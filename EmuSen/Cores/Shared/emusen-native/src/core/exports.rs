@@ -685,8 +685,9 @@ pub unsafe fn raw_copy<T: Core>(machine: *const Machine, raw: u32, out: *mut u8,
     }
 }
 
+/// The picture copied out; a core may make it here, as one whose frame is on a ring reads it back (EmuSen_CoreAPI.md §6.43).
 pub unsafe fn frame_copy<T: Core>(machine: *const Machine, out: *mut u8, len: usize) -> i64 {
-    let Some(inst) = (unsafe { shared::<T>(machine) }) else { return NULL as i64 };
+    let Some(inst) = (unsafe { mutable::<T>(machine as *mut Machine) }) else { return NULL as i64 };
     unsafe { copy_values(inst.core.frame(), out, len) }
 }
 

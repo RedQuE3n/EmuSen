@@ -17,6 +17,8 @@ emusen-libretro-sys = { path = "../emusen-libretro-sys" }
 emusen-core-entry = { path = "../../../../Platform/core-entry" }
 # The systemid and database table, the systems table's (EmuSen_LibretroHost.md §4.1).
 emusen-systems = { path = "../../../../Platform/systems" }
+# The PlayStation 2 card's suffixes, medium and size, which a card profile shares with Sapphire (EmuSen_LibretroHost.md §10j).
+emusen-ps2-card = { path = "../../Shared/emusen-ps2-card" }
 libloading = "0.8"
 # A Vulkan core's device and the ring's import (EmuSen_LibretroHost.md §5.3); the card chosen as emusen-gpu chooses it.
 ash = "0.38"

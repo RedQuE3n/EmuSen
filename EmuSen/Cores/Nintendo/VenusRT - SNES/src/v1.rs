@@ -340,7 +340,7 @@ impl Core for Machine {
         FrameInfo { aspect_num: 4, aspect_den: 3, ..FrameInfo::rgba(self.sys.ppu.frame_width as i32, self.sys.ppu.frame_height as i32) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         self.sys.ppu.picture()
     }
 

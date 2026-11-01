@@ -459,7 +459,7 @@ impl Core for Machine {
         FrameInfo::rgba(self.width as i32, self.height as i32)
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         self.frame_bytes()
     }
 
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn the_stub_reports_the_console_its_market_and_a_black_picture() {
-        let us = create(&cartridge(0x8000, 4), &[]).unwrap();
+        let mut us = create(&cartridge(0x8000, 4), &[]).unwrap();
         let info = us.machine_info();
         assert_eq!((info.system.as_str(), info.region, info.frame_rate), ("sms", Some(Region::Ntsc), NTSC_FRAME));
         assert_eq!(info.spaces.iter().map(|s| (s.name.as_str(), s.read_only, s.cheats)).collect::<Vec<_>>(), [("Z80BUS", true, false), ("RAM", false, true), ("VRAM", false, false), ("CRAM", false, false), ("ROM", true, false), ("BIOS", true, false)]);

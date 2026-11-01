@@ -42,6 +42,7 @@ namespace EmuSen.Mistress.Views
 
         // One object per command, carrying its own enabled and checked state - see EmuSen_Settings_Reference.md §4.12.
         private readonly LunaAction _pause;
+        private readonly LunaAction _frameAdvance;
         private readonly LunaAction _reset;
         private readonly LunaAction _closeGame;
         private readonly LunaAction _saveState;
@@ -157,11 +158,12 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring));
             EarlyLoader = OpenSession;
             // Mistress scrapes, so no shell of this process opens a scraper of its own (EmuSen_LibraryTools.md §8).
             ScrapingLend.Withdraw();
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
+            _frameAdvance = new LunaAction("Frame _Advance", AdvanceOneFrame);
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
             _saveState = new LunaAction("Save _State", SaveState);
@@ -317,6 +319,7 @@ namespace EmuSen.Mistress.Views
                 case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
+                case HotkeyAction.FrameAdvance: if (!LibraryView.IsVisible) AdvanceOneFrame(); break;
                 // Through ToolWindow, so leaving goes back to the state full screen was entered from, a maximised window included.
                 case HotkeyAction.ToggleFullscreen: ToggleFullScreen(); break;
                 case HotkeyAction.ToggleBigPicture: SetBigPicture(!_bigScreen); break;
@@ -484,6 +487,14 @@ namespace EmuSen.Mistress.Views
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
             GameFrame.InvalidateVisual();
+            if (_session is { } running) SyncConsolePicture(running.Crystal, choice.Filter);
+        }
+
+        // A hosted core gives the console's own picture while the CRT filter draws it; a refusal is said, never thrown - see EmuSen_LibretroHost.md §10i.
+        private void SyncConsolePicture(EmuSen.Crystal.Client.CrystalSession session, EmuSen.Serenity.Shaders.ScreenFilter? filter)
+        {
+            try { ConsolePicture.Sync(session, filter); }
+            catch (EmuSen.Crystal.Client.CrystalException e) { StatusText.Text = $"The console's own picture was not set: {e.Message}"; }
         }
 
         private Dictionary<string, float> ShaderParameterValues(string console, string shader)
@@ -745,7 +756,7 @@ namespace EmuSen.Mistress.Views
                     LunaAction.Separator(),
                     new LunaAction("E_xit", () => Close())),
                 new LunaMenu("_Emulation",
-                    _pause, _reset, _closeGame,
+                    _pause, _frameAdvance, _reset, _closeGame,
                     LunaAction.Separator(),
                     _speedMenu,
                     LunaAction.Separator(),
@@ -782,6 +793,7 @@ namespace EmuSen.Mistress.Views
         private void ShowHotkeysOnTheMenu()
         {
             Gesture(_pause, HotkeyAction.TogglePause);
+            Gesture(_frameAdvance, HotkeyAction.FrameAdvance);
             Gesture(_saveState, HotkeyAction.SaveState);
             Gesture(_loadState, HotkeyAction.LoadState);
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
@@ -800,6 +812,7 @@ namespace EmuSen.Mistress.Views
         {
             bool running = _session is not null;
             _pause.IsEnabled = running;
+            _frameAdvance.IsEnabled = running;
             _reset.IsEnabled = running;
             _closeGame.IsEnabled = running;
             _speedMenu.IsEnabled = running;
@@ -1026,7 +1039,7 @@ namespace EmuSen.Mistress.Views
         {
             EmuSen.Serenity.Slang.SlangVulkan? device = PresenterDevice;
             _lentDevice = device;
-            return GameSession.Open(Runtime, OpenOptions with { Path = what.Path, Console = what.Console, Engine = what.Engine, Device = device?.DeviceHandle ?? 0, SingleRows = true });
+            return GameSession.Open(Runtime, OpenOptions with { Path = what.Path, Console = what.Console, Engine = what.Engine, Device = device?.DeviceHandle ?? 0, Ring = device is not null, SingleRows = true });
         }
 
         // The presenter's device, read on the UI thread before a session opens on any thread; the one the open session was lent, for borrowing its lend.
@@ -1284,6 +1297,17 @@ namespace EmuSen.Mistress.Views
             SyncMenuState();
         }
 
+        // One frame run and the game held after it, for every engine - see `man pause` and EmuSen_Backend.md §33.3.
+        public void AdvanceOneFrame()
+        {
+            if (_session is null) return;
+            _paused = true;
+            Send(s => s.FrameAdvance());
+            _playClock.Stop();
+            StatusText.Text = "Paused: advanced one frame";
+            SyncMenuState();
+        }
+
         public void ResumeEmulation()
         {
             _paused = false;
@@ -1392,6 +1416,16 @@ namespace EmuSen.Mistress.Views
         {
             int width = _info.width, height = _info.height;
             if (width <= 0 || height <= 0) return;
+            if (_info.picture_in_ring != 0 && BorrowedRing(session) is { } ring)
+            {
+                var picture = new EmuSen.Serenity.Slang.RingPicture(ring, (int)_info.ring_slot, _info.ring_value, (int)_info.fields, (int)_info.field);
+                if (GameFrame.PresentsOnDevice)
+                {
+                    _frames.OfferInRing(picture, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
+                    return;
+                }
+                _ringRelease.Release(picture, width, height);
+            }
             if (_info.picture_on_device != 0 && GameFrame.PresentsOnDevice && BorrowedLend(session) is { } lend)
             {
                 _frames.OfferOnDevice(lend, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
@@ -1413,6 +1447,21 @@ namespace EmuSen.Mistress.Views
             var lend = EmuSen.Serenity.Slang.SlangLend.Borrow(device, handle);
             _borrowed = (handle, lend);
             return lend;
+        }
+
+        // The machine's ring borrowed for the presenter, kept while the runtime hands the same one - see EmuSen_Backend.md §33.
+        private (nint Handle, EmuSen.Serenity.Slang.SlangRing Ring)? _borrowedRing;
+
+        private readonly EmuSen.Serenity.Slang.SlangRingRelease _ringRelease = new();
+
+        private EmuSen.Serenity.Slang.SlangRing? BorrowedRing(GameSession session)
+        {
+            nint handle = session.Crystal.PictureRing();
+            if (handle == 0 || _lentDevice is not { } device) return null;
+            if (_borrowedRing is { } kept && kept.Handle == handle) return kept.Ring;
+            var ring = EmuSen.Serenity.Slang.SlangRing.Borrow(device, handle);
+            _borrowedRing = (handle, ring);
+            return ring;
         }
 
         // The picture before the palette in the encoding the screen's filter reads, where it reads one - see EmuSen_CRT.md §22.
@@ -1437,7 +1486,8 @@ namespace EmuSen.Mistress.Views
         // Which way the picture reaches the screen, said once a session as its first picture is shown - see EmuSen_Backend.md §14.13.
         private void NamePicturePath(GameSession session)
         {
-            string path = _info.picture_on_device != 0 && GameFrame.PresentsOnDevice ? "on the device: the core draws on the presenter's device and the chain reads it there"
+            string path = _info.picture_in_ring != 0 && GameFrame.PresentsOnDevice ? "in a ring: the hosted core draws into a ring made on the presenter's device and the chain reads it there"
+                : _info.picture_on_device != 0 && GameFrame.PresentsOnDevice ? "on the device: the core draws on the presenter's device and the chain reads it there"
                 : !session.DeviceOffered ? "read back: the picture is not presented on the device, so no device was lent"
                 : _info.picture_on_device == 0 ? "read back: the engine took no lent device"
                 : "read back: the screen stopped presenting on the device";

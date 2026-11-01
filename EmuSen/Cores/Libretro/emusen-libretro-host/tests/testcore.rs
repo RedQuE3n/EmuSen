@@ -93,6 +93,7 @@ fn info_and_schema_describe_the_core_and_its_options() {
     let schema = lib.settings_text().unwrap();
     let unrated = schema.matches(r#""effect":"unrated""#).count();
     assert!(unrated == emusen_libretro_testcore::OPTION_COUNT || unrated == emusen_libretro_testcore::OPTION_COUNT + 1, "every option, and the one declared at load once a game has loaded: {schema}");
+    assert!(schema.contains(r#""key":"console_picture""#) && schema.contains(r#""kind":"switch""#), "the host's reserved setting: {schema}");
     assert!(schema.contains(r#""category":"Picture""#) && schema.contains(r#""label":"Pixel format (in its category)""#), "{schema}");
     assert!(schema.contains(r#"{"value":"rgb565","label":"rgb565 (label)"}"#), "{schema}");
 }
@@ -218,8 +219,15 @@ fn a_state_loads_whole_and_each_refusal_is_its_own() {
     let mut damaged = saved.clone();
     *damaged.last_mut().unwrap() ^= 1;
     assert_eq!(m.state_load(&damaged), Err(status::TRUNCATED));
+    // §10h: the core build's SHA-256 is in every state, and another build's state is refused in plain words.
+    assert!(saved[80..112].iter().any(|&b| b != 0), "the build recorded");
+    let mut other = saved.clone();
+    other[80..112].fill(0xAB);
+    assert_eq!(m.state_load(&other), Err(status::FOREIGN));
+    let said = m.last_error();
+    assert!(said.contains("another build of") && said.contains(&"ab".repeat(32)) && said.contains("the build installed is"), "{said}");
     let layout = m.layout(kind::FULL).unwrap();
-    assert!(layout.starts_with("0 4 bytes header.magic\n") && layout.contains("64 16 bytes header.disc\n80 "), "{layout}");
+    assert!(layout.starts_with("0 4 bytes header.magic\n") && layout.contains("64 16 bytes header.disc\n80 32 bytes header.build\n112 "), "{layout}");
 }
 
 #[test]
@@ -320,6 +328,38 @@ fn options_reach_the_core_and_its_own_changes_are_noted() {
     drop(m);
     let m = make("", 0b011);
     assert!(m.setting_notes().unwrap().contains(r#""tc_note":"Not used with the current settings.""#), "{}", m.setting_notes().unwrap());
+}
+
+/// The picture's size and whether its rows come in blended pairs, as the test core's scale and deinterlacing draw it.
+fn shape(m: &mut Machine) -> (i32, i32, bool) {
+    m.advance().unwrap();
+    let f = m.frame_info().unwrap();
+    let px = frame(m);
+    let row = |y: usize| &px[y * f.stride as usize..y * f.stride as usize + f.width as usize * 4];
+    let scale = f.width as usize / BASE_WIDTH as usize;
+    (f.width, f.height, row(0) == row(scale))
+}
+
+#[test]
+fn the_console_picture_holds_the_named_exceptions_and_gives_the_players_values_back() {
+    let _t = turn();
+    let mut m = make("tc_scale=2\ntc_deinterlace=blend", 0b011);
+    assert_eq!(shape(&mut m), (MAX_WIDTH as i32, MAX_HEIGHT as i32, true), "the player's upscaled, blended picture");
+    let notes = m.setting_notes().unwrap();
+    assert!(notes.contains(r#""!locked":"console_picture""#), "{notes}");
+    m.set_settings("console_picture=true").unwrap();
+    assert_eq!(shape(&mut m), (BASE_WIDTH as i32, BASE_HEIGHT as i32, false), "native and unblended with the CRT filter on");
+    let notes = m.setting_notes().unwrap();
+    assert!(notes.contains(r#""!locked":"tc_scale tc_deinterlace console_picture""#), "{notes}");
+    assert!(notes.contains(r#""tc_scale":"Held at 1 (label) while the CRT filter is on: the test core's native size"#) && notes.contains("decided 2026-11-01"), "{notes}");
+    m.set_settings("tc_scale=2").unwrap();
+    assert_eq!(shape(&mut m).0, BASE_WIDTH as i32, "a player's change while held waits for the filter to be turned off");
+    m.set_settings("console_picture=false").unwrap();
+    assert_eq!(shape(&mut m), (MAX_WIDTH as i32, MAX_HEIGHT as i32, true), "the player's values back");
+    assert!(m.setting_notes().unwrap().contains(r#""!locked":"console_picture""#));
+    drop(m);
+    let mut m = make("tc_scale=2\ntc_deinterlace=blend\nconsole_picture=true", 0b011);
+    assert_eq!(shape(&mut m), (BASE_WIDTH as i32, BASE_HEIGHT as i32, false), "held from the first frame when made with it on");
 }
 
 /// The answer the design gives each environment command at this stage: answered, or refused (EmuSen_LibretroHost.md

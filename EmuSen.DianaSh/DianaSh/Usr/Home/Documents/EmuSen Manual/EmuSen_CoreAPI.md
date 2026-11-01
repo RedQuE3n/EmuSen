@@ -941,6 +941,11 @@ will not use the value as chosen" (`CoreCapabilities.cs`). A function cannot cro
 `setting_notes` (`SETTING_NOTES`) returns `{ "key": "sentence" }` for the machine's current values, read after each
 `set_settings`. MarsRT's antialiasing note is the case.
 
+**Locked rows** (decided 2026-11-01, no change of version). A core whose current values hold some settings fixed lists
+them under the note key `!locked`, the keys separated by spaces; `!` is outside a key's characters, so no setting can
+collide with it, and a frontend that does not know the entry finds no row for it and ignores it. A locked row's own
+note says why. The libretro host's `console_picture` is the first user (`EmuSen_LibretroHost.md` §10i).
+
 **A finding to settle.** MarsCore's `DeferredPresentation` ("the picture … reaches the screen one frame late[r]")
 defaults to on (`MarsCore.cs`). Under this schema it is `effect: latency`. The rule that defaults are accurate
 applies to `accuracy` and `enhancement`; §15 Q12 decided that it does not extend to latency.
@@ -1913,6 +1918,13 @@ host signals `done` once it no longer reads the slot; ownership crosses by a rel
 `emusen_ring_frame` carries the picture's field structure (`fields`, `field`) and aspect beside its size, which the
 screen filters need with the console (`EmuSen_LibretroHost.md` §0.3). `emusen-native`: `Core::ring_lend` and
 `Core::frame_ring`, the `device_ring` group; its test core claims the bit and, holding no device, refuses every ring.
+
+*`frame_copy` with a ring lent (decided 2026-11-01, §12 question 5 of `EmuSen_LibretroHost.md`).* A frame that went to
+the ring still answers `frame_info` with its size and a new serial, and `frame_copy` hands its picture, which a core
+may read back from its own device only then: a screenshot, a state's picture or a bug report's never finds a ringed
+frame blank, and the ring's path reads nothing back. So `Core::frame` in `emusen-native` takes the core by mutable
+reference, every core's implementation changed with it; the C declaration keeps its `const emusen_machine *`, the
+handle being opaque, and the call stays one of the machine's calls, never made beside another on the same machine.
 
 ## 7. Core discovery and trust
 

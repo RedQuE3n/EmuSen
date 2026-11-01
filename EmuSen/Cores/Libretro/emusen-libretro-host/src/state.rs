@@ -1,13 +1,14 @@
-//! A state's header: whose it is, which versions, a digest of the payload, the disc in the drive and, where the core
-//! asks, the platform (EmuSen_LibretroHost.md §4.6).
+//! A state's header: whose it is, which versions, a digest of the payload, the disc in the drive, where the core
+//! asks the platform, and since header version 2 the SHA-256 of the libretro core's build (EmuSen_LibretroHost.md §4.6,
+//! §10h).
 
 use sha2::{Digest, Sha256};
 
 pub const MAGIC: &[u8; 4] = b"ESLR";
-pub const HEADER_VERSION: u16 = 1;
+pub const HEADER_VERSION: u16 = 2;
 /// The adapter's own state version, which machine info's `state.version` gives.
 pub const STATE_VERSION: u32 = 1;
-pub const HEADER: usize = 80;
+pub const HEADER: usize = 112;
 const FLAG_PLATFORM: u16 = 1;
 
 /// Why a state is not this machine's, each answered with its own status.
@@ -25,6 +26,8 @@ pub enum Refusal {
     Damaged,
     /// Saved over another disc than the one in the drive.
     WrongMedia,
+    /// Saved by another build of the same core and version: the build's SHA-256 the state records.
+    OtherBuild([u8; 32]),
 }
 
 /// A disc's identity: its length and the digest of its first MiB, or zero for an empty drive.
@@ -38,6 +41,22 @@ pub fn disc(image: Option<&[u8]>) -> [u8; 16] {
 pub fn identity(name: &str, version: &str) -> u64 {
     let d = Sha256::new().chain_update(name.as_bytes()).chain_update([0]).chain_update(version.as_bytes()).finalize();
     u64::from_le_bytes(d[..8].try_into().unwrap())
+}
+
+/// A build's SHA-256 from its hex form as the library reports it; zero where the text is not one.
+pub fn build(sha256: &str) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    if sha256.len() == 64 && sha256.is_ascii() {
+        for (i, o) in out.iter_mut().enumerate() {
+            *o = u8::from_str_radix(&sha256[i * 2..i * 2 + 2], 16).unwrap_or(0);
+        }
+    }
+    out
+}
+
+/// A SHA-256 written as lowercase hex.
+pub fn hex(d: &[u8; 32]) -> String {
+    d.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// This process's architecture and operating system, for a core whose states depend on them.
@@ -60,7 +79,7 @@ pub fn platform() -> u32 {
 }
 
 /// The header written in front of a payload already in `out[HEADER..HEADER + len]`.
-pub fn seal(out: &mut [u8], len: usize, identity: u64, platform: Option<u32>, disc: [u8; 16]) {
+pub fn seal(out: &mut [u8], len: usize, identity: u64, build: &[u8; 32], platform: Option<u32>, disc: [u8; 16]) {
     let digest = Sha256::digest(&out[HEADER..HEADER + len]);
     let h = &mut out[..HEADER];
     h.fill(0);
@@ -73,10 +92,11 @@ pub fn seal(out: &mut [u8], len: usize, identity: u64, platform: Option<u32>, di
     h[24..32].copy_from_slice(&(len as u64).to_le_bytes());
     h[32..64].copy_from_slice(&digest);
     h[64..80].copy_from_slice(&disc);
+    h[80..112].copy_from_slice(build);
 }
 
 /// The payload of a state this machine may load, or why not.
-pub fn open(data: &[u8], identity: u64, platform: Option<u32>, disc: [u8; 16]) -> Result<&[u8], Refusal> {
+pub fn open<'a>(data: &'a [u8], identity: u64, build: &[u8; 32], platform: Option<u32>, disc: [u8; 16]) -> Result<&'a [u8], Refusal> {
     if data.len() < HEADER || &data[..4] != MAGIC {
         return Err(Refusal::Foreign);
     }
@@ -87,6 +107,9 @@ pub fn open(data: &[u8], identity: u64, platform: Option<u32>, disc: [u8; 16]) -
     }
     if u64::from_le_bytes(data[8..16].try_into().unwrap()) != identity {
         return Err(Refusal::OtherCore);
+    }
+    if &data[80..112] != build {
+        return Err(Refusal::OtherBuild(data[80..112].try_into().unwrap()));
     }
     let recorded = (u16_at(6) & FLAG_PLATFORM != 0).then(|| u32_at(20));
     if let (Some(here), Some(there)) = (platform, recorded)
@@ -108,7 +131,7 @@ pub fn open(data: &[u8], identity: u64, platform: Option<u32>, disc: [u8; 16]) -
 /// One line per field of the header, then the payload, as `state_layout` gives them.
 pub fn layout(len: usize) -> String {
     format!(
-        "0 4 bytes header.magic\n4 2 u16 header.version\n6 2 u16 header.flags\n8 8 u64 header.core\n16 4 u32 header.state_version\n20 4 u32 header.platform\n24 8 u64 header.length\n32 32 bytes header.sha256\n64 16 bytes header.disc\n{HEADER} {len} bytes payload\n"
+        "0 4 bytes header.magic\n4 2 u16 header.version\n6 2 u16 header.flags\n8 8 u64 header.core\n16 4 u32 header.state_version\n20 4 u32 header.platform\n24 8 u64 header.length\n32 32 bytes header.sha256\n64 16 bytes header.disc\n80 32 bytes header.build\n{HEADER} {len} bytes payload\n"
     )
 }
 
@@ -116,10 +139,12 @@ pub fn layout(len: usize) -> String {
 mod tests {
     use super::*;
 
+    const BUILD: [u8; 32] = [7; 32];
+
     fn sealed(payload: &[u8], id: u64, platform: Option<u32>) -> Vec<u8> {
         let mut out = vec![0u8; HEADER + payload.len()];
         out[HEADER..].copy_from_slice(payload);
-        seal(&mut out, payload.len(), id, platform, disc(Some(b"a disc")));
+        seal(&mut out, payload.len(), id, &BUILD, platform, disc(Some(b"a disc")));
         out
     }
 
@@ -127,8 +152,8 @@ mod tests {
     fn a_sealed_state_opens_to_its_payload() {
         let id = identity("Core", "1.0");
         let s = sealed(b"payload", id, None);
-        assert_eq!(open(&s, id, None, disc(Some(b"a disc"))), Ok(&b"payload"[..]));
-        assert_eq!(open(&s, id, None, disc(None)), Err(Refusal::WrongMedia));
+        assert_eq!(open(&s, id, &BUILD, None, disc(Some(b"a disc"))), Ok(&b"payload"[..]));
+        assert_eq!(open(&s, id, &BUILD, None, disc(None)), Err(Refusal::WrongMedia));
     }
 
     #[test]
@@ -136,15 +161,17 @@ mod tests {
         let here = disc(Some(b"a disc"));
         let id = identity("Core", "1.0");
         let s = sealed(b"payload", id, Some(0x0101));
-        assert_eq!(open(b"nothing", id, None, here), Err(Refusal::Foreign));
-        assert_eq!(open(&s, identity("Core", "1.1"), None, here), Err(Refusal::OtherCore));
-        assert_eq!(open(&s, id, Some(0x0201), here), Err(Refusal::Platform));
+        assert_eq!(open(b"nothing", id, &BUILD, None, here), Err(Refusal::Foreign));
+        assert_eq!(open(&s, identity("Core", "1.1"), &BUILD, None, here), Err(Refusal::OtherCore));
+        assert_eq!(open(&s, id, &[8; 32], None, here), Err(Refusal::OtherBuild(BUILD)));
+        assert_eq!(hex(&build(&hex(&BUILD))), hex(&BUILD));
+        assert_eq!(open(&s, id, &BUILD, Some(0x0201), here), Err(Refusal::Platform));
         let mut damaged = s.clone();
         *damaged.last_mut().unwrap() ^= 1;
-        assert_eq!(open(&damaged, id, Some(0x0101), here), Err(Refusal::Damaged));
+        assert_eq!(open(&damaged, id, &BUILD, Some(0x0101), here), Err(Refusal::Damaged));
         let mut later = s.clone();
         later[16] = 2;
-        assert_eq!(open(&later, id, None, here), Err(Refusal::Version));
-        assert_eq!(open(&s[..HEADER + 3], id, None, here), Err(Refusal::Damaged));
+        assert_eq!(open(&later, id, &BUILD, None, here), Err(Refusal::Version));
+        assert_eq!(open(&s[..HEADER + 3], id, &BUILD, None, here), Err(Refusal::Damaged));
     }
 }

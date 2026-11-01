@@ -51,6 +51,10 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static nint PictureLend(nint rt, uint session) => Table->picture_lend(rt, session);
 
+        public static nint PictureRing(nint rt, uint session) => Table->picture_ring(rt, session);
+
+        public static int FrameAdvance(nint rt, uint session) => Table->frame_advance(rt, session);
+
         public static int RawSelect(nint rt, uint session, byte* encoding, nuint len) => Table->raw_select(rt, session, encoding, len);
 
         public static long RawCopy(nint rt, uint session, CrystalRawInfo* info, byte* out_, nuint len) => Table->raw_copy(rt, session, info, out_, len);

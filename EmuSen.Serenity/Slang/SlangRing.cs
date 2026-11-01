@@ -5,9 +5,13 @@ using EmuSen.Serenity.Native;
 namespace EmuSen.Serenity.Slang
 {
     // A ring made on the slang device and exported, lent to a hosted core whose device writes each picture into a slot, read by a chain - see EmuSen_LibretroHost.md §10f.
+    // One frame's picture in a ring: its slot, the value the ring's ready reaches once the slot holds it, and its field structure - see EmuSen_Backend.md §33.
+    public readonly record struct RingPicture(SlangRing Ring, int Slot, ulong Value, int Fields, int Field);
+
     public sealed unsafe class SlangRing : IDisposable
     {
-        private readonly SerenityHandle _handle;
+        private readonly SerenityHandle? _handle;
+        private readonly nint _borrowed;
 
         // One exported image, as the core ABI's emusen_ring_image holds it; the descriptor stays the ring's.
         public readonly record struct Image(uint MemoryType, ulong Handle, ulong AllocationSize, uint Width, uint Height, uint Format, uint Usage);
@@ -19,7 +23,17 @@ namespace EmuSen.Serenity.Slang
         public byte[] DriverUuid { get; }
         public SlangVulkan Owner { get; }
 
-        internal nint Value => _handle.Value;
+        internal nint Value => _handle?.Value ?? _borrowed;
+
+        // A ring another component made and frees, here only read: the frontend API's runtime lends each machine one and the presenter borrows it - see EmuSen_Backend.md §33.
+        public static SlangRing Borrow(SlangVulkan owner, nint ring) =>
+            ring == 0 ? throw new System.ArgumentException("no ring to borrow", nameof(ring)) : new SlangRing(owner, ring);
+
+        private SlangRing(SlangVulkan owner, nint borrowed)
+        {
+            (Owner, _borrowed, Images) = (owner, borrowed, System.Array.Empty<Image>());
+            (DeviceUuid, DriverUuid) = (System.Array.Empty<byte>(), System.Array.Empty<byte>());
+        }
 
         private SlangRing(SlangVulkan owner, SerenityHandle handle, SerenityNative.RingInfo info, Image[] images)
         {
@@ -49,6 +63,6 @@ namespace EmuSen.Serenity.Slang
         }
 
         // After the machine it was lent to, and after every chain that advanced from it has rendered.
-        public void Dispose() => _handle.Dispose();
+        public void Dispose() => _handle?.Dispose();
     }
 }

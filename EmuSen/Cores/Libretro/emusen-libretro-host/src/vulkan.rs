@@ -119,6 +119,8 @@ pub struct Gpu {
     signal: vk::Semaphore,
     ring: Option<Imported>,
     record: Option<RingFrame>,
+    /// The last frame put in the ring, not yet read back: the core's image, which stays its until the next frame.
+    unread: Option<(Handed, u32, u32)>,
     held: Option<Held>,
     readback: Option<Readback>,
     swizzled: Vec<u8>,
@@ -406,6 +408,7 @@ impl Gpu {
             signal: vk::Semaphore::null(),
             ring: None,
             record: None,
+            unread: None,
             held: None,
             readback: None,
             swizzled: Vec::new(),
@@ -565,6 +568,7 @@ impl Gpu {
 
     /// The frame `video_refresh(RETRO_HW_FRAME_BUFFER_VALID)` handed, copied into the ring, held, or read back.
     pub fn frame(&mut self, w: u32, h: u32) -> Shown {
+        self.unread = None;
         let Some(handed) = self.handed else {
             if self.log.len() < 8 {
                 self.log.push("the core handed a hardware frame without setting an image".into());
@@ -575,7 +579,14 @@ impl Gpu {
             Some(true) => {
                 let slot = (self.ring.as_ref().unwrap().count % self.ring.as_ref().unwrap().slots.len() as u64) as usize;
                 match self.submit(handed, w, h, Target::Slot(slot), true) {
-                    Ok(()) => return Shown::Ring,
+                    Ok(()) => {
+                        // A newer frame is in the ring, so a frame held for a larger ring is never shown after it.
+                        if let Some(held) = self.held.as_mut() {
+                            held.pending = false;
+                        }
+                        self.unread = Some((handed, w, h));
+                        return Shown::Ring;
+                    }
                     Err(why) => {
                         self.log.push(why);
                         return Shown::Nothing;
@@ -603,6 +614,25 @@ impl Gpu {
             return Shown::Nothing;
         }
         if shown { Shown::Larger(w, h, bgra) } else { Shown::Bytes(w, h, bgra) }
+    }
+
+    /// The size of the ring's last frame while it has not been read back.
+    pub fn unread(&self) -> Option<(u32, u32)> {
+        self.unread.map(|(_, w, h)| (w, h))
+    }
+
+    /// The ring's last frame read back on demand, for a screenshot or a state's picture: its size and whether it is
+    /// BGRA, `read` handing the bytes; nothing is read back on the ring's own path (EmuSen_LibretroHost.md §10h).
+    pub fn read_unread(&mut self) -> Option<(u32, u32, bool)> {
+        let (src, w, h) = self.unread.take()?;
+        let bgra = readable(src.format)?;
+        match self.read_back(src, w, h, false) {
+            Ok(()) => Some((w, h, bgra)),
+            Err(why) => {
+                self.log.push(why);
+                None
+            }
+        }
     }
 
     /// The frame's record for `frame_ring`; a held frame is copied into a ring that now holds it first.

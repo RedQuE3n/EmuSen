@@ -577,7 +577,7 @@ impl v1::Core for Core {
         }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         if self.scanout.width == 0 { blank() } else { &self.scanout.frame }
     }
 

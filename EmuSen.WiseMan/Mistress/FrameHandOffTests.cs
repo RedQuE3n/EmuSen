@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_frame_s_shape_and_its_console_s_lines_are_presented_with_it() => Session.Dispatch(() =>
         {
             var shapes = new List<(double, int)>();
-            var handOff = new FrameHandOff((_, _, _, _, release, _, aspect, lines, _, _) => shapes.Add((aspect, lines)));
+            var handOff = new FrameHandOff((_, _, _, _, release, _, aspect, lines, _, _, _) => shapes.Add((aspect, lines)));
             handOff.Offer(handOff.Rent(4)!, 1, 1, 1, aspect: 4.0 / 3.0, lines: 288);
             Dispatcher.UIThread.RunJobs();
             handOff.Offer(handOff.Rent(4)!, 1, 1, 1);
@@ -44,7 +44,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Frames_replaced_before_the_screen_took_them_go_back_and_a_presented_one_is_the_screen_s() => Session.Dispatch(() =>
         {
             var presented = new List<(byte[] Pixels, Action<byte[]>? Release)>();
-            var handOff = new FrameHandOff((pixels, _, _, _, release, _, _, _, _, _) => presented.Add((pixels, release)));
+            var handOff = new FrameHandOff((pixels, _, _, _, release, _, _, _, _, _, _) => presented.Add((pixels, release)));
             byte[] a = handOff.Rent(4)!;
             handOff.Offer(a, 1, 1, 1);
             byte[] b = handOff.Rent(4)!;
@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             Action<byte[]>? given = x => { };
             byte[]? pixels = null;
-            var handOff = new FrameHandOff((p, _, _, _, release, _, _, _, _, _) => (pixels, given) = (p, release));
+            var handOff = new FrameHandOff((p, _, _, _, release, _, _, _, _, _, _) => (pixels, given) = (p, release));
             handOff.OfferOnDevice(null!, 4, 4, 1, 0, 0);
             Dispatcher.UIThread.RunJobs();
             Assert.Empty(pixels!);
@@ -94,7 +94,7 @@ namespace EmuSen.WiseMan.Mistress
             await Session.Dispatch(() =>
             {
                 var control = new GameFrameControl();
-                var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _, _, _, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
+                var handOff = new FrameHandOff((pixels, width, height, rowRepeat, release, _, _, _, _, _, _) => control.UpdateFrame(pixels, width, height, rowRepeat, release));
                 var info = new CrystalFrameInfo();
                 using var surface = SKSurface.Create(new SKImageInfo(64, 64, SKColorType.Rgba8888, SKAlphaType.Premul));
                 long allocated = 0, frames = 0;

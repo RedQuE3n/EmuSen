@@ -312,7 +312,7 @@ pub unsafe extern "C" fn emusen_crystal_open(rt: *mut emusen_crystal_runtime, pa
         if p.size < 64 {
             return Err(fail(abi::status::BAD_STRUCT, format!("emusen_crystal_open_params of {} bytes; version 1.0's is 64", p.size)));
         }
-        let known = abi::OPEN_NO_BATTERY | abi::OPEN_SINGLE_ROWS;
+        let known = abi::OPEN_NO_BATTERY | abi::OPEN_SINGLE_ROWS | abi::OPEN_RING;
         if p.flags & !known != 0 {
             return Err(fail(svc::NOT_SUPPORTED, format!("open flags 0x{:X} are not known to 1.{}", p.flags & !known, abi::MINOR)));
         }
@@ -872,6 +872,36 @@ impl emusen_crystal::lend::Lender for SerenityLender {
     fn free(&self, lend: usize) {
         unsafe { crate::serenity_device::emusen_serenity_lend_free(lend as *mut _) };
     }
+
+    fn make_ring(&self, device: usize, width: u32, height: u32, count: u32) -> Result<emusen_crystal::lend::MachineRing, String> {
+        use crate::serenity_device::{RingImageInfo, RingInfo};
+        let mut info = RingInfo { size: std::mem::size_of::<RingInfo>() as u32, count: 0, ready: 0, done: 0, device_uuid: [0; 16], driver_uuid: [0; 16] };
+        let made = unsafe { crate::serenity_device::emusen_serenity_ring_new(device as *const _, width, height, count, &mut info) };
+        if made.is_null() {
+            return Err(platform_words());
+        }
+        let mut ring = emusen_crystal::lend::MachineRing { lender: None, handle: made as usize, images: Vec::new(), ready: info.ready as u64, done: info.done as u64, device_uuid: info.device_uuid, driver_uuid: info.driver_uuid, width, height, last_value: 0 };
+        for index in 0..info.count {
+            let mut i = RingImageInfo { size: std::mem::size_of::<RingImageInfo>() as u32, memory_type: 0, handle: 0, allocation_size: 0, width: 0, height: 0, format: 0, usage: 0 };
+            if unsafe { crate::serenity_device::emusen_serenity_ring_image(made, index, &mut i) } < 0 {
+                let words = platform_words();
+                unsafe { crate::serenity_device::emusen_serenity_ring_free(made) };
+                return Err(words);
+            }
+            ring.images.push(emusen_native::core::sys::RingImage { size: std::mem::size_of::<emusen_native::core::sys::RingImage>() as u32, memory_type: i.memory_type, handle: i.handle, allocation_size: i.allocation_size, width: i.width, height: i.height, format: i.format, usage: i.usage });
+        }
+        Ok(ring)
+    }
+
+    fn free_ring(&self, ring: usize, value: u64) {
+        let handle = ring as *mut crate::serenity_device::RingHandle;
+        if let Some(h) = unsafe { handle.as_ref() }
+            && let Err(words) = h.ring.release_after_crash(value)
+        {
+            emusen_crystal::error_log::warning("picture", &format!("a ring's ready could not be raised before it was freed: {words}"));
+        }
+        unsafe { crate::serenity_device::emusen_serenity_ring_free(handle) };
+    }
 }
 
 /// # Safety
@@ -880,6 +910,21 @@ impl emusen_crystal::lend::Lender for SerenityLender {
 pub unsafe extern "C" fn emusen_crystal_picture_lend(rt: *mut emusen_crystal_runtime, session: u32) -> *const () {
     let lent = || -> Result<usize, i32> { unsafe { session_of(rt, session) }?.picture_lend().map_err(|(st, w)| fail(st, w)) };
     lent().unwrap_or(0) as *const ()
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_picture_ring(rt: *mut emusen_crystal_runtime, session: u32) -> *const () {
+    let lent = || -> Result<usize, i32> { unsafe { session_of(rt, session) }?.picture_ring().map_err(|(st, w)| fail(st, w)) };
+    lent().unwrap_or(0) as *const ()
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_frame_advance(rt: *mut emusen_crystal_runtime, session: u32) -> i32 {
+    code((|| done(unsafe { session_of(rt, session) }?.frame_advance()))())
 }
 
 /// # Safety

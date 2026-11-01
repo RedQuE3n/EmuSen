@@ -31,15 +31,20 @@ impl Folders {
 }
 
 /// A save a core keeps outside its save folder, named by its profile: (battery number, suffix, path under the system
-/// folder, medium, slot's label, port).
-pub type Card = (u32, &'static str, &'static str, &'static str, &'static str, u32);
+/// folder, medium, slot's label, port, the bytes of a new card, a blank one's length and byte).
+pub type Card = (u32, &'static str, &'static str, &'static str, &'static str, u32, (usize, u8));
+
+/// A PlayStation 2 card in a slot: the card format's suffix and medium, so every engine of the console keeps the same files.
+const fn ps2(which: u32, slot: usize, path: &'static str, label: &'static str) -> Card {
+    (which, emusen_ps2_card::SUFFIXES[slot], path, emusen_ps2_card::MEDIUM, label, slot as u32, (emusen_ps2_card::CARD_LENGTH, emusen_ps2_card::ERASED))
+}
 
 /// The profiles: by a core's file stem, its saves outside the save folder, found by running it (EmuSen_LibretroHost.md
-/// §4.5, §10c). PCEE2 and LRPS2 keep their memory cards as two raw 8,650,752-byte files in `pcsx2/memcards/`, measured
-/// for PCEE2 on 2026-10-31 and given by LRPS2's documentation.
+/// §4.5, §10c, §10j). PCEE2 and LRPS2 keep their memory cards as two raw 8,650,752-byte files in `pcsx2/memcards/`,
+/// measured for PCEE2 on 2026-10-31 and given by LRPS2's documentation; they are Sapphire's `.ps2` and `.2.ps2`.
 pub const PROFILES: &[(&str, &[Card])] = &[
-    ("pcee2", &[(2, ".mcd1", "pcsx2/memcards/Mcd001.ps2", "ps2.card", "Slot 1", 0), (3, ".mcd2", "pcsx2/memcards/Mcd002.ps2", "ps2.card", "Slot 2", 1)]),
-    ("pcsx2", &[(2, ".mcd1", "pcsx2/memcards/Mcd001.ps2", "ps2.card", "Slot 1", 0), (3, ".mcd2", "pcsx2/memcards/Mcd002.ps2", "ps2.card", "Slot 2", 1)]),
+    ("pcee2", &[ps2(2, 0, "pcsx2/memcards/Mcd001.ps2", "Slot 1"), ps2(3, 1, "pcsx2/memcards/Mcd002.ps2", "Slot 2")]),
+    ("pcsx2", &[ps2(2, 0, "pcsx2/memcards/Mcd001.ps2", "Slot 1"), ps2(3, 1, "pcsx2/memcards/Mcd002.ps2", "Slot 2")]),
 ];
 
 /// The cards of a core's profile, none where it has no profile.
@@ -98,9 +103,19 @@ impl Saves {
         Saves { folder, files: BTreeMap::new(), next: flags::FILE_NAMED, cards: Vec::new() }
     }
 
-    /// A profile's card, written into place from the host's copy where it passed one, else kept as the core left it.
-    pub fn card(&mut self, which: u32, path: PathBuf, passed: Option<&[u8]>) -> std::io::Result<()> {
-        if let Some(data) = passed.filter(|d| !d.is_empty()) {
+    /// A profile's card, written into place from the host's copy where it passed one, else a new card, blank, as a
+    /// console's slot holds whatever card is put in it; with `keep`, a card not passed is kept as the core left it.
+    pub fn card(&mut self, which: u32, path: PathBuf, passed: Option<&[u8]>, blank: (usize, u8), keep: bool) -> std::io::Result<()> {
+        let new;
+        let data = match passed.filter(|d| !d.is_empty()) {
+            Some(d) => Some(d),
+            None if keep => None,
+            None => {
+                new = vec![blank.1; blank.0];
+                Some(&new[..])
+            }
+        };
+        if let Some(data) = data {
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }

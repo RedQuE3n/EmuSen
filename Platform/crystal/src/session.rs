@@ -46,6 +46,8 @@ pub struct Run {
     pub paused: bool,
     pub halted: bool,
     pub run_requested: bool,
+    /// The frame a run to a frame holds at, on an engine that cannot halt inside one; -1 for none (EmuSen_Backend.md §33.3).
+    pub hold_at_frame: i64,
     pub speed: Speed,
     pub draw_none: bool,
     pub rewind: crate::rewind::Rewind,
@@ -55,7 +57,7 @@ pub struct Run {
 
 impl Default for Run {
     fn default() -> Run {
-        Run { paused: false, halted: false, run_requested: false, speed: Speed::default(), draw_none: false, rewind: crate::rewind::Rewind::default(), base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
+        Run { paused: false, halted: false, run_requested: false, hold_at_frame: -1, speed: Speed::default(), draw_none: false, rewind: crate::rewind::Rewind::default(), base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
     }
 }
 
@@ -315,6 +317,12 @@ impl Session {
         }
         self.raise_said(e);
         self.raise_log(e);
+        if run.hold_at_frame >= 0 && e.total_frames() >= run.hold_at_frame {
+            (run.hold_at_frame, run.paused) = (-1, true);
+            self.events.raise(self.id, abi::EVENT_RUN, "run", |j| {
+                j.str("op", "paused");
+            });
+        }
         Ok(true)
     }
 
@@ -486,16 +494,43 @@ impl Session {
         info.paused = run.paused as u32;
         info.halted_processor = if run.halted { e.halted_index() } else { 0 };
         info.halted_address = if run.halted { e.halted.map_or(0, |(_, address)| address as u64) } else { 0 };
-        if (info.size as usize) < std::mem::size_of::<emusen_crystal_frame_info>() {
+        if (info.size as usize) < std::mem::offset_of!(emusen_crystal_frame_info, picture_in_ring) {
             return;
         }
         info.picture_on_device = (ran && e.picture_on_device) as u32;
         info.reserved = 0;
+        if (info.size as usize) < std::mem::size_of::<emusen_crystal_frame_info>() {
+            return;
+        }
+        let ringed = e.ring_frame.filter(|_| ran);
+        info.picture_in_ring = ringed.is_some() as u32;
+        info.ring_slot = ringed.map_or(0, |f| f.slot);
+        info.ring_value = ringed.map_or(0, |f| f.value);
+        info.fields = ringed.map_or(0, |f| f.fields);
+        info.field = ringed.map_or(0, |f| f.field);
     }
 
     /// The current machine's lend for the presenter to borrow, or 0.
     pub fn picture_lend(&self) -> Result<usize, Refused> {
         Ok(self.lock()?.engine.lend.as_ref().map_or(0, |l| l.handle))
+    }
+
+    /// Since 1.4: the current machine's ring for the presenter to borrow, or 0.
+    pub fn picture_ring(&self) -> Result<usize, Refused> {
+        Ok(self.lock()?.engine.ring.as_ref().map_or(0, |r| r.handle))
+    }
+
+    /// Since 1.4: one frame advance, for every engine: paused, with one frame asked for (EmuSen_Backend.md §33.3).
+    pub fn frame_advance(&self) -> Result<(), Refused> {
+        self.change(|_, run| {
+            run.paused = true;
+            run.run_requested = true;
+            Ok(())
+        })?;
+        self.events.raise(self.id, abi::EVENT_RUN, "run", |j| {
+            j.str("op", "stepped");
+        });
+        Ok(())
     }
 
     /// The raw encoding kept from the next frame; none keeps none.

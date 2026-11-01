@@ -146,7 +146,8 @@ pub trait Core: Sized + StateMachine {
     /// The picture's shape; without `FRAME_SERIAL` the crate writes the frame count as the serial, without
     /// `ROW_REPEAT` a row repeat of 1.
     fn frame_info(&self) -> FrameInfo;
-    fn frame(&self) -> &[u8];
+    /// The picture `frame_copy` hands; mutable so that a core whose frame went to a ring can read it back on demand.
+    fn frame(&mut self) -> &[u8];
 
     /// The rate of the next sample a drain returns.
     fn audio_rate(&self) -> i32;

@@ -17,7 +17,7 @@ namespace EmuSen.Crystal.Managed
         {
             if (p == null) throw new CrystalException(SessionAbi.Null, "null open parameters");
             if (p->size < OpenParamsV1.Size10) throw CrystalException.BadStruct("emusen_crystal_open_params", p->size, OpenParamsV1.Size10);
-            const uint known = CrystalNumbers.OpenNoBattery | CrystalNumbers.OpenSingleRows;
+            const uint known = CrystalNumbers.OpenNoBattery | CrystalNumbers.OpenSingleRows | CrystalNumbers.OpenRing;
             if ((p->flags & ~known) != 0) throw new CrystalException(SessionAbi.NotSupported, $"open flags 0x{p->flags & ~known:X} are not known to 1.{CrystalNumbers.Minor}");
             // The presenter's device, read only from a 1.1 struct that holds it; each machine made is lent it afresh.
             var with = new OpenedWith(p->flags, p->audio_buffer_max_samples, p->size >= sizeof(OpenParamsV1) ? (nint)p->device : 0);
@@ -46,6 +46,7 @@ namespace EmuSen.Crystal.Managed
                 AudioBufferMaxSamples = with.AudioBufferMaxSamples > 0 ? (int)Math.Min(with.AudioBufferMaxSamples, int.MaxValue) : CoreOptions.Default.AudioBufferMaxSamples,
             };
             var refusals = new LendRefusals();
+            if (with.Device != 0 && (with.Flags & CrystalNumbers.OpenRing) != 0) options = options with { RingLender = (w, h) => PlatformRing.Make(with.Device, w, h, refusals.Note) };
             Func<IDeviceLend?>? lender = with.Device == 0 ? null : () => PlatformLend.Make(with.Device, refusals.Note);
             CoreBundle bundle = path is not null ? OpenGame(path, engine, options, lender) : StartConsole(console!, engine, options, lender, out console);
             string name = (bundle.Core as Cores.Native.CoreEngine)?.Console is { Length: > 0 } running ? running : console ?? CoreCatalog.ConsoleForRom(path!) ?? bundle.Core.CoreName;

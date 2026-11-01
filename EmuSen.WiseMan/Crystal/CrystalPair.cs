@@ -175,12 +175,12 @@ namespace EmuSen.WiseMan.Crystal
         // A frame's status and every field of its frame_info, the struct given at size bytes (0 for its own).
         public string Frame(nint rt, uint session, uint size = 0)
         {
-            var info = new CrystalFrameInfo { size = size != 0 ? size : (uint)sizeof(CrystalFrameInfo), reserved = 0xFEEDu, picture_on_device = 7 };
+            var info = new CrystalFrameInfo { size = size != 0 ? size : (uint)sizeof(CrystalFrameInfo), reserved = 0xFEEDu, picture_on_device = 7, picture_in_ring = 7 };
             int status = ((delegate* unmanaged[Cdecl]<nint, uint, CrystalFrameInfo*, int>)Fn("frame"))(rt, session, &info);
             if (status != 0) return Status(status);
             return $"ran {info.ran} halted {info.halted} rendered {info.rendered} serial {info.picture_serial} {info.width}x{info.height} repeat {info.row_repeat} lines {info.display_lines} aspect {info.display_aspect:R} "
                 + $"audio {info.audio_frames}@{info.audio_rate} play {info.play_audio} speed {info.speed_percent} interval {info.frame_interval_ns} total {info.total_frames} hz {info.frame_rate_hz:R} paused {info.paused} "
-                + $"at {info.halted_processor}:{info.halted_address} device {info.picture_on_device} reserved {info.reserved}";
+                + $"at {info.halted_processor}:{info.halted_address} device {info.picture_on_device} reserved {info.reserved} ring {info.picture_in_ring}:{info.ring_slot}:{info.ring_value} fields {info.fields}:{info.field}";
         }
 
         // The picture's length and SHA-256, or the length asked of a buffer len bytes long.
@@ -370,6 +370,10 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         public nint PictureLend(nint rt, uint session) => ((delegate* unmanaged[Cdecl]<nint, uint, nint>)Fn("picture_lend"))(rt, session);
+
+        public nint PictureRing(nint rt, uint session) => ((delegate* unmanaged[Cdecl]<nint, uint, nint>)Fn("picture_ring"))(rt, session);
+
+        public string FrameAdvance(nint rt, uint session) => Status(((delegate* unmanaged[Cdecl]<nint, uint, int>)Fn("frame_advance"))(rt, session));
 
         public string RawSelect(nint rt, uint session, string? encoding)
         {

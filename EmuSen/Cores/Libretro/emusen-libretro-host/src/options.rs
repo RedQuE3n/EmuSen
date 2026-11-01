@@ -30,6 +30,8 @@ pub struct Options {
     /// Keys whose value the core changed itself, for the notes.
     pub changed_by_core: Vec<String>,
     pub update_display: sys::retro_core_options_update_display_callback_t,
+    /// Values held over the player's while the console's own picture is asked for, by key (`console_picture`).
+    forced: HashMap<String, CString>,
 }
 
 /// Text of a C string the core owns, or empty.
@@ -115,9 +117,33 @@ impl Options {
         self.declared = list;
     }
 
-    /// The value the core reads, valid until the value changes.
+    /// The value the core reads, valid until the value changes: a held value over the player's.
     pub fn get(&self, key: &str) -> Option<*const c_char> {
-        self.values.get(key).map(|v| v.as_ptr())
+        self.forced.get(key).or_else(|| self.values.get(key)).map(|v| v.as_ptr())
+    }
+
+    fn effective(&self) -> Vec<(String, String)> {
+        self.declared.iter().map(|d| (d.key.clone(), self.get(&d.key).map(text).unwrap_or_default())).collect()
+    }
+
+    /// Holds these values over the player's, or with none gives the player's back; the keys held, those declared with
+    /// the value among their choices.
+    pub fn hold(&mut self, held: &[(String, String)]) -> Vec<String> {
+        let before = self.effective();
+        self.forced = held
+            .iter()
+            .filter(|(k, v)| self.declared.iter().any(|d| d.key == *k && d.values.iter().any(|c| c.0 == *v)))
+            .map(|(k, v)| (k.clone(), CString::new(v.as_str()).unwrap_or_default()))
+            .collect();
+        if self.effective() != before {
+            self.updated = true;
+        }
+        self.declared.iter().map(|d| d.key.clone()).filter(|k| self.forced.contains_key(k)).collect()
+    }
+
+    /// Whether a key's value is held over the player's.
+    pub fn held(&self, key: &str) -> bool {
+        self.forced.contains_key(key)
     }
 
     /// A value from EmuSen's settings; false for a key not declared or a value outside its choices.
@@ -128,7 +154,7 @@ impl Options {
         }
         if self.values.get(key).is_none_or(|old| old.to_bytes() != value.as_bytes()) {
             self.values.insert(key.to_owned(), CString::new(value).unwrap_or_default());
-            self.updated = true;
+            self.updated |= !self.forced.contains_key(key);
         }
         true
     }
@@ -237,6 +263,25 @@ mod tests {
         assert_eq!(next.declared[0].label, "Early, again", "the core's own declaration stands");
         assert_eq!((next.declared[1].label.as_str(), next.declared[1].values.len(), text(next.get("late").unwrap())), ("Late one", 2, "y".to_owned()));
         assert_eq!(next.categories.get("cat").map(String::as_str), Some("Category"));
+    }
+
+    #[test]
+    fn a_held_value_is_read_over_the_players_and_released_back_to_it() {
+        let vars = [
+            sys::retro_variable { key: c"scale".as_ptr(), value: c"Scale; 1|2".as_ptr() },
+            sys::retro_variable { key: c"other".as_ptr(), value: c"Other; a|b".as_ptr() },
+            sys::retro_variable { key: std::ptr::null(), value: std::ptr::null() },
+        ];
+        let mut o = Options::default();
+        unsafe { o.declare_legacy(vars.as_ptr()) };
+        assert!(o.set("scale", "2"));
+        o.updated = false;
+        let held = o.hold(&[("scale".into(), "1".into()), ("other".into(), "z".into()), ("absent".into(), "1".into())]);
+        assert_eq!((held, text(o.get("scale").unwrap()), o.updated), (vec!["scale".to_owned()], "1".to_owned(), true));
+        o.updated = false;
+        assert!(o.set("scale", "2") && !o.updated, "the player's value changes nothing the core reads while held");
+        assert!(o.hold(&[]).is_empty());
+        assert_eq!((text(o.get("scale").unwrap()), o.updated), ("2".to_owned(), true));
     }
 
     #[test]

@@ -140,7 +140,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     let discovery = rt.discovery();
     let catalog = Catalog::new(&discovery);
     let folders = crate::firmware::folders(&tree);
-    let options = Options { battery_disabled: asked.opened.flags & crate::abi::OPEN_NO_BATTERY != 0, audio_buffer_max_samples: asked.opened.audio_buffer_max_samples, device: asked.opened.device };
+    let options = Options { battery_disabled: asked.opened.flags & crate::abi::OPEN_NO_BATTERY != 0, audio_buffer_max_samples: asked.opened.audio_buffer_max_samples, device: asked.opened.device, ring: asked.opened.flags & crate::abi::OPEN_RING != 0 };
     let is_image = |e: &str| crate::route::is_image_extension(&catalog, &discovery, e);
     let ctx = Ctx { tree: &tree, is_image: &is_image, folders: &folders };
     let stored = emusen_galaxia::consoles::load(&tree);
@@ -253,6 +253,7 @@ fn open_game(
         .or(row_console)
         .unwrap_or_else(|| core.sidecar.info.id.clone());
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
+    e.ring_wanted = options.ring;
     e.package = package;
     e.save_key = save_key;
     e.load_rom(ctx.tree, at, system, console, ctx.is_image, ctx.folders).map_err(|r| (r.status, r.words))?;
@@ -295,6 +296,7 @@ fn start_console(
     let media = crate::media::media_of(&console, system.as_ref());
     e.media_choices = crate::media::stored_choices(&media, &|k| stored.value(&console, k).map(str::to_string));
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
+    e.ring_wanted = options.ring;
     e.start_console(tree, &system_id, console.clone(), folders).map_err(|r| (r.status, r.words))?;
     Ok((e, console))
 }

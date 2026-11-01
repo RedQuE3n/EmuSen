@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         internal static readonly string[] GameSettings = ["Cheats", "Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Memory Cards", "Crop This Game..."];
-        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Memory Cards", "Compressed Discs", "Firmware", "Preferences"];
+        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Memory Cards", "Firmware", "Preferences"];
 
         // One synthetic game, started from the library: as Game Mode starts it with a big screen, else on the desktop.
         private (MainWindow Window, PadDriver Pad) Playing(bool bigScreen, int width = 1280, int height = 800)
@@ -144,7 +144,7 @@ namespace EmuSen.WiseMan.Mistress
             pad.Start();
             Assert.Equal(["Back to Cobalt Harbor (Synthetic)", "Game Options...", "Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(window));
             Assert.Equal([3], Enumerable.Range(0, 6).Where(i => PadMenu.Entries(window)[i].StartsSection));
-            Assert.Equal([MainWindow.StartConsoleMenu, "Scrape Games...", MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu], SubmenuLines(window, MainWindow.LibraryMenu));
+            Assert.Equal([MainWindow.StartConsoleMenu, "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu], SubmenuLines(window, MainWindow.LibraryMenu));
             Assert.Equal(Settings, SubmenuLines(window, MainWindow.SettingsMenu));
             Assert.Equal(["Shell", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
             Assert.Equal(MainWindow.MainMenuTitle, PadMenu.DeskTitle(window));
@@ -159,7 +159,7 @@ namespace EmuSen.WiseMan.Mistress
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.Start();
             Assert.Equal(["Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(s.Window));
-            Assert.Equal([MainWindow.StartConsoleMenu, "Collections", "Scrape Games...", MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, "Theme Settings"], SubmenuLines(s.Window, MainWindow.LibraryMenu));
+            Assert.Equal([MainWindow.StartConsoleMenu, "Collections", "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu, "Theme Settings"], SubmenuLines(s.Window, MainWindow.LibraryMenu));
             Assert.Equal(["Shell", "Exit Big Picture", "Exit EmuSen..."], SubmenuLines(s.Window, MainWindow.EmuSenMenu));
             Assert.Equal(MainWindow.MainMenuTitle, PadMenu.Big(s.Window).Title);
 

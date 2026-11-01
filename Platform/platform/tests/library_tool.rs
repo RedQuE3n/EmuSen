@@ -162,30 +162,30 @@ fn rom_dups_is_the_pipe_of_rom_hash_sort_and_uniq_in_a_shell_this_library_makes(
     let _ = std::fs::remove_dir_all(&base);
 }
 
-/// A catalogue as `cores fetch` caches it, written by the test: one core offered, and one of them installed.
+/// A catalogue as `cores fetch` caches it, written by the test: two cores of the hosted list offered, and one of them installed.
 fn seed_cores(cores: &std::path::Path) {
     use emusen_core_entry::{library_suffix, sha256_file, Entry, Notice};
     let cat = cores.join("libretro/.catalogue");
     std::fs::create_dir_all(&cat).unwrap();
-    let info = cat.join("pcsx2_libretro.info");
+    let info = cat.join("pcee2_libretro.info");
     std::fs::write(&info, "display_name = \"Sony - PlayStation 2 (LRPS2)\"\ncorename = \"LRPS2\"\nlicense = \"GPLv3\"\ndisplay_version = \"2.3.1\"\nfirmware_count = 1\nfirmware0_desc = \"PlayStation 2 BIOS\"\nfirmware0_path = \"pcsx2/bios/ps2.bin\"\n").unwrap();
     let mut zip = emusen_galaxia::archive::ZipWriter::create(cat.join("info.zip").to_str().unwrap()).unwrap();
-    zip.add("pcsx2_libretro.info", info.to_str().unwrap(), std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000), false, &|| false).unwrap();
+    zip.add("pcee2_libretro.info", info.to_str().unwrap(), std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000), false, &|| false).unwrap();
     zip.finish().unwrap();
     std::fs::remove_file(&info).unwrap();
     let s = library_suffix();
-    std::fs::write(cat.join("index-linux-x86_64"), format!("2026-10-31 3a224a58 pcsx2_libretro.{s}.zip\n2026-10-30 11112222 mine_libretro.{s}.zip\n")).unwrap();
+    std::fs::write(cat.join("index-linux-x86_64"), format!("2026-10-31 3a224a58 pcee2_libretro.{s}.zip\n2026-10-30 11112222 flycast_libretro.{s}.zip\n")).unwrap();
     std::fs::write(cat.join("fetched"), "2026-10-31\n").unwrap();
-    let e = Entry::new(cores, "mine").unwrap();
+    let e = Entry::new(cores, "flycast").unwrap();
     std::fs::create_dir_all(&e.folder).unwrap();
     std::fs::write(e.core_path(), b"a core").unwrap();
     let n = Notice {
-        stem: "mine".into(),
-        name: "Mine".into(),
-        corename: "MINE".into(),
+        stem: "flycast".into(),
+        name: "Flycast".into(),
+        corename: "Flycast".into(),
         authors: vec!["Someone".into()],
         license: "MIT".into(),
-        source: format!("https://buildbot.libretro.com/nightly/linux/x86_64/latest/mine_libretro.{s}.zip"),
+        source: format!("https://buildbot.libretro.com/nightly/linux/x86_64/latest/flycast_libretro.{s}.zip"),
         build: "2026-10-29".into(),
         index_crc32: 0x1111_2222,
         sha256: sha256_file(&e.core_path()).unwrap(),
@@ -211,14 +211,14 @@ fn cores_runs_in_a_shell_this_library_makes_over_the_cached_catalogue() {
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
     let listed = run(sh, "cores ls");
     let lines: Vec<Vec<&str>> = listed.lines().map(|l| l.split_whitespace().collect()).collect();
-    assert!(lines.contains(&vec!["available", "-", "pcsx2", "libretro", "2.3.1", "-", "GPLv3"]), "{listed}");
-    assert!(lines.iter().any(|l| l[..3] == ["update", "-", "mine"]), "{listed}");
+    assert!(lines.contains(&vec!["available", "ps2", "pcee2", "libretro", "2.3.1", "-", "GPLv3"]), "{listed}");
+    assert!(lines.iter().any(|l| l[..3] == ["update", "dreamcast,naomi,atomiswave", "flycast"]), "{listed}");
     let updates = run(sh, "cores ls --updates");
-    assert_eq!(updates.lines().map(|l| l.split_whitespace().nth(2).unwrap_or("")).collect::<Vec<_>>(), ["mine"], "{updates}");
+    assert_eq!(updates.lines().map(|l| l.split_whitespace().nth(2).unwrap_or("")).collect::<Vec<_>>(), ["flycast"], "{updates}");
     assert_eq!(run(sh, "cores ls | grep -c libretro").trim(), "2");
-    let info = run(sh, "cores info pcsx2");
+    let info = run(sh, "cores info pcee2");
     assert!(info.contains("corename: LRPS2\n") && info.contains("firmware: PlayStation 2 BIOS (pcsx2/bios/ps2.bin, required)"), "{info}");
-    assert!(info.contains("from: https://buildbot.libretro.com/nightly/linux/x86_64/latest/pcsx2_libretro.so.zip"), "{info}");
+    assert!(info.contains("from: https://buildbot.libretro.com/nightly/linux/x86_64/latest/pcee2_libretro.so.zip"), "{info}");
     assert!(run(sh, "cores info nothere").contains("cores: no core nothere"));
     assert!(run(sh, "cores frobnicate").contains("Usage: cores ls"));
     unsafe { dianash_free(sh) };

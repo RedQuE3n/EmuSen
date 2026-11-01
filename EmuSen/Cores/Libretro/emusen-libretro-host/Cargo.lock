@@ -258,6 +258,7 @@ dependencies = [
  "emusen-libretro-sys",
  "emusen-libretro-testcore",
  "emusen-native",
+ "emusen-ps2-card",
  "emusen-serenity",
  "emusen-systems",
  "libc",

@@ -438,7 +438,7 @@ impl v1::Core for Machine {
     fn battery_files(_system: &str) -> Option<Vec<Battery>> {
         let mut list = vec![Battery::game(SRAM, ".srm"), Battery::game(RTC, ".rtc")];
         if let Ok(lib) = ready() {
-            list.extend(files::cards(&lib.stem).iter().map(|&(which, suffix, _, medium, label, port)| Battery::removable(which, suffix).medium(medium).label(label).port(port)));
+            list.extend(files::cards(&lib.stem).iter().map(|&(which, suffix, _, medium, label, port, _)| Battery::removable(which, suffix).medium(medium).label(label).port(port)));
         }
         Some(list)
     }
@@ -873,9 +873,10 @@ impl Machine {
         };
         saves.place(&passed).map_err(fail_folders)?;
         let system_dir = system_folder(&folders);
-        for &(which, _, path, ..) in files::cards(&lib.stem) {
+        let referee = std::env::var_os("EMUSEN_LIBRETRO_SYSTEM_DIR").is_some();
+        for &(which, _, path, .., blank) in files::cards(&lib.stem) {
             let passed = r.files.iter().find(|f| f.which == which).map(|f| f.data);
-            saves.card(which, system_dir.join(path), passed).map_err(fail_folders)?;
+            saves.card(which, system_dir.join(path), passed, blank, referee).map_err(fail_folders)?;
         }
         let mut firmware_written = Written(Vec::new());
         for fw in firmware(lib) {

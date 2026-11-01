@@ -11578,6 +11578,12 @@ own menu box, which takes the same pages. `PadMenuTests` holds the pages and the
 room checked clear of the panel and the help bar; `PauseCardTests` holds the pane, the screenshot button, the volume row
 in both sessions and the chords; and the card's states are recorded in `EmuSen_InterfaceSpec.md` §6.3.18.
 
+**Seeded faults (2026-11-01).** Five faults were put in and taken out again, each caught: the card's detail left out
+of its panel (five `CardFormTests` cases), the card at half the width rather than 40 per cent (the three sizes'
+placement case), `Auto` leaving the chords on in Steam's Game Mode (`PauseCardTests`' Game Mode case), the backdrop
+blurring under the card (`PadMenuTests`' first-page case), and the strip ringing the slot after the current one (the
+slot test and both `PauseCardSave` recordings).
+
 ### 48.11 Open questions
 
 - Nine rows on a disc console with a second pad: leave Swap Players on the first page, or move it under Game Options ▸

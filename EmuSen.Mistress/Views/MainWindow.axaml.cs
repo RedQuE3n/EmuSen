@@ -1761,7 +1761,7 @@ namespace EmuSen.Mistress.Views
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.DefaultRoot;
+            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.FallbackRoot(_appSettings.LogDirectory);
 
             try
             {

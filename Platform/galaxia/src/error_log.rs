@@ -22,28 +22,66 @@ pub const MAX_BYTES: u64 = 8 << 20;
 
 static GATE: Mutex<()> = Mutex::new(());
 static PRUNED: AtomicBool = AtomicBool::new(false);
+/// The notice that the named folder was passed over, written once into the log it fell back to.
+static FELL_BACK: Mutex<Option<String>> = Mutex::new(None);
+static FELL_BACK_SAID: AtomicBool = AtomicBool::new(false);
+
+/// The words of the fallback, as the log's first entry after it says them.
+pub fn fallback_words(configured: &str, root: &str) -> String {
+    format!("the log folder {configured} cannot be made or written on this machine, so the log is kept in {root}")
+}
 
 /// `ErrorLog.DefaultRoot`: the folder used when the setting names none this machine can make.
 pub fn default_root(tree: &Tree) -> String {
     tree.directory(Directory::LogDefault).unwrap_or_default()
 }
 
-/// `ErrorLog.Usable`: a folder that is named and can be made; made by the asking.
+/// The name of the file a folder is tried with, made and removed at once.
+pub const WRITE_CHECK: &str = ".emusen-write-check";
+
+/// `ErrorLog.Usable`: a folder that is named, can be made, and takes a file; made by the asking.
 pub fn usable(directory: Option<&str>) -> bool {
     match directory {
-        Some(directory) if !is_blank(Some(directory)) => std::fs::create_dir_all(directory).is_ok(),
+        Some(directory) if !is_blank(Some(directory)) => {
+            if std::fs::create_dir_all(directory).is_err() {
+                return false;
+            }
+            let check = path::combine(Style::HOST, directory, WRITE_CHECK);
+            let wrote = std::fs::write(&check, b"").is_ok();
+            let _ = std::fs::remove_file(&check);
+            wrote
+        }
         _ => false,
     }
 }
 
-/// `ErrorLog.Root`: the folder given, else the `LogDirectory` setting when it can be made, else the default; with what reading the settings had to report.
+/// `ErrorLog.FallbackRoot`: where a log goes when the setting names no usable folder: the default when it names none,
+/// the home's own `Logs` when it names one this machine cannot make or write (a settings file copied from another).
+pub fn fallback_root(tree: &Tree, configured: Option<&str>) -> String {
+    match configured {
+        Some(named) if !is_blank(Some(named)) => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
+        _ => default_root(tree),
+    }
+}
+
+/// `ErrorLog.Root`: the folder given, else the `LogDirectory` setting when it is usable, else the fallback, said once
+/// in the log; with what reading the settings had to report.
 pub fn root(tree: &Tree, directory_override: Option<&str>) -> (String, Option<String>) {
     if let Some(directory) = directory_override {
         return (directory.to_string(), None);
     }
     let (settings, said) = config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
     let configured = settings.get("LogDirectory").and_then(|value| value.as_str());
-    (if usable(configured) { configured.unwrap_or_default().to_string() } else { default_root(tree) }, said)
+    if usable(configured) {
+        return (configured.unwrap_or_default().to_string(), said);
+    }
+    let root = fallback_root(tree, configured);
+    if let Some(named) = configured.filter(|named| !is_blank(Some(named))) {
+        if !FELL_BACK_SAID.swap(true, Ordering::SeqCst) {
+            *FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(fallback_words(named, &root));
+        }
+    }
+    (root, said)
 }
 
 /// `ErrorLog.PathFor`: a day's file in a root, the day as the caller's `yyyyMMdd`.
@@ -118,6 +156,9 @@ fn append_entry(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) ->
     }
     let mut log = std::fs::OpenOptions::new().append(true).create(true).open(file).ok()?;
     let mut text = text?.to_string();
+    if let Some(notice) = FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() {
+        text.insert_str(0, &format!("{stamp} WARN [log] {notice}\n"));
+    }
     // The length is counted as C# counts a string's, in UTF-16 code units, against a size in bytes.
     if size + utf16_len(&text) as u64 >= MAX_BYTES {
         text.push_str(&format!("{stamp} WARN [log] this file reached {} MB; nothing more is written to it today\n", MAX_BYTES >> 20));
@@ -125,9 +166,11 @@ fn append_entry(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) ->
     log.write_all(text.as_bytes()).ok()
 }
 
-/// The next entry prunes again; for a test.
+/// The next entry prunes again, and a fallback is said again; for a test.
 pub fn reset() {
     PRUNED.store(false, Ordering::SeqCst);
+    FELL_BACK_SAID.store(false, Ordering::SeqCst);
+    *FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
 }
 
 #[cfg(test)]
@@ -208,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn the_root_is_the_setting_when_it_can_be_made_and_the_default_when_it_cannot() {
+    fn the_root_is_the_setting_when_it_is_usable_the_homes_logs_when_it_is_not_and_the_default_when_none_is_named() {
         let temp = TempDir::new("log");
         let mut tree = Tree { root: temp.join("root"), application_data: temp.join("appdata"), ..Tree::default() };
         tree.set_override(Override::Config, Some(temp.join("etc")));
@@ -219,9 +262,33 @@ mod tests {
         settings(&crate::json::quoted(&temp.join("made/Logs")).replace("\\u002B", "+"));
         assert_eq!(root(&tree, None), (temp.join("made/Logs"), None));
         assert!(crate::tree::directory_exists(&temp.join("made/Logs")));
+        // A folder this machine cannot make, as a settings file copied from another names, falls back to the home's own Logs, said once in it.
+        let _held = crate::test_support::error_log_tests();
+        reset();
+        let home_logs = tree.directory(Directory::Logs).unwrap();
         std::fs::write(temp.join("blocker"), "x").unwrap();
-        settings(&crate::json::quoted(&temp.join("blocker/Logs")));
-        assert_eq!(root(&tree, None).0, temp.join("appdata/EmuSen/Logs"));
+        let blocked = temp.join("blocker/Logs");
+        settings(&crate::json::quoted(&blocked));
+        assert_eq!(root(&tree, None).0, home_logs);
+        let now = SystemTime::now();
+        let file = append(&root(&tree, None).0, "20261101", "T", now, "first\n").unwrap();
+        append(&home_logs, "20261101", "T", now, "second\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), format!("T WARN [log] {}\nfirst\nsecond\n", fallback_words(&blocked, &home_logs)));
+        // One that exists and takes no file falls back too.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let shut = temp.join("shut");
+            std::fs::create_dir_all(&shut).unwrap();
+            std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
+            if std::fs::write(path::combine(Style::HOST, &shut, "probe"), b"").is_err() {
+                assert!(!usable(Some(&shut)));
+                settings(&crate::json::quoted(&shut));
+                assert_eq!(root(&tree, None).0, home_logs);
+            }
+            std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert!(!file_exists(&path::combine(Style::HOST, &temp.join("made/Logs"), WRITE_CHECK)));
         settings("5");
         let (fallback, said) = root(&tree, None);
         assert_eq!(fallback, temp.join("appdata/EmuSen/Logs"));

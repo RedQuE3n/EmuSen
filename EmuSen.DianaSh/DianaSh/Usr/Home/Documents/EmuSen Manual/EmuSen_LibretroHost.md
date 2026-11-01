@@ -317,6 +317,41 @@ Vulkan program must; that path is tested on the presenter's side, and the limit 
 | `frame_rate` | `timing.fps` as the exact ratio its `double` holds where the denominator stays under 10⁶, else the nearest with one (59.94005994 → 60000/1001); a change raises `MACHINE_INFO`, and pacing is the presenter's, as for every core |
 | `phases` (`PHASES`) | `retro_run`, picture, sound, files, as nanoseconds, so that the host's own tools measure a hosted core as any other |
 
+### 4.1a Which games a hosted core takes (2026-11-01)
+
+A hosted core takes a game file of a system when three conditions hold: its line in `libretro-cores.tsv` names the
+system; the file's name ends, past a dot and ignoring case, in one of the extensions its own `.info` lists under
+`supported_extensions`; and no named exception of `libretro-extensions.tsv` drops that extension for that core and
+system (one may also add one). The rule is one pure function in `emusen_systems::libretro_extensions`,
+
+    pub fn takes(stem: &str, supported: &[String], system: &str, game: &Path) -> bool
+
+with `info_extensions(info_text)` reading the `.info`'s value and `takes_under` the same rule over lists a test supplies.
+The ordering of a console's engines (§4.8 of `EmuSen_Cores.md`: the native core first, PCEE2 first on the PlayStation 2
+while Sapphire is developed) is the discovery's, which calls this function to filter and keeps its own order.
+
+**Sources.** The extensions are the cores' public `.info` files (libretro-core-info), never a core's source. Two are
+cited by the tests: PCEE2 lists `iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx`, so it refuses a `.cue` and a cue/bin set
+reaches it through its `.bin`; Flycast lists `chd|cdi|iso|elf|bin|cue|gdi|lst|zip|dat|7z|m3u`, for each of `dreamcast`,
+`naomi` and `atomiswave`, and refuses a `.ccd` although the Dreamcast's table row lists one.
+
+**Exceptions as data.** Each line names a core, one system its line names, the extensions added and dropped, and the
+rule that sets it; the list is checked against `libretro-cores.tsv` when read, and a line of another shape is refused
+with its number. The shipped file names none: no rule of EmuSen's yet sets one, and every difference from a core's own
+list is to be a named exception decided by the tester, never one per game.
+
+**Design notes.** (1) The rule lives in `emusen-systems` because the list it reads does; the discovery, which knows the
+installed `.info`, passes its value in, so the function reads no file. (2) `info_extensions` reads one key with the
+quoting of `emusen-core-tool`'s `CoreInfo` (first key kept, `#` lines skipped); that reader carries the network and TLS
+crates the catalogue needs, which the systems table should not depend on. (3) A suffix match lets a listed compound
+extension (`iso.gz`) and a single one (`gz`) both work without a second rule.
+
+**Tests** (`libretro_extensions::tests`, 9): each listed extension of both cores, the `.cue` refusal and the `.bin`
+path, a system off a core's line, names with no extension, the `.info` value quoted, bare, commented and absent, an
+exception's adding and dropping for its system only, a malformed exception refused, and the shipped file read whole.
+Seeded faults, each reverted, each caught by one test: the dot before a suffix not required; the system condition
+removed; drops ignored; a commented `.info` line read; case not folded.
+
 ### 4.2 Video
 
 | libretro format | handed as | in the callback |

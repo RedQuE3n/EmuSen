@@ -63,8 +63,13 @@ namespace EmuSen.Tools.Packages
             _check = new LunaAction("Check", () => MarkSelected(PackagesPlan.Check.Key)) { HelpText = "Marks the chosen package to be checked against its manifest." };
             _zip = new LunaAction("Zip", () => MarkSelected(PackagesPlan.Zip.Key, PackagesPlan.MakeZip.Key)) { HelpText = "Marks the chosen package to be written as one zip." };
             _convert = new LunaAction("Convert to CHD", () => MarkSelected(PackagesPlan.Convert.Key)) { HelpText = "Marks the chosen disc to be converted to CHD." };
-            _refresh = new LunaAction("Refresh", Refresh) { PadButton = PadGlyphButton.Select, HelpText = "Lists the library and its packages again." };
-            SetToolActions([_make, _check, _zip, _convert, LunaAction.Separator(), _refresh]);
+            _refresh = new LunaAction("Refresh", Refresh) { HelpText = "Lists the library and its packages again." };
+            // On the big screen A opens a package's page, X marks and Start applies; Refresh is a row of the List card (EmuSen_Interface.md §15.1).
+            SetToolActions([_make, _check, _zip, _convert, LunaAction.Separator(), _refresh], bigScreenButtons: []);
+            SetListActions([_refresh]);
+            SetFilters([new AdaptiveSection("all", "All"), new AdaptiveSection("packaged", "Packaged"), new AdaptiveSection("unpackaged", "Not yet"), new AdaptiveSection("problems", "Problems")]);
+            InFilter = Belongs;
+            Header = new AdaptiveHeader("PACKAGES");
             MarksChanged += UpdateActions;
 
             _timer = new DispatcherTimer { Interval = PollEvery };
@@ -251,9 +256,9 @@ namespace EmuSen.Tools.Packages
         {
             var sections = new List<AdaptiveSection> { new("all", "All", "Consoles") };
             sections.AddRange(Rows.Select(r => r.Console).Where(c => c.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
-            sections.AddRange([new AdaptiveSection("packaged", "Packaged", "State"), new AdaptiveSection("unpackaged", "Not yet", "State"), new AdaptiveSection("problems", "Problems", "State")]);
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
+            Header = new AdaptiveHeader("PACKAGES", Facts: $"{Rows.Count} games · {Rows.Count(r => r.Packaged)} packaged · {Rows.Count(r => r.Problem)} problems");
         }
 
         // The packages' total and the free space of the disk they are on (§3).

@@ -807,6 +807,21 @@ only where the change is large (Cores, §14).
   (what the file is, what it matches, which others are the same dump).
 - **Cores**: §14.
 
+**Built 2026-11-01, the three tools on the frame.** LunaP's six pieces (its `docs/LunaP.md` §208) and the tool screen
+first; then each tool's host presents it as a screen (`ToolPaneWindow`, `SheetLayer.Screen`), full screen in the safe
+area with the header role and the frame's own help bar, in place of the centred sheet of 812 × 668 and its second hint
+bar. Packages: the consoles on the shoulders, `Packaged`, `Not yet` and `Problems` as the List card's filter, `Refresh` a
+row of the card, the header `PACKAGES` with its counts; A opens the package's page, X marks, Start applies, and the big
+screen draws no action buttons. Scraper: `All` and the systems on the shoulders; the five criteria and the collections as
+the filter, sent to `scrape ls` beside the system's words (`ScraperPlan.Line` takes both); `Theme`, `Videos` and
+`Overwrite` as rows of the plan's question, read back when the run is confirmed; `Mark All` a row of the card; `Stop` the
+one button; the detail beside the list at 0.6. Library Manager: its six findings stay the strip; A asks to hide the file
+or to show it again, through the plan's question; X opens the file's page (`Mark to hide`, `Show in File Manager`);
+`Save List…` and `Check Again` rows of the card; `Stop` the one button; the detail beside the list. The states of all
+four tools re-recorded at both sizes (`EmuSen_InterfaceSpec.md`), seventeen states, held by `WindowFitAuditTests`.
+Not yet moved: the Scraper's and the Library Manager's detail content, which stays each tool's own lines rather than
+the sentences of §14.4; a stage of their own.
+
 ### 15.2 Queued
 
 - **Themes** (a tile of §2.6). Three sheets today (`ThemeSettingsWindow`, `ThemeBrowserWindow`, `ThemeDetailWindow`)

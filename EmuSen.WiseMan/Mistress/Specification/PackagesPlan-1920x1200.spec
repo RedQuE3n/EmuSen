@@ -7,132 +7,100 @@ root Border
 unit 1.5
 slack 2
 floor 16
-frame 350.48,37,1219.05,1002
-title Packages
+frame 0,0,1920,1161
 case PackagesPlan
 palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=350,187,1221,822 by=panel limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=none seen=350.48,187,1219.05,822
-    1 PackagesPane at=386,205,1149,804 by=panel heard=Packages limit=350.48,187,1219.05,822 role=pane
-      2 Grid at=386,205,1149,804 by=panel limit=350.48,187,1219.05,822 role=none
-        3 DockPanel at=410,223,1101,69 by=panel limit=350.48,187,1219.05,822 role=none
-          4 Border at=1241,223,270,69 by=panel limit=350.48,187,1219.05,822 name=AdaptiveSearch role=none
-            5 TextBox at=1241,223,270,69 by=panel drawn focus heard=Search limit=350.48,187,1219.05,822 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
-              6 ScrollViewer allow="a text box scrolls its own text" at=1257.5,233.5,237,48 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
-                7 TextBlock allow="a text box scrolls its own text" at=1257.5,233.5,237,48 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search games" in=6 layout=119.99,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search games"
-          8 Border at=410,223,831,69 by=panel limit=350.48,187,1219.05,822 name=AdaptiveNavigation role=none
-            9 WholeRow at=410,223,831,69 by=panel limit=350.48,187,1219.05,822 paints=#FFFFFFFF role=none
-              10 ToggleButton at=410,224.5,97.5,66 by=panel drawn focus heard=All limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text=All
-                11 TextBlock at=435.5,233.5,46.5,48 box=31,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ALL layout=30.97,31.2 limit=410,224.5,97.5,66 owner=10 paints=#EEEEF0FF role=text size=26 text=ALL
-              12 ToggleButton at=519.5,224.5,100.5,66 by=panel drawn focus heard=NES limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text=NES
-                13 TextBlock at=545,233.5,49.5,48 box=33,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=NES layout=32.68,31.2 limit=519.5,224.5,100.5,66 owner=12 paints=#FFFFFFFF role=text size=26 text=NES
-              14 ToggleButton at=632,224.5,211.5,66 by=panel drawn focus heard=PlayStation limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text=PlayStation
-                15 TextBlock at=657.5,233.5,160.5,48 box=107,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=PLAYSTATION layout=106.31,31.2 limit=632,224.5,211.5,66 owner=14 paints=#FFFFFFFF role=text size=26 text=PLAYSTATION
-              16 ToggleButton at=855.5,224.5,156,66 by=panel drawn focus heard="Sega CD" limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text="Sega CD"
-                17 TextBlock at=881,233.5,105,48 box=70,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SEGA CD" layout=69.71,31.2 limit=855.5,224.5,156,66 owner=16 paints=#FFFFFFFF role=text size=26 text="SEGA CD"
-              18 ToggleButton at=1023.5,224.5,115.5,66 by=panel drawn focus heard=SNES limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text=SNES
-                19 TextBlock at=1049,233.5,64.5,48 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SNES layout=42.93,31.2 limit=1023.5,224.5,115.5,66 owner=18 paints=#FFFFFFFF role=text size=26 text=SNES
-        20 Grid at=410,310,1101,418.5 by=panel limit=350.48,187,1219.05,822 role=none
-          21 Border at=410,310,1101,418.5 by=panel limit=350.48,187,1219.05,822 name=AdaptiveContent role=none
-            22 Grid at=410,310,1101,418.5 by=panel limit=350.48,187,1219.05,822 role=none
-              23 Border at=425,310,1069.5,418.5 by=panel limit=350.48,187,1219.05,822 paints=#1B1B1EFF,#707070FF role=none
-                24 DockPanel at=450.5,335.5,1018.5,367.5 by=panel limit=350.48,187,1219.05,822 role=none
-                  25 TextBlock at=450.5,335.5,1018.5,43.5 box=679,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Apply these changes?" layout=169.13,28.8 limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=text size=24 text="Apply these changes?"
-                  26 StackPanel at=1181,637,288,66 by=panel limit=350.48,187,1219.05,822 role=none
-                    27 Button at=1181,637,148.5,66 by=panel drawn focus heard=Cancel limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Cancel
-                      28 TextBlock at=1206.5,646,97.5,48 box=65,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=64.74,31.2 limit=1181,637,148.5,66 owner=27 paints=#EEEEF0FF role=text size=26 text=CANCEL
-                    29 Button at=1341.5,637,127.5,66 by=panel drawn focus heard=Apply limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Apply
-                      30 TextBlock at=1367,646,76.5,48 box=51,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=APPLY layout=50.99,31.2 limit=1341.5,637,127.5,66 owner=29 paints=#D4D4D4FF role=text size=26 text=APPLY
-                  31 ScrollViewer at=450.5,397,1018.5,222 by=panel fades=b limit=350.48,187,1219.05,822 overflow=81 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=450.5,397,1018.5,222
-                    32 TextBlock at=450.5,397,1018.5,303 box=679,202 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="Make 1 package, linked: each game stays where it is in the library.\n    Amber Saga (USA) (SNES)\nConvert 1 disc to CHD, each checked three ways once it is written and given a package. The originals are never removed.\n    Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (PlayStation)\nNothing in the library is changed, moved or removed." in=31 layout=673.85,201.6 limit=450.5,397,1018.5,222 paints=#D4D4D4FF role=text seen=450.5,397,1018.5,222 size=24 text="Make 1 package, linked: each game stays where it is in the library.\n    Amber Saga (USA) (SNES)\nConvert 1 disc to CHD, each checked three ways once it is written and given a package. The originals are never removed.\n    Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (PlayStation)\nNothing in the library is changed, moved or removed."
-        33 Border at=410,740.5,1101,66 by=panel limit=350.48,187,1219.05,822 name=AdaptiveActions role=none
-          34 WrapPanel at=410,740.5,1101,66 by=panel limit=350.48,187,1219.05,822 role=none
-            35 ActionButton at=410,740.5,120,66 by=panel drawn focus heard=MAKE limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Make
-              36 TextBlock at=435.5,749.5,69,48 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MAKE layout=45.21,31.2 limit=410,740.5,120,66 owner=35 paints=#D4D4D4FF role=text size=26 text=MAKE
-            37 ActionButton at=548,740.5,133.5,66 by=panel drawn focus heard=CHECK limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Check
-              38 TextBlock at=573.5,749.5,82.5,48 box=55,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CHECK layout=54.55,31.2 limit=548,740.5,133.5,66 owner=37 paints=#D4D4D4FF role=text size=26 text=CHECK
-            39 ActionButton at=699.5,740.5,90,66 by=panel drawn focus heard=ZIP limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Zip
-              40 TextBlock at=725,749.5,39,48 box=26,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ZIP layout=25.45,31.2 limit=699.5,740.5,90,66 owner=39 paints=#D4D4D4FF role=text size=26 text=ZIP
-            41 ActionButton at=807.5,740.5,264,66 by=panel drawn focus heard="CONVERT TO CHD" limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text="Convert to CHD"
-              42 TextBlock at=833,749.5,213,48 box=142,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CONVERT TO CHD" layout=141.08,31.2 limit=807.5,740.5,264,66 owner=41 paints=#D4D4D4FF role=text size=26 text="CONVERT TO CHD"
-            43 ActionButton at=1089.5,740.5,163.5,66 by=panel drawn focus heard=REFRESH limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Refresh
-              44 TextBlock at=1115,749.5,112.5,48 box=75,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REFRESH layout=74.7,31.2 limit=1089.5,740.5,163.5,66 owner=43 paints=#D4D4D4FF role=text size=26 text=REFRESH
-            45 ActionButton at=1271,740.5,120,66 by=panel drawn focus heard=MARK limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Mark
-              46 TextBlock at=1296.5,749.5,69,48 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=45.97,31.2 limit=1271,740.5,120,66 owner=45 paints=#D4D4D4FF role=text size=26 text=MARK
-        47 Border at=386,818.5,1149,133.5 by=panel limit=350.48,187,1219.05,822 name=AdaptiveStatus role=none
-          48 Grid at=392,824.5,1137,121.5 by=panel limit=350.48,187,1219.05,822 role=none
-            49 Grid at=392,824.5,1137,43.5 by=panel limit=350.48,187,1219.05,822 role=none
-              50 TextBlock at=404,824.5,1125,43.5 box=750,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="2 marked: make, linked 1, convert to CHD 1" layout=326.38,28.8 limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=text size=24 text="2 marked: make, linked 1, convert to CHD 1"
-            51 StackPanel at=666.5,880,862.5,66 by=panel limit=350.48,187,1219.05,822 role=none
-              52 Button at=666.5,880,153,66 by=panel drawn focus heard="Apply the marked changes" limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text="Apply…"
-                53 TextBlock at=692,889,102,48 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=666.5,880,153,66 owner=52 paints=#D4D4D4FF role=text size=26 text="APPLY…"
-              54 StackPanel at=837.5,880,691.5,66 by=panel limit=350.48,187,1219.05,822 role=none
-                55 ProgressBar at=837.5,902.5,300,21 by=panel drawn heard=Space limit=350.48,187,1219.05,822 paints=#333337FF,#4C9AE8FF role=progressbar
-                56 TextBlock at=1149.5,892,379.5,43.5 box=253,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="263 KB in packages · 412 GB free" layout=252.31,28.8 limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=text size=24 text="263 KB in packages · 412 GB free"
-        57 HintBar at=410,964,1101,33 by=panel heard="Open, Back, Section, Apply…, Refresh, Mark" limit=350.48,187,1219.05,822 role=group
-focus 27
-edge 5 up same
-edge 5 down 27
-edge 5 left 18
-edge 5 right same
-edge 10 up same
-edge 10 down 35
-edge 10 left same
-edge 10 right 12
+  0 LayoutTransformControl at=0,0,1920,1161 by=panel limit=0,0,1920,1161 role=none
+    1 ContentControl at=0,0,1920,1161 by=panel limit=0,0,1920,1161 paints=#D4D4D4FF role=none
+      2 PackagesPane at=72,42,1776,1107 by=panel heard=Packages limit=0,0,1920,1161 role=pane
+        3 Panel at=72,42,1776,1107 by=panel limit=0,0,1920,1161 role=none
+          4 Grid at=72,42,1776,1107 by=panel limit=0,0,1920,1161 role=none
+            5 Border at=72,42,1776,76.5 by=panel heard=PACKAGES limit=0,0,1920,1161 name=AdaptiveHeader role=none
+              6 DockPanel at=96,60,1728,58.5 by=panel limit=0,0,1920,1161 role=none
+                7 TextBlock at=1486.5,72,337.5,36 box=225,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="6 games · 3 packaged · 1 problems" layout=224.8,24 limit=0,0,1920,1161 paints=#8D8D91FF role=text size=20 text="6 games · 3 packaged · 1 problems"
+                8 StackPanel at=96,60,1372.5,58.5 by=panel limit=0,0,1920,1161 role=none
+                  9 TextBlock at=96,60,1372.5,58.5 box=915,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard=PACKAGES layout=104.77,38.4 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=32 text=PACKAGES
+            10 DockPanel at=96,136.5,1728,69 by=panel limit=0,0,1920,1161 role=none
+              11 Border at=1554,136.5,270,69 by=panel limit=0,0,1920,1161 name=AdaptiveSearch role=none
+                12 TextBox at=1554,136.5,270,69 by=panel drawn focus heard=Search limit=0,0,1920,1161 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+                  13 ScrollViewer allow="a text box scrolls its own text" at=1570.5,147,237,48 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                    14 TextBlock allow="a text box scrolls its own text" at=1570.5,147,237,48 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search games" in=13 layout=119.99,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search games"
+              15 Border at=96,136.5,1458,69 by=panel limit=0,0,1920,1161 name=AdaptiveNavigation role=none
+                16 WholeRow at=96,136.5,1458,69 by=panel limit=0,0,1920,1161 role=none
+                  17 ToggleButton at=96,138,97.5,66 by=panel drawn focus heard=All limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=All
+                    18 TextBlock at=121.5,147,46.5,48 box=31,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ALL layout=30.97,31.2 limit=96,138,97.5,66 owner=17 paints=#EEEEF0FF role=text size=26 text=ALL
+                  19 ToggleButton at=205.5,138,100.5,66 by=panel drawn focus heard=NES limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=NES
+                    20 TextBlock at=231,147,49.5,48 box=33,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=NES layout=32.68,31.2 limit=205.5,138,100.5,66 owner=19 paints=#FFFFFFFF role=text size=26 text=NES
+                  21 ToggleButton at=318,138,211.5,66 by=panel drawn focus heard=PlayStation limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=PlayStation
+                    22 TextBlock at=343.5,147,160.5,48 box=107,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=PLAYSTATION layout=106.31,31.2 limit=318,138,211.5,66 owner=21 paints=#FFFFFFFF role=text size=26 text=PLAYSTATION
+                  23 ToggleButton at=541.5,138,156,66 by=panel drawn focus heard="Sega CD" limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text="Sega CD"
+                    24 TextBlock at=567,147,105,48 box=70,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SEGA CD" layout=69.71,31.2 limit=541.5,138,156,66 owner=23 paints=#FFFFFFFF role=text size=26 text="SEGA CD"
+                  25 ToggleButton at=709.5,138,115.5,66 by=panel drawn focus heard=SNES limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=SNES
+                    26 TextBlock at=735,147,64.5,48 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SNES layout=42.93,31.2 limit=709.5,138,115.5,66 owner=25 paints=#FFFFFFFF role=text size=26 text=SNES
+            27 Grid at=96,223.5,1728,735 by=panel limit=0,0,1920,1161 role=none
+              28 Border at=96,223.5,1728,735 by=panel limit=0,0,1920,1161 name=AdaptiveContent role=none
+                29 Grid at=96,223.5,1728,735 by=panel limit=0,0,1920,1161 role=none
+                  30 Border at=426,298.5,1069.5,586.5 by=panel limit=0,0,1920,1161 paints=#1B1B1EFF,#707070FF role=none
+                    31 DockPanel at=451.5,324,1018.5,535.5 by=panel limit=0,0,1920,1161 role=none
+                      32 TextBlock at=451.5,324,1018.5,58.5 box=679,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"
+                      33 StackPanel at=451.5,721.5,1018.5,138 by=panel limit=0,0,1920,1161 role=none
+                        34 Button at=451.5,721.5,1018.5,66 by=panel drawn focus heard=No limit=0,0,1920,1161 op paints=#707070FF,#D4D4D4FF role=button text=No
+                          35 TextBlock at=477,730.5,36,48 box=24,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=NO layout=23.43,31.2 limit=451.5,721.5,1018.5,66 owner=34 paints=#EEEEF0FF role=text size=26 text=NO
+                        36 Button at=451.5,793.5,1018.5,66 by=panel drawn focus heard=Yes limit=0,0,1920,1161 op paints=#707070FF,#D4D4D4FF role=button text=Yes
+                          37 TextBlock at=477,802.5,46.5,48 box=31,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=YES layout=30.76,31.2 limit=451.5,793.5,1018.5,66 owner=36 paints=#D4D4D4FF role=text size=26 text=YES
+                      38 ScrollViewer at=451.5,400.5,1018.5,303 by=panel limit=0,0,1920,1161 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=451.5,400.5,1018.5,303
+                        39 TextBlock at=451.5,400.5,1018.5,303 box=679,202 by=fixed-scroll caps=16.7988 drawn face="Barlow Condensed" heard="Make 1 package, linked: each game stays where it is in the library.\n    Amber Saga (USA) (SNES)\nConvert 1 disc to CHD, each checked three ways once it is written and given a package. The originals are never removed.\n    Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (PlayStation)\nNothing in the library is changed, moved or removed." in=38 layout=673.85,201.6 limit=451.5,400.5,1018.5,303 paints=#D4D4D4FF role=text size=24 text="Make 1 package, linked: each game stays where it is in the library.\n    Amber Saga (USA) (SNES)\nConvert 1 disc to CHD, each checked three ways once it is written and given a package. The originals are never removed.\n    Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (PlayStation)\nNothing in the library is changed, moved or removed."
+            40 Border at=72,958.5,1776,133.5 by=panel limit=0,0,1920,1161 name=AdaptiveStatus role=none
+              41 Grid at=78,964.5,1764,121.5 by=panel limit=0,0,1920,1161 role=none
+                42 Grid at=78,964.5,1764,43.5 by=panel limit=0,0,1920,1161 role=none
+                  43 TextBlock at=90,964.5,1752,43.5 box=1168,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="2 marked: make, linked 1, convert to CHD 1" layout=326.38,28.8 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=24 text="2 marked: make, linked 1, convert to CHD 1"
+                44 StackPanel at=979.5,1020,862.5,66 by=panel limit=0,0,1920,1161 role=none
+                  45 Button at=979.5,1020,153,66 by=panel drawn focus heard="Apply the marked changes" limit=0,0,1920,1161 op paints=#707070FF,#D4D4D4FF role=button text="Apply…"
+                    46 TextBlock at=1005,1029,102,48 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=979.5,1020,153,66 owner=45 paints=#D4D4D4FF role=text size=26 text="APPLY…"
+                  47 StackPanel at=1150.5,1020,691.5,66 by=panel limit=0,0,1920,1161 role=none
+                    48 ProgressBar at=1150.5,1042.5,300,21 by=panel drawn heard=Space limit=0,0,1920,1161 paints=#333337FF,#4C9AE8FF role=progressbar
+                    49 TextBlock at=1462.5,1032,379.5,43.5 box=253,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="263 KB in packages · 412 GB free" layout=252.31,28.8 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=24 text="263 KB in packages · 412 GB free"
+            50 HintBar at=96,1104,1728,33 by=panel heard="Open, Back, Section, List, Apply…, Mark" limit=0,0,1920,1161 role=group
+focus 34
 edge 12 up same
-edge 12 down 37
-edge 12 left 10
-edge 12 right 14
-edge 14 up same
-edge 14 down 37
-edge 14 left 12
-edge 14 right 16
-edge 16 up same
-edge 16 down 41
-edge 16 left 14
-edge 16 right 18
-edge 18 up same
-edge 18 down 41
-edge 18 left 16
-edge 18 right 5
-edge 27 up 5
-edge 27 down 43
-edge 27 left 41
-edge 27 right 29
-edge 29 up 5
-edge 29 down 45
-edge 29 left 27
-edge 29 right same
-edge 35 up 10
-edge 35 down 52
-edge 35 left same
-edge 35 right 37
-edge 37 up 12
-edge 37 down 52
-edge 37 left 35
-edge 37 right 39
-edge 39 up 14
-edge 39 down 52
-edge 39 left 37
-edge 39 right 41
-edge 41 up 16
-edge 41 down 52
-edge 41 left 39
-edge 41 right 43
-edge 43 up 27
-edge 43 down 52
-edge 43 left 41
-edge 43 right 45
-edge 45 up 27
-edge 45 down 52
-edge 45 left 43
-edge 45 right same
-edge 52 up 39
-edge 52 down same
-edge 52 left 35
-edge 52 right 43
-press pageup focus="Button 'Cancel' (Cancel)" title=Packages top=PackagesWindow
-press pagedown focus="Button 'Cancel' (Cancel)" title=Packages top=PackagesWindow
-press first focus="Button 'Cancel' (Cancel)" title=Packages top=PackagesWindow
-press last focus="Button 'Cancel' (Cancel)" title=Packages top=PackagesWindow
-press back focus="GridSplitter  (Resize Mark)" title=Packages top=PackagesWindow
+edge 12 down 34
+edge 12 left 25
+edge 12 right same
+edge 17 up same
+edge 17 down 34
+edge 17 left same
+edge 17 right 19
+edge 19 up same
+edge 19 down 34
+edge 19 left 17
+edge 19 right 21
+edge 21 up same
+edge 21 down 34
+edge 21 left 19
+edge 21 right 23
+edge 23 up same
+edge 23 down 34
+edge 23 left 21
+edge 23 right 25
+edge 25 up same
+edge 25 down 34
+edge 25 left 23
+edge 25 right 12
+edge 34 up 21
+edge 34 down 36
+edge 34 left 19
+edge 34 right 12
+edge 36 up 34
+edge 36 down 45
+edge 36 left 19
+edge 36 right 12
+edge 45 up 36
+edge 45 down same
+edge 45 left 17
+edge 45 right 12
+press pageup focus="Button 'No' (No)" top=PackagesWindow
+press pagedown focus="Button 'No' (No)" top=PackagesWindow
+press first focus="Button 'No' (No)" top=PackagesWindow
+press last focus="Button 'No' (No)" top=PackagesWindow
+press back focus="GridSplitter  (Resize Mark)" top=PackagesWindow

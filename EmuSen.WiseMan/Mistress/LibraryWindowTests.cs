@@ -177,16 +177,17 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(["psx/Lost Disc.cue"], pane.Rows.Where(r => r.Kind == Finding.Unrecognised).Select(r => r.Source));
             Assert.Equal(7, pane.Rows.Count);
 
-            // Hidden through the pad's X and Start, then shown again the same way; only the records change.
+            // Hidden through the pad's A, which asks first, then shown again the same way; only the records change (EmuSen_Interface.md §15.1).
             pane.Form = AdaptiveForm.BigScreen;
             Dispatcher.UIThread.RunJobs();
             LibraryRow smc = pane.Rows.Single(r => r.Kind == Finding.SameDump && r.Source.EndsWith(".smc", StringComparison.Ordinal));
             pane.BigScreenTable.Select(smc);
             pane.FocusRole(AdaptiveRole.Content);
             Dispatcher.UIThread.RunJobs();
-            Assert.True(window.OnPad(UiButton.Screensaver));
+            Assert.Equal("Hide…", pane.Hints[0].Label);
+            Assert.True(window.OnPad(UiButton.Accept));
             Assert.Equal(LibraryFindings.Hide, pane.MarkOf(smc));
-            Assert.True(window.OnPad(UiButton.Menu));
+            Assert.True(pane.IsPlanOpen);
             Assert.Contains("Amber Saga [copier].smc", pane.PlanText);
             Assert.Contains("no file in the library is written, moved or removed", pane.PlanText);
             Assert.Empty(records.Changes);
@@ -297,21 +298,30 @@ namespace EmuSen.WiseMan.Mistress
             pane.BigScreenTable.Select(empty);
             pane.FocusRole(AdaptiveRole.Content);
             Dispatcher.UIThread.RunJobs();
+            // X opens the file's page, B closes it; A asks to hide the file and B declines, the mark kept; the detail stands beside the list.
             Assert.True(window.OnPad(UiButton.Screensaver));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(pane.IsPageOpen);
+            Assert.True(window.OnPad(UiButton.Back));
+            Assert.False(pane.IsPageOpen);
+            Assert.True(window.OnPad(UiButton.Accept));
             Assert.Equal(LibraryFindings.Hide, pane.MarkOf(empty));
-            Assert.True(window.OnPad(UiButton.Menu));
+            Assert.True(pane.IsPlanOpen);
             Assert.True(window.OnPad(UiButton.Back));
             Assert.False(pane.IsPlanOpen);
-            Assert.True(window.OnPad(UiButton.Accept));
-            Assert.True(pane.IsDetailOpen);
-            Assert.True(window.OnPad(UiButton.Back));
+            Assert.False(pane.IsDetailOpen);
             pane.Actions.Single(a => a.Text == "Show in File Manager").Invoke();
             Dispatcher.UIThread.RunJobs();
             Assert.Equal(Path.Combine(_library, "snes"), revealed);
             string? section = pane.SelectedSection;
             Assert.True(window.OnPad(UiButton.PageDown));
             Assert.NotEqual(section, pane.SelectedSection);
-            Assert.True(window.OnPad(UiButton.Options), "Select reads the library again");
+            Assert.True(window.OnPad(UiButton.Options), "Select opens the List card");
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(pane.IsListToolsOpen);
+            Assert.True(window.OnPad(UiButton.Back));
+            Assert.False(pane.IsListToolsOpen);
+            pane.Actions.Single(a => a.Text == "Check Again").Invoke();
             WaitIdle(pane);
             Assert.True(pane.Complete);
             window.Close();

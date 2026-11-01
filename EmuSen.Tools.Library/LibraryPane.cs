@@ -48,6 +48,13 @@ namespace EmuSen.Tools.Library
         {
             Title = "Library Manager";
             HasSearch = true;
+            // The detail, what the file is and what it matches, stands beside the list; A hides or shows the chosen file (EmuSen_Interface.md §15.1).
+            DetailPlacement = AdaptiveDetailPlacement.Beside;
+            ContentShare = 0.6;
+            Header = new AdaptiveHeader("LIBRARY MANAGER");
+            ActionFor = RowAction;
+            PageFor = r => [new LunaAction(r.Hidden ? "Mark to show again" : "Mark to hide", () => CycleMark(r)) { IsEnabled = Records is not null && !IsRunning }, _reveal];
+            PageTitle = r => r.Title;
             SearchHint = "Search files";
             RowKey = r => r.Key;
             Column(new LunaColumn<LibraryRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
@@ -67,9 +74,10 @@ namespace EmuSen.Tools.Library
             _hide = new LunaAction("Hide", MarkSelected) { HelpText = "Marks the chosen file to be hidden from the library, or a hidden one to be shown again." };
             _reveal = new LunaAction("Show in File Manager", () => _ = RevealSelected()) { HelpText = "Opens the folder that holds the chosen file in the system's file manager." };
             _save = new LunaAction("Save List…", () => _ = SaveList()) { HelpText = "Saves every finding as a text file." };
-            _again = new LunaAction("Check Again", Refresh) { PadButton = PadGlyphButton.Select, HelpText = "Reads the library's files again." };
+            _again = new LunaAction("Check Again", Refresh) { HelpText = "Reads the library's files again." };
             _stop = new LunaAction("Stop", StopScan) { HelpText = "Stops reading the library; the lists keep what was read." };
-            SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop]);
+            SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop], bigScreenButtons: [_stop]);
+            SetListActions([_save, _again]);
             MarksChanged += UpdateActions;
 
             _timer = new DispatcherTimer { Interval = PollEvery };
@@ -250,6 +258,7 @@ namespace EmuSen.Tools.Library
         {
             string library = Library ?? "";
             SetRows(library.Length == 0 ? [] : LibraryFindings.Rows(library, _dumps, _broken, _scraped, _hidden, _consoles, Exists, PackageOf));
+            Header = new AdaptiveHeader("LIBRARY MANAGER", Facts: $"{library.Length} files · {_dumps.Count} same dumps · {_broken.Count} broken or suspect · {_hidden.Count} hidden");
             _overview.Text = OverviewText;
         }
 
@@ -261,6 +270,10 @@ namespace EmuSen.Tools.Library
         {
             if (Selected is { } row) CycleMark(row);
         }
+
+        // The row's one action on the big screen: hiding it, or showing it again, asked in the plan's question before it is done.
+        private LunaAction? RowAction(LibraryRow row) => Records is null || IsRunning ? null
+            : new LunaAction(row.Hidden ? "Show Again…" : "Hide…", () => { if (SetMark(row, row.Hidden ? LibraryFindings.Unhide.Key : LibraryFindings.Hide.Key)) OpenPlan(); });
 
         // The actions stay enabled whichever row is chosen, so the pad's walk through them never changes with the row.
         private void UpdateActions()

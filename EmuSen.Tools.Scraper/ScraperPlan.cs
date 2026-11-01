@@ -41,10 +41,14 @@ namespace EmuSen.Tools.Scraper
             return words;
         }
 
-        public static List<string> Line(string sub, string? section, ScrapeOptions o, bool byHand = false)
+        public static List<string> Line(string sub, string? section, ScrapeOptions o, bool byHand = false) => Line(sub, section, null, o, byHand);
+
+        // The system's words and the criterion's or collection's, so a filter narrows a system's games.
+        public static List<string> Line(string sub, string? section, string? filter, ScrapeOptions o, bool byHand = false)
         {
             var words = new List<string> { sub };
             if (!byHand) words.AddRange(ChoiceWords(section));
+            if (!byHand) words.AddRange(ChoiceWords(filter));
             words.AddRange(KindWords(o));
             if (o.Overwrite && sub != "ls") words.Add("--overwrite");
             return words;

@@ -36,6 +36,10 @@ namespace EmuSen.Tools.Scraper
         {
             Title = "Scraper";
             HasSearch = true;
+            // The detail, a game's media as pictures, stands beside the list (EmuSen_Interface.md §15.1).
+            DetailPlacement = AdaptiveDetailPlacement.Beside;
+            ContentShare = 0.6;
+            Header = new AdaptiveHeader("SCRAPER");
             SearchHint = "Search games";
             RowKey = r => r.Path;
             Column(new LunaColumn<ScrapeRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
@@ -51,13 +55,20 @@ namespace EmuSen.Tools.Scraper
             Applying += Run;
 
             _markAll = new LunaAction("Mark All", () => MarkWhere(_ => true)) { HelpText = "Marks every game shown to be scraped; in Missing Media, every game lacking a kind asked." };
-            _theme = new LunaAction("Theme", _ => OptionsChanged()) { IsCheckable = true, HelpText = "Asks exactly the kinds the active big picture theme draws for each system." };
-            _videos = new LunaAction("Videos", _ => OptionsChanged()) { IsCheckable = true, HelpText = "Asks for videos too; they are off by default." };
-            _overwrite = new LunaAction("Overwrite", _ => OptionsChanged(relist: false)) { IsCheckable = true, HelpText = "Fetches again and replaces what is there (ES-DE's Overwrite files and data)." };
+            _theme = new LunaAction("Theme", _ => { }) { IsCheckable = true, HelpText = "Asks exactly the kinds the active big picture theme draws for each system." };
+            _videos = new LunaAction("Videos", _ => { }) { IsCheckable = true, HelpText = "Asks for videos too; they are off by default." };
+            _overwrite = new LunaAction("Overwrite", _ => { }) { IsCheckable = true, HelpText = "Fetches again and replaces what is there (ES-DE's Overwrite files and data)." };
             _stop = new LunaAction("Stop", StopRun) { HelpText = "Stops the run; the games not reached are not asked." };
-            SetToolActions([_markAll, LunaAction.Separator(), _theme, _videos, _overwrite, LunaAction.Separator(), _stop]);
+            // The options are rows of the plan's question and the desktop toolbar's toggles; a change relists, since what is missing depends on the kinds asked.
+            WatchOption(_theme, relist: true);
+            WatchOption(_videos, relist: true);
+            WatchOption(_overwrite, relist: false);
+            SetToolActions([_markAll, LunaAction.Separator(), _theme, _videos, _overwrite, LunaAction.Separator(), _stop], bigScreenButtons: [_stop]);
+            SetListActions([_markAll]);
+            SetPlanOptions([_theme, _videos, _overwrite]);
             MarksChanged += UpdateActions;
             SectionChosen += section => { _endSaid = null; _ = Refresh(); };
+            FilterChosen += filter => { _endSaid = null; _ = Refresh(); };
 
             _timer = new DispatcherTimer { Interval = PollEvery };
             _timer.Tick += (_, _) => Poll();
@@ -118,7 +129,7 @@ namespace EmuSen.Tools.Scraper
             int listing = ++_listed;
             UpdateActions();
             if (!_following) SetProgress(null, "Choosing the games…");
-            string request = ScrapeCommand.Request(ScraperPlan.Line("ls", SelectedSection, Options));
+            string request = ScrapeCommand.Request(ScraperPlan.Line("ls", SelectedSection, SelectedFilter, Options));
             string? answer = null;
             ScrapeCommandException? refused = null;
             try { answer = await Background(() => Ask(request)); }
@@ -136,7 +147,8 @@ namespace EmuSen.Tools.Scraper
                 (List<ScrapeRow> rows, List<string> notes) = ScrapeRow.Listing(answer);
                 Say(_endSaid ?? (notes.Count > 0 ? string.Join(" ", notes.Select(ScraperPlan.Sentence)) : null));
                 SetRows(rows);
-                if (SelectedSection is null or "all") LearnSystems(rows);
+                // The systems are learnt from the whole library only: a section or a filter lists part of it.
+                if (SelectedSection is null or "all" && SelectedFilter is null or "all") LearnSystems(rows);
             }
             LearnCollections();
             ShowOverview();
@@ -166,21 +178,35 @@ namespace EmuSen.Tools.Scraper
         // All, the criteria of ES-DE's "Scrape these games", each system, and each collection: one section is one choice of the module's.
         private void FillSections()
         {
-            var sections = new List<AdaptiveSection>
-            {
-                new("all", "All Games", "Games"), new("favorites", "Favourites", "Games"), new("missing", "Missing Media", "Games"),
-                new("noimage", "No Game Image", "Games"), new("nometadata", "No Description", "Games"),
-            };
+            var sections = new List<AdaptiveSection> { new("all", "All", "Systems") };
             sections.AddRange(_systems);
-            sections.AddRange(_collections);
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
+            // The criteria and the collections choose among a system's games, so they are the list's filters, not sections.
+            var filters = new List<AdaptiveSection>
+            {
+                new("all", "All Games"), new("favorites", "Favourites"), new("missing", "Missing Media"), new("noimage", "No Game Image"), new("nometadata", "No Description"),
+            };
+            filters.AddRange(_collections.Select(c => new AdaptiveSection(c.Key, c.Label)));
+            string filter = SelectedFilter is { } f && filters.Any(x => x.Key == f) ? f : "all";
+            SetFilters(filters, filter);
         }
 
         private void OptionsChanged(bool relist = true)
         {
             ShowOverview();
             if (relist) _ = Refresh();
+        }
+
+        private void WatchOption(LunaAction option, bool relist)
+        {
+            bool was = option.IsChecked;
+            option.Changed += a =>
+            {
+                if (a.IsChecked == was) return;
+                was = a.IsChecked;
+                OptionsChanged(relist);
+            };
         }
 
         private void MarkWhere(Func<ScrapeRow, bool> which)

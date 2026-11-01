@@ -3525,3 +3525,11 @@ the device and driver UUIDs); `emusen_serenity_ring_image` gives one image laid 
 `frame_ring` answered the chain's new frame. The C# side is `SlangRing`, `SlangChain.AdvanceRing` and
 `CoreMachine.RingLend`/`FrameRing`. The number moved in `emusen_platform.h`, `lib.rs` and
 `PlatformLibrary.InterfaceVersion` together. Recorded in `EmuSen_LibretroHost.md` §10f.
+
+## 43. Interface 30, 2026-11-01: the libretro cores EmuSen hosts
+
+One function: `emusen_systems_libretro_cores` gives `libretro-cores.tsv` as one compact JSON array by the length-query
+idiom, the list `emusen_systems::libretro_cores` reads, for the C# runtime's `HostedCores` (`EmuSen_Cores.md` §4.7,
+`EmuSen_LibretroHost.md` §0.3). It was built as interface 28 beside the ring of §42 and renumbered past it and past
+interface 29's scraping command (`EmuSen_LibraryTools.md` §9), which landed first. The number moved in
+`emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together.

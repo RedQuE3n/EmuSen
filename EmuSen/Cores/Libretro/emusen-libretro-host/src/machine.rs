@@ -152,7 +152,9 @@ fn info_value(lib: &Library, key: &str) -> String {
 fn systems(lib: &Library) -> Vec<(String, String, Vec<String>)> {
     let databases: Vec<String> = info_value(lib, "database").split('|').map(str::to_owned).collect();
     let refs: Vec<&str> = databases.iter().map(String::as_str).collect();
-    let found = emusen_systems::for_libretro(&info_value(lib, "systemid"), &refs);
+    // A listed core runs the systems its list line names, of those its .info claims (EmuSen_Cores.md §4.7).
+    let listed = emusen_systems::libretro_cores::hosted().iter().find(|c| c.stem == lib.stem);
+    let found: Vec<_> = emusen_systems::for_libretro(&info_value(lib, "systemid"), &refs).into_iter().filter(|s| listed.is_none_or(|c| c.systems.contains(&s.id))).collect();
     if found.is_empty() {
         let id = format!("libretro-{}", lib.stem.to_ascii_lowercase().replace(|c: char| !c.is_ascii_alphanumeric(), "-"));
         let name = Some(info_value(lib, "systemname")).filter(|n| !n.is_empty()).unwrap_or_else(|| lib.name.clone());

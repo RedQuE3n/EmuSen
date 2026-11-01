@@ -6062,7 +6062,7 @@ case the page for cores
 target none
 covers 1
 $ man cores
-out 9924
+out 10468
 NAME
     cores - list, download, install, update, roll back, remove and
     verify the libretro cores EmuSen hosts
@@ -6088,10 +6088,19 @@ DESCRIPTION
     later, whose requests beginning core- the platform library hands to
     the core tool.
 
-    EmuSen hosts two libretro cores, PCEE2 for the PlayStation 2 and
-    Flycast for the Dreamcast, Naomi and Atomiswave; only they are
-    listed for download, and a core put in /Cores/libretro that is not
-    one of them is listed as unsupported, with the reason.
+    EmuSen hosts a libretro core for each console it has a core of its
+    own for, plus the Saturn and the Dreamcast: pcee2 (PlayStation 2),
+    flycast (Dreamcast, Naomi, Atomiswave), snes9x, nestopia,
+    genesis_plus_gx (Genesis, Sega CD, Master System, SG-1000),
+    picodrive (32X), mupen64plus_next, sameboy, mednafen_psx_hw and
+    mednafen_saturn. Only they are listed for download, and a core put
+    in /Cores/libretro that is not one of them is listed as unsupported,
+    with the reason. Snes9x, Genesis Plus GX and PicoDrive are under
+    non-commercial licences, shown by cores info before download.
+
+    A console's own core stays its default; a hosted core is chosen with
+    cores default. The PlayStation 2 is the one exception: pcee2 is its
+    default while Sapphire is under development.
 
     A core is named by its file's stem: pcee2 for pcee2_libretro.so. The
     stem names the core's folder under /Cores/libretro and its files; the

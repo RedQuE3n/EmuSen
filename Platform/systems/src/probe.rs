@@ -209,7 +209,7 @@ pub fn route(file_name: &str, folder: Option<&str>, candidates: &[Candidate], cl
 
 /// Whether a system has a recogniser, which only consoles sharing an extension with another need.
 pub fn recognises(system: &str) -> bool {
-    matches!(system, "md" | "mcd" | "32x" | "psx" | "ps2")
+    matches!(system, "md" | "mcd" | "32x" | "psx" | "ps2" | "saturn" | "dreamcast")
 }
 
 /// The system's recogniser over the head; none for a system without one.
@@ -218,6 +218,7 @@ pub fn recognise(system: &str, head: &Head) -> Result<Option<Recognition>, Need>
         "md" | "mcd" | "32x" => crate::genesis::recognise(system, head),
         "psx" => crate::psx::disc::recognise(head),
         "ps2" => crate::ps2::disc::recognise(head),
+        "saturn" | "dreamcast" => crate::sega_disc::recognise(system, head),
         _ => Ok(None),
     }
 }

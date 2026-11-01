@@ -80,6 +80,7 @@ namespace EmuSen.Crystal.Managed
                 w.WriteStartObject();
                 w.WriteString("name", system.Name);
                 w.WriteString("engine", system.Engine);
+                CrystalJson.StringOrNull(w, "note", system.Note);
                 w.WriteStartArray("items");
                 foreach (FirmwareItem i in system.Items)
                 {

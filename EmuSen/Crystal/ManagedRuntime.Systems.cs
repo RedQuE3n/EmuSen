@@ -52,7 +52,7 @@ namespace EmuSen.Crystal.Managed
                 w.WriteString("id", s.Id);
                 w.WriteString("name", s.Name);
                 CrystalJson.Strings(w, "extensions", s.Extensions);
-                string[] engines = group.Select(p => p.Core.EngineName).Distinct().ToArray();
+                string[] engines = CoreDiscovery.InRuleOrder(group.Select(p => p.Core), s.Id).Select(c => c.EngineName).Distinct().ToArray();
                 CrystalJson.Strings(w, "engines", engines);
                 w.WriteBoolean("starts_empty", group.Any(p => p.System.StartsEmpty));
                 w.WriteStartObject("core");
@@ -133,7 +133,7 @@ namespace EmuSen.Crystal.Managed
         // The engines that run a system: the console's choice where it has one, else what discovery found for it.
         private static IReadOnlyList<string> EnginesOf(string console, string systemId) =>
             CoreCatalog.EngineFor(console)?.Choices is { Count: > 0 } choices ? choices
-            : CoreCatalog.SoleDiscoveredEngine(console) is { } sole ? new[] { sole }
+            : CoreCatalog.SoleDiscoveredEngine(console) is { } sole ? new[] { sole }.Concat(CoreDiscovery.ForSystem(systemId).Select(c => c.EngineName)).Distinct().ToArray()
             : CoreDiscovery.ForSystem(systemId).Select(c => c.EngineName).Distinct().ToArray();
 
         public static byte[] EnginesJson() => CrystalJson.Write(w =>

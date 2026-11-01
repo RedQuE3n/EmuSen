@@ -214,3 +214,16 @@ fn only_the_hosted_cores_are_offered_and_an_installed_one_off_the_list_is_not_su
     assert!(text(&refused[0], "reason").contains("not one of the libretro cores EmuSen hosts"), "{:?}", refused[0]);
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn a_listed_core_whose_info_names_only_opengl_is_offered_since_the_list_gives_its_renderer() {
+    let dir = scratch("hosted-gl");
+    let server = serve(files(&dir));
+    let hosted = vec![emusen_core_tool::Hosted { stem: "glonly".into(), systems: vec!["n64".into()] }];
+    let ctx = Context { cores: dir.join("Cores"), source: Some(source(&server)), placement: None, installation: None, notes: Vec::new(), hosted: Some(hosted) };
+    events(&ctx, r#"{"op":"core-fetch"}"#);
+    let rows = events(&ctx, r#"{"op":"core-ls"}"#);
+    let listed: Vec<(&str, &str)> = rows.iter().filter(|e| text(e, "event") == "core").map(|e| (text(e, "stem"), text(e, "state"))).collect();
+    assert_eq!(listed, [("glonly", "available")]);
+    std::fs::remove_dir_all(&dir).unwrap();
+}

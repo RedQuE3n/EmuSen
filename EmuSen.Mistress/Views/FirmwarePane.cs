@@ -58,7 +58,11 @@ namespace EmuSen.Mistress.Views
     }
 
     // A system the build runs and the engine that runs it, with its firmware; and the overview's folders.
-    public sealed record FirmwareSystemRow(string Name, string Engine, IReadOnlyList<FirmwareRow> Items);
+    public sealed record FirmwareSystemRow(string Name, string Engine, IReadOnlyList<FirmwareRow> Items)
+    {
+        // The runtime's words on the console's firmware as a whole, such as the Saturn's BIOS being the player's own to give; null for most.
+        public string? Note { get; init; }
+    }
 
     public sealed record FirmwareView(string Folder, IReadOnlyList<string> Folders, IReadOnlyList<FirmwareSystemRow> Systems)
     {
@@ -74,7 +78,7 @@ namespace EmuSen.Mistress.Views
             var systems = o.GetProperty("systems").EnumerateArray().Select(s => (Name: s.GetProperty("name").GetString() ?? "", System: s)).Select(s => new FirmwareSystemRow(s.Name, s.System.GetProperty("engine").GetString() ?? "",
                 s.System.GetProperty("items").EnumerateArray().Select(i => new FirmwareRow(i.GetProperty("label").GetString() ?? "", i.GetProperty("file").GetString() ?? "", i.GetProperty("size").GetInt32(),
                     i.GetProperty("present").GetBoolean(), i.GetProperty("wrong_size").GetBoolean(), Text(i, "effect"), Text(i, "cost"))
-                { FoundIn = Text(i, "found_in"), WrongSizeIn = Text(i, "wrong_size_in"), StartsEmpty = StartsEmpty(s.Name) }).ToArray())).ToArray();
+                { FoundIn = Text(i, "found_in"), WrongSizeIn = Text(i, "wrong_size_in"), StartsEmpty = StartsEmpty(s.Name) }).ToArray()) { Note = Text(s.System, "note") }).ToArray();
             return new FirmwareView(o.GetProperty("folder").GetString() ?? "", o.GetProperty("folders").EnumerateArray().Select(f => f.GetString() ?? "").ToArray(), systems);
         }
 
@@ -140,6 +144,7 @@ namespace EmuSen.Mistress.Views
             foreach (FirmwareSystemRow system in systems)
             {
                 if (!_menu) yield return new SectionHeader { Text = system.Name };
+                if (system.Note is { } note) yield return _menu ? MenuRow(system.Name, "BIOS", note) : new HintText { Text = note };
                 if (system.Items.Count == 0) yield return _menu ? MenuRow(system.Name, "None needed", NoFirmware) : new HintText { Text = NoFirmware };
                 foreach (FirmwareRow item in system.Items)
                     yield return _menu ? MenuRow(MenuLabel(item), item.FileName, Footer(item), verbatim: true) : DesktopRow(item);

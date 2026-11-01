@@ -19,6 +19,19 @@ pub unsafe extern "C" fn emusen_systems_table(out: *mut u8, len: usize) -> i64 {
     }
 }
 
+/// The libretro cores EmuSen hosts as `emusen_systems::libretro_cores::to_json` writes them, by the length-query idiom
+/// (EmuSen_Cores.md §4.7, EmuSen_LibretroHost.md §0.3).
+///
+/// # Safety
+/// `out` must be valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_systems_libretro_cores(out: *mut u8, len: usize) -> i64 {
+    match emusen_systems::libretro_cores::parse(emusen_systems::libretro_cores::SHIPPED) {
+        Ok(list) => unsafe { put(emusen_systems::libretro_cores::to_json(&list).as_bytes(), out, len) },
+        Err(e) => fail(status::PARSE, e) as i64,
+    }
+}
+
 /// Every save medium's module facts as JSON, by the length-query idiom.
 ///
 /// # Safety

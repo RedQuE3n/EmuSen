@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Crystal
         public void The_library_gives_a_table()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            Assert.Equal(12, SystemTable.Rows.Count);
+            Assert.Equal(14, SystemTable.Rows.Count);
         }
 
         [Fact]
@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.Crystal
             string header = File.ReadAllText(Path.Combine(ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
             Assert.Contains("int64_t emusen_systems_table(uint8_t *out, size_t len);", header);
             var declared = Regex.Matches(header, @"^\w+ \*?(emusen_systems_\w+)\(", RegexOptions.Multiline).Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal);
-            Assert.Equal(SystemCode.Exports.Append("emusen_systems_table").Order(StringComparer.Ordinal), declared);
+            Assert.Equal(SystemCode.Exports.Append("emusen_systems_table").Append("emusen_systems_libretro_cores").Order(StringComparer.Ordinal), declared);
         }
     }
 }

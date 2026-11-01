@@ -29,8 +29,8 @@ Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | 
 status 1
 action none
 $ cores get pcsx2
-out 82
-cores: pcsx2: pcsx2 is not one of the libretro cores EmuSen hosts (pcee2, flycast)
+out 189
+cores: pcsx2: pcsx2 is not one of the libretro cores EmuSen hosts (pcee2, flycast, snes9x, nestopia, genesis_plus_gx, picodrive, mupen64plus_next, sameboy, mednafen_psx_hw, mednafen_saturn)
 status 1
 action none
 $ cores ls --installed --updates
@@ -92,8 +92,8 @@ Usage: cores ls [--installed|--available|--updates|--unsupported] [<console>] | 
 status 1
 action none
 $ cores get pcsx2
-out 82
-cores: pcsx2: pcsx2 is not one of the libretro cores EmuSen hosts (pcee2, flycast)
+out 189
+cores: pcsx2: pcsx2 is not one of the libretro cores EmuSen hosts (pcee2, flycast, snes9x, nestopia, genesis_plus_gx, picodrive, mupen64plus_next, sameboy, mednafen_psx_hw, mednafen_saturn)
 status 1
 action none
 $ cores rm pcsx2

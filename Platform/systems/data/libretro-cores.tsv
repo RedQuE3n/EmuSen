@@ -1,3 +1,13 @@
-# The libretro cores EmuSen hosts, one line each, tab-separated: the core's file stem, the EmuSen systems it runs (comma-separated system ids), and its upstream source. Decided 2026-11-01: PCEE2 and Flycast, and no other is offered for download (EmuSen_Cores.md §4.7).
-pcee2	ps2	https://github.com/libretro/ps2
-flycast	dreamcast,naomi,atomiswave	https://github.com/flyinghead/flycast
+# The libretro cores EmuSen hosts, one line each, tab-separated: the core's file stem; the EmuSen systems it runs (comma-separated system ids); its upstream source; its licence as the core's .info states it; the renderer the host gives it (software, or vulkan for a core drawing through the host's Vulkan context, whatever its .info's required_hw_api lists); and the systems it is the default engine of although a native core runs them, - for none. Decided 2026-11-01: a hosted core for each console with a native core, plus the Saturn, PCEE2 and Flycast; the native core stays the default everywhere but the PlayStation 2, where PCEE2 is the default while Sapphire is under development (EmuSen_Cores.md §4.7, §4.8).
+# Non-commercial licences: Snes9x and Genesis Plus GX ("Non-commercial") and PicoDrive (the MAME licence) forbid commercial use; EmuSen is free and downloads them only at the player's request, never shipping them.
+# Naomi and Atomiswave stay on Flycast's line with no systems-table entry yet, so no console shows them.
+pcee2	ps2	https://github.com/libretro/ps2	GPLv3	vulkan	ps2
+flycast	dreamcast,naomi,atomiswave	https://github.com/flyinghead/flycast	GPLv2	vulkan	-
+snes9x	snes	https://github.com/libretro/snes9x	Non-commercial	software	-
+nestopia	nes	https://github.com/libretro/nestopia	GPLv2	software	-
+genesis_plus_gx	md,mcd,sms,sg1000	https://github.com/libretro/Genesis-Plus-GX	Non-commercial	software	-
+picodrive	32x	https://github.com/libretro/picodrive	MAME	software	-
+mupen64plus_next	n64	https://github.com/libretro/mupen64plus-libretro-nx	GPLv2	vulkan	-
+sameboy	gb,gbc	https://github.com/libretro/SameBoy	MIT	software	-
+mednafen_psx_hw	psx	https://github.com/libretro/beetle-psx-libretro	GPLv2	vulkan	-
+mednafen_saturn	saturn	https://github.com/libretro/beetle-saturn-libretro	GPLv2	software	-

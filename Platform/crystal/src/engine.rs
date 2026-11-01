@@ -1344,6 +1344,15 @@ impl crate::rewind::Snapshots for Snap<'_, '_> {
     fn total_frames(&self) -> i64 {
         self.engine.total_frames()
     }
+
+    fn frame_interval(&self) -> std::time::Duration {
+        let hz = self.engine.frame_rate_hz();
+        if hz > 0.0 { std::time::Duration::from_secs_f64(1.0 / hz) } else { std::time::Duration::ZERO }
+    }
+
+    fn name(&self) -> String {
+        self.engine.display_name.clone()
+    }
 }
 
 impl Drop for Engine {

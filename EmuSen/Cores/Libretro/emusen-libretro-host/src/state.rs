@@ -10,6 +10,8 @@ pub const HEADER_VERSION: u16 = 2;
 pub const STATE_VERSION: u32 = 1;
 pub const HEADER: usize = 112;
 const FLAG_PLATFORM: u16 = 1;
+/// A snapshot kept in memory: the digest's place holds the process's mark, and no digest is made (EmuSen_Backend.md §37).
+const FLAG_SNAPSHOT: u16 = 2;
 
 /// Why a state is not this machine's, each answered with its own status.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -28,6 +30,8 @@ pub enum Refusal {
     WrongMedia,
     /// Saved by another build of the same core and version: the build's SHA-256 the state records.
     OtherBuild([u8; 32]),
+    /// A snapshot another run of the core made, which only the run that made it reads.
+    OtherRun,
 }
 
 /// A disc's identity: its length and the digest of its first MiB, or zero for an empty drive.
@@ -80,17 +84,41 @@ pub fn platform() -> u32 {
 
 /// The header written in front of a payload already in `out[HEADER..HEADER + len]`.
 pub fn seal(out: &mut [u8], len: usize, identity: u64, build: &[u8; 32], platform: Option<u32>, disc: [u8; 16]) {
-    let digest = Sha256::digest(&out[HEADER..HEADER + len]);
+    let digest: [u8; 32] = Sha256::digest(&out[HEADER..HEADER + len]).into();
+    head(out, len, identity, build, platform, disc, 0, &digest);
+}
+
+/// A snapshot's header: as `seal`'s, with the process's mark where the digest goes, so none is computed.
+pub fn mark(out: &mut [u8], len: usize, identity: u64, build: &[u8; 32], platform: Option<u32>, disc: [u8; 16]) {
+    head(out, len, identity, build, platform, disc, FLAG_SNAPSHOT, run_mark());
+}
+
+/// Random bytes made once a process, which mark its snapshots as its own.
+fn run_mark() -> &'static [u8; 32] {
+    static MARK: std::sync::OnceLock<[u8; 32]> = std::sync::OnceLock::new();
+    MARK.get_or_init(|| {
+        let mut m = [0u8; 32];
+        let got = unsafe { libc::getrandom(m.as_mut_ptr() as *mut libc::c_void, m.len(), 0) };
+        if got != m.len() as isize {
+            let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_nanos());
+            m = Sha256::digest([t.to_le_bytes().as_slice(), &std::process::id().to_le_bytes()].concat()).into();
+        }
+        m
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn head(out: &mut [u8], len: usize, identity: u64, build: &[u8; 32], platform: Option<u32>, disc: [u8; 16], flags: u16, digest: &[u8; 32]) {
     let h = &mut out[..HEADER];
     h.fill(0);
     h[..4].copy_from_slice(MAGIC);
     h[4..6].copy_from_slice(&HEADER_VERSION.to_le_bytes());
-    h[6..8].copy_from_slice(&(if platform.is_some() { FLAG_PLATFORM } else { 0 }).to_le_bytes());
+    h[6..8].copy_from_slice(&(flags | if platform.is_some() { FLAG_PLATFORM } else { 0 }).to_le_bytes());
     h[8..16].copy_from_slice(&identity.to_le_bytes());
     h[16..20].copy_from_slice(&STATE_VERSION.to_le_bytes());
     h[20..24].copy_from_slice(&platform.unwrap_or(0).to_le_bytes());
     h[24..32].copy_from_slice(&(len as u64).to_le_bytes());
-    h[32..64].copy_from_slice(&digest);
+    h[32..64].copy_from_slice(digest);
     h[64..80].copy_from_slice(&disc);
     h[80..112].copy_from_slice(build);
 }
@@ -119,7 +147,11 @@ pub fn open<'a>(data: &'a [u8], identity: u64, build: &[u8; 32], platform: Optio
     }
     let len = u64::from_le_bytes(data[24..32].try_into().unwrap()) as usize;
     let payload = data.get(HEADER..HEADER.checked_add(len).ok_or(Refusal::Damaged)?).ok_or(Refusal::Damaged)?;
-    if Sha256::digest(payload).as_slice() != &data[32..64] {
+    if u16_at(6) & FLAG_SNAPSHOT != 0 {
+        if &data[32..64] != run_mark() {
+            return Err(Refusal::OtherRun);
+        }
+    } else if Sha256::digest(payload).as_slice() != &data[32..64] {
         return Err(Refusal::Damaged);
     }
     if data[64..80] != disc {
@@ -173,5 +205,22 @@ mod tests {
         later[16] = 2;
         assert_eq!(open(&later, id, &BUILD, None, here), Err(Refusal::Version));
         assert_eq!(open(&s[..HEADER + 3], id, &BUILD, None, here), Err(Refusal::Damaged));
+    }
+
+    #[test]
+    fn a_snapshot_carries_this_runs_mark_not_a_digest_and_another_runs_is_refused() {
+        let here = disc(Some(b"a disc"));
+        let id = identity("Core", "1.0");
+        let mut m = vec![0u8; HEADER + 7];
+        m[HEADER..].copy_from_slice(b"payload");
+        mark(&mut m, 7, id, &BUILD, None, here);
+        assert_ne!(&m[32..64], Sha256::digest(b"payload").as_slice());
+        assert_eq!(open(&m, id, &BUILD, None, here), Ok(&b"payload"[..]));
+        let mut other = m.clone();
+        other[40] ^= 1;
+        assert_eq!(open(&other, id, &BUILD, None, here), Err(Refusal::OtherRun));
+        let mut unmarked = sealed(b"payload", id, None);
+        unmarked[6] |= 2;
+        assert_eq!(open(&unmarked, id, &BUILD, None, here), Err(Refusal::OtherRun));
     }
 }

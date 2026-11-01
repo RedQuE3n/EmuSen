@@ -187,13 +187,23 @@ pub fn read_request(r: &mut impl Read) -> io::Result<(Head, Vec<u8>)> {
 }
 
 pub fn send_reply(w: &mut impl Write, ret: i64, aux: i64, bytes: &[u8]) -> io::Result<()> {
+    let mut head = [0u8; 20];
+    head[..4].copy_from_slice(&((16 + bytes.len()) as u32).to_le_bytes());
+    head[4..12].copy_from_slice(&ret.to_le_bytes());
+    head[12..20].copy_from_slice(&aux.to_le_bytes());
+    // A large reply (a state) goes after its head as it lies, not copied into one message first.
+    if bytes.len() >= LARGE_REPLY {
+        w.write_all(&head)?;
+        return w.write_all(bytes);
+    }
     let mut m = Vec::with_capacity(20 + bytes.len());
-    m.extend_from_slice(&((16 + bytes.len()) as u32).to_le_bytes());
-    m.extend_from_slice(&ret.to_le_bytes());
-    m.extend_from_slice(&aux.to_le_bytes());
+    m.extend_from_slice(&head);
     m.extend_from_slice(bytes);
     w.write_all(&m)
 }
+
+/// The size from which a reply's bytes are written apart from its head.
+const LARGE_REPLY: usize = 64 * 1024;
 
 /// A reply: the export's return, the word beside it, the bytes it wrote.
 pub struct Reply {
@@ -203,11 +213,23 @@ pub struct Reply {
 }
 
 pub fn read_reply(r: &mut impl Read) -> io::Result<Reply> {
-    let m = read_message(r)?;
-    if m.len() < 16 {
+    let mut head = [0u8; 20];
+    r.read_exact(&mut head[..4])?;
+    let n = u32::from_le_bytes(head[..4].try_into().unwrap()) as usize;
+    if n > MAX_MESSAGE {
+        return Err(io::Error::new(io::ErrorKind::InvalidData, "a message longer than the broker carries"));
+    }
+    if n < 16 {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "a reply shorter than its head"));
     }
-    Ok(Reply { ret: i64::from_le_bytes(m[..8].try_into().unwrap()), aux: i64::from_le_bytes(m[8..16].try_into().unwrap()), bytes: m[16..].to_vec() })
+    r.read_exact(&mut head[4..])?;
+    // The bytes read straight into their own buffer, neither zeroed first nor copied out of the message.
+    let mut bytes = Vec::with_capacity(n - 16);
+    r.take((n - 16) as u64).read_to_end(&mut bytes)?;
+    if bytes.len() != n - 16 {
+        return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "a reply cut short"));
+    }
+    Ok(Reply { ret: i64::from_le_bytes(head[4..12].try_into().unwrap()), aux: i64::from_le_bytes(head[12..20].try_into().unwrap()), bytes })
 }
 
 /// The most descriptors one ring carries: its images and its two semaphores.
@@ -329,6 +351,23 @@ mod tests {
         assert_eq!(Op::from_u16(Op::Ping as u16), Some(Op::Ping));
         assert_eq!(Op::from_u16(0), None);
         assert_eq!(Op::from_u16(Op::FrameRing as u16), Some(Op::FrameRing));
+    }
+
+    #[test]
+    fn a_large_reply_and_the_one_after_it_cross_whole_and_a_short_one_is_refused() {
+        let state: Vec<u8> = (0..LARGE_REPLY * 3 + 5).map(|i| (i * 7) as u8).collect();
+        let mut pipe = Vec::new();
+        send_reply(&mut pipe, 9, -1, &state).unwrap();
+        send_reply(&mut pipe, 0, 2, b"next").unwrap();
+        let mut from = &pipe[..];
+        let rep = read_reply(&mut from).unwrap();
+        assert_eq!((rep.ret, rep.aux, rep.bytes == state), (9, -1, true));
+        let rep = read_reply(&mut from).unwrap();
+        assert_eq!((rep.ret, rep.aux, rep.bytes.as_slice()), (0, 2, &b"next"[..]));
+        let mut cut = Vec::new();
+        send_reply(&mut cut, 1, 1, &state).unwrap();
+        cut.truncate(cut.len() - 1);
+        assert!(read_reply(&mut &cut[..]).is_err());
     }
 
     fn memfd(text: &[u8]) -> OwnedFd {

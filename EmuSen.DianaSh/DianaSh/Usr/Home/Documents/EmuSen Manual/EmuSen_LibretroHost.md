@@ -1116,6 +1116,21 @@ Two findings: (1) PCEE2 aborted at exit while its device was destroyed before `r
 `fields_of` reads its 448 rows as progressive; with the entry's `.info` naming the PlayStation 2 it is `ps2` and two woven
 fields.
 
+**PCEE2 on Jak and Daxter from a real entry** [M, 2026-11-01, the RX 6800, the release libretro host in-process through
+the Rust host, `run.rs` with `EMUSEN_RUN_RING=1`, the entry laid as Cores lays one (the host's copy, `pcee2_libretro.so`
+and its published `pcee2_libretro.info`, whose `systemid` is `playstation2`), `pcsx2_renderer=vulkan`,
+`pcsx2_upscale_multiplier=1` and `pcsx2_deinterlace_mode=1` (Off, the CRT path's exception of §0.3), the BIOS by path as
+before, frames 600 to 2,400 with no input, CPU weight 20 beside a WiseMan test run]: machine info's system is `ps2`, and
+every ring frame kept (600, 1,200 and 2,399) is 512 × 448 with `fields` 2, two woven fields, at 4:3, as `fields_of`
+reads the PlayStation 2's 448 rows. 4.067 and 4.087 ms a frame over two rounds, of which 3.471 and 3.497 ms on the
+emulation thread; 2,399 of 2,400 pictures in the ring. With the core's deinterlacing off the frame is lighter than the
+first run's (5.15 and 5.00 ms with its automatic mode). The PNGs are in `~/.cache/emusen/probe/libretro/ring-png-info/`.
+Two findings: (1) PCEE2 draws its own notice into the game's picture for the first seconds of the title, that the
+detected blending accuracy is Basic where High is recommended for this game, with no option in its published list to
+turn notices off; the CRT path will draw it as part of the picture, and whether `pcsx2_blending_accuracy` belongs among
+the profile's named exceptions is put to the tester (§12). (2) `frame_info` at the end reads 0 × 0, the ring's frames
+never read back, as `RingChainTests` found (§12, question 5).
+
 ## 10g. Stage 4: the frontend, planned (2026-11-01; a plan, nothing built)
 
 Stage 4 puts a hosted core in front of the player through components that exist; it adds no component. Each part
@@ -1201,3 +1216,7 @@ what PCEE2 exposes.
    `emusen-native` to take the machine by mutable reference (or the host to keep the picture behind interior
    mutability). *Recommended:* the read-back on demand, with the trait change, since a per-frame read-back would undo the
    ring's saving.
+6. **[decision]** PCEE2's notice in the picture (§10f): its renderer writes "Blending Accuracy is Basic, High recommended"
+   into the frame of Jak and Daxter's title, and its published options offer no switch for notices. *Recommended:* set
+   `pcsx2_blending_accuracy` to the level the core recommends as a named exception of the PlayStation 2 profile only if
+   a measurement on the handheld shows it fits the frame; otherwise leave the player's choice and accept the notice.

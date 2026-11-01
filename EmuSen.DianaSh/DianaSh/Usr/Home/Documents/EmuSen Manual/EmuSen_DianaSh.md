@@ -931,6 +931,38 @@ Pharaoh or the terminal program:
 It is a service like any other: owned by Crystal's header family, never read by the shell, and refused politely
 where absent (`coretop -w: this program has no windows`).
 
+### 9.10 The settings service, and the shell's one guard (module ABI 1.1)
+
+Decided by the tester 2026-10-31 (`EmuSen_Cores.md` §10, Q11 and Q12): command modules may reach the runtime's
+`Engine` setting and its core approvals through a narrow service, limited to the keys a module's manifest names, as a
+minor version of the module ABI. `emusen.settings@1` (`dianash_settings_v1` in `dianash_module.h` since 1.1): `get`
+and `set` of one key in a console's scope (`DIANASH_SETTINGS_CONSOLE`, the console's name) or a game's
+(`DIANASH_SETTINGS_GAME`, the game file's path), an absent value clearing it; `approve` and `revoke` of a library's
+SHA-256; `last_error`. A host with a runtime provides it with `dianash_set_services`: Mistress's shell does, through
+`IShellSettings` over its `CrystalRuntime` (`SettingsBridge` in `EmuSen.DianaSh`), the runtime's own checks kept.
+
+**The exception to §9.8.** For this one service the shell does read the table: a manifest names `"settings"` (keys) and
+`"approvals"` (true), and the shell hands such a module, in place of the host's table, one of its own
+(`Platform/dianash/src/settings.rs`) that passes on only those keys, refuses any other with
+`DIANASH_SETTINGS_DENIED` and words naming the key, and passes `approve` on only from a call made with
+`DIANASH_CALL_AT_PROMPT`: a line typed at the prompt, not a script given to `source`, not inside `$(...)`, and not fed by
+a pipe, as `trust` decides it. A module whose manifest names neither is handed no settings service. The guard is the
+shell's because the shell alone knows which module a call is for; a module in the process could reach around it, as
+any linked code could, so the guard keeps the declared surface honest rather than confining a hostile module, which
+the module's own approval (`trust`) is for. Revoking is allowed anywhere: it only takes trust away.
+
+`emusen.cores` names `Engine` and approvals: `cores default <console> [<engine>]`, `cores default --game <path>
+[<engine>|-]`, `cores approve <core>` (the libretro core's own SHA-256, read by `core-info`), and the revocation of a
+build `cores rm` or `cores update` dropped. `man modules` is the page.
+
+**Measured on 2026-11-01**: the shell's `tests/settings.rs` (2 tests: the keys a manifest names and no others, no
+service for a module naming none; an approval from the prompt and refused from a substitution, a pipe and a sourced
+script, a revocation from a pipe); `dianash_abi` with the baseline's 1.1 facts; WiseMan's `SettingsServiceTests` (2:
+`cores default` through the C# bridge to a runtime of the test's own, the runtime's refusal in the words printed;
+`cores approve` refused from a pipe and a shell without the service saying so). Seeded faults, each caught: every key
+let through; an approval from anywhere; a module naming no setting handed the host's table; a pipe counted as the
+prompt.
+
 ---
 
 ## 10. The host API

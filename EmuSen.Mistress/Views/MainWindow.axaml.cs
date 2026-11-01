@@ -460,6 +460,31 @@ namespace EmuSen.Mistress.Views
         // The library's discs converted to CHD beside it, checked and listed; the library is only read - see EmuSen_GamePackages.md §13.
         private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory, _appSettings), this);
 
+        // EmuSen's cores and libretro's, downloaded, updated, removed, approved and made default; the runtime's calls handed in, never the runtime itself - see EmuSen_Cores.md §3.4.
+        private void ShowCores() => _ = SheetLayer.Show(new CoresWindow(CoresRuntimeOf(Runtime), new EmuSen.Tools.Cores.CoresHost
+        {
+            Options = (console, engine) => _ = SheetLayer.Show(new GraphicsSettingsWindow(_graphics, null, console, HttpFactory), this),
+            Firmware = () => ShowPreferencesAt(PreferencesWindow.FirmwareTab),
+            OpenFolder = folder => _ = Launcher.LaunchDirectoryInfoAsync(new System.IO.DirectoryInfo(folder)),
+        }), this);
+
+        internal static EmuSen.Tools.Cores.CoresRuntime CoresRuntimeOf(CrystalRuntime runtime) => new()
+        {
+            Cores = runtime.Cores,
+            Systems = runtime.Systems,
+            Setting = (console, key) => Wrap(() => runtime.Setting(console, key)),
+            SetSetting = (console, key, value) => Wrap(() => { runtime.SetSetting(console, key, value); RuntimeCatalog.Forget(); return 0; }),
+            Approve = sha => Wrap(() => { runtime.CoreApprove(sha); return 0; }),
+            Revoke = sha => Wrap(() => { runtime.CoreRevoke(sha); return 0; }),
+        };
+
+        // The runtime's refusal as the InvalidOperationException the tool library catches, since it does not know the binding's exception.
+        private static T Wrap<T>(Func<T> call)
+        {
+            try { return call(); }
+            catch (CrystalException e) { throw new InvalidOperationException(e.Message, e); }
+        }
+
         // The library's games as packages, made, checked, zipped and converted through the library tool's jobs; the library is only read - see EmuSen_Packages.md §7.
         private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(_appSettings.RomDirectory), this);
 
@@ -777,13 +802,14 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
                     new LunaAction("_Memory Cards...", ShowMemoryCards),
                     new LunaAction("C_ompressed Discs...", ShowCompressedDiscs),
+                    new LunaAction("Cor_es...", ShowCores),
                     new LunaAction("Pac_kages...", ShowPackages),
                     new LunaAction("Sc_raper...", ShowScraper),
                     new LunaAction("_Library Manager...", ShowLibraryManager),
                     LunaAction.Separator(),
                     _hardwareDashboard,
                     // Reports on the host VM, so unlike the one above it never needs a ROM - see `man vstop`.
-                    new LunaAction("_Runtime Dashboard...", OpenVstopWindow),
+                    new LunaAction("R_untime Dashboard...", OpenVstopWindow),
                     new LunaAction("S_hell...", ShowShellConsole)));
 
             SyncMenuState();

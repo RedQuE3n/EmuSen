@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
         internal async Task AskCoreApprovalAsync(string romPath)
         {
             if (CoreAwaitingApproval(Runtime, romPath) is not { } core) return;
-            if (!await ConfirmCoreApproval(this, "Approve a Core", ApprovalMessage(core))) return;
+            if (!await ConfirmCoreApproval(this, EmuSen.Tools.Cores.CoreApproval.Title, ApprovalMessage(core))) return;
             try
             {
                 Runtime.CoreApprove(core.Sha256);
@@ -52,13 +52,8 @@ namespace EmuSen.Mistress.Views
             catch (Exception e) when (e is CrystalException or JsonException or KeyNotFoundException or InvalidOperationException) { return null; }
         }
 
-        // The words of the question, plain text: a core's descriptors are shown, never interpreted.
+        // The words of the question, one form with Cores' (EmuSen_Cores.md §3.4).
         internal static string ApprovalMessage(CoreAwaiting core) =>
-            $"{core.Name}, the core in {core.File}, is not one this installation ships, and it has not been approved.\n\n"
-            + $"By: {(core.Authors.Count > 0 ? string.Join(", ", core.Authors) : "not said")}\n"
-            + $"Licence: {(core.License.Length > 0 ? core.License : "not said")}\n"
-            + $"Systems: {(core.Systems.Count > 0 ? string.Join(", ", core.Systems) : "none")}\n"
-            + $"SHA-256: {core.Sha256}\n\n"
-            + "A core runs with your full permissions. Approve it only if you trust where it came from. If the file changes, you will be asked again.";
+            EmuSen.Tools.Cores.CoreApproval.Message(core.Name, core.File, core.Authors, core.License, core.Systems, core.Sha256);
     }
 }

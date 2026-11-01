@@ -157,6 +157,8 @@ pub(crate) struct World {
     pub shown_cwd: Option<String>,
     /// The modules linked into the program, by index.
     pub modules: Vec<&'static dyn Module>,
+    /// Each linked module's guard over the settings service, by the same index; none for one that asks for no setting (§9.9).
+    pub(crate) guards: Vec<Option<Box<crate::settings::Guard>>>,
     /// The programs shipped beside the shell, by index (§7).
     pub programs: Vec<crate::program::Program>,
     /// The table a new session starts from: the builtins and the linked modules' commands.
@@ -290,6 +292,7 @@ impl Shell {
             cancel: Arc::new(AtomicBool::new(false)),
             services: Services::default(),
             modules: Vec::new(),
+            guards: Vec::new(),
             programs: crate::program::shipped().to_vec(),
             base: Table::builtins(),
             shown_cwd: None,
@@ -467,6 +470,7 @@ impl Shell {
         let manifest = Manifest::read(module.manifest())?;
         let index = self.world.modules.len();
         self.world.modules.push(module);
+        self.world.guards.push(crate::settings::Guard::new(manifest.settings.clone(), manifest.approvals));
         let add = |table: &mut Table| {
             for command in &manifest.commands {
                 table.add(Entry { name: command.name.clone(), usage: command.usage.clone(), read_only: command.read_only, kind: Kind::Module(index) });
@@ -607,6 +611,9 @@ pub(crate) struct Manifest {
     pub jobs: Vec<String>,
     pub order: Vec<String>,
     pub notes: Vec<String>,
+    /// Since module ABI 1.1: the settings keys a module may reach, and whether it may approve and revoke (§9.9).
+    pub settings: Vec<String>,
+    pub approvals: bool,
 }
 
 #[derive(Debug)]
@@ -647,6 +654,10 @@ impl Manifest {
         if let Some(Value::Array(notes)) = value.get("notes") {
             manifest.notes = notes.iter().filter_map(Value::as_str).map(str::to_string).collect();
         }
+        if let Some(Value::Array(keys)) = value.get("settings") {
+            manifest.settings = keys.iter().filter_map(Value::as_str).map(str::to_string).collect();
+        }
+        manifest.approvals = matches!(value.get("approvals"), Some(Value::Bool(true)));
         Ok(manifest)
     }
 }

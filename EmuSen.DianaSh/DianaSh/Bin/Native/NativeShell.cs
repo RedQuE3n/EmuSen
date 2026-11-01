@@ -29,6 +29,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
 
         // The providers this shell made and ends with it; a runtime's own provider, handed in, is the runtime's to end.
         private readonly List<SessionService> _owned = new();
+        private DianashSettingsV1* _settings;
+        private GCHandle _settingsHandle;
         private readonly object _gate = new();
 
         public bool KeepsSessions { get; }
@@ -53,6 +55,23 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             _handle = 0;
             foreach (GCHandle handle in _weak) handle.Free();
             foreach (SessionService service in _owned) service.Dispose();
+            if (_settings != null) SettingsBridge.Release(_settings, _settingsHandle);
+        }
+
+        // The shell's emusen.settings@1 over the host's runtime, which the shell hands each module only as far as its manifest names - see EmuSen_DianaSh.md §9.9.
+        public void SetSettings(IShellSettings settings)
+        {
+            lock (_gate)
+            {
+                if (_settings != null) SettingsBridge.Release(_settings, _settingsHandle);
+                _settings = SettingsBridge.Make(settings, out _settingsHandle);
+            }
+            byte[] name = Encoding.UTF8.GetBytes(SettingsBridge.Service);
+            fixed (byte* n = name)
+            {
+                var entry = new DianashService { Size = (uint)sizeof(DianashService), Name = new DianashBytes { Data = n, Len = (nuint)name.Length }, Major = SettingsBridge.Major, Minor = SettingsBridge.Minor, Table = _settings };
+                Check(SetServices(_handle, &entry, 1));
+            }
         }
 
         public static int Check(int status) => status >= 0 ? status : throw new InvalidOperationException($"DianaSh: {LastError()} (status {status})");

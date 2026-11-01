@@ -1,11 +1,13 @@
 //! `emusen-core-tool`, Cores' tool (EmuSen_Cores.md §1): libretro's catalogue and index, the installed cores under
-//! `/Cores/libretro`, and the jobs that list, describe and fetch them, run on `emusen-tool-job` as the library tool's are
-//! (§6). Its words go out as JSON lines; the `cores` command and the Cores window are its faces.
+//! `/Cores/libretro`, and the jobs that list, describe, fetch, install, update, roll back, remove and verify them, run on
+//! `emusen-tool-job` as the library tool's are (§6). Its words go out as JSON lines; the `cores` command and the Cores window are its faces.
 
 pub mod catalogue;
 pub mod index;
 pub mod info;
+pub mod install;
 pub mod job;
+pub mod notes;
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -64,4 +66,31 @@ pub struct Context {
     pub cores: PathBuf,
     pub source: Option<Source>,
     pub placement: Option<Placement>,
+    /// The folder holding this installation's libretro host and proxy, copied into each core's folder (EmuSen_Cores.md §5.3).
+    pub installation: Option<PathBuf>,
+    /// The builds the project tested (`cores-notes.tsv`).
+    pub notes: Vec<notes::Tested>,
+    /// The libretro cores EmuSen hosts, the systems table's `libretro-cores.tsv` (decided 2026-11-01): only these are
+    /// offered and installed, and an installed core not on it is not supported. None, for a test of the tool's
+    /// mechanics, offers every core in the catalogue.
+    pub hosted: Option<Vec<Hosted>>,
+}
+
+/// One libretro core EmuSen hosts, and the systems it runs (EmuSen_Cores.md §4.7).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Hosted {
+    pub stem: String,
+    pub systems: Vec<String>,
+}
+
+impl Context {
+    /// Whether a core is one EmuSen hosts, and why not where it is not.
+    pub fn refuses(&self, stem: &str) -> Option<String> {
+        let list = self.hosted.as_ref()?;
+        if list.iter().any(|h| h.stem == stem) {
+            return None;
+        }
+        let names: Vec<&str> = list.iter().map(|h| h.stem.as_str()).collect();
+        Some(format!("{stem} is not one of the libretro cores EmuSen hosts ({})", names.join(", ")))
+    }
 }

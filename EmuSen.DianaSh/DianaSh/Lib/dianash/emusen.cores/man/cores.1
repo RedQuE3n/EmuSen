@@ -1,11 +1,19 @@
 NAME
-    cores - list the libretro cores EmuSen can download and those
-    installed, describe one, and fetch libretro's catalogue again
+    cores - list, download, install, update, roll back, remove and
+    verify the libretro cores EmuSen hosts
 
 SYNOPSIS
     cores ls [--installed|--available|--updates|--unsupported] [<console>]
     cores info <core>
     cores fetch
+    cores get <core>...
+    cores update [<core>...]
+    cores rollback <core>
+    cores rm <core>...
+    cores verify [<core>...]
+    cores approve <core>
+    cores default <console> [<engine>]
+    cores default --game <path> [<engine>|-]
     cores wait [cores<n>]
 
 DESCRIPTION
@@ -15,7 +23,12 @@ DESCRIPTION
     later, whose requests beginning core- the platform library hands to
     the core tool.
 
-    A core is named by its file's stem: pcsx2 for pcsx2_libretro.so. The
+    EmuSen hosts two libretro cores, PCEE2 for the PlayStation 2 and
+    Flycast for the Dreamcast, Naomi and Atomiswave; only they are
+    listed for download, and a core put in /Cores/libretro that is not
+    one of them is listed as unsupported, with the reason.
+
+    A core is named by its file's stem: pcee2 for pcee2_libretro.so. The
     stem names the core's folder under /Cores/libretro and its files; the
     core's own corename (LRPS2 for pcsx2) is shown, and names nothing.
 
@@ -54,11 +67,104 @@ DESCRIPTION
     with the index's CRC-32; for an installed core also its SHA-256 and
     the date it was fetched.
 
+INSTALLING
+    Nothing is downloaded unless asked: cores get and cores update are
+    the only commands besides cores fetch that make a network request,
+    each to buildbot.libretro.com alone, over HTTPS. A download is held
+    to every check before anything is kept, and each check prints
+    nothing when it passes; the first that fails refuses the core and
+    says why:
+
+        transport      HTTPS, the certificate checked against the
+                       system's store, a redirect off the buildbot
+                       refused
+        crc32          the zip's CRC-32 equals the index line the plan
+                       was made from; a difference means the build
+                       changed since cores fetch, or the bytes did
+        shape          exactly one member, named <core>_libretro.so
+                       whole: no folder, no .., no absolute path, no
+                       link, no other file
+        size           at most 512 MB as the zip declares it, as it
+                       inflates (stopped at the bound) and as the zip
+        members        the member's CRC-32 and length as the zip
+                       records them
+        architecture   the library's header names this machine
+        sha256         the core's SHA-256, written to its NOTICE
+
+    The core is unpacked in /Cores/libretro/.staging/, with its core
+    information, its NOTICE and copies of this EmuSen's libretro host
+    and proxy, and put in place by one rename, so a core is either
+    installed whole or not at all. A build of EmuSen without the
+    libretro host installs nothing, and says so.
+
+    NOTHING DOWNLOADED RUNS UNTIL YOU APPROVE IT. cores get prints the
+    SHA-256 to approve, and cores approve <core> approves it, typed at
+    the prompt only: a script given to source, a $(...) and a pipe are
+    refused, as trust refuses them. libretro signs no build, so the approval is
+    trust on first download: it trusts the build the buildbot served,
+    and the hash holds it to exactly that build; a changed file is a
+    new hash and is asked about again. Where EmuSen tested a build, the
+    line says whether this is that exact build, by its SHA-256; that is
+    information for your decision, never a condition of it.
+
+UPDATING AND ROLLING BACK
+    cores update installs the build the index now offers for each core
+    whose index line changed since it was installed, or for those named
+    (one already current says so). The new build is staged as cores get
+    stages one; the installed build is moved to /Cores/libretro/
+    .previous/ and the new one renamed into place, and if any rename
+    fails the installed build is put back. The new build is approved
+    again before it runs. One earlier build is kept: cores rollback puts
+    it back, keeping the newer one, so a second cores rollback returns
+    to it. Both keep their approvals. The build kept before is dropped
+    at the next update, and its approval revoked, since it now matches
+    no file.
+
+REMOVING
+    cores rm removes a core's folder and its kept build, each by a
+    rename into staging first, so it vanishes whole. Your saves and the
+    core's settings are kept in EmuSen's own folders and stay; a console
+    whose default was the core falls back to its first engine. A folder
+    you put in /Cores/libretro yourself, with no NOTICE, is yours, and
+    cores rm never removes it. The approvals the core was given are
+    revoked.
+
+THE DEFAULT ENGINE
+    cores default <console> prints the engine a console's games open on,
+    and cores default <console> <engine> sets it; --game <path> does the
+    same for one game, - clearing its own choice so that it follows its
+    console. These are the runtime's Engine setting, the same value the
+    Cores window's Make Default, a game's options and the metadata
+    editor's Alternative emulator change; the runtime refuses an engine
+    the console does not run, in its own words.
+
+    cores default, cores approve and the revocations need the settings
+    service, which a program with EmuSen's runtime provides, as
+    Mistress's shell does; elsewhere the command says it is missing (see
+    man modules).
+
+VERIFYING
+    cores verify prints one line per installed core, its result first:
+
+        ok          the core is the file its NOTICE records, and the
+                    libretro host and proxy copies are this EmuSen's
+        refreshed   as ok, after the named copies were made again
+                    from this EmuSen, as after EmuSen is updated
+        changed     the core is not the file its NOTICE records: it
+                    needs approval again, and verify changes nothing
+        added       a folder of your own, not checked
+
+    Refreshing never touches the core itself, so its approval stands.
+    NOTICE is information only: the approval is the hash recorded when
+    you approved the core, which is compared before it starts.
+
+    Only one command that changes /Cores/libretro runs at a time,
+    across every EmuSen program; another is refused until it ends.
+
 CONSOLES
     A core is placed under EmuSen's consoles by its information's
-    database names, or its systemid where those are blank. Until the
-    systems table's libretro names reach this build, the console field
-    is - and no core is called unsupported for its system.
+    database names, or its systemid where those are blank, as the
+    systems table's libretro names place it.
 
 JOBS
     Each command is a job of the core tool. One the line's budget cuts
@@ -71,6 +177,14 @@ EXAMPLES
     cores ls --updates | wc -l
     cores ls --installed | grep GPL
     cores info pcsx2
+    cores get pcsx2
+    cores update
+    cores rollback pcsx2
+    cores verify | grep -v '^ok'
+    cores approve pcsx2
+    cores default "PlayStation 2" Sapphire
+    cores default --game /home/Games/ps2/jak.chd -
+    cores rm pcsx2
     for c in $(cores ls --updates | awk '{print $3}'); do cores info $c; done
 
 SOURCES
@@ -81,7 +195,11 @@ SOURCES
     libretro, "libretro-core-info", 00_example_libretro.info,
     https://github.com/libretro/libretro-core-info, read 2026-10-31: the
     keys of a core information file.
+    PKWARE, "APPNOTE.TXT - .ZIP File Format Specification": the central
+    directory's fields, among them the external attributes that mark a
+    link.
 
 SEE ALSO
-    EmuSen_Cores.md (section 4.2: the catalogue; section 6: the jobs and
-    their events; section 8: this command), chd(1), pkg(1)
+    EmuSen_Cores.md (section 4.2: the catalogue; section 5: download,
+    verification and install; section 6: the jobs and their events;
+    section 8: this command), modules(7), trust(1), chd(1), pkg(1)

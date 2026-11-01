@@ -28,6 +28,9 @@ namespace EmuSen.Mistress.Views
         // See `man tmux`.
         private readonly DianaShSessionManager _sessions = new();
 
+        // The settings service the shell's command modules reach, over the runtime's calls (EmuSen_DianaSh.md §9.9).
+        private readonly EmuSen.Mistress.Library.RuntimeShellSettings _settings = new(CoreSettings.Runtime);
+
         // One scheduler per session - see `man tmux`. ConcurrentDictionary since MainWindow's emulation thread reads it while the UI thread edits it.
         private readonly ConcurrentDictionary<DianaShSession, DianaShInterpreterScheduler> _schedulers = new();
 
@@ -75,6 +78,7 @@ namespace EmuSen.Mistress.Views
             DockPanel.SetDock(hint, Dock.Bottom);
             Content = new DockPanel { Children = { toolbar, hint, _console.Margin(8) } };
 
+            _sessions.Settings = _settings;
             var initial = new DianaShSession("main", BuildInterpreter());
             _sessions.RegisterInitial(initial);
             _schedulers[initial] = new DianaShInterpreterScheduler();
@@ -180,7 +184,9 @@ namespace EmuSen.Mistress.Views
                     _refusal = refused.Message;
                 }
             }
-            return DianaShInterpreter.CreateWithoutSession(_extraCommands, () => EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems);
+            DianaShInterpreter alone = DianaShInterpreter.CreateWithoutSession(_extraCommands, () => EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems);
+            alone.UseSettings(_settings);
+            return alone;
         }
 
         // Syncs _schedulers to whatever sessions currently exist - see `man tmux`.

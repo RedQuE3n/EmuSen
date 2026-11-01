@@ -115,6 +115,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         internal static delegate* unmanaged[Cdecl]<nint, uint, DianashHostCommands*, int> AddCommands;
         internal static delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int> Submit;
         internal static delegate* unmanaged[Cdecl]<nint, int> CancelFn;
+        internal static delegate* unmanaged[Cdecl]<nint, DianashService*, nuint, int> SetServices;
         internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> OutputTake;
         internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> RequestsDrain;
         internal static delegate* unmanaged[Cdecl]<nint, uint, int*, int> LastStatus;
@@ -139,7 +140,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             "dianash_output_take", "dianash_requests_drain", "dianash_last_status", "dianash_is_read_only", "dianash_awaiting",
             "dianash_history", "dianash_commands", "dianash_user", "dianash_set_user", "dianash_sessions", "dianash_session_new",
             "dianash_session_attach", "dianash_session_switch", "dianash_session_kill", "dianash_session_replace",
-            "dianash_session_set_services", "dianash_cancel",
+            "dianash_session_set_services", "dianash_cancel", "dianash_set_services",
         };
 
         // Null when every export resolves, the major is this facade's and a shell can be made and freed; otherwise why not - see EmuSen_DianaSh.md §13.10.
@@ -187,6 +188,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             SessionReplace = (delegate* unmanaged[Cdecl]<nint, uint, uint, int>)found[next++];
             SessionSetServices = (delegate* unmanaged[Cdecl]<nint, uint, DianashService*, nuint, int>)found[next++];
             CancelFn = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
+            SetServices = (delegate* unmanaged[Cdecl]<nint, DianashService*, nuint, int>)found[next++];
             return null;
         }
 

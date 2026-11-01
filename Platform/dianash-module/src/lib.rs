@@ -63,6 +63,10 @@ pub struct Manifest<'a> {
     pub commands: &'a [(&'a str, bool, &'a str)],
     pub aliases: &'a [(&'a str, &'a str)],
     pub jobs: &'a [&'a str],
+    /// Since 1.1: the settings keys the module may get and set through the settings service, and whether it may approve
+    /// and revoke a core library there (EmuSen_DianaSh.md §9.9); none and false for a module that asks for neither.
+    pub settings: &'a [&'a str],
+    pub approvals: bool,
 }
 
 impl Manifest<'_> {
@@ -72,10 +76,13 @@ impl Manifest<'_> {
         let commands: Vec<String> = self.commands.iter().map(|(name, read_only, usage)| format!("{{\"name\":{},\"usage\":{},\"read_only\":{read_only},\"man\":{}}}", json_string(name), json_string(usage), json_string(&format!("man/{name}.1")))).collect();
         let aliases: Vec<String> = self.aliases.iter().map(|(alias, command)| format!("{}:{}", json_string(alias), json_string(command))).collect();
         let jobs: Vec<String> = self.jobs.iter().map(|prefix| json_string(prefix)).collect();
+        let asks = !self.settings.is_empty() || self.approvals;
+        let settings = if asks { format!(",\"settings\":[{}],\"approvals\":{}", self.settings.iter().map(|k| json_string(k)).collect::<Vec<_>>().join(","), self.approvals) } else { String::new() };
         format!(
-            "{{\"manifest\":1,\"id\":{},\"version\":{},\"abi\":\"1.0\",\"kind\":\"module\",\"services\":[{}],\"commands\":[{}],\"aliases\":{{{}}},\"jobs\":[{}]}}",
+            "{{\"manifest\":1,\"id\":{},\"version\":{},\"abi\":\"{}\",\"kind\":\"module\",\"services\":[{}],\"commands\":[{}],\"aliases\":{{{}}},\"jobs\":[{}]{settings}}}",
             json_string(self.id),
             json_string(self.version),
+            if asks { "1.1" } else { "1.0" },
             services.join(","),
             commands.join(","),
             aliases.join(","),
@@ -220,6 +227,18 @@ impl<'a> Call<'a> {
         self.raw.flags & CALL_READ_ONLY_CONTEXT != 0
     }
 
+    /// Since 1.1: whether the command was typed at the prompt, not run by a script, a substitution or a pipe.
+    pub fn at_prompt(&self) -> bool {
+        self.raw.flags & CALL_AT_PROMPT != 0
+    }
+
+    /// Since 1.1: the settings service as far as the manifest names it, or none where the program provides none.
+    pub fn settings(&self) -> Option<Settings<'_>> {
+        let table = self.service(SETTINGS_SERVICE, SETTINGS_MAJOR)? as *const dianash_settings_v1;
+        let table = unsafe { &*table };
+        (table.size as usize >= std::mem::size_of::<dianash_settings_v1>()).then_some(Settings { table })
+    }
+
     /// An exported variable, or none.
     pub fn environment(&self, name: &str) -> Option<String> {
         let io = self.io();
@@ -349,4 +368,54 @@ macro_rules! module_exports {
             unsafe { $crate::kill_module(&$module, call, id, id_len, result) }
         }
     };
+}
+
+/// The settings service a call was handed (since 1.1), each answer the setting or the service's words.
+pub struct Settings<'a> {
+    table: &'a dianash_settings_v1,
+}
+
+impl Settings<'_> {
+    fn words(&self, status: i32) -> String {
+        let t = self.table;
+        query(|out, cap, needed| unsafe { (t.last_error)(t.ctx, out, cap, needed) }).unwrap_or_else(|_| format!("the settings service refused ({status})"))
+    }
+
+    /// A stored setting, none where it has no stored value.
+    pub fn get(&self, scope: u32, target: &str, key: &str) -> Result<Option<String>, String> {
+        let t = self.table;
+        match query(|out, cap, needed| unsafe { (t.get)(t.ctx, scope, dianash_bytes::of(target.as_bytes()), dianash_bytes::of(key.as_bytes()), out, cap, needed) }) {
+            Ok(value) => Ok(Some(value)),
+            Err((status::ABSENT, _)) => Ok(None),
+            Err((code, _)) => Err(self.words(code)),
+        }
+    }
+
+    /// A setting stored, or with none cleared.
+    pub fn set(&self, scope: u32, target: &str, key: &str, value: Option<&str>) -> Result<(), String> {
+        let t = self.table;
+        let value = value.map_or(dianash_bytes::ABSENT, |v| dianash_bytes::of(v.as_bytes()));
+        match unsafe { (t.set)(t.ctx, scope, dianash_bytes::of(target.as_bytes()), dianash_bytes::of(key.as_bytes()), value) } {
+            status::OK => Ok(()),
+            code => Err(self.words(code)),
+        }
+    }
+
+    /// A core library's SHA-256 approved; the shell lets it through only from a command typed at the prompt.
+    pub fn approve(&self, sha256: &str) -> Result<(), String> {
+        let t = self.table;
+        match unsafe { (t.approve)(t.ctx, dianash_bytes::of(sha256.as_bytes())) } {
+            status::OK => Ok(()),
+            code => Err(self.words(code)),
+        }
+    }
+
+    /// Every approval of a SHA-256 revoked.
+    pub fn revoke(&self, sha256: &str) -> Result<(), String> {
+        let t = self.table;
+        match unsafe { (t.revoke)(t.ctx, dianash_bytes::of(sha256.as_bytes())) } {
+            status::OK => Ok(()),
+            code => Err(self.words(code)),
+        }
+    }
 }

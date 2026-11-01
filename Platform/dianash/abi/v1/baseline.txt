@@ -8,6 +8,7 @@ const DIANASH_BAD_STRING -5 @1.0
 const DIANASH_BAD_STRUCT -263 @1.0
 const DIANASH_BUFFER_TOO_SMALL -7 @1.0
 const DIANASH_BUSY -267 @1.0
+const DIANASH_CALL_AT_PROMPT 4 @1.1
 const DIANASH_CALL_INTERACTIVE 2 @1.0
 const DIANASH_CALL_READ_ONLY_CONTEXT 1 @1.0
 const DIANASH_CONFIG_INTERACTIVE 2 @1.0
@@ -28,6 +29,9 @@ const DIANASH_RESOLVE_READ 1 @1.0
 const DIANASH_RESOLVE_REMOVE 4 @1.0
 const DIANASH_RESOLVE_WRITE 2 @1.0
 const DIANASH_SERVICE_MISSING -266 @1.0
+const DIANASH_SETTINGS_CONSOLE 0 @1.1
+const DIANASH_SETTINGS_DENIED -274 @1.1
+const DIANASH_SETTINGS_GAME 1 @1.1
 const DIANASH_UNKNOWN_COMMAND -265 @1.0
 field dianash_bytes.data offset 0 @1.0
 field dianash_bytes.len offset 8 @1.0
@@ -73,6 +77,13 @@ field dianash_service.minor offset 28 @1.0
 field dianash_service.name offset 8 @1.0
 field dianash_service.size offset 0 @1.0
 field dianash_service.table offset 32 @1.0
+field dianash_settings_v1.approve offset 32 @1.1
+field dianash_settings_v1.ctx offset 8 @1.1
+field dianash_settings_v1.get offset 16 @1.1
+field dianash_settings_v1.last_error offset 48 @1.1
+field dianash_settings_v1.revoke offset 40 @1.1
+field dianash_settings_v1.set offset 24 @1.1
+field dianash_settings_v1.size offset 0 @1.1
 field dianash_terminal.columns offset 4 @1.0
 field dianash_terminal.raw_capable offset 12 @1.0
 field dianash_terminal.rows offset 8 @1.0
@@ -117,4 +128,5 @@ struct dianash_host_result size 16 align 8 @1.0
 struct dianash_io size 80 align 8 @1.0
 struct dianash_result size 8 align 4 @1.0
 struct dianash_service size 40 align 8 @1.0
+struct dianash_settings_v1 size 56 align 8 @1.1
 struct dianash_terminal size 16 align 4 @1.0

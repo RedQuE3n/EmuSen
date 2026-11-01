@@ -347,6 +347,7 @@ name = "emusen-core-tool"
 version = "0.1.0"
 dependencies = [
  "emusen-core-entry",
+ "emusen-core-host",
  "emusen-galaxia",
  "emusen-net",
  "emusen-tool-job",

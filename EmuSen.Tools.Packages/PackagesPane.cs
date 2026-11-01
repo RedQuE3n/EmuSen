@@ -291,18 +291,6 @@ namespace EmuSen.Tools.Packages
         // The overview's words kept current, as a listing or a refusal changes them.
         private void ShowOverview() => _overview.Text = OverviewText;
 
-        // The disk under the nearest folder of the path that exists; null where none can be read.
-        private static (long Free, long Total)? DiskOf(string path)
-        {
-            try
-            {
-                string? at = Path.GetFullPath(path);
-                while (at is not null && !Directory.Exists(at)) at = Path.GetDirectoryName(at);
-                if (at is null) return null;
-                var drive = new DriveInfo(at);
-                return (drive.AvailableFreeSpace, drive.TotalSize);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return null; }
-        }
+        private static (long Free, long Total)? DiskOf(string path) => DiskSpace.Under(path);
     }
 }

@@ -144,7 +144,7 @@ namespace EmuSen.WiseMan.Mistress
             pad.Start();
             Assert.Equal(["Back to Cobalt Harbor (Synthetic)", "Game Options...", "Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(window));
             Assert.Equal([3], Enumerable.Range(0, 6).Where(i => PadMenu.Entries(window)[i].StartsSection));
-            Assert.Equal([MainWindow.StartConsoleMenu, "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu], SubmenuLines(window, MainWindow.LibraryMenu));
+            Assert.Equal([MainWindow.StartConsoleMenu, "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu], SubmenuLines(window, MainWindow.LibraryMenu));
             Assert.Equal(Settings, SubmenuLines(window, MainWindow.SettingsMenu));
             Assert.Equal(["Shell", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
             Assert.Equal(MainWindow.MainMenuTitle, PadMenu.DeskTitle(window));
@@ -159,7 +159,7 @@ namespace EmuSen.WiseMan.Mistress
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.Start();
             Assert.Equal(["Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(s.Window));
-            Assert.Equal([MainWindow.StartConsoleMenu, "Collections", "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu, "Theme Settings"], SubmenuLines(s.Window, MainWindow.LibraryMenu));
+            Assert.Equal([MainWindow.StartConsoleMenu, "Collections", "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, "Theme Settings"], SubmenuLines(s.Window, MainWindow.LibraryMenu));
             Assert.Equal(["Shell", "Exit Big Picture", "Exit EmuSen..."], SubmenuLines(s.Window, MainWindow.EmuSenMenu));
             Assert.Equal(MainWindow.MainMenuTitle, PadMenu.Big(s.Window).Title);
 
@@ -423,7 +423,7 @@ namespace EmuSen.WiseMan.Mistress
             { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) }, { "Graphics", typeof(GraphicsSettingsWindow) },
             { "Shaders", typeof(ShaderSettingsWindow) }, { "Cheats", typeof(ActiveCheatsWindow) }, { "Preferences", typeof(PreferencesWindow) },
             { "Collections", typeof(CollectionSettingsWindow) }, { "Scrape Games...", typeof(ScraperWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) },
-            { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Shell", typeof(HotaruWindow) },
+            { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Cores", typeof(CoresWindow) }, { "Shell", typeof(HotaruWindow) },
         };
 
         [Theory]

@@ -839,7 +839,7 @@ pub static MODULE: ScrapeCommands = ScrapeCommands;
 impl Module for ScrapeCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.scrape", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 0, true)], commands: COMMANDS, aliases: &[], jobs: &["scrape"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.scrape", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 0, true)], commands: COMMANDS, aliases: &[], jobs: &["scrape"], settings: &[], approvals: false }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {

@@ -4898,7 +4898,7 @@ Over the library, titled *Main Menu*:
 | Game Options... | the sidebar library has a game selected (§4.63) |
 | Scrape This Game... | a game is selected and no run is going (§4.60) |
 | *divider* | when any of the three above is shown |
-| Library ▸ | Start Console · Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Packages (since 2026-10-31) · Compressed Discs (since 2026-11-01) · Library Manager · Theme Settings (big picture) |
+| Library ▸ | Start Console · Collections (over the themed view, §4.58) · Scrape Games... or *Scraping (n of m)...* · Packages (since 2026-10-31) · Compressed Discs (since 2026-11-01) · Library Manager · Cores (since 2026-11-01) · Theme Settings (big picture) |
 | Settings ▸ | Players & Controllers · Controller Bindings · Graphics · Shaders · Cheats · Memory Cards · Firmware (since 2026-10-05, §4.89) · Preferences |
 | EmuSen ▸ | Full Screen (desktop only) · Big Picture or Exit Big Picture (not in Game Mode) · Exit EmuSen... |
 
@@ -4910,11 +4910,13 @@ tools, has at most five rows with it.
 
 *Compressed Discs* (`EmuSen_GamePackages.md` §13) moved from Settings to Library on 2026-11-01, decided by the tester,
 beside Packages and the Library Manager: all three work on the library's files rather than on how EmuSen behaves.
-Settings is left with eight rows. Library's longest page, over the themed view with a console to start, has seven:
-Start Console, Collections, Scrape Games..., Packages, Compressed Discs, Library Manager and Theme Settings, inside the
-panel's nine, which the fit audit (`WindowFitAuditTests`, the pad menu's cases) checks at 1280×800 and 1920×1200.
-The desktop menu bar is unchanged: its Settings menu keeps *Compressed Discs...* beside *Packages...*, *Scraper...* and
-*Library Manager...*.
+Settings is left with eight rows. *Cores* (`EmuSen_Cores.md` §2) went under Library below the Library Manager the same
+day, since it had made a tenth row under Settings before Compressed Discs moved; it manages what EmuSen plays the
+library with. Library's longest page, over the themed view with a console to start, has eight: Start Console,
+Collections, Scrape Games..., Packages, Compressed Discs, Library Manager, Cores and Theme Settings, inside the panel's
+nine, which the fit audit (`WindowFitAuditTests`, the pad menu's cases) checks at 1280×800 and 1920×1200.
+The desktop menu bar is unchanged: its Settings menu keeps *Compressed Discs...* beside *Packages...*, *Scraper...*,
+*Library Manager...* and *Cores...*.
 
 *Players & Controllers* opens Preferences on its Controllers tab, where the players' rows of `EmuSen_Input.md` §8.9 are.
 *Graphics* is the window that was *Graphics Settings*; *Collections* is ES-DE's *Game Collection Settings*, whose

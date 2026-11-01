@@ -184,6 +184,8 @@ impl Module for Trace {
                 commands: COMMANDS,
                 aliases: &[("c", "resume"), ("s", "step")],
                 jobs: &["bp", "watch"],
+                settings: &[],
+                approvals: false,
             }
             .json()
         })

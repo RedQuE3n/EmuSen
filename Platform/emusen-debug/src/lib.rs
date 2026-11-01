@@ -130,7 +130,7 @@ impl Module for Debug {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
         MANIFEST.get_or_init(|| {
-            Manifest { id: "emusen.debug", version: env!("CARGO_PKG_VERSION"), services: &[(abi::SERVICE, abi::MAJOR, 0, false)], commands: COMMANDS, aliases: &[], jobs: &[] }.json()
+            Manifest { id: "emusen.debug", version: env!("CARGO_PKG_VERSION"), services: &[(abi::SERVICE, abi::MAJOR, 0, false)], commands: COMMANDS, aliases: &[], jobs: &[], settings: &[], approvals: false }.json()
         })
     }
 

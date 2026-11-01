@@ -180,7 +180,8 @@ recorded as information only.
   to EmuSen's system ids. The libretro host needs the same table for `info()` (`EmuSen_LibretroHost.md` §4.1), so it
   has one owner, the systems table (`Platform/systems`), beside each system's other names (§7.2, Q7). Until the host's
   `emusen_systems::for_libretro` lands, the core tool takes the placement from its caller, and switches to that
-  function when it does.
+  function when it does. **Since 2026-10-31** the platform library hands the core tool `for_libretro` as its placement,
+  and a request's `"systems"` remains only for a caller that names its own.
 
 ### 4.3 The default core, per console and per game
 
@@ -219,6 +220,27 @@ Three kinds, kept apart so the player can tell them apart:
    build was tested by EmuSen on <date>" where the installed or offered build's SHA-256 is the one recorded, "An earlier
    build was tested on <date>" otherwise, or "Not tested by EmuSen". Never a gate (§11.4).
 3. **The core's own `notes`**, as its `.info` writes them, escaped as descriptor text (`EmuSen_CoreAPI.md` §7.2 rule 5).
+
+### 4.7 The libretro cores EmuSen hosts (decided 2026-11-01)
+
+**Decided 2026-11-01:** EmuSen hosts exactly two libretro cores for now, PCEE2 (PCSX2's, for the PlayStation 2) and
+Flycast (the Dreamcast, with Naomi and Atomiswave). Cores offers and installs only those: the catalogue's other cores are
+not listed for download, and a core dropped into `/Cores/libretro` that is not on the list shows as *not supported*,
+with the reason. There is no general browsing of libretro's catalogue.
+
+**The list has one owner**, a data file of the systems table, `Platform/systems/data/libretro-cores.tsv`, read by
+`emusen_systems::libretro_cores::hosted()`: one line per core, tab-separated, its file stem, the EmuSen systems it runs
+(comma-separated ids, which place it in place of `for_libretro`) and its upstream source (`https://` only); `#` lines are
+comments. The libretro host's work was adding such a file when this was decided; it had not reached WiseMan, so Cores
+proposed this minimal form, in the crate that owns the host's other libretro facts, for the host to keep or reshape
+(said in the stage's report). The platform library hands the list to the core tool as its `hosted` context; a request
+for a core off the list is refused ("… is not one of the libretro cores EmuSen hosts (pcee2, flycast)") before anything
+is written. A test of the tool's own mechanics may give no list, which offers the whole catalogue.
+
+The Dreamcast is a console EmuSen has not had: its section in the window comes from the systems the list names, under
+the runtime's name for the console once the systems table carries it, and under its id (`dreamcast`) until then.
+Sections in the manager frame carry no icon, so the "icon slot" is the console art of the library's own shelves, which the
+systems table's entry brings.
 
 ## 5. Download, verification and install
 
@@ -369,6 +391,65 @@ was drawn out. Seeded faults, each caught: the update test inverted; the cache w
 called unsupported when any of its APIs is OpenGL; `same_host` off; the same-host check ignoring the host; `core-`
 requests sent to the library tool; the listing's fields out of order.
 
+### 6.2 Install, update, roll back, remove and verify, built (C3, 2026-10-31)
+
+| Request | Events, per core named (or, for `core-update` and `core-verify` naming none, per core they apply to) |
+|---|---|
+| `{"op": "core-get", "cores": [<stem>...]}` | `plan` (`from`, `build`, `crc32`), `progress` (`step`, `bytes`, `total`), `checked` (`check`: `transport`, `crc32`, `shape`, `size`, `members`, `architecture`, `sha256`, in that order), `installed` (`sha256`, `build`, `previous`, `revoke`, `tested`) |
+| `{"op": "core-update", "cores": [...]}` | as `core-get`; `current` for a named core whose index line is unchanged; `installed`'s `previous` is the hash kept for Roll Back and `revoke` the hashes dropped from disk |
+| `{"op": "core-rollback", "cores": [<stem>]}` | `restored` (`sha256` put back, `previous` the newer build kept) |
+| `{"op": "core-rm", "cores": [<stem>...]}` | `removed` (`revoke`: the hashes of the folder and its kept build) |
+| `{"op": "core-verify", "cores": [...]}` | `verified` (`result`: `ok`, `refreshed` with `files`, `changed` with `reason`, `added`) |
+
+A core refused is `refused` with its `stem` and the reason, and the others go on; `done` carries `counts` per result
+and `error` "<n> of <m> refused" where any was. `"core"` names one core as `"cores"` does. `core-info` gains `tested`
+(`match`: `exact`, `other` or `none`, with the tested build's `date`, `sha256`, `kit` and `note`) and `previous`
+(`build`, `sha256`) where a build is kept.
+
+**As built** [M, 2026-10-31], in `emusen-core-tool`'s `install` module:
+- **One changing job at a time** across processes, by an exclusive lock on `/Cores/libretro/.lock`, refused rather than
+  waited for. The lock is taken only once a core passes the checks that need nothing written, so a request refused
+  outright (a core not in the index, not installed, not supported) writes nothing; holding it, the job clears what an
+  earlier job left in `.staging/`.
+- **The download** streams into `.staging/<stem>-<pid>.zip` through `emusen-net`'s `fetch_into` with `same_host`, its
+  CRC-32 taken as it comes and the stream refused past 512 MB (or a `Content-Length` over it). The member is compared
+  whole with `<stem>_libretro.<ext>`, so no name is ever joined to a path; a Unix link is refused by its external
+  attributes; the declared length is bounded before inflating, and Galaxia's `copy_entry` stops inflating one buffer past
+  the declared length and checks length and CRC-32. The architecture is `emusen-core-host`'s own header check, shared
+  rather than copied.
+- **The project's files**: the installation builds them as `libemusen_libretro_host.<ext>` and
+  `libemusen_libretro_proxy.<ext>` (`emusen-core-entry`'s `HOST_LIBRARY` and `PROXY_LIBRARY`, the names its
+  `cores.manifest` lists), and each core's folder holds them as `emusen-libretro-host.<ext>` and
+  `emusen-core-broker.<ext>`, with `broker.target`. Both are required since the libretro host's stage 2 runs every
+  libretro core through the proxy: without either, nothing is downloaded. Refresh copies each where its SHA-256 differs
+  from the installation's, by a copy beside it and a rename, and writes `broker.target` where it differs; the host's
+  discovery lists a folder whose copies are not the installation's as `needs_refresh` (`EmuSen_LibretroHost.md` §10d),
+  which the window shows as "needs refresh: Verify". The platform library names its own folder as the installation.
+  (Corrected 2026-10-31 on merging the host's stage 2: C3 had looked for the copies' own names in the installation.)
+- **Update** stages first; then the kept build moves into staging, the installed one to `.previous/`, the staged one
+  into place, each failure undoing the renames before it. **Roll Back** refreshes the kept build, then swaps the two.
+  **Remove** renames each folder into staging before deleting it. A folder made here is 0755 and its files 0644; a
+  folder already there keeps its mode.
+- **Approvals are not jobs** (§6): `installed`, `removed` and `update`'s `revoke` give the hashes the face approves or
+  revokes through the runtime. The shell has no such call yet: it prints them (Q12).
+- **`cores-notes.tsv`** ships in `Platform/core-tool/data/`, compiled in, with no build yet: stem, date, SHA-256, kit
+  result, sentence, tab-separated.
+
+**Tests** [M, 2026-10-31]: `emusen-core-tool`'s `install` 9 tests against cores zipped by the test (an ELF header for
+this machine and 3 MB of noise) served by its own TLS server: every check of §5.2 refusing with no folder or staging
+left (the index's CRC-32, two members, `../`, a folder, an absolute name, another core's name, a link, a declared size
+over the bound, bytes inflating past the declared size, a member's CRC-32, another machine's header, not a zip, a
+redirect off the host, no libretro host, an OpenGL-only core); an install's files, modes and `NOTICE`, nothing written
+outside `/Cores`; a stopped update leaving the installed build; an update keeping one build, refused when `.previous/`
+is unwritable and leaving both builds, dropping the oldest at the next with its hash to revoke; Roll Back twice, and
+refused for a changed kept build; removal of a folder and its kept build with the player's folder and saves untouched;
+Verify's four results; the lock; a refused request writing nothing; the tested builds matched by hash. The catalogue's
+7 tests share the server with them (`tests/common`). `emusen-cores-module` 3. Seeded faults, each caught: the index's
+CRC-32 unchecked; the member matched by the end of its name; the declared bound doubled; the architecture unchecked;
+the installed build moved before staging; Verify refreshing before checking the core; removal taking a folder Cores
+did not make. Not reached by a test: the update's third rename failing after the second succeeded, which nothing in a
+test can make fail between the two; its undo is the second's in reverse.
+
 ## 7. Surfaces shared with the libretro host
 
 The libretro host is being built on its own branch. Four places need one owner between the two (Q7):
@@ -413,7 +494,9 @@ cores default --game <path> [<core>|-]    print, set, or clear a game's choice
 
 **Built in C2 (2026-10-31)**: `ls`, `info`, `fetch` and `wait`, in `Platform/emusen-cores-module`, reading events
 with `emusen-library-module`'s `next_event`, shared rather than copied, since both follow jobs of the same service.
-A core is named by its file stem (§4.1). `cores default` is held back: a module reaches the runtime's settings only
+**Built in C3 (2026-10-31)**: `get`, `update`, `rollback`, `rm` and `verify` (§6.2). **Built 2026-11-01**, after the
+tester took Q11 and Q12: `default` and `approve`, and the revocation after `rm` and `update`, through the settings service
+of module ABI 1.1 (`EmuSen_DianaSh.md` §9.10), the module's manifest naming `Engine` and approvals. A core is named by its file stem (§4.1). `cores default` is held back: a module reaches the runtime's settings only
 through a service, and none gives a module the console and game `Engine` setting yet (§10, Q11). The window sets the
 default through the frontend API directly (C4).
 
@@ -427,12 +510,48 @@ Composes with the shell's tools: `cores ls --updates ps2 | wc -l`; `cores ls --i
 | **C0** | `AdaptiveLayout` in LunaP (T0): roles, the two forms, focus from roles, actions declared once, its own fit and reach tests | LunaP's tests at 1280×800, 1920×1200 and the handheld's screen, both forms, the pad walk; seeded faults |
 | **C1** | `ManagerLayout` on it (T1), checked against Packages' §3 and Cores' §2 | LunaP's tests; a harness window with Packages' columns and one with Cores' |
 | **C2** | `emusen-tool-job` drawn out of the library tool unchanged in behaviour; `emusen-core-tool`'s catalogue (`info.zip`, the index), the installed listing, `core-ls`, `core-info`, `core-fetch`; the `emusen.cores` module with `ls`, `info`, `fetch`, `default`; `man cores` | the library tool's tests unchanged; the core tool's tests on a catalogue and index built in the test, served by a local TLS server with the test's own roots; DianaSh golden corpus |
-| **C3** | `get`, `update`, `rollback`, `rm`, `verify`; staging and the renames | tests of every check of §5.2 refusing, a stopped job leaving the destination as it was, an update failing back to the previous build, nothing written outside `/Cores`; seeded faults |
-| **C4** | `CoresWindow` in `EmuSen.Tools.Cores` on `ManagerLayout`, desktop and big picture; Make Default, Options…, firmware rows; hosted in Mistress | WiseMan headless: the window over a synthetic `/Cores` and catalogue; the fit audits and InterfaceSpec recordings in both forms; the pad walk |
+| **C3** (built 2026-10-31, §6.2) | `get`, `update`, `rollback`, `rm`, `verify`; staging and the renames | tests of every check of §5.2 refusing, a stopped job leaving the destination as it was, an update failing back to the previous build, nothing written outside `/Cores`; seeded faults |
+| **C4** (built 2026-10-31, §9.1) | `CoresWindow` in `EmuSen.Tools.Cores` on `ManagerLayout`, desktop and big picture; Make Default, Options…, firmware rows; hosted in Mistress | WiseMan headless: the window over a synthetic `/Cores` and catalogue; the fit audits and InterfaceSpec recordings in both forms; the pad walk |
 | **C5** | With the libretro host merged: the proxy copied and `broker.target` written at install, the approval of the whole entry, the `libretro` field of the listing | WiseMan: a core installed from the local server (the host's test core, zipped by the test) approved, opened and run, then updated and removed, saves kept |
 
 Tests never make a live network request and never download a real core: the catalogue, index and zips are made by the
 tests. Seeded faults, three to seven a stage, aimed at the checks of §5.2 and the renames of §5.3–§5.4.
+
+### 9.1 C4 as built (2026-10-31)
+
+- **The tool library** `EmuSen.Tools.Cores` needs only LunaP and Galaxia (`LeafAssemblyTests` holds it so): `CoresPane`
+  on `ManagerLayout`, `CoreRow`, `CoresPlan` (marks, summary, plan, steps), `CoresWords`, and `CoreApproval`, the
+  approval question's words, now Mistress's too, the libretro form adding trust on first download. The runtime is
+  handed in as `CoresRuntime`, its six calls (`cores`, `systems`, a console's setting got and set, `core_approve`,
+  `core_revoke`), so the library needs no binding of its own; Mistress builds it from its `CrystalRuntime`, turning the
+  binding's refusal into the `InvalidOperationException` the tool catches. `CoresHost` carries what the host opens:
+  a console's settings, the firmware pane and a folder (through the system's launcher).
+- **Rows** join the runtime's `cores` listing (EmuSen's own and the player's) with the core tool's `core-ls` (with
+  `"detail": true`, each row with `core-info`'s fields, so the detail needs no second job). A runtime row whose library
+  lies in `/Cores/libretro/<stem>/` lends that libretro row its engine and trust (§7.3's join until the listing's
+  `libretro` field lands). Default ● is the console's stored `Engine`, else its first engine.
+- **Marks** are install, update and remove, on libretro rows only. **Approve…** is an action, not a mark: each core is
+  asked about alone, with its name, authors, licence, consoles and SHA-256, so an approval is never one line of a plan;
+  it is offered on a row waiting for approval and on an installed libretro core. A run's `revoke` hashes (a removal's
+  and an update's dropped build) are revoked through the runtime as they arrive.
+- **Make Default** writes `Engine` for the chosen section's console, else for each console the core runs; a libretro
+  core gains it once discovery lists its engine. **Options…** opens the console's settings window (which shows the
+  console's engine's options; it takes no engine of its own yet). **Verify** and **Check for Updates** are jobs.
+- **Hosted** by Mistress's `CoresWindow` from *Settings ▸ Cores…* and the pad menu's Library page (since 2026-11-01,
+  as a tenth Settings row would not fit the big panel, `EmuSen_Settings_Reference.md` §4.69.8), framed in big picture,
+  with the pad mapped as Packages' host maps it.
+- Not in C4: the count of games choosing a core (○), the licence sheet, and firmware rows for EmuSen's own cores, whose
+  firmware the runtime answers per game; *Revoke Approval* for a core the player added waits for the shell's service (Q12)
+  so that both faces revoke the same way.
+
+**Tests** [M, 2026-10-31]: `CoresWindowTests` 7 (the join and the default, the marks and a plan run in order with its
+revocations, the approval asked and recorded only on yes, Make Default, a refusal about no row as the notice, the desktop
+form under the fit audit at both sizes); `WindowFitAuditTests` and the specification for five states at both sizes;
+`LeafAssemblyTests`; `PadMenuTests`. Found by the tests before landing: a listing row's `size` of `null` threw where the
+tool writes it so. Seeded faults, each caught: a project core offered removal; the approval recorded whatever the
+answer; a removal's hashes left approved; Make Default writing another key (it survived the first run, the test reading
+the pane's own constant; it now reads the runtime's, `RuntimeCatalog.EngineKey`); the summary naming every core (the
+big-screen audit's ellipsis).
 
 ## 10. Questions for the tester
 
@@ -462,6 +581,14 @@ tests. Seeded faults, three to seven a stage, aimed at the checks of §5.2 and t
     scope, through a narrow service (`emusen.settings`, get and set of one key, the runtime's own checks kept), so that
     `cores default` can be built. *Recommended:* yes, the service limited to the keys a module names in its manifest;
     the alternative, the module writing `consoles.json` itself, would bypass the setting's owner.
+12. **[decision]**, asked 2026-10-31 after C3: give the same narrow service the runtime's `core_approve` and
+    `core_revoke`, so that `cores approve` (at the prompt only, as `trust` is) and the revocation after `cores rm` and
+    `cores update` can be built in the shell. Until then the window does both, and the shell prints the hashes.
+    *Recommended:* yes, with Q11, approval refused inside `source` and `$(...)`.
+
+**Decided 2026-10-31 by the tester:** Q11 and Q12 as recommended, the service limited to the keys a module's manifest
+names, a minor version of the module ABI with a man-page entry, approval at the interactive prompt only. Built
+2026-11-01 (`EmuSen_DianaSh.md` §9.10, `man modules`).
 
 ## 11. Decided 2026-10-31 by the tester
 

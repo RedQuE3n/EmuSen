@@ -420,8 +420,7 @@ struct Running {
     prefix: &'static str,
     listing: bool,
     op: String,
-    job: *mut c_void,
-    table: *const LibraryToolV1,
+    job: ServiceJob,
     done: u64,
     of: u64,
     current: String,
@@ -438,16 +437,6 @@ struct Jobs {
     running: Vec<Running>,
 }
 
-// SAFETY: a job's handle and the service's table are the platform library's, safe from any thread (emusen_platform.h).
-unsafe impl Send for Jobs {}
-
-impl Drop for Jobs {
-    fn drop(&mut self) {
-        for r in self.running.drain(..) {
-            unsafe { ((*r.table).free)(r.job) };
-        }
-    }
-}
 
 /// The service's words for the last failure on this thread.
 pub fn last_error(table: &LibraryToolV1) -> String {
@@ -481,6 +470,57 @@ pub fn next_event(table: &LibraryToolV1, job: *mut c_void, wait_ms: u32, buffer:
     }
 }
 
+/// One job of the service a module follows: started through the shell's service table, its events read, stopped, and
+/// freed when it is dropped. Shared by `emusen.library` and `emusen.cores`, which follow jobs of the same service
+/// (EmuSen_Cores.md §6), so that the start, the reads and the freeing are written once.
+pub struct ServiceJob {
+    job: *mut c_void,
+    table: *const LibraryToolV1,
+}
+
+// SAFETY: a job's handle and the service's table are the platform library's, safe from any thread (emusen_platform.h).
+unsafe impl Send for ServiceJob {}
+
+impl ServiceJob {
+    /// A job of the request, or the answer saying why there is none, in the words of the command `prefix`.
+    pub fn start(call: &Call, prefix: &str, request: &str) -> Result<ServiceJob, Answer> {
+        let Some(table) = call.service(SERVICE, MAJOR).map(|t| t as *const LibraryToolV1) else {
+            return Err(Answer::fail(format!("{prefix}: needs emusen.library, which this program does not provide")));
+        };
+        let mut job: *mut c_void = std::ptr::null_mut();
+        if unsafe { ((*table).start)(request.as_ptr(), request.len(), &mut job) } != 0 {
+            return Err(Answer::fail(format!("{prefix}: {}", last_error(unsafe { &*table }))));
+        }
+        Ok(ServiceJob { job, table })
+    }
+
+    /// The next event, waiting up to `wait_ms`.
+    pub fn next(&self, wait_ms: u32, buffer: &mut Vec<u8>) -> Next {
+        next_event(unsafe { &*self.table }, self.job, wait_ms, buffer)
+    }
+
+    /// Whether the last event has been taken, without taking one.
+    pub fn ended(&self) -> bool {
+        unsafe { ((*self.table).next)(self.job, 0, std::ptr::null_mut(), 0) == 0 }
+    }
+
+    /// Asks the job to stop; it ends with what it did.
+    pub fn stop(&self) {
+        unsafe { ((*self.table).stop)(self.job) };
+    }
+}
+
+impl Drop for ServiceJob {
+    fn drop(&mut self) {
+        unsafe { ((*self.table).free)(self.job) };
+    }
+}
+
+/// What a command says of a job the line's budget cut short.
+pub fn detached(prefix: &str, id: u32) -> String {
+    format!("{prefix}{id} goes on in the background: {prefix} wait {prefix}{id} follows it, ps lists it, kill {prefix}{id} stops it.\n")
+}
+
 /// How following a job ended.
 enum Followed {
     Ended(i32),
@@ -489,7 +529,6 @@ enum Followed {
 
 /// Prints a job's events as they come, until it ends or the line is cancelled, which its budget also does.
 fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
-    let table = unsafe { &*r.table };
     let mut buffer = vec![0u8; 4096];
     let (out, err) = std::mem::take(&mut r.pending);
     call.out(&out);
@@ -498,7 +537,7 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
         if call.cancelled() {
             return Followed::Detached;
         }
-        let raw = match next_event(table, r.job, 100, &mut buffer) {
+        let raw = match r.job.next(100, &mut buffer) {
             Next::Ended => return Followed::Ended(*status),
             Next::Absent => continue,
             Next::Failed(words) => {
@@ -564,10 +603,9 @@ fn start_line(e: &Value) -> Option<String> {
 /// Takes a job's waiting events without printing them, as `ps` reads how far it has got; whether it has ended. What
 /// they said is in the tool's log (`Logs/chd_<day>.log`).
 fn drain(r: &mut Running) -> bool {
-    let table = unsafe { &*r.table };
     let mut buffer = vec![0u8; 4096];
     loop {
-        let raw = match next_event(table, r.job, 0, &mut buffer) {
+        let raw = match r.job.next(0, &mut buffer) {
             Next::Ended => return true,
             Next::Absent | Next::Failed(_) => return false,
             Next::Event(raw) => raw,
@@ -593,14 +631,12 @@ fn follow_or_detach(call: &Call, jobs: &mut Jobs, at: usize) -> i32 {
     let mut status = 0;
     match follow(call, &mut jobs.running[at], &mut status) {
         Followed::Ended(status) => {
-            let r = jobs.running.remove(at);
-            unsafe { ((*r.table).free)(r.job) };
+            jobs.running.remove(at);
             status
         }
         Followed::Detached => {
             let (id, p) = (jobs.running[at].id, jobs.running[at].prefix);
-            let said = format!("{p}{id} goes on in the background: {p} wait {p}{id} follows it, ps lists it, kill {p}{id} stops it.\n");
-            if p == "rom" { call.err(&said) } else { call.out(&said) }
+            if p == "rom" { call.err(&detached(p, id)) } else { call.out(&detached(p, id)) }
             status
         }
     }
@@ -617,14 +653,13 @@ fn start(call: &Call, jobs: &mut Jobs, prefix: &'static str) -> Answer {
         Ok(r) => r,
         Err(usage) => return Answer::fail(usage),
     };
-    let Some(table) = call.service(SERVICE, MAJOR).map(|t| t as *const LibraryToolV1) else { return Answer::fail(format!("{prefix}: needs emusen.library, which this program does not provide")) };
-    let mut job: *mut c_void = std::ptr::null_mut();
-    if unsafe { ((*table).start)(request.as_ptr(), request.len(), &mut job) } != 0 {
-        return Answer::fail(format!("{prefix}: {}", last_error(unsafe { &*table })));
-    }
+    let job = match ServiceJob::start(call, prefix, &request) {
+        Ok(j) => j,
+        Err(refused) => return refused,
+    };
     jobs.next += 1;
     let listing = prefix == "pkg" && args.get(1).map(String::as_str) == Some("ls");
-    jobs.running.push(Running { id: jobs.next, prefix, listing, op: args[1].clone(), job, table, done: 0, of: 0, current: String::new(), stopping: false, pending: Default::default(), groups: 0 });
+    jobs.running.push(Running { id: jobs.next, prefix, listing, op: args[1].clone(), job, done: 0, of: 0, current: String::new(), stopping: false, pending: Default::default(), groups: 0 });
     let at = jobs.running.len() - 1;
     Answer::with(String::new(), follow_or_detach(call, jobs, at))
 }
@@ -648,7 +683,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 7, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"] }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 7, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"], settings: &[], approvals: false }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
@@ -675,13 +710,7 @@ impl Module for LibraryCommands {
             let progress = if ended { "ended".to_string() } else if r.stopping { "stopping".to_string() } else { format!("{}/{} {unit}", r.done, r.of) };
             call.out(&format!("  {}{:<7} {:<11} {progress}{}\n", r.prefix, r.id, r.op, if r.current.is_empty() || ended { String::new() } else { format!(", {}", r.current) }));
         }
-        jobs.running.retain(|r| {
-            let ended = unsafe { ((*r.table).next)(r.job, 0, std::ptr::null_mut(), 0) } == 0;
-            if ended {
-                unsafe { ((*r.table).free)(r.job) };
-            }
-            !ended
-        });
+        jobs.running.retain(|r| !r.job.ended());
     }
 
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
@@ -692,7 +721,7 @@ impl Module for LibraryCommands {
             call.err(&format!("kill: no {prefix} job {prefix}{n} found.\n"));
             return Some(1);
         };
-        unsafe { ((*r.table).stop)(r.job) };
+        r.job.stop();
         r.stopping = true;
         let what = match prefix {
             "pkg" => "the packages not reached are left as they are",

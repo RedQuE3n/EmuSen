@@ -1,5 +1,5 @@
 //! How a core that took a game says it cannot run it, where libretro gives it no way to: a line of its log, named for each
-//! core by its file stem as measured, which ends the machine with the core's own words (EmuSen_LibretroHost.md §10l).
+//! core by its file stem as measured, which ends the machine with the core's own words (EmuSen_LibretroHost.md §10n).
 
 use emusen_native::core::Level;
 

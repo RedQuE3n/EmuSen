@@ -263,7 +263,7 @@ On Linux, before loading the target, the runner sets `no_new_privs` and restrict
 | read | `/proc/self`, `/sys/class/drm`, `/sys/devices` (the GPU's nodes as the driver reads them) | the driver's discovery of the card |
 | read, write, and `LANDLOCK_ACCESS_FS_IOCTL_DEV` where the Landlock ABI is 5 or later | `/dev/dri/renderD*` | the render node, and the ioctls every GPU submission is |
 | read | the image's folder | a sheet's or `.m3u`'s companions beside the image |
-| read | the core's system folder and the resolved target of each link under it (§10l) | firmware the player linked into the folder |
+| read | the core's system folder and the resolved target of each link under it (§10n) | firmware the player linked into the folder |
 | read, write | the core's private folders (§4.5), its Mesa shader cache among them | the core's own data |
 | none | the network, where the Landlock ABI is 4 or later | |
 
@@ -1494,7 +1494,59 @@ versioned C surface. `for_extension` and `for_system` now return the engines in 
 tool's rows. The ring through the Rust runtime is branch `libretro-ring`'s. The C#-shaped classes (`LibretroHostTests`,
 `CoreDiscoveryTests`' libretro case) reach the C# host's types and are left for B10.
 
-## 10l. Two defects real cores found on the Rust runtime (2026-11-01)
+## 10m. The cores listing's libretro rows, the path, and the refresh (2026-11-01)
+
+Decided 2026-11-01 by the tester, taking §10k's question: the waiting entry and the listing's `libretro` field are built now,
+and the frontends take the hash to approve from the frontend API's Rust answer, not from the core tool.
+
+**The listing** (the frontend API's 1.5, `EmuSen_Backend.md` §34). `listing::cores` gives each row `libretro`: null for
+a library that is not an entry, or `{folder, file, sha256, corename, name, version, license, authors, source, build,
+trust}`. Its `sha256` is the core file's own, read as the scan reads it, never `NOTICE`'s. Its `trust` is that file's
+standing (approved where the hash is approved and is the build the sidecar names). `version` is the core's own, null
+until it has been read. The other fields are `NOTICE`'s, through `emusen-core-entry`. An entry waiting to be read
+(§10k) that is not already an engine is a last row of its own: `engine` null, `report` "not yet read", `trust` the
+entry's standing, `systems` the hosted list's line for it. `Runtime::approve` also accepts the core hash of an entry
+already read, so a revoked core can be approved again.
+
+**The frontends** read that answer and nothing else:
+- *Cores* (`EmuSen.Tools.Cores`): `CoreRow.OfRuntime` takes a row's approval hash from `libretro.sha256` where it has
+  one, and `CoresPane.Joined` lends the core tool's row that hash beside the engine and trust, so *Approve…* names the
+  libretro core's hash.
+- *Mistress* (`MainWindow.CoreAwaitingApproval`): for the routed engine's row, or where no engine is routed a waiting
+  row of the routed system, the question shows `libretro.file` and approves `libretro.sha256`; a row needing refresh
+  is not asked about.
+
+**The path, found by running real cores.** `Engine::create` never set `image_path`, so Flycast (`need_fullpath`) refused
+every game and PCEE2 was sent a 1.46 GB image through the broker's socket. The path is now given at create and at a
+disc's insert (`Machine::media_insert_at`), and only for an unaltered file: `DiscFiles::unaltered_path` withholds a copy
+unpacked from an archive, and a package (which may carry soft patches) gives none, as §10d's rule has it.
+
+**The refresh, found the same way.** After `cores verify` refreshed an entry's proxy copy, the sidecar kept the old
+copy's hash. The entry was listed approved, but it opened nothing and could not be approved. An entry whose proxy
+copy differs from its sidecar's hash is now waiting, like a new build of the core. The runtime reads every waiting entry
+whose core hash is approved when it starts and at each rescan, so an approval stands across a refresh, as §1.3 promises.
+A refresh must replace the copy by a rename, as the core tool does, since the process may have the old file mapped.
+
+**A core that cannot start** (§10n's status -18) does not cross the frontend API as a number: it is the libretro host's
+own status, and the runtime refuses the frame with the core's words, which are its last error, PCEE2's own line where
+§10n's profile names one. So it needs no bump of its own. Tested through the runtime with the test core's
+`tc_fail=first_frame`, stored as a console setting.
+
+**Proofs** [M, 2026-11-01]:
+- `emusen-core-broker`'s `tests/runtime.rs`, 7 tests on the Rust runtime:
+  - the waiting row approved by its `libretro.sha256` becomes one engine row, and is revoked and approved again;
+  - the path the test core logs is the game's;
+  - a refreshed proxy copy is read again at start and opens a game.
+- `emusen-crystal` (with `crystal_abi` at 1.5), `emusen-core-host` and `emusen-galaxia` pass.
+- WiseMan `CoresWindowRuntimeTests` on the Rust runtime (2): the window offers the waiting core with its core's hash,
+  approves it through the frontend API, and lists it again as an engine; Mistress asks by the core's file and hash, then
+  not after the approval.
+- `CoresWindowTests` and `HostedCoreLaunchTests` pass on the Rust runtime too.
+- On the C#: `CoresWindowTests`, `CrystalHeaderTests` and `CoreHostParityTests` pass.
+- Seeded faults, each caught: the path not set (the runtime test); the window's join dropping the hash (the window
+  test); Mistress naming the proxy's hash (Mistress's test).
+
+## 10n. Two defects real cores found on the Rust runtime (2026-11-01)
 
 Both were found by the tester running PCEE2 through the Rust runtime with the Americas BIOS linked into a system folder.
 
@@ -1541,53 +1593,6 @@ said: …") in place of the earlier "its log says why". The same run after the c
 `status_text` gives. `emusen-core-entry` gains `DATA`, `SYSTEM_DIR_VAR`, `data_folder` and `system_folder`. The core ABI
 and the frontend API are unchanged. The runtime's message for a stopped frame names the status's words. The detail
 carrying the core's line reaches `last_error`, which the runtime does not yet show.
-## 10m. The cores listing's libretro rows, the path, and the refresh (2026-11-01)
-
-Decided 2026-11-01 by the tester, taking §10k's question: the waiting entry and the listing's `libretro` field are built now,
-and the frontends take the hash to approve from the frontend API's Rust answer, not from the core tool.
-
-**The listing** (the frontend API's 1.5, `EmuSen_Backend.md` §34). `listing::cores` gives each row `libretro`: null for
-a library that is not an entry, or `{folder, file, sha256, corename, name, version, license, authors, source, build,
-trust}`. Its `sha256` is the core file's own, read as the scan reads it, never `NOTICE`'s. Its `trust` is that file's
-standing (approved where the hash is approved and is the build the sidecar names). `version` is the core's own, null
-until it has been read. The other fields are `NOTICE`'s, through `emusen-core-entry`. An entry waiting to be read
-(§10k) that is not already an engine is a last row of its own: `engine` null, `report` "not yet read", `trust` the
-entry's standing, `systems` the hosted list's line for it. `Runtime::approve` also accepts the core hash of an entry
-already read, so a revoked core can be approved again.
-
-**The frontends** read that answer and nothing else:
-- *Cores* (`EmuSen.Tools.Cores`): `CoreRow.OfRuntime` takes a row's approval hash from `libretro.sha256` where it has
-  one, and `CoresPane.Joined` lends the core tool's row that hash beside the engine and trust, so *Approve…* names the
-  libretro core's hash.
-- *Mistress* (`MainWindow.CoreAwaitingApproval`): for the routed engine's row, or where no engine is routed a waiting
-  row of the routed system, the question shows `libretro.file` and approves `libretro.sha256`; a row needing refresh
-  is not asked about.
-
-**The path, found by running real cores.** `Engine::create` never set `image_path`, so Flycast (`need_fullpath`) refused
-every game and PCEE2 was sent a 1.46 GB image through the broker's socket. The path is now given at create and at a
-disc's insert (`Machine::media_insert_at`), and only for an unaltered file: `DiscFiles::unaltered_path` withholds a copy
-unpacked from an archive, and a package (which may carry soft patches) gives none, as §10d's rule has it.
-
-**The refresh, found the same way.** After `cores verify` refreshed an entry's proxy copy, the sidecar kept the old
-copy's hash. The entry was listed approved, but it opened nothing and could not be approved. An entry whose proxy
-copy differs from its sidecar's hash is now waiting, like a new build of the core. The runtime reads every waiting entry
-whose core hash is approved when it starts and at each rescan, so an approval stands across a refresh, as §1.3 promises.
-A refresh must replace the copy by a rename, as the core tool does, since the process may have the old file mapped.
-
-**Proofs** [M, 2026-11-01]:
-- `emusen-core-broker`'s `tests/runtime.rs`, 6 tests on the Rust runtime:
-  - the waiting row approved by its `libretro.sha256` becomes one engine row, and is revoked and approved again;
-  - the path the test core logs is the game's;
-  - a refreshed proxy copy is read again at start and opens a game.
-- `emusen-crystal` (with `crystal_abi` at 1.5), `emusen-core-host` and `emusen-galaxia` pass.
-- WiseMan `CoresWindowRuntimeTests` on the Rust runtime (2): the window offers the waiting core with its core's hash,
-  approves it through the frontend API, and lists it again as an engine; Mistress asks by the core's file and hash, then
-  not after the approval.
-- `CoresWindowTests` and `HostedCoreLaunchTests` pass on the Rust runtime too.
-- On the C#: `CoresWindowTests`, `CrystalHeaderTests` and `CoreHostParityTests` pass.
-- Seeded faults, each caught: the path not set (the runtime test); the window's join dropping the hash (the window
-  test); Mistress naming the proxy's hash (Mistress's test).
-
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

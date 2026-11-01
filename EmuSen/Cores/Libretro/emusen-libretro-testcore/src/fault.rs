@@ -1,6 +1,6 @@
 //! The faults the broker's proofs ask for: a fault the core handles as a fast-memory recompiler does, one it does not,
 //! an abort, a write outside its folders, a network connection, a frame that never ends, and a read through a link in its
-//! system folder beside one outside every granted path (EmuSen_LibretroHost.md §3.5, §10l).
+//! system folder beside one outside every granted path (EmuSen_LibretroHost.md §3.5, §10n).
 
 /// The page the handled fault touches, and the handler that makes it writable and lets the write run again.
 static mut PAGE: *mut libc::c_void = std::ptr::null_mut();

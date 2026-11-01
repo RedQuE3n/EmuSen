@@ -105,7 +105,7 @@ const LINK_DEPTH: usize = 8;
 const LINK_ENTRIES: usize = 20_000;
 
 /// The system folder the core is given, and the resolved target of every link under it, each to be granted read-only: a
-/// file the player linked into the folder resolves outside it, where Landlock checks it (EmuSen_LibretroHost.md §10l).
+/// file the player linked into the folder resolves outside it, where Landlock checks it (EmuSen_LibretroHost.md §10n).
 fn system_reads(system: &Path) -> Vec<PathBuf> {
     let mut reads = Vec::new();
     let Ok(root) = std::fs::canonicalize(system) else { return reads };

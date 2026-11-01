@@ -36,7 +36,7 @@ pub const STATUS_PLATFORM: i32 = -15;
 pub const STATUS_STATE_REFUSED: i32 = -16;
 /// The private folders could not be made or written.
 pub const STATUS_FOLDERS: i32 = -17;
-/// The core took the game and then said its machine could not start (EmuSen_LibretroHost.md §10l).
+/// The core took the game and then said its machine could not start (EmuSen_LibretroHost.md §10n).
 pub const STATUS_NOT_STARTED: i32 = -18;
 
 static LIVE: AtomicBool = AtomicBool::new(false);
@@ -100,7 +100,7 @@ pub struct Machine {
     disc: [u8; 16],
     /// The keys `console_picture` holds at the console's values, none while it is off.
     held: Vec<String>,
-    /// The core's line saying its machine could not start, after which every frame is refused (EmuSen_LibretroHost.md §10l).
+    /// The core's line saying its machine could not start, after which every frame is refused (EmuSen_LibretroHost.md §10n).
     failed: Option<String>,
 }
 

@@ -259,3 +259,27 @@ fn a_refreshed_proxy_copy_is_read_again_and_the_cores_approval_stands() {
     assert_eq!(frame(&rt.sessions.get(id).unwrap()).ran, 1);
     rt.close(id).unwrap();
 }
+
+#[test]
+fn a_core_that_cannot_start_is_refused_through_the_runtime_in_its_own_words() {
+    let _t = turn();
+    let l = layout("not-started");
+    let rt = runtime(&l);
+    rt.approve(&hash(&l.entry.core_path())).unwrap();
+    let game = l.root.join("game.tcg");
+    std::fs::write(&game, b"TCG1 a test game").unwrap();
+    let game = game.to_string_lossy().into_owned();
+    let asked = Asked { path: Some(&game), console: None, engine: None, opened: OpenedWith { flags: emusen_crystal::abi::OPEN_NO_BATTERY, ..OpenedWith::default() } };
+    let id = rt.open(&asked).unwrap();
+    rt.settings_set(id, emusen_crystal::abi::SCOPE_CONSOLE, None, "tc_fail", Some("first_frame")).unwrap();
+    rt.close(id).unwrap();
+    let words = match rt.open(&asked) {
+        Err((_, words)) => words,
+        Ok(id) => {
+            let s = rt.sessions.get(id).unwrap();
+            let mut info = emusen_crystal_frame_info { size: size_of::<emusen_crystal_frame_info>() as u32, ..Default::default() };
+            s.frame(Some(&mut info)).err().map(|(_, w)| w).unwrap_or_default()
+        }
+    };
+    assert!(words.contains(emusen_libretro_testcore::FAIL_AT_FIRST_FRAME), "{words}");
+}

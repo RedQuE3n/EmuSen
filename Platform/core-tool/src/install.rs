@@ -4,7 +4,7 @@
 
 use crate::catalogue::{self, Catalogue};
 use crate::Context;
-use emusen_core_entry::{library_suffix, sha256_file, valid_stem, Entry, Notice, ADAPTER, BROKER, LIBRETRO, PREVIOUS, STAGING};
+use emusen_core_entry::{built_name, library_suffix, sha256_file, valid_stem, Entry, Notice, ADAPTER, BROKER, HOST_LIBRARY, LIBRETRO, PREVIOUS, PROXY_LIBRARY, STAGING};
 use emusen_galaxia::rom_hash::Crc32;
 use emusen_galaxia::{archive, atomic, clock};
 use std::fs::File;
@@ -136,18 +136,17 @@ fn take_away(ctx: &Context, entry: &Entry, what: &str) -> Result<Vec<String>, St
     Ok(known)
 }
 
-/// The project's proxy and adapter as this installation has them: the adapter required, the proxy where it is built
-/// (EmuSen_Cores.md §5.3).
+/// The project's proxy and libretro host as this installation builds them, each with the name its copy takes in a core's
+/// folder; both required, since a libretro core runs only through the proxy (EmuSen_Cores.md §5.3, EmuSen_LibretroHost.md §10d).
 fn project_files(ctx: &Context) -> Result<Vec<(PathBuf, String)>, String> {
     let dir = ctx.installation.as_ref().ok_or("this EmuSen build names no installation folder, so it has no libretro host to install a core beside")?;
-    let adapter = format!("{ADAPTER}.{}", library_suffix());
-    if !dir.join(&adapter).is_file() {
-        return Err(format!("this EmuSen build has no libretro host beside it ({adapter}), so a core installed now could not run; nothing was downloaded"));
-    }
-    let mut files = vec![(dir.join(&adapter), adapter)];
-    let broker = format!("{BROKER}.{}", library_suffix());
-    if dir.join(&broker).is_file() {
-        files.push((dir.join(&broker), broker));
+    let mut files = Vec::new();
+    for (library, copy) in [(HOST_LIBRARY, ADAPTER), (PROXY_LIBRARY, BROKER)] {
+        let built = built_name(library);
+        if !dir.join(&built).is_file() {
+            return Err(format!("this EmuSen build has no {built} beside it, so a libretro core installed now could not run; nothing was downloaded"));
+        }
+        files.push((dir.join(&built), format!("{copy}.{}", library_suffix())));
     }
     Ok(files)
 }
@@ -160,8 +159,8 @@ fn copy_in(from: &Path, folder: &Path, name: &str) -> Result<(), String> {
     std::fs::rename(&temp, folder.join(name)).map_err(|e| io(&temp, e))
 }
 
-/// The folder's project files brought to the installation's: each copied where its hash differs or it is missing,
-/// `broker.target` written where the proxy is, and a copy the installation no longer has removed. The names changed.
+/// The folder's project files brought to the installation's: each copied where its hash differs or it is missing, and
+/// `broker.target` written. The names changed.
 fn refresh(ctx: &Context, entry: &Entry) -> Result<Vec<String>, String> {
     let files = project_files(ctx)?;
     let mut changed = Vec::new();
@@ -173,23 +172,13 @@ fn refresh(ctx: &Context, entry: &Entry) -> Result<Vec<String>, String> {
             changed.push(name.clone());
         }
     }
-    let has_broker = files.iter().any(|(_, n)| n.starts_with(BROKER));
     let target = entry.target_path();
-    if has_broker {
-        if std::fs::read_to_string(&target).ok().as_deref() != Some(Entry::target_text().as_str()) {
-            let temp = entry.folder.join(".broker.target.new");
-            std::fs::write(&temp, Entry::target_text()).map_err(|e| io(&temp, e))?;
-            mode(&temp, false)?;
-            std::fs::rename(&temp, &target).map_err(|e| io(&temp, e))?;
-            changed.push(emusen_core_entry::TARGET.to_string());
-        }
-    } else {
-        for stale in [entry.broker_path(), target] {
-            if stale.exists() {
-                std::fs::remove_file(&stale).map_err(|e| io(&stale, e))?;
-                changed.push(stale.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
-            }
-        }
+    if std::fs::read_to_string(&target).ok().as_deref() != Some(Entry::target_text().as_str()) {
+        let temp = entry.folder.join(".broker.target.new");
+        std::fs::write(&temp, Entry::target_text()).map_err(|e| io(&temp, e))?;
+        mode(&temp, false)?;
+        std::fs::rename(&temp, &target).map_err(|e| io(&temp, e))?;
+        changed.push(emusen_core_entry::TARGET.to_string());
     }
     Ok(changed)
 }

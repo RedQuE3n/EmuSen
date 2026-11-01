@@ -13,7 +13,7 @@ namespace EmuSen.Tools.Cores
             _ => (bytes / 1073741824.0).ToString("0.#", CultureInfo.InvariantCulture) + " GB",
         };
 
-        public static string State(CoreRow row) => row.AwaitsApproval ? "waiting for approval" : row.State switch
+        public static string State(CoreRow row) => row.AwaitsApproval ? "waiting for approval" : row.Trust == "needs_refresh" ? "needs refresh: Verify" : row.State switch
         {
             "update" => "update ↑",
             "unsupported" => "not supported",

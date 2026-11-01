@@ -180,7 +180,8 @@ recorded as information only.
   to EmuSen's system ids. The libretro host needs the same table for `info()` (`EmuSen_LibretroHost.md` §4.1), so it
   has one owner, the systems table (`Platform/systems`), beside each system's other names (§7.2, Q7). Until the host's
   `emusen_systems::for_libretro` lands, the core tool takes the placement from its caller, and switches to that
-  function when it does.
+  function when it does. **Since 2026-10-31** the platform library hands the core tool `for_libretro` as its placement,
+  and a request's `"systems"` remains only for a caller that names its own.
 
 ### 4.3 The default core, per console and per game
 
@@ -395,10 +396,15 @@ and `error` "<n> of <m> refused" where any was. `"core"` names one core as `"cor
   attributes; the declared length is bounded before inflating, and Galaxia's `copy_entry` stops inflating one buffer past
   the declared length and checks length and CRC-32. The architecture is `emusen-core-host`'s own header check, shared
   rather than copied.
-- **The project's files**: the installation's `emusen-libretro-host.<ext>` is required (none, and nothing is downloaded);
-  `emusen-core-broker.<ext>` is copied where the installation has it, with `broker.target`. Refresh copies each where its
-  SHA-256 differs from the installation's, by a copy beside it and a rename, and removes a proxy and target the
-  installation no longer has. The platform library names its own folder as the installation.
+- **The project's files**: the installation builds them as `libemusen_libretro_host.<ext>` and
+  `libemusen_libretro_proxy.<ext>` (`emusen-core-entry`'s `HOST_LIBRARY` and `PROXY_LIBRARY`, the names its
+  `cores.manifest` lists), and each core's folder holds them as `emusen-libretro-host.<ext>` and
+  `emusen-core-broker.<ext>`, with `broker.target`. Both are required since the libretro host's stage 2 runs every
+  libretro core through the proxy: without either, nothing is downloaded. Refresh copies each where its SHA-256 differs
+  from the installation's, by a copy beside it and a rename, and writes `broker.target` where it differs; the host's
+  discovery lists a folder whose copies are not the installation's as `needs_refresh` (`EmuSen_LibretroHost.md` §10d),
+  which the window shows as "needs refresh: Verify". The platform library names its own folder as the installation.
+  (Corrected 2026-10-31 on merging the host's stage 2: C3 had looked for the copies' own names in the installation.)
 - **Update** stages first; then the kept build moves into staging, the installed one to `.previous/`, the staged one
   into place, each failure undoing the renames before it. **Roll Back** refreshes the kept build, then swaps the two.
   **Remove** renames each folder into staging before deleting it. A folder made here is 0755 and its files 0644; a

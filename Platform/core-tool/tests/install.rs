@@ -5,7 +5,7 @@
 mod common;
 
 use common::*;
-use emusen_core_entry::{library_suffix, sha256_file, Entry, Notice, PREVIOUS, STAGING};
+use emusen_core_entry::{built_name, library_suffix, sha256_file, Entry, Notice, PREVIOUS, STAGING};
 use emusen_core_tool::catalogue;
 use emusen_core_tool::install::{self, Note};
 use emusen_core_tool::notes::{self, Tested};
@@ -84,12 +84,12 @@ fn buildbot(dir: &Path, cores: &[(&str, &str, Vec<u8>, Option<u32>)]) -> Server 
     serve(files)
 }
 
-/// An installation folder with the project's libretro host and proxy, as a build ships them.
+/// An installation folder with the project's libretro host and, where asked, its proxy, as a build ships them.
 fn installation(dir: &Path, adapter: &[u8], broker: bool) -> PathBuf {
     let at = dir.join("Install");
     std::fs::create_dir_all(&at).unwrap();
-    std::fs::write(at.join(format!("emusen-libretro-host.{}", library_suffix())), adapter).unwrap();
-    let proxy = at.join(format!("emusen-core-broker.{}", library_suffix()));
+    std::fs::write(at.join(built_name("emusen_libretro_host")), adapter).unwrap();
+    let proxy = at.join(built_name("emusen_libretro_proxy"));
     if broker {
         std::fs::write(proxy, b"the proxy").unwrap();
     } else {
@@ -244,7 +244,7 @@ fn every_check_refuses_and_leaves_no_folder_behind() {
     let asked = server.heads.lock().unwrap().len();
     let e = events(&ctx, r#"{"op":"core-get","cores":["pcsx2","glonly"]}"#);
     let reasons: Vec<&str> = of(&e, "refused").iter().map(|v| text(v, "reason")).collect();
-    assert!(reasons[0].contains("no libretro host beside it"), "{reasons:?}");
+    assert!(reasons[0].contains("libemusen_libretro_host") && reasons[0].contains("could not run"), "{reasons:?}");
     assert!(reasons[1].contains("not supported"), "{reasons:?}");
     assert_eq!(server.heads.lock().unwrap().len(), asked, "a refused plan downloaded");
     assert_eq!(text(e.last().unwrap(), "error"), "2 of 2 refused");
@@ -401,10 +401,14 @@ fn verify_refreshes_the_project_files_and_never_clears_a_changed_core() {
     assert_eq!(std::fs::read(entry.adapter_path()).unwrap(), b"the adapter of a newer EmuSen");
     assert_eq!(result(&events(&ctx, r#"{"op":"core-verify","core":"pcsx2"}"#), "pcsx2").as_deref(), Some("ok"));
 
+    std::fs::write(entry.target_path(), "something else\n").unwrap();
+    let e = events(&ctx, r#"{"op":"core-verify","core":"pcsx2"}"#);
+    assert_eq!(of(&e, "verified")[0].get("files"), Some(&Value::Array(vec![Value::string("broker.target")])));
+    assert_eq!(std::fs::read_to_string(entry.target_path()).unwrap(), Entry::target_text());
+
     installation(&dir, b"the adapter of a newer EmuSen", false);
     let e = events(&ctx, r#"{"op":"core-verify","core":"pcsx2"}"#);
-    assert_eq!(text(of(&e, "verified")[0], "result"), "refreshed");
-    assert!(!entry.broker_path().exists() && !entry.target_path().exists());
+    assert!(text(of(&e, "refused")[0], "reason").contains("libemusen_libretro_proxy"), "{e:?}");
 
     let sha = entry.read_notice().unwrap().sha256;
     std::fs::write(entry.core_path(), b"something else").unwrap();

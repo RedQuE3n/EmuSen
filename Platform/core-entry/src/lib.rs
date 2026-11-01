@@ -21,6 +21,9 @@ pub const ASSETS: &str = "assets";
 /// The project's proxy and adapter, copied into each entry (EmuSen_LibretroHost.md §1.1), without the library suffix.
 pub const BROKER: &str = "emusen-core-broker";
 pub const ADAPTER: &str = "emusen-libretro-host";
+/// The libraries the installation builds those copies from, as its `cores.manifest` lists them (EmuSen_LibretroHost.md §10d).
+pub const PROXY_LIBRARY: &str = "emusen_libretro_proxy";
+pub const HOST_LIBRARY: &str = "emusen_libretro_host";
 /// The one `NOTICE` format this crate reads and writes.
 pub const FORMAT: u32 = 1;
 
@@ -33,6 +36,11 @@ pub const fn library_suffix() -> &'static str {
     } else {
         "so"
     }
+}
+
+/// A library's file name as the installation builds it: `libemusen_libretro_host.so`, `emusen_libretro_host.dll`.
+pub fn built_name(library: &str) -> String {
+    format!("{}{library}.{}", if cfg!(windows) { "" } else { "lib" }, library_suffix())
 }
 
 /// Whether a file stem (`pcsx2` of `pcsx2_libretro.so`) can name an entry's folder and files: 1 to 64 of

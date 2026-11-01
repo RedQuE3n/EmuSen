@@ -35,8 +35,8 @@ tree
         19 Grid at=410,310,1101,474 by=panel limit=350.48,187,1219.05,822 role=none
           20 Border at=410,310,1101,474 by=panel limit=350.48,187,1219.05,822 name=AdaptiveDetail role=none
             21 Border at=410,310,1101,474 by=panel limit=350.48,187,1219.05,822 role=none
-              22 ScrollViewer at=422,322,1077,450 by=panel fades=b limit=350.48,187,1219.05,822 overflow=162 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=422,322,1077,450
-                23 PackageDetail at=422,322,1077,612 by=scroll in=22 limit=422,322,1077,450 name=PackagesDetail paints=#9C9CA0FF role=none seen=422,322,1077,450
+              22 ScrollViewer at=422,322,1077,450 by=panel fades=b limit=350.48,187,1219.05,822 overflow=712.5 paints=#55555AFF,#9C9CA0FF,#FFFFFFFF role=scrollviewer viewport=422,322,1077,450
+                23 PackageDetail at=422,322,1077,1162.5 by=scroll in=22 limit=422,322,1077,450 name=PackagesDetail paints=#55555AFF,#86868AFF,#9C9CA0FF role=none seen=422,322,1077,450
                   24 FieldRow at=422,322,1077,136.5 by=scroll heard=Package in=22 limit=422,322,1077,450 paints=#9C9CA0FF role=group
                     25 TextBlock at=422,322,1077,43.5 box=718,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=22 layout=69.48,28.8 limit=422,322,1077,136.5 name=PART_Label paints=#9C9CA0FF part role=text size=24 text=Package
                     26 TextBlock at=422,371.5,1077,87 box=718,58 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Not a package yet. Making one keeps everything EmuSen holds for the game in one folder, and the library is only read." in=22 layout=675.02,57.6 limit=422,322,1077,136.5 paints=#9C9CA0FF role=text size=24 text="Not a package yet. Making one keeps everything EmuSen holds for the game in one folder, and the library is only read."
@@ -97,29 +97,33 @@ edge 17 down 44
 edge 17 left 15
 edge 17 right 5
 edge 38 up 11
-edge 38 down same
+edge 38 down item:ButtonBar/0//
 edge 38 left same
 edge 38 right 40
 edge 40 up 13
-edge 40 down same
+edge 40 down item:ButtonBar/0//
 edge 40 left 38
 edge 40 right 42
 edge 42 up 15
-edge 42 down same
+edge 42 down item:ButtonBar/0//
 edge 42 left 40
 edge 42 right 44
 edge 44 up 15
-edge 44 down same
+edge 44 down item:ButtonBar/0//
 edge 44 left 42
 edge 44 right 46
 edge 46 up 17
-edge 46 down same
+edge 46 down item:ButtonBar/0//
 edge 46 left 44
 edge 46 right 48
 edge 48 up 5
-edge 48 down same
+edge 48 down item:ButtonBar/0//
 edge 48 left 46
 edge 48 right same
+edge item:ButtonBar/0// up 5
+edge item:ButtonBar/0// down 48
+edge item:ButtonBar/0// left 44
+edge item:ButtonBar/0// right same
 press pageup focus="TextBox Search games (Search)" title=Packages top=PackagesWindow
 press pagedown focus="TextBox Search games (Search)" title=Packages top=PackagesWindow
 press first focus="TextBox Search games (Search)" title=Packages top=PackagesWindow

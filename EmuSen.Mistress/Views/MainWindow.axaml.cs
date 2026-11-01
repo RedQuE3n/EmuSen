@@ -455,7 +455,7 @@ namespace EmuSen.Mistress.Views
         private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory, _appSettings), this);
 
         // The library's games as packages, made, checked, zipped and converted through the library tool's jobs; the library is only read - see EmuSen_Packages.md §7.
-        private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(), this);
+        private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(_appSettings.RomDirectory), this);
 
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
         private void ShowShaderSettings() =>

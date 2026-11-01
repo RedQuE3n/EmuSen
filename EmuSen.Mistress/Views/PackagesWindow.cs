@@ -12,7 +12,10 @@ namespace EmuSen.Mistress.Views
     {
         private bool _listed;
 
-        public PackagesWindow()
+        // Parameterless constructor exists only for tooling - real code always uses the one below.
+        public PackagesWindow() : this(null) { }
+
+        public PackagesWindow(string? library)
         {
             Title = "Packages";
             Width = 1120;
@@ -20,7 +23,7 @@ namespace EmuSen.Mistress.Views
             MinWidth = 760;
             MinHeight = 480;
             CanResize = true;
-            Pane = new PackagesPane();
+            Pane = new PackagesPane { Library = library };
             Content = Pane;
             Pane.AttachedToVisualTree += (_, _) => Adapt();
             Pane.MarksChanged += ShowHints;

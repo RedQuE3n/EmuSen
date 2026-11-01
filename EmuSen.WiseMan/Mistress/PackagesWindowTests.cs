@@ -19,6 +19,7 @@ using EmuSen.Mistress.Views;
 using EmuSen.Tools.Packages;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.Mistress.BigPicture;
+using Avalonia.VisualTree;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress
@@ -73,9 +74,9 @@ namespace EmuSen.WiseMan.Mistress
             Dispatcher.UIThread.RunJobs();
         }
 
-        private static PackagesWindow Open(int width = 1280, int height = 800)
+        private PackagesWindow Open(int width = 1280, int height = 800)
         {
-            var window = new PackagesWindow { Width = width, Height = height };
+            var window = new PackagesWindow(_library) { Width = width, Height = height };
             window.Show();
             Dispatcher.UIThread.RunJobs();
             return window;
@@ -149,6 +150,74 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("Checked: every file is as recorded", pane.OutcomeOf(pane.Rows.Single(r => r.Title == "Cobalt Harbor (Synthetic)")));
             Assert.StartsWith("Zipped, ", pane.OutcomeOf(pane.Rows.Single(r => r.Title == "Granite Choir (Synthetic)")));
             Assert.Single(Directory.EnumerateFiles(DataStore.Packages, "*.zip", SearchOption.AllDirectories));
+            Assert.Equal(before, Listing());
+            window.Close();
+        }, default);
+
+        // The chosen row's package controls, its button pressed and its job followed until the list is taken again.
+        private static void Press(PackagesWindow window, string name)
+        {
+            GamePackageDetail game = window.GetVisualDescendants().OfType<PackageDetail>().Single().Game!;
+            Avalonia.Controls.Button button = game.GetVisualDescendants().OfType<Avalonia.Controls.Button>().First(b => b.Name == name);
+            Assert.True(button.IsEnabled, $"{name} is not enabled: {game.Status}");
+            button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Avalonia.Controls.Button.ClickEvent));
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (game.Busy)
+            {
+                game.Poll();
+                Dispatcher.UIThread.RunJobs();
+                Assert.True(clock.Elapsed.TotalSeconds < 60, "the package job did not end: " + game.Status);
+                Thread.Sleep(5);
+            }
+            WaitIdle(window.Pane);
+        }
+
+        private static GamePackageDetail Controls(PackagesWindow window) => window.GetVisualDescendants().OfType<PackageDetail>().Single().Game!;
+
+        [Fact]
+        public Task A_games_package_controls_in_the_detail_add_a_patch_set_the_identity_and_migrate_and_the_library_is_left_as_it_was() => Session.Dispatch(() =>
+        {
+            Assert.True(LibraryToolJob.Available, LibraryToolJob.Report);
+            string game = Path.Combine(_library, "snes", "Cobalt Harbor (Synthetic).sfc");
+            Directory.CreateDirectory(Path.GetDirectoryName(game)!);
+            byte[] rom = SyntheticRom.BuildBlank();
+            File.WriteAllBytes(game, rom);
+            File.WriteAllBytes(Path.Combine(_library, "snes", "Cobalt Harbor (Synthetic).ips"), EmuSen.WiseMan.Crystal.CrystalParityTests.Ips((0x100, new byte[] { 0x5A })));
+            Directory.CreateDirectory(Path.Combine(DataStore.Saves, "SNES"));
+            File.WriteAllBytes(Path.Combine(DataStore.Saves, "SNES", "Cobalt Harbor (Synthetic).srm"), new byte[] { 9, 9 });
+            new AppSettings { RomDirectory = _library }.Save();
+            List<string> before = Listing();
+
+            PackagesWindow window = Open();
+            PackagesPane pane = window.Pane;
+            WaitIdle(pane);
+            pane.Table.Select(Row(pane, "Cobalt Harbor (Synthetic)"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Null(Controls(window).Package);
+            Press(window, "GamePackageMake");
+            pane.Table.Select(Row(pane, "Cobalt Harbor (Synthetic)"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(Row(pane, "Cobalt Harbor (Synthetic)").Packaged, "the list is taken again after the package is made");
+            Assert.NotNull(Controls(window).Package);
+
+            Press(window, "GamePackageAdd.0");
+            pane.Table.Select(Row(pane, "Cobalt Harbor (Synthetic)"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "Cobalt Harbor (Synthetic).ips" }, Row(pane, "Cobalt Harbor (Synthetic)").Patches);
+            Assert.Equal(new[] { new PackageLayer("patch", "Cobalt Harbor (Synthetic).ips", "IPS", 1) }, Controls(window).Layers());
+
+            Press(window, "GamePackageIdentitySwitch");
+            pane.Table.Select(Row(pane, "Cobalt Harbor (Synthetic)"));
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("patched", Row(pane, "Cobalt Harbor (Synthetic)").Identity);
+
+            Press(window, "GamePackageMigrate");
+            Assert.True(File.Exists(Path.Combine(Controls(window).Package!, "saves", "Cobalt Harbor (Synthetic).srm")) || Directory.EnumerateFiles(Controls(window).Package!, "*.srm", SearchOption.AllDirectories).Any(), "the save was copied in");
+
+            pane.Table.Select(Row(pane, "Cobalt Harbor (Synthetic)"));
+            Dispatcher.UIThread.RunJobs();
+            Press(window, "GamePackagePatch.0.Remove");
+            Assert.Empty(Row(pane, "Cobalt Harbor (Synthetic)").Patches);
             Assert.Equal(before, Listing());
             window.Close();
         }, default);

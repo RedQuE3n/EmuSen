@@ -54,7 +54,7 @@ namespace EmuSen.Tools.Packages
             MarksFor = PackagesPlan.MarksFor;
             InSection = Belongs;
             SearchKey = r => $"{r.Title} {r.Source} {r.Package}";
-            DetailFor = r => r is null ? Overview() : Scrolled(new PackageDetail(r, OutcomeOf(r)));
+            DetailFor = r => r is null ? Overview() : Scrolled(new PackageDetail(r, OutcomeOf(r), Library, browse: Form == AdaptiveForm.Desktop, changed: Refresh));
             Summarize = PackagesPlan.Summary;
             Plan = PackagesPlan.Text;
             Applying += Run;
@@ -73,6 +73,9 @@ namespace EmuSen.Tools.Packages
             SetSections([new AdaptiveSection("all", "All", "Consoles")], "all");
             UpdateActions();
         }
+
+        // The library's folder, AppSettings.RomDirectory, which the host gives; a game's package controls need it.
+        public string? Library { get; set; }
 
         // Whether a job is running: the listing, or a step of a confirmed plan.
         public bool Busy => _job is not null;

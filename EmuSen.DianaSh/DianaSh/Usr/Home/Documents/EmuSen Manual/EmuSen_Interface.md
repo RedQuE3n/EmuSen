@@ -15,7 +15,7 @@ measurements are `EmuSen_BigPicture.md`; the toolkit's side of every token is Lu
 **Reading order.** §1 for the idea, §2 for the structure, §3 for the frame, §4 for the six screens, §5 for the visual
 language, §6 for the forms, §7 for themes, §8 for accessibility, §9 for what becomes of what is built, §10 for the
 build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for the sources, §14 for Cores redesigned, §15 for the
-family's screens held against the grammar. A bracketed number cites a source in §13.
+family's screens held against the grammar, §16 for the desktop. A bracketed number cites a source in §13.
 
 **Units.** One design unit is one pixel at 1280 × 800; the big-screen form scales with the screen's height (× 1.5 at
 1920 × 1200, on a monitor and on the handheld alike), as `MenuPanel.Scale` does. Desktop measurements are device pixels
@@ -839,3 +839,154 @@ only where the change is large (Cores, §14).
 - **A game's page, U4** (screen 3). Fits as drawn at both sizes and at 1280 × 720, where the scale by height gives the
   same units with more width. Its Options rows take their values from Cores (`Engine ◂ Diamond (EmuSen, default) ▸`),
   the longest value 360 units at Row 26, inside a 1152 row.
+
+---
+
+## 16. The desktop (2026-11-01)
+
+Asked by the tester on 2026-11-01: the desktop mode as a whole, designed as a native application within the unified
+design, the same structure as the big screen (§2, §3) in the desktop's own scale (§5.2, §5.3), tokens and type. The
+mockups are under `~/.cache/emusen/tmp/desktop-design/`, at 1280 × 800 and 1920 × 1200: `desktop-library` (and
+`-light`), `desktop-home`, `desktop-game-page`, `desktop-cores-waiting`, `desktop-cores-approve`,
+`desktop-cores-installing`, `desktop-packages`, `desktop-settings-light`, `desktop-game-running`. Positions are pixels
+in a 1280 × 800 window; a larger window gives the room to the content and the panes, never to the type.
+
+### 16.1 The desktop as built, measured
+
+Rendered on 2026-11-01 (`DesktopButtonPictureTool`, the pictures under `~/.cache/emusen/bigpicture/png/desktop-button/`
+and `desktop-options/`). **[M]** The window is OpenEmu's shape: a menu bar (File, Emulation, View, Settings), a sidebar
+of Library, Consoles and Collections with counts, a segmented toolbar (`as Grid · as List · Library · Save States ·
+Screenshots`), the cover-size slider, a search field, a line `8 games under /tmp/…/Roms`, the generated cards, the hint
+`Double-click a title, or press Enter, to start it.` and a status bar. Four things are not the desktop's:
+
+1. The pad menu is the big screen's `MAIN MENU`, blurred over the library at the big screen's size, with a help bar of
+   pad glyphs, when a pad is pressed on the desktop; and a game's options open as a sheet of stacked full-width buttons.
+2. `Save States` and `Screenshots` are views of the library's toolbar, though they belong to one game.
+3. Settings are ten windows: Preferences (five tabs), Graphics, Shaders, Memory Cards, Firmware, Controllers, Cheats, the
+   cheat database, the console settings and Themes.
+4. The tools (`ManagerLayout`'s desktop form) put the detail beneath the table in a vertical split and every action in
+   the toolbar, so the detail reads as a log and the toolbar as a wall.
+
+### 16.2 The window
+
+One window, in the platform's conventions. **Menu bar** 28: File · Game · View · Tools · Settings · Help (`Emulation`
+becomes `Game`). **Sidebar** 200 (160–320, `Ctrl+\` hides it): `Home` first, then LIBRARY (Games, Favourites, Recently
+Played), CONSOLES with counts, COLLECTIONS; `SourceList` rows 24 in Body 13, headings in Caption upper Muted, the chosen
+row the bar. **Content** with a **header row** 48: the view's name in Title 20 upper (`SUPER NINTENDO`, `HOME`, `CORES`)
+and its facts in Caption Muted, the view's tools at the right (search 220 × 28, sort, grid or list, the cover size).
+**Status bar** 24: one line at the left (the focused game, a job's progress, `State saved to Slot 3`), the runtime and
+the count at the right; it replaces the hint line. Hover is a 1-px Border on a tile and SurfaceRaised on a row;
+selection the 2-px Accent ring on a tile and the bar on a row; focus never moves without the player. Panes are
+resizable by their dividers and remembered per window. Light or dark follows the system unless Settings ▸ Display says
+otherwise; every colour is a token of §5.1 (`desktop-library-light`, `desktop-settings-light`).
+
+| Menu | Items |
+|---|---|
+| File | Open ROM… · Add ROM Folder… · Import Collection… · Quit |
+| Game | Play `Enter` · Play from the Start · Game Page `Space` · Favourite `Ctrl+D` · Edit Details… `Ctrl+I` · Scrape This Game… · — · Pause `Esc` · Resume · Save State ▸ `F5` · Load State ▸ `F8` · Rewind `Backspace` · Speed ▸ · — · Screenshot `F12` · Cheats… · Game Options… · — · Pause Card `F4` · Back to Library · Restart… · Quit Game… `Ctrl+W` |
+| View | Grid `Ctrl+1` · List `Ctrl+2` · Cover Size ▸ · Sort ▸ · Filter ▸ · — · Sidebar `Ctrl+\` · Full Screen `F11` · Big Picture `F10` |
+| Tools | Cores… · Packages… · Scraper… · Library Manager… · Cheats… · Themes… · — · Shell… · Debugger… |
+| Settings | Controllers… · Display… · Sound… · Consoles… · Library… · EmuSen… · — · Settings… `Ctrl+,` |
+
+### 16.3 The library
+
+The header `SUPER NINTENDO · 5 games · 1 favourite · 2 h 40 min played`; the grid of generated cards 100 × 133 (the
+slider 80–200), gap 16, the title in Body and `console · year` in Caption under each, a favourite's Accent heart; the list
+view's columns Title · Console · Year · Developer · Play time · Last played, sortable, rows 24. Double-click or `Enter`
+plays, `Space` opens the game's page, a right click the context menu of `desktop-library` (Play, Play from the Start,
+Game Page, Favourite, Add to Collection, Options…, Edit Details…, Scrape This Game…, Cover Art, Show in File Manager);
+a game dragged onto a collection joins it. Retired: `Save States` and `Screenshots` as library views (they are the
+game's page's States and Media), the `n games under <path>` line (the folder is Settings ▸ Library's) and the hint line.
+
+### 16.4 A game's page
+
+Screen 3's desktop paragraph (§4), as `desktop-game-page` draws it: `‹ Back` 80 × 28; the hero 1080 × 200 under the OnArt
+gradient; the cover 160 × 200 raised over its foot; the title in Display 24 OnArt and the facts in Body; `Play` filled
+Accent, `Resume: Slot 3 · Marble Gallery · yesterday ▾` a split button, `♥ Favourite`; tabs OVERVIEW · STATES · OPTIONS ·
+MEDIA · DETAILS in Strong 14 with the Accent underline. STATES: cards 160 × 120, `Load` and `Delete` on the selected and
+hovered card, an outlined `Empty`; OPTIONS: `FieldRow`s 48 with the sentence under each (Engine, Cheats, Display crop,
+Controller profile, Package); MEDIA: thumbnails, double-click full screen; DETAILS: the metadata as a form with Scrape
+This Game…, Edit, Open Folder, Hide from Library…. Back returns to the grid on the same game. Retired: the game options
+sheet of stacked buttons, the metadata editor window (DETAILS' Edit).
+
+### 16.5 Home, the hub
+
+Screen 1's desktop paragraph, as `desktop-home` draws it: the Continue card 1032 × 180 with the paused frame, `CONTINUE
+PLAYING`, the title in Display 24, the facts, and `Resume` with the focus; RECENT, a shelf of 100 × 133 cards; PLACES as a
+4 × 2 grid of 246 × 64 tiles with a live line each: Games, Scraper, Packages, Library Manager, Cores (`⚠ 1 to approve` in
+Attention), Cheats, Settings, Big Picture. A place fills the content area with `‹ Back` (`EmuSen_LibraryTools.md` §1b);
+Tools ▸ opens the same pane as a window beside the library, two hosts of one description. Home is the window's first
+view, and Setup is its first-run face: the same panes in order under one header, `Next` and `Back`.
+
+### 16.6 The tools on the frame
+
+Cores in full (`desktop-cores-waiting`, `-approve`, `-installing`), Packages for the family (`desktop-packages`). The
+frame's desktop form, remade for a desk:
+
+- **The header row**: the tool's name and facts at the left; at the right the focused row's one action under its own
+  name as the first button, filled Accent (`Approve…`, `Install…`, `Update…`, `Make Default`), then the row's other
+  actions (`Make Default`, `Options…`), `More ▾` (the row's page of §14.5 as a menu) and the list-wide actions (`Check
+  for Updates`). The buttons change with the row, so the toolbar is never a wall.
+- **The sidebar** of sections (`All`, the consoles), 180 wide.
+- **The filter row** above the table: `Show: All ▾` (the List card's filter) and the search box (`Ctrl+F`).
+- **The table**: a header row of sortable columns (Core · Console · Source · Version · Status · Size; Console sorted by
+  default; Version not sortable), rows 24 at Body 13 on InputSurface, the status words of §14.3 with their glyphs, the
+  selected row's bar, a hovered row on SurfaceRaised; on the selected row its one action as a 20-px button at the
+  right, so the mouse has it in place. A marked row shows its mark's word in the status column. A right click opens the
+  row's page as a context menu.
+- **The pane** at the right (320 at 1280, 440 at 1920, resizable 280–520): the core's name in Display 24, its caption,
+  then the sentences of §14.4 in Body 13, and a last Caption line of the keys (`Enter approves · Space marks · Ctrl+I
+  shows every detail · Delete removes`). No buttons in the pane.
+- **The apply bar** under the table: the summary, the last outcome or the progress bar and its line; `Apply…`
+  (`Ctrl+Enter`), the space meter and its words.
+- **The question**: a dialog 520 wide over the dimmed window with §14.6's words, the verbs on its buttons (`Not Now` ·
+  `Approve`, the default filled Accent), `Esc` answering no.
+- **Keys**: `Enter` the row's action · `Space` mark · `Delete` remove… · `Ctrl+I` details · `F5` check for updates ·
+  `Ctrl+Enter` apply · `Esc` clears the search, then closes.
+
+Packages, Scraper and Library Manager take the same frame with their own columns, filters and actions (§15.1); a row 24
+tall at Body 13 is the density, never the big screen's 54. Retired: the vertical split with the detail beneath, the
+toolbar of every action, the Mark column, and the big screen's hint bar drawn on a desktop window.
+
+### 16.7 Settings
+
+One window, 960 × 640 at 1280 and growing with the screen (`desktop-settings-light`): the six sections in a `SourceList`
+200 wide; rows 48 with the setting in Body, its sentence in Caption Muted under it, and its control at the right (a
+dropdown `▾`, a switch, `Edit…`); a preview pane 276 wide where the row has a picture (the shader on a frame, the crop's
+edges, the text sizes, the two variants) with its sentence under it; a search field at the top right filtering rows
+across all six. Settings ▸ a section in the menu bar opens the window at it; `Ctrl+,` opens it. A change applies at
+once. Retired into its sections: Preferences' five tabs, Graphics Settings, Shader Settings, Memory Cards, Firmware, the
+console settings window (Consoles ▸ the console), the controller window's tabs (Controllers ▸ Bindings, the console a
+section).
+
+### 16.8 A game running
+
+`desktop-game-running`: the game fills the content area under the menu bar, the sidebar hidden, letterboxed on Void; the
+pointer hides after two seconds and moving it shows the heads-up bar (OpenEmu's, 442 × 42, 19 px above the bottom,
+`EmuSen_Settings_Reference.md` §4.34) in the tokens: `Pause · Save ▾ · Load ▾ · Rewind · Volume · Full Screen · Stop`.
+`Esc` pauses and shows the bar; `F4` opens the Pause Card for the keyboard, the same card at 40 per cent of the content
+area over the dimmed frame (§4.4); the Game menu carries every action with its key; a pad connected opens the cards and
+the ring as on the big screen (§6). The status bar reads the game, its frame rate and the last state saved. Retired: the
+big screen's pad menu drawn over the desktop library (a pad opens the Home card, §2.3), the game options sheet.
+
+### 16.9 What is retired or rebuilt, in order
+
+| Stage | What it builds | Holds |
+|---|---|---|
+| **D1** | The window: Home in the sidebar and first; the header row with the view's tools; the Game, Tools and Settings menus; the status bar's words; the view switch, the path line and the hint line retired | the main window's states re-recorded at 1280 × 800 and 1920 × 1200 |
+| **D2** | The tools' desktop frame in LunaP (the pane at the right, the row's action in the header and on the row, the filter row, the question dialog, the context menu), Cores first, then Packages, Scraper and Library Manager | each tool's desktop states; the fit audit |
+| **D3** | A game's page, U4's desktop half; the game options sheet, the metadata editor window and the two library views retired | the page's states |
+| **D4** | Home and Setup, U5's desktop half | Home's states |
+| **D5** | Settings, U6's desktop half; Preferences' tabs and the nine settings windows retired | every settings window's states moved |
+| **D6** | In-game: the heads-up bar in the tokens, the Game menu, `F4`'s card; the pad menu's desktop rendering retired | the in-game states |
+
+D1 and D2 go beside the big screen's Cores work; D3 to D6 go with U4 to U6, each stage building both halves of its
+screen from one description (`EmuSen_LibraryTools.md` §1a).
+
+### 16.10 Questions
+
+1. **[decision]** The tools' pane at the right of the table on the desktop, as `desktop-cores-waiting` draws it, in
+   place of the frame's detail beneath. *Recommended:* yes; a list and its pane are the desktop's list-detail form.
+2. **[decision]** `Save States` and `Screenshots` retired as library views, into the game's page. *Recommended:* yes.
+3. **[routine]** `Emulation` renamed `Game`, and Home first in the sidebar and the window's first view.
+   *Recommended:* yes.

@@ -443,7 +443,7 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     if options.files {
         core.files_root = directories();
     }
-    if options.hw.starts_with("vulkan") && !vulkan::ask(options.hw == "vulkan_bgra") {
+    if options.hw.starts_with("vulkan") && !vulkan::ask(&options.hw) {
         log(sys::LOG_ERROR, "the host refused a Vulkan context");
         return false;
     }

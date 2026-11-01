@@ -103,6 +103,41 @@ fn a_vulkan_picture_reaches_the_ring_as_the_software_picture_rgba_by_copy_and_bg
     ring_run("vulkan_bgra", 6, &want, &gpu);
 }
 
+// §10o: a core that negotiates v1 makes its device itself; the host's vkCreateDevice, handed through the
+// vkGetInstanceProcAddr it is given, adds what the ring needs.
+#[test]
+fn a_core_negotiating_v1_reaches_the_ring_through_the_hosts_vk_create_device() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let want = software(6);
+    ring_run("vulkan_v1", 6, &want, &gpu);
+}
+
+// §10o: a v1 core that takes vkCreateDevice from the loader instead gets no ring, says why, and is read back.
+#[test]
+fn a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_back_and_says_why() {
+    let _t = turn();
+    let Some(gpu) = host() else { return };
+    let want = software(3);
+    let mut m = make("tc_hw=vulkan_v1_loader");
+    let ring = gpu.create_ring(640, 480, 3).unwrap();
+    let (lend, _keep) = lend_of(&ring);
+    assert_eq!(m.ring_lend(Some(&lend)), Err(status::NOT_SUPPORTED));
+    for (n, (w, h, rows)) in want.iter().enumerate() {
+        m.advance().unwrap();
+        assert_eq!(m.frame_ring().unwrap(), None);
+        let f = m.frame_info().unwrap();
+        assert_eq!((f.width, f.height), (*w, *h));
+        let mut all = vec![0u8; m.frame_bytes().unwrap()];
+        m.frame_copy(&mut all).unwrap();
+        let got: Vec<u8> = (0..f.height as usize).flat_map(|y| all[y * f.stride as usize..y * f.stride as usize + f.width as usize * 4].to_vec()).collect();
+        assert!(got == *rows, "frame {n} read back differs");
+    }
+    let mut log = String::new();
+    m.log_drain(&mut log).unwrap();
+    assert!(log.contains("without the host's vkCreateDevice"), "{log}");
+}
+
 // §12 Q5 (decided 2026-11-01): a ringed frame's picture is read back only when frame_copy asks, as a screenshot does.
 #[test]
 fn a_ringed_frames_picture_is_read_back_when_frame_copy_asks_as_a_screenshot_does() {

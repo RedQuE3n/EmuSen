@@ -1671,6 +1671,59 @@ The timings above were taken with two local changes for items 1 and 2, never com
 create where no soft patch altered it, and the proxy's policy reading the system folder and the BIOS file named by path.
 They are to be taken again once both land, and through the ring once it runs on the Rust runtime.
 
+## 10o. A core that negotiates version 1 reaches the ring (2026-11-01)
+
+**The defect.** Flycast put no picture in the ring on the Rust runtime: every frame was read back, and the host
+logged that the card lacked the external extensions, on the RX 6800 where PCEE2 is ringed on every frame. The host's
+log, with the negotiation interface's members added to it, showed Flycast declaring negotiation version 1 with
+`create_device` alone (no `create_instance`, no `create_device2`), although the host answers
+`GET_HW_RENDER_CONTEXT_NEGOTIATION_INTERFACE_SUPPORT` with 2. Two faults of the host's v1 path followed (measured
+2026-11-01, Crazy Taxi, 120 frames, the run example):
+
+1. Whether the ring was possible was decided only inside the host's device wrapper, which version 2 calls and version 1
+   never does; a v1 core's device was therefore always read back, whatever it enabled.
+2. Version 1 gives the host no way to turn on a feature beyond Vulkan 1.0's: its `required_features` is a
+   `VkPhysicalDeviceFeatures`, while timeline semaphores need `timelineSemaphore` in a features chain. The required
+   extension list reached the core, but the feature could not.
+
+**The form.** `libretro_vulkan.h` (negotiation version 2) has the frontend hand `create_device` the
+`get_instance_proc_addr` the core makes its device through. The host now hands its own: it answers `vkCreateDevice`
+with the same wrapper version 2 uses (the three extensions added where the card offers them, `timelineSemaphore` set in
+the core's chain or put in front of it, nothing the core asked for changed) and passes every other name to the loader.
+The wrapper records each device it makes and whether it was given what the ring needs; the ring is offered only for the
+device the core hands back in its context. A core that makes its device without the function it was handed (through
+its own loader) gets no ring and is read back, and the host says so: "the core made its device without the host's
+vkCreateDevice, so the external memory and timeline semaphores the ring needs were not enabled: pictures are read back".
+A private device a v1 core makes through the same function is given the extensions too, as version 2's wrapper would
+give them; the core's allocation callbacks are not passed on, as with the wrapper.
+
+**Result.** Flycast is ringed: "ring: 853x853 lent", and frame 299 of Crazy Taxi read from the ring is its title screen.
+Version 2 cores are unchanged.
+
+**Validation.** The test core's v1 paths are silent. Flycast is not, on either path, and none of its messages is a call
+of the host's: its image handed by `set_image` lacks `TRANSFER_SRC` usage, which `libretro_vulkan.h` requires ("at
+least VK_IMAGE_USAGE_TRANSFER_SRC_BIT and VK_IMAGE_USAGE_SAMPLED_BIT"), so the host's copy out of it and its
+transitions are reported (`VUID-vkCmdCopyImage-aspect-06662`, `VUID-VkImageMemoryBarrier-oldLayout-01212`; on the
+read-back path `VUID-vkCmdCopyImageToBuffer-srcImage-00186`); it enables `VK_KHR_swapchain` on a device of an
+instance without `VK_KHR_surface` (`VUID-vkCreateDevice-ppEnabledExtensionNames-01387`), though no surface is given;
+and on the ring path its depth attachment is written by consecutive frames' render passes with no dependency between
+them (`SYNC-HAZARD-WRITE-AFTER-WRITE`), which the read-back path's wait at each frame's end hides. These are named here
+as the core's, not answered by the host.
+
+**The test core** gained `tc_hw=vulkan_v1` (negotiation version 1, its device made through the function it is
+handed, with the extensions it is asked for) and `tc_hw=vulkan_v1_loader` (the same through the loader's
+`vkCreateDevice`). Tests (`tests/ring.rs`, the RX 6800, validation on and silent):
+`a_core_negotiating_v1_reaches_the_ring_through_the_hosts_vk_create_device`, six frames in the ring equal to the
+software pictures; `a_v1_core_that_bypasses_the_hosts_vk_create_device_is_read_back_and_says_why`, the ring refused
+`NOT_SUPPORTED`, three frames read back equal, and the words in the log. Seeded faults, each caught: the hook not
+answering `vkCreateDevice` and the wrapper not recording its device (the v1 test, the ring refused); the words left
+unsaid (the loader test).
+
+**Also found**, not changed here: with every pixel format offered (the run example's `0b111`), Flycast's run panicked
+in `convert_row`, a 640-pixel XRGB8888 row written as four bytes a pixel into the 1,706-byte row of an RGB565 picture
+(853 pixels): `convert_row` has no XRGB8888-to-RGB565 pair. The runtime offers RGBA only, so no player meets it. The
+Flycast runs above were made with the example offering RGBA alone, a change not kept.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

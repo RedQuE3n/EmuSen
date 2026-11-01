@@ -31,7 +31,7 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 23] = [
     ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
     ("tc_scale", "Internal scale", "picture", &["1", "2"], "The picture drawn at a multiple of its native size, as a console core's upscaling is."),
     ("tc_deinterlace", "Deinterlacing", "picture", &["off", "blend"], "Each odd row a copy of the row above, as a console core's deinterlacing blends two fields."),
-    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA."),
+    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra", "vulkan_v1", "vulkan_v1_loader"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA; v1 its device made through negotiation v1, by the host's vkCreateDevice or the loader's."),
 ];
 
 pub const CATEGORIES: [(&str, &str); 5] = [("picture", "Picture"), ("sound", "Sound"), ("memory", "Memory"), ("states", "States"), ("probe", "Probe")];

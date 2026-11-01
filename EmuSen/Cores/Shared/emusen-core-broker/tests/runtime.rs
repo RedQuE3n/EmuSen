@@ -165,3 +165,23 @@ fn an_entry_starts_nothing_while_unapproved_rebuilt_or_its_copies_stale() {
     let why = c3.open(&rt3.trust()).err().unwrap().to_string();
     assert!(why.contains("needs refresh") && !c3.awaits_approval(), "{why}");
 }
+
+#[test]
+fn a_console_setting_stored_through_a_session_reaches_the_next_machines_creation() {
+    let _t = turn();
+    let l = layout("stored");
+    let rt = runtime(&l);
+    rt.approve(&hash(&l.entry.core_path())).unwrap();
+    let game = l.root.join("game.tcg");
+    std::fs::write(&game, b"TCG1 a test game").unwrap();
+    let game = game.to_string_lossy().into_owned();
+    let asked = Asked { path: Some(&game), console: None, engine: None, opened: OpenedWith { flags: emusen_crystal::abi::OPEN_NO_BATTERY, ..OpenedWith::default() } };
+    let id = rt.open(&asked).unwrap();
+    assert_eq!(frame(&rt.sessions.get(id).unwrap()).audio_rate, 48_000);
+    rt.settings_set(id, emusen_crystal::abi::SCOPE_CONSOLE, None, "tc_rate", Some("44100")).unwrap();
+    rt.close(id).unwrap();
+    // The test core reads tc_rate when it loads, so only the creation values can carry it.
+    let id = rt.open(&asked).unwrap();
+    assert_eq!(frame(&rt.sessions.get(id).unwrap()).audio_rate, 44_100);
+    rt.close(id).unwrap();
+}

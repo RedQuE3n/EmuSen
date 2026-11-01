@@ -23,9 +23,15 @@ emusen-core-entry = { path = "../../../../Platform/core-entry" }
 [dev-dependencies]
 emusen-libretro-proxy = { path = "../emusen-libretro-proxy" }
 emusen-libretro-host = { path = "../emusen-libretro-host" }
+# The platform library's frontend API and Serenity exports, through which the ring example lends and draws the ring as Mistress does.
+emusen-platform = { path = "../../../../Platform/platform" }
+libc = "0.2"
 
 [[example]]
 name = "games"
+
+[[example]]
+name = "ring"
 
 [profile.release]
 panic = "abort"

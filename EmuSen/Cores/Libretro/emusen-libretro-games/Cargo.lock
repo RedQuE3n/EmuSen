@@ -3,6 +3,15 @@
 version = 4
 
 [[package]]
+name = "aho-corasick"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c982642fa9e8606056828ee9a8505737230110bb1099153c79efe865c59d12ba"
+dependencies = [
+ "memchr",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -176,6 +185,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dianash-module"
+version = "0.1.0"
+
+[[package]]
+name = "dianash-text"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "regex",
+ "regex-syntax",
+]
+
+[[package]]
 name = "digest"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -189,6 +212,15 @@ dependencies = [
 [[package]]
 name = "emusen-6502"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-cheat"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
+]
 
 [[package]]
 name = "emusen-cheats"
@@ -239,6 +271,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-cores-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-library-module",
+]
+
+[[package]]
 name = "emusen-crystal"
 version = "0.1.0"
 dependencies = [
@@ -270,6 +311,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-debug"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
+]
+
+[[package]]
+name = "emusen-dianash"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "sha2",
+]
+
+[[package]]
 name = "emusen-disc"
 version = "0.1.0"
 dependencies = [
@@ -281,6 +341,14 @@ name = "emusen-dotnet"
 version = "0.1.0"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "emusen-endymion"
+version = "0.1.0"
+dependencies = [
+ "libloading 0.9.0",
+ "md-5",
 ]
 
 [[package]]
@@ -312,6 +380,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-library"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-sqlite",
+ "emusen-systems",
+]
+
+[[package]]
+name = "emusen-library-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+]
+
+[[package]]
+name = "emusen-library-tool"
+version = "0.1.0"
+dependencies = [
+ "emusen-crystal",
+ "emusen-disc",
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-library",
+ "emusen-patch",
+ "emusen-scrape",
+ "emusen-sqlite",
+ "emusen-systems",
+ "emusen-tool-job",
+ "libc",
+ "sha2",
+]
+
+[[package]]
 name = "emusen-libretro-games"
 version = "0.1.0"
 dependencies = [
@@ -322,7 +426,9 @@ dependencies = [
  "emusen-galaxia",
  "emusen-libretro-host",
  "emusen-libretro-proxy",
+ "emusen-platform",
  "emusen-systems",
+ "libc",
 ]
 
 [[package]]
@@ -393,6 +499,41 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-platform"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "dianash-text",
+ "emusen-cheat",
+ "emusen-cheats",
+ "emusen-core-tool",
+ "emusen-cores-module",
+ "emusen-crystal",
+ "emusen-debug",
+ "emusen-dianash",
+ "emusen-disc",
+ "emusen-dotnet",
+ "emusen-endymion",
+ "emusen-firmware",
+ "emusen-galaxia",
+ "emusen-library",
+ "emusen-library-module",
+ "emusen-library-tool",
+ "emusen-native",
+ "emusen-net",
+ "emusen-patch",
+ "emusen-savemedia",
+ "emusen-scrape",
+ "emusen-scrape-module",
+ "emusen-serenity",
+ "emusen-session",
+ "emusen-session-service",
+ "emusen-sqlite",
+ "emusen-systems",
+ "emusen-trace",
+]
+
+[[package]]
 name = "emusen-ps2-card"
 version = "0.1.0"
 
@@ -415,6 +556,46 @@ dependencies = [
  "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
+]
+
+[[package]]
+name = "emusen-scrape"
+version = "0.1.0"
+dependencies = [
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-library",
+ "emusen-net",
+ "emusen-sqlite",
+ "emusen-systems",
+ "flate2",
+]
+
+[[package]]
+name = "emusen-scrape-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+]
+
+[[package]]
+name = "emusen-serenity"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "emusen-galaxia",
+ "emusen-sqlite",
+ "libloading 0.9.0",
+ "sha2",
+]
+
+[[package]]
+name = "emusen-session"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-session-service",
 ]
 
 [[package]]
@@ -450,6 +631,15 @@ dependencies = [
 [[package]]
 name = "emusen-tool-job"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-trace"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-session-service",
+]
 
 [[package]]
 name = "enumflags2"
@@ -710,6 +900,35 @@ checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
 dependencies = [
  "proc-macro2",
 ]
+
+[[package]]
+name = "regex"
+version = "1.13.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-automata"
+version = "0.4.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad8553b9b26413251cbf30e620595c7a41b3887f03da04579c0e6b0d6a06b4b2"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.8.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
 name = "ring"

@@ -1618,9 +1618,14 @@ libretro host and runner with their `cores.manifest`, the tree's data and config
 runs Cores' own jobs (`core-fetch`, `core-get`, `core-verify`) with the context the platform library gives them. Its
 example `games` installs, approves (`Runtime::approve` with the hash `NOTICE` records) and runs: a game opened, N frames
 past a boot of B frames timed one by one, the picture's size and digest, a state taken, 60 frames run, the state loaded
-and the pictures compared, the core's log on request. Tests: 3 (the timing summary, the `.info` reader, the
-installation's manifest); seeded faults, each caught: the frames per second inverted, a key matched by its end, the
-libretro host left out of the manifest.
+and the pictures compared, the core's log on request. Its example `ring` goes through the platform library's frontend
+API as Mistress does (`emusen_crystal_open` with `OPEN_RING` and Serenity's device, as `tests/api_ring.rs` of the broker
+does): each frame's picture drawn from the lent ring by a one-pass chain (nearest sampling at the source's size) and
+given back by a one-pixel draw, a picture the core read back uploaded to the chain instead; a pad script by frame
+number; PNGs of the chain's picture; a state saved to slot 1, loaded twice and the pictures compared. Tests: 4 (the
+timing summary, the `.info` reader, the installation's manifest, the pad script); seeded faults, each caught: the frames
+per second inverted, a key matched by its end, the libretro host left out of the manifest, a press released a frame
+early, the script left unsorted.
 
 **Installed** [M, 2026-11-01] through `core-fetch` and `core-get` from buildbot.libretro.com (index of 2026-11-01) into
 `~/.cache/emusen/probe/libretro-rust/home/`, then approved:
@@ -1632,44 +1637,56 @@ libretro host left out of the manifest.
 The first `core-get` refused both: the tool compared the whole zip's CRC-32 with the index, whose CRC-32 is the
 library's (`EmuSen_Cores.md` §5.2, fixed the same day).
 
-**Timing** [M, 2026-11-01, the desktop, Ryzen 7 7700X with an RX 6800 (`EMUSEN_GPU_DEVICE="RX 6800"`), the release
-probe, CPU weight 20 with an 8 GB cap, a CPU-only build of another branch running beside the first rounds; no input, no
-ring, the picture read back by the libretro host; each frame run as fast as it goes, unpaced]:
+**Through the ring, with the fixes in** [M, 2026-11-01, libretro-games at 189bb9267 with libretro-rust 4a27c40bb (the
+image's path at create, 3ac0b9178; an entry refreshed by `cores verify` waiting for approval again, 4a27c40bb),
+libretro-e be1f6bf22 (the system folder and its links' targets granted, a core's failed start refusing, §10l) and
+libretro-ring 7ad12d730 (the ring on the Rust runtime, §10l) merged, no local change; the desktop, Ryzen 7 7700X with
+an RX 6800 (`EMUSEN_GPU_DEVICE="RX 6800"`), the release probe, CPU weight 20 with an 8 GB cap, a debug test run of
+another branch beside it; each frame run as fast as it goes, unpaced]:
+- **Setup.** After the installation's proxy and host were rebuilt, `core-verify` refreshed both entries' copies and the
+  runtime listed them as waiting, and one approval each put them back. PCEE2 is given no referee folder: its system
+  folder is the player's own, `.data/pcee2/system/`, holding a link `pcsx2/bios/ps2-0230a-20080220.bin` made from the
+  BIOS's path and nothing else; the approval's schema then lists that name as a `pcsx2_bios` choice, and it is set
+  through `settings_set`. The log says "BIOS Found: USA v02.30(20/02/2008)". Its cards are the host's blank cards in
+  that same folder, so Jak asks to format card 1 and the script answers No.
+- **Pad scripts** (port 0, RetroPad numbering: 0 B, 3 Start, 13 R2). Jak: Start at 2,500, then B at 2,700, 2,850 and
+  every 150 frames to 3,600 (New Game; card 1 not formatted), and B held 10 frames every 120 from 25,000. The intro,
+  drawn by the game's engine, runs from about 4,800 to 24,500; Jak stands on Geyser Rock in play by 25,000. Crazy Taxi:
+  B at 650, 800, 950 and 1,100 (a new file on the VMU), Start at 1,300 and 1,500, B at 1,700 to 2,500 every 200 (Arcade,
+  3 minutes, Axel), R2 held from 2,600 for 2,400 frames: the taxi drives from about 2,600.
 
-| Game | Core | Frames timed | Frames per second | Median, worst frame | Picture |
+| Game | Core and picture path | Frames timed | Frames per second | Median, worst frame | Picture |
 |---|---|---|---|---|---|
-| Jak and Daxter (USA, Rev 1), the ISO | PCEE2, renderer automatic (Vulkan) | 600 to 2,400 | 391.8, 341.8, 656.0 | 1.50 to 1.94 ms, 2.2 to 31.7 ms | 512 × 448 at 4:3 |
-| Crazy Taxi (US), a CDI copied from the household's library | Flycast, defaults | 600 to 2,400 | 603.3, 599.7 | 1.65 to 1.67 ms, 1.9 to 2.4 ms | 640 × 480 at 4:3 |
+| Jak and Daxter (USA, Rev 1), the ISO | PCEE2 v2.9.138, Vulkan, every frame in the ring (26,798 and 26,799 of 26,800) | 25,000 to 26,800, in play | 180.24, 180.00 | 5.47 ms, 8.0 and 8.2 ms | 512 × 448, two fields, 4:3 |
+| Crazy Taxi (US), a CDI copied from the household's library | Flycast, Vulkan, every frame read back and uploaded (none in the ring) | 3,000 to 4,800, driving | 378.46, 369.62 | 2.60 and 2.69 ms, 3.7 and 4.0 ms | 640 × 480, 4:3 |
 
-RetroArch's 60.8 fps measured earlier over the same span is paced at the television's rate (`EmuSen_LibretroBridge.md`
-§1 records RetroArch holding 60 frames a second on frames 600 to 2,400); the runtime's figure is unpaced, so both are at
-or above full speed, and the comparison says only that the brokered runtime falls short of nothing RetroArch reached. The
-spread of Jak's three rounds (the third run after the build beside it ended) is the CPU it shares; PCEE2's own threads
-run at the scope's weight. Both spans are light scenes: with the referee's cards unreadable, Jak stops at "Memory card
-slot 1 … please insert a memory card" (with PCEE2's blending notice drawn over it), and Crazy Taxi has reached "Press A to
-create a new file" by frame 600. A heavier span needs a pad script, as `run.rs` has.
+Both are about three and six times the television's rate. RetroArch's 60.8 fps measured earlier is paced at the
+television's rate (`EmuSen_LibretroBridge.md` §1 records RetroArch holding 60 frames a second on frames 600 to 2,400);
+these figures are unpaced, so they say that the brokered runtime with the ring falls short of nothing RetroArch reached,
+not that it is three times faster. The two rounds of each agree within 2.4%.
 
-**States** [M]: PCEE2's state is 100,663,408 bytes, Flycast's 37,748,848. Flycast's picture after the load equals the one
-after the save, and stays so. PCEE2's equals it when saved at frame 901; saved at 2,401 the frame after the load differs
-and goes on changing for the next four, which matches PCEE2's notice fading by wall-clock time rather than a state
-fault (not proven).
+**States** [M]: PCEE2's load works: two loads of the same slot give the same first picture, and the frames after it are
+the saved scene's (the intro's background when saved at 3,100), though that first picture is the same in every run
+whatever the save point, so it is a picture the core gives once after a load. Flycast's load returns success but does
+not restore the picture: saved while driving at frame 3,100, the picture five frames after the load shows the game
+timer a second past the moment of the save, and two loads of the slot give different pictures; reported, its cause not
+found (Flycast logs nothing at the load).
 
-**Found on the way** (each reported, none fixed here):
-1. The runtime never gives a core claiming `IMAGE_PATH` the game's path (`crystal`'s `Engine::create` leaves
-   `Create.image_path` unset): Flycast refuses the game ("this core opens the game file itself, and the host gave no path
-   to it"); PCEE2's runner exits with code 0, the whole 1.46 GB image having been sent across the socket.
-2. With the referee switch `EMUSEN_LIBRETRO_SYSTEM_DIR`, the runner's Landlock policy grants nothing on that folder nor on
-   the BIOS it holds by link: PCEE2 is "Unable to auto locate a BIOS image" and the approval's schema lists `pcsx2_bios` as
-   `auto` alone, so the runtime refuses the named image.
-3. An open succeeds although PCEE2 reported `VMManager::Initialize() failed`: black frames at about 4,000 a second, and a
-   state refused ("the core did not write its state").
-4. After `cores verify` refreshes an entry's proxy copy, its sidecar keeps the old proxy's hash; the entry is listed as
-   approved but routes nothing ("No core in this build handles '.iso'"), and `approve` answers "no core library listed
-   has the SHA-256"; only a sidecar removed and approved again recovers it.
+**Found on this pass** (reported):
+1. Flycast never puts a picture in the ring. The host logs "the card lacks external memory, semaphores or timeline
+   semaphores: pictures are read back" on the RX 6800, which gives PCEE2 the ring; Flycast makes its own Vulkan device
+   (its log lists only `VK_KHR_swapchain`, `VK_EXT_provoking_vertex` and `VK_KHR_buffer_device_address` enabled), so the
+   extensions the host needs appear not to reach it. Its timing above is therefore the read-back path's.
+2. Flycast's state load, above.
 
-The timings above were taken with two local changes for items 1 and 2, never committed: the image's path given at
-create where no soft patch altered it, and the proxy's policy reading the system folder and the BIOS file named by path.
-They are to be taken again once both land, and through the ring once it runs on the Rust runtime.
+**The first pass, superseded** [M, 2026-11-01, no ring, no input, the picture read back, with two local changes standing
+in for the image-path and system-folder fixes]: Jak 391.8, 341.8 and 656.0 fps and Crazy Taxi 603.3 and 599.7 fps over
+frames 600 to 2,400. Both spans were static menus (Jak's "please insert a memory card", the referee's cards being
+unreadable; Crazy Taxi's "Press A to create a new file"), and the spread of Jak's rounds followed the CPU it shared.
+That pass found the four defects since fixed: the image's path never given to a core claiming `IMAGE_PATH`; the
+referee's system folder and its linked BIOS not granted by the runner's Landlock policy; an open succeeding after
+PCEE2's `VMManager::Initialize() failed`; and an entry whose proxy copy `cores verify` refreshed listed as approved but
+routing nothing. The core tool's CRC-32 comparison (`EmuSen_Cores.md` §5.2) was fixed on this branch.
 
 ## 11. Risks
 

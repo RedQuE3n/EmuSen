@@ -792,6 +792,28 @@ reason the comparison precedes loading), the adapter copy not checked, a removed
 Cores' stage C5; the listing's `"libretro"` field (`EmuSen_Cores.md` §7.3); `audio.rate_exact` in the resampler and
 cards in the card manager (stage 4).
 
+### 10d.1 Decided 2026-10-31: the interval closed at 1.17
+
+Decided by the tester the same day: a changed file must never run, even confined; the interval §10d names is closed in
+minor 1.17, beside rumble (E6). Two forms were weighed [A]:
+
+- **The runner waits for the host's go** after the proxy reports the sealed copy's hash: a new step in the broker's
+  protocol and a new call for the host to give it, with the library's runner, which `info()` needs, held at the step too.
+- **The approved hash given to the proxy before it runs anything** [C, chosen]: an optional library-level export,
+  `emusen_core_expect(const char *sha256)` (capability bit 28, `EXPECT`), which a host calls right after loading and
+  before any other export, as `set_crash_log` may be. The proxy seals its copy at that call and compares; on a mismatch
+  it starts no runner, and every later call answers as a broken library with the two hashes in words. Loading the proxy
+  runs only the project's own initialisers, which `cores.manifest` vouches for, so nothing of the libretro core runs
+  before the comparison. `create` needs no field, since every runner loads the copy sealed at `expect`.
+
+The second is one call and no change to the protocol, and it keeps the comparison in the proxy, which holds the
+bytes. A host that does not call it (an older one) gets today's behaviour, the post-load check of §10d. The C# and Rust
+hosts call it for every entry from the sidecar's approved hash. Proof: a test that swaps the libretro file between the
+host's hash and the load, and sees no runner started and the load refused; and a seeded fault, the comparison skipped.
+
+Also decided: the Rust host's trust of entries, the listing's `"libretro"` field and `rust-cores.yml`'s Linux-only
+entries come with Cores' stage C5, or at the latest in stage 3.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

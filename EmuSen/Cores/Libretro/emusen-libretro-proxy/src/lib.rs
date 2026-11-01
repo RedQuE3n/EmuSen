@@ -171,6 +171,11 @@ impl Target for Libretro {
         })
     }
 
+    /// The libretro host answers from the `.info` file alone, whatever the image.
+    fn firmware_reads_image() -> bool {
+        false
+    }
+
     fn window() -> bool {
         entry().is_ok_and(|e| STILL_BETWEEN_FRAMES.contains(&e.stem.as_str()))
     }

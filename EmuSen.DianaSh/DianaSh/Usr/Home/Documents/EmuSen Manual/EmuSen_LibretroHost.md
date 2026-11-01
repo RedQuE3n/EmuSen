@@ -1862,6 +1862,28 @@ and a value the core lacks accepted (the options test), the RGB565 arm removed (
 
 **Surfaces.** No version changes. The schema's default for Flycast's option is now `disabled`.
 
+## 10r. A game's firmware question froze the big screen (2026-11-01)
+
+**Reported.** On the handheld, docked at 3840 × 2160 in the big-screen form, with PCEE2 approved, choosing Jak and
+Daxter froze the screen before the launch screen appeared; 26 s later the session was ended from Steam. Nothing was
+logged: no game log was begun (it is begun after the open) and no runtime refused anything.
+
+**Found** [M, 2026-11-01, the desktop, the real PCEE2 v2.9.138 approved in a WiseMan home, the Rust runtime, each call
+the big-screen launch makes before its launch screen timed alone]: `route` 0.003 s, `cores` under 0.001 s, the PS2 cards'
+listing 0.001 s, the console's schema 0.001 s, and `firmware_needed` **6.663 s**, answering `[]`. Mistress asks for the
+game's missing firmware on its interface thread before the launch screen (`PromptForMissingFirmwareAsync`), so for that
+long nothing is drawn. The runtime's `firmware::needed` maps the disc and hands its bytes to the engine's
+`firmware_for`; for a hosted core that export is the broker's proxy, which copied every byte of the 1.4 GB image into
+its request, reading the whole file through, and sent it to the runner, whose libretro host answers from the `.info`
+file and never looks at the image. On the handheld the image is read cold from its card and copied once more, which
+is the 26 s and most of the session's 2.4 GB peak; the call failed besides, hence the empty answer.
+
+**Fixed.** A proxy target says whether its core's firmware answer reads the image (`Target::firmware_reads_image`,
+true unless a target says otherwise); the libretro proxy says no, and its firmware request carries no image. After the
+fix the same call took 0.006 and 0.007 s over two rounds and answers what the `.info` declares: PCEE2's `pcsx2/bios` and
+`pcsx2/resources` folders, both required. A unit test in `emusen-core-broker` holds the request for a target that does
+not read the image to the empty one whatever image is given.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

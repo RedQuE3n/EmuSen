@@ -9416,3 +9416,39 @@ changed. `EmuSen_LibretroHost.md` §10m has the design and its proofs.
 numbers, as `crystal_abi.rs` holds it to the Rust's; the C# mirror's minor is checked only to be at or below the header's,
 until B10 deletes it. `CoreHostParityTests` sets the key aside on the Rust side before comparing.
 
+## 35. WiseMan on the Rust frontend API by default, 2026-11-01
+
+Decided 2026-11-01 by the tester: new work is proven on the Rust runtime only, so the suite takes the Rust
+implementation of the frontend API as Mistress, Pharaoh and emusen-shell already did.
+
+**The mechanism.** `CrystalContract.Asked` reads `EMUSEN_CRYSTAL_NATIVE` and, when it is unset, the entry assembly's
+`EmuSenCrystalNative` key. The test host's entry assembly is the runner's, which carries no key, so
+`EmuSen.WiseMan.csproj` sets `EmuSenCrystalNative` and the module initializer `Crystal/RustDefault.cs` applies it as
+`EMUSEN_CRYSTAL_NATIVE=1` before any test, only when the variable is unset or empty. `EMUSEN_CRYSTAL_NATIVE=0` still
+selects the C# implementation, and is how the parity classes' other half and the `CSharpImplementationFact` cases are
+run until B10 removes them. `RustImplementationFact` is kept: it now runs by default and skips at `=0`, which still names
+an answer only the Rust gives. `CrystalSwitchTests` holds the default: WiseMan names it as the programs do, the binding
+is on the Rust unless the variable is 0, and a variable the suite was started with is left as given.
+
+**The other switches.** `EMUSEN_SYSTEMS_NATIVE`, `_SERVICES_`, `_GALAXIA_`, `_ENDYMION_`, `_LIBRARY_`, `_SCRAPE_`,
+`_SERENITY_` and `_DIANASH_` each go through `PlatformSwitch`, which takes the Rust half whenever its library loads and
+the variable is not `0`; none needed a change.
+
+**The tools.** `land.sh` and the blast map run `dotnet test` with no variable set, so they take the Rust default with no
+change to them.
+
+**The sort.** A full run on the Rust default, measured on 2026-11-01 before the merge of `f24fee121`, failed five cases of
+7,447:
+
+| Case | Sort | What was done |
+|---|---|---|
+| `NephriteFirmwareTests`, three cases | (b) | they set the C# implementation's `FirmwareLibrary.Directory` static, which the Rust never sees; they now lay the BIOS files in the player's `home/Firmware` under a config with no chosen folder, which either implementation reads from the tree |
+| `HostedPs2CardTests` | (b) | its information file listed no extensions, and the Rust matches a game to a hosted core by the ones its `.info` lists (`EmuSen_LibretroHost.md` §4.1a); `LibretroEntryFixture` now writes the extensions a real core of the stem lists when given them, and the case gives pcee2's |
+| `OffDispatcherTests` | neither | a static guard that failed on both implementations, naming two cases outside its list; listed with the reasons in `EmuSen_Settings_Reference.md` §4.78.5 |
+
+No case was sorted (a), since the C#'s own types were already marked `CSharpImplementationFact` (§29.27), and no gap in
+the Rust runtime (c) was found. Nothing was added to a C# half.
+
+**Seeded faults**, each reverted: the initializer applying nothing (two `CrystalSwitchTests` cases failed); applying `1`
+over a given `0` (the fills-only case failed at `=0`); the project's key set false (three `CrystalSwitchTests` cases
+failed); the fixture writing no extensions (`HostedPs2CardTests` failed on the Rust).

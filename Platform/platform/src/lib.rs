@@ -26,6 +26,8 @@ pub mod library;
 pub mod library_tool;
 pub mod patch;
 pub mod scrape;
+// The emusen.scrape service every shell is handed (EmuSen_LibraryTools.md §8).
+pub mod scraping;
 pub mod net;
 pub mod serenity;
 pub mod serenity_device;
@@ -33,7 +35,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 27;
+pub const ABI_VERSION: u32 = 28;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {

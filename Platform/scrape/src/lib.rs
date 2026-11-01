@@ -223,6 +223,11 @@ impl Scraper {
         self.root.clone()
     }
 
+    /// The SQLite the host lent, for a host's own database beside the store.
+    pub fn sqlite(&self) -> Arc<Sqlite> {
+        self.sqlite.clone()
+    }
+
     /// The failover's own folder, apart from the player's art: `<store>/openemu/<console>/`.
     pub fn openemu_root(&self) -> String {
         emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &self.root, "openemu")

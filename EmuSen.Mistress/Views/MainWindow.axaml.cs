@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Crystal.Client.Scrape;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -158,6 +159,8 @@ namespace EmuSen.Mistress.Views
         {
             _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend));
             EarlyLoader = OpenSession;
+            // Mistress scrapes, so no shell of this process opens a scraper of its own (EmuSen_LibraryTools.md §8).
+            ScrapingLend.Withdraw();
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);

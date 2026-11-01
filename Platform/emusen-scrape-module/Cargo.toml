@@ -1,0 +1,16 @@
+[package]
+name = "emusen-scrape-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# emusen.scrape, the scraper as a command module (EmuSen_LibraryTools.md §8): `scrape`, over the scraper lent as the
+# emusen.scrape service, since a module links neither the scraper nor Galaxia.
+[lib]
+name = "emusen_scrape_module"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+# .NET's JSON, to read the scraper's answers.
+emusen-dotnet = { path = "../dotnet" }

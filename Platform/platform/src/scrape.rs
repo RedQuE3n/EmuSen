@@ -14,16 +14,16 @@ thread_local! {
     static WAITING: RefCell<Option<(u8, Vec<u8>, Vec<u8>)>> = const { RefCell::new(None) };
 }
 
-fn fail(status: i32, words: impl Into<String>) -> i32 {
+pub(crate) fn fail(status: i32, words: impl Into<String>) -> i32 {
     LAST_ERROR.with_borrow_mut(|last| *last = emusen_scrape::redact::redact(&words.into()));
     status
 }
 
-fn failed(error: Error) -> i32 {
+pub(crate) fn failed(error: Error) -> i32 {
     fail(error.status(), error.words())
 }
 
-unsafe fn text<'a>(data: *const u8, len: usize) -> Result<&'a str, i32> {
+pub(crate) unsafe fn text<'a>(data: *const u8, len: usize) -> Result<&'a str, i32> {
     if data.is_null() {
         return if len == 0 { Ok("") } else { Err(fail(abi::NULL, "a text with a length is null")) };
     }
@@ -39,7 +39,7 @@ unsafe fn handle<'a>(s: *mut Scraper) -> Result<&'a Scraper, i32> {
     if s.is_null() { Err(fail(abi::NULL, "the scraper handle is null")) } else { Ok(unsafe { &*s }) }
 }
 
-unsafe fn answer(export: u8, request: &str, out: *mut u8, len: usize, make: impl FnOnce() -> Result<String, Error>) -> i64 {
+pub(crate) unsafe fn answer(export: u8, request: &str, out: *mut u8, len: usize, make: impl FnOnce() -> Result<String, Error>) -> i64 {
     let waiting = WAITING.with_borrow_mut(|w| match w {
         Some((e, r, _)) if *e == export && r.as_slice() == request.as_bytes() => w.take().map(|(_, _, a)| a),
         _ => None,

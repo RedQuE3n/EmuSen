@@ -1,0 +1,129 @@
+NAME
+    scrape - choose games, see what pictures they have, plan and run a scrape
+
+SYNOPSIS
+    scrape ls   [<choice>...] [--kinds <kind>,...|theme] [--videos]
+    scrape plan [<choice>...] [<option>...]
+    scrape run  [<choice>...] [<option>...]
+    scrape run  --resume
+    scrape status
+    scrape wait [scrape<n>]
+
+    choices: --system <es-de name>[,...]  --favorites  --collection <name>
+             --missing <kind>|any  <path>...  (and paths on standard input)
+    options: --kinds <kind>,...|theme  --videos  --overwrite
+             --region <region>  --language <language>  --threads <n>
+
+DESCRIPTION
+    The command of the emusen.scrape module, and the backend of the Scraper
+    window. It does not scrape by itself: every request goes to EmuSen's
+    one scraper, the emusen-scrape component, through the emusen.scrape
+    service, so the quota rules, the order of the sources (ScreenScraper,
+    then OpenEmu's sources where switched on) and the media store are the
+    scraper's and are the same as from a game's menu. Inside EmuSen the
+    shell is lent EmuSen's own open scraper, so a process never holds two
+    and never counts the account's quota twice; in a shell with no host
+    the platform library opens one from the settings file (the media
+    store under Media, games.db under Library) on first use.
+
+    Data lines go to standard output and notes to standard error, so each
+    form pipes. Nothing is sent to ScreenScraper except by 'scrape run'.
+
+  Choosing the games
+    The games are the library's (AppSettings.RomDirectory) as the scan
+    shelves them, with the packages and compressed discs beside it, each
+    under its ES-DE system name. With no choice every game is chosen. The
+    choices narrow it, and combine:
+        --system      only these systems (snes, megadrive, psx, ...)
+        --favorites   only the favourites (--favourites is the same)
+        --collection  only the members of the named collection, ignoring
+                      case
+        --missing     only the games with no picture of the kind from any
+                      source (the package, the store, an ES-DE folder, a
+                      picture placed by hand, OpenEmu's); 'any' means a
+                      game lacking at least one of the kinds asked
+        <path>        the named games only ("by hand"): a full path, a
+                      path in the shell's tree, or one relative to the
+                      library. Paths on standard input, one a line, are the
+                      same; a line's first tab-separated field is its path,
+                      so the output of 'scrape ls' pipes back in.
+    A game marked "Exclude from multi-scraper" is left out unless it is
+    named by hand; a note says how many were left out.
+
+  The kinds
+    With no --kinds a run asks for the scraper's own default: cover,
+    screenshot, marquee and miximage. --kinds names any of ES-DE's eleven:
+    cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox,
+    physicalmedia, fanart, manual, video. --kinds theme is the "what my
+    theme shows" preset: for each system, the kinds the active big picture
+    theme draws there, as EmuSen's theme loader reads it (the gamelist's
+    imageType lists, its video elements, and the media types its variant's
+    triggers name). Only a shell inside EmuSen can read the theme; anywhere
+    else --kinds theme is refused and the kinds must be named. A run over
+    several systems asks for the union of their kinds.
+
+    Videos are off by default. A video is asked for only with --videos,
+    which adds it; a video named by --kinds or by the theme is otherwise
+    left out, with a note.
+
+  The forms
+    'ls' prints one line for each chosen game, tab-separated:
+        <path>  <system>  <kind>=<source> ...
+    where the source is package, hand, esde, screenscraper, openemu or
+    other_game, or '-' for none: the gaps a theme would show, before
+    anything is asked.
+
+    'plan' prints what a run would ask, one 'key<TAB>value' a line: games,
+    not_yet_asked, asked_again, complete (already holding every kind),
+    max_requests (the bound: one lookup and one request a kind),
+    expected_requests and expected_mb (from the offer rates measured for
+    the scraper), requests_left_today (or unknown), minutes, usable and
+    why_not (whether ScreenScraper can be asked now, and why not), kinds.
+    Its sentence goes to standard error: "38 game(s), about 70 request(s)
+    (at most 145), 9 already complete; ...". The numbers are the scraper's
+    ScrapePlan.
+
+    'run' first prints the plan's sentence on standard error, then starts
+    the run: a wide run, as Scrape Games from the library makes it, queued
+    by priority (one system: console; otherwise library). One line goes to
+    standard output as each game finishes:
+        <outcome>  <path>  <kinds saved, or ->  [openemu]  [<detail>]
+    with the outcome found, unknown, failed, skipped or unchanged, and at
+    the end a sentence of the counts on standard error. The exit status is
+    0 when the run finished with no failure. --overwrite asks again for
+    what is already held (ES-DE's "Overwrite files and data"); --region,
+    --language and --threads are the run's choices, each bounded by the
+    scraper's rules and the account's limits. --resume continues a run
+    that was interrupted, with the games it had queued. A run already
+    going, whether started in EmuSen or in another shell, is refused.
+
+    A run that outlasts the line's budget goes on in the background as
+    scrape<n>: 'ps' lists it with how many games are done, 'scrape wait'
+    follows it again, and 'kill scrape<n>' cancels it (the games not
+    reached are not asked).
+
+    'status' prints the quota as the scraper holds it (quota.<field>:
+    today's requests, the day's limit, threads, the pace, whether it is
+    stopped and until when), whether a member account is signed in and
+    when it was last verified, where the developer credentials come from
+    (tree, user, embedded or none), and the run going. It never prints an
+    account's name or a password, nor any credential; the credentials are
+    the scraper's, kept as they always were.
+
+FILES
+    Media/media.db and Media/...    the scraper's store, the only place
+                                    pictures are written
+    The library is only read.
+
+EXAMPLES
+    scrape ls --system snes --kinds theme
+        each SNES game and where each kind its theme draws comes from
+    scrape ls --kinds theme --missing any | scrape plan --kinds theme
+        the gaps the theme would show, and what filling them would cost
+    scrape plan --favorites --kinds cover,marquee,3dbox
+    scrape run --collection Couch --videos
+    scrape status | grep '^quota\.'
+
+SEE ALSO
+    rom(1), pkg(1), ps(1), kill(1); EmuSen_LibraryTools.md, section 8;
+    EmuSen_Backend.md, section 30

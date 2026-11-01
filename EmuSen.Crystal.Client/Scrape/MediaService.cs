@@ -105,6 +105,9 @@ namespace EmuSen.Crystal.Client.Scrape
         private int _calls;
         private bool _closing;
 
+        // The raw handle, for the lend to the shells alone.
+        internal nint Handle => _handle;
+
         private MediaService(Exports t, nint handle)
         {
             _t = t;
@@ -228,6 +231,7 @@ namespace EmuSen.Crystal.Client.Scrape
         // Waits for every call in progress, then closes the handle, which cancels a run and joins its workers.
         public void Dispose()
         {
+            ScrapingLend.Release(this);
             lock (_gate)
             {
                 if (_handle == 0 || _closing) return;

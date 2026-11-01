@@ -1,0 +1,43 @@
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
+# a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
+command scrape
+shell rust
+
+case the usage, and what a command line refuses
+target none
+covers 1-10
+$ scrape
+status 1
+action none
+$ scrape frobnicate
+status 1
+action none
+$ scrape ls --overwrite
+status 1
+action none
+$ scrape plan --kinds boxart
+status 1
+action none
+$ scrape plan --missing wheel
+status 1
+action none
+$ scrape run --resume --system snes
+status 1
+action none
+$ scrape plan --threads 0
+status 1
+action none
+$ scrape plan --system
+status 1
+action none
+$ scrape status now
+status 1
+action none
+$ scrape wait
+status 1
+action none
+$ scrape wait scrape9
+status 1
+action none
+end

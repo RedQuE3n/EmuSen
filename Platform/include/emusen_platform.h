@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 27u
+#define EMUSEN_PLATFORM_ABI_VERSION 28u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -280,6 +280,28 @@ int32_t emusen_galaxia_mapped_advise(const emusen_galaxia_mapped *mapped, uint64
 
 /* Releases the mapping; a null handle is nothing to release. No address it gave may be read afterwards. */
 int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);
+
+/* ---- The scraper lent to every shell (EmuSen_LibraryTools.md, section 8; since 28) ---- */
+
+/*
+ * The emusen.scrape service (emusen_scrape_service.h) speaks for the process's one scraper. A host that holds its own
+ * lends it here, with the games.db library it was opened with, the systems the build opens (a JSON list of system ids,
+ * empty for every system of the table) and, where it loads themes, a function answering a system's ES-DE name with the
+ * media types its active theme draws, by the length-query idiom, callable from any thread with ctx. A null lend, or one
+ * with a null scraper, withdraws it: the service then refuses rather than open a scraper of its own, as it does in a
+ * process whose host has ever lent one. A lend or withdrawal waits for the service's calls in flight, so the host may
+ * close its handles once it returns.
+ */
+typedef struct emusen_scraping_lend {
+    uint32_t size;
+    struct emusen_scrape *scraper;
+    struct emusen_library *library;
+    const uint8_t *systems; size_t systems_len;
+    int64_t (*theme_kinds)(void *ctx, const uint8_t *system, size_t len, uint8_t *out, size_t out_len);
+    void *ctx;
+} emusen_scraping_lend;
+
+int32_t emusen_scraping_lend(const emusen_scraping_lend *lend);
 
 /* ---- Soft patches (EmuSen_GamePackages.md, sections 5.4 and 15; since 26) ---- */
 

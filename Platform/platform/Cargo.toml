@@ -42,6 +42,8 @@ emusen-library = { path = "../library" }
 emusen-library-tool = { path = "../library-tool" }
 emusen-patch = { path = "../patch" }
 emusen-library-module = { path = "../emusen-library-module" }
+# emusen.scrape, the scraper as `scrape` (EmuSen_LibraryTools.md §8).
+emusen-scrape-module = { path = "../emusen-scrape-module" }
 # Scraping, under its own stable header (EmuSen_Backend.md §30).
 emusen-scrape = { path = "../scrape" }
 emusen-sqlite = { path = "../sqlite" }
@@ -51,3 +53,10 @@ emusen-crystal = { path = "../crystal" }
 emusen-session-service = { path = "../session-service" }
 # .NET's JSON, for the requests the systems' C layer reads.
 emusen-dotnet = { path = "../dotnet" }
+
+[dev-dependencies]
+# A certificate made at test time for the recorded-response server the scraping test answers from.
+rcgen = { version = "=0.14.10", default-features = false, features = ["ring", "pem"] }
+rustls = { version = "=0.23.46", default-features = false, features = ["ring", "std", "tls12"] }
+# libm made global before the NuGet SQLite loads, as a .NET host has it.
+libc = "0.2"

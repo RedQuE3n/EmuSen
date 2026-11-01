@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -85,12 +86,12 @@ namespace EmuSen.Mistress.Views
             Shown = GameMetadata.Fields.Where(f => f.Key != GameMetadata.CustomSortName || inCustomCollection).ToList();
             foreach (MetadataField field in Shown) Editor(field);
 
-            _scrape = Button("Scrape", "MetadataScrape", () => _ = ScrapeAsync());
+            _scrape = Button("Scrape", "MetadataScrape", () => ScrapeAsync().Logged("mistress", "ScrapeAsync"));
             Button save = Button("Save", "MetadataSave", Save);
             save.IsDefault = true;
             Button cancel = Button("Cancel", "MetadataCancel", Close);
-            Button clear = Button(_big ? "Clear" : "Clear...", "MetadataClear", () => _ = ClearAsync());
-            Button hide = Button(HideText + "...", "MetadataHide", () => _ = HideAsync());
+            Button clear = Button(_big ? "Clear" : "Clear...", "MetadataClear", () => ClearAsync().Logged("mistress", "ClearAsync"));
+            Button hide = Button(HideText + "...", "MetadataHide", () => HideAsync().Logged("mistress", "HideAsync"));
             if (menu is { } family) BuildMenu(title, path, family, [_scrape, save, cancel, clear, hide]);
             else BuildDesktop(title, path, [_scrape, save, cancel, clear, hide]);
 
@@ -600,14 +601,14 @@ namespace EmuSen.Mistress.Views
             switch (button)
             {
                 case UiButton.Search:
-                    _ = ScrapeAsync();
+                    ScrapeAsync().Logged("mistress", "ScrapeAsync");
                     return true;
                 // X, or Y with the swap (Delete on the keyboard), resets the focused field in a big-screen session (Q101, §4.79.5).
                 case UiButton.Screensaver when _big:
                     if (_focusedField is { } field && CanReset(field)) ResetField(field);
                     return true;
                 case UiButton.Back:
-                    _ = LeaveAsync();
+                    LeaveAsync().Logged("mistress", "LeaveAsync");
                     return true;
                 // A on the stars adds half a star, and past five starts again from none, as ES-DE's Add Half Star (§40.3).
                 case UiButton.Accept when _big && _focusedControl is RatingPicker { IsFocused: true } stars:

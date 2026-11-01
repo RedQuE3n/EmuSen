@@ -46,6 +46,18 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Contains(nameof(An_error_is_written_whole_with_its_area_context_and_trace_on_today_s_file), text);
         }
 
+        // A task started and not awaited writes its fault here rather than dropping it, and a task that ends well writes nothing (EmuSen_Cores.md §3.5).
+        [Fact]
+        public void A_background_task_s_fault_is_written_and_a_finished_one_writes_nothing()
+        {
+            System.Threading.Tasks.Task.CompletedTask.Logged("cores", "Approve");
+            Assert.False(File.Exists(ErrorLog.PathFor(DateTime.Now)));
+            System.Threading.Tasks.Task.FromException(new InvalidOperationException("the question was never shown")).Logged("cores", "Approve");
+            string text = File.ReadAllText(ErrorLog.PathFor(DateTime.Now));
+            Assert.Contains("ERROR [cores] Approve failed", text);
+            Assert.Contains("the question was never shown", text);
+        }
+
         [Fact]
         public void Entries_append_and_a_message_s_line_breaks_stay_on_its_line()
         {

@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -97,7 +98,7 @@ namespace EmuSen.Mistress.Views
                 }));
             _page.Children.Add(new FieldRow { Label = "Custom Game Collections", Hint = "The same collections as the library's sidebar.", Content = custom });
 
-            Button create = Ui.Button("Create New Custom Collection...", () => _ = CreateAsync());
+            Button create = Ui.Button("Create New Custom Collection...", () => CreateAsync().Logged("mistress", "CreateAsync"));
             create.Name = "CollectionCreate";
             _page.Children.Add(new FieldRow { Label = "Create New Custom Collection", Hint = $"Then add games with {EmuSen.Mistress.Input.PadHints.Glyph(PadGlyphButton.North)} in any game list, until you finish editing.", Content = create });
 

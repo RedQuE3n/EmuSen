@@ -46,6 +46,8 @@ pub struct Run {
     pub paused: bool,
     pub halted: bool,
     pub run_requested: bool,
+    /// The frame a run to a frame holds at, on an engine that cannot halt inside one; -1 for none (EmuSen_Backend.md §33.3).
+    pub hold_at_frame: i64,
     pub speed: Speed,
     pub draw_none: bool,
     pub rewind: crate::rewind::Rewind,
@@ -55,7 +57,7 @@ pub struct Run {
 
 impl Default for Run {
     fn default() -> Run {
-        Run { paused: false, halted: false, run_requested: false, speed: Speed::default(), draw_none: false, rewind: crate::rewind::Rewind::default(), base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
+        Run { paused: false, halted: false, run_requested: false, hold_at_frame: -1, speed: Speed::default(), draw_none: false, rewind: crate::rewind::Rewind::default(), base_percent: NORMAL_PERCENT as u32, mode: abi::SPEED_NORMAL }
     }
 }
 
@@ -315,6 +317,12 @@ impl Session {
         }
         self.raise_said(e);
         self.raise_log(e);
+        if run.hold_at_frame >= 0 && e.total_frames() >= run.hold_at_frame {
+            (run.hold_at_frame, run.paused) = (-1, true);
+            self.events.raise(self.id, abi::EVENT_RUN, "run", |j| {
+                j.str("op", "paused");
+            });
+        }
         Ok(true)
     }
 

@@ -36,6 +36,15 @@ DESCRIPTION
     paused the emulation thread is parked outside the core, so the poke
     happens immediately instead of being queued for the next frame.
 
+    Frame advance (decided 2026-11-01): Mistress's Emulation menu and
+    its hotkey (Frame Advance, '.' by default) run one whole frame and
+    hold the game paused after it, through the frontend API's
+    frame_advance (EmuSen_Backend.md section 33.3). It needs nothing of
+    the core, so every engine has it, the hosted libretro cores among
+    them; a running game is paused first. The debugger's run to a frame
+    holds a hosted session at the frame reached in the same way, since a
+    hosted core cannot be halted inside a frame.
+
 EXAMPLES
     pause
     resume

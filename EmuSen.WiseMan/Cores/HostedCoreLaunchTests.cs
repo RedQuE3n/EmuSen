@@ -68,6 +68,24 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(Frames(s, 2).picture_serial > held, "resumed");
         }
 
+        // §33.3: one frame advance runs one frame of a hosted core and holds it; the debugger's run to a frame holds it at the frame reached.
+        [Fact]
+        public void A_hosted_session_advances_one_frame_and_a_run_to_a_frame_holds_there()
+        {
+            using CrystalRuntime runtime = Runtime();
+            using CrystalSession s = runtime.Open(new CrystalOpen { Path = Disc(), Engine = _entry.Found.EngineName, NoBattery = true });
+            CrystalFrameInfo f = Frames(s, 5);
+            s.FrameAdvance();
+            CrystalFrameInfo one = Frames(s, 1), held = Frames(s, 3);
+            Assert.Equal((1u, f.total_frames + 1, 0u, 1u, one.total_frames, one.picture_serial), (one.ran, one.total_frames, held.ran, held.paused, held.total_frames, held.picture_serial));
+            Assert.True(one.picture_serial > f.picture_serial, "the frame advanced drew a picture");
+            ulong target = held.total_frames + 4;
+            s.Run(CrystalSessionAbi.RunToFrame, 0, (long)target);
+            CrystalFrameInfo reached = Frames(s, 10);
+            _output.WriteLine($"run to frame {target}: held at {reached.total_frames}, paused {reached.paused}");
+            Assert.Equal((target, 1u, 0u), (reached.total_frames, reached.paused, reached.ran));
+        }
+
         // §10h: the core build's SHA-256 is in every state, and a state of another build is refused in plain words.
         [Fact]
         public void A_state_loads_and_one_of_another_build_is_refused_in_plain_words()

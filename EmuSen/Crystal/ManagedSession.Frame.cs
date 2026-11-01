@@ -69,6 +69,11 @@ namespace EmuSen.Crystal.Managed
             if (recording && !Core.SkipRendering) _recorder!.CaptureFrame(WritePicture);
             RaiseSaid();
             if (Engine is { } engine && engine.LoggedLines != _loggedLines) RaiseLog(engine);
+            if (_holdAtFrame >= 0 && Core.TotalFrames >= _holdAtFrame)
+            {
+                (_holdAtFrame, _paused) = (-1, true);
+                Runtime.Events.Raise(Id, CrystalNumbers.EventRun, "run", w => w.WriteString("op", "paused"));
+            }
             return true;
         }
 

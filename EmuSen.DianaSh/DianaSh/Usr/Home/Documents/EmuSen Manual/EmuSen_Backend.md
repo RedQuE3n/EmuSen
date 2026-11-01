@@ -9379,8 +9379,9 @@ engine has it, native and hosted.
 **Run-to-frame on an engine that cannot halt inside a frame.** The debugger's run to a frame arms the core's breakpoint
 registry, which halts at the instruction after the frame is reached; a hosted core runs no instruction hook, so the
 halt never came. Where no processor of the machine can be halted, the runtime now holds the session at the boundary
-of the frame reached instead: paused, with the `run` event `{"op":"halted"}` and the frame in `last_break`. Engines
-that can halt keep the registry's halt unchanged.
+of the frame reached instead: paused once the machine's completed frames reach the number asked, with the `run` event
+`{"op":"paused"}`. "Cannot halt" is read as an engine whose core claims no `DEBUG`; engines that can halt keep the
+registry's halt unchanged. Mistress's Emulation menu offers it as Frame Advance, with a hotkey of its own (`man pause`).
 
 ### 33.4 How it is graded
 

@@ -41,6 +41,7 @@ namespace EmuSen.Mistress.Views
 
         // One object per command, carrying its own enabled and checked state - see EmuSen_Settings_Reference.md §4.12.
         private readonly LunaAction _pause;
+        private readonly LunaAction _frameAdvance;
         private readonly LunaAction _reset;
         private readonly LunaAction _closeGame;
         private readonly LunaAction _saveState;
@@ -159,6 +160,7 @@ namespace EmuSen.Mistress.Views
             _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring));
             EarlyLoader = OpenSession;
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
+            _frameAdvance = new LunaAction("Frame _Advance", AdvanceOneFrame);
             _reset = new LunaAction("_Reset", ResetEmulation);
             _closeGame = new LunaAction("_Close Game", ShowLibrary);
             _saveState = new LunaAction("Save _State", SaveState);
@@ -314,6 +316,7 @@ namespace EmuSen.Mistress.Views
                 case HotkeyAction.Screenshot: TakeScreenshot(); break;
                 // Nothing to pause while the library is up: it is already suspended - see §4.18.
                 case HotkeyAction.TogglePause: if (!LibraryView.IsVisible) TogglePause(); break;
+                case HotkeyAction.FrameAdvance: if (!LibraryView.IsVisible) AdvanceOneFrame(); break;
                 // Through ToolWindow, so leaving goes back to the state full screen was entered from, a maximised window included.
                 case HotkeyAction.ToggleFullscreen: ToggleFullScreen(); break;
                 case HotkeyAction.ToggleBigPicture: SetBigPicture(!_bigScreen); break;
@@ -739,7 +742,7 @@ namespace EmuSen.Mistress.Views
                     LunaAction.Separator(),
                     new LunaAction("E_xit", () => Close())),
                 new LunaMenu("_Emulation",
-                    _pause, _reset, _closeGame,
+                    _pause, _frameAdvance, _reset, _closeGame,
                     LunaAction.Separator(),
                     _speedMenu,
                     LunaAction.Separator(),
@@ -773,6 +776,7 @@ namespace EmuSen.Mistress.Views
         private void ShowHotkeysOnTheMenu()
         {
             Gesture(_pause, HotkeyAction.TogglePause);
+            Gesture(_frameAdvance, HotkeyAction.FrameAdvance);
             Gesture(_saveState, HotkeyAction.SaveState);
             Gesture(_loadState, HotkeyAction.LoadState);
             Gesture(_fullscreen, HotkeyAction.ToggleFullscreen);
@@ -791,6 +795,7 @@ namespace EmuSen.Mistress.Views
         {
             bool running = _session is not null;
             _pause.IsEnabled = running;
+            _frameAdvance.IsEnabled = running;
             _reset.IsEnabled = running;
             _closeGame.IsEnabled = running;
             _speedMenu.IsEnabled = running;
@@ -1272,6 +1277,17 @@ namespace EmuSen.Mistress.Views
             Send(s => s.Run(CrystalSessionAbi.RunPause));
             _playClock.Stop();
             if (_session is not null) StatusText.Text = "Paused";
+            SyncMenuState();
+        }
+
+        // One frame run and the game held after it, for every engine - see `man pause` and EmuSen_Backend.md §33.3.
+        public void AdvanceOneFrame()
+        {
+            if (_session is null) return;
+            _paused = true;
+            Send(s => s.FrameAdvance());
+            _playClock.Stop();
+            StatusText.Text = "Paused: advanced one frame";
             SyncMenuState();
         }
 

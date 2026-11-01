@@ -7,10 +7,14 @@ namespace EmuSen.WiseMan.Crystal
     // The suite's own default, the Rust, applied before any test since the test host's entry assembly carries no key - see EmuSen_Backend.md §35.
     internal static class RustDefault
     {
+        // The variable as the suite was started with it, before the default was applied.
+        internal static string? Given { get; private set; }
+
         [ModuleInitializer]
         internal static void Apply()
         {
-            if (string.IsNullOrEmpty(Environment.GetEnvironmentVariable(CrystalContract.Variable)) && CrystalContract.DefaultsToRust(typeof(RustDefault).Assembly))
+            Given = Environment.GetEnvironmentVariable(CrystalContract.Variable);
+            if (string.IsNullOrEmpty(Given) && CrystalContract.DefaultsToRust(typeof(RustDefault).Assembly))
                 Environment.SetEnvironmentVariable(CrystalContract.Variable, "1");
         }
     }

@@ -65,5 +65,10 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void The_suite_runs_on_the_rust_unless_the_variable_is_0() =>
             Assert.True(CrystalContract.Native == (Environment.GetEnvironmentVariable(CrystalContract.Variable) != "0"), CrystalContract.Report);
+
+        // The default fills only an unset variable; one the suite was started with is left as given.
+        [Fact]
+        public void The_suite_s_default_fills_only_an_unset_variable() =>
+            Assert.Equal(string.IsNullOrEmpty(RustDefault.Given) ? "1" : RustDefault.Given, Environment.GetEnvironmentVariable(CrystalContract.Variable));
     }
 }

@@ -552,3 +552,11 @@ new, and no other recording changed. The first audit found two faults, both fixe
 in a scroller 38 units high at 1280 by 800, a sheet sized to its content having given the plan only the three rows'
 height (the frame's plan floor, LunaP §203.7), and a progress line cut with an ellipsis where it named the game being
 asked, which the line no longer does.
+
+#### 6.3.15 The Library Manager window (2026-11-01)
+
+The Library Manager (`EmuSen_LibraryTools.md` §10) adds four cases, opened over a running game from the pad menu's
+Library page with scripted reads (`rom check` and `rom dups`) and scripted records of seven findings: `Library` (the
+findings, the long-named disc chosen), `LibraryDetail` (its detail page, opened by A), `LibraryPlan` (two files marked
+to be hidden and the plan open) and `LibraryRunning` (the check read part way, its progress line shown). The fit audit
+found nothing in any of the eight; their recordings are new, and no other recording changed.

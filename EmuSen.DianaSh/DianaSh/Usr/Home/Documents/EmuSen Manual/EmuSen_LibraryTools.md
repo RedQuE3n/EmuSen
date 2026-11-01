@@ -1,6 +1,6 @@
 # EmuSen_LibraryTools — the scraping tool, the library manager, and the frame they share with Packages
 
-*Proposal, 2026-10-27; its questions answered by the tester the same day (§6). T2, the commands `rom hash`, `rom check` and `rom dups` and `uniq -D -w`, built 2026-10-31 (§7); the rest is not built.* Asked by the tester the same day: a proper scraping tool in place
+*Proposal, 2026-10-27; its questions answered by the tester the same day (§6). T2, the commands `rom hash`, `rom check` and `rom dups` and `uniq -D -w`, built 2026-10-31 (§7); T4, `scrape` (§8), T5, the Scraper window (§9), and T6, the Library Manager window (§10), built 2026-10-31 and 2026-11-01; T3 and T7 are not built.* Asked by the tester the same day: a proper scraping tool in place
 of the many clicks a scrape takes today, laid out as Packages is (`EmuSen_Packages.md`) and made for theming, with
 the system and the games (favourites or all) chosen; and a library manager laid out the same, which finds duplicate and
 broken ROMs; every backend tool these lack made as a DianaSh command.
@@ -499,3 +499,101 @@ managed half does. A shelf's run chooses its ES-DE system's games, which is the 
 - Preferences' Scraping tab still offers its own scope and *Scrape…*: §2 gathers the choices into the tool but does not
   say to remove them there, so that is put to the tester.
 
+
+## 10. T6 as built: the Library Manager window (2026-11-01)
+
+### 10.1 The tool library and its host
+
+- **`EmuSen.Tools.Library`** references LunaP and Galaxia only (`LeafAssemblyTests`): `LibraryPane` (a
+  `ManagerLayout<LibraryRow>`), `LibraryRow` (one finding of one file), and `LibraryFindings`, which turns the library
+  tool's events and the host's records into rows, marks, the plan and the saved list, free of any control.
+- **One owner of the job's words.** `ToolWords` (the library tool's refusals and reasons in a player's words) and
+  `ToolEvents` (how an event's field is read) moved from `EmuSen.Tools.Packages` to Galaxia's `EmuSen.Galaxia.Native`,
+  beside `LibraryToolJob`, since two tools now read the same jobs; Packages and Mistress's `CompressedDiscsWords` read
+  them there and nothing else changed.
+- **`LibraryWindow`** is the third host on `ToolPaneWindow` (§9.3), and writes no hint or focus route.
+- **Placement** (§1b): *Settings → Library Manager…* on the desktop, and *Library Manager* on the pad menu's Library
+  page, beside Packages; the page holds at most six rows (Start Console, Collections, Scrape Games, Packages, Library
+  Manager, Theme Settings), inside the nine the fit audit checks. The menus say *Library Manager* rather than §6's
+  *Library*, since the pad menu's page is already *Library* and the desktop's View menu has *Game Library*; the
+  question is put to the tester (§10.6).
+
+### 10.2 Where each finding comes from
+
+- **The same dump**: `rom dups` through the library tool's job (§7.4). Members a package claims (the `package` of a
+  group's member) are one game: they are counted once, and a group left with fewer than two games is not shown.
+- **The same game in another dump**: ScreenScraper's game id, for scraped files only, read from the host's records.
+  Two files are one dump when one package claims both, else when `rom dups` grouped them, else when ScreenScraper was
+  asked by the same MD5 and size; a game id is shown only where its files are two or more dumps, so a headered and a
+  plain copy, whose raw MD5s differ, are not shown again here. Files outside the library, or no longer there, are left
+  out. Galaxia's claim index (`GamePackages.Index`) names a file's package.
+- **Broken or suspect**: `rom check -r` over the whole library (§7.3: size, sheet, archive, CHD), each failed check by
+  name and words. The header checksums are T3's: `LibraryFindings.CheckName` already names a `header` check, and the
+  detail says "Header checksum: not checked yet", so T3 adds a check to `rom check` and the window shows it unchanged.
+- **Unrecognised**: a file ScreenScraper answered `Unknown`, shown as a hint ("a hint, not a fault"), never as broken.
+- **The records** are an interface the tool defines, `ILibraryRecords` (the hidden games, hide or show one, the
+  scraped files), which a host lends. Mistress lends games.db's `hidden` edit (`GameMetadata.Hidden`, the field its
+  game menu's *Hide* already sets) and the scraper's answers (`OutcomesByPath`, `FoundByPath`). Without a lend the
+  window lists the two `rom` findings and says that hiding and ScreenScraper's findings need games.db. Two other forms
+  were weighed: reaching games.db and media.db from the tool library would have needed Crystal.Client or a second
+  binding of `emusen_library.h`, breaking the leaf rule; a `scrape`/`games` command answering ids and the hidden flag
+  as data would serve the standalone launcher too, and is put to the tester (§10.6).
+
+### 10.3 What the window does
+
+- **Reading**: on opening, `rom check -r ""` and then `rom dups`, followed in the apply bar's progress line ("Checking
+  each file: n of m", "Comparing dumps: n of m"); *Stop* asks the job to stop, the findings read so far stay, no dump
+  group is given for a stopped comparison (§7.4), and the window says so. *Check Again* (Select) reads again.
+- **Sections**: All, Same Dump, Same Game, Broken or Suspect, Unrecognised, Hidden. **Columns**: Game, Console (the
+  system's id as the tool gives it), Finding, Group (*Dump n*, *Game n*), Size, State; the big screen shows Game and
+  Finding. A file found twice (a duplicate that is also broken) has a row for each finding.
+- **Hide**: a row is offered *hide*, or *show again* where it is hidden; X or the *Hide* action marks it, Apply shows
+  the plan by file name, ending "Only games.db changes: no file in the library is written, moved or removed", and only
+  confirming writes the edit. Marks on two rows of one file are one change.
+- **Save List…** writes every finding as text: a heading per finding, a paragraph per group, one path per line with
+  the ScreenScraper id, the package or the failed checks after a tab, so the list greps and pipes as `rom dups` does.
+  The desktop asks where with the platform's save picker; the big screen, which has no picker a pad drives, writes
+  `Library <date time>.txt` under EmuSen's Logs folder and says where. A path inside the library is refused.
+- **Show in File Manager** opens the folder holding the chosen file through Avalonia's launcher (the folder, not the
+  file, which the system would open in an emulator).
+- **Nothing writes the library.** No Move to Trash (T7). The only writes are games.db's edit and the saved list.
+
+### 10.4 Tests and seeded faults, measured 2026-11-01
+
+- `LibraryWindowTests` (7): through real jobs of the platform library on a synthetic library (a SNES cartridge plain
+  and with a copier header, an empty cartridge, two NES dumps of one game, a cue sheet naming a missing track) with
+  scripted records, the same dump found by `rom dups`, the same game by ScreenScraper's id with the copier pair not
+  shown again, both broken files by their checks, the unrecognised sheet as a hint, a file outside the library and one
+  gone left out; a row hidden by X and Start and shown again from the Hidden section, only after the plan; the list saved
+  outside the library and refused inside it; and the library byte for byte as it was. `LibraryFindings` alone: a
+  package and its files one game in both tiers. With scripted jobs: no marks without records and nothing read without
+  the platform library; a stopped read keeping its findings and comparing nothing; the pad marking, planning, opening
+  the detail, stepping sections and reading again, and *Show in File Manager* opening the file's folder; the desktop
+  window clean under the fit audit at 1280×800 and 1920×1200. `LeafAssemblyTests` holds the library to LunaP and
+  Galaxia; `PadMenuTests` the Library page's rows and its *Library Manager* row opening the window.
+- `WindowFitAuditTests`: `Library`, `LibraryDetail`, `LibraryPlan` and `LibraryRunning` framed over a running game at
+  both sizes, clean at the first audit, and recorded (`EmuSen_InterfaceSpec.md` §6.3.15).
+- Found by these tests and fixed: `rom dups` reports a file it cannot read as `failed`, which the window first took as
+  a second *broken* row of the same file (the real-jobs test). Also corrected here, carried from §9: `PadMenuTests`
+  still expected the pad menu's *Scrape Games…* to open Preferences.
+
+| Seeded fault | Caught by |
+|---|---|
+| a package's files counted apart in a dump group | `A_package_and_the_files_it_claims_are_one_game_in_both_tiers` |
+| the same game ignoring `rom dups`' groups, so a headered pair shows in both tiers | `Library_finds_both_tiers_…` |
+| *hide* offered with no records lent | `Without_records_nothing_is_offered_…` |
+| *show again* written as *hide* | `Library_finds_both_tiers_…` |
+| the list saved inside the library | `Library_finds_both_tiers_…` |
+| a comparison's unreadable file taken as broken | `Library_finds_both_tiers_…` |
+
+### 10.5 Left
+
+- The two reads each take every byte of the library (§7.6); a check and a comparison in one pass of the tool would
+  halve it, if a real library proves slow.
+- The Console column shows the system's id (`snes`, `psx`), since the `rom` events carry no console name.
+
+### 10.6 Questions for the tester
+
+- The menus' name: *Library Manager*, or §6's *Library* (which repeats the pad menu's page).
+- A records surface for the standalone launcher: a command answering the scraped ids and the hidden flag as data, so
+  `emusen-tools library` can show the second tier and hide without Mistress.

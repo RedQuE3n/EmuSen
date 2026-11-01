@@ -34,7 +34,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     (
         "pkg",
         false,
-        "  pkg make <path>... [--self-contained] [--zip]\n                                a package for each game under each path (relative to the library), linked\n                                unless the game is to be copied in; --zip also writes the package as one zip\n  pkg ls [<console>]            the packages, with mode and state (ok, moved, missing, changed)\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages); a package's zip too\n  pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg zip <package>...          a self-contained package written as one zip beside it, saves and all\n  pkg identity <package> original|patched\n                                which identity the scraper sends for a patched package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
+        "  pkg make <path>... [--self-contained] [--zip]\n                                a package for each game under each path (relative to the library), linked\n                                unless the game is to be copied in; --zip also writes the package as one zip\n  pkg ls [<console>] [--all]    the packages, with mode, state (ok, moved, missing, changed) and size; --all also the games no package claims\n  pkg check [<package>...]      the game and every file hashed against the manifest (relative to Packages); a package's zip too\n  pkg migrate <package>...      the game's saves, states, records, settings, art and cheats copied in\n  pkg patch add <package> <file>\n                                an IPS, UPS or BPS patch checked, copied in and applied at load\n  pkg patch rm <package> <n>    patch n taken out of the package's list\n  pkg zip <package>...          a self-contained package written as one zip beside it, saves and all\n  pkg identity <package> original|patched\n                                which identity the scraper sends for a patched package\n  pkg wait [pkg<n>]             follow a pkg job that went on in the background",
     ),
     (
         "rom",
@@ -135,7 +135,7 @@ fn counts(e: &Value) -> String {
     }
 }
 
-const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
+const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | pkg ls [<console>] [--all] | pkg check [<package>...] | pkg migrate <package>... | pkg patch add <package> <file> | pkg patch rm <package> <n> | pkg zip <package>... | pkg identity <package> original|patched | pkg wait [pkg<n>]\n  Paths are relative to the library, / for all of it; packages are relative to Packages. See man pkg.";
 
 fn compact(members: Vec<(&str, Value)>) -> String {
     let mut out = String::new();
@@ -183,10 +183,11 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
         _ => return Err(PKG_USAGE.into()),
     };
     let mut paths = Vec::new();
-    let (mut contained, mut zip) = (false, false);
+    let (mut contained, mut zip, mut all) = (false, false, false);
     for w in words {
         match w.as_str() {
             "--self-contained" if op == "pkg-make" => contained = true,
+            "--all" if op == "pkg-ls" => all = true,
             "--zip" if op == "pkg-make" => zip = true,
             o if o.starts_with('-') && o.len() > 1 => return Err(format!("pkg: {o} is not an option of pkg {sub}\n{PKG_USAGE}")),
             p => paths.push(Value::string(p)),
@@ -200,7 +201,11 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
             return Err(format!("pkg ls: one console at most\n{PKG_USAGE}"));
         }
         let console = paths.pop().unwrap_or(Value::Null);
-        return Ok(compact(vec![("op", Value::string(op)), ("paths", Value::Array(Vec::new())), ("console", console)]));
+        let mut members = vec![("op", Value::string(op)), ("paths", Value::Array(Vec::new())), ("console", console)];
+        if all {
+            members.push(("unpackaged", Value::Bool(true)));
+        }
+        return Ok(compact(members));
     }
     if contained || zip {
         return Ok(compact(vec![("op", Value::string(op)), ("paths", Value::Array(paths)), ("self_contained", Value::Bool(true)), ("zip", Value::Bool(zip))]));
@@ -398,7 +403,15 @@ pub fn listing_line(e: &Value) -> String {
         Some(Value::Array(p)) if !p.is_empty() => format!(", {} patch(es){}", p.len(), if text(e, "identity") == "patched" { ", scraped as patched" } else { "" }),
         _ => String::new(),
     };
-    format!("{:<9}{}  ({}, {}{patched}){why}", text(e, "state"), text(e, "package"), text(e, "mode"), text(e, "system"))
+    let size = number(e, "size").map_or(String::new(), |b| format!(", package {} bytes", grouped(b)));
+    let size = size + &number(e, "game_size").filter(|_| text(e, "where") != "package").map_or(String::new(), |b| format!(", game {} bytes", grouped(b)));
+    format!("{:<9}{}  ({}, {}{patched}{size}){why}", text(e, "state"), text(e, "package"), text(e, "mode"), text(e, "system"))
+}
+
+/// A game no package claims, as `pkg ls --all` lists it after the packages: its path in the library, system and bytes.
+pub fn game_line(e: &Value) -> String {
+    let disc = if e.get("convertible") == Some(&Value::Bool(true)) { ", chd convert takes it" } else { "" };
+    format!("{:<11}{}  ({}, {} bytes{disc})", text(e, "state"), text(e, "source"), text(e, "system"), grouped(number(e, "size").unwrap_or(0)))
 }
 
 /// One job this shell started: its number, what it does, the tool's handle, and how far it has got.
@@ -564,6 +577,7 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
         }
         let printed = match (text(&event, "event"), r.listing) {
             ("package", true) => Some(listing_line(&event)),
+            ("game", _) => Some(game_line(&event)),
             ("package", false) => Some(package_line(&event)),
             ("start", _) if r.prefix == "pkg" => start_line(&event),
             _ => line(&event),
@@ -669,7 +683,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 impl Module for LibraryCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 6, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"], settings: &[], approvals: false }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.library", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 7, true)], commands: COMMANDS, aliases: &[], jobs: &["chd", "pkg", "rom"], settings: &[], approvals: false }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
@@ -822,6 +836,8 @@ mod tests {
         assert!(pkg_request_plain(&args("pkg patch rm a 0")).unwrap_err().contains("not a patch's number"));
         assert!(pkg_request_plain(&args("pkg patch add a")).unwrap_err().starts_with("pkg patch:"));
         assert!(pkg_request_plain(&args("pkg ls a b")).unwrap_err().contains("one console"));
+        assert_eq!(pkg_request_plain(&args("pkg ls --all")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":null,"unpackaged":true}"#);
+        assert!(pkg_request_plain(&args("pkg check --all")).unwrap_err().contains("not an option of pkg check"));
         assert!(pkg_request_plain(&args("pkg")).unwrap_err().starts_with("Usage: pkg"));
         let e = |t: &str| json::parse(t).unwrap();
         assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":2,"source":"SNES/a.sfc","state":"made","package":"SNES/a.sfc"}"#)), "[1/2] SNES/a.sfc: made, Packages/SNES/a.sfc");
@@ -832,5 +848,11 @@ mod tests {
             "[1/1] NES/b.nes: migrated, 0 file(s) copied, 1 already there, 2 state record(s); the states' records were not copied: why"
         );
         assert_eq!(listing_line(&e(r#"{"event":"package","package":"NES/b.nes","state":"moved","mode":"linked","system":"nes","to":"NES/USA/b.nes"}"#)), "moved    NES/b.nes  (linked, nes)  now NES/USA/b.nes");
+        assert_eq!(
+            listing_line(&e(r#"{"event":"package","package":"NES/b.nes","state":"ok","mode":"linked","system":"nes","where":"library","size":4096,"game_size":262160}"#)),
+            "ok       NES/b.nes  (linked, nes, package 4,096 bytes, game 262,160 bytes)"
+        );
+        assert_eq!(listing_line(&e(r#"{"event":"package","package":"NES/c.nes","state":"ok","mode":"self-contained","system":"nes","where":"package","size":266256,"game_size":262160}"#)), "ok       NES/c.nes  (self-contained, nes, package 266,256 bytes)");
+        assert_eq!(game_line(&e(r#"{"event":"game","source":"psx/a.cue","system":"PlayStation","state":"unpackaged","size":1234567,"convertible":true}"#)), "unpackaged psx/a.cue  (PlayStation, 1,234,567 bytes, chd convert takes it)");
     }
 }

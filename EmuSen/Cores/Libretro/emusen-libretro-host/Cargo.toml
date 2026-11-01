@@ -17,7 +17,12 @@ emusen-libretro-sys = { path = "../emusen-libretro-sys" }
 emusen-core-entry = { path = "../../../../Platform/core-entry" }
 # The systemid and database table, the systems table's (EmuSen_LibretroHost.md §4.1).
 emusen-systems = { path = "../../../../Platform/systems" }
+# The PlayStation 2 card's suffixes, medium and size, which a card profile shares with Sapphire (EmuSen_LibretroHost.md §10j).
+emusen-ps2-card = { path = "../../Shared/emusen-ps2-card" }
 libloading = "0.8"
+# A Vulkan core's device and the ring's import (EmuSen_LibretroHost.md §5.3); the card chosen as emusen-gpu chooses it.
+ash = "0.38"
+emusen-gpu = { path = "../../Shared/emusen-gpu" }
 libc = "0.2"
 sha2 = "0.11"
 
@@ -28,6 +33,15 @@ cc = "1"
 emusen-core-host = { path = "../../Shared/emusen-core-host" }
 # Built as a shared library beside the tests, the libretro core they host (EmuSen_LibretroHost.md §9).
 emusen-libretro-testcore = { path = "../emusen-libretro-testcore" }
+# The host's side of the ring, which the ring tests lend and read (EmuSen_LibretroHost.md §10f).
+emusen-serenity = { path = "../../../../Platform/serenity" }
+# The run example's pictures at fixed frames, as PNG.
+emusen-crystal = { path = "../../../../Platform/crystal" }
+
+# emusen-native's test core painting the libretro test core's picture on a lent device (EmuSen_LibretroHost.md §10f).
+[[example]]
+name = "device_test_core"
+crate-type = ["cdylib"]
 
 [profile.release]
 panic = "abort"

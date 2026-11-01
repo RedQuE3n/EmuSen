@@ -6,7 +6,7 @@ namespace EmuSen.Crystal.Managed
     internal static class CrystalNumbers
     {
         public const uint Major = 1u;
-        public const uint Minor = 3u;
+        public const uint Minor = 4u;
         public const uint Version = (Major << 16) | Minor;
         public const int NoEngine = -1109;
         public const int Firmware = -1110;
@@ -18,6 +18,7 @@ namespace EmuSen.Crystal.Managed
         public const uint ConfigDevelopment = 1u;
         public const uint OpenNoBattery = 1u;
         public const uint OpenSingleRows = 2u;
+        public const uint OpenRing = 4u;
         public const uint SpeedNormal = 0u;
         public const uint SpeedTurbo = 1u;
         public const uint SpeedSlow = 2u;
@@ -111,6 +112,11 @@ namespace EmuSen.Crystal.Managed
         public ulong halted_address;
         public uint picture_on_device;
         public uint reserved;
+        public uint picture_in_ring;
+        public uint ring_slot;
+        public ulong ring_value;
+        public uint fields;
+        public uint field;
     }
 
     // emusen_crystal_raw_info, field for field, since 1.1.

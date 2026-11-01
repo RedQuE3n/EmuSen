@@ -1,5 +1,4 @@
 using System;
-using System.Text;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Library;
@@ -24,7 +23,6 @@ namespace EmuSen.Crystal.Managed
         private static delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, int, int, ulong, ulong, int> _take;
         private static delegate* unmanaged[Cdecl]<nint, int> _settle;
         private static delegate* unmanaged[Cdecl]<nint, int> _free;
-        private static delegate* unmanaged[Cdecl]<byte*, nuint, long> _lastError;
 
         private nint _handle;
 
@@ -39,23 +37,16 @@ namespace EmuSen.Crystal.Managed
         {
             if (!PlatformLibrary.Available) return false;
             nint n = PlatformLibrary.Export("emusen_serenity_lend_new"), t = PlatformLibrary.Export("emusen_serenity_lend_take");
-            nint s = PlatformLibrary.Export("emusen_serenity_lend_settle"), f = PlatformLibrary.Export("emusen_serenity_lend_free"), e = PlatformLibrary.Export("emusen_platform_last_error");
-            if (n == 0 || t == 0 || s == 0 || f == 0 || e == 0) return false;
+            nint s = PlatformLibrary.Export("emusen_serenity_lend_settle"), f = PlatformLibrary.Export("emusen_serenity_lend_free");
+            if (n == 0 || t == 0 || s == 0 || f == 0) return false;
             _new = (delegate* unmanaged[Cdecl]<nint, LendInfo*, nint>)n;
             _take = (delegate* unmanaged[Cdecl]<nint, ulong, ulong, int, int, int, ulong, ulong, int>)t;
             _settle = (delegate* unmanaged[Cdecl]<nint, int>)s;
             _free = (delegate* unmanaged[Cdecl]<nint, int>)f;
-            _lastError = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)e;
             return true;
         }
 
-        private static string Words()
-        {
-            long n = _lastError(null, 0);
-            var words = new byte[Math.Max(0, n)];
-            fixed (byte* w = words) _lastError(w, (nuint)words.Length);
-            return Encoding.UTF8.GetString(words);
-        }
+        private static string Words() => PlatformLibrary.LastError();
 
         // A new lend of the device for one machine, or null with the reason logged once a session: no library, or a device that lends nothing.
         public static PlatformLend? Make(nint device, Action<string> refused)

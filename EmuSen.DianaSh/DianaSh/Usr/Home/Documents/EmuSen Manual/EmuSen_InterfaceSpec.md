@@ -516,7 +516,34 @@ its two choosers during a batch and leaves its check boxes enabled, and the rule
 The paragraph that names the run's folders, its first, is recorded as volatile, as the normaliser marks words that
 hold the run's own paths.
 
-#### 6.3.12 The Cores window (2026-10-31)
+
+#### 6.3.12 The Packages window (2026-10-31)
+
+Packages (`EmuSen_Packages.md` §7) adds two cases, opened over a running game with a scripted listing of six rows:
+`Packages` (the listing, a disc chosen) and `PackagesDetail` (its detail page, opened by A). Their four recordings are
+new, and no other recording changed. `PackagesPlan` (Apply's summary open) and `PackagesRunning` (a step running)
+joined once the manager frame's plan sheet and two-line apply bar fitted the big screen (LunaP be0112e), and the four
+earlier recordings were taken again over the fixed frame.
+
+The first recording found one fault of §4.2: *Convert to CHD* not reached by the pad, since the window enabled it only
+for a disc and the walk's Down presses through the table chose a cartridge before it reached the action row. The
+marking actions now stay enabled whichever row is chosen, and the rules find nothing in the four.
+
+#### 6.3.13 The scraping status's idle state taken again (2026-10-31)
+
+`ScrapeStatusIdle` stopped matching its recording on this machine at both sizes, the frame 2 pixels shorter at 1280 by
+800 (64,207.5,1152,385 to 64,208.5,1152,383) and 3 at 1920 by 1200. One element differs: the hint line *Nothing is sent
+from this window. A run starts from Scrape This Game... or Preferences ▸ Scraping.*, laid out 25.7 rather than 27.24
+units tall at the same width, 679.68, and everything under it moves up by the difference. Its `▸` is the only glyph in
+the window that Barlow Condensed lacks, so the line takes its height partly from a fallback face.
+
+The cause is outside the code. Measured 2026-10-31: bfd02c607, whose full sweep passed on 2026-10-28 with LunaP
+9b4a7ad, fails the same way with that LunaP now, as do f3922bd71 against 9b4a7ad and against be0112e, and the result
+does not change with the locale (C, C.UTF-8, en_US.UTF-8). No font or text package changed on the machine between the
+two runs, so which part of the host's text stack moved is not established. Nothing is cut and the fit audit passes in
+both, so the two recordings were taken again as the machine now lays the line out.
+
+#### 6.3.14 The Cores window (2026-10-31)
 
 Cores (`EmuSen_Cores.md` §2) adds five cases, each opened over a running game from Settings with a scripted listing of
 the core tool and a runtime of the test's own: `Cores` (the list in the big screen's form), `CoresDetail` (a core's

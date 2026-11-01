@@ -3515,3 +3515,13 @@ and name a patched game's files `<name>.patched-<key>`; null or empty is the unp
 else is `EMUSEN_PLATFORM_BAD_ARGUMENT`. A host of 26 would pass no key and share the original's save, which is why the
 number moved, in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. Recorded in
 `EmuSen_GamePackages.md` §16.
+
+## 42. Interface 28, 2026-11-01: a ring, and a chain's frame from it
+
+Four functions: `emusen_serenity_ring_new` makes a ring of exported images and two exported timeline semaphores on a
+slang device (core ABI 1.18's `DEVICE_RING`), filling `emusen_serenity_ring_info` (count, the semaphores' descriptors,
+the device and driver UUIDs); `emusen_serenity_ring_image` gives one image laid out as `emusen_core.h`'s
+`emusen_ring_image`; `emusen_serenity_ring_free` frees it; `emusen_serenity_chain_advance_ring` makes the picture
+`frame_ring` answered the chain's new frame. The C# side is `SlangRing`, `SlangChain.AdvanceRing` and
+`CoreMachine.RingLend`/`FrameRing`. The number moved in `emusen_platform.h`, `lib.rs` and
+`PlatformLibrary.InterfaceVersion` together. Recorded in `EmuSen_LibretroHost.md` §10f.

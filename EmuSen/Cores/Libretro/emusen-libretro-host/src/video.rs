@@ -110,6 +110,14 @@ impl Picture {
         true
     }
 
+    /// A frame whose bytes are elsewhere until read back: its shape and number taken, the buffer kept; one larger
+    /// than the buffer leaves the picture as it was.
+    pub fn drawn_unread(&mut self, width: u32, height: u32) {
+        if width as usize * bytes_per_pixel(self.format) <= self.stride && self.stride * height as usize <= self.buffer.len() {
+            self.drawn_in_place(width, height);
+        }
+    }
+
     /// A frame the core drew straight into this buffer, in the handed format.
     pub fn drawn_in_place(&mut self, width: u32, height: u32) {
         self.width = width;

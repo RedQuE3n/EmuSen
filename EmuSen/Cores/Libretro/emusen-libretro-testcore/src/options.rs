@@ -8,11 +8,11 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 18] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 22] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
-    ("tc_geometry", "Geometry changes", "picture", &["off", "on"], "The picture's size changed at frame 60, the timing at 120."),
+    ("tc_geometry", "Geometry changes", "picture", &["off", "on", "grow"], "The picture's size changed at frame 60, the timing at 120; or, grow, maxima declared at the native size and the picture drawn twice as large from frame 3 with nothing said."),
     ("tc_rate", "Sound rate", "sound", &["48000", "44100", "32040.5"], "The rate sound is made at."),
     ("tc_sound", "Sound path", "sound", &["batch", "single"], "Sound through the batch or the single-sample call."),
     ("tc_memory", "Memory", "memory", &["system_ram", "maps", "none"], "How the core's memory is exposed."),
@@ -27,6 +27,10 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 18] = [
     ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang"], "What the core does at its second frame, for the broker's proofs."),
     ("tc_set_variable", "Changes its option", "probe", &["off", "on"], "The core sets tc_note itself at frame 5."),
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
+    ("tc_rumble", "Rumble", "probe", &["off", "on"], "Both motors of ports 0 and 1 driven in a pattern a test reads back."),
+    ("tc_scale", "Internal scale", "picture", &["1", "2"], "The picture drawn at a multiple of its native size, as a console core's upscaling is."),
+    ("tc_deinterlace", "Deinterlacing", "picture", &["off", "blend"], "Each odd row a copy of the row above, as a console core's deinterlacing blends two fields."),
+    ("tc_hw", "Vulkan picture", "picture", &["off", "vulkan", "vulkan_bgra"], "The same picture drawn into an image on a Vulkan device of the core's, RGBA or BGRA."),
 ];
 
 pub const CATEGORIES: [(&str, &str); 5] = [("picture", "Picture"), ("sound", "Sound"), ("memory", "Memory"), ("states", "States"), ("probe", "Probe")];
@@ -53,6 +57,7 @@ pub struct Options {
     pub framebuffer: bool,
     pub dupes: bool,
     pub geometry_change: bool,
+    pub grow: bool,
     pub rate: String,
     pub single_samples: bool,
     pub memory: Memory,
@@ -66,6 +71,10 @@ pub struct Options {
     pub set_variable: bool,
     pub note: String,
     pub fault: String,
+    pub rumble: bool,
+    pub hw: String,
+    pub scale: u32,
+    pub blend: bool,
 }
 
 /// A C string kept for the process's life, as libretro's declarations must be.
@@ -174,6 +183,7 @@ impl Options {
             framebuffer: get("tc_draw") == "framebuffer",
             dupes: on("tc_dupes"),
             geometry_change: on("tc_geometry"),
+            grow: get("tc_geometry") == "grow",
             rate: get("tc_rate"),
             single_samples: get("tc_sound") == "single",
             memory: match get("tc_memory").as_str() {
@@ -197,6 +207,10 @@ impl Options {
             set_variable: on("tc_set_variable"),
             note: get("tc_note"),
             fault: get("tc_fault"),
+            rumble: on("tc_rumble"),
+            hw: get("tc_hw"),
+            scale: get("tc_scale").parse().unwrap_or(1),
+            blend: get("tc_deinterlace") == "blend",
         };
         let display = sys::retro_core_option_display { key: c"tc_note".as_ptr(), visible: options.set_variable };
         environment(env::SET_CORE_OPTIONS_DISPLAY, &display as *const _ as *mut c_void);
@@ -205,9 +219,14 @@ impl Options {
 
     pub fn reread_run_options(&mut self) {
         self.note = get("tc_note");
+        self.scale = get("tc_scale").parse().unwrap_or(1);
+        self.blend = get("tc_deinterlace") == "blend";
     }
 
     pub fn pixel_format(&self) -> i32 {
+        if self.hw != "off" && !self.hw.is_empty() {
+            return sys::PIXEL_FORMAT_XRGB8888;
+        }
         match self.format.as_str() {
             "rgb565" => sys::PIXEL_FORMAT_RGB565,
             "0rgb1555" => sys::PIXEL_FORMAT_0RGB1555,

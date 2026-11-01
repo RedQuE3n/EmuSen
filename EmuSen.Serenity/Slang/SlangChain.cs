@@ -227,6 +227,15 @@ namespace EmuSen.Serenity.Slang
             return status == 1;
         }
 
+        // The picture a core's frame_ring answered, value in slot, as the new frame: the next render or present waits for the ring's ready, copies the slot and signals its done - see EmuSen_LibretroHost.md §10f.
+        public void AdvanceRing(SlangRing ring, int slot, ulong value, int width, int height)
+        {
+            if (_managed is not null) throw new InvalidOperationException("The C#'s chain takes no picture from a ring.");
+            int status = SerenityNative.ChainAdvanceRing(_native!.Value, ring.Value, (uint)slot, value, width, height);
+            GC.KeepAlive(ring);
+            After(status);
+        }
+
         // Runs every pass for the viewport's size and returns a copy of the last one's pixels, RGBA8, a row after row.
         public byte[] Render(int viewWidth, int viewHeight)
         {

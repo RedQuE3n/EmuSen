@@ -16,6 +16,7 @@ namespace EmuSen.Mistress.Input
         ExitToLibrary,
         Screenshot,
         ToggleBigPicture,
+        FrameAdvance,
     }
 
     // Keyboard -> HotkeyAction, shaped like ControllerKeyMap - see EmuSen_Settings_Reference.md §4.3.
@@ -42,6 +43,7 @@ namespace EmuSen.Mistress.Input
             [HotkeyAction.ExitToLibrary] = Key.Escape,
             [HotkeyAction.Screenshot] = Key.F9,
             [HotkeyAction.ToggleBigPicture] = Key.F10,
+            [HotkeyAction.FrameAdvance] = Key.OemPeriod,
         };
 
         public static string DisplayName(HotkeyAction action) => action switch
@@ -55,6 +57,7 @@ namespace EmuSen.Mistress.Input
             HotkeyAction.ExitToLibrary => "Exit to Library",
             HotkeyAction.Screenshot => "Screenshot",
             HotkeyAction.ToggleBigPicture => "Big Picture",
+            HotkeyAction.FrameAdvance => "Frame Advance",
             _ => action.ToString(),
         };
 

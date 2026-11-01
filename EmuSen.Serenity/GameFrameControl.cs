@@ -14,9 +14,11 @@ namespace EmuSen.Serenity
     public sealed class GameFrameControl : Control
     {
         // One offered picture, its rows' repeat (§2.7) and who can still read its array - see EmuSen_Serenity.md §2.8.
-        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null)
+        internal sealed class Offer(byte[] rgba, int width, int height, int rowRepeat, long version, Action<byte[]>? release, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null, Slang.RingPicture? ring = null)
         {
             public readonly byte[] Rgba = rgba;
+            // A hosted core's picture in a ring the presenter's device made, in place of the pixels - see EmuSen_Backend.md §33.
+            public readonly Slang.RingPicture? Ring = ring;
             // A core's picture on the device, taken through this lend, in place of the pixels - see EmuSen_DevicePicture.md §17.
             public readonly Slang.SlangLend? Lend = lend;
             public readonly double Aspect = aspect;
@@ -289,14 +291,15 @@ namespace EmuSen.Serenity
         // lines is the console's own count in a frame drawn at a multiple of its picture, 0 for the frame's rows - see EmuSen_CRT.md §16.
         // raw is the frame before the console's palette, where its core keeps one, for a filter that models the console's own signal - see EmuSen_CRT.md §22.
         // lend is a core's picture on the device in place of rgba, which the device path alone draws - see EmuSen_DevicePicture.md §17.
-        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null)
+        // ring is a hosted core's picture in a ring in place of rgba, which the device path alone draws - see EmuSen_Backend.md §33.
+        public void UpdateFrame(byte[] rgba, int width, int height, int rowRepeat = 1, Action<byte[]>? release = null, long sequence = 0, double aspect = 0, int lines = 0, RawPicture? raw = null, Slang.SlangLend? lend = null, Slang.RingPicture? ring = null)
         {
             WatchDevicePath();
             if (RenderFps > 0 && SyncToDisplay) HoldRenderRate();
             lock (_offerLock)
             {
                 Offer? previous = _current;
-                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines, raw, lend);
+                _current = new Offer(rgba, width, height, Math.Max(1, rowRepeat), ++_version, release, sequence, aspect, lines, raw, lend, ring);
                 if (previous is not null)
                 {
                     previous.Superseded = true;
@@ -546,7 +549,8 @@ namespace EmuSen.Serenity
             bool newFrame = offer.Version != (runner == _slang ? _slangVersion : _builtInVersion);
             int repeat = filter is { RowsOnce: false } ? offer.RowRepeat : 1;
             if (offer.Lend is { } lend && !ReferenceEquals(lend.Owner, presenter.Device)) return false;
-            if (!runner!.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), RawImage(offer, filter), offer.Lend)) return false;
+            if (offer.Ring is { } ring && !ReferenceEquals(ring.Ring.Owner, presenter.Device)) return false;
+            if (!runner!.Present(presenter, offer.Rgba, offer.Width, offer.Height, repeat, newFrame, (int)Math.Round(snapped.Width * scaling), (int)Math.Round(snapped.Height * scaling), RawImage(offer, filter), offer.Lend, offer.Ring)) return false;
             if (runner == _slang) _slangVersion = offer.Version;
             else _builtInVersion = offer.Version;
             presenter.Place(snapped, cropsItself ? null : shown);
@@ -639,7 +643,7 @@ namespace EmuSen.Serenity
             Offer? offer = TakeReader(null);
             if (offer is null) return null;
             // A picture on the device has no pixels here: the device path draws it or nothing does.
-            if (offer.Width > 0 && offer.Height > 0 && offer.Lend is null) return new DrawOp(new Rect(size), this, offer, ActiveEffect);
+            if (offer.Width > 0 && offer.Height > 0 && offer.Lend is null && offer.Ring is null) return new DrawOp(new Rect(size), this, offer, ActiveEffect);
             PutReader(offer);
             return null;
         }

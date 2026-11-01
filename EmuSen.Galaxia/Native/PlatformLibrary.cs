@@ -8,7 +8,7 @@ namespace EmuSen.Galaxia.Native
     public static unsafe class PlatformLibrary
     {
         // Matched exactly against emusen_platform_abi_version - see EmuSen_RustPlatform.md §3.2.
-        public const uint InterfaceVersion = 27;
+        public const uint InterfaceVersion = 28;
 
         public const string Name = "emusen_platform";
 
@@ -23,6 +23,18 @@ namespace EmuSen.Galaxia.Native
         // An export by name for another component's half, Endymion's and later Serenity's; zero when the library is not in use or lacks it.
         public static nint Export(string name) =>
             Available && NativeLibrary.TryGetExport(Library.Value.Handle, name, out nint export) ? export : 0;
+
+        // The library's last error as words for this thread, empty when the library or the export is missing.
+        public static string LastError()
+        {
+            nint export = Export("emusen_platform_last_error");
+            if (export == 0) return "";
+            var read = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)export;
+            long n = read(null, 0);
+            var words = new byte[Math.Max(0, n)];
+            fixed (byte* w = words) read(w, (nuint)words.Length);
+            return System.Text.Encoding.UTF8.GetString(words);
+        }
 
         // Whether Galaxia's own switch chose the library, which a component reading the tree through it needs - see EmuSen_DianaSh.md §13.7.
         public static bool GalaxiaActive => GalaxiaNative.Active;

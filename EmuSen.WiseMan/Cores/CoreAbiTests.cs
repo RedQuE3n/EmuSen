@@ -26,6 +26,9 @@ namespace EmuSen.WiseMan.Cores
             ["emusen_device_lend"] = typeof(CoreInterface.DeviceLend),
             ["emusen_device_frame"] = typeof(CoreInterface.DeviceFrame),
             ["emusen_raw_frame"] = typeof(CoreInterface.RawFrame),
+            ["emusen_ring_image"] = typeof(CoreInterface.RingImage),
+            ["emusen_ring_lend"] = typeof(CoreInterface.Ring),
+            ["emusen_ring_frame"] = typeof(CoreInterface.RingFrame),
         };
 
         // A C type as the baseline spells it, as the C# a host must declare it with.
@@ -84,7 +87,7 @@ namespace EmuSen.WiseMan.Cores
         public void Every_export_of_the_baseline_has_its_field_with_the_headers_signature()
         {
             var functions = Lines("fn").ToList();
-            Assert.Equal(65, functions.Count);
+            Assert.Equal(68, functions.Count);
             Assert.Empty(Compare(typeof(CoreInterface), functions));
             var fields = typeof(CoreInterface).GetFields().Where(f => !f.IsLiteral && f.FieldType.IsFunctionPointer).Select(f => f.Name).ToHashSet();
             Assert.Equal(functions.Select(w => CoreInterface.FieldFor(w[1])).ToHashSet(), fields);
@@ -110,7 +113,11 @@ namespace EmuSen.WiseMan.Cores
                 string name = CoreInterface.FieldFor(parts[1]);
                 FieldInfo f = s.GetField(name) ?? throw new Xunit.Sdk.XunitException($"{w[1]}: no field {name}");
                 Assert.True(Marshal.OffsetOf(s, name).ToInt32() == int.Parse(w[3]), $"{w[1]} at {Marshal.OffsetOf(s, name)}, the header {w[3]}");
-                Assert.True(f.FieldType == CSharp(string.Join(' ', w[5..^1])), $"{w[1]} is {f.FieldType}, the header {string.Join(' ', w[5..^1])}");
+                string c = string.Join(' ', w[5..^1]);
+                if (c.EndsWith(']') && f.GetCustomAttribute<System.Runtime.CompilerServices.FixedBufferAttribute>() is { } fixedBuffer)
+                    Assert.True(fixedBuffer.ElementType == CSharp(c[..c.IndexOf('[')]) && fixedBuffer.Length == int.Parse(c[(c.IndexOf('[') + 1)..^1]), $"{w[1]} is {fixedBuffer.ElementType}[{fixedBuffer.Length}], the header {c}");
+                else
+                    Assert.True(f.FieldType == CSharp(c), $"{w[1]} is {f.FieldType}, the header {c}");
                 checkedFields++;
             }
             Assert.Equal(Structs.Values.Sum(t => t.GetFields().Length), checkedFields);

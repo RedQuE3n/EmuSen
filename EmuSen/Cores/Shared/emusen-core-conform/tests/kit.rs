@@ -36,7 +36,7 @@ const ALL: [&str; 15] = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "
 
 /// The cases a core is run through: the fifteen, C16 where it claims MEDIA, and C17 to C24.
 fn cases(media: bool) -> Vec<&'static str> {
-    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24"]).copied().collect()
+    ALL.iter().chain(media.then_some(&"C16")).chain(&["C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24", "C25"]).copied().collect()
 }
 
 #[test]
@@ -207,7 +207,7 @@ fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let v = json::parse(report.json().as_bytes()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
-    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(24));
+    assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(25));
     let none = run(&library("no_such_core"), &options());
     assert!(!none.passed());
     assert_eq!(none.cases[0].id, "C1");
@@ -232,8 +232,8 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
-    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.16"));
-    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0x3FFFFFF));
+    assert_eq!(v.get("abi").and_then(Value::as_str), Some("1.18"));
+    assert_eq!(v.get("capabilities").and_then(Value::as_i64), Some(0xBFF_FFFF));
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
     assert!(v.get("development").is_none());
@@ -585,6 +585,26 @@ fn each_fault_of_1_13_alone_fails_its_case_alone() {
         assert_eq!(failed, cases, "fault {fault}:\n{text}");
         assert!(text.contains(words), "fault {fault}: {words:?} not in\n{text}");
     }
+}
+
+// Core ABI 1.17's seeded fault (EmuSen_CoreAPI.md §6.42), alone in a runner process of its own: an OUTPUT naming an
+// output machine info does not declare fails the cases that run frames and judge their events.
+#[test]
+fn the_fault_of_1_17_alone_fails_the_cases_that_watch_events() {
+    let plain = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("kit-1-17.v1tc");
+    std::fs::write(&plain, image(&[1, 2, 3, 0x20, 0x41])).unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_emusen-core-conform"))
+        .args(["--self-delimiting", "--frames", "120", "--core"])
+        .arg(library("kit_faulty_full_core"))
+        .arg("--image")
+        .arg(&plain)
+        .env("EMUSEN_TEST_CORE_FAULTS", (1u64 << 40).to_string())
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout);
+    let failed: Vec<&str> = text.lines().filter_map(|l| l.strip_prefix("FAIL ")).filter_map(|l| l.split_whitespace().next()).collect();
+    assert!(failed.contains(&"C6"), "{text}");
+    assert!(text.contains("OUTPUT names port 0's output 5 at level 100"), "{text}");
 }
 
 // Core ABI 1.14's seeded fault (EmuSen_CoreAPI.md §6.39), alone in a runner process of its own: a space's byte order

@@ -98,6 +98,7 @@ namespace EmuSen.Crystal.Managed
                     w.WriteEndObject();
                 }
                 else w.WriteNull("shown_with");
+                w.WriteBoolean("locked", s.Locked);
                 w.WriteEndObject();
             }
             w.WriteEndArray();

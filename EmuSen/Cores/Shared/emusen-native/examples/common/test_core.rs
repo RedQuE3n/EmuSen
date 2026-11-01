@@ -82,6 +82,20 @@ pub const FAULT_DRIVELESS_NAMES_PLACES: u64 = 524288;
 /// the host would then read from a buffer that does not exist (EmuSen_CoreAPI.md §6.29). Without it the test core,
 /// which draws on no device, answers that every picture is in `frame_copy`.
 pub const FAULT_DEVICE_PICTURE_UNLENT: u64 = 1 << 23;
+/// Not a fault, since 2026-11-01: an image whose payload begins with `PAINTED` draws the libretro test core's picture,
+/// `PAINTED_WIDTH` by `PAINTED_HEIGHT`, and an includer whose `PAINTER` paints hands it on the lent device, so that the
+/// ring and `DEVICE_PICTURE` are measured on one picture (EmuSen_LibretroHost.md §10f).
+pub const PAINTED: u8 = 0xD1;
+pub const PAINTED_WIDTH: i32 = 320;
+pub const PAINTED_HEIGHT: i32 = 240;
+
+/// What paints a picture on a lent device: the picture uploaded and its frame record, `value` counting the pictures.
+pub trait Paint {
+    fn hand(&mut self, picture: &[u8], width: u32, height: u32) -> Result<DeviceFrame, i32>;
+}
+
+/// An includer's painter for a lent device, `None` where the lend does not suit it.
+pub type MakePainter = fn(&DeviceLend) -> Option<Box<dyn Paint>>;
 /// Seeded fault for the kit's C21 (since 1.10): the raw picture's first value one more than the frame's pixel, so that
 /// the palette the core declares no longer draws its own frame (EmuSen_CoreAPI.md §6.30).
 pub const FAULT_RAW_DISAGREES: u64 = 1 << 24;
@@ -126,6 +140,9 @@ pub const FAULT_ROUTED_OWN_REFUSED: u64 = 1 << 38;
 /// Not a fault, since 1.15: under `TWO_SYSTEMS` the machine is `create`'s whatever system is named, as a core whose own
 /// rule tells its systems apart may make it (EmuSen_CoreAPI.md §6.40).
 pub const KEEPS_ITS_RULE: u64 = 1 << 39;
+/// Seeded fault for core ABI 1.17's outputs (EmuSen_CoreAPI.md §6.42): an `OUTPUT` raised for port 0's output 5, which
+/// machine info does not declare (C6).
+pub const FAULT_OUTPUT_UNDECLARED: u64 = 1 << 40;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
 /// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
 pub const HELD_CHEATS: u8 = 0xC4;
@@ -217,6 +234,10 @@ pub struct TestCore {
     shared_console: bool,
     /// Whether the host lent a device, which this core keeps but draws nothing on (since 1.9).
     lent: bool,
+    /// `PAINTED`: whether the picture is the libretro test core's, its painter on the lent device, and this frame's record.
+    painted: bool,
+    painter: Option<Box<dyn Paint>>,
+    handed: Option<DeviceFrame>,
     /// `RAW_PICTURE` (since 1.10): the encodings kept, and the red byte of each pixel of the last frame drawn while
     /// `x-test.red` was, or `None` for a frame drawn without it.
     raw_mask: u64,
@@ -313,6 +334,9 @@ impl TestCore {
             memory_dirty: false,
             shared_console: r.shared_console,
             lent: r.device.is_some(),
+            painted: body.first() == Some(&PAINTED),
+            painter: r.device.as_ref().filter(|_| body.first() == Some(&PAINTED)).and_then(|d| PAINTER.and_then(|make| make(d))),
+            handed: None,
             raw_mask: 0,
             raw: None,
             held: 0,
@@ -333,7 +357,11 @@ impl TestCore {
             system: self.system.into(),
             region: Some(Region::Ntsc),
             frame_rate: (60, 1),
-            video: Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] },
+            video: if self.painted {
+                Video { base_width: PAINTED_WIDTH as u32, base_height: PAINTED_HEIGHT as u32, max_width: PAINTED_WIDTH as u32, max_height: PAINTED_HEIGHT as u32, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
+            } else {
+                Video { base_width: 8, base_height: 4, max_width: 16, max_height: 4, aspect: (4, 3), formats: vec![pixel::RGBA8888] }
+            },
             audio: Audio { rate: self.rate, channels: vec!["Tone".into()] },
             ports: vec![Port { port: 0, controller: Some("test.pad".into()) }, Port { port: 1, controller: None }],
             spaces: vec![Space { cheats: true, ..Space::new(0, "RAM") }, Space { read_only: true, byte_order: (TEST_CAPABILITIES != 0).then(|| if faults() & FAULT_BYTE_ORDER_MISSPELT != 0 { "Big" } else { BYTE_ORDER_BIG }), ..Space::new(1, "ROM") }],
@@ -359,10 +387,30 @@ impl TestCore {
     }
 
     fn width(&self) -> i32 {
-        if self.wide { 16 } else { 8 }
+        if self.painted { PAINTED_WIDTH } else if self.wide { 16 } else { 8 }
+    }
+
+    fn height(&self) -> i32 {
+        if self.painted { PAINTED_HEIGHT } else { 4 }
+    }
+
+    /// `PAINTED`: the libretro test core's picture of frame n, its lives falling every 60 frames from 3 and back to 3 after 0.
+    fn paint(&mut self) {
+        let (w, h) = (PAINTED_WIDTH as u32, PAINTED_HEIGHT as u32);
+        let lives = 3 - ((self.frames / 60) % 4) as u32;
+        let (frame, pad) = (self.frames as u64, self.pads[0] as u8);
+        self.picture.resize((w * h * 4) as usize, 0);
+        for (i, p) in self.picture.chunks_exact_mut(4).enumerate() {
+            let (x, y) = (i as u32 % w, i as u32 / w);
+            p.copy_from_slice(&[(x as u64 + frame) as u8, (y * 2 + lives * 40) as u8, pad ^ (x >> 3) as u8, 0xFF]);
+        }
+        self.raw = None;
     }
 
     fn draw(&mut self) {
+        if self.painted {
+            return self.paint();
+        }
         let n = (self.width() * 4) as usize;
         let green = if self.settling > 0 { 0x80 } else { 0 };
         let late = if faults() & FAULT_STATE_LOST_LATE != 0 && self.frames >= STATE_LOST_FROM { self.held } else { 0 };
@@ -566,6 +614,9 @@ impl Core for TestCore {
         }
         self.frames += 1;
         self.ram[2] = self.ram[2].wrapping_add(1);
+        if faults() & FAULT_OUTPUT_UNDECLARED != 0 {
+            emit(event::OUTPUT, 5, 100);
+        }
         if !self.rom.is_empty() {
             let differs = faults() & FAULT_LENT_RUN_DIFFERS != 0 && self.rom.is_lent();
             self.ram[ROM_BYTE] = self.rom[self.frames as usize % self.rom.len()] ^ differs as u8;
@@ -602,8 +653,12 @@ impl Core for TestCore {
             }
             self.samples.extend_from_slice(&[tone, -tone]);
         }
+        self.handed = None;
         if !self.skip {
             self.draw();
+            if let Some(p) = self.painter.as_mut() {
+                self.handed = Some(p.hand(&self.picture, PAINTED_WIDTH as u32, PAINTED_HEIGHT as u32)?);
+            }
         }
         self.held = self.frames as u8;
         if self.settling > 0 && faults() & FAULT_NEVER_SETTLES == 0 {
@@ -639,10 +694,10 @@ impl Core for TestCore {
     fn frame_info(&self) -> FrameInfo {
         let lines = if faults() & FAULT_LINES_UNEVEN != 0 { 3 } else if self.wide { 2 } else { 0 };
         let flags = if self.cheats_held { flags::FRAME_CHEATS_HELD } else { 0 };
-        FrameInfo { serial: self.frames, aspect_num: 4, aspect_den: 3, lines, flags, ..FrameInfo::rgba(self.width(), 4) }
+        FrameInfo { serial: self.frames, aspect_num: 4, aspect_den: 3, lines, flags, ..FrameInfo::rgba(self.width(), self.height()) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         &self.picture
     }
 
@@ -650,7 +705,7 @@ impl Core for TestCore {
         if !self.lent && faults() & FAULT_DEVICE_PICTURE_UNLENT != 0 {
             return Ok(Some(DeviceFrame { format: pixel::RGBA8888, buffer: 0xDEAD, width: self.width(), height: 4, stride: self.width() * 4, ready: 0xBEEF, value: self.frames as u64, ..DeviceFrame::default() }));
         }
-        Ok(None)
+        Ok(self.handed)
     }
 
     fn raw_encodings(&self) -> Vec<RawEncoding> {
@@ -848,6 +903,27 @@ impl Core for TestCore {
 
     fn units(&self) -> Vec<Unit> {
         vec![Unit { id: TIMER_UNIT, name: "Timer".into(), kind: "timer".into(), registers: vec![("Count".into(), 8), ("Frames".into(), 64)] }]
+    }
+
+    fn ring_lend(&mut self, ring: Option<&Ring>) -> Result<(), i32> {
+        // A counter with no device: every ring is on a card it does not hold (EmuSen_CoreAPI.md §6.43).
+        if ring.is_some() { Err(status::NOT_SUPPORTED) } else { Ok(()) }
+    }
+
+    fn frame_ring(&mut self) -> Result<Option<RingFrame>, i32> {
+        Ok(None)
+    }
+
+    fn outputs(&self) -> Vec<Output> {
+        vec![Output { port: 0, output: 0, kind: OutputKind::StrongMotor, label: "Motor".into() }, Output { port: 0, output: 1, kind: OutputKind::Light, label: "Lamp".into() }]
+    }
+
+    fn output_level(&self, port: u32, output: u32) -> u16 {
+        match (port, output) {
+            (0, 0) => (self.frames as u64).wrapping_mul(997) as u16,
+            (0, 1) => if self.frames % 4 < 2 { 0xFFFF } else { 0 },
+            _ => 0,
+        }
     }
 
     fn counters(&self) -> Vec<Counter> {

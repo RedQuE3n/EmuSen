@@ -1,0 +1,7 @@
+# The named exceptions the reserved setting console_picture applies, by the core's file stem: the core's option key, the
+# value that gives the console's own picture, the reason and the date decided (EmuSen_LibretroHost.md §0.3, §10i).
+# stem	key	value	reason	decided
+pcee2	pcsx2_upscale_multiplier	1	the GS's own internal resolution, the picture the PlayStation 2's CRT profile expects	2026-11-01
+pcee2	pcsx2_deinterlace_mode	1	no deinterlacing, so the CRT filter receives the console's fields as the GS made them	2026-11-01
+testcore	tc_scale	1	the test core's native size, standing in for a console's internal resolution in the tests	2026-11-01
+testcore	tc_deinterlace	off	the test core's fields unblended, standing in for a console's deinterlacing in the tests	2026-11-01

@@ -219,3 +219,55 @@ fn a_path_that_names_nothing_is_refused_and_nothing_is_made() {
     let checked = run(&ctx, r#"{"op":"pkg-check","paths":["SNES"]}"#);
     assert!(summary(&checked).contains("SNES: no package there"), "{}", summary(&checked));
 }
+
+/// The game event naming `source`, if any.
+fn game<'a>(events: &'a [Value], source: &str) -> Option<&'a Value> {
+    events.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("game") && e.get("source").and_then(Value::as_str) == Some(source))
+}
+
+fn bytes(e: &Value, name: &str) -> u64 {
+    match e.get(name) {
+        Some(Value::Number(t)) => t.parse().unwrap(),
+        _ => panic!("no {name}"),
+    }
+}
+
+#[test]
+fn the_listing_with_unpackaged_names_every_game_no_package_claims_with_its_size() {
+    let t = Temp::new("unpackaged");
+    let ctx = context(&t);
+    put(&t.at("library/nes/Alpha.nes"), &nes(1));
+    put(&t.at("library/nes/Beta.nes"), &nes(2));
+    put(&t.at("library/snes/Gamma.sfc"), &vec![3u8; 0x8000]);
+    put(&t.at("library/psx/Disc/Disc.cue"), SHEET.as_bytes());
+    put(&t.at("library/psx/Disc/Disc (Track 1).bin"), &vec![0u8; 2352 * 4]);
+    put(&t.at("library/psx/Disc/Disc (Track 2).bin"), &vec![7u8; 2352 * 2]);
+    run(&ctx, r#"{"op":"pkg-make","paths":["nes/Alpha.nes"]}"#);
+    let before = listing(&t.at("library"));
+
+    let listed = run(&ctx, r#"{"op":"pkg-ls","paths":[],"unpackaged":true}"#);
+    let s = summary(&listed);
+    assert_eq!(state(&listed, "NES/Alpha.nes"), "ok", "{s}");
+    let alpha = listed.iter().find(|e| e.get("package").and_then(Value::as_str) == Some("NES/Alpha.nes")).unwrap();
+    assert_eq!(bytes(alpha, "game_size"), nes(1).len() as u64, "{s}");
+    assert_eq!(bytes(alpha, "size"), std::fs::metadata(t.at("home/Packages/NES/Alpha.nes/package.json")).unwrap().len(), "{s}");
+    assert!(alpha.get("convertible").is_none(), "{s}");
+    assert_eq!(alpha.get("console").and_then(Value::as_str), Some("NES"), "the package's console is named as the games' are: {s}");
+    assert_eq!(game(&listed, "nes/Beta.nes").unwrap().get("system").and_then(Value::as_str), Some("NES"), "{s}");
+    assert!(game(&listed, "nes/Alpha.nes").is_none(), "a packaged game is listed once, as its package: {s}");
+    assert_eq!(bytes(game(&listed, "nes/Beta.nes").unwrap(), "size"), nes(2).len() as u64, "{s}");
+    let disc = game(&listed, "psx/Disc/Disc.cue").expect(&s);
+    assert_eq!(bytes(disc, "size"), (SHEET.len() + 2352 * 6) as u64, "a sheet's size holds its tracks: {s}");
+    assert_eq!(disc.get("convertible"), Some(&Value::Bool(true)), "{s}");
+    assert_eq!(disc.get("system").and_then(Value::as_str), Some("PlayStation"), "{s}");
+    assert!(game(&listed, "snes/Gamma.sfc").unwrap().get("convertible").is_none(), "{s}");
+    assert_eq!(listed.iter().filter(|e| e.get("event").and_then(Value::as_str) == Some("game")).count(), 3, "{s}");
+    assert!(s.contains(r#""games":3"#) && s.contains(r#""unpackaged":3"#), "{s}");
+
+    let one = run(&ctx, r#"{"op":"pkg-ls","paths":[],"console":"SNES","unpackaged":true}"#);
+    assert_eq!(one.iter().filter(|e| e.get("event").and_then(Value::as_str) == Some("game")).count(), 1, "{}", summary(&one));
+    let plain = run(&ctx, r#"{"op":"pkg-ls","paths":[]}"#);
+    assert!(!summary(&plain).contains(r#""event":"game""#), "{}", summary(&plain));
+    assert!(job::start(r#"{"op":"pkg-make","paths":["/"],"unpackaged":true}"#, ctx.clone()).err().unwrap().contains("pkg-ls's choice alone"));
+    assert_eq!(listing(&t.at("library")), before, "listing left the library as it was");
+}

@@ -31,6 +31,8 @@ namespace EmuSen.Crystal.Managed
             ["emusen_crystal_frame"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, FrameInfoV1*, int>)&emusen_crystal_frame,
             ["emusen_crystal_picture_copy"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long>)&emusen_crystal_picture_copy,
             ["emusen_crystal_picture_lend"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, nint>)&emusen_crystal_picture_lend,
+            ["emusen_crystal_picture_ring"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, nint>)&emusen_crystal_picture_ring,
+            ["emusen_crystal_frame_advance"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, int>)&emusen_crystal_frame_advance,
             ["emusen_crystal_raw_select"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, int>)&emusen_crystal_raw_select,
             ["emusen_crystal_raw_copy"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, RawInfoV1*, byte*, nuint, long>)&emusen_crystal_raw_copy,
             ["emusen_crystal_audio_drain"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, short*, nuint, uint*, long>)&emusen_crystal_audio_drain,

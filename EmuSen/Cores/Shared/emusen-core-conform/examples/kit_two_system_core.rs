@@ -5,6 +5,7 @@ pub const TEST_ID: &str = "v1-two-system-core";
 pub const TEST_NAME: &str = "V1TwoSystemCore";
 pub const TEST_CAPABILITIES: u64 = 0;
 pub const TEST_FAULTS: u64 = TWO_SYSTEMS | FAULT_ROUTED_HALF_KEPT | FAULT_ROUTED_RUNS_OTHERWISE | FAULT_ROUTED_OWN_REFUSED | KEEPS_ITS_RULE;
+pub const PAINTER: Option<MakePainter> = None;
 
 include!("../../emusen-native/examples/common/test_core.rs");
 

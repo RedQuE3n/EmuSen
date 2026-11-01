@@ -6,6 +6,7 @@ mod fault;
 pub mod layout;
 mod options;
 pub mod probe;
+mod vulkan;
 
 /// How many options the core declares.
 pub const OPTION_COUNT: usize = options::OPTIONS.len();
@@ -33,6 +34,13 @@ static CORE: Mutex<Option<Core>> = Mutex::new(None);
 static LOG: Mutex<sys::retro_log_printf_t> = Mutex::new(None);
 /// The frame times reported since the last frame, added into the state's own sum at each frame.
 static FRAME_TIME_SUM: Mutex<i64> = Mutex::new(0);
+static RUMBLE: Mutex<sys::retro_set_rumble_state_t> = Mutex::new(None);
+
+/// The levels `tc_rumble` drives at a frame, (port, strong, weak); the test reads them back as `OUTPUT` events.
+pub fn rumble_pattern(frame: u64) -> [(u32, u16, u16); 2] {
+    let strong = (frame.wrapping_mul(4099) & 0xFFFF) as u16;
+    [(0, strong, 0xFFFF - strong), (1, if frame >= 10 { 0x1234 } else { 0 }, 0)]
+}
 
 fn callbacks() -> Callbacks {
     *CALLBACKS.lock().unwrap()
@@ -130,6 +138,11 @@ impl Core {
         self.vram[(self.frame % VRAM_SIZE as u64) as usize] ^= 0xFF;
     }
 
+    /// The picture's size as drawn: the native size times the internal scale.
+    fn drawn(&self) -> (u32, u32) {
+        (self.width * self.options.scale, self.height * self.options.scale)
+    }
+
     /// The colour of a pixel, from the frame, the place, the lives and the pad.
     fn colour(&self, x: u32, y: u32) -> (u8, u8, u8) {
         let pad = u16::from_le_bytes([self.ram[PAD], self.ram[PAD + 1]]);
@@ -141,10 +154,12 @@ impl Core {
 
     fn draw(&self, out: &mut [u8], pitch: usize) {
         let bpp = self.bytes_per_pixel();
-        for y in 0..self.height {
-            let row = &mut out[y as usize * pitch..y as usize * pitch + self.width as usize * bpp];
-            for x in 0..self.width {
-                let (r, g, b) = self.colour(x, y);
+        let (scale, (width, height)) = (self.options.scale, self.drawn());
+        for y in 0..height {
+            let row = &mut out[y as usize * pitch..y as usize * pitch + width as usize * bpp];
+            let native_y = if self.options.blend { (y / scale) & !1 } else { y / scale };
+            for x in 0..width {
+                let (r, g, b) = self.colour(x / scale, native_y);
                 let at = x as usize * bpp;
                 match self.format {
                     sys::PIXEL_FORMAT_XRGB8888 => row[at..at + 4].copy_from_slice(&[b, g, r, 0x5A]),
@@ -240,7 +255,7 @@ pub unsafe extern "C" fn retro_get_system_info(info: *mut sys::retro_system_info
     let Some(info) = (unsafe { info.as_mut() }) else { return };
     info.library_name = c"EmuSen Test Core".as_ptr();
     info.library_version = c"1.0".as_ptr();
-    info.valid_extensions = c"tcg".as_ptr();
+    info.valid_extensions = c"tcg|iso".as_ptr();
     info.need_fullpath = false;
     info.block_extract = false;
 }
@@ -248,7 +263,13 @@ pub unsafe extern "C" fn retro_get_system_info(info: *mut sys::retro_system_info
 fn av_info(core: &Core) -> sys::retro_system_av_info {
     let (num, den) = core.rate;
     sys::retro_system_av_info {
-        geometry: sys::retro_game_geometry { base_width: core.width, base_height: core.height, max_width: MAX_WIDTH, max_height: MAX_HEIGHT, aspect_ratio: 4.0 / 3.0 },
+        geometry: sys::retro_game_geometry {
+            base_width: core.drawn().0,
+            base_height: core.drawn().1,
+            max_width: if core.options.grow { core.drawn().0 } else { MAX_WIDTH },
+            max_height: if core.options.grow { core.drawn().1 } else { MAX_HEIGHT },
+            aspect_ratio: 4.0 / 3.0,
+        },
         timing: sys::retro_system_timing { fps: core.fps_num as f64, sample_rate: num as f64 / den as f64 },
     }
 }
@@ -370,6 +391,11 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
         options::declare_late();
     }
     *FRAME_TIME_SUM.lock().unwrap() = 0;
+    if options.rumble {
+        let mut r = sys::retro_rumble_interface { set_rumble_state: None };
+        environment(env::GET_RUMBLE_INTERFACE, &mut r as *mut _ as *mut c_void);
+        *RUMBLE.lock().unwrap() = r.set_rumble_state;
+    }
     let mut core = Core::new(options.clone());
     if let Some(game) = unsafe { game.as_ref() }
         && !game.data.is_null()
@@ -408,6 +434,10 @@ pub unsafe extern "C" fn retro_load_game(game: *const sys::retro_game_info) -> b
     }
     if options.files {
         core.files_root = directories();
+    }
+    if options.hw.starts_with("vulkan") && !vulkan::ask(options.hw == "vulkan_bgra") {
+        log(sys::LOG_ERROR, "the host refused a Vulkan context");
+        return false;
     }
     *CORE.lock().unwrap() = Some(core);
     match options.memory {
@@ -525,8 +555,16 @@ pub extern "C" fn retro_run() {
     if updated {
         let count = u32::from_le_bytes(core.ram[OPTION_UPDATES..OPTION_UPDATES + 4].try_into().unwrap()) + 1;
         core.ram[OPTION_UPDATES..OPTION_UPDATES + 4].copy_from_slice(&count.to_le_bytes());
+        let size = core.drawn();
         core.options.reread_run_options();
+        if core.drawn() != size {
+            let g = av_info(core).geometry;
+            drop(guard);
+            environment(env::SET_GEOMETRY, &g as *const _ as *mut c_void);
+            guard = CORE.lock().unwrap();
+        }
     }
+    let Some(core) = guard.as_mut() else { return };
     read_input(core, &cb);
     core.step_game();
     let pending = std::mem::take(&mut *FRAME_TIME_SUM.lock().unwrap());
@@ -540,6 +578,10 @@ pub extern "C" fn retro_run() {
 
     let mut geometry = None;
     let mut av = None;
+    if options.grow && frame == 3 {
+        core.options.scale = 2;
+    }
+    let options = core.options.clone();
     if options.geometry_change && frame == 60 {
         core.width = 256;
         core.height = 224;
@@ -557,6 +599,14 @@ pub extern "C" fn retro_run() {
     if let Some(a) = av {
         environment(env::SET_SYSTEM_AV_INFO, &a as *const _ as *mut c_void);
     }
+    if options.rumble
+        && let Some(set) = *RUMBLE.lock().unwrap()
+    {
+        for (port, strong, weak) in rumble_pattern(frame as u64) {
+            unsafe { set(port, sys::RUMBLE_STRONG, strong) };
+            unsafe { set(port, sys::RUMBLE_WEAK, weak) };
+        }
+    }
     if options.set_variable && frame == 5 {
         let var = sys::retro_variable { key: c"tc_note".as_ptr(), value: c"changed".as_ptr() };
         environment(env::SET_VARIABLE, &var as *const _ as *mut c_void);
@@ -565,7 +615,7 @@ pub extern "C" fn retro_run() {
     let core = guard.as_mut().unwrap();
     let dupe = options.dupes && frame % 2 == 1;
     let bpp = core.bytes_per_pixel();
-    let (width, height) = (core.width, core.height);
+    let (width, height) = core.drawn();
     if dupe {
         drop(guard);
         if let Some(video) = cb.video {
@@ -573,6 +623,7 @@ pub extern "C" fn retro_run() {
         }
     } else {
         let mut target = None;
+        let mut hw_picture = None;
         if options.framebuffer {
             let mut fb = sys::retro_framebuffer { data: std::ptr::null_mut(), width, height, pitch: 0, format: 0, access_flags: sys::MEMORY_ACCESS_WRITE, memory_flags: 0 };
             let core_format = core.format;
@@ -591,6 +642,13 @@ pub extern "C" fn retro_run() {
                 core.ram[DREW_IN_FRAMEBUFFER] = 1;
                 (data as *const u8, pitch)
             }
+            None if options.hw.starts_with("vulkan") => {
+                let pitch = MAX_WIDTH as usize * bpp;
+                let mut picture = std::mem::take(&mut core.picture);
+                core.draw(&mut picture, pitch);
+                hw_picture = Some(picture);
+                (std::ptr::null(), pitch)
+            }
             None => {
                 let pitch = MAX_WIDTH as usize * bpp;
                 let mut picture = std::mem::take(&mut core.picture);
@@ -601,7 +659,12 @@ pub extern "C" fn retro_run() {
             }
         };
         drop(guard);
-        if let Some(video) = cb.video {
+        if let Some(picture) = hw_picture {
+            if let Some(video) = cb.video {
+                vulkan::hand(&picture, pitch, width, height, video);
+            }
+            with_core(|c| c.picture = picture);
+        } else if let Some(video) = cb.video {
             unsafe { video(data as *const c_void, width, height, pitch) };
         }
     }

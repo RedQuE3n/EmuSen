@@ -941,6 +941,11 @@ will not use the value as chosen" (`CoreCapabilities.cs`). A function cannot cro
 `setting_notes` (`SETTING_NOTES`) returns `{ "key": "sentence" }` for the machine's current values, read after each
 `set_settings`. MarsRT's antialiasing note is the case.
 
+**Locked rows** (decided 2026-11-01, no change of version). A core whose current values hold some settings fixed lists
+them under the note key `!locked`, the keys separated by spaces; `!` is outside a key's characters, so no setting can
+collide with it, and a frontend that does not know the entry finds no row for it and ignores it. A locked row's own
+note says why. The libretro host's `console_picture` is the first user (`EmuSen_LibretroHost.md` §10i).
+
 **A finding to settle.** MarsCore's `DeferredPresentation` ("the picture … reaches the screen one frame late[r]")
 defaults to on (`MarsCore.cs`). Under this schema it is `effect: latency`. The rule that defaults are accurate
 applies to `accuracy` and `enhancement`; §15 Q12 decided that it does not extend to latency.
@@ -1876,6 +1881,50 @@ approved by the tester on 2026-10-31. Each is optional, and a host or core that 
 `emusen-native` also lets a core claiming `SNAPSHOT` withdraw kind 1 for one machine (`Core::snapshot_offered`):
 machine info's `state.kinds` then omits it, and `state_size` and `state_save` of kind 1 answer `NOT_SUPPORTED`, which
 C14 already reads as consistent. That is the crate's, not the ABI's.
+
+### 6.42 The approved hash given first, and a pad's outputs (1.17, 2026-10-31)
+
+Two additions, each optional; a host or library that knows neither runs as before.
+
+- **`EXPECT`** (capability bit 28): `int32_t emusen_core_expect(const char *sha256)`, a library-level export, and
+  `EMUSEN_NOT_EXPECTED` (-268). It is for a library that serves bytes it did not build, a proxy of the broker
+  (`EmuSen_LibretroHost.md` §10d.1), and is never a core's: `core_exports!` refuses the bit. A host that holds an approved
+  hash for what the library serves calls it once, right after loading and before any other export, as it may
+  `set_crash_log`; `capabilities` may be read first, since it runs nothing. The library compares the bytes it will run
+  with the hash before running any of them: 0 on a match; otherwise `NOT_EXPECTED`, after which it runs nothing it
+  serves, `create` refuses with `NOT_EXPECTED`, and `info` (a broken library's) and `status_text(-268)` name both hashes. A
+  hash that is not 64 lower-case hexadecimal digits matches nothing. The first hash given stands; a later one that differs
+  is answered `NOT_EXPECTED` and changes nothing. A host that does not call it keeps the check it made before 1.17.
+  `emusen-native` gives the type, `sys::ExpectFn`, to which the broker's export and the ABI check hold the signature.
+- **`EMUSEN_EVENT_OUTPUT`** (event kind 7) and machine info's **`ports[].outputs`**, `{ output, kind, motor, label }`, as
+  `EmuSen_CoreAPI_Extensions.md` §4.3 designed them: `a` is `(port << 32) | output`, `b` the level over the frame, 0 to
+  65535. `emusen-native`: `Core::outputs` and `Core::output_level`; the crate keeps the level last raised for each
+  declared output in a table made when machine info is read, and after every call that runs or changes the machine
+  raises an event for each output whose level changed, and for every one once after machine info is read, so that a host
+  never holds a stale level. A frame with no change raises nothing and allocates nothing.
+
+Bit 27 is kept for `DEVICE_RING` (`EmuSen_LibretroHost.md` §5.4). The kit refuses an `OUTPUT` that names an output
+machine info does not declare.
+
+### 6.43 The picture on a ring the host lends: `DEVICE_RING` (1.18, 2026-11-01)
+
+Bit 27, designed in `EmuSen_LibretroHost.md` §5.4 and specified in §5.4a there: `emusen_ring_image` (40 bytes),
+`emusen_ring_lend` (72), `emusen_ring_frame` (40), `emusen_core_ring_lend` and `emusen_core_frame_ring`. The form for a
+picture that crosses devices and processes, beside `DEVICE_PICTURE` (§6.29), the form within one process and one device:
+a core claims the one its boundary needs. The host makes the ring on its presenting device, images and two timeline
+semaphores exported; the core imports them, copies each picture into a slot on its own device and signals `ready`; the
+host signals `done` once it no longer reads the slot; ownership crosses by a release to and an acquire from
+`VK_QUEUE_FAMILY_EXTERNAL` on both devices every frame. The handles are the host's, and a core duplicates what it keeps.
+`emusen_ring_frame` carries the picture's field structure (`fields`, `field`) and aspect beside its size, which the
+screen filters need with the console (`EmuSen_LibretroHost.md` §0.3). `emusen-native`: `Core::ring_lend` and
+`Core::frame_ring`, the `device_ring` group; its test core claims the bit and, holding no device, refuses every ring.
+
+*`frame_copy` with a ring lent (decided 2026-11-01, §12 question 5 of `EmuSen_LibretroHost.md`).* A frame that went to
+the ring still answers `frame_info` with its size and a new serial, and `frame_copy` hands its picture, which a core
+may read back from its own device only then: a screenshot, a state's picture or a bug report's never finds a ringed
+frame blank, and the ring's path reads nothing back. So `Core::frame` in `emusen-native` takes the core by mutable
+reference, every core's implementation changed with it; the C declaration keeps its `const emusen_machine *`, the
+handle being opaque, and the call stays one of the machine's calls, never made beside another on the same machine.
 
 ## 7. Core discovery and trust
 
@@ -4121,6 +4170,16 @@ unlisted one refused; 60 frames compared". `kit_two_system_core`, the test core 
 single-image form and in the corpus form, and passes with `KEEPS_ITS_RULE` too ("test2 kept as test").
 `FAULT_ROUTED_HALF_KEPT` (named `test2`, the machine reports `test` and runs otherwise), `FAULT_ROUTED_RUNS_OTHERWISE`
 (named `test`, it runs otherwise) and `FAULT_ROUTED_OWN_REFUSED` (named `test`, it is refused) each fail C24 alone.
+
+
+### 28.20 C25, the picture on a ring (1.18, 2026-11-01)
+
+C25 runs once per library, after C24, and judges a library that claims `DEVICE_RING` (§6.43). A withdrawal with no ring
+lent answers 0; a lend whose `size` is 16 answers `BAD_STRUCT`; a ring on a card nobody has (UUIDs of zeros, no images)
+answers `NOT_SUPPORTED`; for 60 frames (or the session's, if fewer) `frame_ring` with no ring lent answers 0, a record
+of 8 bytes `BAD_STRUCT`, and `frame_copy` keeps handing the picture. The kit makes no ring of its own: a ring lent and
+its pictures read on another device are proved by the libretro host's ring tests (`EmuSen_LibretroHost.md` §10f), not
+by the kit. Seeded fault, measured 2026-11-01: the v1 test core taking every ring, which fails C25 alone.
 
 ### 28.20 The image lent to every case where `BORROW` is claimed (2026-10-26)
 

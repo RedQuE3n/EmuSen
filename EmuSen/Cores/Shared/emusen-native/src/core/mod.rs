@@ -25,7 +25,17 @@ pub use desc::*;
 pub use lend::{Kept, keep};
 pub use outbox::{Level, SEEK_SPAN, detail, emit, log, seek};
 pub use request::{file_name, file_names, image_path};
-pub use sys::{DeviceFrame, DeviceLend, FrameInfo, RawFrame, caps, event, flags, kind, pixel, status};
+pub use sys::{DeviceFrame, DeviceLend, FrameInfo, RawFrame, RingFrame, RingImage, caps, event, flags, kind, pixel, status};
+
+/// Since 1.18: a ring as `ring_lend` gives it to a core, its images copied out of the host's array.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Ring {
+    pub images: Vec<RingImage>,
+    pub ready: u64,
+    pub done: u64,
+    pub device_uuid: [u8; 16],
+    pub driver_uuid: [u8; 16],
+}
 
 /// What `create` receives: the image, the settings resolved against the schema with every key present, the files,
 /// and the pixel formats the host accepts (bit 0, RGBA8888, always set). Every slice is the host's and valid for the
@@ -136,7 +146,8 @@ pub trait Core: Sized + StateMachine {
     /// The picture's shape; without `FRAME_SERIAL` the crate writes the frame count as the serial, without
     /// `ROW_REPEAT` a row repeat of 1.
     fn frame_info(&self) -> FrameInfo;
-    fn frame(&self) -> &[u8];
+    /// The picture `frame_copy` hands; mutable so that a core whose frame went to a ring can read it back on demand.
+    fn frame(&mut self) -> &[u8];
 
     /// The rate of the next sample a drain returns.
     fn audio_rate(&self) -> i32;
@@ -306,6 +317,17 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// `DEVICE_RING`, since 1.18: the host's ring lent, or withdrawn with `None`; the core duplicates the handles it
+    /// keeps (EmuSen_CoreAPI.md §6.43).
+    fn ring_lend(&mut self, _ring: Option<&Ring>) -> Result<(), i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
+    /// `DEVICE_RING`, since 1.18: after `advance`, the frame's picture in the ring, `None` where it is not there.
+    fn frame_ring(&mut self) -> Result<Option<RingFrame>, i32> {
+        Err(status::NOT_SUPPORTED)
+    }
+
     /// `RAW_PICTURE`, since 1.10: machine info's `video.raw`, the encodings of the picture before the palette this
     /// machine can hand, numbered by their place (EmuSen_CoreAPI.md §6.30).
     fn raw_encodings(&self) -> Vec<RawEncoding> {
@@ -349,6 +371,18 @@ pub trait Core: Sized + StateMachine {
         Err(status::NOT_SUPPORTED)
     }
 
+    /// Since 1.17: what each port's device outputs, machine info's `ports[].outputs`; a change raises `MACHINE_INFO`
+    /// (EmuSen_CoreAPI_Extensions.md §4.3).
+    fn outputs(&self) -> Vec<desc::Output> {
+        Vec::new()
+    }
+
+    /// Since 1.17: an output's level over the last frame, 0 to 65535, the fraction of the frame it was driven times its
+    /// strength; the crate raises `OUTPUT` when it changes. Allocates nothing.
+    fn output_level(&self, _port: u32, _output: u32) -> u16 {
+        0
+    }
+
     /// `DEBUG_TRANSLATE`, since 1.13: the address `processor`'s bus sees for `address` by its own translation, never
     /// faulting and changing nothing; `None` where nothing maps it (EmuSen_CoreAPI.md §6.38).
     fn debug_translate(&self, _processor: u32, _address: u32) -> Result<Option<u32>, i32> {
@@ -380,13 +414,16 @@ pub const EXPORTING: u64 = caps::RESET
     | caps::RAW_PICTURE
     | caps::TELEMETRY
     | caps::PRESENCE
-    | caps::DEBUG_TRANSLATE;
+    | caps::DEBUG_TRANSLATE
+    | caps::EXPECT
+    | caps::DEVICE_RING;
 
 /// `core_exports!`'s compile-time check: the groups named are exactly the claimed bits that have exports.
 #[doc(hidden)]
 pub const fn check_groups<T: Core>(named: u64) {
     assert!(T::CAPABILITIES & EXPORTING == named, "the optional groups named and CAPABILITIES disagree");
     assert!(T::CAPABILITIES & caps::UNASSIGNED == 0, "CAPABILITIES claims a bit no minor has assigned");
+    assert!(T::CAPABILITIES & caps::EXPECT == 0, "EXPECT is a proxy's (emusen-core-broker), not a core's");
     assert!(T::CAPABILITIES & caps::DEBUG_READS == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_READS is claimed without DEBUG");
     assert!(T::CAPABILITIES & caps::DEBUG_TRANSLATE == 0 || T::CAPABILITIES & caps::DEBUG != 0, "DEBUG_TRANSLATE is claimed without DEBUG");
 }
@@ -416,6 +453,7 @@ macro_rules! __core_capability {
     (telemetry) => { $crate::core::caps::TELEMETRY };
     (presence) => { $crate::core::caps::PRESENCE };
     (debug_translate) => { $crate::core::caps::DEBUG_TRANSLATE };
+    (device_ring) => { $crate::core::caps::DEVICE_RING };
 }
 
 /// In `impl Core`: `debug_pc` and `debug_registers` forwarding to the machine's inherent methods of the same names. With
@@ -523,6 +561,10 @@ macro_rules! __core_optional {
     };
     ($t:ty, presence) => {
         $crate::__core_export!($t, emusen_core_set_present => set_present(machine: *mut $crate::core::sys::Machine, port: u32, present: u32) -> i32);
+    };
+    ($t:ty, device_ring) => {
+        $crate::__core_export!($t, emusen_core_ring_lend => ring_lend(machine: *mut $crate::core::sys::Machine, ring: *const $crate::core::sys::RingLend) -> i32);
+        $crate::__core_export!($t, emusen_core_frame_ring => frame_ring(machine: *mut $crate::core::sys::Machine, out: *mut $crate::core::sys::RingFrame) -> i32);
     };
     ($t:ty, debug_translate) => {
         $crate::__core_export!($t, emusen_core_debug_translate => debug_translate(machine: *const $crate::core::sys::Machine, processor: u32, address: u32, bus: *mut u32) -> i32);

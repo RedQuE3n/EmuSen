@@ -249,7 +249,7 @@ impl v1::Core for Machine {
         FrameInfo { aspect_num: 10, aspect_den: 9, ..FrameInfo::rgba(SCREEN_WIDTH, SCREEN_HEIGHT) }
     }
 
-    fn frame(&self) -> &[u8] {
+    fn frame(&mut self) -> &[u8] {
         &self.bus.ppu.frame_rgba
     }
 

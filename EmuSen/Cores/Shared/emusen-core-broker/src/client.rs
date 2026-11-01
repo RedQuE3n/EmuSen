@@ -122,6 +122,19 @@ impl Link {
         self.receive(deadline)
     }
 
+    /// A call whose descriptors follow its request in a message of their own (`RingLend`); they stay the caller's.
+    pub fn call_with_fds(&mut self, op: Op, args: &[u8], fds: &[RawFd], deadline: Duration) -> Result<Reply, (i32, String)> {
+        if let Some(d) = &self.dead {
+            return Err(d.clone());
+        }
+        if wire::send_request(&mut self.sock, op, false, 0, args).is_err() || wire::send_fds(&self.sock, fds).is_err() {
+            let d = (STATUS_ENDED, self.reap());
+            self.dead = Some(d.clone());
+            return Err(d);
+        }
+        self.receive(deadline)
+    }
+
     fn stop(&mut self) {
         if let Some(c) = self.child.as_mut() {
             let _ = c.kill();

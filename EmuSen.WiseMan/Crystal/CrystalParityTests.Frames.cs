@@ -41,6 +41,8 @@ namespace EmuSen.WiseMan.Crystal
                     if (f % 3 == 0) a.Add(i.Picture(rt, s));
                     if (f % 4 == 0) a.Add(i.Audio(rt, s, f % 8 == 0 ? 64 : 4096));
                 }
+                // §33: one frame advance holds the session after one frame, and the C# and the Rust lend no ring to the test core.
+                a.AddRange(new[] { i.FrameAdvance(rt, s), i.Frame(rt, s), i.Frame(rt, s), i.Frame(rt, s), i.FrameAdvance(rt, 0), i.Frame(rt, s), i.Frame(rt, s, size: 112), i.FrameAdvance(rt, 99), i.PictureRing(rt, s).ToString() });
                 a.AddRange(new[]
                 {
                     i.Button(rt, s, 0, 16, true), i.Button(rt, s, 9, 8, true), i.Axis(rt, s, 0, 6, 0), i.Axis(rt, s, 0, 0, double.NaN), i.Axis(rt, s, 0, 4, 3),

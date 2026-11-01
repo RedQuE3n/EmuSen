@@ -6,7 +6,7 @@
 
 use std::path::PathBuf;
 
-pub use emusen_core_entry::Entry;
+pub use emusen_core_entry::{Entry, FIRMWARE_ROLES, FirmwareRole, firmware_role, system_folder};
 use emusen_core_entry::{HOST_LIBRARY, PROXY_LIBRARY, built_name};
 
 use crate::descriptors::LibretroFile;

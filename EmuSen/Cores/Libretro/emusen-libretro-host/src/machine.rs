@@ -194,10 +194,11 @@ fn pad(ports: usize, labels: &[(u32, String)]) -> Controller {
 /// cards, so no file passed is both (EmuSen_LibretroHost.md §10j); Sapphire numbers its BIOS so too.
 const FIRST_FIRMWARE: u32 = 16;
 
-/// The `.info` file's firmware entries, numbered from `FIRST_FIRMWARE`.
+/// The `.info` file's firmware entries, numbered from `FIRST_FIRMWARE`, but those the core carries itself.
 fn firmware(lib: &Library) -> Vec<Firmware> {
     let count: usize = info_value(lib, "firmware_count").parse().unwrap_or(0);
     (0..count.min(64))
+        .filter(|i| emusen_core_entry::firmware_role(&lib.stem, &info_value(lib, &format!("firmware{i}_path"))) != Some(emusen_core_entry::FirmwareRole::Carried))
         .map(|i| {
             let path = info_value(lib, &format!("firmware{i}_path"));
             let optional = info_value(lib, &format!("firmware{i}_opt")) == "true";

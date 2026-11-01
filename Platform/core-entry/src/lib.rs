@@ -86,6 +86,26 @@ pub fn system_folder(folder: &Path, stem: &str) -> PathBuf {
     std::env::var_os(SYSTEM_DIR_VAR).map_or_else(|| data_folder(folder, stem).join("system"), PathBuf::from)
 }
 
+/// What a libretro core's `.info` firmware entry is, where it is not a file the player supplies by its name
+/// (EmuSen_LibretroHost.md §10s).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FirmwareRole {
+    /// Data the core carries in itself, never asked of the player.
+    Carried,
+    /// A folder of the console's own firmware, filled from the player's firmware store with what the console's
+    /// engines declare for this system.
+    Console(&'static str),
+}
+
+/// By the core's file stem, the `.info` firmware paths whose role is not the default; PCEE2's binary holds PCSX2's
+/// resources (its game index among them), measured 2026-11-01.
+pub const FIRMWARE_ROLES: &[(&str, &str, FirmwareRole)] = &[("pcee2", "pcsx2/resources", FirmwareRole::Carried), ("pcee2", "pcsx2/bios", FirmwareRole::Console("ps2"))];
+
+/// The role of a core's `.info` firmware path, none for a file the player supplies by its name.
+pub fn firmware_role(stem: &str, path: &str) -> Option<FirmwareRole> {
+    FIRMWARE_ROLES.iter().find(|(s, p, _)| *s == stem && p.trim_end_matches('/') == path.trim_end_matches('/')).map(|r| r.2)
+}
+
 /// What a `NOTICE` records of a downloaded core (EmuSen_Cores.md §5.2 step 4).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Notice {

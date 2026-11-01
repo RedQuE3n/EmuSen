@@ -387,7 +387,7 @@ namespace EmuSen.Mistress.Views
         private async Task PromptForMissingFirmwareAsync(string romPath)
         {
             string needed;
-            try { needed = Runtime.FirmwareNeeded(romPath); }
+            try { needed = await OffInterface(() => FirmwareQuery(romPath)); }
             catch (CrystalException) { return; }
             using System.Text.Json.JsonDocument requests = System.Text.Json.JsonDocument.Parse(needed);
             foreach (System.Text.Json.JsonElement request in requests.RootElement.EnumerateArray())
@@ -1761,7 +1761,7 @@ namespace EmuSen.Mistress.Views
         {
             StopLogging(); // close the previous session's files first - see CategorizedLogWriter.Dispose's own comment
 
-            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.DefaultRoot;
+            string logRoot = ErrorLog.Usable(_appSettings.LogDirectory) ? _appSettings.LogDirectory! : ErrorLog.FallbackRoot(_appSettings.LogDirectory);
 
             try
             {

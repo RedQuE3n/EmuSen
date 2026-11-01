@@ -15,13 +15,26 @@ namespace EmuSen.Mistress.Views
         internal static Func<MainWindow, string, string, Task<bool>> ConfirmCoreApproval =
             (owner, title, message) => Dialogs.ConfirmAsync(owner, title, message, "Approve", "Not Now");
 
+        // The runtime's questions before a launch, asked off the interface thread so a slow answer never freezes it (EmuSen_LibretroHost.md §10r); a test replaces them.
+        internal static Func<string, CoreAwaiting?> AwaitingQuery = rom => CoreAwaitingApproval(Runtime, rom);
+        internal static Func<string, string> FirmwareQuery = rom => Runtime.FirmwareNeeded(rom);
+        internal static Func<string, IReadOnlyList<CardMedium>> CardsQuery = console => CardMedium.Of(Runtime, console);
+
+        // A question run on a worker, its answer taken at once when it comes within a tenth of a second, else awaited with the interface free.
+        internal static async Task<T> OffInterface<T>(Func<T> query)
+        {
+            Task<T> asked = Task.Run(query);
+            ((IAsyncResult)asked).AsyncWaitHandle.WaitOne(TimeSpan.FromMilliseconds(100));
+            return await asked;
+        }
+
         // What the approval shows of a core library, read from the runtime's listing.
         internal sealed record CoreAwaiting(string File, string Name, IReadOnlyList<string> Authors, string License, IReadOnlyList<string> Systems, string Sha256);
 
         // Asked when the engine the game would open on waits for the player's approval; approved, the runtime records it.
         internal async Task AskCoreApprovalAsync(string romPath)
         {
-            if (CoreAwaitingApproval(Runtime, romPath) is not { } core) return;
+            if (await OffInterface(() => AwaitingQuery(romPath)) is not { } core) return;
             if (!await ConfirmCoreApproval(this, EmuSen.Tools.Cores.CoreApproval.Title, ApprovalMessage(core))) return;
             try
             {

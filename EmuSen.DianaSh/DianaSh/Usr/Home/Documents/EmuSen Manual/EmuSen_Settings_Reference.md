@@ -4655,6 +4655,20 @@ Galaxia can write to it.
 - **Location:** one plain-text file a day, `emusen_<yyyyMMdd>.log`. It sits in the same folder as §4.22's per-game
   logs and §4.27's crash reports: the `LogDirectory` setting (Preferences' *Log Directory*), else
   `~/.config/EmuSen/Logs`. `CrashLog` now takes its folder from `ErrorLog.Root()`, so the two cannot diverge.
+- **A folder this machine cannot use** (2026-11-01): the setting is used only when its folder can be made and takes a
+  file (a `.emusen-write-check` file is written and removed). When it names a folder that cannot, the log goes to the
+  home's own `Logs` (`DataStore.Logs`), and the first entry written there says so once in the run (`WARN [log] the log
+  folder … cannot be made or written on this machine, so the log is kept in …`); with no folder named, the default
+  above stands. The per-game logs (§4.22) take the same fallback (`ErrorLog.FallbackRoot`). Found on the handheld,
+  whose `home/etc/EmuSen/appsettings.json` named the desktop's `/home/red/Documents/Logs/` beside its own ROM and state
+  folders; the logs went to `~/.config/EmuSen/Logs`, outside the home, where nobody looked. How the desktop's folder got
+  there is not proven: its backups of 2026-10-17 and 2026-10-27 already hold it, its copies of 2026-09-22 do not, and the
+  handheld has no legacy `~/.config/EmuSen/appsettings.json` now. One route is shown on the desktop: a sandbox's first
+  start copies the legacy file into its home when it has none (`ConfigFile.MigrateFromLegacy`, Galaxia's `config.rs`), so
+  `out/linux-x64/Mistress/home` holds the desktop's folders, and a home or settings file carried from there to another
+  machine brings them along. The fix therefore does not depend on the route: any named folder this machine cannot use
+  falls back and is reported. Both halves, Galaxia's Rust and C#, choose
+  the same folder (`GalaxiaParityTests`), and each has its test (`error_log.rs`, `ErrorLogTests`).
 - **The entry:** one line with the time to the millisecond, `ERROR` or `WARN`, an area in brackets (`themes`,
   `states`, `launch`, `covers`, `scraping`, `cheats`, `library`, `media`, `screenshots`, `shaders`, `config`, `crash`,
   `logging`, `unhandled`), and the message whole. A message's own line breaks are folded to ` ⏎ `, so one entry's

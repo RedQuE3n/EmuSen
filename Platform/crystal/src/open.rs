@@ -240,24 +240,29 @@ fn open_game(
     let (row, _) = crate::route::route(catalog, discovery, at);
     let row_console = row.map(|r| catalog.rows[r].console().to_string());
     let stored_console = row_console.clone().or_else(|| system.as_ref().and_then(|s| Catalog::discovered_console_for_system(&s.id)).map(str::to_string));
+    let console = session_console(system.as_ref(), row_console, core);
     let mut e = Engine::new(lib, core.sidecar.info_json.clone(), &[], options);
-    let values = stored_settings(&e.settings, stored, stored_console.as_deref());
+    let values = stored_settings(&e.settings, stored, Some(&console));
     e = Engine::new(lib, core.sidecar.info_json.clone(), &values, options);
     if let Some(console) = &stored_console {
         let media = crate::media::media_of(console, system.as_ref());
         e.media_choices = crate::media::stored_choices(&media, &|k| stored.value(console, k).map(str::to_string));
     }
-    let console = system
-        .as_ref()
-        .and_then(|s| Catalog::discovered_console_for_system(&s.id).map(str::to_string).or_else(|| Some(emusen_dotnet::text::to_upper(&s.id))))
-        .or(row_console)
-        .unwrap_or_else(|| core.sidecar.info.id.clone());
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
     e.ring_wanted = options.ring;
     e.package = package;
     e.save_key = save_key;
     e.load_rom(ctx.tree, at, system, console, ctx.is_image, ctx.folders).map_err(|r| (r.status, r.words))?;
     Ok(e)
+}
+
+/// The console a game's session is named by, under which its settings are stored and, so, read at the machine's
+/// creation: the table's console of its system, else the system id in capitals, else the row's, else the core's id.
+fn session_console(system: Option<&crate::info::SystemDetail>, row_console: Option<String>, core: &Discovered) -> String {
+    system
+        .and_then(|s| Catalog::discovered_console_for_system(&s.id).map(str::to_string).or_else(|| Some(emusen_dotnet::text::to_upper(&s.id))))
+        .or(row_console)
+        .unwrap_or_else(|| core.sidecar.info.id.clone())
 }
 
 #[allow(clippy::too_many_arguments)]

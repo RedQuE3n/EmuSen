@@ -8,7 +8,7 @@ use emusen_libretro_sys::{self as sys, env};
 use crate::environment;
 
 /// (key, label, category, values, information); the first value is the default.
-pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 16] = [
+pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 17] = [
     ("tc_format", "Pixel format", "picture", &["xrgb8888", "rgb565", "0rgb1555"], "The format the picture is drawn in."),
     ("tc_draw", "Drawing", "picture", &["copy", "framebuffer"], "Into the core's own buffer, or the host's."),
     ("tc_dupes", "Duplicate frames", "picture", &["off", "on"], "Every odd frame handed as a duplicate."),
@@ -23,6 +23,7 @@ pub const OPTIONS: [(&str, &str, &str, &[&str], &str); 16] = [
     ("tc_shutdown", "Shutdown", "states", &["off", "30"], "The core asks to stop at frame 30."),
     ("tc_probe", "Environment probe", "probe", &["off", "on"], "Every environment command called at load."),
     ("tc_log_thread", "Log from a thread", "probe", &["off", "on"], "A formatted log line from a thread of the core's."),
+    ("tc_fault", "A fault at frame 2", "probe", &["none", "handled_segv", "segv", "abort", "write_outside", "socket", "hang"], "What the core does at its second frame, for the broker's proofs."),
     ("tc_set_variable", "Changes its option", "probe", &["off", "on"], "The core sets tc_note itself at frame 5."),
     ("tc_note", "Note", "probe", &["plain", "changed"], "Changed by the core when it changes its own option."),
 ];
@@ -63,6 +64,7 @@ pub struct Options {
     pub log_thread: bool,
     pub set_variable: bool,
     pub note: String,
+    pub fault: String,
 }
 
 /// A C string kept for the process's life, as libretro's declarations must be.
@@ -183,6 +185,7 @@ impl Options {
             log_thread: on("tc_log_thread"),
             set_variable: on("tc_set_variable"),
             note: get("tc_note"),
+            fault: get("tc_fault"),
         };
         let display = sys::retro_core_option_display { key: c"tc_note".as_ptr(), visible: options.set_variable };
         environment(env::SET_CORE_OPTIONS_DISPLAY, &display as *const _ as *mut c_void);

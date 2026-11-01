@@ -116,7 +116,7 @@ impl Target for Libretro {
             policy: Policy { read_exec, read, read_write: vec![data.clone()], devices },
             env: vec![("EMUSEN_LIBRETRO_CORE_FD".into(), "4".into()), ("MESA_SHADER_CACHE_DIR".into(), data.join("cache").join("mesa").to_string_lossy().into_owned())],
             fds: vec![e.sealed.as_raw_fd()],
-            require_abi: 1,
+            require_abi: std::env::var("EMUSEN_BROKER_REQUIRE_ABI").ok().and_then(|v| v.parse().ok()).unwrap_or(1),
         })
     }
 

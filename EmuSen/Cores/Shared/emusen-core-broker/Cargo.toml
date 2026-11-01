@@ -22,5 +22,11 @@ libc = "0.2"
 [target.'cfg(target_os = "linux")'.dependencies]
 landlock = "0.4"
 
+# The libretro proxy, host and test core, built as shared libraries beside the tests that run them brokered.
+[dev-dependencies]
+emusen-libretro-proxy = { path = "../../Libretro/emusen-libretro-proxy" }
+emusen-libretro-host = { path = "../../Libretro/emusen-libretro-host" }
+emusen-libretro-testcore = { path = "../../Libretro/emusen-libretro-testcore" }
+
 [profile.release]
 panic = "abort"

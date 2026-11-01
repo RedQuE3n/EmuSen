@@ -2,6 +2,7 @@
 //! EmuSen_LibretroHost.md §9.
 #![allow(clippy::missing_safety_doc)]
 
+mod fault;
 pub mod layout;
 mod options;
 pub mod probe;
@@ -621,6 +622,10 @@ pub extern "C" fn retro_run() {
         }
     }
 
+    if frame == 2 && options.fault != "none" {
+        let found = fault::run(&options.fault);
+        with_core(|c| c.ram[FAULT] = found);
+    }
     if options.files && (frame == 10 || frame == 20) {
         write_files(frame);
     }

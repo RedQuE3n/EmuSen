@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 emusen-libretro-sys = { path = "../emusen-libretro-sys" }
+libc = "0.2"
 
 [profile.release]
 panic = "abort"

@@ -56,7 +56,8 @@ namespace EmuSen.Galaxia
         // Pre-Galaxia location, read once to migrate out of - see §1.4.
         public static string LegacyDirectory => GalaxiaNative.Active ? GalaxiaNative.Directory(GalaxiaDirectory.ConfigLegacy)! : Managed.LegacyDirectory;
 
-        internal static string? LegacyPathFor(string fileName) =>
+        // Where a config file sat before Galaxia, or null when config is redirected and the legacy directory is not.
+        public static string? LegacyPathFor(string fileName) =>
             GalaxiaNative.Takes(fileName) ? GalaxiaNative.LegacyConfigPath(fileName) : Managed.LegacyPathFor(fileName);
 
         // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.

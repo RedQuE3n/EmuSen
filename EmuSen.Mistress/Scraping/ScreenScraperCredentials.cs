@@ -46,8 +46,7 @@ namespace EmuSen.Mistress.Scraping
         public static IEnumerable<string> Locations()
         {
             yield return ConfigStore.For(FileName);
-            if (ConfigStore.OverrideDirectory is not null && ConfigStore.OverrideLegacyDirectory is null) yield break;
-            yield return Path.Combine(ConfigStore.LegacyDirectory, FileName);
+            if (ConfigStore.LegacyPathFor(FileName) is { } legacy) yield return legacy;
         }
 
         // The tree's own file, then ~/.config/EmuSen's, then the build's embedded credentials.

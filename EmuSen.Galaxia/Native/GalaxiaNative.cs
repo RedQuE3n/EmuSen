@@ -200,6 +200,7 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int> _init;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, long> _directory;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, int> _setOverride;
+        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int> _threadScope;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long> _configPath;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _legacyConfigPath;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, int, byte*, nuint, byte*, nuint, long> _rootFor;
@@ -256,7 +257,7 @@ namespace EmuSen.Galaxia.Native
         internal static readonly string[] Exports =
         {
             "emusen_platform_set_crash_log", "emusen_platform_last_error", "emusen_platform_diagnostics", "emusen_galaxia_init",
-            "emusen_galaxia_directory", "emusen_galaxia_set_override", "emusen_galaxia_config_path", "emusen_galaxia_legacy_config_path",
+            "emusen_galaxia_directory", "emusen_galaxia_set_override", "emusen_galaxia_thread_scope", "emusen_galaxia_config_path", "emusen_galaxia_legacy_config_path",
             "emusen_galaxia_root_for", "emusen_galaxia_bundle_contents_for", "emusen_galaxia_seed_directory_for",
             "emusen_galaxia_mac_data_directory_for", "emusen_galaxia_legacy_root_for", "emusen_galaxia_save_path", "emusen_galaxia_file_read",
             "emusen_galaxia_file_write", "emusen_galaxia_rom_md5", "emusen_galaxia_migrate", "emusen_galaxia_remaining_library",
@@ -287,6 +288,7 @@ namespace EmuSen.Galaxia.Native
             _init = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int>)found[next++];
             _directory = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, long>)found[next++];
             _setOverride = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, int>)found[next++];
+            _threadScope = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int>)found[next++];
             _configPath = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
             _legacyConfigPath = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             _rootFor = (delegate* unmanaged[Cdecl]<byte*, nuint, int, byte*, nuint, byte*, nuint, long>)found[next++];
@@ -364,6 +366,14 @@ namespace EmuSen.Galaxia.Native
         {
             Utf8 text = new(directory);
             fixed (byte* p = text.Bytes) Check(_setOverride((uint)which, p, text.Length));
+        }
+
+        // The calling thread's test scope in the library, or none; before the library is in the process there is nothing to tell - see EmuSen_Galaxia.md §3.14.
+        internal static void ThreadScope(string? config, string? data, string? legacy)
+        {
+            if (!_attached) return;
+            Utf8 c = new(config), d = new(data), l = new(legacy);
+            fixed (byte* pc = c.Bytes, pd = d.Bytes, pl = l.Bytes) _threadScope(pc, c.Length, pd, d.Length, pl, l.Length);
         }
 
         internal static void SetCrashLog(string path)

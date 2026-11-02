@@ -477,7 +477,7 @@ package); `claims.rs`' sources case; `GalaxiaParityTests.A_self_contained_packag
 and `A_package_s_zip_is_unpacked_by_the_platform_library_and_refused_with_words_by_the_C_sharp_half` (a zip another
 archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen_GamePackages.md` §19.
 
-### 3.14 A scoped override for tests (design, 2026-11-01; not built)
+### 3.14 A scoped override for tests (2026-11-01)
 
 *Proposed 2026-11-01, for the tester's decision of the same day to free WiseMan's serial collection (`EmuSen_Debugging_Tools_Reference_v5.md` §3.68).* §3.1's two overrides are process statics, so every class that sets one sits in `"Process globals"`, which xUnit runs alone after every other collection. On 2026-11-01, 301 test files were in that collection; 173 of them set a Galaxia override, and 123 have no other recorded reason to be there.
 
@@ -488,15 +488,17 @@ archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen
 1. *A scope in C# only*: rejected for the reason above.
 2. *An instance the tests own*: every production reader of `DataStore` and `ConfigStore` would take an instance, and the Rust consumers would too. That widens two stable surfaces to serve tests.
 3. *One process per class*: xUnit 2 cannot do this. Splitting WiseMan by component gives one process per assembly, a coarser form that is planned separately.
-4. *Chosen: a scope in C#, resolved by stateless platform calls.*
+4. *Two stateless path functions*: the first form of this design, approved and then withdrawn the same day before it was built. They would answer path questions only. 21 of the library's exports read the process tree inside the call (config load, save, read, write and delete; the cheats; the error log; save paths; migration; scraping; the library tool; the runtime), and they would have ignored the scope.
+5. *Chosen: one thread scope in the library, kept in step with an `AsyncLocal` in C#.* Decided 2026-11-01 by the tester.
 
-**The design.**
+**The design, as built.**
 
-- `GalaxiaScope.Enter(data:, config:, legacy:)` returns an `IDisposable` and sets an `AsyncLocal` value. It is internal to EmuSen.Galaxia and visible to WiseMan.
-- Inside a scope, `DataStore`'s and `ConfigStore`'s getters resolve against the scope. They do so through new platform functions, `galaxia_directory_for` and `galaxia_config_path_for`, which take the three overrides as arguments and read no process state. This is a minor version of the platform interface, an addition only.
-- Outside a scope nothing changes: the statics, the process tree and every current test behave as now.
-- The Rust consumers keep the process tree. A class that starts a runtime session, or calls a Rust function that resolves a path itself, sets the statics and stays in the collection.
-- A guard makes a mistake loud: starting a runtime session inside a scope throws `InvalidOperationException`, naming the class that has to stay serial. The guard does not let a scope pass unnoticed into code that cannot see it.
+- **The export.** `emusen_galaxia_thread_scope(config, data, legacy)` (interface 31) sets a thread-local scope in the library; all three null clear it. `tree::tree()`, which every consumer in the library calls, returns the process tree with that scope's three redirects on a thread that has one, and the process tree itself otherwise. Only the calling thread sees a scope. The library's own threads never do, and `emusen_platform.h` documents it as a test's call that no program makes.
+- **The C# side.** `GalaxiaScope.Enter(data:, config:, legacy:)` is internal to EmuSen.Galaxia and visible to WiseMan. It sets an `AsyncLocal<GalaxiaScope?>` built with a change callback. .NET calls that callback on every thread where the value changes, including when a continuation resumes on another thread, and it hands the value to the export. The library's scope therefore follows the test's flow from thread to thread with no change at any call site. `Enter` loads the library first, so no thread is reached before the library can be told.
+- **Outside a scope nothing changes.** The statics, the process tree and every current test behave as before. The callback runs only where a scope's value changes, so a program never pays for it.
+- **The guard.** `GalaxiaScope.Refuse` throws `InvalidOperationException` inside a scope. It is called where work goes to the library's own threads: `CrystalRuntime`'s constructor (the runtime and its sessions), `ScrapeCommand.Ask` (a scrape run) and `LibraryToolJob.Start` (the library tool). A class using any of these sets the statics and stays in the collection.
+- **One reader of a static moved to the tree.** `ScreenScraperCredentials.Locations` read `ConfigStore.OverrideDirectory` to keep a redirected test from the real legacy file. It now asks `ConfigStore.LegacyPathFor`, made public, which gives the same answer from the tree and so honours a scope.
+- **Kept to tests.** `GalaxiaScopeTests.Nothing_outside_the_tests_enters_a_scope_or_calls_the_export` scans the repository's C# and Rust sources. Only WiseMan, `GalaxiaScope.cs`, `GalaxiaNative.cs` and the export's two Rust files may name `GalaxiaScope.Enter`, the export or `set_thread_scope`.
 - `AsyncLocal` does not flow through native callbacks or `UnsafeQueueUserWorkItem`. Where it does flow was measured on 2026-11-01 with a scratch xUnit 2.9.3 project on Avalonia.Headless 12.1.0, six tests, all passed. A value set in a test class's constructor reaches the test method and `Dispose`. It flows through `await`, `Task.Run` and a new `Thread`. It also flows through `HeadlessUnitTestSession.Dispatch`, `Dispatcher.UIThread.InvokeAsync` and `Dispatcher.UIThread.Post`, so a UI test's scope reaches its dispatched body without help.
 
 **The other reasons in `TestCollections.cs`, re-audited 2026-11-01.**

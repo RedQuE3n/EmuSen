@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 30u
+#define EMUSEN_PLATFORM_ABI_VERSION 31u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -117,6 +117,12 @@ int64_t emusen_galaxia_directory(uint32_t which, uint8_t *out, size_t len);
 
 /* Moves a redirect, by its EMUSEN_GALAXIA_OVERRIDE_* number; a null directory restores the real location. */
 int32_t emusen_galaxia_set_override(uint32_t which, const uint8_t *directory, size_t directory_len);
+
+/* A test's scope, never a program's: the config, data and legacy redirects that every call made on the calling thread
+ * resolves against, in place of the process's, until the thread is scoped again; all three null return the thread to
+ * the process tree. Only the calling thread sees it; the library's own threads (a runtime's sessions, a scrape run, the
+ * library tool) never do. Nothing outside EmuSen.WiseMan's tests reaches it (EmuSen_Galaxia.md, section 3.14). */
+int32_t emusen_galaxia_thread_scope(const uint8_t *config, size_t config_len, const uint8_t *data, size_t data_len, const uint8_t *legacy, size_t legacy_len);
 
 /* A config file's path; a null category is the config directory itself, else its subdirectory of that name. */
 int64_t emusen_galaxia_config_path(const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);

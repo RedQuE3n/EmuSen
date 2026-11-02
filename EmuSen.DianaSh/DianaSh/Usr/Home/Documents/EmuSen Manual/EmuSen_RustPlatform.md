@@ -3559,3 +3559,7 @@ idiom, the list `emusen_systems::libretro_cores` reads, for the C# runtime's `Ho
 `EmuSen_LibretroHost.md` §0.3). It was built as interface 28 beside the ring of §42 and renumbered past it and past
 interface 29's scraping command (`EmuSen_LibraryTools.md` §9), which landed first. The number moved in
 `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together.
+
+## 44. Interface 31, 2026-11-01: a test's thread scope
+
+One function: `emusen_galaxia_thread_scope(config, data, legacy)` scopes the three redirects to the calling thread, and all three null clear the scope. `tree::tree()` answers under the scope on that thread only, so every Galaxia consumer in the library honours it, and the library's own threads never see it. It is a test's call. `GalaxiaScope` in C# keeps it in step with an `AsyncLocal` as a test's flow moves between threads, and no program calls it; a WiseMan test scans the sources to keep it that way. Why one thread scope rather than functions taking the redirects as arguments, and the guard on work the library runs on its own threads, are in `EmuSen_Galaxia.md` §3.14. The number moved in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together.

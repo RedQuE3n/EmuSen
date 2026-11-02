@@ -46,6 +46,7 @@ namespace EmuSen.Galaxia.Native
         // A job started from a request; a request that is not one is a FormatException with the tool's words.
         public static IToolJob Start(string request)
         {
+            GalaxiaScope.Refuse("The library tool");
             if (!Available) throw new InvalidOperationException($"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.Report})");
             byte[] text = Encoding.UTF8.GetBytes(request);
             nint job = 0;

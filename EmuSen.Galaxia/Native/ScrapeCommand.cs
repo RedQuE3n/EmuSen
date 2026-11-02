@@ -30,6 +30,7 @@ namespace EmuSen.Galaxia.Native
         // One request answered, by the length-query idiom; a refusal is a ScrapeCommandException.
         public static string Ask(string request)
         {
+            GalaxiaScope.Refuse("A scrape run");
             if (!Available) throw new ScrapeCommandException(-256, $"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.Report})");
             var call = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)Exports.Value.Command;
             byte[] text = Encoding.UTF8.GetBytes(request);

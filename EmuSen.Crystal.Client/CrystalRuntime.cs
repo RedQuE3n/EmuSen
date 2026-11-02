@@ -45,6 +45,7 @@ namespace EmuSen.Crystal.Client
 
         public CrystalRuntime(CrystalRuntimeOptions? options)
         {
+            EmuSen.Galaxia.GalaxiaScope.Refuse("The runtime");
             byte[]? cores = options?.Cores is { } dirs ? JsonSerializer.SerializeToUtf8Bytes(dirs) : null;
             byte[]? player = options?.PlayerCores is { } own ? JsonSerializer.SerializeToUtf8Bytes(own) : null;
             fixed (byte* c = cores, p = player)

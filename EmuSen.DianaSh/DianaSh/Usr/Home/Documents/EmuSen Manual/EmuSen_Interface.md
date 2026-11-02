@@ -834,6 +834,19 @@ seeded faults, each caught: the update's status without its glyph and case; no a
 the To approve filter matching nothing; the facts leaving out the count to approve; the approval asked through the
 host's dialog on the big screen.
 
+**Landing, 2026-11-01.** The first landing on the merged tree failed 39 recordings of the Pause Card, the Home card and
+the main menu: since the List card and the question's cover, LunaP's `AdaptiveLayout` holds its arranged form in a
+layers panel, so every recording of a card read an unnamed panel at its root where `AdaptiveCardScrim` had been, one
+level up; the dim was still drawn beneath the card. The panel is named `AdaptiveLayers`, `CardFormTests` asserts the
+card's scrim paints the dim across the layout (LunaP §208.12), and every audited state was re-recorded for the one
+level. Found alongside: the sheet layer's handler had set the status bar visible whenever a sheet other than a screen
+was presented, over the bar's own rules (the setting, its parts, the themed library); the screen case is now one more
+term of `ApplyStatusBar`, which the handler calls. Two failures of that landing were not this stage's: `ScrapeStatusIdle`
+is recorded at a frame of 383 and measures 385 in some whole-suite runs and vice versa (the landing of 2026-10-31 at
+23:27 failed it the other way round), and `GraphicsSettingsWindowLayoutTests` reads `ConsolesConfig` through the
+process-wide `ConfigStore.OverrideDirectory` that 141 test classes set, so a parallel neighbour can move its file; both
+pass on their own.
+
 ### 15.11 Questions
 
 1. **[decision]** A does the row's one action where the detail is beside the content, and opens the page where the

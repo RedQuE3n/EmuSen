@@ -5,13 +5,18 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Native;
 using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
+using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Views;
 using EmuSen.Tools.Cores;
 using EmuSen.WiseMan.Fixtures;
@@ -88,6 +93,50 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private static CoreRow Row(CoresPane pane, string stemOrEngine) => pane.Rows.First(r => r.Stem == stemOrEngine || r.Engine == stemOrEngine);
+
+        // The tester's path on 2026-11-01: Cores as a big-screen sheet, A on its Search box, then B, as Mistress routes the pad - see EmuSen_Settings_Reference.md §4.45.6.
+        [Fact]
+        public Task B_on_the_big_screen_search_keyboard_erases_then_puts_it_away() => Session.Dispatch(() =>
+        {
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            try
+            {
+                var app = new AppSettings { RomDirectory = Path.Combine(_root, "Roms"), BigScreen = true };
+                Directory.CreateDirectory(app.RomDirectory);
+                app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
+                app.Save();
+                var window = new MainWindow { Width = 1280, Height = 800 };
+                window.Show();
+                Settle(window);
+                typeof(MainWindow).GetMethod("ShowCores", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+                Settle(window);
+                var cores = Assert.IsType<CoresWindow>(Sheets(window).Current);
+                cores.Pane.Poll();
+                Settle(window);
+                TextBox search = cores.Pane.GetVisualDescendants().OfType<TextBox>().First(t => AutomationProperties.GetName(t) == "Search");
+                search.Focus();
+
+                Pad(window, UiButton.Accept);
+                OnScreenKeyboard keyboard = Assert.IsType<OnScreenKeyboard>(OnScreenKeyboard.OpenOver(window));
+                Assert.Same(search, keyboard.Target);
+                Pad(window, UiButton.Accept);
+                Assert.Equal(1, search.Text?.Length);
+                Pad(window, UiButton.Back);
+                Assert.Equal("", search.Text ?? "");
+                Assert.NotNull(OnScreenKeyboard.OpenOver(window));
+                Pad(window, UiButton.Back);
+                Assert.Null(OnScreenKeyboard.OpenOver(window));
+                Assert.Same(cores, Sheets(window).Current);
+                window.Close();
+            }
+            finally { ConfigStore.OverrideDirectory = null; }
+        }, default);
+
+        private static void Pad(MainWindow window, params UiButton[] buttons)
+        {
+            MethodInfo command = typeof(MainWindow).GetMethod("OnPadCommand", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            foreach (UiButton button in buttons) command.Invoke(window, new object[] { button });
+        }
 
         [Fact]
         public Task The_runtimes_cores_and_libretros_are_listed_together_with_the_console_default() => Session.Dispatch(() =>

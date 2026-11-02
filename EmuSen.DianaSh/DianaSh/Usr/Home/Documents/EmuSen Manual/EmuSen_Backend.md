@@ -9488,7 +9488,7 @@ reel's newest moment is frame 42 and it holds one moment more than before; a sec
 42 succeeds; and with rewind off a load leaves the reel empty. Mistress's `PauseCardTests` holds the same through the
 card's Load on the Rust runtime: the oldest moment from before the load is still held after it.
 
-## 37. A snapshot longer than a frame stops rewind's capture, 2026-11-01
+## 38. A snapshot longer than a frame stops rewind's capture, 2026-11-01
 
 **What was measured** [M, 2026-11-01, the desktop, RX 6800, Mistress's real window in big-screen mode, a sandbox copy of
 the published tree at 3351e722d, Jak and Daxter (USA, Rev 1) on PCEE2 v2.9.138 through the BIOS]. Mistress showed 34 to

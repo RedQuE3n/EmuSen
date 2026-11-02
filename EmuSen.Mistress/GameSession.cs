@@ -42,7 +42,7 @@ namespace EmuSen.Mistress
         public string? GamePath { get; }
         public IReadOnlyList<PadAxis> Axes { get; }
         public double FrameRateHz { get; }
-        // Why no history is kept, read again each time: the runtime stops capture once a snapshot takes longer than a frame - see EmuSen_Backend.md §37.
+        // Why no history is kept, read again each time: the runtime stops capture once a snapshot takes longer than a frame - see EmuSen_Backend.md §38.
         public string? RewindWithheldNow()
         {
             using JsonDocument info = JsonDocument.Parse(Crystal.Info());

@@ -278,7 +278,7 @@ pub struct Rewind {
     moments: VecDeque<Moment>,
     thumbnail_bytes: i64,
     worker: Option<Worker>,
-    /// Why capture stopped for the session: a snapshot that took longer than a frame (EmuSen_Backend.md §37).
+    /// Why capture stopped for the session: a snapshot that took longer than a frame (EmuSen_Backend.md §38).
     withheld: Option<String>,
 }
 

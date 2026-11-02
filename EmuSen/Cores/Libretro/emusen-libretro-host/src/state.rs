@@ -10,7 +10,7 @@ pub const HEADER_VERSION: u16 = 2;
 pub const STATE_VERSION: u32 = 1;
 pub const HEADER: usize = 112;
 const FLAG_PLATFORM: u16 = 1;
-/// A snapshot kept in memory: the digest's place holds the process's mark, and no digest is made (EmuSen_Backend.md §37).
+/// A snapshot kept in memory: the digest's place holds the process's mark, and no digest is made (EmuSen_Backend.md §38).
 const FLAG_SNAPSHOT: u16 = 2;
 
 /// Why a state is not this machine's, each answered with its own status.

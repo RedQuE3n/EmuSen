@@ -17,7 +17,7 @@ namespace EmuSen.Mistress.Views
         {
             Sheets.MenuHintsFor = SheetMenuHints;
             Sheets.MenuFrameFor = FramedAsMenu;
-            // A tool presented as a screen covers the status bar too (EmuSen_Interface.md §14.2).
+            // A tool presented as a screen covers the status bar too (EmuSen_Interface.md §15.2).
             Sheets.PresentedChanged += () => StatusBar.IsVisible = !Sheets.IsScreenShown;
         }
 

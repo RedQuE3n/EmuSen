@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.Mistress
             pane.BigScreenTable.Select(row);
             pane.FocusRole(EmuSen.LunaP.Controls.AdaptiveRole.Content);
             Settle(main);
-            // A on a core waiting for approval asks the question as the frame's card, with the hash in its words (EmuSen_Interface.md §14.5, §14.6).
+            // A on a core waiting for approval asks the question as the frame's card, with the hash in its words (EmuSen_Interface.md §15.5, §15.6).
             Assert.Equal("Approve…", pane.Hints[0].Label);
             pad.A();
             Settle(main);

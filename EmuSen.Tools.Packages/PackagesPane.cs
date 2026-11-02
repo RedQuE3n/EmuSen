@@ -64,7 +64,7 @@ namespace EmuSen.Tools.Packages
             _zip = new LunaAction("Zip", () => MarkSelected(PackagesPlan.Zip.Key, PackagesPlan.MakeZip.Key)) { HelpText = "Marks the chosen package to be written as one zip." };
             _convert = new LunaAction("Convert to CHD", () => MarkSelected(PackagesPlan.Convert.Key)) { HelpText = "Marks the chosen disc to be converted to CHD." };
             _refresh = new LunaAction("Refresh", Refresh) { HelpText = "Lists the library and its packages again." };
-            // On the big screen A opens a package's page, X marks and Start applies; Refresh is a row of the List card (EmuSen_Interface.md §15.1).
+            // On the big screen A opens a package's page, X marks and Start applies; Refresh is a row of the List card (EmuSen_Interface.md §16.1).
             SetToolActions([_make, _check, _zip, _convert, LunaAction.Separator(), _refresh], bigScreenButtons: []);
             SetListActions([_refresh]);
             SetFilters([new AdaptiveSection("all", "All"), new AdaptiveSection("packaged", "Packaged"), new AdaptiveSection("unpackaged", "Not yet"), new AdaptiveSection("problems", "Problems")]);
@@ -102,7 +102,7 @@ namespace EmuSen.Tools.Packages
 
         private string StateText(PackageRow row) => OutcomeOf(row) is { } said ? said : PackagesWords.Status(row);
 
-        // The status words' colour, from one owner with the words (EmuSen_Interface.md §14.3).
+        // The status words' colour, from one owner with the words (EmuSen_Interface.md §15.3).
         private static string? StateTone(PackageRow row) => row.Problem ? "LunaAttention" : row.Packaged ? "LunaSuccess" : "LunaMuted";
 
         private static bool Belongs(PackageRow row, string section) => section switch

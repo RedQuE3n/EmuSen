@@ -37,7 +37,7 @@ namespace EmuSen.Tools.Scraper
         {
             Title = "Scraper";
             HasSearch = true;
-            // The detail, a game's media as pictures, stands beside the list (EmuSen_Interface.md §15.1).
+            // The detail, a game's media as pictures, stands beside the list (EmuSen_Interface.md §16.1).
             DetailPlacement = AdaptiveDetailPlacement.Beside;
             ContentShare = 0.6;
             Header = new AdaptiveHeader("SCRAPER");

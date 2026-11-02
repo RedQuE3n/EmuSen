@@ -480,18 +480,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             var entries = (List<PadMenuEntry>)typeof(MainWindow).GetField("_padMenuEntries", Hidden)!.GetValue(window)!;
             window.GetControl<ListBox>("LibraryList").SelectedIndex = -1;
             Invoke(window, "OpenPadMenu");
-            Assert.DoesNotContain(entries, e => e.Text() == "Scrape This Game...");
+            Assert.DoesNotContain(entries, e => e.ShowsCover);
             Invoke(window, "ClosePadMenu");
 
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             Invoke(window, "OpenPadMenu");
-            entries.Single(e => e.Text() == "Scrape This Game...").Accept();
+            entries.Single(e => e.ShowsCover).Submenu!().Single(e => e.Text() == "Scrape This Game...").Accept();
             RunEnds(window);
             Assert.Equal("Scrape This Game", _asked.Single().Title);
             Assert.Single(_server.JeuInfos);
 
             Invoke(window, "OpenPadMenu");
-            entries.Single(e => e.Text() == MainWindow.LibraryMenu).Submenu!().Single(e => e.Text() == "Scrape Games...").Accept();
+            entries.Single(e => e.Text() == MainWindow.ToolsMenu).Submenu!().Single(e => e.Text() == MainWindow.ScraperRow).Accept();
             Pump(100);
             // Scrape Games opens the Scraper, which gathers the choices (EmuSen_LibraryTools.md §9.3).
             ScraperWindow scraper = window.OwnedWindows.OfType<ScraperWindow>().Single();

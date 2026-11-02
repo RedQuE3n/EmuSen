@@ -55,7 +55,7 @@ namespace EmuSen.Tools.Cores
             HasSearch = true;
             SearchHint = "Search cores";
             RowKey = r => r.Key;
-            // The screen of EmuSen_Interface.md §14: the pane beside the list, the consoles on the shoulders, the states as the List card's filter, one action per row on A and the rest on X.
+            // The screen of EmuSen_Interface.md §15: the pane beside the list, the consoles on the shoulders, the states as the List card's filter, one action per row on A and the rest on X.
             DetailPlacement = AdaptiveDetailPlacement.Beside;
             ContentShare = 0.6;
             SectionWord = "Console";
@@ -113,12 +113,12 @@ namespace EmuSen.Tools.Cores
 
         public string? OutcomeOf(CoreRow row) => _outcomes.TryGetValue(row.Key, out string? said) ? said : null;
 
-        // The status column: a run's outcome for the row while one is shown, else the words of EmuSen_Interface.md §14.3, each with its colour.
+        // The status column: a run's outcome for the row while one is shown, else the words of EmuSen_Interface.md §15.3, each with its colour.
         private string StateText(CoreRow row) => OutcomeOf(row) is { Length: > 0 } said ? char.ToUpperInvariant(said[0]) + said[1..] : CoresWords.Status(row);
 
         private string? StateTone(CoreRow row) => OutcomeOf(row) is { } said ? (said.StartsWith("refused", StringComparison.Ordinal) ? "LunaError" : "LunaMuted") : CoresWords.Tone(row);
 
-        // The row's one action on the big screen, named in the help bar; none while a job runs (EmuSen_Interface.md §14.5).
+        // The row's one action on the big screen, named in the help bar; none while a job runs (EmuSen_Interface.md §15.5).
         private LunaAction? RowAction(CoreRow row)
         {
             if (IsRunning || _job is not null) return null;
@@ -135,7 +135,7 @@ namespace EmuSen.Tools.Cores
             if (SetMark(row, key)) OpenPlan();
         }
 
-        // The row's page under X: everything else it offers, each where it applies (EmuSen_Interface.md §14.5).
+        // The row's page under X: everything else it offers, each where it applies (EmuSen_Interface.md §15.5).
         private IReadOnlyList<LunaAction> RowPage(CoreRow row)
         {
             var rows = new List<LunaAction>();
@@ -460,7 +460,7 @@ namespace EmuSen.Tools.Cores
             }
             string file = row.IsLibretro ? $"{row.Stem}_libretro" : Path.GetFileName(row.Library ?? row.Name);
             string message = CoreApproval.Message(row.Name, file, row.Authors, row.Licence, row.Consoles, sha, downloaded: row.IsLibretro);
-            // On the big screen the question is the frame's card (EmuSen_Interface.md §14.6); on the desktop the host's dialog.
+            // On the big screen the question is the frame's card (EmuSen_Interface.md §15.6); on the desktop the host's dialog.
             bool yes = Form == AdaptiveForm.BigScreen ? await Ask($"Approve {row.Name}?", message, "Approve", "Not Now") : await _host.Confirm(CoreApproval.Title, message);
             if (!yes) return false;
             try { _runtime.Approve(sha); }
@@ -529,7 +529,7 @@ namespace EmuSen.Tools.Cores
             ShowHeader();
         }
 
-        // The header's facts: the counts that need the player first, then the catalogue's date (EmuSen_Interface.md §14.2).
+        // The header's facts: the counts that need the player first, then the catalogue's date (EmuSen_Interface.md §15.2).
         private void ShowHeader()
         {
             var facts = new List<string> { $"{Rows.Count} cores", $"{Rows.Count(r => r.Installed)} installed" };
@@ -574,7 +574,7 @@ namespace EmuSen.Tools.Cores
             return line;
         }
 
-        // The pane: the core in sentences, nothing raw, each fact once (EmuSen_Interface.md §14.4); the raw facts are the Details page.
+        // The pane: the core in sentences, nothing raw, each fact once (EmuSen_Interface.md §15.4); the raw facts are the Details page.
         private Control DetailOf(CoreRow row)
         {
             var panel = new StackPanel { Spacing = 8, Name = "CoresDetail" };
@@ -618,7 +618,7 @@ namespace EmuSen.Tools.Cores
         // "a PlayStation 2 BIOS", "an Atari BIOS": the firmware's description with its article.
         private static string Article(string words) => (words.Length > 0 && "aeiouAEIOU".Contains(words[0]) ? "an " : "a ") + words;
 
-        // The Details page: every fact as the tool holds it (EmuSen_Interface.md §14.5).
+        // The Details page: every fact as the tool holds it (EmuSen_Interface.md §15.5).
         private Control DetailsOf(CoreRow row)
         {
             var panel = new StackPanel { Spacing = 6, Name = "CoresDetails" };

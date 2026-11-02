@@ -10,7 +10,7 @@ namespace EmuSen.Tools.Cores
         // A libretro core's file stem, or a runtime core's engine name; it names the row across refreshes.
         public required string Key { get; init; }
         public required string Name { get; init; }
-        // A libretro core's name as its .info lists it, where that differs from the name shown (EmuSen_Interface.md §14.3).
+        // A libretro core's name as its .info lists it, where that differs from the name shown (EmuSen_Interface.md §15.3).
         public string? ListedAs { get; init; }
         public required string Source { get; init; }
         // The core tool's state word (installed, update, available, unsupported, added), or for a runtime core "built in" or its trust.

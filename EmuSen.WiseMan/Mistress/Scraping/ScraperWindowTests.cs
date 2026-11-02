@@ -152,7 +152,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 ("nometadata", new[] { "ls", "--missing", "metadata" }), ("missing", new[] { "ls", "--missing", "any" }), ("system:snes", new[] { "ls", "--system", "snes" }),
             })
             {
-                // The criteria are the list's filters and the systems its sections (EmuSen_Interface.md §15.1); a system is asked with the filter at All.
+                // The criteria are the list's filters and the systems its sections (EmuSen_Interface.md §16.1); a system is asked with the filter at All.
                 if (section.StartsWith("system:", StringComparison.Ordinal))
                 {
                     Assert.True(pane.SelectFilter("all"));

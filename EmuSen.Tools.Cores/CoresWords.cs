@@ -29,7 +29,7 @@ namespace EmuSen.Tools.Cores
 
         public static string Consoles(CoreRow row) => row.Consoles.Count > 0 ? string.Join(", ", row.Consoles) : "—";
 
-        // The status in the list, a glyph beside a word in Title Case, one owner with its colour (EmuSen_Interface.md §14.3).
+        // The status in the list, a glyph beside a word in Title Case, one owner with its colour (EmuSen_Interface.md §15.3).
         public static string Status(CoreRow row) => row.IsDefault ? "● Default"
             : row.AwaitsApproval ? "⚠ To approve"
             : row.Trust == "needs_refresh" ? "⚠ Needs refresh"

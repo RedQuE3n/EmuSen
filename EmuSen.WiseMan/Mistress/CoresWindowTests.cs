@@ -104,7 +104,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "PlayStation 2" }, Row(pane, "pcsx2").Consoles);
             Assert.True(Row(pane, "ExtraPS2").AwaitsApproval);
             Assert.Contains(pane.Sections, s => s.Key == "console:PlayStation 2");
-            // The states are the List card's filter, the consoles the sections (EmuSen_Interface.md §14.5).
+            // The states are the List card's filter, the consoles the sections (EmuSen_Interface.md §15.5).
             Assert.True(pane.SelectFilter("approval"));
             Assert.Equal(new[] { "ExtraPS2" }, pane.Shown.Select(r => r.Engine));
             Assert.True(pane.SelectFilter("updates"));

@@ -11,11 +11,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public WindowLookPngTheoryAttribute()
         {
             if (Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_PNG") != "1")
-                Skip = "Pictures the tool screens at the mockups' sizes under EMUSEN_WINDOW_FIT_PNG; set EMUSEN_BIGPICTURE_PNG=1 - see EmuSen_Interface.md §14.2";
+                Skip = "Pictures the tool screens at the mockups' sizes under EMUSEN_WINDOW_FIT_PNG; set EMUSEN_BIGPICTURE_PNG=1 - see EmuSen_Interface.md §15.2";
         }
     }
 
-    // The four tools as screens at 1280 by 800 and 1920 by 1080, the mockups' sizes, audited and pictured beside them - see EmuSen_Interface.md §14.2.
+    // The four tools as screens at 1280 by 800 and 1920 by 1080, the mockups' sizes, audited and pictured beside them - see EmuSen_Interface.md §15.2.
     public partial class WindowFitAuditTests
     {
         public static TheoryData<string, int, int> ToolScreenCases()

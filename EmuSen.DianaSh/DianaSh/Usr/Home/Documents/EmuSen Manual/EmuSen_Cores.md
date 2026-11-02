@@ -760,7 +760,7 @@ big-screen audit's ellipsis).
 
 ### 9.2 C6, the screen (2026-11-01)
 
-The window of §2 and §9.1 was redesigned on 2026-11-01 as a screen of the unified interface: `EmuSen_Interface.md` §14
+The window of §2 and §9.1 was redesigned on 2026-11-01 as a screen of the unified interface: `EmuSen_Interface.md` §15
 is the design, §14.10 the build. The layout of §2.1 and §2.2 is superseded by it where they differ: the state filters
 are the List card's, not sections; the detail stands beside the list in sentences rather than on a page; A does the
 row's one action and X opens its page; the approval is the frame's question card on the big screen. The data model

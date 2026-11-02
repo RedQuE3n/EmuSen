@@ -177,7 +177,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(["psx/Lost Disc.cue"], pane.Rows.Where(r => r.Kind == Finding.Unrecognised).Select(r => r.Source));
             Assert.Equal(7, pane.Rows.Count);
 
-            // Hidden through the pad's A, which asks first, then shown again the same way; only the records change (EmuSen_Interface.md §15.1).
+            // Hidden through the pad's A, which asks first, then shown again the same way; only the records change (EmuSen_Interface.md §16.1).
             pane.Form = AdaptiveForm.BigScreen;
             Dispatcher.UIThread.RunJobs();
             LibraryRow smc = pane.Rows.Single(r => r.Kind == Finding.SameDump && r.Source.EndsWith(".smc", StringComparison.Ordinal));

@@ -11461,7 +11461,7 @@ shows what a row will act on before A is pressed.
   the pad menu's list, whose detail is the context pane (§48.4) and whose header is the title row.
 - The right 60 per cent keeps the paused frame **dimmed, not blurred**: the card's own scrim (`LunaScrim`, black at 55
   per cent) is the only thing over it, and the window's `BlurBackdrop` stays off while the card shows. The library's menu
-  keeps the blur.
+  kept the blur until U3 replaced it with the Home card (§49).
 - The title row: the game's cover (the library's own, §4.60, where one is found) and the game's name on one line in
   Barlow Condensed at 32, shrinking to 0.55 of that and never wrapping. A submenu is titled by its name with the way
   back under it; a question by itself with its sentence under it.
@@ -11562,9 +11562,9 @@ changed nothing. `EmuSen_Backend.md` §36 specifies it; the C# implementation is
 
 ### 48.9 The library menu
 
-It keeps its centred, blurred panel, ES-DE's grammar and its rows, gains the paused frame beside its *Back to <game>*
-row (§48.4), and never shows an in-game row. One list, two page sets, two looks: `ApplyBigMenuLook` puts the list in the
-card over a game and in the centred panel over the library.
+As built in U2 it kept its centred, blurred panel, ES-DE's grammar and its rows, gained the paused frame beside its
+*Back to <game>* row (§48.4), and never showed an in-game row. Retired in U3 (2026-11-01): the Home card (§49) takes its
+place on the same Card form, and the centred panel, its page set and its Back row are deleted.
 
 ### 48.10 Kept, and how it is held
 
@@ -11586,3 +11586,102 @@ slot test and both `PauseCardSave` recordings).
 
 - The Guide chords' switch has no row until Settings is rebuilt (`EmuSen_Interface.md` §2.7, U6).
 - The handheld check of Steam's chords by hand (§48.7).
+
+---
+
+## 49. The Home card: the library's menu as a card (2026-11-01)
+
+*Design approved by the tester on 2026-11-01 ("perfect": Start over an ES-DE theme opens EmuSen's left card over the
+dimmed theme); built in stage U3 of the unified interface (`EmuSen_Interface.md` §2.3, §2.10, §10) on the Card form that
+U2 built for the Pause Card (§48, LunaP §207). No second implementation: the same `PadCard`, list and pane.*
+
+### 49.1 The first page
+
+In the order of `EmuSen_Interface.md` §2.3, each row only where it applies:
+
+1. **Continue**, while a game is suspended (the library shown over a kept session, §4.18). A resumes it.
+2. **The game in hand**, named by the game: the themed gamelist's selected game, or the sidebar library's; a folder or
+   a collection is no game. A opens its page (§49.3); Y makes it a favourite.
+3. **Search**, where the view has one: the themed gamelist's search bar, or the sidebar's box, each with the on-screen
+   keyboard as before. The themed system view has none.
+4. **Start a Console**, only where some console starts empty (`RuntimeCatalog.ConsolesThatStartEmpty`).
+5. **Tools ▸**: Scraper, Packages, Library Manager and Cores with a line each in the pane (§49.4), then Compressed
+   Discs, Collections (themed views), Theme Settings (big screen) and Shell.
+6. **Settings ▸**: the settings entries as they were, until U6.
+7. **Power ▸**: Full Screen and Big Picture on the desktop, Exit Big Picture in big picture except under Steam's Game
+   Mode, and Quit EmuSen… with No first and the sentence *The game closes, then EmuSen.* while a game is suspended.
+
+A divider sits above Tools and above Power. The card is titled *Home*; Power's page carries EmuSen's version as its
+footer, where the old EmuSen page carried it.
+
+### 49.2 Layout and grammar
+
+The Card form exactly as §48.2: the panel at the left at 40 per cent over the scrim, the library **dimmed, not
+blurred**, the theme untouched underneath, its colours never read into the card (`EmuSen_Interface.md` §7). While the
+card shows, the theme's help bar is hidden and the card's is the one on screen; it comes back as the card closes. A
+chooses, B goes back a page and closes the first, Start closes, and **Y makes the game in hand a favourite** on the first
+page and on the game's page, where the help bar lists it; elsewhere Y does nothing. The same card opens on the desktop
+when a pad opens the menu, as §2.3 asks; the desktop's bordered box remains only for the in-game menu on the desktop.
+
+### 49.3 The game's page
+
+The game's options exactly as its options menu lists them (`AddGameEntries`, §4.59), with two differences. The
+favourite is Y's, listed in the help bar and shown in the pane as *· Favourite* after the console, rather than a row;
+and the television standard, a choice on the options sheet, is a row stepped with Left and Right and kept at once, both
+forms going through one `SetStandard`. There is no Play row: A on the game in the list plays it (`EmuSen_Interface.md`
+§0.1). Both were measured against the fit audit on 2026-11-01: with Play and the favourite as rows the page held nine
+rows for a Super Nintendo game, ten with a cover chosen from another game, and on the desktop at 1280 × 800, where the
+menu and status bars take 54 pixels, the ninth ran past the card. Without them it holds seven, eight with that cover.
+The themed gamelist's own rows (Jump To, Sort, Filter, Search) stay on Select. U4's game page replaces this page.
+
+### 49.4 The pane
+
+What the focused row holds: on Continue, the paused frame at up to 400 × 300 design units, the game's name and *Paused
+N min ago* (*just now* under a minute, then minutes, hours, days, from the moment the library was shown over the game);
+on the game, its cover where the library has one, its name and its console; on Tools, the four tools with a line each;
+on a tool's row, that tool's line. The lines:
+
+| Tool | Line | Source |
+|---|---|---|
+| Scraper | *Scraping n of m* during a run, else *N games missing media* | the run's progress; the Scraper window's own `scrape ls` of its Missing Media section |
+| Cores | *N cores waiting for approval*, else *N cores, none waiting for approval* | the runtime's `cores` listing read through `CoreRow.OfRuntime`, trust `needs_approval` |
+| Packages | a description | no surface gives a count without listing every file (§49.6) |
+| Library Manager | a description | likewise (§49.6) |
+
+The counts are asked off the interface thread as the card opens, at most once a minute, and the pane is drawn again
+when they come; until then the Scraper and Cores lines read as descriptions.
+
+### 49.5 What was retired
+
+The centred, blurred `PadMenuBig`, the Main Menu's page set (`MainMenuRows`, `LibraryRows`, `EmuSenRows`), its help
+entries, its *Back to <game>* row with the paused frame, and `ApplyBigMenuLook`'s second placement are deleted. The
+slot card beside the desktop's box serves the desktop's in-game menu alone.
+
+### 49.6 Left, and why
+
+- **Sleep and shut down.** Decided 2026-11-01 that they appear only where EmuSen is the device's shell. Nothing in
+  EmuSen knows that today, nor offers a power call, so Power does not show them. Decided 2026-11-01 by the tester: they
+  stay off; a platform surface saying EmuSen is the session's shell, with the power calls beside it, is built when
+  EmuSen ships as a session shell, not before.
+- **Packages and Library Manager counts.** Packages' updates come from `pkg-ls` and suspect dumps from `rom-check`,
+  each a job over every file of the library; running one on every Start would be wrong. Decided 2026-11-01 by the
+  tester: the platform library keeps a summary from the last listing for the card to read, built with U7 (the tools'
+  tiles on Home, `EmuSen_Interface.md` §10). Until then their lines are descriptions.
+- **The game's page.** Decided 2026-11-01 by the tester: no Play row and the favourite on Y (§49.3), and a long name
+  cut with an ellipsis in the game's row, the pane showing it whole; U4's game page revisits both.
+
+### 49.7 How it is held
+
+`HomeCardTests` (Continue's pane and A, the game's name and Y, the tools' lines, Power in three sessions, the
+paused time); `PadMenuTests` (the first page on the desktop and over a theme); `EsdeMenusTests` (the card at the left,
+its bar, the theme dimmed and not blurred with nothing drawn outside the panel but the scrim, F4, the desktop);
+`DesktopGameOptionsTests` and `GameCropTests` (the game's page); the pad menu's fit cases, which now audit the card on
+the desktop too; and the card's states, recorded in `EmuSen_InterfaceSpec.md` §6.3.19.
+
+**Seeded faults (2026-11-01).** Five faults were put in and taken out again, each caught: the backdrop blurring under
+the Home card (`EsdeMenusTests`' dimmed case and F4 case, `HomeCardTests`' Continue case, `PadMenuTests`' first-page
+case); Continue shown only with no game suspended (`HomeCardTests`, `PadMenuTests` and 19 of the card's recordings); Y
+a favourite on every page (`HomeCardTests`' Y case, `PadMenuTests`' themed case, 11 recordings whose help bar gained
+Favourite); Exit Big Picture offered in Steam's Game Mode (`HomeCardTests`' Power theory and the handheld recording);
+and the Cores line counting every core as waiting (`HomeCardTests`' tools case and both `HomeCardTools` recordings).
+

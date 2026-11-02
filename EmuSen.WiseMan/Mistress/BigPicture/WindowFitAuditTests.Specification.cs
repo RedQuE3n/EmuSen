@@ -264,7 +264,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 .Concat(WindowFitScrapeAuditTests.Cases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Concat(ViewCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Concat(PauseCardCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
-                .Concat(HomeCardCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Select(c => $"{c.Item1} {c.Item2} {c.Item3}").ToHashSet();
             var recorded = Directory.EnumerateFiles(InterfaceSpecFiles.Folder, "*.spec").Select(f => SpecDocument.Parse(File.ReadAllText(f)))
                 .Select(d => $"{d["case"]} {d["size"]}").ToHashSet();

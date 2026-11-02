@@ -17,7 +17,7 @@ using SDL3;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // Every page of the pad menu, its submenus and its questions, at 1280 by 800 and 1920 by 1200, on the desktop and in big picture; the Home card on both, the Pause Card in big picture - see EmuSen_Settings_Reference.md §4.69.8 and EmuSen_BigPicture.md §49.
+    // Every page of the pad menu, its submenus and its questions, at 1280 by 800 and 1920 by 1200, on the desktop and as the big panel - see EmuSen_Settings_Reference.md §4.69.8.
     public partial class WindowFitAuditTests
     {
         public static TheoryData<string, bool, int, int> PadMenuCases()
@@ -90,25 +90,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             pad.Down((to - Math.Max(PadMenu.Selected(w), 0) + count) % count);
         }
 
-        // The page shown: the fit audit over the menu, every card row's words inside their parts, every subtitle line inside the panel, no rows past it, and the slot's card clear of the box and the help.
+        // The page shown: the fit audit over the menu, every big row's words inside their parts, every subtitle line inside the panel, no rows past it unless the title takes two lines, and the slot's card clear of the panel and the help.
         private List<string> PadMenuPageFaults(MainWindow window, bool bigScreen, string name)
         {
             Settle(window);
-            bool onCard = PadMenu.Card(window).IsVisible;
-            Control root = onCard ? window.GetControl<Control>("PadMenuPanel") : window.GetControl<Control>("PadMenuDesk");
-            var faults = FitAudit.Check(root, null, smallest: onCard ? FitAudit.SmallestText : 0).Select(f => $"{name}: {f}").ToList();
+            Control root = bigScreen ? window.GetControl<Control>("PadMenuPanel") : window.GetControl<Control>("PadMenuDesk");
+            var faults = FitAudit.Check(root, null, smallest: bigScreen ? FitAudit.SmallestText : 0).Select(f => $"{name}: {f}").ToList();
             Rect area = new(window.GetControl<Control>("PadMenuPanel").Bounds.Size);
             Rect box;
             Rect help = default;
-            if (onCard)
+            if (bigScreen)
             {
                 MenuPanel panel = PadMenu.Big(window);
                 double u = MenuPanel.GetScale(panel);
                 box = panel.PanelBounds;
                 help = panel.HelpBar.Bounds;
-                // The card's title row is one line by design, shrunk then cut, the name whole in the library (EmuSen_BigPicture.md §48.2).
-                if (panel.TitleLines > 1) faults.Add($"{name}: the card's title wraps");
-                if (panel.ScrollIndicator != MenuScrollIndicator.None) faults.Add($"{name}: rows run past the panel");
+                // The card's title row is one line by design, shrunk then cut, the name whole in the library (EmuSen_BigPicture.md §48.2); the centred menu wraps instead.
+                bool onCard = ReferenceEquals(panel, PadMenu.Card(window).CardPanel);
+                if (panel.IsTitleCut && !onCard) faults.Add($"{name}: title cut: '{panel.Title}'");
+                if (onCard && panel.TitleLines > 1) faults.Add($"{name}: the card's title wraps");
+                if (panel.ScrollIndicator != MenuScrollIndicator.None && panel.TitleLines <= 1) faults.Add($"{name}: rows run past the panel under a one-line title");
                 GlyphTypeface face = MenuPanel.GetFontPath(panel) is { } path && FontFiles.Load(path) is { } f ? f : FontFiles.Default;
                 foreach (string line in (panel.Subtitle ?? "").Split('\n').Where(l => l.Length > 0))
                 {
@@ -132,7 +133,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 if (PadMenu.List(window).GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer && viewer.Extent.Height > viewer.Viewport.Height + 0.5)
                     faults.Add($"{name}: the desktop's rows scroll, {viewer.Extent.Height:F0} in {viewer.Viewport.Height:F0}");
             }
-            if (onCard && PadMenu.Pane(window) is { Child: not null } pane)
+            if (bigScreen && (PadMenu.Card(window).IsVisible ? PadMenu.Pane(window) : PadMenu.Big(window).Pane) is PauseCardPane { Child: not null } pane)
             {
                 MenuPanel panel = PadMenu.Big(window);
                 Rect drawn = new(pane.TranslatePoint(default, panel) ?? default, pane.Bounds.Size);

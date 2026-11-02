@@ -536,9 +536,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             window.ScrapeStatusShown!.Close();
 
             Invoke(window, "OpenPadMenu");
-            PadMenuEntry row = PadMenu(window).Single(e => e.Text() == MainWindow.ToolsMenu).Submenu!().Single(e => e.Text() == MainWindow.ScraperRow);
-            Assert.Equal("Scraping 0 of 3", row.Status!());
-            row.Accept();
+            PadMenu(window).Single(e => e.Text() == MainWindow.LibraryMenu).Submenu!().Single(e => e.Text() == "Scraping (0 of 3)...").Accept();
             Invoke(window, "ClosePadMenu");
             Pump(100);
             // The pad menu's row opens the Scraper, whose apply bar carries the run while it is open (EmuSen_LibraryTools.md §9.3).
@@ -595,7 +593,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.True(window.ScrapeRunning);
 
             pad.Start();
-            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, MainWindow.ScraperRow, exact: true);
+            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scraping (");
             ScraperWindow scraper = Assert.IsType<ScraperWindow>(Sheets(window).Current);
             PumpUntil(() => scraper.Pane.Following, "the Scraper to follow the run: " + scraper.Pane.Notice);
         });

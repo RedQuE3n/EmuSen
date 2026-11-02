@@ -105,10 +105,5 @@ namespace EmuSen.Mistress.Input
         // While this row is on, the Pause Card's pane shows the reel's newest moments, or the paused frame (EmuSen_BigPicture.md §48.4).
         public bool ShowsReel { get; init; }
         public bool ShowsFrame { get; init; }
-
-        // While this row is on, the Home card's pane shows the game's cover, every tool's status, or this row's own status line (EmuSen_BigPicture.md §49.4).
-        public bool ShowsCover { get; init; }
-        public bool ShowsTools { get; init; }
-        public Func<string>? Status { get; init; }
     }
 }

@@ -3102,6 +3102,40 @@ the reuse jobs. "Libraries ready" is when the last of them finished, counted fro
 - **The tests are now the critical path.** With nothing to build, a run still takes about 30 minutes, almost all of
   it the WiseMan jobs' 24–32 minutes of tests. That is the next place to look.
 
+### 28.9 The same key on one machine: a core built once for every checkout (2026-11-01)
+
+*Decided 2026-11-01 by the tester*, from the review of that day: every checkout's first `dotnet build` ran thirteen `cargo build` steps before compiling any C#. Two logged examples took 4 min 38 s and 6 min 32 s with a warm sccache; a cold Sapphire alone took 10.5 min. Nineteen checkouts were created between 24 October and 1 November, seven of them on the last day.
+
+`EmuSen.csproj`'s `BuildRustCore` now asks `library_key.py local <crate folder> <name> <target> <profile> <pgo>` for a key before it runs cargo.
+
+- **The key** is §28.3's lines with three changes, so an entry describes exactly what cargo would compile here:
+  1. The toolchain line is `rustc -V` run in the crate's folder. It never runs `rustup toolchain install`, which would reach the network and move `stable`.
+  2. Three lines are added: the profile; the PGO profile's hash, or `off`; and the SHA-256 of each cargo configuration file a build there reads (every `.cargo/config.toml` from the crate's folder up, then `~/.cargo/config.toml`), taken by content in cargo's order of reading. The first version named each file by its path, so two checkouts of one commit gave MercuryRT, which has its own `.cargo/config.toml`, two keys. The fresh-checkout measurement below found that.
+  3. The answer is `none` when any input folder or file has an uncommitted or untracked change, when §28.4's check finds an undeclared input, or when `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS`, `CARGO_PROFILE_*` or `CARGO_BUILD_*` is set.
+
+  The git ids come from `HEAD`, so the clean-tree condition is what makes them describe the files on disk.
+- **A hit** copies `~/.cache/emusen/cores/<name>-<target>-<profile>-<key>/<library>` into the crate's target folder under `obj/`, and cargo is not run.
+- **A miss** builds as before, then stores the result. The library is copied to a unique name and renamed, so a build in another checkout never copies half a file. Only the newest four entries of each library, target and profile are kept.
+- **Off** with `-p:EmuSenCoreReuse=false`, under CI (`CI=true`, where §28.5's artefacts already do this job), and on Windows. A machine without `python3` gets no key and builds as before.
+- **Not covered:** the platform library. Its key is `none` here as in CI, because §28.4's check reports literals such as `names .` in five of its files. The conformance runner, rebuilt on every build that writes sidecars, is not covered either.
+
+**Measured on 2026-11-01** on the desktop, `dotnet build EmuSen.WiseMan` at CPU weight 20 with cargo at six jobs, and sccache warm for the dependencies:
+
+| Build | Time | Load (1 min) before → after | Cores copied |
+|---|---|---|---|
+| `core-reuse`'s first build, cache empty | 284 s | 1.8 → 5.6 | 0 of 12 crates; 8 stored |
+| A new checkout at the same commit, keyed by path | 150 s | 5.6 → 6.7 | 7; MercuryRT missed |
+| A new checkout, keyed by content | 65 s | 7.2 → 8.3 | 8 |
+
+The last row also had sccache warm from the row before it for the crates that are never copied, so 150 s is the fairer figure for a first build that copies seven or eight cores. Every copied library was byte-identical to the one built in `core-reuse`. Four crates still build every time:
+
+- the platform library and the libretro proxy, host and runner, for §28.4's `names .` warnings;
+- MarsRT, because §28.4's `EXTRA` still names `EmuSen/Cores/Nintendo/Mars - N64/Rdp/Gpu/Shaders`, a folder removed with the C# Mars core. `git rev-parse` fails on it, so CI has computed no key for MarsRT, and has built it on every run, since then.
+
+Libraries rebuilt in another checkout differ in bytes from the first build, because the line tables carry the checkout's absolute paths. That is why a copy is checked against the key rather than by comparing files.
+
+**Risk.** An entry is wrong only if the key misses an input that changes what cargo builds. That is the exposure CI's reuse has accepted since 2026-10-16, narrowed here by the clean-tree condition and by the configuration lines.
+
 ## 29. The Mac mini as the Apple Silicon runner, 2026-10-16
 
 The Apple Silicon jobs of `rust-cores.yml` (the shared crates, each library's `osx-arm64` job and WiseMan's) run

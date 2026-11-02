@@ -18,13 +18,14 @@ using EmuSen.Mistress.Input;
 
 namespace EmuSen.Mistress.Views
 {
-    // The pad's menu as pages: the game's menu or the Home card, the submenus under them, and a yes-or-no before anything that ends a game - see EmuSen_Settings_Reference.md §4.69.8.
+    // The pad's menu as pages: the game's menu or the main menu, the submenus under them, and a yes-or-no before anything that ends a game - see EmuSen_Settings_Reference.md §4.69.8.
     public partial class MainWindow
     {
+        public const string MainMenuTitle = "Main Menu", LibraryMenu = "Library", SettingsMenu = "Settings", EmuSenMenu = "EmuSen";
         public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", CompressedDiscsMenu = "Compressed Discs", PackagesMenu = "Packages", CoresMenu = "Cores", SwapPlayersRow = "Swap Players 1 and 2";
         public const string GameOptionsMenu = "Game Options", LeaveMenu = "Leave", ControllersMenu = "Controllers", DisplayMenu = "Display", VolumeRow = "Volume";
 
-        // One page of the menu: its title (null for the first, whose title is the game's or Home), its rows, the row last on, and for a question the sentence under it.
+        // One page of the menu: its title (null for the first, whose title is the game's or Main Menu), its rows, the row last on, and for a question the sentence under it.
         private sealed class PadMenuPage(string? title, Func<List<PadMenuEntry>> rows, string? detail = null, bool question = false)
         {
             public string? Title { get; } = title;
@@ -47,10 +48,7 @@ namespace EmuSen.Mistress.Views
             _padMenuInGame = GameOnScreen;
             _paneShowing = null;
             _padMenuPages.Clear();
-            _homeGame = _padMenuInGame ? null : GameInHand();
-            _padMenuPages.Add(new PadMenuPage(null, _padMenuInGame ? GameMenuRows : HomeRows));
-            PadCard.Title = _padMenuInGame ? "Pause" : HomeTitle;
-            if (!_padMenuInGame) AskToolCounts();
+            _padMenuPages.Add(new PadMenuPage(null, _padMenuInGame ? GameMenuRows : MainMenuRows));
 
             // Before the menu shows, so no frame runs under it - the library's own rule (§4.18).
             _padMenuPaused = _padMenuInGame && !IsPaused;
@@ -58,7 +56,7 @@ namespace EmuSen.Mistress.Views
 
             PadMenuPanel.IsVisible = true;
             _padMenuOpen = true;
-            PlacePadMenu();
+            ApplyBigMenuLook(_bigScreen);
             ShowPadMenuPage(turned: false);
             UpdateMenuBackdrop();
         }
@@ -78,6 +76,22 @@ namespace EmuSen.Mistress.Views
             Submenu(GameOptionsMenu, GameOptionsRows, startsSection: true),
             Submenu(LeaveMenu, LeaveRows),
         ];
+
+        private List<PadMenuEntry> MainMenuRows()
+        {
+            var rows = new List<PadMenuEntry>();
+            if (_session is not null) rows.Add(new(() => $"Back to {RunningGameTitle()}", ToggleLibrary) { ShowsFrame = true });
+            // The sidebar library's game options; the themed gamelist has them on Select - see EmuSen_Settings_Reference.md §4.63.
+            if (!ThemedLibraryShown && SelectedLibraryEntry is EmuSen.Mistress.Library.RomEntry chosen)
+                rows.Add(Opens("Game Options...", () => ShowLibraryGameOptions(chosen)));
+            // Scraping only ever starts here or in Preferences, by the player - see EmuSen_Settings_Reference.md §4.60.
+            if (GameToScrape is string game && !ScrapeRunning)
+                rows.Add(Opens("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(Scraping.ScrapeScope.ThisGame(game))));
+            rows.Add(Submenu(LibraryMenu, LibraryRows, startsSection: rows.Count > 0));
+            rows.Add(Submenu(SettingsMenu, SettingsRows));
+            rows.Add(Submenu(EmuSenMenu, EmuSenRows));
+            return rows;
+        }
 
         // At most seven rows; the console's own only where the running machine reports them - see EmuSen_BigPicture.md §48.5.
         private List<PadMenuEntry> GameOptionsRows()
@@ -120,6 +134,21 @@ namespace EmuSen.Mistress.Views
             Ask("Quit EmuSen...", "Quit EmuSen?", "The game closes, then EmuSen.", Close),
         ];
 
+        private List<PadMenuEntry> LibraryRows()
+        {
+            var rows = new List<PadMenuEntry>();
+            if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
+            AddCollectionMenuEntries(rows);
+            rows.Add(new(() => ScrapeRunning ? $"Scraping ({_scrapeRun!.Done} of {_scrapeRun.Total})..." : "Scrape Games...", ShowScraper) { Opens = true });
+            // Under Library, where a submenu's nine rows leave it room; a tenth under Settings ran past the big panel - see EmuSen_Settings_Reference.md §4.69.8.
+            rows.Add(Opens(PackagesMenu, ShowPackages));
+            rows.Add(Opens(CompressedDiscsMenu, ShowCompressedDiscs));
+            rows.Add(Opens(LibraryManagerMenu, ShowLibraryManager));
+            rows.Add(Opens(CoresMenu, ShowCores));
+            if (_bigScreen) rows.Add(Opens("Theme Settings", ShowThemeSettings));
+            return rows;
+        }
+
         private List<PadMenuEntry> SettingsRows() =>
         [
             Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)),
@@ -131,6 +160,16 @@ namespace EmuSen.Mistress.Views
             Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
             Opens("Preferences", ShowPreferences),
         ];
+
+        private List<PadMenuEntry> EmuSenRows()
+        {
+            var rows = new List<PadMenuEntry>();
+            rows.Add(Opens("Shell", ShowShellConsole));
+            if (!_bigScreen) rows.Add(new(() => IsFullScreen ? "Leave Full Screen" : "Full Screen", ToggleFullScreen));
+            if (!_bigScreenForced) rows.Add(new(() => _bigScreen ? "Exit Big Picture" : "Big Picture", () => SetBigPicture(!_bigScreen)));
+            rows.Add(Ask("Exit EmuSen...", "Exit EmuSen?", "EmuSen closes.", Close));
+            return rows;
+        }
 
         // No first, so a press of A straight through the question changes nothing.
         private static List<PadMenuEntry> QuestionRows(PadMenuEntry asked, Action no) =>
@@ -163,19 +202,31 @@ namespace EmuSen.Mistress.Views
             string change = _padMenuEntries.Any(e => e.Adjust is not null) ? "      Left Right  Change" : "";
             string shot = _padMenuInGame ? "      X  Screenshot" : "";
             PadMenuHint.Text = PadHints.Face(page.Question ? "A  Choose      B  No" + shot : nested ? "A  Choose      B  Back      Start  Close" + change + shot : "A  Choose      B  Close" + change + shot);
-            if (CardShown) ShowCard(page, nested);
+            if (_bigScreen && _padMenuInGame) ShowPauseCard(page, nested);
+            else if (_bigScreen) ShowBigPadMenu(page, nested);
 
             PadMenuList.Refresh(_padMenuEntries);
             int at = Math.Clamp(page.At, 0, _padMenuEntries.Count - 1);
             PadMenuList.SelectedIndex = at;
             PadMenuList.ScrollIntoView(at);
-            if (turned && CardShown) BeginMenuOpening(PadCard.CardPanel);
+            if (turned && _bigScreen) BeginMenuOpening(BigPadPanel);
             UpdateSlotCard();
         }
 
-        // The first page is named by the game, as the library names it, or Home; a submenu or a question by its own title.
+        // The first page is named by the game, as the library names it, or Main Menu; a submenu or a question by its own title.
         private string PageTitle(PadMenuPage page) =>
-            page.Title ?? (!_padMenuInGame ? HomeTitle : RunningGameTitle());
+            page.Title ?? (!_padMenuInGame ? MainMenuTitle : RunningGameTitle());
+
+        private void ShowBigPadMenu(PadMenuPage page, bool nested)
+        {
+            PadMenuBig.Title = PageTitle(page);
+            PadMenuBig.SubtitleLetterCase = page.Question ? LetterCase.None : LetterCase.Upper;
+            string? under = page.Question ? page.Detail : nested ? "‹ " + string.Join(" › ", _padMenuPages.SkipLast(1).Select(p => PageTitle(p))) : null;
+            PadMenuBig.Subtitle = under is null ? null : FitSubtitle(PadMenuBig, page.Question ? under : under.ToUpper(CultureInfo.CurrentCulture));
+            PadMenuBig.Footer = page.Title == EmuSenMenu ? BigMenuFooter : null;
+            PadMenuBig.HintFamily = HelpFamily;
+            PadMenuBig.Hints = PadMenuHints(_padMenuEntries.Any(e => e.Adjust is not null), nested, page.Question);
+        }
 
         // The subtitle broken at spaces into lines the panel holds whole, as MenuPanel draws each line of it and cuts none it is given to fit.
         private string FitSubtitle(MenuPanel big, string text)
@@ -226,8 +277,6 @@ namespace EmuSen.Mistress.Views
                 case UiButton.Accept: ChoosePadMenuRow(at); break;
                 // X takes a screenshot on every page of the in-game menu, with no row of its own.
                 case UiButton.Screensaver when _padMenuInGame: TakeScreenshot(); break;
-                // Y makes the game in hand a favourite on the Home card (EmuSen_Interface.md §2.1).
-                case UiButton.Search: ToggleHomeFavourite(); break;
                 case UiButton.Back: PadMenuBack(); break;
                 case UiButton.Menu: ClosePadMenu(); break;
             }
@@ -275,7 +324,7 @@ namespace EmuSen.Mistress.Views
             ShowPadMenuPage(turned: true);
         }
 
-        private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "home/") + title;
+        private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "main/") + title;
 
         private void ClosePadMenu()
         {
@@ -337,17 +386,17 @@ namespace EmuSen.Mistress.Views
             PadMenuPanel.LayoutUpdated += (_, _) => { if (_padMenuOpen) UpdateSlotCard(); };
         }
 
-        // The section a row opens or closes: on a card the last row of a section has a lighter rule, on the desktop the first has a gap and a line above it.
+        // The section a row opens or closes: in the big panel the last row of a section has a lighter rule, on the desktop the first has a gap and a line above it.
         private void MarkSection(Control container, int index)
         {
             bool starts = index > 0 && _padMenuEntries[index].StartsSection;
             bool ends = index + 1 < _padMenuEntries.Count && _padMenuEntries[index + 1].StartsSection;
-            container.Classes.Set(SectionEndClass, CardShown && ends);
+            container.Classes.Set(SectionEndClass, _bigScreen && ends);
             PaintSectionRule(container);
             if (container is not ListBoxItem item) return;
             item.TemplateApplied -= OnPadRowTemplate;
             item.TemplateApplied += OnPadRowTemplate;
-            if (!CardShown && starts)
+            if (!_bigScreen && starts)
             {
                 item.Margin = new Thickness(0, 9, 0, 0);
                 item.BorderThickness = new Thickness(0, 1, 0, 0);
@@ -375,12 +424,12 @@ namespace EmuSen.Mistress.Views
             }
         }
 
-        // Beside the desktop's box while Save State or Load State is on: the slot's picture and when it was saved, where the screen leaves room for it.
+        // Beside the menu while Save State or Load State is on: the slot's picture and when it was saved, where the screen leaves room for it.
         private void UpdateSlotCard()
         {
             int at = PadMenuList.SelectedIndex;
-            UpdateCardPane();
-            bool show = _padMenuOpen && !CardShown && at >= 0 && at < _padMenuEntries.Count && _padMenuEntries[at].ShowsSlot && PlaceSlotCard();
+            UpdatePauseCardPane();
+            bool show = _padMenuOpen && !PauseCardShown && at >= 0 && at < _padMenuEntries.Count && _padMenuEntries[at].ShowsSlot && PlaceSlotCard();
             PadSlotCard.IsVisible = show;
             if (!show) return;
             string? state = StatePathForSlot(_stateSlot);
@@ -391,18 +440,21 @@ namespace EmuSen.Mistress.Views
             PadSlotPicture.IsVisible = picture is not null;
         }
 
-        // To the right of the desktop's box, as wide as the room there allows up to 240 pixels; false where there is too little room for it.
+        // To the right of the panel, under its title, as wide as the room there allows up to 240 design pixels; false where there is too little room for it.
         private bool PlaceSlotCard()
         {
             if (PadMenuPanel.Child is not Control area || area.Bounds.Width <= 0) return false;
-            Rect box = PadMenuDesk.Bounds;
+            double u = _bigScreen ? MenuPanel.GetScale(this) is > 0 and var s ? s : 1 : 1;
+            Rect box = _bigScreen ? PadMenuBig.PanelBounds : PadMenuDesk.Bounds;
             if (box.Width <= 0) return false;
-            double gap = 16, width = Math.Min(240, area.Bounds.Width - box.Right - 2 * gap);
-            if (width < 150) return false;
+            double gap = 16 * u, width = Math.Min(240 * u, area.Bounds.Width - box.Right - 2 * gap);
+            if (width < 150 * u) return false;
+            double top = box.Top + (_bigScreen ? PadMenuBig.TitleBounds.Height : 0);
             if (PadSlotCard.Width != width) PadSlotCard.Width = width;
-            var margin = new Thickness(box.Right + gap, box.Top, 0, 0);
+            var margin = new Thickness(box.Right + gap, top, 0, 0);
             if (PadSlotCard.Margin != margin) PadSlotCard.Margin = margin;
-            if (PadSlotCaption.FontSize != 15) PadSlotCaption.FontSize = 15;
+            double text = _bigScreen ? 20 * u : 15;
+            if (PadSlotCaption.FontSize != text) PadSlotCaption.FontSize = text;
             return true;
         }
 

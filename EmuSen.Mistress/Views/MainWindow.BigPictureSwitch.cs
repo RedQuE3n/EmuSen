@@ -67,7 +67,7 @@ namespace EmuSen.Mistress.Views
             // A sheet that draws no menu of its own is framed as one, its controls in ES-DE's look - see EmuSen_Settings_Reference.md §4.80.
             Sheets.MenuLook = on;
             EmbeddedPopups.SetIsEnabled(this, on);
-            PlacePadMenu();
+            ApplyBigMenuLook(on);
             ApplyBigStatusLine(on);
 
             if (on && _themed is null) SetUpThemedLibrary();

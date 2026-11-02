@@ -503,10 +503,12 @@ archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen
 
 **The other reasons in `TestCollections.cs`, re-audited 2026-11-01.**
 
-- *trace* and *Venus*: obsolete. `CpuBinaryTrace`, `GsuBinaryTrace` and `ApuWriteTrace` no longer exist outside that comment, and the C# Venus core has been retired.
+- *trace* and *Venus*: dead, and removed from the file on 2026-11-01. Searching every `.cs` and `.rs` file that day, `CpuBinaryTrace`, `GsuBinaryTrace`, `ApuWriteTrace` and `_traceBinary` appeared only in `TestCollections.cs`'s own comment. The C# Venus core whose main 65816 wrote into them is gone; `EmuSen/Cores/Nintendo/` holds only `VenusRT - SNES`, and every `Venus*` class left is a test of the Rust core.
 - *SDL*: stays. `EmuSen.Endymion/AudioPlayer.cs` opens real devices, and SDL's initialisation state is per process.
 - *firmware*: `FirmwareLibrary.Directory` is a plain static. It takes the same scope, applied to its own static.
 - `CheatDatabaseInstaller.FetchOverride` is a further static of the config kind. It takes the same treatment.
+- `AudioLatencyDriftTests` drives SDL and a core together, and xUnit gives a class one collection, so these kinds share one collection rather than one each.
+- **The question that finds the next kind** is "does this class assign a static?" (`EmuSen_Debugging_Tools_Reference_v5.md` §3.57): grep answers it, and judgement does not. `TestCollections.cs` now carries one line pointing here, in place of its paragraph.
 
 **Proof, before the collection shrinks.**
 

@@ -497,7 +497,7 @@ archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen
 - Outside a scope nothing changes: the statics, the process tree and every current test behave as now.
 - The Rust consumers keep the process tree. A class that starts a runtime session, or calls a Rust function that resolves a path itself, sets the statics and stays in the collection.
 - A guard makes a mistake loud: starting a runtime session inside a scope throws `InvalidOperationException`, naming the class that has to stay serial. The guard does not let a scope pass unnoticed into code that cannot see it.
-- `AsyncLocal` flows through `await`, `Task.Run` and `new Thread`. It does not flow through native callbacks or `UnsafeQueueUserWorkItem`, and whether Avalonia's dispatcher carries it is to be proven with a test before any UI class moves. Until then, `UiTest.Run` captures the caller's scope and re-enters it inside the dispatched body.
+- `AsyncLocal` does not flow through native callbacks or `UnsafeQueueUserWorkItem`. Where it does flow was measured on 2026-11-01 with a scratch xUnit 2.9.3 project on Avalonia.Headless 12.1.0, six tests, all passed. A value set in a test class's constructor reaches the test method and `Dispose`. It flows through `await`, `Task.Run` and a new `Thread`. It also flows through `HeadlessUnitTestSession.Dispatch`, `Dispatcher.UIThread.InvokeAsync` and `Dispatcher.UIThread.Post`, so a UI test's scope reaches its dispatched body without help.
 
 **The other reasons in `TestCollections.cs`, re-audited 2026-11-01.**
 

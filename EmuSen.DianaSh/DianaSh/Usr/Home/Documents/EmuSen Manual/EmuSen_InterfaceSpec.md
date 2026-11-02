@@ -629,3 +629,29 @@ recording differed: the library menu's recorded state (`BigPicture-MainMenu`) ha
 row. Every page of the pad menu also passes its fit case (`Every_page_of_the_pad_menu...`), now walking the nested
 pages and checking the pane inside its room and clear of the card and the help bar; the card's title is allowed to be
 cut on its one line, as BigPicture §48.2 decides, and not to wrap.
+
+#### 6.3.19 The Home card, U3 (2026-11-01)
+
+Twenty-one recordings were added, two were taken again and two retired, each by one cause:
+
+- **Added: the Home card.** Ten states at 1280 × 800 and 1920 × 1200 and one on the handheld at 1920 × 1200
+  (`WindowFitAuditTests.HomeCard.cs`), all over the sidebar library with a game suspended: the first page on Continue
+  with the paused frame, its name and *Paused just now* in the pane (`HomeCard`); on the game, with its name and console
+  (`HomeCardGame`); the game's page (`HomeCardGamePage`); on Tools, with the four tools' lines from counts the test
+  gives, *41 games missing media* and *1 core waiting for approval* (`HomeCardTools`); the Tools page
+  (`HomeCardToolsPage`); Settings, Power and Quit EmuSen's question (`HomeCardSettings`, `HomeCardPower`,
+  `HomeCardQuit`); the desktop's first page and its Power (`HomeCardDesktop`, `HomeCardDesktopPower`); and Power in
+  Steam's Game Mode, Quit EmuSen alone (`HomeCardHandheldPower`). They hold the card at the left at 512 design pixels
+  over the scrim `#0000008C`, the rows in Barlow at 26, the help bar of Select, Back, Close Menu and, where a game is in
+  hand, Favourite, and the pane inside its room.
+- **Taken again: the themed views' menu** (`BigPicture-MainMenu`, both sizes), the hold of U3 in `EmuSen_Interface.md`
+  §10. Start over the themed system view now opens the Home card: the centred `PadMenuBig` titled *Main Menu* with
+  Library, Settings and EmuSen became the card titled *Home* with Start a Console, Tools, Settings and Power, and the
+  help bar lost its own D-pad entry, as the card's is generated from its roles (§48.2 of BigPicture). Nothing else in
+  either recording moved.
+- **Retired: `LibraryMenuBack`**, both sizes, the U2 library menu's Back row with its frame; its successor is
+  `HomeCard`.
+
+No other recording differed. Every page of the pad menu passes its fit case, which now audits the card on the desktop
+as in big picture, so the Home card's pages are audited at both sizes in both sessions.
+

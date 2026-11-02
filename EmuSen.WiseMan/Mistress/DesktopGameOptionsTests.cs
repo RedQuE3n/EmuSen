@@ -14,6 +14,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;
 using EmuSen.Mistress.Views.Covers;
@@ -30,6 +31,9 @@ namespace EmuSen.WiseMan.Mistress
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(DesktopGameOptionsTests).GetTypeInfo().Assembly);
 
         private static readonly string[] GameEntries = ["Add to Favourites", "Edit This Game's Metadata", "Crop This Game...", "Use Another Game's Cover...", "Game Package...", "Scrape This Game...", "Find by Name..."];
+
+        // The Home card's game page: the same entries but the favourite, which is Y's, the television standard as a row of its own where the options menu draws a choice (EmuSen_BigPicture.md §49.3).
+        private static readonly string[] GamePage = ["Edit This Game's Metadata", "Crop This Game...", MainWindow.StandardRow, "Use Another Game's Cover...", "Game Package...", "Scrape This Game...", "Find by Name..."];
 
         internal static ThemedSession Desktop(string view = AppSettings.LibraryList) =>
             new(settings: a => { a.BigScreen = false; a.LibraryView = view; });
@@ -244,9 +248,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(s.Window.MetadataEditorShown);
         }, default);
 
-        // The built-in look in a big-screen session: Start's menu has Game Options..., shown as sheets, and the editor typed by the pad.
+        // The built-in look in a big-screen session: the Home card's game page lists the game's options and opens the editor as a sheet, typed by the pad (EmuSen_BigPicture.md §49.3).
         [Fact]
-        public Task The_built_in_big_screen_library_s_pad_menu_opens_the_options_and_the_editor_as_sheets() => Session.Dispatch(() =>
+        public Task The_built_in_big_screen_library_s_home_card_lists_the_options_and_opens_the_editor_as_a_sheet() => Session.Dispatch(() =>
         {
             using ThemedSession s = BuiltInBigScreen();
             Assert.False(s.Shown);
@@ -254,14 +258,13 @@ namespace EmuSen.WiseMan.Mistress
             List(s.Window).Select(Entry(s, 4));
             s.Settle();
 
-            BigPictureSwitchTests.ChooseFromPadMenu(s, "Game Options...");
-            GameOptionsWindow options = Assert.IsType<GameOptionsWindow>(Sheets(s.Window).Current);
-            Assert.Empty(s.Window.OwnedWindows);
-            Assert.Equal(GameEntries, options.Entries.Select(b => b.Content as string));
-            Control sheet = Sheets(s.Window).SheetOf(options)!;
-            PadAudit.Reach(sheet, s.Pad, e => e is Button { Content: "Edit This Game's Metadata" });
-            s.Pad.A();
-            s.Settle();
+            s.Pad.Start();
+            PadMenu.Choose(s.Window, s.Pad, PadMenu.Entries(s.Window).Single(e => e.ShowsCover).Text(), exact: true);
+            Assert.Equal(GamePage, PadMenu.Lines(s.Window));
+            s.Pad.B();
+            s.Pad.B();
+            BigPictureSwitchTests.ChooseFromPadMenu(s, "Edit This Game's Metadata");
+            Control sheet;
 
             MetadataEditorWindow editor = Assert.IsType<MetadataEditorWindow>(Sheets(s.Window).Current);
             Assert.Empty(s.Window.OwnedWindows);
@@ -281,28 +284,29 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Contains("pad name", ListLabels(s.Window));
         }, default);
 
-        // Start's menu over the desktop's list offers the same entry, shown as a window there; the themed gamelist keeps it on Select instead.
+        // The Home card's game page over the desktop's list and over the themed gamelist: the same entries, the gamelist's own rows left to Select (EmuSen_BigPicture.md §49.3).
         [Fact]
-        public Task The_desktop_pad_menu_offers_game_options_and_the_themed_view_s_does_not() => Session.Dispatch(() =>
+        public Task The_home_card_s_game_page_lists_the_game_s_entries_over_both_libraries() => Session.Dispatch(() =>
         {
             using (ThemedSession s = Desktop())
             {
                 List(s.Window).Select(Entry(s, 0));
                 s.Settle();
-                BigPictureSwitchTests.ChooseFromPadMenu(s, "Game Options...");
-                GameOptionsWindow options = OwnedOptions(s);
-                Assert.Equal(ThemedSession.SnesGames[0], Named<TextBlock>(options, "GameOptionsTitle").Text);
-                options.Close();
-                s.Settle();
+                s.Pad.Start();
+                PadMenuEntry game = PadMenu.Entries(s.Window).Single(e => e.ShowsCover);
+                Assert.Contains(ThemedSession.SnesGames[0], game.Text());
+                Assert.Equal(GamePage, game.Submenu!().Select(e => e.Text()));
+                s.Pad.B();
             }
 
             using (ThemedSession s = new())
             {
                 ThemedLibraryPadTests.Enter(s, "snes");
                 s.Pad.Start();
-                string[] lines = PadMenu.Lines(s.Window);
-                Assert.DoesNotContain("Game Options...", lines);
+                PadMenuEntry game = PadMenu.Entries(s.Window).Single(e => e.ShowsCover);
+                string[] lines = game.Submenu!().Select(e => e.Text()).ToArray();
                 Assert.Contains("Scrape This Game...", lines);
+                Assert.DoesNotContain("Jump To...", lines);
             }
         }, default);
     }

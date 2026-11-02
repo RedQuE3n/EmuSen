@@ -34,8 +34,8 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static string SelectedLine(MainWindow w) => Lines(w)[Selected(w)];
 
-        // The big-screen panel shown: the Pause Card's over a game, else the centred one - see EmuSen_BigPicture.md §48.
-        public static MenuPanel Big(MainWindow w) => Card(w).IsVisible ? Card(w).CardPanel : w.GetControl<MenuPanel>("PadMenuBig");
+        // The card's panel: the Pause Card's over a game, the Home card's over the library - see EmuSen_BigPicture.md §48 and §49.
+        public static MenuPanel Big(MainWindow w) => Card(w).CardPanel;
 
         public static AdaptiveLayout Card(MainWindow w) => w.GetControl<AdaptiveLayout>("PadCard");
 

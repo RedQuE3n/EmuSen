@@ -109,9 +109,7 @@ namespace EmuSen.WiseMan.Mistress
             string game = DesktopGameOptionsTests.SnesPath(s, 1), other = DesktopGameOptionsTests.SnesPath(s, 2);
             list.Select(list.Models.Single(e => e.FullPath == game));
             s.Settle();
-            BigPictureSwitchTests.ChooseFromPadMenu(s, "Game Options...");
-            GameOptionsWindow options = Assert.IsType<GameOptionsWindow>(s.Window.GameOptionsShown);
-            DesktopGameOptionsTests.Click(s, options.Entries.Single(b => (string?)b.Content == MainWindow.CropThisGame));
+            BigPictureSwitchTests.ChooseFromPadMenu(s, MainWindow.CropThisGame);
 
             GameCropWindow crop = Assert.IsType<GameCropWindow>(s.Window.GameCropShown);
             Assert.False(sheets.IsPresenting);

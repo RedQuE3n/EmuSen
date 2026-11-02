@@ -17,7 +17,7 @@ tree
       2 Panel at=0,0,1280,768 by=panel limit=0,0,1280,768 name=AdaptiveLayers role=none
         3 Panel at=0,0,1280,768 by=panel limit=0,0,1280,768 name=AdaptiveCardScrim paints=#0000008C role=none
           4 MenuPanel at=0,0,1280,768 by=panel heard=Power limit=0,0,1280,768 name=AdaptiveCard role=menu
-            5 HintBar at=64,684,350,30 by=panel heard="A Choose, B Back, Menu Close" limit=0,0,1280,768 role=group
+            5 HintBar at=64,704,350,30 by=panel heard="A Choose, B Back, Menu Close" limit=0,0,1280,768 role=group
             6 Border at=64,156,424,162 by=panel limit=0,0,1280,768 name=AdaptiveCardRows role=none
               7 Border at=64,156,424,162 by=panel limit=0,0,1280,768 name=AdaptiveContent role=none
                 8 LunaList at=64,156,424,162 by=panel heard=Menu limit=0,0,1280,768 name=PadMenuList paints=#FFFFFFFF role=list

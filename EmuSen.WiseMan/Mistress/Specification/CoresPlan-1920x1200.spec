@@ -120,7 +120,7 @@ tree
                     106 TextBlock at=1531.5,1077,310.5,36 box=207,24 by=panel caps=13.999 face=Barlow heard="/Cores 11 MB · 410 GB free" layout=206.6,24 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=20 text="/Cores 11 MB · 410 GB free"
             107 Border at=72,1119,1776,69 by=panel limit=0,0,1920,1200 name=AdaptiveHelpBar paints=#707070FF role=none
               108 HintBar at=144,1135.5,1632,43.5 by=panel heard="Choose, No" limit=0,0,1920,1200 role=group
-          109 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 name=AdaptiveCover role=none
+          109 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 name=AdaptiveCover paints=#000000B8 role=none
             110 Border at=420,276,1080,679.5 by=panel limit=0,0,1920,1200 paints=#26262BFF,#707070FF role=none
               111 DockPanel at=469.5,325.5,981,580.5 by=panel limit=0,0,1920,1200 role=none
                 112 TextBlock at=469.5,325.5,981,58.5 box=654,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"

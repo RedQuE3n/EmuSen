@@ -149,6 +149,8 @@ namespace EmuSen.Tools.Scraper
                 (List<ScrapeRow> rows, List<string> notes) = ScrapeRow.Listing(answer);
                 Say(_endSaid ?? (notes.Count > 0 ? string.Join(" ", notes.Select(ScraperPlan.Sentence)) : null));
                 SetRows(rows);
+                int lacking = rows.Count(r => r.Media.Count > 0 && r.Missing.Count > 0);
+                Header = new AdaptiveHeader("SCRAPER", Facts: $"{rows.Count} games · {lacking} missing media");
                 // The systems are learnt from the whole library only: a section or a filter lists part of it.
                 if (SelectedSection is null or "all" && SelectedFilter is null or "all") LearnSystems(rows);
             }
@@ -324,8 +326,8 @@ namespace EmuSen.Tools.Scraper
             return new ScrollViewer { Content = panel, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
         }
 
-        private static TextBlock Line(string text, bool bold = false) =>
-            new() { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = bold ? Avalonia.Media.FontWeight.SemiBold : Avalonia.Media.FontWeight.Normal };
+        private TextBlock Line(string text, bool bold = false) =>
+            new() { Text = text, TextWrapping = Avalonia.Media.TextWrapping.Wrap, FontWeight = bold && Form == AdaptiveForm.Desktop ? Avalonia.Media.FontWeight.SemiBold : Avalonia.Media.FontWeight.Normal, Classes = { bold ? AdaptiveLayout.PaneTitleClass : "line" } };
 
         // What the detail shows with no game chosen: the games, the options, and the account's limits as the scraper holds them.
         public string OverviewText

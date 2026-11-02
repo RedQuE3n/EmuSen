@@ -380,11 +380,12 @@ namespace EmuSen.Tools.Library
         }
 
         // The chosen file whole: its path, finding, the rest of its group, each failed check, and the place the header checks will fill.
-        private static Control FileDetail(LibraryRow row)
+        private Control FileDetail(LibraryRow row)
         {
+            bool big = Form != AdaptiveForm.Desktop;
             var panel = new StackPanel { Spacing = 6, Name = "LibraryDetail" };
             void Line(string text, bool strong = false) =>
-                panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontWeight = strong ? FontWeight.SemiBold : FontWeight.Normal });
+                panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontWeight = strong && !big ? FontWeight.SemiBold : FontWeight.Normal, Classes = { strong ? AdaptiveLayout.PaneTitleClass : "line" } });
             Line(row.Title, strong: true);
             Line(row.Source);
             Line($"{LibraryFindings.KindName(row.Kind)}: {LibraryFindings.Words(row)}");

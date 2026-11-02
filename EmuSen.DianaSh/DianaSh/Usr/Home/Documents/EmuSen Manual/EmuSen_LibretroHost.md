@@ -179,7 +179,8 @@ trusts what was downloaded over HTTPS; the hash then holds it to that build.
 
 **When EmuSen is updated**, the proxy's and the libretro host's hashes change. Discovery lists a folder whose copies differ
 from the installation's as "needs refresh", not "needs approval"; the core tool's `cores verify` refreshes the copies, and
-the approval, keyed to the libretro core, stands.
+the approval, keyed to the libretro core, stands. Since 2026-11-01 the runtime also refreshes an approved entry's copies
+itself when it reads the entry, from the installation folder whose manifest lists both libraries (§10v).
 
 ## 2. The core ABI: what v1.15 lacks, and minor 1.16
 
@@ -2011,6 +2012,86 @@ granted its resolved folder; a plain file is granted its library folder only.
 link to a disc elsewhere) was used on a fresh home, with this proxy in the installation and the entry. A on the game
 asked for PCEE2's approval (§10t), and Approve opened it on PCEE2: `[picture] Sony - PlayStation 2 (PCEE2): read back`,
 with no refusal in the error log.
+
+## 10v. An approved default with an earlier build's copies opened nothing, and the game fell back unsaid (2026-11-01)
+
+**The defect.** On 2026-11-01 the tester ran the published build f1592d39e in the real window. PCEE2 had been installed
+at 17:18 by an earlier build, and the build was published again at 21:27. In the big screen the tester went to Cores,
+opened PCEE2 and chose Approve. `cores.approved` was written with the core's SHA-256, but the detail pane still read
+"needs refresh: Verify". Back in the library, A on Jak and Daxter opened the game on Sapphire, and nothing was said
+(`[picture] Sapphire: read back …` in the session's log).
+
+**The cause, shown on the published library.** The entry's proxy copy hashed `630c5b2e…`, while the installation's
+`cores.manifest` lists `libemusen_libretro_proxy.so` as `9c31c402…`. Rule 1 (§1.3) therefore lists the entry as needing
+refresh. A probe loaded the published `libemusen_platform.so` through its C interface (`emusen_galaxia_init`,
+`emusen_crystal_new` with the sandbox's installation and a copy of its `/Cores`, `emusen_crystal_route`,
+`emusen_crystal_core_approve`) and routed the Jak image. It gave these answers:
+
+| Step | `engine` | `waiting_default` | The PCEE2 row |
+|---|---|---|---|
+| Before the approval | Sapphire | `{pcee2, ab7ff5fd…}` | needs_refresh |
+| After it (status 0) | Sapphire | null | needs_refresh, its core approved |
+| After it, the copies replaced with the installation's | Sony - PlayStation 2 (PCEE2) | null | approved |
+
+The approval was recorded, and the rescan tried to read the entry. `entry::read` refused it as stale, and the refusal
+was said only on session 0, which nothing showed. The entry stayed a `Waiting` row and was never an engine. The route's
+`waiting_default` named only an unapproved default, so with the hash approved the route gave Sapphire with no reason,
+and Mistress had nothing to ask or say. Four of the five candidate causes were ruled out by the same run: the approval
+was in the file the runtime reads (`approvals_path`), the trust read it again (the row's core read "approved"), the
+default column reached the route (the waiting default was named before the approval), and the rule order puts a read
+PCEE2 first (the third row).
+
+**The change.**
+1. **The refresh, owned once.** `Entry::refresh` in `emusen-core-entry` copies the project's proxy and libretro host from
+   an installation folder by a rename, as the core tool did. `cores verify`, `get`, `update` and `rollback` call it in
+   place of their own copy.
+2. **The runtime refreshes an approved entry.** `entry::read`, after checking the approval, refreshes stale copies from
+   `Trust::vouched_installation`, the installation folder whose own manifest lists the build of both libraries there.
+   It then checks rule 1 again on the copies. Nothing is trusted that was not already trusted: the copies are the
+   installation's own bytes, and the core is still held to its approved hash. Each rescan also refreshes an approved
+   entry that was read but whose copies went stale, and a runtime starts with a rescan when it finds one.
+3. **A held default is said.** An approved entry that still cannot be read is kept, with its words, until the next rescan
+   (`Runtime::held`). The route then names it as `"default_held": {"stem","sha256","reason"}`, the frontend API's 1.7
+   (`EmuSen_Backend.md` §39). Mistress asks nothing about it. The game opens on the fallback with one line on the status
+   and over the game, which also goes to the session's console as `[core] …`: "Sony - PlayStation 2 (PCEE2) could not be
+   used, so this game opens on Sapphire: <reason>".
+
+**Tests.**
+- `route::waiting_default_tests::an_approved_default_that_could_not_be_read_is_named_with_why`: the held default is
+  named with its words, or with a reason where none was kept. It is not named when unapproved, when an engine was
+  chosen, or for a `.cue`.
+- `emusen-core-broker`'s `tests/runtime.rs`, on the Rust runtime:
+  - an entry whose proxy is an earlier build's is refreshed when its core is approved, and then opens and runs a frame;
+  - an entry whose folder cannot be written is held with the words "needs refresh … refreshing it failed", and is read
+    at the next rescan once the folder can be written.
+- WiseMan `CoresWindowRuntimeTests`, on the Rust runtime with a synthetic PS2 disc:
+  - `The_default_approved_mid_session_over_an_earlier_builds_copies_is_the_routes_engine`: Sapphire before, PCEE2's
+    engine after the approval, both keys null, the copy refreshed, nothing asked;
+  - `An_approved_default_that_cannot_be_read_gives_its_reason_and_no_silent_fallback`.
+- `PreLaunchQueryTests.A_held_default_is_said_with_its_reason_and_not_asked_about`.
+
+- `emusen-core-host`'s `trust::tests::copies_are_refreshed_only_from_an_installation_whose_manifest_lists_both`.
+
+The WiseMan case of the tester's run was first run against the read as it was before the change (a stale entry refused
+and not refreshed). It failed there, with Sapphire as the route's engine after the approval.
+
+**Seeded faults (2026-11-01).** Each was reverted, and each was caught:
+
+| Fault | Caught by |
+|---|---|
+| The read refusing stale copies without refreshing them, as before | the WiseMan mid-session case and the held case |
+| The refresh taking an installation's libraries without its manifest | the trust test |
+| The route naming the held default only when unapproved | the route test |
+| A held reason kept past the next rescan | the runtime test of the held entry |
+| Mistress ignoring `Held` | the pre-launch case |
+
+REAL_WINDOW
+
+**Where that session's log went.** The session logged to `~/.config/EmuSen/Logs/PlayStation 2/gui_…`, not under the
+sandbox's `home/`. This is by design. The sandbox's `appsettings.json` names no `LogDirectory`, and the error log's
+default is `~/.config/EmuSen/Logs` (`ErrorLog.DefaultRoot`, `EmuSen_Settings_Reference.md` §4.70). `EmuSen_Galaxia.md`
+§3.6 records the decision to keep that default rather than move it under the home. A sandbox that wants its logs kept
+apart names a `LogDirectory`.
 
 ## 11. Risks
 

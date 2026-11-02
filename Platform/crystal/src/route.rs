@@ -3,6 +3,7 @@
 //! reads a file by (EmuSen_Backend.md §28.7, §29.2). Reads the file; runs no core.
 
 use emusen_core_host::Discovery;
+use emusen_core_host::entry::Waiting;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe};
 use emusen_systems::System;
@@ -114,10 +115,17 @@ fn is_game_boy_color(at: &str) -> bool {
     matches!(byte, Some(0x80 | 0xC0))
 }
 
-/// `{"system","console","engine","reason","cartridge","shelf","waiting_default"}`.
+/// `{"system","console","engine","reason","cartridge","shelf","waiting_default","default_held"}`.
 /// `engine_for` is the engine the settings' layers choose, given the file, the row's console and the system; `approved`
-/// whether the player's approvals name a hash.
-pub fn route_json(catalog: &Catalog, discovery: &Discovery, at: &str, engine_for: &dyn Fn(&str, Option<&str>, &str) -> Option<String>, approved: &dyn Fn(&str) -> bool) -> String {
+/// whether the player's approvals name a hash; `held` why an entry, by its stem, could not be read.
+pub fn route_json(
+    catalog: &Catalog,
+    discovery: &Discovery,
+    at: &str,
+    engine_for: &dyn Fn(&str, Option<&str>, &str) -> Option<String>,
+    approved: &dyn Fn(&str) -> bool,
+    held: &dyn Fn(&str) -> Option<String>,
+) -> String {
     let (system, row, decision) = routed(catalog, discovery, at);
     let extension = image_extension(catalog, discovery, at);
     let console: Option<String> = row
@@ -126,6 +134,7 @@ pub fn route_json(catalog: &Catalog, discovery: &Discovery, at: &str, engine_for
         .or_else(|| system.as_deref().and_then(Catalog::discovered_console_for_system).map(str::to_string));
     let chosen = system.as_deref().and_then(|sys| engine_for(at, row.map(|r| catalog.rows[r].console()), sys));
     let waiting = system.as_deref().and_then(|sys| waiting_default(discovery, sys, at, chosen.is_some(), approved));
+    let kept_back = system.as_deref().and_then(|sys| default_held(discovery, sys, at, chosen.is_some(), approved, held));
     let engine = system.as_deref().and_then(|sys| {
         chosen
             .clone()
@@ -153,20 +162,41 @@ pub fn route_json(catalog: &Catalog, discovery: &Discovery, at: &str, engine_for
             j.null("waiting_default");
         }
     }
+    match kept_back {
+        Some((stem, sha256, reason)) => {
+            j.key_object("default_held").str("stem", &stem).str("sha256", &sha256).str("reason", &reason).end_object();
+        }
+        None => {
+            j.null("default_held");
+        }
+    }
     j.end_object();
     j.finish()
 }
 
-/// The system's hosted default where it is installed, waits for the player's approval and takes the file, and no layer
-/// chose an engine, so that the route's engine is only the fallback: its stem and its core's hash, which an approval
-/// names (EmuSen_LibretroHost.md §10t).
-pub fn waiting_default(discovery: &Discovery, system: &str, at: &str, chosen: bool, approved: &dyn Fn(&str) -> bool) -> Option<(String, String)> {
+/// The system's hosted default where it is an installed entry not yet read that takes the file, and no layer chose an
+/// engine, so that the route's engine is only the fallback.
+fn default_entry<'d>(discovery: &'d Discovery, system: &str, at: &str, chosen: bool) -> Option<(&'static str, &'d Waiting)> {
     let stem = emusen_systems::libretro_cores::default_for(system).filter(|_| !chosen)?;
     if discovery.for_system(system).any(|c| c.entry.as_ref().is_some_and(|e| e.stem == stem)) {
         return None;
     }
-    let w = discovery.waiting().iter().find(|w| w.entry.stem == stem && !approved(&w.sha256))?;
-    entry_takes(&w.entry, system, at).then(|| (stem.to_string(), w.sha256.clone()))
+    let w = discovery.waiting().iter().find(|w| w.entry.stem == stem)?;
+    entry_takes(&w.entry, system, at).then_some((stem, w))
+}
+
+/// The default entry where it waits for the player's approval: its stem and its core's hash, which an approval names
+/// (EmuSen_LibretroHost.md §10t).
+pub fn waiting_default(discovery: &Discovery, system: &str, at: &str, chosen: bool, approved: &dyn Fn(&str) -> bool) -> Option<(String, String)> {
+    default_entry(discovery, system, at, chosen).filter(|(_, w)| !approved(&w.sha256)).map(|(stem, w)| (stem.to_string(), w.sha256.clone()))
+}
+
+/// The default entry where its core is approved but it could not be read, so the fallback opens the game for a stated
+/// reason, never silently: its stem, its core's hash and why (EmuSen_LibretroHost.md §10v).
+pub fn default_held(discovery: &Discovery, system: &str, at: &str, chosen: bool, approved: &dyn Fn(&str) -> bool, held: &dyn Fn(&str) -> Option<String>) -> Option<(String, String, String)> {
+    let (stem, w) = default_entry(discovery, system, at, chosen).filter(|(_, w)| approved(&w.sha256))?;
+    let why = held(stem).unwrap_or_else(|| "it has not been read since its approval".to_string());
+    Some((stem.to_string(), w.sha256.clone(), why))
 }
 
 /// What the NES pack reads of an iNES header; null for any other system or a file it cannot read.
@@ -292,6 +322,20 @@ mod waiting_default_tests {
         assert_eq!(super::waiting_default(&d, "ps2", "/games/Disc.iso", false, &|h| h == hash), None, "its hash is approved already");
         assert_eq!(super::waiting_default(&d, "ps2", "/games/Disc.cue", false, &|_| false), None, "PCEE2's .info lists no cue");
         assert_eq!(super::waiting_default(&d, "psx", "/games/Disc.iso", false, &|_| false), None, "no hosted default for the system");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    // The tester's run on 2026-11-01: PCEE2 approved, but its copies were an earlier build's, so it could not be read and Jak opened on Sapphire with nothing said.
+    #[test]
+    fn an_approved_default_that_could_not_be_read_is_named_with_why() {
+        let (root, d, hash) = laid("held");
+        let approved = |h: &str| h == hash;
+        let why = |stem: &str| (stem == "pcee2").then(|| "the entry needs refresh".to_string());
+        assert_eq!(super::default_held(&d, "ps2", "/games/Disc.iso", false, &approved, &why), Some(("pcee2".to_string(), hash.clone(), "the entry needs refresh".to_string())));
+        assert!(super::default_held(&d, "ps2", "/games/Disc.iso", false, &approved, &|_| None).is_some_and(|(_, _, w)| !w.is_empty()), "a reason even where none was kept");
+        assert_eq!(super::default_held(&d, "ps2", "/games/Disc.iso", false, &|_| false, &why), None, "not approved: it waits, and is asked about");
+        assert_eq!(super::default_held(&d, "ps2", "/games/Disc.iso", true, &approved, &why), None, "the player chose an engine");
+        assert_eq!(super::default_held(&d, "ps2", "/games/Disc.cue", false, &approved, &why), None, "PCEE2's .info lists no cue");
         let _ = std::fs::remove_dir_all(&root);
     }
 }

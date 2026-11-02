@@ -9577,3 +9577,14 @@ run of another branch beside it]:
 started a few seconds after the first had closed. It was ended by SIGTERM after three minutes, and no stacks were taken.
 Twenty repeats with the capture armed did not reproduce it, ten of them matching its path and its few seconds' gap. It is recorded here as not understood, and is not taken as
 fixed.
+
+## 39. The frontend API's 1.7, 2026-11-01: the route's held default
+
+`emusen_crystal_route`'s answer gains `"default_held"`. It is null, or `{"stem","sha256","reason"}` where the routed
+system's default libretro core is installed and its hash approved, but the entry could not be read: its copies could not
+be refreshed, or its proxy could not be loaded. No layer of the settings may have chosen an engine. `"engine"` is then
+the fallback, and `"reason"` gives the runtime's own words for why. The shape of an answer changed, so the minor is 1.7
+(`EMUSEN_CRYSTAL_MINOR`, `abi.rs`, the client's `CrystalAbi`). No function or struct changed. `EmuSen_LibretroHost.md`
+§10v has the defect, the design and the proofs.
+
+**The C# implementation** stays at the minor it implements, as in §34 and §37. Its `RouteJson` writes the key as null.

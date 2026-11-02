@@ -48,6 +48,27 @@ pub fn built_name(library: &str) -> String {
     format!("{}{library}.{}", if cfg!(windows) { "" } else { "lib" }, library_suffix())
 }
 
+/// The project's libretro host and proxy in an installation folder, each beside the name its copy takes in an entry.
+pub fn project_files(installation: &Path) -> [(PathBuf, String); 2] {
+    [(HOST_LIBRARY, ADAPTER), (PROXY_LIBRARY, BROKER)].map(|(library, copy)| (installation.join(built_name(library)), format!("{copy}.{}", library_suffix())))
+}
+
+fn io(path: &Path, e: std::io::Error) -> String {
+    format!("{}: {e}", path.display())
+}
+
+/// A file written beside `at` and renamed over it, 0644, so a process with the old file mapped keeps the old bytes.
+fn replace(at: &Path, write: &dyn Fn(&Path) -> std::io::Result<()>) -> Result<(), String> {
+    let temp = at.with_file_name(format!(".{}.new", at.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+    write(&temp).map_err(|e| io(&temp, e))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&temp, std::fs::Permissions::from_mode(0o644)).map_err(|e| io(&temp, e))?;
+    }
+    std::fs::rename(&temp, at).map_err(|e| io(&temp, e))
+}
+
 /// Whether a file stem (`pcsx2` of `pcsx2_libretro.so`) can name an entry's folder and files: 1 to 64 of
 /// `[A-Za-z0-9_.-]`, not starting with a dot, so it is never a path, a hidden folder, `.` or `..`.
 pub fn valid_stem(name: &str) -> bool {
@@ -375,6 +396,26 @@ impl Entry {
     /// `broker.target`'s one line: the adapter copy's file name.
     pub fn target_text() -> String {
         format!("{ADAPTER}.{}\n", library_suffix())
+    }
+
+    /// The folder's project files brought to an installation folder's (EmuSen_LibretroHost.md §1.3): each copied in by a
+    /// rename where its hash differs or it is missing, and `broker.target` written. The names changed.
+    pub fn refresh(&self, installation: &Path) -> Result<Vec<String>, String> {
+        let mut changed = Vec::new();
+        for (from, name) in project_files(installation) {
+            let at = self.folder.join(&name);
+            let same = at.is_file() && sha256_file(&at).ok() == sha256_file(&from).ok();
+            if !same {
+                replace(&at, &|temp| std::fs::copy(&from, temp).map(|_| ()))?;
+                changed.push(name);
+            }
+        }
+        let target = self.target_path();
+        if std::fs::read_to_string(&target).ok().as_deref() != Some(Entry::target_text().as_str()) {
+            replace(&target, &|temp| std::fs::write(temp, Entry::target_text()))?;
+            changed.push(TARGET.to_string());
+        }
+        Ok(changed)
     }
 
     /// The entry's `NOTICE`, read and checked, its stem the folder's.

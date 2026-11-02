@@ -2085,7 +2085,21 @@ and not refreshed). It failed there, with Sapphire as the route's engine after t
 | A held reason kept past the next rescan | the runtime test of the held entry |
 | Mistress ignoring `Held` | the pre-launch case |
 
-REAL_WINDOW
+**In the real window (2026-11-01).** This branch's Release publish was placed in a copy of the tester's sandbox. The copy
+kept the sandbox's `home/`, with PCEE2's copies from the 17:18 build, and the hidden `.dianashroot`. Its
+`cores.approved` was moved aside first, so nothing was approved. The window was driven by a virtual pad.
+- **The tester's path.** Home card, Tools, Cores, then PCEE2, whose row read "needs refresh: Verify". Its page's Approve,
+  then Approve on the question. `cores.approved` was written with `ab7ff5fd…`, the proxy copy became the installation's
+  (`2c8d78d5…`), the sidecar was written, and the page read "Runs: PlayStation 2 · installed". Back in the library, A on
+  Jak and Daxter opened PCEE2 with no question: `[picture] Sony - PlayStation 2 (PCEE2): in a ring …`. Rewind was
+  withheld in the pad menu: "Rewind, a snapshot of Sony - PlayStation 2 (PCEE2) takes 398 ms, longer than a frame".
+  Of 132 one-second windows, 119 fell inside 59.9–60.1 fps. All 13 outliers were between 59.5 and 60.3, apart from the
+  first window (54.7) and two during the BIOS (56.2, 58.3).
+- **An update after the approval.** The 17:18 copies were put back, while the approval and the sidecar were kept. At its
+  start Mistress refreshed the copies, and A on Jak opened PCEE2 again. `[picture] … in a ring` came 1.2 s after the A
+  press, and the first fps line 2.0 s after it. The longest UI-thread answer to an AT-SPI probe every 0.25 s was 0.66 s,
+  at the press. One dip, to 42.7 and 45.5 fps, came 38–40 s in.
+- No runner outlived Mistress after SIGTERM in either run.
 
 **Where that session's log went.** The session logged to `~/.config/EmuSen/Logs/PlayStation 2/gui_…`, not under the
 sandbox's `home/`. This is by design. The sandbox's `appsettings.json` names no `LogDirectory`, and the error log's

@@ -1,6 +1,6 @@
 //! The adapters, one per runner kind: cargo through nextest (its JUnit per test, retries recorded), dotnet through
 //! `dotnet test` with TRX (a failed test rerun once by name to tell a flake from a failure), and the sibling LunaP
-//! suite. Each step runs in its own capped scope and process group, so a stop ends all of it. The dotnet adapter is
+//! suite. Each step runs in its own capped scope, in the shell's process group, so Ctrl-C at a terminal reaches it. The dotnet adapter is
 //! the one file removed with the last C# test project. See EmuSen_Testing.md §3.4.
 
 use crate::reports::{self, Outcome, TestRow};
@@ -37,17 +37,13 @@ pub fn scoped(program: &str, args: &[String], cwd: &Path) -> Command {
         c.args(args);
         c
     } else {
+        let memory = format!("MemoryMax={}", std::env::var("EMUSEN_TESTING_MEMORY_MAX").unwrap_or_else(|_| "10G".into()));
         let mut c = Command::new("systemd-run");
-        c.args(["--user", "--scope", "-q", "-p", "CPUWeight=20", "-p", "MemoryMax=10G", "-p", "MemorySwapMax=2G", program]);
+        c.args(["--user", "--scope", "-q", "-p", "CPUWeight=20", "-p", &memory, "-p", "MemorySwapMax=2G", program]);
         c.args(args);
         c
     };
     c.current_dir(cwd).env("TMPDIR", crate::repo::home().join(".cache/emusen/tmp")).env("MSBUILDDISABLENODEREUSE", "1");
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        c.process_group(0);
-    }
     c
 }
 
@@ -61,10 +57,6 @@ pub fn run_logged(mut c: Command, log: &Path, stop: &AtomicBool) -> Result<Optio
             return Ok(Some(status.code().unwrap_or(-1)));
         }
         if stop.load(Ordering::Relaxed) {
-            #[cfg(unix)]
-            unsafe {
-                libc::kill(-(child.id() as i32), libc::SIGTERM);
-            }
             let _ = child.kill();
             let _ = child.wait();
             return Ok(None);

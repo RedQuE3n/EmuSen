@@ -104,7 +104,8 @@ struct Planned {
     problem: Option<String>,
 }
 
-pub fn run(stdin: Option<String>, o: &Options, cancelled: &dyn Fn() -> bool) -> Result<(String, String, i32), String> {
+/// Runs in the foreground past the shell's ten-second budget, which it does not poll (EmuSen_DianaSh.md §6.6); Ctrl-C at a terminal reaches its steps' processes.
+pub fn run(stdin: Option<String>, o: &Options) -> Result<(String, String, i32), String> {
     let repo = Repo::find(o.repo.as_deref())?;
     let head = repo.rev("HEAD")?;
     let branch = repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]).map(|b| b.trim().to_string()).ok();
@@ -175,7 +176,8 @@ pub fn run(stdin: Option<String>, o: &Options, cancelled: &dyn Fn() -> bool) -> 
                 (None, Some((t, when, n))) => format!("would reuse trial {t} ({when}, {n} passed)"),
                 (None, None) => format!("would run{}", if p.key.is_none() { " (no key: uncommitted inputs)" } else { "" }),
             };
-            out.push_str(&format!("{}\t{} {}\t{}\t{} {}\n", what.split(' ').next().unwrap_or(""), p.pick.kind, p.pick.unit, what, p.pick.reason, p.pick.via));
+            let word = if p.problem.is_some() { "FAIL" } else if p.reused.is_some() { "reuse" } else { "run" };
+            out.push_str(&format!("{word}\t{} {}\t{what}\t{} {}\n", p.pick.kind, p.pick.unit, p.pick.reason, p.pick.via));
         }
         out.push_str(&format!("dry run\t{} units, {} would be reused, tier {}\n", planned.len(), planned.iter().filter(|p| p.reused.is_some()).count(), tier.name));
         return Ok((out, err, 0));
@@ -249,9 +251,6 @@ pub fn run(stdin: Option<String>, o: &Options, cancelled: &dyn Fn() -> bool) -> 
         }));
     }
     while handles.iter().any(|h| !h.is_finished()) {
-        if cancelled() {
-            stop.store(true, Ordering::Relaxed);
-        }
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
     let results: Vec<(Work, Outcomes)> = handles.into_iter().filter_map(|h| h.join().ok()).collect();

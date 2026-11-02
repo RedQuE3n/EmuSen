@@ -1,0 +1,32 @@
+NAME
+    ingest - read result files, or land.sh's old logs, into the store
+
+SYNOPSIS
+    ingest FILE... --runner R --tree SHA [--trial N] [--tier T]
+    ingest --backfill [DIR] [--repo DIR]
+
+DESCRIPTION
+    A command of the emusen.testing module. Each FILE is a TRX file
+    (dotnet test --logger trx) or a JUnit file (nextest's, with its
+    flakyFailure and rerunFailure records); its tests become rows under
+    their class or crate, in a new trial or the one --trial names. A file
+    already read is skipped: its path is the trial's source.
+
+    --backfill reads what land.sh left under DIR (default
+    ~/.cache/emusen/tmp): each land/<sha>/ folder as a trial (cargo test's
+    per-test lines and counts, dotnet's summary and failed tests, or its
+    TRX where one was written, times.txt's wall times, GREEN where a .ok
+    file exists); each land-<name>.log transcript, which names the branch
+    of the trial its verdict line names or becomes a trial when its folder
+    is gone; and the full-suite logs under wiseman-rust/. A folder written
+    in the last hour without a .ok file is a land still running and is
+    left for the next backfill. Running it again adds only what is new.
+
+    A cargo log is named as land.sh named it, with ' ' and '/' written as
+    '_'; it is matched to the crate folders of HEAD, and one no crate
+    matches is recorded as cargo:?<name>. See EmuSen_Testing.md §5.
+
+EXAMPLES
+    ingest --backfill
+    ingest results/wiseman-linux-x64.trx --runner ci --tree 3351e722d
+    ingest target/nextest/studio/junit.xml --runner laptop --tree $(git rev-parse HEAD)

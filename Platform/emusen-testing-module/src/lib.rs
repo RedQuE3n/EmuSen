@@ -200,7 +200,7 @@ fn trial_cmd(call: &Call, args: &[String]) -> Result<Answer, String> {
     if o.runner != "desktop" {
         return Err(format!("trial: runner {} has no adapter yet (phase 2 adds the laptop, the Mac and the handheld)", o.runner));
     }
-    let (out, err, status) = trial::run(call.stdin(), &o, &|| call.cancelled())?;
+    let (out, err, status) = trial::run(call.stdin(), &o)?;
     Ok(Answer { out, err, status })
 }
 

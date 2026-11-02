@@ -80,7 +80,7 @@ pub fn list(classes: &[(String, usize)]) -> Vec<String> {
 /// The prefix that runs a command in a capped scope while holding a slot of `class`: `flock` waits if the slot was
 /// taken between the ask and the run.
 pub fn prefix(slot: &std::path::Path, gb: u32) -> String {
-    format!("flock '{}' systemd-run --user --scope -p CPUWeight=20 -p MemoryMax={gb}G -p MemorySwapMax=2G -q", slot.display())
+    format!("flock {} systemd-run --user --scope -p CPUWeight=20 -p MemoryMax={gb}G -p MemorySwapMax=2G -q", slot.display())
 }
 
 /// Waits until a slot of `class` is free and gives its path, leaving it free for the caller's `flock` to take.

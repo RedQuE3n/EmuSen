@@ -28,12 +28,14 @@ namespace EmuSen.Mistress
         private readonly PresentFrame _present;
         private readonly Buffers _pictures = new(), _raws = new();
         private readonly Action<byte[]> _release;
+        private readonly Action<EmuSen.Serenity.Slang.RingPicture, int, int>? _releaseRing;
         private Frame? _newest;
 
-        // present runs on the UI thread and hands each array back through the release it is given, once nothing there reads it.
-        public FrameHandOff(PresentFrame present)
+        // present runs on the UI thread and hands each array back through the release it is given; releaseRing gives back a ring picture replaced unshown - see EmuSen_LibretroHost.md §10y.
+        public FrameHandOff(PresentFrame present, Action<EmuSen.Serenity.Slang.RingPicture, int, int>? releaseRing = null)
         {
             _present = present ?? throw new ArgumentNullException(nameof(present));
+            _releaseRing = releaseRing;
             _latest = new Latest<Frame>(Present);
             _release = buffer => { if (!_pictures.Return(buffer)) _raws.Return(buffer); };
         }
@@ -89,22 +91,24 @@ namespace EmuSen.Mistress
 
         private void Push(Frame frame)
         {
-            Drop(Interlocked.Exchange(ref _newest, frame));
+            Frame? replaced = Interlocked.Exchange(ref _newest, frame);
+            if (Drop(replaced) && replaced!.Ring is { } ring) _releaseRing?.Invoke(ring, replaced.Width, replaced.Height);
             _latest.Offer(frame);
         }
 
         // Once the producer has stopped: a frame not yet taken goes back rather than being shown.
-        public void DropPending() => Drop(Interlocked.Exchange(ref _newest, null));
+        public void DropPending() => _ = Drop(Interlocked.Exchange(ref _newest, null));
 
         // The session ended: its pending frame goes back; what the control still shows is given back when it lets go.
         public void EndSession() => DropPending();
 
         // Whoever moves a frame out of Waiting owns its buffers: the UI thread by presenting it, the producer by dropping it.
-        private void Drop(Frame? frame)
+        private bool Drop(Frame? frame)
         {
-            if (frame is null || Interlocked.CompareExchange(ref frame.State, Dropped, Waiting) != Waiting) return;
+            if (frame is null || Interlocked.CompareExchange(ref frame.State, Dropped, Waiting) != Waiting) return false;
             if (frame.Pixels.Length > 0) _release(frame.Pixels);
             if (frame.Raw is { } raw) _release(raw.Values);
+            return true;
         }
 
         private void Present(Frame frame)

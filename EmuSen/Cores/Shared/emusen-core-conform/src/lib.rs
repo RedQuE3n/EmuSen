@@ -549,14 +549,16 @@ pub(crate) fn core_cases(path: &Path, opts: &Options) -> (Report, BTreeSet<i32>)
     report.cases.push(c3(&lib));
     report.cases.push(c4(&mut s, path, C4::CORE));
     report.cases.push(c5(&mut s));
-    // C9, C10, C12 and C13 make machines of their own, so each runs at once on a session of its own; C15, C22, C23 and C25 keep theirs, in order (EmuSen_CoreAPI.md §28.21).
-    let alone: [fn(&mut Session<'_>) -> Case; 4] = [c9, c10, c12, c13];
-    let (lib, opts) = (&lib, opts);
+    // C9, C10, C12 and C13 make machines of their own, so each runs at once on its own Lib and session, C12's host never another's; C15, C22, C23 and C25 keep theirs, in order (EmuSen_CoreAPI.md §28.21).
+    let alone: [(&'static str, fn(&mut Session<'_>) -> Case); 4] = [("C9", c9), ("C10", c10), ("C12", c12), ("C13", c13)];
     let (apart, chain) = std::thread::scope(|scope| {
-        let running: Vec<_> = alone.iter().map(|case| scope.spawn(move || {
-            let mut own = session(lib, opts);
-            let found = case(&mut own);
-            (found, own.statuses)
+        let running: Vec<_> = alone.iter().map(|&(id, case)| scope.spawn(move || match Lib::open(path) {
+            Ok(own_lib) => {
+                let mut own = session(&own_lib, opts);
+                let found = case(&mut own);
+                (found, own.statuses)
+            }
+            Err(why) => (Case { id, name: "loading", passed: false, evidence: vec![why], images: Vec::new() }, BTreeSet::new()),
         })).collect();
         let chain = [c15(&mut s), c22(&mut s), c23(&mut s), c25(&mut s)];
         (running.into_iter().map(|r| r.join().unwrap_or_else(|panic| std::panic::resume_unwind(panic))).collect::<Vec<_>>(), chain)

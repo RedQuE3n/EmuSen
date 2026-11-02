@@ -10,6 +10,7 @@ pub enum StateError {
     Truncated,
     TooSmall,
     WrongMedia,
+    OldHost,
 }
 
 impl ffi::Status for StateError {
@@ -19,6 +20,7 @@ impl ffi::Status for StateError {
             StateError::Truncated => status::TRUNCATED,
             StateError::TooSmall => status::BUFFER_TOO_SMALL,
             StateError::WrongMedia => status::WRONG_MEDIA,
+            StateError::OldHost => STATUS_OLD_HOST,
         }
     }
 }
@@ -143,6 +145,12 @@ pub const KEEPS_ITS_RULE: u64 = 1 << 39;
 /// Seeded fault for core ABI 1.17's outputs (EmuSen_CoreAPI.md §6.42): an `OUTPUT` raised for port 0's output 5, which
 /// machine info does not declare (C6).
 pub const FAULT_OUTPUT_UNDECLARED: u64 = 1 << 40;
+/// Seeded fault for the kit's corpus form (EmuSen_CoreAPI.md §28.21): under a host of minor 99 a refused state is
+/// refused with `STATUS_OLD_HOST`, which `status_text` does not answer. Only C12 plays that host, so C11 sees the code
+/// only where C12's statuses reach it.
+pub const FAULT_OLD_HOST_UNANSWERED: u64 = 1 << 41;
+/// The status of that fault, a core's own code that no text names.
+pub const STATUS_OLD_HOST: i32 = -1999;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
 /// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
 pub const HELD_CHEATS: u8 = 0xC4;
@@ -256,6 +264,8 @@ pub struct TestCore {
     reads: std::cell::Cell<i64>,
     /// The system machine info reports: `test`, or under `TWO_SYSTEMS` the one a host routed the image to.
     system: &'static str,
+    /// `FAULT_OLD_HOST_UNANSWERED` on C12's host of minor 99.
+    old_host: bool,
 }
 
 /// The test core's one encoding of its picture before the palette: each pixel's red byte (EmuSen_CoreAPI.md §6.30).
@@ -347,6 +357,7 @@ impl TestCore {
             cheats_held: false,
             reads: std::cell::Cell::new(0),
             system: "test",
+            old_host: faults() & FAULT_OLD_HOST_UNANSWERED != 0 && r.host_abi_version == (1 << 16) | 99,
         };
         m.draw();
         Ok(m)
@@ -427,6 +438,9 @@ impl StateMachine for TestCore {
     type Error = StateError;
 
     fn load_state(&mut self, data: &[u8]) -> Result<(), StateError> {
+        if self.old_host && (data.len() < self.state_size() || (&data[..4] != MAGIC && &data[..4] != SNAP)) {
+            return Err(StateError::OldHost);
+        }
         if data.len() < 4 || (&data[..4] != MAGIC && &data[..4] != SNAP) {
             return Err(StateError::Foreign);
         }

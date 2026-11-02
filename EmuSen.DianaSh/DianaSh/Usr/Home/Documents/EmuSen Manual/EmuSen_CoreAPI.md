@@ -4278,11 +4278,11 @@ The core's cases were the critical path.
 
 **What changed.**
 
-1. `core_cases` runs C9, C10, C12 and C13 at once, each on a session of its own. Each makes its own machines, and none reads what an earlier case left in the session; the image cases of a corpus already run this way. Their statuses join the session's before C11 is judged. C15, C22, C23 and C25 keep the one session, in order, beside them, since C15's armed tables are what C22 and C23 run under. The report lists the cases in `CORE_CASES` order, as before.
+1. `core_cases` runs C9, C10, C12 and C13 at once, each on a `Lib` and a session of its own. Each makes its own machines, and none reads what an earlier case left in the session; the image cases of a corpus already run this way. Each needs its own `Lib` because the host the kit plays is kept on the `Lib`: C12 sets a host of minor 0 and then of minor 99, and on a shared `Lib` the machines the other cases made meanwhile would have been made by that host. Their statuses join the session's before C11 is judged. C15, C22, C23 and C25 keep the one session, in order, beside them, since C15's armed tables are what C22 and C23 run under. The report lists the cases in `CORE_CASES` order, as before.
 2. **C25 joins the corpus form.** It was added for 1.18 on 2026-11-01 as a case run once per library (§28.20), and the single-image form ran it. But `CORE_CASES` and `core_cases` were not given it, so a corpus run never judged C25. It is now the corpus form's fourteenth core case. The kit's own tests named the old set of thirteen and are updated with it.
 3. **WiseMan's kit tests use the corpus form** through `Fixtures/ConformKit.cs`. The fixture writes the images to a folder and runs `--images <folder> --jobs <count>` with a report folder. It requires the core's cases to be exactly the list the test names, all passing, and each image's report to list exactly the image cases named, all passing. MarsRT's and Sapphire's tests use it. Endou's (10 s over eight images) and Diamond's (33 s, whose plan asks for the single-image form) are left as they were.
 
-**What the corpus form runs once.** Each image-independent case now runs on one image, the first of the folder, where three single-image runs ran it three times. §28 defines those cases as the ones whose answer does not depend on the image. Each image still gets every case that does.
+**What the corpus form runs once**, for any core, now or later. Each image-independent case runs on one image, the first of the folder, where one single-image run per image ran it once per image. §28 defines those cases as the ones whose answer does not depend on the image. Each image still gets every case that does. A core whose image-independent cases did answer differently by image would be a defect in that core, and the single-image form is still there to show it.
 
 **Measured** (desktop, CPU weight 20, the machine shared, 1-minute load given):
 
@@ -4290,13 +4290,14 @@ The core's cases were the critical path.
 |---|---|---|
 | MarsRT, three cartridges | 615.7 s (a land's TRX) | 88.0 s (load 13.3) |
 | Sapphire, a program, a CD and a DVD | 194.7 s (load 11.7) | 57 s (load 8.5) |
-| The kit's own suite | 30 passed | 30 passed |
+| The kit's own suite | 30 passed | 31 passed (the merge's test added) |
 
 **Seeded faults.**
 
 - C25 replaced by a second C23 in the chain: the kit's corpus tests fail.
 - C16 left out of Sapphire's list of image cases: `ConformKit` fails the test.
-- The parallel cases' statuses not merged before C11: *not caught*. On the kit's test cores and seeded-fault cores, no status reaches C11 only through C9 to C13, so no current test can see the merge. A seeded core whose C9 alone returns an undocumented status would.
+- The parallel cases' statuses not merged before C11. Not caught at first: on the kit's existing test cores no status reaches C11 only through C9 to C13. A seeded core now closes that. `kit_unanswered_core` sets emusen-native's test core fault `FAULT_OLD_HOST_UNANSWERED`: under a host of minor 99, which only C12 plays, a refused state is refused with -1999, which `status_text` does not name. `the_core_s_cases_run_at_once_hand_their_statuses_to_c11` requires C11, and only C11, to fail on it with -1999 in its evidence. With the merge removed the test fails. Note that a host of minor 0 would not do: it is the host the kit plays by default, so every case reaches it.
+- The cases sharing the reference `Lib` again, so that C12's host leaks into the others: *not caught* in three runs. On the test cores C12 lasts milliseconds, so the window in which another case makes a machine under its host is a race no test hits reliably. The separate `Lib` per case is the guard, and the reason for it is written beside it in the code.
 
 ## 29. A space that is a view, 2026-10-07
 

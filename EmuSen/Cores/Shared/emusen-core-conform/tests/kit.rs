@@ -370,6 +370,19 @@ fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     }
 }
 
+// C11 judges the statuses of the core's cases run at once: a status only C12's host of minor 99 draws, which no text names, fails C11 and nothing else (EmuSen_CoreAPI.md §28.21).
+#[test]
+fn the_core_s_cases_run_at_once_hand_their_statuses_to_c11() {
+    let (_, list) = corpus_files("unanswered");
+    let c = run_corpus("kit_unanswered_core", &list, 2);
+    assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), vec!["C11"]);
+    let c11 = c.core.cases.iter().find(|x| x.id == "C11").unwrap();
+    assert!(c11.evidence.iter().any(|e| e.contains("-1999")), "{:?}", c11.evidence);
+    for i in &c.images {
+        assert!(i.failed().is_empty(), "{}: {:?}", i.name, i.failed());
+    }
+}
+
 // The runner's corpus form: a line for each image, a report for each and the summary, and the exit status the verdict.
 #[test]
 fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {

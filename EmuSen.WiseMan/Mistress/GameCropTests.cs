@@ -101,7 +101,7 @@ namespace EmuSen.WiseMan.Mistress
 
         // On the desktop the game's options open it as a window of Mistress's own, and what is typed is in the library for the game.
         [Fact]
-        public Task On_the_desktop_the_game_s_options_open_it_as_a_window_and_the_crop_is_stored_for_that_game() => Session.Dispatch(() =>
+        public Task On_the_desktop_the_game_s_page_opens_it_as_a_window_and_the_crop_is_stored_for_that_game() => Session.Dispatch(() =>
         {
             using ThemedSession s = DesktopLibrary.Desktop();
             SheetLayer sheets = s.Window.GetControl<SheetLayer>("Sheets");
@@ -109,7 +109,10 @@ namespace EmuSen.WiseMan.Mistress
             string game = DesktopLibrary.SnesPath(s, 1), other = DesktopLibrary.SnesPath(s, 2);
             list.Select(list.Models.Single(e => e.FullPath == game));
             s.Settle();
-            BigPictureSwitchTests.ChooseFromPadMenu(s, MainWindow.CropThisGame);
+            // The game's page holds its options: Options ▸ Display crop opens the crop (EmuSen_BigPicture.md §50.2).
+            s.Window.ShowGamePage(game, EmuSen.Mistress.Pages.GamePage.Options);
+            s.Window.GamePageShown!.ChooseRow("crop");
+            s.Settle();
 
             GameCropWindow crop = Assert.IsType<GameCropWindow>(s.Window.GameCropShown);
             Assert.False(sheets.IsPresenting);

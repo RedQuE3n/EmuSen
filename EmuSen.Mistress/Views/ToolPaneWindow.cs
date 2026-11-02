@@ -47,7 +47,8 @@ namespace EmuSen.Mistress.Views
         // A pad's button in ES-DE's grammar, offered to the pane first; what it declines is the router's, B at the top closing the sheet.
         public bool OnPad(UiButton button) => Glyph(button) is { } glyph && _pane.Press(glyph);
 
-        private static PadGlyphButton? Glyph(UiButton button) => button switch
+        // The pad's buttons as the frame names them; one owner for the tool screens and the game's page.
+        internal static PadGlyphButton? Glyph(UiButton button) => button switch
         {
             UiButton.Accept => PadGlyphButton.South,
             UiButton.Back => PadGlyphButton.East,

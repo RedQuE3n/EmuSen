@@ -79,23 +79,10 @@ namespace EmuSen.Mistress.Views
                 case UiButton.Left: page.Move(-1, 0); break;
                 case UiButton.Right: page.Move(1, 0); break;
                 default:
-                    if (PageGlyph(button) is { } glyph) page.Press(glyph);
+                    if (ToolPaneWindow.Glyph(button) is { } glyph) page.Press(glyph);
                     break;
             }
         }
-
-        internal static PadGlyphButton? PageGlyph(UiButton button) => button switch
-        {
-            UiButton.Accept => PadGlyphButton.South,
-            UiButton.Back => PadGlyphButton.East,
-            UiButton.Screensaver => PadGlyphButton.West,
-            UiButton.Search => PadGlyphButton.North,
-            UiButton.PageUp => PadGlyphButton.LeftShoulder,
-            UiButton.PageDown => PadGlyphButton.RightShoulder,
-            UiButton.Menu => PadGlyphButton.Start,
-            UiButton.Options => PadGlyphButton.Select,
-            _ => null,
-        };
 
         // A keyboard on the big screen steers the page as a pad would; on the desktop the page's own controls take the keys.
         private void OnGamePageKey(object? sender, KeyEventArgs e)

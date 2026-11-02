@@ -75,7 +75,7 @@ fn a_transfer_across_a_vsync_and_a_drawing_reaches_the_device_whole() {
         gs.write(reg::TRXPOS, 0);
         gs.write(reg::TRXREG, 64 | 64 << 32);
         gs.write(reg::TRXDIR, 0);
-        let unit = |k: u64| (k * 0x9E37_79B9_7F4A_7C15) ^ (k << 17);
+        let unit = |k: u64| k.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ (k << 17);
         // Cut by a V-sync alone, then by a V-sync and a drawing.
         for draw_between in [false, true] {
             gs.write(reg::TRXDIR, 0);

@@ -36,6 +36,8 @@ namespace EmuSen.Tools.Cores
         private readonly Dictionary<string, string> _outcomes = new();
         private readonly LunaAction _install, _update, _remove, _approve, _default, _options, _verify, _check;
         private Dictionary<string, string> _consoleOf = new();
+        private List<string> _consoleOrder = new();
+        private string? _actedOn;
         private Dictionary<string, IReadOnlyList<string>> _enginesOf = new();
         private List<CoreRow> _listing = new();
         private Queue<CoresStep> _steps = new();
@@ -205,6 +207,7 @@ namespace EmuSen.Tools.Cores
         private void ReadRuntime()
         {
             _consoleOf = new();
+            _consoleOrder = new();
             _enginesOf = new();
             if (_runtime is null) return;
             try
@@ -214,6 +217,7 @@ namespace EmuSen.Tools.Cores
                 {
                     if (Text(s, "id") is not { } id || Text(s, "console") is not { } console) continue;
                     _consoleOf[id] = console;
+                    if (!_consoleOrder.Contains(console)) _consoleOrder.Add(console);
                     if (!_enginesOf.ContainsKey(console)) _enginesOf[console] = Strings(s, "engines");
                 }
             }
@@ -259,12 +263,34 @@ namespace EmuSen.Tools.Cores
 
         private void Show(List<CoreRow> rows)
         {
-            SetRows(rows);
+            SetRows(Ordered(rows));
             FillSections();
             ShowSpace();
             SetNotice(_notice);
             ShowOverview();
             UpdateActions();
+            BackToActedOn();
+        }
+
+        // EmuSen_Interface.md §15.3: by console in the strip's order, the console's default first, then what is installed, then by name.
+        private List<CoreRow> Ordered(List<CoreRow> rows) => rows
+            .OrderBy(r => r.Consoles.Count == 0 ? int.MaxValue : r.Consoles.Select(ConsoleRank).Min())
+            .ThenByDescending(r => r.IsDefault)
+            .ThenByDescending(r => r.Installed)
+            .ThenBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToList();
+
+        private int ConsoleRank(string console) => _consoleOrder.IndexOf(console) is int at and >= 0 ? at : _consoleOrder.Count;
+
+        // The row a run or an approval acted on chosen again and given the focus once the list is shown afresh (EmuSen_Cores.md §3.7).
+        private void BackToActedOn()
+        {
+            if (_actedOn is not { } key || _job is not null) return;
+            _actedOn = null;
+            if (Rows.FirstOrDefault(r => r.Key == key) is not { } row) return;
+            Table.Select(row);
+            BigScreenTable.Select(row);
+            if (!FocusRole(AdaptiveRole.Content)) Dispatcher.UIThread.Post(() => FocusRole(AdaptiveRole.Content), DispatcherPriority.Loaded);
         }
 
         private bool Start(string request, string kind)
@@ -312,6 +338,7 @@ namespace EmuSen.Tools.Cores
             _outcomes.Clear();
             _installed.Clear();
             _notice = null;
+            _actedOn = marked.Count > 0 ? marked[0].Row.Key : null;
             _steps = new Queue<CoresStep>(CoresPlan.Steps(marked));
             _stepCount = _steps.Count;
             _stepsDone = 0;
@@ -475,6 +502,7 @@ namespace EmuSen.Tools.Cores
             }
             _notice = $"Approved {row.Name} (SHA-256 {sha}).";
             _outcomes.Remove(row.Key);
+            _actedOn = row.Key;
             Refresh(keepNotice: true);
             return true;
         }
@@ -535,7 +563,7 @@ namespace EmuSen.Tools.Cores
         private void FillSections()
         {
             var sections = new List<AdaptiveSection> { new("all", "All", "Consoles") };
-            sections.AddRange(Rows.SelectMany(r => r.Consoles).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
+            sections.AddRange(Rows.SelectMany(r => r.Consoles).Distinct().OrderBy(ConsoleRank).ThenBy(c => c, StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
             ShowHeader();

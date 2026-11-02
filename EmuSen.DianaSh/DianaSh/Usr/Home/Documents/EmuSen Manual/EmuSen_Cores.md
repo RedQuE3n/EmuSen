@@ -277,14 +277,43 @@ refusals on its notice line but had written none of them to the error log.
   device`. It ran at 59.9–60.1 fps, with single dips to 55.3, 56.1, 56.5 and 58.4 during loading, and `retro_run`
   at 1.9–2.6 ms. That is 57 one-second samples.
 
-**Left as they are, and recorded for the tester** (the mockups `cores-*.png` of the redesign show otherwise):
-- Raw system ids as console names: "gg" on Endou's row and as a section, and "naomi" and "atomiswave" as sections
-  beside Dreamcast. The mockups use full names ("Super Nintendo", "Nintendo 64").
-- On a fresh home PCEE2 is not offered until the player runs Check for Updates; the mockups show it listed. The
-  catalogue is fetched only when asked (§4.2), so the notice is the only pointer.
-- Rows follow the runtime first, then libretro's, unsorted. In the PlayStation 2 section Sapphire comes above PCEE2,
-  and in GB and GBC the order of MercuryRT and SameBoy differs. The mockups put the default engine first.
-- After a job refreshes the list, the focus is on nothing until the next press, which lands on the Search box.
+**Left as it is, and recorded for the tester.** On a fresh home PCEE2 is not offered until the player runs Check for
+Updates; the mockups show it listed. The catalogue is fetched only when asked (§11 decision 5), so the notice is the
+only pointer. Whether to read it once on a home that never has is the tester's call.
+
+### 3.7 Names, order and focus, to the mockups (2026-11-02)
+
+- **Console names come from the systems table only.** A row's consoles are the table's `console` names for its
+  systems. A system with no entry in the table names no console. This applies to Endou's `gg`, and to Flycast's
+  `naomi` and `atomiswave`, which `libretro-cores.tsv` already says no console shows. Before, the raw id was shown in
+  the Console column and as a section. With no runtime to read the table from, the ids stay as they are.
+- **Order, as §15.3 of `EmuSen_Interface.md` states.** Rows are sorted by console in the strip's order, then the
+  console's default first, then what is installed, then by name. The strip follows the systems table's order as the
+  runtime lists it; before, it was alphabetical. A core of several consoles sits under the earliest of them.
+- **Focus after a job.** After a run (Install, Update, Remove) or an approval, the list is shown afresh. The row acted
+  on (the first marked) is then chosen again and given the focus. Before, the focus was on nothing until the next
+  press, which landed on the Search box.
+
+**Tests.** `CoresInstallPathTests` now also checks three things: no row or section carries `gg`, `naomi` or
+`atomiswave`; the rows run in the strip's order; and the focus is on PCEE2's row after the install and after the
+approval, with PCEE2 first in the PlayStation 2 section once it is the default. Each rule was seeded out on
+2026-11-02 (raw ids kept, rows unordered, the focus not given back), and each was caught.
+
+**Compared with the mockups (1280 × 800, 2026-11-02).** Seen on the audit's pictures (`WindowFitAuditTests`
+`A_tool_screen_fits_and_is_pictured_at_the_mockups_sizes`, Cores and CoresDetail) against `cores-list` and
+`cores-waiting`. These still differ:
+1. Console names: the table's `console` is `SNES` and `N64`, while the mockups say "Super Nintendo" and "Nintendo 64".
+   No field of the table holds those words, and its `name` is the long form ("Super Nintendo Entertainment System").
+2. The rows: the mockups draw full-width rows with a 4 px accent bar on the chosen row's left. Here, inset rule lines
+   separate the rows and the chosen row has no bar. An empty header strip about 10 px tall sits above the first row.
+3. The vertical rhythm: the title, the strip and the list sit about 5, 11 and 12 px higher than in the mockups.
+4. The foot: the mockups put `Apply…` with its Start glyph as a button beside the space bar, with "Nothing marked"
+   above them. Here only the help bar carries Apply, and "Nothing marked" sits lower.
+5. The help bar's order: the mockups read A, B, Console, More, List, Apply; here it is A, B, Console, List, Apply,
+   More.
+6. The pane: the mockups add "✓ You have one." under a firmware need when the player has it. Cores does not check
+   the firmware.
+7. The search box's placeholder reads "Search cores", and the mockups' reads "Search".
 
 ## 4. The data model
 

@@ -1865,11 +1865,14 @@ alone, and fails if the focus leaves a card. Removing either rule fails both tes
 Scraper (each tool screen's List card and the frame's question card), the on-screen keyboard over Cores' search, and
 the Home card. On each, Up, Down, Left, Right, X and Y are pressed three times over. Each press must leave the cover
 open, keep the focus off any covered control, and leave every covered list's selection and every covered toggle
-unchanged. A and B are then pressed on the cover's own controls, which must close it with the screen kept. Measured
+unchanged. A and B are then pressed on the cover's own controls, which must close it with the screen kept. The
+Pause Card over a synthetic game is walked too: each page it opens in place is entered with A and walked by the
+directions, and must keep the card open, no sheet opened and the game on screen; B returns to the first page, and a
+line that opens a tool's screen is closed again with B. Measured
 on 2026-11-02: with the narrowing removed, all four tool screens fail on the first Up, whose focus lands beneath the
 List card (a covered section toggle, or a covered row on Cores). The keyboard and the Home card pass either way,
-since each takes every press itself. The Pause Card's pages are not walked here: they need a running game, and they
-are the Home card's own menu, which does not go through the router.
+since each takes every press itself, and so does the Pause Card, which is the Home card's own menu and does not go
+through the router.
 
 ### 4.46 Game Boy and Game Boy Color on separate shelves (2026-09-24)
 

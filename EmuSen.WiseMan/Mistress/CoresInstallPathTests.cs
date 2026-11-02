@@ -187,6 +187,11 @@ namespace EmuSen.WiseMan.Mistress
             Settle(main);
             Wait(main, pane);
             Assert.StartsWith("Read libretro's catalogue on ", pane.Notice);
+            // Only the systems table's console names, never a raw id such as Endou's gg; sections and rows in the table's order, each console's default first (EmuSen_Interface.md §15.3).
+            Assert.DoesNotContain(pane.Rows.SelectMany(r => r.Consoles), c => c is "gg" or "naomi" or "atomiswave");
+            Assert.DoesNotContain(pane.Sections, s => s.Key is "console:gg");
+            var ranks = pane.Sections.Skip(1).Select(s => s.Key["console:".Length..]).ToList();
+            Assert.Equal(pane.Rows.Where(r => r.Consoles.Count > 0).Select(r => r.Consoles.Min(c => ranks.IndexOf(c))), pane.Rows.Where(r => r.Consoles.Count > 0).Select(r => r.Consoles.Min(c => ranks.IndexOf(c))).Order());
             Assert.Contains("/assets/frontend/info.zip", _buildbot.Asked);
 
             // The PlayStation 2 on the shoulders, then PCEE2's row by the D-pad.
@@ -209,6 +214,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(File.Exists(installed), pane.Notice);
             Assert.Equal(core, File.ReadAllBytes(installed));
             Assert.StartsWith("Installed pcee2.", pane.Notice);
+            Assert.Equal("row PCEE2", Said(Focused(main)));
             CoreRow row = pane.Rows.Single(r => r.Stem == "pcee2");
             Assert.True(row.AwaitsApproval);
 
@@ -228,6 +234,8 @@ namespace EmuSen.WiseMan.Mistress
             row = pane.Rows.Single(r => r.Stem == "pcee2");
             Assert.Equal("approved", row.Trust);
             Assert.Null(pane.OutcomeOf(row));
+            Assert.Equal("row PCEE2", Said(Focused(main)));
+            Assert.Equal("PCEE2", pane.Shown.First().Name);
             using JsonDocument routed = JsonDocument.Parse(runtime.Route(jak));
             Assert.Equal(row.Engine, routed.RootElement.GetProperty("engine").GetString());
             main.Close();

@@ -166,6 +166,62 @@ namespace EmuSen.WiseMan.Mistress
             main.Close();
         }, default);
 
+        // The Pause Card over a synthetic game, and each page it opens in place: every press is the card's, the game kept behind it, B back to the first page.
+        [Fact]
+        public Task The_pause_cards_pages_keep_every_press() => Session.Dispatch(() =>
+        {
+            string roms = Path.Combine(_root, "Roms");
+            Directory.CreateDirectory(roms);
+            File.WriteAllBytes(Path.Combine(roms, "Cobalt Harbor (Synthetic).sfc"), PadRewindReelTests.ChangingBackdrop());
+            var app = new EmuSen.Galaxia.Models.AppSettings { RomDirectory = roms, LibraryView = EmuSen.Galaxia.Models.AppSettings.LibraryList, ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever, BigScreen = true, StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs") };
+            app.BigPictureInterface.MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone;
+            app.Save();
+            var main = new MainWindow { Width = 1280, Height = 800 };
+            main.Show();
+            var pad = new PadDriver(main);
+            main.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
+            pad.A();
+            Settle(main);
+            Control game = main.GetControl<Control>("GameFrame");
+            Assert.True(game.IsVisible);
+            pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+            Settle(main);
+            Assert.True(PadMenu.IsOpen(main));
+            string[] first = PadMenu.Lines(main);
+            int pages = 0;
+            for (int i = 0; i < PadMenu.Entries(main).Count; i++)
+            {
+                if (!PadMenu.Entries(main)[i].Opens) continue;
+                PadMenu.List(main).SelectedIndex = i;
+                pad.A();
+                Settle(main);
+                if (Sheets(main).Current is not null)
+                {
+                    // A tool's screen, walked by the test above; B closes it back to the card.
+                    for (int k = 0; k < 4 && Sheets(main).Current is not null; k++) { pad.B(); Settle(main); }
+                    Assert.Null(Sheets(main).Current);
+                    continue;
+                }
+                if (!PadMenu.IsOpen(main) || PadMenu.Lines(main).SequenceEqual(first)) continue;
+                pages++;
+                string page = string.Join("|", PadMenu.Lines(main));
+                foreach ((string name, SDL.GamepadButton button) in Walk.Where(w => w.Name is not ("X" or "Y")))
+                {
+                    pad.Tap(button);
+                    Settle(main);
+                    Assert.True(PadMenu.IsOpen(main), $"{first[i]}: {name} closed the card");
+                    Assert.Null(Sheets(main).Current);
+                    Assert.True(game.IsVisible, $"{first[i]}: {name} left the game");
+                }
+                for (int k = 0; k < 3 && !PadMenu.Lines(main).SequenceEqual(first); k++) { pad.B(); Settle(main); }
+                Assert.True(PadMenu.IsOpen(main), first[i]);
+                Assert.Equal(first, PadMenu.Lines(main));
+            }
+            Assert.True(pages > 0, "the Pause Card opened no page in place: " + string.Join(", ", first));
+            typeof(MainWindow).GetMethod("StopEmulationThread", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+            main.Close();
+        }, default);
+
         // The Home card over the library: every press is the card's, and B closes it with no sheet opened beneath.
         [Fact]
         public Task The_home_card_keeps_every_press() => Session.Dispatch(() =>

@@ -20,6 +20,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // Mistress in the states ES-DE 3.4.1 was captured in for pass 14, from themes and media kept outside the repository - see EmuSen_BigPicture.md §36.
+    [Trait("Category", "nightly")]
     public class Pass14PictureTool
     {
         private static readonly string Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);

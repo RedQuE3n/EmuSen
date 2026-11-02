@@ -144,6 +144,7 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"{runs.Count} corpus ROMs as recorded");
         }
 
+        [Trait("Category", "nightly")]
         [Fact]
         public void The_games_run_as_their_goldens_recorded()
         {

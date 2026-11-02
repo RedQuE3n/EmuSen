@@ -9,6 +9,7 @@ namespace EmuSen.WiseMan.Reference
     // so every test returns early when they are absent, the same shape as
     // NecDspRealFirmwareTests. Discovery and our own side of the comparison both
     // live in ReferenceDumpSnapshots - see §3.55.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ReferenceDumpTests
     {

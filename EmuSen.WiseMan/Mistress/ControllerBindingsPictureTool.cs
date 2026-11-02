@@ -22,6 +22,7 @@ using SDL3;
 namespace EmuSen.WiseMan.Mistress
 {
     // Pictures of the bindings window for a person to look at, idle and lit, on the desktop and on a big-screen sheet; skipped unless EMUSEN_BINDINGS_PNG names a folder - see EmuSen_Settings_Reference.md §4.81.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ControllerBindingsPictureTool : IDisposable
     {

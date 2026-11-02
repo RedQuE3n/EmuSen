@@ -22,6 +22,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The help bars with the swap on, and the text popups, at 1280 by 800 and 1920 by 1200; EMUSEN_Q160_TAG names the build, so one build's pictures can sit beside another's.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class Q160PictureTool
     {

@@ -6,6 +6,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Cores
 {
     // MarsRT's video interface against angrylion's, one scanned frame at a time - see Mars_Video.md §3.
+    [Trait("Category", "nightly")]
     public class MarsViDifferentialTests
     {
         private const uint Framebuffer = 0x0020_0000;

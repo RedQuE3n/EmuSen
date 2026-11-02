@@ -21,6 +21,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The pictures of §23 at 1280 by 800: the options menu, the editor, the keyboard on a field, and an edited game in the view; written outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class GameOptionsPictureTool
     {

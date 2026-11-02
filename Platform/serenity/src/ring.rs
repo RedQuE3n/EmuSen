@@ -2,9 +2,17 @@
 //! exported, which a hosted core's device imports; each picture taken from `VK_QUEUE_FAMILY_EXTERNAL` once `ready`
 //! reaches its value and given back by `done`. See EmuSen_LibretroHost.md §5.4, §5.4a and §10f.
 
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
+
 use ash::vk;
 
 use crate::vulkan::{Checked, Device, color, libc_close};
+
+/// How long a reader waits on the CPU for a picture's `ready` before it gives up on it, so no wait on a core's
+/// process is unbounded (EmuSen_LibretroHost.md §10x).
+pub const READY_BOUND: Duration = Duration::from_secs(2);
 
 /// The ring's images' format, the one the ABI names.
 pub const FORMAT: vk::Format = vk::Format::R8G8B8A8_UNORM;
@@ -34,6 +42,8 @@ pub struct Ring {
     slots: Vec<Slot>,
     ready: vk::Semaphore,
     done: vk::Semaphore,
+    /// The highest `done` value any reader on this device has submitted.
+    given: Arc<AtomicU64>,
     pub images: Vec<RingImage>,
     pub ready_fd: i32,
     pub done_fd: i32,
@@ -71,7 +81,7 @@ impl Device {
         let (memory_fd, semaphore_fd) = self.export_loaders().unwrap();
         let d = self.vk();
         let usage = vk::ImageUsageFlags::TRANSFER_DST | vk::ImageUsageFlags::TRANSFER_SRC | vk::ImageUsageFlags::SAMPLED;
-        let mut ring = Ring { device: self.clone(), slots: Vec::new(), ready: vk::Semaphore::null(), done: vk::Semaphore::null(), images: Vec::new(), ready_fd: -1, done_fd: -1, device_uuid: self.uuid(), driver_uuid: self.driver_uuid() };
+        let mut ring = Ring { device: self.clone(), slots: Vec::new(), ready: vk::Semaphore::null(), done: vk::Semaphore::null(), given: Arc::default(), images: Vec::new(), ready_fd: -1, done_fd: -1, device_uuid: self.uuid(), driver_uuid: self.driver_uuid() };
         for _ in 0..count {
             let mut external = vk::ExternalMemoryImageCreateInfo::default().handle_types(vk::ExternalMemoryHandleTypeFlags::OPAQUE_FD);
             let info = vk::ImageCreateInfo::default()
@@ -128,18 +138,37 @@ fn layers() -> vk::ImageSubresourceLayers {
 
 /// One picture of a ring as this device reads it: the slot's image, `ready`'s value to wait for and `done` to signal
 /// with it once the picture is read.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct InRing {
     image: vk::Image,
     family: u32,
     pub ready: vk::Semaphore,
     pub done: vk::Semaphore,
+    given: Arc<AtomicU64>,
     pub value: u64,
     pub width: u32,
     pub height: u32,
 }
 
 impl InRing {
+    /// Before the picture is read: every picture below it given back, since a reader that skipped some never reads
+    /// them and the core may wait on their slots to make this one; then its `ready` awaited on the CPU within `bound`;
+    /// and the `done` signal its read makes, none where a later picture was given back already (EmuSen_LibretroHost.md §10x).
+    pub(crate) fn take(&self, device: &Device, bound: Duration) -> Result<Option<(vk::Semaphore, u64)>, String> {
+        let below = self.value.saturating_sub(1);
+        if below > 0 && self.given.fetch_max(below, Ordering::AcqRel) < below {
+            device.signal_in_order(self.done, below)?;
+        }
+        let (semaphores, values) = ([self.ready], [self.value]);
+        let info = vk::SemaphoreWaitInfo::default().semaphores(&semaphores).values(&values);
+        match unsafe { device.vk().wait_semaphores(&info, bound.as_nanos() as u64) } {
+            Ok(()) => {}
+            Err(vk::Result::TIMEOUT) => return Err(format!("the core's picture {} did not arrive within {} s", self.value, bound.as_secs_f64())),
+            Err(e) => Err::<(), _>(e).check("vkWaitSemaphores")?,
+        }
+        Ok((self.given.fetch_max(self.value, Ordering::AcqRel) < self.value).then_some((self.done, self.value)))
+    }
+
     fn crossing(&self, take: bool) -> vk::ImageMemoryBarrier<'static> {
         let (from, to) = if take { (vk::QUEUE_FAMILY_EXTERNAL, self.family) } else { (self.family, vk::QUEUE_FAMILY_EXTERNAL) };
         vk::ImageMemoryBarrier::default()
@@ -180,7 +209,7 @@ impl Ring {
     /// The picture `frame_ring` answered, `value` in `slot`, `width` by `height`, as a chain takes it: the ring outlives
     /// every frame a chain advanced from it and has not yet rendered (EmuSen_LibretroHost.md §10f).
     pub fn picture(&self, slot: usize, value: u64, width: u32, height: u32) -> InRing {
-        InRing { image: self.slots[slot].image, family: self.device.family(), ready: self.ready, done: self.done, value, width, height }
+        InRing { image: self.slots[slot].image, family: self.device.family(), ready: self.ready, done: self.done, given: self.given.clone(), value, width, height }
     }
 
     /// The picture of `slot` once `ready` reaches `value`, `width` by `height`, copied into host memory as RGBA rows,
@@ -191,6 +220,7 @@ impl Ring {
         let out = self.device.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST)?;
         let d = self.device.vk();
         let picture = self.picture(slot, value, width, height);
+        let given = picture.take(&self.device, READY_BOUND)?;
         self.device.run_timed(
             |cmd| {
                 picture.record(&self.device, cmd, |image| unsafe {
@@ -200,7 +230,7 @@ impl Ring {
                 self.device.host_read_barrier(cmd, &out);
             },
             Some((self.ready, value)),
-            Some((self.done, value)),
+            given,
         )?;
         Ok(out.with_bytes(bytes as usize, |b| b.to_vec()))
     }
@@ -251,6 +281,63 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         reading.join().unwrap().unwrap();
+        ring.release_after_crash(1).unwrap();
+    }
+
+    /// The test's stand-in for a core: each picture made once the slot's last picture is given back, as the libretro
+    /// host's copy waits on `done`, and `ready` signalled for it.
+    fn core_making(ring: std::sync::Arc<Ring>, last: u64) -> std::thread::JoinHandle<Result<(), String>> {
+        std::thread::spawn(move || {
+            let d = ring.device.vk();
+            for v in 1..=last {
+                if v > 3 {
+                    let (s, x) = ([ring.done], [v - 3]);
+                    unsafe { d.wait_semaphores(&vk::SemaphoreWaitInfo::default().semaphores(&s).values(&x), 10_000_000_000) }.map_err(|e| format!("picture {v} waited on done {}: {e:?}", v - 3))?;
+                }
+                unsafe { d.signal_semaphore(&vk::SemaphoreSignalInfo::default().semaphore(ring.ready).value(v)) }.check("vkSignalSemaphore")?;
+            }
+            Ok(())
+        })
+    }
+
+    // §10x: a reader that skipped three pictures and reads the fourth gives the skipped ones back first, so the core makes it.
+    #[test]
+    fn a_picture_read_after_three_skipped_ones_gives_them_back_and_arrives() {
+        let Ok(device) = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) else { return eprintln!("skipped: no Vulkan device") };
+        if !device.rings() {
+            return eprintln!("skipped: the device makes no ring");
+        }
+        let ring = std::sync::Arc::new(device.create_ring(64, 64, 3).unwrap());
+        let core = core_making(ring.clone(), 5);
+        ring.read(0, 1, 64, 64).unwrap();
+        let reader = ring.clone();
+        let reading = std::thread::spawn(move || reader.read(1, 5, 64, 64).map(|_| ()));
+        let start = Instant::now();
+        while !reading.is_finished() {
+            assert!(start.elapsed() < Duration::from_secs(5), "picture 5 never arrives: its slot's picture 2 was skipped and never given back");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        reading.join().unwrap().unwrap();
+        core.join().unwrap().unwrap();
+    }
+
+    // §10x: a picture whose core died before making it is given up within a bound, never waited on for ever.
+    #[test]
+    fn a_picture_that_never_arrives_is_given_up_within_a_bound() {
+        let Ok(device) = Device::create(std::env::var("EMUSEN_GPU_DEVICE").ok().as_deref(), false) else { return eprintln!("skipped: no Vulkan device") };
+        if !device.rings() {
+            return eprintln!("skipped: the device makes no ring");
+        }
+        let ring = std::sync::Arc::new(device.create_ring(64, 64, 3).unwrap());
+        let reader = ring.clone();
+        let reading = std::thread::spawn(move || reader.read(0, 1, 64, 64).map(|_| ()));
+        let start = Instant::now();
+        while !reading.is_finished() {
+            assert!(start.elapsed() < Duration::from_secs(5), "the read of a picture that never comes still waits after 5 s");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let said = reading.join().unwrap().unwrap_err();
+        assert!(said.contains("did not arrive"), "{said}");
         ring.release_after_crash(1).unwrap();
     }
 }

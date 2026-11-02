@@ -2,7 +2,8 @@
 // with OPEN_RING on Serenity's device, each frame drawn from the ring by a one-pass chain (a frame read back uploaded to it
 // instead), frames from..to timed; a pad
 // script (EMUSEN_RING_PADS=FILE, lines `<frame> <control> [<frames held>]`), PNGs (EMUSEN_RING_PNG=DIR:F,F,...) and a
-// state taken and loaded at the end, the log's lines holding EMUSEN_RING_LOG's text (EmuSen_LibretroHost.md §10q).
+// state taken and loaded at the end, the log's lines holding EMUSEN_RING_LOG's text (EmuSen_LibretroHost.md §10q); a pad
+// pulled or plugged in at a frame, EMUSEN_RING_PRESENCE=<frame>:<port>:<0|1>,... (§10x).
 
 use std::path::Path;
 use std::time::Instant;
@@ -99,6 +100,11 @@ fn main() {
     home.point_tree();
     unsafe { std::env::set_var("EMUSEN_CORE_RUNNER", home.installation.join("emusen-core-runner")) };
     let script = std::env::var("EMUSEN_RING_PADS").ok().map(|f| pads(&std::fs::read_to_string(&f).unwrap_or_else(|e| fail(format!("{f}: {e}")))).unwrap_or_else(|e| fail(e))).unwrap_or_default();
+    let presence: Vec<(u64, u32, u32)> = std::env::var("EMUSEN_RING_PRESENCE").ok().map(|v| v.split(',').map(|e| {
+        let f: Vec<u64> = e.split(':').map(n).collect();
+        if f.len() != 3 { fail(format!("{e} is not <frame>:<port>:<0|1>")) }
+        (f[0], f[1] as u32, f[2] as u32)
+    }).collect()).unwrap_or_default();
     let shots: (String, Vec<u64>) = std::env::var("EMUSEN_RING_PNG").ok().and_then(|v| v.split_once(':').map(|(d, f)| (d.to_string(), f.split(',').map(n).collect()))).unwrap_or_default();
 
     let (c, p) = (format!("[{:?}]", home.installation.to_string_lossy()), format!("[{:?}]", home.cores.to_string_lossy()));
@@ -144,6 +150,10 @@ fn main() {
             let (_, control, pressed) = script[next];
             rt.check(unsafe { api::emusen_crystal_input_button(rt.0, s, 0, control, pressed as u32) }, "button");
             next += 1;
+        }
+        for &(_, port, on) in presence.iter().filter(|p| p.0 == frame) {
+            rt.check(unsafe { api::emusen_crystal_input_connected(rt.0, s, port, on) }, "connected");
+            println!("presence: port {port} {} at frame {frame}", if on == 1 { "plugged in" } else { "pulled" });
         }
         let t = Instant::now();
         f = emusen_crystal_frame_info { size: size_of::<emusen_crystal_frame_info>() as u32, ..Default::default() };

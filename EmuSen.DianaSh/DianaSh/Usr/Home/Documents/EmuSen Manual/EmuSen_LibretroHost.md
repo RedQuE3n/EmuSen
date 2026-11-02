@@ -2144,6 +2144,115 @@ failing:
 
 The broker's other 14 libretro tests pass unchanged.
 
+## 10x. A pad's arrival froze the window: a ring deadlock, and bounded waits (2026-11-02)
+
+**What was seen.** On the handheld on 2026-11-02, build dc6bc0a67, Jak and Daxter was running on PCEE2 through Steam
+with two pads connected. A virtual Xbox 360 pad was removed at 13:11:13. The core's runner was gone afterwards, with no
+core dump. Mistress's UI thread and a second thread named "EmuSen" were waiting in `drm_syncobj_array_wait_timeout`,
+and the window no longer answered AT-SPI.
+
+**Reproduced on the desktop** [M, 2026-11-02, out/ at dc6bc0a67, a fresh sandbox home, PCEE2 2026-11-02 build
+(SHA-256 `e09d5435…`) installed and approved by pad]:
+- The hang appears only when the screen presents on the device, so that PCEE2 draws into the ring ("in a ring" in the
+  picture log). On the read-back path, pads arriving and leaving did nothing.
+- A virtual pad was added and removed mid-game (`vpad.py`). The runner ended at 2 of 19 arrivals, both the first arrival of their run. Both times the
+  error log said `emulation halt: Sony - PlayStation 2 (PCEE2) stopped: the core stopped answering within 10 s and was
+  stopped`, 10 s after the arrival (13:31:52 and 13:36:50). The runner was not crashing: the broker's deadline (§3.4)
+  stopped it with `SIGKILL`, which leaves no core dump.
+- A stack of the hung Mistress process showed what was waiting:
+  - The UI thread was in `Device::settle_held` → `vkWaitForFences(u64::MAX)`, called from
+    `Chain::advance_ring`. It was waiting for its previous present, which waits on the ring's `ready`.
+  - The second thread was Mesa's `vk_queue_submit_thread_func`, holding that submission until `ready` reached its
+    value.
+
+**The cause.** The runner's copy into a slot waits on `done` reaching that slot's last value (`released_at`). So
+picture *V* is made only once *V − 3* is given back. A reader gives a picture back only by reading it, and the frame
+hand-off drops a picture that a newer one replaces before the UI thread takes it.
+
+When the presenter skips three pictures in a row and then reads the fourth, *V*, these waits form a cycle:
+- the read of *V* waits for `ready` = *V*;
+- the core's copy of *V* waits for `done` ≥ *V − 3*;
+- only reading *V − 3* would have given that back, and that picture was skipped.
+
+The runner's next frames fill its in-flight fences. `advance` then blocks until the broker's 10 s deadline kills the
+runner. The UI thread waits on the fence for ever, because nothing raises `ready` while the session's close waits for
+that same thread.
+
+A pad's arrival is a moment when the UI thread is busy (the pad's notice, the library's hint). The present trace
+(`EMUSEN_PRESENT_TRACE`) over four arrivals and four removals showed this:
+- every arrival made a frame-number jump of 3 between two draws, with gaps of 25.7 to 43.5 ms;
+- every removal made a jump of 2;
+- the whole run's median gap was 17.3 ms and its 99th percentile 17.6 ms.
+
+A jump of 3 skips two pictures and is safe. A jump of 4 is the deadlock. On the handheld's slower CPU the stalls are
+longer, so there it happens every time. Any stall of the UI thread longer than three pictures causes it; a pad is only
+the common trigger.
+
+**The fix, in Serenity** (`ring.rs`, `chain.rs`, `vulkan.rs`):
+1. *Skipped pictures are given back first.* Before a reader reads picture *V*, `InRing::take` signals `done` = *V − 1*
+   in queue order, in a submission with no waits (`Device::signal_in_order`). It does this only when no reader on the
+   device has given back that far yet; the ring's `given` counter holds the highest value submitted. A reader never
+   reads below *V* again, so the slots it skipped are free for the core. The signal follows every earlier submission on
+   the queue, so `done` only ever rises. A read whose value was already given back by another reader signals nothing.
+2. *No wait on a core's process is unbounded.* `take` waits for `ready` = *V* on the CPU, bounded by `READY_BOUND`
+   (2 s), and submits the read only once it has arrived. No host submission ever waits on a value a dead core might
+   never signal, and Mesa's submit thread is never used for one. Past the bound the read fails with "the core's picture
+   *V* did not arrive within 2 s".
+3. Every wait on the device's own fences (`settle_held`, `run_timed`) is bounded by `FENCE_BOUND` (10 s) and reported
+   as an error.
+
+The core still sees a port's device change as libretro defines it, unchanged: `retro_set_controller_port_device`
+with `RETRO_DEVICE_NONE` when a pad leaves, and the port's pad device when one arrives (§4.4). Headless, through the
+`ring` example's new `EMUSEN_RING_PRESENCE=<frame>:<port>:<0|1>,...`, pulling and plugging in ports 0 and 1 during
+Jak's boot and in play changed nothing on the 2026-11-01 build. A real uinput pad removed during a headless run did
+nothing either.
+
+**Stale locks.** The `.lock` files left beside the cards and the console memory after the frozen process was
+terminated name its pid. They are advisory `flock` locks (`EmuSen_SaveMedia.md` §3.5), which the kernel releases when
+the process dies, and `medium_lock::try_take` takes such a file over. Every relaunch on 2026-11-02 started Jak with
+them present. `galaxia`'s `a_file_another_open_file_has_locked_is_held_by_another_program_and_a_stale_one_is_taken`
+covers it.
+
+**Tests**, each run by name:
+- `serenity` `ring::tests::a_picture_read_after_three_skipped_ones_gives_them_back_and_arrives`: a stand-in core
+  thread makes each picture once `done` ≥ *v − 3*; the reader reads 1, then 5. On the old code it is still waiting
+  after 5 s; with the fix it passes.
+- `serenity` `ring::tests::a_picture_that_never_arrives_is_given_up_within_a_bound`: on the old code still waiting
+  after 5 s; with the fix it ends in the words above.
+- `emusen-core-broker` `api_ring` `a_presenter_that_skips_pictures_while_pads_come_and_go_never_stalls_the_core`: the
+  test core in the confined runner, with a ring through the frontend API. It runs 30 frames, draws every fifth and
+  pulls and plugs in ports 1 and 0. On the old code it hangs at the first skip; with the fix it passes in 19.7 s.
+- WiseMan `HostedCoreLaunchTests` on the Rust runtime:
+  - `A_runner_killed_mid_game_ends_the_session_in_words_and_the_next_game_runs`;
+  - `Pads_pulled_and_plugged_in_mid_game_leave_the_session_running`.
+
+**In the real window** [M, 2026-11-02]. Setup:
+- out/ at dc6bc0a67 with this change's platform library (release profile).
+- A fresh home; PCEE2 installed and approved by pad; Jak started in the ring.
+- Silent output; focus confirmed through AT-SPI before every press.
+- A coverage run of another branch was using the CPU at the same time.
+
+Results:
+- *Pads.* Five times, a second virtual pad arrived mid-game and left 5 s later. The runner lived through all five,
+  and the error log gained no line. Frame rate per second:
+  - mostly 59.8 to 60.1;
+  - single windows of 52.8 and 57.5, and a run of 51.0 to 58.4 where the core's own `retro_run` rose to 15 to 18 ms
+    (`sleep+rest` near 0), which is the core's load, not a wait;
+  - 40 s with no pad events afterwards: 59.8 to 60.2.
+- *A runner killed.* `SIGKILL` on the runner mid-game. Within 0.12 s the window showed "[CPU HALT] Sony -
+  PlayStation 2 (PCEE2) stopped: the core's process ended on signal 9". The error log has `emulation halt: …
+  signal 9 (detail 0)` with its crash report. No thread waited in `drm_syncobj`, and AT-SPI answered. Guide opened the
+  game menu, and Start and B each closed it. Leave, Back to Library, and A with Restart started Jak again, in the ring,
+  at 59.9 fps.
+
+**Seeded faults**, each caught by the `serenity` tests above:
+- the skipped pictures not given back: the skip test, still waiting after 5 s;
+- `ready` not awaited on the CPU: the bound test, still waiting after 5 s;
+- too little given back (*V − 4*): the skip test.
+
+**Left.** A runner that dies while its game is paused is noticed at the next frame the game runs, because nothing
+calls it in between.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

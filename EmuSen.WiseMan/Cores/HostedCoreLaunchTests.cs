@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Diagnostics;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia.Input;
@@ -145,5 +146,49 @@ namespace EmuSen.WiseMan.Cores
             Assert.True(saved > 0);
             Frames(s, 2);
         }
+        // The runners this process started, by their parent and command name in /proc.
+        private static int[] Runners() =>
+            Directory.GetDirectories("/proc").Select(Path.GetFileName).Where(d => d!.All(char.IsAsciiDigit)).Select(d => int.Parse(d!))
+                .Where(pid => { try { string[] stat = File.ReadAllText($"/proc/{pid}/stat").Split(") "); return stat[0].EndsWith("(emusen-core-run") && stat[1].Split(' ')[1] == Environment.ProcessId.ToString(); } catch (IOException) { return false; } })
+                .ToArray();
+
+        // §10x: a runner killed mid-game ends its session within a bound, in words naming the signal, and the next game runs.
+        [Fact]
+        public void A_runner_killed_mid_game_ends_the_session_in_words_and_the_next_game_runs()
+        {
+            using CrystalRuntime runtime = Runtime();
+            _output.WriteLine($"runtime: {CrystalRuntime.Implementation}");
+            CrystalSession s = runtime.Open(new CrystalOpen { Path = Disc(), Engine = _entry.Found.EngineName, NoBattery = true });
+            Frames(s, 10);
+            int runner = Assert.Single(Runners());
+            Process.GetProcessById(runner).Kill();
+            var clock = Stopwatch.StartNew();
+            var ended = Assert.Throws<CrystalException>(() => Frames(s, 5));
+            _output.WriteLine($"ended after {clock.ElapsedMilliseconds} ms: {ended.Message}");
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(5), "the end is noticed within a bound");
+            Assert.Contains("signal 9", ended.Message);
+            s.Dispose();
+            using CrystalSession next = runtime.Open(new CrystalOpen { Path = Disc(), Engine = _entry.Found.EngineName, NoBattery = true });
+            Assert.True(Frames(next, 5).picture_serial > 0, "the next game runs");
+        }
+
+        // §10x: pads pulled and plugged in mid-game reach the core as its ports' devices, and the session runs on.
+        [Fact]
+        public void Pads_pulled_and_plugged_in_mid_game_leave_the_session_running()
+        {
+            using CrystalRuntime runtime = Runtime();
+            _output.WriteLine($"runtime: {CrystalRuntime.Implementation}");
+            using CrystalSession s = runtime.Open(new CrystalOpen { Path = Disc(), Engine = _entry.Found.EngineName, NoBattery = true });
+            ulong serial = Frames(s, 5).picture_serial;
+            foreach ((int port, bool on) in new[] { (1, false), (1, true), (0, false), (0, true), (1, false) })
+            {
+                s.Connected(port, on);
+                ulong now = Frames(s, 5).picture_serial;
+                Assert.True(now > serial, $"port {port} {(on ? "plugged in" : "pulled")}: the session runs on");
+                serial = now;
+            }
+            Assert.Single(Runners());
+        }
     }
 }
+

@@ -477,6 +477,43 @@ package); `claims.rs`' sources case; `GalaxiaParityTests.A_self_contained_packag
 and `A_package_s_zip_is_unpacked_by_the_platform_library_and_refused_with_words_by_the_C_sharp_half` (a zip another
 archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen_GamePackages.md` §19.
 
+### 3.14 A scoped override for tests (design, 2026-11-01; not built)
+
+*Proposed 2026-11-01, for the tester's decision of the same day to free WiseMan's serial collection (`EmuSen_Debugging_Tools_Reference_v5.md` §3.68).* §3.1's two overrides are process statics, so every class that sets one sits in `"Process globals"`, which xUnit runs alone after every other collection. On 2026-11-01, 301 test files were in that collection; 173 of them set a Galaxia override, and 123 have no other recorded reason to be there.
+
+**The constraint.** An override lives in two places. One is the C# statics. The other is the platform library's process tree, a `RwLock<Tree>` that `GalaxiaNative.OverrideChanged` writes. Every Rust consumer resolves through that tree: the runtime's sessions (saves, states), the cheats, the error log and the shell. A value scoped to one test in C# alone would leave a Rust session resolving the process's directories, so a scope without the Rust side would be unsafe.
+
+**Options weighed.**
+
+1. *A scope in C# only*: rejected for the reason above.
+2. *An instance the tests own*: every production reader of `DataStore` and `ConfigStore` would take an instance, and the Rust consumers would too. That widens two stable surfaces to serve tests.
+3. *One process per class*: xUnit 2 cannot do this. Splitting WiseMan by component gives one process per assembly, a coarser form that is planned separately.
+4. *Chosen: a scope in C#, resolved by stateless platform calls.*
+
+**The design.**
+
+- `GalaxiaScope.Enter(data:, config:, legacy:)` returns an `IDisposable` and sets an `AsyncLocal` value. It is internal to EmuSen.Galaxia and visible to WiseMan.
+- Inside a scope, `DataStore`'s and `ConfigStore`'s getters resolve against the scope. They do so through new platform functions, `galaxia_directory_for` and `galaxia_config_path_for`, which take the three overrides as arguments and read no process state. This is a minor version of the platform interface, an addition only.
+- Outside a scope nothing changes: the statics, the process tree and every current test behave as now.
+- The Rust consumers keep the process tree. A class that starts a runtime session, or calls a Rust function that resolves a path itself, sets the statics and stays in the collection.
+- A guard makes a mistake loud: starting a runtime session inside a scope throws `InvalidOperationException`, naming the class that has to stay serial. The guard does not let a scope pass unnoticed into code that cannot see it.
+- `AsyncLocal` flows through `await`, `Task.Run` and `new Thread`. It does not flow through native callbacks or `UnsafeQueueUserWorkItem`, and whether Avalonia's dispatcher carries it is to be proven with a test before any UI class moves. Until then, `UiTest.Run` captures the caller's scope and re-enters it inside the dispatched body.
+
+**The other reasons in `TestCollections.cs`, re-audited 2026-11-01.**
+
+- *trace* and *Venus*: obsolete. `CpuBinaryTrace`, `GsuBinaryTrace` and `ApuWriteTrace` no longer exist outside that comment, and the C# Venus core has been retired.
+- *SDL*: stays. `EmuSen.Endymion/AudioPlayer.cs` opens real devices, and SDL's initialisation state is per process.
+- *firmware*: `FirmwareLibrary.Directory` is a plain static. It takes the same scope, applied to its own static.
+- `CheatDatabaseInstaller.FetchOverride` is a further static of the config kind. It takes the same treatment.
+
+**Proof, before the collection shrinks.**
+
+- Tests of the scope itself: two concurrent flows each see their own directories; leaving a scope restores the statics' answer; a session started inside a scope throws.
+- Each class leaves the collection only after its constructor and `Dispose` use a scope rather than a static.
+- As §3.56 and §3.57 require, three consecutive green full runs before the collection shrinks.
+
+**Expected.** Up to the 123 config-only files leave the collection, fewer those that start a session. The review of 2026-11-01 estimated the full suite at 15 to 25 minutes rather than 47, bounded by the single UI dispatcher and by what stays serial. The estimate is to be measured from the TRX logs.
+
 ### 4.1 Why rename rather than write-in-place
 
 `File.Move(temp, path, overwrite: true)` is atomic at the filesystem level: the destination is either the whole old file or the whole new one, never a partial write. The truncation risk moves onto the `.tmp` file, which nothing ever reads — `AtomicFileTests.An_abandoned_temp_file_never_becomes_the_live_file` pins that a leftover temp from a killed process is ignored.

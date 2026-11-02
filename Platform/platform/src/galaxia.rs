@@ -102,6 +102,25 @@ pub unsafe extern "C" fn emusen_galaxia_set_override(which: u32, directory: *con
     }
 }
 
+/// A test's scope, on the calling thread only: the three redirects every call on this thread resolves against until it is scoped again; all three null return it to the process tree. Never called by a program, and never seen by the library's own threads - see EmuSen_Galaxia.md §3.14.
+///
+/// # Safety
+/// Each pointer must be valid for its length, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_galaxia_thread_scope(config: *const u8, config_len: usize, data: *const u8, data_len: usize, legacy: *const u8, legacy_len: usize) -> i32 {
+    let scope = || -> Result<Option<tree::ThreadScope>, i32> {
+        let (config, data, legacy) = (unsafe { text(config, config_len) }?, unsafe { text(data, data_len) }?, unsafe { text(legacy, legacy_len) }?);
+        Ok((config.is_some() || data.is_some() || legacy.is_some()).then(|| tree::ThreadScope { config: config.map(str::to_string), data: data.map(str::to_string), legacy: legacy.map(str::to_string) }))
+    };
+    match scope() {
+        Ok(scope) => {
+            tree::set_thread_scope(scope);
+            0
+        }
+        Err(status) => status,
+    }
+}
+
 /// A config file's path, in a category's subdirectory when one is given.
 ///
 /// # Safety

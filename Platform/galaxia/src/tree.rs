@@ -2,6 +2,8 @@
 //! `DataStore` of the C# Galaxia. See EmuSen_Galaxia.md §3 and `man hier`.
 
 use crate::dotnet_path::{self as path, Style};
+use std::cell::RefCell;
+use std::ops::Deref;
 use std::sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 /// The fallback root beside the binary, when neither marker turns up.
@@ -415,9 +417,52 @@ fn process_tree() -> &'static RwLock<Tree> {
     })
 }
 
-/// The process's tree, computed once on first use as `ConfigRoot.Directory` is.
-pub fn tree() -> RwLockReadGuard<'static, Tree> {
-    process_tree().read().unwrap_or_else(|poisoned| poisoned.into_inner())
+/// The three redirects a test has scoped to one thread, in place of the process tree's - see EmuSen_Galaxia.md §3.14.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ThreadScope {
+    pub config: Option<String>,
+    pub data: Option<String>,
+    pub legacy: Option<String>,
+}
+
+thread_local! {
+    static SCOPE: RefCell<Option<ThreadScope>> = const { RefCell::new(None) };
+}
+
+/// Scopes the redirects to the calling thread, or with `None` returns it to the process tree; no other thread, the library's own included, sees it.
+pub fn set_thread_scope(scope: Option<ThreadScope>) {
+    SCOPE.with(|s| *s.borrow_mut() = scope);
+}
+
+/// The tree a call on this thread resolves against: the process's, or a copy of it under this thread's scope.
+pub enum TreeRef {
+    Process(RwLockReadGuard<'static, Tree>),
+    Scoped(Tree),
+}
+
+impl Deref for TreeRef {
+    type Target = Tree;
+    fn deref(&self) -> &Tree {
+        match self {
+            TreeRef::Process(guard) => guard,
+            TreeRef::Scoped(tree) => tree,
+        }
+    }
+}
+
+/// The process's tree, computed once on first use as `ConfigRoot.Directory` is, under the calling thread's scope when it has one.
+pub fn tree() -> TreeRef {
+    let process = process_tree().read().unwrap_or_else(|poisoned| poisoned.into_inner());
+    match SCOPE.with(|s| s.borrow().clone()) {
+        None => TreeRef::Process(process),
+        Some(scope) => {
+            let mut tree = process.clone();
+            tree.config_override = scope.config;
+            tree.data_override = scope.data;
+            tree.legacy_override = scope.legacy;
+            TreeRef::Scoped(tree)
+        }
+    }
 }
 
 /// The process's tree, to move an override.
@@ -428,6 +473,17 @@ pub fn tree_mut() -> RwLockWriteGuard<'static, Tree> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_thread_scope_is_seen_by_its_thread_alone_and_leaves_the_process_tree_as_it_was() {
+        let before = tree().directory(Directory::Config);
+        set_thread_scope(Some(ThreadScope { config: Some("/scoped/etc".into()), data: Some("/scoped/home".into()), legacy: None }));
+        assert_eq!(tree().directory(Directory::Config).as_deref(), Some("/scoped/etc"));
+        assert_eq!(std::thread::spawn(|| tree().directory(Directory::Config)).join().unwrap(), before);
+        set_thread_scope(None);
+        assert_eq!(tree().directory(Directory::Config), before);
+        assert!(matches!(tree(), TreeRef::Process(_)));
+    }
     use crate::test_support::TempDir;
 
     #[cfg(unix)]

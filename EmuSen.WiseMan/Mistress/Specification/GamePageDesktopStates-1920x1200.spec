@@ -80,7 +80,7 @@ tree
                       65 AccessText at=412,442,24,22 box=24,22 by=clip caps=5.133 drawn face=Barlow in=40 layout=23.35,13.2 limit=399,441,50,24 owner=64 paints=#D4D4D4FF role=none size=7.33 text=Load
                     66 Button at=465,441,56,24 by=fixed-scroll drawn focus heard=Delete in=40 limit=24,349,1672,785 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state.delete" op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=button text=Delete
                       67 AccessText at=478,442,30,22 box=30,22 by=clip caps=5.133 drawn face=Barlow in=40 layout=29.33,13.2 limit=465,441,56,24 owner=66 paints=#D4D4D4FF role=none size=7.33 text=Delete
-                68 TextBlock at=380,481,160,14 box=160,14 by=fixed-scroll caps=5.133 drawn face=Barlow heard="Slot 3" in=40 layout=25.46,13.2 limit=24,349,1672,785 paints=#D4D4D4FF role=text size=7.33 text="Slot 3"
+                68 TextBlock at=380,481,160,14 box=160,14 by=fixed-scroll caps=5.133 drawn face=Barlow heard="Slot 3" in=40 layout=25.46,13.2 limit=24,349,1672,785 paints=#EEEEF0FF role=text size=7.33 text="Slot 3"
                 69 TextBlock at=380,497,160,14 box=160,14 by=fixed-scroll caps=5.133 drawn face=Barlow heard="3 days ago" in=40 layout=48.88,13.2 limit=24,349,1672,785 paints=#8D8D91FF role=text size=7.33 text="3 days ago"
               70 StackPanel at=556,353,160,158 by=fixed-scroll in=40 limit=24,349,1672,785 role=none
                 71 Panel at=556,353,160,120 by=fixed-scroll heard="Auto, Where you left off · 12 min ago" in=40 limit=24,349,1672,785 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).resume.state" role=none

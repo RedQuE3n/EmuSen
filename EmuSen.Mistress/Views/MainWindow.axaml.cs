@@ -476,6 +476,7 @@ namespace EmuSen.Mistress.Views
             SetSetting = (console, key, value) => Wrap(() => { runtime.SetSetting(console, key, value); RuntimeCatalog.Forget(); return 0; }),
             Approve = sha => Wrap(() => { runtime.CoreApprove(sha); return 0; }),
             Revoke = sha => Wrap(() => { runtime.CoreRevoke(sha); return 0; }),
+            Rescan = () => Wrap(() => { runtime.Rescan(); RuntimeCatalog.Forget(); return 0; }),
         };
 
         // The runtime's refusal as the InvalidOperationException the tool library catches, since it does not know the binding's exception.
@@ -704,7 +705,7 @@ namespace EmuSen.Mistress.Views
             });
         }
 
-        private void LoadState() => _ = LoadStateAsync();
+        private void LoadState() => LoadStateAsync().Logged("mistress", "LoadStateAsync");
 
         // Runs straight through to the load unless the state's record names another copy of the game; what may load is the runtime's to say - see EmuSen_Settings_Reference.md §4.37 and EmuSen_Backend.md §14.12.
         private async Task LoadStateAsync()
@@ -772,8 +773,8 @@ namespace EmuSen.Mistress.Views
 
             MenuStrip.SetMenus(
                 new LunaMenu("_File",
-                    new LunaAction("_Open ROM...", () => _ = OpenRomAsync()),
-                    new LunaAction("_Browse ROMs...", () => _ = BrowseRomsAsync()),
+                    new LunaAction("_Open ROM...", () => OpenRomAsync().Logged("mistress", "OpenRomAsync")),
+                    new LunaAction("_Browse ROMs...", () => BrowseRomsAsync().Logged("mistress", "BrowseRomsAsync")),
                     StartConsoleMenuItems(),
                     LunaAction.Separator(),
                     new LunaAction("Game _Library", ShowLibrary),
@@ -1106,6 +1107,13 @@ namespace EmuSen.Mistress.Views
             if (session.EngineNotice is { } notice) StatusText.Text += $"  ({notice})";
             if (session.FirmwareNotice is { } firmware) StatusText.Text += $"  ({firmware})";
             if (session.MediaNotice is { } media) StatusText.Text += $"  ({media})";
+            if (_engineFallbackNotice is { } fallback)
+            {
+                Console.WriteLine("[core] " + fallback);
+                StatusText.Text += $"  ({fallback})";
+                Notify(fallback);
+                _engineFallbackNotice = null;
+            }
         }
 
         // The wired session started: the pad polled and the emulation thread running.

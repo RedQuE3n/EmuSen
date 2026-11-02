@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -69,8 +70,8 @@ namespace EmuSen.Tools.Scraper
             SetListActions([_markAll]);
             SetPlanOptions([_theme, _videos, _overwrite]);
             MarksChanged += UpdateActions;
-            SectionChosen += section => { _endSaid = null; _ = Refresh(); };
-            FilterChosen += filter => { _endSaid = null; _ = Refresh(); };
+            SectionChosen += section => { _endSaid = null; Refresh().Logged("scraper", "Refresh"); };
+            FilterChosen += filter => { _endSaid = null; Refresh().Logged("scraper", "Refresh"); };
 
             _timer = new DispatcherTimer { Interval = PollEvery };
             _timer.Tick += (_, _) => Poll();
@@ -199,7 +200,7 @@ namespace EmuSen.Tools.Scraper
         private void OptionsChanged(bool relist = true)
         {
             ShowOverview();
-            if (relist) _ = Refresh();
+            if (relist) Refresh().Logged("scraper", "Refresh");
         }
 
         private void WatchOption(LunaAction option, bool relist)
@@ -304,7 +305,7 @@ namespace EmuSen.Tools.Scraper
             if (said is not null) Say(said);
             UpdateActions();
             RunEnded?.Invoke();
-            _ = Refresh();
+            Refresh().Logged("scraper", "Refresh");
         }
 
         private void StopRun()

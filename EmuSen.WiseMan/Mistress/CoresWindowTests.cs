@@ -36,6 +36,8 @@ namespace EmuSen.WiseMan.Mistress
         private readonly Func<CoresRuntime?, CoresRuntime?> _realRuntime = CoresPane.RuntimeFor;
         private static readonly FieldInfo ConfirmField = typeof(CoresWindow).GetField("Confirm", BindingFlags.Static | BindingFlags.NonPublic)!;
         private readonly object _realConfirm = ConfirmField.GetValue(null)!;
+        private static readonly FieldInfo TellField = typeof(CoresWindow).GetField("Tell", BindingFlags.Static | BindingFlags.NonPublic)!;
+        private readonly object _realTell = TellField.GetValue(null)!;
         private readonly List<string> _requests = new();
         private readonly FakeCoresRuntime _runtime = new();
 
@@ -61,6 +63,7 @@ namespace EmuSen.WiseMan.Mistress
             CoresPane.Disk = _realDisk;
             CoresPane.RuntimeFor = _realRuntime;
             ConfirmField.SetValue(null, _realConfirm);
+            TellField.SetValue(null, _realTell);
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
@@ -146,6 +149,25 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(pane.IsRunning);
             Assert.StartsWith("Installed pcsx2. Nothing downloaded runs until you approve it", pane.Notice);
             Assert.Contains("CRC-32", pane.Notice);
+            window.Close();
+        }, default);
+
+        // A refusal the runtime gives after the player said yes is said in a message over the window, not only on the bar the big screen's player misses (EmuSen_Cores.md §3.5).
+        [Fact]
+        public Task A_refused_approval_is_said_to_the_player() => Session.Dispatch(() =>
+        {
+            CoresRuntime fake = _runtime.Runtime;
+            CoresPane.RuntimeFor = _ => new CoresRuntime { Cores = fake.Cores, Systems = fake.Systems, Setting = fake.Setting, SetSetting = fake.SetSetting, Revoke = fake.Revoke,
+                Approve = sha => throw new InvalidOperationException($"no core library listed has the SHA-256 {sha}") };
+            ConfirmField.SetValue(null, (Func<Window, string, string, Task<bool>>)((_, _, _) => Task.FromResult(true)));
+            var told = new List<string>();
+            TellField.SetValue(null, (Func<Window, string, string, Task>)((_, title, message) => { told.Add(title + "\n" + message); return Task.CompletedTask; }));
+            (CoresWindow window, CoresPane pane) = Open();
+            pane.Table.Select(Row(pane, "ExtraPS2"));
+            Settle(window);
+            Assert.False(pane.ApproveSelectedAsync().Result);
+            Assert.Equal($"{CoreApproval.Title}\nExtra PS2 Core could not be approved: no core library listed has the SHA-256 {new string('4', 64)}", Assert.Single(told));
+            Assert.StartsWith("Extra PS2 Core could not be approved", pane.Notice);
             window.Close();
         }, default);
 

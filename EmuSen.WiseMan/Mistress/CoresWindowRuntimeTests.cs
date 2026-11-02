@@ -25,6 +25,8 @@ namespace EmuSen.WiseMan.Mistress
         private static readonly HeadlessUnitTestSession Session = HeadlessUnitTestSession.GetOrStartForAssembly(typeof(CoresWindowRuntimeTests).GetTypeInfo().Assembly);
         private static readonly FieldInfo ConfirmField = typeof(CoresWindow).GetField("Confirm", BindingFlags.Static | BindingFlags.NonPublic)!;
         private readonly object _realConfirm = ConfirmField.GetValue(null)!;
+        private static readonly FieldInfo TellField = typeof(CoresWindow).GetField("Tell", BindingFlags.Static | BindingFlags.NonPublic)!;
+        private readonly object _realTell = TellField.GetValue(null)!;
         private readonly Func<string, IToolJob> _realStart = CoresPane.StartJob;
         private readonly Func<bool> _realAvailable = CoresPane.ToolAvailable;
         private readonly Func<string, (long Free, long Total)?> _realDisk = CoresPane.Disk;
@@ -57,6 +59,7 @@ namespace EmuSen.WiseMan.Mistress
             CoresPane.Disk = _realDisk;
             CoresPane.RuntimeFor = _realRuntime;
             ConfirmField.SetValue(null, _realConfirm);
+            TellField.SetValue(null, _realTell);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -151,6 +154,102 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Contains(Sha256(pcee2), File.ReadAllText(Path.Combine(_root, "Config", "cores.approved")));
             main.Close();
         }, default);
+
+        // The tester's run on 2026-11-01: PCEE2 installed while Mistress ran, so the runtime's listing predated it; Approve on its page asked nothing until Cores listed the directories again. The real question, Dialogs.ConfirmAsync over the sheet-hosted window, answered by the pad.
+        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        public Task A_core_installed_while_Mistress_runs_is_approved_through_the_real_question_by_pad() => Session.Dispatch(() =>
+        {
+            Directory.Delete(Entry, recursive: true);
+            using CrystalRuntime runtime = Runtime();
+            string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
+            CoresPane.StartJob = _ => new ScriptedJob([LibretroCore("pcee2", "Sony - PlayStation 2 (PCEE2)", "ps2", "installed", 1 << 20),
+                new { @event = "done", op = "core-ls", counts = new System.Collections.Generic.Dictionary<string, int> { ["installed"] = 1 }, catalogue = "2026-11-01" }], ends: true);
+            CoresPane.RuntimeFor = _ => (CoresRuntime)Mistress("CoresRuntimeOf", runtime)!;
+            new EmuSen.Galaxia.Models.AppSettings { RomDirectory = Path.Combine(_root, "Roms"), BigScreen = true, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
+            Directory.CreateDirectory(Path.Combine(_root, "Roms"));
+            var main = new MainWindow { Width = 1280, Height = 800 };
+            main.Show();
+            var pad = new PadDriver(main);
+            Settle(main);
+            typeof(MainWindow).GetMethod("ShowCores", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+            Settle(main);
+            var shown = (CoresWindow)Sheets(main).Current!;
+            CoresPane pane = shown.Pane;
+            pane.Poll();
+            Settle(main);
+            CoreRow row = pane.Rows.Single(r => r.Stem == "pcee2");
+            Assert.Equal((Sha256(pcee2), "needs_approval"), (row.Sha256, row.Trust));
+            pane.BigScreenTable.Select(row);
+            pane.FocusRole(EmuSen.LunaP.Controls.AdaptiveRole.Content);
+            Settle(main);
+            pad.A();
+            Settle(main);
+            Assert.True(pane.IsDetailOpen, "Accept on the row opens its page");
+            pad.A();
+            Settle(main);
+            object? asked = Sheets(main).Current;
+            Assert.True(asked is not null && !ReferenceEquals(asked, shown), $"the question is presented over Cores, not {asked}; focus {main.FocusManager?.GetFocusedElement()}");
+            Assert.Contains(Sha256(pcee2), string.Join(" ", Sheets(main).SheetOf((Avalonia.Controls.Window)asked!)!.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text)));
+            pad.A();
+            Settle(main);
+            Assert.Same(shown, Sheets(main).Current);
+            Assert.Contains(Sha256(pcee2), File.ReadAllText(Path.Combine(_root, "Config", "cores.approved")));
+            main.Close();
+        }, default);
+
+        // A host that cannot list the directories again: the page's Approve asks with the hash the entry records, and the runtime's refusal is said, never dropped (EmuSen_Cores.md §3.5).
+        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        public Task Without_a_rescan_the_question_is_still_asked_and_the_refusal_said() => Session.Dispatch(() =>
+        {
+            Directory.Delete(Entry, recursive: true);
+            using CrystalRuntime runtime = Runtime();
+            string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
+            // The listing's row as the core tool reads it, with the hash its NOTICE records.
+            CoresPane.StartJob = _ => new ScriptedJob([new { @event = "core", stem = "pcee2", name = "Sony - PlayStation 2 (PCEE2)", corename = "pcee2", systems = new[] { "ps2" }, source = "libretro", version = "2.3.1", build = "2026-11-01", state = "installed", license = "GPLv3", authors = new[] { "Someone" }, size = 1L << 20, sha256 = Sha256(pcee2) },
+                new { @event = "done", op = "core-ls", counts = new System.Collections.Generic.Dictionary<string, int> { ["installed"] = 1 }, catalogue = "2026-11-01" }], ends: true);
+            var full = (CoresRuntime)Mistress("CoresRuntimeOf", runtime)!;
+            CoresPane.RuntimeFor = _ => new CoresRuntime { Cores = full.Cores, Systems = full.Systems, Setting = full.Setting, SetSetting = full.SetSetting, Approve = full.Approve, Revoke = full.Revoke };
+            string? asked = null, told = null;
+            ConfirmField.SetValue(null, (Func<Avalonia.Controls.Window, string, string, Task<bool>>)((_, _, message) => { asked = message; return Task.FromResult(true); }));
+            TellField.SetValue(null, (Func<Avalonia.Controls.Window, string, string, Task>)((_, _, message) => { told = message; return Task.CompletedTask; }));
+            var window = new CoresWindow(null, null) { Width = 1280, Height = 800 };
+            window.Show();
+            Settle(window);
+            CoresPane pane = window.Pane;
+            pane.Poll();
+            CoreRow row = pane.Rows.Single(r => r.Stem == "pcee2");
+            Assert.Null(row.Sha256);
+            pane.Table.Select(row);
+            Settle(window);
+            Assert.False(pane.ApproveSelectedAsync().Result);
+            Assert.Contains(Sha256(pcee2), asked);
+            Assert.StartsWith("Sony - PlayStation 2 (PCEE2) could not be approved: no core library listed has the SHA-256", told);
+            window.Close();
+        }, default);
+
+        // The tester's run on 2026-11-01: PCEE2 installed and waiting, Jak opened on Sapphire without a question. The route names the console's waiting default where no layer chose an engine, and Mistress asks about it first with the engine the game opens on otherwise (EmuSen_LibretroHost.md §10t).
+        [RustImplementationFact("the route's waiting default, 1.6")]
+        public void The_consoles_waiting_default_is_asked_about_ahead_of_the_native_fallback()
+        {
+            Directory.Delete(Entry, recursive: true);
+            string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
+            File.AppendAllText(Path.Combine(Cores, "libretro", "pcee2", "pcee2_libretro.info"), "supported_extensions = \"iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx\"\n");
+            string game = SyntheticPs2Disc.Dvd().WriteSet(_root, "Amber Saga");
+            using CrystalRuntime runtime = Runtime();
+            using (var route = System.Text.Json.JsonDocument.Parse(runtime.Route(game)))
+            {
+                Assert.Equal("Sapphire", route.RootElement.GetProperty("engine").GetString());
+                Assert.Equal(("pcee2", Sha256(pcee2)), (route.RootElement.GetProperty("waiting_default").GetProperty("stem").GetString(), route.RootElement.GetProperty("waiting_default").GetProperty("sha256").GetString()));
+            }
+            object? core = Mistress("CoreAwaitingApproval", runtime, game);
+            Assert.True(core is not null, runtime.Route(game));
+            string? Field(string name) => (string?)core!.GetType().GetProperty(name)!.GetValue(core);
+            Assert.Equal(("pcee2_libretro.so", Sha256(pcee2), "Sony - PlayStation 2 (PCEE2)", "Sapphire"), (Field("File"), Field("Sha256"), Field("Name"), Field("Instead")));
+            Assert.Equal("Sony - PlayStation 2 (PCEE2) waits for your approval, so this game opens on Sapphire.", Mistress("FallbackNotice", core!, "Sapphire"));
+            runtime.SetSetting("PlayStation 2", CoresPane.EngineKey, "Sapphire");
+            Assert.Contains("\"waiting_default\":null", runtime.Route(game));
+            Assert.Null(Mistress("CoreAwaitingApproval", runtime, game));
+        }
 
         [RustImplementationFact("the cores listing's libretro rows, 1.5")]
         public void Mistress_asks_about_a_libretro_core_by_its_cores_file_and_hash()

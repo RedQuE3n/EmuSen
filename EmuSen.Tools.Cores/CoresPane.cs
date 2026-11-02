@@ -73,7 +73,7 @@ namespace EmuSen.Tools.Cores
             _install = new LunaAction("Install", () => MarkSelected(CoresPlan.Install.Key)) { PadButton = PadGlyphButton.North, HelpText = "Marks the chosen libretro core to be downloaded and installed." };
             _update = new LunaAction("Update", () => MarkSelected(CoresPlan.Update.Key)) { HelpText = "Marks the chosen core to be updated to the build the index offers." };
             _remove = new LunaAction("Remove", () => MarkSelected(CoresPlan.Remove.Key)) { HelpText = "Marks the chosen downloaded core to be removed; saves and settings are kept." };
-            _approve = new LunaAction("Approve…", () => _ = ApproveSelectedAsync()) { HelpText = "Asks whether to trust the chosen core, showing what it says it is and its SHA-256." };
+            _approve = new LunaAction("Approve…", () => ApproveSelectedAsync().Logged("cores", "Approve")) { HelpText = "Asks whether to trust the chosen core, showing what it says it is and its SHA-256." };
             _default = new LunaAction("Make Default", MakeDefault) { HelpText = "Makes the chosen core the engine of its console." };
             _options = new LunaAction("Options…", OpenOptions) { HelpText = "Opens the chosen core's options in its console's settings." };
             _verify = new LunaAction("Verify", Verify) { HelpText = "Checks each downloaded core against its record, and refreshes EmuSen's copies beside it." };
@@ -122,6 +122,7 @@ namespace EmuSen.Tools.Cores
         {
             if (_job is not null) return;
             if (!keepNotice) _notice = null;
+            Rescan();
             ReadRuntime();
             _listing = RuntimeRows();
             if (!ToolAvailable())
@@ -398,21 +399,43 @@ namespace EmuSen.Tools.Cores
         /// <summary>The chosen core's approval asked, and recorded through the runtime when the player approves.</summary>
         public async Task<bool> ApproveSelectedAsync()
         {
-            if (_runtime is null || Selected is not { Sha256: { } sha } row) return false;
+            if (_runtime is null || Selected is not { } row) return false;
+            if (HashOf(row) is not { } sha)
+            {
+                await RefuseAsync($"{row.Name} cannot be approved yet: its SHA-256 is known once it is downloaded.");
+                return false;
+            }
             string file = row.IsLibretro ? $"{row.Stem}_libretro" : Path.GetFileName(row.Library ?? row.Name);
             string message = CoreApproval.Message(row.Name, file, row.Authors, row.Licence, row.Consoles, sha, downloaded: row.IsLibretro);
             if (!await _host.Confirm(CoreApproval.Title, message)) return false;
             try { _runtime.Approve(sha); }
             catch (InvalidOperationException e)
             {
-                _notice = $"{row.Name} could not be approved: {e.Message}";
-                SetNotice(_notice);
+                await RefuseAsync($"{row.Name} could not be approved: {e.Message}");
                 return false;
             }
             _notice = $"Approved {row.Name} (SHA-256 {sha}).";
             Refresh(keepNotice: true);
             return true;
         }
+
+        // A refusal on the notice line and, where the host can, in a message the player must dismiss, since the big screen's bar is easily missed.
+        private async Task RefuseAsync(string words)
+        {
+            _notice = words;
+            SetNotice(words);
+            if (_host.Tell is { } tell) await tell(CoreApproval.Title, words);
+        }
+
+        // The runtime's directories listed again, so a core a job just installed or removed is the runtime's to approve.
+        private void Rescan()
+        {
+            try { _runtime?.Rescan?.Invoke(); }
+            catch (InvalidOperationException e) { _notice = $"The cores could not be listed again: {e.Message}"; }
+        }
+
+        // The hash a row is approved by: the runtime's, else the one its downloaded entry records; the page shows the same one.
+        private string? HashOf(CoreRow row) => row.Sha256 ?? (row.Stem is { } stem && _info.TryGetValue(stem, out JsonElement i) ? Text(i, "sha256") : null);
 
         // The chosen core made its console's engine: the section's console, else each console it runs (EmuSen_Cores.md §4.3).
         private void MakeDefault()
@@ -507,12 +530,12 @@ namespace EmuSen.Tools.Cores
                     }));
                 if (d.TryGetProperty("previous", out JsonElement p)) panel.Children.Add(Line($"The build of {Text(p, "build")} is kept for Roll Back."));
             }
-            string? sha = row.Sha256 ?? (info is { } dd ? Text(dd, "sha256") : null);
+            string? sha = HashOf(row);
             if (sha is not null) panel.Children.Add(Line($"SHA-256 {sha}{(row.AwaitsApproval ? " · not yet approved" : "")}", "CoresDetailHash"));
             else if (row.IsLibretro && !row.Installed) panel.Children.Add(Line("Its SHA-256 is known once it is downloaded; nothing downloaded runs until you approve it."));
             if (row.IsLibretro && row.Engine is null && row.Installed) panel.Children.Add(Line("It becomes a choice for its consoles once EmuSen's runtime lists it."));
             var buttons = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
-            if (sha is not null && (row.AwaitsApproval || row.IsLibretro && row.Installed)) buttons.Children.Add(Act("Approve…", "CoresApprove", () => _ = ApproveSelectedAsync()));
+            if (sha is not null && (row.AwaitsApproval || row.IsLibretro && row.Installed)) buttons.Children.Add(Act("Approve…", "CoresApprove", () => ApproveSelectedAsync().Logged("cores", "Approve")));
             if (row.Engine is not null && _host.Options is not null) buttons.Children.Add(Act("Options…", "CoresOptions", OpenOptions));
             if (info is { } withFirmware && withFirmware.TryGetProperty("firmware", out JsonElement any) && any.GetArrayLength() > 0 && _host.Firmware is { } firmware) buttons.Children.Add(Act("Open Firmware…", "CoresFirmware", firmware));
             if (row.Installed && _host.OpenFolder is { } open && FolderOf(row) is { } folder) buttons.Children.Add(Act("Open Folder", "CoresFolder", () => open(folder)));

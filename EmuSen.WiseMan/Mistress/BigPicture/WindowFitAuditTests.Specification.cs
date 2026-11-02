@@ -92,6 +92,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static List<string> RecordSheet(MainWindow window, PadDriver pad, string which, string name, bool presses, Xunit.Abstractions.ITestOutputHelper output)
         {
             Settle(window);
+            WaitFor(() => Sheets(window).Current is { } shown && Sheets(window).SheetOf(shown) is not null, "the sheet on top");   // a loaded machine shows it later than a fixed pump allows
             Window top = Sheets(window).Current!;
             Control root = Sheets(window).SheetOf(top)!;
             string? entered = Enter(window, root, pad);

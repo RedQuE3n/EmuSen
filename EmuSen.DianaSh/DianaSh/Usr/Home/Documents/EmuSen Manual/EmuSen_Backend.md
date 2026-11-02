@@ -9488,6 +9488,17 @@ reel's newest moment is frame 42 and it holds one moment more than before; a sec
 42 succeeds; and with rewind off a load leaves the reel empty. Mistress's `PauseCardTests` holds the same through the
 card's Load on the Rust runtime: the oldest moment from before the load is still held after it.
 
+## 37. The frontend API's 1.6, 2026-11-01: the route's waiting default
+
+Decided 2026-11-01 by the tester. `emusen_crystal_route`'s answer gains `"waiting_default"`. It is null, or
+`{"stem","sha256"}` where the routed system's default libretro core is installed, waits for the player's approval and
+takes the file, and neither the game's nor the console's settings chose an engine. `"engine"` is then only the
+fallback. The shape of an answer changed, so the minor is 1.6 (`EMUSEN_CRYSTAL_MINOR`, `abi.rs`, the client's
+`CrystalAbi`). No function or struct changed. `EmuSen_LibretroHost.md` §10t has the design and its proofs.
+
+**The C# implementation** stays at the minor it implements, as in §34. Its `RouteJson` writes the key as null, so the
+route parity classes compare the two whole.
+
 ## 38. A snapshot longer than a frame stops rewind's capture, 2026-11-01
 
 **What was measured** [M, 2026-11-01, the desktop, RX 6800, Mistress's real window in big-screen mode, a sandbox copy of

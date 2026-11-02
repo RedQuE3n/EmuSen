@@ -78,7 +78,7 @@ namespace EmuSen.Mistress.Views
 
         private LunaAction[] DriveMenuItems()
         {
-            _insertDisc ??= new LunaAction("_Insert Disc...", () => _ = InsertDiscAsync());
+            _insertDisc ??= new LunaAction("_Insert Disc...", () => InsertDiscAsync().Logged("mistress", "InsertDiscAsync"));
             _ejectDisc ??= new LunaAction("E_ject Disc", EjectDisc);
             return [_insertDisc, _ejectDisc];
         }
@@ -182,7 +182,7 @@ namespace EmuSen.Mistress.Views
         private IEnumerable<PadMenuEntry> DriveRows()
         {
             if (DriveEngine is not { } session) yield break;
-            yield return new PadMenuEntry(() => "Insert Disc...", () => _ = InsertDiscAsync()) { Opens = true };
+            yield return new PadMenuEntry(() => "Insert Disc...", () => InsertDiscAsync().Logged("mistress", "InsertDiscAsync")) { Opens = true };
             if (session.Discs.Index >= 0) yield return new PadMenuEntry(() => "Eject Disc", EjectDisc);
         }
     }

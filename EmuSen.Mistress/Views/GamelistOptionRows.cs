@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -53,7 +54,7 @@ namespace EmuSen.Mistress.Views
         // ES-DE's row: the filter screen behind a chevron, how many filters are set as its value (§4.69).
         private Control FilterMenuRow()
         {
-            Button filter = MenuRows.Apply(Ui.Button("Filter Gamelist", () => _ = FilterAsync()), MenuRowKind.Submenu, _filterState.Text);
+            Button filter = MenuRows.Apply(Ui.Button("Filter Gamelist", () => FilterAsync().Logged("mistress", "FilterAsync")), MenuRowKind.Submenu, _filterState.Text);
             filter.Name = "GamelistFilterButton";
             _filterState.PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) MenuRows.SetValue(filter, _filterState.Text); };
             return filter;
@@ -61,7 +62,7 @@ namespace EmuSen.Mistress.Views
 
         private Control FilterRow()
         {
-            Button filter = Ui.Button("Filter Gamelist...", () => _ = FilterAsync());
+            Button filter = Ui.Button("Filter Gamelist...", () => FilterAsync().Logged("mistress", "FilterAsync"));
             filter.Name = "GamelistFilterButton";
             return new FieldRow { Label = "Filter Gamelist", Content = Ui.Row(12, filter, _filterState) };
         }

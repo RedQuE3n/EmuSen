@@ -14,7 +14,8 @@ measurements are `EmuSen_BigPicture.md`; the toolkit's side of every token is Lu
 
 **Reading order.** §1 for the idea, §2 for the structure, §3 for the frame, §4 for the six screens, §5 for the visual
 language, §6 for the forms, §7 for themes, §8 for accessibility, §9 for what becomes of what is built, §10 for the
-build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for the sources. A bracketed number cites a source in §13.
+build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for stage U3 as built, §14 for the sources. A
+bracketed number cites a source in §14.
 
 **Units.** One design unit is one pixel at 1280 × 800; the big-screen form scales with the screen's height (× 1.5 at
 1920 × 1200, on a monitor and on the handheld alike), as `MenuPanel.Scale` does. Desktop measurements are device pixels
@@ -543,7 +544,25 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 - **Recordings.** Eighteen new states, the card's and the library menu's Back row, at 1280 × 800 and 1920 × 1200, and two
   on the handheld (`EmuSen_InterfaceSpec.md` §6.3.18).
 
-## 13. Sources (opened 2026-11-01)
+## 13. U3 as built (2026-11-01)
+
+- **EmuSen (`EmuSen_BigPicture.md` §49).** The Home card of §2.3 on the Card form, the same `PadCard` as the Pause Card:
+  Continue with the paused frame, its name and the time since it was left; the game in hand, whose page holds the game's
+  options until U4, the favourite on Y; Search where the view has one; Start a Console only where a console starts
+  empty; Tools with the Scraper's and Cores' live lines and the other tools after them; Settings as they were; Power.
+  Over the library dimmed, not blurred; the theme's help bar hidden under the card; Y a favourite where a game is in
+  hand; on the desktop the same card when a pad opens it. The centred library menu, its page set and its Back row are
+  deleted, so the departure of §0 ends for every drawn menu.
+- **LunaP.** Nothing new: the Card form and header role of U2 held the Home card as they were.
+- **Not in U3.** Sleep and shut down, for want of a way to know EmuSen is the device's shell; live lines for Packages
+  and the Library Manager, whose counts come from jobs over every file (`EmuSen_BigPicture.md` §49.6). Each waits on a
+  surface proposed first.
+- **Recordings.** Twenty-one new states, the themed menu's two taken again and the Back row's two retired
+  (`EmuSen_InterfaceSpec.md` §6.3.19).
+
+---
+
+## 14. Sources (opened 2026-11-01)
 
 1. Libretro forums, "The UX problems of RetroArch", https://forums.libretro.com/t/the-ux-problems-of-retroarch-the-program-that-uses-cores/29421
 2. The same thread, post 37, https://forums.libretro.com/t/the-ux-problems-of-retroarch-the-program-that-uses-cores/29421/37

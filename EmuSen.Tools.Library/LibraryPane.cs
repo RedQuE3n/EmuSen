@@ -65,8 +65,8 @@ namespace EmuSen.Tools.Library
             Applying += Run;
 
             _hide = new LunaAction("Hide", MarkSelected) { HelpText = "Marks the chosen file to be hidden from the library, or a hidden one to be shown again." };
-            _reveal = new LunaAction("Show in File Manager", () => _ = RevealSelected()) { HelpText = "Opens the folder that holds the chosen file in the system's file manager." };
-            _save = new LunaAction("Save List…", () => _ = SaveList()) { HelpText = "Saves every finding as a text file." };
+            _reveal = new LunaAction("Show in File Manager", () => RevealSelected().Logged("library", "RevealSelected")) { HelpText = "Opens the folder that holds the chosen file in the system's file manager." };
+            _save = new LunaAction("Save List…", () => SaveList().Logged("library", "SaveList")) { HelpText = "Saves every finding as a text file." };
             _again = new LunaAction("Check Again", Refresh) { PadButton = PadGlyphButton.Select, HelpText = "Reads the library's files again." };
             _stop = new LunaAction("Stop", StopScan) { HelpText = "Stops reading the library; the lists keep what was read." };
             SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop]);

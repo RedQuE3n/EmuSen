@@ -1924,6 +1924,94 @@ name at 4 MiB, under the folder's words, and nothing of `pcsx2/resources`; with 
 the store (zeros, no BIOS) the answer is empty, and opening the game leaves exactly one link in the folder, to that file.
 The firmware itself was never listed, opened or hashed by the project's tools in this work.
 
+## 10t. The console's default waits for approval: asked first, not passed over (2026-11-01)
+
+**The defect.** On 2026-11-01 the tester ran Jak and Daxter in the big screen on a fresh home with PCEE2 installed but
+not approved. A on the game opened it on Sapphire at 16–21 fps, and nothing asked for PCEE2's approval. The rule decided
+in `EmuSen_Cores.md` §4.8 and `man cores` makes pcee2 the PS2's default while Sapphire is under development, so the
+player should have been asked for the default first.
+
+**The cause.** An entry whose core waits for its approval has not been read. It is a `Waiting` row of discovery, not a
+`Discovered` engine, so `Discovery::for_system("ps2")` offers only Sapphire, and the route's engine is Sapphire.
+Mistress's `CoreAwaitingApproval` asked only when the routed engine itself waited, or when no engine was routed at all.
+Mistress could see that PCEE2 was the hosted default and that it waited. What it could not see was whether Sapphire was
+the player's choice or only the fallback. `settings_get` answers the schema's default when nothing is stored
+(`Setting("PlayStation 2", "Engine")` read "Sapphire" on a fresh config, measured 2026-11-01).
+
+**The design, decided 2026-11-01 by the tester: the frontend API's 1.6.** `emusen_crystal_route` gains
+`"waiting_default"`: null, or `{"stem","sha256"}` (`route::waiting_default`). It is set when all of these hold:
+1. The routed system's default libretro core (`libretro_cores::default_for`) is an installed entry waiting for approval.
+2. Its hash is not approved.
+3. The core takes the file by its installed `.info`'s extensions.
+4. Neither the game's nor the console's settings chose an engine.
+
+The fact is the runtime's, one owner. Mistress then asks for that hash first:
+- **Approve** records it. The runtime reads the entry, and the route then gives PCEE2.
+- **Not Now** opens the game on the route's engine, with one line on the status and over the game: "Sony - PlayStation
+  2 (PCEE2) waits for your approval, so this game opens on Sapphire." The same line goes to the session's console as
+  `[core] …`.
+
+The C# half's `RouteJson` writes the key as null, so the route parity holds. The C# half stays at the minor it
+implements (`EmuSen_Backend.md` §37).
+
+**Tests.**
+- `route::waiting_default_tests`, written first and failing: named where no layer chose; none when chosen, when
+  approved, for a `.cue` PCEE2's `.info` does not list, or for a system with no hosted default.
+- `CoresWindowRuntimeTests.The_consoles_waiting_default_is_asked_about_ahead_of_the_native_fallback`, on the Rust
+  runtime with a synthetic PS2 disc: the route names Sapphire and the waiting default, Mistress's question carries
+  PCEE2's file and hash with Sapphire as the fallback, and a console engine stored takes the key away.
+- `PreLaunchQueryTests.Not_now_on_a_waiting_default_says_the_game_opens_on_the_fallback`.
+
+**Seeded faults (2026-11-01).** Each was reverted, and each was caught:
+
+| Fault | Caught by |
+|---|---|
+| The route ignoring the player's choice | the Rust test and the runtime case |
+| The route ignoring an approval | the Rust test |
+| Mistress ignoring the key | the runtime case |
+| Not Now saying nothing | the pre-launch case |
+
+**In the real window (2026-11-01).** The build was out/ at 3351e722d, with this change's assemblies and the `dist`
+platform library over it (frontend API 1.6), on a fresh home with PCEE2 installed and not approved.
+- **Not Now**: A on Jak and Daxter presented the question with Approve focused, Right moved the focus to Not Now, and A
+  opened the game on Sapphire. The session logged `[core] Sony - PlayStation 2 (PCEE2) waits for your approval, so this
+  game opens on Sapphire.` and `[picture] Sapphire`, and nothing was approved.
+- **Approve**, on the same home: the question again, then A. The session logged `[picture] Sony - PlayStation 2
+  (PCEE2): read back`, and `cores.approved` was written.
+
+## 10u. A library of links: the image's resolved target granted (2026-11-01)
+
+**The defect.** The tester's real-window sandbox of 2026-11-01 kept its library as a folder of symbolic links to discs
+stored elsewhere. With PCEE2 approved, Jak and Daxter would not open: "Sony - PlayStation 2 (PCEE2) refused the game:
+…/Roms/ps2/Jak and Daxter … (Rev 1).iso: Permission denied (os error 13)" (Mistress's error log, 17:57:24). Sapphire
+opened the same link.
+
+**The cause.** The proxy's Landlock policy (§3.3) granted the image's folder as the path names it, and Landlock checks
+the path a link resolves to (§10n). So a disc linked into the library is refused where it lives. A library folder that
+is itself a link was already reached, since the rule is made on the folder it resolves to. Only a linked file was
+missed.
+
+**The fix**, in the proxy's `spawn` (`image_reads`). The image's folder is granted as before. Where the image resolves
+outside that folder, its resolved file is granted read-only as well, and nothing beside it. An image that names files
+beside it (a cue's tracks, a playlist's discs: `cue`, `gdi`, `m3u`, `ccd`, `toc`) is given its resolved folder instead,
+since its tracks lie beside its target.
+
+Left as it is: a disc inserted after the machine starts (`media` insert) reaches a runner whose policy is fixed. A linked
+second disc that resolves outside the first's grants is refused there. Not yet met in a game.
+
+**Tests.** `image_tests::a_linked_image_grants_its_resolved_file_and_a_linked_cue_its_resolved_folder`, in the proxy,
+written first and failing: a linked ISO is granted its file and not the folder of discs it sits in; a linked cue is
+granted its resolved folder; a plain file is granted its library folder only.
+
+**Seeded faults (2026-11-01).** Each was reverted, and each was caught by that test:
+- granting the resolved file's folder (wider);
+- granting nothing more.
+
+**In the real window (2026-11-01).** The tester's library of links (`~/.cache/emusen/realpath/Roms`, Jak and Daxter a
+link to a disc elsewhere) was used on a fresh home, with this proxy in the installation and the entry. A on the game
+asked for PCEE2's approval (§10t), and Approve opened it on PCEE2: `[picture] Sony - PlayStation 2 (PCEE2): read back`,
+with no refusal in the error log.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

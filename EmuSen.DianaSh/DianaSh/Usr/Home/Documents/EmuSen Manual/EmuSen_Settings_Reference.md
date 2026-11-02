@@ -4891,6 +4891,10 @@ the survey.
 
 #### 4.69.8 The Start menu reorganised into pages (2026-10-04)
 
+*The library half superseded 2026-11-01 by `EmuSen_BigPicture.md` §49:* over the library the pages below are the Home
+card's (Continue, the game in hand, Search, Start a Console, Tools, Settings, Power) on the Card form; the game's
+pages are the Pause Card's (§48 there). What follows records the reorganisation as it was built.
+
 Decided by the tester on 2026-10-04: the pad menu, which §4.29 built as one flat list and §4.69 redrew in ES-DE's look,
 is reorganised for a player with no technical knowledge. It is shown in big picture and, on the desktop, wherever a
 controller opens it. The decision allowed the layout to depart from ES-DE's, ES-DE having been scaffolding, on one

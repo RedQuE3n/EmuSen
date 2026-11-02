@@ -52,10 +52,10 @@ namespace EmuSen.Mistress.Views
 
             _previous = Named(Ui.Button("Previous", () => Step(-1)), "ThemeDetailPrevious");
             _next = Named(Ui.Button("Next", () => Step(1)), "ThemeDetailNext");
-            _download_ = Named(Ui.Button("Download", () => _ = DownloadAsync()), "ThemeDetailDownload");
-            _update = Named(Ui.Button("Update", () => _ = DownloadAsync()), "ThemeDetailUpdate");
+            _download_ = Named(Ui.Button("Download", () => DownloadAsync().Logged("mistress", "DownloadAsync")), "ThemeDetailDownload");
+            _update = Named(Ui.Button("Update", () => DownloadAsync().Logged("mistress", "DownloadAsync")), "ThemeDetailUpdate");
             _use = Named(Ui.Button("Use", Use), "ThemeDetailUse");
-            _remove = Named(Ui.Button("Remove", () => _ = RemoveAsync()), "ThemeDetailRemove");
+            _remove = Named(Ui.Button("Remove", () => RemoveAsync().Logged("mistress", "RemoveAsync")), "ThemeDetailRemove");
             _about = Named(Ui.Button("About", () => { if (_entry.Installed is { } i) _owner.ShowAbout(i.Directory, this); }), "ThemeDetailAbout");
             _cancel = Named(Ui.Button("Cancel Download", () => _download?.Cancel()), "ThemeDetailCancel");
 

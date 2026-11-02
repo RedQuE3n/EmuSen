@@ -142,6 +142,23 @@ fn system_reads(system: &Path) -> Vec<PathBuf> {
     reads
 }
 
+/// Images that name other files beside them, a cue's tracks or a playlist's discs, whose resolved folder is granted.
+const NAMES_FILES_BESIDE: &[&str] = &["cue", "gdi", "m3u", "ccd", "toc"];
+
+/// The image's folder as given and, where the image is a link that resolves outside it, its resolved file, or the
+/// resolved folder of an image that names files beside it: each granted read-only, nothing wider (EmuSen_LibretroHost.md §10u).
+fn image_reads(image: &Path) -> Vec<PathBuf> {
+    let Some(folder) = image.parent() else { return Vec::new() };
+    let mut reads = vec![folder.to_path_buf()];
+    let (Ok(target), Ok(within)) = (std::fs::canonicalize(image), std::fs::canonicalize(folder)) else { return reads };
+    let beside = image.extension().and_then(|e| e.to_str()).is_some_and(|e| NAMES_FILES_BESIDE.iter().any(|n| n.eq_ignore_ascii_case(e)));
+    let grant = if beside { target.parent().map(Path::to_path_buf) } else { Some(target) };
+    if let Some(grant) = grant.filter(|g| !g.starts_with(&within)) {
+        reads.push(grant);
+    }
+    reads
+}
+
 struct Libretro;
 
 impl Target for Libretro {
@@ -153,9 +170,7 @@ impl Target for Libretro {
         let data = emusen_core_entry::data_folder(&e.folder, &e.stem);
         std::fs::create_dir_all(data.join("cache").join("mesa")).map_err(|err| format!("{}: {err}", data.display()))?;
         let mut read: Vec<PathBuf> = ["/etc", "/proc/self", "/proc/cpuinfo", "/proc/meminfo", "/proc/stat", "/sys"].iter().map(PathBuf::from).filter(|p| p.exists()).collect();
-        if let Some(dir) = image_path.and_then(|p| Path::new(p).parent()) {
-            read.push(dir.to_path_buf());
-        }
+        read.extend(image_path.map(|p| image_reads(Path::new(p))).unwrap_or_default());
         read.extend(system_reads(&emusen_core_entry::system_folder(&e.folder, &e.stem)));
         let mut read_exec: Vec<PathBuf> = ["/usr", "/lib", "/lib64"].iter().map(PathBuf::from).filter(|p| p.exists()).collect();
         read_exec.push(e.folder.clone());
@@ -191,3 +206,35 @@ impl Target for Libretro {
 }
 
 emusen_core_broker::broker_exports!(Libretro; reset, phases, axes, settings, setting_notes, media, presence, device_ring, expect);
+
+#[cfg(test)]
+mod image_tests {
+    use std::path::PathBuf;
+
+    // The tester's sandbox on 2026-11-01: the library a folder of links to discs kept elsewhere.
+    fn laid(tag: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("libretro-proxy-image-{tag}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        for d in ["Roms/ps2", "discs", "cd"] {
+            std::fs::create_dir_all(root.join(d)).unwrap();
+        }
+        std::fs::write(root.join("discs/Jak.iso"), b"disc").unwrap();
+        std::fs::write(root.join("discs/Other.iso"), b"not granted").unwrap();
+        std::fs::write(root.join("cd/Game.cue"), b"FILE \"Game.bin\" BINARY").unwrap();
+        std::fs::write(root.join("cd/Game.bin"), b"track").unwrap();
+        std::os::unix::fs::symlink(root.join("discs/Jak.iso"), root.join("Roms/ps2/Jak.iso")).unwrap();
+        std::os::unix::fs::symlink(root.join("cd/Game.cue"), root.join("Roms/ps2/Game.cue")).unwrap();
+        std::fs::write(root.join("Roms/ps2/Plain.iso"), b"disc").unwrap();
+        root.canonicalize().unwrap()
+    }
+
+    #[test]
+    fn a_linked_image_grants_its_resolved_file_and_a_linked_cue_its_resolved_folder() {
+        let root = laid("grants");
+        let roms = root.join("Roms/ps2");
+        assert_eq!(super::image_reads(&roms.join("Jak.iso")), [roms.clone(), root.join("discs/Jak.iso")], "the file, not its folder");
+        assert_eq!(super::image_reads(&roms.join("Game.cue")), [roms.clone(), root.join("cd")], "a cue names its tracks beside it");
+        assert_eq!(super::image_reads(&roms.join("Plain.iso")), [roms.clone()], "a file in the library needs nothing more");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+}

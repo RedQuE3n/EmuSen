@@ -12,6 +12,9 @@ namespace EmuSen.Mistress.Views
         internal static Func<Avalonia.Controls.Window, string, string, Task<bool>> Confirm =
             (owner, title, message) => Dialogs.ConfirmAsync(owner, title, message, "Approve", "Not Now");
 
+        // A refusal said over the window, which a test reads in place of a person.
+        internal static Func<Avalonia.Controls.Window, string, string, Task> Tell = (owner, title, message) => Dialogs.MessageAsync(owner, title, message);
+
         // Parameterless constructor exists only for tooling - real code always uses the one below.
         public CoresWindow() : this(null, null) { }
 
@@ -34,7 +37,7 @@ namespace EmuSen.Mistress.Views
             public Owner(CoresRuntime? runtime, CoresHost? host)
             {
                 var asked = host ?? new CoresHost();
-                Pane = new CoresPane(runtime, new CoresHost { Options = asked.Options, Firmware = asked.Firmware, OpenFolder = asked.OpenFolder, Confirm = (title, message) => Confirm(Window!, title, message) });
+                Pane = new CoresPane(runtime, new CoresHost { Options = asked.Options, Firmware = asked.Firmware, OpenFolder = asked.OpenFolder, Confirm = (title, message) => Confirm(Window!, title, message), Tell = (title, message) => Tell(Window!, title, message) });
             }
 
             public CoresPane Pane { get; }

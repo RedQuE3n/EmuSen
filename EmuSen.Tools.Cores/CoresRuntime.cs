@@ -14,6 +14,8 @@ namespace EmuSen.Tools.Cores
         // `core_approve` and `core_revoke` of a library's SHA-256.
         public required Action<string> Approve { get; init; }
         public required Action<string> Revoke { get; init; }
+        // `rescan`: the cores directories listed again, after a job of Cores' changed them; null where the host has none.
+        public Action? Rescan { get; init; }
     }
 
     // What the host opens for Cores: a console's settings with an engine named, the firmware pane and a folder.
@@ -24,5 +26,7 @@ namespace EmuSen.Tools.Cores
         public Action<string>? OpenFolder { get; init; }
         // The approval question, answered by the player; a test answers it in place of a person.
         public Func<string, string, Task<bool>> Confirm { get; init; } = (_, _) => Task.FromResult(false);
+        // A refusal said to the player, as a message over the window; null leaves it to the notice line.
+        public Func<string, string, Task>? Tell { get; init; }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -49,7 +50,7 @@ namespace EmuSen.Mistress.Views
             ClosesOnEscape = true;
 
             _text.Text = searchText;
-            _search = Ui.Button("Search", () => _ = SearchAsync());
+            _search = Ui.Button("Search", () => SearchAsync().Logged("mistress", "SearchAsync"));
             _search.Name = "FindByNameSearch";
             int kinds = host?.KindsTurnedOn ?? 0;
             var header = Ui.Stack(6,
@@ -75,7 +76,7 @@ namespace EmuSen.Mistress.Views
             {
                 if (e.Key != Key.Enter) return;
                 e.Handled = true;
-                _ = SearchAsync();
+                SearchAsync().Logged("mistress", "SearchAsync");
             };
             Opened += (_, _) => (_search.IsEnabled ? _search : (InputElement)close).Focus(NavigationMethod.Directional);
         }

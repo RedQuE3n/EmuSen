@@ -293,7 +293,7 @@ fn a_corpus_runs_the_cores_cases_once_and_the_images_cases_for_every_image() {
         }
         assert!(c.passed());
         let all: std::collections::BTreeSet<&str> = corpus::CORE_CASES.iter().chain(corpus::IMAGE_CASES.iter()).copied().collect();
-        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24"]).copied().collect());
+        assert_eq!(all, ALL.iter().chain(&["C16", "C17", "C18", "C19", "C20", "C21", "C22", "C23", "C24", "C25"]).copied().collect());
     }
 }
 
@@ -370,6 +370,19 @@ fn the_seeded_faults_fail_the_same_cases_in_a_corpus() {
     }
 }
 
+// C11 judges the statuses of the core's cases run at once: a status only C12's host of minor 99 draws, which no text names, fails C11 and nothing else (EmuSen_CoreAPI.md §28.21).
+#[test]
+fn the_core_s_cases_run_at_once_hand_their_statuses_to_c11() {
+    let (_, list) = corpus_files("unanswered");
+    let c = run_corpus("kit_unanswered_core", &list, 2);
+    assert_eq!(c.core.cases.iter().filter(|x| !x.passed).map(|x| x.id).collect::<Vec<_>>(), vec!["C11"]);
+    let c11 = c.core.cases.iter().find(|x| x.id == "C11").unwrap();
+    assert!(c11.evidence.iter().any(|e| e.contains("-1999")), "{:?}", c11.evidence);
+    for i in &c.images {
+        assert!(i.failed().is_empty(), "{}: {:?}", i.name, i.failed());
+    }
+}
+
 // The runner's corpus form: a line for each image, a report for each and the summary, and the exit status the verdict.
 #[test]
 fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
@@ -393,7 +406,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
         let failing = images_listed.iter().filter(|i| i.get("passed") != Some(&Value::Bool(true))).count();
         assert_eq!(failing, if count == 4 { 1 } else { 0 }, "{text}");
         assert_eq!(out.status.code(), Some(if failing == 0 { 0 } else { 1 }), "{text}");
-        assert_eq!(summary.get("core").and_then(|c| c.get("cases")).and_then(Value::as_array).map(|a| a.len()), Some(13));
+        assert_eq!(summary.get("core").and_then(|c| c.get("cases")).and_then(Value::as_array).map(|a| a.len()), Some(14));
         for i in images_listed {
             let file = i.get("report").and_then(Value::as_str).unwrap();
             let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();

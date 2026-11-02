@@ -195,25 +195,12 @@ namespace EmuSen.WiseMan.Cores
             Assert.Equal(alone, Present(one));
         }
 
-        // The conformance kit on synthetic cartridges, one with each kind of save chip it builds: all 22 cases a core without a drive has.
+        // The conformance kit on synthetic cartridges, one with each kind of save chip it builds: the core's cases once and each cartridge's at once, every case a core without a drive has.
         [Fact]
-        public void The_kit_passes_on_synthetic_cartridges()
-        {
-            string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
-            Assert.True(File.Exists(runner), $"no kit runner at {runner}");
-            foreach (var (name, image) in new[] { ("plain.z64", SyntheticN64Rom.Build()), ("eeprom.z64", SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k)), ("flash.v64", SyntheticN64Rom.ToByteSwapped(SyntheticN64Rom.BuildHomebrew(N64SaveType.FlashRam))) })
-            {
-                var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
-                foreach (string a in new[] { "--core", MarsRt.Library!.Path, "--image", Rom(image, name), "--frames", "120" }) start.ArgumentList.Add(a);
-                using var process = Process.Start(start)!;
-                var stderr = process.StandardError.ReadToEndAsync();
-                string output = process.StandardOutput.ReadToEnd();
-                process.WaitForExit();
-                _output.WriteLine($"{name}:\n{output}{stderr.Result}");
-                Assert.True(process.ExitCode == 0, output + stderr.Result);
-                Assert.Equal(24, output.Split('\n').Count(l => l.StartsWith("pass C")));
-            }
-        }
+        public void The_kit_passes_on_synthetic_cartridges() => ConformKit.Passes(MarsRt.Library!.Path,
+            new[] { ("plain.z64", SyntheticN64Rom.Build()), ("eeprom.z64", SyntheticN64Rom.BuildHomebrew(N64SaveType.Eeprom4k)), ("flash.v64", SyntheticN64Rom.ToByteSwapped(SyntheticN64Rom.BuildHomebrew(N64SaveType.FlashRam))) },
+            ["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C15", "C22", "C23", "C25"],
+            ["C4", "C6", "C7", "C8", "C14", "C17", "C18", "C19", "C20", "C21", "C24"], _output);
 
         // MarsRT's component exports are gone, its state handle's codes read in its own words, and the handle is a v1 machine of the size asked (moved from the deleted NativeHostTests).
         [Fact]

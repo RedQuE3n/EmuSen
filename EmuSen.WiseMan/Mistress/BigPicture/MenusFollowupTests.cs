@@ -29,8 +29,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public static TheoryData<int, int> Sizes() => EsdeMenusTests.Sizes();
 
-        private static MenuPanel Menu(MetadataEditorWindow editor) => editor.Menu!;
-
         private static Func<string, string?> Env(params (string Name, string Value)[] vars) => name => vars.FirstOrDefault(v => v.Name == name).Value;
 
         // ---- the choice of keyboard, under simulated environments ----
@@ -84,140 +82,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // ---- Q109 in the editor ----
 
-        private static TextBox NameBox(MetadataEditorWindow editor) => (TextBox)editor.EditorOf(GameMetadata.Name);
-
-        [Fact]
-        public Task A_keyboard_s_Enter_on_a_text_row_opens_a_focused_field_whose_text_is_kept_on_Enter() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            s.Pad.Unplug();
-            s.Pad.Tick();
-            int launched = NoSteam.Launcher.Opened.Count;
-            Assert.True(NameBox(editor).IsFocused);
-
-            EsdeMenusTests.Press(s, Key.Enter);
-            MenuTextPopup popup = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
-            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
-            Assert.Equal("Enter Name", popup.Title);
-            Assert.Same(popup.Field, TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement());
-            Assert.Equal(PadKeyboard.FieldHint, popup.Hint);
-
-            // Typed keys reach the field, not the menu: Down and Backspace are the text's, not a move or a leave.
-            s.Window.KeyTextInput(" II");
-            EsdeMenusTests.Press(s, Key.Back);
-            Assert.Equal(ThemedSession.SnesGames[0] + " I", popup.Field.Text);
-            Assert.Equal(ThemedSession.SnesGames[0], NameBox(editor).Text);
-            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
-
-            EsdeMenusTests.Press(s, Key.Enter);
-            Assert.False(popup.IsOpen);
-            Assert.Equal(ThemedSession.SnesGames[0] + " I", NameBox(editor).Text);
-            Assert.Equal(ThemedSession.SnesGames[0] + " I", editor.Draft.Value(GameMetadata.Name));
-            Assert.True(NameBox(editor).IsFocused);
-            // A physical keyboard off Steam never asks Steam.
-            Assert.Equal(launched, NoSteam.Launcher.Opened.Count);
-
-            // Enter's release left no key held: Down moves on at once.
-            EsdeMenusTests.Press(s, Key.Down);
-            Assert.False(NameBox(editor).IsFocused);
-        });
-
-        [Fact]
-        public Task Escape_drops_what_was_typed_into_the_field() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            s.Pad.Unplug();
-            s.Pad.Tick();
-            EsdeMenusTests.Press(s, Key.Enter);
-            MenuTextPopup popup = MenuTextPopup.OpenOver(s.Window)!;
-            s.Window.KeyTextInput("zzz");
-            EsdeMenusTests.Press(s, Key.Escape);
-            Assert.False(popup.IsOpen);
-            Assert.Equal(ThemedSession.SnesGames[0], NameBox(editor).Text);
-            Assert.False(editor.Draft.IsDirty);
-            // Escape was the popup's: the editor, and big picture, are still there.
-            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
-            Assert.True(s.Shown);
-
-            // Enter's release while the popup had the focus was taken as the key let go: Enter opens the popup again at once.
-            EsdeMenusTests.Press(s, Key.Enter);
-            Assert.NotNull(MenuTextPopup.OpenOver(s.Window));
-            EsdeMenusTests.Press(s, Key.Escape);
-        });
-
-        [Fact]
-        public Task With_Steam_chosen_A_asks_Steam_for_exactly_its_keyboard_over_a_focused_field() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardSteam;
-            int before = NoSteam.Launcher.Opened.Count;
-
-            s.Pad.A();
-            MenuTextPopup popup = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
-            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
-            Assert.Equal(new[] { "steam://open/keyboard" }, NoSteam.Launcher.Opened.Skip(before));
-            Assert.Same(popup.Field, TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement());
-            Assert.Equal(PadKeyboard.SteamHint, popup.Hint);
-
-            // What Steam's keyboard types arrives as the keyboard's text; A is not taken, Y asks again, Start keeps it.
-            s.Window.KeyTextInput(" Deluxe");
-            s.Pad.A();
-            Assert.True(popup.IsOpen);
-            s.Pad.Y();
-            Assert.Equal(new[] { "steam://open/keyboard", "steam://open/keyboard" }, NoSteam.Launcher.Opened.Skip(before));
-            s.Pad.Start();
-            Assert.False(popup.IsOpen);
-            Assert.Equal(ThemedSession.SnesGames[0] + " Deluxe", NameBox(editor).Text);
-
-            // B drops what was typed.
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Developer);
-            s.Pad.A();
-            popup = MenuTextPopup.OpenOver(s.Window)!;
-            s.Window.KeyTextInput("Nobody");
-            s.Pad.B();
-            Assert.False(popup.IsOpen);
-            Assert.Equal("", ((TextBox)editor.EditorOf(GameMetadata.Developer)).Text);
-            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
-            Assert.Equal(3, NoSteam.Launcher.Opened.Count - before);
-            Assert.All(NoSteam.Launcher.Opened.Skip(before), url => Assert.Equal(DeviceKeyboard.SteamKeyboardUrl, url));
-        });
-
-        [Fact]
-        public Task EmuSen_s_keyboard_is_still_Mistress_s_own_from_a_pad_or_a_keyboard_and_asks_nothing() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardEmuSen;
-            int before = NoSteam.Launcher.Opened.Count;
-
-            ThemedGameOptionsTests.Type(s, "Meta_" + GameMetadata.Genre, "puzzle");
-            Assert.Equal("puzzle", ((TextBox)editor.EditorOf(GameMetadata.Genre)).Text);
-            Assert.Null(MenuTextPopup.OpenOver(s.Window));
-
-            s.Pad.Unplug();
-            s.Pad.Tick();
-            EsdeMenusTests.Press(s, Key.Enter);
-            Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
-            Assert.Null(MenuTextPopup.OpenOver(s.Window));
-            OnScreenKeyboard.OpenOver(s.Window)!.Cancel();
-            Assert.Equal(before, NoSteam.Launcher.Opened.Count);
-        }, a => a.OnScreenKeyboard = AppSettings.OnScreenKeyboardEmuSen);
-
-        [Fact]
-        public Task Automatic_with_a_pad_and_no_Steam_keeps_Mistress_s_keyboard() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            ThemedGameOptionsTests.OpenEditor(s);
-            Assert.Equal(AppSettings.OnScreenKeyboardAutomatic, s.Settings.OnScreenKeyboard);
-            s.Pad.A();
-            Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
-            Assert.Null(MenuTextPopup.OpenOver(s.Window));
-            s.Pad.Start();
-        });
-
         [Fact]
         public Task Preferences_offers_the_setting_in_its_Controllers_screen_and_stores_it() => ThemedLibraryPadTests.Run(s =>
         {
@@ -241,106 +105,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         // ---- Q105 and Q106 ----
 
-        [Fact]
-        public void The_subtitle_is_the_file_and_its_system_in_capitals()
-        {
-            Assert.Equal("Aurora Drift (Synthetic).sfc [SNES]", MetadataEditorWindow.SubtitleOf("/roms/snes/Aurora Drift (Synthetic).sfc"));
-            Assert.Equal("Kestrel Run.nes [NES]", MetadataEditorWindow.SubtitleOf("/roms/Kestrel Run.nes"));
-            Assert.Equal("Hollow Comet.gb [GB]", MetadataEditorWindow.SubtitleOf("/roms/Hollow Comet.gb"));
-            Assert.Equal("notes.txt", MetadataEditorWindow.SubtitleOf("/roms/notes.txt"));
-        }
-
         private static string[] Labels(MenuPanel menu) => menu.Hints!.Select(h => h.Label).ToArray();
 
         private static PadGlyphButton[] Buttons(MenuPanel menu) => menu.Hints!.Select(h => h.Button!.Value).ToArray();
 
-        [Fact]
-        public Task The_editor_s_help_bar_names_what_A_does_on_the_focused_row_in_ES_DE_s_words() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            MenuPanel menu = Menu(editor);
-            // A text row, in ES-DE's order: A, B, Y, then the pad.
-            Assert.Equal(new[] { "Select", "Back", "Scrape", "Choose" }, Labels(menu));
-            Assert.Equal(new[] { PadGlyphButton.South, PadGlyphButton.East, PadGlyphButton.North, PadGlyphButton.DPadUpDown }, Buttons(menu));
-
-            (string Row, string[] Words)[] expected =
-            [
-                ("Meta_" + GameMetadata.Rating, ["Add Half Star", "Back", "Scrape", "Change", "Choose"]),
-                ("Meta_" + GameMetadata.ReleaseDate, ["Edit Date", "Back", "Scrape", "Change", "Choose"]),
-                ("Meta_" + GameMetadata.Developer, ["Select", "Back", "Scrape", "Choose"]),
-                ("Meta_favourite", ["Toggle", "Back", "Scrape", "Choose"]),
-                ("Meta_" + GameMetadata.Completed, ["Toggle", "Back", "Scrape", "Choose"]),
-                ("Meta_" + GameMetadata.Controller, ["Select", "Back", "Scrape", "Change", "Choose"]),
-                ("MetadataScrape", ["Scrape", "Back", "Scrape", "Choose"]),
-                ("MetadataSave", ["Save Metadata", "Back", "Scrape", "Choose"]),
-                ("MetadataCancel", ["Cancel Changes", "Back", "Scrape", "Choose"]),
-                ("MetadataClear", ["Clear Metadata", "Back", "Scrape", "Choose"]),
-                ("MetadataHide", ["Hide Game", "Back", "Scrape", "Choose"]),
-            ];
-            foreach ((string row, string[] words) in expected)
-            {
-                ThemedGameOptionsTests.Reach(s, row);
-                Assert.True(words.SequenceEqual(Labels(menu)), $"{row}: {string.Join(", ", Labels(menu))}");
-            }
-            // On the buttons, Choose is Left and Right, as ES-DE's is.
-            Assert.Equal(PadGlyphButton.DPadLeftRight, menu.Hints![^1].Button);
-
-            // An edited switch adds Reset on West after Scrape.
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
-            s.Pad.A();
-            Assert.Equal(new[] { "Toggle", "Back", "Scrape", "Reset", "Choose" }, Labels(menu));
-            Assert.Equal(PadGlyphButton.West, menu.Hints![3].Button);
-        });
-
-        [Fact]
-        public Task A_on_the_stars_adds_half_a_star_and_past_five_starts_from_none() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            var stars = (RatingPicker)editor.EditorOf(GameMetadata.Rating);
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Rating);
-            s.Pad.A();
-            Assert.Equal(0.1, stars.Value, 3);
-            for (int i = 0; i < 9; i++) s.Pad.A();
-            Assert.Equal(1.0, stars.Value, 3);
-            Assert.Equal("1", editor.Draft.Value(GameMetadata.Rating));
-            s.Pad.A();
-            Assert.Equal(0.0, stars.Value, 3);
-            Assert.True(stars.IsFocused);
-            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
-        });
-
         // ---- Q107 ----
-
-        [Theory]
-        [MemberData(nameof(Sizes))]
-        public Task The_editor_shows_the_scroll_indicator_at_its_title_s_right_while_its_rows_run_past_the_panel(int width, int height) => Session.Dispatch(() =>
-        {
-            using var s = new ThemedSession(width, height);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            MenuPanel menu = Menu(editor);
-            double u = height / 800.0;
-            Assert.Equal(MenuScrollIndicator.Down, menu.ScrollIndicator);
-            (Rect up, Rect down) = menu.ScrollIndicatorBounds;
-            Rect panel = menu.PanelBounds;
-            Assert.Equal(panel.Right - 11 * u, down.Right, 0.5);
-            Assert.Equal(25 * u, down.Width, 0.5);
-            Assert.Equal(panel.Top + 49 * u, (up.Top + down.Bottom) / 2, 0.5);
-            AssertDrawnOnlyIn(s, menu, down, up);
-
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
-            Assert.Equal(MenuScrollIndicator.Both, menu.ScrollIndicator);
-            AssertDrawnOnlyIn(s, menu, up, down);
-
-            // Scrolled to the last row, only the upper pair.
-            var rows = (ScrollViewer)menu.Child!;
-            rows.Offset = new Vector(0, rows.Extent.Height);
-            s.Settle();
-            Assert.Equal(MenuScrollIndicator.Up, menu.ScrollIndicator);
-            AssertDrawnOnlyIn(s, menu, up, down);
-        }, default);
 
         // The indicator's pixels: every change it makes lies in its squares, the ones shown are inked, and a square not shown is not.
         private static void AssertDrawnOnlyIn(ThemedSession s, MenuPanel menu, Rect shown, Rect other)
@@ -387,22 +156,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         // ---- the help glyphs ----
-
-        [Theory]
-        [MemberData(nameof(Sizes))]
-        public Task The_help_bars_draw_lettered_discs_in_menus_and_in_the_themed_view(int width, int height) => Session.Dispatch(() =>
-        {
-            using var s = new ThemedSession(width, height);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            s.Run(300);
-            HintBar themed = s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>().First(b => b.IsVisible);
-            Assert.Equal(PadGlyphStyle.Filled, themed.GlyphStyle);
-            AssertDiscs(s, themed);
-
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            Assert.Equal(PadGlyphStyle.Filled, Menu(editor).HelpBar.GlyphStyle);
-            AssertDiscs(s, Menu(editor).HelpBar);
-        }, default);
 
         // The first entry's glyph, A, is a solid disc: with the family Generic its square is mostly ink, several times what the outlined set drew.
         private static void AssertDiscs(ThemedSession s, HintBar bar)

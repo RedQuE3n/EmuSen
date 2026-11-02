@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task With_the_swap_X_is_the_favourite_Y_does_nothing_and_the_help_bar_draws_X_for_it() => ThemedLibraryPadTests.Run(s =>
+        public Task With_the_swap_X_is_the_favourite_Y_opens_the_game_s_page_and_the_help_bar_draws_X_for_it() => ThemedLibraryPadTests.Run(s =>
         {
             s.Settings.ControllerType = "Xbox";
             EnterSwapped(s, "snes");
@@ -94,7 +94,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(chosen, s.Game);
 
             s.Sounds.Clear();
+            // With the swap Y is the grammar's X, which opens the game's page (EmuSen_Interface.md §0.1); it makes no favourite.
             s.Pad.Y();
+            Assert.Equal(System.IO.Path.Combine(s.RomDirectory, chosen + ".sfc"), s.Window.GamePageShown?.Path);
+            s.Window.CloseGamePage();
+            s.Settle();
             Assert.False(s.Themed.SelectedGame!.Favorite);
             Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
             Assert.Empty(s.Sounds);
@@ -163,29 +167,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
         }
-
-        [Fact]
-        public Task With_the_swap_the_editor_names_X_for_Scrape_and_Y_for_Reset_and_Y_resets() => ThemedLibraryPadTests.Run(s =>
-        {
-            EnterSwapped(s, "snes");
-            ChooseSwapped(s, "Edit This Game's Metadata");
-            var editor = Assert.IsType<MetadataEditorWindow>(ThemedGameOptionsTests.Sheets(s).Current);
-            MenuPanel menu = editor.Menu!;
-            Assert.Equal(new[] { "Select", "Back", "Scrape", "Choose" }, menu.Hints!.Select(h => h.Label));
-            Assert.Equal(new[] { PadGlyphButton.East, PadGlyphButton.South, PadGlyphButton.West, PadGlyphButton.DPadUpDown }, menu.Hints!.Select(h => h.Button!.Value));
-
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
-            s.Pad.B();
-            Assert.True(editor.CanReset(GameMetadata.Completed));
-            Assert.Equal(new[] { "Toggle", "Back", "Scrape", "Reset", "Choose" }, menu.Hints!.Select(h => h.Label));
-            Assert.Equal(PadGlyphButton.West, menu.Hints![2].Button);
-            Assert.Equal(PadGlyphButton.North, menu.Hints![3].Button);
-
-            // X is the scraper's now, so it resets nothing; Y resets the field.
-            s.Pad.Y();
-            Assert.False(editor.CanReset(GameMetadata.Completed));
-            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
-        }, Swapped);
 
         // ---- Q164: the themed search follows the setting ----
 
@@ -317,85 +298,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return box;
         }
 
-        [Theory]
-        [MemberData(nameof(EsdeMenusTests.Sizes), MemberType = typeof(EsdeMenusTests))]
-        public Task Asking_Steam_puts_the_popup_in_the_upper_part_of_the_screen_and_other_modes_keep_it_centred(int width, int height) => Session.Dispatch(() =>
-        {
-            using var s = new ThemedSession(width, height);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-
-            // With Steam, from the pad: the popup's top at a twentieth of the height, its bottom above 45%, and its field four lines tall.
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardSteam;
-            s.Pad.A();
-            MenuTextPopup popup = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
-            s.Settle();
-            Rect steam = AssertWhole(s, popup);
-            _out.WriteLine($"{width}x{height} Steam: {steam}, top {steam.Top / height:P1}, bottom {steam.Bottom / height:P1}");
-            Assert.InRange(steam.Top / height, 0.03, 0.07);
-            Assert.True(popup.Field.Bounds.Height >= 4 * popup.Field.FontSize, $"field {popup.Field.Bounds.Height} for text {popup.Field.FontSize}");
-            Assert.True(steam.Bottom < 0.45 * height, $"bottom {steam.Bottom} of {height}");
-            Assert.True(Math.Abs(width / 2.0 - steam.Center.X) <= 1, $"centre {steam.Center.X} of {width}");
-            s.Pad.B();
-
-            // From a keyboard (Automatic, and under Steam too) and with Steam chosen but the field reached by Enter: centred as before.
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardAutomatic;
-            s.Pad.Unplug();
-            s.Pad.Tick();
-            foreach (bool underSteam in new[] { false, true })
-            {
-                void Centred()
-                {
-                    EsdeMenusTests.Press(s, Key.Enter);
-                    MenuTextPopup field = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
-                    s.Settle();
-                    Rect centred = AssertWhole(s, field);
-                    _out.WriteLine($"{width}x{height} field{(underSteam ? " under Steam" : "")}: {centred}");
-                    Assert.True(Math.Abs(height / 2.0 - centred.Center.Y) <= 1, $"centre {centred.Center.Y} of {height}");
-                    Assert.True(Math.Abs(width / 2.0 - centred.Center.X) <= 1, $"centre {centred.Center.X} of {width}");
-                    Assert.Equal(steam.Size, centred.Size);
-                    EsdeMenusTests.Press(s, Key.Escape);
-                }
-                if (underSteam) UnderSteam(Centred);
-                else Centred();
-            }
-            Assert.Same(editor, ThemedGameOptionsTests.Sheets(s).Current);
-        }, default);
-
         // ---- Q165: Enter under Steam gets the field alone; a pad's A still asks Steam ----
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public Task Under_Steam_Enter_on_a_text_row_gets_the_field_alone_and_a_pad_s_A_asks_Steam(bool byEnvironment) => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            Assert.Equal(AppSettings.OnScreenKeyboardAutomatic, s.Settings.OnScreenKeyboard);
-            UnderSteam(() =>
-            {
-                int before = NoSteam.Launcher.Opened.Count;
-                s.Pad.Unplug();
-                s.Pad.Tick();
-                Assert.True(editor.EditorOf(GameMetadata.Name).IsFocused);
-                EsdeMenusTests.Press(s, Key.Enter);
-                MenuTextPopup popup = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
-                Assert.Equal(PadKeyboard.FieldHint, popup.Hint);
-                Assert.Equal(before, NoSteam.Launcher.Opened.Count);
-                s.Window.KeyTextInput(" II");
-                EsdeMenusTests.Press(s, Key.Enter);
-                Assert.Equal(ThemedSession.SnesGames[0] + " II", ((TextBox)editor.EditorOf(GameMetadata.Name)).Text);
-                Assert.Equal(before, NoSteam.Launcher.Opened.Count);
-
-                s.Pad.Replug();
-                s.Pad.Tick();
-                s.Pad.A();
-                popup = MenuTextPopup.OpenOver(s.Window) ?? throw new InvalidOperationException("no text popup");
-                Assert.Equal(PadKeyboard.SteamHint, popup.Hint);
-                Assert.Equal(new[] { DeviceKeyboard.SteamKeyboardUrl }, NoSteam.Launcher.Opened.Skip(before));
-                s.Pad.B();
-                Assert.False(popup.IsOpen);
-            }, byEnvironment);
-        });
     }
 }

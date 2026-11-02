@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             s.Pad.Select();
             s.Settle();
-            Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
+            Assert.IsType<GamelistOptionsWindow>(Sheets(s).Current);
         }
 
         internal static SheetLayer Sheets(ThemedSession s) => s.Window.GetControl<SheetLayer>("Sheets");
@@ -393,7 +393,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             Assert.True(s.Themed.SelectedGame!.IsCollection);
             OpenMenu(s);
-            Assert.DoesNotContain(((GameOptionsWindow)Sheets(s).Current!).Options, o => o.Label.Contains("Favourites") || o.Label.StartsWith("Edit This Game"));
+            Assert.DoesNotContain(((GamelistOptionsWindow)Sheets(s).Current!).Options, o => o.Label.Contains("Favourites") || o.Label.StartsWith("Edit This Game"));
             Reach(s, e => e is Button { Content: string finish } && finish.StartsWith("Finish Editing"));
             s.Pad.A();
             s.Settle();
@@ -430,9 +430,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             // Back cancels: the sort is stepped, then the Back button closes the sheet with nothing applied.
             OpenMenu(s);
-            // One menu under Select, in ES-DE's order: the list's rows, then the game's entries (Q12).
-            Assert.Equal(["Jump To...", "Sort Games By", "Filter Gamelist", "Search...", "Add to Favourites", "Edit This Game's Metadata", "Crop This Game...", MainWindow.StandardRow, "Use Another Game's Cover...", "Game Package...", "Scrape This Game...", "Find by Name..."],
-                ((GameOptionsWindow)Sheets(s).Current!).Options.Select(o => o.Label));
+            // One menu under Select, in ES-DE's order: the list's rows, then the way to the game's page, which holds its own entries (Q12, EmuSen_BigPicture.md §50).
+            Assert.Equal(["Jump To...", "Sort Games By", "Filter Gamelist", "Search...", MainWindow.GamePageRow],
+                ((GamelistOptionsWindow)Sheets(s).Current!).Options.Select(o => o.Label));
             Assert.Empty(s.Window.OwnedWindows);
             Reach(s, e => e is Dropdown { Name: "GamelistSortBy" });
             s.Pad.Right();
@@ -477,7 +477,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             s.Pad.B();
             s.Settle();
-            Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
+            Assert.IsType<GamelistOptionsWindow>(Sheets(s).Current);
             // The row's value, where the desktop's sheet shows a line of text beside its button (§4.69).
             Assert.Equal("1 filter set", MenuRows.GetValue(Named<Button>(s, "GamelistFilterButton")));
             s.Pad.B();
@@ -574,7 +574,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 if (sheet != "Filter Gamelist") s.Pad.A();
                 OpenMenu(s);
                 if (sheet != "Filter Gamelist")
-                    Assert.Contains(((GameOptionsWindow)Sheets(s).Current!).Options, o => o.Label == "Add/Remove Games to This Collection");
+                    Assert.Contains(((GamelistOptionsWindow)Sheets(s).Current!).Options, o => o.Label == "Add/Remove Games to This Collection");
                 if (sheet == "Filter Gamelist")
                 {
                     Reach(s, e => e is Button { Name: "GamelistFilterButton" });

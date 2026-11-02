@@ -19,6 +19,9 @@ namespace EmuSen.Mistress.Library
 
         public int DecodeWidth { get; set; } = 320;
 
+        // Whether any picture asked for is still being decoded.
+        public bool Busy => _loading.Count > 0;
+
         // Raised on the UI thread when a picture asked for earlier has arrived.
         public event Action<string>? Loaded;
 

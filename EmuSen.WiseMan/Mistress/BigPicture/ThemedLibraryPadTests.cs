@@ -259,27 +259,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         });
 
         [Fact]
-        public Task Select_opens_the_game_options_whose_favourite_entry_moves_the_game_first_while_the_highlight_keeps_its_row() => Run(s =>
-        {
-            Enter(s, "snes");
-            s.Pad.Down(3);
-            string chosen = ThemedSession.SnesGames[3];
-            s.Sounds.Clear();
-            ThemedGameOptionsTests.Choose(s, "Add to Favourites");
-            Assert.Equal(new[] { "favorite" }, s.Sounds);
-            Assert.True(s.Themed.Stage!.Current.Data.System.Games[0].Favorite);
-            Assert.Equal(chosen, s.Themed.Stage.Current.Data.System.Games[0].Name);
-            Assert.Equal(3, s.Themed.Stage.Current.Index);
-            Assert.Equal(ThemedSession.SnesGames[2], s.Game);
-            s.Pad.L2();
-            Assert.Equal(chosen, s.Game);
-            ThemedGameOptionsTests.Choose(s, "Remove from Favourites");
-            Assert.False(s.Themed.Stage.Current.Data.System.Games.Any(g => g.Favorite));
-            Assert.Equal(0, s.Themed.Stage.Current.Index);
-            Assert.Equal(ThemedSession.SnesGames[0], s.Game);
-        });
-
-        [Fact]
         public Task Start_opens_the_pad_menu_over_the_view_and_no_window_is_opened() => Run(s =>
         {
             s.Pad.Start();

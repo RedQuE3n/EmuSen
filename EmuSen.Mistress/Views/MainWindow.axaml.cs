@@ -1254,15 +1254,6 @@ namespace EmuSen.Mistress.Views
             ApplyLibraryView();
             FillSidebar();
 
-            if (MediaShown)
-            {
-                ShowMedia(pool, search);
-                ApplyLibraryView();
-                LibraryHintText.IsVisible = _shownMedia.Count > 0;
-                LibraryHintText.Text = _category == StatesCategory ? "Double-click a state to play from it." : "Double-click a screenshot to open it.";
-                return;
-            }
-
             // Otherwise a suspended game is unreachable from here - see EmuSen_Settings_Reference.md §4.18.
             bool suspended = _session is not null;
             LibraryHintText.IsVisible = shownEntries.Count > 0 || suspended;
@@ -1303,6 +1294,12 @@ namespace EmuSen.Mistress.Views
         // Wired from the list; the search box's Enter arrives as FilterBar.Submitted instead.
         private void OnLibraryKeyDown(object? sender, KeyEventArgs e)
         {
+            if (GamePageGesture.Matches(e) && LibraryList.Selected is RomEntry chosen)
+            {
+                e.Handled = true;
+                ShowGamePage(chosen.FullPath);
+                return;
+            }
             if (e.Key != Key.Enter) return;
             e.Handled = true; // otherwise it also reaches the window's own game-input handler
             LaunchSelectedLibraryEntry();

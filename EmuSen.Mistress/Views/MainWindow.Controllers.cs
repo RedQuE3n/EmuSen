@@ -90,7 +90,7 @@ namespace EmuSen.Mistress.Views
             _appliedSwap = _appSettings.SwapPadButtons;
             PadHints.Swapped = _appSettings.SwapPadButtons;
             Sheets.Hint = PadHints.Face(SheetHint);
-            if (LibraryView.IsVisible && !ThemedLibraryShown && !MediaShown && LibraryHintText.IsVisible && _gamepad.IsConnected) LibraryHintText.Text = PadLibraryHint();
+            if (LibraryView.IsVisible && !ThemedLibraryShown && LibraryHintText.IsVisible && _gamepad.IsConnected) LibraryHintText.Text = PadLibraryHint();
         }
 
         private const string SheetHint = "A  Choose      B  Back      L1 R1  Tab      Left Right  Change";

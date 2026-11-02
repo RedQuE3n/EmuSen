@@ -67,7 +67,6 @@ namespace EmuSen.Mistress.Views
             TileScale.ValueChanged += (_, e) => ScaleTiles(e.NewValue);
             ScaleTiles(TileScale.Value);
 
-            SetUpMediaViews();
             LibraryGrid.ContextMenu = LibraryContextMenu();
             LibraryList.ContextMenu = LibraryContextMenu();
             ApplyLibraryView();
@@ -90,11 +89,9 @@ namespace EmuSen.Mistress.Views
             _asGrid.IsChecked = GridShown;
             _asList.IsChecked = !GridShown;
             bool any = _shownEntries.Count > 0;
-            LibraryGrid.IsVisible = !MediaShown && GridShown && any;
-            LibraryList.IsVisible = !MediaShown && !GridShown && any;
-            MediaGrid.IsVisible = MediaShown && _shownMedia.Count > 0;
-            _asGrid.IsEnabled = _asList.IsEnabled = !MediaShown;
-            TileScale.IsEnabled = GridShown || MediaShown;
+            LibraryGrid.IsVisible = GridShown && any;
+            LibraryList.IsVisible = !GridShown && any;
+            TileScale.IsEnabled = GridShown;
         }
 
         private void ScaleTiles(double scale)
@@ -102,9 +99,6 @@ namespace EmuSen.Mistress.Views
             LibraryGrid.TileWidth = Math.Round(150 * scale);
             LibraryGrid.TileHeight = Math.Round(150 * scale) + CoverTile.TitleBand;
             LibraryGrid.Spacing = Math.Round(26 * scale);
-            MediaGrid.TileWidth = LibraryGrid.TileWidth;
-            MediaGrid.TileHeight = LibraryGrid.TileHeight;
-            MediaGrid.Spacing = LibraryGrid.Spacing;
             _covers.DecodeWidth = (int)Math.Clamp(Math.Round(300 * scale), 160, 760);
             if (Math.Abs(_appSettings.LibraryTileScale - scale) < 0.001) return;
             _appSettings.LibraryTileScale = scale;
@@ -252,18 +246,13 @@ namespace EmuSen.Mistress.Views
             var favourite = new LunaAction("Add to _Favourites", () => { if (SelectedLibraryEntry is RomEntry e) ToggleFavourite(e); });
             var addArt = new LunaAction("Add _Cover Art from File...", () => { if (SelectedLibraryEntry is RomEntry e) _ = AddCoverArtAsync(e); });
             var removeArt = new LunaAction("_Remove Cover Art", () => { if (SelectedLibraryEntry is RomEntry e) RemoveCoverArt(e); });
-            // Q45 - see EmuSen_Settings_Reference.md §4.65.
-            var otherArt = new LunaAction("Use Another _Game's Cover...", () => { if (SelectedLibraryEntry is RomEntry e) ShowCoverPicker(e.FullPath, DisplayTitle(e)); });
-            var ownArt = new LunaAction("Use Its O_wn Cover", () => { if (SelectedLibraryEntry is RomEntry e) UseOwnCover(e.FullPath); });
-            var lookUp = new LunaAction("_Scrape This Game...", () => { if (SelectedLibraryEntry is RomEntry e) _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(e.FullPath)); });
-            var findByName = new LunaAction("_Find by Name...", () => { if (SelectedLibraryEntry is RomEntry e) ShowFindByName(e.FullPath, DisplayTitle(e)); });
-            // The same menu and editor big picture has - see EmuSen_Settings_Reference.md §4.63.
-            var options = new LunaAction("Game _Options...", () => { if (SelectedLibraryEntry is RomEntry e) ShowLibraryGameOptions(e); });
-            var package = new LunaAction("Game _Package...", () => { if (SelectedLibraryEntry is RomEntry e) ShowGamePackage(e.FullPath, DisplayTitle(e)); });
-            var edit = new LunaAction("_Edit Metadata...", () => { if (SelectedLibraryEntry is RomEntry e) EditLibraryGameMetadata(e); })
-            {
-                Shortcut = EditMetadataGesture,
-            };
+            // The game's page and its doors, as EmuSen_Interface.md §17.3 lists them.
+            var page = new LunaAction("Game _Page", () => { if (SelectedLibraryEntry is RomEntry e) ShowGamePage(e.FullPath); }) { Shortcut = GamePageGesture };
+            var options = new LunaAction("_Options...", () => { if (SelectedLibraryEntry is RomEntry e) ShowGamePage(e.FullPath, Pages.GamePage.Options); });
+            var edit = new LunaAction("_Edit Details...", () => { if (SelectedLibraryEntry is RomEntry e) ShowGamePage(e.FullPath, Pages.GamePage.Details, Pages.GamePage.EditPage); }) { Shortcut = EditMetadataGesture };
+            var lookUp = new LunaAction("_Scrape This Game...", () => { if (SelectedLibraryEntry is RomEntry e) ShowGamePage(e.FullPath, Pages.GamePage.Details, Pages.GamePage.ScrapePage); });
+            var otherArt = new LunaAction("Co_ver Art", () => { if (SelectedLibraryEntry is RomEntry e) ShowGamePage(e.FullPath, Pages.GamePage.Details, Pages.GamePage.CoverPage); });
+            var folder = new LunaAction("Show in File _Manager", () => { if (SelectedLibraryEntry is RomEntry e) ((Pages.IGamePageHost)this).OpenFolder(e.FullPath); });
 
             var leave = new LunaAction("Remove from This Collection", () =>
             {
@@ -274,20 +263,17 @@ namespace EmuSen.Mistress.Views
             menu.Opening += (_, _) =>
             {
                 RomEntry? entry = SelectedLibraryEntry;
-                var actions = new List<LunaAction> { play, restart, LunaAction.Separator(), favourite, CollectionsSubmenu(entry) };
+                var actions = new List<LunaAction> { play, restart, page, LunaAction.Separator(), favourite, CollectionsSubmenu(entry) };
                 if (ShownCollection is GameCollection shown)
                 {
                     leave.Text = $"Remove from {shown.Name.Replace("_", "__")}";
                     actions.Add(leave);
                 }
-                actions.AddRange(new[] { LunaAction.Separator(), options, edit, package, LunaAction.Separator(), addArt, removeArt, otherArt });
-                if (entry is not null && CoverChoiceOf(entry.FullPath) is not null) actions.Add(ownArt);
-                lookUp.IsEnabled = findByName.IsEnabled = entry is not null && !ScrapeRunning;
-                actions.Add(lookUp);
-                actions.Add(findByName);
+                actions.AddRange(new[] { LunaAction.Separator(), options, edit, lookUp, otherArt, LunaAction.Separator(), addArt, removeArt, LunaAction.Separator(), folder });
+                lookUp.IsEnabled = entry is not null && !ScrapeRunning;
                 menu.ItemsSource = Menus.Items(actions);
                 bool any = entry is not null;
-                play.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = options.IsEnabled = edit.IsEnabled = otherArt.IsEnabled = package.IsEnabled = any;
+                play.IsEnabled = page.IsEnabled = favourite.IsEnabled = addArt.IsEnabled = options.IsEnabled = edit.IsEnabled = otherArt.IsEnabled = folder.IsEnabled = any;
                 restart.IsEnabled = any && File.Exists(entry!.Package is null ? ResumeStatePath(entry.FullPath, null) : ResumeStatePath(entry.FullPath));
                 favourite.Text = any && _records.IsFavourite(entry!.FullPath) ? "Remove from _Favourites" : "Add to _Favourites";
                 removeArt.IsEnabled = any && OwnCoverPath(entry!) is not null;

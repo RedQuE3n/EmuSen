@@ -59,7 +59,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             var entries = (List<PadMenuEntry>)typeof(MainWindow).GetField("_padMenuEntries", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(s.Window)!;
             s.Pad.Start();
-            entries.Single(e => e.ShowsCover).Submenu!().Single(e => e.Text() == "Scrape This Game...").Accept();
+            // The Home card's game opens its page, whose Details ▸ Scrape This Game offers the file's checksums (EmuSen_BigPicture.md §50.2).
+            entries.Single(e => e.ShowsCover).Accept();
+            EmuSen.Mistress.Pages.GamePage page = s.Window.GamePageShown!;
+            page.ChooseSection(EmuSen.Mistress.Pages.GamePage.Details);
+            page.ChooseRow("scrape");
+            page.ChooseRow("file");
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (s.Themed.SelectedGame?.Description != "Scraped description.")

@@ -52,7 +52,7 @@ namespace EmuSen.Mistress.Views
         {
             var rows = new List<PadMenuEntry>();
             if (_session is not null) rows.Add(new(() => ContinueRow, ToggleLibrary) { ShowsFrame = true });
-            if (_homeGame is { } game) rows.Add(new(() => game.Title, () => { }, closes: false) { Submenu = () => GameRows(game), Opens = true, ShowsCover = true });
+            if (_homeGame is { } game) rows.Add(new(() => game.Title, () => ShowGamePage(game.Path)) { Opens = true, ShowsCover = true });
             if (SearchAction() is { } search) rows.Add(new(() => SearchRow, search));
             if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
             rows.Add(new(() => ToolsMenu, () => { }, closes: false) { Submenu = ToolRows, Opens = true, ShowsTools = true, StartsSection = rows.Count > 0 });
@@ -71,24 +71,10 @@ namespace EmuSen.Mistress.Views
             return SelectedLibraryEntry is RomEntry e ? new HomeGame(e.FullPath, DisplayTitle(e), () => ToggleFavourite(e)) : null;
         }
 
-        // The game's options as its options menu lists them, the favourite on Y, until its own page replaces them (EmuSen_Interface.md §2.3); A on the game in the list plays it.
-        private List<PadMenuEntry> GameRows(HomeGame game)
-        {
-            var options = new List<GameOption>();
-            AddGameEntries(options, game.Path, game.Title, toggleFavourite: null);
-            var rows = new List<PadMenuEntry>();
-            foreach (GameOption o in options)
-            {
-                if (o.Label == StandardRow) rows.Add(StandardEntry(game.Path));
-                else if (o.Row is null) rows.Add(new PadMenuEntry(() => o.Label, o.Choose, closes: o.Closes) { Opens = o.Opens });
-            }
-            return rows;
-        }
-
         private string FavouriteText(string path) => _records.IsFavourite(path) ? "Remove from Favourites" : "Add to Favourites";
 
-        // Y makes the game in hand a favourite on the first page and on the game's own.
-        private bool HomeFavouriteHere => HomeCardShown && _homeGame is { } game && (_padMenuPages.Count == 1 || (_padMenuPages.Count == 2 && _padMenuPages[1].Title == game.Title));
+        // Y makes the game in hand a favourite on the first page.
+        private bool HomeFavouriteHere => HomeCardShown && _homeGame is not null && _padMenuPages.Count == 1;
 
         private void ToggleHomeFavourite()
         {

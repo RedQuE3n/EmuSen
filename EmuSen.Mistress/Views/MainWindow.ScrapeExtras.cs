@@ -11,13 +11,9 @@ using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
-    // Pass 8: Find by Name and its chooser, and the cleanup of media whose game is gone; each only when the player presses for it - see EmuSen_BigPicture.md §38.
-    public partial class MainWindow : IFindByNameHost
+    // Pass 8: the name search the game's page asks (EmuSen_BigPicture.md §50), and the cleanup of media whose game is gone; each only when the player presses for it - see EmuSen_BigPicture.md §38.
+    public partial class MainWindow
     {
-        private FindByNameWindow? _findByName;
-
-        public FindByNameWindow? FindByNameShown => _findByName;
-
         // Requests this window's name searches sent, for the tests' count and the status window's.
         public int NameSearches { get; private set; }
 
@@ -25,28 +21,15 @@ namespace EmuSen.Mistress.Views
         internal static Func<MainWindow, string, Task<bool>> ConfirmCleanUp =
             (owner, message) => Dialogs.ConfirmAsync(owner, "Clean Up Orphaned Media", message, "Move Them", "Cancel");
 
-        private void ShowFindByName(string path, string title)
-        {
-            if (_scrapeClosed) return;
-            if (_findByName is not null) { SheetLayer.Activate(_findByName); return; }
-            _gameOptions?.Close();
-            var window = _findByName = new FindByNameWindow(this, path, title, ScrapeRules.SearchName(Path.GetFileName(path)));
-            window.Closed += (_, _) => { if (ReferenceEquals(_findByName, window)) _findByName = null; };
-            _ = SheetLayer.Show(window, this);
-        }
-
-        string? IFindByNameHost.WhyNot => ScrapeRunning ? "a run is going; Find by Name waits until it ends" : ScreenScraperUnusable();
-
-        int IFindByNameHost.KindsTurnedOn => _scrapeChoices.Kinds().Count();
-
-        string IFindByNameHost.SystemOf(string path) => SystemOf(new RomEntry(path)) ?? "";
+        // Why a name search cannot be sent now, or null.
+        private string? NameSearchWhyNot => ScrapeRunning ? "a run is going; a search waits until it ends" : ScreenScraperUnusable();
 
         // One jeuRecherche for the text the player typed, paced and counted as every request is; nothing else is sent.
         public async Task<SearchAnswer> SearchByNameAsync(string path, string text)
         {
             string name = text.Trim();
             if (name.Length == 0) return new SearchAnswer(ScrapeStatus.BadRequest, [], null, "Type a name to search for.", TimeSpan.Zero);
-            if (((IFindByNameHost)this).WhyNot is string why) return new SearchAnswer(ScrapeStatus.Failed, [], null, $"ScreenScraper cannot be used: {why}.", TimeSpan.Zero);
+            if (NameSearchWhyNot is string why) return new SearchAnswer(ScrapeStatus.Failed, [], null, $"ScreenScraper cannot be used: {why}.", TimeSpan.Zero);
             if (SystemOf(new RomEntry(path)) is not string system || !Scraper.SystemIds.TryGetValue(system, out int systemId))
                 return new SearchAnswer(ScrapeStatus.BadRequest, [], null, "This game's console has no ScreenScraper system.", TimeSpan.Zero);
             if (!OpenMediaStore() || DeveloperSource() is not { } developer) return new SearchAnswer(ScrapeStatus.Failed, [], null, DeveloperCredentials.NoneHere, TimeSpan.Zero);

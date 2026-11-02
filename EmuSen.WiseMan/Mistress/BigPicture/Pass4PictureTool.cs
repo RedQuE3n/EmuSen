@@ -103,49 +103,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             window.Close();
         }, default);
 
-        // The synthetic theme with every switch it has an element for, and the badges drawn by Mistress for a theme that names no image.
-        [Pass4PngFact]
-        public Task Synthetic_theme_switches() => Session.Dispatch(() =>
-        {
-            const string badges = "<badges name=\"badges\"><pos>0.55 0.82</pos><size>0.4 0.08</size><slots>all</slots><lines>1</lines><itemsPerLine>9</itemsPerLine><itemMargin>0.005 0</itemMargin></badges>";
-            using var s = new ThemedSession(extraGamelist: ThemedSwitchesTests.Clock + ThemedSwitchesTests.Status + badges, status: ThemedSwitchesTests.Device);
-            s.Themed.LiveClock = false;
-            s.Themed.Now = () => new DateTime(2026, 9, 27, 13, 45, 0);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            s.Pad.Y();
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            ((Dropdown)editor.EditorOf(GameMetadata.Controller)).SelectedItem = "Super Nintendo";
-            foreach (string flag in new[] { GameMetadata.Completed, GameMetadata.KidGame, GameMetadata.Broken })
-                ((LunaSwitch)editor.EditorOf(flag)).IsChecked = true;
-            ThemedGameOptionsTests.Reach(s, "MetadataSave");
-            s.Pad.A();
-            s.Settle();
-            Save(s.Capture(), "synthetic-default-badges-clock-off");
-
-            ThemedSwitchesTests.Flip(s, "DisplayClock");
-            Save(s.Capture(), "synthetic-clock-on");
-            ThemedSwitchesTests.Flip(s, "StatusWifi");
-            Save(s.Capture(), "synthetic-status-wifi-off");
-            ThemedSwitchesTests.Flip(s, "StatusBatteryPercentage");
-            Save(s.Capture(), "synthetic-status-wifi-and-percentage-off");
-            ThemedSwitchesTests.Flip(s, "DisplayHelp");
-            Save(s.Capture(), "synthetic-help-off");
-            ThemedSwitchesTests.Flip(s, "DisplayHelp");
-            ThemedSwitchesTests.Choose(s, "QuickSystemSelect", "Shoulders");
-            Save(s.Capture(), "synthetic-quick-select-shoulders-help");
-
-            ThemedSwitchesTests.OpenInterface(s);
-            Save(s.Capture(), "sheet-interface-tab");
-            s.Pad.B();
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            Window prefs = s.Window.GetControl<SheetLayer>("Sheets").Current!;
-            TabControl tabs = ThemedSwitchesTests.Named<TabControl>(prefs, "PreferenceTabs");
-            while ((tabs.SelectedItem as TabItem)?.Header as string != "Appearance") s.Pad.R1();
-            ThemedSwitchesTests.Named<Slider>(prefs, "NavigationVolumeSlider").BringIntoView();
-            Save(s.Capture(), "sheet-preferences-volume");
-            s.Pad.B();
-        }, default);
-
         // The quick scrolling overlay over a held list, letters and then a star, on the synthetic theme and on Art Book Next.
         [Pass4PngFact]
         public Task Scroll_overlay() => Session.Dispatch(() =>
@@ -179,26 +136,5 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
         }, default);
 
-        // Art Book Next with its own badge images, which Mistress's drawings leave alone, and its clock turned on.
-        [ArtBookNextFact]
-        public Task Art_book_next_badges_and_clock() => Session.Dispatch(() =>
-        {
-            if (Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_PNG") != "1") return;
-            using var s = new ThemedSession(themeDirectory: ArtBookNextFactAttribute.Folder, status: ThemedSwitchesTests.Device);
-            s.Themed.LiveClock = false;
-            s.Themed.Now = () => new DateTime(2026, 9, 27, 13, 45, 0);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            s.Pad.Y();
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            ((LunaSwitch)editor.EditorOf(GameMetadata.Completed)).IsChecked = true;
-            ThemedGameOptionsTests.Reach(s, "MetadataSave");
-            s.Pad.A();
-            s.Settle();
-            Save(s.Capture(), "artbooknext-badges");
-            s.Pad.B();
-            Save(s.Capture(), "artbooknext-system-clock-off");
-            ThemedSwitchesTests.Flip(s, "DisplayClock");
-            Save(s.Capture(), "artbooknext-system-clock-on");
-        }, default);
     }
 }

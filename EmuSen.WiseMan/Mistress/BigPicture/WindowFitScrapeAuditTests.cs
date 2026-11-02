@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The scraping windows in the states only a run over the fake ScreenScraper reaches: part way, finished, and Find by Name's results - see EmuSen_Settings_Reference.md §4.83.
+    // The scraping windows in the states only a run over the fake ScreenScraper reaches: part way and finished - see EmuSen_Settings_Reference.md §4.83.
     [Collection(TestCollections.ProcessGlobals)]
     public class WindowFitScrapeAuditTests : ScrapeWindowFixture
     {
@@ -21,7 +21,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public static TheoryData<string, int, int> Cases()
         {
             var data = new TheoryData<string, int, int>();
-            foreach (string w in new[] { "ScrapeStatusRunning", "ScrapeStatusFinished", "FindByNameResults" })
+            foreach (string w in new[] { "ScrapeStatusRunning", "ScrapeStatusFinished" })
                 foreach ((int width, int height) in WindowLookPictureTool.Sizes) data.Add(w, width, height);
             return data;
         }
@@ -85,13 +85,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Scrape(window, new ScrapeScope());
                     RunEnds(window);
                     Pump(600);
-                    break;
-                case "FindByNameResults":
-                    typeof(MainWindow).GetMethod("ShowFindByName", Hidden)!.Invoke(window, [first, "Aurora Drift"]);
-                    FindByNameWindow find = Assert.IsType<FindByNameWindow>(WindowFitAuditTests.Sheets(window).Current);
-                    Named<TextBox>(find, "FindByNameText").Text = "Super Mario";
-                    Click(Named<Button>(find, "FindByNameSearch"));
-                    WaitFor(() => find.Results.Count() == 2, "the results");
                     break;
             }
             return window;

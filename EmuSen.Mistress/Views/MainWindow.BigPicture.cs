@@ -153,9 +153,9 @@ namespace EmuSen.Mistress.Views
         // The same order as the library's covers (§4.60 of the settings reference): the player's own, ScreenScraper's, an ES-DE folder's, OpenEmu's.
         private ISceneMedia ThemedMedia() => MediaSourcesNow();
 
-        // Whether the themed view is what the pad is steering now: nothing over it, no game on screen.
+        // Whether the themed view is what the pad is steering now: nothing over it, no game's page, no game on screen.
         private bool ThemedTakesThePad =>
-            ThemedLibraryShown && LibraryView.IsVisible && !_padMenuOpen && !LaunchScreenOpen && OtherWindow() is null && !TextEntryOpen;
+            ThemedLibraryShown && LibraryView.IsVisible && !_padMenuOpen && !LaunchScreenOpen && OtherWindow() is null && !TextEntryOpen && _gamePage is null;
 
         // Directions go to the view as held and let go, so its own repeats (§14.7) run rather than the navigator's.
         private void ThemedDirections(TimeSpan now)

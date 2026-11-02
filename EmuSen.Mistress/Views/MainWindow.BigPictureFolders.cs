@@ -50,7 +50,7 @@ namespace EmuSen.Mistress.Views
 
         internal void ShowFolderEditor(SceneGame folder)
         {
-            if (_folderEditor is not null || _metadataEditor is not null) return;
+            if (_folderEditor is not null || _gamePage is not null) return;
             string? stored = _records.Edits(folder.File).GetValueOrDefault(GameMetadata.FolderLink);
             string where = SettingFolders.Roms(_appSettings) is { } roms ? Path.GetRelativePath(roms, folder.File) : folder.File;
             var window = _folderEditor = new FolderEditorWindow(folder.Name, where, FilesBelow(folder.File), stored, link => SaveFolderLink(folder.File, link));

@@ -202,12 +202,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Save(window, $"shader-settings-{p}", _out);
                     CloseAll(window);
 
-                    string shot = Path.Combine(_root, "shot.png");
-                    UiTest.Capture(window).SavePng(shot);
-                    _ = SheetLayer.Show(new ScreenshotWindow(shot, "Cobalt Harbor (Synthetic), Screenshot 1"), window);
-                    Save(window, $"screenshot-{p}", _out);
-                    CloseAll(window);
-
                     Play(window, 120);
                     pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
                     PadMenu.Choose(window, pad, "Rewind");
@@ -312,18 +306,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             s.Settle();
             Save(s.Window, $"gamelist-filter-{p}", _out);
-            CloseAll(s.Window);
-            s.Settle();
-
-            string rom = Path.Combine(s.RomDirectory, ThemedSession.SnesGames[2] + ".sfc");
-            Call(s.Window, "ShowFindByName", rom, ThemedSession.SnesGames[2]);
-            s.Settle();
-            Save(s.Window, $"find-by-name-{p}", _out);
-            CloseAll(s.Window);
-
-            Call(s.Window, "ShowCoverPicker", rom, ThemedSession.SnesGames[2]);
-            s.Settle();
-            Save(s.Window, $"cover-picker-{p}", _out);
             CloseAll(s.Window);
             s.Settle();
 

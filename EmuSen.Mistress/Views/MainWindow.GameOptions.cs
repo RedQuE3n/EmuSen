@@ -6,22 +6,20 @@ using System.Threading.Tasks;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
-    // A game's options and metadata editor, in the themed gamelist and the sidebar library, and the edits as every view shows them - see EmuSen_Settings_Reference.md §4.59 and §4.63.
-    public partial class MainWindow : IGameEditorHost
+    // The themed gamelist's options sheet, the game's metadata and the edits as every view shows them; the game's own options are its page's - see EmuSen_Settings_Reference.md §4.59 and EmuSen_BigPicture.md §50.
+    public partial class MainWindow
     {
         private static readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> NoEdits = new Dictionary<string, IReadOnlyDictionary<string, string>>();
 
         private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> _editSnapshot = NoEdits;
-        private GameOptionsWindow? _gameOptions;
-        private MetadataEditorWindow? _metadataEditor;
+        private GamelistOptionsWindow? _gameOptions;
 
-        public GameOptionsWindow? GameOptionsShown => _gameOptions;
-
-        public MetadataEditorWindow? MetadataEditorShown => _metadataEditor;
+        public GamelistOptionsWindow? GameOptionsShown => _gameOptions;
 
         // Hook for ES-DE's Jump to, Sort games by and Filter gamelist entries, which open the menu; the collections work fills it - see §4.59.
         partial void AddGamelistOptions(SceneGame game, List<GameOption> options);
@@ -75,28 +73,19 @@ namespace EmuSen.Mistress.Views
         // ES-DE's gamelist options menu, as a sheet over the view; its entries are those Mistress has the features for.
         private void ShowGameOptions(SceneGame game)
         {
-            if (_gameOptions is not null || _metadataEditor is not null || _folderEditor is not null) return;
+            if (_gameOptions is not null || _folderEditor is not null) return;
             var options = new List<GameOption>();
             AddGamelistOptions(game, options);
             AddStartConsoleOption(options);
             AddCollectionOptions(game, options);
             // A grouped collection's entry is no game: it has the list's rows and nothing of a game's (§4.58).
             if (game is { Folder: true, IsCollection: false }) AddFolderEntries(game, options);
-            else if (!game.IsCollection) AddGameEntries(options, game.File, game.Name, () => ToggleThemedFavourite(game));
+            else if (!game.IsCollection) AddGamePageEntry(options, game.File);
             PresentGameOptions(game.Name, options);
         }
 
-        // The sidebar library's menu, on the desktop or its big screen: the game's entries only; the themed gamelist's rows are left out - see §4.63.
-        private void ShowLibraryGameOptions(RomEntry entry)
-        {
-            if (_gameOptions is not null || _metadataEditor is not null) return;
-            var options = new List<GameOption>();
-            AddGameEntries(options, entry.FullPath, DisplayTitle(entry), () => ToggleFavourite(entry));
-            PresentGameOptions(DisplayTitle(entry), options);
-        }
-
-        // The editor for the sidebar library's game, from its context menu, Ctrl+I or the options menu.
-        private void EditLibraryGameMetadata(RomEntry entry) => ShowMetadataEditor(entry.FullPath, DisplayTitle(entry));
+        // Space opens the game's page from the library, as EmuSen_Interface.md §17.3 has it.
+        internal static readonly Avalonia.Input.KeyGesture GamePageGesture = new(Avalonia.Input.Key.Space);
 
         // Finder's and OpenEmu's Get Info gesture; bound here rather than by the menu, which only draws it.
         internal static readonly Avalonia.Input.KeyGesture EditMetadataGesture = new(Avalonia.Input.Key.I, Avalonia.Input.KeyModifiers.Control);
@@ -104,39 +93,29 @@ namespace EmuSen.Mistress.Views
         // Ctrl+I over either library opens the selected game's editor; true when it did, so the key goes no further.
         private bool EditMetadataFromTheKeyboard(Avalonia.Input.KeyEventArgs e)
         {
-            if (!EditMetadataGesture.Matches(e) || !LibraryView.IsVisible || Sheets.IsPresenting || _gameOptions is not null || _coverPicker is not null) return false;
+            if (!EditMetadataGesture.Matches(e) || !LibraryView.IsVisible || Sheets.IsPresenting || _gameOptions is not null || _gamePage is not null) return false;
             if (ThemedLibraryShown)
             {
                 if (_themed?.SelectedGame is not { IsCollection: false } game) return false;
                 if (game.Folder) ShowFolderEditor(game);
-                else ShowMetadataEditor(game.File, game.Name);
+                else ShowGamePage(game.File, GamePage.Details, GamePage.EditPage);
                 return true;
             }
             if (SelectedLibraryEntry is not RomEntry entry) return false;
-            EditLibraryGameMetadata(entry);
+            ShowGamePage(entry.FullPath, GamePage.Details, GamePage.EditPage);
             return true;
         }
 
-        // The favourite's row is left out where the caller draws its own, as the Home card does (EmuSen_BigPicture.md §49.3).
-        private void AddGameEntries(List<GameOption> options, string path, string title, Action? toggleFavourite)
-        {
-            if (toggleFavourite is not null) options.Add(new GameOption(FavouriteText(path), toggleFavourite));
-            options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(path, title)) { Opens = true });
-            if (CropOffered(path)) options.Add(new GameOption(CropThisGame, () => ShowGameCrop(path, title)) { Opens = true });
-            if (StandardOffered(path)) options.Add(StandardOption(path));
-            AddCoverEntries(options, path, title);
-            // A package and its soft patches, made only when asked - see EmuSen_GamePackages.md §15.
-            options.Add(new GameOption("Game Package...", () => ShowGamePackage(path, title)) { Opens = true });
-            // Scraping only ever starts where the player asks for it - see EmuSen_BigPicture.md §17.14.
-            if (!ScrapeRunning) options.Add(new GameOption("Scrape This Game...", () => _ = ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path))) { Opens = true });
-            // ES-DE's search by name, only from here and only when the player presses Search in it - see EmuSen_BigPicture.md §38.
-            if (!ScrapeRunning) options.Add(new GameOption("Find by Name...", () => ShowFindByName(path, title)) { Opens = true });
-        }
+        // The game's own options are its page's: the sheet offers the way there (EmuSen_Interface.md §18.0).
+        private void AddGamePageEntry(List<GameOption> options, string path) =>
+            options.Add(new GameOption(GamePageRow, () => ShowGamePage(path)) { Opens = true });
+
+        public const string GamePageRow = "Game Page";
 
         // A sheet in a big-screen session, a LunaP window owned by Mistress's on the desktop: SheetLayer decides which.
         private void PresentGameOptions(string title, IReadOnlyList<GameOption> options)
         {
-            var window = _gameOptions = new GameOptionsWindow(title, options, _bigScreen ? HelpFamily : (EmuSen.LunaP.Controls.PadFamily?)null);
+            var window = _gameOptions = new GamelistOptionsWindow(title, options, _bigScreen ? HelpFamily : (EmuSen.LunaP.Controls.PadFamily?)null);
             window.Closed += (_, _) => { if (ReferenceEquals(_gameOptions, window)) _gameOptions = null; };
             _ = SheetLayer.Show(window, this);
         }
@@ -151,39 +130,19 @@ namespace EmuSen.Mistress.Views
             ShowLibraryEntries();
         }
 
-        private void ShowMetadataEditor(string path, string title)
-        {
-            if (_metadataEditor is not null)
-            {
-                SheetLayer.Activate(_metadataEditor);
-                return;
-            }
-            // Inside a custom collection, ES-DE adds the custom collections sortname (§4.72).
-            bool inCustom = ThemedLibraryShown && _themed?.SelectedSystem?.System.Kind == EmuSen.Mistress.BigPicture.Theme.ThemeSystemKind.CustomCollection;
-            var window = _metadataEditor = new MetadataEditorWindow(this, path, title, _bigScreen ? HelpFamily : null, inCustom);
-            window.Closed += (_, _) => { if (ReferenceEquals(_metadataEditor, window)) _metadataEditor = null; };
-            _ = SheetLayer.Show(window, this);
-        }
-
         // A sheet is not an owned window, so nothing else closes these with Mistress - see EmuSen_BigPicture.md §15.14 and §20.4.
         private void CloseGameSheets()
         {
-            _coverPicker?.Close();
-            _coverPicker = null;
-            _metadataEditor?.Close();
-            _metadataEditor = null;
             _folderEditor?.Close();
             _folderEditor = null;
             _gameOptions?.Close();
             _gameOptions = null;
         }
 
-        MetadataDraft IGameEditorHost.DraftFor(string path) =>
+        private MetadataDraft DraftFor(string path) =>
             new(path, ScrapedNow(path) ?? _scrapedText.GetValueOrDefault(path), _records.Edits(path), _records.Find(path), _appSettings.ScrapeGameNames);
 
         public ScrapedRecord? ScrapedNow(string path) => _native is { } n ? n.FoundFor(path) : _mediaStore is { IsOpen: true } store ? store.FoundFor(path) : _scrapedText.GetValueOrDefault(path);
-
-        Task<bool> IGameEditorHost.ScrapeGameAsync(string path) => ConfirmAndScrapeAsync(ScrapeScope.ThisGame(path));
 
         // Edits go to games.db beside the favourite and play records; media.db, which a scrape writes, is never where an edit lives.
         public void SaveMetadata(MetadataDraft draft)

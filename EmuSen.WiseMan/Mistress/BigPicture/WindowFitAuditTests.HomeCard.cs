@@ -13,7 +13,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     public partial class WindowFitAuditTests
     {
         // Each state, by the rows chosen from the first page to reach it; the Desktop states open it from the desktop's library.
-        public static readonly string[] HomeCardViews = ["HomeCard", "HomeCardGame", "HomeCardGamePage", "HomeCardTools", "HomeCardToolsPage", "HomeCardSettings", "HomeCardPower", "HomeCardQuit", "HomeCardDesktop", "HomeCardDesktopPower"];
+        public static readonly string[] HomeCardViews = ["HomeCard", "HomeCardGame", "HomeCardTools", "HomeCardToolsPage", "HomeCardSettings", "HomeCardPower", "HomeCardQuit", "HomeCardDesktop", "HomeCardDesktopPower"];
 
         // The handheld's: Steam's Game Mode, where Power holds Quit EmuSen alone.
         public static readonly string[] HomeCardHandheldViews = ["HomeCardHandheldPower"];
@@ -47,7 +47,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 switch (view)
                 {
                     case "HomeCardGame": pad.Down(1); break;
-                    case "HomeCardGamePage": PadMenu.Choose(window, pad, "Cobalt Harbor (Synthetic)", exact: true); break;
                     case "HomeCardTools": pad.Down(PadMenu.PathTo(window, MainWindow.ToolsMenu, exact: true)![0]); break;
                     case "HomeCardToolsPage": PadMenu.Choose(window, pad, MainWindow.ToolsMenu, exact: true); break;
                     case "HomeCardSettings": PadMenu.Choose(window, pad, MainWindow.SettingsMenu, exact: true); break;

@@ -26,11 +26,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         public SettingsMenusPictureTool(ITestOutputHelper output) => _out = output;
 
+        private static readonly string PngFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "bigpicture", "png", "esde-menus-2");
+
         private void Save(ThemedSession s, string name)
         {
             s.Settle();
-            Directory.CreateDirectory(MetadataEditorPictureTool.PngFolder);
-            string path = Path.Combine(MetadataEditorPictureTool.PngFolder, name + ".png");
+            Directory.CreateDirectory(PngFolder);
+            string path = Path.Combine(PngFolder, name + ".png");
             s.Capture().SavePng(path);
             _out.WriteLine(path);
         }
@@ -88,7 +90,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Start();
             MenuPanel menu = EmuSen.WiseMan.Fixtures.PadMenu.Big(s.Window);
             menu.OpeningScale = 0.75;
-            s.Capture().SavePng(Path.Combine(MetadataEditorPictureTool.PngFolder, $"{p}-menu-opening-0.75.png"));
+            s.Capture().SavePng(Path.Combine(PngFolder, $"{p}-menu-opening-0.75.png"));
             s.Pad.B();
         }
 
@@ -99,14 +101,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return new ThemedSession(width, height, a => a.EsdeMediaDirectory = media, themeDirectory: ArtBookNextFactAttribute.Folder);
         }
 
-        [MetadataEditorPngFact]
+        [EsdeMenusPngFact]
         public Task Synthetic_theme() => Session.Dispatch(() =>
         {
             foreach ((int w, int h) in new[] { (1280, 800), (1920, 1200) })
                 using (var s = new ThemedSession(w, h)) Walk(s, $"synthetic-{w}x{h}");
         }, default);
 
-        [MetadataEditorPngFact]
+        [EsdeMenusPngFact]
         public Task Art_book_next() => Session.Dispatch(() =>
         {
             foreach ((int w, int h) in new[] { (1280, 800), (1920, 1200) })

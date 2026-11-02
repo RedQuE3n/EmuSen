@@ -655,3 +655,24 @@ Twenty-one recordings were added, two were taken again and two retired, each by 
 No other recording differed. Every page of the pad menu passes its fit case, which now audits the card on the desktop
 as in big picture, so the Home card's pages are audited at both sizes in both sessions.
 
+
+#### 6.3.20 A game's page, U4 (2026-11-01)
+
+Thirty-two recordings were added, five taken again and twenty-six retired, each by one cause:
+
+- **Added: the game's page** (`WindowFitAuditTests.GamePage.cs`), at 1280 × 800 and 1920 × 1200, over the synthetic
+  library's Cobalt Harbor with three slots and the automatic state, a taken screenshot and three saved cheats: on the
+  big screen the overview with Play focused (`GamePage`), States with Slot 3 focused (`GamePageStates`), Options,
+  Media, Details, and the deeper pages Cheats, Cover Art, Edit Details, Package, Scrape This Game's question and the
+  viewer (`GamePageOptions` … `GamePageViewer`), each with Down, Up and B recorded; on the desktop the overview, States,
+  Options, Details and Edit Details (`GamePageDesktop` …). They hold the hero to the edges at 360 design units, the
+  cover at 64,180, the actions at 336,328, the strip at 336,396, the content from 64,464 and the help bar at 702, and
+  every word whole under the fit audit. The same states are audited at 1920 × 1080 and 1280 × 720 and not recorded.
+- **Taken again: `BigPicture-GameOptions`**, both sizes: the themed gamelist's Select sheet keeps its list rows and ends
+  with `Game Page`, the game's own entries having moved to the page (`EmuSen_BigPicture.md` §50.3).
+- **Taken again: the Home card's game row** (`HomeCard`, `HomeCardGame`, `HomeCardTools`, `HomeCardDesktop`, both
+  sizes): the row opens the game's page instead of a submenu, so its words lose the submenu's `›`; nothing else moved.
+- **Retired, with their windows:** `BigPicture-MetadataEditor`, `CoverPicker`, `CoverPickerCovers`,
+  `CoverPickerLongTitle`, `FindByName`, `FindByNameLongTitle`, `FindByNameResults`, `GamePackageNew`,
+  `GamePackageLongTitle`, `GamePackageSelfContained`, `Screenshot`, `ScreenshotLongTitle`, and the Home card's
+  `HomeCardGamePage`, each at both sizes.

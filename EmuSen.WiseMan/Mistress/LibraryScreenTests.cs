@@ -60,7 +60,6 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private static TileGrid<RomEntry> Grid(MainWindow w) => w.GetControl<TileGrid<RomEntry>>("LibraryGrid");
-        private static TileGrid<MediaItem> Media(MainWindow w) => w.GetControl<TileGrid<MediaItem>>("MediaGrid");
         private static LunaList<RomEntry> List(MainWindow w) => (LunaList<RomEntry>)w.GetControl<ListBox>("LibraryList");
         private static SourceList Sidebar(MainWindow w) => w.GetControl<SourceList>("LibrarySidebar");
         private static string Header(MainWindow w) => w.GetControl<TextBlock>("LibraryHeaderText").Text ?? "";
@@ -285,33 +284,6 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task The_save_states_view_shows_each_state_under_its_game_and_the_sidebar_narrows_it() => Session.Dispatch(() =>
-        {
-            Rom("Alpha.sfc");
-            Rom("Beta.nes");
-            Directory.CreateDirectory(_states);
-            File.WriteAllBytes(Path.Combine(_states, "Alpha.state"), new byte[] { 1 });
-            File.WriteAllBytes(Path.Combine(_states, "Alpha.resume.state"), new byte[] { 1 });
-            File.WriteAllBytes(Path.Combine(_states, "Beta.slot3.state"), new byte[] { 1 });
-            MainWindow window = Open();
-
-            Invoke(window, "ShowCategory", MainWindow.StatesCategory);
-
-            Assert.True(Media(window).IsVisible);
-            Assert.False(Grid(window).IsVisible);
-            Assert.Equal(3, MediaShown(window).Length);
-            Assert.Contains("3 save states", Header(window));
-
-            Choose(window, MainWindow.ConsoleKeyPrefix + "NES (Moon)");
-            MediaItem beta = Assert.Single(MediaShown(window));
-            Assert.Equal("Slot 3", beta.Label);
-
-            Invoke(window, "ShowCategory", MainWindow.LibraryCategory);
-            Assert.True(Grid(window).IsVisible);
-            window.Close();
-        }, default);
-
-        [Fact]
         public Task Big_screen_hides_the_sidebar_and_gives_the_console_back_to_the_filter_bar() => Session.Dispatch(() =>
         {
             Rom("Alpha.sfc");
@@ -369,7 +341,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private static RomEntry Entry(MainWindow w, string name) => ((IReadOnlyList<RomEntry>)Field(w, "_shownEntries")).Single(e => e.FileName == name);
 
-        private static MediaItem[] MediaShown(MainWindow w) => ((IReadOnlyList<MediaItem>)Field(w, "_shownMedia")).ToArray();
 
         private static void Choose(MainWindow window, string key) => Invoke(window, "ChooseCollection", key);
 

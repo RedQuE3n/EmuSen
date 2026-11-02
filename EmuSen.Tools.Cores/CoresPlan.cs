@@ -36,6 +36,11 @@ namespace EmuSen.Tools.Cores
             return $"{marked.Count} marked: {string.Join(", ", parts)}{(bytes > 0 ? $", about {CoresWords.Size(bytes)} to download" : "")}";
         }
 
+        // The plan's question: one marked core by its action and name, several by their count (EmuSen_Interface.md §14.6).
+        public static string Title(IReadOnlyList<ManagerMarked<CoreRow>> marked) => marked.Count == 1
+            ? $"{char.ToUpperInvariant(marked[0].Mark.Label[0])}{marked[0].Mark.Label[1..]} {marked[0].Row.Name}?"
+            : $"Apply {marked.Count} changes?";
+
         // What will happen, before anything runs (EmuSen_Cores.md §2.1).
         public static string Text(IReadOnlyList<ManagerMarked<CoreRow>> marked)
         {

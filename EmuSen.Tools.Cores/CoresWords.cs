@@ -24,7 +24,31 @@ namespace EmuSen.Tools.Cores
             var s => s,
         };
 
+        // A date the tool wrote as 2026-10-31, said as 31 Oct 2026; any other words as they are.
+        public static string Day(string date) => DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day) ? day.ToString("d MMM yyyy", CultureInfo.InvariantCulture) : date;
+
         public static string Consoles(CoreRow row) => row.Consoles.Count > 0 ? string.Join(", ", row.Consoles) : "—";
+
+        // The status in the list, a glyph beside a word in Title Case, one owner with its colour (EmuSen_Interface.md §14.3).
+        public static string Status(CoreRow row) => row.IsDefault ? "● Default"
+            : row.AwaitsApproval ? "⚠ To approve"
+            : row.Trust == "needs_refresh" ? "⚠ Needs refresh"
+            : row.State switch
+            {
+                "update" => "↑ Update",
+                "installed" => "✓ Installed",
+                "available" => "Available",
+                "unsupported" or "not_read" => "Not supported",
+                "built in" or "manifest" => "Built in",
+                "added" or "approved" => "✓ Added by you",
+                var s => s.Length > 0 ? char.ToUpperInvariant(s[0]) + s[1..] : s,
+            };
+
+        // The status's colour, a resource key the frame paints the cell with.
+        public static string? Tone(CoreRow row) => row.IsDefault ? null
+            : row.AwaitsApproval || row.Trust == "needs_refresh" || row.State == "update" ? "LunaAttention"
+            : row.State is "installed" or "added" or "approved" ? "LunaSuccess"
+            : "LunaMuted";
 
         // The tool's refusal for the whole request, said as the window says it.
         public static string Refusal(string tool) => tool switch

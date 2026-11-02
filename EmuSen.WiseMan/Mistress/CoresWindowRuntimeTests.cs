@@ -142,15 +142,16 @@ namespace EmuSen.WiseMan.Mistress
             pane.BigScreenTable.Select(row);
             pane.FocusRole(EmuSen.LunaP.Controls.AdaptiveRole.Content);
             Settle(main);
+            // A on a core waiting for approval asks the question as the frame's card, with the hash in its words (EmuSen_Interface.md §14.5, §14.6).
+            Assert.Equal("Approve…", pane.Hints[0].Label);
             pad.A();
             Settle(main);
-            Assert.True(pane.IsDetailOpen, "Accept on the row opens its page");
-            var approve = Sheets(main).SheetOf(shown)!.GetVisualDescendants().OfType<Avalonia.Controls.Button>().FirstOrDefault(b => b.Name == "CoresApprove");
-            Assert.True(approve is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true }, "the page offers Approve…");
-            Assert.True(approve!.IsFocused, $"the page's first control, Approve…, has the focus, not {main.FocusManager?.GetFocusedElement()}");
-            pad.A();
+            Assert.True(pane.IsPlanOpen, "A on the row asks the approval");
+            Assert.StartsWith("Approve ", pane.QuestionTitle);
+            Assert.Contains(Sha256(pcee2), pane.PlanText);
+            Assert.True(pane.Confirm());
             Settle(main);
-            Assert.Contains(Sha256(pcee2), asked);
+            Assert.Null(asked);
             Assert.Contains(Sha256(pcee2), File.ReadAllText(Path.Combine(_root, "Config", "cores.approved")));
             main.Close();
         }, default);
@@ -184,13 +185,10 @@ namespace EmuSen.WiseMan.Mistress
             Settle(main);
             pad.A();
             Settle(main);
-            Assert.True(pane.IsDetailOpen, "Accept on the row opens its page");
-            pad.A();
-            Settle(main);
-            object? asked = Sheets(main).Current;
-            Assert.True(asked is not null && !ReferenceEquals(asked, shown), $"the question is presented over Cores, not {asked}; focus {main.FocusManager?.GetFocusedElement()}");
-            Assert.Contains(Sha256(pcee2), string.Join(" ", Sheets(main).SheetOf((Avalonia.Controls.Window)asked!)!.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>().Select(t => t.Text)));
-            pad.A();
+            Assert.True(pane.IsPlanOpen, "A on the row asks the approval as the frame's card");
+            Assert.Same(shown, Sheets(main).Current);
+            Assert.Contains(Sha256(pcee2), pane.PlanText);
+            Assert.True(pane.Confirm());
             Settle(main);
             Assert.Same(shown, Sheets(main).Current);
             Assert.Contains(Sha256(pcee2), File.ReadAllText(Path.Combine(_root, "Config", "cores.approved")));
@@ -223,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress
             Settle(window);
             Assert.False(pane.ApproveSelectedAsync().Result);
             Assert.Contains(Sha256(pcee2), asked);
-            Assert.StartsWith("Sony - PlayStation 2 (PCEE2) could not be approved: no core library listed has the SHA-256", told);
+            Assert.StartsWith("pcee2 could not be approved: no core library listed has the SHA-256", told);
             window.Close();
         }, default);
 

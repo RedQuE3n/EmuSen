@@ -16,193 +16,156 @@ tree
       2 CoresPane at=48,28,1184,764 by=panel heard=Cores limit=0,0,1280,800 role=pane
         3 Panel at=48,28,1184,764 by=panel limit=0,0,1280,800 role=none
           4 Grid at=48,28,1184,764 by=panel limit=0,0,1280,800 role=none
-            5 DockPanel at=64,40,1152,44 by=panel limit=0,0,1280,800 role=none
-              6 Border at=1036,40,180,44 by=panel limit=0,0,1280,800 name=AdaptiveSearch role=none
-                7 TextBox at=1036,40,180,44 by=panel drawn focus heard=Search limit=0,0,1280,800 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
-                  8 ScrollViewer allow="a text box scrolls its own text" at=1047,47,158,30 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
-                    9 TextBlock allow="a text box scrolls its own text" at=1047,50,158,24 box=158,24 caps=13.999 drawn face=Barlow heard="Search cores" in=8 layout=110.28,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text="Search cores"
-              10 Border at=64,40,972,44 by=panel limit=0,0,1280,800 name=AdaptiveNavigation role=none
-                11 WholeRow at=64,40,972,44 by=panel limit=0,0,1280,800 paints=#D4D4D4FF role=none
-                  12 ToggleButton at=64,40,66,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
-                    13 TextBlock at=80,48,34,24 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=ALL layout=33.56,24 limit=64,40,66,44 owner=12 paints=#EEEEF0FF role=text size=20 text=ALL
-                  14 ToggleButton at=138,40,146,44 by=panel drawn focus heard=PlayStation limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=PlayStation
-                    15 TextBlock at=154,48,114,24 box=114,24 by=clip caps=13.999 drawn face=Barlow heard=PLAYSTATION layout=113.56,24 limit=138,40,146,44 owner=14 paints=#D4D4D4FF role=text size=20 text=PLAYSTATION
-                  16 ToggleButton at=292,40,160,44 by=panel drawn focus heard="PlayStation 2" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="PlayStation 2"
-                    17 TextBlock at=308,48,128,24 box=128,24 by=clip caps=13.999 drawn face=Barlow heard="PLAYSTATION 2" layout=127.7,24 limit=292,40,160,44 owner=16 paints=#D4D4D4FF role=text size=20 text="PLAYSTATION 2"
-                  18 ToggleButton at=460,40,79,44 by=panel drawn focus heard=SNES limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=SNES
-                    19 TextBlock at=476,48,47,24 box=47,24 by=clip caps=13.999 drawn face=Barlow heard=SNES layout=46.76,24 limit=460,40,79,44 owner=18 paints=#D4D4D4FF role=text size=20 text=SNES
-                  20 ToggleButton at=547,40,127,44 by=panel drawn focus heard=Installed limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Installed
-                    21 TextBlock at=563,48,95,24 box=95,24 by=clip caps=13.999 drawn face=Barlow heard=INSTALLED layout=94.8,24 limit=547,40,127,44 owner=20 paints=#D4D4D4FF role=text size=20 text=INSTALLED
-                  22 ToggleButton at=682,40,127,44 by=panel drawn focus heard=Available limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Available
-                    23 TextBlock at=698,48,95,24 box=95,24 by=clip caps=13.999 drawn face=Barlow heard=AVAILABLE layout=94.54,24 limit=682,40,127,44 owner=22 paints=#D4D4D4FF role=text size=20 text=AVAILABLE
-                  24 ToggleButton at=817,40,112,44 by=panel drawn focus heard=Updates limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Updates
-                    25 TextBlock at=833,48,80,24 box=80,24 by=clip caps=13.999 drawn face=Barlow heard=UPDATES layout=79.8,24 limit=817,40,112,44 owner=24 paints=#D4D4D4FF role=text size=20 text=UPDATES
-            26 Grid at=64,96,1152,471 by=panel limit=0,0,1280,800 role=none
-              27 Border at=64,96,1152,471 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
-                28 Grid at=64,96,1152,471 by=panel limit=0,0,1280,800 paints=#0E0E10FF role=none
-                  29 LunaTable at=64,96,1152,471 by=panel heard=Rows limit=0,0,1280,800 paints=#0E0E10FF,#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
-                    30 ScrollViewer at=64,107,1152,460 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=64,107,1152,460
-                      31 ListBoxItem at=64,107,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Sapphire, State: built in" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        32 Border at=88,117,1104,33 by=clip in=30 limit=64,107,1152,54 paints=#707070FF role=none
-                          33 Grid at=88,117,1104,32 by=clip heard="Mark: not marked, Core: Sapphire, State: built in" in=30 limit=64,107,1152,54 paints=#4C9AE8FF role=none
-                            34 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,117,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=99.29,31.2 owner=31 paints=#D4D4D4FF role=edit size=26 text=Sapphire
-                            35 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,117,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=74.02,31.2 owner=31 paints=#D4D4D4FF role=edit size=26 text="built in"
-                      36 ListBoxItem at=64,161,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Diamond, State: built in" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        37 Border at=88,171,1104,33 by=clip in=30 limit=64,161,1152,54 paints=#707070FF role=none
-                          38 Grid at=88,171,1104,32 by=clip heard="Mark: not marked, Core: Diamond, State: built in" in=30 limit=64,161,1152,54 paints=#4C9AE8FF role=none
-                            39 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,171,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=98.67,31.2 owner=36 paints=#D4D4D4FF role=edit size=26 text=Diamond
-                            40 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,171,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=74.02,31.2 owner=36 paints=#D4D4D4FF role=edit size=26 text="built in"
-                      41 ListBoxItem at=64,215,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: VenusRT, State: built in" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        42 Border at=88,225,1104,33 by=clip in=30 limit=64,215,1152,54 paints=#707070FF role=none
-                          43 Grid at=88,225,1104,32 by=clip heard="Mark: not marked, Core: VenusRT, State: built in" in=30 limit=64,215,1152,54 paints=#4C9AE8FF role=none
-                            44 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,225,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=95.08,31.2 owner=41 paints=#D4D4D4FF role=edit size=26 text=VenusRT
-                            45 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,225,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=74.02,31.2 owner=41 paints=#D4D4D4FF role=edit size=26 text="built in"
-                      46 ListBoxItem at=64,269,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Extra PS2 Core, State: waiting for approval" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        47 Border at=88,279,1104,33 by=clip in=30 limit=64,269,1152,54 paints=#707070FF role=none
-                          48 Grid at=88,279,1104,32 by=clip heard="Mark: not marked, Core: Extra PS2 Core, State: waiting for approval" in=30 limit=64,269,1152,54 paints=#4C9AE8FF role=none
-                            49 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,279,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=162.4,31.2 owner=46 paints=#D4D4D4FF role=edit size=26 text="Extra PS2 Core"
-                            50 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,279,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=218.35,31.2 owner=46 paints=#D4D4D4FF role=edit size=26 text="waiting for approval"
-                      51 ListBoxItem at=64,323,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Sony - PlayStation 2 (LRPS2, the PCSX2 libretro core with its long name), State: available" in=30 limit=64,107,1152,460 op paints=#4C9AE8FF,#EEEEF0FF role=listitem
-                        52 Border at=88,333,1104,33 by=clip in=30 limit=64,323,1152,54 paints=#707070FF role=none
-                          53 Grid at=88,333,1104,32 by=clip heard="Mark: not marked, Core: Sony - PlayStation 2 (LRPS2, the PCSX2 libretro core with its long name), State: available" in=30 limit=64,323,1152,54 paints=#4C9AE8FF role=none
-                            54 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,333,516,32 box=516,32 caps=18.1987 drawn ellipsis face=Barlow heard=Core in=30 layout=510.3,31.2 owner=51 paints=#EEEEF0FF role=edit size=26 text="Sony - PlayStation 2 (LRPS2, the PCSX2 libretro core with its long name)"
-                            55 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,333,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=96.59,31.2 owner=51 paints=#EEEEF0FF role=edit size=26 text=available
-                      56 ListBoxItem at=64,377,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Sony - PlayStation (Beetle PSX), State: update ↑" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        57 Border at=88,387,1104,34 by=clip in=30 limit=64,377,1152,54 paints=#707070FF role=none
-                          58 Grid at=88,387,1104,33 by=clip heard="Mark: not marked, Core: Sony - PlayStation (Beetle PSX), State: update ↑" in=30 limit=64,377,1152,54 paints=#4C9AE8FF role=none
-                            59 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,387,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=338.29,31.2 owner=56 paints=#D4D4D4FF role=edit size=26 text="Sony - PlayStation (Beetle PSX)"
-                            60 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,387,516,33 box=516,33 caps=18.1987 drawn face=Barlow heard=State in=30 layout=103.92,32.27 owner=56 paints=#D4D4D4FF role=edit size=26 text="update ↑"
-                      61 ListBoxItem at=64,431,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Nintendo - SNES / SFC (Snes9x - Current), State: installed" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        62 Border at=88,441,1104,33 by=clip in=30 limit=64,431,1152,54 paints=#707070FF role=none
-                          63 Grid at=88,441,1104,32 by=clip heard="Mark: not marked, Core: Nintendo - SNES / SFC (Snes9x - Current), State: installed" in=30 limit=64,431,1152,54 paints=#4C9AE8FF role=none
-                            64 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,441,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=448.47,31.2 owner=61 paints=#D4D4D4FF role=edit size=26 text="Nintendo - SNES / SFC (Snes9x - Current)"
-                            65 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,441,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=92.95,31.2 owner=61 paints=#D4D4D4FF role=edit size=26 text=installed
-                      66 ListBoxItem at=64,485,1152,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Only GL Core, State: not supported" in=30 limit=64,107,1152,460 op paints=#D4D4D4FF role=listitem
-                        67 Border at=88,495,1104,33 by=clip in=30 limit=64,485,1152,54 paints=#707070FF role=none
-                          68 Grid at=88,495,1104,32 by=clip heard="Mark: not marked, Core: Only GL Core, State: not supported" in=30 limit=64,485,1152,54 paints=#4C9AE8FF role=none
-                            69 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,495,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=137.85,31.2 owner=66 paints=#D4D4D4FF role=edit size=26 text="Only GL Core"
-                            70 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=652,495,516,32 box=516,32 caps=18.1987 drawn face=Barlow heard=State in=30 layout=154.31,31.2 owner=66 paints=#D4D4D4FF role=edit size=26 text="not supported"
-            71 Border at=64,575,1152,96 by=panel limit=0,0,1280,800 name=AdaptiveActions role=none
-              72 WrapPanel at=64,575,1152,96 by=panel limit=0,0,1280,800 role=none
-                73 ActionButton at=64,575,101,44 by=panel drawn focus heard=INSTALL limit=0,0,1280,800 op paints=#707070FF,#D4D4D4FF role=button text=Install
-                  74 TextBlock at=81,581,67,32 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=INSTALL layout=66.22,31.2 limit=64,575,101,44 owner=73 paints=#D4D4D4FF role=text size=26 text=INSTALL
-                75 ActionButton at=177,575,98,44 by=panel drawn focus heard=UPDATE limit=0,0,1280,800 op paints=#707070FF,#D4D4D4FF role=button text=Update
-                  76 TextBlock at=194,581,64,32 box=64,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=UPDATE layout=63.62,31.2 limit=177,575,98,44 owner=75 paints=#D4D4D4FF role=text size=26 text=UPDATE
-                77 ActionButton at=287,575,101,44 by=panel drawn focus heard=REMOVE limit=0,0,1280,800 op paints=#707070FF,#D4D4D4FF role=button text=Remove
-                  78 TextBlock at=304,581,67,32 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=REMOVE layout=66.33,31.2 limit=287,575,101,44 owner=77 paints=#D4D4D4FF role=text size=26 text=REMOVE
-                79 ActionButton at=400,575,127,44 by=panel drawn heard="APPROVE…" limit=0,0,1280,800 off paints=#707070FF,#D4D4D4FF role=button text="Approve…"
-                  80 TextBlock at=417,581,93,32 box=93,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPROVE…" layout=92.09,31.2 limit=400,575,127,44 off owner=79 paints=#707070FF role=text size=26 text="APPROVE…"
-                81 ActionButton at=539,575,155,44 by=panel drawn heard="MAKE DEFAULT" limit=0,0,1280,800 off paints=#707070FF,#D4D4D4FF role=button text="Make Default"
-                  82 TextBlock at=556,581,121,32 box=121,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MAKE DEFAULT" layout=120.87,31.2 limit=539,575,155,44 off owner=81 paints=#707070FF role=text size=26 text="MAKE DEFAULT"
-                83 ActionButton at=706,575,121,44 by=panel drawn heard="OPTIONS…" limit=0,0,1280,800 off paints=#707070FF,#D4D4D4FF role=button text="Options…"
-                  84 TextBlock at=723,581,87,32 box=87,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="OPTIONS…" layout=86.76,31.2 limit=706,575,121,44 off owner=83 paints=#707070FF role=text size=26 text="OPTIONS…"
-                85 ActionButton at=839,575,92,44 by=panel drawn focus heard=VERIFY limit=0,0,1280,800 op paints=#707070FF,#D4D4D4FF role=button text=Verify
-                  86 TextBlock at=856,581,58,32 box=58,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=VERIFY layout=57.02,31.2 limit=839,575,92,44 owner=85 paints=#D4D4D4FF role=text size=26 text=VERIFY
-                87 ActionButton at=943,575,205,44 by=panel drawn focus heard="CHECK FOR UPDATES" limit=0,0,1280,800 op paints=#707070FF,#D4D4D4FF role=button text="Check for Updates"
-                  88 TextBlock at=960,581,171,32 box=171,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CHECK FOR UPDATES" layout=170.85,31.2 limit=943,575,205,44 owner=87 paints=#D4D4D4FF role=text size=26 text="CHECK FOR UPDATES"
-                89 ActionButton at=64,627,80,44 by=panel drawn focus heard=MARK limit=0,0,1280,800 op paints=#707070FF,#D4D4D4FF role=button text=Mark
-                  90 TextBlock at=81,633,46,32 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=45.97,31.2 limit=64,627,80,44 owner=89 paints=#D4D4D4FF role=text size=26 text=MARK
-            91 Border at=48,679,1184,67 by=panel limit=0,0,1280,800 name=AdaptiveStatus role=none
-              92 Grid at=52,683,1176,59 by=panel limit=0,0,1280,800 role=none
-                93 Grid at=52,683,1176,27 by=panel limit=0,0,1280,800 role=none
-                  94 TextBlock at=60,683,1168,27 box=1168,27 by=panel caps=15.3989 drawn face=Barlow heard="Nothing marked" layout=149.56,26.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="Nothing marked"
-                95 StackPanel at=813,718,415,24 by=panel limit=0,0,1280,800 role=none
-                  96 StackPanel at=813,718,415,24 by=panel limit=0,0,1280,800 role=none
-                    97 ProgressBar at=813,723,200,14 by=panel drawn heard=Space limit=0,0,1280,800 paints=#333337FF,#4C9AE8FF role=progressbar
-                    98 TextBlock at=1021,718,207,24 box=207,24 by=panel caps=13.999 drawn face=Barlow heard="/Cores 11 MB · 410 GB free" layout=206.6,24 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="/Cores 11 MB · 410 GB free"
-            99 Border at=48,746,1184,46 by=panel limit=0,0,1280,800 name=AdaptiveHelpBar paints=#707070FF role=none
-              100 HintBar at=96,757,1088,29 by=panel heard="Open, Back, Section, Apply…, Install, Check for Updates, Mark" limit=0,0,1280,800 role=group
-focus 51
-edge 7 up same
-edge 7 down 31
-edge 7 left 24
-edge 7 right same
+            5 Border at=48,28,1184,51 by=panel heard=CORES limit=0,0,1280,800 name=AdaptiveHeader role=none
+              6 DockPanel at=64,40,1152,39 by=panel limit=0,0,1280,800 role=none
+                7 TextBlock at=579,47,637,25 box=637,25 by=panel caps=13.999 drawn face=Barlow heard="8 cores · 6 installed · ⚠ 1 to approve · ↑ 1 update · catalogue read 31 Oct 2026" layout=637,24.82 limit=0,0,1280,800 paints=#8D8D91FF role=text size=20 text="8 cores · 6 installed · ⚠ 1 to approve · ↑ 1 update · catalogue read 31 Oct 2026"
+                8 StackPanel at=64,40,503,39 by=panel limit=0,0,1280,800 role=none
+                  9 TextBlock at=64,40,503,39 box=503,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard=CORES layout=66.24,38.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=32 text=CORES
+            10 DockPanel at=64,91,1152,44 by=panel limit=0,0,1280,800 role=none
+              11 Border at=1036,91,180,44 by=panel limit=0,0,1280,800 name=AdaptiveSearch role=none
+                12 TextBox at=1036,91,180,44 by=panel drawn focus heard=Search limit=0,0,1280,800 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+                  13 ScrollViewer allow="a text box scrolls its own text" at=1047,98,158,30 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                    14 TextBlock allow="a text box scrolls its own text" at=1047,101,158,24 box=158,24 caps=13.999 drawn face=Barlow heard="Search cores" in=13 layout=110.28,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text="Search cores"
+              15 Border at=64,91,972,44 by=panel limit=0,0,1280,800 name=AdaptiveNavigation role=none
+                16 WholeRow at=64,91,972,44 by=panel limit=0,0,1280,800 role=none
+                  17 ToggleButton at=64,91,66,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                    18 TextBlock at=80,99,34,24 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=ALL layout=33.56,24 limit=64,91,66,44 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
+                  19 ToggleButton at=138,91,146,44 by=panel drawn focus heard=PlayStation limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=PlayStation
+                    20 TextBlock at=154,99,114,24 box=114,24 by=clip caps=13.999 drawn face=Barlow heard=PLAYSTATION layout=113.56,24 limit=138,91,146,44 owner=19 paints=#D4D4D4FF role=text size=20 text=PLAYSTATION
+                  21 ToggleButton at=292,91,160,44 by=panel drawn focus heard="PlayStation 2" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="PlayStation 2"
+                    22 TextBlock at=308,99,128,24 box=128,24 by=clip caps=13.999 drawn face=Barlow heard="PLAYSTATION 2" layout=127.7,24 limit=292,91,160,44 owner=21 paints=#D4D4D4FF role=text size=20 text="PLAYSTATION 2"
+                  23 ToggleButton at=460,91,79,44 by=panel drawn focus heard=SNES limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=SNES
+                    24 TextBlock at=476,99,47,24 box=47,24 by=clip caps=13.999 drawn face=Barlow heard=SNES layout=46.76,24 limit=460,91,79,44 owner=23 paints=#D4D4D4FF role=text size=20 text=SNES
+            25 Grid at=64,147,1152,599 by=panel limit=0,0,1280,800 role=none
+              26 Grid at=64,147,691,599 by=panel limit=0,0,1280,800 role=none
+                27 Border at=64,147,691,532 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
+                  28 Grid at=64,147,691,532 by=panel limit=0,0,1280,800 paints=#0E0E10FF role=none
+                    29 LunaTable at=64,147,691,532 by=panel heard=Rows limit=0,0,1280,800 paints=#0E0E10FF,#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
+                      30 ScrollViewer at=64,158,691,521 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=64,158,691,521
+                        31 ListBoxItem at=64,158,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: ● Default" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          32 Border at=88,168,643,34 by=clip in=30 limit=64,158,691,54 paints=#707070FF role=none
+                            33 Grid at=88,168,643,33 by=clip heard="Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: ● Default" in=30 limit=64,158,691,54 paints=#4C9AE8FF role=none
+                              34 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,168,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=99.29,31.2 owner=31 paints=#D4D4D4FF role=edit size=26 text=Sapphire
+                              35 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,168,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=143.29,31.2 owner=31 paints=#D4D4D4FF role=edit size=26 text="PlayStation 2"
+                              36 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,168,158,33 box=158,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=109.44,32.27 owner=31 paints=#D4D4D4FF role=edit size=26 text="● Default"
+                        37 ListBoxItem at=64,212,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Diamond, Console: PlayStation, Status: ● Default" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          38 Border at=88,222,643,34 by=clip in=30 limit=64,212,691,54 paints=#707070FF role=none
+                            39 Grid at=88,222,643,33 by=clip heard="Mark: not marked, Core: Diamond, Console: PlayStation, Status: ● Default" in=30 limit=64,212,691,54 paints=#4C9AE8FF role=none
+                              40 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,222,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=98.67,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text=Diamond
+                              41 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,222,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=124.9,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text=PlayStation
+                              42 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,222,158,33 box=158,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=109.44,32.27 owner=37 paints=#D4D4D4FF role=edit size=26 text="● Default"
+                        43 ListBoxItem at=64,266,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: VenusRT, Console: SNES, Status: ● Default" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          44 Border at=88,276,643,34 by=clip in=30 limit=64,266,691,54 paints=#707070FF role=none
+                            45 Grid at=88,276,643,33 by=clip heard="Mark: not marked, Core: VenusRT, Console: SNES, Status: ● Default" in=30 limit=64,266,691,54 paints=#4C9AE8FF role=none
+                              46 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,276,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=95.08,31.2 owner=43 paints=#D4D4D4FF role=edit size=26 text=VenusRT
+                              47 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,276,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=60.79,31.2 owner=43 paints=#D4D4D4FF role=edit size=26 text=SNES
+                              48 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,276,158,33 box=158,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=109.44,32.27 owner=43 paints=#D4D4D4FF role=edit size=26 text="● Default"
+                        49 ListBoxItem at=64,320,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Extra PS2 Core, Console: PlayStation 2, Status: ⚠ To approve" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          50 Border at=88,330,643,34 by=clip in=30 limit=64,320,691,54 paints=#707070FF role=none
+                            51 Grid at=88,330,643,33 by=clip heard="Mark: not marked, Core: Extra PS2 Core, Console: PlayStation 2, Status: ⚠ To approve" in=30 limit=64,320,691,54 paints=#4C9AE8FF role=none
+                              52 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,330,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=162.4,31.2 owner=49 paints=#D4D4D4FF role=edit size=26 text="Extra PS2 Core"
+                              53 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,330,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=143.29,31.2 owner=49 paints=#D4D4D4FF role=edit size=26 text="PlayStation 2"
+                              54 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,330,158,33 box=158,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=156.22,32.27 owner=49 paints=#DAA520FF role=edit size=26 text="⚠ To approve"
+                        55 ListBoxItem at=64,374,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: LRPS2, Console: PlayStation 2, Status: Available" in=30 limit=64,158,691,521 op paints=#4C9AE8FF,#EEEEF0FF role=listitem
+                          56 Border at=88,384,643,33 by=clip in=30 limit=64,374,691,54 paints=#707070FF role=none
+                            57 Grid at=88,384,643,32 by=clip heard="Mark: not marked, Core: LRPS2, Console: PlayStation 2, Status: Available" in=30 limit=64,374,691,54 paints=#4C9AE8FF role=none
+                              58 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,384,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=72.54,31.2 owner=55 paints=#EEEEF0FF role=edit size=26 text=LRPS2
+                              59 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,384,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=143.29,31.2 owner=55 paints=#EEEEF0FF role=edit size=26 text="PlayStation 2"
+                              60 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,384,158,32 box=158,32 caps=18.1987 drawn face=Barlow heard=Status in=30 layout=98.31,31.2 owner=55 paints=#8D8D91FF role=edit size=26 text=Available
+                        61 ListBoxItem at=64,428,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: mednafen_psx, Console: PlayStation, Status: ↑ Update" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          62 Border at=88,438,643,34 by=clip in=30 limit=64,428,691,54 paints=#707070FF role=none
+                            63 Grid at=88,438,643,33 by=clip heard="Mark: not marked, Core: mednafen_psx, Console: PlayStation, Status: ↑ Update" in=30 limit=64,428,691,54 paints=#4C9AE8FF role=none
+                              64 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,438,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=162.6,31.2 owner=61 paints=#D4D4D4FF role=edit size=26 text=mednafen_psx
+                              65 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,438,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=124.9,31.2 owner=61 paints=#D4D4D4FF role=edit size=26 text=PlayStation
+                              66 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,438,158,33 box=158,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=108.74,32.27 owner=61 paints=#DAA520FF role=edit size=26 text="↑ Update"
+                        67 ListBoxItem at=64,482,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: snes9x, Console: SNES, Status: ✓ Installed" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          68 Border at=88,492,643,34 by=clip in=30 limit=64,482,691,54 paints=#707070FF role=none
+                            69 Grid at=88,492,643,33 by=clip heard="Mark: not marked, Core: snes9x, Console: SNES, Status: ✓ Installed" in=30 limit=64,482,691,54 paints=#4C9AE8FF role=none
+                              70 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,492,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=76.91,31.2 owner=67 paints=#D4D4D4FF role=edit size=26 text=snes9x
+                              71 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,492,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=60.79,31.2 owner=67 paints=#D4D4D4FF role=edit size=26 text=SNES
+                              72 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,492,158,33 box=158,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=123.07,32.27 owner=67 paints=#35A064FF role=edit size=26 text="✓ Installed"
+                        73 ListBoxItem at=64,536,691,54 by=fixed-scroll drawn focus heard="Mark: not marked, Core: glonly, Console: PlayStation, Status: Not supported" in=30 limit=64,158,691,521 op paints=#D4D4D4FF role=listitem
+                          74 Border at=88,546,643,33 by=clip in=30 limit=64,536,691,54 paints=#707070FF role=none
+                            75 Grid at=88,546,643,32 by=clip heard="Mark: not marked, Core: glonly, Console: PlayStation, Status: Not supported" in=30 limit=64,536,691,54 paints=#4C9AE8FF role=none
+                              76 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=112,546,245,32 box=245,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=65.16,31.2 owner=73 paints=#D4D4D4FF role=edit size=26 text=glonly
+                              77 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=381,546,144,32 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=124.9,31.2 owner=73 paints=#D4D4D4FF role=edit size=26 text=PlayStation
+                              78 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=549,546,158,32 box=158,32 caps=18.1987 drawn face=Barlow heard=Status in=30 layout=157.48,31.2 owner=73 paints=#8D8D91FF role=edit size=26 text="Not supported"
+                79 Border at=64,679,691,67 by=panel limit=0,0,1280,800 name=AdaptiveStatus role=none
+                  80 Grid at=68,683,683,59 by=panel limit=0,0,1280,800 role=none
+                    81 Grid at=68,683,683,27 by=panel limit=0,0,1280,800 role=none
+                      82 TextBlock at=76,683,675,27 box=675,27 by=panel caps=15.3989 drawn face=Barlow heard="Nothing marked" layout=149.56,26.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="Nothing marked"
+                    83 StackPanel at=336,718,415,24 by=panel limit=0,0,1280,800 role=none
+                      84 StackPanel at=336,718,415,24 by=panel limit=0,0,1280,800 role=none
+                        85 ProgressBar at=336,723,200,14 by=panel drawn heard=Space limit=0,0,1280,800 paints=#333337FF,#4C9AE8FF role=progressbar
+                        86 TextBlock at=544,718,207,24 box=207,24 by=panel caps=13.999 drawn face=Barlow heard="/Cores 11 MB · 410 GB free" layout=206.6,24 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="/Cores 11 MB · 410 GB free"
+              87 Border at=771,147,445,599 by=panel limit=0,0,1280,800 name=AdaptiveDetail paints=#26262BFF role=none
+                88 Border at=795,171,397,551 by=panel limit=0,0,1280,800 role=none
+                  89 ScrollViewer at=803,179,381,535 by=panel limit=0,0,1280,800 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=803,179,381,535
+                    90 StackPanel at=803,179,381,535 by=fixed-scroll in=89 limit=803,179,381,535 name=CoresDetail role=none
+                      91 TextBlock at=803,179,381,39 box=381,39 by=fixed-scroll caps=22.3984 drawn face="Barlow Condensed" heard=LRPS2 in=89 layout=64.35,38.4 limit=803,179,381,535 paints=#EEEEF0FF role=text size=32 text=LRPS2
+                      92 TextBlock at=803,226,381,106 box=381,106 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="From libretro's buildbot · PlayStation 2 · listed there as “Sony - PlayStation 2 (LRPS2, the PCSX2 libretro core with its long name)”" in=89 layout=361.53,105.6 limit=803,179,381,535 paints=#8D8D91FF role=text size=22 text="From libretro's buildbot · PlayStation 2 · listed there as “Sony - PlayStation 2 (LRPS2, the PCSX2 libretro core with its long name)”"
+                      93 TextBlock at=803,340,381,80 box=381,80 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Runs PlayStation 2 games through EmuSen's libretro host, in a sandbox of its own." in=89 layout=355.48,79.2 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="Runs PlayStation 2 games through EmuSen's libretro host, in a sandbox of its own."
+                      94 TextBlock at=803,428,381,53 box=381,53 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="By PCSX2 Team, libretro, under the GPLv3. Build 2.3.1 2026-10-31." in=89 layout=319.66,52.8 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="By PCSX2 Team, libretro, under the GPLv3. Build 2.3.1 2026-10-31."
+                      95 TextBlock at=803,489,381,53 box=381,53 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Needs a PlayStation 2 BIOS of your own, which EmuSen never downloads." in=89 layout=364.5,52.8 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="Needs a PlayStation 2 BIOS of your own, which EmuSen never downloads."
+                      96 TextBlock at=803,550,381,80 box=381,80 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Its SHA-256 is known once it is downloaded; nothing downloaded runs until you approve it." in=89 layout=358.86,79.2 limit=803,179,381,535 paints=#8D8D91FF role=text size=22 text="Its SHA-256 is known once it is downloaded; nothing downloaded runs until you approve it."
+                      97 TextBlock at=803,638,381,27 box=381,27 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Not tested by EmuSen." in=89 layout=210.43,26.4 limit=803,179,381,535 paints=#8D8D91FF role=text size=22 text="Not tested by EmuSen."
+            98 Border at=48,746,1184,46 by=panel limit=0,0,1280,800 name=AdaptiveHelpBar paints=#707070FF role=none
+              99 HintBar at=96,757,1088,29 by=panel heard="Install…, Back, Console, List, Apply…, More" limit=0,0,1280,800 role=group
+focus 55
 edge 12 up same
 edge 12 down 31
-edge 12 left same
-edge 12 right 14
-edge 14 up same
-edge 14 down 31
-edge 14 left 12
-edge 14 right 16
-edge 16 up same
-edge 16 down 31
-edge 16 left 14
-edge 16 right 18
-edge 18 up same
-edge 18 down 31
-edge 18 left 16
-edge 18 right 20
-edge 20 up same
-edge 20 down 31
-edge 20 left 18
-edge 20 right 22
-edge 22 up same
-edge 22 down 31
-edge 22 left 20
-edge 22 right 24
-edge 24 up same
-edge 24 down 31
-edge 24 left 22
-edge 24 right 7
-edge 31 up 12
-edge 31 down 36
+edge 12 left 23
+edge 12 right same
+edge 17 up same
+edge 17 down 31
+edge 17 left same
+edge 17 right 19
+edge 19 up same
+edge 19 down 31
+edge 19 left 17
+edge 19 right 21
+edge 21 up same
+edge 21 down 31
+edge 21 left 19
+edge 21 right 23
+edge 23 up same
+edge 23 down 31
+edge 23 left 21
+edge 23 right 12
+edge 31 up 17
+edge 31 down 37
 edge 31 left same
-edge 31 right same
-edge 36 up 31
-edge 36 down 41
-edge 36 left same
-edge 36 right same
-edge 41 up 36
-edge 41 down 46
-edge 41 left same
-edge 41 right same
-edge 46 up 41
-edge 46 down 51
-edge 46 left same
-edge 46 right same
-edge 51 up 46
-edge 51 down 56
-edge 51 left same
-edge 51 right same
-edge 56 up 51
-edge 56 down 61
-edge 56 left same
-edge 56 right same
-edge 61 up 56
-edge 61 down 66
+edge 31 right 12
+edge 37 up 31
+edge 37 down 43
+edge 37 left same
+edge 37 right 12
+edge 43 up 37
+edge 43 down 49
+edge 43 left same
+edge 43 right 12
+edge 49 up 43
+edge 49 down 55
+edge 49 left same
+edge 49 right 12
+edge 55 up 49
+edge 55 down 61
+edge 55 left same
+edge 55 right 12
+edge 61 up 55
+edge 61 down 67
 edge 61 left same
-edge 61 right same
-edge 66 up 61
-edge 66 down 73
-edge 66 left same
-edge 66 right same
-edge 73 up 66
-edge 73 down 89
+edge 61 right 12
+edge 67 up 61
+edge 67 down 73
+edge 67 left same
+edge 67 right 12
+edge 73 up 67
+edge 73 down same
 edge 73 left same
-edge 73 right 75
-edge 75 up 66
-edge 75 down 89
-edge 75 left 73
-edge 75 right 77
-edge 77 up 66
-edge 77 down 89
-edge 77 left 75
-edge 77 right 85
-edge 85 up 66
-edge 85 down 89
-edge 85 left 77
-edge 85 right 87
-edge 87 up 66
-edge 87 down 89
-edge 87 left 85
-edge 87 right same
-edge 89 up 73
-edge 89 down same
-edge 89 left same
-edge 89 right 75
+edge 73 right 12
 press pageup top=CoresWindow
 press pagedown top=CoresWindow
 press first focus="TextBox Search cores (Search)" top=CoresWindow
 press last focus="TextBox Search cores (Search)" top=CoresWindow
-press back focus="ListBoxItem  (Mark: not marked, Core: Sapphire, State: built in)" top=CoresWindow
+press back focus="ListBoxItem  (Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: ● Default)" top=CoresWindow

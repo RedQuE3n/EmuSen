@@ -648,7 +648,7 @@ The status words, one owner (`CoresWords.Status`), a glyph beside a word (§5.7)
 
 A player's own core reads as the others do; the pane's first line says `Added by you`. The desktop's table keeps a
 Source column (§14.7). A marked row shows its mark's word in Accent in the status column (`install`, `update`,
-`remove`); the frame's mark box is not drawn on an unmarked row (Q4 of §14.10).
+`remove`); the frame's mark box is not drawn on an unmarked row (Q4 of §14.11).
 
 ### 14.4 The pane: what the player is told
 
@@ -767,7 +767,34 @@ Scraper and Library next (§15):
 Nothing in Cores reaches past these: `CoresPane` hands the frame its rows, status words, sentences, actions and
 questions, and the frame draws both forms.
 
-### 14.10 Questions
+### 14.10 Built 2026-11-01
+
+`CoresPane` on the frame of §14.9, after the three tools (§15.1) and with the frame as the tester accepted it on the
+comparison pictures: the pane beside the list at 0.6; `ALL` and the consoles on the shoulders (`Console`); the six
+states as the List card's filter; the header `CORES` with its facts, a count needing the player first (`⚠ 1 to
+approve`, `↑ 1 update`), then the catalogue's date; the list's columns Core · Console · Status, the status words and
+their colours one owner's (`CoresWords.Status`, `CoresWords.Tone`), the name a libretro core's `corename` and the
+`.info`'s name in the pane's caption (`CoreRow.ListedAs`); A the row's one action (`Approve…`, `Install…`,
+`Update…`, `Make Default`, `Options`), named in the help bar and unnamed where a row has none; X the core's page
+(marks, Options, Firmware, Approve…, Verify, Remove…, Open Folder, Details); Select the List card with Check for
+Updates and Verify; the install, update and remove questions titled by `CoresPlan.Title` (`Install PCEE2?`) and the
+approval asked as the frame's card on the big screen (`Approve PCEE2?`, the hash in its words) and as the host's
+dialog on the desktop; the pane in the sentences of §14.4; the Details page with the raw facts; no button on the big
+screen. The desktop keeps its toolbar.
+
+Not built here: the firmware's `✓ You have one` line, since the tool has no answer from the firmware settings yet
+(§14.4 item 3 waits for that call); the page's `Roll Back…`, `Licence` and `Revoke Approval…` rows, which C4 had not
+built either (`EmuSen_Cores.md` §9.1); the tile on Home (§14.8), which comes with U5.
+
+Tests, measured on 2026-11-01, on the Rust runtime: `CoresWindowTests` and `CoresWindowRuntimeTests` 36 (the listing's
+filters, the status words with their glyphs and colours, the help bar naming the row's action, the approval asked as the
+frame's card by pad and recorded, the desktop's dialog, the fit at both sizes), `LeafAssemblyTests`; the fit audit and the
+recordings of the five Cores states at both sizes, 20; the comparison pictures at 1280 × 800 and 1920 × 1080, 4. Five
+seeded faults, each caught: the update's status without its glyph and case; no action on a core waiting for approval;
+the To approve filter matching nothing; the facts leaving out the count to approve; the approval asked through the
+host's dialog on the big screen.
+
+### 14.11 Questions
 
 1. **[decision]** A does the row's one action where the detail is beside the content, and opens the page where the
    detail is a page: Cores acts, Packages (screen 5) opens. *Recommended:* yes, as a rule of the family, so that the
@@ -781,6 +808,9 @@ questions, and the frame draws both forms.
    *Recommended:* yes.
 6. **[routine]** The source said in the status words and the pane on the big screen, and as a column on the desktop,
    rather than a fourth column at 1280 (§14.2). *Recommended:* yes.
+
+**Decided 2026-11-01 by the tester:** the three decisions as recommended, the three routine items accepted, with one
+correction: the PlayStation 2's default is PCEE2 while Sapphire is under development (§14.3).
 
 ---
 

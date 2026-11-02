@@ -102,10 +102,12 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "PlayStation 2" }, Row(pane, "pcsx2").Consoles);
             Assert.True(Row(pane, "ExtraPS2").AwaitsApproval);
             Assert.Contains(pane.Sections, s => s.Key == "console:PlayStation 2");
-            Choose(pane, "approval");
+            // The states are the List card's filter, the consoles the sections (EmuSen_Interface.md §14.5).
+            Assert.True(pane.SelectFilter("approval"));
             Assert.Equal(new[] { "ExtraPS2" }, pane.Shown.Select(r => r.Engine));
-            Choose(pane, "updates");
+            Assert.True(pane.SelectFilter("updates"));
             Assert.Equal(new[] { "mednafen_psx" }, pane.Shown.Select(r => r.Stem));
+            Assert.True(pane.SelectFilter("all"));
             Assert.Equal("/Cores 11 MB · 410 GB free", pane.SpaceText);
             window.Close();
         }, default);
@@ -225,6 +227,32 @@ namespace EmuSen.WiseMan.Mistress
             pane.Refresh();
             pane.Poll();
             Assert.StartsWith("No catalogue of libretro's cores yet", pane.SummaryText);
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task The_big_screen_names_the_rows_action_and_the_status_words_carry_their_glyphs_and_colours() => Session.Dispatch(() =>
+        {
+            (CoresWindow window, CoresPane pane) = Open();
+            pane.Form = AdaptiveForm.BigScreen;
+            Settle(window);
+            Assert.Equal(("↑ Update", "LunaAttention"), (CoresWords.Status(Row(pane, "mednafen_psx")), CoresWords.Tone(Row(pane, "mednafen_psx"))));
+            Assert.Equal(("⚠ To approve", "LunaAttention"), (CoresWords.Status(Row(pane, "ExtraPS2")), CoresWords.Tone(Row(pane, "ExtraPS2"))));
+            Assert.Equal(("● Default", null), (CoresWords.Status(Row(pane, "Sapphire")), CoresWords.Tone(Row(pane, "Sapphire"))));
+            Assert.Equal(("Available", "LunaMuted"), (CoresWords.Status(Row(pane, "pcsx2")), CoresWords.Tone(Row(pane, "pcsx2"))));
+            Assert.Equal("LRPS2", Row(pane, "pcsx2").Name);
+            Assert.Contains("⚠ 1 to approve", pane.Header!.Facts);
+            Assert.Contains("↑ 1 update", pane.Header!.Facts);
+            Assert.Contains("catalogue read 31 Oct 2026", pane.Header!.Facts);
+            foreach ((string core, string action) in new[] { ("pcsx2", "Install…"), ("ExtraPS2", "Approve…"), ("mednafen_psx", "Update…"), ("snes9x", "Back") })
+            {
+                pane.BigScreenTable.Select(Row(pane, core));
+                Settle(window);
+                Assert.Equal(action, pane.Hints[0].Label);
+            }
+            Assert.Equal("Console", pane.Hints.First(h => h.Button == PadGlyphButton.Shoulders).Label);
+            Assert.DoesNotContain(pane.Sections, s => s.Key == "approval");
+            Assert.Contains(pane.Filters, f => f.Key == "approval");
             window.Close();
         }, default);
 

@@ -55,30 +55,42 @@ namespace EmuSen.Tools.Cores
             HasSearch = true;
             SearchHint = "Search cores";
             RowKey = r => r.Key;
+            // The screen of EmuSen_Interface.md §14: the pane beside the list, the consoles on the shoulders, the states as the List card's filter, one action per row on A and the rest on X.
+            DetailPlacement = AdaptiveDetailPlacement.Beside;
+            ContentShare = 0.6;
+            SectionWord = "Console";
+            Header = new AdaptiveHeader("CORES");
             Column(new LunaColumn<CoreRow>("Core", r => r.Name) { Sort = (a, b) => string.Compare(a.Name, b.Name, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
-                .Column(new LunaColumn<CoreRow>("Console", CoresWords.Consoles))
+                .Column(new LunaColumn<CoreRow>("Console", CoresWords.Consoles) { Width = "Auto" }, bigScreen: true)
                 .Column(new LunaColumn<CoreRow>("Source", r => r.Source) { Width = "Auto" })
                 .Column(new LunaColumn<CoreRow>("Version", r => r.Version))
-                .Column(new LunaColumn<CoreRow>("State", StateText), bigScreen: true)
-                .Column(new LunaColumn<CoreRow>("Default", r => r.IsDefault ? "●" : "") { Width = "Auto" })
+                .Column(new LunaColumn<CoreRow>("Status", StateText) { Tone = StateTone, Width = "Auto", Alignment = HorizontalAlignment.Right }, bigScreen: true)
                 .Column(new LunaColumn<CoreRow>("Size", r => r.Size is long n and > 0 ? CoresWords.Size(n) : "") { Width = "Auto", Sort = (a, b) => (a.Size ?? 0).CompareTo(b.Size ?? 0) });
             MarksFor = CoresPlan.MarksFor;
             InSection = Belongs;
-            SearchKey = r => $"{r.Name} {r.Stem} {r.Engine} {string.Join(" ", r.Consoles)} {r.Licence}";
+            SetFilters([new AdaptiveSection("all", "All"), new AdaptiveSection("installed", "Installed"), new AdaptiveSection("available", "Available"), new AdaptiveSection("updates", "Updates"), new AdaptiveSection("approval", "To approve"), new AdaptiveSection("unsupported", "Not supported")]);
+            InFilter = Belongs;
+            SearchKey = r => $"{r.Name} {r.ListedAs} {r.Stem} {r.Engine} {string.Join(" ", r.Consoles)} {r.Licence}";
             DetailFor = r => r is null ? Overview() : Scrolled(DetailOf(r));
             Summarize = CoresPlan.Summary;
             Plan = CoresPlan.Text;
+            PlanTitle = CoresPlan.Title;
+            ActionFor = RowAction;
+            PageFor = RowPage;
+            PageTitle = r => r.Name;
             Applying += Run;
 
-            _install = new LunaAction("Install", () => MarkSelected(CoresPlan.Install.Key)) { PadButton = PadGlyphButton.North, HelpText = "Marks the chosen libretro core to be downloaded and installed." };
+            _install = new LunaAction("Install", () => MarkSelected(CoresPlan.Install.Key)) { HelpText = "Marks the chosen libretro core to be downloaded and installed." };
             _update = new LunaAction("Update", () => MarkSelected(CoresPlan.Update.Key)) { HelpText = "Marks the chosen core to be updated to the build the index offers." };
             _remove = new LunaAction("Remove", () => MarkSelected(CoresPlan.Remove.Key)) { HelpText = "Marks the chosen downloaded core to be removed; saves and settings are kept." };
             _approve = new LunaAction("Approve…", () => ApproveSelectedAsync().Logged("cores", "Approve")) { HelpText = "Asks whether to trust the chosen core, showing what it says it is and its SHA-256." };
             _default = new LunaAction("Make Default", MakeDefault) { HelpText = "Makes the chosen core the engine of its console." };
             _options = new LunaAction("Options…", OpenOptions) { HelpText = "Opens the chosen core's options in its console's settings." };
             _verify = new LunaAction("Verify", Verify) { HelpText = "Checks each downloaded core against its record, and refreshes EmuSen's copies beside it." };
-            _check = new LunaAction("Check for Updates", CheckForUpdates) { PadButton = PadGlyphButton.Select, HelpText = "Reads libretro's catalogue and this platform's index from buildbot.libretro.com." };
-            SetToolActions([_install, _update, _remove, _approve, _default, _options, LunaAction.Separator(), _verify, _check]);
+            _check = new LunaAction("Check for Updates", CheckForUpdates) { HelpText = "Reads libretro's catalogue and this platform's index from buildbot.libretro.com." };
+            // The desktop's toolbar; on the big screen A, X and the List card carry them and no button is drawn.
+            SetToolActions([_install, _update, _remove, _approve, _default, _options, LunaAction.Separator(), _verify, _check], bigScreenButtons: []);
+            SetListActions([_check, _verify]);
             MarksChanged += UpdateActions;
             foreach (LunaTable<CoreRow> table in new[] { Table, BigScreenTable })
                 table.AddHandler(Avalonia.Controls.Primitives.SelectingItemsControl.SelectionChangedEvent, (_, _) => UpdateActions());
@@ -101,7 +113,47 @@ namespace EmuSen.Tools.Cores
 
         public string? OutcomeOf(CoreRow row) => _outcomes.TryGetValue(row.Key, out string? said) ? said : null;
 
-        private string StateText(CoreRow row) => OutcomeOf(row) ?? CoresWords.State(row);
+        // The status column: a run's outcome for the row while one is shown, else the words of EmuSen_Interface.md §14.3, each with its colour.
+        private string StateText(CoreRow row) => OutcomeOf(row) is { Length: > 0 } said ? char.ToUpperInvariant(said[0]) + said[1..] : CoresWords.Status(row);
+
+        private string? StateTone(CoreRow row) => OutcomeOf(row) is { } said ? (said.StartsWith("refused", StringComparison.Ordinal) ? "LunaError" : "LunaMuted") : CoresWords.Tone(row);
+
+        // The row's one action on the big screen, named in the help bar; none while a job runs (EmuSen_Interface.md §14.5).
+        private LunaAction? RowAction(CoreRow row)
+        {
+            if (IsRunning || _job is not null) return null;
+            if (row.AwaitsApproval && HashOf(row) is not null && _runtime is not null) return new LunaAction("Approve…", () => ApproveSelectedAsync().Logged("cores", "Approve"));
+            if (row.IsLibretro && row.State == "available") return new LunaAction("Install…", () => MarkAndAsk(row, CoresPlan.Install.Key));
+            if (row.IsLibretro && row.State == "update") return new LunaAction("Update…", () => MarkAndAsk(row, CoresPlan.Update.Key));
+            if (row is { Engine: not null, Consoles.Count: > 0 } && !row.IsDefault && _runtime is not null) return new LunaAction("Make Default", MakeDefault);
+            if (row is { Engine: not null, Consoles.Count: > 0 } && _host.Options is not null) return new LunaAction("Options", OpenOptions);
+            return null;
+        }
+
+        private void MarkAndAsk(CoreRow row, string key)
+        {
+            if (SetMark(row, key)) OpenPlan();
+        }
+
+        // The row's page under X: everything else it offers, each where it applies (EmuSen_Interface.md §14.5).
+        private IReadOnlyList<LunaAction> RowPage(CoreRow row)
+        {
+            var rows = new List<LunaAction>();
+            foreach (ManagerMark mark in CoresPlan.MarksFor(row))
+                rows.Add(new LunaAction(MarkOf(row)?.Key == mark.Key ? $"Unmark ({mark.Label})" : $"Mark to {mark.Label}", () => SetMark(row, MarkOf(row)?.Key == mark.Key ? null : mark.Key)));
+            if (row is { Engine: not null, Consoles.Count: > 0 } && _host.Options is not null) rows.Add(new LunaAction("Options", OpenOptions));
+            if (Firmware(row).Count > 0 && _host.Firmware is { } firmware) rows.Add(new LunaAction("Firmware", firmware));
+            if (HashOf(row) is not null && (row.AwaitsApproval || row.IsLibretro && row.Installed) && _runtime is not null) rows.Add(new LunaAction("Approve…", () => ApproveSelectedAsync().Logged("cores", "Approve")));
+            if (row.IsLibretro && row.Installed) rows.Add(new LunaAction("Verify", Verify));
+            if (row.IsLibretro && row.Installed) rows.Add(new LunaAction("Remove…", () => MarkAndAsk(row, CoresPlan.Remove.Key)));
+            if (row.Installed && _host.OpenFolder is { } open && FolderOf(row) is { } folder) rows.Add(new LunaAction("Open Folder", () => open(folder)));
+            // The page closes itself once a row is chosen, so the details open after that.
+            rows.Add(new LunaAction("Details", () => Dispatcher.UIThread.Post(() => OpenPage(Scrolled(DetailsOf(row))), DispatcherPriority.Loaded)));
+            return rows;
+        }
+
+        private IReadOnlyList<JsonElement> Firmware(CoreRow row) =>
+            row.Stem is { } stem && _info.TryGetValue(stem, out JsonElement i) && i.TryGetProperty("firmware", out JsonElement fw) && fw.ValueKind == JsonValueKind.Array ? fw.EnumerateArray().ToList() : [];
 
         private static bool Belongs(CoreRow row, string section) => section switch
         {
@@ -252,6 +304,7 @@ namespace EmuSen.Tools.Cores
             _options.IsEnabled = row is { Engine: not null, Consoles.Count: > 0 } && _host.Options is not null;
             _verify.IsEnabled = idle && ToolAvailable();
             _check.IsEnabled = idle && ToolAvailable();
+            RefreshHints();
         }
 
         private void Run(IReadOnlyList<ManagerMarked<CoreRow>> marked)
@@ -281,7 +334,7 @@ namespace EmuSen.Tools.Cores
             _step = null;
             Finish();
             if (_installed.Count > 0)
-                _notice = $"Installed {string.Join(", ", _installed)}. Nothing downloaded runs until you approve it: choose it, then Approve…." + (_notice is null ? "" : " " + _notice);
+                _notice = $"Installed {string.Join(", ", _installed)}. Nothing downloaded runs until you approve it." + (_notice is null ? "" : " " + _notice);
             Refresh(keepNotice: true);
         }
 
@@ -407,7 +460,9 @@ namespace EmuSen.Tools.Cores
             }
             string file = row.IsLibretro ? $"{row.Stem}_libretro" : Path.GetFileName(row.Library ?? row.Name);
             string message = CoreApproval.Message(row.Name, file, row.Authors, row.Licence, row.Consoles, sha, downloaded: row.IsLibretro);
-            if (!await _host.Confirm(CoreApproval.Title, message)) return false;
+            // On the big screen the question is the frame's card (EmuSen_Interface.md §14.6); on the desktop the host's dialog.
+            bool yes = Form == AdaptiveForm.BigScreen ? await Ask($"Approve {row.Name}?", message, "Approve", "Not Now") : await _host.Confirm(CoreApproval.Title, message);
+            if (!yes) return false;
             try { _runtime.Approve(sha); }
             catch (InvalidOperationException e)
             {
@@ -469,10 +524,20 @@ namespace EmuSen.Tools.Cores
         {
             var sections = new List<AdaptiveSection> { new("all", "All", "Consoles") };
             sections.AddRange(Rows.SelectMany(r => r.Consoles).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
-            sections.AddRange([new AdaptiveSection("installed", "Installed", "Show"), new AdaptiveSection("available", "Available", "Show"), new AdaptiveSection("updates", "Updates", "Show"),
-                new AdaptiveSection("approval", "Waiting for Approval", "Show"), new AdaptiveSection("unsupported", "Not Supported", "Show")]);
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
+            ShowHeader();
+        }
+
+        // The header's facts: the counts that need the player first, then the catalogue's date (EmuSen_Interface.md §14.2).
+        private void ShowHeader()
+        {
+            var facts = new List<string> { $"{Rows.Count} cores", $"{Rows.Count(r => r.Installed)} installed" };
+            int approve = Rows.Count(r => r.AwaitsApproval), updates = Rows.Count(r => r.State == "update");
+            if (approve > 0) facts.Add($"⚠ {approve} to approve");
+            if (updates > 0) facts.Add($"↑ {updates} {(updates == 1 ? "update" : "updates")}");
+            facts.Add(_catalogue is null ? "catalogue not read yet" : $"catalogue read {CoresWords.Day(_catalogue)}");
+            Header = new AdaptiveHeader("CORES", Facts: string.Join(" · ", facts));
         }
 
         // /Cores' total and its disk's free space (EmuSen_Cores.md §2.1).
@@ -502,56 +567,82 @@ namespace EmuSen.Tools.Cores
 
         private void ShowOverview() => _overview.Text = OverviewText;
 
-        private static TextBlock Line(string text, string? name = null) => new() { Text = text, TextWrapping = TextWrapping.Wrap, Name = name };
+        private static TextBlock Line(string text, string? name = null, string? tone = null)
+        {
+            var line = new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, Name = name };
+            if (tone is not null) line.Bind(TextBlock.ForegroundProperty, line.GetResourceObservable(tone));
+            return line;
+        }
 
-        // The detail pane: who made it, its licence and source, its build and hash, its firmware and notes, and its three actions (EmuSen_Cores.md §2.1).
+        // The pane: the core in sentences, nothing raw, each fact once (EmuSen_Interface.md §14.4); the raw facts are the Details page.
         private Control DetailOf(CoreRow row)
         {
-            var panel = new StackPanel { Spacing = 6, Name = "CoresDetail" };
-            panel.Children.Add(new TextBlock { Text = row.Name, FontWeight = FontWeight.SemiBold, TextWrapping = TextWrapping.Wrap });
-            string by = row.Authors.Count > 0 ? string.Join(", ", row.Authors) : "authors not said";
-            panel.Children.Add(Line($"{by} · {(row.Licence.Length > 0 ? row.Licence : "licence not said")} · {row.Source}"));
-            panel.Children.Add(Line($"Runs: {CoresWords.Consoles(row)} · {CoresWords.State(row)}{(row.Reason is { } why ? $": {why}" : "")}"));
+            var panel = new StackPanel { Spacing = 8, Name = "CoresDetail" };
+            panel.Children.Add(new TextBlock { Text = row.Name, TextWrapping = TextWrapping.Wrap, FontWeight = Form == AdaptiveForm.Desktop ? FontWeight.SemiBold : FontWeight.Normal, Classes = { AdaptiveLayout.PaneTitleClass } });
             JsonElement? info = row.Stem is { } stem && _info.TryGetValue(stem, out JsonElement i) ? i : null;
+            string source = row.Source == Project ? "Ships with EmuSen" : row.Source == Added ? "Added by you" : "From libretro's buildbot";
+            panel.Children.Add(Line($"{source} · {CoresWords.Consoles(row)}{(row.ListedAs is { } listed ? $" · listed there as “{listed}”" : "")}", tone: "LunaMuted"));
+            string runs = row.Consoles.Count > 0 ? string.Join(" and ", row.Consoles) + " games" : "games of no console EmuSen knows";
+            panel.Children.Add(Line(row.IsLibretro ? $"Runs {runs} through EmuSen's libretro host, in a sandbox of its own." : row.Source == Project ? $"Runs {runs}. Built into EmuSen and updated with it, so there is nothing to install or approve." : $"Runs {runs}, from a file of your own."));
+            string by = row.Authors.Count > 0 ? $"By {string.Join(", ", row.Authors)}" : "By authors not said";
+            string licence = row.Licence.Length > 0 ? $", under the {row.Licence}" : ", licence not said";
+            string build = row.Version.Length > 0 ? (row.IsLibretro ? $" Build {row.Version}" : $" Version {row.Version}") : "";
+            string size = row.Size is long n and > 0 ? $", {CoresWords.Size(n)}" : "";
+            string fetched = info is { } d1 && Text(d1, "fetched") is { } when ? $", downloaded {when}" : "";
+            panel.Children.Add(Line($"{by}{licence}.{build}{size}{fetched}{(build.Length + size.Length + fetched.Length > 0 ? "." : "")}"));
+            foreach (JsonElement f in Firmware(row))
+            {
+                bool optional = f.TryGetProperty("optional", out JsonElement o) && o.ValueKind == JsonValueKind.True;
+                panel.Children.Add(Line($"Needs {Article(Text(f, "desc") ?? "firmware")} of your own{(optional ? " (optional)" : "")}, which EmuSen never downloads."));
+            }
+            if (row.AwaitsApproval) panel.Children.Add(Line("⚠ Waiting for your approval. Nothing downloaded runs until you approve it.", tone: "LunaAttention"));
+            else if (row.Trust == "needs_refresh") panel.Children.Add(Line("⚠ EmuSen's copies beside it are older than this build: Verify refreshes them.", tone: "LunaAttention"));
+            else if (row.State is "unsupported" or "not_read") panel.Children.Add(Line($"Not supported{(row.Reason is { } why ? $": {why}" : "")}.", tone: "LunaMuted"));
+            else if (row.IsLibretro && row.Installed && HashOf(row) is not null) panel.Children.Add(Line("✓ Approved, held to its hash.", tone: "LunaSuccess"));
+            else if (row.IsLibretro && !row.Installed) panel.Children.Add(Line("Its SHA-256 is known once it is downloaded; nothing downloaded runs until you approve it.", tone: "LunaMuted"));
+            if (info is { } d2 && d2.TryGetProperty("tested", out JsonElement t))
+                panel.Children.Add(Line(Text(t, "match") switch
+                {
+                    "exact" => $"This exact build was tested by EmuSen on {Text(t, "date")}.",
+                    "other" => $"An earlier build was tested by EmuSen on {Text(t, "date")}.",
+                    _ => "Not tested by EmuSen.",
+                }, tone: "LunaMuted"));
+            if (row.IsDefault && row.Consoles.Count > 0) panel.Children.Add(Line($"● The {row.Consoles[0]}'s engine: every {row.Consoles[0]} game opens on it unless the game's own options choose another."));
+            else if (row.State == "update") panel.Children.Add(Line("A newer build is offered; the build installed now is kept for Roll Back."));
+            if (info is { } d3 && d3.TryGetProperty("previous", out JsonElement p)) panel.Children.Add(Line($"The build of {Text(p, "build")} is kept for Roll Back."));
+            if (row.IsLibretro && row.Engine is null && row.Installed && !row.AwaitsApproval) panel.Children.Add(Line("It becomes a choice for its consoles once EmuSen's runtime lists it.", tone: "LunaMuted"));
+            if (OutcomeOf(row) is { } outcome) panel.Children.Add(Line(char.ToUpperInvariant(outcome[0]) + outcome[1..] + ".", tone: outcome.StartsWith("refused", StringComparison.Ordinal) ? "LunaError" : "LunaMuted"));
+            return panel;
+        }
+
+        // "a PlayStation 2 BIOS", "an Atari BIOS": the firmware's description with its article.
+        private static string Article(string words) => (words.Length > 0 && "aeiouAEIOU".Contains(words[0]) ? "an " : "a ") + words;
+
+        // The Details page: every fact as the tool holds it (EmuSen_Interface.md §14.5).
+        private Control DetailsOf(CoreRow row)
+        {
+            var panel = new StackPanel { Spacing = 6, Name = "CoresDetails" };
+            panel.Children.Add(new TextBlock { Text = $"{row.Name} · details", TextWrapping = TextWrapping.Wrap, Classes = { AdaptiveLayout.PaneTitleClass } });
+            if (row.ListedAs is { } listed) panel.Children.Add(Line($"Listed by libretro as {listed}"));
+            if (row.Stem is { } stem) panel.Children.Add(Line($"File stem {stem}"));
+            if (row.Engine is { } engine) panel.Children.Add(Line($"Engine {engine}"));
+            if (row.Library is { } library) panel.Children.Add(Line($"Library {library}"));
+            JsonElement? info = row.Stem is { } st && _info.TryGetValue(st, out JsonElement i) ? i : null;
             if (info is { } d)
             {
                 if (Text(d, "from") is { } from) panel.Children.Add(Line($"From {from}, index CRC-32 {Text(d, "index_crc32")}"));
                 if (Text(d, "fetched") is { } fetched) panel.Children.Add(Line($"Downloaded {fetched}"));
-                foreach (JsonElement f in d.TryGetProperty("firmware", out JsonElement fw) && fw.ValueKind == JsonValueKind.Array ? fw.EnumerateArray() : default)
-                    panel.Children.Add(Line($"Firmware: {Text(f, "desc")} ({Text(f, "path")}), {(f.TryGetProperty("optional", out JsonElement o) && o.ValueKind == JsonValueKind.True ? "optional" : "required")}; your own file, never downloaded"));
+                foreach (JsonElement f in Firmware(row))
+                    panel.Children.Add(Line($"Firmware {Text(f, "desc")} at {Text(f, "path")}, {(f.TryGetProperty("optional", out JsonElement o) && o.ValueKind == JsonValueKind.True ? "optional" : "required")}"));
                 if (Strings(d, "notes") is { Count: > 0 } notes) panel.Children.Add(Line("Notes: " + string.Join(" · ", notes)));
                 if (Strings(d, "permissions") is { Count: > 0 } perms) panel.Children.Add(Line("Asks for: " + string.Join(", ", perms)));
-                if (d.TryGetProperty("tested", out JsonElement t))
-                    panel.Children.Add(Line(Text(t, "match") switch
-                    {
-                        "exact" => $"This exact build was tested by EmuSen on {Text(t, "date")}.",
-                        "other" => $"Another build of it was tested by EmuSen on {Text(t, "date")}.",
-                        _ => "Not tested by EmuSen.",
-                    }));
-                if (d.TryGetProperty("previous", out JsonElement p)) panel.Children.Add(Line($"The build of {Text(p, "build")} is kept for Roll Back."));
             }
-            string? sha = HashOf(row);
-            if (sha is not null) panel.Children.Add(Line($"SHA-256 {sha}{(row.AwaitsApproval ? " · not yet approved" : "")}", "CoresDetailHash"));
-            else if (row.IsLibretro && !row.Installed) panel.Children.Add(Line("Its SHA-256 is known once it is downloaded; nothing downloaded runs until you approve it."));
-            if (row.IsLibretro && row.Engine is null && row.Installed) panel.Children.Add(Line("It becomes a choice for its consoles once EmuSen's runtime lists it."));
-            var buttons = new WrapPanel { Orientation = Orientation.Horizontal, ItemSpacing = 8, LineSpacing = 8 };
-            if (sha is not null && (row.AwaitsApproval || row.IsLibretro && row.Installed)) buttons.Children.Add(Act("Approve…", "CoresApprove", () => ApproveSelectedAsync().Logged("cores", "Approve")));
-            if (row.Engine is not null && _host.Options is not null) buttons.Children.Add(Act("Options…", "CoresOptions", OpenOptions));
-            if (info is { } withFirmware && withFirmware.TryGetProperty("firmware", out JsonElement any) && any.GetArrayLength() > 0 && _host.Firmware is { } firmware) buttons.Children.Add(Act("Open Firmware…", "CoresFirmware", firmware));
-            if (row.Installed && _host.OpenFolder is { } open && FolderOf(row) is { } folder) buttons.Children.Add(Act("Open Folder", "CoresFolder", () => open(folder)));
-            if (buttons.Children.Count > 0) panel.Children.Add(buttons);
+            if (HashOf(row) is { } sha) panel.Children.Add(Line($"SHA-256 {string.Join(" ", Enumerable.Range(0, sha.Length / 8).Select(k => sha.Substring(k * 8, 8)))}{(row.AwaitsApproval ? " · not yet approved" : "")}", "CoresDetailHash"));
+            if (row.Trust is { } trust) panel.Children.Add(Line($"Trust {trust}"));
             return panel;
         }
 
         private static string? FolderOf(CoreRow row) => row.IsLibretro && row.Stem is { } s ? Path.Combine(DataStore.Cores, "libretro", s) : row.Library is { } l ? Path.GetDirectoryName(l) : null;
-
-        private static Button Act(string text, string name, Action act)
-        {
-            var b = new Button { Content = text, Name = name };
-            Avalonia.Automation.AutomationProperties.SetName(b, text.TrimEnd('…'));
-            b.Click += (_, _) => act();
-            return b;
-        }
 
         private static ScrollViewer Scrolled(Control content) => new() { Content = content, HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled };
 

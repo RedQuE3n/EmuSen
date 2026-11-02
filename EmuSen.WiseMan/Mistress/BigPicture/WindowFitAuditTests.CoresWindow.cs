@@ -115,11 +115,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(state == "CoresNoCatalogue" ? 4 : 8, pane.Rows.Count);
             if (state == "CoresNoCatalogue") return;
             CoreRow lrps2 = pane.Rows.First(r => r.Stem == "pcsx2");
-            pane.BigScreenTable.Select(lrps2);
+            // CoresDetail: the core waiting for approval chosen, its pane beside the list and A asking to approve it.
+            pane.BigScreenTable.Select(state == "CoresDetail" ? pane.Rows.First(r => r.AwaitsApproval) : lrps2);
             pane.FocusRole(AdaptiveRole.Content);
             pane.Poll();
             Settle(window);
-            if (state == "CoresDetail") Assert.True(shown.OnPad(global::EmuSen.Mistress.Input.UiButton.Accept));
+            if (state == "CoresDetail") Assert.Equal("Approve…", pane.Hints[0].Label);
             if (state is "CoresPlan" or "CoresRunning")
             {
                 Assert.True(pane.SetMark(lrps2, CoresPlan.Install.Key));

@@ -19,7 +19,7 @@ namespace EmuSen.Mistress.Views
     // The library's menu as the Home card on LunaP's Card form over the dimmed library: Continue, the game in hand, Search, Start Console, Tools, Settings and Power - see EmuSen_BigPicture.md §49.
     public partial class MainWindow
     {
-        public const string HomeTitle = "Home", ContinueRow = "Continue", SearchRow = "Search", ToolsMenu = "Tools", SettingsMenu = "Settings", PowerMenu = "Power";
+        public const string HomeTitle = "Home", ContinueRow = "Continue", SelectedGameRow = "Selected game", SearchRow = "Search", ToolsMenu = "Tools", SettingsMenu = "Settings", PowerMenu = "Power";
         public const string ScraperRow = "Scraper", ShellRow = "Shell", ThemeSettingsRow = "Theme Settings", QuitEmuSenRow = "Quit EmuSen...";
         public const string PackagesLine = "Makes, checks and zips game packages", LibraryManagerLine = "Finds duplicate and damaged dumps", CoresLine = "The engines each console runs on";
 
@@ -51,11 +51,11 @@ namespace EmuSen.Mistress.Views
         private List<PadMenuEntry> HomeRows()
         {
             var rows = new List<PadMenuEntry>();
-            if (_session is not null) rows.Add(new(() => ContinueRow, ToggleLibrary) { ShowsFrame = true });
-            if (_homeGame is { } game) rows.Add(new(() => game.Title, () => ShowGamePage(game.Path)) { Opens = true, ShowsCover = true });
+            if (_session is not null) rows.Add(new(() => ContinueRow, ToggleLibrary) { ShowsFrame = true, Label = () => ContinueRow, Value = RunningGameTitle });
+            if (_homeGame is { } game) rows.Add(new(() => game.Title, () => ShowGamePage(game.Path)) { Opens = true, ShowsCover = true, Label = () => SelectedGameRow, Value = () => game.Title });
             if (SearchAction() is { } search) rows.Add(new(() => SearchRow, search));
             if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
-            rows.Add(new(() => ToolsMenu, () => { }, closes: false) { Submenu = ToolRows, Opens = true, ShowsTools = true, StartsSection = rows.Count > 0 });
+            rows.Add(new(() => ToolsMenu, () => { }, closes: false) { Submenu = ToolRows, Opens = true, ShowsTools = true, StartsSection = rows.Count > 0, Label = () => ToolsMenu, Value = CoresWaitingValue });
             rows.Add(Submenu(SettingsMenu, SettingsRows));
             rows.Add(Submenu(PowerMenu, PowerRows, startsSection: true));
             return rows;
@@ -92,10 +92,10 @@ namespace EmuSen.Mistress.Views
         {
             var rows = new List<PadMenuEntry>
             {
-                Tool(ScraperRow, ShowScraper, ScraperStatus),
+                Tool(ScraperRow, ShowScraper, ScraperStatus, () => _missingMedia is int n and > 0 ? $"{n} no art" : null),
                 Tool(PackagesMenu, ShowPackages, () => PackagesLine),
                 Tool(LibraryManagerMenu, ShowLibraryManager, () => LibraryManagerLine),
-                Tool(CoresMenu, ShowCores, CoresStatus),
+                Tool(CoresMenu, ShowCores, CoresStatus, CoresWaitingValue),
                 Opens(CompressedDiscsMenu, ShowCompressedDiscs),
             };
             AddCollectionMenuEntries(rows);
@@ -104,7 +104,11 @@ namespace EmuSen.Mistress.Views
             return rows;
         }
 
-        private static PadMenuEntry Tool(string name, Action show, Func<string> status) => new(() => name, show) { Opens = true, Status = status };
+        private static PadMenuEntry Tool(string name, Action show, Func<string> status, Func<string?>? value = null) =>
+            new(() => name, show) { Opens = true, Status = status, Label = value is null ? null : () => name, Value = value };
+
+        // The Tools row's and the Cores row's live status: the cores waiting for approval, with the warning sign.
+        private string? CoresWaitingValue() => _coresWaiting is int w and > 0 ? $"⚠ {w} to approve" : null;
 
         // Each tool and its line, as the Tools row's pane lists them.
         private List<(string Name, string Status)> ToolLines() =>
@@ -137,7 +141,9 @@ namespace EmuSen.Mistress.Views
             _missingMedia = counts.MissingMedia;
             _coresListed = counts.Cores?.Listed;
             _coresWaiting = counts.Cores?.Waiting;
-            if (_padMenuOpen) UpdateCardPane();
+            if (!_padMenuOpen) return;
+            RefreshPadMenuText(Math.Max(PadMenuList.SelectedIndex, 0));
+            UpdateCardPane();
         }
 
         // The Scraper window's Missing Media section counted, by the same `scrape ls` request; null where the command is not in use or refuses.
@@ -178,7 +184,8 @@ namespace EmuSen.Mistress.Views
             try { if (_session is { } session && CurrentPicture(session) is { } still) frame = Picture(still.Rgba, still.Width, still.Height); }
             catch (CrystalException) { frame = null; }
             double u = MenuPanel.GetScale(this) is > 0 and var s ? s : 1;
-            _pauseCardPane.ShowPicture(frame, PausedAgo(DateTime.Now - _suspendedAt), 400 * u, RunningGameTitle(), 300 * u);
+            string console = _currentRomPath is string path ? new RomEntry(path).CoreDisplayName + " · " : "";
+            _pauseCardPane.ShowPicture(frame, console + PausedAgo(DateTime.Now - _suspendedAt), PaneWidth * u, null, PaneWidth * 3 / 4 * u);
         }
 
         // The game in hand's cover, its name, its console and whether it is a favourite.
@@ -193,14 +200,17 @@ namespace EmuSen.Mistress.Views
             Bitmap? cover = CoverPathFor(entry) is string path ? _covers.Get(path) : null;
             double u = MenuPanel.GetScale(this) is > 0 and var s ? s : 1;
             string console = entry.CoreDisplayName;
-            _pauseCardPane.ShowPicture(cover, _records.IsFavourite(game.Path) ? $"{console} · Favourite" : console, 300 * u, game.Title, 320 * u);
+            _pauseCardPane.ShowBeside(cover, game.Title, [_records.IsFavourite(game.Path) ? $"{console} · Favourite" : console], "A opens its page: states, options, media and details.", 240 * u);
         }
 
         private void ShowLinesPane(IReadOnlyList<(string Name, string Status)> lines)
         {
             double u = MenuPanel.GetScale(this) is > 0 and var s ? s : 1;
-            _pauseCardPane.ShowLines(lines, 480 * u);
+            _pauseCardPane.ShowLines(lines, PaneWidth * u);
         }
+
+        // The pane's width inside its gutter on the 1280-wide design, in design pixels.
+        private const double PaneWidth = 592;
 
         internal static string PausedAgo(TimeSpan since) =>
             since.TotalMinutes < 1 ? "Paused just now"

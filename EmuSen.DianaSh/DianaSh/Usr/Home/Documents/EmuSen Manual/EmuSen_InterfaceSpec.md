@@ -676,3 +676,16 @@ Thirty-two recordings were added, five taken again and twenty-six retired, each 
   `CoverPickerLongTitle`, `FindByName`, `FindByNameLongTitle`, `FindByNameResults`, `GamePackageNew`,
   `GamePackageLongTitle`, `GamePackageSelfContained`, `Screenshot`, `ScreenshotLongTitle`, and the Home card's
   `HomeCardGamePage`, each at both sizes.
+
+#### 6.3.21 The cards held to their mockups (2026-11-02)
+
+Thirty-seven recordings were taken again, all by one cause, and only after the rendered cards had been compared side
+by side with their approved mockups at 1280 × 800 and 1920 × 1080 (`EmuSen_BigPicture.md` §49.8): the nineteen Home
+card states, the sixteen Pause Card states, and `BigPicture-MainMenu` at both sizes, which is the Home card over the
+synthetic theme. The card is now LunaP's edge card (LunaP §210). Its panel runs the full height at the left edge. The
+title row and the rows stand inside the 64-unit safe area, and the rows are inset 24 with filled marks and muted values.
+The pane is a raised surface, the open edge has its shadow, and the help bar is a band across the foot. The bar reads
+*Choose · Back · Favourite · Close* on Home and *Select · Resume · Screenshot · Resume* on the Pause Card. The rows read
+*Continue* and *Selected game* with the game as their value, *Start Console*, *Save State* and *Load State*, and a
+submenu's way back is a breadcrumb without its arrow. The pad menu's fit case now lets a game's name as Continue's or
+Selected game's value be cut, as the card's title may be.

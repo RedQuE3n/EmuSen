@@ -39,15 +39,28 @@ namespace EmuSen.Mistress.Views
         private void ShowCard(PadMenuPage page, bool nested)
         {
             MenuPanel card = PadCard.CardPanel;
-            string? under = page.Question ? page.Detail : nested ? "‹ " + string.Join(" › ", _padMenuPages.SkipLast(1).Select(p => PageTitle(p))) : null;
+            string? under = page.Question ? page.Detail : nested ? string.Join(" › ", _padMenuPages.SkipLast(1).Select(p => PageTitle(p))) : null;
             card.SubtitleLetterCase = LunaP.Media.LetterCase.None;
-            card.HintFamily = HelpFamily;
+            // With no pad's own family known the card letters its glyphs as an Xbox pad, the kit's default and the game's page's.
+            card.HintFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily;
             PadCard.Header = new AdaptiveHeader(PageTitle(page), under is null ? null : FitSubtitle(card, under), _padMenuInGame ? RunningGameCover() : null, page.Title == PowerMenu && !_padMenuInGame ? BigMenuFooter : null);
             PadCard.SwapsAcceptAndBack = _appSettings.SwapPadButtons;
-            var actions = new List<LunaAction> { new("Close Menu", ClosePadMenu) { PadButton = PadGlyphButton.Start } };
-            if (_padMenuInGame) actions.Add(new LunaAction("Screenshot", TakeScreenshot) { PadButton = PadHints.Glyph(PadGlyphButton.West) });
+            bool resumes = _padMenuInGame && !nested && !page.Question;
+            PadCard.AcceptWord = resumes ? "Select" : "Choose";
+            PadCard.BackWord = resumes ? "Resume" : "Back";
+            SetCardActions();
+        }
+
+        // The help bar's own entries, in the design's order: Favourite or Change slot, Screenshot, then Start, which resumes a game or closes Home (§48.2).
+        private void SetCardActions()
+        {
+            int at = PadMenuList.SelectedIndex;
+            bool slot = at >= 0 && at < _padMenuEntries.Count && _padMenuEntries[at].ShowsSlot;
+            var actions = new List<LunaAction>();
             if (HomeFavouriteHere) actions.Add(new LunaAction("Favourite", ToggleHomeFavourite) { PadButton = PadHints.Glyph(PadGlyphButton.North) });
-            if (_padMenuEntries.Any(e => e.Adjust is not null)) actions.Add(new LunaAction("Change", () => { }) { PadButton = PadGlyphButton.DPadLeftRight });
+            if (slot) actions.Add(new LunaAction("Change slot", () => { }) { PadButton = PadGlyphButton.DPadLeftRight });
+            if (_padMenuInGame) actions.Add(new LunaAction("Screenshot", TakeScreenshot) { PadButton = PadHints.Glyph(PadGlyphButton.West) });
+            actions.Add(new LunaAction(_padMenuInGame ? "Resume" : "Close", ClosePadMenu) { PadButton = PadGlyphButton.Start });
             PadCard.SetActions(actions);
         }
 
@@ -59,18 +72,28 @@ namespace EmuSen.Mistress.Views
         {
             int at = PadMenuList.SelectedIndex;
             PadMenuEntry? entry = _padMenuOpen && at >= 0 && at < _padMenuEntries.Count ? _padMenuEntries[at] : null;
-            string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
+            string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot} {entry.Label?.Invoke()}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
                 : entry.ShowsTools ? "tools " + string.Join(" | ", ToolLines()) : entry.Status is { } status ? $"status {entry.Text()}: {status()}" : "none";
             if (key == _paneShowing) return;
+            if (CardShown && (key.StartsWith("slots", StringComparison.Ordinal) != (_paneShowing?.StartsWith("slots", StringComparison.Ordinal) ?? false))) SetCardActions();
             _paneShowing = key;
             if (!CardShown) _pauseCardPane.Clear();
-            else if (key.StartsWith("slots", StringComparison.Ordinal)) _pauseCardPane.ShowSlots(SlotStrip(), _stateSlot);
+            else if (key.StartsWith("slots", StringComparison.Ordinal)) _pauseCardPane.ShowSlots(SlotStrip(), _stateSlot, SlotSentence(entry!));
             else if (key == "reel") ShowReelPane();
             else if (key == "frame") ShowContinuePane();
             else if (key.StartsWith("cover", StringComparison.Ordinal)) ShowCoverPane();
             else if (key.StartsWith("tools", StringComparison.Ordinal)) ShowLinesPane(ToolLines());
             else if (entry?.Status is { } line) ShowLinesPane([(entry.Text(), line())]);
             else _pauseCardPane.Clear();
+        }
+
+        // What A does on the Save or Load row to the current slot.
+        private string SlotSentence(PadMenuEntry entry)
+        {
+            bool saved = StatePathForSlot(_stateSlot) is string state && File.Exists(state);
+            return entry.Label?.Invoke() == LoadStateRow
+                ? saved ? $"A loads Slot {_stateSlot}." : $"Slot {_stateSlot} is empty."
+                : saved ? $"A saves to Slot {_stateSlot}, replacing it." : $"A saves to Slot {_stateSlot}.";
         }
 
         private List<(string Name, string When, IImage? Picture)> SlotStrip()
@@ -106,20 +129,41 @@ namespace EmuSen.Mistress.Views
                 _pauseCardPane.ShowReel([], $"Rewind: {RewindUnavailable() ?? "no game running"}");
                 return;
             }
-            var pictures = new List<IImage>();
+            var pictures = new List<(IImage, string)>();
             double seconds = 0;
             try
             {
                 using JsonDocument reel = JsonDocument.Parse(session.Crystal.RewindReel());
                 List<JsonElement> moments = reel.RootElement.GetProperty("moments").EnumerateArray().ToList();
-                if (moments.Count > 0 && session.FrameRateHz > 0)
-                    seconds = (moments[^1].GetProperty("frame").GetInt64() - moments[0].GetProperty("frame").GetInt64()) / session.FrameRateHz;
+                seconds = ReelSeconds(moments, session.FrameRateHz);
+                long newest = moments.Count > 0 ? moments[^1].GetProperty("frame").GetInt64() : 0;
                 foreach (JsonElement m in moments.Where(m => m.GetProperty("picture").ValueKind == JsonValueKind.Object).TakeLast(3))
-                    if (Picture(session.Crystal.RewindPicture((ulong)m.GetProperty("frame").GetInt64())) is { } p) pictures.Add(p);
+                    if (Picture(session.Crystal.RewindPicture((ulong)m.GetProperty("frame").GetInt64())) is { } p)
+                        pictures.Add((p, Ago((newest - m.GetProperty("frame").GetInt64()) / Math.Max(1, session.FrameRateHz))));
             }
             catch (CrystalException) { }
-            _pauseCardPane.ShowReel(pictures, seconds >= 1 ? $"{Math.Floor(seconds):0} seconds to go back through" : "Under a second to go back through");
+            string held = seconds >= 1 ? $"{Math.Floor(seconds):0} s available" : "Under a second available";
+            _pauseCardPane.ShowReel(pictures, $"{held}. A opens the reel; Left and Right step through it.");
         }
+
+        // How far back the reel reaches, from its oldest moment to its newest.
+        private static double ReelSeconds(List<JsonElement> moments, double hz) =>
+            moments.Count > 0 && hz > 0 ? (moments[^1].GetProperty("frame").GetInt64() - moments[0].GetProperty("frame").GetInt64()) / hz : 0;
+
+        // The Rewind row's value: the seconds the reel holds, read as the row is drawn.
+        private string? RewindHeld()
+        {
+            if (_session is not { } session) return null;
+            try
+            {
+                using JsonDocument reel = JsonDocument.Parse(session.Crystal.RewindReel());
+                double seconds = ReelSeconds(reel.RootElement.GetProperty("moments").EnumerateArray().ToList(), session.FrameRateHz);
+                return seconds >= 1 ? $"{Math.Floor(seconds):0} s" : null;
+            }
+            catch (CrystalException) { return null; }
+        }
+
+        private static string Ago(double seconds) => seconds < 0.05 ? "Now" : seconds < 10 ? $"{seconds:0.#} s ago" : $"{Math.Floor(seconds):0} s ago";
 
         // A packed picture as the runtime hands it, width and height then RGBA rows.
         private static WriteableBitmap? Picture(byte[] packed)

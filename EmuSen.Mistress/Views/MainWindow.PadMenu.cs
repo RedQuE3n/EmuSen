@@ -59,17 +59,20 @@ namespace EmuSen.Mistress.Views
             PadMenuPanel.IsVisible = true;
             _padMenuOpen = true;
             PlacePadMenu();
+            ApplyStatusBar();
             ShowPadMenuPage(turned: false);
             UpdateMenuBackdrop();
         }
+
+        public const string SaveStateRow = "Save State", LoadStateRow = "Load State";
 
         // The Pause Card's first page: carry on, go back, save, load, the speed, the console's own rows where they apply, then the game's options and the ways out - see EmuSen_BigPicture.md §48.3.
         private List<PadMenuEntry> GameMenuRows() =>
         [
             new(() => "Resume", () => { }),
-            new(RewindMenuText, RewindFromPadMenu, closes: false) { Label = () => "Rewind", Value = RewindUnavailable, ShowsReel = true },
-            new(() => $"Save      <  {SlotValue()}  >", SaveState, StepStateSlot) { Label = () => "Save", Value = SlotValue, ShowsSlot = true },
-            new(() => $"Load      <  {SlotValue()}  >", LoadState, StepStateSlot) { Label = () => "Load", Value = SlotValue, ShowsSlot = true },
+            new(RewindMenuText, RewindFromPadMenu, closes: false) { Label = () => "Rewind", Value = () => RewindUnavailable() ?? RewindHeld(), ShowsReel = true },
+            new(() => $"Save      <  {SlotValue()}  >", SaveState, StepStateSlot) { Label = () => SaveStateRow, Value = SlotValue, ShowsSlot = true },
+            new(() => $"Load      <  {SlotValue()}  >", LoadState, StepStateSlot) { Label = () => LoadStateRow, Value = SlotValue, ShowsSlot = true },
             new(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) },
             .. DiscRows(),
             .. DriveRows(),
@@ -284,6 +287,7 @@ namespace EmuSen.Mistress.Views
             PadMenuPanel.IsVisible = false;
             PadSlotCard.IsVisible = false;
             _padMenuOpen = false;
+            if (_gamePage is null) ApplyStatusBar();
             _padMenuPages.Clear();
             _padQuiet = true;
             UpdateMenuBackdrop();

@@ -121,7 +121,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     string label = (MenuRows.GetLabel((Control)row.TemplatedParent!) ?? row.Label ?? "").ToUpper(CultureInfo.CurrentCulture);
                     if (Measure(face, row.TextSize * u, label) > parts.Label.Width + 1) faults.Add($"{name}: row label cut: '{label}'");
                     string value = (row.Value ?? "").ToUpper(CultureInfo.CurrentCulture);
-                    if (value.Length > 0 && Measure(face, row.TextSize * u, value) > parts.Value.Width + 1) faults.Add($"{name}: row value cut: '{value}'");
+                    // A game's name as Continue's or Selected game's value is cut on its one line as the card's title is, and read whole in the pane and the library (EmuSen_BigPicture.md §49.8).
+                    bool named = label == MainWindow.ContinueRow.ToUpper(CultureInfo.CurrentCulture) || label == MainWindow.SelectedGameRow.ToUpper(CultureInfo.CurrentCulture);
+                    if (value.Length > 0 && !named && Measure(face, row.TextSize * u, value) > parts.Value.Width + 1) faults.Add($"{name}: row value cut: '{value}'");
                 }
                 _out.WriteLine($"PADMENU {name}: {panel.TitleLines} title line(s), {PadMenu.Lines(window).Length} rows, scroll {panel.ScrollIndicator}");
             }

@@ -75,6 +75,18 @@ pub fn standing(entry: &Entry, libretro: Option<&LibretroFile>, trust: &Trust) -
     }
 }
 
+/// An entry's stale copies refreshed from the installation directory whose manifest vouches for both, as `cores verify`
+/// refreshes them, so an approval stands across an update of EmuSen (§1.3, §10v); whether anything changed, or why the
+/// entry still needs refresh.
+pub fn refresh(entry: &Entry, trust: &Trust) -> Result<bool, String> {
+    let Some(words) = stale(entry, trust) else { return Ok(false) };
+    let Some(installation) = trust.vouched_installation() else {
+        return Err(format!("{words}; no installation folder holds copies its manifest lists to refresh it from"));
+    };
+    entry.refresh(installation).map_err(|why| format!("{words}; refreshing it failed: {why}"))?;
+    stale(entry, trust).map_or(Ok(true), Err)
+}
+
 /// An entry whose core has no sidecar of its build yet: none at all, or one naming another build of it.
 #[derive(Clone, Debug)]
 pub struct Waiting {
@@ -88,13 +100,11 @@ pub struct Waiting {
 /// The sidecar's path, or why not.
 pub fn read(waiting: &Waiting, trust: &Trust) -> Result<PathBuf, String> {
     let entry = &waiting.entry;
-    if let Some(words) = stale(entry, trust) {
-        return Err(words);
-    }
     let file = entry.core_path().file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     if !trust.approved(&waiting.sha256) {
         return Err(format!("the libretro core {file} (SHA-256 {}) has not been approved; nothing of it was started", waiting.sha256));
     }
+    refresh(entry, trust)?;
     let proxy = entry.broker_path();
     let name = proxy.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
     trust.check_file(&proxy).map_err(|why| format!("{name} {why}; it was not loaded"))?;

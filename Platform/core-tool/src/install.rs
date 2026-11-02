@@ -4,7 +4,7 @@
 
 use crate::catalogue::{self, Catalogue};
 use crate::Context;
-use emusen_core_entry::{built_name, library_suffix, sha256_file, valid_stem, Entry, Notice, ADAPTER, BROKER, HOST_LIBRARY, LIBRETRO, PREVIOUS, PROXY_LIBRARY, STAGING};
+use emusen_core_entry::{library_suffix, sha256_file, valid_stem, Entry, Notice, LIBRETRO, PREVIOUS, STAGING};
 use emusen_galaxia::{archive, atomic, clock};
 use std::fs::File;
 use std::io::{BufWriter, Read, Write};
@@ -135,51 +135,22 @@ fn take_away(ctx: &Context, entry: &Entry, what: &str) -> Result<Vec<String>, St
     Ok(known)
 }
 
-/// The project's proxy and libretro host as this installation builds them, each with the name its copy takes in a core's
-/// folder; both required, since a libretro core runs only through the proxy (EmuSen_Cores.md §5.3, EmuSen_LibretroHost.md §10d).
-fn project_files(ctx: &Context) -> Result<Vec<(PathBuf, String)>, String> {
+/// The installation folder holding the project's proxy and libretro host, both required, since a libretro core runs
+/// only through the proxy (EmuSen_Cores.md §5.3, EmuSen_LibretroHost.md §10d).
+fn project_files(ctx: &Context) -> Result<&Path, String> {
     let dir = ctx.installation.as_ref().ok_or("this EmuSen build names no installation folder, so it has no libretro host to install a core beside")?;
-    let mut files = Vec::new();
-    for (library, copy) in [(HOST_LIBRARY, ADAPTER), (PROXY_LIBRARY, BROKER)] {
-        let built = built_name(library);
-        if !dir.join(&built).is_file() {
+    for (from, _) in emusen_core_entry::project_files(dir) {
+        if !from.is_file() {
+            let built = from.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
             return Err(format!("this EmuSen build has no {built} beside it, so a libretro core installed now could not run; nothing was downloaded"));
         }
-        files.push((dir.join(&built), format!("{copy}.{}", library_suffix())));
     }
-    Ok(files)
+    Ok(dir.as_path())
 }
 
-/// A file copied into a folder by a copy beside it and a rename over it.
-fn copy_in(from: &Path, folder: &Path, name: &str) -> Result<(), String> {
-    let temp = folder.join(format!(".{name}.new"));
-    std::fs::copy(from, &temp).map_err(|e| io(from, e))?;
-    mode(&temp, false)?;
-    std::fs::rename(&temp, folder.join(name)).map_err(|e| io(&temp, e))
-}
-
-/// The folder's project files brought to the installation's: each copied where its hash differs or it is missing, and
-/// `broker.target` written. The names changed.
+/// The folder's project files brought to the installation's, `Entry::refresh`. The names changed.
 fn refresh(ctx: &Context, entry: &Entry) -> Result<Vec<String>, String> {
-    let files = project_files(ctx)?;
-    let mut changed = Vec::new();
-    for (from, name) in &files {
-        let at = entry.folder.join(name);
-        let same = at.is_file() && sha256_file(&at).ok() == sha256_file(from).ok();
-        if !same {
-            copy_in(from, &entry.folder, name)?;
-            changed.push(name.clone());
-        }
-    }
-    let target = entry.target_path();
-    if std::fs::read_to_string(&target).ok().as_deref() != Some(Entry::target_text().as_str()) {
-        let temp = entry.folder.join(".broker.target.new");
-        std::fs::write(&temp, Entry::target_text()).map_err(|e| io(&temp, e))?;
-        mode(&temp, false)?;
-        std::fs::rename(&temp, &target).map_err(|e| io(&temp, e))?;
-        changed.push(emusen_core_entry::TARGET.to_string());
-    }
-    Ok(changed)
+    entry.refresh(project_files(ctx)?)
 }
 
 /// The zip fetched into `zip`, bounded at [`CORE_LIMIT`].

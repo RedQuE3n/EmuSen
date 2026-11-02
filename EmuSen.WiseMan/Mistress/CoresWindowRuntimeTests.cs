@@ -251,6 +251,62 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(Mistress("CoreAwaitingApproval", runtime, game));
         }
 
+        // PCEE2 as the tester's home had it on 2026-11-01: installed by an earlier build, so its proxy copy is not this installation's, and taking the synthetic disc.
+        private (string Core, string Game) EarlierBuildsPcee2()
+        {
+            Directory.Delete(Entry, recursive: true);
+            string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
+            string folder = Path.GetDirectoryName(pcee2)!;
+            string info = Path.Combine(folder, "pcee2_libretro.info");
+            File.WriteAllText(info, File.ReadAllText(info).Replace("systemid = \"\"", "systemid = \"playstation2\"") + "supported_extensions = \"iso|chd|cso|zso|gz|bin|mdf|nrg|elf|irx\"\n");
+            using (var proxy = new FileStream(Path.Combine(folder, "emusen-core-broker.so"), FileMode.Append)) proxy.Write("\0an earlier build"u8);
+            return (pcee2, SyntheticPs2Disc.Dvd().WriteSet(_root, "Amber Saga"));
+        }
+
+        // The tester's run on 2026-11-01: PCEE2 approved in Cores mid-session, its copies an earlier build's, and Jak then opened on Sapphire with nothing said. The approval refreshes the copies and reads the entry, so the route gives the default (EmuSen_LibretroHost.md §10v).
+        [RustImplementationFact("the route's held default, 1.7")]
+        public void The_default_approved_mid_session_over_an_earlier_builds_copies_is_the_routes_engine()
+        {
+            (string pcee2, string game) = EarlierBuildsPcee2();
+            using CrystalRuntime runtime = Runtime();
+            Assert.Contains("\"engine\":\"Sapphire\"", runtime.Route(game));
+            runtime.CoreApprove(Sha256(pcee2));
+            using var route = System.Text.Json.JsonDocument.Parse(runtime.Route(game));
+            using var cores = System.Text.Json.JsonDocument.Parse(runtime.Cores());
+            string? engine = cores.RootElement.EnumerateArray().Where(c => c.TryGetProperty("libretro", out var l) && l.ValueKind == System.Text.Json.JsonValueKind.Object && l.GetProperty("sha256").GetString() == Sha256(pcee2))
+                .Select(c => c.GetProperty("engine").GetString()).SingleOrDefault();
+            Assert.True(engine is not null, runtime.Cores());
+            Assert.Equal(engine, route.RootElement.GetProperty("engine").GetString());
+            Assert.Equal((System.Text.Json.JsonValueKind.Null, System.Text.Json.JsonValueKind.Null), (route.RootElement.GetProperty("waiting_default").ValueKind, route.RootElement.GetProperty("default_held").ValueKind));
+            Assert.Equal(Sha256(CoreAdapterTests.LibraryPath("emusen_libretro_proxy")), Sha256(Path.Combine(Path.GetDirectoryName(pcee2)!, "emusen-core-broker.so")));
+            Assert.Null(Mistress("CoreAwaitingApproval", runtime, game));
+        }
+
+        // An approved default whose copies cannot be refreshed: the game opens on the fallback with the reason said, never silently, and nothing is asked (EmuSen_LibretroHost.md §10v).
+        [RustImplementationFact("the route's held default, 1.7")]
+        public void An_approved_default_that_cannot_be_read_gives_its_reason_and_no_silent_fallback()
+        {
+            (string pcee2, string game) = EarlierBuildsPcee2();
+            string folder = Path.GetDirectoryName(pcee2)!;
+            using CrystalRuntime runtime = Runtime();
+            File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            try { runtime.CoreApprove(Sha256(pcee2)); }
+            finally { File.SetUnixFileMode(folder, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute); }
+            using (var route = System.Text.Json.JsonDocument.Parse(runtime.Route(game)))
+            {
+                Assert.Equal("Sapphire", route.RootElement.GetProperty("engine").GetString());
+                var held = route.RootElement.GetProperty("default_held");
+                Assert.Equal(("pcee2", Sha256(pcee2)), (held.GetProperty("stem").GetString(), held.GetProperty("sha256").GetString()));
+                Assert.Contains("needs refresh", held.GetProperty("reason").GetString());
+            }
+            object? core = Mistress("CoreAwaitingApproval", runtime, game);
+            Assert.True(core is not null, runtime.Route(game));
+            string? Field(string name) => (string?)core!.GetType().GetProperty(name)!.GetValue(core);
+            Assert.Equal(("Sony - PlayStation 2 (PCEE2)", "Sapphire"), (Field("Name"), Field("Instead")));
+            Assert.Contains("refreshing it failed", Field("Held"));
+            Assert.StartsWith("Sony - PlayStation 2 (PCEE2) could not be used, so this game opens on Sapphire: ", (string)Mistress("HeldNotice", core!, "Sapphire", Field("Held")!)!);
+        }
+
         [RustImplementationFact("the cores listing's libretro rows, 1.5")]
         public void Mistress_asks_about_a_libretro_core_by_its_cores_file_and_hash()
         {

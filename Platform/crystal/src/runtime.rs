@@ -39,6 +39,8 @@ pub struct Runtime {
     development: bool,
     trust: Mutex<Arc<Trust>>,
     discovery: Mutex<Arc<Discovery>>,
+    /// Each approved entry that could not be read at the last rescan, by stem, with why (EmuSen_LibretroHost.md §10v).
+    held: Mutex<Vec<(String, String)>>,
     pub sessions: crate::open::Sessions,
     pub events: Arc<crate::events::Events>,
     sqlite: Option<Arc<emusen_sqlite::Sqlite>>,
@@ -69,9 +71,10 @@ impl Runtime {
         let mine = player_directories(player.as_deref());
         let trust = Mutex::new(Arc::new(trust_of(&directories, &mine, &events)));
         let discovery = Mutex::new(Arc::new(discover(&directories, &mine, development)));
-        let rt = Runtime { directories, player, development, trust, discovery, sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied();
+        let rt = Runtime { directories, player, development, trust, discovery, held: Mutex::default(), sessions: crate::open::Sessions::default(), events, sqlite: config.sqlite.clone(), lender: config.lender.clone(), fetch: config.fetch.clone(), no_game: crate::service::Provider::default(), records: Mutex::new(None) }.with_engine_choices_copied();
         let (discovery, trust) = (rt.discovery(), rt.trust());
-        if discovery.waiting().iter().any(|w| trust.approved(&w.sha256)) {
+        let stale = |c: &emusen_core_host::Discovered| c.entry.is_some() && c.standing(&trust) == emusen_core_host::trust::Standing::NeedsRefresh;
+        if discovery.waiting().iter().any(|w| trust.approved(&w.sha256)) || discovery.found().iter().any(stale) {
             rt.rescan();
         }
         rt
@@ -102,17 +105,43 @@ impl Runtime {
     /// approved already, as after `cores verify` refreshes its copies, is read and listed again, its approval standing.
     pub fn rescan(&self) {
         self.scan();
+        self.held.lock().unwrap_or_else(|p| p.into_inner()).clear();
+        let (discovery, trust) = (self.discovery(), self.trust());
+        let mut refreshed = false;
+        for e in discovery.found().iter().filter(|c| c.sidecar.info.libretro.as_ref().is_some_and(|l| trust.approved(&l.sha256))).filter_map(|c| c.entry.as_ref()) {
+            match emusen_core_host::entry::refresh(e, &trust) {
+                Ok(changed) => refreshed |= changed,
+                Err(why) => self.hold(&e.stem, why),
+            }
+        }
+        if refreshed {
+            self.scan();
+        }
         let (discovery, trust) = (self.discovery(), self.trust());
         let mut read = false;
         for w in discovery.waiting().iter().filter(|w| trust.approved(&w.sha256)) {
             match emusen_core_host::entry::read(w, &trust) {
                 Ok(_) => read = true,
-                Err(why) => self.say(why),
+                Err(why) => self.hold(&w.entry.stem, why),
             }
         }
         if read {
             self.scan();
         }
+    }
+
+    /// An approved entry that could not be read or refreshed: said, and kept for the route's `default_held`.
+    fn hold(&self, stem: &str, why: String) {
+        let mut held = self.held.lock().unwrap_or_else(|p| p.into_inner());
+        held.retain(|(s, _)| s != stem);
+        held.push((stem.to_string(), why.clone()));
+        drop(held);
+        self.say(why);
+    }
+
+    /// Why an approved entry, by its stem, could not be read at the last rescan.
+    pub fn held(&self, stem: &str) -> Option<String> {
+        self.held.lock().unwrap_or_else(|p| p.into_inner()).iter().find(|(s, _)| s == stem).map(|(_, why)| why.clone())
     }
 
     fn scan(&self) {
@@ -148,7 +177,7 @@ impl Runtime {
         for w in discovery.waiting().iter().filter(|w| w.sha256.eq_ignore_ascii_case(sha256)) {
             match emusen_core_host::entry::read(w, &trust) {
                 Ok(_) => written = true,
-                Err(why) => self.say(why),
+                Err(why) => self.hold(&w.entry.stem, why),
             }
         }
         if written {
@@ -289,13 +318,13 @@ impl Runtime {
         j.end_array().end_object();
     }
 
-    /// `{"system","console","engine","reason","cartridge","shelf"}` for a file, as `open` would route it.
+    /// `{"system","console","engine","reason","cartridge","shelf","waiting_default","default_held"}` for a file, as `open` would route it.
     pub fn route_json(&self, at: &str) -> String {
         let discovery = self.discovery();
         let catalog = Catalog::new(&discovery);
         let tree = emusen_galaxia::tree::tree();
         let trust = self.trust();
-        crate::route::route_json(&catalog, &discovery, at, &|game, console, system| crate::settings::engine_for(&tree, game, console, Some(system), None), &|sha| trust.approved(sha))
+        crate::route::route_json(&catalog, &discovery, at, &|game, console, system| crate::settings::engine_for(&tree, game, console, Some(system), None), &|sha| trust.approved(sha), &|stem| self.held(stem))
     }
 
     /// The library's shelves in release order.

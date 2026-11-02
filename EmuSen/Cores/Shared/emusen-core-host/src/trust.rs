@@ -208,6 +208,16 @@ impl Trust {
 
     /// Whether any installation directory's manifest lists a library of this file name with this hash, wherever the
     /// copy being checked lies: an entry's proxy and adapter copies are vouched for so (EmuSen_LibretroHost.md §1.3).
+    /// An installation directory holding the project's libretro host and proxy, each the build its own manifest lists, from
+    /// which a stale entry's copies are refreshed (EmuSen_LibretroHost.md §1.3, §10v).
+    pub fn vouched_installation(&self) -> Option<&Path> {
+        let lists = |entries: &[Entry], from: &Path| {
+            let name = from.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+            crate::discovery::scan_hash(from).is_some_and(|h| entries.iter().any(|e| e.name == name && e.sha256 == h.to_ascii_lowercase()))
+        };
+        self.directories.iter().find(|(dir, entries)| emusen_core_entry::project_files(dir).iter().all(|(from, _)| lists(entries, from))).map(|(dir, _)| dir.as_path())
+    }
+
     pub fn installation_lists(&self, name: &str, sha256: &str) -> bool {
         let hash = sha256.to_ascii_lowercase();
         self.directories.iter().any(|(_, entries)| entries.iter().any(|e| e.name == name && e.sha256 == hash))
@@ -290,6 +300,25 @@ fn pe_matches(b: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // A stale entry is refreshed only from libraries the installation's own manifest lists (EmuSen_LibretroHost.md §10v).
+    #[test]
+    fn copies_are_refreshed_only_from_an_installation_whose_manifest_lists_both() {
+        let dir = std::env::temp_dir().join(format!("trust-vouched-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut manifest = String::new();
+        for (from, _) in emusen_core_entry::project_files(&dir) {
+            std::fs::write(&from, from.to_string_lossy().as_bytes()).unwrap();
+            manifest += &format!("{}  {}\n", crate::sha256::file_hex(&from).unwrap(), from.file_name().unwrap().to_string_lossy());
+        }
+        std::fs::write(dir.join(MANIFEST), &manifest).unwrap();
+        assert_eq!(Trust::new(std::slice::from_ref(&dir), &[]).vouched_installation(), Some(std::fs::canonicalize(&dir).unwrap().as_path()));
+        let proxy = &emusen_core_entry::project_files(&dir)[1].0;
+        std::fs::write(proxy, b"another build").unwrap();
+        assert_eq!(Trust::new(std::slice::from_ref(&dir), &[]).vouched_installation(), None, "a library the manifest does not list");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn a_manifest_reads_sha256sums_two_forms_and_skips_the_rest() {

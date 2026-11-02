@@ -28,6 +28,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The carousel with the collections, the grouped system, a filtered list, the options and filter sheets, a jump, and an edited collection's ticks, at 1280 by 800; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class CollectionsPictureTool
     {

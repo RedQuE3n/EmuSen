@@ -25,6 +25,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The desktop window, its View menu open on Fullscreen and Big Picture, plain full screen, big picture, and the desktop after leaving, at 1280 by 800; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class DesktopButtonPictureTool
     {

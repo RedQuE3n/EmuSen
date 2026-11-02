@@ -24,6 +24,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
     }
 
     // The status window mid-run, stopped by the quota and finished, drawn over the 1280 by 800 desktop window; the sheet and the sign-in in a big-screen session; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ScrapeStatusPictureTool : ScrapeWindowFixture
     {

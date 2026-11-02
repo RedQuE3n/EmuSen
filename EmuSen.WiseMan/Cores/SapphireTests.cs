@@ -163,6 +163,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The gate of Sapphire_Plan.md §7's S1: the kit's C1-C15 on a synthetic program and synthetic CD and DVD images, nothing failing.
+        [Trait("Category", "nightly")]
         [Fact]
         public async Task The_kit_passes_on_a_synthetic_program_and_synthetic_discs()
         {

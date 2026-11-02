@@ -23,6 +23,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The PNGs of §16 at 1280 by 800: the settings sheet's two tabs and the About sheet over Art Book Next, and each grid variant; written outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class StageFPictureTool
     {

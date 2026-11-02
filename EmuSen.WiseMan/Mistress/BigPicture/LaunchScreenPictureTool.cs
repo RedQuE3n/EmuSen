@@ -20,6 +20,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // Pass 11's launch screen at 1280x800 and 1920x1200, written outside the repository beside the ES-DE captures - see EmuSen_BigPicture.md §33.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class LaunchScreenPictureTool
     {

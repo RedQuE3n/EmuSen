@@ -14,6 +14,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Cores
 {
     // MarsRT through ICore, a digest of picture, sound and state each frame in every configuration, for comparing two builds - see Mars_Native.md §7.1.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class MarsRtDigestProbe : IDisposable
     {

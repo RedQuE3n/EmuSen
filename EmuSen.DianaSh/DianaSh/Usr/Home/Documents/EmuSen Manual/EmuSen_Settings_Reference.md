@@ -1843,6 +1843,37 @@ B, the scroll offset unchanged throughout, and A choosing and storing the highli
 highlight where it is and one that makes A choose nothing are both caught. The old key-sending path passes this test
 too, since the headless platform does not move the page, so the test does not show the page defect gone.
 
+#### 4.45.10 A card over part of a sheet, and buttons that carry a command (2026-11-02)
+
+**Two defects found on Cores' List card** (EmuSen_Cores.md §3.6). First, the router moved the focus by position
+across the whole sheet. LunaP's frame lays its List card and its question card over a layout that stays in the tree,
+marked covered (`SheetLayer.IsCovered`). Down from the card's first row therefore reached a row of the list beneath.
+Second, A on a focused button raised its Click event and stopped there. A button that works through its `Command`,
+as LunaP's `ActionButton` does, did nothing.
+
+**The rule now.**
+1. After the window's own handling (`IPadDriven`), the router narrows the sheet to its uppermost layer
+   (`Uppermost`): a visible panel that holds a child set covered is replaced by its last uncovered visible child,
+   repeatedly. Focus left beneath is restarted at the layer's first control, as focus left under a sheet already is.
+2. A on a button raises Click, then runs the command (with `CanExecute` checked) unless a handler marked the click
+   handled, which is the order Avalonia's own click follows.
+
+**Tests.** `CoresInstallPathTests` drives the List card, the plan's question and the approval question by the pad
+alone, and fails if the focus leaves a card. Removing either rule fails both tests.
+
+`CoverPadWalkTests` checks the rule on every screen. The screens are Cores, Packages, the Library Manager and the
+Scraper (each tool screen's List card and the frame's question card), the on-screen keyboard over Cores' search, and
+the Home card. On each, Up, Down, Left, Right, X and Y are pressed three times over. Each press must leave the cover
+open, keep the focus off any covered control, and leave every covered list's selection and every covered toggle
+unchanged. A and B are then pressed on the cover's own controls, which must close it with the screen kept. The
+Pause Card over a synthetic game is walked too: each page it opens in place is entered with A and walked by the
+directions, and must keep the card open, no sheet opened and the game on screen; B returns to the first page, and a
+line that opens a tool's screen is closed again with B. Measured
+on 2026-11-02: with the narrowing removed, all four tool screens fail on the first Up, whose focus lands beneath the
+List card (a covered section toggle, or a covered row on Cores). The keyboard and the Home card pass either way,
+since each takes every press itself, and so does the Pause Card, which is the Home card's own menu and does not go
+through the router.
+
 ### 4.46 Game Boy and Game Boy Color on separate shelves (2026-09-24)
 
 **What changed.** The library's console filter (the facet in big-screen mode, the sidebar's Consoles group on the

@@ -22,8 +22,6 @@ namespace EmuSen.Mistress
             GamePath = i.GetProperty("game") is { ValueKind: JsonValueKind.Object } game ? game.GetProperty("path").GetString() : null;
             Axes = i.GetProperty("axes").EnumerateArray().Select(a => (PadAxis)a.GetInt32()).ToArray();
             FrameRateHz = i.GetProperty("frame_rate_hz").GetDouble();
-            RewindCapture = i.GetProperty("rewind_capture").GetBoolean();
-            RewindWithheld = Text(i, "rewind_withheld");
             JsonElement notices = i.GetProperty("notices");
             (EngineNotice, FirmwareNotice, MediaNotice) = (Text(notices, "engine"), Text(notices, "firmware"), Text(notices, "media"));
             TelevisionStandard = Text(i, "television_standard");
@@ -44,8 +42,13 @@ namespace EmuSen.Mistress
         public string? GamePath { get; }
         public IReadOnlyList<PadAxis> Axes { get; }
         public double FrameRateHz { get; }
-        public bool RewindCapture { get; }
-        public string? RewindWithheld { get; }
+        // Why no history is kept, read again each time: the runtime stops capture once a snapshot takes longer than a frame - see EmuSen_Backend.md §38.
+        public string? RewindWithheldNow()
+        {
+            using JsonDocument info = JsonDocument.Parse(Crystal.Info());
+            JsonElement i = info.RootElement;
+            return i.GetProperty("rewind_capture").GetBoolean() ? null : Text(i, "rewind_withheld") ?? "not kept for this engine";
+        }
         public string? EngineNotice { get; }
         public string? FirmwareNotice { get; }
         public string? MediaNotice { get; }

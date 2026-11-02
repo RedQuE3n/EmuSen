@@ -126,9 +126,11 @@ impl Session {
         }
         let bytes = std::fs::read(at).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, at)))?;
         // With rewind on, the present is kept as the newest moment and the chain stays, so Rewind undoes the load (EmuSen_Backend.md §36).
+        let was = run.rewind.withheld().is_some();
         if run.rewind.enabled && run.rewind.capture_unless_held(&mut crate::engine::Snap { engine: e, ctx: Some(ctx) })? && run.rewind.thumbnail_width > 0 && !e.skip_rendering {
             self.attach_thumbnail(e, &mut run.rewind);
         }
+        self.say_withheld(was, &run.rewind);
         e.load_state(&bytes, Some(ctx)).map_err(|r| (r.status, r.words))?;
         if !run.rewind.enabled {
             run.rewind.clear();

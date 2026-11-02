@@ -43,7 +43,7 @@ pub fn scoped(program: &str, args: &[String], cwd: &Path) -> Command {
         c.args(args);
         c
     };
-    c.current_dir(cwd).env("TMPDIR", crate::repo::home().join(".cache/emusen/tmp")).env("MSBUILDDISABLENODEREUSE", "1");
+    c.current_dir(cwd).env("TMPDIR", crate::repo::home().join(".cache/emusen/tmp")).env("MSBUILDDISABLENODEREUSE", "1").env("UseSharedCompilation", "false");
     c
 }
 
@@ -127,13 +127,24 @@ pub fn run_cargo(repo_root: &Path, work: &Work, dir: &Path, quarantined: &[Strin
 }
 
 /// The dotnet filter for a selection of classes: every class's name, or only the tier's exclusion when all are chosen.
+/// A unit `Class#Key` is one group of the class's cases, those whose display name holds the key in quotes (with or
+/// without a trailing size); `Class#` is its cases without arguments.
 pub fn dotnet_filter(classes: &[String], all: bool, skip_nightly: bool) -> String {
     let nightly = if skip_nightly { "Category!=nightly" } else { "" };
     if all {
         return nightly.to_string();
     }
-    let terms: Vec<String> = classes.iter().map(|c| format!("FullyQualifiedName~{c}")).collect();
+    let terms: Vec<String> = classes.iter().map(|c| unit_term(c)).collect();
     if nightly.is_empty() { format!("({})", terms.join("|")) } else { format!("({})&{nightly}", terms.join("|")) }
+}
+
+/// One unit's filter term.
+pub fn unit_term(unit: &str) -> String {
+    match unit.split_once('#') {
+        None => format!("FullyQualifiedName~{unit}"),
+        Some((class, "")) => format!("(FullyQualifiedName~{class}.&DisplayName!~\")"),
+        Some((class, key)) => format!("(FullyQualifiedName~{class}.&(DisplayName~\"{key}\"|DisplayName~\"{key}-))"),
+    }
 }
 
 fn dotnet_test(cwd: &Path, target: &str, filter: &str, dir: &Path, name: &str, stop: &AtomicBool) -> Result<(Option<i32>, PathBuf, Vec<TestRow>), String> {

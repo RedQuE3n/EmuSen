@@ -1,0 +1,57 @@
+NAME
+    shard - a selection's dotnet units dealt to N processes by their measured times
+
+SYNOPSIS
+    shard [--shards N] [--keep-collections] [--head REV] [--tier T] [--repo DIR] [FILE]
+    shard --machine [--head REV] [--repo DIR]
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads a selection (impact's
+    lines, from FILE or standard input), keeps its dotnet units, and deals
+    them to N shards (default 4) so a land can run N `dotnet test`
+    processes at once and wait for the longest. WiseMan's Avalonia
+    headless classes share one dispatcher per process, so a selection of
+    49 test-minutes takes 34 wall minutes in one process; in four it
+    takes about the longest shard.
+
+    A unit's time is its seconds in the newest trial that recorded it:
+    a land's TRX, or the coverage map's run (`coverage load` records
+    each unit's seconds under coverage); a unit with no time counts
+    20 s, and a group of cases (CLASS#KEY) with no time of its own
+    counts a fortieth of its class's. The items are dealt longest first
+    into the least loaded shard.
+
+    Separate processes share no statics, but they share the machine.
+    The classes whose sources show them touching machine-wide state
+    are dealt as one item and stay in one shard: a virtual pad or
+    uinput (every process's SDL sees the pad another makes), a
+    listener or a literal port, a fixed path under the home or out/
+    that the class also writes, a lock on a fixed folder (flock,
+    FixedRunFolder), the GPU facts; --machine lists them with the
+    reason, from the sources at --head. The classes of one xunit
+    collection ([Collection(...)], DisableParallelization) guard state
+    inside a process and are spread (decided 2026-11-02 by the tester);
+    --keep-collections deals each collection as one item instead. A
+    spread class that fails in a sharded land and passes alone is one
+    the scan missed, and its cause goes into the scan.
+
+    The output, tab-separated: a machine line, one line per shard, and
+    a last line:
+
+        machine  N  NOTE                    how many of the selection's
+                                            units share the machine shard
+        shard  N  SECONDS  UNITS  FILTER    the shard's predicted
+                                            seconds, unit count and
+                                            dotnet filter
+        wall   SECONDS  SUM  NOTE           the longest shard, the sum,
+                                            and how many units had no
+                                            measured time
+
+    land.sh runs the shards at once, each with its own log and TRX
+    (dotnet-N.trx), and sums their summary lines; the backfill reads
+    every dotnet*.trx of a land folder. See EmuSen_Testing.md §3.8.
+
+EXAMPLES
+    impact --base WiseMan --head pausecard | shard --shards 4 --head pausecard
+    shard --keep-collections selection.txt | cut -f1-4
+    shard --machine | cut -f2 | sort | uniq -c

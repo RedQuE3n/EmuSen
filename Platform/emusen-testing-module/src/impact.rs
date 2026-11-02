@@ -1,10 +1,11 @@
-//! `impact`: the units a change can affect, one per line with the rule that chose it. The rules, in order: graph
-//! (the reverse closure over the cargo, MSBuild and host edges), recording (a changed recording selects its owner),
-//! declared (Testing/inputs.json's lines, which also narrow a reached test project until coverage exists), always (a
-//! test class's own file), and closed: a file no rule claims selects the tier's whole set, never nothing. See
-//! EmuSen_Testing.md §3.2 and `man impact`.
+//! `impact`: the units a change can affect, one per line with the rule that chose it. The rules, in order: recording
+//! (a changed recording selects its owner), always (a test class's own file), declared (Testing/inputs.json's lines),
+//! covered (the classes the coverage map saw execute a changed .cs file), graph (the reverse closure over the cargo,
+//! MSBuild and host edges, narrowed by the lines where no map answers), and closed: a file no rule claims selects the
+//! tier's whole set, never nothing. See EmuSen_Testing.md §3.2 and `man impact`.
 
 use crate::catalogue::Snapshot;
+use crate::coverage::Map;
 use crate::config::{LineKind, Tier};
 use crate::repo::{parent, Repo};
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,17 +63,94 @@ pub struct Ask<'a> {
     pub files: Vec<String>,
     pub tier: &'a Tier,
     pub failed_last: Vec<String>,
+    /// The coverage map, when the store has a fresh one.
+    pub map: Option<&'a Map>,
+    /// Filter terms given on the command line, each selecting the classes it names.
+    pub also: Vec<String>,
+    /// The files the change adds: a new .cs file the map never saw selects through the changed files naming its types.
+    pub added: BTreeSet<String>,
+}
+
+/// The types a C# text declares.
+fn declared_types(text: &str) -> Vec<String> {
+    regex::Regex::new(r"\b(?:class|struct|record|interface|enum)\s+([A-Z][A-Za-z0-9_]*)").unwrap().captures_iter(text).map(|c| c[1].to_string()).collect()
+}
+
+/// For each added .cs file the map never saw, the changed files the map has seen that name its types, directly or
+/// through other added files; an added file nothing names is absent, and falls to the graph.
+fn new_files_through(repo: &Repo, snap: &Snapshot, ask: &Ask) -> BTreeMap<String, BTreeSet<String>> {
+    let Some(map) = ask.map else { return BTreeMap::new() };
+    let new: Vec<&String> = ask.files.iter().filter(|f| f.ends_with(".cs") && ask.added.contains(*f) && map.classes_of(f).is_none()).collect();
+    if new.is_empty() {
+        return BTreeMap::new();
+    }
+    let seen: Vec<&String> = ask.files.iter().filter(|f| f.ends_with(".cs") && !ask.added.contains(*f) && map.classes_of(f).is_some()).collect();
+    let paths: Vec<String> = new.iter().chain(seen.iter()).map(|f| (*f).clone()).collect();
+    let mut texts = repo.read_many(&snap.rev, &paths).unwrap_or_default();
+    for p in &paths {
+        if !texts.contains_key(p) {
+            if let Ok(t) = std::fs::read_to_string(repo.root.join(p)) {
+                texts.insert(p.clone(), t);
+            }
+        }
+    }
+    let names = |text: &str, types: &[String]| types.iter().any(|t| regex::Regex::new(&format!(r"\b{}\b", regex::escape(t))).is_ok_and(|re| re.is_match(text)));
+    let types: BTreeMap<&String, Vec<String>> = new.iter().map(|n| (*n, texts.get(*n).map(|t| declared_types(t)).unwrap_or_default())).collect();
+    let mut through: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    loop {
+        let mut changed = false;
+        for n in &new {
+            let Some(ts) = types.get(n).filter(|t| !t.is_empty()) else { continue };
+            let mut sources = through.get(*n).cloned().unwrap_or_default();
+            for s in &seen {
+                if !sources.contains(*s) && texts.get(*s).is_some_and(|t| names(t, ts)) {
+                    sources.insert((*s).clone());
+                }
+            }
+            for (other, their) in through.clone() {
+                if &other != *n && texts.get(&other).is_some_and(|t| names(t, ts)) && !their.is_subset(&sources) {
+                    sources.extend(their);
+                }
+            }
+            if !sources.is_empty() && through.get(*n) != Some(&sources) {
+                through.insert((*n).clone(), sources);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+    through
 }
 
 /// Expands one select entry of a line: a filter term to the classes it names, `cargo:` to a crate, `refs:` to the test
-/// files naming the types a path declares, `lunap` to the toolkit's suite.
-fn expand(repo: &Repo, snap: &Snapshot, tier: &Tier, entry: &str, reason: &str, via: &str, out: &mut Selection) {
+/// files naming the types a path declares, `covered:` to the classes the map saw execute the files a path names,
+/// `lunap` to the toolkit's suite. Whether the entry narrows the project it reaches: a `covered:` entry with no map,
+/// or naming no file, does not.
+fn expand(repo: &Repo, snap: &Snapshot, tier: &Tier, map: Option<&Map>, entry: &str, reason: &str, via: &str, out: &mut Selection) -> bool {
     if let Some(dir) = entry.strip_prefix("cargo:") {
         out.add("cargo", dir, reason, via);
     } else if let Some(spec) = entry.strip_prefix("refs:") {
         for c in refs(repo, snap, &[spec.to_string()]) {
             if !named_only(tier, &c) {
                 out.add("dotnet", &c, reason, &format!("{via} (refs:{spec})"));
+            }
+        }
+    } else if let Some(spec) = entry.strip_prefix("covered:") {
+        let Some(m) = map else { return false };
+        let files = pathspec_files(snap, spec);
+        if files.is_empty() {
+            out.notes.push(format!("covered:{spec} names no file ({via})"));
+            return false;
+        }
+        let mut units: BTreeSet<&str> = m.unknown.iter().map(String::as_str).collect();
+        for f in &files {
+            units.extend(m.classes_of(f).into_iter().flatten().map(String::as_str));
+        }
+        for u in units {
+            if snap.class_of_unit(u).is_some() {
+                out.add("dotnet", u, reason, &format!("{via} (covered:{spec})"));
             }
         }
     } else if entry == "lunap" {
@@ -89,6 +167,22 @@ fn expand(repo: &Repo, snap: &Snapshot, tier: &Tier, entry: &str, reason: &str, 
             out.add("dotnet", &c.fqn, reason, via);
         }
     }
+    true
+}
+
+/// The revision's files a git pathspec names: `*` and `?` match any characters, a folder prefix matches below it.
+fn pathspec_files(snap: &Snapshot, spec: &str) -> Vec<String> {
+    let mut re = String::from("^");
+    for c in spec.chars() {
+        match c {
+            '*' => re.push_str(".*"),
+            '?' => re.push('.'),
+            other => re.push_str(&regex::escape(&other.to_string())),
+        }
+    }
+    re.push_str("(/.*)?$");
+    let Ok(re) = regex::Regex::new(&re) else { return Vec::new() };
+    snap.files.iter().filter(|f| re.is_match(f)).cloned().collect()
 }
 
 /// Whether a class runs in this tier only when a line names it.
@@ -157,6 +251,7 @@ pub fn impact(repo: &Repo, snap: &Snapshot, ask: &Ask) -> Selection {
     let mut out = Selection::default();
     let tier = ask.tier;
     let g = &snap.graph;
+    let through = new_files_through(repo, snap, ask);
     for f in &ask.files {
         let lines = snap.inputs.matching(f);
         let recording: Vec<_> = lines.iter().filter(|l| l.kind == LineKind::Recording).collect();
@@ -169,7 +264,7 @@ pub fn impact(repo: &Repo, snap: &Snapshot, ask: &Ask) -> Selection {
         // recording
         for l in &recording {
             for s in &l.select {
-                expand(repo, snap, tier, s, "recording", f, &mut out);
+                expand(repo, snap, tier, ask.map, s, "recording", f, &mut out);
             }
         }
         if recording.is_empty() && snap.inputs.is_recording(f) && !none {
@@ -182,30 +277,67 @@ pub fn impact(repo: &Repo, snap: &Snapshot, ask: &Ask) -> Selection {
             out.add("dotnet", &c.fqn, "always", f);
         }
         claimed |= !own.is_empty();
-        // declared
-        for l in &folder {
-            for s in &l.select {
-                expand(repo, snap, tier, s, "declared", &format!("{f} ({})", l.source), &mut out);
+        // covered: the classes that executed the file, plus every class the map has no report for; a new file, the
+        // classes that executed the changed files naming it
+        let covered: Option<Vec<String>> = match (ask.map.and_then(|m| m.classes_of(f)), through.get(f)) {
+            (Some(units), _) => Some(units.clone()),
+            (None, Some(sources)) => {
+                let mut units: BTreeSet<String> = BTreeSet::new();
+                for s in sources {
+                    units.extend(ask.map.and_then(|m| m.classes_of(s)).into_iter().flatten().cloned());
+                }
+                out.notes.push(format!("{f} is new; selected through {}", sources.iter().cloned().collect::<Vec<_>>().join(", ")));
+                Some(units.into_iter().collect())
+            }
+            (None, None) => None,
+        };
+        if let Some(units) = &covered {
+            claimed = true;
+            let mut gone = Vec::new();
+            for u in units.iter().chain(ask.map.map(|m| m.unknown.iter()).into_iter().flatten()) {
+                if snap.class_of_unit(u).is_some() {
+                    out.add("dotnet", u, "covered", f);
+                } else {
+                    gone.push(u.as_str());
+                }
+            }
+            if !gone.is_empty() {
+                out.notes.push(format!("the map names {} class(es) the revision no longer has ({}): rebuild it", gone.len(), gone.join(", ")));
             }
         }
-        // graph
+        // declared; a covered file keeps only the entries coverage says nothing about (crates, the toolkit's suite)
+        let mut narrowed = covered.is_some() || !recording.is_empty();
+        for l in &folder {
+            for s in &l.select {
+                if covered.is_some() && !(s.starts_with("cargo:") || s == "lunap") {
+                    continue;
+                }
+                narrowed |= expand(repo, snap, tier, ask.map, s, "declared", &format!("{f} ({})", l.source), &mut out);
+            }
+        }
+        // graph; a line on another crate the closure reaches adds its units, and such lines narrow only when every
+        // crate through which the closure enters C# has one
         if let Some(owner) = g.owner(f) {
             claimed = true;
             let closure = g.reverse_closure(&owner, tier.depth);
-            let mut narrowed = !folder.is_empty() || !recording.is_empty();
+            let mut entries_lined: Option<bool> = None;
             for n in &closure {
                 if g.is_crate(n) {
                     out.add("cargo", n, "graph", f);
+                    let mut lined = n == &owner && narrowed;
                     if n != &owner {
                         for l in snap.inputs.matching(&format!("{n}/")).into_iter().filter(|l| l.kind == LineKind::Folder) {
-                            narrowed = true;
                             for s in &l.select {
-                                expand(repo, snap, tier, s, "declared", &format!("{f} via {n} ({})", l.source), &mut out);
+                                lined |= expand(repo, snap, tier, ask.map, s, "declared", &format!("{f} via {n} ({})", l.source), &mut out);
                             }
                         }
                     }
+                    if g.enters_host(n) {
+                        entries_lined = Some(entries_lined.unwrap_or(true) && lined);
+                    }
                 }
             }
+            narrowed |= entries_lined == Some(true);
             let inside_test = closure.first().is_some_and(|o| g.is_test_project(o));
             if inside_test && own.is_empty() && !narrowed && f.ends_with(".cs") {
                 let found = refs(repo, snap, std::slice::from_ref(f));
@@ -235,6 +367,9 @@ pub fn impact(repo: &Repo, snap: &Snapshot, ask: &Ask) -> Selection {
             out.add(kind, unit, "always", "failed in this branch's last trial");
         }
     }
+    for term in &ask.also {
+        expand(repo, snap, tier, ask.map, term, "given", "--also", &mut out);
+    }
     if !out.picks.is_empty() {
         for a in &tier.always {
             if let Some((kind, unit)) = a.split_once(':') {
@@ -244,7 +379,33 @@ pub fn impact(repo: &Repo, snap: &Snapshot, ask: &Ask) -> Selection {
     }
     let nightly: BTreeSet<&str> = snap.classes.values().filter(|c| c.nightly).map(|c| c.fqn.as_str()).collect();
     if tier.exclude.iter().any(|e| e == "nightly") {
-        out.picks.retain(|p| !(p.kind == "dotnet" && nightly.contains(p.unit.as_str())));
+        out.picks.retain(|p| !(p.kind == "dotnet" && nightly.contains(p.unit.split('#').next().unwrap_or(&p.unit))));
+    }
+    // A class picked whole runs every group of its cases, so its groups are not picked beside it.
+    let whole: BTreeSet<String> = out.picks.iter().filter(|p| p.kind == "dotnet" && !p.unit.contains('#')).map(|p| p.unit.clone()).collect();
+    out.picks.retain(|p| !(p.kind == "dotnet" && p.unit.split_once('#').is_some_and(|(c, _)| whole.contains(c))));
+    out
+}
+
+/// The selection in blast.sh's shape (the dotnet filter, the crates, the toolkit's suite, the files that fell to the
+/// closed rule), so land.sh reads either answer the same way.
+pub fn blast_format(sel: &Selection, tier: &Tier) -> String {
+    let classes: Vec<String> = sel.picks.iter().filter(|p| p.kind == "dotnet" && p.unit != "lunap").map(|p| p.unit.clone()).collect();
+    let mut out = String::new();
+    if classes.is_empty() {
+        out.push_str("dotnet filter: (none)\n");
+    } else {
+        out.push_str(&format!("dotnet filter: {}\n", crate::adapters::dotnet_filter(&classes, false, tier.exclude.iter().any(|e| e == "nightly"))));
+    }
+    for p in sel.picks.iter().filter(|p| p.kind == "cargo") {
+        out.push_str(&format!("cargo: {}\n", p.unit));
+    }
+    if sel.picks.iter().any(|p| p.kind == "dotnet" && p.unit == "lunap") {
+        out.push_str("lunap: selected\n");
+    }
+    let closed: BTreeSet<String> = sel.picks.iter().filter(|p| p.reason == "closed").map(|p| p.via.split(" (").next().unwrap_or(&p.via).to_string()).collect();
+    for f in closed {
+        out.push_str(&format!("closed: {f}\n"));
     }
     out
 }

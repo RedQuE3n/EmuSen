@@ -195,11 +195,13 @@ fn land_dir(store: &Store, snap: &Snapshot, repo: &Repo, base: &Path, sha: &str,
         });
         rows.extend(log.rows.into_iter().map(|r| (unit.clone(), r)));
     }
-    let trx = dir.join("dotnet.trx");
+    // One TRX, or one per shard (dotnet-1.trx ...) when the land ran its selection in several processes.
+    let mut trxs: Vec<std::path::PathBuf> = std::fs::read_dir(&dir).map(|d| d.flatten().map(|e| e.path()).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("dotnet") && n.ends_with(".trx"))).collect()).unwrap_or_default();
+    trxs.sort();
     let dlog = dir.join("dotnet.log");
-    if trx.exists() {
+    if !trxs.is_empty() {
         tally.dotnet_logs += 1;
-        let parsed = reports::trx(&std::fs::read_to_string(&trx).unwrap_or_default());
+        let parsed: Vec<TestRow> = trxs.iter().flat_map(|t| reports::trx(&std::fs::read_to_string(t).unwrap_or_default())).collect();
         let mut by: BTreeMap<String, Vec<TestRow>> = BTreeMap::new();
         for r in parsed {
             by.entry(format!("dotnet:{}", r.group)).or_default().push(r);

@@ -35,6 +35,7 @@ const INPUTS: &str = r#"{ "inputs": 1, "recording_endings": [".spec", ".golden"]
   "lines": [
     { "path": "^Wise/Spec/", "kind": "recording", "select": ["FooTests"], "since": "2026-11-01", "reason": "the fit audit reads them" },
     { "path": "^Cores/core/", "kind": "folder", "select": ["BarTests"], "since": "2026-11-01", "reason": "the core's C# class" },
+    { "path": "^Cores/dep/", "kind": "folder", "select": ["covered:Host/*.cs"], "since": "2026-11-02", "reason": "the host's files name dep's exports" },
     { "path": "\\.md$", "kind": "none", "select": [], "since": "2026-11-01", "reason": "documentation" } ] }"#;
 
 const TIERS: &str = r#"{ "tiers": 1, "land": { "exclude": ["nightly"], "profile": "test-fast", "reuse": true, "reuse_days": 7 } }"#;
@@ -49,8 +50,11 @@ fn fixture(name: &str) -> Fixture {
     write(&dir, "Platform/a/src/lib.rs", "pub fn a() {}\n");
     write(&dir, "Platform/b/Cargo.toml", "[package]\nname = \"b\"\n\n[dependencies]\na = { path = \"../a\" }\n");
     write(&dir, "Platform/b/src/lib.rs", "pub fn b() {}\n");
-    write(&dir, "Cores/core/Cargo.toml", "[package]\nname = \"core\"\n");
+    write(&dir, "Cores/core/Cargo.toml", "[package]\nname = \"core\"\n\n[dependencies]\ndep = { path = \"../dep\" }\n");
     write(&dir, "Cores/core/src/lib.rs", "pub fn c() {}\n");
+    write(&dir, "Cores/dep/Cargo.toml", "[package]\nname = \"dep\"\n");
+    write(&dir, "Cores/dep/src/lib.rs", "pub fn d() {}\n");
+    write(&dir, "Cores/core/Glue.cs", "namespace Core { public class Glue {} }\n");
     write(&dir, "Host/RustCores.props", "<Project><ItemGroup><EmuSenRustCrate Include=\"core\"><Dir>$(MSBuildThisFileDirectory)..\\Cores\\core\\</Dir></EmuSenRustCrate></ItemGroup></Project>\n");
     write(&dir, "Host/Host.csproj", "<Project><Import Project=\"RustCores.props\" /></Project>\n");
     write(&dir, "Host/Thing.cs", "namespace Host { public class Thing {} }\n");
@@ -74,9 +78,48 @@ fn tier(snap: &Snapshot) -> Tier {
 }
 
 fn pick(f: &Fixture, files: &[&str]) -> Vec<Pick> {
+    pick_with(f, files, None)
+}
+
+fn pick_with(f: &Fixture, files: &[&str], map: Option<&crate::coverage::Map>) -> Vec<Pick> {
     let snap = Snapshot::read(&f.repo, "HEAD").unwrap();
     let t = tier(&snap);
-    impact::impact(&f.repo, &snap, &Ask { files: files.iter().map(|s| s.to_string()).collect(), tier: &t, failed_last: Vec::new() }).picks
+    impact::impact(&f.repo, &snap, &Ask { files: files.iter().map(|s| s.to_string()).collect(), tier: &t, failed_last: Vec::new(), map, also: Vec::new(), added: Default::default() }).picks
+}
+
+#[test]
+fn a_new_file_selects_through_the_changed_files_that_name_it_and_else_falls_to_the_graph() {
+    let f = fixture("newfile");
+    let (s, path) = store("newfile");
+    crate::coverage::load(&s, RUN, false).unwrap();
+    s.run("DELETE FROM coverage WHERE file = '*'", &[]).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    write(&f.dir, "Host/Newly.cs", "namespace Host { public class Newly {} }\n");
+    write(&f.dir, "Host/Thing.cs", "namespace Host { public class Thing { Newly n = new Newly(); } }\n");
+    write(&f.dir, "Host/Lonely.cs", "namespace Host { public class Lonely {} }\n");
+    git(&f.dir, &["add", "-A"]);
+    git(&f.dir, &["commit", "-q", "-m", "a new file named by Thing, and one nothing names"]);
+    let snap = Snapshot::read(&f.repo, "HEAD").unwrap();
+    let t = tier(&snap);
+    let ask = |files: &[&str], added: &[&str]| impact::impact(&f.repo, &snap, &Ask { files: files.iter().map(|s| s.to_string()).collect(), tier: &t, failed_last: Vec::new(), map: Some(&m), also: Vec::new(), added: added.iter().map(|s| s.to_string()).collect() });
+    assert_eq!(ids(&ask(&["Host/Newly.cs", "Host/Thing.cs"], &["Host/Newly.cs"]).picks), vec!["dotnet:Wise.FooTests covered"], "Newly runs with the classes that executed Thing.cs, which names it");
+    assert_eq!(ids(&ask(&["Host/Lonely.cs", "Host/Thing.cs"], &["Host/Lonely.cs"]).picks), vec!["dotnet:Wise.BarTests graph", "dotnet:Wise.FooTests graph"], "a new file nothing names falls to the graph, the project whole");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn shards_are_dealt_by_time_with_a_collection_kept_together_unless_spread() {
+    use crate::shard::deal;
+    let units = vec![("A".to_string(), 100.0, Some("globals".to_string())), ("B".to_string(), 90.0, Some("globals".to_string())), ("C".to_string(), 80.0, None), ("D".to_string(), 10.0, None), ("E".to_string(), 5.0, Some("mars".to_string()))];
+    let together = deal(&units, 3, false);
+    let find = |shards: &Vec<crate::shard::Shard>, u: &str| shards.iter().position(|s| s.units.iter().any(|x| x == u)).unwrap();
+    assert_eq!(find(&together, "A"), find(&together, "B"), "a collection stays in one shard");
+    assert_eq!(together[0].units, vec!["A", "B"], "the heaviest item first");
+    assert_eq!(together.iter().map(|s| s.seconds as i64).fold(0, i64::max), 190);
+    let spread = deal(&units, 3, true);
+    assert_ne!(find(&spread, "A"), find(&spread, "B"), "spread, the collection's classes go their own ways");
+    assert_eq!(spread.iter().map(|s| s.seconds as i64).fold(0, i64::max), 100, "the wall is the longest unit");
+    assert_eq!(deal(&units, 1, true).len(), 1);
 }
 
 fn ids(picks: &[Pick]) -> Vec<String> {
@@ -102,7 +145,7 @@ fn a_recording_no_line_owns_selects_the_tier() {
 fn an_unknown_file_selects_the_tier_and_a_doc_selects_nothing() {
     let f = fixture("unknown");
     let p = pick(&f, &["tools/odd.sh"]);
-    assert_eq!(ids(&p), vec!["cargo:Cores/core closed", "cargo:Platform/a closed", "cargo:Platform/b closed", "dotnet:Wise.BarTests closed", "dotnet:Wise.FooTests closed"]);
+    assert_eq!(ids(&p), vec!["cargo:Cores/core closed", "cargo:Cores/dep closed", "cargo:Platform/a closed", "cargo:Platform/b closed", "dotnet:Wise.BarTests closed", "dotnet:Wise.FooTests closed"]);
     assert!(pick(&f, &["README.md"]).is_empty());
 }
 
@@ -120,6 +163,140 @@ fn a_class_file_selects_its_class_and_a_host_file_with_no_line_its_whole_project
     let f = fixture("own");
     assert_eq!(ids(&pick(&f, &["Wise/BarTests.cs"])), vec!["dotnet:Wise.BarTests always"]);
     assert_eq!(ids(&pick(&f, &["Host/Thing.cs"])), vec!["dotnet:Wise.BarTests graph", "dotnet:Wise.FooTests graph"]);
+}
+
+const RUN: &str = "# coverage 1\trev HEAD\tbuilt 2026-11-02T20:00:00Z\tjobs 2\tclasses 2\ncovered\tWise.FooTests\tHost/Thing.cs\ncovered\tWise.FooTests\tCores/core/Glue.cs\ncovered\tWise.FooTests\tlunap:src/Kit/Button.cs\ncovered\tWise.FooTests\tHost/Notes.fs\nran\tWise.FooTests\t12.5\tPassed!  - Failed: 0, Passed: 1\t4 files\nnone\tWise.BarTests\tno report (exit 1; no result line)\n";
+
+#[test]
+fn a_covered_file_selects_the_classes_that_executed_it_and_those_without_a_report() {
+    let f = fixture("covered");
+    let (s, path) = store("covered");
+    crate::coverage::load(&s, RUN, false).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    assert_eq!((m.classes, m.unknown.clone(), m.files.len()), (2, vec!["Wise.BarTests".to_string()], 4));
+    assert_eq!(ids(&pick_with(&f, &["Host/Thing.cs"], Some(&m))), vec!["dotnet:Wise.BarTests covered", "dotnet:Wise.FooTests covered"], "BarTests has no report, so every covered change selects it");
+    s.run("DELETE FROM coverage WHERE file = '*'", &[]).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    assert_eq!(ids(&pick_with(&f, &["Host/Thing.cs"], Some(&m))), vec!["dotnet:Wise.FooTests covered"], "the graph's whole project is not added");
+    assert_eq!(ids(&pick_with(&f, &["Cores/core/Glue.cs"], Some(&m))), vec!["cargo:Cores/core graph", "dotnet:Wise.FooTests covered"], "the folder line's classes step aside, its crates stay");
+    assert_eq!(ids(&pick_with(&f, &["Host/Other.cs"], Some(&m))), vec!["dotnet:Wise.BarTests graph", "dotnet:Wise.FooTests graph"], "a file the map never saw falls to the graph");
+    assert_eq!(ids(&pick_with(&f, &["Wise/BarTests.cs"], Some(&m))), vec!["dotnet:Wise.BarTests always"]);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_covered_entry_names_the_classes_that_executed_a_crates_surface_and_reached_lines_narrow_only_when_every_entry_has_one() {
+    let f = fixture("surface");
+    let (s, path) = store("surface");
+    assert_eq!(ids(&pick(&f, &["Cores/dep/src/lib.rs"])), vec!["cargo:Cores/core graph", "cargo:Cores/dep graph", "dotnet:Wise.BarTests declared"], "without a map dep's covered: entry adds nothing; core, the one crate through which dep enters C#, has a line, so the project is narrowed to it");
+    crate::coverage::load(&s, RUN, false).unwrap();
+    s.run("DELETE FROM coverage WHERE file = '*'", &[]).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    assert_eq!(ids(&pick_with(&f, &["Cores/dep/src/lib.rs"], Some(&m))), vec!["cargo:Cores/core graph", "cargo:Cores/dep graph", "dotnet:Wise.BarTests declared", "dotnet:Wise.FooTests declared"], "with a map, the class that executed Host/Thing.cs");
+    write(&f.dir, "Testing/inputs.json", &INPUTS.replace("    { \"path\": \"^Cores/core/\", \"kind\": \"folder\", \"select\": [\"BarTests\"], \"since\": \"2026-11-01\", \"reason\": \"the core's C# class\" },\n", ""));
+    git(&f.dir, &["commit", "-q", "-am", "core's line removed"]);
+    assert_eq!(ids(&pick(&f, &["Cores/dep/src/lib.rs"])), vec!["cargo:Cores/core graph", "cargo:Cores/dep graph", "dotnet:Wise.BarTests graph", "dotnet:Wise.FooTests graph"], "an entry crate with no line leaves the project whole");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_group_of_cases_is_a_unit_of_its_class_with_a_display_name_filter_and_merges_into_the_map() {
+    use crate::adapters::unit_term;
+    assert_eq!(unit_term("W.FitTests"), "FullyQualifiedName~W.FitTests");
+    assert_eq!(unit_term("W.FitTests#PauseCard"), "(FullyQualifiedName~W.FitTests.&(DisplayName~\"PauseCard\"|DisplayName~\"PauseCard-))");
+    assert_eq!(unit_term("W.FitTests#"), "(FullyQualifiedName~W.FitTests.&DisplayName!~\")");
+    assert_eq!(crate::coverage::case_key("W.FitTests.Holds(file: \"PauseCard-1280x800.spec\")").as_deref(), Some("PauseCard"));
+    assert_eq!(crate::coverage::case_key("W.FitTests.Holds(view: \"HomeCardGame\", under: \"white\")").as_deref(), Some("HomeCardGame"));
+    assert_eq!(crate::coverage::case_key("W.FitTests.Holds(width: 1280)"), None);
+    let f = fixture("groups");
+    let snap = Snapshot::read(&f.repo, "HEAD").unwrap();
+    assert_eq!(snap.class_of_unit("Wise.FooTests#HomeCard").map(|c| c.fqn.as_str()), Some("Wise.FooTests"));
+    assert!(snap.class_of_unit("Wise.Nothing#HomeCard").is_none());
+    let (s, path) = store("groups");
+    crate::coverage::load(&s, RUN, false).unwrap();
+    let by_case = RUN.replace("covered\tWise.FooTests\tHost/Thing.cs\n", "covered\tWise.FooTests#HomeCard\tHost/Thing.cs\ncovered\tWise.FooTests#\tHost/Thing.cs\n").replace("covered\tWise.FooTests\t", "covered\tWise.FooTests#HomeCard\t").replace("ran\tWise.FooTests\t", "ran\tWise.FooTests#HomeCard\t").replace("none\tWise.BarTests\tno report (exit 1; no result line)\n", "");
+    assert!(crate::coverage::load(&s, &by_case.replace("rev HEAD", "rev 0123456789abcdef0123456789abcdef01234567"), true).is_err(), "a merge keeps one revision");
+    crate::coverage::load(&s, &by_case, true).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    let mut groups = m.classes_of("Host/Thing.cs").cloned().unwrap_or_default();
+    groups.sort();
+    assert_eq!(groups, vec!["Wise.FooTests#".to_string(), "Wise.FooTests#HomeCard".to_string()], "the class's whole rows gave way to its groups");
+    assert_eq!(m.unknown, vec!["Wise.BarTests".to_string()], "the other class's rows stayed");
+    assert_eq!(ids(&pick_with(&f, &["Host/Thing.cs"], Some(&m))), vec!["dotnet:Wise.BarTests covered", "dotnet:Wise.FooTests# covered", "dotnet:Wise.FooTests#HomeCard covered"]);
+    assert_eq!(ids(&pick_with(&f, &["Wise/FooTests.cs", "Host/Thing.cs"], Some(&m))), vec!["dotnet:Wise.BarTests covered", "dotnet:Wise.FooTests always"], "the class's own file picks it whole, and its groups step aside");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_report_counts_a_file_executed_only_beyond_the_discovery_baseline() {
+    let dir = std::env::temp_dir().join(format!("studio-baseline-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let report = |a: u32, b: u32, c: u32| format!("<coverage>\n  <sources>\n    <source>/t/</source>\n  </sources>\n  <packages>\n    <package name=\"H\">\n      <classes>\n        <class name=\"H.A\" filename=\"A.cs\">\n          <lines>\n            <line number=\"1\" hits=\"{a}\" branch=\"False\" />\n          </lines>\n        </class>\n        <class name=\"H.A/&lt;&gt;c\" filename=\"A.cs\">\n          <lines>\n            <line number=\"1\" hits=\"{b}\" branch=\"False\" />\n          </lines>\n        </class>\n        <class name=\"H.B\" filename=\"B.cs\">\n          <lines>\n            <line number=\"4\" hits=\"{c}\" branch=\"False\" />\n          </lines>\n        </class>\n      </classes>\n    </package>\n  </packages>\n</coverage>\n");
+    let (d1, d2, c) = (dir.join("d1.xml"), dir.join("d2.xml"), dir.join("c.xml"));
+    std::fs::write(&d1, report(5, 2, 0)).unwrap();
+    std::fs::write(&d2, report(5, 3, 1)).unwrap();
+    let base = crate::coverage::least(crate::coverage::line_hits(&d1).unwrap(), &crate::coverage::line_hits(&d2).unwrap());
+    assert_eq!(base["/t/A.cs"][&("H.A/&lt;&gt;c".to_string(), 1)], 2, "the least of the two runs; a class block is keyed as the report writes it");
+    assert!(!base.contains_key("/t/B.cs"), "a line one run did not hit is no floor");
+    std::fs::write(&c, report(5, 4, 0)).unwrap();
+    assert_eq!(crate::coverage::executed_files(&c, Some(&base)).unwrap().into_iter().collect::<Vec<_>>(), vec!["/t/A.cs"], "the closure's block rose above its floor although the method's did not");
+    std::fs::write(&c, report(5, 2, 0)).unwrap();
+    assert!(crate::coverage::executed_files(&c, Some(&base)).unwrap().is_empty(), "discovery's own hits select nothing");
+    assert_eq!(crate::coverage::executed_files(&c, None).unwrap().len(), 1, "without a baseline every hit counts");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_run_loads_into_the_store_and_replaces_the_previous_map() {
+    let (s, path) = store("map");
+    assert!(crate::coverage::Map::load(&s).unwrap().is_none());
+    assert!(crate::coverage::load(&s, "covered\tA\tx.cs\n", false).is_err(), "a run without its header is refused");
+    let first = crate::coverage::load(&s, RUN, false).unwrap();
+    assert!(first.contains("2 classes (1 without a report)"), "{first}");
+    let again = RUN.replace("Host/Thing.cs", "Host/Else.cs").replace("none\tWise.BarTests", "none\tWise.Other");
+    crate::coverage::load(&s, &again, false).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    assert_eq!(m.classes_of("Host/Thing.cs"), None, "the previous map is gone");
+    assert_eq!(m.classes_of("Host/Else.cs"), Some(&vec!["Wise.FooTests".to_string()]));
+    assert_eq!(m.classes_of("Cores/core/Glue.cs"), Some(&vec!["Wise.FooTests".to_string()]), "a row both maps hold belongs to the new one");
+    assert_eq!(m.classes_of("Host/Notes.fs"), None, "only .cs files are answered");
+    assert_eq!(m.unknown, vec!["Wise.Other".to_string()]);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_report_gives_its_executed_files_and_their_places() {
+    let dir = std::env::temp_dir().join(format!("studio-report-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let xml = "<?xml version=\"1.0\"?>\n<coverage>\n  <sources>\n    <source>/home/t/</source>\n  </sources>\n  <packages>\n    <package name=\"Host\">\n      <classes>\n        <class name=\"Host.A\" filename=\"Projects/Repo/Host/A.cs\">\n          <lines>\n            <line number=\"1\" hits=\"0\" branch=\"False\" />\n            <line number=\"2\" hits=\"12\" branch=\"False\" />\n          </lines>\n        </class>\n        <class name=\"Host.B\" filename=\"Projects/Repo/Host/B.cs\">\n          <lines>\n            <line number=\"1\" hits=\"0\" branch=\"False\" />\n          </lines>\n        </class>\n        <class name=\"Kit.C\" filename=\"Projects/Kit/src/C.cs\">\n          <lines>\n            <line number=\"3\" hits=\"1\" branch=\"False\" />\n          </lines>\n        </class>\n      </classes>\n    </package>\n  </packages>\n</coverage>\n";
+    let report = dir.join("coverage.cobertura.xml");
+    std::fs::write(&report, xml).unwrap();
+    let files: Vec<String> = crate::coverage::executed_files(&report, None).unwrap().into_iter().collect();
+    assert_eq!(files, vec!["/home/t/Projects/Kit/src/C.cs", "/home/t/Projects/Repo/Host/A.cs"], "a file with no line hit is not executed");
+    let place = |p: &str| crate::coverage::relative(p, "/home/t/Projects/Repo", Some("/home/t/Projects/Kit/"));
+    assert_eq!(place(&files[1]).as_deref(), Some("Host/A.cs"));
+    assert_eq!(place(&files[0]).as_deref(), Some("lunap:src/C.cs"));
+    assert_eq!(place("/home/t/Projects/Repository/x.cs"), None, "a longer name is not the tree");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn a_stale_map_says_so_and_falls_back() {
+    let f = fixture("stale");
+    let (s, path) = store("stale");
+    assert!(crate::coverage::fresh(&f.repo, &s, "HEAD", "HEAD", 1.0).unwrap_err().contains("no coverage map"));
+    let head = f.repo.rev("HEAD").unwrap();
+    crate::coverage::load(&s, &RUN.replace("rev HEAD", &format!("rev {head}")), false).unwrap();
+    assert!(crate::coverage::fresh(&f.repo, &s, "HEAD", "HEAD", 1.0).unwrap().is_some());
+    write(&f.dir, "README.md", "later\n");
+    let later = Command::new("git").arg("-C").arg(&f.dir).args(["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "-q", "-am", "three days on"]).env("GIT_COMMITTER_DATE", "2036-01-04T00:00:00Z").env("GIT_AUTHOR_DATE", "2036-01-04T00:00:00Z").output().unwrap();
+    assert!(later.status.success());
+    let why = crate::coverage::fresh(&f.repo, &s, "HEAD", "HEAD", 1.0).unwrap_err();
+    assert!(why.contains("days older than the base"), "{why}");
+    assert!(crate::coverage::fresh(&f.repo, &s, "HEAD", "HEAD", 100000.0).unwrap().is_some(), "--map-age widens it");
+    crate::coverage::load(&s, &RUN.replace("rev HEAD", "rev 0123456789abcdef0123456789abcdef01234567"), false).unwrap();
+    assert!(crate::coverage::fresh(&f.repo, &s, "HEAD", "HEAD", 1.0).unwrap_err().contains("does not have"));
+    let _ = std::fs::remove_file(path);
 }
 
 #[test]

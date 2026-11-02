@@ -127,7 +127,16 @@ pub fn run(stdin: Option<String>, o: &Options) -> Result<(String, String, i32), 
             files.extend(repo.uncommitted()?);
             files.sort();
             files.dedup();
-            impact::impact(&repo, &snap, &impact::Ask { files, tier: &tier, failed_last: Vec::new() }).picks
+            let map = match store.as_ref().map(|s| crate::coverage::fresh(&repo, s, &o.base, "HEAD", 1.0)) {
+                Some(Ok(m)) => m,
+                Some(Err(why)) => {
+                    err.push_str(&format!("trial: {why}\n"));
+                    None
+                }
+                None => None,
+            };
+            let added = repo.added(&o.base, "HEAD", true).unwrap_or_default().into_iter().collect();
+            impact::impact(&repo, &snap, &impact::Ask { files, tier: &tier, failed_last: Vec::new(), map: map.as_ref(), also: Vec::new(), added }).picks
         }
     };
     let q: Vec<(String, String)> = store
@@ -152,9 +161,10 @@ pub fn run(stdin: Option<String>, o: &Options) -> Result<(String, String, i32), 
                 None => (None, Some(format!("no crate {} at {}", p.unit, &head[..9]))),
             },
             "dotnet" if p.unit == "lunap" => (catalogue::key(&repo, &snap, "dotnet:lunap", "Debug", true).ok().flatten().map(|k| k.key), catalogue::lunap_tests(&repo).is_none().then(|| "no LunaP tests beside LunaP.props".to_string())),
-            "dotnet" => match snap.classes.get(&p.unit) {
+            "dotnet" => match snap.class_of_unit(&p.unit) {
                 Some(c) => {
-                    let k = dotnet_keys.entry(c.project.clone()).or_insert_with(|| catalogue::key(&repo, &snap, &id, "Debug", true).ok().flatten().map(|k| k.key)).clone();
+                    let class_id = format!("dotnet:{}", c.fqn);
+                    let k = dotnet_keys.entry(c.project.clone()).or_insert_with(|| catalogue::key(&repo, &snap, &class_id, "Debug", true).ok().flatten().map(|k| k.key)).clone();
                     (k, None)
                 }
                 None => (None, Some(format!("no test class {} at {}", p.unit, &head[..9]))),
@@ -196,7 +206,7 @@ pub fn run(stdin: Option<String>, o: &Options) -> Result<(String, String, i32), 
                 cargo.entry(c.root.clone()).or_default().push((c.dir.clone(), name));
             }
             "dotnet" if p.pick.unit == "lunap" => lunap = true,
-            "dotnet" => dotnet.entry(snap.classes[&p.pick.unit].project.clone()).or_default().push(p.pick.unit.clone()),
+            "dotnet" => dotnet.entry(snap.class_of_unit(&p.pick.unit).map(|c| c.project.clone()).unwrap_or_default()).or_default().push(p.pick.unit.clone()),
             _ => {}
         }
     }

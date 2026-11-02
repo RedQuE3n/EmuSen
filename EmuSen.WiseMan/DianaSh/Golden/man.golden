@@ -6487,14 +6487,15 @@ case the page for impact
 target none
 covers 1
 $ man impact
-out 3003
+out 5498
 NAME
     impact - the units a change can affect, with the rule and the file
 
 SYNOPSIS
-    impact [--base REV] [--head REV] [--tier T] [--depth N] [--repo DIR]
+    impact [--base REV] [--head REV] [--tier T] [--depth N] [--also TERMS] [--map-age DAYS] [--inputs FILE] [--repo DIR]
     impact --explain FILE [--tier T]
     impact --base REV --head REV --blast FILE
+    impact --base REV --head REV --format blast
 
 DESCRIPTION
     A command of the emusen.testing module. It reads the files that
@@ -6514,8 +6515,27 @@ DESCRIPTION
                    owns selects the tier's whole set
         always     a test class's own file selects the class; a unit that
                    failed in this branch's last trial is selected again
-        declared   a folder line of Testing/inputs.json adds its units,
-                   and narrows a reached test project to them
+        declared   a folder line of Testing/inputs.json matching the file
+                   adds its units and narrows a reached test project to
+                   them; a line on another crate the closure reaches adds
+                   its units, and such lines narrow only when every crate
+                   through which the closure enters C# (an edge to a
+                   project or an MSBuild file) has one. An entry covered:PATHSPEC
+                   adds the classes the coverage map saw execute the files
+                   the pathspec names (a Rust crate's C# surface, which
+                   coverlet cannot see from the Rust side), and without a
+                   map adds nothing and narrows nothing. For a covered
+                   file only a line's cargo: and lunap entries apply
+        covered    a changed .cs file the coverage map has seen selects
+                   the classes that executed it (`man coverage`), plus
+                   every class the map has no report for. A .cs file the
+                   change adds selects the classes that executed the
+                   changed files the map has seen that name its types,
+                   directly or through other added files; an added file
+                   nothing names, a file never executed, or a file that
+                   is not C# falls to the rules below. A unit CLASS#KEY
+                   is one group of a class's cases, mapped by case, run
+                   by its display name
         graph      the file's owner (its nearest crate or project, or the
                    project that imports it) and everything in its reverse
                    closure over Cargo path dependencies, workspaces,
@@ -6527,9 +6547,25 @@ DESCRIPTION
 
     A line of kind 'none' (documentation, ignore lists, CI files) claims a
     file and selects nothing. A tier's named_only classes (WindowFitAudit-
-    Tests at land) are selected only by a line naming them; its excluded
-    tags (nightly) are left out. --depth limits the reverse closure, as
-    the fast tier does with 1.
+    Tests at land) are selected only by a line naming them, or by the
+    covered rule when they executed the file; its excluded tags (nightly)
+    are left out. --depth limits the reverse closure, as the fast tier
+    does with 1. --also TERMS adds the classes the |-separated filter
+    terms name, with the reason 'given'. --inputs FILE reads the lines
+    from that file instead of the head revision's Testing/inputs.json,
+    to try a line before committing it or to replay history with
+    today's lines.
+
+    The map is used when its revision is at most --map-age days (default
+    1) older than the merge base of --base and --head; an older map, or
+    none, is said on standard error and the covered rule is off, so the
+    graph answers as before. The map is rebuilt by the nightly.
+
+    --format blast prints the selection as blast.sh prints its answer:
+    'dotnet filter: ' with a FullyQualifiedName~ term per class and the
+    tier's exclusion, 'cargo: ' per crate, 'lunap: selected', and
+    'closed: FILE' for each file that fell to the closed rule, which is
+    where land.sh lets blast.sh's map answer instead.
 
     --explain FILE prints the file's owner, what its closure reaches, the
     lines it matches and its selection. --blast FILE compares the
@@ -6548,6 +6584,188 @@ EXAMPLES
     impact | grep -c '^dotnet'
     impact --explain EmuSen.Mistress/Views/CoresWindow.axaml.cs
     impact --base f1592d39e^1 --head f1592d39e^2 --blast blast.txt | grep -v ^agree
+    impact --base WiseMan --head pausecard --format blast | sed -n 's/^dotnet filter: //p'
+status 0
+action none
+end
+
+case the page for shard
+target none
+covers 1
+$ man shard
+out 2979
+NAME
+    shard - a selection's dotnet units dealt to N processes by their measured times
+
+SYNOPSIS
+    shard [--shards N] [--keep-collections] [--head REV] [--tier T] [--repo DIR] [FILE]
+    shard --machine [--head REV] [--repo DIR]
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads a selection (impact's
+    lines, from FILE or standard input), keeps its dotnet units, and deals
+    them to N shards (default 4) so a land can run N `dotnet test`
+    processes at once and wait for the longest. WiseMan's Avalonia
+    headless classes share one dispatcher per process, so a selection of
+    49 test-minutes takes 34 wall minutes in one process; in four it
+    takes about the longest shard.
+
+    A unit's time is its seconds in the newest trial that recorded it:
+    a land's TRX, or the coverage map's run (`coverage load` records
+    each unit's seconds under coverage); a unit with no time counts
+    20 s, and a group of cases (CLASS#KEY) with no time of its own
+    counts a fortieth of its class's. The items are dealt longest first
+    into the least loaded shard.
+
+    Separate processes share no statics, but they share the machine.
+    The classes whose sources show them touching machine-wide state
+    are dealt as one item and stay in one shard: a virtual pad or
+    uinput (every process's SDL sees the pad another makes), a
+    listener or a literal port, a fixed path under the home or out/
+    that the class also writes, a lock on a fixed folder (flock,
+    FixedRunFolder), the GPU facts; --machine lists them with the
+    reason, from the sources at --head. The classes of one xunit
+    collection ([Collection(...)], DisableParallelization) guard state
+    inside a process and are spread (decided 2026-11-02 by the tester);
+    --keep-collections deals each collection as one item instead. A
+    spread class that fails in a sharded land and passes alone is one
+    the scan missed, and its cause goes into the scan.
+
+    The output, tab-separated: a machine line, one line per shard, and
+    a last line:
+
+        machine  N  NOTE                    how many of the selection's
+                                            units share the machine shard
+        shard  N  SECONDS  UNITS  FILTER    the shard's predicted
+                                            seconds, unit count and
+                                            dotnet filter
+        wall   SECONDS  SUM  NOTE           the longest shard, the sum,
+                                            and how many units had no
+                                            measured time
+
+    land.sh runs the shards at once, each with its own log and TRX
+    (dotnet-N.trx), and sums their summary lines; the backfill reads
+    every dotnet*.trx of a land folder. See EmuSen_Testing.md §3.8.
+
+EXAMPLES
+    impact --base WiseMan --head pausecard | shard --shards 4 --head pausecard
+    shard --keep-collections selection.txt | cut -f1-4
+    shard --machine | cut -f2 | sort | uniq -c
+status 0
+action none
+end
+
+case the page for coverage
+target none
+covers 1
+$ man coverage
+out 5883
+NAME
+    coverage - the coverage map: which test classes executed a source file
+
+SYNOPSIS
+    coverage [FILE...]
+    coverage run --bin DIR [--tree DIR] [--jobs N] [--rev REV] [--class C]... [--by-case C]... [--nightly] [--out DIR] [--repo DIR]
+    coverage load [--merge] [FILE]
+
+DESCRIPTION
+    A command of the emusen.testing module. The map records, for each
+    test class of a test project, the source files its tests executed:
+    C# files of this repository by their path, and the LunaP toolkit's
+    by the sibling checkout's path with a 'lunap:' prefix. impact's
+    'covered' rule reads it: a changed .cs file the map has seen selects
+    the classes that executed it and no more. See `man impact` and
+    EmuSen_Testing.md §3.7.
+
+    With no words, one line describes the map the store holds: the
+    revision it was built at, when, how many classes and files, and how
+    many classes gave no report. With FILE words it prints one line per
+    class that executed each file, or 'unseen' for a file the map never
+    saw (a new file, one no test executes, or any file that is not C#).
+
+    'run' builds a map from one build of the test project. Every class
+    of the land tier runs in its own `dotnet test` process under the
+    coverlet collector (the version the test project references, from
+    the NuGet cache) with the filter
+    (FullyQualifiedName~CLASS.|FullyQualifiedName~CLASS+)&Category!=nightly,
+    so the map shows what land runs; the nightly tier's classes are left
+    out (--nightly adds them), since the nightly runs its classes whole
+    and needs no map. --jobs N processes run at once, each from its own
+    full copy of --bin beside it (bin/coverage-N/<framework>), never a
+    hard link: coverlet rewrites the instrumented assemblies in place
+    and restores them at the end of each session, and a build rewrites
+    the rest, so nothing may be shared with the build or between
+    workers. The copies are removed at the end. A class whose process
+    ends without a report is run once more after five seconds, since
+    the previous class's process may still hold a module coverlet backs
+    up. --tree names
+    the checkout the build was made in, whose paths the pdbs carry
+    (default: the repository); LunaP's root is read from that tree's
+    LunaP.props. --class C limits the run to the classes whose name
+    holds C, for a smoke test. Each process runs in the project's capped
+    scope with MSBUILDDISABLENODEREUSE=1 and UseSharedCompilation=false
+    in its environment (VSTest takes no -p: for a dll), so a test that
+    builds leaves no compiler server behind.
+
+    xunit discovers every test before the filter applies, so each copy
+    gets an xunit.runner.json with preEnumerateTheories false (a
+    theory's data is then evaluated by the class that runs it, not by
+    discovery), and the run opens with a discovery baseline: two runs
+    whose filter matches no test, the least hit count of each line of
+    each class block kept. A file counts as executed by a class only
+    where a line's hits exceed that floor; a line discovery alone hits
+    counts for nobody.
+
+    --by-case C maps a class whose name holds C one group of cases at a
+    time instead of whole: its cases are listed (dotnet test
+    --list-tests, with theories enumerated at discovery for that copy)
+    and grouped by the first quoted argument of each display name, less
+    a trailing size such as -1280x800 (the view a fit audit draws, the
+    recording it reads back), the cases with no quoted argument forming
+    one more group. Each group is a unit of its own, CLASS#KEY (CLASS#
+    for the last), selected and run by the filter
+    (FullyQualifiedName~CLASS.&(DisplayName~"KEY"|DisplayName~"KEY-)),
+    so a change to one window's code runs that window's cases and no
+    other's. The groups' reports are read against a second baseline
+    taken with theories enumerated at discovery, since that is how they
+    run. The output is plain lines, one a line as classes finish:
+
+        # coverage 1  rev R  built T  bin DIR  jobs N  classes C  groups G
+        # baseline  N files  M lines  SECONDS
+        covered  UNIT  FILE           the unit executed the file
+        ran      UNIT  SECONDS  RESULT  N files
+        none     UNIT  why            no report (its log is kept under --out)
+        # done   N with a report, M without
+
+    A class with no report (the process crashed before coverlet wrote
+    it) is recorded under the file '*' and impact selects it for every
+    covered change, so a lost report widens the selection and never
+    narrows it. The status is 1 when any class gave no report.
+
+    'load' reads a run's lines from FILE or standard input into the
+    store, as one trial of tier 'coverage' with the run's revision as
+    its tree, replacing the previous map in one transaction. With
+    --merge it replaces only the rows of the classes the run holds (a
+    class mapped by case merged into a whole map), and the run must be
+    at the map's revision. impact
+    uses the newest map whose revision is at most one day older than
+    the change's merge base (its --map-age), else says so and falls
+    back to the graph rule.
+
+    Measured on 2026-11-02 on the desktop: a class costs about 10 s
+    more under coverlet than bare (instrumenting the 17 EmuSen
+    assemblies and writing a 34 MB report), so 526 land classes in 4
+    processes take about an hour; a file executed by every class
+    (xunit's discovery runs the test attributes' constructors) is
+    attributed to every class, which is correct, since a change there
+    reaches every run.
+
+EXAMPLES
+    coverage
+    coverage EmuSen.Mistress/Views/CoresWindow.cs | wc -l
+    coverage run --bin EmuSen.WiseMan/bin/Debug/net10.0 --jobs 4 > map.txt
+    coverage load map.txt
+    coverage run --bin EmuSen.WiseMan/bin/Debug/net10.0 --class GalaxiaScopeTests --jobs 1
 status 0
 action none
 end

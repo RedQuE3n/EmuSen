@@ -2,9 +2,10 @@ NAME
     impact - the units a change can affect, with the rule and the file
 
 SYNOPSIS
-    impact [--base REV] [--head REV] [--tier T] [--depth N] [--repo DIR]
+    impact [--base REV] [--head REV] [--tier T] [--depth N] [--also TERMS] [--map-age DAYS] [--inputs FILE] [--repo DIR]
     impact --explain FILE [--tier T]
     impact --base REV --head REV --blast FILE
+    impact --base REV --head REV --format blast
 
 DESCRIPTION
     A command of the emusen.testing module. It reads the files that
@@ -24,8 +25,27 @@ DESCRIPTION
                    owns selects the tier's whole set
         always     a test class's own file selects the class; a unit that
                    failed in this branch's last trial is selected again
-        declared   a folder line of Testing/inputs.json adds its units,
-                   and narrows a reached test project to them
+        declared   a folder line of Testing/inputs.json matching the file
+                   adds its units and narrows a reached test project to
+                   them; a line on another crate the closure reaches adds
+                   its units, and such lines narrow only when every crate
+                   through which the closure enters C# (an edge to a
+                   project or an MSBuild file) has one. An entry covered:PATHSPEC
+                   adds the classes the coverage map saw execute the files
+                   the pathspec names (a Rust crate's C# surface, which
+                   coverlet cannot see from the Rust side), and without a
+                   map adds nothing and narrows nothing. For a covered
+                   file only a line's cargo: and lunap entries apply
+        covered    a changed .cs file the coverage map has seen selects
+                   the classes that executed it (`man coverage`), plus
+                   every class the map has no report for. A .cs file the
+                   change adds selects the classes that executed the
+                   changed files the map has seen that name its types,
+                   directly or through other added files; an added file
+                   nothing names, a file never executed, or a file that
+                   is not C# falls to the rules below. A unit CLASS#KEY
+                   is one group of a class's cases, mapped by case, run
+                   by its display name
         graph      the file's owner (its nearest crate or project, or the
                    project that imports it) and everything in its reverse
                    closure over Cargo path dependencies, workspaces,
@@ -37,9 +57,25 @@ DESCRIPTION
 
     A line of kind 'none' (documentation, ignore lists, CI files) claims a
     file and selects nothing. A tier's named_only classes (WindowFitAudit-
-    Tests at land) are selected only by a line naming them; its excluded
-    tags (nightly) are left out. --depth limits the reverse closure, as
-    the fast tier does with 1.
+    Tests at land) are selected only by a line naming them, or by the
+    covered rule when they executed the file; its excluded tags (nightly)
+    are left out. --depth limits the reverse closure, as the fast tier
+    does with 1. --also TERMS adds the classes the |-separated filter
+    terms name, with the reason 'given'. --inputs FILE reads the lines
+    from that file instead of the head revision's Testing/inputs.json,
+    to try a line before committing it or to replay history with
+    today's lines.
+
+    The map is used when its revision is at most --map-age days (default
+    1) older than the merge base of --base and --head; an older map, or
+    none, is said on standard error and the covered rule is off, so the
+    graph answers as before. The map is rebuilt by the nightly.
+
+    --format blast prints the selection as blast.sh prints its answer:
+    'dotnet filter: ' with a FullyQualifiedName~ term per class and the
+    tier's exclusion, 'cargo: ' per crate, 'lunap: selected', and
+    'closed: FILE' for each file that fell to the closed rule, which is
+    where land.sh lets blast.sh's map answer instead.
 
     --explain FILE prints the file's owner, what its closure reaches, the
     lines it matches and its selection. --blast FILE compares the
@@ -58,3 +94,4 @@ EXAMPLES
     impact | grep -c '^dotnet'
     impact --explain EmuSen.Mistress/Views/CoresWindow.axaml.cs
     impact --base f1592d39e^1 --head f1592d39e^2 --blast blast.txt | grep -v ^agree
+    impact --base WiseMan --head pausecard --format blast | sed -n 's/^dotnet filter: //p'

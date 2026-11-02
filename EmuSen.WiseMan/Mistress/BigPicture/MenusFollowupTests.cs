@@ -375,9 +375,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // The pad menu, a list rather than a scroller, is watched through its own scroller.
             s.Pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
             s.Settle();
-            MenuPanel pad = PadMenu.Big(s.Window);
-            Assert.True(pad.IsEffectivelyVisible);
-            // The Home card's rows all show at 800 lines, so its scroller shows no indicator, even with Up wrapped to the last row.
+            var pad = s.Window.GetControl<MenuPanel>("PadMenuBig");
+            Assert.True(pad.IsVisible);
+            // Since §4.69.8 the main menu's rows all show at 800 lines, so its scroller shows no indicator, even with Up wrapped to the last row.
             Assert.NotNull(pad.Child!.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault());
             Assert.Equal(MenuScrollIndicator.None, pad.ScrollIndicator);
             s.Pad.Up();

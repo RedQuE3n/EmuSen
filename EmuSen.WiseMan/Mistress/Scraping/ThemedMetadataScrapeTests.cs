@@ -109,8 +109,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Single(_server.JeuInfos);
 
             // A second run, from the pad menu this time, leaves the edit too.
+            var entries = (List<PadMenuEntry>)typeof(MainWindow).GetField("_padMenuEntries", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(s.Window)!;
             s.Pad.Start();
-            EmuSen.WiseMan.Fixtures.PadMenu.Choose(s.Window, s.Pad, "Scrape This Game...", exact: true);
+            s.Pad.Down(entries.FindIndex(e => e.Text() == "Scrape This Game..."));
+            s.Pad.A();
             Until(s, () => !s.Window.ScrapeRunning, "the second scrape never finished");
             PutAwayTheStatus(s);
             Assert.Equal("mine", Shown(s).Description);

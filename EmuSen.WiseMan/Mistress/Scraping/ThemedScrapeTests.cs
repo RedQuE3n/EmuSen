@@ -59,7 +59,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             var entries = (List<PadMenuEntry>)typeof(MainWindow).GetField("_padMenuEntries", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(s.Window)!;
             s.Pad.Start();
-            entries.Single(e => e.ShowsCover).Submenu!().Single(e => e.Text() == "Scrape This Game...").Accept();
+            entries.Single(e => e.Text() == "Scrape This Game...").Accept();
 
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (s.Themed.SelectedGame?.Description != "Scraped description.")

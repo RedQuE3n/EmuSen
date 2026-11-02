@@ -314,7 +314,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(BigPictureInterface.OpeningScaleUp, new BigPictureInterface().MenuOpeningEffect);
             s.Settings.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningScaleUp;
             ThemedLibraryPadTests.Enter(s, "snes");
-            MenuPanel menu = PadMenu.Big(s.Window);
+            MenuPanel menu = s.Window.GetControl<MenuPanel>("PadMenuBig");
             s.Pad.Start();
             double first = menu.OpeningScale;
             Assert.InRange(first, 0.5, 0.95);

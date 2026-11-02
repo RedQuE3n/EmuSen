@@ -98,7 +98,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 window = OpenAt(w, h, bigScreen: true);
                 var pad = new PadDriver(window);
                 pad.Start();
-                EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, EmuSen.Mistress.Views.MainWindow.ScraperRow, exact: true);
+                EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scrape Games...", exact: true);
                 Pump(300);
                 foreach ((string control, string name) in new[] { ("ScrapeVideosSwitch", "sheet-fetch-more"), ("ScrapeGameNamesSwitch", "sheet-game-names"), ("ScrapeStatusButton", "sheet-scrape-criteria"), ("ScrapeCleanUpButton", "sheet-orphaned-media") })
                 {

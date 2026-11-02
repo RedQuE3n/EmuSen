@@ -362,7 +362,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             ThemedLibraryFlowTests.Choose(s, "Back to Library");
             Assert.True(s.Shown);
-            ThemedCollectionsTests.Choose(s, MainWindow.ContinueRow);
+            ThemedCollectionsTests.Choose(s, "Back to");
             Assert.True(GameShown(s));
             Assert.False(s.Window.IsPaused);
             Assert.Null(Screen(s));

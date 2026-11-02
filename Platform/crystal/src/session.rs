@@ -307,7 +307,9 @@ impl Session {
         }
         e.refresh_debugger();
         if run.rewind.enabled {
+            let was = run.rewind.withheld().is_some();
             let took = run.rewind.on_frame_completed(&mut crate::engine::Snap { engine: e, ctx: None })?;
+            self.say_withheld(was, &run.rewind);
             if took && run.rewind.thumbnail_width > 0 && !e.skip_rendering {
                 self.attach_thumbnail(e, &mut run.rewind);
             }
@@ -324,6 +326,16 @@ impl Session {
             });
         }
         Ok(true)
+    }
+
+    /// Capture stopped just now: said once in the error log and raised to the frontend, which reads the words from info.
+    pub(crate) fn say_withheld(&self, was: bool, rewind: &crate::rewind::Rewind) {
+        if let (false, Some(why)) = (was, rewind.withheld()) {
+            crate::error_log::warning("rewind", why);
+            self.events.raise(self.id, abi::EVENT_REWIND, "rewind", |j| {
+                j.str("op", "withheld").str("words", why);
+            });
+        }
     }
 
     /// The picture on show attached to the snapshot just taken, `AttachThumbnail`.
@@ -351,7 +363,9 @@ impl Session {
             r.thumbnail_width = thumbnail_width.min(i32::MAX as u32) as i32;
             if enabled && !r.enabled {
                 r.enabled = true;
+                let was = r.withheld().is_some();
                 r.capture_now(&mut crate::engine::Snap { engine: e, ctx: None })?;
+                self.say_withheld(was, r);
             } else if !enabled && r.enabled {
                 r.enabled = false;
                 r.clear();
@@ -743,8 +757,8 @@ impl Session {
         }
         j.end_array()
             .end_object()
-            .bool("rewind_capture", true)
-            .null("rewind_withheld")
+            .bool("rewind_capture", run.rewind.withheld().is_none())
+            .str_or_null("rewind_withheld", run.rewind.withheld())
             .key_object("notices")
             .null("engine")
             .str_or_null("firmware", e.firmware_notice.as_deref())

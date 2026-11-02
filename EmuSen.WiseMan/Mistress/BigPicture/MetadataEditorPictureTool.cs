@@ -20,6 +20,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The metadata editor in ES-DE's layout at 1280 by 800 and 1920 by 1200, on both themes, and the gamelist with a game's metadata fields hidden; written outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class MetadataEditorPictureTool
     {

@@ -3050,6 +3050,33 @@ So the unconditional refresh is not a debt. It is the price of the property that
 
 A breakpoint without a condition is unchanged, its path untouched and its numbers equal before and after within noise. The floor of a condition, `if 0`, is leaving the core's frame and re-entering it with the expression parsed. A register costs the refresh: about a microsecond where the core exports its registers, 7 to 9 on MoonRT and MercuryRT, whose shims retake a whole-state snapshot because neither core exports `DEBUG_REGISTERS` (Q28 there). As §3.27 warned in general, a condition on the hottest loop a core runs is real frame time: on MercuryRT's 2,926 hits a frame it is 20 ms.
 
+### 3.68 Test tiers: what a land runs, and what waits for the nightly run
+
+*Decided 2026-11-01 by the tester*, from a review of 157 land records (23 October to 1 November): a land's time went to one Sapphire relink with fat LTO per core change (median 633 s of build, 91 lands) and to wide WiseMan filters, the Mistress namespace (2,798 tests) and `WindowFitAuditTests` (903) among them, with 54% of the suite serial in `"Process globals"`.
+
+**Two tiers.**
+
+1. *Land* (`land.sh`, through `blast.sh`): each crate's own tests on the `test-fast` profile where its root defines one (`EmuSen_RustPlatform.md` §37.6), `--release` elsewhere; WiseMan's mapped classes minus the nightly tier.
+2. *Nightly*: the whole suite, the nightly tier included, with every Rust root on `test-checked` (`EmuSen_RustPlatform.md` §37). CI keeps `test-checked` as it was.
+
+A test in the nightly tier is not deleted or weakened by being there; the tier says only when it runs.
+
+**The nightly tier** is the xUnit trait `[Trait("Category", "nightly")]`, written on the class or on the one method it concerns, and `blast.sh` ends every filter it prints with `&Category!=nightly`. A plain trait was chosen over a custom attribute because the filter syntax reads it directly, `grep -rn '"nightly"'` lists the tier, and nothing in the fixtures has to know about it. Tagged:
+
+- the picture tools (`*PictureTool`), which skip unless `EMUSEN_BIGPICTURE_PNG=1` and write pictures rather than assert;
+- `MarsRtDigestProbe`, a comparison tool between two builds;
+- the game runs of the goldens: `The_games_run_as_their_goldens_recorded` in `MercuryGoldenTests`, `MoonGoldenTests` and `VenusGoldenTests`, and `VenusRtGoldenTests.The_goldens_against_Mesen`; the synthetic programs and corpora of those classes stay at land;
+- `ReferenceDumpTests` and `MarsViDifferentialTests`, the reference differentials;
+- `SapphireTests.The_kit_passes_on_a_synthetic_program_and_synthetic_discs`, the conform kit's run, which Sapphire's own cargo suite repeats at every Sapphire land.
+
+**`WindowFitAuditTests` is not in the tier.** It runs at land when a change reaches a screen: `EmuSen.Mistress/Views/`, `EmuSen.Mistress/BigPicture/`, `App.axaml`, LunaP, the tool windows (`EmuSen.Tools.Packages`, `.Library`, `.Scraper`), the system table's data or the core catalogue, whose change once broke the settings sheets' focus graph (2026-10-20), and the recorded specifications. It runs nightly otherwise. The rule lives in `blast.sh` alone: the map names the class only on those lines, and a filter that does not name it ends with `&FullyQualifiedName!~WindowFitAuditTests`, so a broad term such as the Mistress namespace does not bring it back. `WindowFitScrapeAuditTests` is a separate class and is unaffected.
+
+**The map by folder.** The single `^EmuSen\.Mistress/` line became one line per folder. `Views/`, root files and `App.axaml` keep the namespace; `Input/`, `Library/`, `Scraping/` and `BigPicture/` take `refs:<pathspec>`, which `blast.sh` expands at the head revision into every WiseMan test file naming a type declared there, directly or through a fixture. A changed fixture is expanded the same way; before, a fixture or a recording (`Mistress/Specification/*.spec`, the DianaSh and core goldens, the baselines) selected nothing, because `blast.sh` skipped `*.spec`, `*.golden` and `*.txt` as documentation and marked `Fixtures/` and `Reference/` as covered without a term. On 2026-11-01 a commit changing only `GamelistFilter-*.spec` recorded green with no test run. Now only `*.md` is skipped, each recording maps to the class that reads it, and `land.sh` refuses to record green when files other than documentation changed and nothing was selected, unless `--accept-unmapped` is given.
+
+Replayed over the last 60 first-parent merges on 2026-11-01 against the `--list-tests` count of 7,771 tests, the new map selects 77,432 test runs in all against the old 75,718: the narrower Mistress lines and the nightly tier are outweighed by the recordings and fixtures that were selected by nothing before. The map's saving is therefore correctness, not time; the time comes from the profile, the tier, and the work on `"Process globals"` that follows.
+
+**Measured, not guessed.** `land.sh` builds WiseMan in its own step, then runs `dotnet test --no-build` with a TRX logger into the land's folder, and writes each step's seconds to `times.txt` there, so the next decision has per-class durations, which the review lacked.
+
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
 
 Four efforts landed in one commit, which is not the house style and is worth explaining rather than leaving as an oddity.

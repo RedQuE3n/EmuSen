@@ -26,6 +26,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The browser at 1280 by 800 over the synthetic list and fake hosts: the list, a theme's detail, a download under way, and the Themes tab after it; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ThemeBrowserPictureTool : IDisposable
     {

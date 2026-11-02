@@ -15,6 +15,7 @@ using Xunit.Abstractions;
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
     // The settings sheets as ES-DE menus, the list screen and the menu opening, at 1280 by 800 and 1920 by 1200 on both themes; written outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class SettingsMenusPictureTool
     {

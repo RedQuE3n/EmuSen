@@ -3453,6 +3453,32 @@ morning, which built all seven. Every job of both branch runs passed, the portab
   the shipped libraries built as before. That variation is the runner's, and over twenty times the profile's cost: about half a minute
   more before the WiseMan job can start, on a run of twenty to thirty-five minutes.
 
+### 37.6 The land's profile, `test-fast` (2026-11-01)
+
+*Decided 2026-11-01 by the tester.* A land tests each changed crate with `cargo test`, and on 1 November that meant `--release`: fat LTO and one codegen unit. Sapphire's median build for its tests was 633 s over 91 lands (p75 687 s, max 879 s). The three crates whose release profile is that heavy (Sapphire, MarsRT and the platform's workspace) now carry a second test profile:
+
+```toml
+[profile.test-fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true
+```
+
+`land.sh` uses it for any crate whose root defines it, found with `cargo locate-project --workspace`, and `--release` for the rest, whose builds took at most 2.7 minutes. `test-checked` (§37.1) stays the profile of CI and of the nightly run, so release's code generation is still tested every day. `lto = false` with sixteen units still runs LLVM's thin LTO within each crate. Cargo's book describes the cross-crate pass as the one that costs, and records that more units shorten the build ("Profiles", https://doc.rust-lang.org/cargo/reference/profiles.html, read 2026-11-01).
+
+**Measured on 2026-11-01**, desktop (Ryzen 7 7700X, 16 threads), Sapphire's `cargo test --no-run` in a checkout of its own, cargo at six jobs and CPU weight 20, beside other lands. The 1-minute load averages before and after each step are recorded because the machine was shared:
+
+| Step | `--release` | `test-fast` |
+|---|---|---|
+| Cold build, dependencies from sccache | 820.5 s (load 8.5 → 6.1), resuming a build cut off after about 15 minutes | 80.5 s (load 6.1 → 12.3) |
+| Rebuild after one new function in `src/timer.rs` | 950.8 s (load 22.2 → 6.6) | 15.0 s (load 6.6 → 8.7) |
+| The whole suite, rebuild included | land median 633 s build + about 190 s of tests | 234.4 s: 15 s build, 219 s of tests |
+
+The release rebuild ran under the heavier load, so its ratio of 63 overstates the saving. Against the land median the build falls from 633 s to 15 s. The suite itself may run somewhat slower without cross-crate inlining, 219 s against a median of about 190 s, which is within the spread of a shared machine and was not separated from it. A Sapphire land's Rust step falls from about 14 minutes to about 4. An incremental build's first compile goes into its own `target/test-fast/` (5.6 GB for Sapphire, beside release's 3.6 GB), and sccache does not cache incremental crates (its documentation, docs/Rust.md).
+
+**What the profile changes in the results:** nothing observed. Sapphire: 505 passed, 6 ignored, 36 test binaries, as in the last release land of the same day. MarsRT: 507 passed, as in release. The platform's workspace: 531 passed, 1 ignored, against 529 and 1 in a release land at an earlier commit, the difference being the commits between them. MarsRT's `marsrt_unoptimised` cfg is keyed on `opt-level` 0 (§37.2), which `test-fast` inherits as 3, so its suites run at full length.
+
 ## 38. Interface 18, 2026-10-18: firmware recognised by its content
 
 The firmware store recognises a player's file by its MD5 as well as by its name (`EmuSen_Firmware.md` §7,

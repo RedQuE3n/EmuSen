@@ -31,6 +31,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The connect notice, the help bar under each Controller Type and with the swap, and Preferences' Controllers tab, at 1280 by 800; written outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ControllersPictureTool
     {

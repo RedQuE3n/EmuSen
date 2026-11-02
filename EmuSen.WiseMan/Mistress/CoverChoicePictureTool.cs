@@ -34,6 +34,7 @@ namespace EmuSen.WiseMan.Mistress
     }
 
     // Q42's OpenVGDB row and Q45's picker, on the desktop and as a sheet, at 1280 by 800; a desktop window is drawn over the main window where it opens.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class CoverChoicePictureTool
     {

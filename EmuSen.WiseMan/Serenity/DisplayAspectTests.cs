@@ -24,6 +24,7 @@ using Avalonia.VisualTree;
 namespace EmuSen.WiseMan.Serenity
 {
     // The screen's shape a core reports, drawn by default, and square pixels as before when asked for - see EmuSen_Serenity.md §2.9.
+    [Collection(TestCollections.ProcessGlobals)]
     public class DisplayAspectTests
     {
         private static readonly HeadlessUnitTestSession Session =

@@ -21,6 +21,7 @@ using EmuSen.WiseMan.Fixtures;
 namespace EmuSen.WiseMan.Serenity
 {
     // What is hidden at the picture's edges, per console: its arithmetic, the picture drawn with it, and the setting - see EmuSen_Serenity.md §2.10.
+    [Collection(TestCollections.ProcessGlobals)]
     public class PictureCropTests
     {
         private static readonly HeadlessUnitTestSession Session =

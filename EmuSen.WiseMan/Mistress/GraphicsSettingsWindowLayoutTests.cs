@@ -1,3 +1,4 @@
+using EmuSen.WiseMan.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -16,6 +17,7 @@ using EmuSen.Mistress.Views;
 namespace EmuSen.WiseMan.Mistress
 {
     // One tab per console, the N64's controls showing the config's values, and a change saved and reported - see EmuSen_Settings_Reference.md §4.26.
+    [Collection(TestCollections.ProcessGlobals)]
     public class GraphicsSettingsWindowLayoutTests : IDisposable
     {
         private static readonly HeadlessUnitTestSession Session =

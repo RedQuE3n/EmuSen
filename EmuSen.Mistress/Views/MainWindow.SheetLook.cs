@@ -17,6 +17,8 @@ namespace EmuSen.Mistress.Views
         {
             Sheets.MenuHintsFor = SheetMenuHints;
             Sheets.MenuFrameFor = FramedAsMenu;
+            // A tool presented as a screen covers the status bar too (EmuSen_Interface.md §14.2).
+            Sheets.PresentedChanged += () => StatusBar.IsVisible = !Sheets.IsScreenShown;
         }
 
         // The windows that pass the fit audit at both sizes framed as menus, and the controller bindings, framed by their own overhaul (§4.80, §4.81, §4.83, §42).

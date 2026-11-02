@@ -9,6 +9,9 @@ namespace EmuSen.Tools.Packages
     public static class PackagesWords
     {
         // A row's state as the State column says it.
+        // The state with its glyph, a word beside a mark: ✓ for a package in order, ⚠ for a problem (EmuSen_Interface.md §5.7).
+        public static string Status(PackageRow row) => row.Problem ? "⚠ " + State(row) : row.Packaged ? "✓ " + State(row) : State(row);
+
         public static string State(PackageRow row) => row.State switch
         {
             "unpackaged" => "Not packaged",

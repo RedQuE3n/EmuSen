@@ -40,6 +40,7 @@ namespace EmuSen.Tools.Scraper
             DetailPlacement = AdaptiveDetailPlacement.Beside;
             ContentShare = 0.6;
             Header = new AdaptiveHeader("SCRAPER");
+            SectionWord = "System";
             SearchHint = "Search games";
             RowKey = r => r.Path;
             Column(new LunaColumn<ScrapeRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)

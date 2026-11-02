@@ -49,7 +49,7 @@ namespace EmuSen.Tools.Packages
                 .Column(new LunaColumn<PackageRow>("Console", r => r.Console) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Format", r => r.Format) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Mode", PackagesWords.Mode) { Width = "Auto" })
-                .Column(new LunaColumn<PackageRow>("State", StateText), bigScreen: true)
+                .Column(new LunaColumn<PackageRow>("State", StateText) { Tone = StateTone }, bigScreen: true)
                 .Column(new LunaColumn<PackageRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) });
             MarksFor = PackagesPlan.MarksFor;
             InSection = Belongs;
@@ -70,6 +70,7 @@ namespace EmuSen.Tools.Packages
             SetFilters([new AdaptiveSection("all", "All"), new AdaptiveSection("packaged", "Packaged"), new AdaptiveSection("unpackaged", "Not yet"), new AdaptiveSection("problems", "Problems")]);
             InFilter = Belongs;
             Header = new AdaptiveHeader("PACKAGES");
+            SectionWord = "Console";
             MarksChanged += UpdateActions;
 
             _timer = new DispatcherTimer { Interval = PollEvery };
@@ -99,7 +100,10 @@ namespace EmuSen.Tools.Packages
         public string? OutcomeOf(PackageRow row) =>
             _outcomes.TryGetValue(row.Key, out string? said) ? said : row.Source is { } s && _outcomes.TryGetValue("library:" + s, out said) ? said : null;
 
-        private string StateText(PackageRow row) => OutcomeOf(row) is { } said ? said : PackagesWords.State(row);
+        private string StateText(PackageRow row) => OutcomeOf(row) is { } said ? said : PackagesWords.Status(row);
+
+        // The status words' colour, from one owner with the words (EmuSen_Interface.md §14.3).
+        private static string? StateTone(PackageRow row) => row.Problem ? "LunaAttention" : row.Packaged ? "LunaSuccess" : "LunaMuted";
 
         private static bool Belongs(PackageRow row, string section) => section switch
         {

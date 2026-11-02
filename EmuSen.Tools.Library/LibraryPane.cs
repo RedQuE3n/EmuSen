@@ -52,6 +52,7 @@ namespace EmuSen.Tools.Library
             DetailPlacement = AdaptiveDetailPlacement.Beside;
             ContentShare = 0.6;
             Header = new AdaptiveHeader("LIBRARY MANAGER");
+            SectionWord = "Finding";
             ActionFor = RowAction;
             PageFor = r => [new LunaAction(r.Hidden ? "Mark to show again" : "Mark to hide", () => CycleMark(r)) { IsEnabled = Records is not null && !IsRunning }, _reveal];
             PageTitle = r => r.Title;
@@ -59,7 +60,7 @@ namespace EmuSen.Tools.Library
             RowKey = r => r.Key;
             Column(new LunaColumn<LibraryRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
                 .Column(new LunaColumn<LibraryRow>("Console", r => r.Console) { Width = "Auto" })
-                .Column(new LunaColumn<LibraryRow>("Finding", LibraryFindings.Words), bigScreen: true)
+                .Column(new LunaColumn<LibraryRow>("Finding", LibraryFindings.Words) { Tone = r => r.Kind == Finding.Broken ? "LunaAttention" : r.Hidden ? "LunaMuted" : null }, bigScreen: true)
                 .Column(new LunaColumn<LibraryRow>("Group", LibraryFindings.GroupText) { Width = "Auto", Sort = (a, b) => (a.Kind, a.Group).CompareTo((b.Kind, b.Group)) })
                 .Column(new LunaColumn<LibraryRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) })
                 .Column(new LunaColumn<LibraryRow>("State", r => r.Hidden ? "hidden" : "") { Width = "Auto" });

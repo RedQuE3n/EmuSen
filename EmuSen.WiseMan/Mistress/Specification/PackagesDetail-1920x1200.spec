@@ -7,105 +7,106 @@ root Border
 unit 1.5
 slack 2
 floor 16
-frame 0,0,1920,1161
+frame 0,0,1920,1200
 case PackagesDetail
 palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 LayoutTransformControl at=0,0,1920,1161 by=panel limit=0,0,1920,1161 role=none
-    1 ContentControl at=0,0,1920,1161 by=panel limit=0,0,1920,1161 paints=#D4D4D4FF role=none
-      2 PackagesPane at=72,42,1776,1107 by=panel heard=Packages limit=0,0,1920,1161 role=pane
-        3 Panel at=72,42,1776,1107 by=panel limit=0,0,1920,1161 role=none
-          4 Grid at=72,42,1776,1107 by=panel limit=0,0,1920,1161 role=none
-            5 Border at=72,42,1776,76.5 by=panel heard=PACKAGES limit=0,0,1920,1161 name=AdaptiveHeader role=none
-              6 DockPanel at=96,60,1728,58.5 by=panel limit=0,0,1920,1161 role=none
-                7 TextBlock at=1486.5,72,337.5,36 box=225,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="6 games · 3 packaged · 1 problems" layout=224.8,24 limit=0,0,1920,1161 paints=#8D8D91FF role=text size=20 text="6 games · 3 packaged · 1 problems"
-                8 StackPanel at=96,60,1372.5,58.5 by=panel limit=0,0,1920,1161 role=none
-                  9 TextBlock at=96,60,1372.5,58.5 box=915,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard=PACKAGES layout=104.77,38.4 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=32 text=PACKAGES
-            10 DockPanel at=96,136.5,1728,69 by=panel limit=0,0,1920,1161 role=none
-              11 Border at=1554,136.5,270,69 by=panel limit=0,0,1920,1161 name=AdaptiveSearch role=none
-                12 TextBox at=1554,136.5,270,69 by=panel drawn focus heard=Search limit=0,0,1920,1161 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+  0 LayoutTransformControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
+    1 ContentControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 paints=#D4D4D4FF role=none
+      2 PackagesPane at=72,42,1776,1146 by=panel heard=Packages limit=0,0,1920,1200 role=pane
+        3 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 role=none
+          4 Grid at=72,42,1776,1146 by=panel limit=0,0,1920,1200 role=none
+            5 Border at=72,42,1776,76.5 by=panel heard=PACKAGES limit=0,0,1920,1200 name=AdaptiveHeader role=none
+              6 DockPanel at=96,60,1728,58.5 by=panel limit=0,0,1920,1200 role=none
+                7 TextBlock at=1486.5,72,337.5,36 box=225,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="6 games · 3 packaged · 1 problems" layout=224.8,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="6 games · 3 packaged · 1 problems"
+                8 StackPanel at=96,60,1372.5,58.5 by=panel limit=0,0,1920,1200 role=none
+                  9 TextBlock at=96,60,1372.5,58.5 box=915,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard=PACKAGES layout=104.77,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text=PACKAGES
+            10 DockPanel at=96,136.5,1728,69 by=panel limit=0,0,1920,1200 role=none
+              11 Border at=1554,136.5,270,69 by=panel limit=0,0,1920,1200 name=AdaptiveSearch role=none
+                12 TextBox at=1554,136.5,270,69 by=panel drawn focus heard=Search limit=0,0,1920,1200 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
                   13 ScrollViewer allow="a text box scrolls its own text" at=1570.5,147,237,48 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
                     14 TextBlock allow="a text box scrolls its own text" at=1570.5,147,237,48 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search games" in=13 layout=119.99,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search games"
-              15 Border at=96,136.5,1458,69 by=panel limit=0,0,1920,1161 name=AdaptiveNavigation role=none
-                16 WholeRow at=96,136.5,1458,69 by=panel limit=0,0,1920,1161 role=none
-                  17 ToggleButton at=96,138,97.5,66 by=panel drawn focus heard=All limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=All
-                    18 TextBlock at=121.5,147,46.5,48 box=31,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ALL layout=30.97,31.2 limit=96,138,97.5,66 owner=17 paints=#EEEEF0FF role=text size=26 text=ALL
-                  19 ToggleButton at=205.5,138,100.5,66 by=panel drawn focus heard=NES limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=NES
-                    20 TextBlock at=231,147,49.5,48 box=33,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=NES layout=32.68,31.2 limit=205.5,138,100.5,66 owner=19 paints=#FFFFFFFF role=text size=26 text=NES
-                  21 ToggleButton at=318,138,211.5,66 by=panel drawn focus heard=PlayStation limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=PlayStation
-                    22 TextBlock at=343.5,147,160.5,48 box=107,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=PLAYSTATION layout=106.31,31.2 limit=318,138,211.5,66 owner=21 paints=#FFFFFFFF role=text size=26 text=PLAYSTATION
-                  23 ToggleButton at=541.5,138,156,66 by=panel drawn focus heard="Sega CD" limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text="Sega CD"
-                    24 TextBlock at=567,147,105,48 box=70,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SEGA CD" layout=69.71,31.2 limit=541.5,138,156,66 owner=23 paints=#FFFFFFFF role=text size=26 text="SEGA CD"
-                  25 ToggleButton at=709.5,138,115.5,66 by=panel drawn focus heard=SNES limit=0,0,1920,1161 op paints=#FFFFFFFF role=button text=SNES
-                    26 TextBlock at=735,147,64.5,48 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=SNES layout=42.93,31.2 limit=709.5,138,115.5,66 owner=25 paints=#FFFFFFFF role=text size=26 text=SNES
-            27 Grid at=96,223.5,1728,735 by=panel limit=0,0,1920,1161 role=none
-              28 Border at=96,223.5,1728,735 by=panel limit=0,0,1920,1161 name=AdaptiveDetail role=none
-                29 Border at=96,223.5,1728,735 by=panel limit=0,0,1920,1161 role=none
-                  30 ScrollViewer at=108,235.5,1704,711 by=panel fades=t limit=0,0,1920,1161 overflow=256.5 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=108,235.5,1704,711
-                    31 PackageDetail at=108,139.5,1704,967.5 by=scroll in=30 limit=108,235.5,1704,711 name=PackagesDetail paints=#D4D4D4FF role=none seen=108,235.5,1704,711
-                      32 FieldRow at=108,247.5,1704,93 by=scroll heard=Game in=30 limit=108,235.5,1704,711 paints=#D4D4D4FF role=group
-                        33 TextBlock at=108,247.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Game in=30 layout=44.21,28.8 limit=108,247.5,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Game
-                        34 TextBlock at=108,297,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue in the library (PlayStation)" in=30 layout=977.64,28.8 limit=108,247.5,1704,93 paints=#D4D4D4FF role=text size=24 text="psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue in the library (PlayStation)"
-                      35 FieldRow at=108,355.5,1704,93 by=scroll heard=State in=30 limit=108,235.5,1704,711 paints=#D4D4D4FF role=group
-                        36 TextBlock at=108,355.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=State in=30 layout=39.53,28.8 limit=108,355.5,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=State
-                        37 TextBlock at=108,405,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Not packaged" in=30 layout=107.38,28.8 limit=108,355.5,1704,93 paints=#D4D4D4FF role=text size=24 text="Not packaged"
-                      38 FieldRow at=108,463.5,1704,93 by=scroll heard=Size in=30 limit=108,235.5,1704,711 paints=#D4D4D4FF role=group
-                        39 TextBlock at=108,463.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Size in=30 layout=31.06,28.8 limit=108,463.5,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Size
-                        40 TextBlock at=108,513,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="The game 658 MB" in=30 layout=136.73,28.8 limit=108,463.5,1704,93 paints=#D4D4D4FF role=text size=24 text="The game 658 MB"
-                      41 FieldRow at=108,571.5,1704,93 by=scroll heard=Format in=30 limit=108,235.5,1704,711 paints=#D4D4D4FF role=group
-                        42 TextBlock at=108,571.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Format in=30 layout=54.29,28.8 limit=108,571.5,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Format
-                        43 TextBlock at=108,621,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CUE/BIN, which can be converted to CHD" in=30 layout=312.96,28.8 limit=108,571.5,1704,93 paints=#D4D4D4FF role=text size=24 text="CUE/BIN, which can be converted to CHD"
-                      44 GamePackageDetail at=108,679.5,1704,427.5 by=scroll in=30 limit=108,235.5,1704,711 name=GamePackageDetail paints=#8D8D91FF,#D4D4D4FF role=none seen=108,679.5,1704,267
-                        45 HintText name=GamePackageAbout paints=#8D8D91FF role=text volatile="its words name the run's own folders"
-                        46 FieldRow at=108,775.5,1704,171 by=scroll heard=Package in=30 limit=108,235.5,1704,711 paints=#D4D4D4FF role=group
-                          47 TextBlock at=108,775.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=30 layout=65.81,28.8 limit=108,775.5,1704,171 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Package
-                          48 StackPanel at=108,825,1704,121.5 by=clip heard=Package in=30 limit=108,775.5,1704,171 role=none
-                            49 TextBlock at=108,825,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Not a package yet." in=30 layout=144.72,28.8 limit=108,775.5,1704,171 name=GamePackagePlace paints=#D4D4D4FF role=text size=24 text="Not a package yet."
-                            50 ButtonBar at=1572,880.5,240,66 by=clip in=30 limit=108,775.5,1704,171 paints=#D4D4D4FF role=toolbar
-                              51 Button at=1572,880.5,240,66 by=clip drawn focus heard="MAKE PACKAGE" in=30 limit=1572,880.5,240,66 name=GamePackageMake op paints=#707070FF,#D4D4D4FF role=button text="Make Package"
-                                52 TextBlock at=1597.5,889.5,189,48 box=126,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MAKE PACKAGE" in=30 layout=125.29,31.2 limit=1572,880.5,240,66 owner=51 paints=#EEEEF0FF role=text size=26 text="MAKE PACKAGE"
-            53 Border at=72,958.5,1776,133.5 by=panel limit=0,0,1920,1161 name=AdaptiveStatus role=none
-              54 Grid at=78,964.5,1764,121.5 by=panel limit=0,0,1920,1161 role=none
-                55 Grid at=78,964.5,1764,43.5 by=panel limit=0,0,1920,1161 role=none
-                  56 TextBlock at=90,964.5,1752,43.5 box=1168,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Nothing marked" layout=124.03,28.8 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=24 text="Nothing marked"
-                57 StackPanel at=979.5,1020,862.5,66 by=panel limit=0,0,1920,1161 role=none
-                  58 Button at=979.5,1020,153,66 by=panel drawn heard="Apply the marked changes" limit=0,0,1920,1161 off paints=#707070FF,#D4D4D4FF role=button text="Apply…"
-                    59 TextBlock at=1005,1029,102,48 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=979.5,1020,153,66 off owner=58 paints=#707070FF role=text size=26 text="APPLY…"
-                  60 StackPanel at=1150.5,1020,691.5,66 by=panel limit=0,0,1920,1161 role=none
-                    61 ProgressBar at=1150.5,1042.5,300,21 by=panel drawn heard=Space limit=0,0,1920,1161 paints=#333337FF,#4C9AE8FF role=progressbar
-                    62 TextBlock at=1462.5,1032,379.5,43.5 box=253,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="263 KB in packages · 412 GB free" layout=252.31,28.8 limit=0,0,1920,1161 paints=#D4D4D4FF role=text size=24 text="263 KB in packages · 412 GB free"
-            63 HintBar at=96,1104,1728,33 by=panel heard="Select, Back, Section, List, Apply…, Mark" limit=0,0,1920,1161 role=group
-focus 51
+              15 Border at=96,136.5,1458,69 by=panel limit=0,0,1920,1200 name=AdaptiveNavigation role=none
+                16 WholeRow at=96,136.5,1458,69 by=panel limit=0,0,1920,1200 role=none
+                  17 ToggleButton at=96,138,99,66 by=panel drawn focus heard=All limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                    18 TextBlock at=120,150,51,36 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=ALL layout=33.56,24 limit=96,138,99,66 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
+                  19 ToggleButton at=207,138,102,66 by=panel drawn focus heard=NES limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=NES
+                    20 TextBlock at=231,150,54,36 box=36,24 by=clip caps=13.999 drawn face=Barlow heard=NES layout=35.76,24 limit=207,138,102,66 owner=19 paints=#D4D4D4FF role=text size=20 text=NES
+                  21 ToggleButton at=321,138,219,66 by=panel drawn focus heard=PlayStation limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=PlayStation
+                    22 TextBlock at=345,150,171,36 box=114,24 by=clip caps=13.999 drawn face=Barlow heard=PLAYSTATION layout=113.56,24 limit=321,138,219,66 owner=21 paints=#D4D4D4FF role=text size=20 text=PLAYSTATION
+                  23 ToggleButton at=552,138,159,66 by=panel drawn focus heard="Sega CD" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text="Sega CD"
+                    24 TextBlock at=576,150,111,36 box=74,24 by=clip caps=13.999 drawn face=Barlow heard="SEGA CD" layout=73.12,24 limit=552,138,159,66 owner=23 paints=#D4D4D4FF role=text size=20 text="SEGA CD"
+                  25 ToggleButton at=723,138,118.5,66 by=panel drawn focus heard=SNES limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=SNES
+                    26 TextBlock at=747,150,70.5,36 box=47,24 by=clip caps=13.999 drawn face=Barlow heard=SNES layout=46.76,24 limit=723,138,118.5,66 owner=25 paints=#D4D4D4FF role=text size=20 text=SNES
+            27 Grid at=96,223.5,1728,793.5 by=panel limit=0,0,1920,1200 role=none
+              28 Border at=96,223.5,1728,793.5 by=panel limit=0,0,1920,1200 name=AdaptiveDetail role=none
+                29 Border at=96,223.5,1728,793.5 by=panel limit=0,0,1920,1200 role=none
+                  30 ScrollViewer at=108,235.5,1704,769.5 by=panel fades=t limit=0,0,1920,1200 overflow=198 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=108,235.5,1704,769.5
+                    31 PackageDetail at=108,198,1704,967.5 by=scroll in=30 limit=108,235.5,1704,769.5 name=PackagesDetail role=none seen=108,235.5,1704,769.5
+                      32 FieldRow at=108,198,1704,93 by=scroll heard=Package in=30 limit=108,235.5,1704,769.5 paints=#D4D4D4FF role=group seen=108,235.5,1704,55.5
+                        33 TextBlock at=108,198,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=30 layout=65.81,28.8 limit=108,198,1704,93 name=PART_Label paints=#D4D4D4FF part role=text seen=108,235.5,1704,6 size=24 text=Package
+                        34 TextBlock at=108,247.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Not a package yet. Making one keeps everything EmuSen holds for the game in one folder, and the library is only read." in=30 layout=915.82,28.8 limit=108,198,1704,93 paints=#D4D4D4FF role=text size=24 text="Not a package yet. Making one keeps everything EmuSen holds for the game in one folder, and the library is only read."
+                      35 FieldRow at=108,306,1704,93 by=scroll heard=Game in=30 limit=108,235.5,1704,769.5 paints=#D4D4D4FF role=group
+                        36 TextBlock at=108,306,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Game in=30 layout=44.21,28.8 limit=108,306,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Game
+                        37 TextBlock at=108,355.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue in the library (PlayStation)" in=30 layout=977.64,28.8 limit=108,306,1704,93 paints=#D4D4D4FF role=text size=24 text="psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue in the library (PlayStation)"
+                      38 FieldRow at=108,414,1704,93 by=scroll heard=State in=30 limit=108,235.5,1704,769.5 paints=#D4D4D4FF role=group
+                        39 TextBlock at=108,414,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=State in=30 layout=39.53,28.8 limit=108,414,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=State
+                        40 TextBlock at=108,463.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Not packaged" in=30 layout=107.38,28.8 limit=108,414,1704,93 paints=#D4D4D4FF role=text size=24 text="Not packaged"
+                      41 FieldRow at=108,522,1704,93 by=scroll heard=Size in=30 limit=108,235.5,1704,769.5 paints=#D4D4D4FF role=group
+                        42 TextBlock at=108,522,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Size in=30 layout=31.06,28.8 limit=108,522,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Size
+                        43 TextBlock at=108,571.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="The game 658 MB" in=30 layout=136.73,28.8 limit=108,522,1704,93 paints=#D4D4D4FF role=text size=24 text="The game 658 MB"
+                      44 FieldRow at=108,630,1704,93 by=scroll heard=Format in=30 limit=108,235.5,1704,769.5 paints=#D4D4D4FF role=group
+                        45 TextBlock at=108,630,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Format in=30 layout=54.29,28.8 limit=108,630,1704,93 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Format
+                        46 TextBlock at=108,679.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="CUE/BIN, which can be converted to CHD" in=30 layout=312.96,28.8 limit=108,630,1704,93 paints=#D4D4D4FF role=text size=24 text="CUE/BIN, which can be converted to CHD"
+                      47 GamePackageDetail at=108,738,1704,427.5 by=scroll in=30 limit=108,235.5,1704,769.5 name=GamePackageDetail paints=#8D8D91FF,#D4D4D4FF role=none seen=108,738,1704,267
+                        48 HintText name=GamePackageAbout paints=#8D8D91FF role=text volatile="its words name the run's own folders"
+                        49 FieldRow at=108,834,1704,171 by=scroll heard=Package in=30 limit=108,235.5,1704,769.5 paints=#D4D4D4FF role=group
+                          50 TextBlock at=108,834,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Package in=30 layout=65.81,28.8 limit=108,834,1704,171 name=PART_Label paints=#D4D4D4FF part role=text size=24 text=Package
+                          51 StackPanel at=108,883.5,1704,121.5 by=clip heard=Package in=30 limit=108,834,1704,171 role=none
+                            52 TextBlock at=108,883.5,1704,43.5 box=1136,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Not a package yet." in=30 layout=144.72,28.8 limit=108,834,1704,171 name=GamePackagePlace paints=#D4D4D4FF role=text size=24 text="Not a package yet."
+                            53 ButtonBar at=1572,939,240,66 by=clip in=30 limit=108,834,1704,171 paints=#D4D4D4FF role=toolbar
+                              54 Button at=1572,939,240,66 by=clip drawn focus heard="MAKE PACKAGE" in=30 limit=1572,939,240,66 name=GamePackageMake op paints=#707070FF,#D4D4D4FF role=button text="Make Package"
+                                55 TextBlock at=1597.5,948,189,48 box=126,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MAKE PACKAGE" in=30 layout=125.29,31.2 limit=1572,939,240,66 owner=54 paints=#EEEEF0FF role=text size=26 text="MAKE PACKAGE"
+            56 Border at=72,1017,1776,111 by=panel limit=0,0,1920,1200 name=AdaptiveStatus role=none
+              57 Grid at=78,1023,1764,99 by=panel limit=0,0,1920,1200 role=none
+                58 Grid at=78,1023,1764,43.5 by=panel limit=0,0,1920,1200 role=none
+                  59 TextBlock at=90,1023,1752,43.5 box=1168,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Nothing marked" layout=124.03,28.8 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=24 text="Nothing marked"
+                60 StackPanel at=1150.5,1078.5,691.5,43.5 by=panel limit=0,0,1920,1200 role=none
+                  61 StackPanel at=1150.5,1078.5,691.5,43.5 by=panel limit=0,0,1920,1200 role=none
+                    62 ProgressBar at=1150.5,1090.5,300,21 by=panel drawn heard=Space limit=0,0,1920,1200 paints=#333337FF,#4C9AE8FF role=progressbar
+                    63 TextBlock at=1462.5,1078.5,379.5,43.5 box=253,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="263 KB in packages · 412 GB free" layout=252.31,28.8 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=24 text="263 KB in packages · 412 GB free"
+            64 HintBar at=96,1140,1728,36 by=panel heard="Select, Back, Console, List, Apply…, Mark" limit=0,0,1920,1200 role=group
+focus 54
 edge 12 up same
-edge 12 down 51
+edge 12 down 54
 edge 12 left 25
 edge 12 right same
 edge 17 up same
-edge 17 down 51
+edge 17 down 54
 edge 17 left same
 edge 17 right 19
 edge 19 up same
-edge 19 down 51
+edge 19 down 54
 edge 19 left 17
 edge 19 right 21
 edge 21 up same
-edge 21 down 51
+edge 21 down 54
 edge 21 left 19
 edge 21 right 23
 edge 23 up same
-edge 23 down 51
+edge 23 down 54
 edge 23 left 21
 edge 23 right 25
 edge 25 up same
-edge 25 down 51
+edge 25 down 54
 edge 25 left 23
 edge 25 right 12
-edge 51 up 12
-edge 51 down same
-edge 51 left 25
-edge 51 right same
+edge 54 up 12
+edge 54 down same
+edge 54 left 25
+edge 54 right same
 press pageup top=PackagesWindow
 press pagedown top=PackagesWindow
 press first focus="TextBox Search games (Search)" top=PackagesWindow
 press last focus="TextBox Search games (Search)" top=PackagesWindow
-press back focus="GridSplitter  (Resize Mark)" top=PackagesWindow
+press back focus="ListBoxItem  (Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK)" top=PackagesWindow

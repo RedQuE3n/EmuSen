@@ -89,8 +89,8 @@ namespace EmuSen.WiseMan.Mistress
             PauseCardPane pane = PadMenu.Pane(window);
             Assert.Equal("frame", pane.Showing);
             Assert.NotNull(Named<Image>(pane, "PanePicture"));
-            Assert.Equal(Game, Named<TextBlock>(pane, "PaneTitle").Text);
-            Assert.Equal("Paused just now", Named<TextBlock>(pane, "PaneCaption").Text);
+            Assert.Equal(Game, PadMenu.Entries(window)[0].Value!());
+            Assert.EndsWith(" · Paused just now", Named<TextBlock>(pane, "PaneCaption").Text);
             Assert.False(window.GetControl<Control>("MenuBackdrop").IsVisible);
 
             pad.A();

@@ -190,7 +190,7 @@ namespace EmuSen.WiseMan.Mistress
             WindowFitAuditTests.Settle(window);
             PauseCardPane pane = PadMenu.Pane(window);
             Assert.Equal("reel", pane.Showing);
-            Assert.Contains(PadMenuTests.PaneWords(pane), t => t.Contains("go back through", StringComparison.Ordinal) || t.StartsWith("Rewind: ", StringComparison.Ordinal));
+            Assert.Contains(PadMenuTests.PaneWords(pane), t => t.Contains(" available. A opens the reel", StringComparison.Ordinal) || t.StartsWith("Rewind: ", StringComparison.Ordinal));
             Done(window);
         }, default);
 

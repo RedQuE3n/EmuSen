@@ -7,35 +7,35 @@ root Border#PadMenuPanel
 unit 1.5
 slack 2
 floor 16
-frame 0,0,1920,1161
+frame 0,0,1920,1200
 case HomeCardToolsPage
 palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 walk none: the pad moves the menu's own selection, not the focus
 tree
-  0 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 role=none
-    1 AdaptiveLayout at=0,0,1920,1161 by=panel heard=Home limit=0,0,1920,1161 name=PadCard role=pane
-      2 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 name=AdaptiveLayers role=none
-        3 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 name=AdaptiveCardScrim paints=#0000008C role=none
-          4 MenuPanel at=0,0,1920,1161 by=panel heard=Tools limit=0,0,1920,1161 name=AdaptiveCard role=menu
-            5 HintBar at=682,1075,556,71 by=panel heard="A Select, B Back, Menu Close Menu" limit=0,0,1920,1161 role=group
-            6 Border at=36,386,768,567 by=panel limit=0,0,1920,1161 name=AdaptiveCardRows role=none
-              7 Border at=36,386,768,567 by=panel limit=0,0,1920,1161 name=AdaptiveContent role=none
-                8 LunaList at=36,386,768,567 by=panel heard=Menu limit=0,0,1920,1161 name=PadMenuList paints=#FFFFFFFF role=list
-                  9 ScrollViewer at=36,386,768,567 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=36,386,768,567
-                    10 ListBoxItem at=36,386,768,81 by=fixed-scroll drawn focus heard=Scraper in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Scraper
-                    11 ListBoxItem at=36,467,768,81 by=fixed-scroll drawn focus heard=Packages in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Packages
-                    12 ListBoxItem at=36,548,768,81 by=fixed-scroll drawn focus heard="Library Manager" in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Library Manager"
-                    13 ListBoxItem at=36,629,768,81 by=fixed-scroll drawn focus heard=Cores in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Cores
-                    14 ListBoxItem at=36,710,768,81 by=fixed-scroll drawn focus heard="Compressed Discs" in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Compressed Discs"
-                    15 ListBoxItem at=36,791,768,81 by=fixed-scroll drawn focus heard="Theme Settings" in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Theme Settings"
-                    16 ListBoxItem at=36,872,768,81 by=fixed-scroll drawn focus heard=Shell in=9 limit=36,386,768,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Shell
-            17 Border at=840,36,1044,1003 by=panel limit=0,0,1920,1161 name=AdaptiveCardPane role=none
-              18 Border at=840,36,1044,1003 by=panel limit=0,0,1920,1161 name=AdaptiveDetail role=none
-                19 PauseCardPane at=1002,498,720,79 by=panel limit=0,0,1920,1161 name=PauseCardPane role=none
-                  20 StackPanel at=1002,498,720,79 by=panel limit=0,0,1920,1161 name=PaneLines role=none
-                    21 StackPanel at=1002,498,720,79 by=panel limit=0,0,1920,1161 role=none
-                      22 TextBlock at=1002,498,720,40 box=720,40 by=panel caps=15.3989 drawn face=Barlow heard=Scraper layout=109.89,39.6 limit=0,0,1920,1161 paints=#EEEEF0FF role=text size=22 text=Scraper
-                      23 TextBlock at=1002,541,720,36 box=720,36 by=panel caps=13.999 drawn face=Barlow heard="41 games missing media" layout=305.16,36 limit=0,0,1920,1161 paints=#8D8D91FF role=text size=20 text="41 games missing media"
+  0 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
+    1 AdaptiveLayout at=0,0,1920,1200 by=panel heard=Home limit=0,0,1920,1200 name=PadCard role=pane
+      2 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
+        3 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveCardScrim paints=#0000008C role=none
+          4 MenuPanel at=0,0,1920,1200 by=panel heard=Tools limit=0,0,1920,1200 name=AdaptiveCard role=menu
+            5 HintBar at=96,1074,525,45 by=panel heard="A Choose, B Back, Menu Close" limit=0,0,1920,1200 role=group
+            6 Border at=96,234,636,567 by=panel limit=0,0,1920,1200 name=AdaptiveCardRows role=none
+              7 Border at=96,234,636,567 by=panel limit=0,0,1920,1200 name=AdaptiveContent role=none
+                8 LunaList at=96,234,636,567 by=panel heard=Menu limit=0,0,1920,1200 name=PadMenuList paints=#FFFFFFFF role=list
+                  9 ScrollViewer at=96,234,636,567 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,234,636,567
+                    10 ListBoxItem at=96,234,636,81 by=fixed-scroll drawn focus heard=Scraper in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Scraper
+                    11 ListBoxItem at=96,315,636,81 by=fixed-scroll drawn focus heard=Packages in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Packages
+                    12 ListBoxItem at=96,396,636,81 by=fixed-scroll drawn focus heard="Library Manager" in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Library Manager"
+                    13 ListBoxItem at=96,477,636,81 by=fixed-scroll drawn focus heard=Cores in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Cores
+                    14 ListBoxItem at=96,558,636,81 by=fixed-scroll drawn focus heard="Compressed Discs" in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Compressed Discs"
+                    15 ListBoxItem at=96,639,636,81 by=fixed-scroll drawn focus heard="Theme Settings" in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Theme Settings"
+                    16 ListBoxItem at=96,720,636,81 by=fixed-scroll drawn focus heard=Shell in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text=Shell
+            17 Border at=864,234,960,795 by=panel limit=0,0,1920,1200 name=AdaptiveCardPane paints=#26262BFF role=none
+              18 Border at=900,270,888,723 by=panel limit=0,0,1920,1200 name=AdaptiveDetail role=none
+                19 PauseCardPane at=900,270,888,79 by=panel limit=0,0,1920,1200 name=PauseCardPane role=none
+                  20 StackPanel at=900,270,888,79 by=panel limit=0,0,1920,1200 name=PaneLines role=none
+                    21 StackPanel at=900,270,888,79 by=panel limit=0,0,1920,1200 role=none
+                      22 TextBlock at=900,270,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard=Scraper layout=109.89,39.6 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=22 text=Scraper
+                      23 TextBlock at=900,313,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="41 games missing media" layout=305.16,36 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="41 games missing media"
 focus none
 press down menu="open at 1: Packages" top=none
 press up menu="open at 0: Scraper" top=none

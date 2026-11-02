@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.Mistress
             List<PadMenuEntry> rows = PadMenu.Entries(window);
             Assert.Equal([5], Enumerable.Range(0, rows.Count).Where(i => rows[i].StartsSection));
             Assert.All(new[] { 2, 3, 4 }, i => Assert.NotNull(rows[i].Adjust));
-            Assert.Equal(["Save", "Load"], rows.Where(r => r.ShowsSlot).Select(r => r.Label!()));
+            Assert.Equal([MainWindow.SaveStateRow, MainWindow.LoadStateRow], rows.Where(r => r.ShowsSlot).Select(r => r.Label!()));
             Assert.Equal(["Rewind"], rows.Where(r => r.ShowsReel).Select(r => r.Label!()));
             Assert.DoesNotContain(PadMenu.AllLines(window), l => l is "Preferences" or MainWindow.ShellRow or MainWindow.ToolsMenu or MainWindow.PowerMenu or "Memory Cards");
 
@@ -134,11 +134,11 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.False(window.GetControl<Control>("MenuBackdrop").IsVisible);
                 MenuPanel big = PadMenu.Big(window);
                 Assert.Same(PadMenu.Card(window).CardPanel, big);
-                Assert.Equal(MenuAnchor.Left, big.Anchor);
+                Assert.Equal(MenuAnchor.Edge, big.Anchor);
                 Assert.Equal("Cobalt Harbor (Synthetic)", big.Title);
                 Assert.Null(big.Subtitle);
                 Assert.Null(big.Footer);
-                Assert.Equal(["Select", "Back", "Close Menu", "Screenshot", "Change"], big.Hints!.Select(h => h.Label));
+                Assert.Equal(["Select", "Resume", "Screenshot", "Resume"], big.Hints!.Select(h => h.Label));
             }
             else Assert.Equal("Cobalt Harbor (Synthetic)", PadMenu.DeskTitle(window));
             Done(window);
@@ -160,7 +160,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(PadMenu.Card(window).IsVisible);
             Assert.False(window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(window).Title);
-            Assert.Equal(["Select", "Back", "Close Menu", "Favourite"], PadMenu.Big(window).Hints!.Select(h => h.Label));
+            Assert.Equal(["Choose", "Back", "Favourite", "Close"], PadMenu.Big(window).Hints!.Select(h => h.Label));
             Done(window);
         }, default);
 
@@ -181,8 +181,8 @@ namespace EmuSen.WiseMan.Mistress
             s.Pad.A();
             Assert.Equal(MainWindow.PowerMenu, PadMenu.Big(s.Window).Title);
             Assert.StartsWith("EmuSen 0.", PadMenu.Big(s.Window).Footer);
-            Assert.Equal("‹ Home", PadMenu.Big(s.Window).Subtitle);
-            Assert.Equal(["Select", "Back", "Close Menu"], PadMenu.Big(s.Window).Hints!.Select(h => h.Label));
+            Assert.Equal("Home", PadMenu.Big(s.Window).Subtitle);
+            Assert.Equal(["Choose", "Back", "Close"], PadMenu.Big(s.Window).Hints!.Select(h => h.Label));
         }, default);
 
         // With a second pad, the first page offers Swap Players before the options, reached by pad; it trades players 1 and 2 and names both, and the page fits - see EmuSen_Input.md §8.13.
@@ -235,7 +235,7 @@ namespace EmuSen.WiseMan.Mistress
             if (bigScreen)
             {
                 Assert.Equal(MainWindow.GameOptionsMenu, PadMenu.Big(window).Title);
-                Assert.Equal("‹ Cobalt Harbor (Synthetic)", PadMenu.Big(window).Subtitle);
+                Assert.Equal("Cobalt Harbor (Synthetic)", PadMenu.Big(window).Subtitle);
             }
             else Assert.Equal("Cobalt Harbor (Synthetic)  ›  Game Options", PadMenu.DeskTitle(window));
 
@@ -265,20 +265,21 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task Left_and_right_on_save_and_load_change_the_slot_both_act_on_and_the_pane_shows_every_slot() => Session.Dispatch(() =>
+        public Task Left_and_right_on_save_and_load_change_the_slot_both_act_on_and_the_pane_shows_it_between_its_neighbours() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Playing(bigScreen: true);
             Chord(pad);
             PauseCardPane pane = PadMenu.Pane(window);
             Assert.Equal("none", pane.Showing);
             pad.Down(2);
-            Assert.Equal("Save", PadMenu.Entries(window)[PadMenu.Selected(window)].Label!());
+            Assert.Equal(MainWindow.SaveStateRow, PadMenu.Entries(window)[PadMenu.Selected(window)].Label!());
             WindowFitAuditTests.Settle(window);
             Assert.False(window.GetControl<Control>("PadSlotCard").IsVisible);
             Assert.Equal("slots", pane.Showing);
-            Assert.Equal(Enumerable.Range(1, 8).Select(i => $"PaneSlot{i}"), PaneSlots(pane).Select(b => b.Name));
+            Assert.Equal(Enumerable.Range(1, 3).Select(i => $"PaneSlot{i}"), PaneSlots(pane).Select(b => b.Name));
             Assert.Equal(1, Ringed(pane));
-            Assert.Equal(8, PaneWords(pane).Count(t => t == "Empty"));
+            Assert.Equal(6, PaneWords(pane).Count(t => t == "Empty"));
+            Assert.Contains("A saves to Slot 1.", PaneWords(pane));
 
             pad.Right();
             Assert.True(PadMenu.IsOpen(window));
@@ -301,9 +302,10 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("Load      <  Slot 2  >", PadMenu.SelectedLine(window));
             WindowFitAuditTests.Settle(window);
             Assert.Equal("slots", pane.Showing);
-            Assert.Equal(7, PaneWords(pane).Count(t => t == "Empty"));
+            Assert.Equal(4, PaneWords(pane).Count(t => t == "Empty"));
             Assert.NotNull(PaneSlots(pane)[1].GetVisualDescendants().OfType<Avalonia.Controls.Image>().SingleOrDefault()?.Source);
-            Assert.Null(PaneSlots(pane)[0].Child);
+            Assert.Empty(PaneSlots(pane)[0].GetVisualDescendants().OfType<Avalonia.Controls.Image>());
+            Assert.Contains("A loads Slot 2.", PaneWords(pane));
 
             // Left back to slot 1 on the Load row moves both rows and the ring; the pane empties on any other row.
             pad.Left();

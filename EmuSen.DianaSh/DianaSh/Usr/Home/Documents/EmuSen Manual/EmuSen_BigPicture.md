@@ -11470,6 +11470,8 @@ shows what a row will act on before A is pressed.
 - The help bar: Select, Back, Close Menu (Start), Screenshot (X) and, on a page with a value, Change. It follows the
   player's swap of A and B (`AdaptiveLayout.SwapsAcceptAndBack`).
 - No page scrolls. The longest page has nine rows (§48.3), inside the ten the card holds at 1280 × 800 and 1920 × 1200.
+- Since 2026-11-02 the card stands, reads and names its help bar as its mockups do (§49.8): the panel the full height,
+  the pane on a raised surface, the help bar's words *Select · Resume · Change slot · Screenshot · Resume*.
 
 ### 48.3 The first page
 
@@ -11685,6 +11687,52 @@ a favourite on every page (`HomeCardTests`' Y case, `PadMenuTests`' themed case,
 Favourite); Exit Big Picture offered in Steam's Game Mode (`HomeCardTests`' Power theory and the handheld recording);
 and the Cores line counting every core as waiting (`HomeCardTests`' tools case and both `HomeCardTools` recordings).
 
+
+### 49.8 Legibility, and the cards held to their mockups (2026-11-02)
+
+**The defect.** On the handheld (build 99bc4bf1f) the tester could barely read the words to the right of a chosen row
+on the Home card over a theme, and on the Pause Card. Rendered headless over a pure white screen, every state's pane
+words sat on nothing but the card's scrim, black at 55 per cent, so on #737373: the Muted lines at 1.43:1 and the
+strong lines at 4.09:1, against WCAG's 4.5:1 (`WindowFitAuditTests.CardContrast`, ten states, measured 2026-11-02;
+six of the ten failed over white, none over black). The rows, on the panel's opaque surface, read at 11.6:1 or better.
+The recordings could not see it: they record the tree's paints, and the pane had none, which is the fault.
+
+**The fix, in the kit** (LunaP §210). The card is the design's edge card: the panel the full height at the left, the
+title row and rows inside the 64-unit safe area, the pane on SurfaceRaised beside them and hidden while it has nothing
+to show, the help bar a band across the foot in Barlow with ringed glyphs, the open edge's shadow; rows inset 24, the
+values and marks Muted on a row not chosen and filled triangles for ▸ and ◂ ▸. Over white, measured the same day: rows
+11.6:1, a Muted value on the panel 5.20:1, the chosen row 13.0:1, a Muted pane line on the raised surface 4.55:1.
+
+**Matched to the mockups** (`redesign-gallery`, compared side by side at 1280 × 800 and 1920 × 1080). Mistress's side:
+the status bar hides under an open card; the pane's content is top-left; the slots are a strip of the current slot and
+its neighbours at 184 × 138 with a sentence of what A does, an empty slot dashed; the reel's three newest moments at the
+same size with how long ago each was; Continue shows the paused frame across the pane with the console and the pause
+time; the game in hand shows its cover beside its name, console and what A does; the help bar reads *Choose · Back ·
+Favourite · Close* on Home and *Select · Resume · Change slot · Screenshot · Resume* on the Pause Card's first page,
+*Choose · Back* on the pages under them, with an Xbox pad's lettering where no pad's family is known (as the game's
+page does); a submenu's title has the way back over it as a breadcrumb; the rows read *Continue* and *Selected game*
+with the game as their value, *Tools* with *⚠ 1 to approve* while a core waits, *Start Console*, *Save State*, *Load
+State*, and *Rewind* with the seconds the reel holds.
+
+**Still different, and why.** Start and Left/Right are drawn in the pad family's own glyphs rather than the mockup's
+generic START keycap and ◂ ▸ pill; a row that asks first still says so with `...` in its words rather than a `…` mark;
+the per-row descriptions the mockups put in the pane (Leave, Power, Game Options, each tool) are not written; values
+no surface yet gives (packages changed, suspect dumps, cheats on, the theme, collections, the game's year, developer
+and play time) are absent; the Tools page and Game Options keep the rows decided for them (§18, §48.5). A game's name longer than the room its row
+leaves is cut with an ellipsis as Continue's and Selected game's value, as the card's title is; a row's value now takes
+what its label leaves it (LunaP §210.4), so a short label leaves a name most of the row.
+
+**How it is held.** `WindowFitAuditTests.Every_word_on_a_card_reads_over_a_white_or_a_black_screen`: the Home card on
+its first page, on the game, on Tools and on Power, and the Pause Card on its first page, Rewind, Save, Load, Game
+Options and Leave, at 1280 × 800 over a white and a black screen, every run of words measured against the colour most
+often under it; the status bar hidden and the pane's surface shown exactly while the pane shows something.
+`Every_word_on_the_home_card_reads_over_a_theme` does the same over the synthetic theme at 1280 × 800 and 1920 × 1080.
+`The_cards_drawn_for_comparing_with_their_design` writes the pictures (`EMUSEN_CARD_PNG=1`).
+
+**Seeded faults (2026-11-02)**, each taken out again: today's build before the fix (six of the ten states over white);
+the pane's surface shown while the pane is empty (eight cases, by the surface's assertion); the status bar left under
+the card (twenty cases); in the kit, the pane without its surface, the card anchored as before and the help bar centred
+(LunaP §210.6).
 
 ## 50. A game's page: U4 of the unified interface (2026-11-01)
 

@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(PadMenu.Card(s.Window).IsVisible);
             Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.Equal(MainWindow.HomeTitle, menu.Title);
-            Assert.Equal(MenuAnchor.Left, menu.Anchor);
+            Assert.Equal(MenuAnchor.Edge, menu.Anchor);
             Rect panel = InWindow(menu, menu.PanelBounds, s.Window);
             Assert.True(panel.X < s.Window.Bounds.Width * 0.1 && panel.Right < s.Window.Bounds.Width * 0.5, $"the card {panel} is not at the left");
 
@@ -89,19 +89,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(2, list.SelectedIndex);
             MenuRow row = ((Control)list.ContainerFromIndex(2)!).GetVisualDescendants().OfType<MenuRow>().Single();
             Assert.True(row.IsHighlighted);
-            AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor, row.AccentColor);
+            // The bar spans the rows, which stand in the card's safe area (LunaP §210).
+            AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), InWindow(list, new Rect(list.Bounds.Size), s.Window), row.BarColor, row.AccentColor);
 
             // Dimmed by the card's scrim, never blurred; the theme's own help bar is put away while the card's is shown (EmuSen_Interface.md §7).
             Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsVisible);
             Assert.Null(s.Window.GetControl<Control>("ScreenContent").Effect);
             Assert.All(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>(), b => Assert.False(b.IsVisible));
 
-            // The same frame with the panel alone taken away differs only inside the panel and the help bar; the scrim alone changed the theme.
-            Rect help = InWindow(menu.HelpBar, new Rect(menu.HelpBar.Bounds.Size), s.Window);
+            // The same frame with the card taken away differs only inside the panel and its shadow, the pane's surface and the help bar's band; the scrim alone changed the theme.
+            double u = MenuPanel.GetScale(menu);
+            Rect help = InWindow(menu, new Rect(0, menu.Bounds.Height - 98 * u, menu.Bounds.Width, 58 * u), s.Window);
+            Rect pane = InWindow(menu, menu.PaneBounds, s.Window);
+            Rect shadow = new(panel.X, panel.Y, panel.Width + 40 * u, panel.Height);
             menu.IsVisible = false;
             RenderedFrame scrimOnly = s.Capture();
             menu.IsVisible = true;
-            (int inside, int outside) = Changed(open, scrimOnly, panel.Inflate(1), help.Inflate(1));
+            (int inside, int outside) = Changed(open, scrimOnly, shadow.Inflate(1), help.Inflate(1), pane.Inflate(1));
             Assert.True(inside > 1000, $"only {inside} pixels of the panel were drawn");
             Assert.Equal(0, outside);
             int dimmed = Changed(before, scrimOnly).Outside;

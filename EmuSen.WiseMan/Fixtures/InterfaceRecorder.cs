@@ -115,7 +115,7 @@ namespace EmuSen.WiseMan.Fixtures
             {
                 a["volatile"] = why;
                 if (peer.GetName() is { Length: > 0 } named && Normalise(named) == named && named != TextOf(c)) a["heard"] = named;
-                if (c is InputElement { Focusable: true } fe && PadAudit.IsOperable(fe)) a[PadAudit.Unseen(fe) ? "unseen" : "op"] = "";
+                if (c is InputElement { Focusable: true } fe && PadAudit.IsOperable(fe) && !EmuSen.LunaP.Windowing.SheetLayer.GetIsCovered(c)) a[PadAudit.Unseen(fe) ? "unseen" : "op"] = "";
                 return;
             }
             if (peer.GetName() is { Length: > 0 } heard) a["heard"] = Normalise(heard);
@@ -128,7 +128,8 @@ namespace EmuSen.WiseMan.Fixtures
             if (allowed) a["allow"] = allow.First(x => x.Applies(c)).Why;
             if (c is InputElement ie)
             {
-                if (PadAudit.IsOperable(ie)) a[PadAudit.Unseen(ie) ? "unseen" : "op"] = "";
+                // A covered layer is out of the pad's reach by design, the pad staying on the uppermost uncovered layer (EmuSen_Settings_Reference.md §4.45.10).
+                if (PadAudit.IsOperable(ie) && !EmuSen.LunaP.Windowing.SheetLayer.GetIsCovered(c)) a[PadAudit.Unseen(ie) ? "unseen" : "op"] = "";
                 if (ie.Focusable && ie.IsEffectivelyEnabled) a["focus"] = "";
                 if (!ie.IsEffectivelyEnabled) a["off"] = "";
                 if (PadAudit.TakesSideways(ie)) a["sideways"] = "";

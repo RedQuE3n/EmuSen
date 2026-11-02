@@ -23,18 +23,18 @@ tree
                   9 TextBlock at=96,60,1380,58.5 box=920,39 by=panel caps=22.3984 face="Barlow Condensed" heard=SCRAPER layout=92.8,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text=SCRAPER
             10 DockPanel at=96,136.5,1728,66 by=panel limit=0,0,1920,1200 role=none
               11 Border at=1554,136.5,270,66 by=panel limit=0,0,1920,1200 name=AdaptiveSearch role=none
-                12 TextBox at=1554,136.5,270,66 by=panel focus heard=Search limit=0,0,1920,1200 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+                12 TextBox at=1554,136.5,270,66 by=panel focus heard=Search limit=0,0,1920,1200 paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
                   13 ScrollViewer allow="a text box scrolls its own text" at=1570.5,147,237,45 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
                     14 TextBlock allow="a text box scrolls its own text" at=1570.5,151.5,237,36 box=158,24 caps=13.999 face=Barlow heard="Search games" in=13 layout=119.88,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text="Search games"
               15 Border at=96,136.5,1458,66 by=panel limit=0,0,1920,1200 name=AdaptiveNavigation role=none
                 16 WholeRow at=96,136.5,1458,66 by=panel limit=0,0,1920,1200 role=none
-                  17 ToggleButton at=96,136.5,99,66 by=panel focus heard=All limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                  17 ToggleButton at=96,136.5,99,66 by=panel focus heard=All limit=0,0,1920,1200 paints=#4C9AE8FF,#EEEEF0FF role=button text=All
                     18 TextBlock at=120,148.5,51,36 box=34,24 by=clip caps=13.999 face=Barlow heard=ALL layout=33.56,24 limit=96,136.5,99,66 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
-                  19 ToggleButton at=207,136.5,102,66 by=panel focus heard=nes limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=nes
+                  19 ToggleButton at=207,136.5,102,66 by=panel focus heard=nes limit=0,0,1920,1200 paints=#D4D4D4FF role=button text=nes
                     20 TextBlock at=231,148.5,54,36 box=36,24 by=clip caps=13.999 face=Barlow heard=NES layout=35.76,24 limit=207,136.5,102,66 owner=19 paints=#D4D4D4FF role=text size=20 text=NES
-                  21 ToggleButton at=321,136.5,99,66 by=panel focus heard=psx limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=psx
+                  21 ToggleButton at=321,136.5,99,66 by=panel focus heard=psx limit=0,0,1920,1200 paints=#D4D4D4FF role=button text=psx
                     22 TextBlock at=345,148.5,51,36 box=34,24 by=clip caps=13.999 face=Barlow heard=PSX layout=33.78,24 limit=321,136.5,99,66 owner=21 paints=#D4D4D4FF role=text size=20 text=PSX
-                  23 ToggleButton at=432,136.5,118.5,66 by=panel focus heard=snes limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=snes
+                  23 ToggleButton at=432,136.5,118.5,66 by=panel focus heard=snes limit=0,0,1920,1200 paints=#D4D4D4FF role=button text=snes
                     24 TextBlock at=456,148.5,70.5,36 box=47,24 by=clip caps=13.999 face=Barlow heard=SNES layout=46.76,24 limit=432,136.5,118.5,66 owner=23 paints=#D4D4D4FF role=text size=20 text=SNES
             25 Grid at=96,220.5,1728,898.5 by=panel limit=0,0,1920,1200 role=none
               26 Grid at=96,220.5,1036.5,898.5 by=panel limit=0,0,1920,1200 role=none
@@ -42,19 +42,19 @@ tree
                   28 Grid at=96,220.5,1036.5,834 by=panel limit=0,0,1920,1200 paints=#0E0E10FF role=none
                     29 LunaTable at=96,220.5,1036.5,834 by=panel heard=Rows limit=0,0,1920,1200 paints=#0E0E10FF,#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
                       30 ScrollViewer allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,237,1036.5,817.5 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,237,1036.5,817.5
-                        31 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,237,1036.5,81 focus heard="Mark: Scrape, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Media: 2 of 4" in=30 op paints=#4C9AE8FF,#EEEEF0FF role=listitem
+                        31 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,237,1036.5,81 focus heard="Mark: Scrape, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Media: 2 of 4" in=30 paints=#4C9AE8FF,#EEEEF0FF role=listitem
                           32 Border allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,252,964.5,52.5 in=30 paints=#707070FF role=none
                             33 Grid allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,252,964.5,51 heard="Mark: Scrape, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Media: 2 of 4" in=30 role=none
                               34 TextBlock allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,252,163.5,51 box=109,34 caps=19.1128 face="Adwaita Mono" heard="✓ Scrape" in=30 layout=108.34,33.41 owner=31 paints=#4C9AE8FF role=text size=26 text="✓ Scrape"
                               35 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=331.5,253.5,603,48 box=402,32 caps=18.1987 ellipsis face=Barlow heard=Game in=30 layout=395.77,31.2 owner=31 paints=#EEEEF0FF role=edit size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
                               36 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=970.5,253.5,90,48 box=60,32 caps=18.1987 face=Barlow heard=Media in=30 layout=58.08,31.2 owner=31 paints=#EEEEF0FF role=edit size=26 text="2 of 4"
-                        37 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,318,1036.5,81 focus heard="Mark: Scrape, Game: Amber Saga (USA), Media: 4 of 4" in=30 op paints=#D4D4D4FF role=listitem
+                        37 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,318,1036.5,81 focus heard="Mark: Scrape, Game: Amber Saga (USA), Media: 4 of 4" in=30 paints=#D4D4D4FF role=listitem
                           38 Border allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,333,964.5,52.5 in=30 paints=#707070FF role=none
                             39 Grid allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,333,964.5,51 heard="Mark: Scrape, Game: Amber Saga (USA), Media: 4 of 4" in=30 role=none
                               40 TextBlock allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,333,163.5,51 box=109,34 caps=19.1128 face="Adwaita Mono" heard="✓ Scrape" in=30 layout=108.34,33.41 owner=37 paints=#4C9AE8FF role=text size=26 text="✓ Scrape"
                               41 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=331.5,334.5,603,48 box=402,32 caps=18.1987 face=Barlow heard=Game in=30 layout=197.96,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA)"
                               42 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=970.5,334.5,90,48 box=60,32 caps=18.1987 face=Barlow heard=Media in=30 layout=58.03,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text="4 of 4"
-                        43 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,399,1036.5,81 focus heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), Media: 0 of 4" in=30 op paints=#D4D4D4FF role=listitem
+                        43 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=96,399,1036.5,81 focus heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), Media: 0 of 4" in=30 paints=#D4D4D4FF role=listitem
                           44 Border allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,414,964.5,49.5 in=30 paints=#707070FF role=none
                             45 Grid allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,414,964.5,48 heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), Media: 0 of 4" in=30 role=none
                               46 TextBlock allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=132,414,163.5,48 in=30 owner=43 paints=#4C9AE8FF role=text
@@ -96,58 +96,26 @@ tree
                 82 ScrollViewer at=469.5,384,981,198 by=panel limit=0,0,1920,1200 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=469.5,384,981,198
                   83 TextBlock at=469.5,384,981,198 box=654,132 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply." in=82 layout=619.28,132 limit=469.5,384,981,198 paints=#D4D4D4FF role=text size=22 text="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply."
 focus 71
-edge 12 up same
-edge 12 down 31
-edge 12 left 76
-edge 12 right same
-edge 17 up same
-edge 17 down 31
-edge 17 left same
-edge 17 right 19
-edge 19 up same
-edge 19 down 31
-edge 19 left 17
-edge 19 right 21
-edge 21 up same
-edge 21 down 31
-edge 21 left 19
-edge 21 right 23
-edge 23 up same
-edge 23 down 31
-edge 23 left 21
-edge 23 right 12
-edge 31 up 17
-edge 31 down 37
-edge 31 left same
-edge 31 right 12
-edge 37 up 31
-edge 37 down 43
-edge 37 left same
-edge 37 right 12
-edge 43 up 37
-edge 43 down 76
-edge 43 left same
-edge 43 right 12
 edge 71 up 80
 edge 71 down 73
-edge 71 left 21
-edge 71 right 12
+edge 71 left same
+edge 71 right same
 edge 73 up 71
 edge 73 down same
-edge 73 left 21
-edge 73 right 12
-edge 76 up 43
+edge 73 left same
+edge 73 right same
+edge 76 up same
 edge 76 down 78
-edge 76 left 21
-edge 76 right 12
+edge 76 left same
+edge 76 right same
 edge 78 up 76
 edge 78 down 80
-edge 78 left 21
-edge 78 right 12
+edge 78 left same
+edge 78 right same
 edge 80 up 78
 edge 80 down 71
-edge 80 left 21
-edge 80 right 12
+edge 80 left same
+edge 80 right same
 press pageup focus="Button  (No)" top=ScraperWindow
 press pagedown focus="Button  (No)" top=ScraperWindow
 press first focus="Button  (No)" top=ScraperWindow

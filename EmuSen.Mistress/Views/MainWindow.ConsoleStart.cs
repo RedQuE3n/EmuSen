@@ -18,7 +18,7 @@ namespace EmuSen.Mistress.Views
     // A console started with nothing in it, and a disc put in or taken out afterwards - see Diamond_Shell.md §1.5.
     public partial class MainWindow
     {
-        public const string StartConsoleMenu = "Start a Console";
+        public const string StartConsoleMenu = "Start Console";
 
         // The console of a session started with no game, null for a game's.
         private string? _consoleSession;

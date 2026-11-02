@@ -20,6 +20,7 @@ namespace EmuSen.WiseMan.Galaxia
         private static void LinkedPackage(string folder, string library, string rel, string system = "snes", string? extra = null)
         {
             string game = Path.Combine(library, rel);
+            File.SetLastWriteTimeUtc(game, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));   // both sides' trees record the same seen time, wherever their writing falls on the clock
             RomHashes h = RomHash.Managed.Of(game, 0, -1, default);
             var p = GamePackage.Create(Path.GetFileNameWithoutExtension(game), system, "linked", new PackageFile("image", "library", rel, h.Size));
             var seen = GamePackages.Managed.SeenOf(game)!.Value;

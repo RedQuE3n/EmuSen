@@ -136,7 +136,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(MenuRowKind.Option, row.Kind);
             AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor, row.AccentColor);
             Assert.Equal("Apply", ThemedCollectionsTests.Named<Button>(s, "GameOptionsClose").Content);
-            Assert.Equal(MenuRowKind.Submenu, MenuRows.GetKind(ThemedCollectionsTests.Named<Button>(s, "GameOption_EditThisGamesMetadata")));
+            // The game's entries are its page's (EmuSen_Interface.md §18.0, decision 13); the sheet's last row opens it.
+            Assert.Equal(MenuRowKind.Submenu, MenuRows.GetKind(ThemedCollectionsTests.Named<Button>(s, "GameOption_GamePage")));
 
             Rect help = InWindow(menu.HelpBar, new Rect(menu.HelpBar.Bounds.Size), s.Window);
             menu.IsVisible = false;

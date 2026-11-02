@@ -342,6 +342,12 @@ namespace EmuSen.Mistress.Views
 
         void IGamePageHost.ToggleFavourite(string path)
         {
+            // Over a themed list the view's own favourite keeps its place and plays its sound, as Y in the list does.
+            if (ThemedLibraryShown && _themed?.SelectedGame is { Folder: false, IsCollection: false } shown && shown.File == path)
+            {
+                ToggleThemedFavourite(shown);
+                return;
+            }
             _records.ToggleFavourite(path);
             IdentifyLater(path);
             StatusText.Text = _records.IsFavourite(path) ? $"Added {DisplayTitle(EntryOf(path))} to Favourites" : $"Removed {DisplayTitle(EntryOf(path))} from Favourites";

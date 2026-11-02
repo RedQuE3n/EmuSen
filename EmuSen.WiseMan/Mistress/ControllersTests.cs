@@ -239,9 +239,12 @@ namespace EmuSen.WiseMan.Mistress
             first.A();
             Assert.False(window.GetControl<SheetLayer>("Sheets").IsPresenting);
 
-            // X and Y trade too: X searches, and the keyboard's own letters trade places.
+            // X and Y trade too: Y is the grammar's X, which opens the game's page (EmuSen_Interface.md §0.1), and X searches; the keyboard's own letters trade places.
             first.Y();
             Assert.Null(OnScreenKeyboard.OpenOver(window));
+            Assert.NotNull(window.GamePageShown);
+            first.A();
+            Assert.Null(window.GamePageShown);
             first.X();
             StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      X  Space");
             first.Start();

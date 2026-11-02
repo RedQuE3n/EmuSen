@@ -163,12 +163,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }, ThemedCollectionsTests.AllAuto);
 
         [Fact]
-        public Task The_game_options_favourite_entry_keeps_the_highlight_too() => Run(s =>
+        public Task The_game_page_s_favourite_keeps_the_highlight_too() => Run(s =>
         {
             ThemedLibraryPadTests.Enter(s, "snes");
             string[] before = Listed(s);
             s.Pad.Down(9);
-            ThemedGameOptionsTests.Choose(s, "Add to Favourites");
+            // The game's own favourite is its page's since the options sheet's game entries moved there (EmuSen_Interface.md §18.0, decision 13).
+            s.Pad.X();
+            Assert.NotNull(s.Window.GamePageShown);
+            s.Pad.Y();
+            s.Pad.B();
+            Assert.Null(s.Window.GamePageShown);
             Assert.Equal(before[9], Listed(s)[0]);
             Assert.Equal(9, View(s).Index);
             Assert.Equal(before[8], s.Game);

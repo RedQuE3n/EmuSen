@@ -11703,7 +11703,7 @@ the layout and loads its pictures through the library's cover cache; `MainWindow
 | The themed gamelist's Select sheet | its last row, `Game Page` |
 | The desktop's library | `Space`, or the context menu's `Game Page`, `Options…`, `Edit Details…` (`Ctrl+I`), `Scrape This Game…`, `Cover Art` |
 
-The page covers the whole screen on the big screen and the library's content area on the desktop; B at its top, Start
+A theme's help bar stays the theme's (§18.0 of the interface), so it does not name X. Over a themed list the page's favourite is the list's own, which keeps the list's place and plays its sound. The page covers the whole screen on the big screen and the library's content area on the desktop; B at its top, Start
 on the big screen and `‹ Back` on the desktop return to the library on the same game.
 
 ### 50.2 What the page holds

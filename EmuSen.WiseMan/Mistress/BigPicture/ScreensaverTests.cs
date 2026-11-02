@@ -533,9 +533,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.X();
             Assert.Null(Saver(s));
             ThemedLibraryPadTests.Enter(s, "snes");
+            Assert.DoesNotContain("Screensaver", HelpLabels(s));
+            // In a gamelist X opens the game's page (EmuSen_Interface.md §0.1), not the screensaver; the theme's help bar stays the theme's (§18.0).
             s.Pad.X();
             Assert.Null(Saver(s));
-            Assert.DoesNotContain("Screensaver", HelpLabels(s));
+            Assert.NotNull(s.Window.GamePageShown);
+            s.Pad.B();
+            Assert.Null(s.Window.GamePageShown);
 
             s.Settings.BigPictureInterface.ScreensaverControls = false;
             s.Pad.B();

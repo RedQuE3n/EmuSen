@@ -15,7 +15,8 @@ measurements are `EmuSen_BigPicture.md`; the toolkit's side of every token is Lu
 **Reading order.** §1 for the idea, §2 for the structure, §3 for the frame, §4 for the six screens, §5 for the visual
 language, §6 for the forms, §7 for themes, §8 for accessibility, §9 for what becomes of what is built, §10 for the
 build order, §11 for stage U1 as built, §12 for stage U2 as built, §13 for stage U3 as built, §14 for the sources, §15 for Cores
-redesigned, §16 for the family's screens held against the grammar, §17 for the desktop. A bracketed number cites a source in §14.
+redesigned, §16 for the family's screens held against the grammar, §17 for the desktop, §18 for the remaining windows. A
+bracketed number cites a source in §14.
 
 **Units.** One design unit is one pixel at 1280 × 800; the big-screen form scales with the screen's height (× 1.5 at
 1920 × 1200, on a monitor and on the handheld alike), as `MenuPanel.Scale` does. Desktop measurements are device pixels
@@ -41,6 +42,27 @@ The design study's seven open questions and one addition, as the tester answered
 6. **[D]** **Home's background art comes from the focused tile**, on by default, with a switch to turn it off.
 7. **[D]** **Themes never style a card**, not even with an accent (§7).
 8. **[D]** **Video is part of the design from the start** (§5.9), not added later.
+
+The remaining windows' eleven questions (§18.15), decided 2026-11-01 by the tester:
+
+9. **[D]** Over EmuSen's own look **Start goes to Home the screen**, and no card is drawn over the grid: one Home in the
+   own look, one card over a theme (§2.2, §2.9).
+10. **[D]** **Compressed Discs retires into Packages**: Convert to CHD is the package's action, the discs a filter of
+    the List card, the batch's outcome the apply bar's (§18.0).
+11. **[D]** **The Shell leaves Home and the Home card**, reached from Settings ▸ EmuSen ▸ Shell ▸ and the desktop's
+    Tools menu; `vstop` is a view of the Shell window (§18.9).
+12. **[D]** **A on Rewind opens the reel page** rather than rewinding at once; a held Left scrubs (§18.5).
+13. **[D]** **The themed folder's link moves to the List card ▸ Folder ▸**, and the game's page's five pages replace the
+    metadata editor, the cover picker, the scrape chooser, the game package window and the screenshot window (§18.2).
+14. **[D]** **The launch screen and the slideshow are EmuSen's under every theme**, replacing ES-DE's measured ones
+    (§18.3).
+15. **[D]** **Memory cards get two doors from one description**: the game's Game Options and the console's settings
+    (§18.5, §18.10).
+16. **[D]** **The Resume question is the question form**, `Continue` first (§18.3).
+17. **[D]** **Collections are a tool and a section of the library**; the automatic ones listed and greyed (§18.4).
+18. **[D]** **One notice at a time, for 2 s** (§18.6).
+19. **[D]** **Setup's five steps**: ROM folder, Firmware, Controllers, Theme, ScreenScraper (§16.2;
+    `EmuSen_LibraryTools.md` §1b).
 
 **Departure from 3.** Decided 2026-11-01: a framed sheet's words stay in Barlow Condensed at their present sizes until
 the Card form rebuilds the sheets in U2 and U3, where the departure ends. Set in Barlow at the big screen's Body, the
@@ -1060,3 +1082,299 @@ screen from one description (`EmuSen_LibraryTools.md` §1a).
 
 **Decided 2026-11-01 by the tester:** §17 as pictured, the three questions as recommended. D1 to D6 are built after the
 big screen's Cores work and U4 to U7, not before.
+
+---
+
+## 18. The remaining windows (2026-11-01)
+
+Decided 2026-11-01 by the tester: every window Mistress has today has a form under the unified design, as this section
+gives it, and the questions of §18.15 as recommended. The design was drawn on 2026-11-01 at 1280 × 800 and 1920 × 1080
+for the big screen and 1280 × 800 for the desktop, in the tokens of §5, on the synthetic library's pictures (a flat
+colour with the game's name on it, as `SyntheticLibrary` describes them).
+
+Positions are design units at 1280 × 800 (§4); at 16:9 the extra width goes to the list and the pane in the same shares
+(§15.2). Nothing here adds a form: every screen is the frame of §3 (header, sections, content, detail, actions, help
+bar), the Card form of §3.2, the tool screen of §15.9 or the question form of §15.6, with the pad grammar of §2.1.
+
+### 18.0 The inventory
+
+Every window, sheet, popup and menu Mistress has today (`EmuSen.Mistress/Views`, `BigPicture`, the states of
+`WindowFitAuditTests`, `EmuSen_InterfaceSpec.md`), with what it becomes and whether that is (a) designed and approved,
+(b) designed before this section and built later (U4 to U7, the queued entries of §16.2, the thin designs filled in
+below) or (c) designed here.
+
+| Today | Under the redesign | State |
+|---|---|---|
+| The theme's system view, gamelist view, help bar, sounds | the theme's, untouched (§7) | a |
+| The big-picture grid ("EmuSen (built in)") | Home and Games, the own look (U5, screens 1 and 2) | b |
+| The pad menu's Main Menu (Start over a theme) | the Home card (U3, built) | a |
+| Pad menu ▸ Library ▸ (Packages, Cores, Compressed Discs, Theme Settings, Gamelist Options) | Home card ▸ Tools ▸, each tool with its live line; Compressed Discs into Packages (Q2) | a |
+| Pad menu ▸ Settings ▸ (Controllers, Display, Graphics, Shaders, Preferences, Cheats, Memory Cards) | the six sections of §2.7 (U6, screen 6) | b |
+| Pad menu ▸ EmuSen ▸ (Shell, Big Picture, Full Screen, Exit) | Power ▸ (§0.2); the Shell under Settings ▸ EmuSen (Q3) | a / c |
+| Gamelist Options (Select in a themed view: Jump To, Sort, Filter, Search, favourite, Edit Metadata, Scrape) | the List card (§18.1); the game's own actions on its page | c |
+| `GamelistFilterWindow` | List card ▸ Filter | c |
+| The on-screen keyboard over a sheet, big-picture search (North) | the docked keyboard under the content (§18.1) | c |
+| `OptionListWindow` (a row's choices as a screen) | `◂ ▸` on the row; a page of choices where the values are many (§18.11) | c |
+| `GameOptionsWindow` (the game options sheet: Engine, Game names, favourite) | the game's page ▸ Options (U4, screen 3) | b |
+| `ActiveCheatsWindow` (per console tabs, this game's cheats) | Options ▸ Cheats on the page; Game Options ▸ Cheats in the card; the same rows | b |
+| `CheatDatabaseWindow` (three lists) | Cheats, a tool on the frame (§16.2) | b |
+| `GamePackageWindow` | Options ▸ Package ▸ (§18.2) | c |
+| `MetadataEditorWindow` | Details ▸ Edit Details ▸ (§18.2) | c |
+| `CoverPickerWindow` | Details ▸ Cover Art ▸ (§18.2) | c |
+| `FindByNameWindow` (the scrape chooser) | Details ▸ Scrape This Game…, the question form with the matches as rows (§18.2) | c |
+| `FolderEditorWindow` (a themed folder's link) | List card ▸ Folder ▸ when a folder is focused (Q5) | c |
+| `ScreenshotWindow` | the picture full screen, from Media (§18.2) | c |
+| `ScraperWindow`, `ScrapeStatusWindow` | Scraper on the tool screen (built); its detail in sentences (§18.7) | a / b |
+| `PackagesWindow` | Packages on the tool screen (built) | a |
+| `LibraryWindow` (Library Manager) | on the tool screen (built); its detail in sentences (§18.7) | a / b |
+| `CoresWindow` | §15 (built) | a |
+| `CompressedDiscsWindow` | retired into Packages: Convert to CHD is its action, the discs its filter (Q2) | c |
+| `ThemeSettingsWindow`, `ThemeBrowserWindow`, `ThemeDetailWindow`, `ThemeAboutWindow` | Themes, one screen on the frame with tiles and a page (§16.2) | b |
+| `CollectionSettingsWindow`, the collections | Collections, a tool on the frame, and a section of the library (§18.4) | c |
+| `RomBrowserWindow` | the desktop's File ▸ Open ROM… (the platform's file dialog); Setup's ROM folder row | c |
+| `LaunchScreen` (ES-DE's) | EmuSen's launch screen under every theme (§18.3) | c |
+| `Screensaver` (Dim, Black, Slideshow) | kept; the slideshow with EmuSen's caption bar (§18.3) | c |
+| `ResumeWindow` | the Resume question in the question form (§18.3) | c |
+| `MainWindow.ConsoleStart` (a console started empty) | Home card ▸ Start Console ▸ (§18.3) | c |
+| `InsertDiscWindow` | Pause Card ▸ Change Disc ▸ (§18.5) | c |
+| The pad menu's game page (Start in a game) | the Pause Card (U2, built) | a |
+| Game Options ▸ and its rows | the card's second page (§2.8); its pages filled in (§18.5) | a / b |
+| `RewindReelWindow` (the reel as tiles) | the Rewind pane, and the reel page (§18.5) | a / c |
+| `MemoryCardsWindow` | Game Options ▸ Memory Cards on disc consoles; Consoles ▸ the console ▸ Memory cards (§18.10) | c |
+| Leave ▸, the quit question | the card's page and the question form | a |
+| The HUD notices (`Screenshot saved`, `State saved`) | the notice (§18.6) | b |
+| `GraphicsSettingsWindow` (per console tabs, crop, engines, memory card modes), `GameCropWindow` | Settings ▸ Consoles ▸ the console; Display's rows; This game's crop under the game's Display (U6, §16.2) | b |
+| `ShaderSettingsWindow` (sheet, sliders, CRT) | Display ▸ CRT shader `◂ ▸` and Shader levers ▸ (§16.2) | b |
+| `InputSettingsWindow` (bindings, the diagram, per console tabs) | Controllers ▸ Controller bindings, the drawing as content and the pane (§16.2) | b |
+| `FirmwarePane` | Consoles ▸ the console ▸ Firmware ▸ (§18.10) | c |
+| `PreferencesWindow` (Library, Gameplay, Appearance, Scraping, Firmware) | the six sections (U6) | b |
+| `DebugSettingsWindow` | Settings ▸ EmuSen ▸ Logging ▸ | c |
+| `HotaruWindow` (the Shell) | a tool on the frame with the docked keyboard (§18.9) | c |
+| `VstopWindow` (the runtime dashboard) | a view of the Shell window on the desktop (§18.9) | c |
+| Setup, first run (today only the defaults written) | Setup, the tools' panes in order (§16.2) | b |
+| Mods (X8, no form declared) | a tool on the frame, as §16.2 asks (§18.8) | c |
+| The Debugger (`EmuSen_Debugger.md` §4) | its desktop form on the tools' frame (§18.12) | b |
+| Questions (`SheetLayer`'s) | the question form (§15.6) | a |
+| The Guide-held chords, the Quick Access Menu | unchanged (§2.8) | a |
+| The desktop window, library, menus, context menu, Home, the game's page, the tools' frame, Settings, the game running, F4's card, the pad's card | §17 as pictured, decided 2026-11-01 | a |
+| Desktop Scraper, Library Manager, Cheats, Themes, Setup, Consoles | the family's frame, pictured first here | b |
+| Desktop Mods, Shell, a collection's view | §18.8, §18.9, §18.4 | c |
+
+Counting the rows' states (a row with two marks counts once for each): **a 22, b 21, c 27**.
+
+### 18.1 The List card and search
+
+The List card is the Card form over the content (§2.4, §15.5): panel 0,0 512 × 800, title row with the breadcrumb
+`List` in Caption Muted and the section's name and count in Title (`Super Nintendo · 1,284 games`), rows from 64,156:
+`Search ▸`, `Sort ◂ Name ▸` (Name · Last played · Most played · Year · Rating), `Filter ▸`, `Jump to ◂ G ▸`, `Random
+game`, then the tool's own list-wide rows where a tool opened it (§15.5). The pane says what the focused row does and
+what the list shows now, in Body (`Sorted by name, A to Z.`). Help bar `A Choose · B Back · ◂ ▸ Change · Start
+Close`. Over a themed view the card's Filter and Sort set the theme's own gamelist sort and filter, so the theme's
+`GamelistFilterWindow`, Jump To and Sort By sheets retire into it.
+
+**Search docks the keyboard.** A on Search closes the card and docks the keyboard (`OnScreenKeyboard`'s docked form,
+`EmuSen_Shell.md` §3, H2) at the foot of the screen: 0,470 to 702, five rows of 72 × 48 keys on SurfaceRaised, gap 8,
+the focused key ringed, `Shift`, `Symbols`, `Space` and `Done` as wide keys. The search field takes the strip's row at
+64,100 1152 × 44 on InputSurface with the typed text in TextStrong and a caret; the grid above narrows as the player
+types, one row visible, and the strip's count reads `12 of 1,284 games`. Help bar `A Type · B Delete · Y Space · X
+Done · L1/R1 Move to grid · Start Home`; the shoulders move the focus between the keyboard and the grid, so a result
+is played without closing the keyboard. B on an empty field closes it. The same docked keyboard serves every text row
+(Edit Details, the Shell, a tool's search).
+
+### 18.2 The game's page, its deeper pages
+
+Each is a page in the same frame, the breadcrumb in the section strip (`Options › Cheats`), B returning to the section.
+
+- **Options ▸ Cheats ▸**: the game's cheats as rows `◂ On ▸`, then `Add a code…` (the docked keyboard); the same rows
+  the Pause Card's Game Options ▸ Cheats shows and the Cheats tool's game page, one switch with three doors.
+- **Options ▸ Package ▸**: `Mode ◂ Linked · CHD · 412 MB ▸`, then one row per layer `◂ On ▸` (patches, textures,
+  scripts, audio, codes, in order), X moving the focused layer up or down; `EmuSen_Modding.md` §4's layer control.
+  `GamePackageWindow` retires; Packages' own page keeps the files, identity and checks.
+- **Details ▸ Edit Details ▸**: the metadata as rows (`Name`, `Console ◂ ▸`, `Year`, `Developer`, `Publisher`, `Genre`,
+  `Players ◂ ▸`, `Description ▸`, `Hidden ◂ Off ▸`), A opening the docked keyboard on a text row, Y resetting the row
+  to what was scraped; saved at once. `MetadataEditorWindow` retires.
+- **Details ▸ Cover Art ▸**: the covers to choose from as 150 × 200 cards: `Scraped (in use)`, ScreenScraper's
+  others, `Borrow from <game>` (the cover picker's borrowing), `Generated`; A uses the focused one. `CoverPickerWindow`
+  retires.
+- **Details ▸ Scrape This Game…**: the question form with the matches as rows (`Granite Choir (1994, Super Nintendo)`
+  first and focused, then the others, then `Search by another name…` and `No`), the pane-less form's sentence saying
+  what will be fetched. `FindByNameWindow` retires.
+- **Media ▸ A**: the picture full screen on Void, a caption bar 80 tall at the foot on CaptionSurface (`Screenshot 2
+  of 5 · 1 November 2026 · 512 × 448`), Left and Right stepping, `X Set as cover`, `Y Delete…`, `B Back`; a clip plays
+  here with sound (§5.9). `ScreenshotWindow` retires.
+
+Desktop: the same pages in the content area under the tabs (Edit Details as a form with `Save`; Cover Art as a row of
+cards; a picture full screen in the window on double click).
+
+### 18.3 Start Console, the launch screen, the screensaver, the Resume question
+
+- **Home card ▸ Start Console ▸**: a page of the consoles that start empty (PlayStation, PlayStation 2, Sega CD; those
+  not yet supported greyed with `Not supported yet`), the engine as the value; the pane says what A does and whether
+  firmware was found (`✓ Firmware found.` in Success). A starts the console with no disc, the Pause Card's Change Disc
+  puts a game in. The row is offered only where a console starts empty (§2.3).
+- **The launch screen** is EmuSen's under every theme (§7): Void with the game's hue at 35% blurred, the cover 240 ×
+  320 and, beside it, `STARTING` in Caption upper Muted, the name in Display, the console and engine in Body Muted, a
+  progress bar 320 × 8 and its line (`Loading the state in Slot 3`); held at least Pan (320 ms) and until the core's
+  first frame, then the frame. ES-DE's measured launch screen and popup (`EmuSen_Settings_Reference.md` §4.71) retire.
+- **The screensaver** keeps Dim, Black and Slideshow; the slideshow shows the library's own pictures (screenshots,
+  title screens, clips when §5.9 lands) letterboxed on Void with a caption bar 120 tall on CaptionSurface: the cover
+  60 × 80, the name in Title, the console and `any button wakes` in Caption Muted. A on the caption opens that game's
+  page. ES-DE's overlay (§4.75) retires with it.
+- **The Resume question** at a game's start is the question form: `Continue where you left off?`, one sentence,
+  `Continue` first and focused, `Start again`, the caption naming the setting that stops the asking (Settings ▸ EmuSen ▸
+  Saves and states ▸ Resume ◂ Ask each time ▸). B goes back to the library. `ResumeWindow` retires.
+
+### 18.4 Collections
+
+A tool on the frame: header `COLLECTIONS · 3 collections · 14 games`; sections `All · Mine · Automatic`; rows with the
+count as the value (the automatic ones, Favourites and Recently played, greyed and not editable); `New collection…`
+last; the pane shows the collection's covers and its play time. A opens the collection as a section of the library
+(the grid with the collection's name in the strip's place, B returning); X renames, adds the selected game or removes
+(`…`); Y adds the game in hand (the one Home's card or the grid last focused). In the own look a collection is also
+reached from the List card's Filter ▸ Collections; with a theme, the theme's collection views stay the theme's. Desktop:
+COLLECTIONS in the sidebar as today, a collection a view of the grid with `Rename…` and `Remove…` in the header, a game
+dragged onto it joins it (§17.3). `CollectionSettingsWindow` retires.
+
+### 18.5 The Pause Card's remaining pages
+
+All are pages of the panel with the game as the breadcrumb (§4.4); X takes a screenshot on each; B returns.
+
+- **Rewind, the reel.** The Rewind row's pane shows the three newest pictures (§2.8). A on the row opens the reel page:
+  the pane holds the focused moment at 592 × 330 and, under it, a strip of six moments 88 × 66 (`Now · 1.5 s · 4 s · 8
+  s · 12 s · 28 s`), the focused one ringed; the panel's rows `Go back to 4 s ago` (A), `Moment ◂ 4 s ago ▸` (Left and
+  Right step the strip), `Hold ◂ to scrub` (greyed, a hint). A returns the game to that moment and closes the card; the
+  moments after it are kept until the player plays on. `RewindReelWindow` retires.
+- **Change Disc ▸** (disc consoles): the game's own discs first (`Basalt Run (Disc 1) · In the console`), then the
+  console's other games in the library, then `Open the tray`; the pane shows the focused disc's cover and one sentence
+  (`A opens the tray, swaps the disc and closes it, as the console sees it.`). `InsertDiscWindow` retires; on the desktop
+  the same page with `Any file…` last, opening the file dialog.
+- **Game Options ▸ Controllers**: `Player 1 ◂ Wireless pad ▸`, `Player 2 ◂ None ▸`, `Profile ◂ Default ▸`, `Bindings
+  ▸` (the drawing page of §16.2 for this console), `Swap Players`; the pane says who plays on what.
+- **Game Options ▸ Display**: `Picture shape ◂ ▸`, `CRT shader ◂ ▸`, `Crop overscan ◂ ▸`, `This game's crop ◂ Off ▸`
+  (`GameCropWindow`'s exception, a page of four edges when On), `Full screen ◂ ▸`; the pane previews the shader on the
+  paused frame itself.
+- **Game Options ▸ Sound**: `Volume ◂ 80% ▸`, `Mute ◂ Off ▸`, `Latency ◂ Normal ▸`, `Interface sounds ◂ On · 60% ▸`; on
+  the handheld the Volume row reads `the device's quick menu` and does nothing (§6).
+- **Game Options ▸ Memory Cards** (disc consoles only): `Slot 1 ◂ Card 1 · 11 of 15 blocks ▸`, `Slot 2 ◂ Card 2 ▸`,
+  `Mode ◂ Shared · Per game ▸`, `Cards ▸` (the cards as rows: new, rename, copy); Left and Right put another card in
+  and the game sees a card swap. The same rows under Consoles ▸ the console ▸ Memory cards (§18.10). `MemoryCardsWindow`
+  retires.
+
+### 18.6 Notices
+
+One notice at a time, at the top right inside the safe area (x to 1216, y 40): SurfaceRaised, radius 8, a 1-unit
+Border, the shadow, padding 14 × 24, a status glyph in Success or Attention and the words in Body TextStrong
+(`Screenshot saved`, `State saved to Slot 3`, `Loaded Slot 3`, `Core approved`); it enters over Enter and leaves after
+2 s over Exit; a second notice replaces the first. Over running gameplay only Saved, Loaded and the screenshot appear
+(§5.6); every other notice waits for a card or a screen. The desktop's notices are the status bar's line (§17.2), and
+the same notice over the game's frame. `NoticeLayer` draws both.
+
+### 18.7 The Scraper's and the Library Manager's sentences
+
+The pane in the form of §15.4, replacing each tool's own lines (§16.1, "a stage of their own"):
+
+- **Scraper**: the game's name in Title; `Super Nintendo · matched to ScreenScraper 12345 by its hash` in Caption
+  Muted; the theme's kinds as three 120 × 90 slots, each the picture or a dashed `none`; one sentence on what is
+  missing and what ScreenScraper has; the marked count and the time at the quota's pace. The plan question's rows are
+  `Kinds ◂ The theme's ▸ · Videos ◂ Off ▸ · What is there ◂ Keep ▸`, then `No` and `Yes`.
+- **Library Manager**: the file's name in Title; the console, size and folder in Caption Muted; the finding in one
+  sentence with its glyph (`⚠ Its hash matches no known dump; a byte near the end differs from the verified one, as a
+  bad copy or a trained ROM would.`); which other files are the same dump; what A and X do. Findings: `✓ verified`,
+  `⚠ suspect dump`, `duplicate`, `unknown`, `not a game`, `hidden`.
+
+### 18.8 Mods
+
+A tool on the frame, as §16.2 asks, for the game in hand (opened from its page's Options ▸ Package ▸, from Tools on the
+desktop, or from Home's Mods place once X1 lands): header `MODS · Granite Choir · 5 packs · 2 on`; sections `Granite
+Choir · Installed · Workshop`; rows Pack · Kind · State, A switching `On`/`Off`, X the pack's page (`Order ◂ 1 ▸`,
+`Files ▸`, `Conflicts`, `Check against the dump`, `Save as Patch…`, `Remove…`); the pane with the pack's preview
+picture, its source and version, one sentence on what it does and whether it conflicts. Workshop lists the emusen-mods
+repository's packs for this game with `Install…` as A. The desktop frame adds `Export Patched Game…` to the apply bar.
+The browsing and touch-up views of `EmuSen_Modding.md` §4 are the Debugger's renderers, reached from a pack's page.
+
+### 18.9 The Shell, and vstop
+
+The Shell is not a player's tool and is not on Home's places or the Home card's Tools; it is reached from Settings ▸
+EmuSen ▸ Shell ▸ on the big screen and Tools ▸ Shell… on the desktop. On the big screen it is a tool on the frame:
+header `SHELL · DianaSh 1.4 · Rust runtime · home/Games`; sections `Shell · History · Man pages`; the terminal as the
+content (InputSurface, monospace 20) with the docked keyboard beneath; help bar `A Type · B Delete · X Run · Y Space ·
+L1/R1 History · Start Home`. The History section lists the session's commands as rows (A re-runs); Man pages lists the
+commands as rows (A opens the page as scrolling Body). The desktop window keeps `HotaruWindow`'s toolbar (Run, Stop,
+Clear, Man Pages ▾, Find in output). `vstop`'s dashboard becomes a view of the Shell window on the desktop (the command's
+output drawn by its renderer), not a window of its own; it has no big-screen form.
+
+### 18.10 Consoles ▸ the console ▸ Firmware and Memory cards
+
+- **Firmware ▸**: one row per firmware the console's engines name, in the console's words (`PlayStation BIOS`), its
+  value `✓ Found · SCPH-1001` in Success or `⚠ None found` in Attention; `Open replacement ◂ In use when none is found ·
+  Always · Never ▸` where one exists; `Folder ▸` (the path picker); `Check again`. The pane: recognised by content, never
+  downloaded, what runs without one. `FirmwarePane` retires. Never a file list of the folder.
+- **Memory cards ▸**: `Mode ◂ Shared · Per game ▸`, `Slot 1 ◂ Card 1 ▸`, `Slot 2 ◂ Card 2 ▸`, `Cards ▸`, `New card…`; the
+  pane says what Shared means (`every PlayStation game sees the same two cards, as the console did`). The in-game page
+  of §18.5 is the same description.
+
+### 18.11 A page of choices
+
+A row whose values are more than Left and Right can step comfortably (above six, or long names: an engine, a region, a
+language, a profile) opens a page under A: the breadcrumb (`Consoles › Super Nintendo › Engine`), the choices as rows
+with their status words (`VenusRT (EmuSen) · ● Default`, `Snes9x (libretro) · ✓ Installed`, an unavailable one greyed),
+the pane explaining the focused one; A chooses and returns, B keeps what was chosen. `◂ ▸` still steps the row in
+place. `OptionListWindow` retires.
+
+### 18.12 The Debugger's desktop form
+
+`EmuSen_Debugger.md` §4 on the tools' desktop frame (§17.6): the header `DEBUGGER · Granite Choir · VenusRT · paused at
+frame 4,812 · Explore` with the actions as buttons (`Step Frame` filled, `Step Instruction`, `Run`, `Breakpoint`, the
+`Explore ▾` / `Debug` mode); the sidebar of views grouped (Video, Memory, Processors, Sound, Load, Frame); the filter row
+(`Show: All sprites ▾`, `Find an address`); the view drawn by its renderer as the content, zoomable, the focused cell
+ringed; the pane with the selected thing in full and its explanation; the Shell's pane docked beneath (`debug>`), as
+§4 asks, with `bp`, `mem` and `step` typed beside what they change. No big-screen form (§16.2); the fit audit holds it
+at 1280 × 800 and 1920 × 1200.
+
+### 18.13 Desktop counterparts
+
+Where §17 did not picture a window, the family's frame holds it with its own columns and actions, rows 24 at Body 13,
+the row's one action first in the header (§17.6): Scraper (`Scrape…`, Show: No art · Cover only · Complete), Library
+Manager (`Hide…`), Cheats (the game's cheats switched in the pane), Themes (tiles 160 × 154 with the options in the
+pane), Mods (§18.8), Collections (§18.4), the Shell and the Debugger (§18.9, §18.12), Setup (the steps as tabs under
+one header, `Back` and `Next`), Settings ▸ Consoles (one row per console with its engine and firmware line, `Open…`).
+The pad opens the Home card over the library and the Pause Card over the game at 40 per cent of the content area, as
+§17.8 draws F4's card.
+
+### 18.14 Fits
+
+Measured in the design's drawings on 2026-11-01 **[M]**: every screen's words whole at 1280 × 800 and 1920 × 1080 (16:9 gives the
+list and the pane 142 more units, the grid a sixth column, the shelf a ninth tile); the handheld's 1920 × 1200 is the
+1280 × 800 picture at scale 1.5 (§6). The longest cases held: the Cores pane with firmware and the approval line (as
+§15.4); the Pause Card's title with a cover at Title 32; the Library Manager's finding column at 0.30 of the list; the
+docked keyboard with one grid row above it; the question form's five rows (the Scraper's plan). Two rows were left out
+of a picture rather than cut: the game's page's fifth Options row (Package) and Settings ▸ Display's ninth row, which
+scroll (Reel) as §4 allows. The section strip draws only whole names (`WholeRow`), so `DREAMCAST` and `PLAYSTATION 2`
+are reached by the shoulders at 1280 and drawn at 16:9.
+
+### 18.15 Questions
+
+1. **[decision]** Over EmuSen's own look Start goes to Home the screen, as §2.2 and §2.9 say, and no card is drawn over
+   the grid. *Recommended:* keep the screen; one Home in the own look, one card over a theme.
+2. **[decision]** Compressed Discs retires into Packages: Convert to CHD is the package's action, the discs a filter of
+   the List card, the batch's outcome the apply bar's. *Recommended:* yes; one tool for what a game's files are.
+3. **[decision]** The Shell leaves the Home card and Home's places, reached from Settings ▸ EmuSen ▸ Shell ▸ and the
+   desktop's Tools menu; `vstop` a view of the Shell window. *Recommended:* yes; it is not a player's destination.
+4. **[decision]** A on Rewind opens the reel page (§18.5) rather than rewinding at once. *Recommended:* yes; the pane
+   previews, the page chooses, and a held Left scrubs for the player who wants it at once.
+5. **[decision]** The themed folder's one edit (its link) moves to the List card ▸ Folder ▸, and the five sheets of the
+   game's page (§18.2) replace the metadata editor, the cover picker, the scrape chooser, the game package window and
+   the screenshot window. *Recommended:* yes.
+6. **[decision]** The launch screen and the slideshow are EmuSen's under every theme (§7), replacing ES-DE's measured
+   ones. *Recommended:* yes; the theme keeps its two views and nothing else.
+7. **[decision]** Memory cards get two doors, in the game's Game Options and under the console's settings, from one
+   description. *Recommended:* yes, as Engine has (§16.2).
+8. **[routine]** The Resume question uses the question form with `Continue` first, not `No`/`Yes`. *Recommended:* yes.
+9. **[routine]** Collections as a tool and as a section of the library; the automatic ones listed and greyed.
+   *Recommended:* yes.
+10. **[routine]** The notice as §18.6, one at a time, 2 s. *Recommended:* yes.
+11. **[routine]** Setup's five steps: ROM folder, Firmware, Controllers, Theme, ScreenScraper (`EmuSen_LibraryTools.md`
+    §1b). *Recommended:* yes.
+
+**Decided 2026-11-01 by the tester:** §18 as written, the seven decisions and the four routine items as recommended;
+recorded in §0 as 9 to 19.

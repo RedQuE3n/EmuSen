@@ -75,6 +75,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         try { Capture(window).Save(Path.Combine(folder, $"{view}-{name}-{w}x{h}.png")); }
                         finally { Stop(window); window.Close(); }
                     }
+            foreach (string tool in new[] { "Cores", "PackagesPlan" })
+                foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080) })
+                {
+                    (MainWindow window, PadDriver pad) = InGame(w, h);
+                    try
+                    {
+                        OpenInGame(window, pad, tool);
+                        Settle(window);
+                        Capture(window).Save(Path.Combine(folder, $"{tool}-plain-{w}x{h}.png"));
+                    }
+                    finally { Stop(window); window.Close(); }
+                }
         }, default);
 
         // The Home card over the synthetic theme's gamelist, the tester's own case, on the game in hand and on Tools.

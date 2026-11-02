@@ -21,6 +21,8 @@ namespace EmuSen.Mistress.Views
             CanResize = true;
             _pane = pane;
             Content = pane;
+            // In big picture a tool is a screen of its own, full screen in the safe area, not a centred sheet (EmuSen_Interface.md §15.9).
+            SheetLayer.SetScreen(this, true);
             pane.AttachedToVisualTree += (_, _) => Adapt();
             pane.SectionChosen += _ => ShowHints();
         }

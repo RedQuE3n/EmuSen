@@ -48,11 +48,19 @@ namespace EmuSen.Tools.Library
         {
             Title = "Library Manager";
             HasSearch = true;
+            // The detail, what the file is and what it matches, stands beside the list; A hides or shows the chosen file (EmuSen_Interface.md §16.1).
+            DetailPlacement = AdaptiveDetailPlacement.Beside;
+            ContentShare = 0.6;
+            Header = new AdaptiveHeader("LIBRARY MANAGER");
+            SectionWord = "Finding";
+            ActionFor = RowAction;
+            PageFor = r => [new LunaAction(r.Hidden ? "Mark to show again" : "Mark to hide", () => CycleMark(r)) { IsEnabled = Records is not null && !IsRunning }, _reveal];
+            PageTitle = r => r.Title;
             SearchHint = "Search files";
             RowKey = r => r.Key;
             Column(new LunaColumn<LibraryRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
                 .Column(new LunaColumn<LibraryRow>("Console", r => r.Console) { Width = "Auto" })
-                .Column(new LunaColumn<LibraryRow>("Finding", LibraryFindings.Words), bigScreen: true)
+                .Column(new LunaColumn<LibraryRow>("Finding", LibraryFindings.Words) { Tone = r => r.Kind == Finding.Broken ? "LunaAttention" : r.Hidden ? "LunaMuted" : null }, bigScreen: true)
                 .Column(new LunaColumn<LibraryRow>("Group", LibraryFindings.GroupText) { Width = "Auto", Sort = (a, b) => (a.Kind, a.Group).CompareTo((b.Kind, b.Group)) })
                 .Column(new LunaColumn<LibraryRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) })
                 .Column(new LunaColumn<LibraryRow>("State", r => r.Hidden ? "hidden" : "") { Width = "Auto" });
@@ -67,9 +75,11 @@ namespace EmuSen.Tools.Library
             _hide = new LunaAction("Hide", MarkSelected) { HelpText = "Marks the chosen file to be hidden from the library, or a hidden one to be shown again." };
             _reveal = new LunaAction("Show in File Manager", () => RevealSelected().Logged("library", "RevealSelected")) { HelpText = "Opens the folder that holds the chosen file in the system's file manager." };
             _save = new LunaAction("Save List…", () => SaveList().Logged("library", "SaveList")) { HelpText = "Saves every finding as a text file." };
-            _again = new LunaAction("Check Again", Refresh) { PadButton = PadGlyphButton.Select, HelpText = "Reads the library's files again." };
+            _again = new LunaAction("Check Again", Refresh) { HelpText = "Reads the library's files again." };
             _stop = new LunaAction("Stop", StopScan) { HelpText = "Stops reading the library; the lists keep what was read." };
-            SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop]);
+            SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop], bigScreenButtons: []);
+            StopAction = _stop;
+            SetListActions([_save, _again]);
             MarksChanged += UpdateActions;
 
             _timer = new DispatcherTimer { Interval = PollEvery };
@@ -250,6 +260,7 @@ namespace EmuSen.Tools.Library
         {
             string library = Library ?? "";
             SetRows(library.Length == 0 ? [] : LibraryFindings.Rows(library, _dumps, _broken, _scraped, _hidden, _consoles, Exists, PackageOf));
+            Header = new AdaptiveHeader("LIBRARY MANAGER", Facts: $"{library.Length} files · {_dumps.Count} same dumps · {_broken.Count} broken or suspect · {_hidden.Count} hidden");
             _overview.Text = OverviewText;
         }
 
@@ -261,6 +272,10 @@ namespace EmuSen.Tools.Library
         {
             if (Selected is { } row) CycleMark(row);
         }
+
+        // The row's one action on the big screen: hiding it, or showing it again, asked in the plan's question before it is done.
+        private LunaAction? RowAction(LibraryRow row) => Records is null || IsRunning ? null
+            : new LunaAction(row.Hidden ? "Show Again…" : "Hide…", () => { if (SetMark(row, row.Hidden ? LibraryFindings.Unhide.Key : LibraryFindings.Hide.Key)) OpenPlan(); });
 
         // The actions stay enabled whichever row is chosen, so the pad's walk through them never changes with the row.
         private void UpdateActions()
@@ -365,11 +380,12 @@ namespace EmuSen.Tools.Library
         }
 
         // The chosen file whole: its path, finding, the rest of its group, each failed check, and the place the header checks will fill.
-        private static Control FileDetail(LibraryRow row)
+        private Control FileDetail(LibraryRow row)
         {
+            bool big = Form != AdaptiveForm.Desktop;
             var panel = new StackPanel { Spacing = 6, Name = "LibraryDetail" };
             void Line(string text, bool strong = false) =>
-                panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontWeight = strong ? FontWeight.SemiBold : FontWeight.Normal });
+                panel.Children.Add(new TextBlock { Text = text, TextWrapping = TextWrapping.Wrap, FontWeight = strong && !big ? FontWeight.SemiBold : FontWeight.Normal, Classes = { strong ? AdaptiveLayout.PaneTitleClass : "line" } });
             Line(row.Title, strong: true);
             Line(row.Source);
             Line($"{LibraryFindings.KindName(row.Kind)}: {LibraryFindings.Words(row)}");

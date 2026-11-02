@@ -152,7 +152,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 ("nometadata", new[] { "ls", "--missing", "metadata" }), ("missing", new[] { "ls", "--missing", "any" }), ("system:snes", new[] { "ls", "--system", "snes" }),
             })
             {
-                Assert.True(pane.SelectSection(section));
+                // The criteria are the list's filters and the systems its sections (EmuSen_Interface.md §16.1); a system is asked with the filter at All.
+                if (section.StartsWith("system:", StringComparison.Ordinal))
+                {
+                    Assert.True(pane.SelectFilter("all"));
+                    Assert.True(pane.SelectSection(section));
+                }
+                else Assert.True(pane.SelectFilter(section));
                 pane.Refresh().GetAwaiter().GetResult();
                 Assert.Equal(words, Args(script.Asked.Last(a => Args(a)[0] == "ls")));
             }
@@ -166,7 +172,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             ScraperWindow window = OpenAlone();
             ScraperPane pane = window.Pane;
             window.Pane.Actions.Single(a => a.Text == "Overwrite").Invoke();
-            Assert.True(pane.SelectSection("missing"));
+            Assert.True(pane.SelectFilter("missing"));
             pane.Refresh().GetAwaiter().GetResult();
             window.Pane.Actions.Single(a => a.Text == "Mark All").Invoke();
             Assert.Equal(2, pane.Marked.Count);

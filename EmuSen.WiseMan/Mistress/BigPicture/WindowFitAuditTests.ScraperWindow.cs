@@ -113,7 +113,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             pane.BigScreenTable.Select(pane.Rows.First(r => r.Title == ScriptedScrape.LongTitle));
             pane.FocusRole(AdaptiveRole.Content);
             Settle(window);
-            if (state == "ScraperDetail") Assert.True(shown.OnPad(global::EmuSen.Mistress.Input.UiButton.Accept));
+            // ScraperDetail: the chosen game's media stand beside the list, so A has no page to open.
+            if (state == "ScraperDetail") Assert.False(shown.OnPad(global::EmuSen.Mistress.Input.UiButton.Accept));
             if (state is "ScraperPlan" or "ScraperRunning")
             {
                 Assert.True(pane.SetMark(pane.Rows.First(r => r.Title == "Amber Saga (USA)"), ScraperPlan.Scrape.Key));

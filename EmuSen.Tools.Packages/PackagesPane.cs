@@ -49,7 +49,7 @@ namespace EmuSen.Tools.Packages
                 .Column(new LunaColumn<PackageRow>("Console", r => r.Console) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Format", r => r.Format) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Mode", PackagesWords.Mode) { Width = "Auto" })
-                .Column(new LunaColumn<PackageRow>("State", StateText), bigScreen: true)
+                .Column(new LunaColumn<PackageRow>("State", StateText) { Tone = StateTone, Width = "Auto", Alignment = Avalonia.Layout.HorizontalAlignment.Right }, bigScreen: true)
                 .Column(new LunaColumn<PackageRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) });
             MarksFor = PackagesPlan.MarksFor;
             InSection = Belongs;
@@ -63,8 +63,14 @@ namespace EmuSen.Tools.Packages
             _check = new LunaAction("Check", () => MarkSelected(PackagesPlan.Check.Key)) { HelpText = "Marks the chosen package to be checked against its manifest." };
             _zip = new LunaAction("Zip", () => MarkSelected(PackagesPlan.Zip.Key, PackagesPlan.MakeZip.Key)) { HelpText = "Marks the chosen package to be written as one zip." };
             _convert = new LunaAction("Convert to CHD", () => MarkSelected(PackagesPlan.Convert.Key)) { HelpText = "Marks the chosen disc to be converted to CHD." };
-            _refresh = new LunaAction("Refresh", Refresh) { PadButton = PadGlyphButton.Select, HelpText = "Lists the library and its packages again." };
-            SetToolActions([_make, _check, _zip, _convert, LunaAction.Separator(), _refresh]);
+            _refresh = new LunaAction("Refresh", Refresh) { HelpText = "Lists the library and its packages again." };
+            // On the big screen A opens a package's page, X marks and Start applies; Refresh is a row of the List card (EmuSen_Interface.md §16.1).
+            SetToolActions([_make, _check, _zip, _convert, LunaAction.Separator(), _refresh], bigScreenButtons: []);
+            SetListActions([_refresh]);
+            SetFilters([new AdaptiveSection("all", "All"), new AdaptiveSection("packaged", "Packaged"), new AdaptiveSection("unpackaged", "Not yet"), new AdaptiveSection("problems", "Problems")]);
+            InFilter = Belongs;
+            Header = new AdaptiveHeader("PACKAGES");
+            SectionWord = "Console";
             MarksChanged += UpdateActions;
 
             _timer = new DispatcherTimer { Interval = PollEvery };
@@ -94,7 +100,10 @@ namespace EmuSen.Tools.Packages
         public string? OutcomeOf(PackageRow row) =>
             _outcomes.TryGetValue(row.Key, out string? said) ? said : row.Source is { } s && _outcomes.TryGetValue("library:" + s, out said) ? said : null;
 
-        private string StateText(PackageRow row) => OutcomeOf(row) is { } said ? said : PackagesWords.State(row);
+        private string StateText(PackageRow row) => OutcomeOf(row) is { } said ? said : PackagesWords.Status(row);
+
+        // The status words' colour, from one owner with the words (EmuSen_Interface.md §15.3).
+        private static string? StateTone(PackageRow row) => row.Problem ? "LunaAttention" : row.Packaged ? "LunaSuccess" : "LunaMuted";
 
         private static bool Belongs(PackageRow row, string section) => section switch
         {
@@ -251,9 +260,10 @@ namespace EmuSen.Tools.Packages
         {
             var sections = new List<AdaptiveSection> { new("all", "All", "Consoles") };
             sections.AddRange(Rows.Select(r => r.Console).Where(c => c.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
-            sections.AddRange([new AdaptiveSection("packaged", "Packaged", "State"), new AdaptiveSection("unpackaged", "Not yet", "State"), new AdaptiveSection("problems", "Problems", "State")]);
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
+            int problems = Rows.Count(r => r.Problem);
+            Header = new AdaptiveHeader("PACKAGES", Facts: $"{Rows.Count} games · {Rows.Count(r => r.Packaged)} packaged · {problems} {(problems == 1 ? "problem" : "problems")}");
         }
 
         // The packages' total and the free space of the disk they are on (§3).

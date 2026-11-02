@@ -7,101 +7,108 @@ root Border
 unit 1
 slack 1.5
 floor 16
-frame 233.65,24,812.7,668
-title Scraper
+frame 0,0,1280,800
 case ScraperDetail
-entered down
 palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=234,124,813,548 by=panel limit=234,124,812.35,548 paints=#D4D4D4FF role=none seen=234,124,812.35,548
-    1 ScraperPane at=258,136,765,536 by=panel heard=Scraper limit=234,124,812.35,548 role=pane
-      2 Grid at=258,136,765,536 by=panel limit=234,124,812.35,548 role=none
-        3 DockPanel at=274,148,733,46 by=panel limit=234,124,812.35,548 role=none
-          4 Border at=827,148,180,46 by=panel limit=234,124,812.35,548 name=AdaptiveSearch role=none
-            5 TextBox at=827,148,180,46 by=panel drawn focus heard=Search limit=234,124,812.35,548 op paints=#0E0E10FF,#26262BFF,#4C9AE8FF,#707070FF,#EEEEF0FF role=edit
-              6 ScrollViewer allow="a text box scrolls its own text" at=838,155,158,32 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
-                7 TextBlock allow="a text box scrolls its own text" at=838,155,158,32 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search games" in=6 layout=119.99,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search games"
-          8 Border at=274,148,553,46 by=panel limit=234,124,812.35,548 name=AdaptiveNavigation role=none
-            9 WholeRow at=274,148,553,46 by=panel limit=234,124,812.35,548 paints=#FFFFFFFF role=none
-              10 ToggleButton at=274,149,126,44 by=panel drawn focus heard="All Games" limit=234,124,812.35,548 op paints=#FFFFFFFF role=button text="All Games"
-                11 TextBlock at=291,155,92,32 box=92,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="ALL GAMES" layout=91.44,31.2 limit=274,149,126,44 owner=10 paints=#EEEEF0FF role=text size=26 text="ALL GAMES"
-              12 ToggleButton at=408,149,133,44 by=panel drawn focus heard=Favourites limit=234,124,812.35,548 op paints=#FFFFFFFF role=button text=Favourites
-                13 TextBlock at=425,155,99,32 box=99,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=FAVOURITES layout=98.1,31.2 limit=408,149,133,44 owner=12 paints=#FFFFFFFF role=text size=26 text=FAVOURITES
-              14 ToggleButton at=549,149,156,44 by=panel drawn focus heard="Missing Media" limit=234,124,812.35,548 op paints=#FFFFFFFF role=button text="Missing Media"
-                15 TextBlock at=566,155,122,32 box=122,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MISSING MEDIA" layout=121.71,31.2 limit=549,149,156,44 owner=14 paints=#FFFFFFFF role=text size=26 text="MISSING MEDIA"
-        16 Grid at=274,206,733,279 by=panel limit=234,124,812.35,548 role=none
-          17 Border at=274,206,733,279 by=panel limit=234,124,812.35,548 name=AdaptiveDetail role=none
-            18 Border at=274,206,733,279 by=panel limit=234,124,812.35,548 role=none
-              19 ScrollViewer at=282,214,717,263 by=panel fades=b limit=234,124,812.35,548 overflow=5 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=282,214,717,263
-                20 StackPanel at=282,214,717,268 by=scroll in=19 limit=282,214,717,263 role=none seen=282,214,717,263
-                  21 TextBlock at=282,214,717,29 box=717,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)" in=19 layout=706.97,28.8 limit=282,214,717,263 paints=#D4D4D4FF role=text size=24 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
-                  22 TextBlock at=282,249,717,58 box=717,58 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="/r/psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue" in=19 layout=707.83,57.6 limit=282,214,717,263 paints=#D4D4D4FF role=text size=24 text="/r/psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue"
-                  23 TextBlock at=282,313,717,29 box=717,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="System: psx" in=19 layout=93.91,28.8 limit=282,214,717,263 paints=#D4D4D4FF role=text size=24 text="System: psx"
-                  24 TextBlock at=282,348,717,29 box=717,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="cover: ScreenScraper" in=19 layout=166.8,28.8 limit=282,214,717,263 paints=#D4D4D4FF role=text size=24 text="cover: ScreenScraper"
-                  25 TextBlock at=282,383,717,29 box=717,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="screenshot: missing" in=19 layout=155.74,28.8 limit=282,214,717,263 paints=#D4D4D4FF role=text size=24 text="screenshot: missing"
-                  26 TextBlock at=282,418,717,29 box=717,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="marquee: missing" in=19 layout=139.46,28.8 limit=282,214,717,263 paints=#D4D4D4FF role=text size=24 text="marquee: missing"
-                  27 TextBlock at=282,453,717,29 box=717,29 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="miximage: the game's package" in=19 layout=241.15,28.8 limit=282,214,717,263 paints=#D4D4D4FF role=text seen=282,453,717,24 size=24 text="miximage: the game's package"
-        28 Border at=274,493,733,44 by=panel limit=234,124,812.35,548 name=AdaptiveActions role=none
-          29 WrapPanel at=274,493,733,44 by=panel limit=234,124,812.35,548 role=none
-            30 ActionButton at=274,493,117,44 by=panel drawn focus heard="MARK ALL" limit=234,124,812.35,548 op paints=#707070FF,#D4D4D4FF role=button text="Mark All"
-              31 TextBlock at=291,499,83,32 box=83,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="MARK ALL" layout=82.13,31.2 limit=274,493,117,44 owner=30 paints=#D4D4D4FF role=text size=26 text="MARK ALL"
-            32 ActionButton at=403,493,90,44 by=panel drawn focus heard=THEME limit=234,124,812.35,548 op paints=#707070FF,#D4D4D4FF role=button text=Theme
-              33 TextBlock at=420,499,56,32 box=56,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=THEME layout=55.04,31.2 limit=403,493,90,44 owner=32 paints=#D4D4D4FF role=text size=26 text=THEME
-            34 ActionButton at=505,493,93,44 by=panel drawn focus heard=VIDEOS limit=234,124,812.35,548 op paints=#707070FF,#D4D4D4FF role=button text=Videos
-              35 TextBlock at=522,499,59,32 box=59,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=VIDEOS layout=58.6,31.2 limit=505,493,93,44 owner=34 paints=#D4D4D4FF role=text size=26 text=VIDEOS
-            36 ActionButton at=610,493,130,44 by=panel drawn focus heard=OVERWRITE limit=234,124,812.35,548 op paints=#707070FF,#D4D4D4FF role=button text=Overwrite
-              37 TextBlock at=627,499,96,32 box=96,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=OVERWRITE layout=95,31.2 limit=610,493,130,44 owner=36 paints=#D4D4D4FF role=text size=26 text=OVERWRITE
-            38 ActionButton at=752,493,77,44 by=panel drawn heard=STOP limit=234,124,812.35,548 off paints=#707070FF,#D4D4D4FF role=button text=Stop
-              39 TextBlock at=769,499,43,32 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP layout=42.17,31.2 limit=752,493,77,44 off owner=38 paints=#707070FF role=text size=26 text=STOP
-            40 ActionButton at=841,493,80,44 by=panel drawn focus heard=MARK limit=234,124,812.35,548 op paints=#707070FF,#D4D4D4FF role=button text=Mark
-              41 TextBlock at=858,499,46,32 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=45.97,31.2 limit=841,493,80,44 owner=40 paints=#D4D4D4FF role=text size=26 text=MARK
-        42 Border at=258,545,765,89 by=panel limit=234,124,812.35,548 name=AdaptiveStatus role=none
-          43 Grid at=262,549,757,81 by=panel limit=234,124,812.35,548 role=none
-            44 Grid at=262,549,757,29 by=panel limit=234,124,812.35,548 role=none
-              45 TextBlock at=270,549,749,29 box=749,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="1 game(s) marked \"exclude from multi-scraper\" left out; name one to include it." layout=613.94,28.8 limit=234,124,812.35,548 paints=#D4D4D4FF role=text size=24 text="1 game(s) marked \"exclude from multi-scraper\" left out; name one to include it."
-            46 StackPanel at=917,586,102,44 by=panel limit=234,124,812.35,548 role=none
-              47 Button at=917,586,102,44 by=panel drawn heard="Apply the marked changes" limit=234,124,812.35,548 off paints=#707070FF,#D4D4D4FF role=button text="Apply…"
-                48 TextBlock at=934,592,68,32 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=917,586,102,44 off owner=47 paints=#707070FF role=text size=26 text="APPLY…"
-        49 HintBar at=274,642,733,22 by=panel heard="Select, Back, Section, Apply…, Mark" limit=234,124,812.35,548 role=group
-focus 5
-edge 5 up same
-edge 5 down 40
-edge 5 left 14
-edge 5 right same
-edge 10 up same
-edge 10 down 30
-edge 10 left same
-edge 10 right 12
+  0 LayoutTransformControl at=0,0,1280,800 by=panel limit=0,0,1280,800 role=none
+    1 ContentControl at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#D4D4D4FF role=none
+      2 ScraperPane at=48,28,1184,764 by=panel heard=Scraper limit=0,0,1280,800 role=pane
+        3 Panel at=48,28,1184,764 by=panel limit=0,0,1280,800 name=AdaptiveLayers role=none
+          4 Grid at=48,28,1184,764 by=panel limit=0,0,1280,800 role=none
+            5 Border at=48,28,1184,51 by=panel heard=SCRAPER limit=0,0,1280,800 name=AdaptiveHeader role=none
+              6 DockPanel at=64,40,1152,39 by=panel limit=0,0,1280,800 role=none
+                7 TextBlock at=996,48,220,24 box=220,24 by=panel caps=13.999 drawn face=Barlow heard="3 games · 2 missing media" layout=219.66,24 limit=0,0,1280,800 paints=#8D8D91FF role=text size=20 text="3 games · 2 missing media"
+                8 StackPanel at=64,40,920,39 by=panel limit=0,0,1280,800 role=none
+                  9 TextBlock at=64,40,920,39 box=920,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard=SCRAPER layout=92.8,38.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=32 text=SCRAPER
+            10 DockPanel at=64,91,1152,44 by=panel limit=0,0,1280,800 role=none
+              11 Border at=1036,91,180,44 by=panel limit=0,0,1280,800 name=AdaptiveSearch role=none
+                12 TextBox at=1036,91,180,44 by=panel drawn focus heard=Search limit=0,0,1280,800 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+                  13 ScrollViewer allow="a text box scrolls its own text" at=1047,98,158,30 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                    14 TextBlock allow="a text box scrolls its own text" at=1047,101,158,24 box=158,24 caps=13.999 drawn face=Barlow heard="Search games" in=13 layout=119.88,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text="Search games"
+              15 Border at=64,91,972,44 by=panel limit=0,0,1280,800 name=AdaptiveNavigation role=none
+                16 WholeRow at=64,91,972,44 by=panel limit=0,0,1280,800 role=none
+                  17 ToggleButton at=64,91,66,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                    18 TextBlock at=80,99,34,24 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=ALL layout=33.56,24 limit=64,91,66,44 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
+                  19 ToggleButton at=138,91,68,44 by=panel drawn focus heard=nes limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=nes
+                    20 TextBlock at=154,99,36,24 box=36,24 by=clip caps=13.999 drawn face=Barlow heard=NES layout=35.76,24 limit=138,91,68,44 owner=19 paints=#D4D4D4FF role=text size=20 text=NES
+                  21 ToggleButton at=214,91,66,44 by=panel drawn focus heard=psx limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=psx
+                    22 TextBlock at=230,99,34,24 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=PSX layout=33.78,24 limit=214,91,66,44 owner=21 paints=#D4D4D4FF role=text size=20 text=PSX
+                  23 ToggleButton at=288,91,79,44 by=panel drawn focus heard=snes limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=snes
+                    24 TextBlock at=304,99,47,24 box=47,24 by=clip caps=13.999 drawn face=Barlow heard=SNES layout=46.76,24 limit=288,91,79,44 owner=23 paints=#D4D4D4FF role=text size=20 text=SNES
+            25 Grid at=64,147,1152,599 by=panel limit=0,0,1280,800 role=none
+              26 Grid at=64,147,691,599 by=panel limit=0,0,1280,800 role=none
+                27 Border at=64,147,691,530 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
+                  28 Grid at=64,147,691,530 by=panel limit=0,0,1280,800 paints=#0E0E10FF role=none
+                    29 LunaTable at=64,147,691,530 by=panel heard=Rows limit=0,0,1280,800 paints=#0E0E10FF,#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
+                      30 ScrollViewer allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=64,158,691,519 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=64,158,691,519
+                        31 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=64,158,691,54 drawn focus heard="Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Media: 2 of 4" in=30 op paints=#4C9AE8FF,#EEEEF0FF role=listitem
+                          32 Border allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=88,168,643,33 in=30 paints=#707070FF role=none
+                            33 Grid allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=88,168,643,32 heard="Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Media: 2 of 4" in=30 paints=#4C9AE8FF role=none
+                              34 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=112,168,511,32 box=511,32 caps=18.1987 drawn ellipsis face=Barlow heard=Game in=30 layout=501.54,31.2 owner=31 paints=#EEEEF0FF role=edit size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
+                              35 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=647,168,60,32 box=60,32 caps=18.1987 drawn face=Barlow heard=Media in=30 layout=58.08,31.2 owner=31 paints=#EEEEF0FF role=edit size=26 text="2 of 4"
+                        36 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=64,212,691,54 drawn focus heard="Mark: not marked, Game: Amber Saga (USA), Media: 4 of 4" in=30 op paints=#D4D4D4FF role=listitem
+                          37 Border allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=88,222,643,33 in=30 paints=#707070FF role=none
+                            38 Grid allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=88,222,643,32 heard="Mark: not marked, Game: Amber Saga (USA), Media: 4 of 4" in=30 paints=#4C9AE8FF role=none
+                              39 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=112,222,511,32 box=511,32 caps=18.1987 drawn face=Barlow heard=Game in=30 layout=197.96,31.2 owner=36 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA)"
+                              40 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=647,222,60,32 box=60,32 caps=18.1987 drawn face=Barlow heard=Media in=30 layout=58.03,31.2 owner=36 paints=#D4D4D4FF role=edit size=26 text="4 of 4"
+                        41 ListBoxItem allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=64,266,691,54 drawn focus heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), Media: 0 of 4" in=30 op paints=#D4D4D4FF role=listitem
+                          42 Border allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=88,276,643,33 in=30 paints=#707070FF role=none
+                            43 Grid allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=88,276,643,32 heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), Media: 0 of 4" in=30 paints=#4C9AE8FF role=none
+                              44 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=112,276,511,32 box=511,32 caps=18.1987 drawn face=Barlow heard=Game in=30 layout=273.65,31.2 owner=41 paints=#D4D4D4FF role=edit size=26 text="Cobalt Harbor (Synthetic)"
+                              45 TableCell allow="a game's title or missing kinds cut in the Scraper table are whole in the detail while its row is chosen" at=647,276,60,32 box=60,32 caps=18.1987 drawn face=Barlow heard=Media in=30 layout=59.12,31.2 owner=41 paints=#D4D4D4FF role=edit size=26 text="0 of 4"
+                46 Border at=64,677,691,69 by=panel limit=0,0,1280,800 name=AdaptiveStatus role=none
+                  47 Grid at=68,681,683,61 by=panel limit=0,0,1280,800 role=none
+                    48 Grid at=68,681,683,53 by=panel limit=0,0,1280,800 role=none
+                      49 TextBlock at=76,681,675,53 box=675,53 by=panel caps=15.3989 drawn face=Barlow heard="1 game(s) marked \"exclude from multi-scraper\" left out; name one to include it." layout=625.86,52.8 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="1 game(s) marked \"exclude from multi-scraper\" left out; name one to include it."
+              50 Border at=771,147,445,599 by=panel limit=0,0,1280,800 name=AdaptiveDetail paints=#26262BFF role=none
+                51 Border at=795,171,397,551 by=panel limit=0,0,1280,800 role=none
+                  52 ScrollViewer at=803,179,381,535 by=panel limit=0,0,1280,800 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=803,179,381,535
+                    53 StackPanel at=803,179,381,535 by=fixed-scroll in=52 limit=803,179,381,535 role=none
+                      54 TextBlock at=803,179,381,116 box=381,116 by=fixed-scroll caps=22.3984 drawn face="Barlow Condensed" heard="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)" in=52 layout=365.18,115.2 limit=803,179,381,535 paints=#EEEEF0FF role=text size=32 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
+                      55 TextBlock at=803,301,381,80 box=381,80 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="/r/psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue" in=52 layout=376.4,79.2 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="/r/psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue"
+                      56 TextBlock at=803,387,381,27 box=381,27 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="System: psx" in=52 layout=113.15,26.4 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="System: psx"
+                      57 TextBlock at=803,420,381,27 box=381,27 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="cover: ScreenScraper" in=52 layout=201.76,26.4 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="cover: ScreenScraper"
+                      58 TextBlock at=803,453,381,27 box=381,27 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="screenshot: missing" in=52 layout=188.21,26.4 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="screenshot: missing"
+                      59 TextBlock at=803,486,381,27 box=381,27 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="marquee: missing" in=52 layout=167.42,26.4 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="marquee: missing"
+                      60 TextBlock at=803,519,381,27 box=381,27 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="miximage: the game's package" in=52 layout=287.54,26.4 limit=803,179,381,535 paints=#D4D4D4FF role=text size=22 text="miximage: the game's package"
+            61 Border at=48,746,1184,46 by=panel limit=0,0,1280,800 name=AdaptiveHelpBar paints=#707070FF role=none
+              62 HintBar at=96,757,1088,29 by=panel heard="Select, Back, System, List, Apply…, Mark" limit=0,0,1280,800 role=group
+focus 31
 edge 12 up same
-edge 12 down 32
-edge 12 left 10
-edge 12 right 14
-edge 14 up same
-edge 14 down 34
-edge 14 left 12
-edge 14 right 5
-edge 30 up 10
-edge 30 down same
-edge 30 left same
-edge 30 right 32
-edge 32 up 12
-edge 32 down same
-edge 32 left 30
-edge 32 right 34
-edge 34 up 12
-edge 34 down same
-edge 34 left 32
-edge 34 right 36
-edge 36 up 14
-edge 36 down same
-edge 36 left 34
-edge 36 right 40
-edge 40 up 5
-edge 40 down same
-edge 40 left 36
-edge 40 right same
-press pageup focus="TextBox Search games (Search)" title=Scraper top=ScraperWindow
-press pagedown focus="TextBox Search games (Search)" title=Scraper top=ScraperWindow
-press first focus="TextBox Search games (Search)" title=Scraper top=ScraperWindow
-press last focus="TextBox Search games (Search)" title=Scraper top=ScraperWindow
-press back focus="GridSplitter  (Resize Mark)" title=Scraper top=ScraperWindow
+edge 12 down 31
+edge 12 left 23
+edge 12 right same
+edge 17 up same
+edge 17 down 31
+edge 17 left same
+edge 17 right 19
+edge 19 up same
+edge 19 down 31
+edge 19 left 17
+edge 19 right 21
+edge 21 up same
+edge 21 down 31
+edge 21 left 19
+edge 21 right 23
+edge 23 up same
+edge 23 down 31
+edge 23 left 21
+edge 23 right 12
+edge 31 up 17
+edge 31 down 36
+edge 31 left same
+edge 31 right 12
+edge 36 up 31
+edge 36 down 41
+edge 36 left same
+edge 36 right 12
+edge 41 up 36
+edge 41 down same
+edge 41 left same
+edge 41 right 12
+press pageup top=ScraperWindow
+press pagedown top=ScraperWindow
+press first focus="TextBox Search games (Search)" top=ScraperWindow
+press last focus="TextBox Search games (Search)" top=ScraperWindow
+press back focus="ListBoxItem  (Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Media: 2 of 4)" top=ScraperWindow

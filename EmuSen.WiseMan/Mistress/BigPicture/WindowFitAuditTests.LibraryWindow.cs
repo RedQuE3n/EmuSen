@@ -111,7 +111,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             pane.BigScreenTable.Select(pane.Rows.First(r => r.Title == LongDump));
             pane.FocusRole(AdaptiveRole.Content);
             Settle(window);
-            if (state == "LibraryDetail") Assert.True(shown.OnPad(global::EmuSen.Mistress.Input.UiButton.Accept));
+            // LibraryDetail: the chosen file's detail stands beside the list, so no page is opened; A would ask to hide it.
+            if (state == "LibraryDetail") Assert.Equal("Hide…", pane.Hints[0].Label);
             if (state == "LibraryPlan")
             {
                 Assert.True(pane.SetMark(pane.Rows.First(r => r.Kind == Finding.SameDump && r.Source.EndsWith(".smc", StringComparison.Ordinal)), LibraryFindings.Hide.Key));

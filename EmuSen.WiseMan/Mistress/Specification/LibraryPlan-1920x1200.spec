@@ -7,113 +7,182 @@ root Border
 unit 1.5
 slack 2
 floor 16
-frame 350.48,37,1219.05,1002
-title "Library Manager"
+frame 0,0,1920,1200
 case LibraryPlan
 palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=350,187,1221,822 by=panel limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=none seen=350.48,187,1219.05,822
-    1 LibraryPane at=386,205,1149,804 by=panel heard="Library Manager" limit=350.48,187,1219.05,822 role=pane
-      2 Grid at=386,205,1149,804 by=panel limit=350.48,187,1219.05,822 role=none
-        3 DockPanel at=410,223,1101,69 by=panel limit=350.48,187,1219.05,822 role=none
-          4 Border at=1241,223,270,69 by=panel limit=350.48,187,1219.05,822 name=AdaptiveSearch role=none
-            5 TextBox at=1241,223,270,69 by=panel drawn focus heard=Search limit=350.48,187,1219.05,822 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
-              6 ScrollViewer allow="a text box scrolls its own text" at=1257.5,233.5,237,48 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
-                7 TextBlock allow="a text box scrolls its own text" at=1257.5,233.5,237,48 box=158,32 caps=18.1987 drawn face="Barlow Condensed" heard="Search files" in=6 layout=99.84,31.2 name=PART_Placeholder paints=#8D8D91FF part role=text size=26 text="Search files"
-          8 Border at=410,223,831,69 by=panel limit=350.48,187,1219.05,822 name=AdaptiveNavigation role=none
-            9 WholeRow at=410,223,831,69 by=panel limit=350.48,187,1219.05,822 paints=#FFFFFFFF role=none
-              10 ToggleButton at=410,224.5,97.5,66 by=panel drawn focus heard=All limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text=All
-                11 TextBlock at=435.5,233.5,46.5,48 box=31,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=ALL layout=30.97,31.2 limit=410,224.5,97.5,66 owner=10 paints=#EEEEF0FF role=text size=26 text=ALL
-              12 ToggleButton at=519.5,224.5,196.5,66 by=panel drawn focus heard="Same Dump" limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text="Same Dump"
-                13 TextBlock at=545,233.5,145.5,48 box=97,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAME DUMP" layout=96.28,31.2 limit=519.5,224.5,196.5,66 owner=12 paints=#FFFFFFFF role=text size=26 text="SAME DUMP"
-              14 ToggleButton at=728,224.5,193.5,66 by=panel drawn focus heard="Same Game" limit=350.48,187,1219.05,822 op paints=#FFFFFFFF role=button text="Same Game"
-                15 TextBlock at=753.5,233.5,142.5,48 box=95,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAME GAME" layout=94.48,31.2 limit=728,224.5,193.5,66 owner=14 paints=#FFFFFFFF role=text size=26 text="SAME GAME"
-        16 Grid at=410,310,1101,340.5 by=panel limit=350.48,187,1219.05,822 role=none
-          17 Border at=410,310,1101,340.5 by=panel limit=350.48,187,1219.05,822 name=AdaptiveContent role=none
-            18 Grid at=410,310,1101,340.5 by=panel limit=350.48,187,1219.05,822 role=none
-              19 Border at=422,310,1075.5,340.5 by=panel limit=350.48,187,1219.05,822 paints=#1B1B1EFF,#707070FF role=none
-                20 DockPanel at=447.5,335.5,1024.5,289.5 by=panel limit=350.48,187,1219.05,822 role=none
-                  21 TextBlock at=447.5,335.5,1024.5,43.5 box=683,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Apply these changes?" layout=169.13,28.8 limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=text size=24 text="Apply these changes?"
-                  22 StackPanel at=1184,559,288,66 by=panel limit=350.48,187,1219.05,822 role=none
-                    23 Button at=1184,559,148.5,66 by=panel drawn focus heard=Cancel limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Cancel
-                      24 TextBlock at=1209.5,568,97.5,48 box=65,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=CANCEL layout=64.74,31.2 limit=1184,559,148.5,66 owner=23 paints=#EEEEF0FF role=text size=26 text=CANCEL
-                    25 Button at=1344.5,559,127.5,66 by=panel drawn focus heard=Apply limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Apply
-                      26 TextBlock at=1370,568,76.5,48 box=51,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=APPLY layout=50.99,31.2 limit=1344.5,559,127.5,66 owner=25 paints=#D4D4D4FF role=text size=26 text=APPLY
-                  27 ScrollViewer at=447.5,397,1024.5,144 by=panel fades=b limit=350.48,187,1219.05,822 overflow=202.5 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=447.5,397,1024.5,144
-                    28 TextBlock at=447.5,397,1024.5,346.5 box=683,231 by=scroll caps=16.7988 drawn face="Barlow Condensed" heard="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue\n\nOnly games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\"." in=27 layout=677.52,230.4 limit=447.5,397,1024.5,144 paints=#D4D4D4FF role=text seen=447.5,397,1024.5,144 size=24 text="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue\n\nOnly games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\"."
-        29 Border at=410,662.5,1101,144 by=panel limit=350.48,187,1219.05,822 name=AdaptiveActions role=none
-          30 WrapPanel at=410,662.5,1101,144 by=panel limit=350.48,187,1219.05,822 role=none
-            31 ActionButton at=410,662.5,109.5,66 by=panel drawn focus heard=HIDE limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Hide
-              32 TextBlock at=435.5,671.5,58.5,48 box=39,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=HIDE layout=38.01,31.2 limit=410,662.5,109.5,66 owner=31 paints=#D4D4D4FF role=text size=26 text=HIDE
-            33 ActionButton at=537.5,662.5,345,66 by=panel drawn focus heard="SHOW IN FILE MANAGER" limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text="Show in File Manager"
-              34 TextBlock at=563,671.5,294,48 box=196,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SHOW IN FILE MANAGER" layout=195.86,31.2 limit=537.5,662.5,345,66 owner=33 paints=#D4D4D4FF role=text size=26 text="SHOW IN FILE MANAGER"
-            35 ActionButton at=900.5,662.5,198,66 by=panel drawn focus heard="SAVE LIST…" limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text="Save List…"
-              36 TextBlock at=926,671.5,147,48 box=98,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="SAVE LIST…" layout=97.11,31.2 limit=900.5,662.5,198,66 owner=35 paints=#D4D4D4FF role=text size=26 text="SAVE LIST…"
-            37 ActionButton at=1116.5,662.5,216,66 by=panel drawn focus heard="CHECK AGAIN" limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text="Check Again"
-              38 TextBlock at=1142,671.5,165,48 box=110,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="CHECK AGAIN" layout=109.38,31.2 limit=1116.5,662.5,216,66 owner=37 paints=#D4D4D4FF role=text size=26 text="CHECK AGAIN"
-            39 ActionButton at=1350.5,662.5,115.5,66 by=panel drawn heard=STOP limit=350.48,187,1219.05,822 off paints=#707070FF,#D4D4D4FF role=button text=Stop
-              40 TextBlock at=1376,671.5,64.5,48 box=43,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=STOP layout=42.17,31.2 limit=1350.5,662.5,115.5,66 off owner=39 paints=#707070FF role=text size=26 text=STOP
-            41 ActionButton at=410,740.5,120,66 by=panel drawn focus heard=MARK limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text=Mark
-              42 TextBlock at=435.5,749.5,69,48 box=46,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=MARK layout=45.97,31.2 limit=410,740.5,120,66 owner=41 paints=#D4D4D4FF role=text size=26 text=MARK
-        43 Border at=386,818.5,1149,133.5 by=panel limit=350.48,187,1219.05,822 name=AdaptiveStatus role=none
-          44 Grid at=392,824.5,1137,121.5 by=panel limit=350.48,187,1219.05,822 role=none
-            45 Grid at=392,824.5,1137,43.5 by=panel limit=350.48,187,1219.05,822 role=none
-              46 TextBlock at=404,824.5,1125,43.5 box=750,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="2 to hide" layout=67.18,28.8 limit=350.48,187,1219.05,822 paints=#D4D4D4FF role=text size=24 text="2 to hide"
-            47 StackPanel at=1376,880,153,66 by=panel limit=350.48,187,1219.05,822 role=none
-              48 Button at=1376,880,153,66 by=panel drawn focus heard="Apply the marked changes" limit=350.48,187,1219.05,822 op paints=#707070FF,#D4D4D4FF role=button text="Apply…"
-                49 TextBlock at=1401.5,889,102,48 box=68,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard="APPLY…" layout=67.24,31.2 limit=1376,880,153,66 owner=48 paints=#D4D4D4FF role=text size=26 text="APPLY…"
-        50 HintBar at=410,964,1101,33 by=panel heard="Open, Back, Section, Apply…, Check Again, Mark" limit=350.48,187,1219.05,822 role=group
-focus 23
-edge 5 up same
-edge 5 down 23
-edge 5 left 14
-edge 5 right same
-edge 10 up same
-edge 10 down 31
-edge 10 left same
-edge 10 right 12
+  0 LayoutTransformControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
+    1 ContentControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 paints=#D4D4D4FF role=none
+      2 LibraryPane at=72,42,1776,1146 by=panel heard="Library Manager" limit=0,0,1920,1200 role=pane
+        3 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
+          4 Grid at=72,42,1776,1146 by=panel limit=0,0,1920,1200 role=none
+            5 Border at=72,42,1776,76.5 by=panel heard="LIBRARY MANAGER" limit=0,0,1920,1200 name=AdaptiveHeader role=none
+              6 DockPanel at=96,60,1728,58.5 by=panel limit=0,0,1920,1200 role=none
+                7 TextBlock at=1143,72,681,36 box=454,24 by=panel caps=13.999 face=Barlow heard="29 files · 1 same dumps · 2 broken or suspect · 0 hidden" layout=453.66,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="29 files · 1 same dumps · 2 broken or suspect · 0 hidden"
+                8 StackPanel at=96,60,1029,58.5 by=panel limit=0,0,1920,1200 role=none
+                  9 TextBlock at=96,60,1029,58.5 box=686,39 by=panel caps=22.3984 face="Barlow Condensed" heard="LIBRARY MANAGER" layout=188.99,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text="LIBRARY MANAGER"
+            10 DockPanel at=96,136.5,1728,66 by=panel limit=0,0,1920,1200 role=none
+              11 Border at=1554,136.5,270,66 by=panel limit=0,0,1920,1200 name=AdaptiveSearch role=none
+                12 TextBox at=1554,136.5,270,66 by=panel focus heard=Search limit=0,0,1920,1200 op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=edit
+                  13 ScrollViewer allow="a text box scrolls its own text" at=1570.5,147,237,45 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
+                    14 TextBlock allow="a text box scrolls its own text" at=1570.5,151.5,237,36 box=158,24 caps=13.999 face=Barlow heard="Search files" in=13 layout=98.58,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text="Search files"
+              15 Border at=96,136.5,1458,66 by=panel limit=0,0,1920,1200 name=AdaptiveNavigation role=none
+                16 WholeRow at=96,136.5,1458,66 by=panel limit=0,0,1920,1200 role=none
+                  17 ToggleButton at=96,136.5,99,66 by=panel focus heard=All limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                    18 TextBlock at=120,148.5,51,36 box=34,24 by=clip caps=13.999 face=Barlow heard=ALL layout=33.56,24 limit=96,136.5,99,66 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
+                  19 ToggleButton at=207,136.5,202.5,66 by=panel focus heard="Same Dump" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text="Same Dump"
+                    20 TextBlock at=231,148.5,154.5,36 box=103,24 by=clip caps=13.999 face=Barlow heard="SAME DUMP" layout=102.88,24 limit=207,136.5,202.5,66 owner=19 paints=#D4D4D4FF role=text size=20 text="SAME DUMP"
+                  21 ToggleButton at=421.5,136.5,199.5,66 by=panel focus heard="Same Game" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text="Same Game"
+                    22 TextBlock at=445.5,148.5,151.5,36 box=101,24 by=clip caps=13.999 face=Barlow heard="SAME GAME" layout=100.84,24 limit=421.5,136.5,199.5,66 owner=21 paints=#D4D4D4FF role=text size=20 text="SAME GAME"
+                  23 ToggleButton at=633,136.5,324,66 by=panel focus heard="Broken or Suspect" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text="Broken or Suspect"
+                    24 TextBlock at=657,148.5,276,36 box=184,24 by=clip caps=13.999 face=Barlow heard="BROKEN OR SUSPECT" layout=183.44,24 limit=633,136.5,324,66 owner=23 paints=#D4D4D4FF role=text size=20 text="BROKEN OR SUSPECT"
+                  25 ToggleButton at=969,136.5,253.5,66 by=panel focus heard=Unrecognised limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=Unrecognised
+                    26 TextBlock at=993,148.5,205.5,36 box=137,24 by=clip caps=13.999 face=Barlow heard=UNRECOGNISED layout=136.92,24 limit=969,136.5,253.5,66 owner=25 paints=#D4D4D4FF role=text size=20 text=UNRECOGNISED
+                  27 ToggleButton at=1234.5,136.5,148.5,66 by=panel focus heard=Hidden limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=Hidden
+                    28 TextBlock at=1258.5,148.5,100.5,36 box=67,24 by=clip caps=13.999 face=Barlow heard=HIDDEN layout=66.66,24 limit=1234.5,136.5,148.5,66 owner=27 paints=#D4D4D4FF role=text size=20 text=HIDDEN
+            29 Grid at=96,220.5,1728,898.5 by=panel limit=0,0,1920,1200 role=none
+              30 Grid at=96,220.5,1036.5,898.5 by=panel limit=0,0,1920,1200 role=none
+                31 Border at=96,220.5,1036.5,834 by=panel limit=0,0,1920,1200 name=AdaptiveContent role=none
+                  32 Grid at=96,220.5,1036.5,834 by=panel limit=0,0,1920,1200 paints=#0E0E10FF role=none
+                    33 LunaTable at=96,220.5,1036.5,834 by=panel heard=Rows limit=0,0,1920,1200 paints=#0E0E10FF,#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
+                      34 ScrollViewer allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,237,1036.5,817.5 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,237,1036.5,817.5
+                        35 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,237,1036.5,81 focus heard="Mark: not marked, Game: Amber Saga (USA), Finding: Same dump as 1 other file" in=34 op paints=#D4D4D4FF role=listitem
+                          36 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,252,964.5,49.5 in=34 paints=#707070FF role=none
+                            37 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,252,964.5,48 heard="Mark: not marked, Game: Amber Saga (USA), Finding: Same dump as 1 other file" in=34 role=none
+                              38 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,252,118.5,48 in=34 owner=35 paints=#4C9AE8FF role=text
+                              39 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,252,369,48 box=246,32 caps=18.1987 face=Barlow heard=Game in=34 layout=197.96,31.2 owner=35 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA)"
+                              40 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,252,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=236.7,31.2 owner=35 paints=#D4D4D4FF role=edit size=26 text="Same dump as 1 other file"
+                        41 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,318,1036.5,81 focus heard="Mark: hide, Game: Amber Saga (USA) [copier], Finding: Same dump as 1 other file" in=34 op paints=#D4D4D4FF role=listitem
+                          42 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,333,964.5,52.5 in=34 paints=#707070FF role=none
+                            43 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,333,964.5,51 heard="Mark: hide, Game: Amber Saga (USA) [copier], Finding: Same dump as 1 other file" in=34 role=none
+                              44 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,333,118.5,51 box=79,34 caps=19.1128 face="Adwaita Mono" heard="✓ hide" in=34 layout=78.96,33.41 owner=41 paints=#4C9AE8FF role=text size=26 text="✓ hide"
+                              45 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,334.5,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Game in=34 layout=244.79,31.2 owner=41 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA) [copier]"
+                              46 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,334.5,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=236.7,31.2 owner=41 paints=#D4D4D4FF role=edit size=26 text="Same dump as 1 other file"
+                        47 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,399,1036.5,81 focus heard="Mark: not marked, Game: Amber Saga (Europe) (Rev 1), Finding: Same game as 1 other file (Amber Saga)" in=34 op paints=#D4D4D4FF role=listitem
+                          48 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,414,964.5,49.5 in=34 paints=#707070FF role=none
+                            49 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,414,964.5,48 heard="Mark: not marked, Game: Amber Saga (Europe) (Rev 1), Finding: Same game as 1 other file (Amber Saga)" in=34 role=none
+                              50 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,414,118.5,48 in=34 owner=47 paints=#4C9AE8FF role=text
+                              51 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,414,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Game in=34 layout=244.66,31.2 owner=47 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (Europe) (Rev 1)"
+                              52 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,414,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=234.49,31.2 owner=47 paints=#D4D4D4FF role=edit size=26 text="Same game as 1 other file (Amber Saga)"
+                        53 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,480,1036.5,81 focus heard="Mark: not marked, Game: Amber Saga (USA), Finding: Same game as 1 other file (Amber Saga)" in=34 op paints=#D4D4D4FF role=listitem
+                          54 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,495,964.5,49.5 in=34 paints=#707070FF role=none
+                            55 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,495,964.5,48 heard="Mark: not marked, Game: Amber Saga (USA), Finding: Same game as 1 other file (Amber Saga)" in=34 role=none
+                              56 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,495,118.5,48 in=34 owner=53 paints=#4C9AE8FF role=text
+                              57 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,495,369,48 box=246,32 caps=18.1987 face=Barlow heard=Game in=34 layout=197.96,31.2 owner=53 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA)"
+                              58 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,495,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=234.49,31.2 owner=53 paints=#D4D4D4FF role=edit size=26 text="Same game as 1 other file (Amber Saga)"
+                        59 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,561,1036.5,81 focus heard="Mark: hide, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Finding: Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there" in=34 op paints=#4C9AE8FF,#EEEEF0FF role=listitem
+                          60 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,576,964.5,52.5 in=34 paints=#707070FF role=none
+                            61 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,576,964.5,51 heard="Mark: hide, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Finding: Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there" in=34 role=none
+                              62 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,576,118.5,51 box=79,34 caps=19.1128 face="Adwaita Mono" heard="✓ hide" in=34 layout=78.96,33.41 owner=59 paints=#4C9AE8FF role=text size=26 text="✓ hide"
+                              63 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,577.5,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Game in=34 layout=233.14,31.2 owner=59 paints=#EEEEF0FF role=edit size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
+                              64 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,577.5,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=233.01,31.2 owner=59 paints=#DAA520FF role=edit size=26 text="Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there"
+                        65 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,642,1036.5,81 focus heard="Mark: not marked, Game: Cobalt Harbor (Empty), Finding: Size: Cobalt Harbor (Empty).sfc is empty" in=34 op paints=#D4D4D4FF role=listitem
+                          66 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,657,964.5,49.5 in=34 paints=#707070FF role=none
+                            67 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,657,964.5,48 heard="Mark: not marked, Game: Cobalt Harbor (Empty), Finding: Size: Cobalt Harbor (Empty).sfc is empty" in=34 role=none
+                              68 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,657,118.5,48 in=34 owner=65 paints=#4C9AE8FF role=text
+                              69 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,657,369,48 box=246,32 caps=18.1987 face=Barlow heard=Game in=34 layout=240.99,31.2 owner=65 paints=#D4D4D4FF role=edit size=26 text="Cobalt Harbor (Empty)"
+                              70 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,657,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=243.8,31.2 owner=65 paints=#DAA520FF role=edit size=26 text="Size: Cobalt Harbor (Empty).sfc is empty"
+                        71 ListBoxItem allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=96,723,1036.5,81 focus heard="Mark: not marked, Game: Granite Choir (Translated En), Finding: Not recognised by ScreenScraper (a hint, not a fault)" in=34 op paints=#D4D4D4FF role=listitem
+                          72 Border allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,738,964.5,49.5 in=34 paints=#707070FF role=none
+                            73 Grid allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,738,964.5,48 heard="Mark: not marked, Game: Granite Choir (Translated En), Finding: Not recognised by ScreenScraper (a hint, not a fault)" in=34 role=none
+                              74 TextBlock allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=132,738,118.5,48 in=34 owner=71 paints=#4C9AE8FF role=text
+                              75 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=286.5,738,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Game in=34 layout=243.46,31.2 owner=71 paints=#D4D4D4FF role=edit size=26 text="Granite Choir (Translated En)"
+                              76 TableCell allow="a file's name or finding cut in the Library Manager's table is whole in the detail while its row is chosen" at=691.5,738,369,48 box=246,32 caps=18.1987 ellipsis face=Barlow heard=Finding in=34 layout=238.26,31.2 owner=71 paints=#D4D4D4FF role=edit size=26 text="Not recognised by ScreenScraper (a hint, not a fault)"
+                77 Border at=96,1054.5,1036.5,64.5 by=panel limit=0,0,1920,1200 name=AdaptiveStatus role=none
+                  78 Grid at=102,1060.5,1024.5,52.5 by=panel limit=0,0,1920,1200 role=none
+                    79 Grid at=102,1060.5,1024.5,40.5 by=panel limit=0,0,1920,1200 role=none
+                      80 TextBlock at=114,1060.5,1012.5,40.5 box=675,27 by=panel caps=15.3989 face=Barlow heard="2 to hide" layout=78.96,26.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=22 text="2 to hide"
+              81 Border at=1156.5,220.5,667.5,898.5 by=panel limit=0,0,1920,1200 name=AdaptiveDetail paints=#26262BFF role=none
+                82 Border at=1192.5,256.5,595.5,826.5 by=panel limit=0,0,1920,1200 role=none
+                  83 ScrollViewer at=1204.5,268.5,571.5,802.5 by=panel fades=b limit=0,0,1920,1200 overflow=24 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=1204.5,268.5,571.5,802.5
+                    84 StackPanel at=1204.5,268.5,571.5,826.5 by=scroll in=83 limit=1204.5,268.5,571.5,802.5 name=LibraryDetail role=none seen=1204.5,268.5,571.5,802.5
+                      85 TextBlock at=1204.5,268.5,571.5,174 box=381,116 by=scroll caps=22.3984 face="Barlow Condensed" heard="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)" in=83 layout=365.18,115.2 limit=1204.5,268.5,571.5,802.5 paints=#EEEEF0FF role=text size=32 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
+                      86 TextBlock at=1204.5,451.5,571.5,120 box=381,80 by=scroll caps=15.3989 face=Barlow heard="psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue" in=83 layout=353.52,79.2 limit=1204.5,268.5,571.5,802.5 paints=#D4D4D4FF role=text size=22 text="psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue"
+                      87 TextBlock at=1204.5,580.5,571.5,198 box=381,132 by=scroll caps=15.3989 face=Barlow heard="Broken or suspect: Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there" in=83 layout=371.43,132 limit=1204.5,268.5,571.5,802.5 paints=#D4D4D4FF role=text size=22 text="Broken or suspect: Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there"
+                      88 TextBlock at=1204.5,787.5,571.5,40.5 box=381,27 by=scroll caps=15.3989 face=Barlow heard="System: psx" in=83 layout=113.15,26.4 limit=1204.5,268.5,571.5,802.5 paints=#D4D4D4FF role=text size=22 text="System: psx"
+                      89 TextBlock at=1204.5,837,571.5,159 box=381,106 by=scroll caps=15.3989 face=Barlow heard="Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there" in=83 layout=379.59,105.6 limit=1204.5,268.5,571.5,802.5 paints=#D4D4D4FF role=text size=22 text="Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there"
+                      90 TextBlock at=1204.5,1005,571.5,40.5 box=381,27 by=scroll caps=15.3989 face=Barlow heard="Header checksum: not checked yet." in=83 layout=332.13,26.4 limit=1204.5,268.5,571.5,802.5 paints=#D4D4D4FF role=text size=22 text="Header checksum: not checked yet."
+                      91 TextBlock at=1204.5,1054.5,571.5,40.5 box=381,27 by=scroll caps=15.3989 face=Barlow heard="Shown in the library." in=83 layout=189.07,26.4 limit=1204.5,268.5,571.5,802.5 paints=#D4D4D4FF role=text seen=1204.5,1054.5,571.5,16.5 size=22 text="Shown in the library."
+            92 Border at=72,1119,1776,69 by=panel limit=0,0,1920,1200 name=AdaptiveHelpBar paints=#707070FF role=none
+              93 HintBar at=144,1135.5,1632,43.5 by=panel heard="Choose, No" limit=0,0,1920,1200 role=group
+          94 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 name=AdaptiveCover paints=#000000B8 role=none
+            95 Border at=420,276,1080,679.5 by=panel limit=0,0,1920,1200 paints=#26262BFF,#707070FF role=none
+              96 DockPanel at=469.5,325.5,981,580.5 by=panel limit=0,0,1920,1200 role=none
+                97 TextBlock at=469.5,325.5,981,58.5 box=654,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"
+                98 StackPanel at=469.5,738,981,168 by=panel limit=0,0,1920,1200 role=none
+                  99 Button at=469.5,738,981,81 by=panel drawn focus heard=No limit=0,0,1920,1200 op paints=#D4D4D4FF role=button
+                    100 TextBlock at=511.5,754.5,46.5,48 box=31,32 by=clip caps=18.1987 drawn face=Barlow heard=No layout=30.68,31.2 limit=469.5,738,981,81 owner=99 paints=#EEEEF0FF role=text size=26 text=No
+                  101 Button at=469.5,825,981,81 by=panel drawn focus heard=Yes limit=0,0,1920,1200 op paints=#D4D4D4FF role=button
+                    102 TextBlock at=511.5,841.5,60,48 box=40,32 by=clip caps=18.1987 drawn face=Barlow heard=Yes layout=39.36,31.2 limit=469.5,825,981,81 owner=101 paints=#D4D4D4FF role=text size=26 text=Yes
+                103 ScrollViewer at=469.5,402,981,318 by=panel limit=0,0,1920,1200 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=469.5,402,981,318
+                  104 TextBlock at=469.5,402,981,318 box=654,212 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue\n\nOnly games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\"." in=103 layout=653.33,211.2 limit=469.5,402,981,318 paints=#D4D4D4FF role=text size=22 text="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue\n\nOnly games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\"."
+focus 99
 edge 12 up same
-edge 12 down 33
-edge 12 left 10
-edge 12 right 14
-edge 14 up same
-edge 14 down 33
-edge 14 left 12
-edge 14 right 5
-edge 23 up 5
-edge 23 down 37
-edge 23 left 35
+edge 12 down 35
+edge 12 left 27
+edge 12 right same
+edge 17 up same
+edge 17 down 35
+edge 17 left same
+edge 17 right 19
+edge 19 up same
+edge 19 down 35
+edge 19 left 17
+edge 19 right 21
+edge 21 up same
+edge 21 down 35
+edge 21 left 19
+edge 21 right 23
+edge 23 up same
+edge 23 down 35
+edge 23 left 21
 edge 23 right 25
-edge 25 up 5
-edge 25 down 48
+edge 25 up same
+edge 25 down 35
 edge 25 left 23
-edge 25 right same
-edge 31 up 10
-edge 31 down 41
-edge 31 left same
-edge 31 right 33
-edge 33 up 12
-edge 33 down 41
-edge 33 left 31
-edge 33 right 35
-edge 35 up 23
+edge 25 right 27
+edge 27 up same
+edge 27 down 99
+edge 27 left 25
+edge 27 right 12
+edge 35 up 17
 edge 35 down 41
-edge 35 left 33
-edge 35 right 37
-edge 37 up 23
-edge 37 down 41
-edge 37 left 35
-edge 37 right 25
-edge 41 up 31
-edge 41 down 48
+edge 35 left same
+edge 35 right 27
+edge 41 up 35
+edge 41 down 47
 edge 41 left same
-edge 41 right 33
-edge 48 up 25
-edge 48 down same
-edge 48 left 37
-edge 48 right same
-press pageup focus="Button 'Cancel' (Cancel)" title="Library Manager" top=LibraryWindow
-press pagedown focus="Button 'Cancel' (Cancel)" title="Library Manager" top=LibraryWindow
-press first focus="Button 'Cancel' (Cancel)" title="Library Manager" top=LibraryWindow
-press last focus="Button 'Cancel' (Cancel)" title="Library Manager" top=LibraryWindow
-press back focus="GridSplitter  (Resize Mark)" title="Library Manager" top=LibraryWindow
+edge 41 right 27
+edge 47 up 41
+edge 47 down 53
+edge 47 left same
+edge 47 right 27
+edge 53 up 47
+edge 53 down 59
+edge 53 left same
+edge 53 right 12
+edge 59 up 53
+edge 59 down 65
+edge 59 left same
+edge 59 right 12
+edge 65 up 59
+edge 65 down 71
+edge 65 left same
+edge 65 right 12
+edge 71 up 65
+edge 71 down 101
+edge 71 left same
+edge 71 right 99
+edge 99 up 65
+edge 99 down 101
+edge 99 left 71
+edge 99 right 27
+edge 101 up 99
+edge 101 down same
+edge 101 left 19
+edge 101 right 27
+press pageup focus="Button  (No)" top=LibraryWindow
+press pagedown focus="Button  (No)" top=LibraryWindow
+press first focus="Button  (No)" top=LibraryWindow
+press last focus="Button  (No)" top=LibraryWindow
+press back focus="ListBoxItem  (Mark: hide, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), Finding: Disc sheet: it lists Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3) (Track 2).bin, which is not there)" top=LibraryWindow

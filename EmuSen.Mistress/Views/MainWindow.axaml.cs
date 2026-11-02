@@ -563,13 +563,13 @@ namespace EmuSen.Mistress.Views
             _ = SheetLayer.Show(window, this);
         }
 
-        // The bar goes when it is switched off or when both its parts are; a big screen's counters are its HUD's, not the bar's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
+        // The bar goes when it is switched off, when both its parts are, or under a tool shown as a screen (EmuSen_Interface.md §15.2); a big screen's counters are its HUD's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
         private void ApplyStatusBar()
         {
             bool counters = _appSettings.ShowFpsBar && !_bigScreen;
             StatusText.IsVisible = _appSettings.ShowStatusText;
             FpsText.IsVisible = counters;
-            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible);
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible) && !Sheets.IsScreenShown;
         }
 
         private void ShowDebugLogging()

@@ -41,10 +41,9 @@ pub trait Target: 'static {
 pub const DEADLINE_KEY: &str = "broker.deadline";
 const DEADLINE_DEFAULT: u64 = 10;
 
-static LIBRARY: Mutex<Option<Link>> = Mutex::new(None);
 static CRASH_LOG: Mutex<Option<String>> = Mutex::new(None);
 static LIBRARY_LOG: Mutex<Vec<String>> = Mutex::new(Vec::new());
-static INFO: OnceLock<Result<(String, String, u32), String>> = OnceLock::new();
+static INFO: OnceLock<Result<Descriptors, String>> = OnceLock::new();
 /// Since 1.17: the hash `expect` was given and its outcome; a mismatch leaves the library broken for the process.
 static EXPECTED: OnceLock<(String, Result<(), String>)> = OnceLock::new();
 
@@ -138,29 +137,65 @@ unsafe fn copy_out(text: &[u8], out: *mut u8, len: usize) -> i64 {
     text.len() as i64
 }
 
-fn library_call(op: Op, out_null: bool, out_len: u64, args: &[u8]) -> Result<Reply, (i32, String)> {
-    if let Some(why) = broken() {
-        return Err((status::NOT_EXPECTED, why.to_owned()));
-    }
-    let mut guard = LIBRARY.lock().unwrap_or_else(|e| e.into_inner());
-    for attempt in 0..2 {
-        if guard.as_ref().is_none_or(|l| l.dead.is_some()) {
-            let spawn = Target_spawn_library()?;
-            match Link::spawn(&spawn, Duration::from_secs(60)) {
-                Ok(l) => {
-                    record(&mut LIBRARY_LOG.lock().unwrap_or_else(|e| e.into_inner()), "info", &format!("the library's runner started: {}", l.hello));
-                    *guard = Some(l);
+/// The library's runner for one run of library-level calls, ended when dropped, so it lives only while it is asked
+/// and a game's runner is the only one beside the host (EmuSen_LibretroHost.md §3.2, §10w).
+struct LibraryRunner(Option<Link>);
+
+impl LibraryRunner {
+    fn call(&mut self, op: Op, out_null: bool, out_len: u64, args: &[u8]) -> Result<Reply, (i32, String)> {
+        if let Some(why) = broken() {
+            return Err((status::NOT_EXPECTED, why.to_owned()));
+        }
+        for attempt in 0..2 {
+            if self.0.as_ref().is_none_or(|l| l.dead.is_some()) {
+                let spawn = Target_spawn_library()?;
+                let mut l = Link::spawn(&spawn, LIBRARY_DEADLINE).map_err(|why| (STATUS_ENDED, why))?;
+                record(&mut LIBRARY_LOG.lock().unwrap_or_else(|e| e.into_inner()), "info", &format!("the library's runner started: {}", l.hello));
+                if let Some(path) = CRASH_LOG.lock().unwrap_or_else(|e| e.into_inner()).clone() {
+                    let mut w = Writer::default();
+                    w.bytes(path.as_bytes());
+                    let _ = l.call(Op::SetCrashLog, false, 0, &w.0, LIBRARY_DEADLINE);
                 }
-                Err(why) => return Err((STATUS_ENDED, why)),
+                self.0 = Some(l);
+            }
+            match self.0.as_mut().unwrap().call(op, out_null, out_len, args, LIBRARY_DEADLINE) {
+                Ok(r) => return Ok(r),
+                Err(e) if attempt == 1 => return Err(e),
+                Err(_) => {}
             }
         }
-        match guard.as_mut().unwrap().call(op, out_null, out_len, args, Duration::from_secs(60)) {
-            Ok(r) => return Ok(r),
-            Err(e) if attempt == 1 => return Err(e),
-            Err(_) => {}
+        unreachable!()
+    }
+
+    /// A text answer whole, its length asked first, from the one runner: the return and the bytes.
+    fn text(&mut self, op: Op, args: &[u8]) -> Result<(i64, Vec<u8>), (i32, String)> {
+        let n = self.call(op, true, 0, args)?.ret;
+        if n < 0 {
+            return Ok((n, Vec::new()));
+        }
+        let r = self.call(op, false, n as u64, args)?;
+        Ok((r.ret, r.bytes))
+    }
+}
+
+impl Drop for LibraryRunner {
+    /// The runner's own log kept in the library's before it exits.
+    fn drop(&mut self) {
+        let Some(l) = self.0.as_mut().filter(|l| l.dead.is_none()) else { return };
+        let Ok(n) = l.call(Op::LogDrain, true, 0, &[], LIBRARY_DEADLINE).map(|r| r.ret) else { return };
+        if n > 0
+            && let Ok(r) = l.call(Op::LogDrain, false, n as u64, &[], LIBRARY_DEADLINE)
+        {
+            LIBRARY_LOG.lock().unwrap_or_else(|e| e.into_inner()).push(String::from_utf8_lossy(&r.bytes).into_owned());
         }
     }
-    unreachable!()
+}
+
+const LIBRARY_DEADLINE: Duration = Duration::from_secs(60);
+
+/// One library-level call on a runner of its own, which exits with the answer.
+fn library_call(op: Op, out_null: bool, out_len: u64, args: &[u8]) -> Result<Reply, (i32, String)> {
+    LibraryRunner(None).call(op, out_null, out_len, args)
 }
 
 /// The library runner's spawn, set by the export macro for its target.
@@ -172,22 +207,30 @@ fn Target_spawn_library() -> Result<Spawn, (i32, String)> {
     f().map_err(|why| (STATUS_ENDED, why))
 }
 
-/// Core info, the schema and the served library's version, asked once.
-fn descriptors<T: Target>() -> &'static Result<(String, String, u32), String> {
+/// What the library answers whatever the game, asked once of one runner.
+struct Descriptors {
+    info: String,
+    schema: String,
+    abi: u32,
+    /// The firmware answer, for a core whose answer does not read the image; none where it does or was not given.
+    firmware: Option<(i64, Vec<u8>)>,
+}
+
+/// Core info, the schema, the served library's version and an image-blind firmware answer, asked once.
+fn descriptors<T: Target>() -> &'static Result<Descriptors, String> {
     let _ = SPAWN_LIBRARY.set(|| T::spawn(None));
     INFO.get_or_init(|| {
-        let caps = library_call(Op::Capabilities, false, 0, &[]).map_err(|e| e.1)?;
+        let mut runner = LibraryRunner(None);
+        let caps = runner.call(Op::Capabilities, false, 0, &[]).map_err(|e| e.1)?;
         let forwarded = T::CAPABILITIES & !caps::EXPECT;
         if caps.ret as u64 != forwarded {
             return Err(format!("the served library claims capabilities {:#x}, and this proxy forwards {:#x}", caps.ret, forwarded));
         }
-        let text = |op| -> Result<String, String> {
-            let n = library_call(op, true, 0, &[]).map_err(|e| e.1)?.ret;
-            if n < 0 {
-                return Err(format!("{op:?} answered {n}"));
+        let mut text = |op| -> Result<String, String> {
+            match runner.text(op, &[]).map_err(|e| e.1)? {
+                (n, _) if n < 0 => Err(format!("{op:?} answered {n}")),
+                (_, bytes) => Ok(String::from_utf8_lossy(&bytes).into_owned()),
             }
-            let r = library_call(op, false, n as u64, &[]).map_err(|e| e.1)?;
-            Ok(String::from_utf8_lossy(&r.bytes).into_owned())
         };
         let mut info = text(Op::Info)?;
         if T::CAPABILITIES & caps::EXPECT != 0 {
@@ -210,12 +253,13 @@ fn descriptors<T: Target>() -> &'static Result<(String, String, u32), String> {
             Some(end) => schema.insert_str(end, &format!(",{deadline}")),
             None => schema = format!("[{deadline}]"),
         }
-        Ok((info, schema, caps.aux as u32))
+        let firmware = if T::firmware_reads_image() { None } else { runner.text(Op::FirmwareFor, &firmware_request::<T>(&[])).ok() };
+        Ok(Descriptors { info, schema, abi: caps.aux as u32, firmware })
     })
 }
 
 pub fn abi_version<T: Target>() -> u32 {
-    descriptors::<T>().as_ref().map_or(emusen_native::core::sys::ABI_VERSION, |d| d.2)
+    descriptors::<T>().as_ref().map_or(emusen_native::core::sys::ABI_VERSION, |d| d.abi)
 }
 
 pub fn capabilities<T: Target>() -> u64 {
@@ -224,7 +268,7 @@ pub fn capabilities<T: Target>() -> u64 {
 
 pub unsafe fn info<T: Target>(out: *mut u8, len: usize) -> i64 {
     match descriptors::<T>() {
-        Ok(d) => unsafe { copy_out(d.0.as_bytes(), out, len) },
+        Ok(d) => unsafe { copy_out(d.info.as_bytes(), out, len) },
         Err(why) => {
             let text = format!(r#"{{"abi":"","id":"broken-proxy","name":"broken proxy","version":"0","license":"NOASSERTION","description":{why:?},"systems":[],"capabilities":[]}}"#);
             unsafe { copy_out(text.as_bytes(), out, len) }
@@ -234,7 +278,7 @@ pub unsafe fn info<T: Target>(out: *mut u8, len: usize) -> i64 {
 
 pub unsafe fn settings_schema<T: Target>(out: *mut u8, len: usize) -> i64 {
     match descriptors::<T>() {
-        Ok(d) => unsafe { copy_out(d.1.as_bytes(), out, len) },
+        Ok(d) => unsafe { copy_out(d.schema.as_bytes(), out, len) },
         Err(_) => unsafe { copy_out(b"[]", out, len) },
     }
 }
@@ -252,7 +296,9 @@ fn whole(r: Result<Reply, (i32, String)>, out: *mut u8, len: usize) -> i64 {
 }
 
 pub unsafe fn firmware_for<T: Target>(image: *const u8, image_len: usize, out: *mut u8, len: usize) -> i64 {
-    let _ = descriptors::<T>();
+    if let Ok(Descriptors { firmware: Some((ret, bytes)), .. }) = descriptors::<T>() {
+        return whole(Ok(Reply { ret: *ret, aux: 0, bytes: bytes.clone() }), out, len);
+    }
     let bytes = if image.is_null() { &[][..] } else { unsafe { std::slice::from_raw_parts(image, image_len) } };
     whole(library_call(Op::FirmwareFor, out.is_null(), len as u64, &firmware_request::<T>(bytes)), out, len)
 }
@@ -287,12 +333,10 @@ pub unsafe fn set_crash_log<T: Target>(path: *const c_char) -> i32 {
     let text = unsafe { CStr::from_ptr(path) }.to_string_lossy().into_owned();
     let mut c = CRASH_LOG.lock().unwrap_or_else(|e| e.into_inner());
     if c.is_none() {
-        *c = Some(text.clone());
+        *c = Some(text);
     }
-    drop(c);
-    let mut w = Writer::default();
-    w.bytes(text.as_bytes());
-    library_call(Op::SetCrashLog, false, 0, &w.0).map_or(0, |r| r.ret as i32)
+    // Kept, not sent: each runner is given it as it starts, so none is started for it alone.
+    0
 }
 
 unsafe fn proxied<'a>(m: *mut RawMachine) -> Option<&'a mut Proxied> {
@@ -315,9 +359,8 @@ pub unsafe fn log_drain<T: Target>(m: *mut RawMachine, out: *mut u8, len: usize)
             if !out.is_null() && own.len() <= len {
                 l.clear();
             }
-            drop(l);
-            let room = len.saturating_sub(own.len()) as u64;
-            (own, library_call(Op::LogDrain, out.is_null(), room, &[]))
+            // The library's runners drained their own logs into it as they ended.
+            (own, Ok(Reply { ret: 0, aux: 0, bytes: Vec::new() }))
         }
     };
     let own_n = if out.is_null() || own.len() <= len { own.len() } else { 0 };
@@ -367,7 +410,7 @@ fn path_of(p: *const c_char) -> Option<String> {
 
 /// Whether the served library reads its image by path alone, so its bytes need not cross.
 fn reads_by_path<T: Target>() -> bool {
-    descriptors::<T>().as_ref().is_ok_and(|d| d.0.contains(r#""image_path""#))
+    descriptors::<T>().as_ref().is_ok_and(|d| d.info.contains(r#""image_path""#))
 }
 
 /// `emusen_core_expect`: the first hash given stands, and a later one that differs is refused without changing it.

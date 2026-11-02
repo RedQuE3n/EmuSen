@@ -140,6 +140,38 @@ fn two_machines_run_side_by_side_in_processes_of_their_own() {
     assert!(log.contains("the core runs in process") && log.contains("Landlock"), "{log}");
 }
 
+/// The proxy's library-level log, drained through its own export, as a host without a machine reads it.
+fn library_log(root: &std::path::Path) -> String {
+    let path = std::ffi::CString::new(root.join("libretro/testcore").join(format!("emusen-core-broker.{}", suffix())).to_str().unwrap()).unwrap();
+    let handle = unsafe { libc::dlopen(path.as_ptr(), libc::RTLD_NOW) };
+    assert!(!handle.is_null());
+    let drain: unsafe extern "C" fn(*mut u8, *mut u8, usize) -> i64 = unsafe { std::mem::transmute(libc::dlsym(handle, c"emusen_core_log_drain".as_ptr())) };
+    let mut text = vec![0u8; 1 << 16];
+    let n = unsafe { drain(std::ptr::null_mut(), text.as_mut_ptr(), text.len()) }.max(0) as usize;
+    String::from_utf8_lossy(&text[..n.min(text.len())]).into_owned()
+}
+
+#[test]
+fn one_game_runs_one_runner_and_the_librarys_ends_with_its_answers() {
+    let _t = turn();
+    let (lib, root) = library();
+    lib.info_text().unwrap();
+    lib.firmware_for(GAME).unwrap();
+    assert_eq!(runners(), 0, "the library's runner outlived the answers it was started for");
+    library_log(&root);
+    let mut m = make("").unwrap();
+    m.advance().unwrap();
+    // The launch's firmware question, asked again while the game runs, starts nothing beside it (EmuSen_LibretroHost.md §10w).
+    lib.firmware_for(GAME).unwrap();
+    assert_eq!(runners(), 1, "one game, one runner");
+    let log = library_log(&root);
+    assert!(!log.contains("the library's runner started"), "a library runner was started for an answer already held: {log}");
+    let log = library_log(&root);
+    assert!(!log.contains("the library's runner started"), "draining the library's log started a runner: {log}");
+    drop(m);
+    assert_eq!(runners(), 0);
+}
+
 #[test]
 fn a_fault_the_core_handles_itself_runs_on() {
     let _t = turn();

@@ -717,12 +717,16 @@ impl Chain {
         if !upload {
             return None;
         }
-        self.from_ring.map(|p| (p.ready, p.value)).or_else(|| self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value)))
+        self.from_ring.as_ref().map(|p| (p.ready, p.value)).or_else(|| self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value)))
     }
 
-    /// The timeline signal of the frame pending, when it is a ring's picture: its slot given back.
-    fn upload_signal(&self, upload: bool) -> Option<(vk::Semaphore, u64)> {
-        self.from_ring.filter(|_| upload).map(|p| (p.done, p.value))
+    /// The timeline signal of the frame pending, when it is a ring's picture: its slot given back, the ones it skipped
+    /// before it, and its `ready` awaited within a bound (EmuSen_LibretroHost.md §10x).
+    fn upload_signal(&self, upload: bool) -> Result<Option<(vk::Semaphore, u64)>, String> {
+        match self.from_ring.as_ref().filter(|_| upload) {
+            Some(p) => p.take(&self.device, crate::ring::READY_BOUND),
+            None => Ok(None),
+        }
     }
 
     /// The frame's upload recorded into a submission that is about to run its passes, when `upload` says one waits.
@@ -751,7 +755,7 @@ impl Chain {
             return Ok(());
         }
         self.upload_pending = false;
-        let (wait, signal) = (self.upload_wait(true), self.upload_signal(true));
+        let (wait, signal) = (self.upload_wait(true), self.upload_signal(true)?);
         self.device.run_timed(|commands| self.record_pending_upload(commands, true), wait, signal)
     }
 
@@ -856,7 +860,7 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
         let upload = std::mem::take(&mut self.upload_pending);
-        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload));
+        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload)?);
         let device = &self.device;
         device.run_unwaited(
             |commands| {
@@ -942,7 +946,7 @@ impl Chain {
         self.device.phase(point::BOUND);
 
         let upload = std::mem::take(&mut self.upload_pending);
-        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload));
+        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload)?);
         let device = &self.device;
         device.run_timed(|commands| {
             self.record_pending_upload(commands, upload);

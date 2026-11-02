@@ -301,6 +301,50 @@ fn ring_frames_given_back_by_a_one_pixel_draw_never_stall_the_core() {
     assert_silent(&gpu);
 }
 
+/// A one-pixel draw on a thread of its own, failed when it does not return within `seconds`.
+fn draw_within(chain: &Chain, seconds: u64) {
+    let (tx, rx) = mpsc::channel();
+    let h = chain.0 as usize;
+    std::thread::spawn(move || {
+        let mut out = [0u8; 4];
+        let _ = tx.send(unsafe { sd::emusen_serenity_chain_render(h as *mut sd::ChainHandle, 1, 1, out.as_mut_ptr(), out.len()) });
+    });
+    match rx.recv_timeout(Duration::from_secs(seconds)) {
+        Ok(4) => {}
+        Ok(n) => panic!("render: {n}: {}", platform_words()),
+        Err(_) => panic!("a draw did not return within {seconds} s: it waits on a picture the core cannot make"),
+    }
+}
+
+// §10x: a presenter that skips pictures, as one does while the window is busy with a pad's notice, and pads pulled
+// and plugged in, never stall the core; on 2026-11-02 a skip of three ended the handheld's PCEE2 session at its deadline.
+#[test]
+fn a_presenter_that_skips_pictures_while_pads_come_and_go_never_stalls_the_core() {
+    let _t = turn();
+    let Some(gpu) = Gpu::new() else { return };
+    let rt = Rt::new("skips");
+    rt.settings(&[("tc_hw", "vulkan")]);
+    let presenter = Chain::stock(&gpu, &rt.root);
+    let s = rt.open(Some(&gpu), true);
+    for n in 0..30u32 {
+        match n {
+            8 => assert_eq!(unsafe { api::emusen_crystal_input_connected(rt.rt, s, 1, 0) }, 0, "{}", rt.words()),
+            17 => assert_eq!(unsafe { api::emusen_crystal_input_connected(rt.rt, s, 1, 1) }, 0, "{}", rt.words()),
+            21 => assert_eq!(unsafe { api::emusen_crystal_input_connected(rt.rt, s, 0, 0) }, 0, "{}", rt.words()),
+            _ => {}
+        }
+        let f = rt.frame_within(s, 15).unwrap_or_else(|e| panic!("frame {n}: {e}"));
+        assert_eq!(f.picture_in_ring, 1, "frame {n}");
+        if n % 5 == 0 {
+            presenter.from_ring(rt.ring(s), &f);
+            draw_within(&presenter, 8);
+        }
+    }
+    rt.close(s);
+    drop(presenter);
+    assert_silent(&gpu);
+}
+
 #[test]
 fn a_ring_is_lent_again_at_machine_info_when_the_core_draws_past_its_maxima() {
     let _t = turn();

@@ -20,6 +20,9 @@ use std::time::Instant;
 /// The variable that names the device when the caller does not; the C# reads it, and a Rust host may.
 pub const DEVICE_VARIABLE: &str = "EMUSEN_SLANG_GPU_DEVICE";
 
+/// The longest any wait on this device's own work lasts before it is an error (EmuSen_LibretroHost.md §10x).
+pub const FENCE_BOUND: std::time::Duration = std::time::Duration::from_secs(10);
+
 /// The system's Vulkan loader, by the name each platform's loader of libraries knows it by.
 #[cfg(windows)]
 const LOADER: &str = "vulkan-1.dll";
@@ -754,7 +757,7 @@ impl Device {
         }
         let fence = self.inner.fence;
         unsafe {
-            self.inner.device.wait_for_fences(&[fence], true, u64::MAX).check("vkWaitForFences")?;
+            self.wait_fence(fence)?;
             self.inner.device.reset_fences(&[fence]).check("vkResetFences")?;
         }
         *pending = false;
@@ -835,12 +838,30 @@ impl Device {
             }
             device.queue_submit(self.inner.queue, &[submit], fence).check("vkQueueSubmit")?;
             self.phase(point::SUBMITTED);
-            device.wait_for_fences(&[fence], true, u64::MAX).check("vkWaitForFences")?;
+            self.wait_fence(fence)?;
             device.reset_fences(&[fence]).check("vkResetFences")?;
             self.read_marks();
             self.phase(point::WAITED);
         }
         Ok(())
+    }
+
+    /// A fence of this device's own work waited for within `FENCE_BOUND`, so a wedged queue is an error, never a hang.
+    fn wait_fence(&self, fence: vk::Fence) -> Result<(), String> {
+        match unsafe { self.inner.device.wait_for_fences(&[fence], true, FENCE_BOUND.as_nanos() as u64) } {
+            Err(vk::Result::TIMEOUT) => Err(format!("the device did not finish its work within {} s", FENCE_BOUND.as_secs())),
+            r => r.check("vkWaitForFences"),
+        }
+    }
+
+    /// A timeline value signalled once everything submitted before it on the queue has finished: a ring's pictures
+    /// given back in the order they were read (EmuSen_LibretroHost.md §10x).
+    pub(crate) fn signal_in_order(&self, semaphore: vk::Semaphore, value: u64) -> Result<(), String> {
+        let _held = locked(&self.inner.submit);
+        let (signals, values) = ([semaphore], [value]);
+        let mut timeline = vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&values);
+        let submit = vk::SubmitInfo::default().signal_semaphores(&signals).push_next(&mut timeline);
+        unsafe { self.inner.device.queue_submit(self.inner.queue, &[submit], vk::Fence::null()) }.check("vkQueueSubmit")
     }
 
     /// Waits for everything the device has been given, with the queue held as Vulkan asks.

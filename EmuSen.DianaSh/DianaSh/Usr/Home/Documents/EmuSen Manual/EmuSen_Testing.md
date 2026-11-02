@@ -210,8 +210,11 @@ Seeded faults, 2026-11-01, each reverted, each caught by one test:
 | the key hashing the unit's own folder only | `a_changed_input_changes_the_key_and_nothing_else_does` |
 | an expired quarantine still honoured | `a_quarantine_has_an_owner_a_cause_and_an_expiry` |
 
-End to end on 2026-11-01: `trial` ran two Platform crates through nextest (51 tests, 6 s, trial 156), and a dry run
-straight after reported both as reusable from it.
+End to end on 2026-11-01: `trial` ran two Platform crates through nextest (51 tests, 6 s), and a dry run straight
+after reported both as reusable from it; it ran one WiseMan class through the dotnet adapter in a fresh checkout
+(build 5 m 03 s with the cores cold, the class 5 s, its TRX read back); and it ran this change's own blast radius, the
+whole Platform workspace and the 72 DianaSh and Golden classes (1,690 tests, 4 m 59 s), where it found the six new man
+pages missing from `man.golden`, which `GoldenCorpusTests.Every_manual_page_is_recorded` requires.
 
 ## 8. Decisions
 

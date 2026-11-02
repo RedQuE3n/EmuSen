@@ -6429,3 +6429,323 @@ SEE ALSO
 status 0
 action none
 end
+
+case the page for units
+target none
+covers 1
+$ man units
+out 2129
+NAME
+    units - the catalogue of test units, one per line
+
+SYNOPSIS
+    units [--kind cargo|dotnet] [--tier T] [--crates] [--rev REV] [--repo DIR]
+    units --key UNIT [--profile P] [--rev REV] [--repo DIR]
+
+DESCRIPTION
+    A command of the emusen.testing module, the testing studio. A unit is
+    the smallest thing the studio runs and records as a whole. It is
+    derived from the revision's files, never from a hand-kept list:
+
+        cargo    a Cargo root: a crate outside any workspace, or a
+                 workspace, counted once (Platform); --crates adds a
+                 workspace's member crates as 'crate' lines
+        dotnet   a test class of a test project (a project that
+                 references xunit), found in its sources: a class with
+                 [Fact] or [Theory] tests of its own, merged across
+                 partial files, or one inheriting an abstract class's
+                 tests; and 'lunap', the sibling toolkit's suite
+
+    Each line is tab-separated: kind, unit, tier tag, needs. The tier tag
+    is 'nightly' for a class carrying [Trait("Category", "nightly")] and
+    'land' otherwise.
+
+    --key prints a unit's key and what it is made of: the git object name
+    of every input folder (the unit's own, the crates and projects it is
+    built from, its workspace's manifest and lock, the declared extras of
+    Testing/inputs.json), the toolchain (rustc -V or dotnet --version),
+    the profile, ~/.cargo/config.toml for a cargo unit and the LunaP
+    checkout's commit for a dotnet one. The key is git's hash of those
+    lines. When an input has uncommitted changes the answer is 'none' and
+    the status 1: git's objects would not describe what runs, so nothing
+    may be reused for it.
+
+    The repository is --repo, else EMUSEN_REPO, else the one holding the
+    working folder. Revisions are read from git objects, so a branch need
+    not be checked out. See EmuSen_Testing.md §3.1.
+
+EXAMPLES
+    units --kind cargo | wc -l
+    units --tier nightly
+    units --crates | grep '^crate' | grep Platform/
+    units --key "cargo:EmuSen/Cores/Sony/Sapphire - PlayStation 2"
+status 0
+action none
+end
+
+case the page for impact
+target none
+covers 1
+$ man impact
+out 3003
+NAME
+    impact - the units a change can affect, with the rule and the file
+
+SYNOPSIS
+    impact [--base REV] [--head REV] [--tier T] [--depth N] [--repo DIR]
+    impact --explain FILE [--tier T]
+    impact --base REV --head REV --blast FILE
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads the files that
+    differ between the merge base of --base (default WiseMan) and --head
+    (default HEAD, with the working tree's uncommitted changes) and prints
+    one line per unit, tab-separated:
+
+        kind    unit    reason    via
+
+    kind is cargo or dotnet; unit a crate folder or a test class's full
+    name; reason the rule that chose it; via the file that brought it.
+    The rules, in order, the first reason for a unit kept:
+
+        recording  a changed recording (a line of kind 'recording' in
+                   Testing/inputs.json) selects its owner; a file ending
+                   as a recording does (.spec, .golden, ...) that no line
+                   owns selects the tier's whole set
+        always     a test class's own file selects the class; a unit that
+                   failed in this branch's last trial is selected again
+        declared   a folder line of Testing/inputs.json adds its units,
+                   and narrows a reached test project to them
+        graph      the file's owner (its nearest crate or project, or the
+                   project that imports it) and everything in its reverse
+                   closure over Cargo path dependencies, workspaces,
+                   ProjectReference and Import, and the host's crate edges
+                   (RustCores.props, Platform.targets); a test project the
+                   closure reaches and no line narrows is selected whole
+        closed     a file no rule claims selects the tier's whole set:
+                   unknown is closed, never open
+
+    A line of kind 'none' (documentation, ignore lists, CI files) claims a
+    file and selects nothing. A tier's named_only classes (WindowFitAudit-
+    Tests at land) are selected only by a line naming them; its excluded
+    tags (nightly) are left out. --depth limits the reverse closure, as
+    the fast tier does with 1.
+
+    --explain FILE prints the file's owner, what its closure reaches, the
+    lines it matches and its selection. --blast FILE compares the
+    selection with what blast.sh printed for the same revisions: each
+    unit as 'agree', 'impact' (impact only) or 'blast' (blast.sh only),
+    blast.sh's filter terms resolved to classes under its own exclusions,
+    its unmapped files, and a summary line. land.sh logs this while the
+    two run side by side.
+
+    Terms that name no class are reported on standard error. See
+    EmuSen_Testing.md §3.2 and §6.
+
+EXAMPLES
+    impact
+    impact --base WiseMan --head approve-fix --tier land
+    impact | grep -c '^dotnet'
+    impact --explain EmuSen.Mistress/Views/CoresWindow.axaml.cs
+    impact --base f1592d39e^1 --head f1592d39e^2 --blast blast.txt | grep -v ^agree
+status 0
+action none
+end
+
+case the page for trial
+target none
+covers 1
+$ man trial
+out 3193
+NAME
+    trial - run a selection, judge it and record it
+
+SYNOPSIS
+    trial [--tier T] [--from FILE] [--no-reuse] [--dry-run] [--on RUNNER]
+          [--requested-by WHO] [--base REV] [--repo DIR]
+    trial verdict SHA | ls | show N
+    trial quarantine [add TEST --owner O --cause C [--unit U] [--days N]
+                     | rm TEST]
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads impact's lines from
+    standard input, or --from FILE, or runs impact for the tier against
+    --base, and runs them:
+
+    - each cargo root once, with its selected crates as -p arguments,
+      through cargo nextest on the tier's profile where the root defines
+      it (test-fast at land) and release otherwise; nextest's JUnit gives
+      a row per test, and one retry for every test (two for a quarantined
+      one) shows a flake for what it is;
+    - each test project once: dotnet build, then dotnet test --no-build
+      with the selected classes as the filter (or only Category!=nightly
+      when every class is chosen) and a TRX logger; a failed test is run
+      once more by name, and a pass then records it as flaky;
+    - the lunap unit as dotnet test of the sibling LunaP checkout.
+
+    Steps run concurrently in the queue's CPU slots (two on the desktop),
+    each in a capped scope (CPUWeight=20, MemoryMax=10G or
+    EMUSEN_TESTING_MEMORY_MAX, MemorySwapMax=2G). A trial runs in the
+    foreground past the shell's ten-second budget, which it does not poll;
+    Ctrl-C at a terminal reaches its steps' processes.
+
+    Reuse: at a tier with "reuse": true (fast, land), a unit whose key
+    (see units) matches a green result on the same runner within the
+    tier's reuse_days, for a unit with no flaky result in 30 days, is not
+    run and is reported 'reused' with the trial it came from. A unit with
+    no key (uncommitted inputs) is always run. The nightly never reuses.
+
+    The policy: a failed test fails its unit; a flaky test fails it too
+    unless it is quarantined by name. A quarantine has an owner, a cause
+    and an expiry of at most 14 days; renewing it needs a new cause.
+    A step that could not run, or a dotnet run that matched no test,
+    fails its units.
+
+    Output, tab-separated: one 'build' line per step; one line per unit
+    beginning ok, FAIL, flaky (quarantined) or reused, with its counts and
+    time, and the failing tests indented below; and the verdict, GREEN or
+    RED, with the trial's number, tree, units and time and its folder
+    under ~/.cache/emusen/testing/trials/. Exit status 0 for GREEN, 1 for
+    RED, 2 when it could not run. The verdict is printed before the store
+    is written; a store failure is reported and never changes it.
+
+    trial verdict SHA prints the newest verdict of a tree, as push.sh
+    reads it (status 0 GREEN, 1 RED, 2 none). See EmuSen_Testing.md §3.4
+    and §3.5.
+
+EXAMPLES
+    impact | trial --dry-run
+    impact --base WiseMan@{1} --head WiseMan | trial --requested-by land
+    trial --from selection.txt --no-reuse
+    trial verdict $(git rev-parse HEAD)
+    trial quarantine add 'tests::racy_timer' --unit cargo:Platform/crystal --owner tester --cause "a 2 ms timing window, §3.57"
+status 0
+action none
+end
+
+case the page for results
+target none
+covers 1
+$ man results
+out 1621
+NAME
+    results - the store's answers
+
+SYNOPSIS
+    results [--last N]
+    results --slowest N [--tier T] [--since D]
+    results --flaky [--since D] | --misses [--since D] | --quarantine
+    results --selected TRIAL
+    results unit UNIT | test NAME
+    results export [--since D]
+
+DESCRIPTION
+    A command of the emusen.testing module; it only reads. The store is
+    ~/.local/share/EmuSen/testing/studio.db (EMUSEN_TESTING_DB for
+    another). D is a span such as 14d, 12h or 30m.
+
+        (none)       the last trials: number, start, verdict, tier, tree,
+                     branch, time and the source a backfilled one came from
+        --slowest    units by median wall time, with runs and the maximum
+        --flaky      tests recorded flaky, with their runners, and tests
+                     with two outcomes under one key
+        --misses     impact's misses as the nightly records them
+        --quarantine the quarantine in force
+        --selected   why each unit was in a trial: reason, file, key, and
+                     the trial a reused unit came from
+        unit, test   history, the newest first
+        export       every trial since D as one JSON object a line
+
+    Units read back from land.sh's old logs are named as land.sh ran them:
+    a crate folder, and 'dotnet:EmuSen.WiseMan' for a dotnet step without
+    a TRX file. See EmuSen_Testing.md §3.5.
+
+EXAMPLES
+    results --slowest 15 --tier land
+    results --flaky --since 14d
+    results unit "cargo:EmuSen/Cores/Sony/Sapphire - PlayStation 2"
+    results test Every_audited_window_state
+    results export --since 30d > trials.jsonl
+status 0
+action none
+end
+
+case the page for ingest
+target none
+covers 1
+$ man ingest
+out 1596
+NAME
+    ingest - read result files, or land.sh's old logs, into the store
+
+SYNOPSIS
+    ingest FILE... --runner R --tree SHA [--trial N] [--tier T]
+    ingest --backfill [DIR] [--repo DIR]
+
+DESCRIPTION
+    A command of the emusen.testing module. Each FILE is a TRX file
+    (dotnet test --logger trx) or a JUnit file (nextest's, with its
+    flakyFailure and rerunFailure records); its tests become rows under
+    their class or crate, in a new trial or the one --trial names. A file
+    already read is skipped: its path is the trial's source.
+
+    --backfill reads what land.sh left under DIR (default
+    ~/.cache/emusen/tmp): each land/<sha>/ folder as a trial (cargo test's
+    per-test lines and counts, dotnet's summary and failed tests, or its
+    TRX where one was written, times.txt's wall times, GREEN where a .ok
+    file exists); each land-<name>.log transcript, which names the branch
+    of the trial its verdict line names or becomes a trial when its folder
+    is gone; and the full-suite logs under wiseman-rust/. A folder written
+    in the last hour without a .ok file is a land still running and is
+    left for the next backfill. Running it again adds only what is new.
+
+    A cargo log is named as land.sh named it, with ' ' and '/' written as
+    '_'; it is matched to the crate folders of HEAD, and one no crate
+    matches is recorded as cargo:?<name>. See EmuSen_Testing.md §5.
+
+EXAMPLES
+    ingest --backfill
+    ingest results/wiseman-linux-x64.trx --runner ci --tree 3351e722d
+    ingest target/nextest/studio/junit.xml --runner laptop --tree $(git rev-parse HEAD)
+status 0
+action none
+end
+
+case the page for queue
+target none
+covers 1
+$ man queue
+out 1195
+NAME
+    queue - the runner's slots, and a slot for a heavy job
+
+SYNOPSIS
+    queue
+    queue ask CLASS [--gb N] [--as WHO]
+
+DESCRIPTION
+    A command of the emusen.testing module. The desktop's slots per class
+    (two cpu, one gpu, from ~/.config/EmuSen/testing/runners.json) are
+    lock files under ~/.cache/emusen/testing/queue/, held with flock(2).
+    trial takes a cpu slot for each step and waits for one otherwise.
+
+    queue lists every slot, tab-separated: class, slot, held or free, and
+    who holds it and since when, as the holder wrote it.
+
+    queue ask waits until a slot of CLASS is free and prints a command
+    prefix: flock on that slot, then systemd-run --user --scope with
+    CPUWeight=20, MemoryMax=N G (default 10) and MemorySwapMax=2G. The
+    command run after it holds the slot for as long as it runs; if another
+    job took the slot in between, flock waits. Each ask is a row of the
+    store's queue table.
+
+    When the household's lease service arrives, the one function that
+    takes a slot calls it instead of the lock files. See EmuSen_Testing.md
+    §3.8.
+
+EXAMPLES
+    queue
+    $(dianash -c 'queue ask cpu --gb 8 --as studio-p1') cargo build --release
+status 0
+action none
+end

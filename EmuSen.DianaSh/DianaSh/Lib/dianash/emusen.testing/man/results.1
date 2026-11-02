@@ -1,0 +1,38 @@
+NAME
+    results - the store's answers
+
+SYNOPSIS
+    results [--last N]
+    results --slowest N [--tier T] [--since D]
+    results --flaky [--since D] | --misses [--since D] | --quarantine
+    results --selected TRIAL
+    results unit UNIT | test NAME
+    results export [--since D]
+
+DESCRIPTION
+    A command of the emusen.testing module; it only reads. The store is
+    ~/.local/share/EmuSen/testing/studio.db (EMUSEN_TESTING_DB for
+    another). D is a span such as 14d, 12h or 30m.
+
+        (none)       the last trials: number, start, verdict, tier, tree,
+                     branch, time and the source a backfilled one came from
+        --slowest    units by median wall time, with runs and the maximum
+        --flaky      tests recorded flaky, with their runners, and tests
+                     with two outcomes under one key
+        --misses     impact's misses as the nightly records them
+        --quarantine the quarantine in force
+        --selected   why each unit was in a trial: reason, file, key, and
+                     the trial a reused unit came from
+        unit, test   history, the newest first
+        export       every trial since D as one JSON object a line
+
+    Units read back from land.sh's old logs are named as land.sh ran them:
+    a crate folder, and 'dotnet:EmuSen.WiseMan' for a dotnet step without
+    a TRX file. See EmuSen_Testing.md §3.5.
+
+EXAMPLES
+    results --slowest 15 --tier land
+    results --flaky --since 14d
+    results unit "cargo:EmuSen/Cores/Sony/Sapphire - PlayStation 2"
+    results test Every_audited_window_state
+    results export --since 30d > trials.jsonl

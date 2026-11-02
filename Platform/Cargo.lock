@@ -264,6 +264,7 @@ dependencies = [
  "emusen-dianash",
  "emusen-dotnet",
  "emusen-galaxia",
+ "emusen-testing-module",
  "libc",
 ]
 
@@ -670,6 +671,17 @@ dependencies = [
  "emusen-ps2-card",
  "emusen-psx-card",
  "silvermillennium-sm83",
+]
+
+[[package]]
+name = "emusen-testing-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-dotnet",
+ "emusen-sqlite",
+ "libc",
+ "regex",
 ]
 
 [[package]]

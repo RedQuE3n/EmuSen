@@ -20,6 +20,8 @@ path = "src/nano.rs"
 dianash-text = { path = "../dianash-text" }
 # The project's development tools (dupes); never in the platform library.
 emusen-dev-module = { path = "../emusen-dev-module" }
+# The testing studio (units, impact, trial, results, ingest, queue); never in the platform library.
+emusen-testing-module = { path = "../emusen-testing-module" }
 emusen-dotnet = { path = "../dotnet" }
 emusen-dianash = { path = "../dianash" }
 emusen-galaxia = { path = "../galaxia" }

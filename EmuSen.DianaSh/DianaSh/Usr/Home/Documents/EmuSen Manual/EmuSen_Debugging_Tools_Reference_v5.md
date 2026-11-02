@@ -3078,6 +3078,22 @@ Replayed over the last 60 first-parent merges on 2026-11-01 against the `--list-
 
 **Measured, not guessed.** `land.sh` builds WiseMan in its own step, then runs `dotnet test --no-build` with a TRX logger into the land's folder, and writes each step's seconds to `times.txt` there, so the next decision has per-class durations, which the review lacked.
 
+**The first run** (2026-11-02, `621484c54`, 02:30 to 03:48, lavapipe) was red on three steps, none of them from the
+missing U3 (restored in `b21d1d28e`):
+
+- *Sapphire's crate.* `tests/gs_device.rs` stopped it twice. The transfer test's own hash multiplied with `*`, which
+  `test-checked`'s overflow checks stop. The generated-streams test was killed by the kernel at the scope's 8 GiB
+  (`journalctl`: `oom-kill`, `gs_device-955d5` at anon-rss 8.1 GB): the device GS never destroyed its buffers or walks,
+  and on lavapipe each GS torn down left them behind. Neither shows at a land, which runs `test-fast` on the RX 6800.
+  Both fixed (`Sapphire_Gs.md` §11); the crate's remaining test binaries, never reached that night, were run on
+  `test-checked` with lavapipe the same day.
+- *WiseMan.* `OffDispatcherTests` failed on `HotaruOnTheApiTests.C7`, the case its list exempts, because `a043e1f56`
+  renamed the case and the list held the old name as a string; the list is by `nameof` now
+  (`EmuSen_Settings_Reference.md` §4.78.5).
+- *`emusen-core-broker`.* "profile `test-checked` is not defined": the script asked every crate for the profile, and
+  the broker's workspace defines only `release` and `dist`. A crate whose workspace defines no `test-checked` now runs
+  on `--release`, as CI runs it.
+
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
 
 Four efforts landed in one commit, which is not the house style and is worth explaining rather than leaving as an oddity.

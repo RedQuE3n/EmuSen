@@ -510,6 +510,17 @@ archiver wrote); `scan.rs`' self-contained case; and the runtimes' gate, `EmuSen
 - `AudioLatencyDriftTests` drives SDL and a core together, and xUnit gives a class one collection, so these kinds share one collection rather than one each.
 - **The question that finds the next kind** is "does this class assign a static?" (`EmuSen_Debugging_Tools_Reference_v5.md` §3.57): grep answers it, and judgement does not. `TestCollections.cs` now carries one line pointing here, in place of its paragraph.
 
+**Three parallel classes that set statics (found 2026-11-02).** A full run of the suite failed `GalaxiaScopeTests.Two_scopes_on_interleaved_threads_each_see_only_their_own_tree`. Its last assertion found `ConfigStore.Directory` under `EmuSenCropWindow_`, a folder `PictureCropTests` sets through `ConfigStore.OverrideDirectory`, and that class was not in the collection. The scope had done nothing wrong: the test reads the process's answer before and after, and a parallel class had moved it.
+
+A sweep of every test class that assigns a Galaxia override, a `CoreDiscovery` setting, `ErrorLog.DirectoryOverride`, `FirmwareLibrary.Directory` or `FetchOverride` found three outside the collection:
+
+- `PictureCropTests` and `GraphicsSettingsWindowLayoutTests`, which set `ConfigStore.OverrideDirectory`;
+- `DisplayAspectTests`, which also sets `DataStore`'s override and `CoreDiscovery.UseDevelopment`.
+
+Run eight times together on WiseMan 678be6322, the three classes and the scope's tests failed 3 times out of 8, each time a graphics-settings test reading another class's config. Converting the two config-only classes to a scope was tried first, and the guard refused it: the graphics settings window starts a `CrystalRuntime`, which a scope cannot reach. So all three join the collection with their statics as they were. With that, 8 of 8 runs passed.
+
+`Fixtures/TestCollectionsTests.Every_test_class_that_sets_a_process_static_is_in_the_serial_collection` now scans WiseMan's sources and fails on any test class that assigns one of those statics without `TestCollections.ProcessGlobals` on one of its declarations. The scan is aware of partial classes. A fixture class without tests of its own is left to the classes that use it. Seeded fault: `PictureCropTests`' attribute removed, and the scan names it.
+
 **Proof, before the collection shrinks.**
 
 - Tests of the scope itself: two concurrent flows each see their own directories; leaving a scope restores the statics' answer; a session started inside a scope throws.

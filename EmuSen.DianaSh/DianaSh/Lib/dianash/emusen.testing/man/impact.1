@@ -1,0 +1,60 @@
+NAME
+    impact - the units a change can affect, with the rule and the file
+
+SYNOPSIS
+    impact [--base REV] [--head REV] [--tier T] [--depth N] [--repo DIR]
+    impact --explain FILE [--tier T]
+    impact --base REV --head REV --blast FILE
+
+DESCRIPTION
+    A command of the emusen.testing module. It reads the files that
+    differ between the merge base of --base (default WiseMan) and --head
+    (default HEAD, with the working tree's uncommitted changes) and prints
+    one line per unit, tab-separated:
+
+        kind    unit    reason    via
+
+    kind is cargo or dotnet; unit a crate folder or a test class's full
+    name; reason the rule that chose it; via the file that brought it.
+    The rules, in order, the first reason for a unit kept:
+
+        recording  a changed recording (a line of kind 'recording' in
+                   Testing/inputs.json) selects its owner; a file ending
+                   as a recording does (.spec, .golden, ...) that no line
+                   owns selects the tier's whole set
+        always     a test class's own file selects the class; a unit that
+                   failed in this branch's last trial is selected again
+        declared   a folder line of Testing/inputs.json adds its units,
+                   and narrows a reached test project to them
+        graph      the file's owner (its nearest crate or project, or the
+                   project that imports it) and everything in its reverse
+                   closure over Cargo path dependencies, workspaces,
+                   ProjectReference and Import, and the host's crate edges
+                   (RustCores.props, Platform.targets); a test project the
+                   closure reaches and no line narrows is selected whole
+        closed     a file no rule claims selects the tier's whole set:
+                   unknown is closed, never open
+
+    A line of kind 'none' (documentation, ignore lists, CI files) claims a
+    file and selects nothing. A tier's named_only classes (WindowFitAudit-
+    Tests at land) are selected only by a line naming them; its excluded
+    tags (nightly) are left out. --depth limits the reverse closure, as
+    the fast tier does with 1.
+
+    --explain FILE prints the file's owner, what its closure reaches, the
+    lines it matches and its selection. --blast FILE compares the
+    selection with what blast.sh printed for the same revisions: each
+    unit as 'agree', 'impact' (impact only) or 'blast' (blast.sh only),
+    blast.sh's filter terms resolved to classes under its own exclusions,
+    its unmapped files, and a summary line. land.sh logs this while the
+    two run side by side.
+
+    Terms that name no class are reported on standard error. See
+    EmuSen_Testing.md §3.2 and §6.
+
+EXAMPLES
+    impact
+    impact --base WiseMan --head approve-fix --tier land
+    impact | grep -c '^dotnet'
+    impact --explain EmuSen.Mistress/Views/CoresWindow.axaml.cs
+    impact --base f1592d39e^1 --head f1592d39e^2 --blast blast.txt | grep -v ^agree

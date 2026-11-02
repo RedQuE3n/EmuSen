@@ -54,6 +54,9 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Libretro/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Endou - Master System/target/**;Cores/Sega/Beryl-HW/*/target/**;Cores/Sony/Diamond - PlayStation/target/**;Cores/Sony/Sapphire - PlayStation 2/target/**;Cores/Sony/BlackMoon-HW/*/target/**;Cores/Nintendo/SilverMillennium-HW/*/target/**</DefaultItemExcludes>
     <!-- A crate holding pgo/<name>.<this machine's Rust target>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
     <EmuSenPgo Condition="'$(EmuSenPgo)' == ''">true</EmuSenPgo>
+    <!-- A library built on this machine from the same committed inputs is copied from here instead of rebuilt; false always builds - see EmuSen_RustPlatform.md §28.9. -->
+    <EmuSenCoreReuse Condition="'$(EmuSenCoreReuse)' == '' And ('$(CI)' == 'true' Or $([MSBuild]::IsOSPlatform('Windows')))">false</EmuSenCoreReuse>
+    <EmuSenCoreCache Condition="'$(EmuSenCoreCache)' == ''">$(HOME)/.cache/emusen/cores</EmuSenCoreCache>
     <_EmuSenHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_EmuSenHostArch>
     <_EmuSenHostArch Condition="'$(_EmuSenHostArch)' == 'X64'">x86_64</_EmuSenHostArch>
     <_EmuSenHostArch Condition="'$(_EmuSenHostArch)' == 'Arm64'">aarch64</_EmuSenHostArch>
@@ -157,8 +160,37 @@
     </PropertyGroup>
     <Copy Condition="'$(_EmuSenPgoUse)' == 'true'" SourceFiles="$(_EmuSenPgoProfile);$([System.IO.Path]::ChangeExtension('$(_EmuSenPgoProfile)', '.pgo'))" DestinationFiles="$(_EmuSenPgoCopy).profdata;$(_EmuSenPgoCopy).pgo" SkipUnchangedFiles="true" />
     <Warning Condition="'$(_EmuSenPgoUse)' == 'true' And ('$(RUSTFLAGS)' != '' Or '$(CARGO_ENCODED_RUSTFLAGS)' != '')" Text="RUSTFLAGS is set and overrides build.rustflags: %(EmuSenRustCrate.Core) builds without its PGO profile." />
+    <PropertyGroup>
+      <_EmuSenReuseFile>$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)</_EmuSenReuseFile>
+      <_EmuSenReuseFile Condition="'%(EmuSenRustCrate.Role)' == 'program'">%(EmuSenRustCrate.Identity)$(EmuSenHostProgramSuffix)</_EmuSenReuseFile>
+      <_EmuSenReuseBuilt>$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(_EmuSenReuseFile)</_EmuSenReuseBuilt>
+      <_EmuSenReusePgo>off</_EmuSenReusePgo>
+      <_EmuSenReusePgo Condition="'$(_EmuSenPgoUse)' == 'true'">$(_EmuSenPgoHash)</_EmuSenReusePgo>
+      <_EmuSenCoreKey></_EmuSenCoreKey>
+      <_EmuSenReuseEntry></_EmuSenReuseEntry>
+      <_EmuSenReuseHit>false</_EmuSenReuseHit>
+    </PropertyGroup>
+    <!-- The key is CI's input key with this machine's toolchain, cargo configuration, profile and PGO profile; "none" when an input is uncommitted - see EmuSen_RustPlatform.md §28.9. -->
+    <Exec Condition="'$(EmuSenCoreReuse)' != 'false'" WorkingDirectory="%(EmuSenRustCrate.Dir)" Command="python3 -I &quot;$(MSBuildThisFileDirectory)../.github/scripts/library_key.py&quot; local . %(EmuSenRustCrate.Identity) $(EmuSenHostRustTarget) $(EmuSenNativeProfile) $(_EmuSenReusePgo)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ConsoleOutput" PropertyName="_EmuSenCoreKey" />
+    </Exec>
+    <PropertyGroup Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_EmuSenCoreKey)', '^[0-9a-f]{24}$'))">
+      <_EmuSenReuseEntry>$(EmuSenCoreCache)/%(EmuSenRustCrate.Identity)-$(EmuSenHostRustTarget)-$(EmuSenNativeProfile)-$(_EmuSenCoreKey)</_EmuSenReuseEntry>
+      <_EmuSenReuseHit Condition="Exists('$(_EmuSenReuseEntry)/$(_EmuSenReuseFile)')">true</_EmuSenReuseHit>
+    </PropertyGroup>
+    <Copy Condition="'$(_EmuSenReuseHit)' == 'true'" SourceFiles="$(_EmuSenReuseEntry)/$(_EmuSenReuseFile)" DestinationFiles="$(_EmuSenReuseBuilt)" SkipUnchangedFiles="true" />
+    <Message Condition="'$(_EmuSenReuseHit)' == 'true'" Importance="high" Text="%(EmuSenRustCrate.Core): copied from $(_EmuSenReuseEntry), built before from the same inputs." />
     <!-- Run from the crate's directory, as CI runs it, so a crate's own .cargo/config.toml applies - see Mercury_Native.md §8.7. -->
-    <Exec WorkingDirectory="%(EmuSenRustCrate.Dir)" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;$(_EmuSenPgoConfig)" StandardOutputImportance="low" />
+    <Exec Condition="'$(_EmuSenReuseHit)' != 'true'" WorkingDirectory="%(EmuSenRustCrate.Dir)" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;$(_EmuSenPgoConfig)" StandardOutputImportance="low" />
+    <!-- Stored under a unique name, then renamed, so a build in another checkout never copies half a file. -->
+    <Copy Condition="'$(_EmuSenReuseEntry)' != '' And '$(_EmuSenReuseHit)' != 'true' And Exists('$(_EmuSenReuseBuilt)')" SourceFiles="$(_EmuSenReuseBuilt)" DestinationFiles="$(_EmuSenReuseEntry)/$(_EmuSenReuseFile).$([System.Guid]::NewGuid().ToString('N'))">
+      <Output TaskParameter="CopiedFiles" ItemName="_EmuSenReuseStored" />
+    </Copy>
+    <Move Condition="'@(_EmuSenReuseStored)' != ''" SourceFiles="@(_EmuSenReuseStored)" DestinationFiles="$(_EmuSenReuseEntry)/$(_EmuSenReuseFile)" />
+    <Exec Condition="'@(_EmuSenReuseStored)' != ''" Command="python3 -I &quot;$(MSBuildThisFileDirectory)../.github/scripts/library_key.py&quot; prune &quot;$(EmuSenCoreCache)&quot; &quot;$([System.IO.Path]::GetFileName('$(_EmuSenReuseEntry)'))&quot; 4" IgnoreExitCode="true" StandardOutputImportance="low" />
+    <ItemGroup>
+      <_EmuSenReuseStored Remove="@(_EmuSenReuseStored)" />
+    </ItemGroup>
   </Target>
 
 </Project>

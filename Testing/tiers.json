@@ -1,0 +1,11 @@
+{
+  "tiers": 1,
+  "about": "What each tier selects, leaves out, builds with and reuses. A tag is set once, on the unit: [Trait(\"Category\", \"nightly\")] on a WiseMan class. named_only lists classes a tier runs only when a line names them. See EmuSen_Testing.md §3.3.",
+  "fast": { "select": "impact", "depth": 1, "exclude": ["nightly", "slow", "hardware"], "budget_min": 10, "profile": "test-fast",
+            "runners": ["desktop"], "reuse": true, "reuse_days": 7, "named_only": ["WindowFitAuditTests"] },
+  "land": { "select": "impact", "exclude": ["nightly", "slow", "hardware"], "budget_min": 20, "profile": "test-fast",
+            "runners": ["desktop"], "reuse": true, "reuse_days": 7, "named_only": ["WindowFitAuditTests"] },
+  "nightly": { "select": "all", "exclude": ["hardware"], "profile": "test-checked", "runners": ["desktop"], "reuse": false, "at": "02:00" },
+  "games": { "select": "tag:slow", "runners": ["desktop"], "reuse": false, "needs": ["roms"] },
+  "hardware": { "select": "tag:hardware", "runners": ["handheld", "mac", "laptop", "desktop"], "reuse": false, "attended": true }
+}

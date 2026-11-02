@@ -283,3 +283,58 @@ fn a_core_that_cannot_start_is_refused_through_the_runtime_in_its_own_words() {
     };
     assert!(words.contains(emusen_libretro_testcore::FAIL_AT_FIRST_FRAME), "{words}");
 }
+
+/// The copies an earlier build of EmuSen installed: a proxy this installation's manifest does not list; and the
+/// installation holding this build's libraries beside its manifest, as a published one does.
+fn an_earlier_builds_proxy(l: &Layout) {
+    for library in ["emusen_libretro_proxy", "emusen_libretro_host"] {
+        std::fs::copy(deps().join(format!("lib{library}.{SUFFIX}")), l.installation.join(format!("lib{library}.{SUFFIX}"))).unwrap();
+    }
+    let mut earlier = std::fs::read(l.entry.broker_path()).unwrap();
+    earlier.extend_from_slice(b"\0an earlier build");
+    std::fs::write(l.entry.broker_path(), &earlier).unwrap();
+}
+
+// The tester's run on 2026-11-01: PCEE2 installed by an earlier build and approved after an update, then never read (EmuSen_LibretroHost.md §10v).
+#[test]
+fn an_entry_whose_copies_are_an_earlier_builds_is_refreshed_when_its_core_is_approved_and_opens() {
+    let _t = turn();
+    let l = layout("earlier");
+    an_earlier_builds_proxy(&l);
+    let core = hash(&l.entry.core_path());
+    let rt = runtime(&l);
+    assert_eq!(rt.discovery().waiting().len(), 1);
+    rt.approve(&core).unwrap();
+    let d = rt.discovery();
+    assert!(d.waiting().is_empty(), "read once refreshed: {:?}", rt.held("testcore"));
+    assert_eq!(hash(&l.entry.broker_path()), hash(&deps().join(format!("libemusen_libretro_proxy.{SUFFIX}"))));
+    let found = d.found().iter().find(|c| c.entry.is_some()).unwrap();
+    assert_eq!(found.standing(&rt.trust()), Standing::Approved);
+    drop(d);
+    let game = l.root.join("game.tcg");
+    std::fs::write(&game, b"TCG1 a test game").unwrap();
+    let game = game.to_string_lossy().into_owned();
+    let id = rt.open(&Asked { path: Some(&game), console: None, engine: None, opened: OpenedWith { flags: emusen_crystal::abi::OPEN_NO_BATTERY, ..OpenedWith::default() } }).unwrap();
+    assert_eq!(frame(&rt.sessions.get(id).unwrap()).ran, 1);
+    rt.close(id).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn an_approved_entry_that_cannot_be_refreshed_is_held_with_why() {
+    use std::os::unix::fs::PermissionsExt;
+    let _t = turn();
+    let l = layout("held");
+    an_earlier_builds_proxy(&l);
+    let core = hash(&l.entry.core_path());
+    let rt = runtime(&l);
+    std::fs::set_permissions(&l.entry.folder, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let approved = rt.approve(&core);
+    std::fs::set_permissions(&l.entry.folder, std::fs::Permissions::from_mode(0o755)).unwrap();
+    approved.unwrap();
+    assert_eq!(rt.discovery().waiting().len(), 1, "still waiting");
+    let why = rt.held("testcore").expect("the reason kept");
+    assert!(why.contains("needs refresh") && why.contains("refreshing it failed"), "{why}");
+    rt.rescan();
+    assert!(rt.held("testcore").is_none(), "refreshed at the next rescan once the folder can be written");
+}

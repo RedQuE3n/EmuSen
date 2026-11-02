@@ -162,28 +162,11 @@ namespace EmuSen.WiseMan.Cores
             }
         }
 
-        // The gate of Sapphire_Plan.md §7's S1: the kit's C1-C15 on a synthetic program and synthetic CD and DVD images, nothing failing.
-        [Trait("Category", "nightly")]
+        // The gate of Sapphire_Plan.md §7's S1: the kit on a synthetic program and synthetic CD and DVD images, the core's cases once and each image's at once, nothing failing.
         [Fact]
-        public async Task The_kit_passes_on_a_synthetic_program_and_synthetic_discs()
-        {
-            string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
-            Assert.True(File.Exists(runner), $"no kit runner at {runner}");
-            foreach (var (name, image) in new[] { ("program.elf", SyntheticPs2Elf.Build()), ("cd.iso", SyntheticPs2Disc.Cd().Iso), ("dvd.iso", SyntheticPs2Disc.Dvd().Iso) })
-            {
-                var start = new ProcessStartInfo(runner) { RedirectStandardOutput = true, RedirectStandardError = true };
-                foreach (string a in new[] { "--core", LibraryPath, "--image", Write(name, image), "--frames", "120" }) start.ArgumentList.Add(a);
-                using var process = Process.Start(start)!;
-                var stderr = process.StandardError.ReadToEndAsync();
-                string output = process.StandardOutput.ReadToEnd();
-                string errors = await stderr;
-                await process.WaitForExitAsync();
-                _output.WriteLine($"{name}:\n{output}{errors}");
-                Assert.True(process.ExitCode == 0, output + errors);
-                var passed = output.Split('\n').Where(l => l.StartsWith("pass C")).Select(l => l.Split(' ', StringSplitOptions.RemoveEmptyEntries)[1]).ToHashSet();
-                Assert.All(Enumerable.Range(1, 15).Select(n => $"C{n}"), c => Assert.Contains(c, passed));
-                Assert.DoesNotContain(output.Split('\n'), l => l.StartsWith("fail"));
-            }
-        }
+        public void The_kit_passes_on_a_synthetic_program_and_synthetic_discs() => ConformKit.Passes(LibraryPath,
+            new[] { ("program.elf", SyntheticPs2Elf.Build()), ("cd.iso", SyntheticPs2Disc.Cd().Iso), ("dvd.iso", SyntheticPs2Disc.Dvd().Iso) },
+            ["C1", "C2", "C3", "C4", "C5", "C9", "C10", "C11", "C12", "C13", "C15", "C22", "C23", "C25"],
+            ["C4", "C6", "C7", "C8", "C14", "C16", "C17", "C18", "C19", "C20", "C21", "C24"], _output);
     }
 }

@@ -40,6 +40,10 @@ namespace EmuSen.Tools.Cores
 
         public bool AwaitsApproval => Trust == "needs_approval";
 
+        // The systems table's console names for a core's systems; a system the table has no entry for names no console (EmuSen_Cores.md §3.7).
+        private static string[] ConsolesOf(IReadOnlyList<string> systems, IReadOnlyDictionary<string, string> consoleOf) =>
+            consoleOf.Count == 0 ? systems.Distinct().ToArray() : systems.Where(consoleOf.ContainsKey).Select(s => consoleOf[s]).Distinct().ToArray();
+
         // A row of the core tool's `core` event (EmuSen_Cores.md §6.1).
         public static CoreRow? OfTool(JsonElement e, IReadOnlyDictionary<string, string> consoleOf)
         {
@@ -55,7 +59,7 @@ namespace EmuSen.Tools.Cores
                 State = Text(e, "state") ?? "",
                 Reason = Text(e, "reason"),
                 Systems = systems,
-                Consoles = systems.Select(s => consoleOf.TryGetValue(s, out string? c) ? c : s).Distinct().ToArray(),
+                Consoles = ConsolesOf(systems, consoleOf),
                 Version = string.Join(" ", new[] { Text(e, "version"), Text(e, "build") }.Where(v => !string.IsNullOrEmpty(v))),
                 Licence = Text(e, "license") ?? "",
                 Authors = Strings(e, "authors"),
@@ -70,7 +74,7 @@ namespace EmuSen.Tools.Cores
             string engine = Text(c, "engine") ?? "";
             bool shipped = Text(c, "directory") == "installation";
             IReadOnlyList<string> systems = Strings(c, "systems");
-            string[] consoles = systems.Select(s => consoleOf.TryGetValue(s, out string? name) ? name : s).Distinct().ToArray();
+            string[] consoles = ConsolesOf(systems, consoleOf);
             string trust = Text(c, "trust") ?? "";
             return new CoreRow
             {

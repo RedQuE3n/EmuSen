@@ -198,6 +198,123 @@ Left as they are, and recorded:
 - Through a symlinked library the hosted runner refused the disc with "Permission denied".
 - PCEE2 ran at 34–51 fps with `retro_run` at 3–4 ms, which points at the pacer.
 
+### 3.6 PCEE2 could not be installed from the pad (2026-11-02)
+
+**The report.** On the handheld the tester said: "the core window does not work properly and you cannot download PCEE2".
+The handheld's `home/Cores/` was empty, with no `libretro/.catalogue/`, so no catalogue had ever been read. Nothing
+about it was in the error log or the journal.
+
+**Ruled out, with evidence (2026-11-02).** The handheld's environment does not differ. The shipped build (99bc4bf1f) was
+copied to a throwaway tree in `/tmp` on the handheld and run with an empty home. Its own `cores fetch` read 255
+cores, and `cores get pcee2` installed the build of 2026-11-02 (SHA-256 `e09d5435…40dfc92`). DNS, TLS against SteamOS's
+store, HTTP, the unzip, permissions and the paths all worked. The desktop gave the same result. The core tool is
+sound; the defect lies in reaching it from the pad.
+
+**The cause, reproduced in the real window and then headlessly.** On a fresh home the Cores screen lists only EmuSen's
+own cores, and its notice says that Check for Updates reads libretro's catalogue. On the big screen that action is on
+the List card (Select). Two defects in Mistress's pad router (`PadWindowRouter`) kept it out of reach:
+1. **Up and down left the card.** The router moves the focus by position across the whole sheet, and the List card
+   lies over a layout that is still in the tree. Down from the card's Search landed on a row of the covered list
+   (measured: "Search > row MoonRT"). Check for Updates could not be reached, so no catalogue was read and PCEE2 was
+   never listed. The approval question, a card of the same kind, had the same exposure.
+2. **A on a button that carries a command did nothing.** The router raised the button's Click event but never ran its
+   `Command`. LunaP's `ActionButton`, which every List card row and frame action uses, works through `Command`. Even
+   with the focus on Check for Updates, A closed the card and fetched nothing.
+
+Neither defect wrote anything, because nothing failed: the press went elsewhere. Separately, the pane shows the tool's
+refusals on its notice line but had written none of them to the error log.
+
+**The fix.**
+1. The router keeps the pad within the uppermost layer (`PadWindowRouter.Uppermost`). Where a panel holds a child
+   marked covered (`SheetLayer.IsCovered`, set by the frame's List card and its question card), the focus is searched
+   only in the uncovered layer above it (Settings Reference §4.45.10).
+2. A on a button is pressed the way a click presses it: Click, then the command unless a handler took the click.
+3. Every failure the pane shows also goes to the error log as `ERROR [cores] …`, with the request or event as context.
+   This covers a job that cannot start (any exception, no longer two types only), an event that does not read, a
+   refused job or core, the runtime's listing, revocation, rescan, engine and approval refusals, and the missing
+   platform library.
+4. After an approval, the run's "installed, to approve" status is cleared, so the row reads as its state.
+5. For tests, the core tool takes an optional `"test": {"connect", "roots"}` in a request. The buildbot's name and
+   `https://` are kept, the connection goes to that address, and the given roots are trusted. Only a loopback address
+   is accepted, so a request can never send the buildbot's traffic to another machine. Mistress never sends it.
+
+**Tests.**
+- `CoresInstallPathTests` (WiseMan, Rust runtime), driven by the pad only, against a buildbot of the test's own: a TLS
+  server on 127.0.0.1 serving `info.zip`, the index, and the synthetic core zipped as `pcee2_libretro.so`. The real
+  job runs on the platform library.
+  - `A_fresh_home_installs_PCEE2_by_the_pad_from_the_buildbot_and_a_PlayStation_2_disc_routes_to_it`: Select, Down
+    to Check for Updates with the focus held on the card, A, then R1 to the PlayStation 2 and Down to PCEE2. A, then
+    Down to Apply and A. The core's bytes land in `/Cores/libretro/pcee2`. Then A, Down to Yes and A: the hash is in
+    `cores.approved`, and the runtime's `route` of a synthetic PlayStation 2 disc names PCEE2's engine.
+  - `A_failed_fetch_is_said_on_the_screen_and_in_the_error_log`: a buildbot that answers 404. The notice and the day's
+    error log both carry the refusal.
+- `a_requests_test_server_stands_in_for_the_buildbot_on_loopback_only` (core tool): a fetch through the seam succeeds,
+  and a non-loopback address, a host name or unreadable roots are refused.
+
+**Seeded faults (2026-11-02).** Each was reverted, and each was caught:
+
+| Fault | Caught by |
+|---|---|
+| No narrowing to the uppermost layer (the defect itself) | both path tests: "the focus left the card" |
+| A raises Click without running the command | both path tests: no catalogue read |
+| A refused job not written to the error log | the failed-fetch test |
+| The run's outcome kept after the approval | the install path test |
+| The loopback check removed | the core tool's seam test |
+
+**In the real window (2026-11-02).** The build was this change's own publish, on a fresh home with no `Cores/`, no
+`cores.approved` and the big screen, driven by a virtual pad and read through AT-SPI.
+- Start ▸ Tools ▸ Cores showed "8 cores · 8 installed · catalogue not read yet".
+- Select, then Down ×3: the focus went Filter, Check for Updates, Verify, never leaving the card.
+- Up, then A at 08:50:53 showed "Read libretro's catalogue on 2026-11-02: 255 cores for this machine".
+- R1 to PlayStation 2, then Down to PCEE2 ("Available"; help bar "Install…"). A showed "Install PCEE2?" with No
+  focused. Down to Yes, then A at 08:52:23. At 08:52:28 the notice read "Installed pcee2. Nothing downloaded runs until
+  you approve it", and `pcee2_libretro.so` (42,217,760 bytes) was in place.
+- A showed "Approve PCEE2?" with No focused. Down to Yes, then A wrote `cores.approved` with
+  `e09d543568895f631ff61b7249586a82c878c10182cc7e6ae2d287c5640dfc92`, the file's own SHA-256. The page then read
+  "✓ Approved, held to its hash".
+- Jak and Daxter, opened from the PlayStation 2 gamelist with A, logged
+  `[picture] Sony - PlayStation 2 (PCEE2): in a ring: the hosted core draws into a ring made on the presenter's
+  device`. It ran at 59.9–60.1 fps, with single dips to 55.3, 56.1, 56.5 and 58.4 during loading, and `retro_run`
+  at 1.9–2.6 ms. That is 57 one-second samples.
+
+**Left as it is, and recorded for the tester.** On a fresh home PCEE2 is not offered until the player runs Check for
+Updates; the mockups show it listed. The catalogue is fetched only when asked (§11 decision 5), so the notice is the
+only pointer. Whether to read it once on a home that never has is the tester's call.
+
+### 3.7 Names, order and focus, to the mockups (2026-11-02)
+
+- **Console names come from the systems table only.** A row's consoles are the table's `console` names for its
+  systems. A system with no entry in the table names no console. This applies to Endou's `gg`, and to Flycast's
+  `naomi` and `atomiswave`, which `libretro-cores.tsv` already says no console shows. Before, the raw id was shown in
+  the Console column and as a section. With no runtime to read the table from, the ids stay as they are.
+- **Order, as §15.3 of `EmuSen_Interface.md` states.** Rows are sorted by console in the strip's order, then the
+  console's default first, then what is installed, then by name. The strip follows the systems table's order as the
+  runtime lists it; before, it was alphabetical. A core of several consoles sits under the earliest of them.
+- **Focus after a job.** After a run (Install, Update, Remove) or an approval, the list is shown afresh. The row acted
+  on (the first marked) is then chosen again and given the focus. Before, the focus was on nothing until the next
+  press, which landed on the Search box.
+
+**Tests.** `CoresInstallPathTests` now also checks three things: no row or section carries `gg`, `naomi` or
+`atomiswave`; the rows run in the strip's order; and the focus is on PCEE2's row after the install and after the
+approval, with PCEE2 first in the PlayStation 2 section once it is the default. Each rule was seeded out on
+2026-11-02 (raw ids kept, rows unordered, the focus not given back), and each was caught.
+
+**Compared with the mockups (1280 × 800, 2026-11-02).** Seen on the audit's pictures (`WindowFitAuditTests`
+`A_tool_screen_fits_and_is_pictured_at_the_mockups_sizes`, Cores and CoresDetail) against `cores-list` and
+`cores-waiting`. These still differ:
+1. Console names: the table's `console` is `SNES` and `N64`, while the mockups say "Super Nintendo" and "Nintendo 64".
+   No field of the table holds those words, and its `name` is the long form ("Super Nintendo Entertainment System").
+2. The rows: the mockups draw full-width rows with a 4 px accent bar on the chosen row's left. Here, inset rule lines
+   separate the rows and the chosen row has no bar. An empty header strip about 10 px tall sits above the first row.
+3. The vertical rhythm: the title, the strip and the list sit about 5, 11 and 12 px higher than in the mockups.
+4. The foot: the mockups put `Apply…` with its Start glyph as a button beside the space bar, with "Nothing marked"
+   above them. Here only the help bar carries Apply, and "Nothing marked" sits lower.
+5. The help bar's order: the mockups read A, B, Console, More, List, Apply; here it is A, B, Console, List, Apply,
+   More.
+6. The pane: the mockups add "✓ You have one." under a firmware need when the player has it. Cores does not check
+   the firmware.
+7. The search box's placeholder reads "Search cores", and the mockups' reads "Search".
+
 ## 4. The data model
 
 ### 4.1 Three sources, each the owner of its facts

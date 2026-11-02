@@ -57,6 +57,9 @@ namespace EmuSen.Mistress.Input
 
             if (open is null && window is IPadDriven driven && driven.OnPad(button)) return;
 
+            // A card over part of the sheet, such as a frame's List card or question, keeps the pad's focus within it - see EmuSen_Settings_Reference.md §4.45.10.
+            root = Uppermost(root);
+
             // Focus left under the sheet, nowhere, or on a control since hidden starts again at the window's first control - see EmuSen_Settings_Reference.md §4.48.10.
             if (open is null && (focused is not Visual at || !IsWithin(at, root) || !focused.IsEffectivelyVisible))
             {
@@ -110,7 +113,7 @@ namespace EmuSen.Mistress.Input
                     if (focused is ComboBox closed) { closed.IsDropDownOpen = true; return; }
                     if (focused is TabItem header) { header.IsSelected = true; return; }
                     if (focused is ToggleButton toggle) { toggle.IsChecked = toggle.IsChecked != true; return; }
-                    if (focused is Button pressed) { pressed.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); return; }
+                    if (focused is Button pressed) { Press(pressed); return; }
                     if (focused is ListBoxItem item && item.GetVisualDescendants().OfType<ToggleButton>().FirstOrDefault(t => t.IsEffectivelyEnabled) is { } tick)
                     {
                         tick.IsChecked = tick.IsChecked != true;
@@ -124,6 +127,28 @@ namespace EmuSen.Mistress.Input
                     if (open is not null) { Close(open); return; }
                     window.Close();
                     return;
+            }
+        }
+
+        // A button pressed as a click presses it: its Click raised, then its command run unless a handler took the click - see EmuSen_Settings_Reference.md §4.45.10.
+        private static void Press(Button button)
+        {
+            var click = new RoutedEventArgs(Button.ClickEvent);
+            button.RaiseEvent(click);
+            if (!click.Handled && button.Command is { } command && command.CanExecute(button.CommandParameter)) command.Execute(button.CommandParameter);
+        }
+
+        // The uncovered layer over a covered part of root, followed down to the top one; root itself where nothing in it is covered.
+        internal static Control Uppermost(Control root)
+        {
+            for (Control at = root; ;)
+            {
+                Control? over = at.GetVisualDescendants().OfType<Panel>()
+                    .Where(p => p.IsEffectivelyVisible && !SheetLayer.GetIsCovered(p) && p.Children.Any(c => c.IsSet(SheetLayer.IsCoveredProperty) && SheetLayer.GetIsCovered(c)))
+                    .Select(p => p.Children.LastOrDefault(c => c.IsEffectivelyVisible && !SheetLayer.GetIsCovered(c)))
+                    .FirstOrDefault(c => c is not null);
+                if (over is null) return at;
+                at = over;
             }
         }
 

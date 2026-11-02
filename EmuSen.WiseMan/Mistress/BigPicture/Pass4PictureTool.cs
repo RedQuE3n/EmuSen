@@ -31,6 +31,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // Pass 4's badges, switches, overlay and sheets at 1280 by 800, written outside the repository to be looked at - see EmuSen_BigPicture.md §29.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class Pass4PictureTool
     {

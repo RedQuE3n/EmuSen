@@ -15,7 +15,7 @@ tree
   0 LayoutTransformControl at=0,0,1280,800 by=panel limit=0,0,1280,800 role=none
     1 ContentControl at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#D4D4D4FF role=none
       2 PackagesPane at=48,28,1184,764 by=panel heard=Packages limit=0,0,1280,800 role=pane
-        3 Panel at=48,28,1184,764 by=panel limit=0,0,1280,800 role=none
+        3 Panel at=48,28,1184,764 by=panel limit=0,0,1280,800 name=AdaptiveLayers role=none
           4 Grid at=48,28,1184,764 by=panel limit=0,0,1280,800 role=none
             5 Border at=48,28,1184,51 by=panel heard=PACKAGES limit=0,0,1280,800 name=AdaptiveHeader role=none
               6 DockPanel at=64,40,1152,39 by=panel limit=0,0,1280,800 role=none

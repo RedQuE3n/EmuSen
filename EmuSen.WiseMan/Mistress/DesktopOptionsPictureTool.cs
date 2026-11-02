@@ -35,6 +35,7 @@ namespace EmuSen.WiseMan.Mistress
     }
 
     // Q18's offer and Q19's menu and editor at 1280 by 800; a desktop window or menu is drawn over the main window where it opens.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class DesktopOptionsPictureTool : IDisposable
     {

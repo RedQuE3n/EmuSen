@@ -36,6 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // Every window a big-screen session shows as a sheet, at 1280 by 800 and 1920 by 1200, into a folder named by EMUSEN_WINDOW_LOOK_STAGE; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class WindowLookPictureTool : IDisposable
     {
@@ -336,6 +337,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The scraping status in a big-screen session, part way through a run and finished, at both sizes.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class WindowLookScrapePictureTool : ScrapeWindowFixture
     {

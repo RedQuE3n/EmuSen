@@ -252,6 +252,10 @@ pub trait Snapshots {
     fn snapshot(&mut self, into: &mut Vec<u8>) -> Result<usize, (i32, String)>;
     fn load(&mut self, state: &[u8]) -> Result<(), (i32, String)>;
     fn total_frames(&self) -> i64;
+    /// The console's frame at its own rate, the longest a snapshot may take before capture stops; zero for no limit.
+    fn frame_interval(&self) -> std::time::Duration;
+    /// The engine as the player knows it, for the words saying why no history is kept.
+    fn name(&self) -> String;
 }
 
 pub struct Rewind {
@@ -274,6 +278,8 @@ pub struct Rewind {
     moments: VecDeque<Moment>,
     thumbnail_bytes: i64,
     worker: Option<Worker>,
+    /// Why capture stopped for the session: a snapshot that took longer than a frame (EmuSen_Backend.md §38).
+    withheld: Option<String>,
 }
 
 impl Default for Rewind {
@@ -296,6 +302,7 @@ impl Default for Rewind {
             moments: VecDeque::new(),
             thumbnail_bytes: 0,
             worker: None,
+            withheld: None,
         }
     }
 }
@@ -307,6 +314,11 @@ impl Rewind {
 
     pub fn set_interval(&mut self, frames: i32) {
         self.interval = frames.max(1);
+    }
+
+    /// Why no history is kept, once a snapshot took longer than a frame; none while capture goes on.
+    pub fn withheld(&self) -> Option<&str> {
+        self.withheld.as_deref()
     }
 
     /// Frames completed while on, rewound with the chain; a moment's frame is this at its capture.
@@ -338,7 +350,7 @@ impl Rewind {
 
     /// Once per completed frame; true when it took a snapshot, whose picture the caller may attach.
     pub fn on_frame_completed(&mut self, e: &mut dyn Snapshots) -> Result<bool, (i32, String)> {
-        if !self.enabled {
+        if !self.enabled || self.withheld.is_some() {
             return Ok(false);
         }
         self.frames += 1;
@@ -364,9 +376,27 @@ impl Rewind {
     }
 
     fn capture(&mut self, e: &mut dyn Snapshots) -> Result<bool, (i32, String)> {
+        if self.withheld.is_some() {
+            return Ok(false);
+        }
         self.settle();
         let mut state = self.spare.take().unwrap_or_default();
+        let started = std::time::Instant::now();
         let length = e.snapshot(&mut state)?;
+        let took = started.elapsed();
+        let frame = e.frame_interval();
+        if !frame.is_zero() && took > frame {
+            self.withheld = Some(format!(
+                "a snapshot of {} takes {} ms, longer than a frame ({:.1} ms), so no history is kept for it",
+                e.name(),
+                took.as_millis(),
+                frame.as_secs_f64() * 1000.0
+            ));
+            self.clear();
+            (self.spare, self.worker) = (None, None);
+            self.free.clear();
+            return Ok(false);
+        }
         if length == 0 {
             self.spare = Some(state);
             self.clear();
@@ -536,5 +566,65 @@ mod tests {
         encode(&a, &a, &mut d);
         assert!(d.is_empty());
         assert!(apply(&mut c, &[5, 9, 1]).is_err());
+    }
+
+    /// A machine whose snapshot takes `cost` against a frame of `frame`.
+    struct Timed {
+        cost: std::time::Duration,
+        frame: std::time::Duration,
+        frames: i64,
+    }
+
+    impl Snapshots for Timed {
+        fn snapshot(&mut self, into: &mut Vec<u8>) -> Result<usize, (i32, String)> {
+            std::thread::sleep(self.cost);
+            into.resize(64, self.frames as u8);
+            Ok(64)
+        }
+        fn load(&mut self, _state: &[u8]) -> Result<(), (i32, String)> {
+            Ok(())
+        }
+        fn total_frames(&self) -> i64 {
+            self.frames
+        }
+        fn frame_interval(&self) -> std::time::Duration {
+            self.frame
+        }
+        fn name(&self) -> String {
+            "Slow Core".to_string()
+        }
+    }
+
+    fn run(r: &mut Rewind, m: &mut Timed, frames: i64) -> i64 {
+        let mut taken = 0;
+        for _ in 0..frames {
+            m.frames += 1;
+            taken += r.on_frame_completed(m).unwrap() as i64;
+        }
+        taken
+    }
+
+    #[test]
+    fn a_snapshot_longer_than_a_frame_stops_capture_and_says_why_with_its_time() {
+        let mut r = Rewind { enabled: true, ..Rewind::default() };
+        r.set_interval(2);
+        let mut m = Timed { cost: std::time::Duration::from_millis(25), frame: std::time::Duration::from_millis(10), frames: 0 };
+        assert!(!r.capture_now(&mut m).unwrap());
+        let why = r.withheld().expect("withheld").to_string();
+        assert!(why.starts_with("a snapshot of Slow Core takes ") && why.contains(" ms, longer than a frame (10.0 ms)"), "{why}");
+        m.cost = std::time::Duration::ZERO;
+        assert_eq!(run(&mut r, &mut m, 10), 0);
+        assert_eq!((r.depth(), r.snapshot_bytes(), r.moments().len()), (0, 0, 0));
+    }
+
+    #[test]
+    fn a_snapshot_inside_a_frame_keeps_capturing() {
+        let mut r = Rewind { enabled: true, ..Rewind::default() };
+        r.set_interval(2);
+        let mut m = Timed { cost: std::time::Duration::ZERO, frame: std::time::Duration::from_secs(1), frames: 0 };
+        assert!(r.capture_now(&mut m).unwrap());
+        assert_eq!(run(&mut r, &mut m, 10), 5);
+        assert!(r.withheld().is_none());
+        assert_eq!(r.moments().len(), 6);
     }
 }

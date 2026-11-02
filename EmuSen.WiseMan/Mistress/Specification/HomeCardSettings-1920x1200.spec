@@ -14,23 +14,24 @@ walk none: the pad moves the menu's own selection, not the focus
 tree
   0 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 role=none
     1 AdaptiveLayout at=0,0,1920,1161 by=panel heard=Home limit=0,0,1920,1161 name=PadCard role=pane
-      2 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 name=AdaptiveCardScrim paints=#0000008C role=none
-        3 MenuPanel at=0,0,1920,1161 by=panel heard=Settings limit=0,0,1920,1161 name=AdaptiveCard role=menu
-          4 HintBar at=682,1075,556,71 by=panel heard="A Select, B Back, Menu Close Menu" limit=0,0,1920,1161 role=group
-          5 Border at=36,346,768,648 by=panel limit=0,0,1920,1161 name=AdaptiveCardRows role=none
-            6 Border at=36,346,768,648 by=panel limit=0,0,1920,1161 name=AdaptiveContent role=none
-              7 LunaList at=36,346,768,648 by=panel heard=Menu limit=0,0,1920,1161 name=PadMenuList paints=#FFFFFFFF role=list
-                8 ScrollViewer at=36,346,768,648 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=36,346,768,648
-                  9 ListBoxItem at=36,346,768,81 by=fixed-scroll drawn focus heard="Players & Controllers" in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Players & Controllers"
-                  10 ListBoxItem at=36,427,768,81 by=fixed-scroll drawn focus heard="Controller Bindings" in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Controller Bindings"
-                  11 ListBoxItem at=36,508,768,81 by=fixed-scroll drawn focus heard=Graphics in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Graphics
-                  12 ListBoxItem at=36,589,768,81 by=fixed-scroll drawn focus heard=Shaders in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Shaders
-                  13 ListBoxItem at=36,670,768,81 by=fixed-scroll drawn focus heard=Cheats in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Cheats
-                  14 ListBoxItem at=36,751,768,81 by=fixed-scroll drawn focus heard="Memory Cards" in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Memory Cards"
-                  15 ListBoxItem at=36,832,768,81 by=fixed-scroll drawn focus heard=Firmware in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Firmware
-                  16 ListBoxItem at=36,913,768,81 by=fixed-scroll drawn focus heard=Preferences in=8 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Preferences
-          17 Border at=840,36,1044,1003 by=panel limit=0,0,1920,1161 name=AdaptiveCardPane role=none
-            18 Border at=840,36,1044,1003 by=panel limit=0,0,1920,1161 name=AdaptiveDetail role=none
+      2 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 name=AdaptiveLayers role=none
+        3 Panel at=0,0,1920,1161 by=panel limit=0,0,1920,1161 name=AdaptiveCardScrim paints=#0000008C role=none
+          4 MenuPanel at=0,0,1920,1161 by=panel heard=Settings limit=0,0,1920,1161 name=AdaptiveCard role=menu
+            5 HintBar at=682,1075,556,71 by=panel heard="A Select, B Back, Menu Close Menu" limit=0,0,1920,1161 role=group
+            6 Border at=36,346,768,648 by=panel limit=0,0,1920,1161 name=AdaptiveCardRows role=none
+              7 Border at=36,346,768,648 by=panel limit=0,0,1920,1161 name=AdaptiveContent role=none
+                8 LunaList at=36,346,768,648 by=panel heard=Menu limit=0,0,1920,1161 name=PadMenuList paints=#FFFFFFFF role=list
+                  9 ScrollViewer at=36,346,768,648 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=36,346,768,648
+                    10 ListBoxItem at=36,346,768,81 by=fixed-scroll drawn focus heard="Players & Controllers" in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Players & Controllers"
+                    11 ListBoxItem at=36,427,768,81 by=fixed-scroll drawn focus heard="Controller Bindings" in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Controller Bindings"
+                    12 ListBoxItem at=36,508,768,81 by=fixed-scroll drawn focus heard=Graphics in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Graphics
+                    13 ListBoxItem at=36,589,768,81 by=fixed-scroll drawn focus heard=Shaders in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Shaders
+                    14 ListBoxItem at=36,670,768,81 by=fixed-scroll drawn focus heard=Cheats in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Cheats
+                    15 ListBoxItem at=36,751,768,81 by=fixed-scroll drawn focus heard="Memory Cards" in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Memory Cards"
+                    16 ListBoxItem at=36,832,768,81 by=fixed-scroll drawn focus heard=Firmware in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Firmware
+                    17 ListBoxItem at=36,913,768,81 by=fixed-scroll drawn focus heard=Preferences in=9 limit=36,346,768,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Preferences
+            18 Border at=840,36,1044,1003 by=panel limit=0,0,1920,1161 name=AdaptiveCardPane role=none
+              19 Border at=840,36,1044,1003 by=panel limit=0,0,1920,1161 name=AdaptiveDetail role=none
 focus none
 press down menu="open at 1: Controller Bindings" top=none
 press up menu="open at 0: Players & Controllers" top=none

@@ -16,9 +16,9 @@ namespace EmuSen.Mistress.Views
         private string? RewindUnavailable()
         {
             if (_session is not { } session) return "no game running";
-            if (!session.RewindCapture) return session.RewindWithheld ?? "not kept for this engine";
             try
             {
+                if (session.RewindWithheldNow() is string withheld) return withheld;
                 using JsonDocument reel = JsonDocument.Parse(session.Crystal.RewindReel());
                 if (reel.RootElement.GetProperty("snapshot_bytes").GetInt64() == 0) return "nothing to go back to yet";
             }

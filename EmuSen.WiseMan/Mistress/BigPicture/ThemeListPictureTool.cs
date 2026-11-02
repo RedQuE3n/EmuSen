@@ -27,6 +27,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The Themes tab at 1280 by 800 with EmuSen's own look chosen and with Art Book Next chosen, and Preferences' row; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ThemeListPictureTool
     {

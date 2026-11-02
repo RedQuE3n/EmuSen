@@ -14,7 +14,7 @@ tree
   0 LayoutTransformControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
     1 ContentControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 paints=#D4D4D4FF role=none
       2 LibraryPane at=72,42,1776,1146 by=panel heard="Library Manager" limit=0,0,1920,1200 role=pane
-        3 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 role=none
+        3 Panel at=72,42,1776,1146 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
           4 Grid at=72,42,1776,1146 by=panel limit=0,0,1920,1200 role=none
             5 Border at=72,42,1776,76.5 by=panel heard="LIBRARY MANAGER" limit=0,0,1920,1200 name=AdaptiveHeader role=none
               6 DockPanel at=96,60,1728,58.5 by=panel limit=0,0,1920,1200 role=none

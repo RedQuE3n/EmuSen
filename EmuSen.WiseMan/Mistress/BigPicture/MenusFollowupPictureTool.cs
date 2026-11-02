@@ -26,6 +26,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // The lettered help glyphs, the editor's subtitle and per-row help, the scroll indicator and the text popup, at 1280 by 800 and 1920 by 1200 on both themes; written outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class MenusFollowupPictureTool
     {

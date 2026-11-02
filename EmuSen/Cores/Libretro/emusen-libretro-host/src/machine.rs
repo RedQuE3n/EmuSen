@@ -272,7 +272,8 @@ impl Machine {
         (self.shared.quirks & (sys::QUIRK_ENDIAN_DEPENDENT | sys::QUIRK_PLATFORM_DEPENDENT) != 0).then(state::platform)
     }
 
-    fn serialize_into(&self, out: &mut [u8]) -> Result<usize, i32> {
+    /// The core's state after a header: sealed with its digest for a state that may be written out, marked as this run's for a snapshot.
+    fn serialize_into(&self, out: &mut [u8], sealed: bool) -> Result<usize, i32> {
         let n = unsafe { (self.lib.api.serialize_size)() };
         if out.len() < state::HEADER + n {
             return Err(status::BUFFER_TOO_SMALL);
@@ -281,7 +282,11 @@ impl Machine {
             v1::detail("the core did not write its state");
             return Err(STATUS_STATE_REFUSED);
         }
-        state::seal(out, n, self.identity, &self.build, self.platform(), self.disc);
+        if sealed {
+            state::seal(out, n, self.identity, &self.build, self.platform(), self.disc);
+        } else {
+            state::mark(out, n, self.identity, &self.build, self.platform(), self.disc);
+        }
         Ok(state::HEADER + n)
     }
 }
@@ -325,9 +330,10 @@ impl StateMachine for Machine {
                 state::Refusal::Platform => "this state was saved on another kind of computer, and this core's states do not cross between them".to_owned(),
                 state::Refusal::Damaged => "this state is damaged: its contents do not match the digest saved with them".to_owned(),
                 state::Refusal::WrongMedia => "this state was saved with another disc in the drive than the one in it now".to_owned(),
+                state::Refusal::OtherRun => "this is a snapshot kept in memory by another run of the core, which only that run reads".to_owned(),
             });
             Fail(match r {
-                state::Refusal::Foreign | state::Refusal::OtherCore | state::Refusal::OtherBuild(_) => status::FOREIGN,
+                state::Refusal::Foreign | state::Refusal::OtherCore | state::Refusal::OtherBuild(_) | state::Refusal::OtherRun => status::FOREIGN,
                 state::Refusal::Version => status::STATE_VERSION,
                 state::Refusal::Platform => STATUS_PLATFORM,
                 state::Refusal::Damaged => status::TRUNCATED,
@@ -335,7 +341,7 @@ impl StateMachine for Machine {
             })
         })?;
         let mut before = vec![0u8; state::HEADER + unsafe { (self.lib.api.serialize_size)() }];
-        let kept = self.serialize_into(&mut before).map_err(Fail)?;
+        let kept = self.serialize_into(&mut before, false).map_err(Fail)?;
         if unsafe { (self.lib.api.unserialize)(payload.as_ptr() as *const c_void, payload.len()) } {
             self.refresh_blocks();
             front::flush_logs();
@@ -353,7 +359,7 @@ impl StateMachine for Machine {
     }
 
     fn save_state(&self, out: &mut [u8]) -> Result<usize, Fail> {
-        self.serialize_into(out).map_err(Fail)
+        self.serialize_into(out, true).map_err(Fail)
     }
 
     fn layout(&self) -> String {
@@ -692,7 +698,7 @@ impl v1::Core for Machine {
 
     fn save_snapshot(&mut self, out: &mut [u8]) -> Result<usize, i32> {
         self.shared().savestate_context = sys::SAVESTATE_CONTEXT_RUNAHEAD_SAME_INSTANCE;
-        let r = self.serialize_into(out);
+        let r = self.serialize_into(out, false);
         self.shared().savestate_context = sys::SAVESTATE_CONTEXT_NORMAL;
         r
     }

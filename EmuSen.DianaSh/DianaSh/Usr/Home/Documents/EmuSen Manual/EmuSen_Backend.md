@@ -2020,8 +2020,13 @@ buffers that `FrameHandOff` owns and gets back from the control, so a frame allo
 (`FrameHandOffTests.With_the_picture_copied_as_Mistress_copies_it_a_frame_allocates_next_to_nothing`). The raw picture
 is selected and copied the same way when the screen's filter reads one.
 
-Which way the picture reaches the screen is said once in the log, at a session's first picture (`[picture] <engine>:
-on the device …` or `read back: …` with the reason), as proposed with the device lend.
+Which way the picture reaches the screen is said in the log (`[picture] <engine>: in a ring …`, `on the device …` or
+`read back: …` with the reason), as proposed with the device lend. *Since 2026-11-01 it is said each time the path
+changes* (`PicturePaths`), not once at the first picture. The first picture is offered before the screen has ever
+presented on the device. So a ringed session was named "read back: the engine took no lent device" for its whole life,
+though every frame after the first went through the ring. On 2026-11-01 Jak on PCEE2 showed this: hand-off was 0.02 ms a
+frame, with no read-back. A ringed or lent frame shown while the screen is not presenting on the device now says so in
+its own words.
 
 The launch screen's load under the screen now opens the session on a worker for every engine, not only the v1 engines:
 `open` may be called on any thread.
@@ -9494,3 +9499,81 @@ fallback. The shape of an answer changed, so the minor is 1.6 (`EMUSEN_CRYSTAL_M
 **The C# implementation** stays at the minor it implements, as in §34. Its `RouteJson` writes the key as null, so the
 route parity classes compare the two whole.
 
+## 38. A snapshot longer than a frame stops rewind's capture, 2026-11-01
+
+**What was measured** [M, 2026-11-01, the desktop, RX 6800, Mistress's real window in big-screen mode, a sandbox copy of
+the published tree at 3351e722d, Jak and Daxter (USA, Rev 1) on PCEE2 v2.9.138 through the BIOS]. Mistress showed 34 to
+51 frames a second in alternate one-second windows, with `retro_run` at 2 to 4 ms and "sleep+rest" at 9 to 15 ms. The
+per-frame trace (`EMUSEN_PRESENT_TRACE`, Settings Reference §4.87.1) settled the question:
+- Frames ran on the scheduler's 16.68 ms grid (median period 16.68 ms, work median 6.9 ms).
+- Every thirtieth frame took 250 to 420 ms: 101 such frames in 49 s, at sequence 30, 60, 90 and so on.
+- That frame is the rewind snapshot. Mistress takes one every half second of console time (Settings Reference §4.112).
+  PCEE2's state is about 37 MB.
+- A late frame's debt is capped at three frames (§4.28), so each stall cost about fourteen frames.
+- The "sleep+rest" was the spin to the next deadline between stalls, not a sleep while behind. The scheduler and the
+  content-paced fallback ("refresh not measured") were not at fault.
+
+`eu-stack` samples of the core runner's main thread (200, about 30 ms apart) put the snapshot's time as follows:
+- the core's `retro_serialize`: 26 samples;
+- the libretro host's seal, a SHA-256 of the payload: 17;
+- copies of the buffer: 16;
+- the socket write: 11.
+
+For comparison, `retro_run` itself took 19 samples, and the runner sat idle in `recv` for 109.
+
+**The rule** (decided 2026-11-01). The runtime times every snapshot rewind takes (`Rewind::capture`). If one takes longer
+than one frame at the console's own rate, whatever the speed, then:
+- capture stops for the rest of the session and the chain and its buffers are let go;
+- session info's `rewind_capture` turns false and `rewind_withheld` says why, with the time measured: "a snapshot of
+  Sony - PlayStation 2 (PCEE2) takes 270 ms, longer than a frame (16.7 ms), so no history is kept for it";
+- the player's error log gets the same words once, and a `rewind` event with `op` `withheld` is raised.
+
+Mistress reads the words again each time its rewind menu is built (`GameSession.RewindWithheldNow`), so the menu row and
+the Pause Card say why. The rule is general and not per game or per core. An in-process core's snapshot is a copy of its
+memory, well inside a frame. Any engine whose snapshot cannot be hidden inside a frame stalls the picture every half
+second, and is withheld the same way. The first snapshot, taken when Mistress turns rewind on before the first frame runs,
+usually decides it, so the player sees no stall. Keeping rewind at the cost of the stalls would be a player option, never
+the default.
+
+**What a snapshot costs less of.** Two parts of the pipeline were waste, and are gone:
+- *No digest on a snapshot.* A state that may be written out (kind 0) keeps its seal. A snapshot (kind 1, used only in
+  memory by rewind) is marked instead: header flag 2, with 32 random bytes made once per process where the digest goes
+  (`state::mark`). Only the process that made a snapshot opens it; another's is refused as "a snapshot kept in memory
+  by another run of the core" (`FOREIGN`). The copy taken before a load to restore a refused state is marked the same
+  way, so a load computes one digest, not two.
+- *One copy less each way.* The broker's reply writes a large payload (64 KiB or more) after its head as it lies, not
+  copied into one message first. The caller reads the payload straight into its own buffer, neither zeroed nor copied
+  out of the message (`wire::send_reply`, `wire::read_reply`).
+
+These shorten the snapshots and loads that remain, such as a quick save's state and the undo snapshot a load takes. The
+core's own serialization alone is still longer than a frame for PCEE2, so these changes do not keep its rewind.
+
+**Tests.**
+- `rewind.rs`: a snapshot of 25 ms against a 10 ms frame withholds with words naming the engine and both times, and
+  nothing is captured after; one inside the frame keeps capturing.
+- The libretro host's `state.rs`: a snapshot carries this run's mark and not a digest, opens to its payload, and a
+  changed mark or a sealed state flagged as a snapshot is refused.
+- The broker's `wire.rs`: a reply of three times the threshold and the small one after it cross whole, and a reply cut
+  short is an error.
+- `PicturePathTests` (Mistress): the path's words.
+
+**In the real window, after** [M, 2026-11-01, the same desktop and sandbox, the published tree of this change, a blast
+run of another branch beside it]:
+- Three runs: 25 s; 132 s through the BIOS; and 167 s with Start and Cross pressed from about frame 2,500, as §10q's
+  pad script does, into New Game and the intro.
+- Each said `[picture] … read back: the core drew into the ring, but the screen is not presenting on the device yet`
+  for the first frame, then `in a ring` for the rest. Each withheld rewind at its first snapshot (377, 380, 427 and
+  433 ms), before the first frame ran, and the rewind row of the pad menu read the same words.
+- In the 167 s run, 147 of the 166 one-second windows after the first were within 59.9 to 60.1 frames a second, and
+  163 within 59.7 to 60.3. The one exception was a pair at 58.6 and 60.6: one late frame and its debt made up.
+- The trace's frame period was 16.68 ms at the median and the tenth percentile, and 16.69 ms at the ninetieth, over
+  8,270 frames; the longest frame took 90 ms. Before this change the same launch showed 33 to 53 frames a second.
+- Twenty further launches of 30 s each ran with stacks to be taken if the frame lines stopped for 3 s. Ten went
+  through `--play`. Ten went through the library, A on Jak, each started 4 s after the last had exited. None stopped,
+  and every window after the first was within 59.4 to 60.6. No core runner of a closed instance outlived it.
+
+*One launch is unexplained.* Of the 24 launches of this build, one stopped after its first two frames: its two
+`[picture]` lines were written, then no frame line followed, and AT-SPI found no application. It was the second launch,
+started a few seconds after the first had closed. It was ended by SIGTERM after three minutes, and no stacks were taken.
+Twenty repeats with the capture armed did not reproduce it, ten of them matching its path and its few seconds' gap. It is recorded here as not understood, and is not taken as
+fixed.

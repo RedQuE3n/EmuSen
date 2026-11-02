@@ -563,13 +563,13 @@ namespace EmuSen.Mistress.Views
             _ = SheetLayer.Show(window, this);
         }
 
-        // The bar goes when it is switched off or when both its parts are; a big screen's counters are its HUD's, not the bar's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
+        // The bar goes when it is switched off, when both its parts are, or under a tool shown as a screen (EmuSen_Interface.md §15.2); a big screen's counters are its HUD's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
         private void ApplyStatusBar()
         {
             bool counters = _appSettings.ShowFpsBar && !_bigScreen;
             StatusText.IsVisible = _appSettings.ShowStatusText;
             FpsText.IsVisible = counters;
-            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible);
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible) && !Sheets.IsScreenShown;
         }
 
         private void ShowDebugLogging()
@@ -1444,28 +1444,31 @@ namespace EmuSen.Mistress.Views
         }
 
         // The picture to the frame control: the lent device's when the core drew there and the screen presents there, else copied into a buffer the hand-off owns - see EmuSen_DevicePicture.md §17.
-        private void OfferPicture(GameSession session)
+        private PicturePath? OfferPicture(GameSession session)
         {
             int width = _info.width, height = _info.height;
-            if (width <= 0 || height <= 0) return;
+            if (width <= 0 || height <= 0) return null;
+            bool presents = GameFrame.PresentsOnDevice;
+            PicturePath path = PicturePaths.Of(_info.picture_in_ring != 0, _info.picture_on_device != 0, presents, session.DeviceOffered);
             if (_info.picture_in_ring != 0 && BorrowedRing(session) is { } ring)
             {
                 var picture = new EmuSen.Serenity.Slang.RingPicture(ring, (int)_info.ring_slot, _info.ring_value, (int)_info.fields, (int)_info.field);
-                if (GameFrame.PresentsOnDevice)
+                if (presents)
                 {
                     _frames.OfferInRing(picture, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
-                    return;
+                    return path;
                 }
                 _ringRelease.Release(picture, width, height);
             }
-            if (_info.picture_on_device != 0 && GameFrame.PresentsOnDevice && BorrowedLend(session) is { } lend)
+            if (_info.picture_on_device != 0 && presents && BorrowedLend(session) is { } lend)
             {
                 _frames.OfferOnDevice(lend, width, height, (long)_info.total_frames, _info.display_aspect, _info.display_lines);
-                return;
+                return path;
             }
-            if (_frames.Rent(width * height * 4) is not { } pixels) return;
+            if (_frames.Rent(width * height * 4) is not { } pixels) return path;
             session.Crystal.CopyPicture(pixels);
             _frames.Offer(pixels, width, height, Math.Max(1, _info.row_repeat), (long)_info.total_frames, _info.display_aspect, _info.display_lines, RawFor(session.Crystal));
+            return path;
         }
 
         // The machine's lend borrowed for the presenter, kept while the runtime hands the same one - see EmuSen_Backend.md §14.12.
@@ -1515,17 +1518,6 @@ namespace EmuSen.Mistress.Views
             return new EmuSen.Serenity.RawPicture(wanted, shape.width, shape.height, (int)shape.element, shape.stride, values);
         }
 
-        // Which way the picture reaches the screen, said once a session as its first picture is shown - see EmuSen_Backend.md §14.13.
-        private void NamePicturePath(GameSession session)
-        {
-            string path = _info.picture_in_ring != 0 && GameFrame.PresentsOnDevice ? "in a ring: the hosted core draws into a ring made on the presenter's device and the chain reads it there"
-                : _info.picture_on_device != 0 && GameFrame.PresentsOnDevice ? "on the device: the core draws on the presenter's device and the chain reads it there"
-                : !session.DeviceOffered ? "read back: the picture is not presented on the device, so no device was lent"
-                : _info.picture_on_device == 0 ? "read back: the engine took no lent device"
-                : "read back: the screen stopped presenting on the device";
-            Console.WriteLine($"[picture] {session.Engine}: {path}");
-        }
-
         // Runs off the UI thread; the frame-end order is the runtime's, the pacing against the display the window's - see EmuSen_Settings_Reference.md §4.21 and EmuSen_Backend.md §14.13.
         private void EmulationLoop()
         {
@@ -1544,7 +1536,8 @@ namespace EmuSen.Mistress.Views
 
             // The serial of the picture last offered; a core that says its picture is unchanged is not offered it again - see EmuSen_Multicore.md §14.
             ulong? offeredSerial = null;
-            bool pictureNamed = false, turboApplied = false;
+            bool turboApplied = false;
+            PicturePath? namedPath = null;
 
             // The frame call alone against the rest of this loop's per-frame work - see §4.21.
             TimeSpan runFrameTimeInWindow = TimeSpan.Zero;
@@ -1640,11 +1633,11 @@ namespace EmuSen.Mistress.Views
                     // Nothing new was drawn on a frame the speed left undrawn, nor when the core says its picture is the last one.
                     if (_info.rendered != 0 && _info.picture_serial != offeredSerial)
                     {
-                        OfferPicture(session);
-                        if (!pictureNamed)
+                        // Said when it changes, so a first frame read back before the screen presents on the device is followed by the path the rest take.
+                        if (OfferPicture(session) is { } path && path != namedPath)
                         {
-                            pictureNamed = true;
-                            NamePicturePath(session);
+                            namedPath = path;
+                            Console.WriteLine($"[picture] {session.Engine}: {PicturePaths.Words(path)}");
                         }
                         offeredSerial = _info.picture_serial;
                         offeredInWindow++;

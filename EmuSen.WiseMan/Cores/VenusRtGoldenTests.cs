@@ -151,6 +151,7 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // Opt-in: each anchor's VenusRT picture equal to one of Mesen's within the window, or the cause recorded, and its hash as recorded; every skipped game listed.
+        [Trait("Category", "nightly")]
         [Fact]
         public void The_goldens_against_Mesen()
         {

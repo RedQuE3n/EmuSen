@@ -27,6 +27,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     }
 
     // NES opening on its folders, inside one, GB's letter folders, NES flattened, and the folder's options and editor, at 1280 by 800; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class FoldersPictureTool
     {

@@ -19,6 +19,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
     }
 
     // The Scraping tab's new rows, on the desktop and as sheets in a big-screen session, at 1280 by 800 and 1920 by 1200; outside the repository.
+    [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ScrapeExtrasPictureTool : ScrapeWindowFixture
     {

@@ -38,3 +38,10 @@ strip = "debuginfo"
 [profile.test-checked]
 inherits = "release"
 overflow-checks = true
+
+# What a land tests with: release without cross-crate LTO, in sixteen incremental units, so a change rebuilds in minutes - see EmuSen_RustPlatform.md §37.6.
+[profile.test-fast]
+inherits = "release"
+lto = false
+codegen-units = 16
+incremental = true

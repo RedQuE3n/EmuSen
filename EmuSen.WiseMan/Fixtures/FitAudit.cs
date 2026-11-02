@@ -41,6 +41,8 @@ namespace EmuSen.WiseMan.Fixtures
             SlackFor(root);
             Rect frame = FrameOf(root);
             List<(Control C, Rect R, Rect Seen)> shown = Shown(root, frame).ToList();
+            // What a sheet layer marks covered, under a card or a message box, is out of reach and not drawn for the audit's purposes, as LunaP's audit holds (its docs §208.7).
+            shown.RemoveAll(x => EmuSen.LunaP.Windowing.SheetLayer.GetIsCovered(x.C));
             if (root.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu") is { IsTitleCut: true } menu)
                 faults.Add($"title cut: '{menu.Title}'");
             if (root.GetVisualDescendants().OfType<MenuPanel>().FirstOrDefault(m => m.Name == "SheetMenu") is { IsFooterCut: true } cut)

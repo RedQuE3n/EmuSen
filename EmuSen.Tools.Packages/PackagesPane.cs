@@ -49,7 +49,7 @@ namespace EmuSen.Tools.Packages
                 .Column(new LunaColumn<PackageRow>("Console", r => r.Console) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Format", r => r.Format) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Mode", PackagesWords.Mode) { Width = "Auto" })
-                .Column(new LunaColumn<PackageRow>("State", StateText) { Tone = StateTone }, bigScreen: true)
+                .Column(new LunaColumn<PackageRow>("State", StateText) { Tone = StateTone, Width = "Auto", Alignment = Avalonia.Layout.HorizontalAlignment.Right }, bigScreen: true)
                 .Column(new LunaColumn<PackageRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) });
             MarksFor = PackagesPlan.MarksFor;
             InSection = Belongs;
@@ -262,7 +262,8 @@ namespace EmuSen.Tools.Packages
             sections.AddRange(Rows.Select(r => r.Console).Where(c => c.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
-            Header = new AdaptiveHeader("PACKAGES", Facts: $"{Rows.Count} games · {Rows.Count(r => r.Packaged)} packaged · {Rows.Count(r => r.Problem)} problems");
+            int problems = Rows.Count(r => r.Problem);
+            Header = new AdaptiveHeader("PACKAGES", Facts: $"{Rows.Count} games · {Rows.Count(r => r.Packaged)} packaged · {problems} {(problems == 1 ? "problem" : "problems")}");
         }
 
         // The packages' total and the free space of the disk they are on (§3).

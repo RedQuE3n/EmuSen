@@ -64,7 +64,8 @@ namespace EmuSen.Tools.Scraper
             WatchOption(_theme, relist: true);
             WatchOption(_videos, relist: true);
             WatchOption(_overwrite, relist: false);
-            SetToolActions([_markAll, LunaAction.Separator(), _theme, _videos, _overwrite, LunaAction.Separator(), _stop], bigScreenButtons: [_stop]);
+            SetToolActions([_markAll, LunaAction.Separator(), _theme, _videos, _overwrite, LunaAction.Separator(), _stop], bigScreenButtons: []);
+            StopAction = _stop;
             SetListActions([_markAll]);
             SetPlanOptions([_theme, _videos, _overwrite]);
             MarksChanged += UpdateActions;

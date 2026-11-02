@@ -77,7 +77,8 @@ namespace EmuSen.Tools.Library
             _save = new LunaAction("Save List…", () => _ = SaveList()) { HelpText = "Saves every finding as a text file." };
             _again = new LunaAction("Check Again", Refresh) { HelpText = "Reads the library's files again." };
             _stop = new LunaAction("Stop", StopScan) { HelpText = "Stops reading the library; the lists keep what was read." };
-            SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop], bigScreenButtons: [_stop]);
+            SetToolActions([_hide, _reveal, _save, LunaAction.Separator(), _again, _stop], bigScreenButtons: []);
+            StopAction = _stop;
             SetListActions([_save, _again]);
             MarksChanged += UpdateActions;
 

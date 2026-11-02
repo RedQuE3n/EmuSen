@@ -133,7 +133,8 @@ namespace EmuSen.WiseMan.Fixtures
                 if (!ie.IsEffectivelyEnabled) a["off"] = "";
                 if (PadAudit.TakesSideways(ie)) a["sideways"] = "";
             }
-            if (FitAudit.Drawn(c)) a["drawn"] = "";
+            // What a sheet layer marks covered, under a card or a message box, is not drawn for the rules' purposes, as the fit audit holds (LunaP's docs §208.7).
+            if (FitAudit.Drawn(c) && !EmuSen.LunaP.Windowing.SheetLayer.GetIsCovered(c)) a["drawn"] = "";
             if (!FitAudit.HitTestable(c, root)) a["nohit"] = "";
 
             // The limit the fit audit holds it to: its nearest clip or scroller, else the panel.

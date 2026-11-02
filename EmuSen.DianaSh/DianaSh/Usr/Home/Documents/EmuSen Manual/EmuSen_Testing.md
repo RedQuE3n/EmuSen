@@ -151,7 +151,7 @@ comment; twelve are recordings and two are nobody's input. Added on 2026-11-01: 
 lists as nobody's input; any `.csproj` selecting `LeafAssemblyTests`; `LunaP.props` selecting `lunap`; `Testing/`
 selecting the studio's own crate; and `EmuSen/Cores/Libretro/` selecting `LibretroHostTests`, from the replay of §6.
 A term that names no class is reported on standard error: on 2026-11-01, `CrystalTwinScript` (in the map's
-`^Platform/crystal` line) named none.
+`^Platform/crystal` line) named none, and was dropped from `inputs.json` the same day.
 
 `blast-map.txt` is deleted when a month of the nightly's `miss` rows shows nothing the map would have caught that impact
 did not (phase 3).

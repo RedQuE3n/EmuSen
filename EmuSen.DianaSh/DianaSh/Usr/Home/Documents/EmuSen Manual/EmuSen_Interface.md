@@ -601,7 +601,7 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   once on the desktop too, with no Save button.
 - **Not in U4.** Controller profile, a layer's switch and order, ScreenScraper's other covers and the generated one, X
   Pin and Set as cover, and the docked keyboard, each waiting on a surface proposed first (§50.4 there).
-- **Recordings.** Thirty-two new states, the themed Select sheet taken again, and twenty-six retired with their
+- **Recordings.** Thirty-two new states, the themed Select sheet and the Home card's game row taken again, and twenty-six retired with their
   windows (`EmuSen_InterfaceSpec.md` §6.3.20).
 
 ---

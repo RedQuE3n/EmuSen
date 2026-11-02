@@ -347,7 +347,10 @@ over a white picture under the 72% scrim measures 9.3:1. `Info` is kept as the o
 
 Barlow Condensed for display words and titles, Barlow for everything else, on every form (§0.3); regular and medium
 weights only, never light [21]. Both families ship with LunaP under the SIL Open Font License 1.1, version 1.422 from the
-Barlow project (`THIRD_PARTY_NOTICES.md` §1.5).
+Barlow project (`THIRD_PARTY_NOTICES.md` §1.5). The symbol glyphs Barlow lacks come from one bundled face each, declared to the
+font manager so they resolve the same on every machine (decided 2026-11-01): the arrows, triangles, ticks, warning sign,
+dot, stars and boxes from Adwaita Mono, version 34.08 under the same licence, whose line beside Barlow's stays within
+2 px of a plain one (LunaP §208.13).
 
 | Role | Big screen (units) | Desktop (px) | Face |
 |---|---|---|---|
@@ -868,6 +871,14 @@ is recorded at a frame of 383 and measures 385 in some whole-suite runs and vice
 23:27 failed it the other way round), and `GraphicsSettingsWindowLayoutTests` reads `ConsolesConfig` through the
 process-wide `ConfigStore.OverrideDirectory` that 141 test classes set, so a parallel neighbour can move its file; both
 pass on their own.
+
+Decided 2026-11-01, on the tester's standing rule that no test is left flaky: the symbol glyphs resolve to one bundled
+face on every machine. `ScrapeStatusIdle`'s 2 px was the fallback for `▸`, a glyph Barlow lacks, chosen by what the
+process had loaded first; LunaP now declares the face (§5.2): every symbol block to Adwaita Mono, bundled under the OFL
+beside Barlow (LunaP §208.13), for Mistress and for the headless harness alike. Noto Sans Symbols 2 and STIX Two Math
+were each tried first and rejected the same night: a Caption line holding one glyph grew from 26 to 34 px under the
+first (its descent) and to 30 under the second (its line gap), where Adwaita Mono keeps the 26 the machine's own
+fallback had given. Every audited state was re-recorded for the faces that changed.
 
 ### 15.11 Questions
 

@@ -1,0 +1,30 @@
+NAME
+    queue - the runner's slots, and a slot for a heavy job
+
+SYNOPSIS
+    queue
+    queue ask CLASS [--gb N] [--as WHO]
+
+DESCRIPTION
+    A command of the emusen.testing module. The desktop's slots per class
+    (two cpu, one gpu, from ~/.config/EmuSen/testing/runners.json) are
+    lock files under ~/.cache/emusen/testing/queue/, held with flock(2).
+    trial takes a cpu slot for each step and waits for one otherwise.
+
+    queue lists every slot, tab-separated: class, slot, held or free, and
+    who holds it and since when, as the holder wrote it.
+
+    queue ask waits until a slot of CLASS is free and prints a command
+    prefix: flock on that slot, then systemd-run --user --scope with
+    CPUWeight=20, MemoryMax=N G (default 10) and MemorySwapMax=2G. The
+    command run after it holds the slot for as long as it runs; if another
+    job took the slot in between, flock waits. Each ask is a row of the
+    store's queue table.
+
+    When the household's lease service arrives, the one function that
+    takes a slot calls it instead of the lock files. See EmuSen_Testing.md
+    §3.8.
+
+EXAMPLES
+    queue
+    $(dianash -c 'queue ask cpu --gb 8 --as studio-p1') cargo build --release

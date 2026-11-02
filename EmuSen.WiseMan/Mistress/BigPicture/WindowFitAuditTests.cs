@@ -38,6 +38,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // The windows a player reaches in a game, and those reached from the themed library.
         public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "GraphicsSettingsPlayStation2", "GraphicsSettingsHostedPlayStation2", "ShaderSettingsPlayStation2", "ControllerBindingsPlayStation2", "ControllerBindingsPlayStation2Digital", "ControllerBindingsSaturn", "ControllerBindingsDreamcast", "ShaderSettingsSliders", "RewindReel", "Resume", "ControllerBindings",
             "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ResumeLongTitle", "ControllerBindingsLongNames", "Shell"];
+        // The installed themes' date, fixed because digit widths decide where the state line wraps.
+        private static readonly DateTimeOffset ThemeInstallDate = new(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
+
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
 
@@ -661,7 +664,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     var longHosts = FakeThemeHosts.Standard();
                     longHosts.Themes.Add(LongTheme);
                     ThemeBrowserSheetTests.Serve(longHosts);
-                    longHosts.Install(LongTheme.Source);
+                    longHosts.InstallDated(LongTheme.Source, ThemeInstallDate);
                     ThemeBrowserWindow longBrowser = ThemeBrowserSheetTests.OpenBrowser(s, ThemeBrowserSheetTests.OpenSettings(s));
                     if (which == "ThemeBrowserLongName")
                     {
@@ -692,7 +695,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "ThemeAbout":
                     var hosts = FakeThemeHosts.Standard();
                     ThemeBrowserSheetTests.Serve(hosts);
-                    hosts.Install(hosts["Plain Shelf"].Source);
+                    hosts.InstallDated(hosts["Plain Shelf"].Source, ThemeInstallDate);
                     ThemeSettingsWindow settings = ThemeBrowserSheetTests.OpenSettings(s);
                     ThemeBrowserWindow browser = ThemeBrowserSheetTests.OpenBrowser(s, settings);
                     if (which == "ThemeBrowser") break;

@@ -1,0 +1,44 @@
+NAME
+    units - the catalogue of test units, one per line
+
+SYNOPSIS
+    units [--kind cargo|dotnet] [--tier T] [--crates] [--rev REV] [--repo DIR]
+    units --key UNIT [--profile P] [--rev REV] [--repo DIR]
+
+DESCRIPTION
+    A command of the emusen.testing module, the testing studio. A unit is
+    the smallest thing the studio runs and records as a whole. It is
+    derived from the revision's files, never from a hand-kept list:
+
+        cargo    a Cargo root: a crate outside any workspace, or a
+                 workspace, counted once (Platform); --crates adds a
+                 workspace's member crates as 'crate' lines
+        dotnet   a test class of a test project (a project that
+                 references xunit), found in its sources: a class with
+                 [Fact] or [Theory] tests of its own, merged across
+                 partial files, or one inheriting an abstract class's
+                 tests; and 'lunap', the sibling toolkit's suite
+
+    Each line is tab-separated: kind, unit, tier tag, needs. The tier tag
+    is 'nightly' for a class carrying [Trait("Category", "nightly")] and
+    'land' otherwise.
+
+    --key prints a unit's key and what it is made of: the git object name
+    of every input folder (the unit's own, the crates and projects it is
+    built from, its workspace's manifest and lock, the declared extras of
+    Testing/inputs.json), the toolchain (rustc -V or dotnet --version),
+    the profile, ~/.cargo/config.toml for a cargo unit and the LunaP
+    checkout's commit for a dotnet one. The key is git's hash of those
+    lines. When an input has uncommitted changes the answer is 'none' and
+    the status 1: git's objects would not describe what runs, so nothing
+    may be reused for it.
+
+    The repository is --repo, else EMUSEN_REPO, else the one holding the
+    working folder. Revisions are read from git objects, so a branch need
+    not be checked out. See EmuSen_Testing.md §3.1.
+
+EXAMPLES
+    units --kind cargo | wc -l
+    units --tier nightly
+    units --crates | grep '^crate' | grep Platform/
+    units --key "cargo:EmuSen/Cores/Sony/Sapphire - PlayStation 2"

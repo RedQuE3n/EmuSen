@@ -101,5 +101,30 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(said, typeof(MainWindow).GetField("_engineFallbackNotice", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
             window.Close();
         }, default);
+
+        // A console's approved default that could not be read: nothing is asked, and the game opens on the fallback with the reason in one line (EmuSen_LibretroHost.md §10v).
+        [Fact]
+        public Task A_held_default_is_said_with_its_reason_and_not_asked_about() => Session.Dispatch(() =>
+        {
+            Type awaiting = Seam("AwaitingQuery").FieldType, record = awaiting.GetGenericArguments()[1];
+            object core = Activator.CreateInstance(record, "pcee2_libretro.so", "Sony - PlayStation 2 (PCEE2)", new[] { "Someone" }, "GPLv3", new[] { "ps2" }, new string('a', 64))!;
+            record.GetProperty("Instead")!.SetValue(core, "Sapphire");
+            record.GetProperty("Held")!.SetValue(core, "the entry needs refresh");
+            var rom0 = System.Linq.Expressions.Expression.Parameter(typeof(string));
+            Seam("AwaitingQuery").SetValue(null, System.Linq.Expressions.Expression.Lambda(awaiting, System.Linq.Expressions.Expression.Constant(core, record), rom0).Compile());
+            bool asked = false;
+            Seam("ConfirmCoreApproval").SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, _, _) => { asked = true; return Task.FromResult(true); }));
+            var window = new MainWindow();
+            window.Show();
+            var ask = (Task)typeof(MainWindow).GetMethod("AskCoreApprovalAsync", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { Path.Combine(_root, "Roms", "Jak.iso") })!;
+            var clock = Stopwatch.StartNew();
+            while (!ask.IsCompleted && clock.ElapsedMilliseconds < 5000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
+            Assert.True(ask.IsCompletedSuccessfully);
+            Assert.False(asked, "an approved default is not asked about again");
+            const string said = "Sony - PlayStation 2 (PCEE2) could not be used, so this game opens on Sapphire: the entry needs refresh";
+            Assert.Equal(said, window.GetControl<TextBlock>("StatusText").Text);
+            Assert.Equal(said, typeof(MainWindow).GetField("_engineFallbackNotice", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            window.Close();
+        }, default);
     }
 }

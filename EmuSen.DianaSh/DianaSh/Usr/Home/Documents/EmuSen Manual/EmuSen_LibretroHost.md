@@ -179,7 +179,8 @@ trusts what was downloaded over HTTPS; the hash then holds it to that build.
 
 **When EmuSen is updated**, the proxy's and the libretro host's hashes change. Discovery lists a folder whose copies differ
 from the installation's as "needs refresh", not "needs approval"; the core tool's `cores verify` refreshes the copies, and
-the approval, keyed to the libretro core, stands.
+the approval, keyed to the libretro core, stands. Since 2026-11-01 the runtime also refreshes an approved entry's copies
+itself when it reads the entry, from the installation folder whose manifest lists both libraries (§10v).
 
 ## 2. The core ABI: what v1.15 lacks, and minor 1.16
 
@@ -221,7 +222,7 @@ write and reach. One process per machine also removes libretro's one-instance-pe
 ### 3.2 The protocol
 
 - **Start.** The proxy starts `emusen-core-runner` at the first library-level call (to answer `info`, `settings_schema`,
-  `firmware_for`, then cached; the runner exits) and one runner per `create`. It passes a Unix socket pair (control,
+  `firmware_for`, then cached; the runner exits, which it did not until §10w) and one runner per `create`. It passes a Unix socket pair (control,
   and descriptors by `SCM_RIGHTS`) and a shared memory region (`memfd`), and the runner loads `broker.target`.
 - **Calls.** Every v1 export is forwarded: the proxy writes the call and its arguments into the shared region and wakes
   the runner (a futex word in the region; a socket message for calls that carry descriptors), and waits for the answer.
@@ -2011,6 +2012,137 @@ granted its resolved folder; a plain file is granted its library folder only.
 link to a disc elsewhere) was used on a fresh home, with this proxy in the installation and the entry. A on the game
 asked for PCEE2's approval (§10t), and Approve opened it on PCEE2: `[picture] Sony - PlayStation 2 (PCEE2): read back`,
 with no refusal in the error log.
+
+## 10v. An approved default with an earlier build's copies opened nothing, and the game fell back unsaid (2026-11-01)
+
+**The defect.** On 2026-11-01 the tester ran the published build f1592d39e in the real window. PCEE2 had been installed
+at 17:18 by an earlier build, and the build was published again at 21:27. In the big screen the tester went to Cores,
+opened PCEE2 and chose Approve. `cores.approved` was written with the core's SHA-256, but the detail pane still read
+"needs refresh: Verify". Back in the library, A on Jak and Daxter opened the game on Sapphire, and nothing was said
+(`[picture] Sapphire: read back …` in the session's log).
+
+**The cause, shown on the published library.** The entry's proxy copy hashed `630c5b2e…`, while the installation's
+`cores.manifest` lists `libemusen_libretro_proxy.so` as `9c31c402…`. Rule 1 (§1.3) therefore lists the entry as needing
+refresh. A probe loaded the published `libemusen_platform.so` through its C interface (`emusen_galaxia_init`,
+`emusen_crystal_new` with the sandbox's installation and a copy of its `/Cores`, `emusen_crystal_route`,
+`emusen_crystal_core_approve`) and routed the Jak image. It gave these answers:
+
+| Step | `engine` | `waiting_default` | The PCEE2 row |
+|---|---|---|---|
+| Before the approval | Sapphire | `{pcee2, ab7ff5fd…}` | needs_refresh |
+| After it (status 0) | Sapphire | null | needs_refresh, its core approved |
+| After it, the copies replaced with the installation's | Sony - PlayStation 2 (PCEE2) | null | approved |
+
+The approval was recorded, and the rescan tried to read the entry. `entry::read` refused it as stale, and the refusal
+was said only on session 0, which nothing showed. The entry stayed a `Waiting` row and was never an engine. The route's
+`waiting_default` named only an unapproved default, so with the hash approved the route gave Sapphire with no reason,
+and Mistress had nothing to ask or say. Four of the five candidate causes were ruled out by the same run: the approval
+was in the file the runtime reads (`approvals_path`), the trust read it again (the row's core read "approved"), the
+default column reached the route (the waiting default was named before the approval), and the rule order puts a read
+PCEE2 first (the third row).
+
+**The change.**
+1. **The refresh, owned once.** `Entry::refresh` in `emusen-core-entry` copies the project's proxy and libretro host from
+   an installation folder by a rename, as the core tool did. `cores verify`, `get`, `update` and `rollback` call it in
+   place of their own copy.
+2. **The runtime refreshes an approved entry.** `entry::read`, after checking the approval, refreshes stale copies from
+   `Trust::vouched_installation`, the installation folder whose own manifest lists the build of both libraries there.
+   It then checks rule 1 again on the copies. Nothing is trusted that was not already trusted: the copies are the
+   installation's own bytes, and the core is still held to its approved hash. Each rescan also refreshes an approved
+   entry that was read but whose copies went stale, and a runtime starts with a rescan when it finds one.
+3. **A held default is said.** An approved entry that still cannot be read is kept, with its words, until the next rescan
+   (`Runtime::held`). The route then names it as `"default_held": {"stem","sha256","reason"}`, the frontend API's 1.7
+   (`EmuSen_Backend.md` §39). Mistress asks nothing about it. The game opens on the fallback with one line on the status
+   and over the game, which also goes to the session's console as `[core] …`: "Sony - PlayStation 2 (PCEE2) could not be
+   used, so this game opens on Sapphire: <reason>".
+
+**Tests.**
+- `route::waiting_default_tests::an_approved_default_that_could_not_be_read_is_named_with_why`: the held default is
+  named with its words, or with a reason where none was kept. It is not named when unapproved, when an engine was
+  chosen, or for a `.cue`.
+- `emusen-core-broker`'s `tests/runtime.rs`, on the Rust runtime:
+  - an entry whose proxy is an earlier build's is refreshed when its core is approved, and then opens and runs a frame;
+  - an entry whose folder cannot be written is held with the words "needs refresh … refreshing it failed", and is read
+    at the next rescan once the folder can be written.
+- WiseMan `CoresWindowRuntimeTests`, on the Rust runtime with a synthetic PS2 disc:
+  - `The_default_approved_mid_session_over_an_earlier_builds_copies_is_the_routes_engine`: Sapphire before, PCEE2's
+    engine after the approval, both keys null, the copy refreshed, nothing asked;
+  - `An_approved_default_that_cannot_be_read_gives_its_reason_and_no_silent_fallback`.
+- `PreLaunchQueryTests.A_held_default_is_said_with_its_reason_and_not_asked_about`.
+
+- `emusen-core-host`'s `trust::tests::copies_are_refreshed_only_from_an_installation_whose_manifest_lists_both`.
+
+The WiseMan case of the tester's run was first run against the read as it was before the change (a stale entry refused
+and not refreshed). It failed there, with Sapphire as the route's engine after the approval.
+
+**Seeded faults (2026-11-01).** Each was reverted, and each was caught:
+
+| Fault | Caught by |
+|---|---|
+| The read refusing stale copies without refreshing them, as before | the WiseMan mid-session case and the held case |
+| The refresh taking an installation's libraries without its manifest | the trust test |
+| The route naming the held default only when unapproved | the route test |
+| A held reason kept past the next rescan | the runtime test of the held entry |
+| Mistress ignoring `Held` | the pre-launch case |
+
+**In the real window (2026-11-01).** This branch's Release publish was placed in a copy of the tester's sandbox. The copy
+kept the sandbox's `home/`, with PCEE2's copies from the 17:18 build, and the hidden `.dianashroot`. Its
+`cores.approved` was moved aside first, so nothing was approved. The window was driven by a virtual pad.
+- **The tester's path.** Home card, Tools, Cores, then PCEE2, whose row read "needs refresh: Verify". Its page's Approve,
+  then Approve on the question. `cores.approved` was written with `ab7ff5fd…`, the proxy copy became the installation's
+  (`2c8d78d5…`), the sidecar was written, and the page read "Runs: PlayStation 2 · installed". Back in the library, A on
+  Jak and Daxter opened PCEE2 with no question: `[picture] Sony - PlayStation 2 (PCEE2): in a ring …`. Rewind was
+  withheld in the pad menu: "Rewind, a snapshot of Sony - PlayStation 2 (PCEE2) takes 398 ms, longer than a frame".
+  Of 132 one-second windows, 119 fell inside 59.9–60.1 fps. All 13 outliers were between 59.5 and 60.3, apart from the
+  first window (54.7) and two during the BIOS (56.2, 58.3).
+- **An update after the approval.** The 17:18 copies were put back, while the approval and the sidecar were kept. At its
+  start Mistress refreshed the copies, and A on Jak opened PCEE2 again. `[picture] … in a ring` came 1.2 s after the A
+  press, and the first fps line 2.0 s after it. The longest UI-thread answer to an AT-SPI probe every 0.25 s was 0.66 s,
+  at the press. One dip, to 42.7 and 45.5 fps, came 38–40 s in.
+- No runner outlived Mistress after SIGTERM in either run.
+
+**Where that session's log went.** The session logged to `~/.config/EmuSen/Logs/PlayStation 2/gui_…`, not under the
+sandbox's `home/`. This is by design. The sandbox's `appsettings.json` names no `LogDirectory`, and the error log's
+default is `~/.config/EmuSen/Logs` (`ErrorLog.DefaultRoot`, `EmuSen_Settings_Reference.md` §4.70). `EmuSen_Galaxia.md`
+§3.6 records the decision to keep that default rather than move it under the home. A sandbox that wants its logs kept
+apart names a `LogDirectory`.
+
+## 10w. The library's runner outlived its answers: two runners for one game (2026-11-01)
+
+**What was seen.** In the tester's real-window run of the published build 115ee07ee on 2026-11-01 (Cores, Approve on
+PCEE2, then A on Jak and Daxter at 23:31:15), two `emusen-core-runner` processes stood beside Mistress while the game
+ran, started about 23 s apart.
+
+**The cause, read and then shown.** §3.2 gives the proxy two kinds of runner: one for the library-level calls (`info`,
+`settings_schema`, `firmware_for`, `status_text`), and one per `create`. It says the library's runner exits once its
+answers are cached. The proxy did not end it. The link was held in a process-wide `static LIBRARY`, which nothing ever
+cleared, and the runner ends only when its socket closes. So the first library-level call of the session (Approve's
+`info`, or the route's firmware question) started a runner that lived until Mistress exited. The game's own runner
+started beside it at `create`. On the handheld that costs a second process holding a copy of the libretro core,
+for nothing. A broker test written first showed it: after `info` and `firmware_for`, one runner was still alive
+(`left: 1, right: 0`).
+
+**The fix** (`emusen-core-broker`'s `proxy.rs`):
+- A library-level call runs on a `LibraryRunner` of its own, and the runner ends when the call returns. Its log is
+  drained into the library's log before the socket closes.
+- The descriptors (capabilities, info, schema) are asked of one runner in a single run, as before.
+- For a target whose firmware answer does not read the image (`firmware_reads_image`, false for libretro, §10r), that
+  answer is fetched in the same run and cached. The launch's two firmware questions, the route's and `load_rom`'s,
+  then start no runner.
+- `set_crash_log` keeps the path and starts nothing. Each runner, library or machine, is given the path as it starts.
+- A library-level `log_drain` answers from the proxy's own log and starts nothing.
+- `status_text`, a firmware question that reads the image, and any call after a failed one each start a runner that
+  ends with the answer. They are rare: an error's words, or a target no shipped proxy has.
+
+**Test.** `tests/libretro.rs`'s `one_game_runs_one_runner_and_the_librarys_ends_with_its_answers`, written first and
+failing:
+- after `info` and `firmware_for`, no runner is alive;
+- with a game running, the firmware question asked again leaves exactly one runner, and the library's log shows no
+  runner started for it;
+- draining that log starts none;
+- once the game is freed, none is alive.
+
+The broker's other 14 libretro tests pass unchanged.
 
 ## 11. Risks
 

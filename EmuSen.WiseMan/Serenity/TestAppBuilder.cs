@@ -1,4 +1,5 @@
 using Avalonia;
+using EmuSen.LunaP;
 using Avalonia.Headless;
 using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Styling;
@@ -23,6 +24,7 @@ namespace EmuSen.WiseMan.Serenity
             AppBuilder.Configure<Application>()
                 .UseHeadless(new AvaloniaHeadlessPlatformOptions { UseHeadlessDrawing = false })
                 .UseSkia()
+                .WithLunaFonts()
                 .AfterSetup(builder =>
                 {
                     builder.Instance!.Styles.Add(new StyleInclude(null as System.Uri)

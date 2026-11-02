@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 6u
+#define EMUSEN_CRYSTAL_MINOR 7u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -263,6 +263,9 @@ int32_t emusen_crystal_core_revoke(emusen_crystal_runtime *rt, const uint8_t *sh
  * none. Since 1.6 "waiting_default" is null, or {"stem","sha256"} where the system's default libretro core is installed,
  * waits for the player's approval and takes the file, and neither the game's nor the console's settings chose an
  * engine: "engine" is then only the fallback, and "sha256" is the hash an approval names (EmuSen_LibretroHost.md 10t).
+ * Since 1.7 "default_held" is null, or {"stem","sha256","reason"} where that default's core is approved but the entry
+ * could not be read, its copies refreshed or its proxy loaded: "engine" is then the fallback, and "reason" says why
+ * (EmuSen_LibretroHost.md 10v).
  * Reads the file; runs no core. */
 int64_t emusen_crystal_route(emusen_crystal_runtime *rt, const uint8_t *path, size_t path_len, uint8_t *out, size_t len);
 

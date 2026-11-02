@@ -3,6 +3,9 @@
 
   library_key.py key  DIR NAME TARGET   print the key of crate DIR's library NAME for TARGET (the inputs to stderr)
   library_key.py plan                   from CRATES, PLATFORMS and FULL in the environment, write the job outputs
+  library_key.py local DIR NAME TARGET PROFILE PGO
+                                        print the key of a build on this machine, or "none" when its inputs are not all committed
+  library_key.py prune CACHE ENTRY KEEP  keep the newest KEEP of CACHE's entries named like ENTRY up to its key
 
 See EmuSen_RustPlatform.md §28.
 """
@@ -18,7 +21,6 @@ import zipfile
 
 # What a crate's build or tests read from outside its path dependencies, by the folder that reads it.
 EXTRA = {
-    "EmuSen/Cores/Nintendo/MarsRT - N64": ["EmuSen/Cores/Nintendo/Mars - N64/Rdp/Gpu/Shaders"],
     "EmuSen/Cores/Nintendo/VenusRT - SNES": [
         "EmuSen.WiseMan/Reference/analysis/dsp1_tables.py",
         "EmuSen.WiseMan/Reference/analysis/st010_tables.py",
@@ -124,6 +126,39 @@ def inputs(folder, name, target):
     return lines + list(ids), list(missing)
 
 
+def local_inputs(folder, name, target, profile, pgo):
+    """CI's key lines with the toolchain rustc names here, and what a build here reads beside the sources; None when an input is uncommitted or unknown."""
+    if any(k in os.environ for k in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")) or any(k.startswith(("CARGO_PROFILE_", "CARGO_BUILD_")) for k in os.environ):
+        return None
+    ids, missing = sources(folder)
+    if missing or git("status", "--porcelain", "--untracked-files=all", "--", *(i.split(" ", 1)[1] for i in ids)).strip():
+        return None
+    rustc = subprocess.run(["rustc", "-V"], cwd=folder, check=True, capture_output=True, text=True).stdout.strip()
+    lines = [f"key {KEY_VERSION}", f"library {name}", f"target {target}", f"toolchain {rustc}", *ids, f"profile {profile}", f"pgo {pgo}"]
+    # Cargo reads every .cargo/config.toml from the crate's folder up, then the home folder's; by content in that order, so two checkouts of one tree agree.
+    configs, d = [], os.path.abspath(folder)
+    while True:
+        configs += [os.path.join(d, ".cargo", n) for n in ("config.toml", "config")]
+        if os.path.dirname(d) == d:
+            break
+        d = os.path.dirname(d)
+    configs += [os.path.join(os.path.expanduser("~"), ".cargo", n) for n in ("config.toml", "config")]
+    for c in dict.fromkeys(c for c in configs if os.path.isfile(c)):
+        with open(c, "rb") as f:
+            lines.append(f"config {hashlib.sha256(f.read()).hexdigest()}")
+    return lines
+
+
+def prune(cache, entry, keep):
+    """The newest `keep` entries of the same library, target and profile stay; older ones go."""
+    stem = entry.rsplit("-", 1)[0] + "-"
+    found = sorted((e for e in os.scandir(cache) if e.is_dir() and e.name.startswith(stem)), key=lambda e: e.stat().st_mtime, reverse=True)
+    for e in found[keep:]:
+        for f in os.scandir(e.path):
+            os.remove(f.path)
+        os.rmdir(e.path)
+
+
 def key_of(lines):
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()[:24]
 
@@ -199,6 +234,16 @@ def main():
         print(key_of(lines) if not missing else "undeclared")
     elif sys.argv[1:2] == ["plan"]:
         plan()
+    elif sys.argv[1:2] == ["local"] and len(sys.argv) == 7:
+        folder = os.path.abspath(sys.argv[2])
+        os.chdir(git("-C", folder, "rev-parse", "--show-toplevel").strip())
+        try:
+            lines = local_inputs(norm(os.path.relpath(folder)), *sys.argv[3:7])
+        except (OSError, subprocess.CalledProcessError):
+            lines = None
+        print(key_of(lines) if lines else "none")
+    elif sys.argv[1:2] == ["prune"] and len(sys.argv) == 5:
+        prune(sys.argv[2], sys.argv[3], int(sys.argv[4]))
     else:
         sys.exit(__doc__)
 

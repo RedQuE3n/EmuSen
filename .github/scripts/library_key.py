@@ -21,7 +21,6 @@ import zipfile
 
 # What a crate's build or tests read from outside its path dependencies, by the folder that reads it.
 EXTRA = {
-    "EmuSen/Cores/Nintendo/MarsRT - N64": ["EmuSen/Cores/Nintendo/Mars - N64/Rdp/Gpu/Shaders"],
     "EmuSen/Cores/Nintendo/VenusRT - SNES": [
         "EmuSen.WiseMan/Reference/analysis/dsp1_tables.py",
         "EmuSen.WiseMan/Reference/analysis/st010_tables.py",

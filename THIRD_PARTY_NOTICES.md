@@ -198,10 +198,14 @@ Where a crate offers a choice of licences ("MIT OR Apache-2.0"), EmuSen uses it 
 | Font | Version | Licence | Copyright |
 |---|---|---|---|
 | [Barlow and Barlow Condensed](https://github.com/jpt/barlow), Regular and Medium, bundled with EmuSen.LunaP and shipped as `LunaP/Fonts/*.ttf` beside the program; the interface's typefaces | 1.422 | SIL Open Font License 1.1 | Copyright 2017 The Barlow Project Authors (https://github.com/jpt/barlow) |
+| [Adwaita Mono](https://gitlab.gnome.org/GNOME/adwaita-fonts), Regular, bundled with EmuSen.LunaP and shipped as `LunaP/Fonts/AdwaitaMono-Regular.ttf` beside the program; the one face for the symbol glyphs Barlow lacks | 34.08 | SIL Open Font License 1.1 | Copyright 2015-2025 Renzhi Li (Iosevka), 2025 Jamie Gravendeel, 2025 Florian Müllner, 2016 The Inter Project Authors |
 
 The files are unmodified, as the Barlow project distributes them; their copyright notice and the licence are in
 [`licenses/Barlow-OFL-1.1.txt`](licenses/Barlow-OFL-1.1.txt) and beside the fonts as `LunaP/Fonts/OFL.txt`. The fonts
-are shipped as separate files beside the program and are not sold by themselves, as the licence requires.
+are shipped as separate files beside the program and are not sold by themselves, as the licence requires. Adwaita Mono
+is the file the Adwaita fonts project distributes, unmodified; its copyright notices and licence are in
+[`licenses/AdwaitaMono-OFL-1.1.txt`](licenses/AdwaitaMono-OFL-1.1.txt) and beside the fonts as
+`LunaP/Fonts/AdwaitaMono-OFL-1.1.txt`.
 
 ### 1.6 Code taken from another emulator
 

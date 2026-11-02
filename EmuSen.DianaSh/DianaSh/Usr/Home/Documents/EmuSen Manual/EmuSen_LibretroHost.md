@@ -222,7 +222,7 @@ write and reach. One process per machine also removes libretro's one-instance-pe
 ### 3.2 The protocol
 
 - **Start.** The proxy starts `emusen-core-runner` at the first library-level call (to answer `info`, `settings_schema`,
-  `firmware_for`, then cached; the runner exits) and one runner per `create`. It passes a Unix socket pair (control,
+  `firmware_for`, then cached; the runner exits, which it did not until §10w) and one runner per `create`. It passes a Unix socket pair (control,
   and descriptors by `SCM_RIGHTS`) and a shared memory region (`memfd`), and the runner loads `broker.target`.
 - **Calls.** Every v1 export is forwarded: the proxy writes the call and its arguments into the shared region and wakes
   the runner (a futex word in the region; a socket message for calls that carry descriptors), and waits for the answer.
@@ -2106,6 +2106,43 @@ sandbox's `home/`. This is by design. The sandbox's `appsettings.json` names no 
 default is `~/.config/EmuSen/Logs` (`ErrorLog.DefaultRoot`, `EmuSen_Settings_Reference.md` §4.70). `EmuSen_Galaxia.md`
 §3.6 records the decision to keep that default rather than move it under the home. A sandbox that wants its logs kept
 apart names a `LogDirectory`.
+
+## 10w. The library's runner outlived its answers: two runners for one game (2026-11-01)
+
+**What was seen.** In the tester's real-window run of the published build 115ee07ee on 2026-11-01 (Cores, Approve on
+PCEE2, then A on Jak and Daxter at 23:31:15), two `emusen-core-runner` processes stood beside Mistress while the game
+ran, started about 23 s apart.
+
+**The cause, read and then shown.** §3.2 gives the proxy two kinds of runner: one for the library-level calls (`info`,
+`settings_schema`, `firmware_for`, `status_text`), and one per `create`. It says the library's runner exits once its
+answers are cached. The proxy did not end it. The link was held in a process-wide `static LIBRARY`, which nothing ever
+cleared, and the runner ends only when its socket closes. So the first library-level call of the session (Approve's
+`info`, or the route's firmware question) started a runner that lived until Mistress exited. The game's own runner
+started beside it at `create`. On the handheld that costs a second process holding a copy of the libretro core,
+for nothing. A broker test written first showed it: after `info` and `firmware_for`, one runner was still alive
+(`left: 1, right: 0`).
+
+**The fix** (`emusen-core-broker`'s `proxy.rs`):
+- A library-level call runs on a `LibraryRunner` of its own, and the runner ends when the call returns. Its log is
+  drained into the library's log before the socket closes.
+- The descriptors (capabilities, info, schema) are asked of one runner in a single run, as before.
+- For a target whose firmware answer does not read the image (`firmware_reads_image`, false for libretro, §10r), that
+  answer is fetched in the same run and cached. The launch's two firmware questions, the route's and `load_rom`'s,
+  then start no runner.
+- `set_crash_log` keeps the path and starts nothing. Each runner, library or machine, is given the path as it starts.
+- A library-level `log_drain` answers from the proxy's own log and starts nothing.
+- `status_text`, a firmware question that reads the image, and any call after a failed one each start a runner that
+  ends with the answer. They are rare: an error's words, or a target no shipped proxy has.
+
+**Test.** `tests/libretro.rs`'s `one_game_runs_one_runner_and_the_librarys_ends_with_its_answers`, written first and
+failing:
+- after `info` and `firmware_for`, no runner is alive;
+- with a game running, the firmware question asked again leaves exactly one runner, and the library's log shows no
+  runner started for it;
+- draining that log starts none;
+- once the game is freed, none is alive.
+
+The broker's other 14 libretro tests pass unchanged.
 
 ## 11. Risks
 

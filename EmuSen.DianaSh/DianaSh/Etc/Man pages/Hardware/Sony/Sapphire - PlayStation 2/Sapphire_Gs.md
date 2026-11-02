@@ -305,3 +305,37 @@ Seeded faults for this step:
   `single_precision_coordinates_leave_nearly_every_pixel_as_the_reference` was added.
 - An ordered record's lanes storing before every lane had read **survived**. It is a race between the waves of one
   workgroup, which no test here provokes reliably.
+
+## 11. The device's objects freed with it, and the first nightly run (2026-11-02)
+
+The first nightly run (`EmuSen_Debugging_Tools_Reference_v5.md` §3.68, `621484c54`, lavapipe, every Rust root on
+`test-checked`) ended Sapphire's crate in `tests/gs_device.rs` with two findings, both invisible to a land, which runs
+`test-fast` on the RX 6800.
+
+1. **The device GS never freed its buffers or walks.** `Gpu`'s `Drop` waited for the pending submission and nothing
+   else; its four 4 MiB buffers, the two slots' twelve host buffers (42 MiB each slot at the planner's maxima) and every
+   walk program outlived the device that made them. The validation layer names it at once
+   (`VUID-vkDestroyDevice-device-05137`, on every device torn down). On the RX 6800 the memory goes with the driver's
+   objects and the generated-streams test peaks at 98 MB [M]; on lavapipe, whose device memory is the process's, each
+   of the test's seventeen devices left its memory and its compiled walks behind, and the process grew about
+   115 MB/s until the run's 8 GiB scope killed it (the kernel's log names `gs_device-955d5`, anon-rss 8.1 GB). `Drop`
+   now destroys every walk and buffer before the device, as Mars's rasteriser does. Measured on 2026-11-02, lavapipe:
+   the generated streams alone peak at 1.28 GB and pass in 110 s, the six tests together at 4.0 GB in 126 s.
+2. **The transfer test's own hash overflowed.** Its stand-in for a random word multiplied a `u64` by the golden-ratio
+   constant with `*`, which `test-checked`'s overflow checks stop; release wraps. It is `wrapping_mul` now, the same
+   values as every land has used.
+
+A third check went in with the fix: `a_device_gs_destroys_every_buffer_and_walk_it_made`, a unit test in
+`src/gs/device/mod.rs`, makes a device GS and a second walk, takes the device's tally (`EmuSen_Gpu.md` §3.4), drops
+the GS and asserts that none of its eighteen objects is left. It stands down without a device, and passes on the
+RX 6800 and on lavapipe. The whole crate then passed on `test-checked` with lavapipe, as the nightly run builds it:
+505 tests passed (before the teardown test was added), `gs_device.rs` in 133 s (2026-11-02).
+
+Seeded faults, each reverted:
+
+| Fault | Caught by |
+|---|---|
+| `Drop` destroying the buffers but not the walks | the teardown test (2 objects left) |
+| `Drop` destroying nothing, the form the nightly run met | the teardown test (18 left) |
+| emusen-gpu's `destroy_buffer` not taking itself off the tally | emusen-gpu's tally test |
+| the hash's `wrapping_mul` back to `*` | `test-checked`'s overflow check, as on the night (the land's `test-fast` does not see it) |

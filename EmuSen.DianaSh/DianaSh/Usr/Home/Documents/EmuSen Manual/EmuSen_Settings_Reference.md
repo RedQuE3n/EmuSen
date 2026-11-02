@@ -5937,6 +5937,10 @@ whole assembly, and runs in the ordinary suite.
   table, whose `coretop` entry's lambda opens `CoretopWindow`, and the case gives `state save` and `state load` only.
   The guard named both in full runs on either frontend API implementation measured on 2026-11-01, so neither came from
   the suite's change to the Rust default (`EmuSen_Backend.md` §35).
+- **Named by `nameof` since 2026-11-02.** The list held the names as strings, and `a043e1f56` renamed C7 (from
+  `…_clears_rewind_and_…` to `…_runs_the_api_s_sequence_and_…`) without it, so the first nightly run (`621484c54`,
+  `EmuSen_Debugging_Tools_Reference_v5.md` §3.68) failed on a case the list meant to exempt. Each entry is now
+  `Of<T>(nameof(T.Case))`, and renaming an exempt case fails the build instead of the scan.
 
 **What it cannot see.** It is a static reading, so it over-approximates: a method is flagged if any path through it
 reaches a site, as `LunaTheme.Apply(BuiltIn)` was, through the CSS branch that name never takes (it was wrong there for

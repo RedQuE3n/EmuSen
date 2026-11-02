@@ -11698,7 +11698,7 @@ the layout and loads its pictures through the library's cover cache; `MainWindow
 
 | Where | Gesture |
 |---|---|
-| Either library, a pad | X on a game (§0.1 of the interface; A still plays) |
+| Either library, a pad | X on a game (§0.1 of the interface; A still plays); with the face buttons swapped, Y, the grammar's X |
 | The Home card | A on the game in hand |
 | The themed gamelist's Select sheet | its last row, `Game Page` |
 | The desktop's library | `Space`, or the context menu's `Game Page`, `Options…`, `Edit Details…` (`Ctrl+I`), `Scrape This Game…`, `Cover Art` |

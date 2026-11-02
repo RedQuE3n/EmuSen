@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task With_the_swap_X_is_the_favourite_Y_does_nothing_and_the_help_bar_draws_X_for_it() => ThemedLibraryPadTests.Run(s =>
+        public Task With_the_swap_X_is_the_favourite_Y_opens_the_game_s_page_and_the_help_bar_draws_X_for_it() => ThemedLibraryPadTests.Run(s =>
         {
             s.Settings.ControllerType = "Xbox";
             EnterSwapped(s, "snes");
@@ -94,7 +94,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(chosen, s.Game);
 
             s.Sounds.Clear();
+            // With the swap Y is the grammar's X, which opens the game's page (EmuSen_Interface.md §0.1); it makes no favourite.
             s.Pad.Y();
+            Assert.Equal(System.IO.Path.Combine(s.RomDirectory, chosen + ".sfc"), s.Window.GamePageShown?.Path);
+            s.Window.CloseGamePage();
+            s.Settle();
             Assert.False(s.Themed.SelectedGame!.Favorite);
             Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
             Assert.Empty(s.Sounds);

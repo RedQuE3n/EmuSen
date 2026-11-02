@@ -96,6 +96,16 @@ namespace EmuSen.WiseMan.Fixtures
             return await ThemeDownloads.FetchAsync(http, source);
         }).GetAwaiter().GetResult();
 
+        // The download stamped with a fixed date, so a window that prints it wraps the same on every day.
+        public ThemeStamp InstallDated(ThemeSource source, DateTimeOffset when)
+        {
+            ThemeStamp stamp = Install(source);
+            using ThemeRecords db = ThemeRecords.Open();
+            InstalledRecord r = db.Installed().First(x => x.Source.Equals(source));
+            db.RememberInstall(r with { Installed = when, Updated = when }, db.Files(r.Id));
+            return stamp;
+        }
+
         // Two GitHub themes and one on GitLab, each stating a different licence, or none.
         public static FakeThemeHosts Standard()
         {

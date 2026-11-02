@@ -43,12 +43,12 @@ tree
                   28 Grid at=96,220.5,1036.5,759 by=panel limit=0,0,1920,1200 paints=#0E0E10FF role=none
                     29 LunaTable at=96,220.5,1036.5,759 by=panel heard=Rows limit=0,0,1920,1200 paints=#0E0E10FF,#707070FF,#D4D4D4FF,#FFFFFFFF role=datagrid
                       30 ScrollViewer at=96,237,1036.5,742.5 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,237,1036.5,742.5
-                        31 ListBoxItem at=96,237,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: ● Default" in=30 limit=96,237,1036.5,742.5 op paints=#D4D4D4FF role=listitem
-                          32 Border at=132,252,964.5,51 by=clip in=30 limit=96,237,1036.5,81 paints=#707070FF role=none
-                            33 Grid at=132,252,964.5,49.5 by=clip heard="Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: ● Default" in=30 limit=96,237,1036.5,81 paints=#4C9AE8FF role=none
+                        31 ListBoxItem at=96,237,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: Built in" in=30 limit=96,237,1036.5,742.5 op paints=#D4D4D4FF role=listitem
+                          32 Border at=132,252,964.5,49.5 by=clip in=30 limit=96,237,1036.5,81 paints=#707070FF role=none
+                            33 Grid at=132,252,964.5,48 by=clip heard="Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: Built in" in=30 limit=96,237,1036.5,81 paints=#4C9AE8FF role=none
                               34 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=168,252,369,48 box=246,32 caps=18.1987 drawn face=Barlow heard=Core in=30 layout=99.29,31.2 owner=31 paints=#D4D4D4FF role=edit size=26 text=Sapphire
                               35 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=573,252,216,48 box=144,32 caps=18.1987 drawn face=Barlow heard=Console in=30 layout=143.29,31.2 owner=31 paints=#D4D4D4FF role=edit size=26 text="PlayStation 2"
-                              36 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=825,252,235.5,49.5 box=157,33 caps=18.916 drawn face="Adwaita Sans" heard=Status in=30 layout=109.44,32.27 owner=31 paints=#D4D4D4FF role=edit size=26 text="● Default"
+                              36 TableCell allow="a core's name, console or state cut in the Cores table is whole in the detail while its row is chosen" at=825,252,235.5,48 box=157,32 caps=18.1987 drawn face=Barlow heard=Status in=30 layout=75.79,31.2 owner=31 paints=#8D8D91FF role=edit size=26 text="Built in"
                         37 ListBoxItem at=96,318,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Core: Diamond, Console: PlayStation, Status: ● Default" in=30 limit=96,237,1036.5,742.5 op paints=#D4D4D4FF role=listitem
                           38 Border at=132,333,964.5,51 by=clip in=30 limit=96,318,1036.5,81 paints=#707070FF role=none
                             39 Grid at=132,333,964.5,49.5 by=clip heard="Mark: not marked, Core: Diamond, Console: PlayStation, Status: ● Default" in=30 limit=96,318,1036.5,81 paints=#4C9AE8FF role=none
@@ -121,4 +121,4 @@ press pageup focus="TextBox Search cores (Search)" top=CoresWindow
 press pagedown focus="TextBox Search cores (Search)" top=CoresWindow
 press first focus="TextBox Search cores (Search)" top=CoresWindow
 press last focus="TextBox Search cores (Search)" top=CoresWindow
-press back focus="ListBoxItem  (Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: ● Default)" top=CoresWindow
+press back focus="ListBoxItem  (Mark: not marked, Core: Sapphire, Console: PlayStation 2, Status: Built in)" top=CoresWindow

@@ -22,7 +22,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             public static string Systems => JsonSerializer.Serialize(new object[]
             {
-                new { id = "ps2", console = "PlayStation 2", engines = new[] { "Sapphire", "ExtraPS2" } },
+                // PCEE2 first: the PlayStation 2's default while Sapphire is under development (EmuSen_Cores.md §4.8).
+                new { id = "ps2", console = "PlayStation 2", engines = new[] { "PCEE2", "Sapphire", "ExtraPS2" } },
                 new { id = "psx", console = "PlayStation", engines = new[] { "Diamond" } },
                 new { id = "snes", console = "SNES", engines = new[] { "VenusRT" } },
             });
@@ -33,6 +34,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 new { library = "/opt/emusen/libdiamond.so", sha256 = new string('2', 64), engine = "Diamond", directory = "installation", trust = "manifest", name = "Diamond", authors = new[] { "EmuSen" }, license = "GPL-3.0-or-later", systems = new[] { "psx" } },
                 new { library = "/opt/emusen/libvenusrt.so", sha256 = new string('3', 64), engine = "VenusRT", directory = "installation", trust = "manifest", name = "VenusRT", authors = new[] { "EmuSen" }, license = "GPL-3.0-or-later", systems = new[] { "snes" } },
                 new { library = "/home/player/Cores/libextraps2.so", sha256 = new string('4', 64), engine = "ExtraPS2", directory = "player", trust = "needs_approval", name = "Extra PS2 Core", authors = new[] { "Someone Else" }, license = "MIT", systems = new[] { "ps2" } },
+                new { library = "/home/player/Cores/libretro/pcee2/pcee2_libretro.so", sha256 = new string('5', 64), engine = "PCEE2", directory = "player", trust = "approved", name = "PCEE2", authors = new[] { "PCSX2 Team" }, license = "GPLv3", systems = new[] { "ps2" }, libretro = new { sha256 = new string('5', 64) } },
             });
 
             public CoresRuntime Runtime => new()
@@ -46,10 +48,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             };
         }
 
+        // The corename as a real .info gives it, read 2026-11-01 from the smoke test's copies: PCEE2, Beetle PSX, Snes9x; the test's own cores keep their stem.
+        internal static string CorenameOf(string stem) => stem switch { "pcee2" => "PCEE2", "mednafen_psx" => "Beetle PSX", "snes9x" => "Snes9x", "glonly" => "Only GL", _ => stem };
+
         internal static object LibretroCore(string stem, string name, string system, string state, long? size, string? reason = null) =>
             reason is null
-                ? new { @event = "core", stem, name, corename = stem, systems = new[] { system }, source = "libretro", version = "2.3.1", build = "2026-10-31", offered = "2026-10-31", state, license = "GPLv3", authors = new[] { "PCSX2 Team", "libretro" }, size }
-                : new { @event = "core", stem, name, corename = stem, systems = new[] { system }, source = "libretro", version = "1.0", build = "2026-10-30", offered = "2026-10-30", state, license = "MIT", authors = new[] { "Someone" }, size, reason };
+                ? new { @event = "core", stem, name, corename = CorenameOf(stem), systems = new[] { system }, source = "libretro", version = "2.3.1", build = "2026-10-31", offered = "2026-10-31", state, license = "GPLv3", authors = new[] { "PCSX2 Team", "libretro" }, size }
+                : new { @event = "core", stem, name, corename = CorenameOf(stem), systems = new[] { system }, source = "libretro", version = "1.0", build = "2026-10-30", offered = "2026-10-30", state, license = "MIT", authors = new[] { "Someone" }, size, reason };
 
         internal static IEnumerable<object> CoresListing(bool catalogue = true)
         {
@@ -57,10 +62,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return
             [
                 CoresInfo("pcsx2").First(),
+                LibretroCore("pcee2", "Sony - PlayStation 2 (PCEE2)", "ps2", "installed", 41_943_040),
                 LibretroCore("mednafen_psx", "Sony - PlayStation (Beetle PSX)", "psx", "update", 8_388_608),
                 LibretroCore("snes9x", "Nintendo - SNES / SFC (Snes9x - Current)", "snes", "installed", 3_145_728),
                 LibretroCore("glonly", "Only GL Core", "psx", "unsupported", null, "needs OpenGL Core >= 3.3, and EmuSen's host renders through software and Vulkan only"),
-                new { @event = "done", op = "core-ls", counts = new Dictionary<string, int> { ["available"] = 1, ["update"] = 1, ["installed"] = 1, ["unsupported"] = 1 }, catalogue = "2026-10-31" },
+                new { @event = "done", op = "core-ls", counts = new Dictionary<string, int> { ["available"] = 1, ["update"] = 1, ["installed"] = 2, ["unsupported"] = 1 }, catalogue = "2026-10-31" },
             ];
         }
 
@@ -112,7 +118,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             pane.Poll();
             Settle(window);
             Assert.Equal(AdaptiveForm.BigScreen, pane.Form);
-            Assert.Equal(state == "CoresNoCatalogue" ? 4 : 8, pane.Rows.Count);
+            Assert.Equal(state == "CoresNoCatalogue" ? 4 : 9, pane.Rows.Count);
             if (state == "CoresNoCatalogue") return;
             CoreRow lrps2 = pane.Rows.First(r => r.Stem == "pcsx2");
             // CoresDetail: the core waiting for approval chosen, its pane beside the list and A asking to approve it.

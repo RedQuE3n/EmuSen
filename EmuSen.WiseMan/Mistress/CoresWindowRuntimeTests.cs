@@ -203,7 +203,7 @@ namespace EmuSen.WiseMan.Mistress
             using CrystalRuntime runtime = Runtime();
             string pcee2 = Installed("pcee2", "Sony - PlayStation 2 (PCEE2)");
             // The listing's row as the core tool reads it, with the hash its NOTICE records.
-            CoresPane.StartJob = _ => new ScriptedJob([new { @event = "core", stem = "pcee2", name = "Sony - PlayStation 2 (PCEE2)", corename = "pcee2", systems = new[] { "ps2" }, source = "libretro", version = "2.3.1", build = "2026-11-01", state = "installed", license = "GPLv3", authors = new[] { "Someone" }, size = 1L << 20, sha256 = Sha256(pcee2) },
+            CoresPane.StartJob = _ => new ScriptedJob([new { @event = "core", stem = "pcee2", name = "Sony - PlayStation 2 (PCEE2)", corename = "PCEE2", systems = new[] { "ps2" }, source = "libretro", version = "2.3.1", build = "2026-11-01", state = "installed", license = "GPLv3", authors = new[] { "Someone" }, size = 1L << 20, sha256 = Sha256(pcee2) },
                 new { @event = "done", op = "core-ls", counts = new System.Collections.Generic.Dictionary<string, int> { ["installed"] = 1 }, catalogue = "2026-11-01" }], ends: true);
             var full = (CoresRuntime)Mistress("CoresRuntimeOf", runtime)!;
             CoresPane.RuntimeFor = _ => new CoresRuntime { Cores = full.Cores, Systems = full.Systems, Setting = full.Setting, SetSetting = full.SetSetting, Approve = full.Approve, Revoke = full.Revoke };
@@ -221,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress
             Settle(window);
             Assert.False(pane.ApproveSelectedAsync().Result);
             Assert.Contains(Sha256(pcee2), asked);
-            Assert.StartsWith("pcee2 could not be approved: no core library listed has the SHA-256", told);
+            Assert.StartsWith("PCEE2 could not be approved: no core library listed has the SHA-256", told);
             window.Close();
         }, default);
 

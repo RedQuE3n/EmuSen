@@ -94,9 +94,11 @@ namespace EmuSen.WiseMan.Mistress
         {
             (CoresWindow window, CoresPane pane) = Open();
             Assert.Equal(AdaptiveForm.Desktop, pane.Form);
-            Assert.Equal(8, pane.Rows.Count);
+            Assert.Equal(9, pane.Rows.Count);
             Assert.Equal(CoresPane.ListingRequest, _requests[0]);
-            Assert.True(Row(pane, "Sapphire").IsDefault);
+            // PCEE2, installed and approved, is the PlayStation 2's engine ahead of Sapphire (EmuSen_Cores.md §4.8).
+            Assert.True(Row(pane, "pcee2").IsDefault);
+            Assert.False(Row(pane, "Sapphire").IsDefault);
             Assert.False(Row(pane, "ExtraPS2").IsDefault);
             Assert.Equal(CoreRow.Project, Row(pane, "Diamond").Source);
             Assert.Equal(new[] { "PlayStation 2" }, Row(pane, "pcsx2").Consoles);
@@ -108,7 +110,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(pane.SelectFilter("updates"));
             Assert.Equal(new[] { "mednafen_psx" }, pane.Shown.Select(r => r.Stem));
             Assert.True(pane.SelectFilter("all"));
-            Assert.Equal("/Cores 11 MB · 410 GB free", pane.SpaceText);
+            Assert.Equal("/Cores 51 MB · 410 GB free", pane.SpaceText);
             window.Close();
         }, default);
 
@@ -210,6 +212,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("ExtraPS2", _runtime.Settings[("PlayStation 2", global::EmuSen.Mistress.Library.RuntimeCatalog.EngineKey)]);
             Assert.True(Row(pane, "ExtraPS2").IsDefault);
             Assert.False(Row(pane, "Sapphire").IsDefault);
+            Assert.False(Row(pane, "pcee2").IsDefault);
             pane.Table.Select(Row(pane, "pcsx2"));
             Settle(window);
             Assert.False(make.IsEnabled);
@@ -238,7 +241,9 @@ namespace EmuSen.WiseMan.Mistress
             Settle(window);
             Assert.Equal(("↑ Update", "LunaAttention"), (CoresWords.Status(Row(pane, "mednafen_psx")), CoresWords.Tone(Row(pane, "mednafen_psx"))));
             Assert.Equal(("⚠ To approve", "LunaAttention"), (CoresWords.Status(Row(pane, "ExtraPS2")), CoresWords.Tone(Row(pane, "ExtraPS2"))));
-            Assert.Equal(("● Default", null), (CoresWords.Status(Row(pane, "Sapphire")), CoresWords.Tone(Row(pane, "Sapphire"))));
+            Assert.Equal(("● Default", null), (CoresWords.Status(Row(pane, "pcee2")), CoresWords.Tone(Row(pane, "pcee2"))));
+            Assert.Equal(("Built in", "LunaMuted"), (CoresWords.Status(Row(pane, "Sapphire")), CoresWords.Tone(Row(pane, "Sapphire"))));
+            Assert.Equal("PCEE2", Row(pane, "pcee2").Name);
             Assert.Equal(("Available", "LunaMuted"), (CoresWords.Status(Row(pane, "pcsx2")), CoresWords.Tone(Row(pane, "pcsx2"))));
             Assert.Equal("LRPS2", Row(pane, "pcsx2").Name);
             Assert.Contains("⚠ 1 to approve", pane.Header!.Facts);

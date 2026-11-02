@@ -163,7 +163,6 @@ namespace EmuSen.WiseMan.Cores
         }
 
         // The gate of Sapphire_Plan.md §7's S1: the kit on a synthetic program and synthetic CD and DVD images, the core's cases once and each image's at once, nothing failing.
-        [Trait("Category", "nightly")]
         [Fact]
         public void The_kit_passes_on_a_synthetic_program_and_synthetic_discs() => ConformKit.Passes(LibraryPath,
             new[] { ("program.elf", SyntheticPs2Elf.Build()), ("cd.iso", SyntheticPs2Disc.Cd().Iso), ("dvd.iso", SyntheticPs2Disc.Dvd().Iso) },

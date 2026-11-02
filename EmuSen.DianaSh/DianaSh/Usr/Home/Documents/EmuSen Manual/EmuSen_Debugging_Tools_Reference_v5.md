@@ -3067,7 +3067,8 @@ A test in the nightly tier is not deleted or weakened by being there; the tier s
 - `MarsRtDigestProbe`, a comparison tool between two builds;
 - the game runs of the goldens: `The_games_run_as_their_goldens_recorded` in `MercuryGoldenTests`, `MoonGoldenTests` and `VenusGoldenTests`, and `VenusRtGoldenTests.The_goldens_against_Mesen`; the synthetic programs and corpora of those classes stay at land;
 - `ReferenceDumpTests` and `MarsViDifferentialTests`, the reference differentials;
-- `SapphireTests.The_kit_passes_on_a_synthetic_program_and_synthetic_discs`, the conform kit's run, which Sapphire's own cargo suite repeats at every Sapphire land.
+
+*Sapphire's kit run* was in the tier from the tier's start until later the same day, 2026-11-01. The review behind the tier said Sapphire's cargo suite repeats the kit at every land, and it does not: neither the crate nor CI's WiseMan partitions run `emusen-core-conform`'s checks, so for those hours the kit ran nowhere. The kit's corpus form then brought the test from 194.7 s to 57 s (`EmuSen_CoreAPI.md` §28.21), and it returned to the land tier.
 
 **`WindowFitAuditTests` is not in the tier.** It runs at land when a change reaches a screen: `EmuSen.Mistress/Views/`, `EmuSen.Mistress/BigPicture/`, `App.axaml`, LunaP, the tool windows (`EmuSen.Tools.Packages`, `.Library`, `.Scraper`), the system table's data or the core catalogue, whose change once broke the settings sheets' focus graph (2026-10-20), and the recorded specifications. It runs nightly otherwise. The rule lives in `blast.sh` alone: the map names the class only on those lines, and a filter that does not name it ends with `&FullyQualifiedName!~WindowFitAuditTests`, so a broad term such as the Mistress namespace does not bring it back. `WindowFitScrapeAuditTests` is a separate class and is unaffected.
 

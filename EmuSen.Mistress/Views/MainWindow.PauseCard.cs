@@ -60,7 +60,7 @@ namespace EmuSen.Mistress.Views
             if (HomeFavouriteHere) actions.Add(new LunaAction("Favourite", ToggleHomeFavourite) { PadButton = PadHints.Glyph(PadGlyphButton.North) });
             if (slot) actions.Add(new LunaAction("Change slot", () => { }) { PadButton = PadGlyphButton.DPadLeftRight });
             if (_padMenuInGame) actions.Add(new LunaAction("Screenshot", TakeScreenshot) { PadButton = PadHints.Glyph(PadGlyphButton.West) });
-            actions.Add(new LunaAction(_padMenuInGame ? "Resume" : "Close", ClosePadMenu) { PadButton = PadGlyphButton.Start });
+            actions.Add(new LunaAction(_padMenuInGame ? "Resume" : "Close", () => ClosePadMenu()) { PadButton = PadGlyphButton.Start });
             PadCard.SetActions(actions);
         }
 

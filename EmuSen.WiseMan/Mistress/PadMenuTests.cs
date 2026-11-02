@@ -455,6 +455,29 @@ namespace EmuSen.WiseMan.Mistress
             Done(w);
         }, default);
 
+        // §10y: a game the card paused runs no frame from the card into a sheet and back to the card; it resumes only when the card closes.
+        [Fact]
+        public Task A_game_the_card_paused_runs_no_frame_from_the_card_into_a_sheet_and_back() => Session.Dispatch(() =>
+        {
+            (MainWindow w, PadDriver pad) = Playing(bigScreen: true);
+            var said = new List<string?>();
+            w.GetControl<TextBlock>("StatusText").PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) said.Add(e.NewValue as string); };
+            Chord(pad);
+            PadMenu.Choose(w, pad, "Graphics", exact: true);
+            Assert.IsType<GraphicsSettingsWindow>(Sheets(w).Current);
+            Assert.True(w.IsPaused);
+            ((Window)Sheets(w).Current!).Close();
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(PadMenu.IsOpen(w), "closing the sheet comes back to the card");
+            Assert.True(w.IsPaused);
+            Assert.DoesNotContain(said, t => t?.StartsWith("Running", StringComparison.Ordinal) == true);
+            pad.B();
+            Assert.False(PadMenu.IsOpen(w));
+            Assert.False(w.IsPaused);
+            Assert.StartsWith("Running", said[^1]);
+            Done(w);
+        }, default);
+
         private static string? PreferencesTab(MainWindow w) =>
             (Sheets(w).SheetOf(Sheets(w).Current!)!.GetVisualDescendants().OfType<TabControl>().Single(t => t.Name == "PreferenceTabs").SelectedItem as TabItem)?.Header as string;
 

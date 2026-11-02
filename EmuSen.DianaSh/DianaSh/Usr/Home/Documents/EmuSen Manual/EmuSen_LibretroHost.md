@@ -2319,6 +2319,29 @@ installed by pad, Jak in the ring]:
 - Seeded faults, each caught by the WiseMan test: the replaced picture not given back; the picture the session's end
   drops given back.
 
+## 10z. The card hands its pause to the sheet it opens, and takes it back (2026-11-02)
+
+§10y made the frames run between the card and a sheet harmless. This section stops them running at all.
+
+Decided 2026-11-02 by the tester: a game the card paused runs no frame while the player goes from the card into a
+sheet and back.
+
+- **Opening a sheet from the card.** The card's entry closes the card while keeping its pause (`ClosePadMenu` with
+  `holdPause`). The entry then runs, and `HandOverHeldPause` passes the pause to the sheet the entry opened. If the
+  entry opened no sheet, the game resumes as before.
+- **Closing that sheet.** The card opens again and owns the pause. The game resumes only when the card closes.
+- Before this, `ClosePadMenu` resumed the game and `OnSheetsChanged` paused it again for the sheet. Closing the sheet
+  went back to the running game, not to the card.
+
+**Test.** WiseMan `PadMenuTests.A_game_the_card_paused_runs_no_frame_from_the_card_into_a_sheet_and_back`, run by
+name. It goes from the card to Graphics, closes the sheet, and is back at the card. The status line never says
+"Running" until B closes the card. On the old code it failed ("closing the sheet comes back to the card"). It passes
+with the change, as do the 5 cases of `Each_moved_row_of_the_game_s_menu_opens_its_window`.
+
+**Seeded faults**, each caught by that test:
+- the held pause not passed to the sheet;
+- the card not opened again when the sheet closes.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

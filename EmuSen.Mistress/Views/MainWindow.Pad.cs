@@ -118,7 +118,7 @@ namespace EmuSen.Mistress.Views
             return false;
         }
 
-        private bool _sheetPaused;
+        private bool _sheetPaused, _cardUnderSheet;
 
         // A sheet over a game pauses it, and its last one resumes only what it paused - the pad menu's rule (§4.29).
         private void OnSheetsChanged()
@@ -132,6 +132,16 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
+            if (_cardUnderSheet)
+            {
+                // A sheet the card opened comes back to the card, which keeps the pause until it closes - see EmuSen_LibretroHost.md §10z.
+                _cardUnderSheet = _sheetPaused = false;
+                if (!GameOnScreen || !IsPaused) return;
+                if (!_padMenuOpen) OpenPadMenu();
+                if (_padMenuOpen) _padMenuPaused = true;
+                else ResumeEmulation();
+                return;
+            }
             if (_sheetPaused && GameOnScreen && IsPaused && !_padMenuOpen) ResumeEmulation();
             _sheetPaused = false;
         }

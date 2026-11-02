@@ -312,6 +312,11 @@ impl Graph {
         self.crates.contains_key(node)
     }
 
+    /// Whether a crate is built into C# directly: a reverse edge to a project or an MSBuild file.
+    pub fn enters_host(&self, node: &str) -> bool {
+        self.rdeps.get(node).into_iter().flatten().any(|r| !self.is_crate(r))
+    }
+
     pub fn is_test_project(&self, node: &str) -> bool {
         self.projects.get(node).copied().unwrap_or(false)
     }

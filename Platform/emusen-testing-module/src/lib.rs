@@ -4,6 +4,7 @@
 mod adapters;
 mod catalogue;
 mod config;
+mod coverage;
 mod graph;
 mod impact;
 mod ingest;
@@ -11,6 +12,7 @@ mod queue;
 mod reports;
 mod repo;
 mod results;
+mod shard;
 mod store;
 mod trial;
 
@@ -22,7 +24,9 @@ use repo::Repo;
 
 pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("units", true, "  units [--kind cargo|dotnet] [--tier T] [--crates] [--key UNIT] [--profile P] [--rev REV] [--repo DIR]\n                                the catalogue of test units, one per line"),
-    ("impact", true, "  impact [--base REV] [--head REV] [--tier T] [--depth N] [--explain FILE] [--blast FILE] [--repo DIR]\n                                the units a change can affect, with the rule and the file"),
+    ("impact", true, "  impact [--base REV] [--head REV] [--tier T] [--depth N] [--also TERMS] [--map-age DAYS] [--format blast] [--explain FILE] [--blast FILE] [--repo DIR]\n                                the units a change can affect, with the rule and the file"),
+    ("coverage", false, "  coverage [FILE...] | run --bin DIR [--tree DIR] [--jobs N] [--rev REV] [--class C] [--by-case C] [--out DIR] | load [--merge] [FILE]\n                                the coverage map: the classes that executed a file; build it; read a run into the store"),
+    ("shard", true, "  shard [--shards N] [--keep-collections] [--head REV] [--repo DIR] [FILE] | --machine\n                                a selection's dotnet units dealt to N processes by their measured times"),
     ("trial", false, "  trial [--tier T] [--from FILE] [--no-reuse] [--dry-run] [--on RUNNER] [--requested-by WHO] | verdict SHA | ls | show N | quarantine ...\n                                run a selection, judge it and record it"),
     ("results", true, "  results [--last N] [--slowest N] [--flaky] [--misses] [--selected N] [--quarantine] [unit U | test T] [--tier T] [--since D] | export\n                                the store's answers"),
     ("ingest", false, "  ingest FILE... --runner R --tree SHA [--trial N] [--tier T] | --backfill [DIR]\n                                read TRX or JUnit results, or land.sh's old logs, into the store"),
@@ -92,12 +96,19 @@ fn units(args: &[String]) -> Result<Answer, String> {
 }
 
 fn impact_cmd(args: &[String]) -> Result<Answer, String> {
-    let a = parse(args, &[], &["--base", "--head", "--tier", "--depth", "--explain", "--blast", "--repo"])?;
+    let a = parse(args, &[], &["--base", "--head", "--tier", "--depth", "--explain", "--blast", "--repo", "--also", "--map-age", "--format", "--inputs"])?;
     let repo = Repo::find(a.get("--repo"))?;
     let base = a.get("--base").unwrap_or("WiseMan");
     let head = a.get("--head");
     let rev = head.unwrap_or("HEAD");
-    let snap = catalogue::Snapshot::read(&repo, rev)?;
+    if a.get("--format").is_some_and(|f| f != "blast") {
+        return Err("--format takes blast".into());
+    }
+    let map_age: f64 = a.get("--map-age").map_or(Ok(1.0), |d| d.parse().map_err(|_| "--map-age needs a number of days".to_string()))?;
+    let mut snap = catalogue::Snapshot::read(&repo, rev)?;
+    if let Some(file) = a.get("--inputs") {
+        snap.inputs = config::Inputs::parse(&std::fs::read_to_string(file).map_err(|e| format!("{file}: {e}"))?)?;
+    }
     let mut tier = match &snap.tiers_text {
         Some(t) => config::parse_tier(t, a.get("--tier").unwrap_or("land"))?,
         None => config::Tier { name: a.get("--tier").unwrap_or("land").to_string(), ..config::Tier::default() },
@@ -117,9 +128,10 @@ fn impact_cmd(args: &[String]) -> Result<Answer, String> {
             f
         }
     };
-    let failed_last = match (head.is_none(), store::Store::open()) {
-        (true, Ok(s)) => {
-            let branch = repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default();
+    let store = store::Store::open().ok();
+    let failed_last = match &store {
+        Some(s) => {
+            let branch = head.map(str::to_string).unwrap_or_else(|| repo.git(&["rev-parse", "--abbrev-ref", "HEAD"]).unwrap_or_default());
             s.rows(
                 "SELECT unit FROM unit_run WHERE outcome = 'fail' AND trial = (SELECT MAX(id) FROM trial WHERE branch = $b AND source IS NULL)",
                 &[("$b", emusen_sqlite::Bound::Text(branch.trim()))],
@@ -129,10 +141,27 @@ fn impact_cmd(args: &[String]) -> Result<Answer, String> {
             .filter_map(|r| r[0].clone())
             .collect()
         }
-        _ => Vec::new(),
+        None => Vec::new(),
     };
-    let sel = impact::impact(&repo, &snap, &impact::Ask { files: files.clone(), tier: &tier, failed_last });
-    let err: String = sel.notes.iter().map(|n| format!("impact: {n}\n")).collect();
+    let mut notes = Vec::new();
+    let map = match &store {
+        Some(s) => match coverage::fresh(&repo, s, base, rev, map_age) {
+            Ok(m) => m,
+            Err(why) => {
+                notes.push(why);
+                None
+            }
+        },
+        None => None,
+    };
+    let also: Vec<String> = a.get("--also").map(|t| t.split('|').filter(|s| !s.is_empty()).map(str::to_string).collect()).unwrap_or_default();
+    let added: std::collections::BTreeSet<String> = if a.get("--explain").is_some() { Default::default() } else { repo.added(base, rev, head.is_none()).unwrap_or_default().into_iter().collect() };
+    let sel = impact::impact(&repo, &snap, &impact::Ask { files: files.clone(), tier: &tier, failed_last, map: map.as_ref(), also, added });
+    notes.extend(sel.notes.iter().cloned());
+    let err: String = notes.iter().map(|n| format!("impact: {n}\n")).collect();
+    if a.get("--format") == Some("blast") {
+        return Ok(Answer { out: impact::blast_format(&sel, &tier), err, status: 0 });
+    }
     if let Some(blast) = a.get("--blast") {
         let text = if blast == "-" { String::new() } else { std::fs::read_to_string(blast).map_err(|e| format!("{blast}: {e}"))? };
         let b = impact::read_blast(&snap, &text);
@@ -157,6 +186,85 @@ fn impact_cmd(args: &[String]) -> Result<Answer, String> {
         return Ok(Answer { out, err, status: 0 });
     }
     Ok(Answer { out: sel.picks.iter().map(|p| format!("{}\n", p.line())).collect(), err, status: 0 })
+}
+
+fn coverage_cmd(call: &Call, args: &[String]) -> Result<Answer, String> {
+    match args.get(1).map(String::as_str) {
+        Some("run") => {
+            let a = parse(&args[1..], &["--nightly"], &["--bin", "--jobs", "--rev", "--tree", "--repo", "--out", "--class", "--by-case"])?;
+            let repo = Repo::find(a.get("--repo"))?;
+            let rev = repo.rev(a.get("--rev").unwrap_or("HEAD"))?;
+            let snap = catalogue::Snapshot::read(&repo, &rev)?;
+            let bin = a.get("--bin").ok_or("coverage run needs --bin DIR, the test project's build output")?;
+            let absolute = |p: &str| if p.starts_with('/') { std::path::PathBuf::from(p) } else { repo.root.join(p) };
+            let o = coverage::RunOptions {
+                bin: absolute(bin),
+                tree: a.get("--tree").map(absolute).unwrap_or_else(|| repo.root.clone()),
+                rev,
+                jobs: a.number("--jobs", 4)?,
+                nightly: a.has("--nightly"),
+                only: a.flags.iter().filter(|(f, _)| f == "--class").map(|(_, v)| v.clone()).collect(),
+                by_case: a.flags.iter().filter(|(f, _)| f == "--by-case").map(|(_, v)| v.clone()).collect(),
+                out: a.get("--out").map(absolute).unwrap_or_else(|| repo::testing_home().join("coverage")),
+            };
+            let (_, none) = coverage::run(&repo, &snap, &o, &|l| call.out(&format!("{l}\n")))?;
+            Ok(Answer { out: String::new(), err: String::new(), status: i32::from(none > 0) })
+        }
+        Some("load") => {
+            let a = parse(&args[1..], &["--merge"], &[])?;
+            let text = match a.words.first() {
+                Some(f) => std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?,
+                None => call.stdin().ok_or("coverage load needs a run's file, or its lines on stdin")?,
+            };
+            Ok(ok(coverage::load(&store::Store::open()?, &text, a.has("--merge"))?))
+        }
+        _ => {
+            let a = parse(args, &[], &[])?;
+            let Some(m) = coverage::Map::load(&store::Store::open()?)? else { return Ok(Answer { out: "no map\n".into(), err: String::new(), status: 1 }) };
+            if a.words.is_empty() {
+                return Ok(ok(format!("map\trev {}\tbuilt {}\t{} classes ({} without a report)\t{} files\ttrial {}\n", m.rev, m.built, m.classes, m.unknown.len(), m.files.len(), m.trial)));
+            }
+            let mut out = String::new();
+            for f in &a.words {
+                match m.classes_of(f) {
+                    Some(units) => {
+                        for u in units {
+                            out.push_str(&format!("{f}\t{u}\n"));
+                        }
+                    }
+                    None => out.push_str(&format!("{f}\tunseen\n")),
+                }
+            }
+            Ok(ok(out))
+        }
+    }
+}
+
+fn shard_cmd(call: &Call, args: &[String]) -> Result<Answer, String> {
+    let a = parse(args, &["--keep-collections", "--machine"], &["--shards", "--head", "--repo", "--tier"])?;
+    let repo = Repo::find(a.get("--repo"))?;
+    let snap = catalogue::Snapshot::read(&repo, a.get("--head").unwrap_or("HEAD"))?;
+    let machine = shard::machine_globals(&repo, &snap);
+    if a.has("--machine") {
+        return Ok(ok(machine.iter().map(|(c, why)| format!("machine\t{why}\t{c}\n")).collect()));
+    }
+    let text = match a.words.first() {
+        Some(f) => std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?,
+        None => call.stdin().ok_or("shard needs a selection file, or impact's lines on stdin")?,
+    };
+    let units: Vec<String> = text.lines().filter_map(impact::Pick::parse).filter(|p| p.kind == "dotnet" && p.unit != "lunap").map(|p| p.unit).collect();
+    let times = store::Store::open().map(|s| shard::times(&s)).unwrap_or_default();
+    let skip_nightly = a.get("--tier").unwrap_or("land") != "nightly";
+    let shards = shard::plan(&snap, &times, &machine, &units, a.number("--shards", 4)?, a.has("--keep-collections"), 20.0);
+    let mut out = String::new();
+    let held: Vec<&String> = units.iter().filter(|u| snap.class_of_unit(u).is_some_and(|c| machine.contains_key(&c.fqn))).collect();
+    out.push_str(&format!("machine\t{}\t{} of the selection's units touch machine-wide state and share one shard\n", held.len(), held.len()));
+    for (i, s) in shards.iter().enumerate() {
+        out.push_str(&format!("shard\t{}\t{:.0}\t{}\t{}\n", i + 1, s.seconds, s.units.len(), adapters::dotnet_filter(&s.units, false, skip_nightly)));
+    }
+    let wall = shards.iter().map(|s| s.seconds).fold(0.0, f64::max);
+    out.push_str(&format!("wall\t{wall:.0}\t{:.0}\t{} units, {} without a measured time\n", shards.iter().map(|s| s.seconds).sum::<f64>(), units.len(), units.iter().filter(|u| !times.contains_key(*u) && !u.split_once('#').is_some_and(|(c, _)| times.contains_key(c))).count()));
+    Ok(ok(out))
 }
 
 fn trial_cmd(call: &Call, args: &[String]) -> Result<Answer, String> {
@@ -276,6 +384,8 @@ impl Module for TestingCommands {
         let result = match command.as_str() {
             "units" => units(&args),
             "impact" => impact_cmd(&args),
+            "coverage" => coverage_cmd(call, &args),
+            "shard" => shard_cmd(call, &args),
             "trial" => trial_cmd(call, &args),
             "results" => results_cmd(&args),
             "ingest" => ingest_cmd(&args),

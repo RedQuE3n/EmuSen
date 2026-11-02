@@ -56,6 +56,20 @@ impl Repo {
         Ok(out.split('\0').filter(|f| !f.is_empty()).map(str::to_string).collect())
     }
 
+    /// The files `head` adds since the merge base with `base` (and, with `uncommitted`, those the working tree adds).
+    pub fn added(&self, base: &str, head: &str, uncommitted: bool) -> Result<Vec<String>, String> {
+        let mb = self.git(&["merge-base", base, head])?;
+        let out = self.git(&["diff", "--name-only", "-z", "--no-renames", "--diff-filter=A", mb.trim(), head])?;
+        let mut files: Vec<String> = out.split('\0').filter(|f| !f.is_empty()).map(str::to_string).collect();
+        if uncommitted {
+            let out = self.git(&["diff", "--name-only", "-z", "--no-renames", "--diff-filter=A", "HEAD"])?;
+            files.extend(out.split('\0').filter(|f| !f.is_empty()).map(str::to_string));
+        }
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
     /// Every file of a revision.
     pub fn files(&self, rev: &str) -> Result<Vec<String>, String> {
         let out = self.git(&["ls-tree", "-r", "-z", "--name-only", rev])?;

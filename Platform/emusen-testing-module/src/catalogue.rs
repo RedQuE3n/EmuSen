@@ -20,6 +20,8 @@ pub struct Class {
     pub abstract_: bool,
     pub base: Option<String>,
     pub has_tests: bool,
+    /// The xunit collection the class runs in, by its last name (`[Collection(TestCollections.ProcessGlobals)]`).
+    pub collection: Option<String>,
 }
 
 /// A revision as the studio sees it.
@@ -62,6 +64,7 @@ pub fn classes_in(file: &str, text: &str, project: &str) -> Vec<Class> {
         let end = tops.get(k + 1).map_or(lines.len(), |n| n.0);
         let has_tests = lines[at..end].iter().any(|l| test_attribute().is_match(l));
         let mut nightly = false;
+        let mut collection = None;
         let mut j = at;
         while j > 0 {
             j -= 1;
@@ -70,12 +73,15 @@ pub fn classes_in(file: &str, text: &str, project: &str) -> Vec<Class> {
                 break;
             }
             nightly |= l.contains("\"Category\"") && l.contains("\"nightly\"");
+            if let Some(rest) = l.strip_prefix("[Collection(") {
+                collection = rest.split(')').next().map(|c| c.trim().trim_matches('"').rsplit('.').next().unwrap_or("").trim_matches('"').to_string()).filter(|c| !c.is_empty());
+            }
         }
         let fqn = match &namespace {
             Some(n) => format!("{n}.{name}"),
             None => name.clone(),
         };
-        out.push(Class { fqn, project: project.to_string(), files: BTreeSet::from([file.to_string()]), nightly, abstract_, base: base.clone(), has_tests });
+        out.push(Class { fqn, project: project.to_string(), files: BTreeSet::from([file.to_string()]), nightly, abstract_, base: base.clone(), has_tests, collection });
     }
     out
 }
@@ -93,6 +99,9 @@ pub fn test_classes(sources: &[(String, String, String)]) -> BTreeMap<String, Cl
             e.has_tests |= c.has_tests;
             if e.base.is_none() {
                 e.base = c.base;
+            }
+            if e.collection.is_none() {
+                e.collection = c.collection;
             }
         }
     }
@@ -136,6 +145,12 @@ impl Snapshot {
     /// The test classes a file declares.
     pub fn classes_of_file(&self, file: &str) -> Vec<&Class> {
         self.classes.values().filter(|c| c.files.contains(file)).collect()
+    }
+
+    /// The class a dotnet unit names: the class itself, or the class before `#` of a unit that is one group of its
+    /// cases (`coverage run --by-case`).
+    pub fn class_of_unit(&self, unit: &str) -> Option<&Class> {
+        self.classes.get(unit.split('#').next().unwrap_or(unit))
     }
 
     /// The classes whose full name holds a filter term, as `FullyQualifiedName~term` selects them.
@@ -285,26 +300,26 @@ pub fn hash_text(text: &str) -> Result<String, String> {
 
 /// The sibling LunaP checkout's commit, and `dirty` when it has changes, as LunaP.props in the working tree names it.
 fn lunap_state(repo: &Repo) -> Option<String> {
-    let props = std::fs::read_to_string(repo.root.join("LunaP.props")).ok()?;
-    let at = props.split('"').find(|s| s.ends_with("EmuSen.LunaP.csproj"))?;
-    let path = at.replace("$(MSBuildThisFileDirectory)", &format!("{}/", repo.root.display()));
-    let dir = std::path::Path::new(&path).parent()?.to_path_buf();
-    let sibling = Repo { root: dir };
-    let top = sibling.git(&["rev-parse", "--show-toplevel"]).ok()?;
-    let sibling = Repo { root: top.trim().into() };
+    let sibling = Repo { root: lunap_root(repo)? };
     let head = sibling.git(&["rev-parse", "HEAD"]).ok()?;
     let dirty = !sibling.git(&["status", "--porcelain", "--untracked-files=no"]).ok()?.trim().is_empty();
     Some(format!("{}{}", head.trim(), if dirty { " dirty" } else { "" }))
 }
 
-/// The folder of the sibling LunaP checkout's tests, for the lunap unit.
-pub fn lunap_tests(repo: &Repo) -> Option<std::path::PathBuf> {
+/// The sibling LunaP checkout's root, as LunaP.props in the working tree names it; the coverage map's `lunap:` paths
+/// are relative to it.
+pub fn lunap_root(repo: &Repo) -> Option<std::path::PathBuf> {
     let props = std::fs::read_to_string(repo.root.join("LunaP.props")).ok()?;
     let at = props.split('"').find(|s| s.ends_with("EmuSen.LunaP.csproj"))?;
     let path = at.replace("$(MSBuildThisFileDirectory)", &format!("{}/", repo.root.display()));
-    let csproj = std::path::PathBuf::from(path);
-    let top = csproj.parent()?.parent()?.parent()?;
-    let tests = top.join("tests/EmuSen.LunaP.Tests");
+    let dir = std::path::Path::new(&path).parent()?.to_path_buf();
+    let top = (Repo { root: dir }).git(&["rev-parse", "--show-toplevel"]).ok()?;
+    Some(std::path::PathBuf::from(top.trim()))
+}
+
+/// The folder of the sibling LunaP checkout's tests, for the lunap unit.
+pub fn lunap_tests(repo: &Repo) -> Option<std::path::PathBuf> {
+    let tests = lunap_root(repo)?.join("tests/EmuSen.LunaP.Tests");
     tests.exists().then_some(tests)
 }
 

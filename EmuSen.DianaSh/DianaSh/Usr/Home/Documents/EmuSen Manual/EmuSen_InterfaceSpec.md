@@ -658,7 +658,7 @@ as in big picture, so the Home card's pages are audited at both sizes in both se
 
 #### 6.3.20 A game's page, U4 (2026-11-01)
 
-Thirty-two recordings were added, one taken again and twenty-six retired, each by one cause:
+Thirty-two recordings were added, five taken again and twenty-six retired, each by one cause:
 
 - **Added: the game's page** (`WindowFitAuditTests.GamePage.cs`), at 1280 × 800 and 1920 × 1200, over the synthetic
   library's Cobalt Harbor with three slots and the automatic state, a taken screenshot and three saved cheats: on the
@@ -670,6 +670,8 @@ Thirty-two recordings were added, one taken again and twenty-six retired, each b
   every word whole under the fit audit. The same states are audited at 1920 × 1080 and 1280 × 720 and not recorded.
 - **Taken again: `BigPicture-GameOptions`**, both sizes: the themed gamelist's Select sheet keeps its list rows and ends
   with `Game Page`, the game's own entries having moved to the page (`EmuSen_BigPicture.md` §50.3).
+- **Taken again: the Home card's game row** (`HomeCard`, `HomeCardGame`, `HomeCardTools`, `HomeCardDesktop`, both
+  sizes): the row opens the game's page instead of a submenu, so its words lose the submenu's `›`; nothing else moved.
 - **Retired, with their windows:** `BigPicture-MetadataEditor`, `CoverPicker`, `CoverPickerCovers`,
   `CoverPickerLongTitle`, `FindByName`, `FindByNameLongTitle`, `FindByNameResults`, `GamePackageNew`,
   `GamePackageLongTitle`, `GamePackageSelfContained`, `Screenshot`, `ScreenshotLongTitle`, and the Home card's

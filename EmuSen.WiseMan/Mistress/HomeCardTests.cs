@@ -125,14 +125,18 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(PadMenu.IsOpen(window));
 
             Assert.EndsWith("· Favourite", Named<TextBlock>(PadMenu.Pane(window), "PaneCaption").Text);
+            // A on the game opens its page, where Y is the favourite too (EmuSen_BigPicture.md §50.1).
             pad.A();
-            Assert.DoesNotContain(PadMenu.Lines(window), l => l.Contains("Favourites", StringComparison.Ordinal));
-            Assert.Contains("Favourite", PadMenu.Big(window).Hints!.Select(h => h.Label));
+            Assert.False(PadMenu.IsOpen(window));
+            Assert.Equal(rom, window.GamePageShown?.Path);
+            Assert.Contains("Favourite", window.GamePageLayout!.Hints.Select(h => h.Label));
             pad.Y();
             Assert.False(Records(window).IsFavourite(rom));
 
-            // Off the game's page, Y does nothing and the help bar does not offer it.
+            // Off the game, Y does nothing and the help bar does not offer it.
             pad.B();
+            Assert.Null(window.GamePageShown);
+            pad.Start();
             PadMenu.Choose(window, pad, MainWindow.ToolsMenu, exact: true);
             Assert.DoesNotContain("Favourite", PadMenu.Big(window).Hints!.Select(h => h.Label));
             pad.Y();

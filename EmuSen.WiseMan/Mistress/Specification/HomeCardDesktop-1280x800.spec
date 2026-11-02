@@ -23,7 +23,7 @@ tree
                 8 LunaList at=24,224,512,378 by=panel heard=Menu limit=0,0,1280,746 name=PadMenuList paints=#FFFFFFFF role=list
                   9 ScrollViewer at=24,224,512,378 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=24,224,512,378
                     10 ListBoxItem at=24,224,512,54 by=fixed-scroll drawn focus heard=Continue in=9 limit=24,224,512,378 op paints=#333337FF,#D4D4D4FF role=listitem text=Continue
-                    11 ListBoxItem at=24,278,512,54 by=fixed-scroll drawn focus heard="Cobalt Harbor (Synthetic)" in=9 limit=24,224,512,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Cobalt Harbor (Synthetic)  ›"
+                    11 ListBoxItem at=24,278,512,54 by=fixed-scroll drawn focus heard="Cobalt Harbor (Synthetic)" in=9 limit=24,224,512,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Cobalt Harbor (Synthetic)"
                     12 ListBoxItem at=24,332,512,54 by=fixed-scroll drawn focus heard=Search in=9 limit=24,224,512,378 op paints=#333337FF,#D4D4D4FF role=listitem text=Search
                     13 ListBoxItem at=24,386,512,54 by=fixed-scroll drawn focus heard="Start a Console" in=9 limit=24,224,512,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Start a Console  ›"
                     14 ListBoxItem at=24,440,512,54 by=fixed-scroll drawn focus heard=Tools in=9 limit=24,224,512,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Tools  ›"

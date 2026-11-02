@@ -60,7 +60,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             foreach ((string key, string value) in new[] { (GameMetadata.Developer, "Lantern Works"), (GameMetadata.Publisher, "Publisher P"), (GameMetadata.ReleaseDate, "1994-03-01"),
                 (GameMetadata.Description, "Cobalt Harbor is a game invented for EmuSen's tests. It has no story and no pictures of its own; every image shown for it is a flat colour with its name written on it. This second sentence is here so that the description is long enough to wrap over several lines.") })
                 host.EditField(rom, key, value);
-            DateTime now = DateTime.Now;
+            // The page's words about time from a fixed evening, so no recording crosses midnight.
+            DateTime now = new(2026, 11, 1, 21, 42, 0);
+            typeof(MainWindow).GetField("PageClock", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, (Func<DateTime>)(() => now));
             foreach ((int slot, TimeSpan ago, Color colour) in new[] { (1, TimeSpan.FromHours(2), Colors.SteelBlue), (2, TimeSpan.FromDays(1), Colors.SeaGreen), (3, TimeSpan.FromDays(3), Colors.Indigo) })
             {
                 string file = SaveLibrary.StatePathFor(rom, slot, s.Settings.StateDirectory);
@@ -149,6 +151,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             {
                 InterfaceRecorder.Normalise = t => t;
                 InterfaceRecorder.Volatile = _ => null;
+                ResetPageClock();
             }
         }, default);
 
@@ -160,9 +163,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             OpenGamePage(s, view);
             PictureGamePage(s, $"{view}-{width}x{height}");
             List<string> faults = FitAudit.Check(s.Window.GamePageLayout!);
+            ResetPageClock();
             foreach (string f in faults) _out.WriteLine($"{view} {width}x{height}: {f}");
             Assert.Empty(faults);
         }, default);
+
+        private static void ResetPageClock() =>
+            typeof(MainWindow).GetField("PageClock", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, (Func<DateTime>)(() => DateTime.Now));
 
         private static SortedDictionary<string, string> GamePageSeen(MainWindow w)
         {

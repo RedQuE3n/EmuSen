@@ -116,7 +116,10 @@ namespace EmuSen.Mistress.Views
 
         // --- IGamePageHost: what the page reads ---
 
-        DateTime IGamePageHost.Now => DateTime.Now;
+        // The page's clock for how long ago a state was saved; a test fixes it.
+        internal static Func<DateTime> PageClock = () => DateTime.Now;
+
+        DateTime IGamePageHost.Now => PageClock();
 
         bool IGamePageHost.ScrapeRunning => ScrapeRunning;
 

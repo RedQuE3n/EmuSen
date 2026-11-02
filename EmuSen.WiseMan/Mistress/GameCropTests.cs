@@ -103,10 +103,10 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task On_the_desktop_the_game_s_options_open_it_as_a_window_and_the_crop_is_stored_for_that_game() => Session.Dispatch(() =>
         {
-            using ThemedSession s = DesktopGameOptionsTests.Desktop();
+            using ThemedSession s = DesktopLibrary.Desktop();
             SheetLayer sheets = s.Window.GetControl<SheetLayer>("Sheets");
-            var list = DesktopGameOptionsTests.List(s.Window);
-            string game = DesktopGameOptionsTests.SnesPath(s, 1), other = DesktopGameOptionsTests.SnesPath(s, 2);
+            var list = DesktopLibrary.List(s.Window);
+            string game = DesktopLibrary.SnesPath(s, 1), other = DesktopLibrary.SnesPath(s, 2);
             list.Select(list.Models.Single(e => e.FullPath == game));
             s.Settle();
             BigPictureSwitchTests.ChooseFromPadMenu(s, MainWindow.CropThisGame);
@@ -124,31 +124,5 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(s.Window.GameCropShown);
         }, default);
 
-        // In big picture it is a sheet framed as a menu, every control of it reached by the pad, and B puts it away.
-        [Fact]
-        public Task In_big_picture_the_gamelist_s_options_open_it_as_a_sheet_the_pad_reaches_all_of() => ThemedLibraryPadTests.Run(s =>
-        {
-            SheetLayer sheets = s.Window.GetControl<SheetLayer>("Sheets");
-            ThemedLibraryPadTests.Enter(s, "snes");
-            s.Pad.Select();
-            s.Settle();
-            GameOptionsWindow options = Assert.IsType<GameOptionsWindow>(sheets.Current);
-            PadAudit.Reach(sheets.SheetOf(options)!, s.Pad, e => e is Button { Content: MainWindow.CropThisGame });
-            s.Pad.A();
-            s.Settle();
-
-            GameCropWindow crop = Assert.IsType<GameCropWindow>(sheets.Current);
-            Assert.Empty(s.Window.OwnedWindows);
-            Assert.True(sheets.DrawsMenu(crop));
-            Control sheet = sheets.SheetOf(crop)!;
-            Type(s, crop, "CropLeft", "2.4");
-            HashSet<Avalonia.Input.InputElement> reached = PadAudit.Reachable(sheet, s.Pad);
-            Assert.Empty(PadAudit.Operable(sheet).Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
-            Assert.Equal(6, PadAudit.Operable(sheet).Count);
-            Assert.Equal(new GameCrop(2.4, 0, 0, 0), Records(s.Window).Crop(System.IO.Path.Combine(s.RomDirectory, s.Game + ".sfc")));
-            s.Pad.B();
-            s.Settle();
-            Assert.Null(s.Window.GameCropShown);
-        });
     }
 }

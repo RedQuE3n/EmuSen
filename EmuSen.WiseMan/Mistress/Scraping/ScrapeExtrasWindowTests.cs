@@ -40,16 +40,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             base.Dispose();
         }
 
-        private static void ShowFindByName(MainWindow w, string path) =>
-            typeof(MainWindow).GetMethod("ShowFindByName", Hidden)!.Invoke(w, [path, Path.GetFileNameWithoutExtension(path)]);
-
-        private static void Search(FindByNameWindow find, string text)
-        {
-            Named<TextBox>(find, "FindByNameText").Text = text;
-            Task searching = find.SearchAsync();
-            WaitFor(() => searching.IsCompleted, "the search");
-        }
-
         private static AppSettings SettingsOf(MainWindow w) => (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(w)!;
 
         private static GameRecords RecordsOf(MainWindow w) => (GameRecords)typeof(MainWindow).GetField("_records", Hidden)!.GetValue(w)!;
@@ -71,86 +61,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         // --- Find by Name ---
 
         [Fact]
-        public Task Find_by_name_sends_nothing_until_Search_then_one_request_and_a_pick_keeps_that_game_with_no_lookup() => OnUi(() =>
-        {
-            string hack = Game("SMW Hack (USA) [Hack]", 5);
-            Server.Games.Add(new FakeGame(900, "Super Mario World"));
-            Server.Games.Add(new FakeGame(901, "Super Mario Kart"));
-            MainWindow window = Open();
-            Pump(200);
-
-            ShowFindByName(window, hack);
-            FindByNameWindow find = Assert.IsType<FindByNameWindow>(window.FindByNameShown);
-            Pump(200);
-            Assert.Empty(Server.Asked);
-            Assert.Equal("SMW Hack", Named<TextBox>(find, "FindByNameText").Text);
-
-            Search(find, "Super Mario");
-            string asked = Assert.Single(Server.Asked);
-            Assert.Contains("/jeuRecherche.php", asked);
-            Assert.Equal(("4", "Super Mario"), (FakeScreenScraper.Param(asked, "systemeid"), FakeScreenScraper.Param(asked, "recherche")));
-            Assert.Equal(1, window.NameSearches);
-            Assert.Equal(["FindByNameResult_0", "FindByNameResult_1"], find.Results.Select(b => b.Name));
-            Assert.StartsWith("2 games", find.StatusText);
-
-            Click(find.Results.First(b => ((ScrapedGame)b.Tag!).Id == 900));
-            Assert.Null(window.FindByNameShown);
-            RunEnds(window);
-            Assert.Empty(Server.JeuInfos);
-            Assert.Equal(4, Server.MediaAsked.Count());
-            Assert.Equal(5, Server.Asked.Count);
-            ScrapedRecord kept = window.ScrapedNow(hack)!;
-            Assert.Equal((900L, "name", "Super Mario World (US title)"), (kept.GameId!.Value, kept.MatchedBy, kept.Name));
-            Pump(200);
-            Assert.Equal(Stored("snes", "covers", "SMW Hack (USA) [Hack].png"), CoverShown(window, hack));
-            // The file is never renamed, and nothing is written beside it.
-            Assert.Equal([hack], Directory.EnumerateFiles(RomDir));
-        });
-
-        [Fact]
-        public Task A_search_that_finds_nothing_says_so_and_counts_against_the_unrecognised_allowance() => OnUi(() =>
-        {
-            string rom = Game("Nameless", 9);
-            MainWindow window = Open();
-            ShowFindByName(window, rom);
-            FindByNameWindow find = window.FindByNameShown!;
-
-            Search(find, "Nothing Like It");
-
-            Assert.Single(Server.Searches);
-            Assert.Empty(find.Results);
-            Assert.Contains("found no game", find.StatusText);
-            QuotaSnapshot quota = ((IScrapeHost)window).Quota!;
-            Assert.Equal((11, 2), (quota.RequestsToday, quota.KoToday));
-        });
-
-        [Fact]
-        public Task Without_the_developer_file_find_by_name_says_why_and_sends_nothing() => OnUi(() =>
-        {
-            string rom = Game("Nameless", 9);
-            MainWindow window = Open(developer: false);
-            ShowFindByName(window, rom);
-            FindByNameWindow find = window.FindByNameShown!;
-
-            Assert.False(Named<Button>(find, "FindByNameSearch").IsEnabled);
-            Assert.StartsWith("ScreenScraper cannot be asked", find.StatusText);
-            Task searching = find.SearchAsync();
-            WaitFor(() => searching.IsCompleted, "the search");
-            Assert.Empty(Server.Asked);
-            Assert.Equal(0, window.NameSearches);
-            find.Close();
-            window.Close();
-
-            // ScreenScraper switched off is the same: the reason, and nothing sent.
-            window = Open(settings: s => s.Scraping = false);
-            ShowFindByName(window, rom);
-            find = window.FindByNameShown!;
-            Assert.Contains("switched off", find.StatusText);
-            Assert.Equal(ScrapeStatus.Failed, window.SearchByNameAsync(rom, "Nameless").GetAwaiter().GetResult().Status);
-            Assert.Empty(Server.Asked);
-        });
-
-        [Fact]
         public Task Each_search_waits_its_turn_at_the_quota_s_pace() => OnUi(() =>
         {
             string rom = Game("Nameless", 9);
@@ -162,82 +72,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             // The first answer sets 6 a minute less 10%; the third waits that interval after the second.
             Assert.Equal(3, Server.Searches.Count());
             Assert.True(window.ScrapeNow - start >= TimeSpan.FromSeconds(60 / 5.4), $"{(window.ScrapeNow - start).TotalSeconds} s");
-        });
-
-        [Fact]
-        public Task Find_by_name_is_in_the_game_s_options_and_the_context_menu_and_neither_offers_it_during_a_run() => OnUi(() =>
-        {
-            string rom = Game("F-Zero (USA)", 1);
-            Server.Games.Add(new FakeGame(77, "F-Zero", Md5(rom)));
-            MainWindow window = Open();
-            Pump(200);
-            RomEntry entry = DesktopGameOptionsTests.List(window).Models.Single(e => e.FullPath == rom);
-
-            typeof(MainWindow).GetMethod("ShowLibraryGameOptions", Hidden)!.Invoke(window, [entry]);
-            GameOptionsWindow options = Assert.IsType<GameOptionsWindow>(window.GameOptionsShown);
-            Button entryButton = options.Entries.Single(b => b.Content as string == "Find by Name...");
-            Click(entryButton);
-            Pump(100);
-            Assert.NotNull(window.FindByNameShown);
-            window.FindByNameShown!.Close();
-            Assert.Empty(Server.Asked);
-
-            LunaList<RomEntry> list = DesktopGameOptionsTests.List(window);
-            Control row = list.ContainerFromIndex(list.Models.ToList().IndexOf(entry))!;
-            Point centre = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value;
-            window.MouseDown(centre, MouseButton.Right);
-            window.MouseUp(centre, MouseButton.Right);
-            Pump(100);
-            ContextMenu menu = list.ContextMenu!;
-            string[] labels = menu.ItemsSource!.OfType<ActionMenuItem>().Select(i => i.Action.Text).ToArray();
-            ActionMenuItem find = menu.ItemsSource!.OfType<ActionMenuItem>().SingleOrDefault(i => i.Action.Text == "_Find by Name...") ?? throw new InvalidOperationException(string.Join(" | ", labels));
-            Assert.True(find.IsEnabled);
-            menu.Close();
-            find.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
-            Pump(100);
-            Assert.NotNull(window.FindByNameShown);
-            window.FindByNameShown!.Close();
-
-            Server.Gate = new System.Threading.SemaphoreSlim(0);
-            Scrape(window, ScrapeScope.ThisGame(rom));
-            typeof(MainWindow).GetMethod("ShowLibraryGameOptions", Hidden)!.Invoke(window, [entry]);
-            Assert.DoesNotContain(window.GameOptionsShown!.Entries, b => b.Content as string == "Find by Name...");
-            window.GameOptionsShown!.Close();
-            window.CancelScrape();
-            Assert.Empty(Server.Searches);
-        });
-
-        [Fact]
-        public Task On_a_sheet_the_pad_reaches_the_box_Search_and_every_result() => OnUi(() =>
-        {
-            string rom = Game("SMW Hack (USA)", 5);
-            Server.Games.Add(new FakeGame(900, "Super Mario World"));
-            Server.Games.Add(new FakeGame(901, "Super Mario Kart"));
-            MainWindow window = Open(bigScreen: true);
-            var pad = new PadDriver(window);
-            Pump(200);
-            ShowFindByName(window, rom);
-            FindByNameWindow find = Assert.IsType<FindByNameWindow>(Sheets(window).Current);
-            Control sheet = RootOf(find);
-            window.UpdateLayout();
-
-            HashSet<InputElement> reached = PadAudit.Reachable(sheet, pad);
-            Assert.Contains(reached, e => e is TextBox { Name: "FindByNameText" });
-            Assert.Contains(reached, e => e is Button { Name: "FindByNameSearch" });
-            Assert.Empty(PadAudit.Operable(sheet).Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
-
-            Named<TextBox>(find, "FindByNameText").Text = "Super Mario";
-            PadAudit.Reach(sheet, pad, e => e is Button { Name: "FindByNameSearch" });
-            pad.A();
-            WaitFor(() => find.Results.Count() == 2, "the results");
-            window.UpdateLayout();
-            reached = PadAudit.Reachable(sheet, pad);
-            Assert.Contains(reached, e => e is Button { Name: "FindByNameResult_1" });
-            Assert.Empty(PadAudit.Operable(sheet).Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
-            PadAudit.Reach(sheet, pad, e => e is Button { Name: "FindByNameResult_1" });
-            pad.A();
-            RunEnds(window);
-            Assert.Equal(901L, window.ScrapedNow(rom)!.GameId);
         });
 
         // --- the criteria and the plan ---
@@ -357,36 +191,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
 
         // --- ScreenScraper's names (Q30) ---
-
-        [Fact]
-        public Task Game_names_shows_ScreenScraper_s_name_only_when_on_and_the_player_s_name_still_wins() => OnUi(() =>
-        {
-            string rom = Game("F-Zero (USA)", 1);
-            Server.Games.Add(new FakeGame(77, "F-Zero", Md5(rom)));
-            MainWindow window = Open();
-            Pump(200);
-            Scrape(window, ScrapeScope.ThisGame(rom));
-            RunEnds(window);
-            Pump(200);
-            Assert.Contains("F-Zero (USA)", DesktopGameOptionsTests.ListLabels(window));
-
-            SettingsOf(window).ScrapeGameNames = true;
-            Refresh(window);
-            Assert.Contains("F-Zero (US title)", DesktopGameOptionsTests.ListLabels(window));
-            MetadataDraft draft = ((IGameEditorHost)window).DraftFor(rom);
-            Assert.Equal(("F-Zero (US title)", MetadataSource.Scraped), (draft.Value(GameMetadata.Name), draft.Source(GameMetadata.Name)));
-            Assert.Null(draft.OfferedName);
-
-            RecordsOf(window).SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.Name] = "My Racer" }, DateTime.Now);
-            Refresh(window);
-            Assert.Contains("My Racer", DesktopGameOptionsTests.ListLabels(window));
-
-            SettingsOf(window).ScrapeGameNames = false;
-            RecordsOf(window).ClearEdits(rom);
-            Refresh(window);
-            Assert.Contains("F-Zero (USA)", DesktopGameOptionsTests.ListLabels(window));
-            Assert.Equal("F-Zero (US title)", ((IGameEditorHost)window).DraftFor(rom).OfferedName);
-        });
 
         // --- orphaned media ---
 

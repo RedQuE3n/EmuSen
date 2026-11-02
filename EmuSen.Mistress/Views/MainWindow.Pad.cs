@@ -152,6 +152,8 @@ namespace EmuSen.Mistress.Views
             else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);
             else if (EmuSen.LunaP.Controls.MenuTextPopup.OpenOver(this) is { } popup) PadKeyboard.Send(popup, button);
             else if (_padMenuOpen) PadMenuCommand(button);
+            else if (_gamePage is not null) GamePagePadCommand(button);
+            else if (LibraryView.IsVisible && ThemedLibraryShown && button == UiButton.Screensaver && _themed?.SelectedGame is { Folder: false, IsCollection: false } game) ShowGamePage(game.File);
             else if (LibraryView.IsVisible && ThemedLibraryShown) ThemedPadCommand(button);
             else if (LibraryView.IsVisible) LibraryPadCommand(button);
         }
@@ -171,6 +173,7 @@ namespace EmuSen.Mistress.Views
                 case UiButton.Right: if (GridShown) MoveLibrarySelection(1); else StepLibraryConsole(1); break;
                 case UiButton.Options: if (LibraryList.Selected is EmuSen.Mistress.Library.RomEntry chosen) ToggleFavourite(chosen); break;
                 case UiButton.Accept: LaunchSelectedLibraryEntry(); break;
+                case UiButton.Screensaver: if (LibraryList.Selected is EmuSen.Mistress.Library.RomEntry inHand) ShowGamePage(inHand.FullPath); break;
                 case UiButton.Search: SearchFromThePad(); break;
                 case UiButton.Back: if (!LeaveTheSearchBox() && _session is not null) ToggleLibrary(); break;
                 case UiButton.Menu: OpenPadMenu(); break;

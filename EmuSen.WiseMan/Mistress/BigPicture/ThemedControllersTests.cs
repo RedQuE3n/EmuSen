@@ -116,7 +116,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             // Select opens the game options (§23), and the second pad closes them.
             second.Select();
-            Assert.IsType<GameOptionsWindow>(s.Window.GetControl<EmuSen.LunaP.Windowing.SheetLayer>("Sheets").Current);
+            Assert.IsType<GamelistOptionsWindow>(s.Window.GetControl<EmuSen.LunaP.Windowing.SheetLayer>("Sheets").Current);
             second.B();
             Assert.False(s.Window.GetControl<EmuSen.LunaP.Windowing.SheetLayer>("Sheets").IsPresenting);
 

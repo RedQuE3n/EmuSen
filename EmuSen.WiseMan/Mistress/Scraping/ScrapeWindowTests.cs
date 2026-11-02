@@ -485,8 +485,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             Invoke(window, "OpenPadMenu");
-            entries.Single(e => e.ShowsCover).Submenu!().Single(e => e.Text() == "Scrape This Game...").Accept();
+            entries.Single(e => e.ShowsCover).Accept();
+            EmuSen.Mistress.Pages.GamePage page = window.GamePageShown!;
+            page.ChooseSection(EmuSen.Mistress.Pages.GamePage.Details);
+            page.ChooseRow("scrape");
+            page.ChooseRow("file");
             RunEnds(window);
+            window.CloseGamePage();
             Assert.Equal("Scrape This Game", _asked.Single().Title);
             Assert.Single(_server.JeuInfos);
 

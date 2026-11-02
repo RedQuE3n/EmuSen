@@ -21,7 +21,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
     }
 
-    // The help bars with the swap on, and the text popups, at 1280 by 800 and 1920 by 1200; EMUSEN_Q160_TAG names the build, so one build's pictures can sit beside another's.
+    // The help bars with the swap on, and the themed search's text popup, at 1280 by 800 and 1920 by 1200; EMUSEN_Q160_TAG names the build, so one build's pictures can sit beside another's.
     [Collection(TestCollections.ProcessGlobals)]
     public class Q160PictureTool
     {
@@ -55,23 +55,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(500);
             Save(s, $"{size}-gamelist-swapped");
 
-            ThemedGameOptionsTests.OpenOptions(s);
-            PadAudit.Reach(ThemedGameOptionsTests.Sheet(s), s.Pad, e => e is Avalonia.Controls.Button { Content: "Edit This Game's Metadata" });
-            s.Pad.B();
-            s.Settle();
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
-            s.Pad.B();
-            Save(s, $"{size}-editor-swapped");
-            for (int guard = 0; guard < 4 && ThemedGameOptionsTests.Sheets(s).IsPresenting; guard++)
-            {
-                s.Pad.A();
-                if (ThemedGameOptionsTests.Sheets(s).Current?.GetType().Name == "DialogWindow")
-                {
-                    PadAudit.Reach(ThemedGameOptionsTests.Sheet(s), s.Pad, e => e is Avalonia.Controls.Button { Content: "Discard" });
-                    s.Pad.B();
-                }
-            }
-
             typeof(MainWindow).GetMethod("ShowPreferences", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(s.Window, null);
             s.Settle();
             ThemedGameOptionsTests.Reach(s, "BigMenuPage4");
@@ -85,23 +68,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private void Popups(ThemedSession s, string size)
         {
             ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardSteam;
-            s.Pad.A();
-            s.Window.KeyTextInput(" Deluxe");
-            Save(s, $"{size}-editor-steam");
-            s.Pad.B();
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardAutomatic;
-            s.Pad.Unplug();
-            s.Pad.Tick();
-            EsdeMenusTests.Press(s, Key.Enter);
-            s.Window.KeyTextInput(" Deluxe");
-            Save(s, $"{size}-editor-field");
-            EsdeMenusTests.Press(s, Key.Escape);
-            s.Pad.Replug();
-            s.Pad.Tick();
-            ThemedSwitchesTests.PutAway(s);
-
             ThemedGameOptionsTests.OpenOptions(s);
             PadAudit.Reach(ThemedGameOptionsTests.Sheet(s), s.Pad, e => e is Avalonia.Controls.Button { Content: "Search..." });
             s.Pad.Unplug();
@@ -111,7 +77,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Save(s, $"{size}-search-field");
             EsdeMenusTests.Press(s, Key.Enter);
             Save(s, $"{size}-search-filtered");
-            _ = editor;
         }
 
         [Q160PngFact]

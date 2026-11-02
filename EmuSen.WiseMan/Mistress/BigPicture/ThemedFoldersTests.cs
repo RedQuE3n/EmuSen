@@ -309,59 +309,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(s.Themed.FoldersOnTop);
         });
 
-        // USERGUIDE's "Folder link": A launches the linked file, the menu's Enter Folder overrides it, and editing a collection disables it.
-        [Fact]
-        public Task A_folder_link_set_in_the_folder_s_editor_launches_its_game_and_Enter_Folder_still_opens_it() => Session.Dispatch(() =>
-        {
-            using var s = new ThemedSession(roms: Library);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            Assert.Equal("Racing", s.Game);
-            ThemedCollectionsTests.OpenMenu(s);
-            var menu = (GameOptionsWindow)ThemedCollectionsTests.Sheets(s).Current!;
-            Assert.DoesNotContain(menu.Options, o => o.Label is "Enter Folder" or "Edit This Game's Metadata" or "Add to Favourites");
-            Assert.Contains(menu.Options, o => o.Label == "Edit This Folder's Metadata");
-            ThemedCollectionsTests.Reach(s, e => e is Button { Name: "GameOption_EditThisFoldersMetadata" });
-            s.Pad.A();
-            s.Settle();
-            var editor = Assert.IsType<FolderEditorWindow>(ThemedCollectionsTests.Sheets(s).Current);
-            Assert.Empty(s.Window.OwnedWindows);
-            Assert.Equal([FolderEditorWindow.NoLink, NeonLoop + ".sfc", VelvetRally + ".sfc"], editor.Link.ItemsSource!.Cast<string>());
-            HashSet<InputElement> reached = PadAudit.Reachable(ThemedCollectionsTests.Sheet(s), s.Pad);
-            Assert.Empty(PadAudit.Operable(ThemedCollectionsTests.Sheet(s)).Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
-            editor.Link.SelectedItem = VelvetRally + ".sfc";
-            ThemedCollectionsTests.Reach(s, e => e is Button { Name: "FolderSave" });
-            s.Pad.A();
-            s.Settle();
-
-            string racing = Path.Combine(s.RomDirectory, "SNES", "Racing"), velvet = Path.Combine(racing, VelvetRally + ".sfc");
-            Assert.Equal(VelvetRally + ".sfc", ThemedCollectionsTests.Records(s).Edits(racing)[EmuSen.Mistress.Library.GameMetadata.FolderLink]);
-            Assert.Equal(velvet, s.Themed.SelectedGame!.FolderLink);
-            Assert.Equal("Launch", HelpLabel(s, "a"));
-
-            s.Sounds.Clear();
-            s.Pad.A();
-            Assert.Equal(["launch"], s.Sounds);
-            Assert.Equal(velvet, Running(s.Window));
-            ThemedLibraryFlowTests.Choose(s, "Back to Library");
-            Assert.Equal(("", "Racing"), (s.Themed.CurrentFolder, s.Game));
-
-            ThemedCollectionsTests.OpenMenu(s);
-            ThemedCollectionsTests.Reach(s, e => e is Button { Name: "GameOption_EnterFolder" });
-            s.Pad.A();
-            s.Settle();
-            Assert.Equal("Racing", s.Themed.CurrentFolder);
-            Assert.Equal([NeonLoop, VelvetRally], Listed(s));
-            s.Pad.B();
-
-            // While a custom collection is edited, A enters a linked folder as if it had no link.
-            s.Themed.Editing = new EditedCollection(1, "Platform", new HashSet<string>());
-            Now(s, now => s.Themed.Refresh(now));
-            Assert.Equal("Select", HelpLabel(s, "a"));
-            s.Pad.A();
-            Assert.Equal("Racing", s.Themed.CurrentFolder);
-            Stop(s.Window);
-        }, default);
-
         // A link to a file that has gone is no link: A enters the folder and the help bar says so.
         [Fact]
         public Task A_folder_link_to_a_file_that_has_gone_is_ignored() => Run(s =>

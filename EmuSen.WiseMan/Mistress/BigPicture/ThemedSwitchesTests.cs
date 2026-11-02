@@ -416,24 +416,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(NavigationSounds.Samples("nonesuch"));
         }
 
-        // The controller chosen in the metadata editor is drawn on the controller badge in the shape of that console's pad.
-        [Fact]
-        public Task The_controller_chosen_in_the_editor_is_drawn_on_the_controller_badge() => Session.Dispatch(() =>
-        {
-            const string badges = "<badges name=\"badges\"><pos>0.55 0.8</pos><size>0.3 0.1</size><slots>controller,favorite</slots><lines>1</lines><itemsPerLine>4</itemsPerLine></badges>";
-            using ThemedSession s = Session4(badges);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            Assert.Empty(Only<BadgeStrip>(s).Entries!);
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            ((Dropdown)editor.EditorOf(GameMetadata.Controller)).SelectedItem = "SNES";
-            ThemedGameOptionsTests.Reach(s, "MetadataSave");
-            s.Pad.A();
-            s.Settle();
-            Assert.Equal("gamepad_nintendo_snes", ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc")[GameMetadata.Controller]);
-            BadgeEntry entry = Assert.Single(Only<BadgeStrip>(s).Entries!);
-            Assert.Equal((BadgeKind.Controller, ControllerShape.Snes), (entry.Kind, entry.Controller));
-        }, default);
-
         // Pass 6's folder entries carry Mistress's own folder badge, with the link drawn over it for a linked folder, and a game carries none (§29, §30).
         [Fact]
         public Task Pass_6_s_folders_show_the_built_in_folder_badge_and_a_linked_folder_its_link() => Session.Dispatch(() =>

@@ -48,42 +48,6 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", ""));
         }
 
-        // The editor offers a Game Boy or an NES game no engine, and a Super Nintendo game its engines when discovery found a second; the choice is an edit, and the badge shows it.
-        [Fact]
-        public Task The_editor_sets_a_game_s_engine_and_the_alternative_emulator_badge_shows_it() => Session.Dispatch(() =>
-        {
-            const string badges = "<badges name=\"badges\"><pos>0.55 0.8</pos><size>0.3 0.1</size><slots>altemulator</slots><lines>1</lines><itemsPerLine>4</itemsPerLine></badges>";
-            using var s = new ThemedSession(extraGamelist: badges, status: ThemedSwitchesTests.Device);
-            foreach (string console in new[] { "gb", "nes" })
-            {
-                ThemedLibraryPadTests.Enter(s, console);
-                MetadataEditorWindow single = ThemedGameOptionsTests.OpenEditor(s);
-                Assert.False(((Dropdown)single.EditorOf(GameMetadata.AltEmulator)).IsEnabled, $"{console} has one engine");
-                single.Close();
-                s.Settle();
-                s.Pad.B();
-            }
-            ThemedLibraryPadTests.Enter(s, "snes");
-            Assert.Empty(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<BadgeStrip>().Single().Entries!);
-            MetadataEditorWindow snes = ThemedGameOptionsTests.OpenEditor(s);
-            var engine = (Dropdown)snes.EditorOf(GameMetadata.AltEmulator);
-            if (CoreCatalog.EngineFor("SNES") is not { } row)
-            {
-                Assert.False(engine.IsEnabled);
-                return;
-            }
-            Assert.True(engine.IsEnabled);
-            Assert.Equal(new[] { "None (the console's engine)" }.Concat(row.Choices!), ((System.Collections.IEnumerable)engine.ItemsSource!).Cast<string>());
-            string chosen = row.Choices!.Last();
-            engine.SelectedItem = chosen;
-            ThemedGameOptionsTests.Reach(s, "MetadataSave");
-            s.Pad.A();
-            s.Settle();
-            Assert.Equal(chosen, ThemedGameOptionsTests.StoredEdits(s, ThemedSession.SnesGames[0] + ".sfc")[GameMetadata.AltEmulator]);
-            BadgeEntry badge = Assert.Single(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<BadgeStrip>().Single().Entries!);
-            Assert.Equal(BadgeKind.AltEmulator, badge.Kind);
-        }, default);
-
         // A game or a console whose stored engine is the retired Mars (C#) runs on MarsRT, the N64's one engine - see Mars_Native.md §6.7.
         [Fact]
         public Task An_n64_game_that_names_the_retired_csharp_core_runs_on_MarsRT() => Session.Dispatch(() =>

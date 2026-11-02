@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
     }
 
-    // The Scraping tab's new rows and Find by Name, on the desktop and as sheets in a big-screen session, at 1280 by 800 and 1920 by 1200; outside the repository.
+    // The Scraping tab's new rows, on the desktop and as sheets in a big-screen session, at 1280 by 800 and 1920 by 1200; outside the repository.
     [Collection(TestCollections.ProcessGlobals)]
     public class ScrapeExtrasPictureTool : ScrapeWindowFixture
     {
@@ -82,16 +82,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 }
                 prefs.Close();
 
-                typeof(MainWindow).GetMethod("ShowFindByName", Hidden)!.Invoke(window, [hack, "SMW Hack (USA) [Hack]"]);
-                FindByNameWindow find = window.FindByNameShown!;
-                Pump(300);
-                Save(Over(window, find), $"desktop-find-by-name-{size}");
-                Named<TextBox>(find, "FindByNameText").Text = "Super Mario";
-                Task searching = find.SearchAsync();
-                WaitFor(() => searching.IsCompleted, "the search");
-                Pump(300);
-                Save(Over(window, find), $"desktop-find-by-name-results-{size}");
-                find.Close();
                 window.Close();
 
                 // A big-screen session: the same as sheets, driven by the pad.
@@ -109,15 +99,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Sheets(window).Current!.Close();
                 Pump(200);
 
-                typeof(MainWindow).GetMethod("ShowFindByName", Hidden)!.Invoke(window, [hack, "SMW Hack (USA) [Hack]"]);
-                find = window.FindByNameShown!;
-                Pump(300);
-                Named<TextBox>(find, "FindByNameText").Text = "Super Mario";
-                searching = find.SearchAsync();
-                WaitFor(() => searching.IsCompleted, "the search");
-                Pump(300);
-                Save(UiTest.Capture(window), $"sheet-find-by-name-results-{size}");
-                find.Close();
                 window.Close();
             }
         });

@@ -62,4 +62,4 @@ press pageup focus="TextBox FilterGameName" title="Filter Gamelist" top=Gamelist
 press pagedown focus="TextBox FilterGameName" title="Filter Gamelist" top=GamelistFilterWindow
 press first focus="TextBox FilterGameName" title="Filter Gamelist" top=GamelistFilterWindow
 press last focus="TextBox FilterGameName" title="Filter Gamelist" top=GamelistFilterWindow
-press back focus="Button 'Filter Gamelist'" top=GameOptionsWindow
+press back focus="Button 'Filter Gamelist'" top=GamelistOptionsWindow

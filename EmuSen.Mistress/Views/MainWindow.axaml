@@ -97,12 +97,11 @@
                         BorderBrush="{DynamicResource LunaBorder}" BorderThickness="0,0,1,0">
                     <lunac:SourceList x:Name="LibrarySidebar" AutomationProperties.Name="Collections and consoles" Margin="0,10,0,0" />
                 </Border>
-                <Grid>
+                <Grid x:Name="LibraryArea">
                 <DockPanel x:Name="LibraryContent" Margin="12">
                     <Grid DockPanel.Dock="Top" x:Name="LibraryToolbar" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,8">
                         <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="16" VerticalAlignment="Center">
                             <lunac:ButtonBar x:Name="LibraryViewButtons" VerticalAlignment="Center" />
-                            <lunac:ButtonBar x:Name="LibraryCategoryButtons" VerticalAlignment="Center" />
                             <!-- Shown while the sidebar shows a console that starts with nothing in it - see Diamond_Shell.md §1.5. -->
                             <Button x:Name="StartConsoleButton" IsVisible="False" VerticalAlignment="Center" Click="OnStartConsoleButton" />
                         </StackPanel>
@@ -130,9 +129,6 @@
                         <lunac:TileGrid x:TypeArguments="lib:RomEntry"
                                         x:Name="LibraryGrid"
                                         AutomationProperties.Name="ROM library covers" />
-                        <lunac:TileGrid x:TypeArguments="lib:MediaItem"
-                                        x:Name="MediaGrid" IsVisible="False"
-                                        AutomationProperties.Name="Save states and screenshots" />
                         <lunac:LunaList x:TypeArguments="lib:RomEntry"
                                         x:Name="LibraryList"
                                         AutomationProperties.Name="ROM library"

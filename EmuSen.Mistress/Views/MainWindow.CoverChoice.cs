@@ -3,19 +3,16 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Galaxia.Library;
-using EmuSen.LunaP.Windowing;
+using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Views
 {
-    // Q45, Use Another Game's Cover...: a row of games.db names the game whose cover this one shows, first in the order; no file is copied or deleted - see EmuSen_Settings_Reference.md §4.65.
+    // Q45, another game's cover, chosen on the game's page under Details ▸ Cover Art: a row of games.db names the game whose cover this one shows, first in the order; no file is copied or deleted - see EmuSen_Settings_Reference.md §4.65.
     public partial class MainWindow
     {
-        private CoverPickerWindow? _coverPicker;
         private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? _choiceStampOf;
         private string _choiceStamp = "";
-
-        public CoverPickerWindow? CoverPickerShown => _coverPicker;
 
         private string? CoverChoiceOf(string path) =>
             _editSnapshot.TryGetValue(path, out IReadOnlyDictionary<string, string>? edits) && edits.TryGetValue(GameMetadata.CoverFrom, out string? from) && from.Length > 0 ? from : null;
@@ -34,8 +31,8 @@ namespace EmuSen.Mistress.Views
 
         private string CoverTitle(RomEntry entry) => DisplayTitle(entry);
 
-        // Every listed game with a cover to give, other than this one and any whose cover already comes from it.
-        private List<CoverCandidate> CoverCandidatesFor(string path)
+        // Every listed game with a cover to give, other than this one and any whose cover already comes from it, those sharing its first words first.
+        private IReadOnlyList<CoverCandidate> CoverCandidatesFor(string path)
         {
             var candidates = new List<CoverCandidate>();
             foreach (RomEntry entry in _allScan.Entries)
@@ -45,7 +42,7 @@ namespace EmuSen.Mistress.Views
                 string console = EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(entry.Shelf)?.Label ?? entry.Shelf;
                 candidates.Add(new CoverCandidate(entry.FullPath, CoverTitle(entry), console, cover));
             }
-            return candidates;
+            return CoverCandidates.Rank(NameOf(path), candidates, null);
         }
 
         private bool LeadsTo(string start, string target)
@@ -58,17 +55,6 @@ namespace EmuSen.Mistress.Views
 
         private string NameOf(string path) =>
             _allScan.Entries.FirstOrDefault(e => e.FullPath == path) is RomEntry e ? DisplayTitle(e) : Path.GetFileNameWithoutExtension(path);
-
-        // A sheet in a big-screen session, a LunaP window on the desktop, as the options menu is.
-        private void ShowCoverPicker(string path, string title)
-        {
-            if (_coverPicker is not null) { SheetLayer.Activate(_coverPicker); return; }
-            string? from = CoverChoiceOf(path);
-            var window = _coverPicker = new CoverPickerWindow(title, CoverCandidatesFor(path), from is null ? null : NameOf(from),
-                chosen => ChooseCover(path, chosen.Path), from is null ? null : () => UseOwnCover(path));
-            window.Closed += (_, _) => { if (ReferenceEquals(_coverPicker, window)) _coverPicker = null; };
-            _ = SheetLayer.Show(window, this);
-        }
 
         private void ChooseCover(string path, string from)
         {
@@ -85,11 +71,32 @@ namespace EmuSen.Mistress.Views
             StatusText.Text = $"{Path.GetFileNameWithoutExtension(path)} shows its own cover again";
             ShowLibraryEntries();
         }
+    }
 
-        private void AddCoverEntries(List<GameOption> options, string path, string title)
+    public sealed record CoverCandidate(string Path, string Title, string Console, string Cover);
+
+    // The order the Cover Art page lists games in: those whose name starts with the most of this game's words first, then by name - see EmuSen_Settings_Reference.md §4.65.
+    public static class CoverCandidates
+    {
+        public const int Shown = 60;
+
+        private static string[] Words(string title) =>
+            ArtworkIndex.Untagged(title).ToLowerInvariant().Split([' ', '-', ':', ',', '.', '\'', '!', '&'], StringSplitOptions.RemoveEmptyEntries);
+
+        public static int SharedWords(string a, string b)
         {
-            options.Add(new GameOption("Use Another Game's Cover...", () => ShowCoverPicker(path, title)) { Opens = true });
-            if (CoverChoiceOf(path) is not null) options.Add(new GameOption("Use Its Own Cover", () => UseOwnCover(path)));
+            string[] x = Words(a), y = Words(b);
+            int n = 0;
+            while (n < x.Length && n < y.Length && x[n] == y[n]) n++;
+            return n;
         }
+
+        public static IReadOnlyList<CoverCandidate> Rank(string title, IEnumerable<CoverCandidate> all, string? search) =>
+            all.Where(c => string.IsNullOrWhiteSpace(search) || FilterBar.Matches(search, c.Title))
+               .OrderByDescending(c => SharedWords(title, c.Title))
+               .ThenBy(c => c.Title, StringComparer.OrdinalIgnoreCase)
+               .ThenBy(c => c.Path, StringComparer.Ordinal)
+               .Take(Shown)
+               .ToList();
     }
 }

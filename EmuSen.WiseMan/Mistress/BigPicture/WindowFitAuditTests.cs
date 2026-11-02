@@ -36,27 +36,24 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "GraphicsSettingsPlayStation2", "GraphicsSettingsHostedPlayStation2", "ShaderSettingsPlayStation2", "ControllerBindingsPlayStation2", "ControllerBindingsPlayStation2Digital", "ControllerBindingsSaturn", "ControllerBindingsDreamcast", "ShaderSettingsSliders", "Screenshot", "RewindReel", "Resume", "ControllerBindings",
-            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ScreenshotLongTitle", "ResumeLongTitle", "ControllerBindingsLongNames", "Shell"];
-        public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "FindByName", "CoverPicker", "CoverPickerCovers", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
-            "FindByNameLongTitle", "CoverPickerLongTitle", "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName",
-            "GamePackageNew", "GamePackageLongTitle", "GamePackageSelfContained"];
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "GraphicsSettingsPlayStation2", "GraphicsSettingsHostedPlayStation2", "ShaderSettingsPlayStation2", "ControllerBindingsPlayStation2", "ControllerBindingsPlayStation2Digital", "ControllerBindingsSaturn", "ControllerBindingsDreamcast", "ShaderSettingsSliders", "RewindReel", "Resume", "ControllerBindings",
+            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ResumeLongTitle", "ControllerBindingsLongNames", "Shell"];
+        public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
+            "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
             ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow), ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["CompressedDiscsBeside"] = typeof(CompressedDiscsWindow), ["Cores"] = typeof(CoresWindow), ["CoresDetail"] = typeof(CoresWindow), ["CoresPlan"] = typeof(CoresWindow), ["CoresRunning"] = typeof(CoresWindow), ["CoresNoCatalogue"] = typeof(CoresWindow), ["Packages"] = typeof(PackagesWindow), ["PackagesDetail"] = typeof(PackagesWindow), ["PackagesPlan"] = typeof(PackagesWindow), ["PackagesRunning"] = typeof(PackagesWindow), ["Scraper"] = typeof(ScraperWindow), ["ScraperDetail"] = typeof(ScraperWindow), ["ScraperPlan"] = typeof(ScraperWindow), ["ScraperRunning"] = typeof(ScraperWindow), ["Library"] = typeof(LibraryWindow), ["LibraryDetail"] = typeof(LibraryWindow), ["LibraryPlan"] = typeof(LibraryWindow), ["LibraryRunning"] = typeof(LibraryWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation2"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsHostedPlayStation2"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsPlayStation2"] = typeof(ShaderSettingsWindow), ["ControllerBindingsPlayStation2"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStation2Digital"] = typeof(InputSettingsWindow), ["ControllerBindingsSaturn"] = typeof(InputSettingsWindow), ["ControllerBindingsDreamcast"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
-            ["Screenshot"] = typeof(ScreenshotWindow), ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
-            ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["FindByName"] = typeof(FindByNameWindow), ["CoverPicker"] = typeof(CoverPickerWindow),
-            ["CoverPickerCovers"] = typeof(CoverPickerWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
+            ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
+            ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
             ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow), ["ThemeAbout"] = typeof(ThemeAboutWindow),
             // The long names, where a cut would first appear (Q190).
-            ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ShaderSettingsCrt"] = typeof(ShaderSettingsWindow), ["ScreenshotLongTitle"] = typeof(ScreenshotWindow),
+            ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ShaderSettingsCrt"] = typeof(ShaderSettingsWindow),
             ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
-            ["FindByNameLongTitle"] = typeof(FindByNameWindow), ["CoverPickerLongTitle"] = typeof(CoverPickerWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
+            ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
-            ["GamePackageNew"] = typeof(GamePackageWindow), ["GamePackageLongTitle"] = typeof(GamePackageWindow), ["GamePackageSelfContained"] = typeof(GamePackageWindow),
         };
 
         // A window is framed as a menu only once the audit opens it at both sizes, and every case opens a window that is framed.
@@ -517,11 +514,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Settle(window);
                     Assert.NotEmpty(snes.Sliders);
                     break;
-                case "Screenshot":
-                    string shot = Path.Combine(_root, "shot.png");
-                    UiTest.Capture(window).SavePng(shot);
-                    _ = SheetLayer.Show(new ScreenshotWindow(shot, "Cobalt Harbor (Synthetic), Screenshot 1"), window);
-                    break;
                 case "RewindReel":
                     MistressGame.Play(window, 120, (until, what) => WaitFor(until, what));
                     Choose(window, pad, "Rewind");
@@ -572,11 +564,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     WaitFor(() => crt.Reading.IsCompleted, "the preset\'s sliders");
                     Settle(window);
                     Assert.NotEmpty(crt.Sliders);
-                    break;
-                case "ScreenshotLongTitle":
-                    string longShot = Path.Combine(_root, "shot.png");
-                    UiTest.Capture(window).SavePng(longShot);
-                    _ = SheetLayer.Show(new ScreenshotWindow(longShot, $"{LongTitle}, Screenshot 12"), window);
                     break;
                 case "ControllerBindingsLongNames":
                     LongBindings(window);
@@ -662,24 +649,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "ScrapeStatusIdle":
                     s.Window.ShowScrapeStatus();
                     break;
-                case "GamePackageNew":
-                case "GamePackageLongTitle":
-                case "GamePackageSelfContained":
-                    ShowGamePackage(s.Window, s.RomDirectory, which);
-                    break;
-                case "FindByName":
-                    Call(s.Window, "ShowFindByName", rom, ThemedSession.SnesGames[2]);
-                    break;
-                case "CoverPicker":
-                    Call(s.Window, "ShowCoverPicker", rom, ThemedSession.SnesGames[2]);
-                    break;
-                case "FindByNameLongTitle":
-                case "CoverPickerLongTitle":
                 case "GameCropLongTitle":
                     string longRom = Path.Combine(s.RomDirectory, LongTitle + ".sfc");
                     if (File.Exists(rom)) File.Copy(rom, longRom, overwrite: true);
                     else File.WriteAllBytes(longRom, PadRewindReelTests.ChangingBackdrop());
-                    Call(s.Window, which == "FindByNameLongTitle" ? "ShowFindByName" : which == "GameCropLongTitle" ? "ShowGameCrop" : "ShowCoverPicker", longRom, LongTitle);
+                    Call(s.Window, "ShowGameCrop", longRom, LongTitle);
                     break;
                 case "ThemeBrowserLongName":
                 case "ThemeDetailLongName":
@@ -701,17 +675,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     ThemeDetailWindow longDetail = ThemeBrowserSheetTests.OpenDetail(s, longBrowser, LongTheme.Name);
                     if (which == "ThemeDetailLongName") break;
                     ThemeBrowserSheetTests.Click(ThemeBrowserSheetTests.Named<Button>(longDetail, "ThemeDetailAbout"));
-                    break;
-                case "CoverPickerCovers":
-                    foreach (int n in new[] { 0, 1, 3, 4 })
-                    {
-                        string cover = Path.Combine(DataStore.Artwork, "SNES", ThemedSession.SnesGames[n] + ".png");
-                        Directory.CreateDirectory(Path.GetDirectoryName(cover)!);
-                        File.Copy(SceneAssets.Halves($"fit-cover-{n}", 120, 160, Avalonia.Media.Colors.Crimson, Avalonia.Media.Colors.Gold), cover, overwrite: true);
-                    }
-                    Call(s.Window, "ScanArtwork");
-                    for (int i = 0; i < 20; i++) { s.Settle(); Thread.Sleep(10); }
-                    Call(s.Window, "ShowCoverPicker", rom, ThemedSession.SnesGames[2]);
                     break;
                 case "GamelistFilter":
                     ThemedCollectionsTests.Enter(s, "snes");

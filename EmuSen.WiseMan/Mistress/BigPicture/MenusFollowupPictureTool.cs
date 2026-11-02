@@ -59,43 +59,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
 
-            ThemedGameOptionsTests.OpenEditor(s);
-            Save(s, $"{prefix}-editor");
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Rating);
-            s.Pad.A();
-            s.Pad.A();
-            s.Pad.A();
-            Save(s, $"{prefix}-editor-rating");
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Completed);
-            Save(s, $"{prefix}-editor-switch");
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.HideMetadata);
-            Save(s, $"{prefix}-editor-scrolled");
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Controller);
-            Save(s, $"{prefix}-editor-lower");
-            var rows = (ScrollViewer)((EmuSen.Mistress.Views.MetadataEditorWindow)ThemedGameOptionsTests.Sheets(s).Current!).Menu!.Child!;
-            rows.Offset = new Vector(0, rows.Extent.Height);
-            Save(s, $"{prefix}-editor-bottom");
-            ThemedGameOptionsTests.Reach(s, "MetadataSave");
-            Save(s, $"{prefix}-editor-buttons");
-
-            // The text popup a physical keyboard gets, and the one Steam's keyboard would type into.
-            ThemedGameOptionsTests.Reach(s, "Meta_" + GameMetadata.Developer);
-            s.Pad.Unplug();
-            s.Pad.Tick();
-            EsdeMenusTests.Press(s, Avalonia.Input.Key.Enter);
-            s.Window.KeyTextInput("Halcyon Works");
-            Save(s, $"{prefix}-editor-field");
-            EsdeMenusTests.Press(s, Avalonia.Input.Key.Escape);
-            s.Pad.Replug();
-            s.Pad.Tick();
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardSteam;
-            s.Pad.A();
-            Save(s, $"{prefix}-editor-steam");
-            s.Pad.B();
-            s.Settings.OnScreenKeyboard = AppSettings.OnScreenKeyboardAutomatic;
-            ThemedSwitchesTests.PutAway(s);
-            if (ThemedGameOptionsTests.Sheets(s).IsPresenting) ThemedGameOptionsTests.Answer(s, "Discard");
-
             ThemedSwitchesTests.OpenInterface(s);
             Save(s, $"{prefix}-interface");
             ThemedSwitchesTests.PutAway(s);

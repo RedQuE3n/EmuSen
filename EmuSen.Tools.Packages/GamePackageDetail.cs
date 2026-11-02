@@ -157,7 +157,19 @@ namespace EmuSen.Tools.Packages
             catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return []; }
         }
 
-        private void Make()
+        // The game the controls are for, as given.
+        public string Game => _game;
+
+        // Whether the platform library that runs the package's jobs is in use here.
+        public static bool Available => ToolAvailable();
+
+        // Whether Make Package can start now: no package yet, the tool in use, no job running, the game in the library.
+        public bool CanMake => Package is null && ToolAvailable() && _job is null && LibraryPath() is not null;
+
+        // Raised after each job ends, made or changed or not, so a host draws its words again.
+        public event Action? JobEnded;
+
+        public void Make()
         {
             if (LibraryPath() is not { } rel)
             {
@@ -228,6 +240,7 @@ namespace EmuSen.Tools.Packages
                 _job = null;
                 _timer.Stop();
                 if (Changed) PackageChanged?.Invoke();
+                JobEnded?.Invoke();
             }
             Render();
         }

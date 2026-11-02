@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // The Big Picture views: the two scenes, and what opens over them.
-        public static readonly string[] BigPictureViews = ["System", "Gamelist", "MainMenu", "GameOptions", "MetadataEditor", "ThemeSettings", "CollectionSettings", "SearchKeyboard", "LaunchScreen", "Screensaver"];
+        public static readonly string[] BigPictureViews = ["System", "Gamelist", "MainMenu", "GameOptions", "ThemeSettings", "CollectionSettings", "SearchKeyboard", "LaunchScreen", "Screensaver"];
 
         public static TheoryData<string, int, int> ViewCases()
         {
@@ -183,10 +183,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     case "GameOptions":
                         ThemedLibraryPadTests.Enter(s, "snes");
                         ThemedGameOptionsTests.OpenOptions(s);
-                        break;
-                    case "MetadataEditor":
-                        ThemedLibraryPadTests.Enter(s, "snes");
-                        ThemedGameOptionsTests.OpenEditor(s);
                         break;
                     case "ThemeSettings":
                         ThemeBrowserSheetTests.OpenSettings(s);
@@ -265,6 +261,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 .Concat(ViewCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Concat(PauseCardCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Concat(HomeCardCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
+                .Concat(GamePageCases().Select(r => ((string)r[0], (int)r[1], (int)r[2])))
                 .Select(c => $"{c.Item1} {c.Item2} {c.Item3}").ToHashSet();
             var recorded = Directory.EnumerateFiles(InterfaceSpecFiles.Folder, "*.spec").Select(f => SpecDocument.Parse(File.ReadAllText(f)))
                 .Select(d => $"{d["case"]} {d["size"]}").ToHashSet();

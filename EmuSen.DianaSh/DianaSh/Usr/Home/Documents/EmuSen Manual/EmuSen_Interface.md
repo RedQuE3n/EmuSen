@@ -584,6 +584,28 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 
 ---
 
+## 13a. U4 as built (2026-11-01)
+
+- **LunaP (§209 there).** `PageLayout`, a canonical layout for one item's page in both forms: the hero to the edges in
+  a `PosterSlot` shaped for video (its `Video` kept, `PlaysClip` false until Pass 12, the new `Poster` motion token of
+  1.5 s), the cover, the title and facts, the actions with a stepped value, the strip with the frame's look, rows,
+  tiles and text as the content, deeper pages named `Parent › Page`, the viewer, and the help bar generated from what
+  the host declares. `AdaptiveSection.Status` and `PageRow.Status` are §3.2's Status on sections and rows;
+  `MenuRow.Inset` gives a row the page's 24.
+- **EmuSen (`EmuSen_BigPicture.md` §50).** Screen 3 and §18.2's deeper pages from one plain class, `GamePage`, on both
+  forms; X on a game, A on the Home card's game, `Space` and the desktop's context menu open it. The metadata editor,
+  cover picker, name chooser, package window and screenshot window, the game options sheet's game entries and the
+  library's two media views are deleted (§17.9's D3).
+- **Departures, measured.** The cover's box stops at 268 units, not 300, which would have reached 16 into the content
+  at 464; Cover Art's cards are 150 × 176 so a two-line name fits above the help bar; Edit Details saves each field at
+  once on the desktop too, with no Save button.
+- **Not in U4.** Controller profile, a layer's switch and order, ScreenScraper's other covers and the generated one, X
+  Pin and Set as cover, and the docked keyboard, each waiting on a surface proposed first (§50.4 there).
+- **Recordings.** Thirty-two new states, the themed Select sheet taken again, and twenty-six retired with their
+  windows (`EmuSen_InterfaceSpec.md` §6.3.20).
+
+---
+
 ## 14. Sources (opened 2026-11-01)
 
 1. Libretro forums, "The UX problems of RetroArch", https://forums.libretro.com/t/the-ux-problems-of-retroarch-the-program-that-uses-cores/29421

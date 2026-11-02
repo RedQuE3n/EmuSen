@@ -11685,3 +11685,89 @@ a favourite on every page (`HomeCardTests`' Y case, `PadMenuTests`' themed case,
 Favourite); Exit Big Picture offered in Steam's Game Mode (`HomeCardTests`' Power theory and the handheld recording);
 and the Cores line counting every core as waiting (`HomeCardTests`' tools case and both `HomeCardTools` recordings).
 
+
+## 50. A game's page: U4 of the unified interface (2026-11-01)
+
+Screen 3 of `EmuSen_Interface.md` §4, its deeper pages of §18.2 and the desktop half of §17.4 (D3), built on LunaP's
+`PageLayout` (LunaP §209) from one plain description, `EmuSen.Mistress/Pages/GamePage.cs`, which names no Avalonia
+type: its words, rows, tiles, hints and what each press does. `GamePageView` is the thin view that hands its records to
+the layout and loads its pictures through the library's cover cache; `MainWindow.GamePage.cs` is its host
+(`IGamePageHost`), the one place the page reads the window and asks it to act.
+
+### 50.1 Doors
+
+| Where | Gesture |
+|---|---|
+| Either library, a pad | X on a game (§0.1 of the interface; A still plays) |
+| The Home card | A on the game in hand |
+| The themed gamelist's Select sheet | its last row, `Game Page` |
+| The desktop's library | `Space`, or the context menu's `Game Page`, `Options…`, `Edit Details…` (`Ctrl+I`), `Scrape This Game…`, `Cover Art` |
+
+The page covers the whole screen on the big screen and the library's content area on the desktop; B at its top, Start
+on the big screen and `‹ Back` on the desktop return to the library on the same game.
+
+### 50.2 What the page holds
+
+- **The hero**: the game's fan art, else a screenshot, else its title screen, in the poster slot shaped for video
+  (`PosterSlot.Video` holds the scraped clip for the playback of Pass 12); the cover in its box shape; the name; the
+  facts `console · year · developer · publisher · play time · last played`.
+- **Actions**: `Play`; `Resume ◂ Slot 3 · 3 days ago ▸` over the game's states newest first, Left and Right choosing, the
+  chosen one marked with the accent dot on States; `♡ Favourite`, Y anywhere on the page.
+- **Overview**: the description beside a screenshot.
+- **States**: slots 1 to 8 as 200 × 150 tiles, the automatic state (*Where you left off*) after the last slot in use, an
+  empty slot outlined; A loads it with no resume question, X deletes it after asking. The desktop shows Load and Delete
+  on the selected or hovered card.
+- **Options**: `Engine` (the game's alternative emulator, the one owner of it since SR10; one engine shows its name and
+  steps nothing), `Cheats ▸` with `n of m on`, `Display crop ▸` (the existing crop window), `Television standard ◂ ▸`,
+  `Package ▸`.
+- **Media**: the screenshots the player took, then the scraped screenshot, title screen, clip, marquee and fan art; A
+  opens the viewer: the picture on Void with `Screenshot 2 (2 of 5) · 1 November 2026 · 512 × 448`, Left and Right
+  stepping, Y deleting a taken screenshot after asking.
+- **Details**: `Scrape This Game…`, `Edit Details ▸`, `Cover art ▸` with what it shows and how many it could, `Open
+  Folder`, `Hide from Library…`. The desktop shows the metadata as a form with these as buttons.
+- **Cheats ▸**: each cheat `◂ On ▸`, live in the running game or in its saved list; `Add a code…` while the game runs.
+- **Package ▸**: `Make Package…` or its mode, each layer (a soft patch, A takes it out after asking), `Add <patch>…` for
+  the patches beside the game, `Scraped as ◂ The original dump ▸`, `Copy Saves and Art In…`, the job's sentence above
+  the rows. Packages' own controls (`GamePackageDetail`) run the jobs, so nothing of the pkg protocol is copied.
+- **Edit Details ▸**: every metadata field but the engine as a row, a text field typed through the player's keyboard and
+  a flag, choice or rating stepped, each saved at once to games.db; Y resets the focused field to what was scraped;
+  `Clear Scraped Data…` last, ES-DE's Clear.
+- **Cover Art ▸**: its own cover, then each listed game's that it may borrow (Q45), nearest names first, sixty at most.
+- **Scrape This Game…**: the question form: the press asks ScreenScraper once for games of the file's search name (the
+  player's request, as §38 requires), the matches as rows with year and console, `Search by another name…`, `By the
+  file's checksums…` (the earlier Scrape This Game, kept), and `No`; a match is kept for the file by one paced run.
+
+### 50.3 Retired
+
+`GameOptionsWindow`'s game entries (the class remains as `GamelistOptionsWindow`, the themed gamelist's list rows until
+the List card of §18.1), `MetadataEditorWindow`, `CoverPickerWindow`, `FindByNameWindow`, `GamePackageWindow`,
+`ScreenshotWindow`, the library's `Save States` and `Screenshots` views and their toolbar, and the Home card's game page
+(the Home card's row opens the page). Their recordings are retired with them (`EmuSen_InterfaceSpec.md` §6.3.20).
+
+### 50.4 Left, and why
+
+Each needs data no surface gives, and is proposed rather than built:
+
+1. **Controller profile** (Options): no per-game controller profile exists in the input settings or the runtime.
+2. **A layer's `◂ On ▸` and X to reorder** (Package): the pkg jobs offer add, remove, identity and migrate only; a
+   `pkg-layer-set` and a `pkg-patch-move` job would carry them.
+3. **ScreenScraper's other covers and `Generated`** (Cover Art): the store keeps one cover a game; the scraper would
+   have to keep the alternatives, and a games.db value would have to choose the generated card.
+4. **X Pin** (States) and **X Set as cover** (the viewer): no state is protected from overwrite today, and a cover is
+   chosen only by file or by borrowing.
+5. **The docked keyboard** (§18.1, H2): text rows use the keyboard the player's setting names, as the editor did.
+
+### 50.5 How it is held
+
+`GamePageTests` (15, the plain class on a fake host, no window); LunaP's `PageLayoutTests` (32); the recordings of
+§6.3.20 with their fit audit at 1280 × 800 and 1920 × 1200 (the handheld's picture at scale 1.5) and the fit cases at
+1920 × 1080 and 1280 × 720 (`WindowFitAuditTests.GamePage.cs`). Seeded faults, measured 2026-11-01, each reverted after
+its run:
+
+| Fault | Caught by |
+|---|---|
+| Up from the first row stays in the rows (`PageLayout.MoveInContent`) | `PageLayoutTests`' pad walk |
+| The shoulders step sections on a deeper page | `PageLayoutTests`' deeper page case |
+| B on a deeper page closes the whole page (`GamePage.Back`) | `GamePageTests`, the Options and Details cases |
+| Resume plays the newest state whatever slot was chosen | `GamePageTests`' Play and Resume case |
+| The window's pad router passes the page by (`MainWindow.Pad.cs`) | 22 of the page's recordings, their pressed transitions |

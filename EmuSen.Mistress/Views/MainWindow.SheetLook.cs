@@ -26,11 +26,11 @@ namespace EmuSen.Mistress.Views
 
         public static readonly IReadOnlyList<System.Type> FramedWindows =
         [
-            typeof(ScrapeStatusWindow), typeof(ActiveCheatsWindow), typeof(CheatDatabaseWindow), typeof(FindByNameWindow), typeof(CoverPickerWindow),
+            typeof(ScrapeStatusWindow), typeof(ActiveCheatsWindow), typeof(CheatDatabaseWindow),
             typeof(GamelistFilterWindow), typeof(FolderEditorWindow), typeof(GraphicsSettingsWindow), typeof(ShaderSettingsWindow), typeof(ResumeWindow),
-            typeof(RewindReelWindow), typeof(ScreenshotWindow), typeof(ThemeBrowserWindow), typeof(ThemeDetailWindow), typeof(ThemeAboutWindow),
+            typeof(RewindReelWindow), typeof(ThemeBrowserWindow), typeof(ThemeDetailWindow), typeof(ThemeAboutWindow),
             typeof(InputSettingsWindow), typeof(GameCropWindow), typeof(MemoryCardsWindow), typeof(InsertDiscWindow), typeof(CompressedDiscsWindow),
-            typeof(GamePackageWindow), typeof(HotaruWindow), typeof(PackagesWindow), typeof(ScraperWindow), typeof(LibraryWindow), typeof(CoresWindow),
+            typeof(HotaruWindow), typeof(PackagesWindow), typeof(ScraperWindow), typeof(LibraryWindow), typeof(CoresWindow),
         ];
 
         // A framed sheet's help bar, from what its window holds: choose and back always, tabs and sideways values where there are any.

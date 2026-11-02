@@ -302,7 +302,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Down();
             s.Pad.A();
             s.Settle();
-            Assert.IsType<GameOptionsWindow>(Sheets(s).Current);
+            Assert.IsType<GamelistOptionsWindow>(Sheets(s).Current);
             Assert.Equal(1, Named<Dropdown>(s, "GamelistSortBy").SelectedIndex);
         }, default);
 
@@ -357,21 +357,5 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(3200);
         }, default);
 
-        // Q100: a text row in a big-screen menu opens ES-DE's text popup, titled with the row's name, and it types as the keyboard did.
-        [Fact]
-        public Task A_text_row_opens_the_text_popup_titled_with_its_name() => ThemedLibraryPadTests.Run(s =>
-        {
-            ThemedLibraryPadTests.Enter(s, "snes");
-            MetadataEditorWindow editor = ThemedGameOptionsTests.OpenEditor(s);
-            ThemedGameOptionsTests.Reach(s, "Meta_" + EmuSen.Mistress.Library.GameMetadata.Developer);
-            s.Pad.A();
-            OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(s.Window)!;
-            Assert.True(keyboard.MenuLook);
-            Assert.Equal("Enter Developer", keyboard.Title);
-            PadCheatsTests.TypeByPad(s.Pad, keyboard, "abc");
-            s.Pad.Start();
-            Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
-            Assert.Equal("abc", ((TextBox)editor.EditorOf(EmuSen.Mistress.Library.GameMetadata.Developer)).Text);
-        });
     }
 }

@@ -179,7 +179,7 @@ namespace EmuSen.Tools.Cores
             _listing = RuntimeRows();
             if (!ToolAvailable())
             {
-                _notice = $"Downloading cores needs EmuSen's platform library, which is not in use here ({LibraryToolJob.Report}).";
+                _notice = Logged($"Downloading cores needs EmuSen's platform library, which is not in use here ({LibraryToolJob.Report}).");
                 Show(_listing);
                 return;
             }
@@ -217,7 +217,7 @@ namespace EmuSen.Tools.Cores
                     if (!_enginesOf.ContainsKey(console)) _enginesOf[console] = Strings(s, "engines");
                 }
             }
-            catch (Exception e) when (e is JsonException or InvalidOperationException) { _notice = "EmuSen's runtime did not list its systems: " + e.Message; }
+            catch (Exception e) when (e is JsonException or InvalidOperationException) { _notice = Logged("EmuSen's runtime did not list its systems: " + e.Message, e); }
         }
 
         // The console's engine: its stored setting, else the first engine discovery lists for it.
@@ -239,7 +239,7 @@ namespace EmuSen.Tools.Cores
                 foreach (JsonElement c in cores.RootElement.EnumerateArray())
                     if (OfRuntime(c, _consoleOf, IsDefault) is { } row) rows.Add(row);
             }
-            catch (Exception e) when (e is JsonException or InvalidOperationException) { _notice = "EmuSen's runtime did not list its cores: " + e.Message; }
+            catch (Exception e) when (e is JsonException or InvalidOperationException) { _notice = Logged("EmuSen's runtime did not list its cores: " + e.Message, e); }
             return rows;
         }
 
@@ -270,9 +270,9 @@ namespace EmuSen.Tools.Cores
         private bool Start(string request, string kind)
         {
             try { _job = StartJob(request); }
-            catch (Exception e) when (e is FormatException or InvalidOperationException)
+            catch (Exception e)
             {
-                _notice = CoresWords.Refusal(e.Message);
+                _notice = Logged(CoresWords.Refusal(e.Message), e, request);
                 SetNotice(_notice);
                 return false;
             }
@@ -345,14 +345,18 @@ namespace EmuSen.Tools.Cores
             for (int i = 0; i < 256; i++)
             {
                 string? line;
-                try { line = _job.Next(0); }
-                catch (InvalidOperationException e)
+                try
                 {
-                    _notice = CoresWords.Refusal(e.Message);
+                    line = _job.Next(0);
+                    if (line is null) break;
+                    Take(line);
+                }
+                catch (Exception e) when (e is InvalidOperationException or JsonException or KeyNotFoundException)
+                {
+                    _notice = Logged(CoresWords.Refusal(e.Message), e, _step?.Request);
+                    SetNotice(_notice);
                     break;
                 }
-                if (line is null) break;
-                Take(line);
             }
             if (_job is not { Ended: true }) return;
             _timer.Stop();
@@ -396,11 +400,11 @@ namespace EmuSen.Tools.Cores
                     if (_jobKind == "ls" && _catalogue is null && _notice is null) _notice = "No catalogue of libretro's cores yet: Check for Updates reads it from buildbot.libretro.com.";
                     break;
                 case "refused" when stem is null:
-                    _notice = CoresWords.Refusal(Text(e, "reason") ?? "");
+                    _notice = Logged(CoresWords.Refusal(Text(e, "reason") ?? ""), context: line);
                     break;
                 case "refused":
                     _outcomes[key] = "refused: " + (Text(e, "reason") ?? "");
-                    _notice = $"{stem}: {Text(e, "reason")}";
+                    _notice = Logged($"{stem}: {Text(e, "reason")}", context: line);
                     break;
                 case "fetched":
                     _notice = $"Read libretro's catalogue on {Text(e, "date")}: {Number(e, "cores")} cores for this machine.";
@@ -445,7 +449,7 @@ namespace EmuSen.Tools.Cores
             foreach (string sha in Strings(e, "revoke"))
             {
                 try { _runtime.Revoke(sha); }
-                catch (InvalidOperationException x) { _notice = $"The approval of {sha} could not be revoked: {x.Message}"; }
+                catch (InvalidOperationException x) { _notice = Logged($"The approval of {sha} could not be revoked: {x.Message}", x); }
             }
         }
 
@@ -470,6 +474,7 @@ namespace EmuSen.Tools.Cores
                 return false;
             }
             _notice = $"Approved {row.Name} (SHA-256 {sha}).";
+            _outcomes.Remove(row.Key);
             Refresh(keepNotice: true);
             return true;
         }
@@ -477,16 +482,23 @@ namespace EmuSen.Tools.Cores
         // A refusal on the notice line and, where the host can, in a message the player must dismiss, since the big screen's bar is easily missed.
         private async Task RefuseAsync(string words)
         {
-            _notice = words;
+            _notice = Logged(words);
             SetNotice(words);
             if (_host.Tell is { } tell) await tell(CoreApproval.Title, words);
+        }
+
+        // A failure the player is shown, written to the error log as well, so none is only on a screen since closed (EmuSen_Cores.md §3.6).
+        private static string Logged(string words, Exception? fault = null, string? context = null)
+        {
+            ErrorLog.Error("cores", words, fault, context);
+            return words;
         }
 
         // The runtime's directories listed again, so a core a job just installed or removed is the runtime's to approve.
         private void Rescan()
         {
             try { _runtime?.Rescan?.Invoke(); }
-            catch (InvalidOperationException e) { _notice = $"The cores could not be listed again: {e.Message}"; }
+            catch (InvalidOperationException e) { _notice = Logged($"The cores could not be listed again: {e.Message}", e); }
         }
 
         // The hash a row is approved by: the runtime's, else the one its downloaded entry records; the page shows the same one.
@@ -500,7 +512,7 @@ namespace EmuSen.Tools.Cores
             foreach (string console in consoles)
             {
                 try { _runtime.SetSetting(console, EngineKey, engine); }
-                catch (InvalidOperationException e) { _notice = $"{row.Name} could not be made {console}'s engine: {e.Message}"; }
+                catch (InvalidOperationException e) { _notice = Logged($"{row.Name} could not be made {console}'s engine: {e.Message}", e); }
             }
             _listing = RuntimeRows();
             SetRows(Rows.Select(r => r with { IsDefault = r.Engine is { } en && r.Consoles.Any(c => IsDefault(c, en)) }).ToList());

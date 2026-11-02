@@ -47,6 +47,8 @@ pub struct Request {
     pub cores: Vec<String>,
     /// The request's own placement, from its `"systems"` object, in place of the context's.
     pub placement: Option<Placement>,
+    /// A test's own server for the buildbot, from its `"test"` object: a loopback address and the roots it is signed by.
+    pub test: Option<(std::net::SocketAddr, Vec<emusen_net::CertificateDer<'static>>)>,
 }
 
 /// Whether a request's op is the core tool's, so the platform library routes it here.
@@ -80,7 +82,8 @@ fn placement_of(map: &[(Text, Value)]) -> Result<Placement, String> {
 
 /// A request's JSON: `{"op": "core-fetch"}`, `{"op": "core-ls", "show": "all" | "installed" | "available" | "updates" |
 /// "unsupported", "console": null | <system id>}` or `{"op": "core-info", "core": <stem>}`, each with an optional
-/// `"systems": {<libretro database or systemid>: <system id> | [<system id>...]}`.
+/// `"systems": {<libretro database or systemid>: <system id> | [<system id>...]}` and an optional
+/// `"test": {"connect": <loopback address:port>, "roots": <PEM>}`, the buildbot's name kept and its address a test's.
 pub fn request(text: &str) -> Result<Request, String> {
     let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
@@ -132,7 +135,23 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some(_) => return Err("systems is not an object".into()),
     };
     let detail = doc.get("detail").and_then(Value::as_bool).unwrap_or(false);
-    Ok(Request { op, show, console, detail, core, cores, placement })
+    let test = match doc.get("test") {
+        None | Some(Value::Null) => None,
+        Some(t @ Value::Object(_)) => Some(test_of(t)?),
+        Some(_) => return Err("test is not an object".into()),
+    };
+    Ok(Request { op, show, console, detail, core, cores, placement, test })
+}
+
+/// A test's server: only a loopback address, so a request can never send the buildbot's traffic to another machine
+/// (EmuSen_Cores.md §3.6).
+fn test_of(t: &Value) -> Result<(std::net::SocketAddr, Vec<emusen_net::CertificateDer<'static>>), String> {
+    let connect: std::net::SocketAddr = t.get("connect").and_then(Value::as_str).ok_or("test names no connect address")?.parse().map_err(|_| "test's connect is not an address and port".to_string())?;
+    if !connect.ip().is_loopback() {
+        return Err(format!("test's connect {connect} is not a loopback address"));
+    }
+    let roots = emusen_net::pem_certificates(t.get("roots").and_then(Value::as_str).ok_or("test names no roots")?).filter(|r| !r.is_empty()).ok_or("test's roots hold no certificate that reads")?;
+    Ok((connect, roots))
 }
 
 /// Starts a request as a job.
@@ -140,6 +159,10 @@ pub fn start(text: &str, mut ctx: Context) -> Result<Job, String> {
     let req = request(text)?;
     if let Some(p) = req.placement.clone() {
         ctx.placement = Some(p);
+    }
+    if let (Some((connect, roots)), Some(source)) = (req.test.clone(), ctx.source.as_mut()) {
+        source.test_connect = Some(connect);
+        source.test_roots = roots;
     }
     Job::spawn("emusen-core-tool", move |q, stop| run(&ctx, &req, q, stop))
 }

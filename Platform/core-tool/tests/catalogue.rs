@@ -8,7 +8,7 @@ use emusen_core_entry::{library_suffix, sha256_file, Entry, Notice};
 use emusen_core_tool::catalogue::{self, State};
 use emusen_core_tool::info::CoreInfo;
 use emusen_core_tool::{index, job, Context, Source};
-use emusen_galaxia::json::Value;
+use emusen_galaxia::json::{Text, Value};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -226,4 +226,38 @@ fn a_listed_core_whose_info_names_only_opengl_is_offered_since_the_list_gives_it
     let listed: Vec<(&str, &str)> = rows.iter().filter(|e| text(e, "event") == "core").map(|e| (text(e, "stem"), text(e, "state"))).collect();
     assert_eq!(listed, [("glonly", "available")]);
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+// A request's own test server: the buildbot's name kept and its address the loopback one, so a host's tests drive the real job; any other address is refused.
+#[test]
+fn a_requests_test_server_stands_in_for_the_buildbot_on_loopback_only() {
+    let dir = scratch("test-seam");
+    let server = serve(files(&dir));
+    let pem = format!("-----BEGIN CERTIFICATE-----\n{}\n-----END CERTIFICATE-----\n", base64(&server.root));
+    let ctx = Context { cores: dir.join("Cores"), source: Source::buildbot(), placement: Some(placement()), installation: None, notes: Vec::new(), hosted: None };
+    let request = |connect: &str| {
+        let mut out = String::new();
+        emusen_galaxia::json::write_compact(&mut out, &Value::Object(vec![(Text::new("op"), Value::string("core-fetch")), (Text::new("test"), Value::Object(vec![(Text::new("connect"), Value::string(connect)), (Text::new("roots"), Value::string(pem.as_str()))]))]));
+        out
+    };
+    let fetched = events(&ctx, &request(&format!("127.0.0.1:{}", server.port)));
+    assert!(fetched.iter().any(|e| text(e, "event") == "fetched"), "{fetched:?}");
+    assert!(catalogue::folder(&ctx.cores).join("info.zip").exists());
+    for bad in ["10.1.1.10:443".to_string(), "buildbot.libretro.com:443".to_string()] {
+        assert!(job::request(&request(&bad)).is_err(), "{bad}");
+    }
+    assert!(job::request(r#"{"op":"core-fetch","test":{"connect":"127.0.0.1:1","roots":"none"}}"#).is_err());
+    std::fs::remove_dir_all(&dir).unwrap();
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::new();
+    for c in bytes.chunks(3) {
+        let n = (c[0] as u32) << 16 | (*c.get(1).unwrap_or(&0) as u32) << 8 | *c.get(2).unwrap_or(&0) as u32;
+        for i in 0..4 {
+            out.push(if i <= c.len() { A[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
 }

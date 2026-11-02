@@ -156,6 +156,22 @@ texture coordinates in single precision with every rounding fixed (`Sapphire_Gs.
 
 Nothing MarsRT or Diamond calls changed, so this is a minor: **1.4.0**.
 
+### 3.4 Version 1.6: a tally of what is not yet destroyed (2026-11-02)
+
+**The need.** Buffers and programs are destroyed by their user, by value, before the device goes; nothing checked that
+a user did. Sapphire's device GS did not, and on lavapipe, where device memory is the process's, each GS torn down
+left its memory and compiled walks behind until the first nightly run's 8 GiB scope killed the test
+(`Sapphire_Gs.md` §11). The validation layer reports it, but no ordinary test runs with it.
+
+**The addition.** `GpuDevice::tally()` returns a `Tally`, a shared count of the device's buffers and programs made and
+not yet destroyed, readable after the device itself is dropped: `create_buffer`, `create_buffer_shared` and the
+`create_program*` family add one, `destroy_buffer` and `destroy_program` take one off. It costs an atomic add at
+creation, never anything per frame. Timelines are not counted. A user's test makes its object, takes the tally,
+drops it, and asserts zero. `tests/device.rs` checks the count through a refused program, two buffers and
+a program made, some destroyed, and the device dropped.
+
+Nothing any user calls changed, so this is a minor: **1.6.0**.
+
 ## 4. Choosing a device, and the variable's name
 
 The variable was `EMUSEN_MARS_GPU_DEVICE`. It is now **`EMUSEN_GPU_DEVICE`**, in this crate and in C#'s `GpuDevice.cs`,

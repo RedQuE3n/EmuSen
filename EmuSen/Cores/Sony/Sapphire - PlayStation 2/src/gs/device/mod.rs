@@ -191,6 +191,16 @@ impl Gpu {
 impl Drop for Gpu {
     fn drop(&mut self) {
         self.device.wait_for_pending();
+        for (_, walk) in self.walks.drain(..) {
+            self.device.destroy_program(walk);
+        }
+        // SAFETY: each buffer is read out once, here, destroyed before the device that made it, and never touched again.
+        unsafe {
+            let own = [&self.local, &self.lanes, &self.snapshot, &self.readback].into_iter().chain(self.slots.iter().flat_map(|s| &s.buffers));
+            for buffer in own.map(|b| std::ptr::read(b)).collect::<Vec<_>>() {
+                self.device.destroy_buffer(buffer);
+            }
+        }
     }
 }
 
@@ -458,5 +468,24 @@ impl Inner {
         let w = &mut self.counts.waits[cause as usize];
         w.0 += 1;
         w.1 += t0.elapsed().as_nanos() as u64;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every buffer and walk the device GS made is destroyed with it, before its device (Sapphire_Gs.md §11).
+    #[test]
+    fn a_device_gs_destroys_every_buffer_and_walk_it_made() {
+        let mut g = match Gpu::new(None) {
+            Ok(g) => g,
+            Err(e) => return eprintln!("no device, the test stands down: {e}"),
+        };
+        g.walk_for(plan::CLASS_ALL, true);
+        let tally = g.device.tally();
+        assert_eq!(tally.count(), 4 + 12 + 2, "four buffers, two slots of six and two walks made");
+        drop(g);
+        assert_eq!(tally.count(), 0, "buffers or walks outlived the device GS");
     }
 }

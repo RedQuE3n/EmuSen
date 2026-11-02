@@ -233,3 +233,21 @@ fn a_program_is_dispatched_again_in_one_recording_with_the_buffers_its_set_holds
     device.destroy_program(first);
     device.destroy_program(second);
 }
+
+#[test]
+fn the_tally_counts_what_is_made_and_not_yet_destroyed_and_outlives_the_device() {
+    let Some(device) = device() else { return };
+    let tally = device.tally();
+    assert_eq!(tally.count(), 0);
+    assert!(device.create_program(&TRIPLE[..TRIPLE.len() - 1], 1, 4).is_err());
+    assert_eq!(tally.count(), 0, "a refused program is not counted");
+    let (host, own) = (device.create_buffer(64, Where::Host).expect("a buffer"), device.create_buffer(64, Where::Device).expect("a buffer"));
+    let program = device.create_program(TRIPLE, 1, 4).expect("the program");
+    assert_eq!(tally.count(), 3);
+    device.destroy_buffer(host);
+    device.destroy_program(program);
+    assert_eq!(tally.count(), 1);
+    device.destroy_buffer(own);
+    drop(device);
+    assert_eq!(tally.count(), 0);
+}

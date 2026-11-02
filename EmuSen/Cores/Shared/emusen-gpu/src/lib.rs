@@ -4,7 +4,7 @@
 
 use std::ffi::CStr;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{AtomicBool, AtomicUsize};
 use std::sync::atomic::Ordering::{Acquire, Relaxed, Release};
 
 use ash::vk;
@@ -170,6 +170,19 @@ pub struct GpuDevice {
     /// Whether shaders may set round-towards-zero and flush denormals for 32-bit floats (VK_KHR_shader_float_controls
     /// enabled, both modes offered), since 1.4; off on a lent device.
     float_controls: bool,
+    /// Buffers and programs made here and not yet destroyed, since 1.6.
+    live: Tally,
+}
+
+/// The count of a device's buffers and programs not yet destroyed, readable after the device is gone, so a test can show
+/// a user frees everything it made (EmuSen_Gpu.md §3.4), since 1.6.
+#[derive(Clone, Default)]
+pub struct Tally(Arc<AtomicUsize>);
+
+impl Tally {
+    pub fn count(&self) -> usize {
+        self.0.load(Relaxed)
+    }
 }
 
 struct Candidate {
@@ -391,6 +404,7 @@ impl GpuDevice {
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
             int64,
             float_controls,
+            live: Tally::default(),
         })
     }
 
@@ -451,7 +465,13 @@ impl GpuDevice {
             max_buffer_bytes: properties.limits.max_storage_buffer_range as u64,
             int64: false,
             float_controls: false,
+            live: Tally::default(),
         })
+    }
+
+    /// A handle on the count of this device's buffers and programs not yet destroyed, since 1.6.
+    pub fn tally(&self) -> Tally {
+        self.live.clone()
     }
 
     /// Whether shaders may use 64-bit integers (`shaderInt64` enabled), since 1.3.
@@ -534,6 +554,7 @@ impl GpuDevice {
         } else {
             std::ptr::null_mut()
         };
+        self.live.0.fetch_add(1, Relaxed);
         Ok(GpuBuffer { handle, memory, bytes: size, mapped })
     }
 
@@ -559,6 +580,7 @@ impl GpuDevice {
             self.device.destroy_buffer(buffer.handle, None);
             self.device.free_memory(buffer.memory, None);
         }
+        self.live.0.fetch_sub(1, Relaxed);
     }
 
     /// A compute shader with its storage buffers at bindings 0..buffers-1 of set 0 and one block of push constants.
@@ -614,6 +636,7 @@ impl GpuDevice {
         let allocated = unsafe { self.device.allocate_descriptor_sets(&vk::DescriptorSetAllocateInfo::default().descriptor_pool(pool).set_layouts(&layouts)) }.map_err(|e| format!("vkAllocateDescriptorSets returned {e}"))?;
         let mut sets = [vk::DescriptorSet::null(); AHEAD];
         sets[..count].copy_from_slice(&allocated);
+        self.live.0.fetch_add(1, Relaxed);
         Ok(GpuProgram { pipeline, layout, set_layout, pool, sets, buffers, push_bytes })
     }
 
@@ -624,6 +647,7 @@ impl GpuDevice {
             self.device.destroy_descriptor_pool(program.pool, None);
             self.device.destroy_descriptor_set_layout(program.set_layout, None);
         }
+        self.live.0.fetch_sub(1, Relaxed);
     }
 
     /// `Submit`: records, submits and waits; nothing of this batch is in flight when this returns, though a pending one may be (Mars_Gpu.md §14).

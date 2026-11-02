@@ -1,5 +1,5 @@
 //! The queue: a runner's slots per class (two CPU and one GPU on the desktop) as lock files under
-//! `~/.cache/emusen/testing/queue/`, held with flock(2), so a trial's steps and an agent's heavy job wait for the same
+//! `~/.cache/emusen/testing/queue/`, held with flock(2), so a trial's steps and any other heavy job wait for the same
 //! slots. `queue ask` prints the command prefix that holds a slot for as long as the job runs. When 8bb-lease arrives,
 //! `acquire` is the one function that changes. See EmuSen_Testing.md §3.8 and `man queue`.
 

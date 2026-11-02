@@ -244,9 +244,9 @@ pub fn input_paths(snap: &Snapshot, unit: &str) -> Result<Vec<String>, String> {
 
 /// The key of a unit at the snapshot's revision under a profile; none when an input has uncommitted changes and the
 /// revision is the working tree's, since git's objects would not describe what runs.
-pub fn key(repo: &Repo, snap: &Snapshot, unit: &str, profile: &str, worktree: bool) -> Result<Option<Key>, String> {
+pub fn key(repo: &Repo, snap: &Snapshot, unit: &str, profile: &str, checkout: bool) -> Result<Option<Key>, String> {
     let paths = input_paths(snap, unit)?;
-    if worktree && repo.dirty(&paths) {
+    if checkout && repo.dirty(&paths) {
         return Ok(None);
     }
     let mut args: Vec<String> = vec!["rev-parse".into()];
@@ -265,7 +265,7 @@ pub fn key(repo: &Repo, snap: &Snapshot, unit: &str, profile: &str, worktree: bo
             lines.push(format!("{} ~/.cargo/config.toml", hash_text(&text)?));
         }
     } else if let Some(state) = lunap_state(repo) {
-        if state.ends_with("dirty") && worktree {
+        if state.ends_with("dirty") && checkout {
             return Ok(None);
         }
         lines.push(format!("lunap {state}"));

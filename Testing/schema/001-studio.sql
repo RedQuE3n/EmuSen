@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS build (
     id INTEGER PRIMARY KEY,
     trial INTEGER REFERENCES trial,
     tree TEXT,
-    worktree TEXT,
+    checkout TEXT,
     kind TEXT,
     profile TEXT,
     toolchain TEXT,
@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS build (
     reused_from INTEGER REFERENCES build
 );
 
--- One run of a selection: a land, an agent's fast loop, a nightly, or a log read back by the backfill. source names
+-- One run of a selection: a land, a developer's fast loop, a nightly, or a log read back by the backfill. source names
 -- the file a backfilled or ingested trial came from, so reading it twice adds nothing.
 CREATE TABLE IF NOT EXISTS trial (
     id INTEGER PRIMARY KEY,
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS trial (
     tree TEXT,
     base TEXT,
     branch TEXT,
-    worktree TEXT,
+    checkout TEXT,
     tier TEXT,
     runner TEXT REFERENCES runner,
     requested_by TEXT,

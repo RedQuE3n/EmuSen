@@ -218,7 +218,7 @@ pub fn run(stdin: Option<String>, o: &Options) -> Result<(String, String, i32), 
     let mut t = NewTrial::new(&head, &tier.name, &o.runner);
     t.base = Some(o.base.clone());
     t.branch = branch.clone();
-    t.worktree = Some(repo.root.display().to_string());
+    t.checkout = Some(repo.root.display().to_string());
     t.requested_by = o.requested_by.clone();
     let trial_id = match store.as_ref().map(|s| s.new_trial(&t)) {
         Some(Ok(id)) => id,

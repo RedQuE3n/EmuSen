@@ -27,7 +27,7 @@ the map with a derived graph.
 | choose the units | `impact` | `kind TAB unit TAB reason TAB via`, one unit a line |
 | run them | `trial` | a selection in; a line per unit and a verdict out; result files under `~/.cache/emusen/testing/trials/<n>/` |
 | keep the record | `results`, `ingest` | the store, `~/.local/share/EmuSen/testing/studio.db`; JSON lines by `results export` |
-| share the machine | `queue` | lock files under `~/.cache/emusen/testing/queue/`; a command prefix for an agent's job |
+| share the machine | `queue` | lock files under `~/.cache/emusen/testing/queue/`; a command prefix for any heavy job |
 
 The data files carry a format number each, and a reader ignores a field it does not know: `Testing/inputs.json`,
 `Testing/tiers.json` and `~/.config/EmuSen/testing/runners.json`. The schema is `Testing/schema/001-studio.sql`.
@@ -135,8 +135,8 @@ first row. Backfilled cargo rows and nextest's rows are named alike.
 ### 3.6 The queue
 
 Slots per class as lock files held with flock(2): `trial` takes a CPU slot per step; `queue ask cpu --gb 8` waits for a
-free slot and prints `flock <slot> systemd-run --user --scope …`, so an agent's job holds the slot while it runs.
-Decided 2026-11-01: agents take slots this way once this phase lands; until then they ask main. When 8bb-lease
+free slot and prints `flock <slot> systemd-run --user --scope …`, so the job holds the slot while it runs.
+Decided 2026-11-01: heavy jobs take their slots this way once this phase lands; until then they are agreed by hand. When 8bb-lease
 arrives, the one function that takes a slot calls `lease run` instead.
 
 ## 4. The data files
@@ -217,7 +217,7 @@ straight after reported both as reusable from it.
 
 Decided 2026-11-01 by the tester, as recommended: nextest is the cargo runner; green results are reused by key at the
 fast and land tiers, never at nightly; a flaky test fails the land unless quarantined by name with an owner, a cause
-and a 14-day expiry; agents take slots with `queue ask` once this phase lands, asking main until then; the real-window
+and a 14-day expiry; heavy jobs take slots with `queue ask` once this phase lands, agreed by hand until then; the real-window
 and device drivers stay Python inside declared jobs; the C# coverage pass runs on the Mint laptop's nightly. Also: the
 `Testing/` folder, the store under `~/.local/share/EmuSen/testing`, results under `~/.cache/emusen/testing`,
 `runners.json` under `~/.config/EmuSen/testing`, and this page.

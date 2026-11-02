@@ -145,14 +145,14 @@ impl Store {
         let mut id = 0;
         self.db
             .query(
-                "INSERT INTO trial (started, finished, tree, base, branch, worktree, tier, runner, requested_by, verdict, seconds, note, source) VALUES ($started, $finished, $tree, $base, $branch, $worktree, $tier, $runner, $by, $verdict, $seconds, $note, $source) RETURNING id",
+                "INSERT INTO trial (started, finished, tree, base, branch, checkout, tier, runner, requested_by, verdict, seconds, note, source) VALUES ($started, $finished, $tree, $base, $branch, $checkout, $tier, $runner, $by, $verdict, $seconds, $note, $source) RETURNING id",
                 &[
                     ("$started", Bound::Text(&t.started)),
                     ("$finished", t.finished.as_deref().map_or(Bound::Null, Bound::Text)),
                     ("$tree", Bound::Text(&t.tree)),
                     ("$base", t.base.as_deref().map_or(Bound::Null, Bound::Text)),
                     ("$branch", t.branch.as_deref().map_or(Bound::Null, Bound::Text)),
-                    ("$worktree", t.worktree.as_deref().map_or(Bound::Null, Bound::Text)),
+                    ("$checkout", t.checkout.as_deref().map_or(Bound::Null, Bound::Text)),
                     ("$tier", Bound::Text(&t.tier)),
                     ("$runner", Bound::Text(&t.runner)),
                     ("$by", t.requested_by.as_deref().map_or(Bound::Null, Bound::Text)),
@@ -273,7 +273,7 @@ pub struct NewTrial {
     pub tree: String,
     pub base: Option<String>,
     pub branch: Option<String>,
-    pub worktree: Option<String>,
+    pub checkout: Option<String>,
     pub tier: String,
     pub runner: String,
     pub requested_by: Option<String>,
@@ -285,7 +285,7 @@ pub struct NewTrial {
 
 impl NewTrial {
     pub fn new(tree: &str, tier: &str, runner: &str) -> NewTrial {
-        NewTrial { started: now(), finished: None, tree: tree.into(), base: None, branch: None, worktree: None, tier: tier.into(), runner: runner.into(), requested_by: None, verdict: None, seconds: None, note: None, source: None }
+        NewTrial { started: now(), finished: None, tree: tree.into(), base: None, branch: None, checkout: None, tier: tier.into(), runner: runner.into(), requested_by: None, verdict: None, seconds: None, note: None, source: None }
     }
 }
 

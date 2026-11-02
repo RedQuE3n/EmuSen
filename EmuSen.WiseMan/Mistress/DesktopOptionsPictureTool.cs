@@ -165,12 +165,12 @@ namespace EmuSen.WiseMan.Mistress
             s.Pad.Start();
             Save(s.Capture(), "builtin-pad-menu");
             s.Pad.B();
-            BigPictureSwitchTests.ChooseFromPadMenu(s, "Game Options...");
-            Save(s.Capture(), "builtin-options-sheet");
-            SheetLayer sheets = s.Window.GetControl<SheetLayer>("Sheets");
-            PadAudit.Reach(sheets.SheetOf(sheets.Current!)!, s.Pad, e => e is Button { Content: "Edit This Game's Metadata" });
-            s.Pad.A();
-            s.Settle();
+            s.Pad.Start();
+            PadMenu.Choose(s.Window, s.Pad, ThemedSession.SnesGames[1], exact: true);
+            Save(s.Capture(), "builtin-game-page");
+            s.Pad.B();
+            s.Pad.B();
+            BigPictureSwitchTests.ChooseFromPadMenu(s, "Edit This Game's Metadata");
             Save(s.Capture(), "builtin-editor-sheet");
         }, default);
 

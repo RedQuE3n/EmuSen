@@ -168,7 +168,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             var pad = new PadDriver(window);
             pad.Start();
-            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, "Scrape Games...", exact: true);
+            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, EmuSen.Mistress.Views.MainWindow.ScraperRow, exact: true);
             Pump(300);
             Control sheet = RootOf(Sheets(window).Current!);
             Named<Control>(Sheets(window).Current!, "ScreenScraperLogOutButton").BringIntoView();

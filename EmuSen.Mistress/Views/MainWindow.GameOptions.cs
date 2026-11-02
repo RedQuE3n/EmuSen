@@ -117,9 +117,10 @@ namespace EmuSen.Mistress.Views
             return true;
         }
 
-        private void AddGameEntries(List<GameOption> options, string path, string title, Action toggleFavourite)
+        // The favourite's row is left out where the caller draws its own, as the Home card does (EmuSen_BigPicture.md §49.3).
+        private void AddGameEntries(List<GameOption> options, string path, string title, Action? toggleFavourite)
         {
-            options.Add(new GameOption(_records.IsFavourite(path) ? "Remove from Favourites" : "Add to Favourites", toggleFavourite));
+            if (toggleFavourite is not null) options.Add(new GameOption(FavouriteText(path), toggleFavourite));
             options.Add(new GameOption("Edit This Game's Metadata", () => ShowMetadataEditor(path, title)) { Opens = true });
             if (CropOffered(path)) options.Add(new GameOption(CropThisGame, () => ShowGameCrop(path, title)) { Opens = true });
             if (StandardOffered(path)) options.Add(StandardOption(path));

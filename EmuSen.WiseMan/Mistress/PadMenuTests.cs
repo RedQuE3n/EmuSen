@@ -118,7 +118,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.All(new[] { 2, 3, 4 }, i => Assert.NotNull(rows[i].Adjust));
             Assert.Equal(["Save", "Load"], rows.Where(r => r.ShowsSlot).Select(r => r.Label!()));
             Assert.Equal(["Rewind"], rows.Where(r => r.ShowsReel).Select(r => r.Label!()));
-            Assert.DoesNotContain(PadMenu.AllLines(window), l => l is "Preferences" or "Shell" or MainWindow.EmuSenMenu or "Memory Cards");
+            Assert.DoesNotContain(PadMenu.AllLines(window), l => l is "Preferences" or MainWindow.ShellRow or MainWindow.ToolsMenu or MainWindow.PowerMenu or "Memory Cards");
 
             string[] options = SubmenuLines(window, MainWindow.GameOptionsMenu);
             Assert.Equal(GameOptions, options[..3]);
@@ -131,7 +131,6 @@ namespace EmuSen.WiseMan.Mistress
             if (bigScreen)
             {
                 Assert.True(PadMenu.Card(window).IsVisible);
-                Assert.False(window.GetControl<Control>("PadMenuBig").IsVisible);
                 Assert.False(window.GetControl<Control>("MenuBackdrop").IsVisible);
                 MenuPanel big = PadMenu.Big(window);
                 Assert.Same(PadMenu.Card(window).CardPanel, big);
@@ -145,41 +144,45 @@ namespace EmuSen.WiseMan.Mistress
             Done(window);
         }, default);
 
+        // Over the desktop's library with a game suspended: Continue, the game in hand, Search, Start Console, Tools, Settings and Power, on the card (EmuSen_BigPicture.md §49.1).
         [Fact]
-        public Task The_main_menu_is_the_game_s_entries_then_library_settings_and_emusen() => Session.Dispatch(() =>
+        public Task The_home_card_is_continue_the_game_search_start_console_tools_settings_and_power() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Playing(bigScreen: false);
             Call(window, "ToggleLibrary");
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             pad.Start();
-            Assert.Equal(["Back to Cobalt Harbor (Synthetic)", "Game Options...", "Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(window));
-            Assert.Equal([3], Enumerable.Range(0, 6).Where(i => PadMenu.Entries(window)[i].StartsSection));
-            Assert.Equal([MainWindow.StartConsoleMenu, "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu], SubmenuLines(window, MainWindow.LibraryMenu));
+            Assert.Equal([MainWindow.ContinueRow, "Cobalt Harbor (Synthetic)", MainWindow.SearchRow, MainWindow.StartConsoleMenu, MainWindow.ToolsMenu, MainWindow.SettingsMenu, MainWindow.PowerMenu], PadMenu.Lines(window));
+            Assert.Equal([4, 6], Enumerable.Range(0, 7).Where(i => PadMenu.Entries(window)[i].StartsSection));
+            Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CompressedDiscsMenu, MainWindow.ShellRow], SubmenuLines(window, MainWindow.ToolsMenu));
             Assert.Equal(Settings, SubmenuLines(window, MainWindow.SettingsMenu));
-            Assert.Equal(["Shell", "Full Screen", "Big Picture", "Exit EmuSen..."], SubmenuLines(window, MainWindow.EmuSenMenu));
-            Assert.Equal(MainWindow.MainMenuTitle, PadMenu.DeskTitle(window));
+            Assert.Equal(["Full Screen", "Big Picture", MainWindow.QuitEmuSenRow], SubmenuLines(window, MainWindow.PowerMenu));
+            Assert.True(PadMenu.Card(window).IsVisible);
+            Assert.False(window.GetControl<Control>("PadMenuDesk").IsVisible);
+            Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(window).Title);
+            Assert.Equal(["Select", "Back", "Close Menu", "Favourite"], PadMenu.Big(window).Hints!.Select(h => h.Label));
             Done(window);
         }, default);
 
-        // Over the themed view with no game: no divider above the first row, and the library's own entries in Library.
+        // Over the themed gamelist with no game running: no Continue, the gamelist's game and its search; the library's own tools under Tools, Exit Big Picture under Power.
         [Fact]
-        public Task The_themed_main_menu_folds_collections_and_theme_settings_into_library() => Session.Dispatch(() =>
+        public Task The_themed_home_card_folds_collections_and_theme_settings_into_tools() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession();
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.Start();
-            Assert.Equal(["Scrape This Game...", MainWindow.LibraryMenu, MainWindow.SettingsMenu, MainWindow.EmuSenMenu], PadMenu.Lines(s.Window));
-            Assert.Equal([MainWindow.StartConsoleMenu, "Collections", "Scrape Games...", MainWindow.PackagesMenu, MainWindow.CompressedDiscsMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, "Theme Settings"], SubmenuLines(s.Window, MainWindow.LibraryMenu));
-            Assert.Equal(["Shell", "Exit Big Picture", "Exit EmuSen..."], SubmenuLines(s.Window, MainWindow.EmuSenMenu));
-            Assert.Equal(MainWindow.MainMenuTitle, PadMenu.Big(s.Window).Title);
+            Assert.Equal([s.Game!, MainWindow.SearchRow, MainWindow.StartConsoleMenu, MainWindow.ToolsMenu, MainWindow.SettingsMenu, MainWindow.PowerMenu], PadMenu.Lines(s.Window));
+            Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CompressedDiscsMenu, "Collections", MainWindow.ThemeSettingsRow, MainWindow.ShellRow], SubmenuLines(s.Window, MainWindow.ToolsMenu));
+            Assert.Equal(["Exit Big Picture", MainWindow.QuitEmuSenRow], SubmenuLines(s.Window, MainWindow.PowerMenu));
+            Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(s.Window).Title);
 
             s.Pad.Up();
-            Assert.Equal(MainWindow.EmuSenMenu, PadMenu.SelectedLine(s.Window));
+            Assert.Equal(MainWindow.PowerMenu, PadMenu.SelectedLine(s.Window));
             s.Pad.A();
-            Assert.Equal(MainWindow.EmuSenMenu, PadMenu.Big(s.Window).Title);
+            Assert.Equal(MainWindow.PowerMenu, PadMenu.Big(s.Window).Title);
             Assert.StartsWith("EmuSen 0.", PadMenu.Big(s.Window).Footer);
-            Assert.Equal("‹ MAIN MENU", PadMenu.Big(s.Window).Subtitle);
-            Assert.Equal("Back", PadMenu.Big(s.Window).Hints![2].Label);
+            Assert.Equal("‹ Home", PadMenu.Big(s.Window).Subtitle);
+            Assert.Equal(["Select", "Back", "Close Menu"], PadMenu.Big(s.Window).Hints!.Select(h => h.Label));
         }, default);
 
         // With a second pad, the first page offers Swap Players before the options, reached by pad; it trades players 1 and 2 and names both, and the page fits - see EmuSen_Input.md §8.13.
@@ -395,8 +398,8 @@ namespace EmuSen.WiseMan.Mistress
             bool closed = false;
             window.Closed += (_, _) => closed = true;
             pad.Start();
-            Enter(window, pad, MainWindow.EmuSenMenu);
-            Enter(window, pad, "Exit EmuSen");
+            Enter(window, pad, MainWindow.PowerMenu);
+            Enter(window, pad, "Quit EmuSen");
             PadMenu.Answer(window, pad, yes: true);
             Assert.True(closed);
         }, default);
@@ -419,10 +422,10 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(frames, MistressGame.TotalFrames(window));
 
             pad.Start();
-            Assert.Equal("Back to Cobalt Harbor (Synthetic)", PadMenu.Lines(window)[0]);
+            Assert.Equal(MainWindow.ContinueRow, PadMenu.Lines(window)[0]);
             WindowFitAuditTests.Settle(window);
-            Assert.False(PadMenu.Card(window).IsVisible);
-            if (bigScreen) Assert.Equal("frame", Assert.IsType<PauseCardPane>(PadMenu.Big(window).Pane).Showing);
+            Assert.True(PadMenu.Card(window).IsVisible);
+            Assert.Equal("frame", PadMenu.Pane(window).Showing);
             pad.A();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             Assert.False(window.IsPaused);
@@ -457,7 +460,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) }, { "Graphics", typeof(GraphicsSettingsWindow) },
             { "Shaders", typeof(ShaderSettingsWindow) }, { "Cheats", typeof(ActiveCheatsWindow) }, { "Preferences", typeof(PreferencesWindow) },
-            { "Collections", typeof(CollectionSettingsWindow) }, { "Scrape Games...", typeof(ScraperWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) },
+            { "Collections", typeof(CollectionSettingsWindow) }, { MainWindow.ScraperRow, typeof(ScraperWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) },
             { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Cores", typeof(CoresWindow) }, { "Shell", typeof(HotaruWindow) },
         };
 

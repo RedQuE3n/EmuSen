@@ -68,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task The_start_menu_is_centred_its_bar_spans_the_panel_and_it_draws_nothing_outside_the_panel_but_the_backdrop_and_the_help(int width, int height) => Session.Dispatch(() =>
+        public Task The_home_card_is_anchored_left_its_bar_spans_the_panel_and_the_theme_is_dimmed_not_blurred(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
             ThemedLibraryPadTests.Enter(s, "snes");
@@ -77,14 +77,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Down(2);
             RenderedFrame open = s.Capture();
 
-            MenuPanel menu = s.Window.GetControl<MenuPanel>("PadMenuBig");
-            Assert.True(menu.IsVisible);
+            MenuPanel menu = PadMenu.Big(s.Window);
+            Assert.True(PadMenu.Card(s.Window).IsVisible);
             Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
-            Assert.Equal("Main Menu", menu.Title);
-            // The version moved to the EmuSen submenu's footer, which gives the first page a row's height (§4.69.8).
-            Assert.Null(menu.Footer);
+            Assert.Equal(MainWindow.HomeTitle, menu.Title);
+            Assert.Equal(MenuAnchor.Left, menu.Anchor);
             Rect panel = InWindow(menu, menu.PanelBounds, s.Window);
-            AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
+            Assert.True(panel.X < s.Window.Bounds.Width * 0.1 && panel.Right < s.Window.Bounds.Width * 0.5, $"the card {panel} is not at the left");
 
             ListBox list = s.Window.GetControl<ListBox>("PadMenuList");
             Assert.Equal(2, list.SelectedIndex);
@@ -92,28 +91,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(row.IsHighlighted);
             AssertBarSpans(open, InWindow(row, row.Layout(row.Bounds.Size).Bar, s.Window), panel, row.BarColor, row.AccentColor);
 
-            // The screen under it is blurred, and the theme's own help bar is put away while the menu's is shown.
-            BlurBackdrop backdrop = s.Window.GetControl<BlurBackdrop>("MenuBackdrop");
-            Assert.True(backdrop.IsBlurring);
-            Assert.IsType<BlurEffect>(s.Window.GetControl<Control>("ScreenContent").Effect);
+            // Dimmed by the card's scrim, never blurred; the theme's own help bar is put away while the card's is shown (EmuSen_Interface.md §7).
+            Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsVisible);
+            Assert.Null(s.Window.GetControl<Control>("ScreenContent").Effect);
             Assert.All(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>(), b => Assert.False(b.IsVisible));
 
-            // The same frame with the panel alone taken away differs only inside the panel and the help bar.
+            // The same frame with the panel alone taken away differs only inside the panel and the help bar; the scrim alone changed the theme.
             Rect help = InWindow(menu.HelpBar, new Rect(menu.HelpBar.Bounds.Size), s.Window);
             menu.IsVisible = false;
-            RenderedFrame backdropOnly = s.Capture();
+            RenderedFrame scrimOnly = s.Capture();
             menu.IsVisible = true;
-            (int inside, int outside) = Changed(open, backdropOnly, panel.Inflate(1), help.Inflate(1));
+            (int inside, int outside) = Changed(open, scrimOnly, panel.Inflate(1), help.Inflate(1));
             Assert.True(inside > 1000, $"only {inside} pixels of the panel were drawn");
             Assert.Equal(0, outside);
-            // The synthetic theme is mostly black, which a shade leaves black; its list, cover and art must all have changed.
-            int blurred = Changed(before, backdropOnly).Outside;
-            Assert.True(blurred > before.Width * before.Height / 20, $"the backdrop changed only {blurred} pixels of the screen");
+            int dimmed = Changed(before, scrimOnly).Outside;
+            Assert.True(dimmed > before.Width * before.Height / 20, $"the scrim changed only {dimmed} pixels of the screen");
 
             s.Pad.B();
             s.Settle();
-            Assert.False(backdrop.IsBlurring);
-            Assert.Null(s.Window.GetControl<Control>("ScreenContent").Effect);
+            Assert.False(PadMenu.IsOpen(s.Window));
             Assert.All(s.Themed.Stage!.Current.Scene.Entries.Select(e => e.Control).OfType<HintBar>(), b => Assert.True(b.IsVisible));
         }, default);
 
@@ -183,8 +179,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Unplug();
             s.Pad.Tick();
             Press(s, Avalonia.Input.Key.F4);
-            Assert.True(s.Window.GetControl<MenuPanel>("PadMenuBig").IsEffectivelyVisible);
-            Assert.True(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsBlurring);
+            Assert.True(PadMenu.Big(s.Window).IsEffectivelyVisible);
+            Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsBlurring);
             Press(s, Avalonia.Input.Key.Down);
             Assert.Equal(1, s.Window.GetControl<ListBox>("PadMenuList").SelectedIndex);
             Press(s, Avalonia.Input.Key.Back);
@@ -192,19 +188,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsBlurring);
         }, default);
 
-        // The desktop keeps its own menu and sheet: the list in the bordered box, no backdrop, and a game's options on a sheet of their own.
+        // A pad opens the same Home card on the desktop, over the library dimmed and with no backdrop (EmuSen_Interface.md §2.3).
         [Fact]
-        public Task A_desktop_session_keeps_the_desktop_menus() => Session.Dispatch(() =>
+        public Task A_pad_opens_the_home_card_on_the_desktop_too() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(settings: a => { a.BigScreen = false; a.LibraryStyle = EmuSen.Galaxia.Models.AppSettings.LibraryStyleMistress; });
             s.Pad.Start();
             s.Settle();
-            Assert.True(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
-            Assert.False(s.Window.GetControl<MenuPanel>("PadMenuBig").IsVisible);
+            Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
+            Assert.True(PadMenu.Card(s.Window).IsVisible);
+            Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(s.Window).Title);
             Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsVisible);
             ListBox list = s.Window.GetControl<ListBox>("PadMenuList");
-            Assert.IsType<DockPanel>(list.Parent);
-            Assert.Empty(list.GetVisualDescendants().OfType<MenuRow>());
+            Assert.Same(list, PadMenu.Card(s.Window).Content);
+            Assert.NotEmpty(list.GetVisualDescendants().OfType<MenuRow>());
             Assert.Null(s.Window.GetControl<Control>("ScreenContent").Effect);
         }, default);
 

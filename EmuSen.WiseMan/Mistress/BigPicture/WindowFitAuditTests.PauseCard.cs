@@ -11,11 +11,11 @@ using Xunit;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The Pause Card's states recorded at both sizes and on the handheld, and the library menu's Back row with its frame - see EmuSen_InterfaceSpec.md §6.3.18 and EmuSen_BigPicture.md §48.
+    // The Pause Card's states recorded at both sizes and on the handheld - see EmuSen_InterfaceSpec.md §6.3.18 and EmuSen_BigPicture.md §48.
     public partial class WindowFitAuditTests
     {
         // Each state, by the rows chosen from the first page to reach it, and the row the selection rests on.
-        public static readonly string[] PauseCardViews = ["PauseCard", "PauseCardRewind", "PauseCardSave", "PauseCardGameOptions", "PauseCardDisplay", "PauseCardLeave", "PauseCardQuitGame", "LibraryMenuBack"];
+        public static readonly string[] PauseCardViews = ["PauseCard", "PauseCardRewind", "PauseCardSave", "PauseCardGameOptions", "PauseCardDisplay", "PauseCardLeave", "PauseCardQuitGame"];
 
         // The handheld's: the big-screen form at 1920 by 1200 in Steam's Game Mode, where the volume row defers and the chords are off.
         public static readonly string[] HandheldViews = ["PauseCardHandheld", "PauseCardHandheldOptions"];
@@ -40,12 +40,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             InterfaceRecorder.Volatile = Volatile;
             try
             {
-                if (view == "LibraryMenuBack")
-                {
-                    Call(window, "ToggleLibrary");
-                    pad.Start();
-                }
-                else pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+                pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
                 Assert.True(PadMenu.IsOpen(window));
                 switch (view)
                 {

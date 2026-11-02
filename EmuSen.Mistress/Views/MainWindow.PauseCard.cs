@@ -26,7 +26,7 @@ namespace EmuSen.Mistress.Views
         private string? _paneShowing;
         private readonly Dictionary<string, (DateTime When, Bitmap? Picture)> _slotPictures = new(StringComparer.Ordinal);
 
-        // The card shows over a game in a big-screen session; the library's menu keeps its centred look.
+        // The Pause Card shows over a game in a big-screen session; over the library the Home card does (§49).
         internal bool PauseCardShown => _bigScreen && _padMenuInGame;
 
         private void SetUpPauseCard()
@@ -35,20 +35,18 @@ namespace EmuSen.Mistress.Views
             PadCard.Detail = _pauseCardPane;
         }
 
-        // The header names the page with the game's cover before it; a submenu's subtitle is the way back, a question's its sentence.
-        private void ShowPauseCard(PadMenuPage page, bool nested)
+        // The header names the page, over a game with its cover before it and on Power with EmuSen's version under it; a submenu's subtitle is the way back, a question's its sentence.
+        private void ShowCard(PadMenuPage page, bool nested)
         {
             MenuPanel card = PadCard.CardPanel;
             string? under = page.Question ? page.Detail : nested ? "‹ " + string.Join(" › ", _padMenuPages.SkipLast(1).Select(p => PageTitle(p))) : null;
             card.SubtitleLetterCase = LunaP.Media.LetterCase.None;
             card.HintFamily = HelpFamily;
-            PadCard.Header = new AdaptiveHeader(PageTitle(page), under is null ? null : FitSubtitle(card, under), RunningGameCover());
+            PadCard.Header = new AdaptiveHeader(PageTitle(page), under is null ? null : FitSubtitle(card, under), _padMenuInGame ? RunningGameCover() : null, page.Title == PowerMenu && !_padMenuInGame ? BigMenuFooter : null);
             PadCard.SwapsAcceptAndBack = _appSettings.SwapPadButtons;
-            var actions = new List<LunaAction>
-            {
-                new("Close Menu", ClosePadMenu) { PadButton = PadGlyphButton.Start },
-                new("Screenshot", TakeScreenshot) { PadButton = PadHints.Glyph(PadGlyphButton.West) },
-            };
+            var actions = new List<LunaAction> { new("Close Menu", ClosePadMenu) { PadButton = PadGlyphButton.Start } };
+            if (_padMenuInGame) actions.Add(new LunaAction("Screenshot", TakeScreenshot) { PadButton = PadHints.Glyph(PadGlyphButton.West) });
+            if (HomeFavouriteHere) actions.Add(new LunaAction("Favourite", ToggleHomeFavourite) { PadButton = PadHints.Glyph(PadGlyphButton.North) });
             if (_padMenuEntries.Any(e => e.Adjust is not null)) actions.Add(new LunaAction("Change", () => { }) { PadButton = PadGlyphButton.DPadLeftRight });
             PadCard.SetActions(actions);
         }
@@ -56,17 +54,22 @@ namespace EmuSen.Mistress.Views
         private Bitmap? RunningGameCover() =>
             _currentRomPath is string path && CoverPathFor(new EmuSen.Mistress.Library.RomEntry(path)) is string cover ? _covers.Get(cover) : null;
 
-        // The pane follows the chosen row: the slots on Save and Load, the reel on Rewind, the paused frame on the library's Back row; read again only when the row or the slot changes.
-        private void UpdatePauseCardPane()
+        // The pane follows the chosen row: the slots on Save and Load, the reel on Rewind, the paused frame on Continue, the cover on the game, the tools' lines; read again only when what it shows changes.
+        private void UpdateCardPane()
         {
             int at = PadMenuList.SelectedIndex;
             PadMenuEntry? entry = _padMenuOpen && at >= 0 && at < _padMenuEntries.Count ? _padMenuEntries[at] : null;
-            string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : "none";
+            string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
+                : entry.ShowsTools ? "tools " + string.Join(" | ", ToolLines()) : entry.Status is { } status ? $"status {entry.Text()}: {status()}" : "none";
             if (key == _paneShowing) return;
             _paneShowing = key;
-            if (!PauseCardShown) ShowLibraryFramePane(key == "frame");
-            if (PauseCardShown && key.StartsWith("slots", StringComparison.Ordinal)) _pauseCardPane.ShowSlots(SlotStrip(), _stateSlot);
-            else if (PauseCardShown && key == "reel") ShowReelPane();
+            if (!CardShown) _pauseCardPane.Clear();
+            else if (key.StartsWith("slots", StringComparison.Ordinal)) _pauseCardPane.ShowSlots(SlotStrip(), _stateSlot);
+            else if (key == "reel") ShowReelPane();
+            else if (key == "frame") ShowContinuePane();
+            else if (key.StartsWith("cover", StringComparison.Ordinal)) ShowCoverPane();
+            else if (key.StartsWith("tools", StringComparison.Ordinal)) ShowLinesPane(ToolLines());
+            else if (entry?.Status is { } line) ShowLinesPane([(entry.Text(), line())]);
             else _pauseCardPane.Clear();
         }
 
@@ -133,24 +136,6 @@ namespace EmuSen.Mistress.Views
             for (int y = 0; y < height; y++)
                 Marshal.Copy(rgba.Slice(y * width * 4, width * 4).ToArray(), 0, target.Address + y * target.RowBytes, width * 4);
             return bitmap;
-        }
-
-        // The library's menu shows the paused frame beside its Back row, where the screen leaves room for it.
-        private void ShowLibraryFramePane(bool show)
-        {
-            if (!show || _session is not { } session)
-            {
-                PadMenuBig.Pane = null;
-                return;
-            }
-            Bitmap? frame = null;
-            try { if (CurrentPicture(session) is { } still) frame = Picture(still.Rgba, still.Width, still.Height); }
-            catch (CrystalException) { frame = null; }
-            var pane = new PauseCardPane();
-            double u = MenuPanel.GetScale(this) is > 0 and var s ? s : 1;
-            MenuPanel.SetScale(pane, u);
-            pane.ShowPicture(frame, "Paused", 140 * u);
-            PadMenuBig.Pane = pane;
         }
 
         // On the desktop the menu owns the volume; under Steam's Game Mode the device's quick menu does, and the row says so (§48.5).

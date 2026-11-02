@@ -11708,7 +11708,7 @@ on the big screen and `‹ Back` on the desktop return to the library on the sam
 
 ### 50.2 What the page holds
 
-- **The hero**: the game's fan art, else a screenshot, else its title screen, in the poster slot shaped for video
+- **The hero**: the game's fan art, else a screenshot, else its title screen, under the hero scrim that darkens the title band to 80 per cent black or more whatever the art (LunaP §209.3; over white art the title reads at 12:1 and the facts at 7:1, measured 2026-11-02), in the poster slot shaped for video
   (`PosterSlot.Video` holds the scraped clip for the playback of Pass 12); the cover in its box shape; the name; the
   facts `console · year · developer · publisher · play time · last played`.
 - **Actions**: `Play`; `Resume ◂ Slot 3 · 3 days ago ▸` over the game's states newest first, Left and Right choosing, the

@@ -69,6 +69,9 @@ pub struct System {
     pub libretro_systemids: Vec<String>,
     /// What the console's firmware is, said once above its files in the firmware overview; none for most (EmuSen_Cores.md §4.10).
     pub firmware_note: Option<String>,
+    /// Whether the console's games can drive a motor in the player's hands, a controller's, an accessory's or a
+    /// cartridge's, so that the player's rumble switch is honoured (EmuSen_Input.md §9.2).
+    pub rumble: bool,
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
@@ -93,7 +96,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 22] = [
+pub const KEYS: [&str; 23] = [
     "id",
     "name",
     "console",
@@ -116,6 +119,7 @@ pub const KEYS: [&str; 22] = [
     "libretro_databases",
     "libretro_systemids",
     "firmware_note",
+    "rumble",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
@@ -270,6 +274,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         libretro_databases: f.texts_or_none("libretro_databases")?,
         libretro_systemids: f.texts_or_none("libretro_systemids")?,
         firmware_note: f.optional_text("firmware_note")?,
+        rumble: f.bool("rumble")?,
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -359,6 +364,7 @@ pub fn to_json(systems: &[System]) -> String {
                 words(&s.libretro_databases),
                 words(&s.libretro_systemids),
                 or_null(s.firmware_note.as_deref().map(Value::string)),
+                Value::Bool(s.rumble),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })
@@ -503,6 +509,13 @@ mod tests {
         assert_eq!(ps2.media.iter().map(|m| (m.id.as_str(), m.title.as_str(), m.noun.as_str())).collect::<Vec<_>>(), [("ps2.card", "Memory Card (PS2)", "Card")], "Sapphire_Native.md §30.16");
         assert!(crate::probe::recognises("ps2") && crate::cheats::PAIRS.iter().all(|p| p.0 != "ps2"));
         assert_eq!(refused("nes", &nes().replace("\"cheat_systems\": [", "\"cheat_systems\": [\"A\", \"A\", ")), "cheat_systems names one twice");
+    }
+
+    #[test]
+    fn the_consoles_whose_games_drive_a_motor_say_so_and_the_rest_do_not() {
+        let rumbles: Vec<&str> = table().unwrap().iter().filter(|s| s.rumble).map(|s| s.id.as_str()).collect();
+        assert_eq!(rumbles, ["psx", "gb", "gbc", "n64", "ps2", "dreamcast"]);
+        assert_eq!(refused("nes", &nes().replace("\"rumble\": false", "\"rumble\": 1")), "rumble is not true or false");
     }
 
     #[test]

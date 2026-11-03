@@ -20,10 +20,10 @@ namespace EmuSen.Endymion.Native
     internal static unsafe class DeviceNative
     {
         internal const int Absent = -1030;
-        internal const uint PadName = 0, PadGuid = 1, PadPath = 2, PadPlayerIndex = 0, PadKind = 1, PadVendorProduct = 2;
+        internal const uint PadName = 0, PadGuid = 1, PadPath = 2, PadPlayerIndex = 0, PadKind = 1, PadVendorProduct = 2, PadRumble = 3;
         internal const uint SetFirst = 0, SetOpenHandles = 1, SetOpens = 2, SetCloses = 3, SetInitialized = 4;
         internal const uint DeviceInit = 0, DeviceQuit = 1, DeviceOpen = 2, DeviceClose = 3, DeviceIsAttached = 4, DeviceChanged = 5, DeviceUpdate = 6,
-            DeviceButton = 7, DeviceAxis = 8, DeviceKind = 9, DeviceLabel = 10, DeviceSetPlayerIndex = 11, DeviceVendorProduct = 12;
+            DeviceButton = 7, DeviceAxis = 8, DeviceKind = 9, DeviceLabel = 10, DeviceSetPlayerIndex = 11, DeviceVendorProduct = 12, DeviceRumble = 13;
         internal const uint DeviceName = 0, DeviceGuid = 1, DevicePath = 2;
         internal const uint DevicesSdl = 0, DevicesSimulated = 1;
         internal const uint PadsId = 0, PadsIsOpen = 1, PadsKind = 2, PadsRawPressed = 3, PadsAxisValue = 4, PadsLabel = 5, PadsFrontendCount = 6, PadsStarted = 7,
@@ -67,6 +67,7 @@ namespace EmuSen.Endymion.Native
         internal static delegate* unmanaged[Cdecl]<nint, ulong, uint, uint, double*, int> PadsAxis;
         internal static delegate* unmanaged[Cdecl]<nint, ulong, uint, int, int> PadsPressed;
         internal static delegate* unmanaged[Cdecl]<nint, ulong, int, int> PadsSetPlayerIndex;
+        internal static delegate* unmanaged[Cdecl]<nint, ulong, ushort, ushort, int> PadsRumble;
         internal static delegate* unmanaged[Cdecl]<nint, uint, double, int> PadsSetSetting;
         internal static delegate* unmanaged[Cdecl]<nint, uint, double*, int> PadsSetting;
         internal static delegate* unmanaged[Cdecl]<long, long, int> PadsRescanDue;
@@ -99,7 +100,7 @@ namespace EmuSen.Endymion.Native
             "emusen_endymion_sim_set_disconnect", "emusen_endymion_sim_set_get", "emusen_endymion_sim_set_attached", "emusen_endymion_sim_set_call", "emusen_endymion_sim_set_text",
             "emusen_endymion_pads_new", "emusen_endymion_pads_free", "emusen_endymion_pads_start", "emusen_endymion_pads_poll", "emusen_endymion_pads_show_only", "emusen_endymion_pads_update", "emusen_endymion_pads_use",
             "emusen_endymion_pads_take", "emusen_endymion_pads_close_all", "emusen_endymion_pads_open", "emusen_endymion_pads_get", "emusen_endymion_pads_text", "emusen_endymion_pads_axis",
-            "emusen_endymion_pads_pressed", "emusen_endymion_pads_set_player_index", "emusen_endymion_pads_set_setting", "emusen_endymion_pads_setting", "emusen_endymion_pads_rescan_due",
+            "emusen_endymion_pads_pressed", "emusen_endymion_pads_set_player_index", "emusen_endymion_pads_rumble", "emusen_endymion_pads_set_setting", "emusen_endymion_pads_setting", "emusen_endymion_pads_rescan_due",
             "emusen_endymion_audio_new", "emusen_endymion_audio_free", "emusen_endymion_audio_dispose", "emusen_endymion_audio_submit", "emusen_endymion_audio_get",
             "emusen_endymion_audio_set_volume", "emusen_endymion_audio_volume", "emusen_endymion_ui_new", "emusen_endymion_ui_free", "emusen_endymion_ui_dispose", "emusen_endymion_ui_sound",
             "emusen_endymion_ui_remember", "emusen_endymion_ui_get", "emusen_endymion_ui_set_volume", "emusen_endymion_ui_volume", "emusen_endymion_ui_decode", "emusen_endymion_ui_decode_take",
@@ -145,6 +146,7 @@ namespace EmuSen.Endymion.Native
             PadsAxis = (delegate* unmanaged[Cdecl]<nint, ulong, uint, uint, double*, int>)found[next++];
             PadsPressed = (delegate* unmanaged[Cdecl]<nint, ulong, uint, int, int>)found[next++];
             PadsSetPlayerIndex = (delegate* unmanaged[Cdecl]<nint, ulong, int, int>)found[next++];
+            PadsRumble = (delegate* unmanaged[Cdecl]<nint, ulong, ushort, ushort, int>)found[next++];
             PadsSetSetting = (delegate* unmanaged[Cdecl]<nint, uint, double, int>)found[next++];
             PadsSetting = (delegate* unmanaged[Cdecl]<nint, uint, double*, int>)found[next++];
             PadsRescanDue = (delegate* unmanaged[Cdecl]<long, long, int>)found[next++];

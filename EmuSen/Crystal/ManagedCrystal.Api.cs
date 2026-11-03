@@ -192,6 +192,20 @@ namespace EmuSen.Crystal.Managed
             catch (Exception e) { return (int)Fail(e); }
         }
 
+        // The C# runtime routes no core outputs, so every motor reads zero.
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static int emusen_crystal_input_rumble(nint rt, uint session, uint port, ushort* strong, ushort* weak)
+        {
+            try
+            {
+                SessionOf(rt, session);
+                if (strong != null) *strong = 0;
+                if (weak != null) *weak = 0;
+                return 0;
+            }
+            catch (Exception e) { return (int)Fail(e); }
+        }
+
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static int emusen_crystal_input_connected(nint rt, uint session, uint port, uint connected)
         {

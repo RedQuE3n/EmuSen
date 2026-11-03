@@ -33,6 +33,9 @@ namespace EmuSen.Endymion.Input
 
         // Lights the player number on a pad that has one; most have none, and SDL ignores them.
         void SetPlayerIndex(IntPtr pad, int index);
+
+        // Drives the two motors, strong the low-frequency one, for RumbleMs, each call replacing the last - see EmuSen_Input.md §9.
+        void Rumble(IntPtr pad, ushort strong, ushort weak);
     }
 
     // The real devices, through SDL3.
@@ -100,5 +103,10 @@ namespace EmuSen.Endymion.Input
         public uint VendorProduct(IntPtr pad) => (uint)SDL.GetGamepadVendor(pad) << 16 | SDL.GetGamepadProduct(pad);
 
         public void SetPlayerIndex(IntPtr pad, int index) => SDL.SetGamepadPlayerIndex(pad, index);
+
+        // Longer than a frame at 50 Hz, so each frame's refresh keeps the motors running and a game paused stops them - see EmuSen_Input.md §9.3.
+        public const uint RumbleMs = 100;
+
+        public void Rumble(IntPtr pad, ushort strong, ushort weak) => SDL.RumbleGamepad(pad, strong, weak, RumbleMs);
     }
 }

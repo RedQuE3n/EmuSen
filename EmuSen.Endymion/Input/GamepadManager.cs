@@ -125,6 +125,9 @@ namespace EmuSen.Endymion.Input
         // The pad the game hears as the player; with the first controller alone, player 1's only - see EmuSen_Input.md §8.3.
         public ConnectedPad? PlayerPad(int player) => FirstControllerOnly && player > 1 ? null : Players.PadFor(player);
 
+        // The player's pad's motors, strong and weak, as the game drives them this frame - see EmuSen_Input.md §9.
+        public void Rumble(int player, ushort strong, ushort weak) => PlayerPad(player)?.Rumble(strong, weak);
+
         // Stick-as-d-pad and its threshold - see EmuSen_Settings_Reference.md §4.4.
         public bool AnalogStickAsDpad
         {

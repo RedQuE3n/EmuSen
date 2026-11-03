@@ -60,6 +60,7 @@ namespace EmuSen.WiseMan.Input
             public string? Path(IntPtr pad) => sdl.Path(pad);
             public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
+            public void Rumble(IntPtr pad, ushort strong, ushort weak) => sdl.Rumble(pad, strong, weak);
         }
 
         // A manager on the real devices, ticked as Mistress's 16 ms pad timer ticks it: Poll and nothing else on the thread.

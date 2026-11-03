@@ -32,6 +32,7 @@ Config lives inside DianaSh's own sandbox tree, at `<root>/etc/EmuSen` — reach
   appsettings.json        general app preferences        §3.1
   keybindings.json        keyboard -> console button      §3.6
   gamepadbindings.json    pad button -> console button    §3.6
+  gamepadprofiles.json    named pad profiles per console  EmuSen_Input.md §10
   hotkeybindings.json     keyboard -> emulator action
   audio.json              §3.2
   graphics.json           §3.3

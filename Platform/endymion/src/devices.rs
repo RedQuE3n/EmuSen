@@ -13,6 +13,10 @@ pub type Handle = usize;
 /// SDL's gamepad buttons, `SDL_GAMEPAD_BUTTON_COUNT` of them.
 pub const SDL_BUTTONS: i32 = 26;
 
+/// How long one call drives the motors: longer than a frame at 50 Hz, so each frame's refresh keeps them running and a
+/// game paused or closed stops them (EmuSen_Input.md §9.3).
+pub const RUMBLE_MS: u32 = 100;
+
 pub trait PadDevices: Send {
     fn init(&mut self) -> bool;
     fn quit(&mut self);
@@ -35,6 +39,9 @@ pub trait PadDevices: Send {
     /// controller behind Steam's virtual pad. See EmuSen_Input.md §8.13.
     fn vendor_product(&mut self, pad: Handle) -> u32;
     fn set_player_index(&mut self, pad: Handle, index: i32);
+    /// Drives the pad's two motors, `strong` the low-frequency one, for `RUMBLE_MS`, each call replacing the last; a pad
+    /// with no motor ignores it. See EmuSen_Input.md §9.
+    fn rumble(&mut self, pad: Handle, strong: u16, weak: u16);
     /// Hides every pad but these, or none for `None`; only a layer over real devices has pads to hide.
     fn show_only(&mut self, _ids: Option<HashSet<u32>>) {}
 }
@@ -162,6 +169,10 @@ impl PadDevices for SdlPads {
         unsafe { (self.sdl.f.set_gamepad_player_index)(Self::pad(pad), index) };
     }
 
+    fn rumble(&mut self, pad: Handle, strong: u16, weak: u16) {
+        unsafe { (self.sdl.f.rumble_gamepad)(Self::pad(pad), strong, weak, RUMBLE_MS) };
+    }
+
     fn show_only(&mut self, ids: Option<HashSet<u32>>) {
         self.only = ids;
     }
@@ -179,6 +190,8 @@ pub struct SimulatedPad {
     pub kind: i32,
     /// The vendor and product it reports, as `PadDevices::vendor_product`; 0 for none.
     pub vendor_product: u32,
+    /// The motors as last driven, strong and weak.
+    pub rumble: (u16, u16),
     held: HashSet<i32>,
     axes: HashMap<i32, i16>,
 }
@@ -186,7 +199,7 @@ pub struct SimulatedPad {
 impl SimulatedPad {
     /// `path` is the host's to number, one per pad as a USB port's.
     pub fn new(path: Option<String>) -> SimulatedPad {
-        SimulatedPad { name: "Simulated pad".to_string(), guid: None, path, player_index: -1, kind: 0, vendor_product: 0, held: HashSet::new(), axes: HashMap::new() }
+        SimulatedPad { name: "Simulated pad".to_string(), guid: None, path, player_index: -1, kind: 0, vendor_product: 0, rumble: (0, 0), held: HashSet::new(), axes: HashMap::new() }
     }
 
     pub fn press(&mut self, button: i32) {
@@ -361,6 +374,12 @@ impl PadDevices for SimulatedPads {
             lock(p).player_index = index;
         }
     }
+
+    fn rumble(&mut self, pad: Handle, strong: u16, weak: u16) {
+        if let Some(p) = self.pad(pad) {
+            lock(p).rumble = (strong, weak);
+        }
+    }
 }
 
 /// A set shared between the test that plugs pads in and the manager that opens them.
@@ -420,6 +439,9 @@ impl PadDevices for SharedSet {
     }
     fn set_player_index(&mut self, pad: Handle, index: i32) {
         lock_set(self).set_player_index(pad, index)
+    }
+    fn rumble(&mut self, pad: Handle, strong: u16, weak: u16) {
+        lock_set(self).rumble(pad, strong, weak)
     }
 }
 

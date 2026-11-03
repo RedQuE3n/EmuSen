@@ -99,6 +99,8 @@ pub struct Session {
     pub run: Mutex<Run>,
     pub latch: Arc<InputLatch>,
     pub routes: Arc<Mutex<Routes>>,
+    /// Each port's motors, the engine's, read without the gate (EmuSen_Input.md §9).
+    pub rumble: Arc<crate::rumble::Rumble>,
     pending: AtomicU32,
     in_frame: AtomicU64,
     frame_thread: AtomicU64,
@@ -125,7 +127,7 @@ fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
 
 impl Session {
     pub fn new(id: u32, engine: Engine, game_path: Option<String>, console: String, empty_console: Option<String>, opened: OpenedWith, events: Arc<crate::events::Events>) -> Session {
-        let (latch, routes) = (engine.latch.clone(), engine.routes.clone());
+        let (latch, routes, rumble) = (engine.latch.clone(), engine.routes.clone(), engine.rumble.clone());
         let identity = Arc::new(Mutex::new((None, 0)));
         if let Some(at) = game_path.clone() {
             let theirs = identity.clone();
@@ -151,6 +153,7 @@ impl Session {
             run: Mutex::new(Run::default()),
             latch,
             routes,
+            rumble,
             pending: AtomicU32::new(0),
             in_frame: AtomicU64::new(0),
             frame_thread: AtomicU64::new(0),

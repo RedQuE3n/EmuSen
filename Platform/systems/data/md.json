@@ -20,5 +20,6 @@
   "byte_order": "big",
   "libretro_databases": ["Sega - Mega Drive - Genesis"],
   "libretro_systemids": ["mega_drive"],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": false
 }

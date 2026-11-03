@@ -1906,6 +1906,10 @@ Two additions, each optional; a host or library that knows neither runs as befor
 Bit 27 is kept for `DEVICE_RING` (`EmuSen_LibretroHost.md` §5.4). The kit refuses an `OUTPUT` that names an output
 machine info does not declare.
 
+*Rumble, 2026-11-03.* The "rumble" capability approved by the tester that day for U6 is this minor's motor outputs, not
+a new bit: a core that declares `motor` outputs has rumble. The runtime's levels, the frontend API's `input_rumble`
+(1.10), Endymion's motors and the player's switch are recorded in `EmuSen_Input.md` §9.
+
 ### 6.43 The picture on a ring the host lends: `DEVICE_RING` (1.18, 2026-11-01)
 
 Bit 27, designed in `EmuSen_LibretroHost.md` §5.4 and specified in §5.4a there: `emusen_ring_image` (40 bytes),

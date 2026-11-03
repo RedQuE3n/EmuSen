@@ -23,5 +23,6 @@
   "byte_order": "big",
   "libretro_databases": ["Sega - Mega-CD - Sega CD"],
   "libretro_systemids": [],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": false
 }

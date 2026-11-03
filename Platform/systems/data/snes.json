@@ -20,5 +20,6 @@
   "byte_order": "little",
   "libretro_databases": ["Nintendo - Super Nintendo Entertainment System", "Nintendo - Satellaview", "Nintendo - Sufami Turbo"],
   "libretro_systemids": ["super_nes"],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": false
 }

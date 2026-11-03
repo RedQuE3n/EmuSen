@@ -20,5 +20,6 @@
   "byte_order": "little",
   "libretro_databases": ["Sony - PlayStation"],
   "libretro_systemids": ["playstation"],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": true
 }

@@ -20,5 +20,6 @@
   "byte_order": "little",
   "libretro_databases": ["Nintendo - Game Boy Color"],
   "libretro_systemids": [],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": true
 }

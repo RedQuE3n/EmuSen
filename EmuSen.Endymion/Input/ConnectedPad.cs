@@ -83,6 +83,17 @@ namespace EmuSen.Endymion.Input
             return label == SDL.GamepadButtonLabel.Unknown ? null : label.ToString();
         }
 
+        // Drives the pad's motors for RumbleMs; a closed pad is left alone - see EmuSen_Input.md §9.
+        public unsafe void Rumble(ushort strong, ushort weak)
+        {
+            if (_pads is not null)
+            {
+                DeviceNative.PadsRumble(_pads.Value, _key, strong, weak);
+                GC.KeepAlive(_pads);
+            }
+            else if (IsOpen) _devices!.Rumble(Handle, strong, weak);
+        }
+
         internal void Close()
         {
             if (!IsOpen) return;

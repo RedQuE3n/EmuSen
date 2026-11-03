@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 32u
+#define EMUSEN_PLATFORM_ABI_VERSION 33u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -959,6 +959,7 @@ int64_t emusen_endymion_sim_pad_text(const emusen_endymion_sim_pad *pad, uint32_
 #define EMUSEN_ENDYMION_SIM_PAD_PLAYER_INDEX 0u /* the player number SDL was last asked to light, or -1 */
 #define EMUSEN_ENDYMION_SIM_PAD_KIND 1u         /* SDL_GamepadType */
 #define EMUSEN_ENDYMION_SIM_PAD_VENDOR_PRODUCT 2u /* the USB vendor in the high sixteen bits, the product in the low; 0 for none */
+#define EMUSEN_ENDYMION_SIM_PAD_RUMBLE 3u /* read only, since 33: the motors as last driven, the strong one's level in the high sixteen bits, the weak one's in the low */
 
 int32_t emusen_endymion_sim_pad_set(const emusen_endymion_sim_pad *pad, uint32_t which, int32_t value);
 int32_t emusen_endymion_sim_pad_get(const emusen_endymion_sim_pad *pad, uint32_t which, int32_t *out);
@@ -1000,6 +1001,7 @@ int64_t emusen_endymion_sim_set_attached(const emusen_endymion_sim_set *set, uin
 #define EMUSEN_ENDYMION_DEVICE_LABEL 10u
 #define EMUSEN_ENDYMION_DEVICE_SET_PLAYER_INDEX 11u
 #define EMUSEN_ENDYMION_DEVICE_VENDOR_PRODUCT 12u /* as SIM_PAD_VENDOR_PRODUCT */
+#define EMUSEN_ENDYMION_DEVICE_RUMBLE 13u /* since 33: `arg` as SIM_PAD_RUMBLE */
 
 int64_t emusen_endymion_sim_set_call(const emusen_endymion_sim_set *set, uint32_t op, uint64_t handle, int32_t arg);
 
@@ -1076,6 +1078,8 @@ int32_t emusen_endymion_pads_axis(const emusen_endymion_pads *pads, uint64_t key
 /* A PadButton as the game hears it on the pad: the stick for the d-pad, a trigger past half for L2 and R2, else `bound`, the player's SDL button, or -1 for none. */
 int32_t emusen_endymion_pads_pressed(const emusen_endymion_pads *pads, uint64_t key, uint32_t button, int32_t bound);
 int32_t emusen_endymion_pads_set_player_index(const emusen_endymion_pads *pads, uint64_t key, int32_t index);
+/* Since 33: drives an open pad's motors, `strong` the low-frequency one, for 100 ms, each call replacing the last; a closed pad is left alone. */
+int32_t emusen_endymion_pads_rumble(const emusen_endymion_pads *pads, uint64_t key, uint16_t strong, uint16_t weak);
 
 #define EMUSEN_ENDYMION_SETTING_FIRST_CONTROLLER_ONLY 0u /* flags: nonzero is true */
 #define EMUSEN_ENDYMION_SETTING_STICK_AS_DPAD 1u

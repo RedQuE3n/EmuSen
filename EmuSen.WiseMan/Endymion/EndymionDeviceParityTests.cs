@@ -412,6 +412,7 @@ namespace EmuSen.WiseMan.Endymion
             public string? Path(IntPtr pad) => inner.Path(pad);
             public uint VendorProduct(IntPtr pad) => inner.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => inner.SetPlayerIndex(pad, index);
+            public void Rumble(IntPtr pad, ushort strong, ushort weak) => inner.Rumble(pad, strong, weak);
         }
 
         [Fact]
@@ -553,6 +554,7 @@ namespace EmuSen.WiseMan.Endymion
             public string? Path(IntPtr pad) => sdl.Path(pad);
             public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
             public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
+            public void Rumble(IntPtr pad, ushort strong, ushort weak) => sdl.Rumble(pad, strong, weak);
         }
 
         [Fact]

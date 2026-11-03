@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 9u
+#define EMUSEN_CRYSTAL_MINOR 10u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -367,6 +367,12 @@ int32_t emusen_crystal_input_axis(emusen_crystal_runtime *rt, uint32_t session, 
 
 /* A controller plugged into a port (1) or pulled out (0). */
 int32_t emusen_crystal_input_connected(emusen_crystal_runtime *rt, uint32_t session, uint32_t port, uint32_t connected);
+
+/* reads, since 1.10, from any thread. A port's motors as the core's OUTPUT events last set them, the strong (low-frequency)
+ * and the weak, 0 to 65535 each, for the pad of the player the port hears; both zero for a port past 8 or with no motor,
+ * and wherever the console's games drive none (the systems table's "rumble") or AppSettings.Rumble was off as the
+ * session opened. A frontend hands them to the pad each frame it runs (EmuSen_Input.md 9). */
+int32_t emusen_crystal_input_rumble(emusen_crystal_runtime *rt, uint32_t session, uint32_t port, uint16_t *strong, uint16_t *weak);
 
 /* ---- Speed (changes) ------------------------------------------------------------------------------------- */
 

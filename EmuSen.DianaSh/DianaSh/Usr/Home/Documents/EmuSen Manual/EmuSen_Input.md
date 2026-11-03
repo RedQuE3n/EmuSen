@@ -1106,3 +1106,152 @@ at every poll and the two cases read no input (`Four_pads_play_a_genesis_team_pl
 `…j_cart_game…`). The helper now runs the game's poll once after letting go, as the 60 Hz timer would, and both pass.
 Measured 2026-10-18 with the change: the pad, multiplayer, launch, emulation menu and player claims classes with the
 Shaders recordings, 250 passed and 1 skipped by its own opt-in.
+
+---
+
+## 9. Rumble: a core's motors on the player's pad (2026-11-03)
+
+Decided 2026-11-03 by the tester, for the Settings screen's rows (U6): the component halves of rumble, from a core to
+the physical pad, with a player switch. This section builds `EmuSen_CoreAPI_Extensions.md` §4.4, whose ABI half
+was built at core ABI 1.17.
+
+### 9.1 The core's half already existed, so no new core ABI minor
+
+The approval named "an optional capability `rumble`, strength per port, per frame, as a minor version". Core ABI 1.17
+(`EmuSen_CoreAPI.md` §6.42) had already added it in a general form: machine info's `ports[].outputs` declares each
+port's motors (`kind` `motor`, `motor` `strong` or `weak`), and the event `EMUSEN_EVENT_OUTPUT` (kind 7) carries each
+motor's level over the frame, 0 to 65535, whenever it changes. A second capability bit for the same fact would give
+it two owners and make a core declare its motors twice, so none was added: the rumble capability is 1.17's motor
+outputs, and `emusen-native`'s `Core::outputs` and `Core::output_level` are what a core implements. No real core
+adopts them in this step. The libretro host already turns `retro_rumble_interface` into these events (1.17,
+`EmuSen_LibretroHost.md` §10e), so a hosted core's rumble takes the same path as a native core's with no change to
+the host.
+
+### 9.2 Where the motor is allowed: the systems table and the switch
+
+- **The table's `rumble`** (`Platform/systems/data/<id>.json`, a field of every row since 2026-11-03): whether the
+  console's games can drive a motor in the player's hands, a controller's, an accessory's or a cartridge's. True for
+  the Game Boy and Game Boy Color (the MBC5 rumble cartridges, types 0x1C to 0x1E, which MercuryRT already models,
+  `EmuSen_CoreAPI_Extensions.md` §4.1), the Nintendo 64 (the Rumble Pak), the PlayStation (the DualShock), the
+  PlayStation 2 (the DualShock 2) and the Dreamcast (the Jump Pack); false for the rest. It is a console fact, true
+  on every engine, which is the table's rule for a field. The `rumble` that `emusen_systems_header` reports for a Game
+  Boy image is a different fact, one cartridge's header, and is unchanged.
+- **`AppSettings.Rumble`**, on by default as Extensions §4.4 recommended, since the motor is the hardware's. Both
+  halves of the settings model carry it (`AppSettings.cs`, `Platform/galaxia/src/models.rs`).
+- **The gate** is `emusen_crystal::rumble::allowed(system, switch)`: the switch, and the table's row for the system
+  the machine reports. The runtime decides it as a session opens; a system with no row, such as the test core's
+  `test`, gets none. A change to the switch while a game runs takes effect at the next game started, since the
+  runtime reads `appsettings.json` once per session and never per frame (§9.6, question 1).
+
+### 9.3 The runtime's half: each port's levels, read without the gate
+
+The Rust runtime's engine handles `OUTPUT` as it drains events after each frame: machine info names the port's motor
+for the output, and the level goes into that port's strong or weak half of one `AtomicU32`
+(`Platform/crystal/src/rumble.rs`). A light, or an output machine info does not declare, is ignored; a new machine
+info clears every level, since `emusen-native` raises every declared output again after it. Eight ports are kept,
+`PlayerSlots.MaxPlayers`. Nothing is allocated per frame.
+
+The frontend API reads it: `emusen_crystal_input_rumble(rt, session, port, &strong, &weak)`, **frontend API 1.10**,
+callable from any thread without the session's gate, as the input calls are. It answers zero for a port past eight,
+a port with no motor, or a closed gate. The C# runtime (`ManagedCrystal`) routes no core outputs and answers zero.
+The client's `CrystalSession.Rumble(port)` returns the pair.
+
+### 9.4 Endymion's half: the pad's motors
+
+- `IPadDevices.Rumble(pad, strong, weak)`, over `SDL_RumbleGamepad`, the strong motor as SDL's low-frequency one, as
+  Extensions §4.3 assigned them. Each call lasts **100 ms** (`SdlPadDevices.RumbleMs`; `devices::RUMBLE_MS` in Rust):
+  longer than a frame at 50 Hz, so the per-frame refresh keeps a motor running, while a game paused, halted or closed
+  stops refreshing and the motor stops within 100 ms. This is Extensions §4.4's stop rule, obtained from the duration
+  with no separate stop call.
+- `ConnectedPad.Rumble`; `GamepadManager.Rumble(player, …)`, the pad seated at that player, none for players past
+  the first under `FirstControllerOnly`; and `PortRouter.Rumble(port, …)`, port *p* to player *p* + 1 and nothing past
+  the game's ports. The mirror of player 1 onto port 1 sends player 1 no rumble: a game's port 1 motor is player 2's.
+- The platform library's half, interface **33**: `emusen_endymion_pads_rumble(pads, key, strong, weak)`, Rust's
+  `PadDevices::rumble` and `Pads::rumble`, and for the simulated pads `EMUSEN_ENDYMION_DEVICE_RUMBLE` and the
+  read-only `EMUSEN_ENDYMION_SIM_PAD_RUMBLE`. A simulated pad records its last levels (`SimulatedPad.Rumble`).
+
+**Not wired yet.** The frontends' frame loops do not yet call `CrystalSession.Rumble` and `PortRouter.Rumble`, and no
+Settings row shows the switch: both land with U6 once its Settings screen is in. The call each frame is, for each of
+the game's ports, `router.Rumble(port, strong, weak)` with the levels `session.Rumble(port)` gives.
+
+### 9.5 Tests
+
+- Rust: `rumble::tests` in emusen-crystal (a port's two halves kept apart; nothing past a closed gate or past the
+  ports; machine info's motors read and a light left out; the gate's four cases); `crystal/tests/rumble.rs`, the test
+  core's declared strong motor followed from its `OUTPUT` events through a session to an Endymion simulated pad each
+  frame, zero while the table has no row for its system, its level frame by frame once open, and the switch read from
+  `appsettings.json` closing the gate for the N64; Endymion's
+  `rumble_drives_the_open_pad_it_names_and_leaves_a_closed_one_alone`; emusen-systems'
+  `the_consoles_whose_games_drive_a_motor_say_so_and_the_rest_do_not`.
+- WiseMan: `RumbleRouteTests` (the C#'s devices and the library's), `CrystalHeaderTests` (the new export and its
+  types), `SystemTableParityTests` (the new key), `EndymionDeviceParityTests` (the export is in the header).
+
+### 9.6 Questions
+
+1. Should the switch apply to a game already running? It would take a runtime call to set the gate, another frontend
+   API addition. Recommended: yes, added with U6's row, since a player who turns rumble off mid-game expects it to
+   stop.
+2. A strength setting per player, as Extensions §4.4 proposed, is not built. Recommended: only if the tester asks.
+
+---
+
+## 10. Controller profiles (2026-11-03)
+
+Decided 2026-11-03 by the tester, for U6's Settings rows and bindings page: named sets of pad bindings per console,
+beside the one set each console has always had.
+
+### 10.1 The model
+
+- **A profile is a console's pad bindings**: player 1's map and each player's own (§8.4), in the shape the console's
+  bindings already had. Every console has **Default**, which is exactly what `gamepadbindings.json` has held since
+  §5.1. Default is listed first and can be neither deleted nor renamed, and no other profile may take its name in any
+  case.
+- **Names** are trimmed, compared without regard to case, and never blank. A new profile begins as a copy of another,
+  Default unless one is named, its players' own maps included.
+- **The console's default profile**, the one its games start with, is chosen per console and kept in Endymion's
+  store, never in `graphics.json`, because input has one owner. Renaming the chosen profile keeps it chosen; deleting
+  it returns the console to Default.
+- **Resolution**: `Resolve(console, gameProfile)` gives the game's own profile where it names one that exists, Default
+  included, else the console's default. Where a game's own choice is kept is §10.4's question 1; until then a caller
+  passes none and the console's default applies.
+
+The API is `GamepadBindings`': `Profiles`, `CreateProfile`, `RenameProfile`, `DeleteProfile`, `ChooseDefault`,
+`ConsoleDefault`, `Resolve`, and `For`, `Own`, `HasOwn` and `Forget` taking a profile's name; the overloads without
+one are Default's, as before. `ResetToDefaults` resets Default and keeps the named profiles, which are the player's.
+
+### 10.2 The store, version 1.1, and migration
+
+Version 1.0 of Endymion's binding store is `gamepadbindings.json` as §5.1 and §8.4 shaped it. **Version 1.1 adds
+`gamepadprofiles.json`** beside it:
+
+```json
+{ "SNES": { "Default": "Couch",
+            "Profiles": { "Couch": { "1": { "A": "East", "B": "South" }, "2": { "Start": "Guide" } } } } }
+```
+
+`Default` is the console's chosen profile, null for Default; `Profiles` holds each named profile's maps by player,
+player 1's always present. Default's maps stay in `gamepadbindings.json` alone, so each fact has one place.
+
+- **Migration loses nothing because nothing moves.** The bindings a player has are Default's by definition and are
+  read from the same file as before; without `gamepadprofiles.json` a console has Default alone, chosen.
+- **An older build** reads only `gamepadbindings.json` and plays Default; its saves leave `gamepadprofiles.json` as
+  it was, so the profiles are there when a newer build runs again. That is the minor version's promise: additive, and
+  readable in both directions.
+- As the file loads, a profile with no player 1 map, a blank name or Default's name is skipped, and a chosen profile
+  the file does not hold reads as Default. Buttons added after a profile was saved take their defaults, as Default's
+  do (§7.4).
+
+### 10.3 Tests
+
+`ControllerProfileTests`: profiles created, renamed and deleted with maps of their own, and names taken in any case
+refused; the Default guard; a 1.0 file with a player 2 map loading whole as Default and saving back in the shape an
+older build reads, with no named profile in it; resolution, and the choice surviving a save, a load, a rename and a
+delete.
+
+### 10.4 Questions
+
+1. **Where a game's own profile is kept.** Input has one owner, so a per-game choice belongs in Endymion's store too,
+   keyed by the game's key as the per-game settings are. Recommended: a `Games` member in `gamepadprofiles.json`,
+   added with the U6 row that sets it, as a further minor of the store.
+2. The keyboard's bindings (`keybindings.json`) have no profiles; they are the frontend's (§5.1). Recommended: leave
+   them until a player asks.

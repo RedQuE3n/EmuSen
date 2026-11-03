@@ -149,7 +149,7 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
     assert!(!status.contains("dummydev"), "no credential is printed: {status}");
 
     let listed = run(sh, "scrape ls --system snes");
-    assert!(listed.contains(&format!("{game}\tsnes\tcover=- screenshot=- marquee=- miximage=-")), "{listed}");
+    assert!(listed.contains(&format!("{game}\tsnes\tcover=- screenshot=- marquee=- titlescreen=- miximage=- backcover=- 3dbox=- physicalmedia=- fanart=-")), "{listed}");
     assert!(!listed.contains(&format!("{other}\t")) && listed.contains("1 game(s) marked \"exclude from multi-scraper\" left out"), "{listed}");
     let themed = run(sh, "scrape ls --system snes --kinds theme");
     assert!(themed.contains(&format!("{game}\tsnes\tmiximage=- marquee=-\n")) && themed.contains("videos are off by default"), "{themed}");

@@ -324,6 +324,8 @@ namespace EmuSen.Tools.Cores
         {
             if (_actedOn is not { } key || _job is not null) return;
             _actedOn = null;
+            // A row the player chose while the list was read again keeps the choice (EmuSen_Cores.md §3.10).
+            if (Selected is { } chosen && chosen.Key != key) return;
             if (Rows.FirstOrDefault(r => r.Key == key) is not { } row) return;
             Table.Select(row);
             BigScreenTable.Select(row);

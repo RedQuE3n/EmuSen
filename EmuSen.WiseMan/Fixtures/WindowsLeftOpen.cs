@@ -21,14 +21,31 @@ namespace EmuSen.WiseMan.Fixtures
         private static readonly ConditionalWeakTable<Window, object> Closed = new();
         private static int _watching;
 
+        // The last exception the UI thread did not handle: the cause when the headless session's UI thread has stopped.
+        internal static Exception? LastUiFault;
+
         private static void Watch()
         {
             if (Interlocked.Exchange(ref _watching, 1) == 1) return;
+            // The dispatcher's event is the UI thread's own, so it is subscribed there.
+            Bounded(UiTest.Session.Dispatch(() => Avalonia.Threading.Dispatcher.UIThread.UnhandledException += (_, e) =>
+            {
+                LastUiFault = e.Exception;
+                if (Environment.GetEnvironmentVariable("EMUSEN_UI_FAULT_LOG") is { Length: > 0 } log) lock (Closed) File.AppendAllText(log, $"{DateTime.Now:O} {e.Exception}{Environment.NewLine}");
+            }, default));
             Window.WindowOpenedEvent.AddClassHandler<Window>((w, _) =>
             {
                 if (Opened.Value is { } list) lock (list) list.Add(new WeakReference<Window>(w));
             });
             Window.WindowClosedEvent.AddClassHandler<Window>((w, _) => Closed.AddOrUpdate(w, Closed));
+        }
+
+        // A wait on the UI session that ends: a session whose thread has stopped fails the test with the cause rather than hanging the run (EmuSen_Debugging_Tools_Reference_v5.md §3.69).
+        internal static void Bounded(System.Threading.Tasks.Task work)
+        {
+            if (!work.Wait(TimeSpan.FromSeconds(60)))
+                throw new XunitException("the UI session stopped" + (LastUiFault is { } fault ? $": its thread ended on {fault}" : "; no unhandled exception was seen on its thread"));
+            work.GetAwaiter().GetResult();
         }
 
         public override void Before(MethodInfo methodUnderTest)
@@ -47,10 +64,10 @@ namespace EmuSen.WiseMan.Fixtures
             if (left.Length == 0) return;
             if (Environment.GetEnvironmentVariable("EMUSEN_LEFT_WINDOWS") is { Length: > 0 } record)
                 lock (Closed) File.AppendAllText(record, $"{methodUnderTest.DeclaringType?.FullName}.{methodUnderTest.Name}: {string.Join(", ", left.Select(w => w.GetType().Name))}{Environment.NewLine}");
-            UiTest.Session.Dispatch(() =>
+            Bounded(UiTest.Session.Dispatch(() =>
             {
                 foreach (Window w in left.Reverse()) if (!Closed.TryGetValue(w, out _)) w.Close();
-            }, default).GetAwaiter().GetResult();
+            }, default));
         }
     }
 }

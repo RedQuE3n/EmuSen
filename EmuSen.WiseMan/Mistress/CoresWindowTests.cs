@@ -248,6 +248,25 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A row the player chose while the list was being shown afresh after an approval keeps the choice: the acted-on row takes the focus back only if nothing else was chosen (EmuSen_Cores.md §3.10).
+        [Fact]
+        public Task A_row_chosen_while_the_list_is_read_again_after_an_approval_stays_chosen() => Session.Dispatch(() =>
+        {
+            ConfirmField.SetValue(null, (Func<Window, string, string, Task<bool>>)((_, _, _) => Task.FromResult(true)));
+            (CoresWindow window, CoresPane pane) = Open();
+            pane.Table.Select(Row(pane, "ExtraPS2"));
+            Settle(window);
+            Assert.True(pane.ApproveSelectedAsync().Result);
+            pane.Table.Select(Row(pane, "Sapphire"));
+            // Longer than the pane's poll, so the listing the approval asked for ends while Sapphire is chosen.
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (clock.Elapsed < CoresPane.PollEvery * 4) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
+            Settle(window);
+            Assert.Equal("Sapphire", pane.Selected?.Name);
+            Assert.False(pane.Actions.First(a => a.Text == "Approve…").IsEnabled);
+            window.Close();
+        }, default);
+
         [Fact]
         public Task Make_Default_sets_the_consoles_engine_through_the_runtime() => Session.Dispatch(() =>
         {

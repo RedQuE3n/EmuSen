@@ -25,21 +25,21 @@ tree
         10 Viewbox at=504,429,763.5,40.5 by=panel limit=0,0,1920,1200 role=none
           11 ViewboxContainer at=504,429,763.5,40.5 by=clip limit=504,429,763.5,40.5 role=none
             12 TextBlock at=504,429,763.5,40.5 box=509,27 by=clip caps=15.3989 drawn face=Barlow heard="SNES · 1994 · Lantern Works · Publisher P · Never played" layout=508.11,26.4 limit=504,429,763.5,40.5 name=PageFacts paints=#FFFFFFFF role=text size=22 text="SNES · 1994 · Lantern Works · Publisher P · Never played"
-        13 StackPanel at=504,492,1320,66 by=panel heard=Actions limit=0,0,1920,1200 name=PageActions role=none
-          14 Panel at=504,492,172.5,66 by=panel heard=Play limit=0,0,1920,1200 role=none
+        13 SelectionStack at=504,492,1320,66 by=panel heard=Actions limit=0,0,1920,1200 name=PageActions role=list
+          14 SelectableCell at=504,492,172.5,66 by=panel focus heard=Play limit=0,0,1920,1200 role=listitem
             15 Border at=504,492,172.5,66 by=panel limit=0,0,1920,1200 name=PageAction.play paints=#4C9AE8FF role=none
               16 StackPanel at=516,501,130.5,48 by=panel limit=0,0,1920,1200 role=none
                 17 PadGlyph at=516,502.5,45,45 by=panel heard=A limit=0,0,1920,1200 role=image
                 18 TextBlock at=576,501,70.5,48 box=47,32 by=panel caps=18.1987 drawn face=Barlow heard=Play layout=46.7,31.2 limit=0,0,1920,1200 paints=#0E0E10FF role=text size=26 text=Play
             19 Border at=493.5,481.5,193.5,87 by=panel limit=0,0,1920,1200 nohit paints=#4C9AE8FF role=none
-          20 Panel at=694.5,492,535.5,66 by=panel heard="Resume, Auto · 12 min ago" limit=0,0,1920,1200 role=none
+          20 SelectableCell at=694.5,492,535.5,66 by=panel focus heard="Resume, Auto · 12 min ago" limit=0,0,1920,1200 role=listitem
             21 Border at=694.5,492,535.5,66 by=panel limit=0,0,1920,1200 name=PageAction.resume paints=#707070FF role=none
               22 StackPanel at=726,501,472.5,48 by=panel limit=0,0,1920,1200 role=none
                 23 TextBlock at=726,501,133.5,48 box=89,32 by=panel caps=18.1987 drawn face=Barlow heard=Resume layout=88.92,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Resume
                 24 Path at=874.5,516,10.5,18 by=panel limit=0,0,1920,1200 nohit role=none
                 25 TextBlock at=900,501,273,48 box=182,32 by=panel caps=18.1987 drawn face=Barlow heard="Auto · 12 min ago" layout=181.19,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text="Auto · 12 min ago"
                 26 Path at=1188,516,10.5,18 by=panel limit=0,0,1920,1200 nohit role=none
-          27 Panel at=1248,492,307.5,66 by=panel heard=Favourite limit=0,0,1920,1200 role=none
+          27 SelectableCell at=1248,492,307.5,66 by=panel focus heard=Favourite limit=0,0,1920,1200 role=listitem
             28 Border at=1248,492,307.5,66 by=panel limit=0,0,1920,1200 name=PageAction.favourite paints=#707070FF role=none
               29 StackPanel at=1261.5,501,262.5,48 by=panel limit=0,0,1920,1200 role=none
                 30 PadGlyph at=1261.5,502.5,45,45 by=panel heard=Y limit=0,0,1920,1200 role=image
@@ -65,6 +65,6 @@ tree
         50 Border at=0,1053,1920,87 by=panel limit=0,0,1920,1200 name=PageHelpBar paints=#1B1B1EFF,#707070FF role=none
           51 HintBar at=96,1069.5,1728,61.5 by=panel heard="Play, Favourite, Section, Back, Home" limit=0,0,1920,1200 role=group
 focus none
-press down focus="PageLayout GamePage" page=overview
-press up focus="PageLayout GamePage" page=overview
+press down focus="SelectableCell  (Play)" page=overview
+press up focus="SelectableCell  (Play)" page=overview
 press back page=closed

@@ -673,7 +673,7 @@ namespace EmuSen.Mistress.Views
         // EmuSen's firmware folder in the file manager, made first since a file manager opens nothing for a path that does not exist; the player's own is never made.
         private static void OpenFirmwareFolder()
         {
-            string folder = EmuSen.Common.Firmware.FirmwareLibrary.Directory;
+            string folder = EmuSen.Galaxia.Library.DataStore.Firmware;
             try { System.IO.Directory.CreateDirectory(folder); } catch (System.IO.IOException) { } catch (UnauthorizedAccessException) { }
             Input.DeviceKeyboard.Launcher.Open(folder);
         }

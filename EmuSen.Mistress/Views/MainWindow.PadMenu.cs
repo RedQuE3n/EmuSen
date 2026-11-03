@@ -60,7 +60,7 @@ namespace EmuSen.Mistress.Views
             _padMenuOpen = true;
             PlacePadMenu();
             ApplyStatusBar();
-            ShowPadMenuPage(turned: false);
+            ShowPadMenuPage();
             UpdateMenuBackdrop();
         }
 
@@ -153,7 +153,8 @@ namespace EmuSen.Mistress.Views
         // The slot the Save and Load rows act on, and whether anything is saved in it.
         private string SlotValue() => StatePathForSlot(_stateSlot) is string path && File.Exists(path) ? $"Slot {_stateSlot}" : $"Slot {_stateSlot} (Empty)";
 
-        private void ShowPadMenuPage(bool turned)
+        // A page of the same card: only the rows, the header and the pane change, with no opening effect - see EmuSen_Interface.md §18.5.
+        private void ShowPadMenuPage()
         {
             PadMenuPage page = _padMenuPages[^1];
             _padMenuEntries.Clear();
@@ -172,7 +173,6 @@ namespace EmuSen.Mistress.Views
             int at = Math.Clamp(page.At, 0, _padMenuEntries.Count - 1);
             PadMenuList.SelectedIndex = at;
             PadMenuList.ScrollIntoView(at);
-            if (turned && CardShown) BeginMenuOpening(PadCard.CardPanel);
             UpdateSlotCard();
         }
 
@@ -250,11 +250,16 @@ namespace EmuSen.Mistress.Views
                 EnterPadMenuPage(new PadMenuPage(question, () => QuestionRows(entry, PadMenuBack), entry.QuestionDetail, question: true), at, key: null);
                 return;
             }
-            _padMenuPages[^1].At = at;
-            List<PadMenuPage> pages = [.. _padMenuPages];
-            if (entry.Closes) ClosePadMenuHoldingPause();
+            // A screen of its own lays over the card, which keeps its page, row and pause beneath it - see EmuSen_Interface.md §18.5.
+            if (entry.Opens && entry.Closes)
+            {
+                _padMenuPages[^1].At = at;
+                entry.Accept();
+                if (!Sheets.IsPresenting) ClosePadMenu();
+                return;
+            }
+            if (entry.Closes) ClosePadMenu();
             entry.Accept();
-            HandOverHeldPause(pages);
             if (_padMenuOpen && !entry.Closes && at < _padMenuEntries.Count && ReferenceEquals(_padMenuEntries[at], entry)) RefreshPadMenuText(at);
         }
 
@@ -264,7 +269,7 @@ namespace EmuSen.Mistress.Views
             _padMenuPages[^1].At = from;
             page.At = key is not null && _padSubmenuRows.TryGetValue(key, out int was) ? was : 0;
             _padMenuPages.Add(page);
-            ShowPadMenuPage(turned: true);
+            ShowPadMenuPage();
         }
 
         // One page back, to the row the page was entered from; from the first page, closed.
@@ -278,16 +283,12 @@ namespace EmuSen.Mistress.Views
             PadMenuPage left = _padMenuPages[^1];
             if (!left.Question && left.Title is { } title) _padSubmenuRows[SubmenuKey(title)] = Math.Max(PadMenuList.SelectedIndex, 0);
             _padMenuPages.RemoveAt(_padMenuPages.Count - 1);
-            ShowPadMenuPage(turned: true);
+            ShowPadMenuPage();
         }
 
         private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "home/") + title;
 
-        private void ClosePadMenu() => ClosePadMenu(holdPause: false);
-
-        private void ClosePadMenuHoldingPause() => ClosePadMenu(holdPause: true);
-
-        private void ClosePadMenu(bool holdPause)
+        private void ClosePadMenu()
         {
             if (!_padMenuOpen) return;
 
@@ -300,24 +301,10 @@ namespace EmuSen.Mistress.Views
             UpdateMenuBackdrop();
 
             // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.
-            if (_padMenuPaused && GameOnScreen)
-            {
-                if (holdPause) _pauseHeld = true;
-                else ResumeEmulation();
-            }
+            if (_padMenuPaused && GameOnScreen) ResumeEmulation();
             _padMenuPaused = false;
         }
 
-        // Held while a closing card's entry runs: the pause goes to the sheet it opened, else back to the game - see EmuSen_LibretroHost.md §10z.
-        private bool _pauseHeld;
-
-        private void HandOverHeldPause(List<PadMenuPage> pages)
-        {
-            if (!_pauseHeld) return;
-            _pauseHeld = false;
-            if (Sheets.IsPresenting && GameOnScreen) (_sheetPaused, _cardUnderSheet) = (true, pages);
-            else if (GameOnScreen && IsPaused && !_padMenuOpen) ResumeEmulation();
-        }
 
         private void RefreshPadMenuText(int keep)
         {

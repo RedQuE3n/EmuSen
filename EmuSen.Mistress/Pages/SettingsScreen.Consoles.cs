@@ -73,8 +73,7 @@ namespace EmuSen.Mistress.Pages
         // A file missing on a console that starts with a cartridge is a chip's, which only the games that carry the chip need; on one that starts empty every game does.
         private bool NeededByAll(string console) => _host.Systems.Any(s => s.Console == console && s.StartsEmpty);
 
-        // One need of a console's firmware and the files that meet it: on a console that starts empty, the regional copies of one thing
-        // (its BIOS) are one need, named by the last word their labels share; a cartridge console's chips are a need each.
+        // One need of a console's firmware and the files that meet it, grouped as EmuSen_BigPicture.md §52.4 says.
         private sealed record FirmwareNeed(string Name, string Word, IReadOnlyList<FirmwareFile> Files)
         {
             public FirmwareFile? Found => Files.FirstOrDefault(f => f.Status == "present");

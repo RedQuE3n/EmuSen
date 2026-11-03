@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Mistress
             MethodInfo ask = pane.GetType().GetMethod("Ask")!;
             foreach (SDL.GamepadButton closing in new[] { SDL.GamepadButton.South, SDL.GamepadButton.East })
             {
-                var answered = (Task<bool>)ask.Invoke(pane, ["A question?", "Words.", "Yes", "No"])!;
+                var answered = (Task<bool>)ask.Invoke(pane, ["A question?", "Words.", "Yes", "No", null])!;
                 Settle(main);
                 Assert.True(pane.IsCoverOpen, show);
                 WalkOver(main, pad, sheet, () => pane.IsCoverOpen, show + "'s question");

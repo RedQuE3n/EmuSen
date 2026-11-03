@@ -85,6 +85,14 @@ namespace EmuSen.Crystal.Client
 
         public void Connected(int port, bool connected) => Check(Contract.Crystal.InputConnected(Rt, Id, (uint)port, connected ? 1u : 0u));
 
+        // A port's motors, strong and weak, for the player's pad each frame; zero where the console or the switch says none - see EmuSen_Input.md §9.
+        public (ushort Strong, ushort Weak) Rumble(int port)
+        {
+            ushort strong, weak;
+            Check(Contract.Crystal.InputRumble(Rt, Id, (uint)port, &strong, &weak));
+            return (strong, weak);
+        }
+
         public void Speed(uint percent, uint turboPercent = 300, uint slowPercent = 25, bool drawNone = false) =>
             Check(Contract.Crystal.SpeedSet(Rt, Id, percent, turboPercent, slowPercent, drawNone ? CrystalAbi.SpeedDrawNone : 0));
 

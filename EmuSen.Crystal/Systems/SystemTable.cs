@@ -24,8 +24,8 @@ namespace EmuSen.Crystal.Systems
             (nameof(SystemEntry.ScreenScraperSystem), "screenscraper_system"),
         };
 
-        // The keys a row holds beyond SystemEntry's: the name a list shows, the firmware's words, the space its RAM cheats write into, its save media, byte order, libretro names and firmware note.
-        public static readonly IReadOnlyList<string> PackKeys = new[] { "display_name", "firmware_name", "cheat_space", "media", "byte_order", "libretro_databases", "libretro_systemids", "firmware_note" };
+        // The keys a row holds beyond SystemEntry's: the name a list shows, the firmware's words, the space its RAM cheats write into, its save media, byte order, libretro names, firmware note and rumble.
+        public static readonly IReadOnlyList<string> PackKeys = new[] { "display_name", "firmware_name", "cheat_space", "media", "byte_order", "libretro_databases", "libretro_systemids", "firmware_note", "rumble" };
 
         // A save medium as a row names it, by the system whose row it is in.
         public sealed record RowMedium(string System, string Id, string Title, string Noun);

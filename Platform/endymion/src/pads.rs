@@ -304,6 +304,14 @@ impl Pads {
         }
     }
 
+    /// Drives an open pad's motors; a closed pad is left alone. See EmuSen_Input.md §9.
+    pub fn rumble(&mut self, key: u64, strong: u16, weak: u16) {
+        let handle = self.handle(key);
+        if handle != 0 {
+            self.devices.rumble(handle, strong, weak);
+        }
+    }
+
     /// How many open pads, from the first, the interface reads.
     pub fn frontend_pad_count(&self) -> usize {
         if self.settings.first_controller_only { self.open.len().min(1) } else { self.open.len() }
@@ -402,6 +410,20 @@ mod tests {
         pads.close_all();
         let devices = lock_set(&set);
         assert_eq!((devices.opens, devices.closes, devices.initialized), (2, 2, false));
+    }
+
+    #[test]
+    fn rumble_drives_the_open_pad_it_names_and_leaves_a_closed_one_alone() {
+        let (first, second) = (pad("First"), pad("Second"));
+        let set = set(&[&first, &second]);
+        let mut pads = Pads::new(Box::new(set.clone()));
+        pads.start();
+        pads.rumble(2, 40000, 9);
+        assert_eq!((lock(&first).rumble, lock(&second).rumble), ((0, 0), (40000, 9)));
+        lock_set(&set).disconnect(&second);
+        pads.poll_at(0);
+        pads.rumble(2, 1, 1);
+        assert_eq!(lock(&second).rumble, (40000, 9), "a closed pad is left alone");
     }
 
     #[test]

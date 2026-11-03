@@ -131,6 +131,12 @@ namespace EmuSen.Endymion.Input
             else Call(DeviceNative.DeviceSetPlayerIndex, pad, index);
         }
 
+        public void Rumble(IntPtr pad, ushort strong, ushort weak)
+        {
+            if (_managed is not null) _managed.Rumble(pad, strong, weak);
+            else Call(DeviceNative.DeviceRumble, pad, (int)((uint)strong << 16 | weak));
+        }
+
         private unsafe long Get(uint which)
         {
             long value = DeviceNative.SimSetGet(_native!.Value, which);
@@ -234,6 +240,11 @@ namespace EmuSen.Endymion.Input
             public void SetPlayerIndex(IntPtr pad, int index)
             {
                 if (Pad(pad) is { } p) p.PlayerIndex = index;
+            }
+
+            public void Rumble(IntPtr pad, ushort strong, ushort weak)
+            {
+                if (Pad(pad) is { } p) p.Rumble = (strong, weak);
             }
         }
     }

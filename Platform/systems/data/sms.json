@@ -20,5 +20,6 @@
   "byte_order": "little",
   "libretro_databases": ["Sega - Master System - Mark III"],
   "libretro_systemids": ["master_system"],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": false
 }

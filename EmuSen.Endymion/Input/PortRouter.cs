@@ -37,6 +37,12 @@ namespace EmuSen.Endymion.Input
             else _managed = new Managed(pads, setButton, setAxis, setConnected);
         }
 
+        // A port's motors to the pad of the player it hears, port 0 player 1; nothing past the game's ports - see EmuSen_Input.md §9.
+        public void Rumble(int port, ushort strong, ushort weak)
+        {
+            if (port >= 0 && port < Ports) _pads.Rumble(port + 1, strong, weak);
+        }
+
         // How many controller ports the running game has; nothing is sent past them.
         public int Ports => _managed?.Ports ?? Get(EndymionNative.RouterPorts);
 

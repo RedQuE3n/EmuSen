@@ -147,6 +147,8 @@ pub unsafe extern "C" fn emusen_endymion_sim_pad_text(pad: *const SimPad, which:
 pub const PAD_PLAYER_INDEX: u32 = 0;
 pub const PAD_KIND: u32 = 1;
 pub const PAD_VENDOR_PRODUCT: u32 = 2;
+/// Read only: the motors as last driven, the strong one's level in the high sixteen bits and the weak one's in the low.
+pub const PAD_RUMBLE: u32 = 3;
 
 /// # Safety
 /// `pad` live.
@@ -173,6 +175,7 @@ pub unsafe extern "C" fn emusen_endymion_sim_pad_get(pad: *const SimPad, which: 
         PAD_PLAYER_INDEX => pad.player_index,
         PAD_KIND => pad.kind,
         PAD_VENDOR_PRODUCT => pad.vendor_product as i32,
+        PAD_RUMBLE => ((pad.rumble.0 as u32) << 16 | pad.rumble.1 as u32) as i32,
         _ => return fail(status::BAD_ARGUMENT, "no such number"),
     };
     match unsafe { out.as_mut() } {
@@ -316,6 +319,8 @@ pub const DEVICE_KIND: u32 = 9;
 pub const DEVICE_LABEL: u32 = 10;
 pub const DEVICE_SET_PLAYER_INDEX: u32 = 11;
 pub const DEVICE_VENDOR_PRODUCT: u32 = 12;
+/// `arg` is the strong motor's level in the high sixteen bits and the weak one's in the low.
+pub const DEVICE_RUMBLE: u32 = 13;
 
 /// One of the set's device calls, as a manager makes it: `handle` is the opened pad's, `arg` the id, button, axis or index.
 ///
@@ -348,6 +353,10 @@ pub unsafe extern "C" fn emusen_endymion_sim_set_call(set: *const SimSet, op: u3
             0
         }
         DEVICE_VENDOR_PRODUCT => set.vendor_product(pad) as i64,
+        DEVICE_RUMBLE => {
+            set.rumble(pad, (arg as u32 >> 16) as u16, arg as u16);
+            0
+        }
         _ => fail(status::BAD_ARGUMENT, "no such device call") as i64,
     }
 }
@@ -656,6 +665,16 @@ pub unsafe extern "C" fn emusen_endymion_pads_pressed(h: *const PadsHandle, key:
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_endymion_pads_set_player_index(h: *const PadsHandle, key: u64, index: i32) -> i32 {
     locked(get!(h)).0.set_player_index(key, index);
+    0
+}
+
+/// Drives an open pad's motors for Endymion's `RUMBLE_MS`; a closed pad is left alone (EmuSen_Input.md §9).
+///
+/// # Safety
+/// `h` live.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_pads_rumble(h: *const PadsHandle, key: u64, strong: u16, weak: u16) -> i32 {
+    locked(get!(h)).0.rumble(key, strong, weak);
     0
 }
 

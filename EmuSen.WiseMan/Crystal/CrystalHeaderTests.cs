@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             ["void"] = typeof(void), ["uint32_t"] = typeof(uint), ["int32_t"] = typeof(int), ["int64_t"] = typeof(long), ["uint64_t"] = typeof(ulong),
             ["size_t"] = typeof(nuint), ["double"] = typeof(double), ["uint8_t *"] = typeof(byte*), ["const uint8_t *"] = typeof(byte*),
-            ["int16_t *"] = typeof(short*), ["uint32_t *"] = typeof(uint*), ["double *"] = typeof(double*), ["emusen_crystal_runtime *"] = typeof(nint),
+            ["int16_t *"] = typeof(short*), ["uint16_t *"] = typeof(ushort*), ["uint32_t *"] = typeof(uint*), ["double *"] = typeof(double*), ["emusen_crystal_runtime *"] = typeof(nint),
             ["emusen_crystal_subscription *"] = typeof(nint), ["const emusen_session_v1 *"] = typeof(nint),
             ["const emusen_crystal_config *"] = typeof(CrystalConfig*), ["const emusen_crystal_open_params *"] = typeof(CrystalOpenParams*),
             ["emusen_crystal_frame_info *"] = typeof(CrystalFrameInfo*), ["const void *"] = typeof(nint),
@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Crystal
         public void The_header_declares_the_exports_this_test_reads()
         {
             var exports = Exports();
-            Assert.Equal(147, exports.Count);
+            Assert.Equal(148, exports.Count);
             Assert.Equal(exports.Count, exports.Select(e => e.Name).Distinct().Count());
             Assert.All(exports, e => Assert.All(e.Parameters.Append(e.Return), t => Assert.True(Client.ContainsKey(t), $"{e.Name}: a type the test does not know: '{t}'")));
         }

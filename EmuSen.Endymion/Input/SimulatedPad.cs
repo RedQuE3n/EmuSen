@@ -60,6 +60,18 @@ namespace EmuSen.Endymion.Input
         }
 
         // What SDL would say the pad is, from which the interface picks its button drawings - see EmuSen_Settings_Reference.md §4.52.
+        // The motors as last driven, strong and weak.
+        public (ushort Strong, ushort Weak) Rumble
+        {
+            get
+            {
+                if (_managed is not null) return _managed.Rumble;
+                uint both = (uint)GetNumber(DeviceNative.PadRumble);
+                return ((ushort)(both >> 16), (ushort)both);
+            }
+            internal set { if (_managed is not null) _managed.Rumble = value; }
+        }
+
         public SDL.GamepadType Type
         {
             get => _managed is not null ? _managed.Type : (SDL.GamepadType)GetNumber(DeviceNative.PadKind);
@@ -174,6 +186,8 @@ namespace EmuSen.Endymion.Input
             public string? Path { get; set; }
 
             public int PlayerIndex { get; set; } = -1;
+
+            public (ushort Strong, ushort Weak) Rumble { get; set; }
 
             public SDL.GamepadType Type { get; set; } = SDL.GamepadType.Unknown;
 

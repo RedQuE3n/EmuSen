@@ -20,6 +20,7 @@ pub mod open;
 pub mod png;
 pub mod recording;
 pub mod rewind;
+pub mod rumble;
 pub mod route;
 pub mod runtime;
 pub mod saving;

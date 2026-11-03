@@ -374,6 +374,7 @@ dependencies = [
  "emusen-core-host",
  "emusen-crystal-debug",
  "emusen-dotnet",
+ "emusen-endymion",
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",

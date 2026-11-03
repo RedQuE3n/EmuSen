@@ -522,6 +522,24 @@ pub unsafe extern "C" fn emusen_crystal_input_axis(rt: *mut emusen_crystal_runti
 }
 
 /// # Safety
+/// `rt` a live runtime; `strong` and `weak` null or valid.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_input_rumble(rt: *mut emusen_crystal_runtime, session: u32, port: u32, strong: *mut u16, weak: *mut u16) -> i32 {
+    code((|| {
+        let (s, w) = unsafe { session_of(rt, session) }?.rumble.level(port);
+        unsafe {
+            if let Some(out) = strong.as_mut() {
+                *out = s;
+            }
+            if let Some(out) = weak.as_mut() {
+                *out = w;
+            }
+        }
+        Ok(())
+    })())
+}
+
+/// # Safety
 /// `rt` a live runtime.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_input_connected(rt: *mut emusen_crystal_runtime, session: u32, port: u32, connected: u32) -> i32 {

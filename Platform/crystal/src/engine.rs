@@ -125,7 +125,9 @@ pub struct Engine {
     /// The processor (machine info's id) and address a halt left the frame open at.
     pub halted: Option<(u32, u32)>,
     frame_scratch: Vec<u8>,
-    event_scratch: Vec<(u32, i64)>,
+    event_scratch: Vec<(u32, i64, i64)>,
+    /// Each port's motors from the core's outputs, read by a frontend without the gate.
+    pub rumble: Arc<crate::rumble::Rumble>,
     battery_scratch: Vec<u8>,
     audio_scratch: Vec<i16>,
     phase_scratch: Vec<i64>,
@@ -218,6 +220,7 @@ impl Engine {
             halted: None,
             frame_scratch: Vec::new(),
             event_scratch: Vec::with_capacity(16),
+            rumble: Arc::default(),
             battery_scratch: Vec::new(),
             audio_scratch: Vec::new(),
             phase_scratch: vec![0; 32],
@@ -715,9 +718,9 @@ impl Engine {
         let mut events = std::mem::take(&mut self.event_scratch);
         events.clear();
         if let Ok(list) = m.events() {
-            events.extend(list.iter().map(|e| (e.kind, e.a)));
+            events.extend(list.iter().map(|e| (e.kind, e.a, e.b)));
         }
-        for &(kind, a) in &events {
+        for &(kind, a, b) in &events {
             match kind {
                 event::GEOMETRY => self.shape = self.machine.as_ref().and_then(|m| m.frame_info().ok()).unwrap_or(self.shape),
                 event::AUDIO_RATE => self.audio_rate = a as i32,
@@ -733,6 +736,7 @@ impl Engine {
                         self.shape = m.frame_info().unwrap_or(self.shape);
                     }
                     self.latch.grow(self.mi.ports.len());
+                    self.rumble.clear();
                     self.lend_ring();
                     self.raw_current = false;
                     self.reroute();
@@ -740,6 +744,7 @@ impl Engine {
                         self.debug.info_changed(m);
                     }
                 }
+                event::OUTPUT => self.rumble.output(&self.mi, a, b),
                 _ => {}
             }
         }

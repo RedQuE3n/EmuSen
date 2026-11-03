@@ -20,5 +20,6 @@
   "byte_order": "big",
   "libretro_databases": ["Nintendo - Nintendo 64"],
   "libretro_systemids": ["nintendo_64"],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": true
 }

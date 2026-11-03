@@ -42,6 +42,7 @@ namespace EmuSen.Crystal.Managed
             ["emusen_crystal_input_button"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, uint, uint, int>)&emusen_crystal_input_button,
             ["emusen_crystal_input_axis"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, uint, double, int>)&emusen_crystal_input_axis,
             ["emusen_crystal_input_connected"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, uint, int>)&emusen_crystal_input_connected,
+            ["emusen_crystal_input_rumble"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, ushort*, ushort*, int>)&emusen_crystal_input_rumble,
             ["emusen_crystal_speed_set"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, uint, uint, uint, int>)&emusen_crystal_speed_set,
             ["emusen_crystal_speed_mode"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, int>)&emusen_crystal_speed_mode,
             ["emusen_crystal_rewind_set"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, uint, ulong, uint, int>)&emusen_crystal_rewind_set,

@@ -25,6 +25,24 @@ fn obj<'a>(v: Option<&'a Value>, key: &str) -> Option<&'a Value> {
 pub struct Port {
     pub port: u32,
     pub controller: Option<String>,
+    /// Each motor the port's device declares, by its output number; a light or an unknown kind is left out (1.17).
+    pub outputs: Vec<(u32, Motor)>,
+}
+
+/// SDL's two motors: the strong, low-frequency one and the weak one (EmuSen_CoreAPI_Extensions.md §4.3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Motor {
+    Strong,
+    Weak,
+}
+
+fn motors(port: &Value) -> Vec<(u32, Motor)> {
+    let motor = |o: &Value| match (text(Some(o), "kind"), text(Some(o), "motor")) {
+        (Some("motor"), Some("strong")) => Some((int(Some(o), "output", 0) as u32, Motor::Strong)),
+        (Some("motor"), Some("weak")) => Some((int(Some(o), "output", 0) as u32, Motor::Weak)),
+        _ => None,
+    };
+    arr(Some(port), "outputs").iter().filter_map(motor).collect()
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -95,7 +113,7 @@ impl MachineInfo {
             aspect_den: int(aspect, "den", 0) as u32,
             max_width: int(video, "max_width", 0).max(0) as u32,
             max_height: int(video, "max_height", 0).max(0) as u32,
-            ports: arr(r, "ports").iter().map(|p| Port { port: int(Some(p), "port", 0) as u32, controller: text(Some(p), "controller").map(str::to_string) }).collect(),
+            ports: arr(r, "ports").iter().map(|p| Port { port: int(Some(p), "port", 0) as u32, controller: text(Some(p), "controller").map(str::to_string), outputs: motors(p) }).collect(),
             spaces: arr(r, "spaces")
                 .iter()
                 .map(|s| Space { id: int(Some(s), "id", 0) as u32, name: text(Some(s), "name").unwrap_or("").to_string(), byte_order: text(Some(s), "byte_order").map(str::to_string) })

@@ -20,5 +20,6 @@
   "byte_order": "little",
   "libretro_databases": ["Nintendo - Nintendo Entertainment System"],
   "libretro_systemids": ["nes"],
-  "firmware_note": null
+  "firmware_note": null,
+  "rumble": false
 }

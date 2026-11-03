@@ -96,6 +96,7 @@ functions! {
     get_gamepad_vendor = "SDL_GetGamepadVendor": fn(*mut c_void) -> u16;
     get_gamepad_product = "SDL_GetGamepadProduct": fn(*mut c_void) -> u16;
     set_gamepad_player_index = "SDL_SetGamepadPlayerIndex": fn(*mut c_void, c_int) -> bool;
+    rumble_gamepad = "SDL_RumbleGamepad": fn(*mut c_void, u16, u16, u32) -> bool;
 }
 
 /// SDL3 and its functions; the library stays loaded while this lives, and one the host lent is never closed here.

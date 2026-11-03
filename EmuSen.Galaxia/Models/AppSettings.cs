@@ -52,6 +52,9 @@ namespace EmuSen.Galaxia.Models
         public bool ClaimPlayersByPress { get; set; } = true;
         public bool ExternalControllerFirst { get; set; } = true;
 
+        // A pad's motors driven as the game drives them, on a console whose games have rumble (the systems table's rumble) - see EmuSen_Input.md §9.2.
+        public bool Rumble { get; set; } = true;
+
         // What types into a big-screen text row: Automatic, Steam's keyboard, or Mistress's own - see EmuSen_Settings_Reference.md §4.79.
         public string OnScreenKeyboard { get; set; } = OnScreenKeyboardAutomatic;
         public const string OnScreenKeyboardAutomatic = "Automatic", OnScreenKeyboardSteam = "Steam", OnScreenKeyboardEmuSen = "EmuSen";

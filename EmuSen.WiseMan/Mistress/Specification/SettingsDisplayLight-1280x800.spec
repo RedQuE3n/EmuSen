@@ -32,13 +32,13 @@ tree
           17 MenuRow at=64,108,704,54 by=panel heard="Picture shape, TV shape" limit=0,0,1280,800 name=SettingsRow.shape role=listitem
           18 MenuRow at=64,162,704,54 by=panel heard="CRT shader, Off" limit=0,0,1280,800 name=SettingsRow.crt role=listitem
           19 MenuRow at=64,216,704,54 by=panel heard="Shader levers" limit=0,0,1280,800 name=SettingsRow.levers role=listitem
-          20 MenuRow at=64,270,704,54 by=panel heard="Crop overscan, Whole picture" limit=0,0,1280,800 name=SettingsRow.crop role=listitem
-          21 MenuRow at=64,324,704,54 by=panel heard="Light or dark, Light" limit=0,0,1280,800 name=SettingsRow.variant role=listitem
-          22 MenuRow at=64,378,704,54 by=panel heard="Background art on Home, On" limit=0,0,1280,800 name=SettingsRow.art role=listitem
-          23 MenuRow at=64,432,704,54 by=panel heard="Play videos, On" limit=0,0,1280,800 name=SettingsRow.videos role=listitem
-          24 MenuRow at=64,486,704,54 by=panel heard="Smooth motion, On" limit=0,0,1280,800 name=SettingsRow.smooth role=listitem
-          25 MenuRow at=64,540,704,54 by=panel heard="Status bar, On" limit=0,0,1280,800 name=SettingsRow.statusbar role=listitem
-          26 MenuRow at=64,594,704,54 by=panel heard="Messages, On" limit=0,0,1280,800 name=SettingsRow.messages role=listitem
+          20 MenuRow at=64,270,704,54 by=panel heard=Shaders limit=0,0,1280,800 name=SettingsRow.shaders role=listitem
+          21 MenuRow at=64,324,704,54 by=panel heard="Crop overscan, Whole picture" limit=0,0,1280,800 name=SettingsRow.crop role=listitem
+          22 MenuRow at=64,378,704,54 by=panel heard="Light or dark, Light" limit=0,0,1280,800 name=SettingsRow.variant role=listitem
+          23 MenuRow at=64,432,704,54 by=panel heard="Background art on Home, On" limit=0,0,1280,800 name=SettingsRow.art role=listitem
+          24 MenuRow at=64,486,704,54 by=panel heard="Play videos, On" limit=0,0,1280,800 name=SettingsRow.videos role=listitem
+          25 MenuRow at=64,540,704,54 by=panel heard="Smooth motion, On" limit=0,0,1280,800 name=SettingsRow.smooth role=listitem
+          26 MenuRow at=64,594,704,54 by=panel heard="Status bar, On" limit=0,0,1280,800 name=SettingsRow.statusbar role=listitem
         27 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#FFFFFFFF role=none
           28 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
             29 StackPanel at=824,132,368,160 by=clip limit=800,108,416,578 name=SettingsVariants role=none

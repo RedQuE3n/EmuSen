@@ -16,6 +16,8 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Input;
+using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
@@ -84,17 +86,35 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
-        // Up from the top wraps to the bottom, so any entry is found by walking down from the first.
+        public const string Shaders = "Shaders";
+
+        // Up from the top wraps to the bottom, so any entry is found by walking down from the first; the Shaders window's door is Settings ▸ Display's row, reached from the card's Shader Levers.
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible);
-            PadMenu.Choose(window, pad, entry);
+            if (entry != Shaders)
+            {
+                PadMenu.Choose(window, pad, entry);
+                return;
+            }
+            PadMenu.Choose(window, pad, "Shader Levers");
+            pad.B();
+            Assert.Equal(SettingsScreen.Display, window.SettingsShown!.Section);
+            Assert.Empty(window.SettingsShown.Trail);
+            SettingsPad.To(window, pad, "shaders");
+            pad.A();
         }
 
-        // B from a sheet the Pause Card opened climbs back to its page, and each B a level more, the game paused until the card closes - see EmuSen_Interface.md §2.9 and EmuSen_LibretroHost.md §10z.
+        // B from a sheet the Pause Card opened climbs back to its page, through Settings where Settings opened it, each B a level more, the game paused until the card closes - see EmuSen_Interface.md §2.9 and EmuSen_LibretroHost.md §10z.
         private static void BackToTheGame(MainWindow window, PadDriver pad)
         {
+            for (int level = 0; level < 4 && window.SettingsShown is not null; level++)
+            {
+                Assert.True(IsPaused(window));
+                pad.B();
+            }
+            Assert.Null(window.SettingsShown);
             Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible, "B from the sheet climbs back to the Pause Card");
             for (int level = 0; level < 4 && window.GetControl<Control>("PadMenuPanel").IsVisible; level++)
             {
@@ -138,10 +158,8 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Theory]
-        [InlineData("Graphics")]
-        [InlineData("Shaders")]
+        [InlineData(Shaders)]
         [InlineData("Controller Bindings")]
-        [InlineData("Players & Controllers")]
         [InlineData(MainWindow.CropThisGame)]
         public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
@@ -162,6 +180,56 @@ namespace EmuSen.WiseMan.Mistress
             Stop(window);
             window.Close();
         }, default);
+
+        // What Graphics and Players & Controllers held is Settings' own rows: the card's doors open Settings over the paused game, and every row of the page is reached by the pad - see EmuSen_BigPicture.md §52.5.
+        [Theory]
+        [InlineData("Console Settings")]
+        [InlineData("Shader Levers")]
+        [InlineData("Players & Controllers")]
+        public Task Every_row_of_each_settings_page_the_card_opens_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, entry);
+
+            SettingsLayout layout = window.SettingsLayoutShown!;
+            Assert.NotNull(layout);
+            Assert.NotEmpty(window.SettingsShown!.Trail);
+            Assert.False(Sheets(window).IsPresenting);
+            Assert.Empty(window.OwnedWindows);
+            Assert.True(IsPaused(window));
+            Assert.Empty(UnreachedRows(window, pad));
+
+            BackToTheGame(window, pad);
+            Assert.False(IsPaused(window));
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // Down from the first row to the last: the enabled rows the focus never reached, by key.
+        private static List<string> UnreachedRows(MainWindow window, PadDriver pad)
+        {
+            SettingsLayout layout = window.SettingsLayoutShown!;
+            var seen = new HashSet<string> { layout.Focused! };
+            for (int i = 0; i < layout.Rows.Count; i++) { pad.Down(); seen.Add(layout.Focused!); }
+            return layout.Rows.Where(r => r.IsEnabled && !seen.Contains(r.Key)).Select(r => r.Key).ToList();
+        }
+
+        // A console's page on Settings, from the card's Console Settings and the shoulders, as a player steps from the running game's console to another.
+        private static void ConsolePage(MainWindow window, PadDriver pad, string console)
+        {
+            Choose(window, pad, "Console Settings");
+            StepTo(window, pad, console);
+        }
+
+        private static string NameOf(string console) =>
+            EmuSen.Mistress.Library.RuntimeCatalog.Systems.First(s => s.Console == console) is var facts && facts.DisplayName is { Length: > 0 } shown ? shown : facts.Name;
+
+        private static void StepTo(MainWindow window, PadDriver pad, string console)
+        {
+            string name = NameOf(console);
+            for (int i = 0; i < 24 && window.SettingsShown!.Trail[^1] != name; i++) pad.R1();
+            Assert.Equal(name, window.SettingsShown!.Trail[^1]);
+        }
 
         private static TabControl Tabs(MainWindow w) => Sheet(w).GetVisualDescendants().OfType<TabControl>().First();
 
@@ -184,129 +252,120 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string? Stored(string console, string key) => ConsolesConfig.Load().Value(console, key) ?? GraphicsConfig.Load().Value(console, key);
 
-        // A dropdown's list on a sheet, which asks for it inside the window (§4.45.8): the pad moves the focus among its items, never the page behind - see EmuSen_Settings_Reference.md §4.45.9.
+        // A dropdown's list on a sheet, which asks for it inside the window (§4.45.8): the pad moves the focus among its items, never the page behind; the Controller Bindings sheet's player selector - see EmuSen_Settings_Reference.md §4.45.9.
         [Fact]
         public Task An_open_dropdown_drawn_in_the_window_moves_its_highlight_and_not_the_page() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics");
-            TabTo(window, pad, "N64");
-            var scale = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.RenderScale" });
-            ScrollViewer page = scale.FindAncestorOfType<ScrollViewer>()!;
-            Vector scrolled = page.Offset;
-            int was = scale.SelectedIndex;
-            Assert.True(scale.ItemCount >= 2);
+            Choose(window, pad, "Controller Bindings");
+            TabTo(window, pad, "SNES");
+            var players = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "PlayerSelector" });
+            ScrollViewer? page = players.FindAncestorOfType<ScrollViewer>();
+            Vector scrolled = page?.Offset ?? default;
+            int was = players.SelectedIndex;
+            Assert.True(players.ItemCount >= 2);
 
             pad.A();
-            Assert.True(scale.IsDropDownOpen);
-            Assert.True(scale.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single().ShouldUseOverlayLayer);
-            Assert.Same(scale.ContainerFromIndex(was), Focused(window));
+            Assert.True(players.IsDropDownOpen);
+            Assert.True(players.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single().ShouldUseOverlayLayer);
+            Assert.Same(players.ContainerFromIndex(was), Focused(window));
             pad.Down();
-            Assert.Same(scale.ContainerFromIndex(was + 1), Focused(window));
-            pad.Down(scale.ItemCount);
-            Assert.Same(scale.ContainerFromIndex(scale.ItemCount - 1), Focused(window));
-            Assert.Equal(was, scale.SelectedIndex);
-            Assert.Equal(scrolled, page.Offset);
+            Assert.Same(players.ContainerFromIndex(was + 1), Focused(window));
+            pad.Down(players.ItemCount);
+            Assert.Same(players.ContainerFromIndex(players.ItemCount - 1), Focused(window));
+            Assert.Equal(was, players.SelectedIndex);
+            Assert.Equal(scrolled, page?.Offset ?? default);
             Picture(window, "dropdown-in-window");
 
             pad.B();
-            Assert.False(scale.IsDropDownOpen);
-            Assert.Equal(was, scale.SelectedIndex);
-            Assert.Same(scale, Focused(window));
+            Assert.False(players.IsDropDownOpen);
+            Assert.Equal(was, players.SelectedIndex);
+            Assert.Same(players, Focused(window));
+            Assert.True(Sheets(window).IsPresenting);
 
             pad.A();
             pad.Down();
             pad.A();
-            Assert.False(scale.IsDropDownOpen);
-            Assert.Equal(was + 1, scale.SelectedIndex);
-            Assert.Equal(scale.SelectedItem as string, Stored("N64", "RenderScale"));
-            Assert.Equal(scrolled, page.Offset);
+            Assert.False(players.IsDropDownOpen);
+            Assert.Equal(was + 1, players.SelectedIndex);
+            Assert.Equal($"Player {was + 2}", players.SelectedItem as string);
+            Assert.Equal(scrolled, page?.Offset ?? default);
             Stop(window);
             window.Close();
         }, default);
 
+        // Graphics' rows on a console's page in Settings: the shoulders step the console, a choice is stepped both ways and chosen with A, a switch turned, and the console reset - see EmuSen_BigPicture.md §52.5.
         [Fact]
-        public Task Graphics_by_pad_tabs_a_dropdown_stepped_opened_committed_and_cancelled_a_switch_and_reset() => Session.Dispatch(() =>
+        public Task Console_settings_by_pad_the_console_stepped_a_choice_stepped_and_chosen_a_switch_and_reset() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics");
-            Assert.Equal("SNES", (Tabs(window).SelectedItem as TabItem)?.Header);
-            Picture(window, "graphics-snes");
+            Choose(window, pad, "Console Settings");
+            Assert.Equal(NameOf("SNES"), window.SettingsShown!.Trail[^1]);
+            Picture(window, "console-snes");
 
-            TabTo(window, pad, "N64");
-            var scale = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "N64.RenderScale" });
-            int was = scale.SelectedIndex;
+            StepTo(window, pad, "N64");
+            SettingRow scaleRow = window.SettingsShown!.Host.Schema("N64").Single(r => r.Key == "RenderScale");
+            SettingsPad.To(window, pad, "RenderScale");
+            int was = scaleRow.Choices.ToList().IndexOf(Stored("N64", "RenderScale") ?? scaleRow.Default);
             pad.Right();
-            Assert.Equal(was + 1, scale.SelectedIndex);
-            Assert.Equal(scale.SelectedItem as string, Stored("N64", "RenderScale"));
+            Assert.Equal(scaleRow.Choices[was + 1], Stored("N64", "RenderScale"));
             pad.Left();
-            Assert.Equal(was, scale.SelectedIndex);
+            Assert.Equal(scaleRow.Choices[was], Stored("N64", "RenderScale"));
 
-            // Open, move, commit: the highlight moves the focus, and only A chooses.
+            // A on a choice steps it on, and the focus and the page stay.
             pad.A();
-            Assert.True(scale.IsDropDownOpen);
-            Picture(window, "graphics-n64-dropdown");
-            pad.Down();
-            Assert.Equal(was, scale.SelectedIndex);
-            pad.A();
-            Assert.False(scale.IsDropDownOpen);
-            Assert.Equal(was + 1, scale.SelectedIndex);
-            Assert.Equal(scale.SelectedItem as string, Stored("N64", "RenderScale"));
+            Assert.Equal(scaleRow.Choices[was + 1], Stored("N64", "RenderScale"));
+            Assert.Equal("RenderScale", window.SettingsLayoutShown!.Focused);
+            Assert.Equal(NameOf("N64"), window.SettingsShown.Trail[^1]);
 
-            // Open, move, back out: nothing chosen, and the sheet stays.
+            SettingRow switchRow = window.SettingsShown.Host.Schema("N64").First(r => r.Kind == SettingRow.Switch && !r.Locked && window.SettingsLayoutShown.Rows.Any(p => p.Key == r.Key));
+            SettingsPad.To(window, pad, switchRow.Key);
+            bool before = (Stored("N64", switchRow.Key) ?? switchRow.Default) is "true" or "1" or "on";
             pad.A();
-            pad.Up();
-            pad.B();
-            Assert.False(scale.IsDropDownOpen);
-            Assert.Equal(was + 1, scale.SelectedIndex);
-            Assert.True(Sheets(window).IsPresenting);
-            Assert.Same(scale, Focused(window));
+            Assert.Equal((!before).ToString().ToLowerInvariant(), Stored("N64", switchRow.Key));
+            Picture(window, "console-n64");
 
-            var toggle = (LunaSwitch)Reach(window, pad, e => e is LunaSwitch);
-            string key = toggle.Name!["N64.".Length..];
-            bool before = toggle.IsChecked == true;
+            SettingsPad.To(window, pad, "reset");
             pad.A();
-            Assert.Equal(!before, toggle.IsChecked == true);
-            Assert.Equal((!before).ToString().ToLowerInvariant(), Stored("N64", key));
-            Picture(window, "graphics-n64");
-
-            Reach(window, pad, e => e is Button { Content: "Reset This Console" });
-            pad.A();
-            Assert.Null(Stored("N64", key));
+            Assert.Null(Stored("N64", switchRow.Key));
             Assert.Null(Stored("N64", "RenderScale"));
 
-            pad.B();
-            Assert.False(Sheets(window).IsPresenting);
             BackToTheGame(window, pad);
             Assert.False(IsPaused(window));
             Stop(window);
             window.Close();
         }, default);
 
+        // Preferences' rows in Settings: a switch in one section and a choice on a page of another, each stored as it is turned - see EmuSen_BigPicture.md §52.5.
         [Fact]
-        public Task Preferences_by_pad_a_switch_and_a_dropdown_on_another_tab() => Session.Dispatch(() =>
+        public Task Settings_by_pad_a_switch_and_a_choice_on_a_page_of_another_section() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
             Choose(window, pad, "Players & Controllers");
-            Picture(window, "preferences-library");
+            Assert.Equal("Players", window.SettingsShown!.Trail[^1]);
+            Picture(window, "settings-players");
+            pad.B();
+            Assert.Empty(window.SettingsShown.Trail);
 
-            TabTo(window, pad, "Gameplay");
-            Reach(window, pad, e => e is LunaSwitch { Name: "PauseInBackgroundSwitch" });
+            SettingsPad.Section(window, pad, SettingsScreen.EmuSen);
+            SettingsPad.To(window, pad, "background");
             bool before = AppSettings.Load().PauseInBackground;
             pad.A();
             Assert.Equal(!before, AppSettings.Load().PauseInBackground);
 
-            Reach(window, pad, e => e is Dropdown { Name: "ResumeDropdown" });
+            SettingsPad.To(window, pad, "saves");
+            pad.A();
+            SettingsPad.To(window, pad, "resume");
             string resume = AppSettings.Load().ResumeOnLaunch;
             pad.Left();
             Assert.NotEqual(resume, AppSettings.Load().ResumeOnLaunch);
-            Picture(window, "preferences-gameplay");
+            Picture(window, "settings-saves");
 
-            // In Game Mode Preferences is ES-DE's menus: B leaves Gameplay for the first screen, and B again closes it (§4.72.8).
+            // B closes the page for its section, and B again closes Settings onto the card.
             pad.B();
-            Assert.True(Sheets(window).IsPresenting);
-            pad.B();
-            Assert.False(Sheets(window).IsPresenting);
+            Assert.NotNull(window.SettingsShown);
+            Assert.Empty(window.SettingsShown!.Trail);
+            BackToTheGame(window, pad);
             Stop(window);
             window.Close();
         }, default);
@@ -430,16 +489,13 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The Shaders window opened from the graphics sheet's row, over it, searched with the on-screen keyboard, a preset used, a slider moved and reset, and left by pad - see EmuSen_Settings_Reference.md §4.48.5.
+        // The Shaders window opened from Settings ▸ Display's row, over Settings, searched with the on-screen keyboard, a preset used, a slider moved and reset, and left by pad, the row then naming the shader in use - see EmuSen_Settings_Reference.md §4.48.5.
         [Fact]
-        public Task The_shaders_window_opens_over_the_graphics_sheet_and_is_searched_used_and_adjusted_by_pad() => Session.Dispatch(() =>
+        public Task The_shaders_window_opens_over_settings_and_is_searched_used_and_adjusted_by_pad() => Session.Dispatch(() =>
         {
             ShaderSettingsWindowTests.FakePack();
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics");
-            var graphics = Sheets(window).Current;
-            Reach(window, pad, e => e is Button { Name: "SNES.Shaders" });
-            pad.A();
+            Choose(window, pad, Shaders);
 
             var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
             Assert.Equal("SNES", (Tabs(window).SelectedItem as TabItem)?.Header);
@@ -472,10 +528,10 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Empty(GraphicsConfig.Load().ParametersFor("SNES", "slang:crt/crt-royale-kurozumi.slangp"));
 
             pad.B();
-            Assert.Same(graphics, Sheets(window).Current);
-            Assert.Equal("crt-royale-kurozumi (RetroArch, crt)", Sheet(window).GetVisualDescendants().OfType<TextBlock>().Single(t => t.Name == "SNES.ShaderInUse").Text);
-            pad.B();
             Assert.False(Sheets(window).IsPresenting);
+            Assert.Equal("shaders", window.SettingsLayoutShown!.Focused);
+            Assert.Equal("crt-royale-kurozumi (RetroArch, crt)", SettingsPad.Value(window, "shaders"));
+            BackToTheGame(window, pad);
             Stop(window);
             window.Close();
         }, default);
@@ -650,28 +706,27 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A Graphics tab scrolled to its foot, left and come back to: the pad starts at a control in view and the page stays where it was - see EmuSen_Settings_Reference.md §4.48.10.
+        // A console's page walked to its foot, stepped to the next console and back with the shoulders: the pad starts at a row in view - see EmuSen_BigPicture.md §52.5.
         [Fact]
-        public Task A_tab_change_back_to_a_scrolled_page_starts_at_a_control_in_view() => Session.Dispatch(() =>
+        public Task A_console_page_stepped_away_from_and_back_to_starts_at_a_row_in_view() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Graphics");
-            TabTo(window, pad, "N64");
-            ScrollViewer page = (ScrollViewer)((Avalonia.Controls.Presenters.ContentPresenter)Tabs(window).GetVisualDescendants().OfType<Avalonia.Controls.Presenters.ContentPresenter>().First(p => p.Name == "PART_SelectedContentHost")).Content!;
-            InputElement last = PadAudit.Operable(page).OrderBy(e => ((Visual)e).TranslatePoint(default, page)?.Y ?? 0).Last();
-            Reach(window, pad, e => ReferenceEquals(e, last));
+            ConsolePage(window, pad, "N64");
+            SettingsLayout layout = window.SettingsLayoutShown!;
+            pad.Down(layout.Rows.Count);
             window.UpdateLayout();
-            Vector scrolled = page.Offset;
-            Assert.True(scrolled.Y > 0, "the N64 page does not scroll at 1280x800");
+            // The big screen builds only the rows in view, so a row in view is one whose row is drawn.
+            bool Drawn(string? key) => layout.GetVisualDescendants().OfType<Control>().Any(c => c.Name == "SettingsRow." + key && c.IsEffectivelyVisible);
+            Assert.False(Drawn(layout.Rows[0].Key), "the N64 page does not scroll at 1280x800");
+            Assert.True(Drawn(layout.Focused));
 
-            TabTo(window, pad, "NES");
-            TabTo(window, pad, "N64");
-            var focused = Assert.IsAssignableFrom<Control>(Focused(window));
-            _out.WriteLine($"focus after the tab change: {PadAudit.Describe((InputElement)focused)}, page at {page.Offset.Y} of {scrolled.Y}");
-            Assert.Equal(scrolled, page.Offset);
-            Assert.True(focused.TranslatePoint(default, page) is { } at && at.Y + focused.Bounds.Height > 0 && at.Y < page.Bounds.Height);
-            pad.B();
-            pad.B();
+            pad.R1();
+            pad.L1();
+            StepTo(window, pad, "N64");
+            window.UpdateLayout();
+            _out.WriteLine($"focus after the console change: {layout.Focused}");
+            Assert.True(Drawn(layout.Focused), $"the focus is on {layout.Focused}, a row out of view");
+            BackToTheGame(window, pad);
             Stop(window);
             window.Close();
         }, default);
@@ -725,7 +780,6 @@ namespace EmuSen.WiseMan.Mistress
 
         // Desktop Mode keeps real windows; the headless platform never makes one active, so the router is handed the window the pad would have found.
         [Theory]
-        [InlineData("ShowDebugLogging")]
         [InlineData("ShowGraphicsSettings")]
         [InlineData("ShowShaderSettings")]
         [InlineData("ShowActiveCheats")]
@@ -754,6 +808,33 @@ namespace EmuSen.WiseMan.Mistress
             foreach (string m in missing) _out.WriteLine("unreachable: " + m);
             Assert.Empty(missing);
 
+            Press(UiButton.Back);
+            Assert.False(other.IsVisible);
+            window.Close();
+        }, default);
+
+        // Desktop Mode's Settings window, where the retired Debug Logging window's rows are EmuSen ▸ Logging: every row reached through the router, Back closing the page and then the window.
+        [Fact]
+        public Task In_desktop_mode_the_settings_window_s_logging_page_is_driven_and_every_row_reached() => Session.Dispatch(() =>
+        {
+            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            var window = new MainWindow { Width = 1280, Height = 800 };
+            window.Show();
+            window.ShowSettings(SettingsScreen.EmuSen, "logging");
+            Window other = Assert.Single(window.OwnedWindows);
+            Assert.IsType<SettingsWindow>(other);
+            Assert.False(Sheets(window).IsPresenting);
+            Assert.Equal("Logging", window.SettingsShown!.Trail[^1]);
+            void Press(UiButton b) => PadWindowRouter.Send(other, b);
+
+            SettingsLayout layout = window.SettingsLayoutShown!;
+            var seen = new HashSet<string?> { layout.Focused };
+            for (int i = 0; i <= layout.Rows.Count; i++) { Press(UiButton.Down); seen.Add(layout.Focused); }
+            Assert.Empty(layout.Rows.Where(r => r.IsEnabled && !seen.Contains(r.Key)).Select(r => r.Key));
+
+            Press(UiButton.Back);
+            Assert.True(other.IsVisible);
+            Assert.Empty(window.SettingsShown!.Trail);
             Press(UiButton.Back);
             Assert.False(other.IsVisible);
             window.Close();
@@ -832,14 +913,11 @@ namespace EmuSen.WiseMan.Mistress
             Assert.False(Sheets(window).IsPresenting);
             BackToTheGame(window, pad);
 
-            // The console's row says what replaces it; another console's says nothing.
-            Choose(window, pad, "Graphics");
-            Control sheet = Sheet(window);
-            HintText note = sheet.GetVisualDescendants().OfType<HintText>().Single(t => t.Name == "SNES.Overscan.Note");
-            Assert.True(note.IsVisible);
-            Assert.StartsWith("Game has a crop of its own", note.Text);
-            Assert.False(Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(sheet).OfType<HintText>().First(t => t.Name == "N64.Overscan.Note").IsVisible);
-            pad.B();
+            // The console's crop row in Settings says what replaces it; another console's says nothing.
+            Choose(window, pad, "Console Settings");
+            Assert.Contains(window.SettingsShown!.PaneOf("consolecrop")!.Lines, l => l.Text.StartsWith("Game has a crop of its own", StringComparison.Ordinal));
+            StepTo(window, pad, "N64");
+            Assert.DoesNotContain(window.SettingsShown!.PaneOf("consolecrop")!.Lines, l => l.Text.Contains("crop of its own", StringComparison.Ordinal));
             BackToTheGame(window, pad);
 
             // The console's own setting changed meanwhile does not reach the frame while the game has its own.

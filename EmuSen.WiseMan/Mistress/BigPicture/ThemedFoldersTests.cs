@@ -292,18 +292,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task The_settings_sheet_flattens_a_console_at_once_and_keeps_it_in_appsettings() => Run(s =>
         {
+            // Settings ▸ Library ▸ Collections, where the retired collection settings' switches are rows.
             ThemedCollectionsTests.Choose(s, "Collections");
-            LunaSwitch flatten = ThemedCollectionsTests.Named<LunaSwitch>(s, "Flatten_nes");
-            Assert.False(flatten.IsChecked);
-            flatten.IsChecked = true;
+            SettingsPad.To(s.Window, s.Pad, "flattennes");
+            Assert.Equal(EmuSen.Mistress.Pages.SettingsScreen.Off, SettingsPad.Value(s.Window, "flattennes"));
+            s.Pad.A();
             s.Settle();
             Assert.Equal(["nes"], AppSettings.Load().BigPictureCollections.FlattenedSystems);
             Assert.Equal(6, s.Themed.Stage!.Current.Data.Systems.Single(x => x.System.Name == "nes").Games.Count);
             Assert.All(s.Themed.Stage!.Current.Data.Systems.Single(x => x.System.Name == "nes").Games, g => Assert.False(g.Folder));
 
-            LunaSwitch onTop = ThemedCollectionsTests.Named<LunaSwitch>(s, "FoldersOnTop");
-            Assert.True(onTop.IsChecked);
-            onTop.IsChecked = false;
+            SettingsPad.To(s.Window, s.Pad, "folderstop");
+            Assert.Equal(EmuSen.Mistress.Pages.SettingsScreen.On, SettingsPad.Value(s.Window, "folderstop"));
+            s.Pad.A();
             s.Settle();
             Assert.False(AppSettings.Load().BigPictureCollections.FoldersOnTop);
             Assert.False(s.Themed.FoldersOnTop);

@@ -203,7 +203,8 @@ namespace EmuSen.Mistress.Pages
                     _host.SaveGraphics(console);
                 }));
                 rows.Add(Opens("consolelevers", "Shader levers", $"The CRT's own levers for the {name}.", null, () => Push("Shader levers", () => LeverRows(console), "consolelevers"), enabled: current == CrtFilter.Name));
-                rows.Add(GraphicsChoice(console, "consolecrop", "Crop overscan", "The whole picture, or the part a television showed.", GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan], ["Whole picture", "TV overscan"]));
+                Setting crop = GraphicsChoice(console, "consolecrop", "Crop overscan", "The whole picture, or the part a television showed.", GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan], ["Whole picture", "TV overscan"]);
+                rows.Add(_host.RunningCropNote(console) is { } note ? crop with { Pane = () => new ScreenPane([new SettingsLine("The whole picture, or the part a television showed."), new SettingsLine(note, SettingsTone.Attention)]) } : crop);
             }
             else
             {
@@ -212,7 +213,16 @@ namespace EmuSen.Mistress.Pages
                     i => { _host.Graphics.SetValue(console, GraphicsKeys.ScreenFilter, filters[i]); _host.SaveGraphics(console); }));
             }
             rows.Add(GraphicsChoice(console, "consoleshape", "Picture shape", "The screen the console was made for, or each pixel square.", GraphicsKeys.PictureShape, [GraphicsKeys.TvShape, GraphicsKeys.SquarePixels], ["TV shape", "Square pixels"]));
+            rows.Add(Act("reset", "Reset this console", $"Every {name} setting back to its default: the engine's rows, its picture and its shaders; a row the engine holds stays.", () => ResetConsole(console)));
             return rows;
+        }
+
+        // Every row of the console's schema the player may change, and its picture, back to their defaults.
+        private void ResetConsole(string console)
+        {
+            foreach (SettingRow row in _host.Schema(console).Where(r => !r.Locked)) _host.SetCoreValue(console, row.Key, null);
+            _host.Graphics.Forget(console);
+            _host.SaveGraphics(console);
         }
 
         private int ScreenTier(string console) => _host.Graphics.Value(console, GraphicsKeys.ScreenFilter) != CrtFilter.Name ? 0

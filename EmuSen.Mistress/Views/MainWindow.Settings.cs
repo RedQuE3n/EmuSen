@@ -149,6 +149,8 @@ namespace EmuSen.Mistress.Views
 
         string? ISettingsHost.RunningConsole => _session is null ? null : _activeConsole;
 
+        string? ISettingsHost.RunningCropNote(string console) => RunningGameCropNote(console);
+
         IReadOnlyList<SystemFacts> ISettingsHost.Systems => RuntimeCatalog.Systems;
 
         IReadOnlyList<SettingRow> ISettingsHost.Schema(string console)
@@ -289,6 +291,8 @@ namespace EmuSen.Mistress.Views
             switch (door)
             {
                 case SettingsScreen.DoorBindings: ShowControllerBindings(); break;
+                case SettingsScreen.DoorShaders: _ = ThenRefreshSettings(SheetLayer.Show(NewShaderSettings(), this)); break;
+                case SettingsScreen.DoorCheats: ShowActiveCheats(); break;
                 case SettingsScreen.DoorThemes: ShowThemeSettings(); break;
                 case SettingsScreen.DoorScraper: ShowScraper(); break;
                 case SettingsScreen.DoorSignIn: _ = SignInFromSettingsAsync(); break;
@@ -302,7 +306,7 @@ namespace EmuSen.Mistress.Views
                 case SettingsScreen.DoorNewCollection: _ = NewCollectionAsync(); break;
                 case SettingsScreen.DoorFinishCollection: FinishEditingCollection(); RefreshSettings(); break;
                 case var d when d.StartsWith(SettingsScreen.DoorDeleteCollection, StringComparison.Ordinal) && long.TryParse(d[SettingsScreen.DoorDeleteCollection.Length..], out long id) && _collections.FirstOrDefault(c => c.Id == id) is { } doomed:
-                    _ = CollectionThenRefresh(DeleteCollectionAsync(this, doomed)); break;
+                    _ = ThenRefreshSettings(DeleteCustomCollectionAsync(this, doomed)); break;
                 case var d when d.StartsWith(SettingsScreen.DoorCardSaves, StringComparison.Ordinal):
                     _ = SheetLayer.Show(new MemoryCardsWindow(_graphics, d[SettingsScreen.DoorCardSaves.Length..]), this); break;
                 case SettingsScreen.DoorRomFolder: _ = AskFolderAsync("ROM folder", _appSettings.RomDirectory, p => { _appSettings.RomDirectory = p; RefreshLibrary(); }); break;
@@ -343,7 +347,7 @@ namespace EmuSen.Mistress.Views
             else RefreshSettings();
         }
 
-        private async Task CollectionThenRefresh(Task done)
+        private async Task ThenRefreshSettings(Task done)
         {
             await done;
             RefreshSettings();

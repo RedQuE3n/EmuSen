@@ -83,24 +83,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // ---- Q109 in the editor ----
 
         [Fact]
-        public Task Preferences_offers_the_setting_in_its_Controllers_screen_and_stores_it() => ThemedLibraryPadTests.Run(s =>
+        public Task Settings_offers_the_setting_in_its_Controllers_section_and_stores_it() => ThemedLibraryPadTests.Run(s =>
         {
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            s.Settle();
-            var sheet = Assert.IsType<PreferencesWindow>(ThemedGameOptionsTests.Sheets(s).Current);
-            ThemedGameOptionsTests.Reach(s, "BigMenuPage4");
-            s.Pad.A();
-            Assert.Equal("Controllers", sheet.Form!.Menu.Title);
-            var box = ThemedGameOptionsTests.Sheet(s).GetLogicalDescendants().OfType<Dropdown>().Single(d => d.Name == "OnScreenKeyboardDropdown");
-            Assert.Equal(MenuRowKind.Option, MenuRows.GetKind(box));
-            Assert.Equal("On-Screen Keyboard", MenuRows.GetLabel(box));
-            Assert.Equal(new[] { "Automatic", "Steam", "EmuSen's" }, box.Items.Cast<object>().Select(i => (i as ContentControl)?.Content as string ?? i as string));
-            ThemedGameOptionsTests.Reach(s, "OnScreenKeyboardDropdown");
+            SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.Controllers);
+            SettingsPad.To(s.Window, s.Pad, "keyboard");
+            SettingsLayout layout = s.Window.SettingsLayoutShown!;
+            Assert.Equal("On-screen keyboard", layout.Rows.Single(r => r.Key == "keyboard").Label);
+            Assert.Equal(new[] { "Automatic", "Steam", "EmuSen's" }, layout.Rows.Single(r => r.Key == "keyboard").Choices);
+            Assert.Equal("Automatic", SettingsPad.Value(s.Window, "keyboard"));
             s.Pad.Right();
             Assert.Equal(AppSettings.OnScreenKeyboardSteam, s.Settings.OnScreenKeyboard);
+            Assert.Equal(AppSettings.OnScreenKeyboardSteam, AppSettings.Load().OnScreenKeyboard);
             s.Pad.Right();
             Assert.Equal(AppSettings.OnScreenKeyboardEmuSen, s.Settings.OnScreenKeyboard);
-            ThemedSwitchesTests.PutAway(s);
+            Assert.Equal("EmuSen's", SettingsPad.Value(s.Window, "keyboard"));
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
         });
 
         // ---- Q105 and Q106 ----
@@ -130,11 +129,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Fact]
         public Task Every_big_screen_menu_that_overflows_gets_the_indicator_and_one_that_does_not_shows_none() => ThemedLibraryPadTests.Run(s =>
         {
-            // Preferences' first screen fits; Theme Settings' Interface screen runs past the panel.
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
+            // Theme Settings' first screen fits; its Interface screen runs past the panel.
+            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
             s.Settle();
-            var sheet = Assert.IsType<PreferencesWindow>(ThemedGameOptionsTests.Sheets(s).Current);
-            Assert.Equal(MenuScrollIndicator.None, sheet.Form!.Menu.ScrollIndicator);
+            var first = Assert.IsType<ThemeSettingsWindow>(ThemedGameOptionsTests.Sheets(s).Current);
+            Assert.Equal(MenuScrollIndicator.None, first.Form!.Menu.ScrollIndicator);
             ThemedSwitchesTests.PutAway(s);
             ThemeSettingsWindow theme = ThemedSwitchesTests.OpenInterface(s);
             Assert.Equal("Interface", theme.Form!.Menu.Title);

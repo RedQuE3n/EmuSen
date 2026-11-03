@@ -395,6 +395,9 @@ namespace EmuSen.WiseMan.Galaxia
             return damaged.ToString();
         }
 
+        // Each text's cuts and one-character losses, spread evenly over a longer file so every model costs about the same - see EmuSen_RustPlatform.md §11.5.
+        private const int CutsPerText = 4000;
+
         [Fact]
         public void A_malformed_file_is_refused_or_read_the_same_both_ways()
         {
@@ -422,7 +425,7 @@ namespace EmuSen.WiseMan.Galaxia
                 string whole = JsonSerializer.Serialize(Random_(type, random, 0, nullable: false), type, ConfigJson.Options);
                 string fresh = JsonSerializer.Serialize(Activator.CreateInstance(type), type, ConfigJson.Options);
                 foreach (string text in new[] { whole, fresh })
-                    for (int cut = 0; cut <= text.Length; cut += text.Length > 4000 ? 3 : 1)
+                    for (int cut = 0, step = Math.Max(1, (text.Length + CutsPerText - 1) / CutsPerText); cut <= text.Length; cut += step)
                     {
                         if (cut < text.Length && char.IsLowSurrogate(text[cut])) continue;
                         Ask(model, type, text[..cut]);

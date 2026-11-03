@@ -351,23 +351,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.Tick();
         }, default);
 
-        // Navigation volume: the stream's gain is the setting over a hundred, set by Preferences' slider, and at 0 nothing is played at all.
+        // Navigation volume: the stream's gain is the setting over a hundred, set by Settings ▸ Sound's row, and at 0 nothing is played at all.
         [Fact]
         public Task The_navigation_volume_is_the_stream_s_gain_and_zero_plays_nothing() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(status: Device);
             float Gain() => (float)typeof(MainWindow).GetProperty("UiSoundGain", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(s.Window)!;
             Assert.Equal(0.6f, Gain(), 3);
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            Window prefs = Sheets(s).Current!;
-            Slider slider = Named<Slider>(prefs, "NavigationVolumeSlider");
-            Assert.Equal(60, slider.Value);
-            slider.Value = 35;
+            SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.Sound);
+            SettingsPad.To(s.Window, s.Pad, "soundvolume");
+            Assert.Equal("60%", SettingsPad.Value(s.Window, "soundvolume"));
+            s.Pad.Left(5);
+            Assert.Equal("35%", SettingsPad.Value(s.Window, "soundvolume"));
             Assert.Equal(35, s.Settings.BigPictureInterface.NavigationVolume);
             Assert.Equal(35, AppSettings.Load().BigPictureInterface.NavigationVolume);
             Assert.Equal(0.35f, Gain(), 3);
-            slider.Value = 0;
-            PutAway(s);
+            s.Pad.Left(8);
+            Assert.Equal(0, AppSettings.Load().BigPictureInterface.NavigationVolume);
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
             s.Sounds.Clear();
             s.Pad.Right();
             s.Pad.A();

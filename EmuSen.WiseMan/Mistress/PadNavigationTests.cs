@@ -253,7 +253,7 @@ namespace EmuSen.WiseMan.Mistress
             Pad(window, UiButton.Menu);
             Assert.True(MenuPanel(window).IsVisible);
             Assert.DoesNotContain("Resume", MenuLines(window));
-            Assert.Contains("Graphics", PadMenu.AllLines(window));
+            Assert.Contains(MainWindow.SettingsMenu, PadMenu.AllLines(window));
             Assert.True(BelongsToTheInterface(window));
 
             Pad(window, UiButton.Menu);

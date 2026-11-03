@@ -35,6 +35,7 @@ namespace EmuSen.Mistress.Pages
         string Version { get; }
         string? RunningTitle { get; }
         string? RunningConsole { get; }
+        string? RunningCropNote(string console);
         IReadOnlyList<SystemFacts> Systems { get; }
         IReadOnlyList<SettingRow> Schema(string console);
         string? CoreValue(string console, string key);
@@ -70,7 +71,7 @@ namespace EmuSen.Mistress.Pages
         public const string Controllers = "controllers", Display = "display", Sound = "sound", Consoles = "consoles", Library = "library", EmuSen = "emusen";
 
         // The doors to what Settings does not draw itself: tools, pickers and the Shell.
-        public const string DoorBindings = "bindings", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
+        public const string DoorBindings = "bindings", DoorShaders = "shaders", DoorCheats = "cheats", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
         public const string DoorSignIn = "scraper:signin", DoorSignOut = "scraper:signout", DoorCheckAccount = "scraper:check", DoorOpenVgdb = "scraper:openvgdb", DoorCleanUp = "scraper:cleanup";
         public const string DoorNewCollection = "collection:new", DoorFinishCollection = "collection:finish", DoorDeleteCollection = "collection:delete:", DoorCardSaves = "cardsaves:";
         public const string DoorRomFolder = "folder:rom", DoorArtFolder = "folder:art", DoorStateFolder = "folder:state", DoorLogFolder = "folder:log", DoorFirmwareFolder = "folder:firmware", DoorMediaFolder = "folder:media", DoorThemeFolder = "folder:theme";

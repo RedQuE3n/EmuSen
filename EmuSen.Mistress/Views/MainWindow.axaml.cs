@@ -491,8 +491,9 @@ namespace EmuSen.Mistress.Views
         private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(_appSettings.RomDirectory), this);
 
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
-        private void ShowShaderSettings() =>
-            _ = SheetLayer.Show(new ShaderSettingsWindow(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory), this);
+        private void ShowShaderSettings() => _ = SheetLayer.Show(NewShaderSettings(), this);
+
+        private ShaderSettingsWindow NewShaderSettings() => new(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory);
 
         private void ShaderChanged(string console)
         {

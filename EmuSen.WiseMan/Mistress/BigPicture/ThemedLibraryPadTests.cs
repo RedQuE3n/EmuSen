@@ -267,7 +267,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
             Assert.True(s.Shown);
             Assert.Equal([MainWindow.ToolsMenu, MainWindow.SettingsMenu, MainWindow.PowerMenu], PadMenu.Lines(s.Window).TakeLast(3));
-            Assert.Contains("Preferences", PadMenu.AllLines(s.Window));
+            Assert.True(PadMenu.Entries(s.Window).Single(e => e.Text() == MainWindow.SettingsMenu).Opens, "Settings is a door, not a submenu");
             // The directions steer the menu while it is up, not the view behind it.
             s.Pad.Right();
             Assert.Equal("nes", s.System);

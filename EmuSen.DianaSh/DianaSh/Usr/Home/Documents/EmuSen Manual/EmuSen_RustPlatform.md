@@ -1088,7 +1088,10 @@ Its second half asks, of the C# and the library side by side:
 - about 9,000 documents setting every property of every class, at every place a class is held, to each of 59
   values, with a map's keys repeated;
 - about 28,000 malformed texts: a hand-written list, every truncation and every one-character loss of two documents
-  for each model, and 4,000 random damages each;
+  for each model, and 4,000 random damages each. A document longer than 4,000 characters is cut at 4,000 places
+  spread evenly over it, the step the document's length over 4,000 rounded up, so a model that gains fields keeps the
+  same cost and still has each region of its file cut. Decided 2026-11-03, after `AppSettings` passed first 3,000 and
+  then 4,000 characters and each time a fixed threshold, raised by hand, dropped it to every third cut;
 - 27 file scenarios for each model and for a frontend's type, and a 28th where a class can be made that will not
   serialize: missing, bad, null, a folder in the file's place, the
   copy from the old place and its failures, categories, saving over a file, a folder and a blocked folder, what

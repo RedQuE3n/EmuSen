@@ -11994,15 +11994,30 @@ manager's keys), the cards in the drawer, a new card, and the saves on them thro
 Retired: `CollectionSettingsWindow` (into Library ▸ Collections), `DebugSettingsWindow` (into EmuSen ▸ Logging), the pad
 menu's Settings submenu and Home's Settings card with its Tools page (Theme Settings, Compressed Discs and the Shell are
 Library and EmuSen rows). Kept with no door until U6b ports their tests (decided 2026-11-03): Preferences, Graphics
-Settings, Shader Settings, and `BigMenuForm`, whose last user is Theme Settings; until then the slang catalogue and its
-download have no door. Kept with a door: the controller binding window, until the bindings page; the Memory Cards window,
-for a card's saves; `GameCropWindow`, the game's own crop from its page; `OptionListWindow`, for the choices of the sheets
-still drawn in ES-DE's menus; `FirmwarePane`, which Preferences holds.
+Settings and `BigMenuForm`, whose last user is Theme Settings. Kept with a door: the controller binding window, until the
+bindings page; the Memory Cards window, for a card's saves; `GameCropWindow`, the game's own crop from its page;
+`OptionListWindow`, for the choices of the sheets still drawn in ES-DE's menus; `FirmwarePane`, which Preferences holds;
+the Shader Settings and Active Cheats windows, through Settings.
+
+**Doors restored, 2026-11-03.** The land of U6a showed four things the retired doors gave the player and Settings did
+not; each is a row of Settings now rather than a door of its own:
+
+1. Display ▸ Shaders opens the Shader Settings window over Settings: the built-in filters, the slang catalogue with its
+   categories and Download Pack, and every parameter. Its value is the running console's shader, as Graphics Settings'
+   line named it. The Pause Card reaches it through Shader Levers, B, then the row.
+2. Library ▸ Cheats opens the Active Cheats window the library's Settings submenu opened: the last game's cheats and the
+   cheat database. A running game keeps Game Options ▸ Cheats.
+3. A console's page ends in Reset this console, which clears every row of the console's schema the engine does not hold
+   and forgets its picture, as Graphics Settings' Reset This Console did.
+4. A console's Crop overscan pane says when the running game's own crop replaces the console's, the line Graphics
+   Settings drew under its Overscan row.
 
 ### 52.6 How it is held
 
 `WindowFitAuditTests.Settings` records fifteen states at two sizes and audits the big screen's at 1920 × 1080 and
 1280 × 720 (`EmuSen_InterfaceSpec.md` §6.3.23); the tests that reached the retired doors walk Settings now
 (`PadMenuTests`, `EsdeSettingsMenusTests`, `ThemedCollectionsTests`, `ControllersTests`, `PlayerPreferencesTests`,
-`GameEngineAndPlayTimeTests`, `BigPictureSwitchTests`, `BigPictureThemeListTests`, `ThemeSettingsSheetTests`), through
+`GameEngineAndPlayTimeTests`, `BigPictureSwitchTests`, `BigPictureThemeListTests`, `ThemeSettingsSheetTests`, and since the
+land's fixes `PadSettingsWindowTests`, `ThemedLibraryHostTests`, `MenusFollowupTests`, `ThemedSwitchesTests`,
+`ThemedFoldersTests`), through
 `SettingsPad`, which opens Settings and reaches a row as the player does.

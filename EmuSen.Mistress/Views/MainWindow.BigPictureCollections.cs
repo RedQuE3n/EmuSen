@@ -127,7 +127,7 @@ namespace EmuSen.Mistress.Views
             ShowLibraryEntries();
         }
 
-        private async Task DeleteCollectionAsync(Window owner, GameCollection collection)
+        private async Task DeleteCustomCollectionAsync(Window owner, GameCollection collection)
         {
             if (!await AskAsync(owner, "Delete Custom Collection", $"Delete the collection {collection.Name}? The games in it are not touched.", "Delete", "Cancel")) return;
             _records.DeleteCollection(collection.Id);

@@ -654,7 +654,8 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   console a row with its page (Engine as Cores' Make Default, Firmware from `firmware_status`, Memory cards), and every
   door to Settings reaching the same screens.
 - **Retired.** `CollectionSettingsWindow`, `DebugSettingsWindow`, the pad menu's Settings submenu. Preferences, Graphics
-  Settings, Shader Settings and `BigMenuForm` have no door and retire in U6b with their tests.
+  Settings and `BigMenuForm` have no door and retire in U6b with their tests; Shader Settings and Active Cheats are
+  reached through Settings' Display ▸ Shaders and Library ▸ Cheats (`EmuSen_BigPicture.md` §52.5).
 - **Not in U6a.** The rows awaiting their surfaces and the accessibility rows (`EmuSen_InterfaceSpec.md` §6.3.23).
 - **Recordings.** `EmuSen_InterfaceSpec.md` §6.3.23.
 

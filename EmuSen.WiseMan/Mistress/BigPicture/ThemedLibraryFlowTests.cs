@@ -42,6 +42,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 s.Pad.A();
                 return;
             }
+            // With no game on screen, the doors the pad menu's Settings submenu had are Settings rows too (EmuSen_BigPicture.md §52.5).
+            if (!s.Window.GetControl<Control>("GameFrame").IsVisible && SettingsDoors.TryGetValue(entry, out at))
+            {
+                SettingsPad.Open(s.Window, s.Pad);
+                SettingsPad.Section(s.Window, s.Pad, at.Section);
+                SettingsPad.To(s.Window, s.Pad, at.Row);
+                s.Pad.A();
+                return;
+            }
             if (s.Window.HomeLayout is { } home)
             {
                 home.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "settings");
@@ -56,6 +65,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             ["Theme Settings"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "themes"), ["Compressed Discs"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "discs"),
             ["Shell"] = (EmuSen.Mistress.Pages.SettingsScreen.EmuSen, "shell"), ["Collections"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "collections"),
+        };
+
+        private static readonly System.Collections.Generic.Dictionary<string, (string Section, string Row)> SettingsDoors = new()
+        {
+            ["Shaders"] = (EmuSen.Mistress.Pages.SettingsScreen.Display, "shaders"), ["Cheats"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "cheats"),
+            ["Controller Bindings"] = (EmuSen.Mistress.Pages.SettingsScreen.Controllers, "bindings"),
         };
 
         // Quit Game... from the in-game menu, and Yes to its question.

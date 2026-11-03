@@ -750,6 +750,11 @@ both sizes). Retired: `HomeCardSettings` (Home's Settings place opens Settings, 
 Home's Power place, the one place that still opens it over the own look. Taken again after review the same day:
 `SettingsDesktopConsoles` (each console's line its facts rather than one sentence for all) and `SettingsFirmware` (a row
 per need, the PlayStation's regional files one `PlayStation BIOS` row), both sizes.
+Taken again on 2026-11-03 at the land, one cause each, both sizes: `SettingsConsolePage` and `SettingsConsoles`, because
+FirmwarePreference, landed beside U6a, is a row of the Super Nintendo's schema ahead of SA-1 catch-up, so the page gains
+its row and the pane's facts line names it first; `SettingsConsolePage` again for Reset this console;
+`SettingsDisplay`, `SettingsDisplayLight` and `SettingsDesktopDisplay` for Display ▸ Shaders; `SettingsLibrary` for
+Library ▸ Cheats (`EmuSen_BigPicture.md` §52.5).
 
 **Where each old setting went.** Every row of the retired windows, and of those no door reaches until U6b, has a row:
 
@@ -762,13 +767,14 @@ per need, the PlayStation's regional files one `PlayStation BIOS` row), both siz
 | Preferences ▸ Appearance: Status Bar, Messages, Frame Rate, Big Picture Theme, ES-DE Theme Folder, Theme Settings, ES-DE Media, Navigation Sounds and their volume, Hidden Games | Display ▸ Status bar, Messages, Frame rate; Library ▸ Themes (stepped, A opens Theme Settings), ES-DE theme folder, ES-DE media folder, Hidden games; Sound ▸ Navigation sounds, Sound volume |
 | Preferences ▸ Controllers: the players, Keyboard, Controller Type, Button Swap, First Controller, On-Screen Keyboard, Notifications, Player 1 by press, External Controller | Controllers ▸ Players ▸ a row per pad (a held button marks its row), Keyboard, The first controller pressed, External controller first; Controllers ▸ Controller type, Swap A and B in menus, Only the first controller, On-screen keyboard, Controller notices |
 | Preferences ▸ Firmware, FirmwarePane | Consoles ▸ the console ▸ Firmware ▸ a row per file of `firmware_status`, Folder, Check again |
-| Graphics Settings, per console: the schema's rows, Shader and shape, Overscan, Reset This Console | Consoles ▸ the console ▸ Engine, the schema's rows, CRT profile or Screen, Shader levers, Crop overscan, Picture shape; Display ▸ Picture shape, CRT shader, Crop overscan for every console at once |
+| Graphics Settings, per console: the schema's rows, Shader and shape, Overscan and its note, Reset This Console | Consoles ▸ the console ▸ Engine, the schema's rows, CRT profile or Screen, Shader levers, Crop overscan (its pane naming the running game's own crop), Picture shape, Reset this console; Display ▸ Picture shape, CRT shader, Crop overscan for every console at once, Shaders |
 | Shader Settings: the CRT's parameters, Reset All | Display ▸ Shader levers, and Consoles ▸ the console ▸ Shader levers ▸ every CRT parameter, Reset to the tier's values |
-| Shader Settings: the slang catalogue, its categories and Download Pack | no row yet: unreachable until U6b |
+| Shader Settings: the slang catalogue, its categories and Download Pack | Display ▸ Shaders, the Shader Settings window, until U6b (restored 2026-11-03, `EmuSen_BigPicture.md` §52.5) |
 | Memory Cards: mode and slots | Consoles ▸ the console ▸ Memory cards ▸ Mode, Slot 1, Slot 2, Cards, New card; Saves on the cards opens the Memory Cards window for copying, moving and deleting saves |
 | Debug Logging: the master switch | EmuSen ▸ Logging ▸ Logging |
 | Game Collection Settings: automatic collections, custom collections shown, create, delete, finish editing, grouping, sorting, stars, folders, flatten, random entry | Library ▸ Collections ▸ its rows; Delete a collection ▸ a row each |
 | Settings menu: Controller Bindings | Controllers ▸ Controller bindings, the binding window until the bindings page is built |
+| Settings menu: Cheats | Library ▸ Cheats, the Active Cheats window (restored 2026-11-03) |
 
 **Awaiting a step.** Approved by the tester on 2026-11-03 and coming in the step after U6a, each on a surface built beside
 it: Controllers ▸ Controller bindings as a page with the drawing, Controllers ▸ Profiles (Endymion's store) and Rumble

@@ -16,6 +16,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Input;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
@@ -305,39 +306,33 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task Preferences_chooses_the_big_picture_theme_and_the_session_follows_it_at_once() => Session.Dispatch(() =>
+        public Task Settings_chooses_the_big_picture_theme_and_the_session_follows_it_at_once() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession();
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            var sheets = s.Window.GetControl<SheetLayer>("Sheets");
-            Assert.IsType<PreferencesWindow>(sheets.Current);
+            SettingsPad.Open(s.Window, s.Pad);
             Assert.Empty(s.Window.OwnedWindows);
-            Control sheet = sheets.SheetOf(sheets.Current!)!;
-            var tabs = sheet.GetVisualDescendants().OfType<TabControl>().First();
-            for (int i = 0; i < 6 && (tabs.SelectedItem as TabItem)?.Header as string != "Appearance"; i++) s.Pad.R1();
-
-            PadAudit.Reach(sheet, s.Pad, e => e is LunaSwitch { Name: "NavigationSoundsSwitch" });
+            SettingsPad.Section(s.Window, s.Pad, SettingsScreen.Sound);
+            SettingsPad.To(s.Window, s.Pad, "navsounds");
             s.Pad.A();
             Assert.False(AppSettings.Load().NavigationSounds);
-            PadAudit.Reach(sheet, s.Pad, e => e is Dropdown { Name: "BigPictureThemeDropdown" });
+            SettingsPad.Section(s.Window, s.Pad, SettingsScreen.Library);
+            SettingsPad.To(s.Window, s.Pad, "themes");
             s.Pad.Left();
             Assert.Equal(AppSettings.LibraryStyleMistress, AppSettings.Load().LibraryStyle);
             Assert.False(s.Shown);
 
-            ThemedSwitchesTests.PutAway(s);
-            Assert.False(sheets.IsPresenting);
+            for (int guard = 0; guard < 3 && s.Window.SettingsShown is not null; guard++) s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
             s.Settle();
             Assert.False(s.Shown);
             Assert.NotNull(s.Window.HomeLayout);
         }, default);
 
-        // P45: the themed session's pad menu reaches every sheet, and every control on each is reached by the pad at 1280 by 800.
+        // P45: the themed session reaches every sheet, through Settings where that is its door, and every control on each is reached by the pad at 1280 by 800.
         [Theory]
         [InlineData("Cheats")]
-        [InlineData("Graphics")]
         [InlineData("Shaders")]
         [InlineData("Controller Bindings")]
-        [InlineData("Preferences")]
         public Task Every_control_of_each_sheet_opened_from_the_themed_view_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession();
@@ -361,6 +356,39 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             ThemedSwitchesTests.PutAway(s);
             Assert.False(sheets.IsPresenting);
+            for (int guard = 0; guard < 3 && s.Window.SettingsShown is not null; guard++) s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
+            s.Pad.Right();
+            Assert.Equal("gb", s.System);
+        }, default);
+
+        // What Preferences and Graphics held is Settings' own rows now: every row of each section, and of a console's page, reached by Down from the themed view.
+        [Fact]
+        public Task Every_row_of_each_settings_section_opened_from_the_themed_view_is_reached_by_the_pad() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            SettingsLayout layout = SettingsPad.Open(s.Window, s.Pad);
+            Assert.Empty(s.Window.OwnedWindows);
+            Assert.True(s.Shown);
+            void EveryRow(string where)
+            {
+                var seen = new HashSet<string> { layout.Focused! };
+                for (int i = 0; i < layout.Rows.Count; i++) { s.Pad.Down(); seen.Add(layout.Focused!); }
+                Assert.True(layout.Rows.Where(r => r.IsEnabled).Select(r => r.Key).ToHashSet().IsSubsetOf(seen), $"{where}: {string.Join(", ", layout.Rows.Where(r => r.IsEnabled && !seen.Contains(r.Key)).Select(r => r.Key))} not reached");
+            }
+            foreach ((string section, _) in SettingsScreen.SectionList)
+            {
+                SettingsPad.Section(s.Window, s.Pad, section);
+                EveryRow(section);
+            }
+            SettingsPad.Section(s.Window, s.Pad, SettingsScreen.Consoles);
+            SettingsPad.To(s.Window, s.Pad, "console:SNES");
+            s.Pad.A();
+            Assert.Equal("Super Nintendo", s.Window.SettingsShown!.Trail[^1]);
+            EveryRow("SNES");
+
+            for (int guard = 0; guard < 4 && s.Window.SettingsShown is not null; guard++) s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
             s.Pad.Right();
             Assert.Equal("gb", s.System);
         }, default);

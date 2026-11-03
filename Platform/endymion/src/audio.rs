@@ -1,5 +1,5 @@
-//! The game's sound to SDL's default playback device through the rate control, and the interface's short sounds on a
-//! stream of their own: the C# `AudioPlayer` and `UiSoundPlayer`. See EmuSen_Audio_Sync.md §7 and
+//! The game's sound to SDL's default or a chosen playback device through the rate control, and the interface's short
+//! sounds on a stream of their own: the C# `AudioPlayer` and `UiSoundPlayer`. See EmuSen_Audio_Sync.md §7 and
 //! EmuSen_Settings_Reference.md §4.10 and §4.52.
 //!
 //! Each owns its device until `dispose`, which may be called more than once, as the C#'s `Dispose` may; dropping one
@@ -9,7 +9,7 @@ use crate::rate_control::DynamicRateControl;
 use crate::resampler::RatioError;
 use crate::sdl::{self, AudioSpec, Sdl};
 use std::collections::HashMap;
-use std::ffi::{CString, c_void};
+use std::ffi::{CString, c_int, c_void};
 use std::sync::Arc;
 
 /// The game's sink: samples and a rate in, nothing about cores. The rate control is the caller's, lent to each call.
@@ -23,9 +23,31 @@ pub struct AudioPlayer {
     buffer_frames: i32,
     volume: f32,
     scratch: Vec<i16>,
+    /// The playback device by its name; None is the system default.
+    device: Option<String>,
 }
 
 unsafe impl Send for AudioPlayer {}
+
+/// SDL's playback devices, each its id and name, in SDL's order; none where SDL's audio does not start (EmuSen_Audio_Sync.md §7.4).
+pub fn playback_devices(sdl: &Sdl) -> Vec<(u32, String)> {
+    if !unsafe { (sdl.f.init_sub_system)(sdl::INIT_AUDIO) } {
+        return Vec::new();
+    }
+    let mut count: c_int = 0;
+    let ids = unsafe { (sdl.f.get_audio_playback_devices)(&mut count) };
+    let mut found = Vec::new();
+    if !ids.is_null() {
+        for &id in unsafe { std::slice::from_raw_parts(ids, count.max(0) as usize) } {
+            if let Some(name) = unsafe { sdl::text((sdl.f.get_audio_device_name)(id)) } {
+                found.push((id, name));
+            }
+        }
+        unsafe { (sdl.f.free)(ids.cast()) };
+    }
+    unsafe { (sdl.f.quit_sub_system)(sdl::INIT_AUDIO) };
+    found
+}
 
 /// `targetLatencyMs * sampleRate / 1000` in C#'s unchecked 32-bit arithmetic.
 pub fn target_frames(target_latency_ms: i32, sample_rate: i32) -> i32 {
@@ -45,6 +67,7 @@ impl AudioPlayer {
             buffer_frames,
             volume: 1.0,
             scratch: Vec::new(),
+            device: None,
         };
         if player.subsystem {
             player.open_device(rate, sample_rate);
@@ -56,7 +79,12 @@ impl AudioPlayer {
         self.sdl.set_hint(sdl::HINT_AUDIO_DEVICE_SAMPLE_FRAMES, &self.buffer_frames.to_string());
         let format = if cfg!(target_endian = "little") { sdl::AUDIO_S16LE } else { sdl::AUDIO_S16BE };
         let desired = AudioSpec { format, channels: 2, freq: sample_rate };
-        self.stream = unsafe { (self.sdl.f.open_audio_device_stream)(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK, &desired, std::ptr::null(), std::ptr::null_mut()) };
+        let id = self.device.as_deref().and_then(|name| playback_devices(&self.sdl).into_iter().find(|(_, d)| d == name)).map_or(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK, |(id, _)| id);
+        let open = |id| unsafe { (self.sdl.f.open_audio_device_stream)(id, &desired, std::ptr::null(), std::ptr::null_mut()) };
+        self.stream = open(id);
+        if self.stream.is_null() && id != sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK {
+            self.stream = open(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK);
+        }
         self.device_open = !self.stream.is_null();
         self.open_sample_rate = if self.device_open { sample_rate } else { 0 };
         if !self.device_open {
@@ -102,6 +130,29 @@ impl AudioPlayer {
         if self.device_open {
             unsafe { (self.sdl.f.set_audio_stream_gain)(self.stream, self.volume) };
         }
+    }
+
+    /// The playback device chosen by name; None is the system default.
+    pub fn device(&self) -> Option<&str> {
+        self.device.as_deref()
+    }
+
+    /// Plays on the device of that name, None or empty the system default; false where no device has the name, and
+    /// the system default plays. An open device reopens at its rate (EmuSen_Audio_Sync.md §7.4).
+    pub fn set_device(&mut self, rate: &mut DynamicRateControl, name: Option<&str>) -> bool {
+        let name = name.filter(|n| !n.is_empty());
+        let found = name.is_none_or(|n| playback_devices(&self.sdl).iter().any(|(_, d)| d == n));
+        let wanted = if found { name.map(str::to_string) } else { None };
+        if wanted != self.device {
+            self.device = wanted;
+            if self.device_open {
+                let sample_rate = self.open_sample_rate;
+                self.close_device();
+                self.open_device(rate, sample_rate);
+                rate.reset();
+            }
+        }
+        found
     }
 
     /// L,R,L,R 16-bit PCM at `sample_rate`; a new rate moves the device. None is C#'s null, which does nothing.

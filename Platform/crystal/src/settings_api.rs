@@ -96,14 +96,20 @@ fn sidecar_rows(core: &Discovered, trust: &Trust) -> Vec<Row> {
     crate::machine_info::settings(&text).iter().filter(|s| !s.hidden).filter_map(|s| row_of(s, Note::None)).collect()
 }
 
-/// The discovered engines that run a console's systems, `EnginesOfConsole`.
-fn engines_of_console<'d>(discovery: &'d Discovery, console: &str) -> Vec<&'d Discovered> {
+/// The system ids a console runs: the catalogue's and the systems table's.
+fn console_system_ids(console: &str) -> Vec<String> {
     let mut ids: Vec<String> = catalog::system_ids_for(console).into_iter().map(str::to_string).collect();
     for p in emusen_systems::table().unwrap_or(&[]) {
         if equals_ignore_case(&p.console, console) {
             ids.push(p.id.clone());
         }
     }
+    ids
+}
+
+/// The discovered engines that run a console's systems, `EnginesOfConsole`.
+fn engines_of_console<'d>(discovery: &'d Discovery, console: &str) -> Vec<&'d Discovered> {
+    let ids = console_system_ids(console);
     let engines = discovery.found().iter().filter(|c| c.sidecar.info.systems.iter().any(|s| ids.contains(&s.id) || equals_ignore_case(&s.id, console))).collect();
     let system = ids.iter().find(|id| emusen_systems::libretro_cores::default_for(id).is_some()).or(ids.first());
     discovery.in_rule_order(engines, system.map(String::as_str))
@@ -170,6 +176,24 @@ pub fn schema(rt: &Runtime, catalog: &Catalog, discovery: &Discovery, tree: &Tre
             max: 0,
             choices: engines.iter().map(|e| e.engine_name().to_string()).collect(),
             choice_labels: Vec::new(),
+            group: None,
+            note: Note::None,
+            shown_with: None,
+            locked: false,
+        });
+    }
+    let infos: Vec<&emusen_native::json::Value> = engines.iter().map(|e| &e.sidecar.info_json).collect();
+    if crate::firmware::replacement_offered(&infos, &console_system_ids(console)) {
+        rows.push(Row {
+            key: crate::firmware::PREFERENCE_KEY.to_string(),
+            label: "Firmware".to_string(),
+            hint: "Automatic uses your own firmware where it is found, and the open replacement otherwise. Open replacement always uses the replacement, even with your own present. Own firmware uses only yours: without it, the game does not start. Takes effect when a game is next loaded.".to_string(),
+            kind: "choice",
+            default: crate::firmware::Preference::CHOICES[0].to_string(),
+            min: 0,
+            max: 0,
+            choices: crate::firmware::Preference::CHOICES.iter().map(|c| c.to_string()).collect(),
+            choice_labels: crate::firmware::Preference::LABELS.iter().map(|c| c.to_string()).collect(),
             group: None,
             note: Note::None,
             shown_with: None,

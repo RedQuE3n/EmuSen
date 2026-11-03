@@ -104,7 +104,7 @@ namespace EmuSen.Hotaru.Views
         // Pictures to the frame control in buffers made once, so a frame allocates none (C4) - see EmuSen_Backend.md §14.11.
         private readonly PictureSlots _pictures;
 
-        private static AudioPlayer NewAudioPlayer(AudioConfig audio) => new(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation);
+        private static AudioPlayer NewAudioPlayer(AudioConfig audio) => new(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation, outputDevice: AppSettings.Load().SoundOutputDevice);
 
         public GameWindow(HotaruSession session)
         {

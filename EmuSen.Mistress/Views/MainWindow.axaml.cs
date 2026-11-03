@@ -197,7 +197,7 @@ namespace EmuSen.Mistress.Views
             Opened += (_, _) => { if (PlayArgument(Environment.GetCommandLineArgs()) is { } rom) Dispatcher.UIThread.Post(() => LoadRom(rom, Path.GetFileNameWithoutExtension(rom)), DispatcherPriority.Background); };
             // Endymion is a leaf and reads no globals, so audio.json's settings come from here, the cores' with them - see EmuSen_Audio_Sync.md §7.1.
             AudioConfig audio = AudioConfig.Load().Bounded();
-            _audioPlayer = new AudioPlayer(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation);
+            _audioPlayer = new AudioPlayer(audio.SampleRate, audio.OutputTargetLatencyMs, audio.RateControlMaxDeviation, outputDevice: _appSettings.SoundOutputDevice);
             OpenOptions = new CrystalOpen { AudioBufferMaxSamples = audio.AudioBufferMaxSamples };
             // graphics.json's filtering and display sync, which the picture and the pacer read - see EmuSen_Settings_Reference.md §3, §4.87.
             GameFrame.BilinearFiltering = _graphics.BilinearFiltering;

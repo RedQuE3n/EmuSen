@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using EmuSen.Endymion.Native;
+using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
 using SDL3;
 
 namespace EmuSen.Endymion
@@ -46,8 +49,45 @@ namespace EmuSen.Endymion
 
         // Every knob is a parameter, not a global read - that is what makes this project a leaf - see §7.1.
         public AudioPlayer(int sampleRate = 32000, int targetLatencyMs = 256,
-            double maxRateDeviation = 0.005, int bufferFrames = 4096)
-            : this(sampleRate, targetLatencyMs, maxRateDeviation, bufferFrames, DeviceNative.Active) { }
+            double maxRateDeviation = 0.005, int bufferFrames = 4096, string? outputDevice = null)
+            : this(sampleRate, targetLatencyMs, maxRateDeviation, bufferFrames, DeviceNative.Active)
+        {
+            SetOutputDevice(outputDevice);
+        }
+
+        // The playback device by name; "System default" until another is chosen or after a fallback - see EmuSen_Audio_Sync.md §7.4.
+        public string OutputDevice { get; private set; } = AppSettings.SystemDefaultOutput;
+
+        // SDL's playback devices by name, "System default" first - see EmuSen_Audio_Sync.md §7.4.
+        public static IReadOnlyList<string> OutputDevices()
+        {
+            var names = new List<string> { AppSettings.SystemDefaultOutput };
+            if (!DeviceNative.Active) return names;
+            string? list = DeviceNative.Text((buffer, capacity) => DeviceNative.AudioDeviceList(buffer, capacity));
+            foreach (string name in (list ?? "").Split('\0', StringSplitOptions.RemoveEmptyEntries))
+                if (!names.Contains(name)) names.Add(name);
+            return names;
+        }
+
+        // False, with one log line, where no device has the name: the system default plays - see EmuSen_Audio_Sync.md §7.4.
+        public bool SetOutputDevice(string? name)
+        {
+            string? wanted = string.IsNullOrEmpty(name) || name == AppSettings.SystemDefaultOutput ? null : name;
+            int status = DeviceNative.Absent;
+            if (_managed is not null) status = wanted is null ? 0 : DeviceNative.Absent;
+            else
+            {
+                byte[]? bytes = DeviceNative.Utf8(wanted);
+                fixed (byte* p = bytes)
+                    status = DeviceNative.AudioDeviceSet(_native!.Value, _nativeRate!.NativeValue!.Value, bytes is null ? null : DeviceNative.Pin(p), (nuint)(bytes?.Length ?? 0));
+                GC.KeepAlive(_native);
+                GC.KeepAlive(_nativeRate);
+            }
+            OutputDevice = status == 0 ? wanted ?? AppSettings.SystemDefaultOutput : AppSettings.SystemDefaultOutput;
+            if (status == 0) return true;
+            ErrorLog.Warning("audio", $"The sound output \"{name}\" is not connected; the system default plays instead.");
+            return false;
+        }
 
         // The library's player or the C#'s, chosen for the instance; a parity test asks for each.
         internal AudioPlayer(int sampleRate, int targetLatencyMs, double maxRateDeviation, int bufferFrames, bool native)

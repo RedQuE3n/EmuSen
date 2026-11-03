@@ -77,6 +77,8 @@ namespace EmuSen.Endymion.Native
         internal static delegate* unmanaged[Cdecl]<nint, uint, long> AudioGet;
         internal static delegate* unmanaged[Cdecl]<nint, float, int> AudioSetVolume;
         internal static delegate* unmanaged[Cdecl]<nint, float> AudioVolume;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, long> AudioDeviceList;
+        internal static delegate* unmanaged[Cdecl]<nint, nint, byte*, nuint, int> AudioDeviceSet;
         internal static delegate* unmanaged[Cdecl]<nint> UiNew;
         internal static delegate* unmanaged[Cdecl]<nint, int> UiFree;
         internal static delegate* unmanaged[Cdecl]<nint, int> UiDispose;
@@ -101,6 +103,7 @@ namespace EmuSen.Endymion.Native
             "emusen_endymion_audio_new", "emusen_endymion_audio_free", "emusen_endymion_audio_dispose", "emusen_endymion_audio_submit", "emusen_endymion_audio_get",
             "emusen_endymion_audio_set_volume", "emusen_endymion_audio_volume", "emusen_endymion_ui_new", "emusen_endymion_ui_free", "emusen_endymion_ui_dispose", "emusen_endymion_ui_sound",
             "emusen_endymion_ui_remember", "emusen_endymion_ui_get", "emusen_endymion_ui_set_volume", "emusen_endymion_ui_volume", "emusen_endymion_ui_decode", "emusen_endymion_ui_decode_take",
+            "emusen_endymion_audio_device_list", "emusen_endymion_audio_device_set",
         };
 
         // The resolved exports, in Exports' order.
@@ -162,6 +165,8 @@ namespace EmuSen.Endymion.Native
             UiVolume = (delegate* unmanaged[Cdecl]<nint, float>)found[next++];
             UiDecode = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             UiDecodeTake = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
+            AudioDeviceList = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
+            AudioDeviceSet = (delegate* unmanaged[Cdecl]<nint, nint, byte*, nuint, int>)found[next++];
         }
 
         private static readonly Lazy<string?> Lent = new(Lend);

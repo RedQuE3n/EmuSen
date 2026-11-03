@@ -14,7 +14,7 @@ use emusen_native::core::sys::{FrameInfo, caps, event, flags};
 use emusen_native::json::Value;
 
 use crate::battery::BatterySave;
-use crate::firmware::Entry as Firmware;
+use crate::firmware::{Entry as Firmware, Preference};
 use crate::info::{self, BatteryFile, SystemDetail};
 use crate::machine_info::{self, MachineInfo, SettingDesc};
 use crate::media::{self, Choice, Placement};
@@ -114,6 +114,8 @@ pub struct Engine {
     battery: Vec<(u32, BatterySave)>,
     placement: Option<Placement>,
     pub firmware_notice: Option<String>,
+    /// Which firmware the machine is given, the console's `FirmwarePreference`.
+    pub firmware_preference: Preference,
     pub media_notice: Option<String>,
     pub notes: Vec<(String, String)>,
     pub latch: Arc<InputLatch>,
@@ -207,6 +209,7 @@ impl Engine {
             battery: Vec::new(),
             placement: None,
             firmware_notice: None,
+            firmware_preference: Preference::Auto,
             media_notice: None,
             notes: Vec::new(),
             latch: Arc::new(InputLatch::default()),
@@ -310,6 +313,9 @@ impl Engine {
         let mut files = Vec::new();
         self.located.clear();
         for f in entries {
+            if self.firmware_preference == Preference::Replacement && f.has_replacement() {
+                continue;
+            }
             let Some(found) = emusen_firmware::find(&f.request(), folders) else { continue };
             for (n, part) in found.parts.iter().enumerate() {
                 files.push((f.which + n as u32, part.clone()));
@@ -317,6 +323,15 @@ impl Engine {
             self.located.push(Located { which: f.which, folder: found.folder.clone(), names: found.names.clone(), content: found.content });
         }
         files
+    }
+
+    /// Under `own`, why the machine cannot be made: a file it would run the open replacement of in its absence (§3.12).
+    fn own_missing(&self, entries: &[Firmware], console: &str) -> Option<String> {
+        if self.firmware_preference != Preference::Own {
+            return None;
+        }
+        let f = entries.iter().find(|f| f.has_replacement() && !self.located.iter().any(|l| l.which == f.which))?;
+        Some(format!("{} ({}) is not in your firmware folders, and the {console} is set to use your own firmware, never the open replacement.", f.label, f.name))
     }
 
     /// The machine's firmware line for each entry it reports, `FirmwareLines`.
@@ -456,6 +471,9 @@ impl Engine {
         let disc = self.patched(set.open(tree, 0, is_image).map_err(Refused::io)?, at)?;
         let asked = self.lib.firmware_for(disc.image.bytes()).ok().and_then(|t| emusen_native::json::parse(t.as_bytes()).ok()).map(|v| crate::firmware::entries(&v)).unwrap_or_default();
         let firmware = self.firmware_files(&asked, folders);
+        if let Some(why) = self.own_missing(&asked, &console) {
+            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", path::file_name(Style::HOST, at)) });
+        }
         self.release_media();
         let stem = path::file_name_without_extension(Style::HOST, at).to_string();
         let disabled = self.options.battery_disabled;
@@ -526,6 +544,9 @@ impl Engine {
         };
         let wanted_fw = self.system_entries().into_iter().find(|(id, _, _)| id == system_id).map(|(_, _, fw)| fw).unwrap_or_default();
         let firmware = self.firmware_files(&wanted_fw, folders);
+        if let Some(why) = self.own_missing(&wanted_fw, &console) {
+            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{console} cannot start with nothing in it: {why}") });
+        }
         self.release_media();
         let media = media::media_of(&console, Some(&system));
         let choices: Vec<(String, Choice)> = media

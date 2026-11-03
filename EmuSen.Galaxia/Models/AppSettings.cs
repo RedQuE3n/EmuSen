@@ -77,6 +77,10 @@ namespace EmuSen.Galaxia.Models
         public double LibraryTileScale { get; set; } = 1.0;
         public string LibraryCollection { get; set; } = "all";
 
+        // The game's sound output by the device's name, "System default" first among the choices; a saved one missing at start falls back to the default - see EmuSen_Settings_Reference.md §4.10.
+        public string SoundOutputDevice { get; set; } = SystemDefaultOutput;
+        public const string SystemDefaultOutput = "System default";
+
         // The in-game bar's volume, 0 to 1, and OpenEmu's pause when the window is not the one in front - see EmuSen_Settings_Reference.md §4.34.
         public double Volume { get; set; } = 1.0;
         public bool PauseInBackground { get; set; } = true;

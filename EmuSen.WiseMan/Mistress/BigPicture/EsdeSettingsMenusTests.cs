@@ -139,7 +139,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Null(s.Window.SettingsShown);
         }, default);
 
-        // Firmware is Consoles ▸ the console ▸ Firmware: a row per file the runtime's firmware_status names, its status as the value, the folder and Check again; A on a file's row changes nothing (EmuSen_Interface.md §18.10).
+        // Firmware is Consoles ▸ the console ▸ Firmware: a row per need the runtime's firmware_status names, its status as the value, the folder and Check again; A on a file's row changes nothing (EmuSen_Interface.md §18.10).
         [Theory]
         [MemberData(nameof(Sizes))]
         public Task The_firmware_page_under_a_theme_is_rows_of_the_runtime_s_firmware_status(int width, int height) => Session.Dispatch(() =>
@@ -159,7 +159,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             PageRow bios = Assert.Single(files);
             Assert.Equal("PlayStation BIOS", bios.Label);
             Assert.True(bios.Status is "Not found" or "⚠ Not found" || bios.Status!.StartsWith("✓ Found · ", StringComparison.Ordinal), bios.Status);
+            // Then Open replacement, the runtime's FirmwarePreference where the mockup draws it (decided 2026-11-03, EmuSen_Cores.md §3.13), the folder, its clearing and opening, and Check again.
             Assert.Equal(["fwreplacement", "fwfolder", "fwclear", "fwopen", "fwcheck"], layout.Rows.Skip(files.Count).Select(r => r.Key));
+            Assert.Equal("Open replacement", layout.Rows.Single(r => r.Key == "fwreplacement").Label);
             foreach (PageRow file in files)
             {
                 ToRow(s, file.Key);

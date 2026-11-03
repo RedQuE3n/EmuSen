@@ -21,7 +21,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // Settings ▸ Display ▸ Shaders: a page per console of its built-in filters, the pack's folders and the recent ones, a search, the pack's download, and the parameters of the shader in use - see EmuSen_BigPicture.md §52.8.
+    // Settings ▸ Display ▸ Shaders: a page per console of its built-in filters, the pack's folders and the recent ones, a search, the pack's download, and the parameters of the shader in use - see EmuSen_BigPicture.md §52.9.
     [Collection(TestCollections.ProcessGlobals)]
     public class ShaderSettingsTests : IDisposable
     {

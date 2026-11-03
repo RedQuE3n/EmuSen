@@ -432,7 +432,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A shader's page in Settings over the paused game: a preset found by the search typed by pad, used, its parameter stepped and back, and left by pad, Display's row then naming the shader in use - see EmuSen_BigPicture.md §52.8.
+        // A shader's page in Settings over the paused game: a preset found by the search typed by pad, used, its parameter stepped and back, and left by pad, Display's row then naming the shader in use - see EmuSen_BigPicture.md §52.9.
         [Fact]
         public Task The_shaders_page_is_searched_used_and_adjusted_by_pad() => Session.Dispatch(() =>
         {

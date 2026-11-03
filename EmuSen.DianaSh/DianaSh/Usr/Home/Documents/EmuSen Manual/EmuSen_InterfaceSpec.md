@@ -756,7 +756,7 @@ Settings and Shader Settings audits and recordings of `WindowFitAuditTests` (the
 custom crop, the PlayStation's cards, the hosted PlayStation 2's tab, the sliders and the long parameter), and
 `PreferencesFirmware`; the hosted core's page is held by `WindowFitAuditTests.Hosted` through Settings' own description,
 and the players' rows by `SettingsPlayers` at both sizes. Taken again in U6b, one cause each, both sizes:
-`SettingsDesktopDisplay` for Window colours; `SettingsFirmware` for Use EmuSen's folder alone, Open EmuSen's folder and
+`SettingsDesktopDisplay` for Window colours, and again as both U6 halves merged, Text size and Window colours on one page; `SettingsFirmware` for Use EmuSen's folder alone, Open EmuSen's folder and
 the need's pane saying what the open version changes; `BigPicture-ThemeSettings`, `ThemeBrowser` and
 `ThemeBrowserLongName` because Theme Settings is a framed sheet of tabs rather than ES-DE's menu, so its rows are its
 controls' own; `ThemeSettings`, added to the audited windows now that it is framed, its Options heading recorded as
@@ -782,7 +782,7 @@ Library ▸ Cheats (`EmuSen_BigPicture.md` §52.5).
 | Preferences ▸ Firmware, FirmwarePane | Consoles ▸ the console ▸ Firmware ▸ a row per file of `firmware_status` (its pane saying where the file was found, why one of the wrong size is unused and what the open version changes), Folder (by §7.7's rules), Use EmuSen's folder alone, Open EmuSen's folder, Check again |
 | Graphics Settings, per console: the schema's rows, the running engine's own, its groups and held rows, Shader and shape, Overscan with Custom crop and its note, Reset This Console | Consoles ▸ the console ▸ Engine, the schema's rows (the running engine's for the running game's console, under the engine's group headings, a held row shown with why), CRT profile or Screen, Shader levers, Crop overscan with Custom crop ▸ Left, Right, Top, Bottom (its pane naming the running game's own crop), Picture shape, Reset this console; Display ▸ Picture shape, CRT shader, Crop overscan for every console at once, Shaders |
 | Shader Settings: the CRT's parameters, Reset All | Display ▸ Shader levers, and Consoles ▸ the console ▸ Shader levers ▸ every CRT parameter, Reset to the tier's values |
-| Shader Settings: every filter and preset per console, its search, the recent ones, the slang catalogue's categories and Download Pack, a shader's parameters and their search | Display ▸ Shaders ▸ the pack's row and a page per console: Parameters (with Search parameters and Reset all), Search, the recent ones, the built-in filters, the pack's folders (`EmuSen_BigPicture.md` §52.8) |
+| Shader Settings: every filter and preset per console, its search, the recent ones, the slang catalogue's categories and Download Pack, a shader's parameters and their search | Display ▸ Shaders ▸ the pack's row and a page per console: Parameters (with Search parameters and Reset all), Search, the recent ones, the built-in filters, the pack's folders (`EmuSen_BigPicture.md` §52.9) |
 | Memory Cards: mode and slots | Consoles ▸ the console ▸ Memory cards ▸ Mode, Slot 1, Slot 2, Cards, New card; Saves on the cards opens the Memory Cards window for copying, moving and deleting saves |
 | Debug Logging: the master switch | EmuSen ▸ Logging ▸ Logging |
 | Game Collection Settings: automatic collections, custom collections shown, create, delete, finish editing, grouping, sorting, stars, folders, flatten, random entry | Library ▸ Collections ▸ its rows; Delete a collection ▸ a row each |
@@ -812,3 +812,9 @@ bindings page instead, without recordings: `WindowFitAuditTests.Every_consoles_b
 and the PlayStation's pads and their digital ones, the Saturn's and the Dreamcast's, the Genesis's three-button, six-button
 and Team Player fourth player, the Nintendo 64's, and the keyboard's page with the longest key names, each at
 1280 × 800, 1920 × 1080 and 1280 × 720.
+
+Item 7 the same day (`EmuSen_BigPicture.md` §52.8), compared with the text-size and Display mockups first. Added:
+`SettingsTextSize`, both sizes, Display with the Text size row focused and its samples in the pane. Taken again, one cause:
+`SettingsDisplay`, `SettingsDisplayLight` and `SettingsDesktopDisplay`, both sizes, for the Text size and Reduced motion
+rows and Light or dark moved after them, as the mockup orders the section. Every big-screen state is audited at the
+largest text size at 1280 × 720 and 1280 × 800 without recordings.

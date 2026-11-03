@@ -313,5 +313,87 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("own", s.Host.CoreValue(psx, SettingsScreen.FirmwarePreferenceKey));
             window.Close();
         }, default);
+    
+        // Item 7: Text size through LunaP's type scale and Reduced motion through LunaP's switch, both saved and applied at once - see EmuSen_BigPicture.md §52.8.
+        [Fact]
+        public Task Text_size_scales_the_interface_through_the_kits_tokens_at_once_and_is_saved() => Session.Dispatch(() =>
+        {
+            (MainWindow window, _) = Open(app => app.BigScreen = true);
+            try
+            {
+                window.ShowSettings(SettingsScreen.Display);
+                SettingsScreen s = Model(window);
+                Assert.Equal("Default", Status(s, "textsize"));
+                Assert.Equal(1.0, EmuSen.LunaP.Theme.LunaTokens.TextScale);
+                double Row() => window.SettingsLayoutShown!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.MenuRow>().First(r => r.Name == "SettingsRow.textsize").TextSize;
+                Assert.Equal(26, Row());
+                Assert.Equal([22d, 25.5d, 28.5d], s.PaneOf("textsize")!.Lines.Take(3).Select(l => l.Size ?? 0));
+
+                window.SettingsLayoutShown!.FocusOn("textsize");
+                window.SettingsLayoutShown!.Move(1, 0);
+                Assert.Equal(AppSettings.TextSizeLarge, AppSettings.Load().TextSize);
+                Assert.Equal(1.15, EmuSen.LunaP.Theme.LunaTokens.TextScale);
+                Assert.Equal(30, Row());
+                window.SettingsLayoutShown!.Move(1, 0);
+                Assert.Equal(AppSettings.TextSizeLarger, AppSettings.Load().TextSize);
+                Assert.Equal(34, Row());
+                Assert.Equal([22d, 25.5d, 28.5d], s.PaneOf("textsize")!.Lines.Take(3).Select(l => l.Size ?? 0));
+                Assert.Empty(EmuSen.WiseMan.Fixtures.FitAudit.Check(window.SettingsLayoutShown!, []));
+            }
+            finally
+            {
+                window.Close();
+                EmuSen.LunaP.Theme.LunaTokens.TextScale = 1;
+            }
+        }, default);
+
+        // The screen under Settings is drawn again at the new size as Settings closes.
+        [Fact]
+        public Task Home_under_settings_takes_the_new_text_size_as_settings_closes() => Session.Dispatch(() =>
+        {
+            (MainWindow window, _) = Open(app => app.BigScreen = true);
+            try
+            {
+                typeof(MainWindow).GetMethod("ShowHome", Hidden)!.Invoke(window, null);
+                Dispatcher.UIThread.RunJobs();
+                double HubSize() => window.HomeLayout!.GetVisualDescendants().OfType<TextBlock>().First(b => b.Name == "HubStatus").FontSize;
+                Assert.Equal(20, HubSize());
+                window.ShowSettings(SettingsScreen.Display);
+                while (Status(Model(window), "textsize") != "Larger") Model(window).Step("textsize", 1);
+                window.CloseSettings();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(26, HubSize());
+            }
+            finally
+            {
+                window.Close();
+                EmuSen.LunaP.Theme.LunaTokens.TextScale = 1;
+            }
+        }, default);
+
+        [Fact]
+        public Task Reduced_motion_turns_the_kits_motion_off_at_once_and_is_saved() => Session.Dispatch(() =>
+        {
+            (MainWindow window, _) = Open(app => app.ReducedMotion = AppSettings.ReducedMotionOff);
+            try
+            {
+                Assert.False(EmuSen.LunaP.Theme.LunaMotion.Reduced);
+                window.ShowSettings(SettingsScreen.Display);
+                SettingsScreen s = Model(window);
+                Assert.Equal(SettingsScreen.Off, Status(s, "motion"));
+                while (Status(s, "motion") != SettingsScreen.On) s.Step("motion", 1);
+                Assert.Equal(AppSettings.ReducedMotionOn, AppSettings.Load().ReducedMotion);
+                Assert.True(EmuSen.LunaP.Theme.LunaMotion.Reduced);
+                Assert.Equal(10, new EmuSen.LunaP.Motion.Glide(0, 10, TimeSpan.Zero, TimeSpan.FromSeconds(1)).ValueAt(TimeSpan.FromSeconds(0.5)));
+                while (Status(s, "motion") != "System") s.Step("motion", 1);
+                Assert.Equal(s.Host.SystemReducesMotion, EmuSen.LunaP.Theme.LunaMotion.Reduced);
+                Assert.Contains("The desktop's own setting", s.PaneOf("motion")!.Lines[0].Text);
+            }
+            finally
+            {
+                window.Close();
+                EmuSen.LunaP.Theme.LunaMotion.Reduced = false;
+            }
+        }, default);
     }
 }

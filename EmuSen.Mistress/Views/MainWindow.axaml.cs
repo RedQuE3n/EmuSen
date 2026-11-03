@@ -180,6 +180,7 @@ namespace EmuSen.Mistress.Views
             SetUpStatusLine();
             ApplyStatusBar();
             SetUpLibraryScreen();
+            ApplyAccessibility();
             BuildMenus();
             // The tick follows the window, so a window-manager key cannot leave it lying - see §4.19.
             FullScreenChanged += on => _fullscreen.IsChecked = on;

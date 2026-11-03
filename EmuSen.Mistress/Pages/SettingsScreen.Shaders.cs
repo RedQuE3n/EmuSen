@@ -9,7 +9,7 @@ using EmuSen.Serenity.Slang;
 
 namespace EmuSen.Mistress.Pages
 {
-    // Display ▸ Shaders: each console's screen filter from every one EmuSen has, the slang pack and its download, and the parameters of the one in use - see EmuSen_BigPicture.md §52.8.
+    // Display ▸ Shaders: each console's screen filter from every one EmuSen has, the slang pack and its download, and the parameters of the one in use - see EmuSen_BigPicture.md §52.9.
     public sealed partial class SettingsScreen
     {
         private string ShaderOf(string console) => _host.Graphics.Value(console, GraphicsKeys.ScreenFilter) ?? ScreenFilters.None;
@@ -105,7 +105,7 @@ namespace EmuSen.Mistress.Pages
                 groups = groups.Select(g => (g.Heading, g.Heading is { } h && FilterBar.MatchesWords(search, h.Description) ? g.Parameters : g.Parameters.Where(p => FilterBar.MatchesWords(search, LabelOf(p), p.Id)).ToList())).ToList();
             groups = groups.Where(g => g.Parameters.Count > 0).ToList();
 
-            // A long list is a page per heading, split again past the page's size, so no page holds hundreds of rows - see EmuSen_BigPicture.md §52.8.
+            // A long list is a page per heading, split again past the page's size, so no page holds hundreds of rows - see EmuSen_BigPicture.md §52.9.
             if (search.Length == 0 && groups.Sum(g => g.Parameters.Count) > PageOfParameters)
             {
                 var pages = groups.SelectMany(g => g.Parameters.Chunk(PageOfParameters).Select((chunk, i) => (g.Heading, Chunk: chunk, Part: i))).ToList();

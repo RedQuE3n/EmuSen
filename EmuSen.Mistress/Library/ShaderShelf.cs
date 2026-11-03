@@ -10,7 +10,7 @@ using EmuSen.Serenity.Slang;
 
 namespace EmuSen.Mistress.Library
 {
-    // The shaders Settings offers a console: the built-in filters, the downloaded slang pack's presets, each one's parameters read once and kept, and the pack's download - see EmuSen_BigPicture.md §52.8.
+    // The shaders Settings offers a console: the built-in filters, the downloaded slang pack's presets, each one's parameters read once and kept, and the pack's download - see EmuSen_BigPicture.md §52.9.
     public sealed class ShaderShelf
     {
         public const int CacheLimit = 8;

@@ -360,6 +360,40 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("gb", s.System);
         }, default);
 
+        // Controller Bindings from the themed view is Settings' bindings page since 2026-11-03: every control of the console's drawing is reached by the pad's directions alone, and B goes back to the view.
+        [Fact]
+        public Task Every_control_of_the_bindings_page_opened_from_the_themed_view_is_reached_by_the_pad() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryFlowTests.Choose(s, "Controller Bindings");
+            Assert.Empty(s.Window.OwnedWindows);
+            EmuSen.Mistress.Pages.SettingsScreen settings = s.Window.SettingsShown!;
+            EmuSen.Mistress.Pages.BindingsPage page = settings.Binding!;
+            var view = (EmuSen.Mistress.Views.SettingsView)typeof(MainWindow).GetField("_settings", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(s.Window)!;
+            var all = settings.ControlsOf(page.Console);
+            var reached = new HashSet<EmuSen.Galaxia.Input.PadControl> { page.Focus!.Value };
+            var queue = new Queue<EmuSen.Galaxia.Input.PadControl>(reached);
+            while (queue.Count > 0)
+            {
+                EmuSen.Galaxia.Input.PadControl from = queue.Dequeue();
+                foreach (Action press in new Action[] { () => s.Pad.Up(), () => s.Pad.Down(), () => s.Pad.Left(), () => s.Pad.Right() })
+                {
+                    settings.FocusBinding(from);
+                    view.Fill();
+                    press();
+                    if (settings.Binding!.Focus is { } to && reached.Add(to)) queue.Enqueue(to);
+                }
+            }
+            string[] missing = all.Where(c => !reached.Contains(c)).Select(c => c.ToString()).ToArray();
+            foreach (string m in missing) _out.WriteLine("unreachable: " + m);
+            Assert.Empty(missing);
+
+            for (int guard = 0; guard < 3 && s.Window.SettingsShown is not null; guard++) s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
+            s.Pad.Right();
+            Assert.Equal("gb", s.System);
+        }, default);
+
         // What Preferences and Graphics held is Settings' own rows now: every row of each section, and of a console's page, reached by Down from the themed view.
         [Fact]
         public Task Every_row_of_each_settings_section_opened_from_the_themed_view_is_reached_by_the_pad() => Session.Dispatch(() =>

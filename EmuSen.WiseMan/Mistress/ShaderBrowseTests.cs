@@ -26,7 +26,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // A big pack in Settings ▸ Display ▸ Shaders: a preset of hundreds of parameters on its page, their search, the pad reaching every row, and the parameters kept for the presets read last - see EmuSen_BigPicture.md §52.8.
+    // A big pack in Settings ▸ Display ▸ Shaders: a preset of hundreds of parameters on its page, their search, the pad reaching every row, and the parameters kept for the presets read last - see EmuSen_BigPicture.md §52.9.
     [Collection(TestCollections.ProcessGlobals)]
     public class ShaderBrowseTests : IDisposable
     {

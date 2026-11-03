@@ -59,7 +59,7 @@ namespace EmuSen.WiseMan.Mistress
             Dispatcher.UIThread.RunJobs();
         }
 
-        // Display ▸ Shaders names each console's shader on its row and opens its page, where a shader is used - see EmuSen_BigPicture.md §52.8.
+        // Display ▸ Shaders names each console's shader on its row and opens its page, where a shader is used - see EmuSen_BigPicture.md §52.9.
         [Fact]
         public Task Every_console_s_row_names_its_shader_and_opens_its_page() => Session.Dispatch(() =>
         {

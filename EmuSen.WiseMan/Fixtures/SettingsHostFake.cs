@@ -60,6 +60,7 @@ namespace EmuSen.WiseMan.Fixtures
         public EmuSen.Mistress.Input.ControllerKeyBindings KeyBindings { get; } = new(RuntimeCatalog.Systems.Select(s => s.Console).Distinct());
         public EmuSen.Mistress.Input.HotkeyBindingMap Hotkeys { get; } = new();
         public void SaveKeys() { }
+        public bool SystemReducesMotion => false;
         public PadFacts PadNow(string console) => RuntimeCatalog.Systems.First(s => s.Console == console).Pad;
     }
 }

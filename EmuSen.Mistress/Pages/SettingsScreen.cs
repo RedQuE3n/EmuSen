@@ -81,6 +81,7 @@ namespace EmuSen.Mistress.Pages
         HotkeyBindingMap Hotkeys { get; }
         void SaveKeys();
         PadFacts PadNow(string console);
+        bool SystemReducesMotion { get; }
     }
 
     // Settings, as one plain description for both forms: six sections, the pages under their rows, each row's value, sentence and pane, and what each press does - see EmuSen_BigPicture.md §52 and EmuSen_Interface.md §2.7.

@@ -28,17 +28,18 @@ tree
             13 AccessText at=593,48,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.16,24 limit=577,40,107,44 owner=12 paints=#D4D4D4FF role=none size=20 text=LIBRARY
           14 ToggleButton at=692,40,107,44 by=panel drawn focus heard=EmuSen limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=EMUSEN
             15 AccessText at=708,48,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.04,24 limit=692,40,107,44 owner=14 paints=#D4D4D4FF role=none size=20 text=EMUSEN
-        16 StackPanel at=64,108,704,162 by=panel heard=Sound limit=0,0,1280,800 name=SettingsRows role=none
+        16 StackPanel at=64,108,704,216 by=panel heard=Sound limit=0,0,1280,800 name=SettingsRows role=none
           17 MenuRow at=64,108,704,54 by=panel heard="Volume, 100%" limit=0,0,1280,800 name=SettingsRow.volume role=listitem
           18 MenuRow at=64,162,704,54 by=panel heard="Navigation sounds, On" limit=0,0,1280,800 name=SettingsRow.navsounds role=listitem
           19 MenuRow at=64,216,704,54 by=panel heard="Sound volume, 60%" limit=0,0,1280,800 name=SettingsRow.soundvolume role=listitem
-        20 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#26262BFF role=none
-          21 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
-            22 Border at=824,132,368,16 by=clip limit=800,108,416,578 name=SettingsMeter paints=#707070FF role=none
-              23 Border at=824,132,368,16 by=clip limit=800,108,416,578 paints=#4C9AE8FF role=none
-            24 TextBlock at=824,160,368,80 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="The game's volume. On the handheld this row defers to the device's quick menu." layout=337.44,79.2 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="The game's volume. On the handheld this row defers to the device's quick menu."
-        25 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
-          26 HintBar at=64,716,1152,30 by=panel heard="Change, Value, Section, Back, Home" limit=0,0,1280,800 role=group
+          20 MenuRow at=64,270,704,54 by=panel heard="Output, System default" limit=0,0,1280,800 name=SettingsRow.output role=listitem
+        21 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#26262BFF role=none
+          22 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
+            23 Border at=824,132,368,16 by=clip limit=800,108,416,578 name=SettingsMeter paints=#707070FF role=none
+              24 Border at=824,132,368,16 by=clip limit=800,108,416,578 paints=#4C9AE8FF role=none
+            25 TextBlock at=824,160,368,80 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="The game's volume. On the handheld this row defers to the device's quick menu." layout=337.44,79.2 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="The game's volume. On the handheld this row defers to the device's quick menu."
+        26 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
+          27 HintBar at=64,716,1152,30 by=panel heard="Change, Value, Section, Back, Home" limit=0,0,1280,800 role=group
 focus none
 press down focus="SettingsLayout SettingsScreen" settings="sound  navsounds" top=none
 press up focus="SettingsLayout SettingsScreen" settings="sound  volume" top=none

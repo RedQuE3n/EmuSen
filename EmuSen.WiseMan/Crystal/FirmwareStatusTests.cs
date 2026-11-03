@@ -71,6 +71,30 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Contains("ps2-0230j-20080220.bin True missing", Items(runtime.FirmwareStatus("ps2"), "ps2"));
         }
 
+        // Each file's need, by file name.
+        private static System.Collections.Generic.Dictionary<string, string> Needs(string answer)
+        {
+            using JsonDocument doc = JsonDocument.Parse(answer);
+            return doc.RootElement.GetProperty("firmware").EnumerateArray().ToDictionary(f => f.GetProperty("file").GetString()!, f => f.GetProperty("need").GetString()!);
+        }
+
+        [RustImplementationFact("firmware_status's need, 1.11")]
+        public void Files_an_engine_declares_alternatives_share_its_need_and_a_cartridges_chips_do_not()
+        {
+            using CrystalRuntime runtime = Runtime();
+            Assert.True(CrystalAbi.Minor >= 11);
+            // Diamond declares its three market BIOSes one need, each in a slot of its own.
+            var psx = Needs(runtime.FirmwareStatus("psx"));
+            Assert.Equal(3, psx.Count);
+            Assert.Single(psx.Values.Distinct());
+            // Sapphire declares the PlayStation 2's likewise.
+            Assert.Single(Needs(runtime.FirmwareStatus("ps2")).Values.Distinct());
+            // VenusRT declares each coprocessor's program a need of its own, though they share a slot and many a size.
+            var snes = Needs(runtime.FirmwareStatus("snes"));
+            Assert.True(snes.Count > 1, string.Join(", ", snes.Keys));
+            Assert.Equal(snes.Count, snes.Values.Distinct().Count());
+        }
+
         [RustImplementationFact("firmware_status, 1.9")]
         public void A_system_no_table_or_engine_names_is_absent_and_none_is_refused()
         {

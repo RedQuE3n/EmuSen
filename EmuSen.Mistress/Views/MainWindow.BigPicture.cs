@@ -25,6 +25,15 @@ namespace EmuSen.Mistress.Views
         private TextBox? _themedSearch;
         private Border? _themedSearchBar;
         private UiSoundPlayer? _uiSounds;
+
+        // The interface's sounds, made on the first, on the sound output the game's sound uses (EmuSen_Audio_Sync.md §7.5).
+        private UiSoundPlayer UiSounds()
+        {
+            if (_uiSounds is { } made) return made;
+            _uiSounds = new UiSoundPlayer();
+            _uiSounds.SetOutputDevice(_appSettings.SoundOutputDevice);
+            return _uiSounds;
+        }
         private DispatcherTimer? _themedWake;
         private bool _themedFrameAsked;
         private bool _themedClosed;
@@ -99,7 +108,7 @@ namespace EmuSen.Mistress.Views
                 shown = _themed.Show(_appSettings.BigPictureTheme!, LibraryView.Bounds.Size, WithCollections(ThemedShelves()), ThemedMedia(), mediaKey,
                     ThemeSettingsWindow.ChoicesFor(_appSettings, _appSettings.BigPictureTheme));
                 if (!shown && _themed.Error is { } why && LibraryView.Bounds.Width > 0) StatusText.Text = why;
-                if (shown && _themed.PlaySound is not null && UiSoundSink is null) (_uiSounds ??= new UiSoundPlayer()).Preload(_themed.SoundFiles);
+                if (shown && _themed.PlaySound is not null && UiSoundSink is null) UiSounds().Preload(_themed.SoundFiles);
             }
 
             LibraryContent.IsVisible = !shown;
@@ -120,7 +129,7 @@ namespace EmuSen.Mistress.Views
                 sink(path);
                 return;
             }
-            UiSoundPlayer player = _uiSounds ??= new UiSoundPlayer();
+            UiSoundPlayer player = UiSounds();
             player.Volume = UiSoundGain;
             if (NavigationSounds.IsBuiltIn(path)) player.Remember(path, NavigationSounds.Samples(path));
             player.Play(path);

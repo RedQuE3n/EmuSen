@@ -7,6 +7,8 @@ using Avalonia.Media;
 using Avalonia.Styling;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
+using EmuSen.Endymion;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
@@ -39,6 +41,13 @@ namespace EmuSen.Mistress.Views
             _settingsPaused = GameOnScreen && !IsPaused;
             if (_settingsPaused) PauseEmulation();
             var layout = new SettingsLayout { Name = "SettingsScreen", Form = _bigScreen ? AdaptiveForm.BigScreen : AdaptiveForm.Desktop, PadFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily };
+            // Keys reach the bindings pages before anything else in the window that holds Settings, whatever has the focus.
+            if (!_settingsKeysWired)
+            {
+                AddHandler(KeyDownEvent, OnSettingsKeyFirst, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+                AddHandler(KeyUpEvent, OnSettingsKeyUp, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+                _settingsKeysWired = true;
+            }
             var model = new SettingsScreen(this, section);
             if (path.Length > 0) model.OpenPath(section, path);
             _settings = new SettingsView(model, layout, SettingsFrame);
@@ -48,6 +57,8 @@ namespace EmuSen.Mistress.Views
             {
                 // The desktop's one Settings window, 960 by 640, a sheet over the library (EmuSen_Interface.md §17.7).
                 var window = _settingsWindow = new SettingsWindow(layout, button => { SettingsPadCommand(button); return true; });
+                window.AddHandler(KeyDownEvent, OnSettingsKeyFirst, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+                window.AddHandler(KeyUpEvent, OnSettingsKeyUp, Avalonia.Interactivity.RoutingStrategies.Tunnel);
                 window.Closed += (_, _) => { if (_settingsWindow == window) { _settingsWindow = null; SettingsClosed(); } };
                 _ = SheetLayer.Show(window, this);
                 return;
@@ -90,6 +101,23 @@ namespace EmuSen.Mistress.Views
         private void SettingsPadCommand(UiButton button)
         {
             if (_settings is not { } view) return;
+            // While a binding listens, and until the button it heard is let go, the pad is the binding's, not the screen's.
+            if (_bindHeld || view.Model.Binding is { Testing: true }) return;
+            // A key cannot come from the pad: while a key is listened for, B backs out and nothing else does.
+            if (view.Model.Binding is { Keys: true, Capturing: true } || view.Model.HotkeyListening is not null)
+            {
+                if (button != UiButton.Back) return;
+                view.Model.CancelCapture();
+                view.Model.CancelHotkey();
+                view.Fill();
+                return;
+            }
+            if (view.Model.Binding is { } binding && button is UiButton.PageUp or UiButton.PageDown)
+            {
+                view.Model.StepBindingConsole(button == UiButton.PageUp ? -1 : 1);
+                view.Fill();
+                return;
+            }
             switch (button)
             {
                 case UiButton.Up: view.Layout.Move(0, -1); return;
@@ -109,9 +137,46 @@ namespace EmuSen.Mistress.Views
             if (button is UiButton.PageUp or UiButton.PageDown && view.Model.StepConsole(button == UiButton.PageUp ? -1 : 1)) view.Fill();
         }
 
+        // Keys before the screen sees them, on both forms: a binding or a hotkey listening takes the key, the tester sees what is held and Escape stops it.
+        private void OnSettingsKeyFirst(object? sender, KeyEventArgs e)
+        {
+            if (_settings is not { } view) return;
+            _keysHeld.Add(e.Key);
+            SettingsScreen model = view.Model;
+            if (model.Binding is { Keys: false, Capturing: true })
+            {
+                if (e.Key == Key.Escape) EndBindCapture();
+                e.Handled = true;
+                return;
+            }
+            if (model.RebindKey(e.Key) || model.RebindHotkey(e.Key))
+            {
+                e.Handled = true;
+                view.Fill();
+                return;
+            }
+            if (model.Binding is { Testing: true })
+            {
+                if (e.Key == Key.Escape) model.StopTesting();
+                e.Handled = true;
+                LightBindings(view, force: true);
+            }
+        }
+
+        private void OnSettingsKeyUp(object? sender, KeyEventArgs e)
+        {
+            if (!_keysHeld.Remove(e.Key) || _settings is not { } view) return;
+            if (view.Model.Binding is not null) LightBindings(view);
+            if (view.Model.Binding is { Testing: true }) e.Handled = true;
+        }
+
+        private readonly HashSet<Key> _keysHeld = new();
+        private bool _settingsKeysWired;
+
         private void OnSettingsKey(object? sender, KeyEventArgs e)
         {
-            if (e.Handled || KeyAsPad(e.Key) is not { } b) return;
+            if (e.Handled) return;
+            if (KeyAsPad(e.Key) is not { } b) return;
             SettingsPadCommand(b);
             e.Handled = true;
         }
@@ -179,7 +244,8 @@ namespace EmuSen.Mistress.Views
                 using var answer = System.Text.Json.JsonDocument.Parse(Runtime.FirmwareStatus(system));
                 static string Text(System.Text.Json.JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() ?? "" : "";
                 return answer.RootElement.GetProperty("firmware").EnumerateArray()
-                    .Select(f => new FirmwareFile(Text(f, "label"), Text(f, "file"), f.TryGetProperty("required", out var r) && r.ValueKind == System.Text.Json.JsonValueKind.True, Text(f, "status"))).ToList();
+                    .Select(f => new FirmwareFile(Text(f, "label"), Text(f, "file"), f.TryGetProperty("required", out var r) && r.ValueKind == System.Text.Json.JsonValueKind.True, Text(f, "status"),
+                        Text(f, "need") is { Length: > 0 } need ? need : null)).ToList();
             }
             catch (Exception e) when (e is CrystalException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException) { return null; }
         }
@@ -242,12 +308,127 @@ namespace EmuSen.Mistress.Views
         // A button held on a pad marks its row on the Players page, drawn again only when what is held changes.
         private void OnSettingsPadsPolled()
         {
+            if (_settings is { } bound && (bound.Model.Binding is { Keys: false, Capturing: true } || _bindHeld))
+            {
+                PollBindCapture(bound);
+                return;
+            }
+            if (_settings is { Model.Binding: not null } shown)
+            {
+                PollTester(shown);
+                return;
+            }
             if (_settings is not { } view || view.Model.Trail.LastOrDefault() != "Players") return;
             int held = 0;
             for (int i = 0; i < _gamepad.Pads.Count && i < 30; i++) if (_gamepad.Pads[i].AnyPressed()) held |= 1 << i;
             if (held == _padsHeld) return;
             _padsHeld = held;
             RefreshSettings();
+        }
+
+        // --- The bindings page's capture: the press that chose it let go first, then the first button pressed, or a trigger pulled, within the timeout (EmuSen_Input.md §10.5). ---
+
+        private bool _bindHeld, _bindArmed;
+        private readonly System.Diagnostics.Stopwatch _bindListening = new();
+
+        // How long a binding listens before it gives up, since every pad button that could cancel it is one it could bind.
+        public TimeSpan BindCaptureTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+        private void PollBindCapture(SettingsView view)
+        {
+            SDL3.SDL.GamepadButton? pressed = _gamepad.GetAnyPressedButton();
+            if (view.Model.Binding is not { Capturing: true } binding)
+            {
+                if (pressed is null) _bindHeld = false;
+                return;
+            }
+            if (!_bindHeld)
+            {
+                _bindHeld = true;
+                _bindArmed = false;
+                _bindListening.Restart();
+            }
+            if (!_bindArmed)
+            {
+                _bindArmed = pressed is null;
+                return;
+            }
+            if (pressed is null && binding.Focus is EmuSen.Galaxia.Input.PadControl.L2 or EmuSen.Galaxia.Input.PadControl.R2
+                && _gamepad.RawAxis(binding.Focus == EmuSen.Galaxia.Input.PadControl.L2 ? SDL3.SDL.GamepadAxis.LeftTrigger : SDL3.SDL.GamepadAxis.RightTrigger) >= 0.5)
+                view.Model.RebindTrigger();
+            else if (pressed is { } pad) view.Model.Rebind(pad);
+            else if (_bindListening.Elapsed >= BindCaptureTimeout) view.Model.CancelCapture();
+            else return;
+            view.Fill();
+        }
+
+        private static readonly System.Diagnostics.Stopwatch Uptime = System.Diagnostics.Stopwatch.StartNew();
+
+        // How long B is held to leave the tester, since a short press of B is a button being tried; the clock a test sets.
+        public static readonly TimeSpan TestExitHold = TimeSpan.FromSeconds(1);
+        public Func<TimeSpan> TesterClock { get; set; } = () => Uptime.Elapsed;
+        private TimeSpan? _backHeldSince;
+
+        // The tester: B held for a second stops it; what is held lights the drawing, drawn again only when it changes.
+        private void PollTester(SettingsView view)
+        {
+            if (view.Model.Binding is { Testing: true } && _gamepad.Primary is { } pad && pad.IsRawPressed(_appSettings.SwapPadButtons ? SDL3.SDL.GamepadButton.South : SDL3.SDL.GamepadButton.East))
+            {
+                _backHeldSince ??= TesterClock();
+                if (TesterClock() - _backHeldSince.Value >= TestExitHold)
+                {
+                    view.Model.StopTesting();
+                    _backHeldSince = null;
+                    LightBindings(view, force: true);
+                    return;
+                }
+            }
+            else _backHeldSince = null;
+            LightBindings(view);
+        }
+
+        private void LightBindings(SettingsView view, bool force = false)
+        {
+            if (view.Model.Binding is not { } page) return;
+            List<EmuSen.Galaxia.Input.PadControl> held = page.Capturing ? [] : view.Model.ControlsOf(page.Console).Where(c => BindingHeld(page, c)).ToList();
+            if (view.Model.SetHeld(held) || force) view.Fill();
+            view.SetSticks(axis => BindingAxis(page, axis));
+        }
+
+        // An axis as the game would read it: the player's stick, pushed all the way by a key held for its direction.
+        private double BindingAxis(BindingsPage page, EmuSen.Galaxia.Input.PadAxis axis)
+        {
+            double raw = !page.Keys && (_gamepad.Players.PadFor(page.Player) ?? (page.Player == 1 ? _gamepad.Primary : null)) is { } pad ? pad.RawAxis(axis switch
+            {
+                EmuSen.Galaxia.Input.PadAxis.LeftX => SDL3.SDL.GamepadAxis.LeftX, EmuSen.Galaxia.Input.PadAxis.LeftY => SDL3.SDL.GamepadAxis.LeftY,
+                EmuSen.Galaxia.Input.PadAxis.RightX => SDL3.SDL.GamepadAxis.RightX, _ => SDL3.SDL.GamepadAxis.RightY,
+            }) : 0;
+            return EmuSen.Galaxia.Input.PadControls.Resolve(axis, raw, c => _keyBindings.For(page.Console).ButtonToKey.TryGetValue(c, out Key k) && _keysHeld.Contains(k));
+        }
+
+        // A control as the game would hear it: its key held, or the player's pad pressing its button, its trigger or its stick's direction (EmuSen_Input.md §7.3).
+        private bool BindingHeld(BindingsPage page, EmuSen.Galaxia.Input.PadControl control)
+        {
+            if (_keyBindings.For(page.Console).ButtonToKey.TryGetValue(control, out Key key) && _keysHeld.Contains(key)) return true;
+            if (page.Keys || (_gamepad.Players.PadFor(page.Player) ?? (page.Player == 1 ? _gamepad.Primary : null)) is not { } pad) return false;
+            if (!EmuSen.Galaxia.Input.PadControls.IsButton(control, out EmuSen.Galaxia.Input.PadButton button))
+            {
+                bool left = control is EmuSen.Galaxia.Input.PadControl.LeftStickUp or EmuSen.Galaxia.Input.PadControl.LeftStickDown or EmuSen.Galaxia.Input.PadControl.LeftStickLeft or EmuSen.Galaxia.Input.PadControl.LeftStickRight;
+                bool vertical = control is EmuSen.Galaxia.Input.PadControl.LeftStickUp or EmuSen.Galaxia.Input.PadControl.LeftStickDown or EmuSen.Galaxia.Input.PadControl.RightStickUp or EmuSen.Galaxia.Input.PadControl.RightStickDown;
+                bool negative = control is EmuSen.Galaxia.Input.PadControl.LeftStickUp or EmuSen.Galaxia.Input.PadControl.LeftStickLeft or EmuSen.Galaxia.Input.PadControl.RightStickUp or EmuSen.Galaxia.Input.PadControl.RightStickLeft;
+                double value = pad.RawAxis(left ? (vertical ? SDL3.SDL.GamepadAxis.LeftY : SDL3.SDL.GamepadAxis.LeftX) : (vertical ? SDL3.SDL.GamepadAxis.RightY : SDL3.SDL.GamepadAxis.RightX));
+                return negative ? value <= -ControllerDiagrams.DirectionThreshold : value >= ControllerDiagrams.DirectionThreshold;
+            }
+            if (button is EmuSen.Galaxia.Input.PadButton.L2 or EmuSen.Galaxia.Input.PadButton.R2 && pad.RawAxis(button == EmuSen.Galaxia.Input.PadButton.L2 ? SDL3.SDL.GamepadAxis.LeftTrigger : SDL3.SDL.GamepadAxis.RightTrigger) >= 0.5) return true;
+            return _gamepadBindings.For(page.Console, page.Player, page.Profile).ButtonToPad.TryGetValue(button, out SDL3.SDL.GamepadButton bound) && pad.IsRawPressed(bound);
+        }
+
+        private void EndBindCapture()
+        {
+            if (_settings is not { } view) return;
+            view.Model.CancelCapture();
+            _bindHeld = false;
+            view.Fill();
         }
 
         void ISettingsHost.Seat(int pad, int player)
@@ -270,6 +451,17 @@ namespace EmuSen.Mistress.Views
                 case "variant": ApplyAppearance(); break;
                 case "statusbar" or "messages" or "fps": ApplyStatusBar(); break;
                 case "volume": SetVolume(_appSettings.Volume); break;
+                case "deadzone": _gamepad.StickDeadzone = _appSettings.StickDeadzone; break;
+                case "stickdpad": _gamepad.AnalogStickAsDpad = _appSettings.AnalogStickAsDpad; break;
+                case "mirror": ApplyKeys(); break;
+                case "output":
+                    _audioPlayer.SetOutputDevice(_appSettings.SoundOutputDevice);
+                    _uiSounds?.SetOutputDevice(_appSettings.SoundOutputDevice);
+                    break;
+                case "rumble":
+                    try { _session?.Crystal.RumbleSwitch(_appSettings.Rumble); }
+                    catch (CrystalException e) { StatusText.Text = $"Rumble was not changed in the game: {e.Message}"; }
+                    break;
                 case "hidden": RefreshLibrary(); break;
                 case "screenscraper" or "openemu": ApplyScraping(); ApplyOnlineCovers(); break;
                 default:
@@ -290,7 +482,6 @@ namespace EmuSen.Mistress.Views
         {
             switch (door)
             {
-                case SettingsScreen.DoorBindings: ShowControllerBindings(); break;
                 case SettingsScreen.DoorShaders: _ = ThenRefreshSettings(SheetLayer.Show(NewShaderSettings(), this)); break;
                 case SettingsScreen.DoorCheats: ShowActiveCheats(); break;
                 case SettingsScreen.DoorThemes: ShowThemeSettings(); break;
@@ -317,6 +508,42 @@ namespace EmuSen.Mistress.Views
                 case SettingsScreen.DoorMediaFolder: _ = AskFolderAsync("ES-DE media folder", _appSettings.EsdeMediaDirectory, p => _appSettings.EsdeMediaDirectory = p); break;
                 case SettingsScreen.DoorThemeFolder: _ = AskFolderAsync("ES-DE theme folder", _appSettings.BigPictureTheme, p => { _appSettings.BigPictureTheme = p; ThemeChanged(false); }); break;
             }
+        }
+
+        GamepadBindings ISettingsHost.PadBindings => _gamepadBindings;
+
+        ControllerKeyBindings ISettingsHost.KeyBindings => _keyBindings;
+
+        HotkeyBindingMap ISettingsHost.Hotkeys => _hotkeyBindings;
+
+        // Both files saved, the game hearing the new keys at once, and the menus advertising them.
+        void ISettingsHost.SaveKeys()
+        {
+            _keyBindings.Save();
+            _hotkeyBindings.Save();
+            ApplyKeys();
+            SyncMenuState();
+        }
+
+        // The console's pad as its settings stand, the running game's ports where it is that console's.
+        PadFacts ISettingsHost.PadNow(string console)
+        {
+            PadFacts facts = RuntimeCatalog.PadNow(console);
+            return _session is { } running && console == _activeConsole ? facts with { Players = running.PortControllers } : facts;
+        }
+
+        void ISettingsHost.SavePadBindings() => _gamepadBindings.Save();
+
+        IReadOnlyList<string> ISettingsHost.SoundOutputs => AudioPlayer.OutputDevices();
+
+        void ISettingsHost.Ask(string title, string prompt, string current, Action<string> then) => _ = AskInSettingsAsync(title, prompt, current, then);
+
+        // A name typed in; what was kept is applied and Settings drawn again.
+        private async Task AskInSettingsAsync(string title, string prompt, string current, Action<string> then)
+        {
+            if (await Dialogs.PromptAsync(this, title, prompt, current, "Use") is not string typed || typed.Trim().Length == 0) return;
+            then(typed.Trim());
+            RefreshSettings();
         }
 
         string? ISettingsHost.ScrapeUser => ((IScrapeHost)this).Member is { IsSet: true } m ? m.User : null;

@@ -62,7 +62,7 @@ namespace EmuSen.WiseMan.Mistress
                 typeof(MainWindow).GetMethod(sheet, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)!.Invoke(window, null);
                 Dispatcher.UIThread.RunJobs();
                 UiTest.Capture(window);
-                Assert.NotNull(window.GetControl<SheetLayer>("Sheets").Current);
+                Assert.True(window.GetControl<SheetLayer>("Sheets").Current is not null || window.SettingsShown is not null, "the door opened nothing");
             }
             object core = EmuSen.Crystal.Client.CrystalRuntime.Native ? MistressGame.Of(window) : MistressGame.Core(window);
             window.Close();

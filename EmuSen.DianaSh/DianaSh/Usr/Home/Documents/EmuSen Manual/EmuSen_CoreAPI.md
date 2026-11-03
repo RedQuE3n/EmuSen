@@ -1930,6 +1930,22 @@ frame blank, and the ring's path reads nothing back. So `Core::frame` in `emusen
 reference, every core's implementation changed with it; the C declaration keeps its `const emusen_machine *`, the
 handle being opaque, and the call stays one of the machine's calls, never made beside another on the same machine.
 
+### 6.44 Which firmware files are alternatives: a declared `need` (1.19, 2026-11-03)
+
+Decided by the tester on 2026-11-03: Settings shows a console's firmware as a row per need, and which files meet one
+need is the core's to say, never the runtime's to guess. A firmware entry, in core info's `systems[].firmware` and in
+`emusen_core_firmware_for`'s answer alike, may carry **`need`**, an id of the core's own: entries sharing one are
+alternatives, any one of which will do, whatever their sizes or file slots. An entry without one meets a need of its own.
+The key is written only where the core gives it, so no earlier answer changes by a byte, and a host that predates it reads
+every file as its own need, which is what it did. `emusen_native::core::desc::Firmware::need` (empty for none);
+`firmware.schema.json` admits it.
+
+Declared at this minor: Diamond's three market BIOSes `bios`, Sapphire's `bios`, Nephrite's Sega CD BIOSes `bios`, and each
+of VenusRT's NEC DSP programs its own stem, though they share file 2. The libretro host gives none, since a `.info` file
+says nothing of alternatives. The shared `which` of §6.2 was not taken as the mark: VenusRT's chip programs share one slot
+because a cartridge carries one chip, while Diamond's BIOSes take a slot each. Tests: `emusen-native`'s
+`a_firmware_entrys_need_is_written_only_when_given_and_alternatives_of_any_size_share_it`.
+
 ## 7. Core discovery and trust
 
 ### 7.1 Where cores are found

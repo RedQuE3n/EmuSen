@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture;
@@ -49,26 +50,34 @@ namespace EmuSen.Mistress.Pages
             return
             [
                 Opens("players", "Players", "Which controller plays as which player.", $"{set} of {Math.Max(set, seats.Count)} set", () => Push("Players", PlayerRows, "players"), PlayersPane),
-                Opens("bindings", "Controller bindings", "Each console's buttons on the controller in your hand.", null, () => _host.Open(DoorBindings)),
-                Pick("type", "Controller type", "Which buttons the help bar draws. Automatic follows the controller last pressed; only the pictures change.", ControllerTypes, App.ControllerType, v => { App.ControllerType = v; _host.SaveApp("type"); }),
+                Opens("bindings", "Controller bindings", "Each console's buttons on the controller in your hand.", null, () => OpenBindings(PadConsole, null)),
+                Opens("profiles", "Profiles", "Named sets of a console's bindings, and the one its games start with.", PadConsole is { } pc ? _host.PadBindings.ConsoleDefault(pc) : GamepadBindings.DefaultProfile,
+                    () => Push("Profiles", ProfileRows, "profiles"), ProfilesPane, enabled: PadConsole is not null),
+                .. RumbleRows(),
                 Switch("swap", "Swap A and B in menus", "A and B trade what they do in the library, the menus and every sheet, and so do X and Y, for a controller with a Nintendo layout. Games keep their own bindings.", App.SwapPadButtons, on => App.SwapPadButtons = on),
                 Pick("chords", "Guide chords", "Guide held with Up saves, with Down loads, with R1 takes a screenshot; Auto keeps them off in Steam's Game Mode, whose own chords they would clash with.",
                     [(AppSettings.GuideChordsAuto, "Auto"), (AppSettings.GuideChordsOn, On), (AppSettings.GuideChordsOff, Off)], App.GuideChords, v => { App.GuideChords = v; _host.SaveApp("chords"); }),
+                .. KeyRows(),
+                Pick("type", "Controller type", "Which buttons the help bar draws. Automatic follows the controller last pressed; only the pictures change.", ControllerTypes, App.ControllerType, v => { App.ControllerType = v; _host.SaveApp("type"); }),
                 Switch("firstonly", "Only the first controller", "Only the first controller connected steers the menus, and games hear player 1's controller alone, as when a wireless pad registers twice.", App.FirstControllerOnly, on => App.FirstControllerOnly = on),
                 Switch("notices", "Controller notices", "A notice at the top of the screen when a controller is connected or disconnected.", App.ControllerNotifications, on => App.ControllerNotifications = on),
                 Pick("keyboard", "On-screen keyboard", "What types into a text row and the search. Automatic uses Steam's keyboard under Steam and EmuSen's otherwise.", Keyboards, App.OnScreenKeyboard, v => { App.OnScreenKeyboard = v; _host.SaveApp("keyboard"); }),
                 Switch("stickdpad", "Left stick as the D-pad", "In games whose console has no stick, the left stick also presses the D-pad.", App.AnalogStickAsDpad, on => App.AnalogStickAsDpad = on),
+                .. StickAndResetRows(),
             ];
         }
 
         private ScreenPane PlayersPane()
         {
-            var lines = _host.Players.Where(s => s.Pad is not null).Select(s => new SettingsLine($"Player {s.Player} · {s.Pad}{(s.Kept ? " · kept" : "")}")).ToList();
+            var lines = _host.Players.Where(s => s.Pad is not null).Select(s => new SettingsLine($"Player {s.Player} · {s.Pad}{(s.Kept ? " · kept" : "")}{ProfileWords}")).ToList();
             int[] free = _host.Players.Where(s => s.Pad is null).Select(s => s.Player).ToArray();
             if (free.Length > 0) lines.Add(new SettingsLine($"Players {string.Join(" and ", free)} · none", SettingsTone.Muted));
             lines.Add(new SettingsLine("Left and Right on a controller's row pick its player.", SettingsTone.Muted));
             return new ScreenPane(lines);
         }
+
+        // The profile the players' pads start the console's games with, as the Players pane names it.
+        private string ProfileWords => PadConsole is { } console ? $" · {_host.PadBindings.ConsoleDefault(console)} profile" : "";
 
         private IReadOnlyList<Setting> PlayerRows()
         {
@@ -200,7 +209,23 @@ namespace EmuSen.Mistress.Pages
                 Switch("navsounds", "Navigation sounds", "The sounds for moving, choosing and going back, on a stream of their own beside the game's; a theme without one plays EmuSen's.", App.NavigationSounds, on => App.NavigationSounds = on),
                 Percent("soundvolume", "Sound volume", "How loud the navigation sounds are, beside the game's own volume.", sounds, v => { App.BigPictureInterface.NavigationVolume = v; _host.SaveApp("soundvolume"); },
                     () => new ScreenPane([new SettingsLine("How loud the navigation sounds are, beside the game's own volume.")]) { Preview = new PanePreview.Meter(sounds / 100.0) }),
+                OutputRow(),
             ];
+        }
+
+        // Sound ▸ Output: System default first, then the connected devices by name; a saved device not connected now is kept and listed (EmuSen_Audio_Sync.md §7.4).
+        private Setting OutputRow()
+        {
+            List<string> outputs = _host.SoundOutputs.ToList();
+            string chosen = App.SoundOutputDevice is { Length: > 0 } d ? d : AppSettings.SystemDefaultOutput;
+            bool absent = !outputs.Contains(chosen);
+            if (absent) outputs.Add(chosen);
+            return Choice("output", "Output", "Where the game's sound and the interface's sounds play.", outputs, outputs.IndexOf(chosen),
+                i => { App.SoundOutputDevice = outputs[i]; _host.SaveApp("output"); },
+                () => new ScreenPane(absent
+                    ? [new SettingsLine($"{chosen} is not connected, so the system default plays until it is.", SettingsTone.Attention) { Mark = "⚠" }, new SettingsLine("The choice is kept and tried again each time EmuSen starts.", SettingsTone.Muted)]
+                    : [new SettingsLine(chosen == AppSettings.SystemDefaultOutput ? "The game and the interface's sounds play where the system sends sound." : $"The game and the interface's sounds play on {chosen}."),
+                       new SettingsLine("A device not connected when EmuSen starts falls back to the system default.", SettingsTone.Muted)]));
         }
 
         private IReadOnlyList<Setting> LibraryRows()

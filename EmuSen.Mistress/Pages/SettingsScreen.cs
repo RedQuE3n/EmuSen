@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;
 
@@ -20,8 +22,8 @@ namespace EmuSen.Mistress.Pages
     // What the pane says of the focused row.
     public sealed record ScreenPane(IReadOnlyList<SettingsLine> Lines, PanePreview? Preview = null);
 
-    // One firmware file a system's engines declare, as the runtime's firmware_status answers.
-    public sealed record FirmwareFile(string Label, string File, bool Required, string Status);
+    // One firmware file a system's engines declare, as the runtime's firmware_status answers; files sharing a Need are alternatives for one need.
+    public sealed record FirmwareFile(string Label, string File, bool Required, string Status, string? Need = null);
 
     // One player's seat: who plays it now, or null, and whether it is kept for a controller that went away.
     public sealed record PlayerSeat(int Player, string? Pad, bool Kept);
@@ -62,6 +64,14 @@ namespace EmuSen.Mistress.Pages
         void SaveApp(string? what = null);
         void SaveGraphics(string? console);
         void Open(string door);
+        GamepadBindings PadBindings { get; }
+        void SavePadBindings();
+        IReadOnlyList<string> SoundOutputs { get; }
+        void Ask(string title, string prompt, string current, Action<string> then);
+        ControllerKeyBindings KeyBindings { get; }
+        HotkeyBindingMap Hotkeys { get; }
+        void SaveKeys();
+        PadFacts PadNow(string console);
     }
 
     // Settings, as one plain description for both forms: six sections, the pages under their rows, each row's value, sentence and pane, and what each press does - see EmuSen_BigPicture.md §52 and EmuSen_Interface.md §2.7.
@@ -71,7 +81,7 @@ namespace EmuSen.Mistress.Pages
         public const string Controllers = "controllers", Display = "display", Sound = "sound", Consoles = "consoles", Library = "library", EmuSen = "emusen";
 
         // The doors to what Settings does not draw itself: tools, pickers and the Shell.
-        public const string DoorBindings = "bindings", DoorShaders = "shaders", DoorCheats = "cheats", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
+        public const string DoorShaders = "shaders", DoorCheats = "cheats", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
         public const string DoorSignIn = "scraper:signin", DoorSignOut = "scraper:signout", DoorCheckAccount = "scraper:check", DoorOpenVgdb = "scraper:openvgdb", DoorCleanUp = "scraper:cleanup";
         public const string DoorNewCollection = "collection:new", DoorFinishCollection = "collection:finish", DoorDeleteCollection = "collection:delete:", DoorCardSaves = "cardsaves:";
         public const string DoorRomFolder = "folder:rom", DoorArtFolder = "folder:art", DoorStateFolder = "folder:state", DoorLogFolder = "folder:log", DoorFirmwareFolder = "folder:firmware", DoorMediaFolder = "folder:media", DoorThemeFolder = "folder:theme";
@@ -84,7 +94,7 @@ namespace EmuSen.Mistress.Pages
         private sealed record Setting(PageRow Row, Func<ScreenPane?>? Pane = null, Action<int>? Step = null, Action? Choose = null);
 
         // One page under a section: its title, its rows made each time it is shown, and the row it was opened from.
-        private sealed record Page(string Title, Func<IReadOnlyList<Setting>> Rows, string? From, bool Choices = false);
+        private sealed record Page(string Title, Func<IReadOnlyList<Setting>> Rows, string? From, bool Choices = false, BindingsPage? Bindings = null);
 
         private readonly ISettingsHost _host;
         private readonly List<Page> _pages = new();
@@ -149,6 +159,7 @@ namespace EmuSen.Mistress.Pages
 
         public ScreenPane? PaneOf(string key)
         {
+            if (Binding is { } bindings) return BindingPane(bindings);
             Setting? s = _rows.FirstOrDefault(r => r.Row.Key == key);
             if (s is null) return null;
             return s.Pane?.Invoke() ?? (s.Row.Sentence is { Length: > 0 } sentence ? new ScreenPane([new SettingsLine(sentence)]) : null);
@@ -163,6 +174,11 @@ namespace EmuSen.Mistress.Pages
 
         public void Choose(string key)
         {
+            if (Binding is { } bindings)
+            {
+                StartCapture(bindings);
+                return;
+            }
             if (_rows.FirstOrDefault(r => r.Row.Key == key) is not { Row.IsEnabled: true } s) return;
             Returned = null;
             if (s.Choose is { } choose) choose();
@@ -185,11 +201,13 @@ namespace EmuSen.Mistress.Pages
         public IReadOnlyList<ScreenHint> HintsFor(string? key)
         {
             if (OnChoicePage) return [new("South", "Choose"), new("East", "Back")];
+            if (Binding is { } bindings) return BindingHints(bindings);
             PageRow? row = _rows.FirstOrDefault(r => r.Row.Key == key)?.Row;
             var hints = new List<ScreenHint> { new("South", row?.Kind == PageRowKind.Opens ? "Open" : "Change") };
             if (_rows.Any(r => r.Row.Kind == PageRowKind.Steps)) hints.Add(new("DPadLeftRight", "Value"));
             if (_pages.Count == 0) hints.Add(new("Shoulders", "Section"));
             else if (_section == Consoles && _pages.Count == 1) hints.Add(new("Shoulders", "Console"));
+            if (_pages.Count > 0 && _pages[^1].From == "hotkeys") hints.Insert(1, new("West", "Clear", HintClear));
             hints.Add(new("East", "Back"));
             hints.Add(new("Start", "Home"));
             return hints;

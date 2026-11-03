@@ -68,6 +68,13 @@ namespace EmuSen.Endymion.Input
             RebuildReverseLookup();
         }
 
+        // One button back to its default, which the button holding that pad button gives up; a button with no default is left unbound.
+        public void ResetButton(PadButton button)
+        {
+            if (DefaultBindings().TryGetValue(button, out SDL.GamepadButton pad)) Rebind(button, pad);
+            else Unbind(button);
+        }
+
         public void ResetToDefaults()
         {
             ButtonToPad = DefaultBindings();

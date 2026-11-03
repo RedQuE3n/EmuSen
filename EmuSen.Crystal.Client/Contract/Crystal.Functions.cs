@@ -74,6 +74,7 @@ namespace EmuSen.Crystal.Client.Contract
         public static int InputConnected(nint rt, uint session, uint port, uint connected) => Table->input_connected(rt, session, port, connected);
 
         public static int InputRumble(nint rt, uint session, uint port, ushort* strong, ushort* weak) => Table->input_rumble(rt, session, port, strong, weak);
+        public static int InputRumbleSwitch(nint rt, uint session, uint on) => Table->input_rumble_switch(rt, session, on);
 
         public static int SpeedSet(nint rt, uint session, uint percent, uint turbo_percent, uint slow_percent, uint flags) => Table->speed_set(rt, session, percent, turbo_percent, slow_percent, flags);
 

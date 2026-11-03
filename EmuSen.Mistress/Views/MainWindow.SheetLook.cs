@@ -29,7 +29,7 @@ namespace EmuSen.Mistress.Views
             typeof(ScrapeStatusWindow), typeof(ActiveCheatsWindow), typeof(CheatDatabaseWindow),
             typeof(GamelistFilterWindow), typeof(FolderEditorWindow), typeof(GraphicsSettingsWindow), typeof(ShaderSettingsWindow), typeof(ResumeWindow),
             typeof(RewindReelWindow), typeof(ThemeBrowserWindow), typeof(ThemeDetailWindow), typeof(ThemeAboutWindow),
-            typeof(InputSettingsWindow), typeof(GameCropWindow), typeof(MemoryCardsWindow), typeof(InsertDiscWindow), typeof(CompressedDiscsWindow),
+            typeof(GameCropWindow), typeof(MemoryCardsWindow), typeof(InsertDiscWindow), typeof(CompressedDiscsWindow),
             typeof(HotaruWindow), typeof(PackagesWindow), typeof(ScraperWindow), typeof(LibraryWindow), typeof(CoresWindow),
         ];
 

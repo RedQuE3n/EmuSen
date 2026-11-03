@@ -143,6 +143,7 @@ pub fn bios(model: Model) -> Option<Firmware> {
         parts: vec![vec![name.into()]],
         replacement: Some(Replacement::Accuracy { cost: cost.into() }),
         md5: md5.iter().map(|m| m.to_string()).collect(),
+        need: String::new(),
     })
 }
 

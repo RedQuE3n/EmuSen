@@ -3604,3 +3604,12 @@ One function: `emusen_galaxia_thread_scope(config, data, legacy)` scopes the thr
 ## 45. Interface 32, 2026-11-03: the sound output device
 
 Two functions, approved by the tester on 2026-11-03 for the Settings screen's sound rows: `emusen_endymion_audio_device_list` gives SDL's playback devices by the length-query idiom, each name followed by a NUL, and `emusen_endymion_audio_device_set(audio, rate, name)` plays the player on the device of that name, null or empty being the system default, answering `ABSENT` with words when no device has the name, in which case the system default plays. The C# side is `AudioPlayer.OutputDevices` and `AudioPlayer.SetOutputDevice` in Endymion, which owns the player; `EmuSen.Crystal.Client` binds the frontend API and does not reference Endymion, so the binding stays where the player's other calls are. The setting is `AppSettings.SoundOutputDevice`, carried by Galaxia's model of the file as well. Rule B gives the interface one number and no minor part (§3.2), so the addition is a new number rather than a minor version: it moved in `emusen_platform.h`, `lib.rs` and `PlatformLibrary.InterfaceVersion` together. Design and tests: `EmuSen_Audio_Sync.md` §7.4.
+
+## 46. Interface 34, 2026-11-03: the interface's sounds on the chosen device
+
+One function, accepted by the tester on 2026-11-03 with Settings' sound rows: `emusen_endymion_ui_set_device(ui, name)`
+keeps the device the interface's short sounds play on, by a name `emusen_endymion_audio_device_list` gave, null or empty the
+system default, answering `ABSENT` with words where no device has the name. An open stream is let go and the next sound opens
+on the device. The C# side is `UiSoundPlayer.SetOutputDevice`. A new number, as §45's was (rule B). Design and tests:
+`EmuSen_Audio_Sync.md` §7.5.
+

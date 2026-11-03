@@ -58,6 +58,11 @@ namespace EmuSen.Mistress.Pages
         IReadOnlyList<GameChoice> Engines(string path);
         string? Engine(string path);
         void SetEngine(string path, string? engine);
+
+        // The game's controller profile, kept in Endymion's store; null where its console has no profile but Default, so the row is left out (EmuSen_Input.md §10.5).
+        IReadOnlyList<GameChoice>? Profiles(string path) => null;
+        string? Profile(string path) => null;
+        void SetProfile(string path, string? profile) { }
         IReadOnlyList<GameChoice>? Standards(string path);
         string? Standard(string path);
         void SetStandard(string path, string? standard);

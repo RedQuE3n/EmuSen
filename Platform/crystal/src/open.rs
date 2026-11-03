@@ -176,7 +176,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     session.save_key = save_key;
     // The motors reach a pad where the console's games drive one and the player's switch is on (EmuSen_Input.md §9.2).
     let system = session.engine.lock().unwrap_or_else(|p| p.into_inner()).mi.system.clone();
-    session.rumble.set_open(crate::rumble::allowed(&system, crate::rumble::switch(&tree)));
+    session.rumble.set_gate(crate::rumble::in_table(&system), crate::rumble::switch(&tree));
     let session = Arc::new(session);
     apply_stored(&session, &ctx, &stored);
     sessions.add(session.clone());

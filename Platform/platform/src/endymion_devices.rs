@@ -947,6 +947,25 @@ pub unsafe extern "C" fn emusen_endymion_ui_remember(h: *mut Ui, key: *const u8,
     0
 }
 
+/// The device the interface's sounds play on, by a name the device list gave; null or empty is the system default.
+/// ABSENT where no device has the name: the system default plays (interface 34).
+///
+/// # Safety
+/// `h` live; `name` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_ui_set_device(h: *mut Ui, name: *const u8, len: usize) -> i32 {
+    let Some(ui) = (unsafe { h.as_mut() }) else { return fail(status::NULL, "no handle") };
+    let name = match unsafe { text(name, len) } {
+        Ok(name) => name,
+        Err(status) => return status,
+    };
+    if ui.sounds.set_device(name) {
+        0
+    } else {
+        fail(status::ABSENT, format!("No sound output is named \"{}\"; the system default plays the interface's sounds instead.", name.unwrap_or_default()))
+    }
+}
+
 pub const UI_IS_OPEN: u32 = 0;
 pub const UI_QUEUED: u32 = 1;
 

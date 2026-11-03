@@ -39,6 +39,7 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, uint, uint, uint, double, int> input_axis;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, uint, int> input_connected;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, ushort*, ushort*, int> input_rumble;
+        public delegate* unmanaged[Cdecl]<nint, uint, uint, int> input_rumble_switch;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, uint, uint, uint, int> speed_set;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, int> speed_mode;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, uint, ulong, uint, int> rewind_set;

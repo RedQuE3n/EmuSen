@@ -36,8 +36,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "ControllerBindingsGenesis", "ControllerBindingsGenesisSix", "ControllerBindingsGenesisTeamPlayer", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "ControllerBindingsPlayStation", "ControllerBindingsPlayStationDigital", "GraphicsSettingsPlayStation2", "GraphicsSettingsHostedPlayStation2", "ShaderSettingsPlayStation2", "ControllerBindingsPlayStation2", "ControllerBindingsPlayStation2Digital", "ControllerBindingsSaturn", "ControllerBindingsDreamcast", "ShaderSettingsSliders", "RewindReel", "Resume", "ControllerBindings",
-            "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ResumeLongTitle", "ControllerBindingsLongNames", "Shell"];
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "GraphicsSettingsPlayStation2", "GraphicsSettingsHostedPlayStation2", "ShaderSettingsPlayStation2", "ShaderSettingsSliders", "RewindReel", "Resume", "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ResumeLongTitle", "Shell"];
         // The installed themes' date, fixed because digit widths decide where the state line wraps.
         private static readonly DateTimeOffset ThemeInstallDate = new(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -48,14 +47,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["ControllerBindingsGenesis"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisSix"] = typeof(InputSettingsWindow), ["ControllerBindingsGenesisTeamPlayer"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow), ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["CompressedDiscsBeside"] = typeof(CompressedDiscsWindow), ["Cores"] = typeof(CoresWindow), ["CoresDetail"] = typeof(CoresWindow), ["CoresPlan"] = typeof(CoresWindow), ["CoresRunning"] = typeof(CoresWindow), ["CoresNoCatalogue"] = typeof(CoresWindow), ["Packages"] = typeof(PackagesWindow), ["PackagesDetail"] = typeof(PackagesWindow), ["PackagesPlan"] = typeof(PackagesWindow), ["PackagesRunning"] = typeof(PackagesWindow), ["Scraper"] = typeof(ScraperWindow), ["ScraperDetail"] = typeof(ScraperWindow), ["ScraperPlan"] = typeof(ScraperWindow), ["ScraperRunning"] = typeof(ScraperWindow), ["Library"] = typeof(LibraryWindow), ["LibraryDetail"] = typeof(LibraryWindow), ["LibraryPlan"] = typeof(LibraryWindow), ["LibraryRunning"] = typeof(LibraryWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["ControllerBindingsPlayStation"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStationDigital"] = typeof(InputSettingsWindow), ["GraphicsSettingsPlayStation2"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsHostedPlayStation2"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsPlayStation2"] = typeof(ShaderSettingsWindow), ["ControllerBindingsPlayStation2"] = typeof(InputSettingsWindow), ["ControllerBindingsPlayStation2Digital"] = typeof(InputSettingsWindow), ["ControllerBindingsSaturn"] = typeof(InputSettingsWindow), ["ControllerBindingsDreamcast"] = typeof(InputSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
-            ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ControllerBindings"] = typeof(InputSettingsWindow),
-            ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
+            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow), ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["CompressedDiscsBeside"] = typeof(CompressedDiscsWindow), ["Cores"] = typeof(CoresWindow), ["CoresDetail"] = typeof(CoresWindow), ["CoresPlan"] = typeof(CoresWindow), ["CoresRunning"] = typeof(CoresWindow), ["CoresNoCatalogue"] = typeof(CoresWindow), ["Packages"] = typeof(PackagesWindow), ["PackagesDetail"] = typeof(PackagesWindow), ["PackagesPlan"] = typeof(PackagesWindow), ["PackagesRunning"] = typeof(PackagesWindow), ["Scraper"] = typeof(ScraperWindow), ["ScraperDetail"] = typeof(ScraperWindow), ["ScraperPlan"] = typeof(ScraperWindow), ["ScraperRunning"] = typeof(ScraperWindow), ["Library"] = typeof(LibraryWindow), ["LibraryDetail"] = typeof(LibraryWindow), ["LibraryPlan"] = typeof(LibraryWindow), ["LibraryRunning"] = typeof(LibraryWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["GraphicsSettingsPlayStation2"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsHostedPlayStation2"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsPlayStation2"] = typeof(ShaderSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
+            ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
             ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow), ["ThemeAbout"] = typeof(ThemeAboutWindow),
             // The long names, where a cut would first appear (Q190).
             ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ShaderSettingsCrt"] = typeof(ShaderSettingsWindow),
-            ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow), ["ControllerBindingsLongNames"] = typeof(InputSettingsWindow),
-            ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
+            ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
         };
 
@@ -432,40 +429,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Call(window, "ShowShaderSettings");
                     SelectTab(window, "PlayStation 2");
                     break;
-                case "ControllerBindingsPlayStation2":
-                case "ControllerBindingsPlayStation2Digital":
-                    // The DualShock 2, and the digital pad a port can be set to, each drawn - see Sapphire_Native.md §49.6.
-                    if (which.EndsWith("Digital", StringComparison.Ordinal))
-                    {
-                        var ps2Digital = ConsolesConfig.Load();
-                        ps2Digital.SetValue("PlayStation 2", "pad1", "ps2.digital");
-                        ps2Digital.Save();
-                    }
-                    Call(window, "ShowControllerBindings");
-                    SelectTab(window, "PlayStation 2");
-                    Assert.Equal("PlayStation 2", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
-                    break;
-                case "ControllerBindingsSaturn":
-                case "ControllerBindingsDreamcast":
-                    // A console only a hosted core runs, its pad drawn as the console's - see EmuSen_Cores.md §4.11.
-                    string hosted = which == "ControllerBindingsSaturn" ? "Saturn" : "Dreamcast";
-                    HostedConsole(hosted.ToLowerInvariant());
-                    Call(window, "ShowControllerBindings");
-                    SelectTab(window, hosted);
-                    Assert.Equal(hosted, (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
-                    break;
-                case "ControllerBindingsPlayStation":
-                case "ControllerBindingsPlayStationDigital":
-                    if (which.EndsWith("Digital", StringComparison.Ordinal))
-                    {
-                        var digital = ConsolesConfig.Load();
-                        digital.SetValue("PlayStation", "pad1", "psx.pad");
-                        digital.Save();
-                    }
-                    Call(window, "ShowControllerBindings");
-                    SelectTab(window, "PlayStation");
-                    Assert.Equal("PlayStation", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
-                    break;
                 case "GraphicsSettingsGameCropNote":
                     ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(1.3, 1.1, 8.7, 9));
                     ShowEngineTab(window, "SNES");
@@ -482,34 +445,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "ActiveCheatsGenesis":
                     Call(window, "ShowActiveCheats");
                     SelectTab(window, "Genesis");
-                    break;
-                case "ControllerBindingsGenesis":
-                    Call(window, "ShowControllerBindings");
-                    SelectTab(window, "Genesis");
-                    Assert.Equal("Genesis", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
-                    break;
-                case "ControllerBindingsGenesisSix":
-                    var stored = ConsolesConfig.Load();
-                    stored.SetValue("Genesis", "pad1", "md.pad6");
-                    stored.Save();
-                    Call(window, "ShowControllerBindings");
-                    SelectTab(window, "Genesis");
-                    Assert.Equal("Genesis", (Sheets(window).Current as InputSettingsWindow)?.ShownConsole);
-                    break;
-                case "ControllerBindingsGenesisTeamPlayer":
-                    // A Team Player on port 1: the window offers five players, and the fourth's pad is drawn.
-                    var tapped = ConsolesConfig.Load();
-                    tapped.SetValue("Genesis", "pad1", "md.teamplayer6");
-                    tapped.Save();
-                    Call(window, "ShowControllerBindings");
-                    SelectTab(window, "Genesis");
-                    Settle(window);
-                    var players = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Dropdown>().First(d => d.Name == "PlayerSelector");
-                    Assert.Equal(("Genesis", 5), ((Sheets(window).Current as InputSettingsWindow)?.ShownConsole, players.Items.Count));
-                    players.SelectedItem = "Player 4";
-                    break;
-                case "ControllerBindings":
-                    Call(window, "ShowControllerBindings");
                     break;
                 case "ShaderSettings":
                     Call(window, "ShowShaderSettings");
@@ -574,10 +509,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     WaitFor(() => crt.Reading.IsCompleted, "the preset\'s sliders");
                     Settle(window);
                     Assert.NotEmpty(crt.Sliders);
-                    break;
-                case "ControllerBindingsLongNames":
-                    LongBindings(window);
-                    Call(window, "ShowControllerBindings");
                     break;
             }
             if (Sheets(window).Current is ShaderSettingsWindow shaders) HeldStill(shaders);

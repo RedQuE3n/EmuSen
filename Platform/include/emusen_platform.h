@@ -1138,6 +1138,11 @@ int32_t emusen_endymion_ui_dispose(emusen_endymion_ui *ui);
 int32_t emusen_endymion_ui_sound(emusen_endymion_ui *ui, uint32_t which, const uint8_t *key, size_t key_len);
 int32_t emusen_endymion_ui_remember(emusen_endymion_ui *ui, const uint8_t *key, size_t key_len, const uint8_t *samples, size_t samples_len);
 
+/* Since 34: the device the interface's sounds play on, by a name emusen_endymion_audio_device_list gave, as the game's
+ * player has it; a null or empty name is the system default. An open stream is let go and the next sound opens it on the
+ * new device. ABSENT where no device has the name: the system default plays. */
+int32_t emusen_endymion_ui_set_device(emusen_endymion_ui *ui, const uint8_t *name, size_t len);
+
 #define EMUSEN_ENDYMION_UI_IS_OPEN 0u
 #define EMUSEN_ENDYMION_UI_QUEUED 1u /* bytes */
 

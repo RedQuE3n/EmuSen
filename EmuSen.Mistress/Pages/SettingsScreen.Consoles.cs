@@ -63,8 +63,10 @@ namespace EmuSen.Mistress.Pages
 
         private IEnumerable<string> SystemsOf(string console) => _host.Systems.Where(s => s.Console == console).Select(s => s.Id);
 
-        private IReadOnlyList<FirmwareFile> FirmwareOf(string console) =>
-            SystemsOf(console).SelectMany(id => _host.Firmware(id) ?? []).GroupBy(f => f.File, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
+        // Each file once, with the need it meets as its system's firmware_status groups them (EmuSen_Cores.md §3.13); a file with no need given meets one of its own.
+        private IReadOnlyList<(FirmwareFile File, string Need, string System)> FirmwareOf(string console) =>
+            SystemsOf(console).SelectMany(id => (_host.Firmware(id) ?? []).Select((f, i) => (File: f, Need: f.Need is { } n ? $"{id}:{n}" : $"{id}:#{i}", System: id)))
+                .GroupBy(f => f.File.File, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
 
         // A console's line in a list, the same facts its pane gives: its games, its engine, and its firmware where it has one to speak of.
         private string ConsoleFacts(string console) =>
@@ -81,13 +83,15 @@ namespace EmuSen.Mistress.Pages
             public string Recognised => Found is { } f ? System.IO.Path.GetFileNameWithoutExtension(f.File).ToUpperInvariant() : "";
         }
 
-        private IReadOnlyList<FirmwareNeed> NeedsOf(string console)
+        // A need of one file is named by its label, of several by the systems table's firmware_name; its word is that name's last.
+        private IReadOnlyList<FirmwareNeed> NeedsOf(string console) => FirmwareOf(console).GroupBy(f => f.Need).Select(g =>
         {
-            IReadOnlyList<FirmwareFile> files = FirmwareOf(console);
-            if (!NeededByAll(console)) return files.Select(f => new FirmwareNeed(f.Label, "firmware", [f])).ToList();
-            static string Word(FirmwareFile f) => System.Text.RegularExpressions.Regex.Replace(f.Label, @"\s*\([^)]*\)", "").Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "firmware";
-            return files.GroupBy(Word, StringComparer.OrdinalIgnoreCase).Select(g => new FirmwareNeed($"{NameOf(console)} {g.Key}", g.Key, g.ToList())).ToList();
-        }
+            List<FirmwareFile> files = g.Select(f => f.File).ToList();
+            string? table = _host.Systems.FirstOrDefault(s => s.Id == g.First().System)?.FirmwareName;
+            string name = files.Count > 1 ? table ?? files[0].Label : files[0].Label;
+            string word = (table ?? name).Split('(')[0].Split(' ', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? "firmware";
+            return new FirmwareNeed(name, word, files);
+        }).ToList();
 
         private bool MissingForAll(string console) => NeededByAll(console) && NeedsOf(console).Any(n => n.Missing);
 
@@ -127,7 +131,7 @@ namespace EmuSen.Mistress.Pages
         // The keys the console page draws in rows of its own, so the schema's rows leave them out.
         private IReadOnlyList<SettingRow> ConsoleSchema(string console)
         {
-            HashSet<string> own = [RuntimeCatalog.EngineKey, .. MediaOf(console).SelectMany(m => m.Slots.Select((_, i) => SlotKey(m, i)).Prepend(m.ModeKey))];
+            HashSet<string> own = [RuntimeCatalog.EngineKey, FirmwarePreferenceKey, .. MediaOf(console).SelectMany(m => m.Slots.Select((_, i) => SlotKey(m, i)).Prepend(m.ModeKey))];
             Dictionary<string, string?> values = _host.Schema(console).ToDictionary(r => r.Key, r => (string?)(_host.CoreValue(console, r.Key) ?? r.Default));
             return _host.Schema(console).Where(r => !own.Contains(r.Key) && !r.Locked && (r.ShownWithKey is null || values.GetValueOrDefault(r.ShownWithKey) == r.ShownWithValue)).ToList();
         }
@@ -289,18 +293,41 @@ namespace EmuSen.Mistress.Pages
         private IReadOnlyList<Setting> FirmwareRows(string console)
         {
             string engine = EngineName(console);
+            bool replaced = _host.CoreValue(console, FirmwarePreferenceKey) == "replacement";
             var rows = NeedsOf(console).Select(n => new Setting(
                 new PageRow("fw:" + n.Name, n.Name) { Kind = PageRowKind.Action, Status = NeedStatus(console, n), Sentence = string.Join(", ", n.Files.Select(f => f.File)) },
                 () => new ScreenPane(n.Found is { } found
-                    ? [new SettingsLine($"Your own {n.Name} ({n.Recognised}) was recognised by its content, and {engine} uses it.", SettingsTone.Success) { Mark = "✓" }, new SettingsLine("EmuSen never downloads firmware.", SettingsTone.Muted)]
+                    ? [new SettingsLine($"Your own {n.Name} ({n.Recognised}) was recognised by its content, and {engine} {(replaced ? "runs the open replacement instead, as Open replacement says Always" : "uses it")}.", SettingsTone.Success) { Mark = "✓" }, new SettingsLine("EmuSen never downloads firmware.", SettingsTone.Muted)]
                     : n.Missing && NeededByAll(console)
                         ? [new SettingsLine($"No {n.Name} of your own was found, and the {NameOf(console)}'s games need one.", SettingsTone.Attention) { Mark = "⚠" }, new SettingsLine($"Put your own copy ({string.Join(", ", n.Files.Select(f => f.File))}) in your firmware folder, then Check again.", SettingsTone.Muted)]
                         : n.Missing
                             ? [new SettingsLine($"{n.Name}: needed only by the games that carry its chip; none of your own was found."), new SettingsLine($"Put your own copy ({n.Files[0].File}) in your firmware folder for those games, then Check again.", SettingsTone.Muted)]
                             : [new SettingsLine($"No {n.Name} of your own was found, so {engine} runs its open replacement in its place."), new SettingsLine($"Your own copy ({string.Join(", ", n.Files.Select(f => f.File))}) is used once it is found. EmuSen never downloads firmware.", SettingsTone.Muted)]))).ToList();
+            if (_host.Schema(console).FirstOrDefault(r => r.Key == FirmwarePreferenceKey && !r.Locked) is { } preference) rows.Add(ReplacementRow(console, preference));
             rows.Add(Opens("fwfolder", "Folder", "Your firmware folder, searched before EmuSen's; only ever read.", _host.App.FirmwareDirectory is { Length: > 0 } d ? d : "EmuSen's folder", () => _host.Open(DoorFirmwareFolder)));
             rows.Add(Act("fwcheck", "Check again", "Reads the folders again, as after a file is put in one.", () => { }));
             return rows;
+        }
+
+        // The runtime's FirmwarePreference, the setting of EmuSen_Cores.md §3.12, as the firmware mockup words it.
+        public const string FirmwarePreferenceKey = "FirmwarePreference";
+
+        private static readonly (string Value, string Text, string Says)[] Replacements =
+        [
+            ("auto", "In use when none is found", "Your own firmware runs where it is found; where it is not, the open replacement runs in its place."),
+            ("replacement", "Always", "The open replacement runs even where your own firmware is found."),
+            ("own", "Never", "Only your own firmware runs: a game whose firmware is not found does not start, and says which file it needs."),
+        ];
+
+        // Open replacement: Automatic, Open replacement or Own firmware, the schema's row drawn where the Firmware page's mockup draws it.
+        private Setting ReplacementRow(string console, SettingRow row)
+        {
+            string value = _host.CoreValue(console, row.Key) is { Length: > 0 } v ? v : row.Default;
+            var choices = Replacements.Where(r => row.Choices.Contains(r.Value)).ToArray();
+            int at = Array.FindIndex(choices, c => c.Value == value);
+            return Choice("fwreplacement", "Open replacement", "Whether the console's open replacement runs in place of firmware of your own. Takes effect when a game is next loaded.",
+                choices.Select(c => c.Text).ToList(), at, i => _host.SetCoreValue(console, row.Key, choices[i].Value),
+                () => Said(choices.ElementAtOrDefault(Math.Max(0, at)).Says ?? "", "Takes effect when a game is next loaded. EmuSen never downloads firmware."));
         }
 
         private ScreenPane CardsPane(string console)

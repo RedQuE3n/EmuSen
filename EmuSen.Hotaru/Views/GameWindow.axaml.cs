@@ -320,6 +320,22 @@ namespace EmuSen.Hotaru.Views
             _gamepad.Poll();
             _ports.MirrorPlayer1ToPlayer2 = _mirrorPlayer1ToPlayer2;
             _ports.PollPads();
+            PassRumble();
+        }
+
+        // The game's motors to the players' pads each poll, a level gone to zero sent once (EmuSen_Input.md §9.7).
+        private readonly uint[] _rumbleSent = new uint[PlayerSlots.MaxPlayers];
+
+        private void PassRumble()
+        {
+            for (int port = 0; port < _ports.Ports && port < _rumbleSent.Length; port++)
+            {
+                (ushort strong, ushort weak) = _session.Rumble(port);
+                uint both = (uint)strong << 16 | weak;
+                if (both == 0 && _rumbleSent[port] == 0) continue;
+                _ports.Rumble(port, strong, weak);
+                _rumbleSent[port] = both;
+            }
         }
 
         // Reuses FramePresenter's static NextEffect, not FramePresenter itself - see EmuSen_Serenity.md §4.

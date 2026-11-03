@@ -93,6 +93,9 @@ namespace EmuSen.Crystal.Client
             return (strong, weak);
         }
 
+        // The player's rumble switch turned while the game runs; the console's own half of the gate stays as it opened.
+        public void RumbleSwitch(bool on) => Check(Contract.Crystal.InputRumbleSwitch(Rt, Id, on ? 1u : 0u));
+
         public void Speed(uint percent, uint turboPercent = 300, uint slowPercent = 25, bool drawNone = false) =>
             Check(Contract.Crystal.SpeedSet(Rt, Id, percent, turboPercent, slowPercent, drawNone ? CrystalAbi.SpeedDrawNone : 0));
 

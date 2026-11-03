@@ -172,6 +172,23 @@ namespace EmuSen.Mistress.Views
 
         void IGamePageHost.SetEngine(string path, string? engine) => ((IGamePageHost)this).EditField(path, GameMetadata.AltEmulator, engine);
 
+        IReadOnlyList<GameChoice>? IGamePageHost.Profiles(string path)
+        {
+            if (RuntimeCatalog.ConsoleForRom(path) is not { } console || _gamepadBindings.Profiles(console) is not { Count: > 1 } profiles) return null;
+            return profiles.Select(p => new GameChoice(p, p)).Prepend(new GameChoice(null, $"Console's ({_gamepadBindings.ConsoleDefault(console)})")).ToList();
+        }
+
+        string? IGamePageHost.Profile(string path) => RuntimeCatalog.ConsoleForRom(path) is { } console ? _gamepadBindings.GameProfile(console, GameProfileKey(path)) : null;
+
+        void IGamePageHost.SetProfile(string path, string? profile)
+        {
+            if (RuntimeCatalog.ConsoleForRom(path) is not { } console || !_gamepadBindings.SetGameProfile(console, GameProfileKey(path), profile)) return;
+            _gamepadBindings.Save();
+        }
+
+        // A game's key in the profile store: its file's stem, as its own settings are kept (EmuSen_Input.md §10.5).
+        private static string GameProfileKey(string path) => System.IO.Path.GetFileNameWithoutExtension(path);
+
         IReadOnlyList<GameChoice>? IGamePageHost.Standards(string path) => StandardOffered(path) ? StandardChoices.Select(c => new GameChoice(c.Value, c.Text)).ToList() : null;
 
         string? IGamePageHost.Standard(string path) => _records.StandardChoice(path);

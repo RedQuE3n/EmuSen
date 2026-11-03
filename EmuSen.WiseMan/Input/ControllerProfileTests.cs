@@ -139,5 +139,40 @@ namespace EmuSen.WiseMan.Input
             Assert.True(loaded.DeleteProfile("SNES", "Party"));
             Assert.Equal("Default", loaded.Resolve("SNES"));
         }
+
+        [Fact]
+        public void A_games_own_profile_is_a_Games_entry_that_follows_a_rename_goes_with_a_delete_and_resolves_first()
+        {
+            var bindings = new GamepadBindings(Consoles);
+            Assert.True(bindings.CreateProfile("SNES", "Couch"));
+            Assert.False(bindings.SetGameProfile("SNES", "Granite Choir", "Nobody"));
+            Assert.True(bindings.SetGameProfile("SNES", "Granite Choir", "couch"));
+            Assert.True(bindings.SetGameProfile("SNES", "Dune Relay", "default"));
+            Assert.Equal("Couch", bindings.GameProfile("SNES", "Granite Choir"));
+            Assert.Equal("Couch", bindings.Resolve("SNES", bindings.GameProfile("SNES", "Granite Choir")));
+            Assert.True(bindings.Save());
+
+            using (JsonDocument file = JsonDocument.Parse(Read("gamepadprofiles.json")))
+            {
+                JsonElement games = file.RootElement.GetProperty("SNES").GetProperty("Games");
+                Assert.Equal("Couch", games.GetProperty("Granite Choir").GetString());
+                Assert.Equal("Default", games.GetProperty("Dune Relay").GetString());
+            }
+            GamepadBindings loaded = GamepadBindings.Load(Consoles);
+            Assert.Equal("Couch", loaded.GameProfile("SNES", "Granite Choir"));
+            Assert.Equal("Default", loaded.GameProfile("SNES", "Dune Relay"));
+
+            Assert.True(loaded.RenameProfile("SNES", "Couch", "Sofa"));
+            Assert.Equal("Sofa", loaded.GameProfile("SNES", "Granite Choir"));
+            Assert.True(loaded.DeleteProfile("SNES", "Sofa"));
+            Assert.Null(loaded.GameProfile("SNES", "Granite Choir"));
+            Assert.Equal("Default", loaded.Resolve("SNES", loaded.GameProfile("SNES", "Granite Choir")));
+            Assert.True(loaded.SetGameProfile("SNES", "Dune Relay", null));
+            Assert.Null(loaded.GameProfile("SNES", "Dune Relay"));
+
+            // A Games entry naming a profile the file does not hold reads as none.
+            Write("gamepadprofiles.json", """{ "SNES": { "Default": null, "Profiles": {}, "Games": { "Lost": "Gone" } } }""");
+            Assert.Null(GamepadBindings.Load(Consoles).GameProfile("SNES", "Lost"));
+        }
     }
 }

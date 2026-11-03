@@ -457,12 +457,12 @@ namespace EmuSen.WiseMan.Mistress
 
         public static TheoryData<string, Type> InGameWindows() => new()
         {
-            { "Cheats", typeof(ActiveCheatsWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) },
+            { "Cheats", typeof(ActiveCheatsWindow) },
         };
 
         public static TheoryData<string, string, string> InGameSettings() => new()
         {
-            { "Players & Controllers", "controllers", "Controllers › Players" }, { "Console Settings", "consoles", "Consoles › Super Nintendo" }, { "Shader Levers", "display", "Display › Shader levers" },
+            { "Players & Controllers", "controllers", "Controllers › Players" }, { "Controller Bindings", "controllers", "Controllers › Controller bindings" }, { "Console Settings", "consoles", "Consoles › Super Nintendo" }, { "Shader Levers", "display", "Display › Shader levers" },
         };
 
         // The game's options that were settings windows open Settings at their page, over the card, the game paused beneath.

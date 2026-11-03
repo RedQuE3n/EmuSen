@@ -94,7 +94,7 @@ fn every_descriptor_validates_against_its_committed_schema() {
         assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
     }
     let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.18"));
+    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.19"));
     let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
     assert_eq!(names.len(), 27);
     assert!(
@@ -126,6 +126,19 @@ fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
     let mi = super::desc::machine_info_json(&m, &measured, &[]);
     assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
     assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
+}
+
+// Since 1.19 an entry's need is written only when the core gives one, so no earlier answer changes by a byte (§6.44).
+#[test]
+fn a_firmware_entrys_need_is_written_only_when_given_and_alternatives_of_any_size_share_it() {
+    use super::desc::Firmware;
+    let small = Firmware { which: 2, name: "a.rom".into(), label: "A".into(), size: 8, need: "bios".into(), ..Firmware::default() };
+    let large = Firmware { which: 3, name: "b.rom".into(), size: 16, ..small.clone() };
+    let own = Firmware { which: 4, name: "c.rom".into(), label: "C".into(), size: 8, ..Firmware::default() };
+    let doc = super::desc::firmware_json(&[small, large, own]);
+    assert_eq!(schema::validate(schema::FIRMWARE, &doc), Vec::<String>::new());
+    assert_eq!(doc.matches(r#""need":"bios""#).count(), 2, "{doc}");
+    assert_eq!(doc.matches(r#""need""#).count(), 2, "{doc}");
 }
 
 // Since 1.12 an entry's md5 list is written only when it has a checksum, so no earlier answer changes by a byte (§6.32).
@@ -552,7 +565,7 @@ fn read_ranges_reach_a_core_that_claims_them_and_an_unknown_kind_is_refused() {
 
 #[test]
 fn the_crates_constants_are_the_headers_own_numbers() {
-    assert_eq!(ABI_VERSION, 0x0001_0012);
+    assert_eq!(ABI_VERSION, 0x0001_0013);
     assert_eq!((caps::DEVICE_RING, caps::UNASSIGNED & caps::DEVICE_RING, std::mem::size_of::<RingImage>(), std::mem::size_of::<RingLend>(), std::mem::size_of::<RingFrame>()), (1 << 27, 0, 40, 72, 40), "since 1.18");
     assert_eq!((caps::EXPECT, caps::UNASSIGNED & caps::EXPECT, caps::UNASSIGNED & (1 << 27), status::NOT_EXPECTED, event::OUTPUT), (1 << 28, 0, 0, -268, 7), "since 1.17");
     assert_eq!((std::mem::size_of::<CreateParams>(), std::mem::offset_of!(CreateParams, system)), (120, 104), "since 1.11");

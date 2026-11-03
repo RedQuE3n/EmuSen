@@ -101,6 +101,7 @@ pub fn bios(market: Market) -> Firmware {
         parts: vec![vec![name.into()]],
         replacement: Some(Replacement::None { cost: BIOS_COST.into() }),
         md5: md5.iter().map(|&m| m.into()).collect(),
+        need: "bios".into(),
     }
 }
 

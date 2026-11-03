@@ -362,6 +362,9 @@ namespace EmuSen.Mistress.Pages
                 case Options when key == "engine":
                     _host.SetEngine(Path, Step(_host.Engines(Path), _host.Engine(Path), by));
                     break;
+                case Options when key == "profile" && _host.Profiles(Path) is { } profiles:
+                    _host.SetProfile(Path, Step(profiles, _host.Profile(Path), by));
+                    break;
                 case Options when key == "standard" && _host.Standards(Path) is { } standards:
                     _host.SetStandard(Path, Step(standards, _host.Standard(Path), by));
                     break;
@@ -430,6 +433,12 @@ namespace EmuSen.Mistress.Pages
                     Kind = engines.Count > 1 ? PageRowKind.Steps : PageRowKind.Action, IsEnabled = engines.Count > 1,
                     Status = TextOf(engines, _host.Engine(Path)), Choices = engines.Select(e => e.Text).ToList(),
                     Sentence = "The engine this game runs on; the console's own unless one is chosen here. Cores lists them all.",
+                });
+            if (_host.Profiles(Path) is { } profiles)
+                rows.Add(new PageRow("profile", "Controller profile")
+                {
+                    Kind = PageRowKind.Steps, Status = TextOf(profiles, _host.Profile(Path)), Choices = profiles.Select(p => p.Text).ToList(),
+                    Sentence = "The bindings this game starts with; the console's profile unless one is chosen here. Settings ▸ Controllers ▸ Profiles makes them.",
                 });
             if (_host.Cheats(Path) is { } cheats)
                 rows.Add(new PageRow("cheats", "Cheats") { Kind = PageRowKind.Opens, Status = $"{cheats.Count(c => c.Enabled)} of {cheats.Count} on", Sentence = "The game's cheats, on or off; the same switches the Pause Card shows." });

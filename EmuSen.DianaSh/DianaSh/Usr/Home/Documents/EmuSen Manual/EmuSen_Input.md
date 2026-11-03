@@ -1141,7 +1141,7 @@ the host.
 - **The gate** is `emusen_crystal::rumble::allowed(system, switch)`: the switch, and the table's row for the system
   the machine reports. The runtime decides it as a session opens; a system with no row, such as the test core's
   `test`, gets none. A change to the switch while a game runs takes effect at the next game started, since the
-  runtime reads `appsettings.json` once per session and never per frame (§9.6, question 1).
+  runtime reads `appsettings.json` once per session and never per frame (§9.6, question 1). Since frontend API 1.11 the frontend sets it again as the player turns it (§9.7).
 
 ### 9.3 The runtime's half: each port's levels, read without the gate
 
@@ -1194,6 +1194,27 @@ the game's ports, `router.Rumble(port, strong, weak)` with the levels `session.R
 2. A strength setting per player, as Extensions §4.4 proposed, is not built. Recommended: only if the tester asks.
 
 ---
+
+### 9.7 Wired: the row, the switch mid-game and the frame loop (2026-11-03)
+
+Built in U6's wiring step, as §9.6 recommended and the tester decided on 2026-11-03.
+
+- **The row.** Settings ▸ Controllers ▸ `Rumble`, a switch over `AppSettings.Rumble`, is shown only where the systems
+  table's `rumble` says a console's games drive a motor: while a game runs, its console's; otherwise any console's. The
+  runtime's `systems` answer gained the table's `rumble` for each row (frontend API 1.11), read as `SystemFacts.Rumble`.
+- **Mid-game.** The gate of §9.2 now has two halves in `emusen_crystal::rumble::Rumble`: the table's, fixed as the session
+  opens (`in_table`), and the switch, read from `appsettings.json` as it opens and set again by
+  `emusen_crystal_input_rumble_switch(rt, session, on)`, **frontend API 1.11**, callable from any thread. On never opens
+  the gate for a console whose table row says no motor. `CrystalSession.RumbleSwitch(on)` binds it; Mistress calls it when
+  the row changes while a game runs. The C# runtime accepts the call and gates nothing, as it routes no outputs.
+- **The frame loop.** Mistress's and Hotaru's pad polls end by handing each of the game's ports' levels to
+  `PortRouter.Rumble`: a level held is sent every poll, so the motor keeps running within SDL's 100 ms, and a level gone to
+  zero is sent once. Nothing is sent while the pad belongs to a menu, so a motor stops within 100 ms of the Pause Card
+  opening. Nothing is allocated per poll.
+- **Tests.** `rumble::tests::the_switch_turned_mid_game_closes_and_opens_the_gate_but_never_past_the_table` and the
+  integration test's mid-game turn (`crystal/tests/rumble.rs`); `SettingsWiringTests` (the row from the table, the switch
+  saved; the frame loop's levels reaching the simulated pad and a stop sent once); `CrystalHeaderTests` holds the export to
+  the header.
 
 ## 10. Controller profiles (2026-11-03)
 
@@ -1255,3 +1276,85 @@ delete.
    added with the U6 row that sets it, as a further minor of the store.
 2. The keyboard's bindings (`keybindings.json`) have no profiles; they are the frontend's (§5.1). Recommended: leave
    them until a player asks.
+
+### 10.5 Wired: Settings ▸ Profiles, a game's own profile and the bindings page (2026-11-03)
+
+**Store 1.2: a game's own profile.** Decided by the tester on 2026-11-03 (§10.4, question 1): a console's entry in
+`gamepadprofiles.json` gains `Games`, the game's key to the profile it chose, Default included:
+
+```json
+{ "SNES": { "Default": "Couch", "Profiles": { "Couch": { "1": { "A": "East" } } }, "Games": { "Granite Choir": "Couch" } } }
+```
+
+The key is the game file's stem, as a game's own settings are kept (`GameSettings.PlainPath`). `GameProfile(console, game)`
+and `SetGameProfile(console, game, profile)` read and set it, null forgetting the choice and a profile the console does not
+have refused; a rename carries the games that chose the profile, a delete returns them to the console's default, and an
+entry naming a profile the file does not hold reads as none. An older build ignores the member and keeps the file as §10.2
+says. A session's bindings are `Resolve(console, GameProfile(console, game))`'s, player by player.
+
+**Settings ▸ Controllers ▸ Profiles.** A page for one console (a `Console` row steps among those with a pad): Default
+first, then the named profiles, the one the console's games start with marked; `New profile…` asks a name and copies the
+console's chosen profile. A profile's page opens its `Controller bindings`, makes it start every game, renames it, or
+deletes it (Default refuses both). Every change goes through `GamepadBindings` and is saved at once.
+
+**A game's page.** Options gains `Controller profile ◂ Console's (Default) ▸` where the game's console has a named profile;
+stepping it sets the game's `Games` entry.
+
+**The bindings page.** Settings ▸ Controllers ▸ `Controller bindings` (and a profile's) opens a page of content
+(`docs/LunaP.md` §213.7) as its mockup draws it: the strip `Player n` and the consoles with a pad, the console's controller
+drawn with the focused control selected, the caption under it, and the pane naming the control, the console, the profile
+where it is not Default, the player past the first, and the pad button it is bound to. The directions move between the
+drawing's regions by where they are drawn (`ControllerDiagram.Neighbour`), passing over regions the console lacks; A listens
+for a press: the press that chose is let go first, then the first button pressed is bound in the profile's map for the
+player (`GamepadBindings.Own`), or a trigger pulled past half binds L2 or R2 alone, as §7.3 says; nothing pressed within
+`BindCaptureTimeout` (5 s) leaves the button as it was, and Escape cancels from the keyboard. The press that was bound does
+not reach the screen until it is let go. Y resets the focused button to its default (`GamepadBindingMap.ResetButton`); the
+shoulders step the console; X steps the player where the console's ports hold more than one; B closes the page.
+
+**The old binding window** is retired the same day (§10.6).
+
+**Tests.** `ControllerProfileTests.A_games_own_profile_is_a_Games_entry_that_follows_a_rename_goes_with_a_delete_and_resolves_first`;
+`SettingsWiringTests`: profiles made, chosen, renamed and deleted through Settings and read back from the file; a game's
+profile kept as a `Games` entry and its session's pad map that profile's; the bindings page's content, hints and pane, a
+press rebinding Y in the profile and not in Default, the bound press not reaching the screen, Y resetting, the shoulders
+and B; a capture left unanswered giving up.
+
+### 10.6 The binding window retired: Keyboard keys, Hotkeys, the tester and the stick's rows (2026-11-03)
+
+Decided by the tester on 2026-11-03: Keyboard keys and Hotkeys become pages of the bindings page's form, with no mockup of
+their own; the stick deadzone and Mirror player 1 to player 2 become Controllers rows; the tester and the conflict warnings
+move onto the bindings page, as a pane and a notice; and `InputSettingsWindow`, its player selector and its drawings retire
+with every door to them, which now opens Settings ▸ Controllers ▸ Controller bindings on the running game's console.
+
+- **Controllers ▸ Keyboard keys**, per console as the pad's bindings are: the same page of content, the strip `Keyboard`
+  and the consoles, the drawing labelled with each control's key. A listens for a key (a bare modifier is no binding,
+  Escape or the pad's B cancels), Y resets the focused control to its default key, X clears it. A key a hotkey holds is
+  taken from the hotkey, since hotkeys are every console's. Stick directions are bound here, and on the pad's page say
+  they come from the pad's own stick.
+- **Controllers ▸ Hotkeys**, a page of rows, one per action with its key: A listens, X clears; a hotkey's key is taken
+  from every console's buttons. A key a console's button also has is marked `⚠` and said in the row's pane.
+- **The conflict notice.** A console's clashes, among the keys of the controls it has and the hotkeys, are an Attention
+  line in the pane of both of its pages; two consoles sharing a key is none, which is why each has its own keys (§5.1).
+- **The tester.** Select on the pad's page tries the buttons: the drawing lights what the player's pad and the keyboard
+  press, as the game would hear them (the bound button, a trigger past half, a stick's direction past the threshold, a
+  key held), the knobs move with the sticks, and the pane lists what is held. No press moves or rebinds; B held for a
+  second (`MainWindow.TestExitHold`) or Escape stops it. Outside the tester the drawing lights what the keyboard holds,
+  and nothing while a binding listens.
+- **Rows.** `Stick deadzone` (5 % to 95 % by five, the pad manager told at once), `Mirror player 1 to player 2`, and
+  `Reset every binding` (every console's keys and pad bindings and the hotkeys; named profiles stay).
+- **Not carried over.** The General tab's drawing of the player's pad as SDL reads it, beside the deadzone slider, has no
+  page: the tester shows the pad through the console's bindings instead. The window's footer words on a sheet are the help
+  bar's hints.
+
+**Tests**, the window's ported to the pages, each asserting the behaviour it did: `BindingsPageTests` (26: keys rebound by
+real key events, Escape and modifiers, a key taken from another control, clearing and resetting, each console's own
+controls and keys, the conflict notice, release order, stick directions, hotkeys and their clash with buttons, the hotkey
+file's backfilled defaults, Reset every binding, players and an adapter's drawings, every control's region, the hosted
+consoles' tables, the cross on the drawing, lighting by pad, key and stick, Z and its trigger, the tester, the rows, the
+drawing's name); `PadSettingsWindowTests.Controller_bindings_by_pad_the_deadzone_a_switch_a_pad_rebind_and_a_key_rebind_backed_out_of`;
+`MultiplayerTests` (the Genesis's four players drawn); `PadMenuTests` and `SheetLookTests` (the card's door opens the page);
+`WindowFitAuditTests.Every_consoles_bindings_page_fits` (the eleven drawings the window's audits held, at 1280 × 800,
+1920 × 1080 and 1280 × 720). Retired with the window: its 246 recordings, `InputSettingsWindowLayoutTests` and
+`InputSettingsWindowRenderTests` (the window's columns), the dropdown-in-a-sheet case (no dropdown remains), and
+`ControllerBindingsPictureTool`. `EmuSen_Settings_Reference.md` §4.81 and its neighbours describe the window as it was.
+

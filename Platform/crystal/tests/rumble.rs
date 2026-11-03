@@ -74,13 +74,20 @@ fn the_test_cores_motor_reaches_the_players_pad_only_where_the_table_and_the_swi
     }
 
     // Opened as a console whose games drive a motor: each frame's level, `frames × 997` on port 0's strong motor.
-    s.rumble.set_open(true);
+    s.rumble.set_gate(true, true);
     let first = frame(&mut pads);
     assert!(first.0 != 0 && first.1 == 0, "{first:?}");
     for i in 1..3u16 {
         assert_eq!(frame(&mut pads), (first.0.wrapping_add(997 * i), 0));
     }
     assert_eq!(s.rumble.level(1), (0, 0), "port 1 declares no motor");
+
+    // The player's switch turned off while the game runs: the next frame's level reaches the pad as nothing; on again, the motor's own.
+    s.rumble.set_switch(false);
+    assert_eq!(frame(&mut pads), (0, 0), "switched off mid-game");
+    s.rumble.set_switch(true);
+    let back = frame(&mut pads);
+    assert!(back.0 != 0, "{back:?}");
 
     // The switch is read from appsettings.json, on by default; off, no console's motor passes.
     assert!(emusen_crystal::rumble::switch(&tree()));

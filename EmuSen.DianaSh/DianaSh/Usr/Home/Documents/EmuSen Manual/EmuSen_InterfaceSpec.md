@@ -773,7 +773,7 @@ Library ▸ Cheats (`EmuSen_BigPicture.md` §52.5).
 | Memory Cards: mode and slots | Consoles ▸ the console ▸ Memory cards ▸ Mode, Slot 1, Slot 2, Cards, New card; Saves on the cards opens the Memory Cards window for copying, moving and deleting saves |
 | Debug Logging: the master switch | EmuSen ▸ Logging ▸ Logging |
 | Game Collection Settings: automatic collections, custom collections shown, create, delete, finish editing, grouping, sorting, stars, folders, flatten, random entry | Library ▸ Collections ▸ its rows; Delete a collection ▸ a row each |
-| Settings menu: Controller Bindings | Controllers ▸ Controller bindings, the binding window until the bindings page is built |
+| Settings menu: Controller Bindings | Controllers ▸ Controller bindings, Keyboard keys and Hotkeys, pages since 2026-11-03 (§6.3.24, `EmuSen_Input.md` §10.6); the deadzone and the mirror are Controllers rows |
 | Settings menu: Cheats | Library ▸ Cheats, the Active Cheats window (restored 2026-11-03) |
 
 **Awaiting a step.** Approved by the tester on 2026-11-03 and coming in the step after U6a, each on a surface built beside
@@ -781,3 +781,21 @@ it: Controllers ▸ Controller bindings as a page with the drawing, Controllers 
 (shown where the systems table reports it), Sound ▸ Output (the platform library's device list), and Consoles ▸ the
 console ▸ Firmware ▸ Open replacement (the runtime's `FirmwarePreference`). Next after those, still U6: Display ▸ Text size
 and Reduced motion. Decided for later, not U6: Sound ▸ Latency and EmuSen ▸ Updates.
+
+#### 6.3.24 Settings, the wiring step (2026-11-03)
+
+Compared side by side with the approved mockups at 1280 × 800 and 1920 × 1080 before recording (`EmuSen_BigPicture.md`
+§52.7). Added: `SettingsBindings`, both sizes, reached by the player's presses: Controllers ▸ Controller bindings, the
+shoulders to the Super Nintendo and Left to its Y, the mockup's state. Taken again, one cause each, both sizes:
+`SettingsControllers` (Profiles and Rumble join the rows in the mockup's order, then Keyboard keys and Hotkeys after
+Guide chords, Controller type after them),
+`SettingsSound` (Output), `SettingsFirmware` (Open replacement after the need's row), `SettingsConsolePage` (the schema's
+FirmwarePreference row leaves the console's page for the Firmware page) and `SettingsConsoles` (the pane's facts line names
+the next of the console's choices in its place, as accepted on 2026-11-03).
+
+Retired the same day with the binding window (`EmuSen_Input.md` §10.6): its 246 recordings
+(`ControllerBindings*`, every tab of each of its eleven in-game states). The drawings they held are audited on the
+bindings page instead, without recordings: `WindowFitAuditTests.Every_consoles_bindings_page_fits`, the PlayStation 2's
+and the PlayStation's pads and their digital ones, the Saturn's and the Dreamcast's, the Genesis's three-button, six-button
+and Team Player fourth player, the Nintendo 64's, and the keyboard's page with the longest key names, each at
+1280 × 800, 1920 × 1080 and 1280 × 720.

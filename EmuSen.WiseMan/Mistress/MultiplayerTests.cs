@@ -302,16 +302,17 @@ namespace EmuSen.WiseMan.Mistress
 
                 typeof(MainWindow).GetMethod("ShowControllerBindings", Hidden)!.Invoke(window, null);
                 EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests.Settle(window);
-                var sheets = window.GetControl<SheetLayer>("Sheets");
-                var bindings = Assert.IsType<InputSettingsWindow>(sheets.Current);
-                Assert.Equal("Genesis", bindings.ShownConsole);
-                Dropdown player = sheets.SheetOf(bindings)!.GetVisualDescendants().OfType<Dropdown>().Single(d => d.Name == "PlayerSelector");
-                Assert.Equal(new[] { "Player 1", "Player 2", "Player 3", "Player 4" }, player.Items.Cast<string>());
-                foreach (var (name, layout) in new[] { ("Player 1", ControllerLayout.GenesisSixButton), ("Player 3", ControllerLayout.Genesis), ("Player 4", ControllerLayout.Genesis) })
+                // The bindings page opens on the running game's console, and offers and draws each player its ports hold.
+                var settings = window.SettingsShown!;
+                Assert.Equal("Genesis", settings.Binding!.Console);
+                Assert.Equal(4, settings.PlayersOf("Genesis"));
+                var view = (SettingsView)typeof(MainWindow).GetField("_settings", Hidden)!.GetValue(window)!;
+                foreach (var (number, layout) in new[] { (1, ControllerLayout.GenesisSixButton), (3, ControllerLayout.Genesis), (4, ControllerLayout.Genesis) })
                 {
-                    player.SelectedItem = name;
-                    EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests.Settle(window);
-                    Assert.Equal(layout, bindings.DiagramFor("Genesis")!.Layout);
+                    while (settings.Binding!.Player != number) settings.StepBindingPlayer();
+                    view.Fill();
+                    Assert.Equal($"Player {number}", window.SettingsLayoutShown!.Content!.Tabs[0]);
+                    Assert.Equal(layout, view.Diagram!.Layout);
                 }
                 window.Close();
             }

@@ -128,14 +128,21 @@ namespace EmuSen.Mistress.Views
             bool card = _padMenuOpen && CardShown;
             Sheets.HintFamily = HelpFamily;
             MenuBackdrop.IsVisible = _bigScreen && sheetMenu;
+            // A card under a sheet that draws its menu stays mounted, covered by the blurred screen the sheet stands on - see EmuSen_Interface.md §18.5.
+            PadMenuPanel.Opacity = card && MenuBackdrop.IsVisible ? 0 : 1;
             HideThemedHelp(MenuBackdrop.IsVisible || card);
             MenuPanel? shown = sheetMenu && _bigScreen ? MenuPanelOf(Sheets.Current!) : card ? PadCard.CardPanel : null;
             if (!ReferenceEquals(shown, _menuShown))
             {
+                // A card a sheet uncovers was on screen beneath it all along, so it does not open again - see EmuSen_Interface.md §18.5.
+                bool uncovered = card && ReferenceEquals(shown, PadCard.CardPanel) && _cardCovered;
+                _cardCovered = card && shown is not null && !ReferenceEquals(shown, PadCard.CardPanel);
                 _menuShown = shown;
-                if (shown is not null) BeginMenuOpening(shown);
+                if (shown is not null && !uncovered) BeginMenuOpening(shown);
             }
         }
+
+        private bool _cardCovered;
 
         private MenuPanel? _menuShown;
         private readonly MenuOpening _menuOpening = new();

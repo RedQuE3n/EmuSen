@@ -448,10 +448,56 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow w, PadDriver pad) = Playing(bigScreen: true);
             Chord(pad);
             PadMenu.Choose(w, pad, row, exact: true);
-            Assert.False(PadMenu.IsOpen(w));
+            Assert.True(PadMenu.IsOpen(w), "the card stays beneath the sheet it opened (EmuSen_Interface.md §18.5)");
             Assert.IsType(window, Sheets(w).Current);
             Assert.True(w.IsPaused);
             if (row == "Players & Controllers") Assert.Equal(PreferencesWindow.ControllersTab, PreferencesTab(w));
+            Done(w);
+        }, default);
+
+        // §2.8, §18.5: the card's pages and a sheet it opens keep one card on screen, with no close, no reopening and no opening effect; the scrim stays and the game runs no frame.
+        [Fact]
+        public Task The_card_stays_on_screen_from_page_to_page_into_a_sheet_and_back() => Session.Dispatch(() =>
+        {
+            (MainWindow w, PadDriver pad) = Playing(bigScreen: true);
+            ((AppSettings)Field(w, "_appSettings")!).BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningScaleUp;
+            TimeSpan now = TimeSpan.FromSeconds(100);
+            typeof(MainWindow).GetProperty("UiClock", Hidden)!.SetValue(w, (Func<TimeSpan>)(() => now));
+            var opening = (EmuSen.Mistress.BigPicture.MenuOpening)typeof(MainWindow).GetProperty("MenuOpeningNow", Hidden)!.GetValue(w)!;
+            Chord(pad);
+            var card = w.GetControl<AdaptiveLayout>("PadCard");
+            MenuPanel panel = card.CardPanel;
+            Panel scrim = card.GetVisualDescendants().OfType<Panel>().Single(p => p.Name == "AdaptiveCardScrim");
+            for (int i = 0; i < 10; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
+            long frames = MistressGame.TotalFrames(w);
+            void Step(string what, Action act)
+            {
+                now += TimeSpan.FromSeconds(1);
+                opening.Advance(now);
+                act();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Same(panel, card.CardPanel);
+                Assert.True(PadMenu.IsOpen(w) && card.IsEffectivelyVisible && scrim.IsEffectivelyVisible, $"{what}: the card and its scrim stay on screen");
+                Assert.Equal(1.0, scrim.Opacity);
+                Assert.False(ReferenceEquals(opening.Growing, panel), $"{what}: the card runs no opening effect");
+                Assert.Equal(1.0, panel.OpeningScale);
+                Assert.True(w.IsPaused, what);
+                Assert.Equal(frames, MistressGame.TotalFrames(w));
+            }
+            Step(MainWindow.GameOptionsMenu, () => Enter(w, pad, MainWindow.GameOptionsMenu));
+            Step(MainWindow.DisplayMenu, () => Enter(w, pad, MainWindow.DisplayMenu));
+            Step("Graphics", () => Enter(w, pad, "Graphics"));
+            Assert.IsType<GraphicsSettingsWindow>(Sheets(w).Current);
+            Assert.Equal(0, w.GetControl<Control>("PadMenuPanel").Opacity);
+            Step("the sheet closed", () => ((Window)Sheets(w).Current!).Close());
+            Assert.False(Sheets(w).IsPresenting);
+            Assert.Equal(1, w.GetControl<Control>("PadMenuPanel").Opacity);
+            Assert.EndsWith(MainWindow.DisplayMenu, PadMenu.DeskTitle(w));
+            Assert.Equal("Graphics", PadMenu.SelectedLine(w));
+            Step("B to Game Options", () => pad.B());
+            Step("B to the first page", () => pad.B());
+            for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
+            Assert.Equal(frames, MistressGame.TotalFrames(w));
             Done(w);
         }, default);
 

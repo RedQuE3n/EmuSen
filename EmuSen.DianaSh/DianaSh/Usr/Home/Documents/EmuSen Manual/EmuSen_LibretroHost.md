@@ -2321,6 +2321,10 @@ installed by pad, Jak in the ring]:
 
 ## 10z. The card hands its pause to the sheet it opens, and takes it back (2026-11-02)
 
+*Superseded on 2026-11-02 by `EmuSen_Interface.md` §18.5:* a sheet opened from the card now lays over the card, which
+stays open beneath it and keeps the pause. Nothing is handed over and nothing is reopened. The record below is kept as
+it was built.
+
 §10y made the frames run between the card and a sheet harmless. This section stops them running at all.
 
 Decided 2026-11-02 by the tester: a game the card paused runs no frame while the player goes from the card into a

@@ -402,6 +402,17 @@ Still different from the mockups: their order (before the maker order of decisio
 glyphs in the session's pad family; and the dim behind a question at 74 per cent where the mockup's is 55, the
 frame's cover scrim being the one every question shares.
 
+### 3.10 The focus after a job takes no row the player chose meanwhile (2026-11-03)
+
+A land failed `CoresWindowTests.Approve_asks_with_the_hash…` once in 7,370 tests, in its second shard, and the test
+passed alone. Not a leaked static: the suspect `LaunchAfterCloseTests` ran in another shard, and the shard's order
+before the failure, run again, passed. The cause was a race of the product's own. After an approval the pane lists
+the cores again, and when the listing ends (the pane's poll, every 100 ms) it chose the acted-on row again and gave it
+the focus (§3.7). A row the player chose in between was taken from them: in the test, Sapphire was chosen after the
+approval, and when a busy machine let the poll fall inside the test's settle, the waiting row came back and Approve…
+was enabled. Now the acted-on row is chosen again only while nothing else is chosen. `A_row_chosen_while_the_list_is
+_read_again_after_an_approval_stays_chosen` waits past the poll on purpose; it failed before the change.
+
 ## 4. The data model
 
 ### 4.1 Three sources, each the owner of its facts

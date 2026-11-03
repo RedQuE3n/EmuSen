@@ -29,12 +29,12 @@ tree
                     14 ScrollViewer at=987,107,218,30 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
                       15 TextBlock at=987,110,218,24 box=218,24 by=fixed-scroll caps=13.999 drawn face=Barlow heard=Search in=14 layout=59.32,24 limit=987,107,218,30 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text=Search
                 16 Border at=64,100,912,44 by=panel limit=0,0,1280,800 name=AdaptiveNavigation role=none
-                  17 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=none
-                    18 ToggleButton at=80,100,34,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                  17 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=tab
+                    18 SectionTab at=80,100,34,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=All
                       19 TextBlock at=80,108,34,24 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=ALL layout=33.56,24 limit=80,100,34,44 owner=18 paints=#EEEEF0FF role=text size=20 text=ALL
-                    20 ToggleButton at=146,100,44,44 by=panel drawn focus heard=Mine limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Mine
+                    20 SectionTab at=146,100,44,44 by=panel drawn focus heard=Mine limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=Mine
                       21 TextBlock at=146,108,44,24 box=44,24 by=clip caps=13.999 drawn face=Barlow heard=MINE layout=43.6,24 limit=146,100,44,44 owner=20 paints=#D4D4D4FF role=text size=20 text=MINE
-                    22 ToggleButton at=222,100,98,44 by=panel drawn focus heard=Automatic limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Automatic
+                    22 SectionTab at=222,100,98,44 by=panel drawn focus heard=Automatic limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=Automatic
                       23 TextBlock at=222,108,98,24 box=98,24 by=clip caps=13.999 drawn face=Barlow heard=AUTOMATIC layout=97.26,24 limit=222,100,98,44 owner=22 paints=#D4D4D4FF role=text size=20 text=AUTOMATIC
               24 Grid at=64,160,1152,542 by=panel limit=0,0,1280,800 role=none
                 25 Border at=64,160,691,542 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
@@ -85,5 +85,5 @@ tree
                 70 HintBar at=64,716,1152,30 by=panel heard="Open, Back, Collections, Add the selected game, More, List" limit=0,0,1280,800 role=group
 focus none
 press down focus="ListBoxItem  (Mark: not marked, Collection: Weekend, Games: 3 games  ▸)" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=CollectionsWindow
-press up focus="ToggleButton 'All' (All)" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=CollectionsWindow
+press up focus="SectionTab 'All' (All)" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=CollectionsWindow
 press back focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=none

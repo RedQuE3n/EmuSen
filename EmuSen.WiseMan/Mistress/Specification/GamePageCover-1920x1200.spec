@@ -44,10 +44,10 @@ tree
                 29 PadGlyph at=1261.5,502.5,45,45 by=panel heard=Y limit=0,0,1920,1200 role=image
                 30 Path at=1321.5,508.5,33,33 by=panel limit=0,0,1920,1200 nohit role=none
                 31 TextBlock at=1369.5,501,154.5,48 box=103,32 by=panel caps=18.1987 drawn face=Barlow heard=Favourite layout=102.36,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Favourite
-        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 role=none
-          33 ToggleButton at=504,594,154.5,66 by=panel drawn focus heard=Details limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=DETAILS
+        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 name=PageSections role=tab
+          33 SectionTab at=504,594,154.5,66 by=panel drawn focus heard=Details limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=DETAILS
             34 AccessText at=528,606,106.5,37.5 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.98,24 limit=504,594,154.5,66 owner=33 paints=#D4D4D4FF role=none size=20 text=DETAILS
-          35 ToggleButton at=670.5,594,192,66 by=panel drawn focus heard="Cover Art" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text="COVER ART"
+          35 SectionTab at=670.5,594,192,66 by=panel drawn focus heard="Cover Art" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="COVER ART"
             36 AccessText at=694.5,606,144,37.5 box=96,25 by=clip caps=13.999 drawn face=Barlow layout=95.68,24 limit=670.5,594,192,66 owner=35 paints=#EEEEF0FF role=none size=20 text="COVER ART"
         37 Border at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageContent role=none
           38 StackPanel at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageTiles role=none
@@ -94,4 +94,4 @@ tree
 focus none
 press down focus="PageLayout GamePage" page="Cover Art"
 press up focus="PageLayout GamePage" page="Cover Art"
-press back focus="PageLayout GamePage" page=details
+press back focus="MenuRow PageRow.cover" page=details

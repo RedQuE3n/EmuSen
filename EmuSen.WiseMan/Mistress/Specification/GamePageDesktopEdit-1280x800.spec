@@ -41,10 +41,10 @@ tree
                 26 Path at=550,192,12,12 by=clip limit=537,184,96,28 nohit role=none
                 27 TextBlock at=568,190,52,16 box=52,16 by=clip caps=9.0994 drawn face=Barlow heard=Favourite layout=51.18,15.6 limit=537,184,96,28 owner=24 paints=#D4D4D4FF role=text size=13 text=Favourite
         28 Border at=24,300,1032,31 by=panel limit=0,0,1080,746 paints=#333337FF role=none
-          29 StackPanel at=36,300,1008,30 by=panel limit=0,0,1080,746 name=PageTabs role=none
-            30 ToggleButton at=36,300,50,30 by=panel drawn focus heard=Details limit=0,0,1080,746 op paints=#D4D4D4FF role=button text=DETAILS
+          29 SelectionStack at=36,300,1008,30 by=panel limit=0,0,1080,746 name=PageTabs role=tab
+            30 SectionTab at=36,300,50,30 by=panel drawn focus heard=Details limit=0,0,1080,746 op paints=#D4D4D4FF role=tabitem text=DETAILS
               31 AccessText at=36,304,50,19 box=50,19 by=clip caps=9.7993 drawn face=Barlow layout=49.69,16.8 limit=36,300,50,30 owner=30 paints=#D4D4D4FF role=none size=14 text=DETAILS
-            32 ToggleButton at=110,300,80,30 by=panel drawn focus heard="Edit Details" limit=0,0,1080,746 op paints=#4C9AE8FF,#EEEEF0FF role=button text="EDIT DETAILS"
+            32 SectionTab at=110,300,80,30 by=panel drawn focus heard="Edit Details" limit=0,0,1080,746 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="EDIT DETAILS"
               33 AccessText at=110,304,80,19 box=80,19 by=clip caps=9.7993 drawn face=Barlow layout=79.81,16.8 limit=110,300,80,30 owner=32 paints=#EEEEF0FF role=none size=14 text="EDIT DETAILS"
         34 ScrollViewer at=24,349,1032,385 by=panel fades=b limit=0,0,1080,746 overflow=690 paints=#707070FF,#FFFFFFFF role=scrollviewer viewport=24,349,1032,385
           35 Border at=24,349,1032,1075 by=scroll in=34 limit=24,349,1032,385 name=PageContent role=none seen=24,349,1032,385

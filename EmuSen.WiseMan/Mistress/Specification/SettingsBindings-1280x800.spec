@@ -22,14 +22,14 @@ tree
             7 AccessText at=247,48,203,25 box=203,25 by=clip caps=13.999 drawn face=Barlow layout=202.66,24 limit=231,40,235,44 owner=6 paints=#EEEEF0FF role=none size=20 text="CONTROLLER BINDINGS"
         8 Border at=64,108,704,578 by=panel heard="Controller bindings" limit=0,0,1280,800 name=SettingsContent paints=#26262BFF role=none
           9 StackPanel at=88,132,656,530 by=clip limit=64,108,704,578 role=none
-            10 WholeRow at=88,132,656,44 by=clip limit=64,108,704,578 name=SettingsContentTabs paints=#D4D4D4FF role=none
-              11 ToggleButton at=88,132,110,44 by=clip drawn focus heard="Player 1" limit=64,108,704,578 op paints=#D4D4D4FF role=button text="PLAYER 1"
+            10 WholeRow at=88,132,656,44 by=clip limit=64,108,704,578 name=SettingsContentTabs paints=#D4D4D4FF role=tab
+              11 SectionTab at=88,132,110,44 by=clip drawn focus heard="Player 1" limit=64,108,704,578 op paints=#D4D4D4FF role=tabitem text="PLAYER 1"
                 12 AccessText at=104,140,78,25 box=78,25 by=clip caps=13.999 drawn face=Barlow layout=77.74,24 limit=88,132,110,44 owner=11 paints=#D4D4D4FF role=none size=20 text="PLAYER 1"
-              13 ToggleButton at=206,132,186,44 by=clip drawn focus heard="Super Nintendo" limit=64,108,704,578 op paints=#4C9AE8FF,#EEEEF0FF role=button text="SUPER NINTENDO"
+              13 SectionTab at=206,132,186,44 by=clip drawn focus heard="Super Nintendo" limit=64,108,704,578 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="SUPER NINTENDO"
                 14 AccessText at=222,140,154,25 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=206,132,186,44 owner=13 paints=#EEEEF0FF role=none size=20 text="SUPER NINTENDO"
-              15 ToggleButton at=400,132,106,44 by=clip drawn focus heard="Sega CD" limit=64,108,704,578 op paints=#D4D4D4FF role=button text="SEGA CD"
+              15 SectionTab at=400,132,106,44 by=clip drawn focus heard="Sega CD" limit=64,108,704,578 op paints=#D4D4D4FF role=tabitem text="SEGA CD"
                 16 AccessText at=416,140,74,25 box=74,25 by=clip caps=13.999 drawn face=Barlow layout=73.12,24 limit=400,132,106,44 owner=15 paints=#D4D4D4FF role=none size=20 text="SEGA CD"
-              17 ToggleButton at=514,132,146,44 by=clip drawn focus heard=PlayStation limit=64,108,704,578 op paints=#D4D4D4FF role=button text=PLAYSTATION
+              17 SectionTab at=514,132,146,44 by=clip drawn focus heard=PlayStation limit=64,108,704,578 op paints=#D4D4D4FF role=tabitem text=PLAYSTATION
                 18 AccessText at=530,140,114,25 box=114,25 by=clip caps=13.999 drawn face=Barlow layout=113.56,24 limit=514,132,146,44 owner=17 paints=#D4D4D4FF role=none size=20 text=PLAYSTATION
             19 Border at=88,176,656,380 by=clip limit=64,108,704,578 name=SettingsContentBody role=none
               20 ControllerDiagram at=88,176,656,380 by=clip heard="SNES controller" limit=88,176,656,380 name=BindingsDiagram role=group

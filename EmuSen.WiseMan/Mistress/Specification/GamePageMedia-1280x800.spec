@@ -44,16 +44,16 @@ tree
                 29 PadGlyph at=841,335,30,30 by=panel heard=Y limit=0,0,1280,800 role=image
                 30 Path at=881,339,22,22 by=panel limit=0,0,1280,800 nohit role=none
                 31 TextBlock at=913,334,103,32 box=103,32 by=panel caps=18.1987 drawn face=Barlow heard=Favourite layout=102.36,31.2 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=26 text=Favourite
-        32 WholeRow at=336,396,880,44 by=panel heard=Sections limit=0,0,1280,800 role=none
-          33 ToggleButton at=336,396,124,44 by=panel drawn focus heard=Overview limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=OVERVIEW
+        32 WholeRow at=336,396,880,44 by=panel heard=Sections limit=0,0,1280,800 name=PageSections role=tab
+          33 SectionTab at=336,396,124,44 by=panel drawn focus heard=Overview limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=OVERVIEW
             34 AccessText at=352,404,92,25 box=92,25 by=clip caps=13.999 drawn face=Barlow layout=91.62,24 limit=336,396,124,44 owner=33 paints=#D4D4D4FF role=none size=20 text=OVERVIEW
-          35 ToggleButton at=468,396,95,44 by=panel drawn focus heard="States, 4" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=STATES
+          35 SectionTab at=468,396,95,44 by=panel drawn focus heard="States, 4" limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=STATES
             36 AccessText at=484,404,63,25 box=63,25 by=clip caps=13.999 drawn face=Barlow layout=62.64,24 limit=468,396,95,44 owner=35 paints=#D4D4D4FF role=none size=20 text=STATES
-          37 ToggleButton at=571,396,107,44 by=panel drawn focus heard=Options limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=OPTIONS
+          37 SectionTab at=571,396,107,44 by=panel drawn focus heard=Options limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=OPTIONS
             38 AccessText at=587,404,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.88,24 limit=571,396,107,44 owner=37 paints=#D4D4D4FF role=none size=20 text=OPTIONS
-          39 ToggleButton at=686,396,87,44 by=panel drawn focus heard=Media limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=MEDIA
+          39 SectionTab at=686,396,87,44 by=panel drawn focus heard=Media limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=MEDIA
             40 AccessText at=702,404,55,25 box=55,25 by=clip caps=13.999 drawn face=Barlow layout=54.3,24 limit=686,396,87,44 owner=39 paints=#EEEEF0FF role=none size=20 text=MEDIA
-          41 ToggleButton at=781,396,103,44 by=panel drawn focus heard=Details limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=DETAILS
+          41 SectionTab at=781,396,103,44 by=panel drawn focus heard=Details limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=DETAILS
             42 AccessText at=797,404,71,25 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.98,24 limit=781,396,103,44 owner=41 paints=#D4D4D4FF role=none size=20 text=DETAILS
         43 Border at=64,464,1152,238 by=panel limit=0,0,1280,800 name=PageContent role=none
           44 StackPanel at=64,464,1152,238 by=panel limit=0,0,1280,800 name=PageTiles role=none

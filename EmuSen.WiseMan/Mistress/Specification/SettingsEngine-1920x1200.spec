@@ -22,7 +22,7 @@ tree
             7 AccessText at=319.5,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=295.5,60,279,66 owner=6 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
           8 SectionTab at=586.5,60,147,66 by=panel drawn focus heard=Engine limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=ENGINE
             9 AccessText at=610.5,72,99,37.5 box=66,25 by=clip caps=13.999 drawn face=Barlow layout=65.94,24 limit=586.5,60,147,66 owner=8 paints=#EEEEF0FF role=none size=20 text=ENGINE
-        10 RowList at=96,162,1056,81 by=panel heard=Engine limit=0,0,1920,1200 name=SettingsRows role=list
+        10 SelectionStack at=96,162,1056,81 by=panel heard=Engine limit=0,0,1920,1200 name=SettingsRows role=list
           11 MenuRow at=96,162,1056,81 by=panel focus heard="VenusRT (Rust), ● Default" limit=0,0,1920,1200 name="SettingsRow.engine:VenusRT (Rust)" role=listitem
         12 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#26262BFF role=none
           13 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none

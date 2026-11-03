@@ -20,7 +20,7 @@ tree
             5 AccessText at=120,72,108,37.5 box=72,25 by=clip caps=13.999 drawn face=Barlow layout=71.9,24 limit=96,60,156,66 owner=4 paints=#D4D4D4FF role=none size=20 text=DISPLAY
           6 SectionTab at=264,60,264,66 by=panel drawn focus heard="Shader levers" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="SHADER LEVERS"
             7 AccessText at=288,72,216,37.5 box=144,25 by=clip caps=13.999 drawn face=Barlow layout=143.58,24 limit=264,60,264,66 owner=6 paints=#EEEEF0FF role=none size=20 text="SHADER LEVERS"
-        8 RowList at=96,162,1056,810 by=panel heard="Shader levers" limit=0,0,1920,1200 name=SettingsRows role=list
+        8 SelectionStack at=96,162,1056,810 by=panel heard="Shader levers" limit=0,0,1920,1200 name=SettingsRows role=list
           9 MenuRow at=96,162,1056,81 by=panel focus heard="Signal, Composite" limit=0,0,1920,1200 name=SettingsRow.signal role=listitem
           10 MenuRow at=96,243,1056,81 by=panel focus heard="Television standard, The game's" limit=0,0,1920,1200 name=SettingsRow.standard role=listitem
           11 MenuRow at=96,324,1056,81 by=panel focus heard="PAL colour decoding, Delay line" limit=0,0,1920,1200 name=SettingsRow.palDecoder role=listitem

@@ -24,7 +24,7 @@ tree
             9 AccessText at=472.5,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=448.5,60,279,66 owner=8 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
           10 SectionTab at=739.5,60,223.5,66 by=panel drawn focus heard=Parameters limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=PARAMETERS
             11 AccessText at=763.5,72,175.5,37.5 box=117,25 by=clip caps=13.999 drawn face=Barlow layout=116.52,24 limit=739.5,60,223.5,66 owner=10 paints=#EEEEF0FF role=none size=20 text=PARAMETERS
-        12 RowList at=96,162,1056,810 by=panel heard=Parameters limit=0,0,1920,1200 name=SettingsRows role=list
+        12 SelectionStack at=96,162,1056,810 by=panel heard=Parameters limit=0,0,1920,1200 name=SettingsRows role=list
           13 MenuRow at=96,162,1056,81 by=panel focus heard="Search parameters, …" limit=0,0,1920,1200 name=SettingsRow.paramsearch role=listitem
           14 MenuRow at=96,243,1056,81 by=panel focus heard="Reset all" limit=0,0,1920,1200 name=SettingsRow.paramreset role=listitem
           15 MenuRow at=96,324,1056,81 by=panel focus heard="Quality, Balanced" limit=0,0,1920,1200 name=SettingsRow.p:quality role=listitem

@@ -17,18 +17,18 @@ tree
       2 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#1B1B1EFF role=none
         3 DockPanel at=64,40,1152,44 by=panel limit=0,0,1280,800 role=none
           4 TextBlock at=1114,50,102,24 box=102,24 by=panel caps=13.999 drawn face=Barlow heard="1 of 8 games" layout=101.62,24 limit=0,0,1280,800 name=GalleryCount paints=#8D8D91FF role=text size=20 text="1 of 8 games"
-          5 WholeRow at=64,40,1026,44 by=panel heard=Sections limit=0,0,1280,800 name=GallerySections role=none
-            6 ToggleButton at=64,40,66,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=ALL
+          5 WholeRow at=64,40,1026,44 by=panel heard=Sections limit=0,0,1280,800 name=GallerySections role=tab
+            6 SectionTab at=64,40,66,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=ALL
               7 AccessText at=80,48,34,25 box=34,25 by=clip caps=13.999 drawn face=Barlow layout=33.56,24 limit=64,40,66,44 owner=6 paints=#EEEEF0FF role=none size=20 text=ALL
-            8 ToggleButton at=138,40,138,44 by=panel drawn focus heard=Favourites limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=FAVOURITES
+            8 SectionTab at=138,40,138,44 by=panel drawn focus heard=Favourites limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=FAVOURITES
               9 AccessText at=154,48,106,25 box=106,25 by=clip caps=13.999 drawn face=Barlow layout=105.54,24 limit=138,40,138,44 owner=8 paints=#D4D4D4FF role=none size=20 text=FAVOURITES
-            10 ToggleButton at=284,40,103,44 by=panel drawn focus heard=Recent limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=RECENT
+            10 SectionTab at=284,40,103,44 by=panel drawn focus heard=Recent limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=RECENT
               11 AccessText at=300,48,71,25 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.14,24 limit=284,40,103,44 owner=10 paints=#D4D4D4FF role=none size=20 text=RECENT
-            12 ToggleButton at=395,40,68,44 by=panel drawn focus heard=NES limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=NES
+            12 SectionTab at=395,40,68,44 by=panel drawn focus heard=NES limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=NES
               13 AccessText at=411,48,36,25 box=36,25 by=clip caps=13.999 drawn face=Barlow layout=35.76,24 limit=395,40,68,44 owner=12 paints=#D4D4D4FF role=none size=20 text=NES
-            14 ToggleButton at=471,40,119,44 by=panel drawn focus heard="Game Boy" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="GAME BOY"
+            14 SectionTab at=471,40,119,44 by=panel drawn focus heard="Game Boy" limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text="GAME BOY"
               15 AccessText at=487,48,87,25 box=87,25 by=clip caps=13.999 drawn face=Barlow layout=86.74,24 limit=471,40,119,44 owner=14 paints=#D4D4D4FF role=none size=20 text="GAME BOY"
-            16 ToggleButton at=598,40,186,44 by=panel drawn focus heard="Super Nintendo" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="SUPER NINTENDO"
+            16 SectionTab at=598,40,186,44 by=panel drawn focus heard="Super Nintendo" limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text="SUPER NINTENDO"
               17 AccessText at=614,48,154,25 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=598,40,186,44 owner=16 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
         18 TextBox at=64,100,1152,44 by=panel drawn heard=Search limit=0,0,1280,800 name=GallerySearch paints=#0E0E10FF,#707070FF,#EEEEF0FF role=edit text=gran
           19 ScrollViewer at=81,101,1118,42 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer

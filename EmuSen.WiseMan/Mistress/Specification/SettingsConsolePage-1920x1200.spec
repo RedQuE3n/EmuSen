@@ -20,7 +20,7 @@ tree
             5 AccessText at=120,72,139.5,37.5 box=93,25 by=clip caps=13.999 drawn face=Barlow layout=92.68,24 limit=96,60,187.5,66 owner=4 paints=#D4D4D4FF role=none size=20 text=CONSOLES
           6 SectionTab at=295.5,60,279,66 by=panel drawn focus heard="Super Nintendo" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="SUPER NINTENDO"
             7 AccessText at=319.5,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=295.5,60,279,66 owner=6 paints=#EEEEF0FF role=none size=20 text="SUPER NINTENDO"
-        8 RowList at=96,162,1056,729 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=list
+        8 SelectionStack at=96,162,1056,729 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=list
           9 MenuRow at=96,162,1056,81 by=panel focus heard="Engine, VenusRT (Rust)" limit=0,0,1920,1200 name=SettingsRow.engine role=listitem
           10 MenuRow at=96,243,1056,81 by=panel focus heard="Firmware, only some games" limit=0,0,1920,1200 name=SettingsRow.firmware role=listitem
           11 MenuRow at=96,324,1056,81 by=panel focus heard="Memory cards" limit=0,0,1920,1200 name=SettingsRow.cards role=listitem

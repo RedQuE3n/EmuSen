@@ -27,18 +27,18 @@ tree
                   13 ScrollViewer allow="a text box scrolls its own text" at=987,107,218,30 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
                     14 TextBlock allow="a text box scrolls its own text" at=987,110,218,24 box=218,24 caps=13.999 drawn face=Barlow heard="Search files" in=13 layout=98.58,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text="Search files"
               15 Border at=64,100,912,44 by=panel limit=0,0,1280,800 name=AdaptiveNavigation role=none
-                16 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=none
-                  17 ToggleButton at=80,100,34,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=All
+                16 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=tab
+                  17 SectionTab at=80,100,34,44 by=panel drawn focus heard=All limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=All
                     18 TextBlock at=80,108,34,24 box=34,24 by=clip caps=13.999 drawn face=Barlow heard=ALL layout=33.56,24 limit=80,100,34,44 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
-                  19 ToggleButton at=146,100,103,44 by=panel drawn focus heard="Same Dump" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="Same Dump"
+                  19 SectionTab at=146,100,103,44 by=panel drawn focus heard="Same Dump" limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text="Same Dump"
                     20 TextBlock at=146,108,103,24 box=103,24 by=clip caps=13.999 drawn face=Barlow heard="SAME DUMP" layout=102.88,24 limit=146,100,103,44 owner=19 paints=#D4D4D4FF role=text size=20 text="SAME DUMP"
-                  21 ToggleButton at=281,100,101,44 by=panel drawn focus heard="Same Game" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="Same Game"
+                  21 SectionTab at=281,100,101,44 by=panel drawn focus heard="Same Game" limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text="Same Game"
                     22 TextBlock at=281,108,101,24 box=101,24 by=clip caps=13.999 drawn face=Barlow heard="SAME GAME" layout=100.84,24 limit=281,100,101,44 owner=21 paints=#D4D4D4FF role=text size=20 text="SAME GAME"
-                  23 ToggleButton at=414,100,184,44 by=panel drawn focus heard="Broken or Suspect" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="Broken or Suspect"
+                  23 SectionTab at=414,100,184,44 by=panel drawn focus heard="Broken or Suspect" limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text="Broken or Suspect"
                     24 TextBlock at=414,108,184,24 box=184,24 by=clip caps=13.999 drawn face=Barlow heard="BROKEN OR SUSPECT" layout=183.44,24 limit=414,100,184,44 owner=23 paints=#D4D4D4FF role=text size=20 text="BROKEN OR SUSPECT"
-                  25 ToggleButton at=630,100,137,44 by=panel drawn focus heard=Unrecognised limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Unrecognised
+                  25 SectionTab at=630,100,137,44 by=panel drawn focus heard=Unrecognised limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=Unrecognised
                     26 TextBlock at=630,108,137,24 box=137,24 by=clip caps=13.999 drawn face=Barlow heard=UNRECOGNISED layout=136.92,24 limit=630,100,137,44 owner=25 paints=#D4D4D4FF role=text size=20 text=UNRECOGNISED
-                  27 ToggleButton at=799,100,67,44 by=panel drawn focus heard=Hidden limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=Hidden
+                  27 SectionTab at=799,100,67,44 by=panel drawn focus heard=Hidden limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=Hidden
                     28 TextBlock at=799,108,67,24 box=67,24 by=clip caps=13.999 drawn face=Barlow heard=HIDDEN layout=66.66,24 limit=799,100,67,44 owner=27 paints=#D4D4D4FF role=text size=20 text=HIDDEN
             29 Grid at=64,160,1152,542 by=panel limit=0,0,1280,800 role=none
               30 Grid at=64,160,691,542 by=panel limit=0,0,1280,800 role=none

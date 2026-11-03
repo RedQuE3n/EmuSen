@@ -44,26 +44,26 @@ tree
                 29 PadGlyph at=1261.5,502.5,45,45 by=panel heard=Y limit=0,0,1920,1200 role=image
                 30 Path at=1321.5,508.5,33,33 by=panel limit=0,0,1920,1200 nohit role=none
                 31 TextBlock at=1369.5,501,154.5,48 box=103,32 by=panel caps=18.1987 drawn face=Barlow heard=Favourite layout=102.36,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Favourite
-        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 role=none
-          33 ToggleButton at=504,594,186,66 by=panel drawn focus heard=Overview limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=OVERVIEW
+        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 name=PageSections role=tab
+          33 SectionTab at=504,594,186,66 by=panel drawn focus heard=Overview limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=OVERVIEW
             34 AccessText at=528,606,138,37.5 box=92,25 by=clip caps=13.999 drawn face=Barlow layout=91.62,24 limit=504,594,186,66 owner=33 paints=#D4D4D4FF role=none size=20 text=OVERVIEW
-          35 ToggleButton at=702,594,142.5,66 by=panel drawn focus heard="States, 4" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=STATES
+          35 SectionTab at=702,594,142.5,66 by=panel drawn focus heard="States, 4" limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=STATES
             36 AccessText at=726,606,94.5,37.5 box=63,25 by=clip caps=13.999 drawn face=Barlow layout=62.64,24 limit=702,594,142.5,66 owner=35 paints=#D4D4D4FF role=none size=20 text=STATES
-          37 ToggleButton at=856.5,594,160.5,66 by=panel drawn focus heard=Options limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=OPTIONS
+          37 SectionTab at=856.5,594,160.5,66 by=panel drawn focus heard=Options limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=OPTIONS
             38 AccessText at=880.5,606,112.5,37.5 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.88,24 limit=856.5,594,160.5,66 owner=37 paints=#D4D4D4FF role=none size=20 text=OPTIONS
-          39 ToggleButton at=1029,594,130.5,66 by=panel drawn focus heard=Media limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=MEDIA
+          39 SectionTab at=1029,594,130.5,66 by=panel drawn focus heard=Media limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=MEDIA
             40 AccessText at=1053,606,82.5,37.5 box=55,25 by=clip caps=13.999 drawn face=Barlow layout=54.3,24 limit=1029,594,130.5,66 owner=39 paints=#D4D4D4FF role=none size=20 text=MEDIA
-          41 ToggleButton at=1171.5,594,154.5,66 by=panel drawn focus heard=Details limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text=DETAILS
+          41 SectionTab at=1171.5,594,154.5,66 by=panel drawn focus heard=Details limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=DETAILS
             42 AccessText at=1195.5,606,106.5,37.5 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.98,24 limit=1171.5,594,154.5,66 owner=41 paints=#EEEEF0FF role=none size=20 text=DETAILS
         43 Border at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageContent role=none
-          44 StackPanel at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageRows role=none
-            45 MenuRow at=96,696,1728,81 by=panel heard="Scrape This Game, …" limit=0,0,1920,1200 name=PageRow.scrape role=listitem
-            46 MenuRow at=96,777,1728,81 by=panel heard="Edit Details" limit=0,0,1920,1200 name=PageRow.edit role=listitem
-            47 MenuRow at=96,858,1728,81 by=panel heard="Cover art, Its own · 8 to choose from" limit=0,0,1920,1200 name=PageRow.cover role=listitem
-            48 MenuRow at=96,939,1728,81 by=panel heard="Open Folder" limit=0,0,1920,1200 name=PageRow.folder role=listitem
+          44 SelectionStack at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageRows role=list
+            45 MenuRow at=96,696,1728,81 by=panel focus heard="Scrape This Game, …" limit=0,0,1920,1200 name=PageRow.scrape role=listitem
+            46 MenuRow at=96,777,1728,81 by=panel focus heard="Edit Details" limit=0,0,1920,1200 name=PageRow.edit role=listitem
+            47 MenuRow at=96,858,1728,81 by=panel focus heard="Cover art, Its own · 8 to choose from" limit=0,0,1920,1200 name=PageRow.cover role=listitem
+            48 MenuRow at=96,939,1728,81 by=panel focus heard="Open Folder" limit=0,0,1920,1200 name=PageRow.folder role=listitem
         49 Border at=0,1053,1920,87 by=panel limit=0,0,1920,1200 name=PageHelpBar paints=#1B1B1EFF,#707070FF role=none
           50 HintBar at=96,1069.5,1728,61.5 by=panel heard="Choose, Favourite, Section, Back, Home" limit=0,0,1920,1200 role=group
 focus none
-press down focus="PageLayout GamePage" page=details
-press up focus="PageLayout GamePage" page=details
+press down focus="MenuRow PageRow.edit" page=details
+press up focus="MenuRow PageRow.scrape" page=details
 press back page=closed

@@ -22,7 +22,7 @@ tree
             7 AccessText at=213,48,114,25 box=114,25 by=clip caps=13.999 drawn face=Barlow layout=113.56,24 limit=197,40,146,44 owner=6 paints=#D4D4D4FF role=none size=20 text=PLAYSTATION
           8 SectionTab at=351,40,169,44 by=panel drawn focus heard="Memory cards" limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="MEMORY CARDS"
             9 AccessText at=367,48,137,25 box=137,25 by=clip caps=13.999 drawn face=Barlow layout=136.02,24 limit=351,40,169,44 owner=8 paints=#EEEEF0FF role=none size=20 text="MEMORY CARDS"
-        10 RowList at=64,108,704,324 by=panel heard="Memory cards" limit=0,0,1280,800 name=SettingsRows role=list
+        10 SelectionStack at=64,108,704,324 by=panel heard="Memory cards" limit=0,0,1280,800 name=SettingsRows role=list
           11 MenuRow at=64,108,704,54 by=panel focus heard="Mode, Shared" limit=0,0,1280,800 name=SettingsRow.mode:psx.card role=listitem
           12 MenuRow at=64,162,704,54 by=panel focus heard="Slot 1, Card 1" limit=0,0,1280,800 name=SettingsRow.slot:psx.card:0 role=listitem
           13 MenuRow at=64,216,704,54 by=panel focus heard="Slot 2, Card 2" limit=0,0,1280,800 name=SettingsRow.slot:psx.card:1 role=listitem

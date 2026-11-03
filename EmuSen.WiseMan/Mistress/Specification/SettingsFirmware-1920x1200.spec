@@ -22,7 +22,7 @@ tree
             7 AccessText at=319.5,72,171,37.5 box=114,25 by=clip caps=13.999 drawn face=Barlow layout=113.56,24 limit=295.5,60,219,66 owner=6 paints=#D4D4D4FF role=none size=20 text=PLAYSTATION
           8 SectionTab at=526.5,60,190.5,66 by=panel drawn focus heard=Firmware limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=FIRMWARE
             9 AccessText at=550.5,72,142.5,37.5 box=95,25 by=clip caps=13.999 drawn face=Barlow layout=94.76,24 limit=526.5,60,190.5,66 owner=8 paints=#EEEEF0FF role=none size=20 text=FIRMWARE
-        10 RowList at=96,162,1056,486 by=panel heard=Firmware limit=0,0,1920,1200 name=SettingsRows role=list
+        10 SelectionStack at=96,162,1056,486 by=panel heard=Firmware limit=0,0,1920,1200 name=SettingsRows role=list
           11 MenuRow at=96,162,1056,81 by=panel focus heard="PlayStation BIOS, Not found" limit=0,0,1920,1200 name="SettingsRow.fw:PlayStation BIOS" role=listitem
           12 MenuRow at=96,243,1056,81 by=panel focus heard="Open replacement, In use when none is found" limit=0,0,1920,1200 name=SettingsRow.fwreplacement role=listitem
           13 MenuRow at=96,324,1056,81 by=panel focus heard="Folder, EmuSen's folder" limit=0,0,1920,1200 name=SettingsRow.fwfolder role=listitem

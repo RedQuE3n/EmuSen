@@ -22,7 +22,7 @@ tree
             7 AccessText at=288,72,124.5,37.5 box=83,25 by=clip caps=13.999 drawn face=Barlow layout=82.2,24 limit=264,60,172.5,66 owner=6 paints=#D4D4D4FF role=none size=20 text=SHADERS
           8 SectionTab at=448.5,60,279,66 by=panel drawn focus heard="Super Nintendo" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="SUPER NINTENDO"
             9 AccessText at=472.5,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=448.5,60,279,66 owner=8 paints=#EEEEF0FF role=none size=20 text="SUPER NINTENDO"
-        10 RowList at=96,162,1056,567 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=list
+        10 SelectionStack at=96,162,1056,567 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=list
           11 MenuRow at=96,162,1056,81 by=panel focus heard="Parameters, None" limit=0,0,1920,1200 name=SettingsRow.params role=listitem
           12 MenuRow at=96,243,1056,81 by=panel focus heard="Search, …" limit=0,0,1920,1200 name=SettingsRow.find role=listitem
           13 MenuRow at=96,324,1056,81 by=panel focus heard="None, ● In use" limit=0,0,1920,1200 name=SettingsRow.use:None role=listitem

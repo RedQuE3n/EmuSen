@@ -201,29 +201,32 @@ namespace EmuSen.WiseMan.LunaP
         private static string Selection(Control root, string name) =>
             string.Join("|", PeerNamed(root, name).GetProvider<ISelectionProvider>()!.GetSelection().Select(p => p.GetName()));
 
-        // What a reader is given on Settings' big screen: the element holding the focus, which must be the selected row and the rows' one selection.
-        private static string Heard(SettingsLayout layout)
+        // What a reader is given on a big-screen page: the element holding the focus, which must be the selected row and the rows' one selection.
+        private static string Heard(Control layout, string rows = "SettingsRows")
         {
             var focused = TopLevel.GetTopLevel(layout)!.FocusManager!.GetFocusedElement() as Control;
             Assert.NotNull(focused);
             AutomationPeer peer = ControlAutomationPeer.CreatePeerForElement(focused!);
             Assert.True(peer.HasKeyboardFocus(), $"{focused!.Name} does not report the focus");
             Assert.True(peer.GetProvider<ISelectionItemProvider>()?.IsSelected, $"{focused!.Name} is not reported selected");
-            Assert.Equal(peer.GetName(), Selection(layout, "SettingsRows"));
+            Assert.Equal(peer.GetName(), Selection(layout, rows));
             return peer.GetName();
         }
 
         // Down the page from the focused row to its last, the reader told each row's label and value in turn, the focus passing from row to row and never resting on the screen between.
-        private static int Walk(SettingsLayout layout, Action down)
+        private static int Walk(SettingsLayout layout, Action down) =>
+            Walk(layout, () => layout.Rows, () => layout.Focused, "SettingsRows", down);
+
+        private static int Walk(Control layout, Func<IReadOnlyList<PageRow>> rows, Func<string?> focus, string rowsName, Action down)
         {
             var told = new List<object?>();
             TopLevel.GetTopLevel(layout)!.AddHandler(InputElement.GotFocusEvent, (_, e) => told.Add(e.Source));
             for (int steps = 1; ; steps++)
             {
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-                PageRow row = layout.Rows.Single(r => r.Key == layout.Focused);
-                Assert.Equal(Spoken(row), Heard(layout));
-                if (row.Key == layout.Rows[^1].Key) return steps;
+                PageRow row = rows().Single(r => r.Key == focus());
+                Assert.Equal(Spoken(row), Heard(layout, rowsName));
+                if (row.Key == rows()[^1].Key) return steps;
                 told.Clear();
                 down();
                 Assert.True(told.Count > 0, $"the move from {row.Key} was not told");
@@ -245,6 +248,26 @@ namespace EmuSen.WiseMan.LunaP
             Assert.Equal(2, layout.Trail.Count);
             Assert.Equal(layout.Trail[^1], Selection(layout, "SettingsSections"));
             Assert.True(Walk(layout, () => s.Pad.Down()) >= 4, "the console's page had too few rows to walk");
+        });
+
+        // A game's page by pad: its chosen section selected, the page holding the focus in its actions, then each row of Options told selected as the pad walks it.
+        [Fact]
+        public Task A_game_s_page_tells_a_reader_the_row_the_pad_is_on() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.X();
+            PageLayout layout = s.Window.GamePageLayout!;
+            for (int i = 0; i < 6 && s.Window.GamePageShown!.Section != GamePage.Options; i++) s.Pad.R1();
+            Assert.Equal(GamePage.Options, s.Window.GamePageShown!.Section);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Options", Selection(layout, "PageSections"));
+            Assert.True(layout.Focused.InActions);
+            Assert.Same(layout, TopLevel.GetTopLevel(layout)!.FocusManager!.GetFocusedElement());
+            Assert.Equal("", Selection(layout, "PageRows"));
+            s.Pad.Down();
+            Assert.False(layout.Focused.InActions);
+            IReadOnlyList<PageRow> Rows() => ((PageContent.Rows)layout.Content!).Items;
+            Assert.True(Walk(layout, Rows, () => layout.Focused.Key, "PageRows", () => s.Pad.Down()) >= 3, "the page had too few rows to walk");
         });
 
         // A running engine's own rows from its options, through the fake host: the same, each heading and held row included.

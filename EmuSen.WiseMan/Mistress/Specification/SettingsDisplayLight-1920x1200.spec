@@ -28,7 +28,7 @@ tree
             13 AccessText at=889.5,72,112.5,37.5 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.16,24 limit=865.5,60,160.5,66 owner=12 paints=#1F1F1FFF role=none size=20 text=LIBRARY
           14 SectionTab at=1038,60,160.5,66 by=panel drawn focus heard=EmuSen limit=0,0,1920,1200 op paints=#1F1F1FFF role=tabitem text=EMUSEN
             15 AccessText at=1062,72,112.5,37.5 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.04,24 limit=1038,60,160.5,66 owner=14 paints=#1F1F1FFF role=none size=20 text=EMUSEN
-        16 RowList at=96,162,1056,810 by=panel heard=Display limit=0,0,1920,1200 name=SettingsRows role=list
+        16 SelectionStack at=96,162,1056,810 by=panel heard=Display limit=0,0,1920,1200 name=SettingsRows role=list
           17 MenuRow at=96,162,1056,81 by=panel focus heard="Picture shape, TV shape" limit=0,0,1920,1200 name=SettingsRow.shape role=listitem
           18 MenuRow at=96,243,1056,81 by=panel focus heard="CRT shader, Off" limit=0,0,1920,1200 name=SettingsRow.crt role=listitem
           19 MenuRow at=96,324,1056,81 by=panel focus heard="Shader levers" limit=0,0,1920,1200 name=SettingsRow.levers role=listitem

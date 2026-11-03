@@ -22,7 +22,7 @@ tree
             7 AccessText at=213,48,154,25 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=197,40,186,44 owner=6 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
           8 SectionTab at=391,40,155,44 by=panel drawn focus heard="Custom crop" limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="CUSTOM CROP"
             9 AccessText at=407,48,123,25 box=123,25 by=clip caps=13.999 drawn face=Barlow layout=122.08,24 limit=391,40,155,44 owner=8 paints=#EEEEF0FF role=none size=20 text="CUSTOM CROP"
-        10 RowList at=64,108,704,216 by=panel heard="Custom crop" limit=0,0,1280,800 name=SettingsRows role=list
+        10 SelectionStack at=64,108,704,216 by=panel heard="Custom crop" limit=0,0,1280,800 name=SettingsRows role=list
           11 MenuRow at=64,108,704,54 by=panel focus heard="Left, 0%" limit=0,0,1280,800 name=SettingsRow.crop:CropLeft role=listitem
           12 MenuRow at=64,162,704,54 by=panel focus heard="Right, 0%" limit=0,0,1280,800 name=SettingsRow.crop:CropRight role=listitem
           13 MenuRow at=64,216,704,54 by=panel focus heard="Top, 0%" limit=0,0,1280,800 name=SettingsRow.crop:CropTop role=listitem

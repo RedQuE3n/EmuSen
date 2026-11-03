@@ -28,7 +28,7 @@ tree
             13 AccessText at=593,48,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.16,24 limit=577,40,107,44 owner=12 paints=#EEEEF0FF role=none size=20 text=LIBRARY
           14 SectionTab at=692,40,107,44 by=panel drawn focus heard=EmuSen limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=EMUSEN
             15 AccessText at=708,48,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.04,24 limit=692,40,107,44 owner=14 paints=#D4D4D4FF role=none size=20 text=EMUSEN
-        16 RowList at=64,108,704,540 by=panel heard=Library limit=0,0,1280,800 name=SettingsRows role=list
+        16 SelectionStack at=64,108,704,540 by=panel heard=Library limit=0,0,1280,800 name=SettingsRows role=list
           17 MenuRow at=64,108,704,54 by=panel focus heard="ROM folder, <run>/Roms" limit=0,0,1280,800 name=SettingsRow.rom role=listitem
           18 MenuRow at=64,162,704,54 by=panel focus heard="Artwork folder, beside the games" limit=0,0,1280,800 name=SettingsRow.art role=listitem
           19 MenuRow at=64,216,704,54 by=panel focus heard="Themes, EmuSen (built in)" limit=0,0,1280,800 name=SettingsRow.themes role=listitem

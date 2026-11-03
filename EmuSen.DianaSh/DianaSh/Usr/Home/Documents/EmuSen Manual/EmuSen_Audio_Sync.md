@@ -285,3 +285,17 @@ reopens at a new rate, and null and an empty name are both the default. It loads
 through the C# binding: the list's first entry and its distinct names, a listed device chosen and the default chosen
 again with nothing logged, and a missing saved device falling back at start with exactly one log line, then playing at
 a new rate.
+
+### 7.5 Wired: Sound ▸ Output, and the interface's sounds follow it (2026-11-03)
+
+- **The row.** Settings ▸ Sound ▸ `Output ◂ System default ▸`: the list of §7.4, the saved name added at the end where it
+  is not connected now, so a choice is never lost by unplugging; the pane says so in Attention. A step saves
+  `AppSettings.SoundOutputDevice` and hands it to the game's player at once.
+- **The interface's sounds.** Accepted by the tester on 2026-11-03: `UiSoundPlayer` plays on the same device. The platform
+  library's `emusen_endymion_ui_set_device(ui, name)`, **interface 34** (`EmuSen_RustPlatform.md` §46), keeps the name; an
+  open stream is let go and the next sound opens it on the device found by that name, the system default where none has it
+  (ABSENT, with words). Mistress hands the saved name to its player as it makes it, and again when the row changes.
+- **Tests.** `audio_devices.rs`'s `the_interface_sounds_follow_the_chosen_device_and_fall_back_to_the_default` on SDL's dummy
+  driver (the two tests take turns with SDL's audio subsystem, which is the process's); `SettingsWiringTests`: the system
+  default first, a saved device not connected kept and said, a step saved and the game's player following.
+

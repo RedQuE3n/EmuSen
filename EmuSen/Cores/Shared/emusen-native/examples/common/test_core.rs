@@ -544,6 +544,7 @@ impl Core for TestCore {
                     parts: vec![],
                     replacement: None,
                     md5: vec![if faults() & FAULT_MD5_SHORT != 0 { BOOT_MD5[..31].into() } else { BOOT_MD5.into() }],
+                    need: String::new(),
                 }],
                 development: false,
             }]

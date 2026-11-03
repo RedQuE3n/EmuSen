@@ -13,17 +13,26 @@ pub const PORTS: usize = 8;
 pub struct Rumble {
     /// Each port's strong motor in the high sixteen bits and its weak one in the low.
     levels: [AtomicU32; PORTS],
-    open: AtomicBool,
+    /// The systems table says the console's games drive a motor; fixed as the session opens.
+    table: AtomicBool,
+    /// The player's switch, read as the session opens and set again by `input_rumble_switch`.
+    switch: AtomicBool,
 }
 
 impl Rumble {
     /// Whether the motors reach the pads: the systems table says the console's games drive one and the switch is on.
-    pub fn set_open(&self, open: bool) {
-        self.open.store(open, Ordering::Relaxed);
+    pub fn set_gate(&self, table: bool, switch: bool) {
+        self.table.store(table, Ordering::Relaxed);
+        self.switch.store(switch, Ordering::Relaxed);
+    }
+
+    /// The player's switch turned while the game runs (frontend API 1.11); the table's half is unchanged.
+    pub fn set_switch(&self, on: bool) {
+        self.switch.store(on, Ordering::Relaxed);
     }
 
     pub fn is_open(&self) -> bool {
-        self.open.load(Ordering::Relaxed)
+        self.table.load(Ordering::Relaxed) && self.switch.load(Ordering::Relaxed)
     }
 
     /// A port's strong and weak levels, 0 to 65535; zero while closed or past the ports.
@@ -63,9 +72,14 @@ pub fn switch(tree: &emusen_galaxia::tree::Tree) -> bool {
     settings.get("Rumble").and_then(|v| v.as_bool()).unwrap_or(true)
 }
 
+/// Whether the systems table says a system's games drive a motor; false for a system with no row.
+pub fn in_table(system: &str) -> bool {
+    emusen_systems::find(system).is_some_and(|s| s.rumble)
+}
+
 /// The gate as the table and the switch decide it, for a system by its id.
 pub fn allowed(system: &str, switch: bool) -> bool {
-    switch && emusen_systems::find(system).is_some_and(|s| s.rumble)
+    switch && in_table(system)
 }
 
 #[cfg(test)]
@@ -91,7 +105,7 @@ mod tests {
         r.output(&mi, 1, 7);
         r.output(&mi, 2, 65535);
         assert_eq!(r.level(0), (0, 0), "closed");
-        r.set_open(true);
+        r.set_gate(true, true);
         assert_eq!(r.level(0), (40000, 7));
         r.output(&mi, 0, 0);
         assert_eq!(r.level(0), (0, 7));
@@ -99,6 +113,20 @@ mod tests {
         assert_eq!((r.level(1), r.level(99)), ((0, 0), (0, 0)), "port 1 declares no motor; port 99 is past the ports");
         r.clear();
         assert_eq!(r.level(0), (0, 0));
+    }
+
+    #[test]
+    fn the_switch_turned_mid_game_closes_and_opens_the_gate_but_never_past_the_table() {
+        let (r, mi) = (Rumble::default(), info());
+        r.set_gate(true, true);
+        r.output(&mi, 0, 30000);
+        r.set_switch(false);
+        assert_eq!(r.level(0), (0, 0), "switched off");
+        r.set_switch(true);
+        assert_eq!(r.level(0), (30000, 0), "on again, the level the core last set");
+        r.set_gate(false, true);
+        r.set_switch(true);
+        assert_eq!(r.level(0), (0, 0), "the table says no motor");
     }
 
     #[test]

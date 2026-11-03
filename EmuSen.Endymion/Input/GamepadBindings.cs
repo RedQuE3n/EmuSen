@@ -93,6 +93,7 @@ namespace EmuSen.Endymion.Input
         {
             public List<Profile> Named { get; } = new();
             public string? Chosen { get; set; }
+            public Dictionary<string, string> Games { get; } = new(StringComparer.Ordinal);
         }
 
         private readonly Dictionary<string, ConsoleProfiles> _profiles = new(StringComparer.OrdinalIgnoreCase);
@@ -141,6 +142,7 @@ namespace EmuSen.Endymion.Input
             if (Named(console, newName) is { } other && other != profile) return false;
             ConsoleProfiles all = ProfilesOf(console);
             if (all.Chosen is not null && string.Equals(all.Chosen, profile.Name, StringComparison.OrdinalIgnoreCase)) all.Chosen = newName;
+            foreach (string game in all.Games.Where(g => string.Equals(g.Value, profile.Name, StringComparison.OrdinalIgnoreCase)).Select(g => g.Key).ToList()) all.Games[game] = newName;
             profile.Name = newName;
             return true;
         }
@@ -152,6 +154,26 @@ namespace EmuSen.Endymion.Input
             ConsoleProfiles all = ProfilesOf(console);
             all.Named.Remove(profile);
             if (all.Chosen is not null && string.Equals(all.Chosen, profile.Name, StringComparison.OrdinalIgnoreCase)) all.Chosen = null;
+            foreach (string game in all.Games.Where(g => string.Equals(g.Value, profile.Name, StringComparison.OrdinalIgnoreCase)).Select(g => g.Key).ToList()) all.Games.Remove(game);
+            return true;
+        }
+
+        // A game's own profile by its key (the file's stem, as its own settings are kept), null where it follows the console's default; store 1.2.
+        public string? GameProfile(string console, string game) =>
+            _profiles.TryGetValue(console, out ConsoleProfiles? all) && all.Games.TryGetValue(game, out string? name) ? name : null;
+
+        // Null forgets the game's own choice; a profile the console does not have is refused.
+        public bool SetGameProfile(string console, string game, string? profile)
+        {
+            if (game.Length == 0) return false;
+            if (profile is null)
+            {
+                if (_profiles.TryGetValue(console, out ConsoleProfiles? had)) had.Games.Remove(game);
+                return true;
+            }
+            string? name = IsDefault(profile) ? DefaultProfile : Named(console, profile)?.Name;
+            if (name is null) return false;
+            ProfilesOf(console).Games[game] = name;
             return true;
         }
 
@@ -204,6 +226,7 @@ namespace EmuSen.Endymion.Input
         {
             public string? Default { get; set; }
             public Dictionary<string, Dictionary<int, Dictionary<PadButton, SDL.GamepadButton>>> Profiles { get; set; } = new();
+            public Dictionary<string, string>? Games { get; set; }
         }
 
         private static readonly ConfigFile<Dictionary<string, ProfileFile>> ProfilesFile = new("gamepadprofiles.json");
@@ -216,11 +239,12 @@ namespace EmuSen.Endymion.Input
             var profiles = new Dictionary<string, ProfileFile>(StringComparer.OrdinalIgnoreCase);
             foreach (var (console, all) in _profiles)
             {
-                if (all.Named.Count == 0) continue;
+                if (all.Named.Count == 0 && all.Games.Count == 0) continue;
                 profiles[console] = new ProfileFile
                 {
                     Default = all.Chosen,
                     Profiles = all.Named.ToDictionary(p => p.Name, p => p.Maps.ToDictionary(m => m.Key, m => m.Value.ButtonToPad)),
+                    Games = all.Games.Count > 0 ? new Dictionary<string, string>(all.Games) : null,
                 };
             }
             return File.Save(payload) & ProfilesFile.Save(profiles);
@@ -248,6 +272,8 @@ namespace EmuSen.Endymion.Input
                     all.Named.Add(profile);
                 }
                 all.Chosen = file.Default is { } chosen && Named(console, chosen) is { } named ? named.Name : null;
+                foreach (var (game, name) in file.Games ?? new())
+                    if (game.Length > 0 && name is not null && (IsDefault(name) ? DefaultProfile : Named(console, name)?.Name) is { } kept) all.Games[game] = kept;
             }
         }
 

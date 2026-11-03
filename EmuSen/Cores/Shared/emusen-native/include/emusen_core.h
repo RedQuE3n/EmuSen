@@ -1,4 +1,4 @@
-/* emusen_core.h - the EmuSen core ABI, version 1.18.
+/* emusen_core.h - the EmuSen core ABI, version 1.19.
  *
  * A core is a shared library exporting the functions below, C calling convention. The normative text is
  * EmuSen_CoreAPI.md in the EmuSen manual; this header is its machine-checked half, and where the two disagree the
@@ -34,7 +34,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CORE_ABI_MAJOR 1u
-#define EMUSEN_CORE_ABI_MINOR 18u
+#define EMUSEN_CORE_ABI_MINOR 19u
 #define EMUSEN_CORE_ABI_VERSION ((EMUSEN_CORE_ABI_MAJOR << 16) | EMUSEN_CORE_ABI_MINOR)
 
 /* An opaque machine. Several may exist at once, from one library. */
@@ -378,7 +378,9 @@ uint64_t emusen_core_capabilities(void);                        /* EMUSEN_CAP_* 
 int64_t  emusen_core_info(uint8_t *out, size_t len);            /* core info, JSON (section 6.3) */
 int64_t  emusen_core_settings_schema(uint8_t *out, size_t len); /* the settings schema, a JSON array (section 6.13) */
 /* What an image needs, from its bytes alone and without a machine: a JSON array of firmware entries. @since 1.12 an
- * entry may list md5, the lower-case MD5s of the images the core accepts whatever their name (section 6.32). */
+ * entry may list md5, the lower-case MD5s of the images the core accepts whatever their name (section 6.32). @since 1.19
+ * an entry may name its need, an id of the core's: entries sharing one are alternatives, any one of which will do, in
+ * core info's firmware lists as here (section 6.44). */
 int64_t  emusen_core_firmware_for(const uint8_t *image, size_t image_len, uint8_t *out, size_t len);
 /* Words for a status, UTF-8; EMUSEN_NOT_SUPPORTED for a code the core never returns. */
 int64_t  emusen_core_status_text(int32_t status, uint8_t *out, size_t len);

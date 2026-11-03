@@ -239,6 +239,7 @@ impl Runtime {
                 .str("esde_system", &e.esde_system)
                 .str("esde_full_name", &e.esde_full_name)
                 .bool("self_delimiting_images", e.self_delimiting_images)
+                .bool("rumble", e.rumble)
                 .str_or_null("attached_to", e.attached_to.as_deref());
             match e.screenscraper_system {
                 Some(id) => j.int("screenscraper_system", id as i64),

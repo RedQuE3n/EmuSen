@@ -206,6 +206,18 @@ namespace EmuSen.Crystal.Managed
             catch (Exception e) { return (int)Fail(e); }
         }
 
+        // No motor passes the C# runtime, so the switch has nothing to gate.
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static int emusen_crystal_input_rumble_switch(nint rt, uint session, uint on)
+        {
+            try
+            {
+                SessionOf(rt, session);
+                return 0;
+            }
+            catch (Exception e) { return (int)Fail(e); }
+        }
+
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static int emusen_crystal_input_connected(nint rt, uint session, uint port, uint connected)
         {

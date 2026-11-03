@@ -49,6 +49,22 @@ pub fn playback_devices(sdl: &Sdl) -> Vec<(u32, String)> {
     found
 }
 
+/// A device chosen by name, None or empty the system default: whether a device has the name, and the name kept, None
+/// where none has it so that the system default plays (EmuSen_Audio_Sync.md §7.4).
+fn choose(sdl: &Sdl, name: Option<&str>) -> (bool, Option<String>) {
+    let name = name.filter(|n| !n.is_empty());
+    let found = name.is_none_or(|n| playback_devices(sdl).iter().any(|(_, d)| d == n));
+    (found, if found { name.map(str::to_string) } else { None })
+}
+
+/// A stream on the device of that name, else on the system default where the named one does not open; null for neither.
+fn open_stream(sdl: &Sdl, device: Option<&str>, spec: &AudioSpec) -> *mut c_void {
+    let id = device.and_then(|name| playback_devices(sdl).into_iter().find(|(_, d)| d == name)).map_or(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK, |(id, _)| id);
+    let open = |id| unsafe { (sdl.f.open_audio_device_stream)(id, spec, std::ptr::null(), std::ptr::null_mut()) };
+    let stream = open(id);
+    if stream.is_null() && id != sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK { open(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK) } else { stream }
+}
+
 /// `targetLatencyMs * sampleRate / 1000` in C#'s unchecked 32-bit arithmetic.
 pub fn target_frames(target_latency_ms: i32, sample_rate: i32) -> i32 {
     target_latency_ms.wrapping_mul(sample_rate) / 1000
@@ -79,12 +95,7 @@ impl AudioPlayer {
         self.sdl.set_hint(sdl::HINT_AUDIO_DEVICE_SAMPLE_FRAMES, &self.buffer_frames.to_string());
         let format = if cfg!(target_endian = "little") { sdl::AUDIO_S16LE } else { sdl::AUDIO_S16BE };
         let desired = AudioSpec { format, channels: 2, freq: sample_rate };
-        let id = self.device.as_deref().and_then(|name| playback_devices(&self.sdl).into_iter().find(|(_, d)| d == name)).map_or(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK, |(id, _)| id);
-        let open = |id| unsafe { (self.sdl.f.open_audio_device_stream)(id, &desired, std::ptr::null(), std::ptr::null_mut()) };
-        self.stream = open(id);
-        if self.stream.is_null() && id != sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK {
-            self.stream = open(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK);
-        }
+        self.stream = open_stream(&self.sdl, self.device.as_deref(), &desired);
         self.device_open = !self.stream.is_null();
         self.open_sample_rate = if self.device_open { sample_rate } else { 0 };
         if !self.device_open {
@@ -140,9 +151,7 @@ impl AudioPlayer {
     /// Plays on the device of that name, None or empty the system default; false where no device has the name, and
     /// the system default plays. An open device reopens at its rate (EmuSen_Audio_Sync.md §7.4).
     pub fn set_device(&mut self, rate: &mut DynamicRateControl, name: Option<&str>) -> bool {
-        let name = name.filter(|n| !n.is_empty());
-        let found = name.is_none_or(|n| playback_devices(&self.sdl).iter().any(|(_, d)| d == n));
-        let wanted = if found { name.map(str::to_string) } else { None };
+        let (found, wanted) = choose(&self.sdl, name);
         if wanted != self.device {
             self.device = wanted;
             if self.device_open {
@@ -211,6 +220,8 @@ pub struct UiSounds {
     tried: bool,
     stream: *mut c_void,
     volume: f32,
+    /// The playback device chosen by name, as the game's player has it; None is the system default.
+    device: Option<String>,
 }
 
 unsafe impl Send for UiSounds {}
@@ -244,7 +255,7 @@ pub fn decode(sdl: &Sdl, path: &str) -> Option<Vec<u8>> {
 
 impl UiSounds {
     pub fn new(sdl: Arc<Sdl>) -> UiSounds {
-        UiSounds { sdl, decoded: HashMap::new(), subsystem: false, tried: false, stream: std::ptr::null_mut(), volume: 0.7 }
+        UiSounds { sdl, decoded: HashMap::new(), subsystem: false, tried: false, stream: std::ptr::null_mut(), volume: 0.7, device: None }
     }
 
     pub fn volume(&self) -> f32 {
@@ -297,6 +308,25 @@ impl UiSounds {
         }
     }
 
+    /// The device chosen by name, None or empty the system default; false where no device has the name, and the system
+    /// default plays. An open stream is let go, and the next sound opens it on the new device (EmuSen_Audio_Sync.md §7.5).
+    pub fn set_device(&mut self, name: Option<&str>) -> bool {
+        let (found, wanted) = choose(&self.sdl, name);
+        if wanted != self.device {
+            self.device = wanted;
+            if !self.stream.is_null() {
+                unsafe { (self.sdl.f.destroy_audio_stream)(self.stream) };
+                self.stream = std::ptr::null_mut();
+            }
+            self.tried = false;
+        }
+        found
+    }
+
+    pub fn device(&self) -> Option<&str> {
+        self.device.as_deref()
+    }
+
     /// Opened on the first sound, so a session that never plays one never touches the audio device.
     fn open(&mut self) -> bool {
         if !self.stream.is_null() {
@@ -306,11 +336,13 @@ impl UiSounds {
             return false;
         }
         self.tried = true;
-        self.subsystem = unsafe { (self.sdl.f.init_sub_system)(sdl::INIT_AUDIO) };
+        if !self.subsystem {
+            self.subsystem = unsafe { (self.sdl.f.init_sub_system)(sdl::INIT_AUDIO) };
+        }
         if !self.subsystem {
             return false;
         }
-        self.stream = unsafe { (self.sdl.f.open_audio_device_stream)(sdl::AUDIO_DEVICE_DEFAULT_PLAYBACK, &UI_FORMAT, std::ptr::null(), std::ptr::null_mut()) };
+        self.stream = open_stream(&self.sdl, self.device.as_deref(), &UI_FORMAT);
         if self.stream.is_null() {
             return false;
         }

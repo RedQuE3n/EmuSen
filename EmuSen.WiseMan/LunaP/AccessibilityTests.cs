@@ -31,19 +31,14 @@ namespace EmuSen.WiseMan.LunaP
     // That is worth a guard precisely because nothing in this repository would notice it breaking.
     public class AccessibilityTests
     {
-        private static Window BuildInputSettings() => new InputSettingsWindow(
-            new ControllerKeyBindings(new[] { "NES", "SNES" }),
-            new GamepadBindings(new[] { "NES", "SNES" }), null!, new AppSettings(), new HotkeyBindingMap(), null);
-
         public static TheoryData<string> Windows => new()
         {
-            "InputSettings", "ActiveCheats", "CheatDatabase", "Preferences",
+            "ActiveCheats", "CheatDatabase", "Preferences",
             "Vstop", "Main", "RomBrowser", "DianaShConsole",
         };
 
         private static Window Build(string name) => name switch
         {
-            "InputSettings" => BuildInputSettings(),
             "ActiveCheats" => new ActiveCheatsWindow(),
             "CheatDatabase" => new CheatDatabaseWindow(),
             "Preferences" => new PreferencesWindow(new AppSettings()),
@@ -98,51 +93,6 @@ namespace EmuSen.WiseMan.LunaP
                 .ToArray();
 
             Assert.True(unnamed.Length == 0, $"{name} has unnamed tab stops: {string.Join(", ", unnamed)}");
-        });
-
-        // Seven binding rows, fourteen buttons, two captions between them. The caption stays - an
-        // accessible name that drops the visible label breaks voice control - so what tells them
-        // apart is help text, and this is what stops somebody removing it as redundant.
-        //
-        // ONE TAB PER RUN, AND THAT IS NOT A DETAIL. Avalonia realises only the selected tab, so a
-        // window opened on General contains the hotkey rows and none of the console binding rows -
-        // which is exactly what the first version of this test did, while its name claimed to cover
-        // all fourteen buttons. It stayed green under a sabotage that stripped the help text off
-        // every console rebind button, because those buttons were not in the tree to check. The
-        // existing render tests already knew this and said so (EmuSen_Settings_Reference.md §4.6);
-        // this one had to rediscover it by surviving a sabotage it should have caught.
-        [Theory]
-        [InlineData(null)]
-        [InlineData("NES")]
-        [InlineData("SNES")]
-        public Task Every_rebind_button_says_which_binding_it_belongs_to(string? console) => UiTest.Run(() =>
-        {
-            using var window = new Showing(LaidOut(new InputSettingsWindow(
-                new ControllerKeyBindings(new[] { "NES", "SNES" }),
-                new GamepadBindings(new[] { "NES", "SNES" }), null!, new AppSettings(), new HotkeyBindingMap(), console)));
-
-            Button[] repeated = window.Window.GetVisualDescendants()
-                .OfType<Button>()
-                .Where(b => string.Equals(b.Content as string, "Rebind Key", StringComparison.Ordinal)
-                            || string.Equals(b.Content as string, "Clear", StringComparison.Ordinal)
-                            || string.Equals(b.Content as string, "Rebind Pad", StringComparison.Ordinal)
-                            || string.Equals(b.Content as string, "Clear Pad", StringComparison.Ordinal))
-                .ToArray();
-
-            Assert.True(repeated.Length >= 4, $"expected several repeated rebind buttons, found {repeated.Length}");
-
-            foreach (Button b in repeated)
-            {
-                AutomationPeer peer = ControlAutomationPeer.CreatePeerForElement(b);
-
-                Assert.Equal(b.Content as string, peer.GetName());
-                Assert.False(string.IsNullOrWhiteSpace(peer.GetHelpText()),
-                    $"a '{b.Content}' button has no help text, so it is indistinguishable from the others");
-            }
-
-            // And no two say the same thing, which is the actual defect being guarded.
-            string[] helps = repeated.Select(b => ControlAutomationPeer.CreatePeerForElement(b).GetHelpText() ?? "").ToArray();
-            Assert.Equal(helps.Length, helps.Distinct().Count());
         });
 
         // A list whose rows announce as themselves is still a list of nothing in particular.

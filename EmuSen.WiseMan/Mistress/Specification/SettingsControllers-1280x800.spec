@@ -28,23 +28,24 @@ tree
             13 AccessText at=593,48,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.16,24 limit=577,40,107,44 owner=12 paints=#D4D4D4FF role=none size=20 text=LIBRARY
           14 ToggleButton at=692,40,107,44 by=panel drawn focus heard=EmuSen limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=EMUSEN
             15 AccessText at=708,48,75,25 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.04,24 limit=692,40,107,44 owner=14 paints=#D4D4D4FF role=none size=20 text=EMUSEN
-        16 StackPanel at=64,108,704,486 by=panel heard=Controllers limit=0,0,1280,800 name=SettingsRows role=none
+        16 StackPanel at=64,108,704,540 by=panel heard=Controllers limit=0,0,1280,800 name=SettingsRows role=none
           17 MenuRow at=64,108,704,54 by=panel heard="Players, 1 of 4 set" limit=0,0,1280,800 name=SettingsRow.players role=listitem
           18 MenuRow at=64,162,704,54 by=panel heard="Controller bindings" limit=0,0,1280,800 name=SettingsRow.bindings role=listitem
-          19 MenuRow at=64,216,704,54 by=panel heard="Controller type, Automatic" limit=0,0,1280,800 name=SettingsRow.type role=listitem
-          20 MenuRow at=64,270,704,54 by=panel heard="Swap A and B in menus, Off" limit=0,0,1280,800 name=SettingsRow.swap role=listitem
-          21 MenuRow at=64,324,704,54 by=panel heard="Guide chords, Auto" limit=0,0,1280,800 name=SettingsRow.chords role=listitem
-          22 MenuRow at=64,378,704,54 by=panel heard="Only the first controller, Off" limit=0,0,1280,800 name=SettingsRow.firstonly role=listitem
-          23 MenuRow at=64,432,704,54 by=panel heard="Controller notices, On" limit=0,0,1280,800 name=SettingsRow.notices role=listitem
-          24 MenuRow at=64,486,704,54 by=panel heard="On-screen keyboard, Automatic" limit=0,0,1280,800 name=SettingsRow.keyboard role=listitem
-          25 MenuRow at=64,540,704,54 by=panel heard="Left stick as the D-pad, On" limit=0,0,1280,800 name=SettingsRow.stickdpad role=listitem
-        26 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#26262BFF role=none
-          27 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
-            28 TextBlock at=824,132,368,27 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="Player 1 · Simulated pad" layout=216.83,26.4 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Player 1 · Simulated pad"
-            29 TextBlock at=824,167,368,27 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="Players 2 and 3 and 4 · none" layout=253.35,26.4 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="Players 2 and 3 and 4 · none"
-            30 TextBlock at=824,202,368,53 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="Left and Right on a controller's row pick its player." layout=365.57,52.8 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="Left and Right on a controller's row pick its player."
-        31 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
-          32 HintBar at=64,716,1152,30 by=panel heard="Open, Value, Section, Back, Home" limit=0,0,1280,800 role=group
+          19 MenuRow at=64,216,704,54 by=panel heard="Profiles, Default" limit=0,0,1280,800 name=SettingsRow.profiles role=listitem
+          20 MenuRow at=64,270,704,54 by=panel heard="Rumble, On" limit=0,0,1280,800 name=SettingsRow.rumble role=listitem
+          21 MenuRow at=64,324,704,54 by=panel heard="Swap A and B in menus, Off" limit=0,0,1280,800 name=SettingsRow.swap role=listitem
+          22 MenuRow at=64,378,704,54 by=panel heard="Guide chords, Auto" limit=0,0,1280,800 name=SettingsRow.chords role=listitem
+          23 MenuRow at=64,432,704,54 by=panel heard="Keyboard keys" limit=0,0,1280,800 name=SettingsRow.keys role=listitem
+          24 MenuRow at=64,486,704,54 by=panel heard=Hotkeys limit=0,0,1280,800 name=SettingsRow.hotkeys role=listitem
+          25 MenuRow at=64,540,704,54 by=panel heard="Controller type, Automatic" limit=0,0,1280,800 name=SettingsRow.type role=listitem
+          26 MenuRow at=64,594,704,54 by=panel heard="Only the first controller, Off" limit=0,0,1280,800 name=SettingsRow.firstonly role=listitem
+        27 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#26262BFF role=none
+          28 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
+            29 TextBlock at=824,132,368,27 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="Player 1 · Simulated pad · Default profile" layout=361.24,26.4 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Player 1 · Simulated pad · Default profile"
+            30 TextBlock at=824,167,368,27 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="Players 2 and 3 and 4 · none" layout=253.35,26.4 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="Players 2 and 3 and 4 · none"
+            31 TextBlock at=824,202,368,53 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="Left and Right on a controller's row pick its player." layout=365.57,52.8 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="Left and Right on a controller's row pick its player."
+        32 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
+          33 HintBar at=64,716,1152,30 by=panel heard="Open, Value, Section, Back, Home" limit=0,0,1280,800 role=group
 focus none
 press down focus="SettingsLayout SettingsScreen" settings="controllers  bindings" top=none
 press up focus="SettingsLayout SettingsScreen" settings="controllers  players" top=none

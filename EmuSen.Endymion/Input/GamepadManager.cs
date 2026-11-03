@@ -181,7 +181,7 @@ namespace EmuSen.Endymion.Input
 
         public double RawAxis(SDL.GamepadAxis axis) => Primary?.RawAxis(axis) ?? 0;
 
-        // First button held on any pad the interface reads, for InputSettingsWindow's rebind capture - see EmuSen_Settings_Reference.md §4.6 and §4.61.
+        // First button held on any pad the interface reads, for the bindings page's capture - see EmuSen_Input.md §10.5.
         public SDL.GamepadButton? GetAnyPressedButton() => _managed is not null ? _managed.GetAnyPressedButton() : _native!.GetAnyPressedButton();
 
         public void Dispose()

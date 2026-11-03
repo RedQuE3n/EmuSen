@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 10u
+#define EMUSEN_CRYSTAL_MINOR 11u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -374,6 +374,10 @@ int32_t emusen_crystal_input_connected(emusen_crystal_runtime *rt, uint32_t sess
  * session opened. A frontend hands them to the pad each frame it runs (EmuSen_Input.md 9). */
 int32_t emusen_crystal_input_rumble(emusen_crystal_runtime *rt, uint32_t session, uint32_t port, uint16_t *strong, uint16_t *weak);
 
+/* since 1.11, from any thread. The player's rumble switch turned while the session runs: 0 off, else on. The systems
+ * table's half of the gate is unchanged, so on never opens it for a console whose games drive no motor (EmuSen_Input.md 9.7). */
+int32_t emusen_crystal_input_rumble_switch(emusen_crystal_runtime *rt, uint32_t session, uint32_t on);
+
 /* ---- Speed (changes) ------------------------------------------------------------------------------------- */
 
 /* The three speeds in percent, the normal one 0 for unthrottled, turbo from 100, slow 1..100; EMUSEN_CRYSTAL_SPEED_*
@@ -481,11 +485,13 @@ int32_t emusen_crystal_firmware_install(emusen_crystal_runtime *rt, const uint8_
  * "wrong_size","effect","cost","found_in","wrong_size_in"}]}]}: each discovered system's firmware. */
 int64_t emusen_crystal_firmware_overview(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
-/* reads, since 1.9. {"system","firmware":[{"label","file","required","status"}]}: each firmware file the system's engines
+/* reads, since 1.9. {"system","firmware":[{"label","file","required","status","need"}]}: each firmware file the system's engines
  * declare, once, the native engines' where one lists the system, else the hosted cores'; "required" where one declares
  * it required or it has no open replacement; "status" "present" where the firmware folders hold it by name or content
  * as firmware_overview finds it, else "missing" where it is required and "not_needed" where it is not. An empty list
- * for a system that needs none; ABSENT for a system neither the table nor an engine names (EmuSen_Cores.md 3.11). */
+ * for a system that needs none; ABSENT for a system neither the table nor an engine names (EmuSen_Cores.md 3.11).
+ * Since 1.11 "need" is the index in the list of the first file that meets the same need: files that are alternatives, as a console's
+ * regional BIOSes, share it (EmuSen_Cores.md 3.13). */
 int64_t emusen_crystal_firmware_status(emusen_crystal_runtime *rt, const uint8_t *system, size_t system_len, uint8_t *out,
                                        size_t len);
 

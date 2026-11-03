@@ -39,8 +39,8 @@ const EMUSEN_CAP_SETTING_NOTES 0x8000 @1.0
 const EMUSEN_CAP_SNAPSHOT 0x4 @1.0
 const EMUSEN_CAP_TELEMETRY 0x800000 @1.13
 const EMUSEN_CORE_ABI_MAJOR 0x1 @1.0
-const EMUSEN_CORE_ABI_MINOR 0x12 @1.18
-const EMUSEN_CORE_ABI_VERSION 0x10012 @1.18
+const EMUSEN_CORE_ABI_MINOR 0x13 @1.19
+const EMUSEN_CORE_ABI_VERSION 0x10013 @1.19
 const EMUSEN_CREATE_LENT 0x1 @1.3
 const EMUSEN_CREATE_SHARED_CONSOLE 0x4 @1.8
 const EMUSEN_CREATE_SHARED_REMOVABLE 0x2 @1.7
@@ -357,6 +357,7 @@ json firmware array<object> @1.0
 json firmware[].label string required @1.0
 json firmware[].md5 array<string> optional @1.12
 json firmware[].name string required @1.0
+json firmware[].need string optional @1.19
 json firmware[].parts array<array<string>> optional @1.0
 json firmware[].replacement object optional @1.0
 json firmware[].replacement.cost string optional @1.0

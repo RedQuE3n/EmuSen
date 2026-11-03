@@ -12021,3 +12021,20 @@ not; each is a row of Settings now rather than a door of its own:
 land's fixes `PadSettingsWindowTests`, `ThemedLibraryHostTests`, `MenusFollowupTests`, `ThemedSwitchesTests`,
 `ThemedFoldersTests`), through
 `SettingsPad`, which opens Settings and reaches a row as the player does.
+
+### 52.7 The wiring step (2026-11-03)
+
+The rows approved on 2026-11-03 and left out of U6a, each on the surface that landed beside it:
+
+- Controllers ▸ `Profiles` and the bindings page, and a game's `Controller profile` (`EmuSen_Input.md` §10.5);
+- Controllers ▸ `Keyboard keys`, `Hotkeys`, `Stick deadzone`, `Mirror player 1 to player 2` and `Reset every binding`,
+  the tester and the conflict notice, with the binding window retired (`EmuSen_Input.md` §10.6);
+- Controllers ▸ `Rumble`, applied to a running game (`EmuSen_Input.md` §9.7);
+- Sound ▸ `Output`, which the interface's sounds follow (`EmuSen_Audio_Sync.md` §7.5);
+- Consoles ▸ the console ▸ Firmware ▸ `Open replacement`, and the firmware rows grouped by the runtime's `need`
+  (`EmuSen_Cores.md` §3.13).
+
+The Controllers section's rows follow the mockup's order: Players, Controller bindings, Profiles, Rumble, Swap A and B,
+Guide chords, then Keyboard keys and Hotkeys, then U6a's others, then the stick's rows and the reset.
+`SettingsWiringTests` holds the rows' behaviour; the recordings taken again are listed in `EmuSen_InterfaceSpec.md` §6.3.24.
+

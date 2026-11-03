@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using EmuSen.Endymion.Native;
+using EmuSen.Galaxia.Models;
 using SDL3;
 
 namespace EmuSen.Endymion
@@ -93,6 +94,18 @@ namespace EmuSen.Endymion
         }
 
         // A new sound replaces the one still playing, so a held list's steps never queue up behind each other.
+        // The chosen sound output by name, as the game's player has it; false where none has the name and the system default plays - see EmuSen_Audio_Sync.md §7.5.
+        public unsafe bool SetOutputDevice(string? name)
+        {
+            string? wanted = string.IsNullOrEmpty(name) || name == AppSettings.SystemDefaultOutput ? null : name;
+            if (_managed is not null) return wanted is null;
+            byte[]? bytes = DeviceNative.Utf8(wanted);
+            int status;
+            fixed (byte* p = bytes) status = DeviceNative.UiSetDevice(_native!.Value, bytes is null ? null : DeviceNative.Pin(p), (nuint)(bytes?.Length ?? 0));
+            GC.KeepAlive(_native);
+            return status == 0;
+        }
+
         public void Play(string path)
         {
             if (_managed is not null) _managed.Play(path);

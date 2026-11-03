@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
+using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Pages;
@@ -15,11 +16,11 @@ using Xunit;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // Settings on the big screen, each section and page reached by the player's presses from Home, recorded at both sizes and audited at 16:9 and 1280 by 720 - see EmuSen_InterfaceSpec.md §6.3.23 and EmuSen_BigPicture.md §52.
+    // Settings on the big screen, each section and page reached by the player's presses from Home, recorded at both sizes and audited at 16:9 and 1280 by 720 - see EmuSen_InterfaceSpec.md §6.3.23-§6.3.24 and EmuSen_BigPicture.md §52.
     public partial class WindowFitAuditTests
     {
         public static readonly string[] SettingsViews =
-            ["SettingsControllers", "SettingsDisplay", "SettingsDisplayLight", "SettingsShaderLevers", "SettingsSound", "SettingsConsoles", "SettingsConsolePage", "SettingsEngine",
+            ["SettingsControllers", "SettingsBindings", "SettingsDisplay", "SettingsDisplayLight", "SettingsShaderLevers", "SettingsSound", "SettingsConsoles", "SettingsConsolePage", "SettingsEngine",
              "SettingsFirmware", "SettingsMemoryCards", "SettingsLibrary", "SettingsEmuSen", "SettingsDesktopDisplay", "SettingsDesktopConsoles", "SettingsDesktopSearch"];
 
         public static TheoryData<string, int, int> SettingsCases()
@@ -67,6 +68,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
             switch (view)
             {
+                case "SettingsBindings":
+                    To(k => k == "bindings");
+                    pad.A();
+                    Settle(w);
+                    // The mockup's console: the shoulders step to the Super Nintendo, as the player would.
+                    string snes = w.SettingsShown!.Host.Systems.First(f => f.Id == "snes").Console;
+                    for (int i = 0; i < 16 && w.SettingsShown!.Binding!.Console != snes; i++) { pad.Press(UiButton.PageDown); Settle(w); }
+                    // And the mockup's region: Y, left of B on the drawing.
+                    pad.Left(1);
+                    break;
                 case "SettingsDisplay": Section(1); To(k => k == "crt"); break;
                 case "SettingsDisplayLight": Section(1); To(k => k == "variant"); pad.Right(1); break;
                 case "SettingsShaderLevers": Section(1); To(k => k == "levers"); pad.A(); break;
@@ -152,6 +163,65 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             finally
             {
                 if (Avalonia.Application.Current is { } app) app.RequestedThemeVariant = ThemeVariant.Dark;
+                ToolCounts.Quiet();
+                ResetPageClock();
+                Stop(window);
+                window.Close();
+            }
+        }, default);
+    
+        // Each console's pad as the bindings page draws it, the cases the binding window's audits held until 2026-11-03: a port's other pads, an adapter's fourth player, the hosted consoles, and the keyboard's page with the longest keys.
+        public static TheoryData<string, int, int> BindingsFitCases()
+        {
+            var data = new TheoryData<string, int, int>();
+            foreach (string v in new[] { "PlayStation 2", "PlayStation 2 Digital", "Saturn", "Dreamcast", "PlayStation", "PlayStation Digital", "Genesis", "Genesis Six", "Genesis Team Player", "N64", "Keys Long Names" })
+                foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080), (1280, 720) }) data.Add(v, w, h);
+            return data;
+        }
+
+        [Theory]
+        [MemberData(nameof(BindingsFitCases))]
+        public Task Every_consoles_bindings_page_fits(string which, int width, int height) => Session.Dispatch(() =>
+        {
+            void Pad(string console, string pad)
+            {
+                var stored = ConsolesConfig.Load();
+                stored.SetValue(console, "pad1", pad);
+                stored.Save();
+            }
+            (MainWindow window, PadDriver pad) = OwnLookSession("Games", width, height);
+            try
+            {
+                switch (which)
+                {
+                    case "PlayStation 2 Digital": Pad("PlayStation 2", "ps2.digital"); break;
+                    case "PlayStation Digital": Pad("PlayStation", "psx.pad"); break;
+                    case "Genesis Six": Pad("Genesis", "md.pad6"); break;
+                    case "Genesis Team Player": Pad("Genesis", "md.teamplayer6"); break;
+                    case "Saturn" or "Dreamcast": HostedConsole(which.ToLowerInvariant()); break;
+                }
+                EmuSen.Mistress.Library.RuntimeCatalog.Forget();
+                if (which == "Keys Long Names") LongBindings(window);
+                window.ShowSettings(SettingsScreen.Controllers, which == "Keys Long Names" ? "keys" : "bindings");
+                SettingsScreen s = window.SettingsShown!;
+                string console = which switch { "Keys Long Names" => "SNES", "N64" => "N64", _ => which.Replace(" Digital", "").Replace(" Six", "").Replace(" Team Player", "") };
+                s.ChooseBindingConsole(console);
+                Assert.Equal(console, s.Binding!.Console);
+                if (which == "Genesis Team Player")
+                {
+                    Assert.Equal(5, s.PlayersOf("Genesis"));
+                    while (s.Binding!.Player != 4) s.StepBindingPlayer();
+                }
+                if (which == "Keys Long Names") s.FocusBinding(EmuSen.Galaxia.Input.PadControl.Start);
+                ((SettingsView)Field(window, "_settings")).Fill();
+                Settle(window);
+                PictureSettings(window, $"Bindings-{which.Replace(" ", "")}-{width}x{height}");
+                List<string> faults = FitAudit.Check(window.SettingsLayoutShown!, []);
+                foreach (string f in faults) _out.WriteLine($"{which} {width}x{height}: {f}");
+                Assert.Empty(faults);
+            }
+            finally
+            {
                 ToolCounts.Quiet();
                 ResetPageClock();
                 Stop(window);

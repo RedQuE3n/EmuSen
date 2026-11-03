@@ -59,9 +59,9 @@ namespace EmuSen.WiseMan.Crystal
             Compare(managed, native);
         }
 
-        // The Rust's answer with what only it gives set aside: the cores listing's libretro key (1.5) and firmware key (1.8), the systems listing's display_name and firmware_name, the FirmwarePreference row (EmuSen_Cores.md §3.12), and its minor in a refusal's words - see EmuSen_Backend.md §34.
+        // The Rust's answer with what only it gives set aside: the cores listing's libretro key (1.5) and firmware key (1.8), the systems listing's display_name, firmware_name and rumble (1.11), the FirmwarePreference row (EmuSen_Cores.md §3.12), and its minor in a refusal's words - see EmuSen_Backend.md §34.
         internal static string AsCSharp(string answer) =>
-            System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(answer.Replace(",\"libretro\":null", "", StringComparison.Ordinal), ",\\{\"key\":\"FirmwarePreference\"[^{}]*\\}", ""), "(?<=\"systems\":\\[[^\\]]*\\]),\"firmware\":(null|\"required\"|\"optional\")|,\"display_name\":\"[^\"]*\",\"firmware_name\":(null|\"[^\"]*\")", ""), $@"(?<= (in|to) ){EmuSen.Crystal.Client.Contract.CrystalAbi.Major}\.{EmuSen.Crystal.Client.Contract.CrystalAbi.Minor}\b", $"{EmuSen.Crystal.Managed.CrystalNumbers.Major}.{EmuSen.Crystal.Managed.CrystalNumbers.Minor}");
+            System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(answer, "(?<=\"self_delimiting_images\":(true|false)),\"rumble\":(true|false)", "").Replace(",\"libretro\":null", "", StringComparison.Ordinal), ",\\{\"key\":\"FirmwarePreference\"[^{}]*\\}", ""), "(?<=\"systems\":\\[[^\\]]*\\]),\"firmware\":(null|\"required\"|\"optional\")|,\"display_name\":\"[^\"]*\",\"firmware_name\":(null|\"[^\"]*\")", ""), $@"(?<= (in|to) ){EmuSen.Crystal.Client.Contract.CrystalAbi.Major}\.{EmuSen.Crystal.Client.Contract.CrystalAbi.Minor}\b", $"{EmuSen.Crystal.Managed.CrystalNumbers.Major}.{EmuSen.Crystal.Managed.CrystalNumbers.Minor}");
 
         private void Compare(List<string> managed, List<string> native)
         {

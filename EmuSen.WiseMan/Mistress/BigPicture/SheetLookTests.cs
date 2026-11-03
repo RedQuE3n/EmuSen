@@ -367,10 +367,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             desk.Close();
 
             (MainWindow big, PadDriver pad) = InGame();
+            // Controller Bindings is Settings' bindings page since 2026-11-03, drawn by Settings' own layout, not a sheet.
             Choose(big, pad, "Controller Bindings");
-            Assert.IsType<InputSettingsWindow>(Sheets(big).Current);
-            Assert.True(Sheets(big).DrawsMenu(Sheets(big).Current!));
-            Assert.Single(Sheet(big).GetVisualDescendants().OfType<MenuPanel>());
+            Assert.NotNull(big.SettingsShown?.Binding);
+            Assert.False(Sheets(big).IsPresenting);
             Stop(big);
             big.Close();
         }, default);

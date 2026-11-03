@@ -31,6 +31,12 @@ namespace EmuSen.Mistress.Library
     {
         // The systems table's display_name, as a list names the console (EmuSen_Interface.md §0.21); null where the table gives none.
         public string? DisplayName { get; init; }
+
+        // The systems table's rumble: whether the console's games can drive a motor in the player's hands (EmuSen_Input.md §9.2).
+        public bool Rumble { get; init; }
+
+        // The systems table's firmware_name, the words for the console's firmware, as "PlayStation BIOS"; null where it gives none.
+        public string? FirmwareName { get; init; }
     }
 
     // A row of a console's settings schema, its note as the stored values stand, and the row it is shown with.
@@ -98,7 +104,7 @@ namespace EmuSen.Mistress.Library
                     Text(s, "manufacturer") ?? "", s.TryGetProperty("release_year", out JsonElement year) ? year.GetInt32() : 0, Text(s, "esde_system") ?? "",
                     s.TryGetProperty("screenscraper_system", out JsonElement ss) && ss.ValueKind == JsonValueKind.Number ? ss.GetInt32() : null,
                     Text(s, "attached_to"), s.GetProperty("starts_empty").GetBoolean(), Strings(s, "engines"), Strings(s, "cheat_systems"), Strings(s, "openvgdb_systems"),
-                    s.TryGetProperty("cover_aspect", out JsonElement aspect) ? aspect.GetDouble() : null, facts) { DisplayName = Text(s, "display_name") });
+                    s.TryGetProperty("cover_aspect", out JsonElement aspect) ? aspect.GetDouble() : null, facts) { DisplayName = Text(s, "display_name"), Rumble = s.TryGetProperty("rumble", out JsonElement rumble) && rumble.ValueKind == JsonValueKind.True, FirmwareName = Text(s, "firmware_name") });
             }
 
             using JsonDocument shelvesDoc = JsonDocument.Parse(CoreSettings.Runtime.Shelves());

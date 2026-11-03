@@ -488,6 +488,32 @@ with its three choices and `auto` as the default, a value outside them refused, 
 dump on the replacement and with one on the dump, whether set or left unset; `replacement` on the replacement with the
 dump present; `own` on the dump, and with it removed the open refused with `FIRMWARE` and the sentence above.
 
+### 3.13 Which files meet one need: `firmware_status`'s `need` (2026-11-03)
+
+Settings shows a console's firmware as a row per need (U6a, `EmuSen_BigPicture.md` §52.4); until now it grouped the files by
+the last word of their labels, an interim rule. The tester decided on 2026-11-03 that the runtime says it, as a frontend API
+minor version.
+
+- **The field.** Each entry of `firmware_status` gains `need`, **frontend API 1.11**, a string: files with one `need`
+  are alternatives, any one of which will do.
+- **Declared, never inferred.** The runtime passes through the id the engine declares (core ABI 1.19,
+  `EmuSen_CoreAPI.md` §6.44): Diamond's three market BIOSes share `bios`, as do the PlayStation 2's and the Sega CD's,
+  and each of the Super Nintendo's coprocessor programs has its own. A file declared with none meets a need of its own,
+  answered as `file:` and its name. A first build of this step inferred the need from equal sizes on a console that
+  starts empty; the tester rejected that on 2026-11-03 as a guess that breaks the first time two alternatives differ in
+  size or a cartridge chip happens to match one, and the rule was removed before it landed. A hosted libretro core
+  declares none, so the Saturn's two BIOSes show as two rows until its host can say otherwise.
+- **Settings** groups by `need`: a need of one file is named by its label, of several by the systems table's
+  `firmware_name` (`PlayStation BIOS`).
+- **Open replacement.** `FirmwarePreference` (§3.12) is drawn on the Firmware page where its mockup draws it, after the need
+  rows, as `Open replacement ◂ In use when none is found ▸` (`auto`), `Always` (`replacement`), `Never` (`own`), with a
+  pane sentence for each, accepted by the tester on 2026-11-03. The console's page and its pane's facts line leave it out;
+  a need found while `Always` is set says the replacement runs instead.
+- **Tests.** `FirmwareStatusTests.Files_an_engine_declares_alternatives_share_its_need_and_a_cartridges_chips_do_not`;
+  `firmware::need_tests` in emusen-crystal, two alternatives of different sizes sharing a need and two chip programs of
+  one size and slot meeting two;
+  `SettingsWiringTests.Open_replacement_is_a_row_of_the_Firmware_page_and_neither_of_the_console_page_nor_its_facts`.
+
 ## 4. The data model
 
 ### 4.1 Three sources, each the owner of its facts

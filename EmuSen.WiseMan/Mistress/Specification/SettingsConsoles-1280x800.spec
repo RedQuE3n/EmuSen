@@ -43,8 +43,8 @@ tree
           28 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
             29 TextBlock at=824,132,368,53 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="Super Nintendo · 5 games · engine VenusRT (Rust)" layout=312.33,52.8 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Super Nintendo · 5 games · engine VenusRT (Rust)"
             30 TextBlock at=824,193,368,29 by=clip drawn heard="✓ No firmware needed" limit=800,108,416,578 name=SettingsLine paints=#FFFFFFFF role=text
-            31 TextBlock at=824,230,368,27 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="CRT profile Off · Firmware Automatic" layout=336.78,26.4 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="CRT profile Off · Firmware Automatic"
-            32 TextBlock at=824,265,368,80 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="What every Super Nintendo game shares, unless the game's own options say otherwise." layout=353.36,79.2 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="What every Super Nintendo game shares, unless the game's own options say otherwise."
+            31 TextBlock at=824,230,368,53 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="CRT profile Off · SA-1 catch-up After every S-CPU instruction (exact)" layout=327.23,52.8 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="CRT profile Off · SA-1 catch-up After every S-CPU instruction (exact)"
+            32 TextBlock at=824,291,368,80 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="What every Super Nintendo game shares, unless the game's own options say otherwise." layout=353.36,79.2 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="What every Super Nintendo game shares, unless the game's own options say otherwise."
         33 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
           34 HintBar at=64,716,1152,30 by=panel heard="Open, Section, Back, Home" limit=0,0,1280,800 role=group
 focus none

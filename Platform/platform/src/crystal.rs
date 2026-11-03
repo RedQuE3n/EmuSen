@@ -542,6 +542,16 @@ pub unsafe extern "C" fn emusen_crystal_input_rumble(rt: *mut emusen_crystal_run
 /// # Safety
 /// `rt` a live runtime.
 #[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_input_rumble_switch(rt: *mut emusen_crystal_runtime, session: u32, on: u32) -> i32 {
+    code((|| {
+        unsafe { session_of(rt, session) }?.rumble.set_switch(on != 0);
+        Ok(())
+    })())
+}
+
+/// # Safety
+/// `rt` a live runtime.
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_input_connected(rt: *mut emusen_crystal_runtime, session: u32, port: u32, connected: u32) -> i32 {
     code((|| {
         unsafe { session_of(rt, session) }?.connected(port, connected != 0);

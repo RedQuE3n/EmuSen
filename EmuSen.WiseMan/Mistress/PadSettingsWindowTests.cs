@@ -159,7 +159,6 @@ namespace EmuSen.WiseMan.Mistress
 
         [Theory]
         [InlineData(Shaders)]
-        [InlineData("Controller Bindings")]
         [InlineData(MainWindow.CropThisGame)]
         public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
@@ -252,206 +251,66 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string? Stored(string console, string key) => ConsolesConfig.Load().Value(console, key) ?? GraphicsConfig.Load().Value(console, key);
 
-        // A dropdown's list on a sheet, which asks for it inside the window (§4.45.8): the pad moves the focus among its items, never the page behind; the Controller Bindings sheet's player selector - see EmuSen_Settings_Reference.md §4.45.9.
+        // The bindings page by pad, in Game Mode over the paused game: the deadzone and the stick's switch are Controllers rows, the A that chose a rebind is not the binding, and a key's capture is backed out of with B - see EmuSen_Input.md §10.6.
         [Fact]
-        public Task An_open_dropdown_drawn_in_the_window_moves_its_highlight_and_not_the_page() => Session.Dispatch(() =>
+        public Task Controller_bindings_by_pad_the_deadzone_a_switch_a_pad_rebind_and_a_key_rebind_backed_out_of() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
             Choose(window, pad, "Controller Bindings");
-            TabTo(window, pad, "SNES");
-            var players = (Dropdown)Reach(window, pad, e => e is Dropdown { Name: "PlayerSelector" });
-            ScrollViewer? page = players.FindAncestorOfType<ScrollViewer>();
-            Vector scrolled = page?.Offset ?? default;
-            int was = players.SelectedIndex;
-            Assert.True(players.ItemCount >= 2);
-
-            pad.A();
-            Assert.True(players.IsDropDownOpen);
-            Assert.True(players.GetVisualDescendants().OfType<Avalonia.Controls.Primitives.Popup>().Single().ShouldUseOverlayLayer);
-            Assert.Same(players.ContainerFromIndex(was), Focused(window));
-            pad.Down();
-            Assert.Same(players.ContainerFromIndex(was + 1), Focused(window));
-            pad.Down(players.ItemCount);
-            Assert.Same(players.ContainerFromIndex(players.ItemCount - 1), Focused(window));
-            Assert.Equal(was, players.SelectedIndex);
-            Assert.Equal(scrolled, page?.Offset ?? default);
-            Picture(window, "dropdown-in-window");
-
-            pad.B();
-            Assert.False(players.IsDropDownOpen);
-            Assert.Equal(was, players.SelectedIndex);
-            Assert.Same(players, Focused(window));
-            Assert.True(Sheets(window).IsPresenting);
-
-            pad.A();
-            pad.Down();
-            pad.A();
-            Assert.False(players.IsDropDownOpen);
-            Assert.Equal(was + 1, players.SelectedIndex);
-            Assert.Equal($"Player {was + 2}", players.SelectedItem as string);
-            Assert.Equal(scrolled, page?.Offset ?? default);
-            Stop(window);
-            window.Close();
-        }, default);
-
-        // Graphics' rows on a console's page in Settings: the shoulders step the console, a choice is stepped both ways and chosen with A, a switch turned, and the console reset - see EmuSen_BigPicture.md §52.5.
-        [Fact]
-        public Task Console_settings_by_pad_the_console_stepped_a_choice_stepped_and_chosen_a_switch_and_reset() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Console Settings");
-            Assert.Equal(NameOf("SNES"), window.SettingsShown!.Trail[^1]);
-            Picture(window, "console-snes");
-
-            StepTo(window, pad, "N64");
-            SettingRow scaleRow = window.SettingsShown!.Host.Schema("N64").Single(r => r.Key == "RenderScale");
-            SettingsPad.To(window, pad, "RenderScale");
-            int was = scaleRow.Choices.ToList().IndexOf(Stored("N64", "RenderScale") ?? scaleRow.Default);
-            pad.Right();
-            Assert.Equal(scaleRow.Choices[was + 1], Stored("N64", "RenderScale"));
-            pad.Left();
-            Assert.Equal(scaleRow.Choices[was], Stored("N64", "RenderScale"));
-
-            // A on a choice steps it on, and the focus and the page stay.
-            pad.A();
-            Assert.Equal(scaleRow.Choices[was + 1], Stored("N64", "RenderScale"));
-            Assert.Equal("RenderScale", window.SettingsLayoutShown!.Focused);
-            Assert.Equal(NameOf("N64"), window.SettingsShown.Trail[^1]);
-
-            SettingRow switchRow = window.SettingsShown.Host.Schema("N64").First(r => r.Kind == SettingRow.Switch && !r.Locked && window.SettingsLayoutShown.Rows.Any(p => p.Key == r.Key));
-            SettingsPad.To(window, pad, switchRow.Key);
-            bool before = (Stored("N64", switchRow.Key) ?? switchRow.Default) is "true" or "1" or "on";
-            pad.A();
-            Assert.Equal((!before).ToString().ToLowerInvariant(), Stored("N64", switchRow.Key));
-            Picture(window, "console-n64");
-
-            SettingsPad.To(window, pad, "reset");
-            pad.A();
-            Assert.Null(Stored("N64", switchRow.Key));
-            Assert.Null(Stored("N64", "RenderScale"));
-
-            BackToTheGame(window, pad);
-            Assert.False(IsPaused(window));
-            Stop(window);
-            window.Close();
-        }, default);
-
-        // Preferences' rows in Settings: a switch in one section and a choice on a page of another, each stored as it is turned - see EmuSen_BigPicture.md §52.5.
-        [Fact]
-        public Task Settings_by_pad_a_switch_and_a_choice_on_a_page_of_another_section() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Players & Controllers");
-            Assert.Equal("Players", window.SettingsShown!.Trail[^1]);
-            Picture(window, "settings-players");
-            pad.B();
-            Assert.Empty(window.SettingsShown.Trail);
-
-            SettingsPad.Section(window, pad, SettingsScreen.EmuSen);
-            SettingsPad.To(window, pad, "background");
-            bool before = AppSettings.Load().PauseInBackground;
-            pad.A();
-            Assert.Equal(!before, AppSettings.Load().PauseInBackground);
-
-            SettingsPad.To(window, pad, "saves");
-            pad.A();
-            SettingsPad.To(window, pad, "resume");
-            string resume = AppSettings.Load().ResumeOnLaunch;
-            pad.Left();
-            Assert.NotEqual(resume, AppSettings.Load().ResumeOnLaunch);
-            Picture(window, "settings-saves");
-
-            // B closes the page for its section, and B again closes Settings onto the card.
-            pad.B();
-            Assert.NotNull(window.SettingsShown);
-            Assert.Empty(window.SettingsShown!.Trail);
-            BackToTheGame(window, pad);
-            Stop(window);
-            window.Close();
-        }, default);
-
-        [Fact]
-        public Task Controller_bindings_by_pad_the_slider_a_switch_a_pad_rebind_and_a_key_rebind_backed_out_of() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Controller Bindings");
-            var bindings = (InputSettingsWindow)Sheets(window).Current!;
+            SettingsScreen settings = window.SettingsShown!;
+            Assert.Equal("Controller bindings", settings.Trail[^1]);
+            Assert.Equal("SNES", settings.Binding!.Console);
             Picture(window, "bindings-snes");
 
-            TabTo(window, pad, "General");
-            var slider = (Slider)Reach(window, pad, e => e is Slider);
+            // B to Controllers, where the deadzone steps by five and the stick's switch turns.
+            pad.B();
             double deadzone = AppSettings.Load().StickDeadzone;
+            window.SettingsLayoutShown!.FocusOn("deadzone");
             pad.Right();
             Assert.Equal(deadzone + 0.05, AppSettings.Load().StickDeadzone, 3);
-            Assert.Same(slider, Focused(window));
-
-            Reach(window, pad, e => e is LunaSwitch { Name: "AnalogStickAsDpadCheckBox" });
+            window.SettingsLayoutShown!.FocusOn("stickdpad");
             bool dpad = AppSettings.Load().AnalogStickAsDpad;
             pad.A();
             Assert.Equal(!dpad, AppSettings.Load().AnalogStickAsDpad);
-            Picture(window, "bindings-general");
 
-            // The A that chose Rebind Pad is not the binding; the next press is, and the pad is the window's again once it is let go.
-            TabTo(window, pad, "SNES");
-            var rebind = (Button)Reach(window, pad, e => e is Button { Content: "Rebind Pad" });
+            // The A that chose the rebind is not the binding; the next press is, and the pad is the page's again once it is let go.
+            window.SettingsLayoutShown!.FocusOn("bindings");
+            pad.A();
+            settings.ChooseBindingConsole("SNES");
             var before = new System.Collections.Generic.Dictionary<PadButton, SDL.GamepadButton>(EmuSen.Endymion.Input.GamepadBindings.Load(new[] { "SNES" }).For("SNES").ButtonToPad);
             pad.Pad.Press(SDL.GamepadButton.South);
             pad.Tick();
-            Assert.Equal(PadCapture.PadButton, bindings.Capturing);
-            Poll(bindings);
+            Assert.True(settings.Binding!.Capturing);
             Assert.Equal(before, EmuSen.Endymion.Input.GamepadBindings.Load(new[] { "SNES" }).For("SNES").ButtonToPad);
             pad.Pad.Release(SDL.GamepadButton.South);
             pad.Tick();
-            Poll(bindings);
             pad.Pad.Press(SDL.GamepadButton.North);
             pad.Tick();
-            Poll(bindings);
-            Assert.Same(rebind, Focused(window));
-            Assert.Equal(PadCapture.PadButton, bindings.Capturing);
+            Assert.False(settings.Binding!.Capturing);
             pad.Pad.Release(SDL.GamepadButton.North);
             pad.Tick();
-            Poll(bindings);
-            Assert.Equal(PadCapture.None, bindings.Capturing);
+            Assert.False(settings.Binding!.Capturing);
             Assert.Contains(EmuSen.Endymion.Input.GamepadBindings.Load(new[] { "SNES" }).For("SNES").ButtonToPad, kv => kv.Value == SDL.GamepadButton.North);
 
-            // A keyboard key cannot come from the pad, so B backs out of the capture and nothing else does.
-            Reach(window, pad, e => e is Button { Content: "Rebind Key" });
+            // A keyboard key cannot come from the pad, so B backs out of its capture and nothing else does.
+            pad.B();
+            window.SettingsLayoutShown!.FocusOn("keys");
             pad.A();
-            Assert.Equal(PadCapture.Key, bindings.Capturing);
+            Assert.True(settings.Binding!.Keys);
+            pad.A();
+            Assert.True(settings.Binding!.Capturing);
             pad.Down();
-            Assert.Equal(PadCapture.Key, bindings.Capturing);
+            Assert.True(settings.Binding!.Capturing);
             pad.B();
-            Assert.Equal(PadCapture.None, bindings.Capturing);
-            Assert.True(Sheets(window).IsPresenting);
+            Assert.False(settings.Binding!.Capturing);
+            Assert.Equal("Keyboard keys", settings.Trail[^1]);
 
             pad.B();
-            Assert.False(Sheets(window).IsPresenting);
+            pad.B();
+            Assert.Null(window.SettingsShown);
             Stop(window);
             window.Close();
         }, default);
-
-        [Fact]
-        public Task A_pad_capture_nobody_answers_gives_up() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Controller Bindings");
-            var bindings = (InputSettingsWindow)Sheets(window).Current!;
-            bindings.PadCaptureTimeout = TimeSpan.Zero;
-
-            Reach(window, pad, e => e is Button { Content: "Rebind Pad" });
-            pad.A();
-            Poll(bindings);
-            Poll(bindings);
-            Assert.Equal(PadCapture.None, bindings.Capturing);
-
-            pad.B();
-            Assert.False(Sheets(window).IsPresenting);
-            Stop(window);
-            window.Close();
-        }, default);
-
-        private static void Poll(InputSettingsWindow window) =>
-            typeof(InputSettingsWindow).GetMethod("PollForPadButton", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
 
         // The question a game with a resume state asks as it starts: on a sheet in Game Mode, answered with A, or B to not start at all - see EmuSen_Settings_Reference.md §4.45.2.
         [Theory]

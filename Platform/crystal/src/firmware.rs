@@ -50,6 +50,8 @@ pub struct Entry {
     pub parts: Vec<Vec<String>>,
     pub replacement: Option<(String, Option<String>)>,
     pub md5: Vec<String>,
+    /// Core ABI 1.19's declared need, empty where the core gives none.
+    pub need: String,
 }
 
 fn strs(v: &Value) -> Vec<String> {
@@ -70,6 +72,7 @@ impl Entry {
                 (r.get("effect").and_then(Value::as_str).unwrap_or("none").to_string(), r.get("cost").and_then(Value::as_str).map(str::to_string))
             }),
             md5: f.get("md5").map(strs).unwrap_or_default(),
+            need: s("need"),
         }
     }
 
@@ -221,7 +224,7 @@ fn asked_for_folder(folder: &Entry, wanted: &[Entry]) -> Entry {
     for w in wanted {
         md5.extend(w.md5.iter().filter(|m| !md5.contains(m)).cloned().collect::<Vec<_>>());
     }
-    Entry { which: folder.which, name: first.name.clone(), label: folder.label.clone(), size: first.size, required: true, parts: vec![vec![first.name.clone()]], replacement: None, md5 }
+    Entry { which: folder.which, name: first.name.clone(), label: folder.label.clone(), size: first.size, required: true, parts: vec![vec![first.name.clone()]], replacement: None, md5, need: folder.need.clone() }
 }
 
 /// For a hosted libretro core: each folder of console firmware in its system folder given links, read-only, to the
@@ -305,10 +308,16 @@ pub fn status_json(rt: &Runtime, system: &str) -> Option<String> {
             None if *needed => "missing",
             None => "not_needed",
         };
-        j.begin_object().str("label", &e.label).str("file", &e.name).bool("required", *needed).str("status", status).end_object();
+        j.begin_object().str("label", &e.label).str("file", &e.name).bool("required", *needed).str("status", status).str("need", &need(e)).end_object();
     }
     j.end_array().end_object();
     Some(j.finish())
+}
+
+/// The need a declared file meets, `firmware_status`'s `need` (frontend API 1.11): the id its engine declares (core ABI
+/// 1.19), so that alternatives share it whatever their sizes, else one of its own from its name (EmuSen_Cores.md §3.13).
+pub fn need(e: &Entry) -> String {
+    if e.need.is_empty() { format!("file:{}", e.name) } else { e.need.clone() }
 }
 
 /// A discovered engine a player is offered and whose library is there to run.
@@ -453,4 +462,24 @@ pub fn install(tree: &Tree, request: &str, source: &str, say: &dyn Fn(String)) -
         }
     };
     if written { Ok(()) } else { Err((crate::abi::status::IO, format!("{file} could not be written to {store}"))) }
+}
+
+#[cfg(test)]
+mod need_tests {
+    use super::*;
+
+    fn entry(json: &str) -> Entry {
+        Entry::read(&emusen_native::json::parse(json.as_bytes()).unwrap())
+    }
+
+    #[test]
+    fn alternatives_share_the_need_their_engine_declares_whatever_their_sizes_and_the_rest_meet_their_own() {
+        let small = entry(r#"{"which":2,"name":"a.bin","label":"A","size":8,"required":false,"need":"bios"}"#);
+        let large = entry(r#"{"which":3,"name":"b.bin","label":"B","size":16,"required":false,"need":"bios"}"#);
+        let chip = entry(r#"{"which":2,"name":"dsp1.rom","label":"DSP-1","size":8,"required":false}"#);
+        let other = entry(r#"{"which":2,"name":"dsp2.rom","label":"DSP-2","size":8,"required":false}"#);
+        assert_eq!(need(&small), need(&large), "two sizes, one need");
+        assert_ne!(need(&chip), need(&other), "the same size and slot, and still two needs");
+        assert_ne!(need(&chip), need(&small));
+    }
 }

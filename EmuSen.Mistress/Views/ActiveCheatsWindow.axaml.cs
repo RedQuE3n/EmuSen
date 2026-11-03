@@ -231,7 +231,7 @@ namespace EmuSen.Mistress.Views
             string.Equals(tab.Console, name, StringComparison.OrdinalIgnoreCase)
             || string.Equals(tab.DisplayName, name, StringComparison.OrdinalIgnoreCase);
 
-        // General is index 0, so console i sits at i + 1 - matches InputSettingsWindow.
+        // General is index 0, so console i sits at i + 1.
         private void SelectConsoleTab(string? console)
         {
             if (console is null) return;

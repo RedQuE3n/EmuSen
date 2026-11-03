@@ -364,6 +364,23 @@ namespace EmuSen.Mistress.Views
             // Buttons go when they change; a stick moves without crossing any threshold, so the axes go every poll.
             RoutePlayers();
             _ports.PollPads();
+            GameSession session = _session;
+            PassRumbleLevels(port => session.Crystal.Rumble(port));
+        }
+
+        // The game's motors to the players' pads each poll: a level held is refreshed, one gone to zero sent once, so a pad stops within a call's 100 ms (EmuSen_Input.md §9.7).
+        private readonly uint[] _rumbleSent = new uint[EmuSen.Endymion.Input.PlayerSlots.MaxPlayers];
+
+        private void PassRumbleLevels(Func<int, (ushort Strong, ushort Weak)> levels)
+        {
+            for (int port = 0; port < _ports.Ports && port < _rumbleSent.Length; port++)
+            {
+                (ushort strong, ushort weak) = levels(port);
+                uint both = (uint)strong << 16 | weak;
+                if (both == 0 && _rumbleSent[port] == 0) continue;
+                _ports.Rumble(port, strong, weak);
+                _rumbleSent[port] = both;
+            }
         }
 
         private async Task OpenRomAsync()
@@ -434,13 +451,12 @@ namespace EmuSen.Mistress.Views
             await StartGameAsync(selected, Path.GetFileName(selected));
         }
 
+        // Controllers ▸ Controller bindings, every door's, on the running game's console where there is one (EmuSen_Input.md §10.5).
         private void ShowControllerBindings()
         {
-            var window = new InputSettingsWindow(_keyBindings, _gamepadBindings, _gamepad, _appSettings, _hotkeyBindings,
-                _session is null ? null : _activeConsole, _session?.PortControllers);
-            // A rebind has to reach the menu, or it advertises the old key - see §4.19.
-            window.Closed += (_, _) => SyncMenuState();
-            _ = SheetLayer.Show(window, this);
+            ShowSettings(Pages.SettingsScreen.Controllers, "bindings");
+            if (_session is not null && SettingsShown is { } settings) settings.ChooseBindingConsole(_activeConsole);
+            RefreshSettings();
         }
 
         private void ShowGraphicsSettings()
@@ -1077,11 +1093,14 @@ namespace EmuSen.Mistress.Views
         // A loaded session's pad, ports, rewind, speed, cheats, shell and screen, and the status line naming it.
         private void WireSession(GameSession session, string displayName, int restoredCheats, bool newGame)
         {
-            _gamepad.Bindings = _gamepadBindings.For(_activeConsole);
+            // The game's own profile where its page chose one, else the console's (EmuSen_Input.md §10.5).
             string bindingsConsole = _activeConsole;
-            _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player);
+            string profile = _gamepadBindings.Resolve(bindingsConsole, session.GamePath is { } game ? _gamepadBindings.GameProfile(bindingsConsole, GameProfileKey(game)) : null);
+            _gamepad.Bindings = _gamepadBindings.For(bindingsConsole, 1, profile);
+            _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player, profile);
             _gamepad.LeftStickIsAnalog = session.Axes.Contains(PadAxis.LeftX);
             _ports.Reset(session.ControllerPorts, session.Axes);
+            Array.Clear(_rumbleSent);
             // A new game is claimed again by the first press; a restart keeps its players - see EmuSen_Input.md §8.13.
             if (newGame) _gamepad.BeginClaims();
 

@@ -139,6 +139,10 @@ pub struct Firmware {
     /// Since 1.12: the lower-case MD5s of the images the core accepts whatever their name, each `size` bytes; written
     /// only when not empty (§6.32).
     pub md5: Vec<String>,
+    /// Since 1.19: the need the file meets, an id of the core's own; files sharing one are alternatives, any one of which
+    /// will do, whatever their sizes or slots. Empty for a file that meets a need of its own; written only when not empty
+    /// (§6.44).
+    pub need: String,
 }
 
 /// An open replacement for a firmware file, and what running on it costs, in the settings schema's words (§6.13).
@@ -566,6 +570,9 @@ fn write_firmware(j: &mut Json, f: &Firmware) {
         j.end_array();
     }
     j.end_array();
+    if !f.need.is_empty() {
+        j.field_str("need", &f.need);
+    }
     if !f.md5.is_empty() {
         j.key("md5").begin_array();
         for m in &f.md5 {

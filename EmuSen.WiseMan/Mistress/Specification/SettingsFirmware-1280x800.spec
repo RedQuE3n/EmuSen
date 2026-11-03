@@ -22,17 +22,18 @@ tree
             7 AccessText at=213,48,114,25 box=114,25 by=clip caps=13.999 drawn face=Barlow layout=113.56,24 limit=197,40,146,44 owner=6 paints=#D4D4D4FF role=none size=20 text=PLAYSTATION
           8 ToggleButton at=351,40,127,44 by=panel drawn focus heard=Firmware limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=FIRMWARE
             9 AccessText at=367,48,95,25 box=95,25 by=clip caps=13.999 drawn face=Barlow layout=94.76,24 limit=351,40,127,44 owner=8 paints=#EEEEF0FF role=none size=20 text=FIRMWARE
-        10 StackPanel at=64,108,704,162 by=panel heard=Firmware limit=0,0,1280,800 name=SettingsRows role=none
+        10 StackPanel at=64,108,704,216 by=panel heard=Firmware limit=0,0,1280,800 name=SettingsRows role=none
           11 MenuRow at=64,108,704,54 by=panel heard="PlayStation BIOS, Not found" limit=0,0,1280,800 name="SettingsRow.fw:PlayStation BIOS" role=listitem
-          12 MenuRow at=64,162,704,54 by=panel heard="Folder, EmuSen's folder" limit=0,0,1280,800 name=SettingsRow.fwfolder role=listitem
-          13 MenuRow at=64,216,704,54 by=panel heard="Check again" limit=0,0,1280,800 name=SettingsRow.fwcheck role=listitem
-        14 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#26262BFF role=none
-          15 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
-            16 TextBlock at=824,132,368,80 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="No PlayStation BIOS of your own was found, so Diamond runs its open replacement in its place." layout=337.59,79.2 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="No PlayStation BIOS of your own was found, so Diamond runs its open replacement in its place."
-            17 TextBlock at=824,220,368,106 box=368,106 by=clip caps=15.3989 drawn face=Barlow heard="Your own copy (scph5500.bin, scph5501.bin, scph5502.bin) is used once it is found. EmuSen never downloads firmware." layout=331.08,105.6 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="Your own copy (scph5500.bin, scph5501.bin, scph5502.bin) is used once it is found. EmuSen never downloads firmware."
-        18 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
-          19 HintBar at=64,716,1152,30 by=panel heard="Change, Back, Home" limit=0,0,1280,800 role=group
+          12 MenuRow at=64,162,704,54 by=panel heard="Open replacement, In use when none is found" limit=0,0,1280,800 name=SettingsRow.fwreplacement role=listitem
+          13 MenuRow at=64,216,704,54 by=panel heard="Folder, EmuSen's folder" limit=0,0,1280,800 name=SettingsRow.fwfolder role=listitem
+          14 MenuRow at=64,270,704,54 by=panel heard="Check again" limit=0,0,1280,800 name=SettingsRow.fwcheck role=listitem
+        15 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#26262BFF role=none
+          16 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
+            17 TextBlock at=824,132,368,80 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="No PlayStation BIOS of your own was found, so Diamond runs its open replacement in its place." layout=337.59,79.2 limit=800,108,416,578 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="No PlayStation BIOS of your own was found, so Diamond runs its open replacement in its place."
+            18 TextBlock at=824,220,368,106 box=368,106 by=clip caps=15.3989 drawn face=Barlow heard="Your own copy (scph5500.bin, scph5501.bin, scph5502.bin) is used once it is found. EmuSen never downloads firmware." layout=331.08,105.6 limit=800,108,416,578 name=SettingsLine paints=#8D8D91FF role=text size=22 text="Your own copy (scph5500.bin, scph5501.bin, scph5502.bin) is used once it is found. EmuSen never downloads firmware."
+        19 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
+          20 HintBar at=64,716,1152,30 by=panel heard="Change, Value, Back, Home" limit=0,0,1280,800 role=group
 focus none
-press down focus="SettingsLayout SettingsScreen" settings="consoles Consoles › PlayStation › Firmware fwfolder" top=none
+press down focus="SettingsLayout SettingsScreen" settings="consoles Consoles › PlayStation › Firmware fwreplacement" top=none
 press up focus="SettingsLayout SettingsScreen" settings="consoles Consoles › PlayStation › Firmware fw:PlayStation BIOS" top=none
 press back focus="SettingsLayout SettingsScreen" settings="consoles Consoles › PlayStation firmware" top=none

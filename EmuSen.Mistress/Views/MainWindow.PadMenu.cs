@@ -250,9 +250,11 @@ namespace EmuSen.Mistress.Views
                 EnterPadMenuPage(new PadMenuPage(question, () => QuestionRows(entry, PadMenuBack), entry.QuestionDetail, question: true), at, key: null);
                 return;
             }
+            _padMenuPages[^1].At = at;
+            List<PadMenuPage> pages = [.. _padMenuPages];
             if (entry.Closes) ClosePadMenuHoldingPause();
             entry.Accept();
-            HandOverHeldPause();
+            HandOverHeldPause(pages);
             if (_padMenuOpen && !entry.Closes && at < _padMenuEntries.Count && ReferenceEquals(_padMenuEntries[at], entry)) RefreshPadMenuText(at);
         }
 
@@ -309,11 +311,11 @@ namespace EmuSen.Mistress.Views
         // Held while a closing card's entry runs: the pause goes to the sheet it opened, else back to the game - see EmuSen_LibretroHost.md §10z.
         private bool _pauseHeld;
 
-        private void HandOverHeldPause()
+        private void HandOverHeldPause(List<PadMenuPage> pages)
         {
             if (!_pauseHeld) return;
             _pauseHeld = false;
-            if (Sheets.IsPresenting && GameOnScreen) (_sheetPaused, _cardUnderSheet) = (true, true);
+            if (Sheets.IsPresenting && GameOnScreen) (_sheetPaused, _cardUnderSheet) = (true, pages);
             else if (GameOnScreen && IsPaused && !_padMenuOpen) ResumeEmulation();
         }
 

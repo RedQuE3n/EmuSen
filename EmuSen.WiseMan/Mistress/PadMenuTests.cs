@@ -469,7 +469,15 @@ namespace EmuSen.WiseMan.Mistress
             ((Window)Sheets(w).Current!).Close();
             Dispatcher.UIThread.RunJobs();
             Assert.True(PadMenu.IsOpen(w), "closing the sheet comes back to the card");
-            Assert.True(w.IsPaused);
+            string Title() => w.GetControl<TextBlock>("PadMenuTitle").Text ?? "";
+            Assert.EndsWith(MainWindow.DisplayMenu, Title());
+            Assert.Equal("Graphics", PadMenu.Lines(w)[PadMenu.Selected(w)]);
+            // B climbs one level at a time and the game stays paused until the card closes (EmuSen_Interface.md §2.9).
+            pad.B();
+            Assert.True(PadMenu.IsOpen(w) && w.IsPaused);
+            Assert.EndsWith("Game Options", Title());
+            pad.B();
+            Assert.True(PadMenu.IsOpen(w) && w.IsPaused);
             Assert.DoesNotContain(said, t => t?.StartsWith("Running", StringComparison.Ordinal) == true);
             pad.B();
             Assert.False(PadMenu.IsOpen(w));

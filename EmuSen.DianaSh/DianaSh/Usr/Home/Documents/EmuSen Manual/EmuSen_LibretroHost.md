@@ -2329,7 +2329,7 @@ sheet and back.
 - **Opening a sheet from the card.** The card's entry closes the card while keeping its pause (`ClosePadMenu` with
   `holdPause`). The entry then runs, and `HandOverHeldPause` passes the pause to the sheet the entry opened. If the
   entry opened no sheet, the game resumes as before.
-- **Closing that sheet.** The card opens again and owns the pause. The game resumes only when the card closes.
+- **Closing that sheet.** The card opens again on the page and row it left (Graphics' sheet comes back to Display with Graphics focused), as `EmuSen_Interface.md` §2.9 has it, and owns the pause. Each B climbs one level, and the game resumes only when the card closes.
 - Before this, `ClosePadMenu` resumed the game and `OnSheetsChanged` paused it again for the sheet. Closing the sheet
   went back to the running game, not to the card.
 

@@ -92,12 +92,15 @@ namespace EmuSen.WiseMan.Mistress
             PadMenu.Choose(window, pad, entry);
         }
 
-        // B from a sheet the Pause Card opened climbs back to the card, which keeps the game paused; one more B resumes it - see EmuSen_Interface.md §2.9 and EmuSen_LibretroHost.md §10z.
+        // B from a sheet the Pause Card opened climbs back to its page, and each B a level more, the game paused until the card closes - see EmuSen_Interface.md §2.9 and EmuSen_LibretroHost.md §10z.
         private static void BackToTheGame(MainWindow window, PadDriver pad)
         {
             Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible, "B from the sheet climbs back to the Pause Card");
-            Assert.True(IsPaused(window));
-            pad.B();
+            for (int level = 0; level < 4 && window.GetControl<Control>("PadMenuPanel").IsVisible; level++)
+            {
+                Assert.True(IsPaused(window));
+                pad.B();
+            }
             Assert.False(window.GetControl<Control>("PadMenuPanel").IsVisible);
         }
 

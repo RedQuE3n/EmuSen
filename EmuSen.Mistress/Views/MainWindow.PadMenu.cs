@@ -135,18 +135,6 @@ namespace EmuSen.Mistress.Views
             Ask("Quit EmuSen...", "Quit EmuSen?", "The game closes, then EmuSen.", Close),
         ];
 
-        private List<PadMenuEntry> SettingsRows() =>
-        [
-            Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)),
-            Opens("Controller Bindings", ShowControllerBindings),
-            Opens("Graphics", ShowGraphicsSettings),
-            Opens("Shaders", ShowShaderSettings),
-            Opens("Cheats", ShowActiveCheats),
-            Opens(MemoryCardsMenu, ShowMemoryCards),
-            Opens(PreferencesWindow.FirmwareTab, () => ShowPreferencesAt(PreferencesWindow.FirmwareTab)),
-            Opens("Preferences", ShowPreferences),
-        ];
-
         // No first, so a press of A straight through the question changes nothing.
         private static List<PadMenuEntry> QuestionRows(PadMenuEntry asked, Action no) =>
         [

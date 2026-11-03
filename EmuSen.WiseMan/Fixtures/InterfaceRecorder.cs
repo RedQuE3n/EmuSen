@@ -212,14 +212,17 @@ namespace EmuSen.WiseMan.Fixtures
         public static SortedSet<string> Palette(Control root)
         {
             var colours = new SortedSet<string>(StringComparer.Ordinal);
-            ThemeVariant variant = root.ActualThemeVariant;
+            // The root's variant, and any a scope inside it draws in, such as a preview of the other variant.
+            var variants = new HashSet<ThemeVariant> { root.ActualThemeVariant };
+            foreach (ThemeVariantScope scope in root.GetVisualDescendants().OfType<ThemeVariantScope>()) if (scope.RequestedThemeVariant is { } v) variants.Add(v);
             void Dictionary(IResourceDictionary? d)
             {
                 if (d is null) return;
-                foreach (object key in d.Keys.ToList()) if (d.TryGetResource(key, variant, out object? value)) Value(value);
+                foreach (ThemeVariant variant in variants)
+                    foreach (object key in d.Keys.ToList()) if (d.TryGetResource(key, variant, out object? value)) Value(value);
                 foreach (IResourceProvider merged in d.MergedDictionaries) if (merged is IResourceDictionary md) Dictionary(md);
                 foreach ((ThemeVariant key, IThemeVariantProvider provider) in d.ThemeDictionaries)
-                    if (key == variant && provider is IResourceDictionary td) Dictionary(td);
+                    if (variants.Contains(key) && provider is IResourceDictionary td) Dictionary(td);
             }
             void Value(object? value)
             {
@@ -248,6 +251,10 @@ namespace EmuSen.WiseMan.Fixtures
             }
             foreach (System.Reflection.FieldInfo f in typeof(EmuSen.LunaP.Theme.LunaPalette).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
                 Value(f.GetValue(null));
+            // LunaPalette's fields are the dark column; another variant drawn here gives each token's colour as that variant resolves it.
+            foreach (ThemeVariant other in variants.Where(v => v != ThemeVariant.Dark))
+                foreach (System.Reflection.FieldInfo f in typeof(EmuSen.LunaP.Theme.LunaPalette).GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static))
+                    if (Application.Current?.TryGetResource($"Luna{f.Name}Color", other, out object? colour) == true) Value(colour);
             return colours;
         }
 

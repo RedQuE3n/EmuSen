@@ -151,6 +151,7 @@ namespace EmuSen.Mistress.Views
             if (OtherWindow() is { } other) PadWindowRouter.Send(other, button);
             else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);
             else if (EmuSen.LunaP.Controls.MenuTextPopup.OpenOver(this) is { } popup) PadKeyboard.Send(popup, button);
+            else if (_settings is not null) SettingsPadCommand(button);
             else if (_padMenuOpen) PadMenuCommand(button);
             else if (_gamePage is not null) GamePagePadCommand(button);
             else if (LibraryView.IsVisible && ThemedLibraryShown && button == UiButton.Screensaver && _themed?.SelectedGame is { Folder: false, IsCollection: false } game) ShowGamePage(game.File);

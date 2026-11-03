@@ -24,7 +24,9 @@ namespace EmuSen.Mistress.Views
         private async Task StartGameAsync(string path, string displayName, BigPicture.Scene.SceneGame? bigPicture = null)
         {
             await PrepareGameAsync(path);
-            if (await ChooseResumeAsync(path) is not { } choice) return;
+            // The window closed while the questions were asked off the interface thread: nothing starts in it - see EmuSen_Debugging_Tools_Reference_v5.md §3.69.
+            if (_recordsClosed) return;
+            if (await ChooseResumeAsync(path) is not { } choice || _recordsClosed) return;
             Task<GameSession>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
             if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture))
             {
@@ -41,6 +43,11 @@ namespace EmuSen.Mistress.Views
                     LetGo(loading);
                     return;
                 }
+            }
+            if (_recordsClosed)
+            {
+                LetGo(loading);
+                return;
             }
             LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false, loading);
             if (bigPicture is null) return;

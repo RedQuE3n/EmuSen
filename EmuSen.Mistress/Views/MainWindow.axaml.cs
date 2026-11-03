@@ -1305,11 +1305,11 @@ namespace EmuSen.Mistress.Views
             LaunchSelectedLibraryEntry();
         }
 
-        private async void LaunchSelectedLibraryEntry()
+        // Not awaited, so a launch's fault is written to the error log rather than thrown on the interface thread.
+        private void LaunchSelectedLibraryEntry()
         {
             if (LibraryList.Selected is not RomEntry entry) return;
-
-            await StartGameAsync(entry.FullPath, entry.FileName);
+            StartGameAsync(entry.FullPath, entry.FileName).Logged("launch", $"Starting {entry.FileName}");
         }
 
         // Hotkey counterpart to the console's pause/resume pair - see `man pause`.

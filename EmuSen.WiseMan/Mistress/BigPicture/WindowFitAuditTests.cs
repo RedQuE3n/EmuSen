@@ -171,7 +171,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             if (bigScreen) pad.A();
             else Call(window, "LaunchSelectedLibraryEntry");
-            Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
+            // The launch's questions are asked off the interface thread and answered within 100 ms only when the machine is idle, so the game is waited for (EmuSen_Debugging_Tools_Reference_v5.md §3.69).
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!window.GetControl<Control>("GameFrame").IsVisible && clock.ElapsedMilliseconds < 15_000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
+            Assert.True(window.GetControl<Control>("GameFrame").IsVisible, "the game started");
             return (window, pad);
         }
 

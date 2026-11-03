@@ -3094,6 +3094,37 @@ missing U3 (restored in `b21d1d28e`):
   the broker's workspace defines only `release` and `dist`. A crate whose workspace defines no `test-checked` now runs
   on `--release`, as CI runs it.
 
+### 3.69 The headless session's UI thread stopped: a launch that outlived its window (2026-11-03)
+
+A land hung for two hours on `WindowFitAuditTests.Nothing_in_the_window_is_cut_off…` at `GraphicsSettingsN64Note`,
+1280 × 800, after eight other views. The hang dump held no Avalonia UI thread at all, and the test thread waited for
+ever in `WindowsLeftOpen.After`, which dispatches to that thread to close the windows a test left open.
+
+**What stopped the thread**, recorded on 2026-11-03 by an `UnhandledException` hook on the UI dispatcher
+(`EMUSEN_UI_FAULT_LOG` names a file it is written to): an `ObjectDisposedException` from `GameLibrary`, thrown in
+`MainWindow.ShowLibrary` on the failure path of `LoadGame`, reached from `StartGameAsync` through the `async void`
+`LaunchSelectedLibraryEntry`. A launch asks its questions off the interface thread (core approval, firmware, cards,
+EmuSen_LibretroHost.md §10r). When the window closed before they were answered, the launch went on in the closed
+window: its records disposed, the load failed, showing the library threw, and an `async void` throws on the
+interface thread, which ends the headless session's dispatcher loop. In the product the same order (a launch, then the
+window closed) would end EmuSen with that exception. The hypothesis that Cores' first read of the catalogue was the
+cause was refuted: no Cores job was running, and the fault's stack holds none.
+
+**Fixed:** `StartGameAsync` starts nothing in a window that has closed (`_recordsClosed`, checked after each awaited
+question and before the load), and `LaunchSelectedLibraryEntry` is no longer `async void`: the launch is a task whose
+fault is written to the error log (`BackgroundTask.Logged`). `LaunchAfterCloseTests` holds the firmware answer until
+the window has closed and asserts nothing reaches the interface thread; it failed before the change with the same
+`ObjectDisposedException`.
+
+**Why only in that sequence:** the launch's questions wait 100 ms for their answer on the interface thread
+(`OffInterface`) and go on asynchronously past that. Run alone, the N64 view's answers came in time and the game was
+on screen when `InGame` asserted it at once; after eight other views the machine was slower, the launch went on
+asynchronously, the assertion failed, the test closed its window, and the launch then went on in the closed window.
+`InGame` now waits up to 15 s for the game, as the player's path does.
+
+**And the harness never hangs on it again:** `WindowsLeftOpen` waits at most 60 s on the UI session and then fails
+the test with "the UI session stopped" and the exception that stopped it.
+
 ## 8. A note on the 2026-08-06 commit, for whoever runs `git log` and wonders
 
 Four efforts landed in one commit, which is not the house style and is worth explaining rather than leaving as an oddity.

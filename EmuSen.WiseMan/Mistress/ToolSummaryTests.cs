@@ -142,6 +142,36 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void Age(MainWindow w) => typeof(MainWindow).GetField("_toolSummariesAsked", Hidden)!.SetValue(w, DateTime.MinValue);
 
+        // Home's place and the Home card's Scraper row by the player's own door: the pad menu's Tools page.
+        private static (string? Place, string? Value, string? Status) ScraperLines(MainWindow w)
+        {
+            IReadOnlyList<HomePlace> places = new HomeScreen(w).Places;
+            typeof(MainWindow).GetMethod("OpenPadMenu", Hidden)!.Invoke(w, []);
+            EmuSen.Mistress.Input.PadMenuEntry row = PadMenu.Entries(w).Single(e => e.Text() == MainWindow.ToolsMenu).Submenu!().Single(e => e.Text() == MainWindow.ScraperRow);
+            (string? Place, string? Value, string? Status) seen = (places.Single(p => p.Key == HomeScreen.Scraper).Status, row.Value?.Invoke(), row.Status?.Invoke());
+            typeof(MainWindow).GetMethod("ClosePadMenu", Hidden)!.Invoke(w, []);
+            return seen;
+        }
+
+        [Fact]
+        public Task While_a_scrape_runs_the_scrapers_line_is_its_progress_everywhere_and_the_count_comes_back_after() => Session.Dispatch(() =>
+        {
+            MainWindow window = Home(out _);
+            try
+            {
+                Age(window);
+                Ask(window);
+                Assert.Equal(("41 without art", "41 no art", "41 without art"), ScraperLines(window));
+                var run = new EmuSen.Mistress.Scraping.ScrapeProgress(3) { Done = 1 };
+                typeof(MainWindow).GetField("_scrapeRun", Hidden)!.SetValue(window, run);
+                Assert.Equal(("Scraping 1 of 3", "Scraping 1 of 3", "Scraping 1 of 3"), ScraperLines(window));
+                Assert.Equal("Scraping 1 of 3 games; the Scraper's window follows the run, and its Stop ends it.", Summary(window, HomeScreen.Scraper)?.Sentence);
+                run.State = EmuSen.Mistress.Scraping.ScrapeRunState.Done;
+                Assert.Equal(("41 without art", "41 no art", "41 without art"), ScraperLines(window));
+            }
+            finally { window.Close(); }
+        }, default);
+
         [Fact]
         public Task The_costly_reads_are_made_once_and_again_only_when_their_data_changes_and_a_window_s_listing_is_kept() => Session.Dispatch(() =>
         {

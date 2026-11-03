@@ -95,6 +95,18 @@ namespace EmuSen.Tools.Scraper
         }
 
         // A run's progress answer as the frame's line: the fraction, the line, and the end's sentence once it is not running.
+        // The tool's one-line state while a run goes: its progress, in place of the count until the run ends (EmuSen_Interface.md §19.7).
+        public static ToolSummary Running(int done, int total) =>
+            new($"Scraping {done:N0} of {total:N0}", Sentence: $"Scraping {done:N0} of {total:N0} games; the Scraper's window follows the run, and its Stop ends it.");
+
+        // How far a run is, from the scraper's answer.
+        public static (int Done, int Total) Counts(string answer)
+        {
+            using JsonDocument doc = JsonDocument.Parse(answer);
+            JsonElement p = doc.RootElement.GetProperty("progress");
+            return (Int(p, "done"), Int(p, "total"));
+        }
+
         public static (double? Fraction, string Line, bool Running, string? Said) Progress(string answer)
         {
             using JsonDocument doc = JsonDocument.Parse(answer);

@@ -835,3 +835,6 @@ for the desktop's quiet `⚠` lines; `Collections`, missed in the first round, f
 
 Taken again on 2026-11-03, cause merged with the reader fix (every section strip a tab list, the drawn rows focusable): the
 36 U7 states above whose recordings both changes touched, recorded once over both.
+
+Taken again the same day, one cause, both sizes: `ScraperRunning`, whose header now says the run's progress
+(`Scraping 1 of 2`) in place of the count while it runs (`EmuSen_Interface.md` §19.7).

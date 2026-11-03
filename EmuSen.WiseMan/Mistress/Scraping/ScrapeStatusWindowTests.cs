@@ -296,7 +296,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.StartsWith("Stopped after", TextOf(status, "ScrapeStatusHeading"));
             Assert.Contains(why, TextOf(status, "ScrapeStatusWhy"));
             Assert.StartsWith("Why it stopped: ", TextOf(status, "ScrapeStatusWhy"));
-            Assert.Contains("left queued: Resume, in Preferences ▸ Scraping, goes on with them. Nothing resumes by itself.", TextOf(status, "ScrapeStatusSummary"));
+            Assert.Contains("left queued: Resume, in Settings ▸ Library ▸ Scraping, goes on with them. Nothing resumes by itself.", TextOf(status, "ScrapeStatusSummary"));
             Assert.Equal("Close", Named<Button>(status, "ScrapeStatusHideButton").Content);
             Assert.False(Named<Button>(status, "ScrapeStatusCancelButton").IsVisible);
         });
@@ -528,7 +528,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
-        public Task The_pad_menu_and_the_scraping_tab_reopen_the_window_during_a_run() => OnUi(() =>
+        public Task The_pad_menu_and_settings_scraping_reopen_the_window_during_a_run() => OnUi(() =>
         {
             ThreeGames();
             Server.Gate = new SemaphoreSlim(0);
@@ -548,14 +548,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Null(window.ScrapeStatusShown);
             scraper.Close();
 
-            var prefs = new PreferencesWindow(new AppSettings { RomDirectory = RomDir }, window);
-            Windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            SettingsDesk.At(window, EmuSen.Mistress.Pages.SettingsScreen.Library, "scraping");
             Pump(100);
-            Click(Named<Button>(prefs, "ScrapeStatusButton"));
+            Assert.Equal("Running", SettingsDesk.Value(window, "cancelscrape"));
+            SettingsDesk.Choose(window, "status");
             Assert.NotNull(window.ScrapeStatusShown);
-            prefs.Close();
+            window.CloseSettings();
         });
 
         // In a big-screen session the window is a sheet, and every control on it is reached and pressed by the pad.

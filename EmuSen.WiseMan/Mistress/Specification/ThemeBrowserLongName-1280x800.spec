@@ -75,4 +75,4 @@ press pageup focus="ListBoxItem 'Synthetic Book'" title="ES-DE Themes" top=Theme
 press pagedown focus="ListBoxItem 'The Complete Illustrated Library of Every Console, Anniversary Deluxe Edition   ·   Installed'" title="ES-DE Themes" top=ThemeBrowserWindow
 press first focus="ListBoxItem 'The Complete Illustrated Library of Every Console, Anniversary Deluxe Edition   ·   Installed'" title="ES-DE Themes" top=ThemeBrowserWindow
 press last focus="ListBoxItem 'The Complete Illustrated Library of Every Console, Anniversary Deluxe Edition   ·   Installed'" title="ES-DE Themes" top=ThemeBrowserWindow
-press back focus="Dropdown TransitionsDropdown (Transitions)" tab=Options top=ThemeSettingsWindow
+press back focus="Dropdown TransitionsDropdown" tab=Options title="Theme Settings" top=ThemeSettingsWindow

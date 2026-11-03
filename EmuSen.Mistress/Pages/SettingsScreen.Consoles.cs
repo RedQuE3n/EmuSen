@@ -43,7 +43,7 @@ namespace EmuSen.Mistress.Pages
             if (FirmwareLine(console) is { } firmware) lines.Add(firmware);
             var facts = new List<string>();
             if (HasTelevision(console)) facts.Add($"CRT profile {ScreenWord(console)}");
-            foreach (SettingRow row in ConsoleSchema(console).Where(r => r.Kind == SettingRow.Choice).Take(1)) facts.Add($"{row.Label} {ValueText(console, row)}");
+            foreach (SettingRow row in ConsoleSchema(console).Where(r => r.Kind == SettingRow.Choice && !r.Locked).Take(1)) facts.Add($"{row.Label} {ValueText(console, row)}");
             if (facts.Count > 0) lines.Add(new SettingsLine(string.Join(" · ", facts)));
             lines.Add(new SettingsLine($"What every {name} game shares, unless the game's own options say otherwise.", SettingsTone.Muted));
             return new ScreenPane(lines);
@@ -131,9 +131,9 @@ namespace EmuSen.Mistress.Pages
         // The keys the console page draws in rows of its own, so the schema's rows leave them out.
         private IReadOnlyList<SettingRow> ConsoleSchema(string console)
         {
-            HashSet<string> own = [RuntimeCatalog.EngineKey, FirmwarePreferenceKey, .. MediaOf(console).SelectMany(m => m.Slots.Select((_, i) => SlotKey(m, i)).Prepend(m.ModeKey))];
+            HashSet<string> own = [RuntimeCatalog.EngineKey, FirmwarePreferenceKey, ConsolePicture.Key, .. MediaOf(console).SelectMany(m => m.Slots.Select((_, i) => SlotKey(m, i)).Prepend(m.ModeKey))];
             Dictionary<string, string?> values = _host.Schema(console).ToDictionary(r => r.Key, r => (string?)(_host.CoreValue(console, r.Key) ?? r.Default));
-            return _host.Schema(console).Where(r => !own.Contains(r.Key) && !r.Locked && (r.ShownWithKey is null || values.GetValueOrDefault(r.ShownWithKey) == r.ShownWithValue)).ToList();
+            return _host.Schema(console).Where(r => !own.Contains(r.Key) && (!r.Locked || r.HasNote) && (r.ShownWithKey is null || values.GetValueOrDefault(r.ShownWithKey) == r.ShownWithValue)).ToList();
         }
 
         // The setting a medium's slot is stored under, as the runtime's card manager names it (Platform/crystal/src/media.rs).
@@ -195,7 +195,14 @@ namespace EmuSen.Mistress.Pages
             bool cards = media.Count > 0;
             rows.Add(Opens("cards", "Memory cards", cards ? $"The {name}'s cards: shared by every game as the console's were, or one per game." : $"The {name}'s games keep their saves in the cartridge.", null,
                 () => Push("Memory cards", () => CardRows(console), "cards"), () => cards ? CardsPane(console) : Said($"The {name}'s games keep their saves in the cartridge; there is no card to choose."), enabled: cards));
-            foreach (SettingRow row in ConsoleSchema(console)) rows.Add(SchemaRow(console, row, row.Key, row.Label));
+            // The engine's groups each under a heading, and a row the engine holds shown with why, taking no choice - see EmuSen_LibretroHost.md §10i.
+            string? group = null;
+            foreach (SettingRow row in ConsoleSchema(console))
+            {
+                if (row.Group is { } g && g != group) rows.Add(Act("group:" + g, g, $"The {NameOf(console)}'s {g.ToLowerInvariant()} settings.", () => { }, enabled: false));
+                group = row.Group;
+                rows.Add(row.Locked ? Act(row.Key, row.Label, row.Note is { Length: > 0 } held ? held : row.Hint, () => { }, ValueText(console, row), enabled: false) : SchemaRow(console, row, row.Key, row.Label));
+            }
             if (HasTelevision(console))
             {
                 IReadOnlyList<string> filters = ScreenFilters.NamesFor(console);
@@ -207,8 +214,12 @@ namespace EmuSen.Mistress.Pages
                     _host.SaveGraphics(console);
                 }));
                 rows.Add(Opens("consolelevers", "Shader levers", $"The CRT's own levers for the {name}.", null, () => Push("Shader levers", () => LeverRows(console), "consolelevers"), enabled: current == CrtFilter.Name));
-                Setting crop = GraphicsChoice(console, "consolecrop", "Crop overscan", "The whole picture, or the part a television showed.", GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan], ["Whole picture", "TV overscan"]);
-                rows.Add(_host.RunningCropNote(console) is { } note ? crop with { Pane = () => new ScreenPane([new SettingsLine("The whole picture, or the part a television showed."), new SettingsLine(note, SettingsTone.Attention)]) } : crop);
+                string said = "The whole picture, the part a television showed, or a crop of your own.";
+                Setting crop = GraphicsChoice(console, "consolecrop", "Crop overscan", said, GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan, GraphicsKeys.CustomCrop], ["Whole picture", "TV overscan", "Custom crop"]);
+                rows.Add(_host.RunningCropNote(console) is { } note ? crop with { Pane = () => new ScreenPane([new SettingsLine(said), new SettingsLine(note, SettingsTone.Attention)]) } : crop);
+                if (_host.Graphics.Value(console, GraphicsKeys.Overscan) == GraphicsKeys.CustomCrop)
+                    rows.Add(Opens("consolecropedges", "Custom crop", "How much of the picture's width or height to hide at each edge.",
+                        string.Join(" · ", ConsoleCrop.Edges.Select((e, i) => $"{e.Label} {ConsoleCrop.Text(CropEdge(console, i))}%")), () => Push("Custom crop", () => CropRows(console), "consolecropedges")));
             }
             else
             {
@@ -220,6 +231,23 @@ namespace EmuSen.Mistress.Pages
             rows.Add(Act("reset", "Reset this console", $"Every {name} setting back to its default: the engine's rows, its picture and its shaders; a row the engine holds stays.", () => ResetConsole(console)));
             return rows;
         }
+
+        private double CropEdge(string console, int edge) => ConsoleCrop.ParsePercent(_host.Graphics.Value(console, ConsoleCrop.Edges[edge].Key)) ?? 0;
+
+        // A custom crop's four edges, each stepped by a tenth of a percent or typed, held to what one edge may hide - see EmuSen_Settings_Reference.md §4.99.
+        private IReadOnlyList<Setting> CropRows(string console) => ConsoleCrop.Edges.Select((edge, i) =>
+        {
+            double now = CropEdge(console, i);
+            void Store(double percent)
+            {
+                _host.Graphics.SetValue(console, edge.Key, ConsoleCrop.Text(Math.Clamp(Math.Round(percent, 1), 0, ConsoleCrop.MostPercent)));
+                _host.SaveGraphics(console);
+            }
+            string most = ConsoleCrop.Text(ConsoleCrop.MostPercent);
+            return new Setting(new PageRow("crop:" + edge.Key, edge.Label) { Kind = PageRowKind.Steps, Status = $"{ConsoleCrop.Text(now)}%", Sentence = $"The part of the picture hidden at its {edge.Label.ToLowerInvariant()} edge, 0 to {most}%; A types it." },
+                null, by => Store(now + by * 0.1),
+                () => _host.Ask("Custom crop", $"{edge.Label}, percent of the picture, 0 to {most}", ConsoleCrop.Text(now), text => { if (ConsoleCrop.ParsePercent(text) is { } typed) Store(typed); }));
+        }).ToList();
 
         // Every row of the console's schema the player may change, and its picture, back to their defaults.
         private void ResetConsole(string console)
@@ -296,7 +324,7 @@ namespace EmuSen.Mistress.Pages
             bool replaced = _host.CoreValue(console, FirmwarePreferenceKey) == "replacement";
             var rows = NeedsOf(console).Select(n => new Setting(
                 new PageRow("fw:" + n.Name, n.Name) { Kind = PageRowKind.Action, Status = NeedStatus(console, n), Sentence = string.Join(", ", n.Files.Select(f => f.File)) },
-                () => new ScreenPane(n.Found is { } found
+                () => Worded(n, n.Found is { } found
                     ? [new SettingsLine($"Your own {n.Name} ({n.Recognised}) was recognised by its content, and {engine} {(replaced ? "runs the open replacement instead, as Open replacement says Always" : "uses it")}.", SettingsTone.Success) { Mark = "✓" }, new SettingsLine("EmuSen never downloads firmware.", SettingsTone.Muted)]
                     : n.Missing && NeededByAll(console)
                         ? [new SettingsLine($"No {n.Name} of your own was found, and the {NameOf(console)}'s games need one.", SettingsTone.Attention) { Mark = "⚠" }, new SettingsLine($"Put your own copy ({string.Join(", ", n.Files.Select(f => f.File))}) in your firmware folder, then Check again.", SettingsTone.Muted)]
@@ -305,6 +333,8 @@ namespace EmuSen.Mistress.Pages
                             : [new SettingsLine($"No {n.Name} of your own was found, so {engine} runs its open replacement in its place."), new SettingsLine($"Your own copy ({string.Join(", ", n.Files.Select(f => f.File))}) is used once it is found. EmuSen never downloads firmware.", SettingsTone.Muted)]))).ToList();
             if (_host.Schema(console).FirstOrDefault(r => r.Key == FirmwarePreferenceKey && !r.Locked) is { } preference) rows.Add(ReplacementRow(console, preference));
             rows.Add(Opens("fwfolder", "Folder", "Your firmware folder, searched before EmuSen's; only ever read.", _host.App.FirmwareDirectory is { Length: > 0 } d ? d : "EmuSen's folder", () => _host.Open(DoorFirmwareFolder)));
+            rows.Add(Act("fwclear", "Use EmuSen's folder alone", "Forgets your folder; firmware is then looked for in EmuSen's own.", () => _host.Open(DoorClearFirmware), enabled: _host.App.FirmwareDirectory is { Length: > 0 }));
+            rows.Add(Act("fwopen", "Open EmuSen's folder", "EmuSen's own firmware folder in the file manager, made if it is not there yet.", () => _host.Open(DoorOpenFirmware)));
             rows.Add(Act("fwcheck", "Check again", "Reads the folders again, as after a file is put in one.", () => { }));
             return rows;
         }
@@ -328,6 +358,30 @@ namespace EmuSen.Mistress.Pages
             return Choice("fwreplacement", "Open replacement", "Whether the console's open replacement runs in place of firmware of your own. Takes effect when a game is next loaded.",
                 choices.Select(c => c.Text).ToList(), at, i => _host.SetCoreValue(console, row.Key, choices[i].Value),
                 () => Said(choices.ElementAtOrDefault(Math.Max(0, at)).Says ?? "", "Takes effect when a game is next loaded. EmuSen never downloads firmware."));
+        }
+
+        // A need's pane with what the runtime's overview says of each file: where it was found, why one of the wrong size is unused, and what the open version changes.
+        private ScreenPane Worded(FirmwareNeed need, IReadOnlyList<SettingsLine> lines)
+        {
+            IReadOnlyDictionary<string, FirmwareWords> overview = _host.FirmwareOverview();
+            var words = new List<SettingsLine>(lines);
+            foreach (FirmwareFile file in need.Files)
+            {
+                if (!overview.TryGetValue(file.File, out FirmwareWords? w)) continue;
+                if (w.FoundIn is { } folder) words.Add(new SettingsLine($"{file.File}: found in {folder}.", SettingsTone.Muted));
+                if (w.WrongSize) words.Add(new SettingsLine($"{file.File}: not used, the file in {w.WrongSizeIn ?? "EmuSen's folder"} is not {w.Size:N0} bytes.", SettingsTone.Attention));
+                if (w.FoundIn is null && w.Effect == "exact") words.Add(new SettingsLine("Exact: games run the same with the open version.", SettingsTone.Muted));
+                else if (w.FoundIn is null && w.Effect == "accuracy" && FirstSentence(w.Cost) is { } cost) words.Add(new SettingsLine($"The open version: {cost}", SettingsTone.Muted));
+            }
+            return new ScreenPane(words.DistinctBy(l => l.Text).ToList());
+        }
+
+        // The first sentence of a core's words on a cost, the rest being detail for the core's own page.
+        private static string? FirstSentence(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return null;
+            int end = text.IndexOf(". ", StringComparison.Ordinal);
+            return end < 0 ? text.Trim() : text[..(end + 1)];
         }
 
         private ScreenPane CardsPane(string console)

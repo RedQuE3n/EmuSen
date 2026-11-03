@@ -19,6 +19,7 @@ using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -57,13 +58,12 @@ namespace EmuSen.WiseMan.Mistress
             config.Save();
         }
 
-        // The NES has one engine, so its tab offers no choice of engine.
+        // The NES has one engine, so its page in Settings offers it alone.
         [Fact]
-        public Task The_NES_tab_offers_no_engine_choice() => Session.Dispatch(() =>
+        public Task The_NES_page_offers_one_engine() => Session.Dispatch(() =>
         {
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "NES");
-            window.Show();
-            Assert.Empty(window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"NES.{CoreCatalog.EngineKey}"));
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:NES");
+            Assert.True(!SettingsDesk.Keys(window).Contains("engine") || SettingsDesk.Row(window, "engine").Choices?.Count == 1, "the page offers a choice of engine");
             window.Close();
         }, default);
 

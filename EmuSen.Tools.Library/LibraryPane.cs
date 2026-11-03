@@ -139,7 +139,7 @@ namespace EmuSen.Tools.Library
             ReadRecords();
             if (string.IsNullOrEmpty(Library))
             {
-                Say("No library folder is set, so there is nothing to check. Choose the library's folder in Preferences, then open this again.");
+                Say("No library folder is set, so there is nothing to check. Choose the library's folder in Settings ▸ Library, then open this again.");
                 Redraw();
                 return;
             }

@@ -204,7 +204,7 @@ namespace EmuSen.Mistress.Library
         // inline library and the modal browser can't drift apart.
         public static string DescribeEmpty(RomLibraryResult result) => result.Status switch
         {
-            RomLibraryStatus.NoDirectoryConfigured => "No ROM directory set - choose one in Settings > Preferences...",
+            RomLibraryStatus.NoDirectoryConfigured => "No ROM directory set - choose one in Settings ▸ Library ▸ ROM folder.",
             RomLibraryStatus.DirectoryNotFound => $"ROM directory not found: {result.Directory}",
             RomLibraryStatus.Empty when result.CoreDisplayName is { } console =>
                 $"No {console} games under {result.Directory}",

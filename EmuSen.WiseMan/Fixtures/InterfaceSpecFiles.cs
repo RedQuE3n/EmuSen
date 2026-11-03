@@ -35,7 +35,9 @@ namespace EmuSen.WiseMan.Fixtures
             return s =>
             {
                 foreach (string root in roots.Where(r => r.Length > 0)) s = s.Replace(root, "<run>", StringComparison.Ordinal);
-                return s.Replace(temp, "<temp>", StringComparison.Ordinal).Replace(home, "<home>", StringComparison.Ordinal);
+                s = s.Replace(temp, "<temp>", StringComparison.Ordinal).Replace(home, "<home>", StringComparison.Ordinal);
+                // A run's own folder named by a fresh id, such as a test theme's, reads the same on every run.
+                return System.Text.RegularExpressions.Regex.Replace(s, "\\b[0-9A-Fa-f]{32}\\b", "<id>");
             };
         }
 

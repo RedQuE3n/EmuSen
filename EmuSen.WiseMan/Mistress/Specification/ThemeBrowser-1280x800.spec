@@ -72,4 +72,4 @@ press pageup focus="Button 'Refresh'" title="ES-DE Themes" top=ThemeBrowserWindo
 press pagedown focus="Button 'Refresh'" title="ES-DE Themes" top=ThemeBrowserWindow
 press first focus="Button 'Refresh'" title="ES-DE Themes" top=ThemeBrowserWindow
 press last focus="Button 'Refresh'" title="ES-DE Themes" top=ThemeBrowserWindow
-press back focus="Dropdown TransitionsDropdown (Transitions)" tab=Options top=ThemeSettingsWindow
+press back focus="Dropdown TransitionsDropdown" tab=Options title="Theme Settings" top=ThemeSettingsWindow

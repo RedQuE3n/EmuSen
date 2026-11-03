@@ -105,14 +105,14 @@ namespace EmuSen.Mistress.Views
             IReadOnlyList<string> orphans = OrphanedMedia();
             if (orphans.Count == 0) return "No orphaned media: every scraped file belongs to a game in the library.";
             long bytes = orphans.Sum(f => new FileInfo(Path.Combine(MediaStore.DefaultRoot, f)).Length);
-            string message = $"{orphans.Count:N0} scraped file(s), {ScrapePreferencesPane.Size(bytes)}, belong to games no longer in the library. "
+            string message = $"{orphans.Count:N0} scraped file(s), {ScrapeSizes.Text(bytes)}, belong to games no longer in the library. "
                 + $"They are moved to home/Media/{MediaStore.CleanupFolder}/, not deleted; delete that folder yourself when you are sure. The ROM folder is not touched.";
             if (!await ConfirmCleanUp(this, message)) return "Nothing was moved.";
             (int moved, long size, string folder) = _native is { } native2 ? native2.CleanUp(orphans, DateTimeOffset.Now) : _mediaStore!.CleanUp(orphans, DateTimeOffset.Now);
             _scrapeGeneration++;
             ReadScrapeSnapshot();
             ShowLibraryEntries();
-            return $"Moved {moved:N0} file(s), {ScrapePreferencesPane.Size(size)}, to {Path.GetRelativePath(DataStore.Media, folder)} in home/Media.";
+            return $"Moved {moved:N0} file(s), {ScrapeSizes.Text(size)}, to {Path.GetRelativePath(DataStore.Media, folder)} in home/Media.";
         }
     }
 }

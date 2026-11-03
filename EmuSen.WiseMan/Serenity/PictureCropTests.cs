@@ -17,6 +17,8 @@ using EmuSen.Crystal;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
+using EmuSen.Galaxia.Library;
 
 namespace EmuSen.WiseMan.Serenity
 {
@@ -181,83 +183,80 @@ namespace EmuSen.WiseMan.Serenity
             Assert.NotEqual(before, Drawn(frame, 640, 576, 1, c => c.Crop = Uneven).Hash);
         }, default);
 
-        private static T Named<T>(Window window, string name) where T : Control =>
-            Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(window).OfType<T>().First(c => c.Name == name);
-
         [Fact]
-        public Task Graphics_settings_offer_overscan_on_every_console_that_had_a_television_and_store_it_per_console() => Session.Dispatch(() =>
+        public Task Settings_offer_overscan_on_every_console_that_had_a_television_and_store_it_per_console() => Session.Dispatch(() =>
         {
             string dir = Path.Combine(Path.GetTempPath(), "EmuSenCropWindow_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             ConfigStore.OverrideDirectory = dir;
+            DataStore.OverrideDirectory = Path.Combine(dir, "Home");
             try
             {
-                var config = new GraphicsConfig();
-                string? changed = null;
-                var window = new GraphicsSettingsWindow(config, c => changed = c, "N64");
-                window.Show();
-                window.CaptureRenderedFrame();
-
+                static GraphicsConfig Saved() => GraphicsConfig.Load();
                 foreach (string console in new[] { "NES", "SNES", "N64", "Genesis" })
                 {
-                    Assert.True(GraphicsSettingsWindow.HasOverscan(console));
-                    Assert.Equal(PictureCrop.None, GraphicsSettingsWindow.CropFor(config, console));
+                    Assert.True(EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(console));
+                    Assert.Equal(PictureCrop.None, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), console));
                 }
-                Assert.False(GraphicsSettingsWindow.HasOverscan("GB"));
-                Assert.DoesNotContain(Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(window).OfType<Control>(), c => c.Name is "GB.Overscan" or "GB.Crop");
+                Assert.False(EmuSen.Mistress.Library.ConsoleCrop.HasOverscan("GB"));
+                MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:GB");
+                Assert.DoesNotContain("consolecrop", SettingsDesk.Keys(window));
 
-                Dropdown overscan = Named<Dropdown>(window, "N64.Overscan");
-                Assert.Equal("Whole picture", overscan.SelectedItem);
-                Assert.Equal(new[] { "Whole picture", "TV overscan", "Custom crop" }, overscan.Items.Cast<object>().Select(o => o.ToString()));
-                FieldRow row = Named<FieldRow>(window, "N64.Crop");
-                Assert.False(row.IsVisible);
+                SettingsDesk.At(window, SettingsScreen.Consoles, "console:N64");
+                Assert.Equal("Whole picture", SettingsDesk.Value(window, "consolecrop"));
+                Assert.Equal(new[] { "Whole picture", "TV overscan", "Custom crop" }, SettingsDesk.Row(window, "consolecrop").Choices);
+                Assert.DoesNotContain("consolecropedges", SettingsDesk.Keys(window));
 
-                overscan.SelectedItem = "TV overscan";
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal((GraphicsSettingsWindow.TvOverscan, "N64"), (config.Value("N64", GraphicsSettingsWindow.OverscanKey), changed));
-                Assert.Equal(PictureCrop.Television, GraphicsSettingsWindow.CropFor(config, "N64"));
-                Assert.False(row.IsVisible);
+                SettingsDesk.Pick(window, "consolecrop", "TV overscan");
+                Assert.Equal(EmuSen.Mistress.Library.GraphicsKeys.TvOverscan, Saved().Value("N64", EmuSen.Mistress.Library.GraphicsKeys.Overscan));
+                Assert.Equal(PictureCrop.Television, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "N64"));
+                Assert.DoesNotContain("consolecropedges", SettingsDesk.Keys(window));
 
-                overscan.SelectedItem = "Custom crop";
-                Dispatcher.UIThread.RunJobs();
-                Assert.True(row.IsVisible);
-                Assert.Equal(PictureCrop.None, GraphicsSettingsWindow.CropFor(config, "N64"));
-                Named<TextBox>(window, "N64.CropLeft").Text = "2.4";
-                Named<TextBox>(window, "N64.CropRight").Text = "1,2";
-                Named<TextBox>(window, "N64.CropTop").Text = "8.68";
-                Named<TextBox>(window, "N64.CropBottom").Text = "99";
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal(("2.4", "1.2", "8.7", "25"), (config.Value("N64", "CropLeft"), config.Value("N64", "CropRight"), config.Value("N64", "CropTop"), config.Value("N64", "CropBottom")));
-                Assert.Equal(new PictureCrop(0.024, 0.087, 0.012, 0.25), GraphicsSettingsWindow.CropFor(config, "N64"));
+                SettingsDesk.Pick(window, "consolecrop", "Custom crop");
+                Assert.Contains("consolecropedges", SettingsDesk.Keys(window));
+                Assert.Equal(PictureCrop.None, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "N64"));
+                SettingsDesk.Choose(window, "consolecropedges");
+                foreach ((string key, string typed) in new[] { ("CropLeft", "2.4"), ("CropRight", "1,2"), ("CropTop", "8.68"), ("CropBottom", "99") })
+                {
+                    SettingsDesk.Choose(window, "crop:" + key);
+                    SettingsDesk.Answer(window, typed);
+                }
+                GraphicsConfig now = Saved();
+                Assert.Equal(("2.4", "1.2", "8.7", "25"), (now.Value("N64", "CropLeft"), now.Value("N64", "CropRight"), now.Value("N64", "CropTop"), now.Value("N64", "CropBottom")));
+                Assert.Equal(new PictureCrop(0.024, 0.087, 0.012, 0.25), EmuSen.Mistress.Library.ConsoleCrop.CropFor(now, "N64"));
+                Assert.Equal("8.7%", SettingsDesk.Value(window, "crop:CropTop"));
 
-                // What is no number leaves the stored value alone.
-                Named<TextBox>(window, "N64.CropLeft").Text = "wide";
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal("2.4", config.Value("N64", "CropLeft"));
+                // What is no number leaves the stored value alone; a step moves a tenth.
+                SettingsDesk.Choose(window, "crop:CropLeft");
+                SettingsDesk.Answer(window, "wide");
+                Assert.Equal("2.4", Saved().Value("N64", "CropLeft"));
+                SettingsDesk.Step(window, "crop:CropLeft", 1);
+                Assert.Equal("2.5", Saved().Value("N64", "CropLeft"));
+                SettingsDesk.Step(window, "crop:CropLeft", -1);
+                Assert.Equal("2.4", Saved().Value("N64", "CropLeft"));
 
                 // Another console's is its own, and the saved file holds both.
-                Assert.Equal(PictureCrop.None, GraphicsSettingsWindow.CropFor(config, "SNES"));
-                Named<Dropdown>(window, "SNES.Overscan").SelectedItem = "TV overscan";
-                Dispatcher.UIThread.RunJobs();
-                GraphicsConfig saved = GraphicsConfig.Load();
-                Assert.Equal(PictureCrop.Television, GraphicsSettingsWindow.CropFor(saved, "SNES"));
-                Assert.Equal(new PictureCrop(0.024, 0.087, 0.012, 0.25), GraphicsSettingsWindow.CropFor(saved, "N64"));
+                Assert.Equal(PictureCrop.None, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "SNES"));
+                SettingsDesk.At(window, SettingsScreen.Consoles, "console:SNES");
+                SettingsDesk.Pick(window, "consolecrop", "TV overscan");
+                Assert.Equal(PictureCrop.Television, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "SNES"));
+                Assert.Equal(new PictureCrop(0.024, 0.087, 0.012, 0.25), EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "N64"));
 
-                // The values are kept while another choice is made, and Reset This Console clears them all.
-                overscan.SelectedItem = "Whole picture";
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal(PictureCrop.None, GraphicsSettingsWindow.CropFor(config, "N64"));
-                Assert.Equal("8.7", config.Value("N64", "CropTop"));
-                window.GetVisualDescendants().OfType<Button>().First(b => b.Content as string == "Reset This Console").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-                Dispatcher.UIThread.RunJobs();
-                Assert.Null(config.Value("N64", "CropTop"));
-                Assert.Equal("Whole picture", overscan.SelectedItem);
-                Assert.Equal(PictureCrop.Television, GraphicsSettingsWindow.CropFor(config, "SNES"));
+                // The values are kept while another choice is made, and Reset this console clears them all.
+                SettingsDesk.At(window, SettingsScreen.Consoles, "console:N64");
+                SettingsDesk.Pick(window, "consolecrop", "Whole picture");
+                Assert.Equal(PictureCrop.None, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "N64"));
+                Assert.Equal("8.7", Saved().Value("N64", "CropTop"));
+                SettingsDesk.Choose(window, "reset");
+                Assert.Null(Saved().Value("N64", "CropTop"));
+                Assert.Equal("Whole picture", SettingsDesk.Value(window, "consolecrop"));
+                Assert.Equal(PictureCrop.Television, EmuSen.Mistress.Library.ConsoleCrop.CropFor(Saved(), "SNES"));
                 window.Close();
             }
             finally
             {
                 ConfigStore.OverrideDirectory = null;
+                DataStore.OverrideDirectory = null;
                 try { Directory.Delete(dir, recursive: true); } catch { }
             }
         }, default);

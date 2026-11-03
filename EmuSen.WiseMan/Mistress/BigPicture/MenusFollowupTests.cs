@@ -127,19 +127,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         [Fact]
-        public Task Every_big_screen_menu_that_overflows_gets_the_indicator_and_one_that_does_not_shows_none() => ThemedLibraryPadTests.Run(s =>
+        public Task A_big_screen_menu_that_does_not_overflow_shows_no_indicator() => ThemedLibraryPadTests.Run(s =>
         {
-            // Theme Settings' first screen fits; its Interface screen runs past the panel.
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
-            s.Settle();
-            var first = Assert.IsType<ThemeSettingsWindow>(ThemedGameOptionsTests.Sheets(s).Current);
-            Assert.Equal(MenuScrollIndicator.None, first.Form!.Menu.ScrollIndicator);
-            ThemedSwitchesTests.PutAway(s);
-            ThemeSettingsWindow theme = ThemedSwitchesTests.OpenInterface(s);
-            Assert.Equal("Interface", theme.Form!.Menu.Title);
-            Assert.Equal(MenuScrollIndicator.Down, theme.Form.Menu.ScrollIndicator);
-            ThemedSwitchesTests.PutAway(s);
-
             // The pad menu, a list rather than a scroller, is watched through its own scroller.
             s.Pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
             s.Settle();

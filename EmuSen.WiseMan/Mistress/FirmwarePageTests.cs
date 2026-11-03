@@ -17,12 +17,13 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // Preferences' Firmware tab on the desktop: its rows are the overview's, the folder's button opens the folder and nothing else, and the rows follow the folder - see EmuSen_Settings_Reference.md §4.89.
+    // A console's Firmware page in Settings on the desktop: a row per need naming its files, the folder rows by the setting's rules, EmuSen's folder opened, and the rows following the folders - see EmuSen_BigPicture.md §52 and EmuSen_Settings_Reference.md §4.89.
     [Collection(TestCollections.ProcessGlobals)]
     public class FirmwarePageTests : IDisposable
     {
@@ -49,158 +50,119 @@ namespace EmuSen.WiseMan.Mistress
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        private static PreferencesWindow Open()
+        // The Super Nintendo's firmware page, whose chips the runtime's overview names.
+        private static MainWindow Open() => SettingsDesk.Open(SettingsScreen.Consoles, "console:SNES", "firmware");
+
+        private static IReadOnlyList<FirmwareItem> Snes => FirmwareOverview.Build(new ConsolesConfig()).Single(s => s.Name == "Super Nintendo").Items;
+
+        // The need's row that names the file.
+        private static string RowFor(MainWindow window, string file) =>
+            SettingsDesk.Layout(window).Rows.Single(r => r.Key.StartsWith("fw:", StringComparison.Ordinal) && (r.Sentence ?? "").Split(", ").Contains(file)).Key;
+
+        private static string Pane(MainWindow window, string row) => string.Join(" ", window.SettingsShown!.PaneOf(row)!.Lines.Select(l => l.Text));
+
+        private static string Status(MainWindow window) => window.GetControl<TextBlock>("StatusText").Text ?? "";
+
+        private static void Folder(MainWindow window, string typed)
         {
-            var window = new PreferencesWindow(new AppSettings());
-            window.Show();
-            window.ShowTab(PreferencesWindow.FirmwareTab);
-            Dispatcher.UIThread.RunJobs();
-            return window;
+            SettingsDesk.Choose(window, "fwfolder");
+            SettingsDesk.Answer(window, typed);
         }
-
-        private static HintText Problem(PreferencesWindow w) => w.GetVisualDescendants().OfType<HintText>().Single(t => t.Name == "FirmwareDirectoryProblem");
-
-        private static PathPickerRow Picker(PreferencesWindow w) => w.GetVisualDescendants().OfType<PathPickerRow>().Single(p => p.Name == "FirmwareDirectoryBox");
-
-        // A path typed into the folder row and committed by leaving the box, as a keyboard or Game Mode's on-screen keyboard does.
-        private static void Type(PreferencesWindow w, string text)
-        {
-            TextBox box = Picker(w).GetVisualDescendants().OfType<TextBox>().Single();
-            box.Focus();
-            box.Text = text;
-            Picker(w).GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_Browse").Focus();
-            Dispatcher.UIThread.RunJobs();
-        }
-
-        private static FieldRow RowOf(PreferencesWindow w, string label) => w.GetVisualDescendants().OfType<FieldRow>().Single(r => r.Label == label);
-
-        // A file's row: which version runs, then what the open one changes, then any note.
-        private static string?[] Words(FieldRow row) => ((Panel)row.Content!).Children.OfType<TextBlock>().Select(t => t.Text).ToArray();
 
         [Fact]
-        public Task The_tab_shows_every_system_and_each_file_s_words_from_the_overview() => Session.Dispatch(() =>
+        public Task The_page_has_a_row_for_every_file_the_overview_names_and_the_folder_rows() => Session.Dispatch(() =>
         {
-            PreferencesWindow window = Open();
-            var systems = FirmwareView.Current.Systems;
-            Assert.Equal(systems.Select(s => s.Name), window.GetVisualDescendants().OfType<SectionHeader>().Select(h => h.Text));
-            Assert.Equal(systems.Count(s => s.Items.Count == 0), window.GetVisualDescendants().OfType<HintText>().Count(h => h.Text == FirmwarePane.NoFirmware));
-            Assert.NotEmpty(systems.SelectMany(s => s.Items));
-            foreach (FirmwareRow item in systems.SelectMany(s => s.Items))
-            {
-                // A file two systems use, as the Genesis and the Sega CD both use the TMSS ROM, has a row under each.
-                List<FieldRow> rows = window.GetVisualDescendants().OfType<FieldRow>().Where(r => r.Label == item.Title).ToList();
-                Assert.Equal(systems.Count(s => s.Items.Any(i => i.Title == item.Title)), rows.Count);
-                Assert.All(rows, row =>
-                {
-                    Assert.Equal(new[] { item.InUse, item.Change, item.Where, item.Note }.Where(w => w is not null), Words(row));
-                    Assert.Equal(item.Cost, (ToolTip.GetTip(row) as TextBlock)?.Text);
-                });
-            }
-            FieldRow folder = RowOf(window, FirmwarePane.FolderRowLabel);
-            Assert.Equal(FirmwarePane.Optional, folder.Hint);
-            Assert.Contains("never downloads", folder.Hint);
-            Assert.DoesNotContain("below", folder.Hint);
-            Assert.DoesNotContain("above", folder.Hint);
-            Assert.Equal(FirmwareLibrary.Directory, window.GetVisualDescendants().OfType<MonoText>().Single(t => t.Name == "FirmwareFolderText").Text);
-            FieldRow chosen = RowOf(window, FirmwarePane.ChosenLabel);
-            Assert.Equal(FirmwarePane.ChosenHint, chosen.Hint);
-            PathPickerRow picker = chosen.GetVisualDescendants().OfType<PathPickerRow>().Single();
-            Assert.Equal(("", FirmwarePane.ChosenPlaceholder, true, true), (picker.Path, picker.Placeholder, picker.IsEditable, picker.IsClearable));
-            Assert.False(Problem(window).IsVisible);
+            MainWindow window = Open();
+            Assert.NotEmpty(Snes);
+            foreach (FirmwareItem item in Snes) Assert.StartsWith("fw:", RowFor(window, item.FileName));
+            Assert.Equal("EmuSen's folder", SettingsDesk.Value(window, "fwfolder"));
+            Assert.Equal(["fwreplacement", "fwfolder", "fwclear", "fwopen", "fwcheck"], SettingsDesk.Keys(window).Where(k => !k.StartsWith("fw:", StringComparison.Ordinal)));
+            Assert.Contains("never downloads", string.Join(" ", window.SettingsShown!.PaneOf(RowFor(window, Snes[0].FileName))!.Lines.Select(l => l.Text)));
             window.Close();
         }, default);
 
         [Fact]
-        public Task The_folder_s_button_opens_the_folder_and_is_the_page_s_only_button() => Session.Dispatch(() =>
+        public Task Open_makes_and_opens_emusens_folder_and_nothing_else() => Session.Dispatch(() =>
         {
-            PreferencesWindow window = Open();
-            var pane = (Control)window.GetVisualDescendants().OfType<Tabs>().Single().SelectedContent!;
-            // Besides the folder row's own Browse and Clear, Open Folder is the page's one button.
-            Button open = Assert.Single(pane.GetVisualDescendants().OfType<Button>().Where(b => b.FindAncestorOfType<ScrollBar>() is null && b.FindAncestorOfType<PathPickerRow>() is null));
-            Assert.Equal((FirmwarePane.OpenFolder, "FirmwareOpenFolderButton"), (open.Content, open.Name));
+            MainWindow window = Open();
             Assert.False(Directory.Exists(FirmwareLibrary.Directory));
-            open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            SettingsDesk.Choose(window, "fwopen");
             Assert.Equal([FirmwareLibrary.Directory], NoSteam.Launcher.Opened);
             Assert.True(Directory.Exists(FirmwareLibrary.Directory));
             Assert.Empty(Directory.GetFileSystemEntries(FirmwareLibrary.Directory));
-            Assert.Empty(window.OwnedWindows);
+            Assert.Single(window.OwnedWindows);
             window.Close();
         }, default);
 
         [Fact]
-        public Task The_rows_follow_the_folder_when_the_window_comes_back_and_when_it_is_opened_again() => Session.Dispatch(() =>
+        public Task The_rows_follow_the_folder_on_check_again_and_when_the_page_is_opened_again() => Session.Dispatch(() =>
         {
-            string title = FirmwareView.Current.Systems.SelectMany(s => s.Items).First().Title;
-            string file = FirmwareView.Current.Systems.SelectMany(s => s.Items).First().FileName;
-            int size = FirmwareView.Current.Systems.SelectMany(s => s.Items).First().Size;
-            PreferencesWindow window = Open();
-            Assert.NotEqual(FirmwareRow.OwnFile, Words(RowOf(window, title))[0]);
-            Assert.False(window.RefreshFirmware());
+            FirmwareItem first = Snes[0];
+            MainWindow window = Open();
+            string row = RowFor(window, first.FileName);
+            Assert.DoesNotContain("Found", SettingsDesk.Value(window, row));
+            Assert.Contains("The open version: Games may start a fraction of a second later.", Pane(window, row));
 
             Directory.CreateDirectory(FirmwareLibrary.Directory);
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, file), new byte[size]);
-            Assert.True(window.RefreshFirmware());
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal([FirmwareRow.OwnFile, FirmwareRow.AsTheConsole, "Found in EmuSen's folder."], Words(RowOf(window, title)));
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, first.FileName), new byte[first.Size]);
+            SettingsDesk.Choose(window, "fwcheck");
+            Assert.StartsWith("✓ Found", SettingsDesk.Value(window, row));
+            Assert.Contains($"{first.FileName}: found in EmuSen's folder.", Pane(window, row));
 
-            // One byte short is not the file: the open version runs and the row says why.
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, file), new byte[size - 1]);
-            Assert.True(window.RefreshFirmware());
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(3, Words(RowOf(window, title)).Length);
-            Assert.Equal($"Not used: the file in EmuSen's folder is not {size:N0} bytes.", Words(RowOf(window, title))[2]);
-            window.Close();
+            // One byte short is not the file: the open version runs.
+            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, first.FileName), new byte[first.Size - 1]);
+            SettingsDesk.Choose(window, "fwcheck");
+            Assert.DoesNotContain("Found", SettingsDesk.Value(window, row));
+            Assert.Contains($"{first.FileName}: not used, the file in EmuSen's folder is not {first.Size:N0} bytes.", Pane(window, row));
 
-            File.Delete(Path.Combine(FirmwareLibrary.Directory, file));
-            window = Open();
-            Assert.Equal(2, Words(RowOf(window, title)).Length);
-            Assert.NotEqual(FirmwareRow.OwnFile, Words(RowOf(window, title))[0]);
+            File.Delete(Path.Combine(FirmwareLibrary.Directory, first.FileName));
+            SettingsDesk.At(window, SettingsScreen.Consoles, "console:SNES", "firmware");
+            Assert.DoesNotContain("Found", SettingsDesk.Value(window, row));
             window.Close();
         }, default);
 
-        // The folder row by the setting's rules: a relative path or a file refused and the row put back, a missing folder kept and said, ~ expanded, a real folder used, Clear back to blank.
+        // The folder row by the setting's rules: a relative path or a file refused and said, a missing folder kept and said, ~ kept as typed, a real folder used, blank back to EmuSen's.
         [Fact]
         public Task The_folder_row_keeps_a_folder_refuses_a_relative_path_or_a_file_and_clears() => Session.Dispatch(() =>
         {
-            FirmwareRow first = FirmwareView.Current.Systems.SelectMany(s => s.Items).First();
+            FirmwareItem first = Snes[0];
             string chosen = Path.Combine(_root, "BIOS");
             Directory.CreateDirectory(chosen);
             File.WriteAllBytes(Path.Combine(chosen, first.FileName), new byte[first.Size]);
-            PreferencesWindow window = Open();
+            MainWindow window = Open();
 
-            Type(window, "genesis");
+            Folder(window, "genesis");
             Assert.Null(AppSettings.Load().FirmwareDirectory);
-            Assert.Equal("", Picker(window).Path);
-            Assert.True(Problem(window).IsVisible);
-            Assert.Equal(SettingFolders.Checked("genesis").Problem, Problem(window).Text);
+            Assert.Equal(SettingFolders.Checked("genesis").Problem, Status(window));
 
             string file = Path.Combine(chosen, first.FileName);
-            Type(window, file);
+            Folder(window, file);
             Assert.Null(AppSettings.Load().FirmwareDirectory);
-            Assert.Equal($"\"{file}\" is a file, not a folder, so it is not used.", Problem(window).Text);
+            Assert.Equal($"\"{file}\" is a file, not a folder, so it is not used.", Status(window));
 
             string missing = Path.Combine(_root, "Unplugged");
-            Type(window, missing);
+            Folder(window, missing);
             Assert.Equal(missing, AppSettings.Load().FirmwareDirectory);
-            Assert.Equal($"The folder {missing} does not exist.", Problem(window).Text);
+            Assert.Equal($"The folder {missing} does not exist.", Status(window));
             Assert.False(Directory.Exists(missing));
 
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            Type(window, "~/EmuSenNoSuchFirmwareFolder");
+            Folder(window, "~/EmuSenNoSuchFirmwareFolder");
             Assert.Equal("~/EmuSenNoSuchFirmwareFolder", AppSettings.Load().FirmwareDirectory);
-            Assert.Equal($"The folder {Path.Join(home, "EmuSenNoSuchFirmwareFolder")} does not exist.", Problem(window).Text);
+            Assert.Equal($"The folder {Path.Join(home, "EmuSenNoSuchFirmwareFolder")} does not exist.", Status(window));
 
-            Type(window, chosen);
+            Folder(window, chosen);
             Assert.Equal(chosen, AppSettings.Load().FirmwareDirectory);
-            Assert.False(Problem(window).IsVisible);
-            Assert.Equal([FirmwareRow.OwnFile, FirmwareRow.AsTheConsole, "Found in your folder."], Words(RowOf(window, first.Title)));
+            Assert.Equal("", Status(window));
+            Assert.Equal(chosen, SettingsDesk.Value(window, "fwfolder"));
+            Assert.StartsWith("✓ Found", SettingsDesk.Value(window, RowFor(window, first.FileName)));
+            Assert.Contains($"{first.FileName}: found in your folder.", Pane(window, RowFor(window, first.FileName)));
 
-            Button clear = Picker(window).GetVisualDescendants().OfType<Button>().Single(b => b.Name == "PART_Clear");
-            clear.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
+            SettingsDesk.Choose(window, "fwclear");
             Assert.Null(AppSettings.Load().FirmwareDirectory);
-            Assert.Equal("", Picker(window).Path);
-            Assert.NotEqual(FirmwareRow.OwnFile, Words(RowOf(window, first.Title))[0]);
+            Assert.False(SettingsDesk.Row(window, "fwclear").IsEnabled);
+            Assert.Equal("EmuSen's folder", SettingsDesk.Value(window, "fwfolder"));
+            Assert.DoesNotContain("Found", SettingsDesk.Value(window, RowFor(window, first.FileName)));
             Assert.Equal([first.FileName], Directory.GetFileSystemEntries(chosen).Select(Path.GetFileName));
             window.Close();
         }, default);

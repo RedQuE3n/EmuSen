@@ -11,10 +11,11 @@ using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using Avalonia.VisualTree;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // The settings sheets as ES-DE menus, the list screen and the menu opening, at 1280 by 800 and 1920 by 1200 on both themes; written outside the repository.
+    // Settings' sections, the collection settings, the list screen and the menu opening, at 1280 by 800 and 1920 by 1200 on both themes; written outside the repository.
     [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class SettingsMenusPictureTool
@@ -46,8 +47,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             ThemedLibraryFlowTests.Choose(s, "Theme Settings");
             Save(s, $"{p}-theme-settings");
-            Reach(s, "BigMenuPage2");
-            s.Pad.A();
+            TabControl tabs = Sheets(s).SheetOf(Sheets(s).Current!)!.GetVisualDescendants().OfType<TabControl>().First(t => t.Name == "ThemeSettingsTabs");
+            for (int i = 0; i < 4 && (tabs.SelectedItem as TabItem)?.Header as string != "Interface"; i++) s.Pad.R1();
+            s.Settle();
             Save(s, $"{p}-theme-settings-interface");
             Reach(s, "LaunchScreenDuration");
             s.Pad.A();
@@ -57,12 +59,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Save(s, $"{p}-list-screen-chosen");
             s.Pad.Down(12);
             Save(s, $"{p}-theme-settings-interface-lower");
-            s.Pad.B();
-            Reach(s, "BigMenuPage1");
-            s.Pad.A();
+            s.Pad.L1();
+            s.Settle();
             Save(s, $"{p}-theme-settings-themes");
-            s.Pad.B();
-            s.Pad.B();
+            ThemedSwitchesTests.PutAway(s);
             s.Settle();
 
             ThemedCollectionsTests.Choose(s, "Collections");
@@ -72,17 +72,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
 
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            Save(s, $"{p}-preferences");
-            foreach (int page in new[] { 0, 1, 2, 3, 4, 5 })
+            SettingsPad.Open(s.Window, s.Pad);
+            foreach ((string section, string title) in EmuSen.Mistress.Pages.SettingsScreen.SectionList)
             {
-                Reach(s, $"BigMenuPage{page}");
-                s.Pad.A();
-                string title = ((PreferencesWindow)Sheets(s).Current!).Form!.Shown.ToLowerInvariant().Replace(' ', '-');
-                Save(s, $"{p}-preferences-{title}");
-                s.Pad.B();
+                SettingsPad.Section(s.Window, s.Pad, section);
+                s.Settle();
+                Save(s, $"{p}-settings-{title.ToLowerInvariant()}");
             }
-            s.Pad.B();
+            for (int guard = 0; guard < 4 && s.Window.SettingsShown is not null; guard++) s.Pad.B();
             s.Settle();
 
             // Scale-up, caught part way: the pad menu at the start of its opening.

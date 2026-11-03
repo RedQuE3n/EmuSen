@@ -42,13 +42,13 @@ namespace EmuSen.WiseMan.Mistress
         }
     }
 
-    // The theme picker `man theme` promises - see EmuSen_LunaP.md §8.2.
+    // The theme picker `man theme` promises, Settings ▸ Display ▸ Window colours on the desktop - see EmuSen_LunaP.md §8.2.
     [Collection(TestCollections.ProcessGlobals)]
-    public class PreferencesThemeTests : IClassFixture<ThemeStore>, IAsyncLifetime
+    public class WindowColoursTests : IClassFixture<ThemeStore>, IAsyncLifetime
     {
         private readonly string _root;
 
-        public PreferencesThemeTests(ThemeStore store)
+        public WindowColoursTests(ThemeStore store)
         {
             _root = store.Root;
 
@@ -64,15 +64,18 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllText(Path.Combine(LunaTheme.Directory, name + ".css"),
                 ":root {\n  --luna-surface: " + surface + ";\n}\n");
 
-        private static Dropdown ThemeRow(PreferencesWindow window) =>
-            window.GetLogicalDescendants().OfType<Dropdown>().Single(d => d.Name == "ThemeDropdown");
+        // Settings' Display rows on the desktop, where Window colours is offered.
+        private static EmuSen.Mistress.Pages.SettingsScreen Shown() => new(new SettingsHostFake { Desktop = true }, EmuSen.Mistress.Pages.SettingsScreen.Display);
 
-        private static PreferencesWindow Shown()
+        private static PageRow ThemeRow(EmuSen.Mistress.Pages.SettingsScreen screen) => screen.Rows.Single(r => r.Key == "colours");
+
+        // Right or Left to the theme named, as the row is stepped.
+        private static void Choose(EmuSen.Mistress.Pages.SettingsScreen screen, string name)
         {
-            var window = new PreferencesWindow(new AppSettings());
-            window.Show();
+            PageRow row = ThemeRow(screen);
+            int by = row.Choices!.ToList().IndexOf(name) - row.Choices!.ToList().IndexOf(row.Status!);
+            screen.Step("colours", by);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            return window;
         }
 
         [Fact]
@@ -81,14 +84,11 @@ namespace EmuSen.WiseMan.Mistress
             WriteTheme("midnight", "#101018");
             WriteTheme("aurora", "#12233a");
 
-            var window = Shown();
+            var screen = Shown();
 
-            Assert.Equal(
-                new[] { LunaTheme.BuiltIn, "aurora", "midnight" },
-                ThemeRow(window).Items.Cast<string>().ToArray());
-            Assert.Equal(LunaTheme.Current, ThemeRow(window).SelectedItem);
-
-            window.Close();
+            Assert.Equal(new[] { LunaTheme.BuiltIn, "aurora", "midnight" }, ThemeRow(screen).Choices);
+            Assert.Equal(LunaTheme.Current, ThemeRow(screen).Status);
+            Assert.DoesNotContain(new EmuSen.Mistress.Pages.SettingsScreen(new SettingsHostFake(), EmuSen.Mistress.Pages.SettingsScreen.Display).Rows, r => r.Key == "colours");
         });
 
         [Fact]
@@ -96,15 +96,12 @@ namespace EmuSen.WiseMan.Mistress
         {
             WriteTheme("midnight", "#101018");
 
-            var window = Shown();
-            ThemeRow(window).SelectedItem = "midnight";
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var screen = Shown();
+            Choose(screen, "midnight");
 
             Assert.Equal("midnight", LunaTheme.Current);
             Assert.Equal("midnight", LunaTheme.Saved);
             Assert.Contains("midnight", File.ReadAllText(Path.Combine(_root, "luna.json")));
-
-            window.Close();
         });
 
         [Fact]
@@ -113,16 +110,12 @@ namespace EmuSen.WiseMan.Mistress
             WriteTheme("midnight", "#101018");
             File.WriteAllText(Path.Combine(LunaTheme.Directory, "broken.css"), "this is not a theme file {{{\n");
 
-            var window = Shown();
-            ThemeRow(window).SelectedItem = "midnight";
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-            ThemeRow(window).SelectedItem = "broken";
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var screen = Shown();
+            Choose(screen, "midnight");
+            Choose(screen, "broken");
 
             Assert.Equal("midnight", LunaTheme.Current);
-            Assert.Equal("midnight", ThemeRow(window).SelectedItem);
-
-            window.Close();
+            Assert.Equal("midnight", ThemeRow(screen).Status);
         });
 
         // `man theme` promises no restart, and a window opened before the choice is where that is decided.
@@ -136,16 +129,13 @@ namespace EmuSen.WiseMan.Mistress
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Color before = ((ISolidColorBrush)already.Background!).Color;
 
-            var window = Shown();
-            ThemeRow(window).SelectedItem = "midnight";
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Choose(Shown(), "midnight");
 
             Color after = ((ISolidColorBrush)already.Background!).Color;
 
             Assert.NotEqual(before, after);
             Assert.Equal(Color.Parse("#101018"), after);
 
-            window.Close();
             already.Close();
         });
     }

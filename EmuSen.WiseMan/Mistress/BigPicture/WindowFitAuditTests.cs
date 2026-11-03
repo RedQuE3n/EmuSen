@@ -36,23 +36,31 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GraphicsSettings", "GraphicsSettingsN64Note", "GraphicsSettingsNesEngine", "GraphicsSettingsSnesEngine", "GraphicsSettingsGenesis", "GraphicsSettingsCustomCrop", "GraphicsSettingsGameCropNote", "GameCrop", "ShaderSettings", "ShaderSettingsGenesis", "ActiveCheatsGenesis", "GraphicsSettingsPlayStation", "GraphicsSettingsPlayStationNamedCards", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ShaderSettingsPlayStation", "ActiveCheatsPlayStation", "GraphicsSettingsPlayStation2", "GraphicsSettingsHostedPlayStation2", "ShaderSettingsPlayStation2", "ShaderSettingsSliders", "RewindReel", "Resume", "ActiveCheatsLongCheat", "ShaderSettingsLongParameter", "ShaderSettingsCrt", "ResumeLongTitle", "Shell"];
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GameCrop", "ActiveCheatsGenesis", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ActiveCheatsPlayStation", "RewindReel",
+            "Resume", "ActiveCheatsLongCheat", "ResumeLongTitle", "Shell"];
         // The installed themes' date, fixed because digit widths decide where the state line wraps.
         private static readonly DateTimeOffset ThemeInstallDate = new(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
 
-        public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "GamelistFilter", "FolderEditor", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
+        public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "GamelistFilter", "FolderEditor", "ThemeSettings", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
             "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GraphicsSettings"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsN64Note"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsNesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsSnesEngine"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGenesis"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsCustomCrop"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsGameCropNote"] = typeof(GraphicsSettingsWindow), ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ShaderSettingsGenesis"] = typeof(ShaderSettingsWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["GraphicsSettingsPlayStation"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsPlayStationNamedCards"] = typeof(GraphicsSettingsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow), ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow), ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["CompressedDiscsBeside"] = typeof(CompressedDiscsWindow), ["Cores"] = typeof(CoresWindow), ["CoresDetail"] = typeof(CoresWindow), ["CoresPlan"] = typeof(CoresWindow), ["CoresRunning"] = typeof(CoresWindow), ["CoresNoCatalogue"] = typeof(CoresWindow), ["Packages"] = typeof(PackagesWindow), ["PackagesDetail"] = typeof(PackagesWindow), ["PackagesPlan"] = typeof(PackagesWindow), ["PackagesRunning"] = typeof(PackagesWindow), ["Scraper"] = typeof(ScraperWindow), ["ScraperDetail"] = typeof(ScraperWindow), ["ScraperPlan"] = typeof(ScraperWindow), ["ScraperRunning"] = typeof(ScraperWindow), ["Library"] = typeof(LibraryWindow), ["LibraryDetail"] = typeof(LibraryWindow), ["LibraryPlan"] = typeof(LibraryWindow), ["LibraryRunning"] = typeof(LibraryWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ShaderSettingsPlayStation"] = typeof(ShaderSettingsWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow), ["GraphicsSettingsPlayStation2"] = typeof(GraphicsSettingsWindow), ["GraphicsSettingsHostedPlayStation2"] = typeof(GraphicsSettingsWindow), ["ShaderSettingsPlayStation2"] = typeof(ShaderSettingsWindow), ["ShaderSettings"] = typeof(ShaderSettingsWindow), ["ShaderSettingsSliders"] = typeof(ShaderSettingsWindow),
-            ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow), ["FolderEditor"] = typeof(FolderEditorWindow),
-            ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow), ["ThemeAbout"] = typeof(ThemeAboutWindow),
-            // The long names, where a cut would first appear (Q190).
-            ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["ShaderSettingsLongParameter"] = typeof(ShaderSettingsWindow), ["ShaderSettingsCrt"] = typeof(ShaderSettingsWindow),
-            ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow), ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
+            ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow),
+            ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow),
+            ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow),
+            ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["CompressedDiscsBeside"] = typeof(CompressedDiscsWindow),
+            ["Cores"] = typeof(CoresWindow), ["CoresDetail"] = typeof(CoresWindow), ["CoresPlan"] = typeof(CoresWindow), ["CoresRunning"] = typeof(CoresWindow),
+            ["CoresNoCatalogue"] = typeof(CoresWindow), ["Packages"] = typeof(PackagesWindow), ["PackagesDetail"] = typeof(PackagesWindow), ["PackagesPlan"] = typeof(PackagesWindow),
+            ["PackagesRunning"] = typeof(PackagesWindow), ["Scraper"] = typeof(ScraperWindow), ["ScraperDetail"] = typeof(ScraperWindow), ["ScraperPlan"] = typeof(ScraperWindow),
+            ["ScraperRunning"] = typeof(ScraperWindow), ["Library"] = typeof(LibraryWindow), ["LibraryDetail"] = typeof(LibraryWindow), ["LibraryPlan"] = typeof(LibraryWindow),
+            ["LibraryRunning"] = typeof(LibraryWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow),
+            ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow),
+            ["FolderEditor"] = typeof(FolderEditorWindow), ["ThemeSettings"] = typeof(ThemeSettingsWindow), ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow),
+            ["ThemeAbout"] = typeof(ThemeAboutWindow), ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow),
+            ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
             ["ThemeDetailLongName"] = typeof(ThemeDetailWindow), ["ThemeAboutLongName"] = typeof(ThemeAboutWindow),
         };
 
@@ -202,66 +210,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // A synthetic N64 game that runs, counting in RDRAM, for the states whose note comes from the running machine.
         internal static byte[] N64Game() => SyntheticN64Rom.BuildRunningFromRdram(new MipsAssembler().Lui(5, 0x8000).Addiu(8, 8, 1).Sw(8, 5, 0x3F0).Beq(0, 0, -3).Nop().ToArray());
 
-        // The states that run an N64 game, whose note comes from the running machine (EmuSen_Backend.md §20, Q15).
-        internal static bool RunsN64(string which) => which == "GraphicsSettingsN64Note";
-
-        // The N64 tab at 3x resolution with 3x antialiasing while an N64 game runs, where the Antialiasing row carries MarsRT's note (Mars_Performance.md §42.5).
-        internal static void ShowN64WithNote(MainWindow window)
-        {
-            MistressGame.Runtime.SetSetting("N64", "RenderScale", "3");
-            MistressGame.Runtime.SetSetting("N64", "Antialiasing", "3x");
-            Settle(window);
-            Call(window, "ShowGraphicsSettings");
-            Settle(window);
-            var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
-            tabs.SelectedIndex = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList().IndexOf("N64");
-            Settle(window);
-            HintText note = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<HintText>().Single(t => t.Name == "N64.Antialiasing.Note");
-            Assert.True(note.IsEffectivelyVisible, "the note is not shown");
-            ScrollViewer scroll = note.FindAncestorOfType<ScrollViewer>()!;
-            Point at = note.TranslatePoint(default, (Visual)scroll.Content!) ?? default;
-            scroll.Offset = new Vector(0, Math.Max(0, at.Y + note.Bounds.Height - scroll.Viewport.Height * 0.8));
-            Settle(window);
-        }
-
-        // The NES tab, whose Engine row MoonRT's stage 4 added (Moon_Native.md §8.3).
-        internal static void ShowNesTab(MainWindow window) => ShowEngineTab(window, "NES");
-
-        // The console's tab with its engine row showing, where the console has one (the SNES's comes from discovery).
-        internal static void ShowEngineTab(MainWindow window, string console)
-        {
-            Call(window, "ShowGraphicsSettings");
-            Settle(window);
-            var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
-            tabs.SelectedIndex = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList().IndexOf(console);
-            Settle(window);
-            if (EmuSen.Cores.CoreCatalog.EngineFor(console) is null) return;
-            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.{EmuSen.Cores.CoreCatalog.EngineKey}" && c.IsEffectivelyVisible);
-        }
-
-        // The NES tab with a custom crop chosen, where the row of its four numbers is shown (EmuSen_Settings_Reference.md §4.99).
-        internal static void ShowCustomCrop(MainWindow window)
-        {
-            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
-            graphics.SetValue("NES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.CustomCrop);
-            foreach ((string key, _) in GraphicsSettingsWindow.CropEdges) graphics.SetValue("NES", key, "12.5");
-            ShowEngineTab(window, "NES");
-            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == "NES.CropBottom" && c.IsEffectivelyVisible);
-        }
-
-        // The PlayStation's tab under Named cards with one card in both slots, so the slots' rows and slot 2's note are shown - see Diamond_Cards.md §9.
-        internal static void ShowNamedCards(MainWindow window)
-        {
-            var graphics = ConsolesConfig.Load();
-            graphics.SetValue("PlayStation", EmuSen.Cores.MemoryCards.ModeKey, EmuSen.Cores.MemoryCards.Named);
-            foreach (string key in EmuSen.Cores.MemoryCards.SlotKeys) graphics.SetValue("PlayStation", key, "Card 1");
-            graphics.Save();
-            ShowDiscoveredTab(window, "PlayStation");
-            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
-            Assert.Contains(shown, c => c.Name == "PlayStation.Card2.Row" && c.IsEffectivelyVisible);
-            Assert.Contains(shown, c => c.Name == "PlayStation.Card2.Note" && c.IsEffectivelyVisible);
-        }
-
         // The open sheet's tab headed by the console.
         internal static void SelectTab(MainWindow window, string console)
         {
@@ -271,19 +219,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             int at = tabs.Items.Cast<object>().Select((t, i) => (t, i)).First(p => (p.t as TabItem)?.Header?.ToString() == console).i;
             tabs.SelectedIndex = at;
             Settle(window);
-        }
-
-        // A console only a discovered engine serves, whose tab the window adds after the catalog's, with no core in development shown - see EmuSen_Settings_Reference.md §4.90 and §4.94.
-        internal static void ShowDiscoveredTab(MainWindow window, string console, bool development = false)
-        {
-            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(development);
-            Call(window, "ShowGraphicsSettings");
-            Settle(window);
-            var tabs = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.Tabs>().First(t => t.Name == "ConsoleTabs");
-            var consoles = EmuSen.Cores.CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
-            tabs.SelectedIndex = consoles.IndexOf(console);
-            Settle(window);
-            Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == $"{console}.region" && c.IsEffectivelyVisible);
         }
 
         // The hosted console's library a case placed in the player's /Cores, taken out again by Dispose.
@@ -334,30 +269,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Call(window, "ShowCheatDatabase");
                     Settle(window);
                     if (Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<ListBox>().FirstOrDefault(l => l.Name == "SystemsList") is { } systems) systems.SelectedIndex = 2;
-                    break;
-                case "GraphicsSettings":
-                    Call(window, "ShowGraphicsSettings");
-                    break;
-                case "GraphicsSettingsN64Note":
-                    ShowN64WithNote(window);
-                    break;
-                case "GraphicsSettingsNesEngine":
-                    ShowNesTab(window);
-                    break;
-                case "GraphicsSettingsSnesEngine":
-                    ShowEngineTab(window, "SNES");
-                    break;
-                case "GraphicsSettingsGenesis":
-                    ShowDiscoveredTab(window, "Genesis");
-                    break;
-                case "GraphicsSettingsCustomCrop":
-                    ShowCustomCrop(window);
-                    break;
-                case "GraphicsSettingsPlayStation":
-                    ShowDiscoveredTab(window, "PlayStation");
-                    break;
-                case "GraphicsSettingsPlayStationNamedCards":
-                    ShowNamedCards(window);
                     break;
                 case "MemoryCardsPlayStation":
                 case "MemoryCardsPlayStationHeld":
@@ -411,53 +322,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "InsertDiscEmpty":
                     ShowInsertDisc(window, empty: which.EndsWith("Empty", StringComparison.Ordinal));
                     break;
-                case "ShaderSettingsPlayStation":
-                    Call(window, "ShowShaderSettings");
-                    SelectTab(window, "PlayStation");
-                    break;
                 case "ActiveCheatsPlayStation":
                     Call(window, "ShowActiveCheats");
                     SelectTab(window, "PlayStation");
-                    break;
-                case "GraphicsSettingsPlayStation2":
-                    ShowDiscoveredTab(window, "PlayStation 2");
-                    break;
-                case "GraphicsSettingsHostedPlayStation2":
-                    ShowHostedTab(window);
-                    break;
-                case "ShaderSettingsPlayStation2":
-                    Call(window, "ShowShaderSettings");
-                    SelectTab(window, "PlayStation 2");
-                    break;
-                case "GraphicsSettingsGameCropNote":
-                    ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(1.3, 1.1, 8.7, 9));
-                    ShowEngineTab(window, "SNES");
-                    Assert.Contains(Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>(), c => c.Name == "SNES.Overscan.Note" && c.IsEffectivelyVisible);
                     break;
                 case "GameCrop":
                     ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(12.5, 12.5, 12.5, 12.5));
                     Call(window, "ShowGameCrop", (string)Field(window, "_currentRomPath"), "Cobalt Harbor (Synthetic)");
                     break;
-                case "ShaderSettingsGenesis":
-                    Call(window, "ShowShaderSettings");
-                    SelectTab(window, "Genesis");
-                    break;
                 case "ActiveCheatsGenesis":
                     Call(window, "ShowActiveCheats");
                     SelectTab(window, "Genesis");
-                    break;
-                case "ShaderSettings":
-                    Call(window, "ShowShaderSettings");
-                    break;
-                case "ShaderSettingsSliders":
-                    ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
-                    Call(window, "ShowShaderSettings");
-                    Settle(window);
-                    PadAudit.Reach(Sheets(window).SheetOf(Sheets(window).Current!)!, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
-                    ShaderPanel snes = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
-                    WaitFor(() => snes.Reading.IsCompleted, "the preset\'s sliders");
-                    Settle(window);
-                    Assert.NotEmpty(snes.Sliders);
                     break;
                 case "RewindReel":
                     MistressGame.Play(window, 120, (until, what) => WaitFor(until, what));
@@ -487,45 +362,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Assert.Empty(Audit(window, $"{which}-Row-{window.Width}x{window.Height}", _out));
                     Sheets(window).Current!.GetControl<TextBlock>("StatusText").Text = $"Saved 3 cheat(s) as '{LongTitle}' - they come back automatically next time you start it.";
                     break;
-                case "ShaderSettingsLongParameter":
-                    LongParameterPreset(ShaderSettingsWindowTests.FakePack());
-                    Call(window, "ShowShaderSettings");
-                    Settle(window);
-                    PadAudit.Reach(Sheets(window).SheetOf(Sheets(window).Current!)!, pad, e => e is ListBoxItem item && item.Content?.ToString() == "long-names");
-                    ShaderPanel panel = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
-                    WaitFor(() => panel.Reading.IsCompleted, "the preset\'s sliders");
-                    Settle(window);
-                    Assert.NotEmpty(panel.Sliders);
-                    break;
-                case "ShaderSettingsCrt":
-                    // The modelled CRT shown, its longest choice chosen against a default as long, so a row carries both names (§4.96).
-                    var graphicsCrt = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
-                    graphicsCrt.SetParameter("SNES", EmuSen.Serenity.Shaders.CrtFilter.Name, "screen", "4");
-                    graphicsCrt.SetParameter("SNES", EmuSen.Serenity.Shaders.CrtFilter.Name, "level", "1");
-                    Call(window, "ShowShaderSettings");
-                    Settle(window);
-                    ShaderPanel crt = ((ShaderSettingsWindow)Sheets(window).Current!).PanelFor("SNES");
-                    crt.List.SelectedIndex = crt.List.Models.ToList().FindIndex(e => e.Stored == EmuSen.Serenity.Shaders.CrtFilter.Name);
-                    WaitFor(() => crt.Reading.IsCompleted, "the preset\'s sliders");
-                    Settle(window);
-                    Assert.NotEmpty(crt.Sliders);
-                    break;
             }
-            if (Sheets(window).Current is ShaderSettingsWindow shaders) HeldStill(shaders);
         }
-
-        // Every shader's sliders built, and a keyed move's read left to settle after the walk, so no state hangs on the wall clock - see EmuSen_InterfaceSpec.md §3.1.
-        private static void HeldStill(ShaderSettingsWindow shaders)
-        {
-            WaitFor(() => shaders.PrefetchesRunning == 0 && Panels(shaders).All(p => p.Reading.IsCompleted), "the shader panels' first reads");
-            shaders.Settle = TimeSpan.FromDays(1);
-        }
-
-        // True once no read or read-ahead is in flight, for the walk to wait on after it puts a selection back.
-        internal static Func<bool> ShadersRead(ShaderSettingsWindow shaders) => () => shaders.PrefetchesRunning == 0 && !Panels(shaders).Any(p => p.ReadInFlight);
-
-        private static IEnumerable<ShaderPanel> Panels(ShaderSettingsWindow shaders) =>
-            EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => shaders.PanelFor(c.Console));
 
         // A theme whose name, author, licence and variants are as long as ES-DE's list could carry (Q190).
         private static FakeTheme LongTheme => new()
@@ -546,18 +384,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Space = "CpuBus", Address = "7E0100", Value = "12345678", Width = 4, Type = "Increase", BigEndian = true, RepeatCount = 16, RepeatAddAddress = "4", RepeatAddValue = "1",
         };
 
-        // A preset whose parameters have names as long as RetroArch's longest, under the SNES tab's list as "long-names" (Q190).
-        private static void LongParameterPreset(string pack)
-        {
-            string shader = "#version 450\n"
-                + "#pragma parameter LONG_HEAD \"--- Beam, mask and the curvature of the tube's glass, for every console that draws its picture this way ---\" 0.0 0.0 0.0 1.0\n"
-                + "#pragma parameter BEAM_WIDTH_AT_THE_BRIGHTEST_PART_OF_THE_PICTURE \"Horizontal beam width at the brightest part of the picture, in pixels of the source image\" 0.60 0.00 2.00 0.05\n"
-                + "#pragma parameter MASK_STRENGTH \"Shadow mask strength (0 = off, 1 = the whole of the phosphor pattern, as a television of the time)\" 0.30 0.00 1.00 0.05\n"
-                + "#pragma stage vertex\nvoid main() { gl_Position = vec4(0.0); }\n#pragma stage fragment\nvoid main() { }\n";
-            Directory.CreateDirectory(Path.Combine(pack, "long", "shaders"));
-            File.WriteAllText(Path.Combine(pack, "long", "shaders", "long.slang"), shader);
-            File.WriteAllText(Path.Combine(pack, "long", "long-names.slangp"), "shaders = 1\nshader0 = shaders/long.slang\n");
-        }
 
         // Every console's A and Start bound to the longest names a keyboard's keys have, so the labels beside the tall columns and in the rows are at their widest (Q190).
         private static void LongBindings(MainWindow window)
@@ -628,6 +454,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     SceneGame folder = s.Themed.Stage!.Current.Data.System.Games.First(g => g.Folder);
                     Call(s.Window, "ShowFolderEditor", folder);
                     break;
+                case "ThemeSettings":
+                    ThemeBrowserSheetTests.OpenSettings(s);
+                    break;
                 case "ThemeBrowser":
                 case "ThemeDetail":
                 case "ThemeAbout":
@@ -655,7 +484,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),
-                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)", n64: RunsN64(which));
+                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)");
                 try
                 {
                     OpenInGame(window, pad, which);
@@ -685,12 +514,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Empty(Audit(s.Window, name, _out));
         }, default);
 
-        // Preferences ▸ Controllers in a game with four pads, two of one long name, and a seat kept: the players' rows on the desktop and as the big-screen menu - see EmuSen_Input.md §8.9.
+        // Settings ▸ Controllers ▸ Players in a game with four pads, two of one long name, and a seat kept: the players' rows on the desktop's window and the big screen - see EmuSen_Input.md §8.9.
         [Theory]
         [MemberData(nameof(StatusCases))]
-        public Task The_players_rows_in_preferences_are_whole_at_both_sizes(bool bigScreen, int width, int height) => Session.Dispatch(() =>
+        public Task The_players_rows_in_settings_are_whole_at_both_sizes(bool bigScreen, int width, int height) => Session.Dispatch(() =>
         {
-            string name = $"PreferencesPlayers-{(bigScreen ? "BigScreen" : "Desktop")}-{width}x{height}";
+            string name = $"SettingsPlayers-{(bigScreen ? "BigScreen" : "Desktop")}-{width}x{height}";
             (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: bigScreen);
             try
             {
@@ -701,21 +530,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 pad.Tick();
                 gone.Unplug();
                 pad.Tick();
-                Call(window, "ShowPreferencesAt", PreferencesWindow.ControllersTab);
+                window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Controllers, "players");
                 Settle(window);
-                // A desktop session shows Preferences as a window of its own, which must fit the screen as a sheet fits the window.
-                Window top = Sheets(window).Current ?? window.OwnedWindows.OfType<PreferencesWindow>().Last();
-                Assert.IsType<PreferencesWindow>(top);
-                Control root = Sheets(window).SheetOf(top) ?? top;
-                if (!bigScreen)
+                Assert.Equal("Players", window.SettingsShown!.Trail[^1]);
+                Assert.Contains(window.SettingsLayoutShown!.Rows, r => r.Label.Contains(LongPad[..20], StringComparison.Ordinal));
+                // The desktop's Settings is a window of its own, which must fit the screen; the big screen's fills the window.
+                Window? own = window.OwnedWindows.OfType<SettingsWindow>().SingleOrDefault();
+                Assert.Equal(!bigScreen, own is not null);
+                Control root = (Control?)own ?? window.SettingsLayoutShown!;
+                if (own is not null)
                 {
-                    Settle(top);
-                    Assert.True(top.Bounds.Height <= height && top.Bounds.Width <= width, $"{name}: the window is {top.Bounds.Size}");
+                    Settle(own);
+                    Assert.True(own.Bounds.Height <= height && own.Bounds.Width <= width, $"{name}: the window is {own.Bounds.Size}");
                 }
-                Assert.Contains(root.GetVisualDescendants().OfType<Control>(), c => c.Name == "KeptPlayerRow4" || MenuRows.GetLabel(c) is { } l && l.StartsWith("Player 4:", StringComparison.Ordinal));
-                // A desktop window keeps the desktop's text sizes and scrolls its pane behind a scroll bar; the big screen's rules for both, Q186's fade among them, are the menu's.
-                List<string> faults = bigScreen ? FitAudit.Check(root, WindowAllowances.For(top))
-                    : FitAudit.Check(root, WindowAllowances.For(top), smallest: 0).Where(f => !f.StartsWith("cut at a scrolling edge", StringComparison.Ordinal)).ToList();
+                List<string> faults = bigScreen ? FitAudit.Check(root, WindowAllowances.For(window))
+                    : FitAudit.Check(root, WindowAllowances.For(own!), smallest: 0).Where(f => !f.StartsWith("cut at a scrolling edge", StringComparison.Ordinal)).ToList();
                 foreach (string f in faults) _out.WriteLine($"{name}: {f}");
                 if (bigScreen) SavePicture(window, name);
                 Assert.Empty(faults);

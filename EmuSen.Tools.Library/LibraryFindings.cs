@@ -160,7 +160,7 @@ namespace EmuSen.Tools.Library
                 foreach (string p in paths) text.Append("  ").AppendLine(Path.GetFileName(p));
                 text.AppendLine();
             }
-            text.Append("Only games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\".");
+            text.Append("Only games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Settings ▸ Library ▸ Hidden games.");
             return text.ToString();
         }
 

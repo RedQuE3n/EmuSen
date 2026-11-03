@@ -30,7 +30,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
     }
 
-    // The connect notice, the help bar under each Controller Type and with the swap, and Preferences' Controllers tab, at 1280 by 800; written outside the repository.
+    // The connect notice, the help bar under each Controller Type and with the swap, and Settings' Controllers section, at 1280 by 800; written outside the repository.
     [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ControllersPictureTool
@@ -157,14 +157,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }, default);
 
         [ControllersPngFact]
-        public Task Preferences_controllers_tab() => Session.Dispatch(() =>
+        public Task Settings_controllers_section() => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(1280, 800);
-            var prefs = new PreferencesWindow(Settings(s.Window));
-            _ = SheetLayer.Show(prefs, s.Window);
-            prefs.ShowTab(PreferencesWindow.ControllersTab);
-            Save(Whole(s.Window), "preferences-controllers-sheet");
-            prefs.Close();
+            s.Window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Controllers);
+            s.Settle();
+            Save(Whole(s.Window), "settings-controllers");
+            s.Window.CloseSettings();
         }, default);
     }
 }

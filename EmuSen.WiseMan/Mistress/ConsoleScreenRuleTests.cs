@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Mistress
                 {
                     if (!CrtFilter.ConsoleTiming.ContainsKey(screen.Profile) || screen.Profile == ScreenFilter.AnyConsole) breaches.Add($"{system.Console}'s profile {screen.Profile} is no row of the CRT's");
                     if (!offered.Contains(CrtFilter.Name) || !offered.Contains(CrtFilters.Lottes.Name)) breaches.Add($"{system.Console}, a television, is not offered both tubes under {under}");
-                    if (!GraphicsSettingsWindow.HasOverscan(under)) breaches.Add($"{system.Console}, a television, has no overscan row under {under}");
+                    if (!EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(under)) breaches.Add($"{system.Console}, a television, has no overscan row under {under}");
                     if (CrtFilter.Filter.ConsoleDefaults is not { } defaults || !defaults.TryGetValue(host, out var drawn) || !CrtFilter.ConsoleTiming.TryGetValue(screen.Profile, out var profile) || !ReferenceEquals(drawn, profile))
                         breaches.Add($"{system.Console} is drawn on {host}'s row, not on its profile {screen.Profile}'s");
                 }
@@ -67,7 +67,7 @@ namespace EmuSen.WiseMan.Mistress
                     ScreenFilterChoice choice = ScreenFilters.Find(screen.Profile);
                     if (choice.Name != screen.Profile || choice.Filter is null) breaches.Add($"{system.Console}'s LCD profile {screen.Profile} is no filter");
                     else if (!offered.Contains(screen.Profile)) breaches.Add($"{system.Console}'s LCD filter {screen.Profile} is not offered under {under}");
-                    if (offered.Contains(CrtFilter.Name) || GraphicsSettingsWindow.HasOverscan(under)) breaches.Add($"{system.Console}, an LCD, is offered a tube or an overscan under {under}");
+                    if (offered.Contains(CrtFilter.Name) || EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(under)) breaches.Add($"{system.Console}, an LCD, is offered a tube or an overscan under {under}");
                 }
             }
             foreach (Screen screen in screens.Where(s => systems.All(e => e.Console != s.Console))) breaches.Add($"{screen.Console} has a screen row and is no system of the table");
@@ -102,7 +102,7 @@ namespace EmuSen.WiseMan.Mistress
             foreach (string console in new[] { "NES", "SNES", "Genesis", "Sega CD", "N64", "PlayStation", "PlayStation 2", "Master System", "SG-1000" })
                 Assert.Equal(television, ShaderCatalog.BuiltIns(console).Select(e => e.Stored));
             Assert.Equal(new[] { ScreenFilters.None, "Game Boy LCD", "Game Boy Pocket LCD", "Game Boy Light LCD", "Game Boy Color LCD", "Scanlines", "Simple CRT" }, ShaderCatalog.BuiltIns("GB").Select(e => e.Stored));
-            foreach (string console in new[] { "Master System", "SG-1000" }) Assert.True(GraphicsSettingsWindow.HasOverscan(console), console);
+            foreach (string console in new[] { "Master System", "SG-1000" }) Assert.True(EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(console), console);
         }
 
         // Each way the rule can be broken is caught: a system with no row, a borrowed profile, a television not offered the tube, an LCD that is no filter, an undated gap.

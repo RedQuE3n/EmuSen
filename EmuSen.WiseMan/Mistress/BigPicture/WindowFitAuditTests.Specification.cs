@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),
-                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)", n64: RunsN64(which));
+                    game: which.EndsWith("LongTitle", StringComparison.Ordinal) ? LongTitle : "Cobalt Harbor (Synthetic)");
                 InterfaceRecorder.Normalise = InterfaceSpecFiles.Normaliser(_root);
                 InterfaceRecorder.Volatile = Volatile;
                 try
@@ -102,7 +102,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             doc.Header["case"] = which;
             if (entered is not null) doc.Header["entered"] = entered;
             Assert.Equal(FitAudit.Check(root, allow).Select(InterfaceRules.Category).Order(), InterfaceRules.Fit(doc).Select(InterfaceRules.Category).Order());
-            InterfaceRecorder.Walk(doc, root, pad, ids, settled: top is ShaderSettingsWindow shaders ? ShadersRead(shaders) : null);
+            InterfaceRecorder.Walk(doc, root, pad, ids, settled: null);
             if (presses) InterfaceSpecFiles.Presses(doc, pad, window, () => Observe(window), InterfaceSpecFiles.Grammar);
             return InterfaceSpecFiles.Check(doc, output, Known);
         }

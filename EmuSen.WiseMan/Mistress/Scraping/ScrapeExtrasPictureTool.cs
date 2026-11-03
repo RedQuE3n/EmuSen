@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
     }
 
-    // The Scraping tab's new rows, on the desktop and as sheets in a big-screen session, at 1280 by 800 and 1920 by 1200; outside the repository.
+    // The scraping rows, in Settings on the desktop and in the Scraper's sheet in a big-screen session, at 1280 by 800 and 1920 by 1200; outside the repository.
     [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ScrapeExtrasPictureTool : ScrapeWindowFixture
@@ -68,20 +68,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 string size = $"{w}x{h}";
 
-                // The desktop: Preferences as a window over Mistress's, on the Scraping tab.
+                // The desktop: Settings' window over Mistress's, at Library ▸ Scraping.
                 MainWindow window = OpenAt(w, h, bigScreen: false);
-                var prefs = new PreferencesWindow(AppSettings.Load(), window) { SizeToContent = SizeToContent.Manual, Height = h - 80 };
-                Windows.Add(prefs);
-                prefs.Show();
-                prefs.ShowTab(PreferencesWindow.ScrapingTab);
+                window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Library, "scraping");
+                Window settings = window.OwnedWindows.OfType<EmuSen.Mistress.Views.SettingsWindow>().Single();
                 Pump(300);
-                foreach ((string control, string name) in new[] { ("ScrapeGameNamesSwitch", "desktop-fetch-more-and-game-names"), ("ScrapeStatusButton", "desktop-scrape-criteria"), ("ScrapeCleanUpButton", "desktop-orphaned-media") })
+                foreach ((string row, string name) in new[] { ("gamenames", "desktop-fetch-more-and-game-names"), ("status", "desktop-scrape-status"), ("account", "desktop-member-account") })
                 {
-                    Named<Control>(prefs, control).BringIntoView();
+                    window.SettingsLayoutShown!.FocusOn(row);
                     Pump(300);
-                    Save(Over(window, prefs), $"{name}-{size}");
+                    Save(Over(window, settings), $"{name}-{size}");
                 }
-                prefs.Close();
+                window.CloseSettings();
 
                 window.Close();
 

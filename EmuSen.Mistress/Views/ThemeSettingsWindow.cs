@@ -18,7 +18,7 @@ using EmuSen.Galaxia.Library;
 namespace EmuSen.Mistress.Views
 {
     // The ES-DE theme's options, built from its capabilities.xml, and the themes downloaded on request - see EmuSen_Settings_Reference.md §4.53.
-    public class ThemeSettingsWindow : ToolWindow, EmuSen.Mistress.Input.IPadDriven
+    public class ThemeSettingsWindow : ToolWindow
     {
         private readonly AppSettings _settings;
         private readonly Func<HttpClient> _http;
@@ -31,7 +31,7 @@ namespace EmuSen.Mistress.Views
         private bool _closed;
 
         // Called with true when a theme folder was replaced or removed, so the view reads it afresh.
-        public ThemeSettingsWindow(AppSettings settings, Func<HttpClient> http, Action<bool> applied, PadFamily? menu = null)
+        public ThemeSettingsWindow(AppSettings settings, Func<HttpClient> http, Action<bool> applied)
         {
             _settings = settings;
             _http = http;
@@ -52,13 +52,7 @@ namespace EmuSen.Mistress.Views
             Content = new DockPanel { LastChildFill = true, Children = { buttons, tabs } }.Margin(16);
             Closed += (_, _) => { _closed = true; StopDownload(); };
             Fill();
-            // In a big-screen session, ES-DE's UI settings: the theme's options first, then Themes and Interface as submenus (§4.72.8).
-            if (menu is { } family) Form = new BigMenuForm(this, "Theme Settings", family, [("Options", options), ("Themes", themes), ("Interface", interfacePane)], tabs, firstInline: true);
         }
-
-        public BigMenuForm? Form { get; }
-
-        public bool OnPad(EmuSen.Mistress.Input.UiButton button) => Form is not null && button == EmuSen.Mistress.Input.UiButton.Back && Form.Back();
 
         // The download in flight, for a test to await; null when none runs.
         public Task<ThemeStamp>? Downloading { get; private set; }
@@ -104,7 +98,7 @@ namespace EmuSen.Mistress.Views
 
             if (Current is not { } dir || !Directory.Exists(dir))
             {
-                _options.Children.Add(new EmptyState { Message = "The theme's folder is missing", Detail = "Choose another theme on the Themes tab, download one from ES-DE's theme list there, or choose an ES-DE theme folder in Preferences." });
+                _options.Children.Add(new EmptyState { Message = "The theme's folder is missing", Detail = "Choose another theme on the Themes tab, download one from ES-DE's theme list there, or choose an ES-DE theme folder in Settings ▸ Library." });
                 return;
             }
 

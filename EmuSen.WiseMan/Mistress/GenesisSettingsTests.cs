@@ -16,6 +16,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -72,22 +73,17 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public Task The_genesis_tab_shows_each_choice_in_words_and_stores_its_value() => Session.Dispatch(() =>
+        public Task The_genesis_page_shows_each_choice_in_words_and_stores_its_value() => Session.Dispatch(() =>
         {
             var consoles = new ConsolesConfig();
             consoles.SetValue("Genesis", "pad2", "md.pad6");
             consoles.Save();
-            string? changed = null;
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), c => changed = c, "Genesis");
-            window.Show();
-            window.CaptureRenderedFrame();
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:Genesis");
 
-            Assert.Equal("Genesis", (string)((TabItem)ByName<Tabs>(window, "ConsoleTabs").Items[ByName<Tabs>(window, "ConsoleTabs").SelectedIndex]!).Header!);
-            Assert.Equal("From the cartridge", ByName<Dropdown>(window, "Genesis.region").SelectedItem);
-            Assert.Equal("6-Button Arcade Pad", ByName<Dropdown>(window, "Genesis.pad2").SelectedItem);
-            ByName<Dropdown>(window, "Genesis.region").SelectedItem = "Europe (PAL)";
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal(("md.eu", "Genesis"), (ConsolesConfig.Load().Value("Genesis", "region"), changed));
+            Assert.Equal("From the cartridge", SettingsDesk.Value(window, "region"));
+            Assert.Equal("6-Button Arcade Pad", SettingsDesk.Value(window, "pad2"));
+            SettingsDesk.Pick(window, "region", "Europe (PAL)");
+            Assert.Equal("md.eu", ConsolesConfig.Load().Value("Genesis", "region"));
             window.Close();
         }, default);
 

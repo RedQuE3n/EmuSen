@@ -21,7 +21,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     {
         public static readonly string[] SettingsViews =
             ["SettingsControllers", "SettingsBindings", "SettingsDisplay", "SettingsDisplayLight", "SettingsShaderLevers", "SettingsSound", "SettingsConsoles", "SettingsConsolePage", "SettingsEngine",
-             "SettingsFirmware", "SettingsMemoryCards", "SettingsLibrary", "SettingsEmuSen", "SettingsDesktopDisplay", "SettingsDesktopConsoles", "SettingsDesktopSearch"];
+             "SettingsFirmware", "SettingsMemoryCards", "SettingsLibrary", "SettingsEmuSen", "SettingsDesktopDisplay", "SettingsDesktopConsoles", "SettingsDesktopSearch",
+             "SettingsShaders", "SettingsShaderParameters", "SettingsCustomCrop"];
 
         public static TheoryData<string, int, int> SettingsCases()
         {
@@ -89,6 +90,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "SettingsMemoryCards": Section(3); To(k => k == "PlayStation"); pad.A(); Settle(w); To(k => k == "cards"); pad.A(); break;
                 case "SettingsLibrary": Section(4); break;
                 case "SettingsEmuSen": Section(5); break;
+                case "SettingsShaders": Section(1); To(k => k == "shaders"); pad.A(); Settle(w); To(k => k == "shader:SNES"); pad.A(); break;
+                case "SettingsShaderParameters": Section(1); To(k => k == "shaders"); pad.A(); Settle(w); To(k => k == "shader:SNES"); pad.A(); Settle(w); To(k => k == "use:CRT"); pad.A(); Settle(w); for (int i = 0; i < 12 && w.SettingsLayoutShown!.Focused != "params"; i++) pad.Up(); pad.A(); break;
+                case "SettingsCustomCrop": Section(3); To(k => k == "Super Nintendo"); pad.A(); Settle(w); To(k => k == "consolecrop"); pad.Right(2); Settle(w); To(k => k == "consolecropedges"); pad.A(); break;
             }
             Settle(w);
         }

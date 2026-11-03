@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // Big screen, as Game Mode starts it, with one synthetic game running.
-        private (MainWindow Window, PadDriver Pad) GameModeWithAGame(double tallerBar = 0)
+        private (MainWindow Window, PadDriver Pad) GameModeWithAGame()
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
@@ -64,31 +64,14 @@ namespace EmuSen.WiseMan.Mistress
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             OwnLook.Play(window, pad);
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
-            if (tallerBar > 0) TallerBar(window, tallerBar);
             return (window, pad);
         }
-
-        // The status bar made taller by some pixels, so a sheet above it is shorter by as much - see EmuSen_Settings_Reference.md §4.83.7.
-        private static void TallerBar(MainWindow window, double by)
-        {
-            var bar = window.GetControl<Border>("StatusBar");
-            window.UpdateLayout();
-            bar.MinHeight = bar.Bounds.Height + by;
-            window.UpdateLayout();
-        }
-
-        // Sheets shorter by these pixels: 0 to 7 left a row unbuilt, 3 also a view that would not scroll, 7 and 8 bracket the first big-screen status line, 10 and 13 failed the walk's replay (§4.83.7).
-        public static TheoryData<double> Shorter => new() { 0, 3, 5, 7, 8, 10, 13 };
-
-        public static TheoryData<double> EveryShorter => new(Enumerable.Range(0, 17).Select(h => (double)h));
-
-        public static TheoryData<double> MuchShorter => new() { 60, 61, 62, 66, 70, 74, 75, 80 };
 
         private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
         public const string Shaders = "Shaders";
 
-        // Up from the top wraps to the bottom, so any entry is found by walking down from the first; the Shaders window's door is Settings ▸ Display's row, reached from the card's Shader Levers.
+        // Up from the top wraps to the bottom, so any entry is found by walking down from the first; Shaders is Settings ▸ Display's row, reached from the card's Shader Levers.
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
@@ -158,7 +141,6 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Theory]
-        [InlineData(Shaders)]
         [InlineData(MainWindow.CropThisGame)]
         public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
@@ -185,6 +167,7 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData("Console Settings")]
         [InlineData("Shader Levers")]
         [InlineData("Players & Controllers")]
+        [InlineData(Shaders)]
         public Task Every_row_of_each_settings_page_the_card_opens_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
@@ -250,6 +233,107 @@ namespace EmuSen.WiseMan.Mistress
         private static void Picture(MainWindow w, string name) => UiTest.Dump("pad-" + name, UiTest.Capture(w));
 
         private static string? Stored(string console, string key) => ConsolesConfig.Load().Value(console, key) ?? GraphicsConfig.Load().Value(console, key);
+
+        // Graphics' rows on a console's page in Settings: the shoulders step the console, a choice is stepped both ways and chosen with A, a switch turned, and the console reset - see EmuSen_BigPicture.md §52.5.
+        [Fact]
+        public Task Console_settings_by_pad_the_console_stepped_a_choice_stepped_and_chosen_a_switch_and_reset() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Console Settings");
+            Assert.Equal(NameOf("SNES"), window.SettingsShown!.Trail[^1]);
+            Picture(window, "console-snes");
+
+            StepTo(window, pad, "N64");
+            SettingRow scaleRow = window.SettingsShown!.Host.Schema("N64").Single(r => r.Key == "RenderScale");
+            SettingsPad.To(window, pad, "RenderScale");
+            int was = scaleRow.Choices.ToList().IndexOf(Stored("N64", "RenderScale") ?? scaleRow.Default);
+            pad.Right();
+            Assert.Equal(scaleRow.Choices[was + 1], Stored("N64", "RenderScale"));
+            pad.Left();
+            Assert.Equal(scaleRow.Choices[was], Stored("N64", "RenderScale"));
+
+            // A on a choice steps it on, and the focus and the page stay.
+            pad.A();
+            Assert.Equal(scaleRow.Choices[was + 1], Stored("N64", "RenderScale"));
+            Assert.Equal("RenderScale", window.SettingsLayoutShown!.Focused);
+            Assert.Equal(NameOf("N64"), window.SettingsShown.Trail[^1]);
+
+            SettingRow switchRow = window.SettingsShown.Host.Schema("N64").First(r => r.Kind == SettingRow.Switch && !r.Locked && window.SettingsLayoutShown.Rows.Any(p => p.Key == r.Key));
+            SettingsPad.To(window, pad, switchRow.Key);
+            bool before = (Stored("N64", switchRow.Key) ?? switchRow.Default) is "true" or "1" or "on";
+            pad.A();
+            Assert.Equal((!before).ToString().ToLowerInvariant(), Stored("N64", switchRow.Key));
+            Picture(window, "console-n64");
+
+            SettingsPad.To(window, pad, "reset");
+            pad.A();
+            Assert.Null(Stored("N64", switchRow.Key));
+            Assert.Null(Stored("N64", "RenderScale"));
+
+            BackToTheGame(window, pad);
+            Assert.False(IsPaused(window));
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // A row of the running game's engine changed in Settings over the game: the page is the running session's own rows, and the change is kept and reaches the session at once - the path the hosted PlayStation 2's Internal Resolution took on the handheld on 2026-11-02, see EmuSen_BigPicture.md §52.5.
+        [Fact]
+        public Task A_running_engine_s_row_changed_in_settings_is_kept_and_reaches_the_session() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            object game = typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            var crystal = (EmuSen.Crystal.Client.CrystalSession)game.GetType().GetProperty("Crystal")!.GetValue(game)!;
+            IReadOnlyList<SettingRow> running = RuntimeCatalog.SettingsOf(crystal);
+
+            Choose(window, pad, "Console Settings");
+            List<string> keys = window.SettingsLayoutShown!.Rows.Select(r => r.Key).ToList();
+            Assert.Contains(keys, k => running.Any(r => r.Key == k));
+            SettingRow row = running.First(r => r.Kind == SettingRow.Choice && !r.Locked && r.Choices.Count > 1 && keys.Contains(r.Key));
+            string now = ConsolesConfig.Load().Value("SNES", row.Key) ?? row.Default;
+            string next = row.Choices[(row.Choices.ToList().IndexOf(now) + 1) % row.Choices.Count];
+            SettingsPad.To(window, pad, row.Key);
+            pad.Right();
+            Assert.Equal(next, ConsolesConfig.Load().Value("SNES", row.Key));
+            Assert.Equal(next, crystal.Setting(row.Key, game: false));
+
+            BackToTheGame(window, pad);
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // Preferences' rows in Settings: a switch in one section and a choice on a page of another, each stored as it is turned - see EmuSen_BigPicture.md §52.5.
+        [Fact]
+        public Task Settings_by_pad_a_switch_and_a_choice_on_a_page_of_another_section() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            Choose(window, pad, "Players & Controllers");
+            Assert.Equal("Players", window.SettingsShown!.Trail[^1]);
+            Picture(window, "settings-players");
+            pad.B();
+            Assert.Empty(window.SettingsShown.Trail);
+
+            SettingsPad.Section(window, pad, SettingsScreen.EmuSen);
+            SettingsPad.To(window, pad, "background");
+            bool before = AppSettings.Load().PauseInBackground;
+            pad.A();
+            Assert.Equal(!before, AppSettings.Load().PauseInBackground);
+
+            SettingsPad.To(window, pad, "saves");
+            pad.A();
+            SettingsPad.To(window, pad, "resume");
+            string resume = AppSettings.Load().ResumeOnLaunch;
+            pad.Left();
+            Assert.NotEqual(resume, AppSettings.Load().ResumeOnLaunch);
+            Picture(window, "settings-saves");
+
+            // B closes the page for its section, and B again closes Settings onto the card.
+            pad.B();
+            Assert.NotNull(window.SettingsShown);
+            Assert.Empty(window.SettingsShown!.Trail);
+            BackToTheGame(window, pad);
+            Stop(window);
+            window.Close();
+        }, default);
 
         // The bindings page by pad, in Game Mode over the paused game: the deadzone and the stick's switch are Controllers rows, the A that chose a rebind is not the binding, and a key's capture is backed out of with B - see EmuSen_Input.md §10.6.
         [Fact]
@@ -348,219 +432,188 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The Shaders window opened from Settings ▸ Display's row, over Settings, searched with the on-screen keyboard, a preset used, a slider moved and reset, and left by pad, the row then naming the shader in use - see EmuSen_Settings_Reference.md §4.48.5.
+        // A shader's page in Settings over the paused game: a preset found by the search typed by pad, used, its parameter stepped and back, and left by pad, Display's row then naming the shader in use - see EmuSen_BigPicture.md §52.8.
         [Fact]
-        public Task The_shaders_window_opens_over_settings_and_is_searched_used_and_adjusted_by_pad() => Session.Dispatch(() =>
+        public Task The_shaders_page_is_searched_used_and_adjusted_by_pad() => Session.Dispatch(() =>
         {
-            ShaderSettingsWindowTests.FakePack();
+            ShaderSettingsTests.FakePack();
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
             Choose(window, pad, Shaders);
+            Assert.Equal("Shaders", window.SettingsShown!.Trail[1]);
+            Assert.Empty(UnreachedRows(window, pad));
 
-            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
-            Assert.Equal("SNES", (Tabs(window).SelectedItem as TabItem)?.Header);
-            Assert.Empty(Unreachable(window, pad));
-            TabTo(window, pad, "SNES");
-
-            var search = (TextBox)Reach(window, pad, e => e is TextBox && e.FindAncestorOfType<FilterBar>() is { Name: "SNES.ShaderSearch" });
+            SettingsPad.To(window, pad, "find");
             pad.A();
-            OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(window)!;
-            Assert.Same(search, keyboard.Target);
-            PadCheatsTests.TypeByPad(pad, keyboard, "kuro");
-            pad.Start();
-            ShaderPanel snes = shaders.PanelFor("SNES");
-            Assert.Equal(new[] { "None", "crt-royale-kurozumi" }, snes.List.Models.Select(e => e.Name));
+            Answer(window, pad, "kuro");
+            Assert.Equal(["use:" + EmuSen.Serenity.Shaders.ScreenFilters.None, "use:slang:crt/crt-royale-kurozumi.slangp"], window.SettingsLayoutShown!.Rows.Select(r => r.Key));
             Picture(window, "shaders-search");
 
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "crt-royale-kurozumi");
-            Pump(snes);
+            SettingsPad.To(window, pad, "use:slang:crt/crt-royale-kurozumi.slangp");
             pad.A();
-            Assert.Equal("slang:crt/crt-royale-kurozumi.slangp", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
-
-            var slider = (Slider)Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Scanline weight" });
+            Assert.Equal("slang:crt/crt-royale-kurozumi.slangp", Stored("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter));
+            pad.B();
+            SettingsPad.To(window, pad, "params");
+            pad.A();
+            SettingsPad.To(window, pad, "p:SCAN");
             pad.Right();
             Assert.Equal("6", GraphicsConfig.Load().ParametersFor("SNES", "slang:crt/crt-royale-kurozumi.slangp")["SCAN"]);
-            Assert.Same(slider, Focused(window));
-            Picture(window, "shaders-slider");
-            pad.Up();
-            Assert.Equal("Reset Scanline weight", Avalonia.Automation.AutomationProperties.GetName((Focused(window) as Control)!));
-            pad.A();
+            Assert.Equal("p:SCAN", window.SettingsLayoutShown!.Focused);
+            Picture(window, "shaders-parameter");
+            pad.Left();
             Assert.Empty(GraphicsConfig.Load().ParametersFor("SNES", "slang:crt/crt-royale-kurozumi.slangp"));
 
+            // B a page at a time to Display, whose Shaders row names the shader in use.
             pad.B();
-            Assert.False(Sheets(window).IsPresenting);
-            Assert.Equal("shaders", window.SettingsLayoutShown!.Focused);
+            pad.B();
+            pad.B();
+            Assert.Empty(window.SettingsShown!.Trail);
             Assert.Equal("crt-royale-kurozumi (RetroArch, crt)", SettingsPad.Value(window, "shaders"));
             BackToTheGame(window, pad);
             Stop(window);
             window.Close();
         }, default);
 
-        // Pressed straight down from a preset's first slider, with no walk, the pad reaches each row's Reset and then its slider, whatever the sheet's height - see EmuSen_Settings_Reference.md §4.83.7.
-        [Theory]
-        [MemberData(nameof(EveryShorter))]
-        public Task Down_from_a_preset_s_first_slider_reaches_every_slider_at_any_sheet_height(double tallerBar) => Session.Dispatch(() =>
+        // The question a row asked on the big screen, typed with the on-screen keyboard and its OK pressed, as a player does.
+        private static void Answer(MainWindow window, PadDriver pad, string words)
         {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame(tallerBar);
-            Choose(window, pad, "Shaders");
-            ShaderPanel snes = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current).PanelFor("SNES");
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "CRT (Lottes)");
-            string? RowOf() => (Focused(window) as Visual)?.FindAncestorOfType<SliderRow>()?.Label;
+            Assert.Equal("PromptWindow", Sheets(window).Current!.GetType().Name);
+            var box = (TextBox)Reach(window, pad, e => e is TextBox { Name: "PART_Answer" });
+            pad.A();
+            OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(window)!;
+            Assert.Same(box, keyboard.Target);
+            PadCheatsTests.TypeByPad(pad, keyboard, words);
+            pad.Start();
+            Reach(window, pad, e => e is Button { Name: "PART_Accept" });
+            pad.A();
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.False(Sheets(window).IsPresenting);
+        }
 
-            pad.Right();
-            Pump(snes);
-            string[] labels = snes.Parameters.Select(p => p.Label).ToArray();
-            for (int i = 0; i < 4 && !(Focused(window) is Slider && RowOf() == labels[0]); i++) pad.Down();
-            Assert.Equal(labels[0], RowOf());
-            Assert.IsType<Slider>(Focused(window));
-
-            // The view moves by no more than a row a press, so building the next row never jumps the page.
-            ScrollViewer view = snes.ParameterList.FindDescendantOfType<ScrollViewer>()!;
-            double pitch = snes.Sliders.First().Bounds.Height + snes.Sliders.First().Margin.Bottom;
-            void Press()
+        // The SNES's shader page with a shader in use, its parameters page opened by pad.
+        private void ParametersOf(MainWindow window, PadDriver pad, string stored)
+        {
+            Choose(window, pad, Shaders);
+            if (stored.StartsWith(EmuSen.Mistress.Library.ShaderCatalog.SlangPrefix, StringComparison.Ordinal))
             {
-                double was = view.Offset.Y;
-                pad.Down();
-                Assert.True(System.Math.Abs(view.Offset.Y - was) <= pitch, $"the view moved {view.Offset.Y - was:F0} for one press, more than a row ({pitch:F0})");
+                SettingsPad.To(window, pad, "folder:" + EmuSen.Mistress.Library.ShaderCatalog.Category(stored[EmuSen.Mistress.Library.ShaderCatalog.SlangPrefix.Length..]));
+                pad.A();
+                SettingsPad.To(window, pad, "use:" + stored);
+                pad.A();
+                pad.B();
             }
-            foreach (string label in labels.Skip(1))
+            else
             {
-                Press();
-                Assert.True(Focused(window) is Button && RowOf() == label, $"Down went to {PadAudit.Describe(Focused(window)!)}, not the Reset of {label}");
-                Press();
-                Assert.True(Focused(window) is Slider && RowOf() == label, $"Down went to {PadAudit.Describe(Focused(window)!)}, not the slider of {label}");
+                SettingsPad.To(window, pad, "use:" + stored);
+                pad.A();
+            }
+            Assert.Equal(stored, Stored("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter));
+            SettingsPad.To(window, pad, "params");
+            pad.A();
+            Assert.Equal("Parameters", window.SettingsShown!.Trail[^1]);
+        }
+
+        private static string? RowOf(MainWindow window) => window.SettingsLayoutShown!.Focused;
+
+        // The big screen draws only the rows in view, so a row in view is one whose row is drawn.
+        private static bool Drawn(MainWindow window, string? key) => window.SettingsLayoutShown!.GetVisualDescendants().OfType<Control>().Any(c => c.Name == "SettingsRow." + key && c.IsEffectivelyVisible);
+
+        // Pressed straight down from a shader's first parameter, the pad reaches each parameter in turn, the page following it.
+        [Fact]
+        public Task Down_from_a_shader_s_first_parameter_reaches_every_parameter_in_turn() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            ParametersOf(window, pad, EmuSen.Serenity.Shaders.CrtFilters.Lottes.Name);
+            string[] keys = EmuSen.Serenity.Shaders.CrtFilters.LottesParameters.Select(p => "p:" + p.Id).ToArray();
+            SettingsPad.To(window, pad, keys[0]);
+            foreach (string key in keys.Skip(1))
+            {
+                pad.Down();
+                Assert.Equal(key, RowOf(window));
+                Assert.True(Drawn(window, key), $"{key} is focused but not drawn");
             }
             Stop(window);
             window.Close();
         }, default);
 
-        // Straight from the pad's menu: a built-in filter's slider moved, Reset All, moved again, then the filter used and the value drawn with - see EmuSen_Settings_Reference.md §4.48.5.
-        [Theory]
-        [MemberData(nameof(Shorter))]
-        public Task The_shaders_window_from_the_pad_menu_adjusts_a_built_in_filter_and_resets_it_all(double tallerBar) => Session.Dispatch(() =>
+        // Straight from the card: a built-in filter used, a parameter moved, Reset all, moved again, and the value drawn with, the console's shape and crop with it - see EmuSen_Settings_Reference.md §4.48.5.
+        [Fact]
+        public Task The_shaders_page_from_the_card_uses_a_built_in_filter_and_its_parameters_reach_the_frame() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame(tallerBar);
-            Choose(window, pad, "Shaders");
-            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
-            Assert.True(IsPaused(window));
-            ShaderPanel snes = shaders.PanelFor("SNES");
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
             var frame = window.GetControl<EmuSen.Serenity.GameFrameControl>("GameFrame");
-
             Assert.False(frame.SquarePixels);
             Assert.Equal(EmuSen.Serenity.PictureCrop.None, frame.Crop);
-            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.TvOverscan);
-            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", GraphicsSettingsWindow.PictureShapeKey, GraphicsSettingsWindow.SquarePixels);
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "CRT (Lottes)");
-            Assert.Equal("CRT (Lottes)", snes.Shown?.Stored);
-            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Mask dark" });
+            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.TvOverscan);
+            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.PictureShape, EmuSen.Mistress.Library.GraphicsKeys.SquarePixels);
+            ParametersOf(window, pad, EmuSen.Serenity.Shaders.CrtFilters.Lottes.Name);
+            Assert.True(IsPaused(window));
+
+            SettingsPad.To(window, pad, "p:maskDark");
             pad.Left();
             pad.Left();
             Assert.Equal("0.3", GraphicsConfig.Load().ParametersFor("SNES", "CRT (Lottes)")["maskDark"]);
-            Assert.Null(frame.ActiveFilter);
             Picture(window, "shaders-lottes");
 
-            // Up the column of sliders to the row of Reset All and Use: the route a player takes, pressed rather than searched for, since a search that wanders onto the list changes the shader shown - see EmuSen_Settings_Reference.md §4.96.
-            UpTo(window, pad, e => e is Button { Name: "SNES.UseShader" or "SNES.ResetShader" });
-            if ((Focused(window) as Control)?.Name == "SNES.UseShader") pad.Left();
-            Assert.Equal("SNES.ResetShader", (Focused(window) as Control)?.Name);
+            SettingsPad.To(window, pad, "paramreset");
             pad.A();
             Assert.Empty(GraphicsConfig.Load().ShaderParameters);
-            Assert.IsType<Button>(Focused(window));
-            Assert.All(snes.Sliders, s => Assert.True(s.IsDefault));
-
-            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Mask dark" });
+            SettingsPad.To(window, pad, "p:maskDark");
             pad.Left();
-            UpTo(window, pad, e => e is Button { Name: "SNES.UseShader" or "SNES.ResetShader" });
-            if ((Focused(window) as Control)?.Name == "SNES.ResetShader") pad.Right();
-            Assert.Equal("SNES.UseShader", (Focused(window) as Control)?.Name);
-            pad.A();
-            Assert.IsType<Button>(Focused(window));
-            Assert.Equal("CRT (Lottes)", Stored("SNES", GraphicsSettingsWindow.ScreenFilterKey));
+            Assert.Equal("CRT (Lottes)", Stored("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter));
             Assert.Equal("CRT (Lottes)", frame.ActiveFilter?.Name);
             Assert.Equal("SNES", frame.FilterConsole);
             Assert.True(frame.SquarePixels, "the console's stored picture shape reaches the frame with its filter");
             Assert.Equal(EmuSen.Serenity.PictureCrop.Television, frame.Crop);
             Assert.Equal(0.4f, frame.ShaderParameters!["maskDark"], 4);
 
-            pad.B();
-            Assert.False(Sheets(window).IsPresenting);
             BackToTheGame(window, pad);
             Assert.False(IsPaused(window));
             Stop(window);
             window.Close();
         }, default);
 
-        // A preset of 944 parameters on the Game Mode sheet: only the rows in view are built, every control is still reached, and the pad walks down and moves a slider far down - see EmuSen_Settings_Reference.md §4.48.9.
-        [Theory]
-        [MemberData(nameof(Shorter))]
-        public Task A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad(double tallerBar) => Session.Dispatch(() =>
+        // A preset of 944 parameters on the big screen: only the rows in view are drawn, and the pad walks down and moves a parameter far down - see EmuSen_Settings_Reference.md §4.48.9.
+        [Fact]
+        public Task A_long_preset_s_parameters_are_drawn_a_page_at_a_time_and_walked_by_pad() => Session.Dispatch(() =>
         {
-            ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
-            (MainWindow window, PadDriver pad) = GameModeWithAGame(tallerBar);
-            Choose(window, pad, "Shaders");
-            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
-            ShaderPanel snes = shaders.PanelFor("SNES");
+            ShaderBrowseTests.WriteBig(ShaderSettingsTests.FakePack());
+            (MainWindow window, PadDriver pad) = GameModeWithAGame();
+            ParametersOf(window, pad, "slang:big/huge.slangp");
+            SettingsLayout layout = window.SettingsLayoutShown!;
+            Assert.Equal(944, layout.Rows.Where(r => r.Key.StartsWith("sec:", StringComparison.Ordinal)).Sum(r => int.Parse(r.Status!)));
+            SettingsPad.To(window, pad, "sec:HEAD0");
+            pad.A();
+            Assert.Equal(105, layout.Rows.Count(r => r.Key.StartsWith("p:", StringComparison.Ordinal)));
+            int drawn() => layout.GetVisualDescendants().OfType<Control>().Count(c => c.Name is { } n && n.StartsWith("SettingsRow.", StringComparison.Ordinal));
+            Assert.InRange(drawn(), 1, 40);
 
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
-            Pump(snes);
-            window.UpdateLayout();
-            Assert.Equal(944, snes.Parameters.Count);
-            Assert.InRange(snes.Sliders.Count(), 1, 40);
-            Assert.Empty(Unreachable(window, pad));
-            TabTo(window, pad, "SNES");
-            Assert.Equal("huge", snes.Shown?.Name);
-
-            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Parameter 0001" });
-            pad.Down(2 * 30);
-            Assert.Equal("Parameter 0031", (Focused(window) as Visual)?.FindAncestorOfType<SliderRow>()?.Label);
-            Assert.IsType<Slider>(Focused(window));
-            Assert.InRange(snes.Sliders.Count(), 1, 40);
+            SettingsPad.To(window, pad, "p:P0001");
+            pad.Down(30);
+            Assert.Equal("p:P0031", RowOf(window));
+            Assert.True(Drawn(window, "p:P0031"));
+            Assert.InRange(drawn(), 1, 40);
             pad.Right();
             Assert.Equal("0.55", GraphicsConfig.Load().ParametersFor("SNES", "slang:big/huge.slangp")["P0031"]);
             Picture(window, "shaders-944-walked");
-
-            pad.B();
-            Assert.False(Sheets(window).IsPresenting);
             Stop(window);
             window.Close();
         }, default);
 
-        // The same walk under a status bar two lines taller, where a first search from the category found no path from 61 to 74 and at 80 pixels shorter - see VenusRT_Native.md §66.
-        [Theory]
-        [MemberData(nameof(MuchShorter))]
-        public Task A_long_preset_s_sliders_are_reached_under_a_much_taller_status_bar(double tallerBar) => A_long_preset_s_sliders_on_the_sheet_are_reached_and_walked_by_pad(tallerBar);
-
-        // The parameter search on the sheet: reached by pad, typed with the on-screen keyboard, and the one row it leaves moved by pad - see EmuSen_Settings_Reference.md §4.48.10.
+        // The parameter search on the big screen: reached by pad, typed with the on-screen keyboard, and the one row it leaves moved by pad - see EmuSen_Settings_Reference.md §4.48.10.
         [Fact]
-        public Task The_parameter_search_is_reached_and_typed_by_pad_on_the_sheet() => Session.Dispatch(() =>
+        public Task The_parameter_search_is_reached_and_typed_by_pad() => Session.Dispatch(() =>
         {
-            ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
+            ShaderBrowseTests.WriteBig(ShaderSettingsTests.FakePack());
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Shaders");
-            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
-            ShaderPanel snes = shaders.PanelFor("SNES");
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
-            Pump(snes);
-
-            // The walk to the box may pass over other rows of the shader list, so the preset is chosen again after typing.
-            var search = (TextBox)Reach(window, pad, e => e is TextBox && e.FindAncestorOfType<FilterBar>() is { Name: "SNES.ParameterSearch" });
+            ParametersOf(window, pad, "slang:big/huge.slangp");
+            SettingsPad.To(window, pad, "paramsearch");
             pad.A();
-            OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(window)!;
-            Assert.Same(search, keyboard.Target);
-            PadCheatsTests.TypeByPad(pad, keyboard, "0031");
-            pad.Start();
-            // A row reached sideways from the search box takes the focus but not the choice, so the pad steps off it and back, as a player would (§4.83.7, Q194).
-            var huge = (ListBoxItem)Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
-            if (!huge.IsSelected) { pad.Up(); pad.Down(); }
-            Assert.True(Focused(window) is ListBoxItem { IsSelected: true } chosen && chosen.Content?.ToString() == "huge");
-            Pump(snes);
-            Assert.Equal("0031", snes.ParameterList.Search);
-            Assert.Equal(new[] { "Parameter 0031" }, snes.ParameterList.Matching.Select(p => p.Label));
+            Answer(window, pad, "0031");
+            Assert.Equal(["p:P0031"], window.SettingsLayoutShown!.Rows.Select(r => r.Key).Where(k => k.StartsWith("p:", StringComparison.Ordinal)));
             Picture(window, "shaders-944-search");
-
-            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Parameter 0031" });
+            SettingsPad.To(window, pad, "p:P0031");
             pad.Right();
             Assert.Equal("0.55", GraphicsConfig.Load().ParametersFor("SNES", "slang:big/huge.slangp")["P0031"]);
-            pad.B();
             Stop(window);
             window.Close();
         }, default);
@@ -591,58 +644,33 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // Back on a tab whose parameter list is scrolled part way down, the pad starts at a control in view, and the list stays where it was - see EmuSen_Settings_Reference.md §4.48.10.
+        // Back on a parameters page left part way down, the pad starts at a row in view.
         [Fact]
-        public Task A_tab_change_never_puts_the_focus_on_a_row_scrolled_out_of_view() => Session.Dispatch(() =>
+        public Task A_parameters_page_opened_again_puts_the_focus_on_a_row_in_view() => Session.Dispatch(() =>
         {
-            ShaderBrowseTests.WriteBig(ShaderSettingsWindowTests.FakePack());
+            ShaderBrowseTests.WriteBig(ShaderSettingsTests.FakePack());
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Shaders");
-            var shaders = Assert.IsType<ShaderSettingsWindow>(Sheets(window).Current);
-            ShaderPanel snes = shaders.PanelFor("SNES");
-            Reach(window, pad, e => e is ListBoxItem item && item.Content?.ToString() == "huge");
-            Pump(snes);
-            Reach(window, pad, e => e is Slider s && s.FindAncestorOfType<SliderRow>() is { Label: "Parameter 0001" });
-            pad.Down(2 * 20);
-            ScrollViewer scroll = snes.ParameterList.GetVisualDescendants().OfType<ScrollViewer>().First();
-            Vector scrolled = scroll.Offset;
-            Assert.True(scrolled.Y > 0);
-            Assert.Contains(snes.Sliders, r => r.TranslatePoint(default, scroll) is { Y: < 0 } at && at.Y + r.Bounds.Height <= 0);
+            ParametersOf(window, pad, "slang:big/huge.slangp");
+            SettingsPad.To(window, pad, "sec:HEAD0");
+            pad.A();
+            SettingsPad.To(window, pad, "p:P0001");
+            pad.Down(40);
+            Assert.False(Drawn(window, "p:P0001"), "the page did not move down");
+            Assert.True(Drawn(window, RowOf(window)));
 
-            TabTo(window, pad, "N64");
-            TabTo(window, pad, "SNES");
-            var focused = Assert.IsAssignableFrom<Control>(Focused(window));
-            _out.WriteLine($"focus after the tab change: {PadAudit.Describe((InputElement)focused)}");
-            Assert.Null(focused.FindAncestorOfType<SliderList>());
-            Assert.Equal(scrolled, scroll.Offset);
-            Picture(window, "shaders-tab-return");
-
-            // Up to the tab strip and down into the page again, the page now laid out with the rows above the view built.
-            for (int i = 0; i < 6 && Focused(window) is not TabItem; i++) pad.Up();
-            Assert.IsType<TabItem>(Focused(window));
-            window.UpdateLayout();
-            Assert.Contains(snes.Sliders, r => r.TranslatePoint(default, scroll) is { } at && at.Y + r.Bounds.Height <= 0);
-            pad.Down();
-            focused = Assert.IsAssignableFrom<Control>(Focused(window));
-            _out.WriteLine($"focus down from the tab strip: {PadAudit.Describe((InputElement)focused)}");
-            Assert.Null(focused.FindAncestorOfType<SliderList>());
-            Assert.Equal(scrolled, scroll.Offset);
             pad.B();
+            Assert.Equal("sec:HEAD0", RowOf(window));
+            pad.A();
+            _out.WriteLine($"focus on opening again: {RowOf(window)}");
+            Assert.True(Drawn(window, RowOf(window)), $"the focus is on {RowOf(window)}, a row out of view");
             Stop(window);
             window.Close();
         }, default);
 
-        private static void Pump(ShaderPanel panel)
-        {
-            for (int i = 0; i < 2000 && !panel.Reading.IsCompleted; i++) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(1); }
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
-        }
-
         // Desktop Mode keeps real windows; the headless platform never makes one active, so the router is handed the window the pad would have found.
         [Theory]
-        [InlineData("ShowGraphicsSettings")]
-        [InlineData("ShowShaderSettings")]
         [InlineData("ShowActiveCheats")]
-        [InlineData("ShowPreferences")]
+        [InlineData("ShowThemeSettings")]
         public Task In_desktop_mode_a_real_window_is_driven_and_every_control_reached(string opener) => Session.Dispatch(() =>
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
@@ -706,38 +734,34 @@ namespace EmuSen.WiseMan.Mistress
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
-            typeof(MainWindow).GetMethod("ShowPreferences", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            typeof(MainWindow).GetMethod("ShowThemeSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
             Window other = Assert.Single(window.OwnedWindows);
 
             PadWindowRouter.Send(other, UiButton.Down);
             PadWindowRouter.Send(other, UiButton.PageDown);
-            Assert.Equal(503, other.Bounds.Height);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            double grown = other.Bounds.Height;
 
             var heights = new List<double>();
             PadAudit.Reachable(other, b => { heights.Add(other.Bounds.Height); PadWindowRouter.Send(other, b); }, limit: 4);
             Assert.NotEmpty(heights);
-            Assert.All(heights, h => Assert.Equal(720, h));
+            Assert.All(heights, h => Assert.Equal(grown, h));
             window.Close();
         }, default);
 
-        // The four numbers of a custom crop are a row a pad must reach like any other - see EmuSen_Settings_Reference.md §4.99.
+        // The four numbers of a custom crop are rows a pad must reach like any other - see EmuSen_Settings_Reference.md §4.99.
         [Fact]
         public Task With_a_custom_crop_chosen_its_four_numbers_are_reached_by_the_pad() => Session.Dispatch(() =>
         {
-            File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
-            var window = new MainWindow { Width = 1280, Height = 800 };
-            window.Show();
-            ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("NES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.CustomCrop);
-            typeof(MainWindow).GetMethod("ShowGraphicsSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
-            Window other = Assert.Single(window.OwnedWindows);
-            void Press(UiButton b) => PadWindowRouter.Send(other, b);
-
-            Press(UiButton.Down);
-            HashSet<InputElement> reached = PadAudit.Reachable(other, Press);
-            List<InputElement> operable = PadAudit.Operable(other);
-            Assert.Equal(new[] { "NES.CropBottom", "NES.CropLeft", "NES.CropRight", "NES.CropTop" }, operable.OfType<TextBox>().Select(b => b.Name).Order());
-            Assert.Empty(operable.Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
+            var graphics = new GraphicsConfig();
+            graphics.SetValue("NES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.CustomCrop);
+            graphics.Save();
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:NES", "consolecropedges");
+            Assert.Equal(["crop:CropLeft", "crop:CropRight", "crop:CropTop", "crop:CropBottom"], SettingsDesk.Keys(window));
+            var seen = new HashSet<string?> { SettingsDesk.Layout(window).Focused };
+            for (int i = 0; i < 4; i++) { SettingsDesk.Press(window, UiButton.Down); seen.Add(SettingsDesk.Layout(window).Focused); }
+            Assert.Empty(SettingsDesk.Keys(window).Where(k => !seen.Contains(k)));
             window.Close();
         }, default);
 
@@ -750,7 +774,7 @@ namespace EmuSen.WiseMan.Mistress
             var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
             var records = (EmuSen.Mistress.Library.GameRecords)typeof(MainWindow).GetField("_records", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
             string rom = Path.Combine(_romDir, "Game.sfc");
-            graphics.SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.TvOverscan);
+            graphics.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.TvOverscan);
 
             Choose(window, pad, MainWindow.CropThisGame);
             var crop = Assert.IsType<GameCropWindow>(Sheets(window).Current);
@@ -780,7 +804,7 @@ namespace EmuSen.WiseMan.Mistress
             BackToTheGame(window, pad);
 
             // The console's own setting changed meanwhile does not reach the frame while the game has its own.
-            graphics.SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.NoOverscan);
+            graphics.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.NoOverscan);
             typeof(MainWindow).GetMethod("ApplyScreenFilter", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { "SNES" });
             Assert.Equal(EmuSen.Serenity.PictureCrop.Percent(3.3, 8.7, 3.3, 3.3), frame.Crop);
 

@@ -194,13 +194,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Save(window, $"cheat-database-game-focused-{p}", _out);
                     CloseAll(window);
 
-                    Call(window, "ShowGraphicsSettings");
-                    Save(window, $"graphics-settings-{p}", _out);
-                    CloseAll(window);
+                    window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Consoles, "console:SNES");
+                    Save(window, $"settings-console-{p}", _out);
+                    window.CloseSettings();
 
-                    Call(window, "ShowShaderSettings");
-                    Save(window, $"shader-settings-{p}", _out);
-                    CloseAll(window);
+                    window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Display, "shaders");
+                    Save(window, $"settings-shaders-{p}", _out);
+                    window.CloseSettings();
 
                     Play(window, 120);
                     pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
@@ -221,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
         }, default);
 
-        // The N64 tab's antialiasing note, which only a running N64 game words (EmuSen_Backend.md §18.10.11).
+        // The N64 page's antialiasing note, which only a running N64 game words (EmuSen_Backend.md §18.10.11).
         [WindowLookPngFact]
         public Task N64_note() => Session.Dispatch(() =>
         {
@@ -230,9 +230,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 (MainWindow window, _) = InGame(w, h, n64: true);
                 try
                 {
-                    WindowFitAuditTests.ShowN64WithNote(window);
-                    Save(window, $"graphics-settings-n64-aa-{w}x{h}", _out);
-                    CloseAll(window);
+                    MistressGame.Runtime.SetSetting("N64", "RenderScale", "3");
+                    MistressGame.Runtime.SetSetting("N64", "Antialiasing", "3x");
+                    window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Consoles, "console:N64");
+                    window.SettingsLayoutShown!.FocusOn("Antialiasing");
+                    Save(window, $"settings-n64-aa-{w}x{h}", _out);
+                    window.CloseSettings();
                 }
                 finally
                 {

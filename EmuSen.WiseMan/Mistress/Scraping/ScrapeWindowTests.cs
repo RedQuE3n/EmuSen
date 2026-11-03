@@ -19,6 +19,7 @@ using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
@@ -177,8 +178,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(1, window.Interrupted);
             Assert.Contains("Resume", ((IScrapeHost)window).Status);
 
-            Assert.True(window.ResumeScrape());
+            // Settings ▸ Library ▸ Scraping's Resume, the one door to a queue left behind.
+            SettingsDesk.At(window, SettingsScreen.Library, "scraping");
+            Assert.Equal("1 game queued", SettingsDesk.Value(window, "resume"));
+            Assert.False(SettingsDesk.Row(window, "cancelscrape").IsEnabled);
+            SettingsDesk.Choose(window, "resume");
             RunEnds(window);
+            window.CloseSettings();
             Assert.Single(_server.JeuInfos);
             Assert.Equal(ScrapedCover, CoverShown(window, _rom));
         });
@@ -506,28 +512,23 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
-        public Task The_scraping_tab_s_link_opens_the_Scraper_sends_nothing_and_lets_go_of_the_window_when_it_closes() => OnUi(() =>
+        public Task Settings_scraper_row_opens_the_Scraper_sends_nothing_and_lets_go_of_the_window_when_it_closes() => OnUi(() =>
         {
             MainWindow window = Open();
-            var prefs = new PreferencesWindow(new AppSettings { RomDirectory = _romDir }, window);
-            _windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            SettingsDesk.At(window, SettingsScreen.Library, "scraping");
             Pump(100);
-            Assert.NotNull(ScrapeChangedHandlers(window));
             Assert.Empty(_server.Asked);
+            int handlers = ScrapeChangedHandlers(window)?.GetInvocationList().Length ?? 0;
 
-            Assert.Empty(prefs.GetVisualDescendants().OfType<Control>().Where(c => c.Name is "ScrapeStartButton" or "ScrapeShelfDropdown" or "ScrapeCriteriaDropdown"));
-            Button link = prefs.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "ScraperLinkButton");
-            link.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+            SettingsDesk.Choose(window, "scraper");
             Pump(100);
             ScraperWindow scraper = window.OwnedWindows.OfType<ScraperWindow>().Single();
             Assert.Empty(_server.Asked);
             scraper.Close();
 
-            prefs.Close();
+            window.CloseSettings();
             Pump(100);
-            Assert.DoesNotContain(ScrapeChangedHandlers(window)?.GetInvocationList() ?? [], d => d.Target is ScrapePreferencesPane);
+            Assert.Equal(handlers, ScrapeChangedHandlers(window)?.GetInvocationList().Length ?? 0);
         });
 
         // --- Q42: OpenVGDB's Remove (§4.65) ---
@@ -554,14 +555,11 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 : new HttpResponseMessage(HttpStatusCode.NotFound);
         }
 
-        private PreferencesWindow ScrapingTab(MainWindow window)
+        // Settings ▸ Library ▸ Scraping ▸ Member account, where OpenVGDB's row is.
+        private static void Account(MainWindow window)
         {
-            var prefs = new PreferencesWindow(new AppSettings { RomDirectory = _romDir }, window);
-            _windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            SettingsDesk.At(window, SettingsScreen.Library, "scraping", "account");
             Pump(100);
-            return prefs;
         }
 
         private static T Named<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
@@ -589,29 +587,27 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Assert.DoesNotContain(OpenVgdbDownload.LatestRelease, _server.Asked);
                 Assert.True(File.Exists(OpenVgdb.DefaultPath));
 
-                PreferencesWindow prefs = ScrapingTab(window);
-                Assert.StartsWith("OpenVGDB is downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
-                Button button = Named<Button>(prefs, "OpenVgdbRemoveButton");
-                Assert.True(button.IsEffectivelyVisible && button.IsEffectivelyEnabled);
+                Account(window);
+                Assert.EndsWith(" MB", SettingsDesk.Value(window, "openvgdb"));
 
                 // Declined, nothing goes.
-                button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                SettingsDesk.Choose(window, "openvgdb");
                 Pump(100);
                 Assert.Equal(1, confirms);
                 Assert.True(File.Exists(OpenVgdb.DefaultPath));
 
                 remove = true;
                 int asked = _server.Asked.Count;
-                button.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                SettingsDesk.Choose(window, "openvgdb");
+                WaitFor(() => !File.Exists(OpenVgdb.DefaultPath), "the removal");
                 Pump(100);
-                Assert.False(File.Exists(OpenVgdb.DefaultPath));
                 Assert.Equal(asked, _server.Asked.Count);
-                Assert.StartsWith("OpenVGDB is not downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
-                Assert.False(button.IsEffectivelyVisible);
-                Assert.Contains("OpenEmu's fallback is off until it is downloaded again", Named<EmuSen.LunaP.Controls.HintText>(prefs, "OpenVgdbRemoveMessage").Text);
-                // The fallback is off with its database gone, in the window and in the switch; the covers it found stay on disk.
+                Assert.Equal("Not downloaded", SettingsDesk.Value(window, "openvgdb"));
+                Assert.Contains("OpenEmu's fallback is off until it is downloaded again", window.SettingsShown!.Host.AccountLine);
+                // The fallback is off with its database gone, in the window and in its row; the covers it found stay on disk.
                 Assert.False(WindowSettings(window).OpenEmuFallback);
-                Assert.False(Named<EmuSen.LunaP.Controls.LunaSwitch>(prefs, "OpenEmuFallbackSwitch").IsChecked);
+                SettingsDesk.Back(window);
+                Assert.Equal(SettingsScreen.Off, SettingsDesk.Value(window, "openemu"));
                 Assert.True(File.Exists(OpenEmuCover));
                 Assert.False(AppSettings.Load().OpenEmuFallback);
 
@@ -625,16 +621,15 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Assert.False(File.Exists(OpenVgdb.DefaultPath));
 
                 // Download fetches it again and turns the fallback back on; the next run uses it.
-                Button download = Named<Button>(prefs, "OpenVgdbDownloadButton");
-                Assert.True(download.IsEffectivelyVisible && download.IsEffectivelyEnabled);
-                download.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+                Account(window);
+                SettingsDesk.Choose(window, "openvgdb");
                 WaitFor(() => File.Exists(OpenVgdb.DefaultPath) && WindowSettings(window).OpenEmuFallback, "the download");
                 Pump(100);
                 Assert.Contains(OpenVgdbDownload.LatestRelease, _server.Asked);
-                Assert.StartsWith("OpenVGDB is downloaded", Named<TextBlock>(prefs, "OpenVgdbStatusText").Text);
-                Assert.True(Named<EmuSen.LunaP.Controls.LunaSwitch>(prefs, "OpenEmuFallbackSwitch").IsChecked);
-                Assert.True(Named<Button>(prefs, "OpenVgdbRemoveButton").IsEffectivelyVisible);
-                prefs.Close();
+                Assert.EndsWith(" MB", SettingsDesk.Value(window, "openvgdb"));
+                SettingsDesk.Back(window);
+                Assert.Equal(SettingsScreen.On, SettingsDesk.Value(window, "openemu"));
+                window.CloseSettings();
                 Scrape(window, ScrapeScope.ThisGame(_rom));
                 RunEnds(window);
                 WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the cover after the download");
@@ -657,8 +652,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             MainWindow window = Open(developer: false, settings: a => a.OpenEmuFallback = false);
             Scrape(window, new ScrapeScope());
             RunEnds(window);
-            PreferencesWindow prefs = ScrapingTab(window);
-            prefs.Close();
+            Account(window);
+            window.CloseSettings();
             window.Close();
             window = Open(developer: true);
             Scrape(window, new ScrapeScope());

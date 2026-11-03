@@ -20,6 +20,7 @@ using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -56,14 +57,13 @@ namespace EmuSen.WiseMan.Mistress
 
         private static bool Found => CoreDiscovery.Found.Any(c => c.Info.Id == "venusrt");
 
-        // The SNES tab has no Engine row since the C# core was retired.
+        // The SNES page in Settings offers VenusRT alone since the C# core was retired.
         [Fact]
-        public Task The_SNES_tab_has_no_engine_row() => Session.Dispatch(() =>
+        public Task The_SNES_page_offers_one_engine() => Session.Dispatch(() =>
         {
             if (!Found) return;
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "SNES");
-            window.Show();
-            Assert.Empty(window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"SNES.{CoreCatalog.EngineKey}"));
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:SNES");
+            Assert.True(!SettingsDesk.Keys(window).Contains("engine") || SettingsDesk.Row(window, "engine").Choices?.Count == 1, "the page offers a choice of engine");
             window.Close();
         }, default);
 

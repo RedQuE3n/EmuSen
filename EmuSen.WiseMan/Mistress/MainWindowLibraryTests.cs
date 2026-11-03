@@ -89,7 +89,7 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.True(LibraryView(window).IsVisible);
             Assert.False(LibraryList(window).IsVisible);
-            Assert.Contains("Preferences", Header(window).Text!);
+            Assert.Contains("Settings ▸ Library ▸ ROM folder", Header(window).Text!);
         }, default);
 
         [Fact]

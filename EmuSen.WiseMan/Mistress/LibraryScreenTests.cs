@@ -17,6 +17,7 @@ using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -102,38 +103,35 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The status bar and each of its parts follow Preferences at once and are remembered - see EmuSen_Settings_Reference.md §4.51.
+        // The status bar and each of its parts follow Settings ▸ Display at once and are remembered - see EmuSen_Settings_Reference.md §4.51.
         [Fact]
-        public Task The_status_bar_and_its_parts_follow_preferences_at_once_and_are_remembered() => Session.Dispatch(() =>
+        public Task The_status_bar_and_its_parts_follow_settings_at_once_and_are_remembered() => Session.Dispatch(() =>
         {
             MainWindow window = Open(AppSettings.LibraryList);
             Control bar = window.GetControl<Border>("StatusBar");
             TextBlock text = window.GetControl<TextBlock>("StatusText"), fps = window.GetControl<TextBlock>("FpsText");
             Assert.True(bar.IsVisible && text.IsVisible && fps.IsVisible);
 
-            Invoke(window, "ShowPreferences");
-            Dispatcher.UIThread.RunJobs();
-            var preferences = window.OwnedWindows.OfType<PreferencesWindow>().Single();
-            LunaSwitch Toggle(string name) => preferences.GetLogicalDescendants().OfType<LunaSwitch>().Single(t => t.Name == name);
-            void Set(string name, bool on) { Toggle(name).IsChecked = on; Dispatcher.UIThread.RunJobs(); }
+            SettingsDesk.At(window, SettingsScreen.Display);
+            void Set(string key, bool on) { SettingsDesk.Pick(window, key, on ? SettingsScreen.On : SettingsScreen.Off); Dispatcher.UIThread.RunJobs(); }
 
-            Set("ShowFpsBarSwitch", false);
+            Set("fps", false);
             Assert.True(bar.IsVisible && text.IsVisible);
             Assert.False(fps.IsVisible);
 
-            Set("ShowStatusTextSwitch", false);
+            Set("messages", false);
             Assert.False(bar.IsVisible);
 
-            Set("ShowStatusTextSwitch", true);
+            Set("messages", true);
             Assert.True(bar.IsVisible && text.IsVisible);
 
-            Set("ShowStatusBarSwitch", false);
+            Set("statusbar", false);
             Assert.False(bar.IsVisible);
             AppSettings saved = AppSettings.Load();
             Assert.False(saved.ShowStatusBar);
             Assert.True(saved.ShowStatusText);
             Assert.False(saved.ShowFpsBar);
-            preferences.Close();
+            window.CloseSettings();
             window.Close();
 
             var again = new MainWindow { Width = 1024, Height = 768 };

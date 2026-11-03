@@ -36,41 +36,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
         }
 
-        // The hosted core's categories as the tab's sections in its order, every option a row, the held rows and console_picture locked.
+        // The hosted core's categories as the console page's headings in its order, every option a row, a held row shown with why and taking no choice, console_picture not drawn - see EmuSen_LibretroHost.md §10i.
         [Fact]
-        public System.Threading.Tasks.Task A_hosted_cores_tab_has_its_categories_as_sections_and_its_held_rows_locked() => Session.Dispatch(() =>
+        public System.Threading.Tasks.Task A_hosted_cores_page_has_its_categories_as_headings_and_its_held_rows_said() => Session.Dispatch(() =>
         {
             ConfigStore.OverrideDirectory = System.IO.Path.Combine(_root, "Config");
             IReadOnlyList<SettingRow> rows = HostedRows();
-            var config = new GraphicsConfig();
-            config.SetValue("PlayStation 2", ConsolePicture.Key, "true");
-            var sheet = new GraphicsSettingsWindow(config, null, "PlayStation 2", runningSettings: c => c == "PlayStation 2" ? rows : null);
-            try
-            {
-                sheet.Show();
-                Settle(sheet);
-                var controls = sheet.GetVisualDescendants().OfType<Avalonia.Controls.Control>().ToArray();
-                string[] sections = controls.Select(c => c.Name ?? "").Where(n => n.StartsWith("PlayStation 2.Group.", System.StringComparison.Ordinal)).ToArray();
-                Assert.Equal(new[] { "Picture", "Sound", "Memory", "States", "Probe" }.Select(g => $"PlayStation 2.Group.{g}"), sections);
-                foreach (string key in new[] { "tc_format", "tc_rate", "tc_hw", ConsolePicture.Key })
-                    Assert.True(controls.Single(c => c.Name == $"PlayStation 2.{key}").IsVisible == (key is "tc_format" or "tc_rate" or "tc_hw"), key);
-                Assert.False(controls.Single(c => c.Name == "PlayStation 2.tc_deinterlace").IsVisible);
-                Assert.Contains("Held at off (label) while the CRT filter is on", ((EmuSen.LunaP.Controls.HintText)controls.Single(c => c.Name == "PlayStation 2.tc_deinterlace.Note")).Text);
-            }
-            finally { sheet.Close(); }
+            var graphics = new GraphicsConfig();
+            graphics.SetValue("PlayStation 2", ConsolePicture.Key, "true");
+            var host = new SettingsHostFake { Graphics = graphics, Rows = c => c == "PlayStation 2" ? rows : RuntimeCatalog.SettingsFor(c), RunningConsole = "PlayStation 2" };
+            var screen = new EmuSen.Mistress.Pages.SettingsScreen(host, EmuSen.Mistress.Pages.SettingsScreen.Consoles);
+            screen.OpenPath(EmuSen.Mistress.Pages.SettingsScreen.Consoles, "console:PlayStation 2");
+            var page = screen.Rows;
+            Assert.Equal(new[] { "Picture", "Sound", "Memory", "States", "Probe" }.Select(g => "group:" + g), page.Where(r => r.Key.StartsWith("group:", System.StringComparison.Ordinal)).Select(r => r.Key));
+            Assert.All(page.Where(r => r.Key.StartsWith("group:", System.StringComparison.Ordinal)), r => Assert.False(r.IsEnabled));
+            foreach (string key in new[] { "tc_format", "tc_rate", "tc_hw" }) Assert.True(page.Single(r => r.Key == key).IsEnabled, key);
+            Assert.DoesNotContain(page, r => r.Key == ConsolePicture.Key);
+            var held = page.Single(r => r.Key == "tc_deinterlace");
+            Assert.False(held.IsEnabled);
+            Assert.Contains("Held at off (label) while the CRT filter is on", held.Sentence);
         }, default);
-
-        internal static void ShowHostedTab(MainWindow window)
-        {
-            IReadOnlyList<SettingRow> rows = HostedRows();
-            Assert.Contains(rows, r => r.Key == "tc_scale" && r.Locked && r.Group == "Picture");
-            var graphics = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", Hidden)!.GetValue(window)!;
-            var sheet = new GraphicsSettingsWindow(graphics, null, "PlayStation 2", runningSettings: c => c == "PlayStation 2" ? rows : null);
-            _ = EmuSen.LunaP.Windowing.SheetLayer.Show(sheet, window);
-            Settle(window);
-            SelectTab(window, "PlayStation 2");
-            Avalonia.Controls.Control scale = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Avalonia.Controls.Control>().Single(c => c.Name == "PlayStation 2.tc_scale");
-            Assert.False(scale.IsVisible, "the held row is locked, its note alone shown");
-        }
     }
 }

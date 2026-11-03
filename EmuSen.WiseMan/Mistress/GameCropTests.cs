@@ -28,7 +28,7 @@ namespace EmuSen.WiseMan.Mistress
         private static T Named<T>(Window window, string name) where T : Control =>
             Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(window).OfType<T>().First(c => c.Name == name);
 
-        private static string[] Boxes(Window window) => CropFields.Edges.Select(e => Named<TextBox>(window, $"GameCrop.{e.Key}").Text!).ToArray();
+        private static string[] Boxes(Window window) => EmuSen.Mistress.Library.ConsoleCrop.Edges.Select(e => Named<TextBox>(window, $"GameCrop.{e.Key}").Text!).ToArray();
 
         [Fact]
         public Task The_window_starts_from_the_console_s_crop_and_a_number_typed_makes_the_crop_the_game_s_own() => Session.Dispatch(() =>

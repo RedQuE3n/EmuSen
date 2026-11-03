@@ -95,10 +95,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             List(s.Window).Select(entry);
         }
 
-        // Preferences' "Start in big screen mode", read off the window whichever tab is shown.
-        private static LunaSwitch StartSwitch(Window preferences) =>
-            (LunaSwitch)typeof(PreferencesWindow).GetField("_bigScreen", Hidden)!.GetValue(preferences)!;
-
         private readonly record struct Look(double ListSize, double HeaderSize, double HintSize);
 
         private static Look LookOf(MainWindow w) =>
@@ -389,7 +385,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(w.GetControl<Control>("MenuStrip").IsVisible);
         }, default);
 
-        // How the next start begins is Preferences' choice alone: a switch writes nothing, and a start in big picture that the player leaves keeps the choice.
+        // How the next start begins is Settings' choice alone: a switch writes nothing, and a start in big picture that the player leaves keeps the choice.
         [Fact]
         public Task The_next_start_follows_preferences_and_not_the_last_switch() => Session.Dispatch(() =>
         {

@@ -21,6 +21,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -69,15 +70,12 @@ namespace EmuSen.WiseMan.Mistress
             config.Save();
         }
 
-        // The N64 has one engine since Mars (C#) was retired, so its tab offers no choice of one - see Mars_Native.md §6.7.
+        // The N64 has one engine since Mars (C#) was retired, so its page in Settings offers it alone - see Mars_Native.md §6.7.
         [Fact]
-        public Task The_N64_tab_offers_no_engine() => Session.Dispatch(() =>
+        public Task The_N64_page_offers_one_engine() => Session.Dispatch(() =>
         {
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "N64");
-            window.Show();
-
-            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name == $"N64.{CoreCatalog.EngineKey}");
-            Assert.DoesNotContain(window.GetLogicalDescendants().OfType<Control>(), c => c.Name is string name && name.EndsWith("." + CoreCatalog.EngineKey) && name != $"GB.{CoreCatalog.EngineKey}" && name != $"NES.{CoreCatalog.EngineKey}" && name != $"SNES.{CoreCatalog.EngineKey}");
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:N64");
+            Assert.True(!SettingsDesk.Keys(window).Contains("engine") || SettingsDesk.Row(window, "engine").Choices?.Count == 1, "the page offers a choice of engine");
             window.Close();
         }, default);
 

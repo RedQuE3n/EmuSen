@@ -190,10 +190,12 @@ namespace EmuSen.WiseMan.Common
         public void The_overview_says_which_folder_each_file_was_found_in()
         {
             Choose(Chosen);
-            var item = new EmuSen.Mistress.Views.FirmwareRow("A chip", "chip.rom", 8, true, false, "accuracy", null) { FoundIn = FirmwareItem.YourFolder };
-            Assert.Equal("Found in your folder.", item.Where);
-            Assert.Null((item with { Present = false, FoundIn = null }).Where);
-            Assert.Equal("Not used: the file in EmuSen's folder is not 8 bytes.", (item with { Present = false, FoundIn = null, WrongSize = true, WrongSizeIn = FirmwareItem.EmuSensFolder }).Note);
+            FirmwareItem Boot() => FirmwareOverview.Build(new ConsolesConfig()).Single(x => x.Name == "Super Nintendo").Items.Single(i => i.FileName == "spc700.rom");
+            Assert.Null(Boot().FoundIn);
+            Put(DataStore.Firmware, "spc700.rom", 8, 1);
+            Assert.Equal((false, FirmwareItem.EmuSensFolder), (Boot().Present, Boot().WrongSizeIn));
+            Put(Chosen, "spc700.rom", 64, 2);
+            Assert.Equal((true, FirmwareItem.YourFolder), (Boot().Present, Boot().FoundIn));
         }
     }
 }

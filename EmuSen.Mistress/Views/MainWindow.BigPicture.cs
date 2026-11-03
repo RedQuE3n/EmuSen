@@ -278,7 +278,7 @@ namespace EmuSen.Mistress.Views
         // The theme's settings and the themes downloaded on request, as a sheet over whatever shows (§4.53).
         private void ShowThemeSettings()
         {
-            var window = _themeSettings = new ThemeSettingsWindow(_appSettings, HttpFactory, ThemeChanged, _bigScreen ? HelpFamily : null);
+            var window = _themeSettings = new ThemeSettingsWindow(_appSettings, HttpFactory, ThemeChanged);
             window.Closed += (_, _) => { if (_themeSettings == window) _themeSettings = null; };
             _ = SheetLayer.Show(window, this);
         }
@@ -288,17 +288,6 @@ namespace EmuSen.Mistress.Views
         {
             if (replaced) _themed?.Forget();
             if (LibraryView.IsVisible) ShowThemedLibrary();
-            _preferencesSheet?.ShowBigPictureTheme();
-        }
-
-        private PreferencesWindow? _preferencesSheet;
-
-        // Preferences' Big Picture Theme row and the sheet's Themes list write one setting, and each shows the other's choice (§4.56).
-        private void WatchPreferences(PreferencesWindow window)
-        {
-            _preferencesSheet = window;
-            window.ThemeChosen = () => ThemeChanged(false);
-            window.Closed += (_, _) => { if (_preferencesSheet == window) _preferencesSheet = null; };
         }
 
         // A closed window's wake timer and sound stream end with it, so it never draws or plays into what runs next - see EmuSen_BigPicture.md §15.14.

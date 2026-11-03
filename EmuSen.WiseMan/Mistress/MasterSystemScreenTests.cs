@@ -53,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress
             string rom = Path.Combine(_roms, name);
             File.WriteAllBytes(rom, console == "SG-1000" ? SyntheticSmsRom.TmsPicture() : SyntheticSmsRom.Picture());
             var config = new GraphicsConfig();
-            config.SetValue(console, GraphicsSettingsWindow.ScreenFilterKey, CrtFilter.Name);
+            config.SetValue(console, EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, CrtFilter.Name);
             config.Save();
             var window = new MainWindow().WithoutBattery();
             window.Show();

@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 14,
+  "display_name": "Nintendo 64",
+  "firmware_name": null,
   "cheat_space": "RDRAM",
   "media": [{ "id": "n64.pak", "title": "Controller Pak", "noun": "Pak" }],
   "byte_order": "big",

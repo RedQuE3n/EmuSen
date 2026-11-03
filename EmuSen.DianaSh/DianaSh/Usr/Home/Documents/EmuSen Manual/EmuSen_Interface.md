@@ -64,6 +64,24 @@ The remaining windows' eleven questions (§18.15), decided 2026-11-01 by the tes
 19. **[D]** **Setup's five steps**: ROM folder, Firmware, Controllers, Theme, ScreenScraper (§16.2;
     `EmuSen_LibraryTools.md` §1b).
 
+Cores, decided 2026-11-02 by the tester ("Yes to all", and "In core window, we should also sort by manufacturer"):
+
+20. **[D]** **The catalogue is read once.** A home that has never read libretro's catalogue reads it when Cores opens,
+    with its progress in the apply bar; a failure is said in the header's facts (`catalogue could not be read: <why>`)
+    and in the error log. A home that has one never reads it again unasked; checking when Cores opens stays opt-in and
+    off (`EmuSen_Cores.md` §3.8, §11 decision 11).
+21. **[D]** **A console's name in a list is the systems table's `display_name`** (`Super Nintendo`, `Nintendo 64`), one
+    owner beside `console`, which stays the settings' key (§15.3; `EmuSen_Cores.md` §11 decision 12).
+22. **[D]** **Cores sorts by maker**: the strip and the rows by maker in the order the systems table first names them
+    (Nintendo, Sega, Sony, then the rest), within a maker by `release_year`, the table's order breaking a tie; within a
+    console the default first, then the installed cores that can run, then by name. Each maker is a heading above its
+    first row, in Caption Muted upper case, a band of 32 units that the pad never lands on, drawn only while the rows
+    shown hold more than one maker (§15.3; LunaP §211.1).
+23. **[D]** **The frame is held to the mockups**, not Cores: full-width rows with the chosen one raised and its 4-unit
+    accent bar, no empty strip above the first row, the title, strip and list on the grid of §15.2, `Apply…` with its
+    Start glyph beside the meter, the help bar `A · B · Console · More · List · Apply`, and the search box's word
+    `Search` (`EmuSen_Cores.md` §3.8; LunaP §211.2, §211.3).
+
 **Departure from 3.** Decided 2026-11-01: a framed sheet's words stay in Barlow Condensed at their present sizes until
 the Card form rebuilds the sheets in U2 and U3, where the departure ends. Set in Barlow at the big screen's Body, the
 sheets failed the fit audit in 23 states at both sizes (§11; LunaP §206.3).

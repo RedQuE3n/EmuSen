@@ -27,7 +27,10 @@ namespace EmuSen.Tools.Cores
         // A date the tool wrote as 2026-10-31, said as 31 Oct 2026; any other words as they are.
         public static string Day(string date) => DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day) ? day.ToString("d MMM yyyy", CultureInfo.InvariantCulture) : date;
 
-        public static string Consoles(CoreRow row) => row.Consoles.Count > 0 ? string.Join(", ", row.Consoles) : "—";
+        // A date the tool wrote as 2026-10-31, said in full as 31 October 2026; null for anything else.
+        public static string? LongDay(string date) => DateOnly.TryParseExact(date, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day) ? day.ToString("d MMMM yyyy", CultureInfo.InvariantCulture) : null;
+
+        public static string Consoles(CoreRow row) => row.ConsoleNames.Count > 0 ? string.Join(", ", row.ConsoleNames) : "—";
 
         // The status in the list, a glyph beside a word in Title Case, one owner with its colour (EmuSen_Interface.md §15.3).
         public static string Status(CoreRow row) => row.IsDefault ? "● Default"

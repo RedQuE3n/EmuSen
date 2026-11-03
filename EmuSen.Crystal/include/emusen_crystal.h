@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 7u
+#define EMUSEN_CRYSTAL_MINOR 8u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -234,7 +234,9 @@ int64_t emusen_crystal_engines(emusen_crystal_runtime *rt, uint8_t *out, size_t 
  * (section 29.40.5). Since 1.5 every row has "libretro": null, or for an installed libretro core {"folder","file",
  * "sha256","corename","name","version","license","authors":[text],"source","build","trust"}, "sha256" the core file's
  * own and "trust" its standing, the hash an approval names; "trust" of the row may be "needs_refresh"; and an entry
- * whose core waits for that approval is a last row of its own, its "engine" null (EmuSen_LibretroHost.md 10m). */
+ * whose core waits for that approval is a last row of its own, its "engine" null (EmuSen_LibretroHost.md 10m). Since 1.8
+ * every row has "firmware": "required" where the sidecar's info declares firmware for its systems that one has no open
+ * replacement for, "optional" where every one has, or null (EmuSen_Cores.md 3.9). */
 int64_t emusen_crystal_cores(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* changes. Lists the cores directories again, and reads the player's approvals again; a session already open keeps its

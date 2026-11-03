@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 4,
+  "display_name": "Super Nintendo",
+  "firmware_name": null,
   "cheat_space": "CpuBus",
   "media": [],
   "byte_order": "little",

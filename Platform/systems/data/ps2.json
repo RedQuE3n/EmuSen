@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 58,
+  "display_name": "PlayStation 2",
+  "firmware_name": "PlayStation 2 BIOS",
   "cheat_space": null,
   "media": [{ "id": "ps2.card", "title": "Memory Card (PS2)", "noun": "Card" }],
   "byte_order": "little",

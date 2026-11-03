@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": "Genesis",
   "screenscraper_system": 20,
+  "display_name": "Sega CD",
+  "firmware_name": "Sega CD BIOS",
   "cheat_space": "WRAM",
   "media": [
     { "id": "mcd.ramcart", "title": "Backup RAM Cartridge", "noun": "Cartridge" },

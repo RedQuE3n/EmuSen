@@ -18,6 +18,9 @@ namespace EmuSen.Tools.Cores
         public IReadOnlyList<string> Systems { get; init; } = [];
         // The consoles its systems belong to, as the runtime names them.
         public IReadOnlyList<string> Consoles { get; init; } = [];
+        // The same consoles as a list shows them, the systems table's display_name, "Super Nintendo" for SNES (EmuSen_Cores.md §3.8).
+        public IReadOnlyList<string> ConsoleNames { get => _names ?? Consoles; init => _names = value; }
+        private readonly IReadOnlyList<string>? _names;
         public string Version { get; init; } = "";
         public string? Reason { get; init; }
         public string Licence { get; init; } = "";
@@ -33,6 +36,10 @@ namespace EmuSen.Tools.Cores
         public string? Trust { get; init; }
         // Whether it is the engine of one of its consoles.
         public bool IsDefault { get; init; }
+        // A core under development, which the runtime lists but no console defaults to.
+        public bool Development { get; init; }
+        // The firmware its info declares: "required", "optional", or none (EmuSen_Cores.md §3.9).
+        public string? Firmware { get; init; }
 
         public bool IsLibretro => Source == Libretro;
 
@@ -45,10 +52,15 @@ namespace EmuSen.Tools.Cores
             consoleOf.Count == 0 ? systems.Distinct().ToArray() : systems.Where(consoleOf.ContainsKey).Select(s => consoleOf[s]).Distinct().ToArray();
 
         // A row of the core tool's `core` event (EmuSen_Cores.md §6.1).
-        public static CoreRow? OfTool(JsonElement e, IReadOnlyDictionary<string, string> consoleOf)
+        // The consoles' names a list shows; a console the table gives no display name keeps its own.
+        private static string[] NamesOf(IReadOnlyList<string> consoles, IReadOnlyDictionary<string, string>? nameOf) =>
+            consoles.Select(c => nameOf is not null && nameOf.TryGetValue(c, out string? n) ? n : c).ToArray();
+
+        public static CoreRow? OfTool(JsonElement e, IReadOnlyDictionary<string, string> consoleOf, IReadOnlyDictionary<string, string>? nameOf = null)
         {
             if (Text(e, "event") != "core" || Text(e, "stem") is not { } stem) return null;
             IReadOnlyList<string> systems = Strings(e, "systems");
+            string[] consoles = ConsolesOf(systems, consoleOf);
             return new CoreRow
             {
                 Key = "libretro:" + stem,
@@ -59,7 +71,8 @@ namespace EmuSen.Tools.Cores
                 State = Text(e, "state") ?? "",
                 Reason = Text(e, "reason"),
                 Systems = systems,
-                Consoles = ConsolesOf(systems, consoleOf),
+                Consoles = consoles,
+                ConsoleNames = NamesOf(consoles, nameOf),
                 Version = string.Join(" ", new[] { Text(e, "version"), Text(e, "build") }.Where(v => !string.IsNullOrEmpty(v))),
                 Licence = Text(e, "license") ?? "",
                 Authors = Strings(e, "authors"),
@@ -68,7 +81,7 @@ namespace EmuSen.Tools.Cores
         }
 
         // A row of the runtime's `cores` listing, a core library discovery found (EmuSen_Backend.md §29.40.5).
-        public static CoreRow? OfRuntime(JsonElement c, IReadOnlyDictionary<string, string> consoleOf, Func<string, string, bool> isDefault)
+        public static CoreRow? OfRuntime(JsonElement c, IReadOnlyDictionary<string, string> consoleOf, Func<string, string, bool> isDefault, IReadOnlyDictionary<string, string>? nameOf = null)
         {
             if (Text(c, "library") is not { } library) return null;
             string engine = Text(c, "engine") ?? "";
@@ -84,6 +97,7 @@ namespace EmuSen.Tools.Cores
                 State = shipped ? "built in" : trust,
                 Systems = systems,
                 Consoles = consoles,
+                ConsoleNames = NamesOf(consoles, nameOf),
                 Licence = Text(c, "license") ?? "",
                 Authors = Strings(c, "authors"),
                 Size = File.Exists(library) ? new FileInfo(library).Length : null,
@@ -91,7 +105,10 @@ namespace EmuSen.Tools.Cores
                 Library = library,
                 Sha256 = c.TryGetProperty("libretro", out JsonElement l) && l.ValueKind == JsonValueKind.Object ? Text(l, "sha256") : Text(c, "sha256"),
                 Trust = trust,
-                IsDefault = engine.Length > 0 && consoles.Any(console => isDefault(console, engine)),
+                Development = c.TryGetProperty("development", out JsonElement dev) && dev.ValueKind == JsonValueKind.True,
+                Firmware = Text(c, "firmware"),
+                // A core waiting for approval cannot run, so it is no console's default until approved (EmuSen_Cores.md §3.8).
+                IsDefault = engine.Length > 0 && trust != "needs_approval" && consoles.Any(console => isDefault(console, engine)),
             };
         }
 

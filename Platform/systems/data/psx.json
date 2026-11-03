@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 57,
+  "display_name": "PlayStation",
+  "firmware_name": "PlayStation BIOS",
   "cheat_space": "RAM",
   "media": [{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }],
   "byte_order": "little",

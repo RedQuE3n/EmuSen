@@ -200,7 +200,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { dropped }, _runtime.Revoked);
             Assert.Empty(_runtime.Approved);
             Assert.False(pane.IsRunning);
-            Assert.StartsWith("Installed pcsx2. Nothing downloaded runs until you approve it", pane.Notice);
+            Assert.StartsWith("Installed LRPS2. Nothing downloaded runs until you approve it", pane.Notice);
             Assert.Contains("CRC-32", pane.Notice);
             window.Close();
         }, default);
@@ -236,7 +236,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(pane.Actions.First(a => a.Text == "Approve…").IsEnabled);
             Assert.False(pane.ApproveSelectedAsync().Result);
             Assert.Empty(_runtime.Approved);
-            Assert.Contains(new string('4', 64), asked[0]);
+            Assert.Contains(new string('4', 64), Ungrouped(asked[0]));
             Assert.StartsWith(CoreApproval.Title, asked[0]);
             Assert.DoesNotContain("trust on first download", asked[0]);
             answer = true;
@@ -253,14 +253,18 @@ namespace EmuSen.WiseMan.Mistress
         {
             (CoresWindow window, CoresPane pane) = Open();
             Choose(pane, "console:PlayStation 2");
+            // A core waiting for approval cannot run, so it is not offered as the engine until approved (EmuSen_Cores.md §3.8).
             pane.Table.Select(Row(pane, "ExtraPS2"));
             Settle(window);
             LunaAction make = pane.Actions.First(a => a.Text == "Make Default");
+            Assert.False(make.IsEnabled);
+            pane.Table.Select(Row(pane, "Sapphire"));
+            Settle(window);
             Assert.True(make.IsEnabled);
             make.Invoke();
-            Assert.Equal("ExtraPS2", _runtime.Settings[("PlayStation 2", global::EmuSen.Mistress.Library.RuntimeCatalog.EngineKey)]);
-            Assert.True(Row(pane, "ExtraPS2").IsDefault);
-            Assert.False(Row(pane, "Sapphire").IsDefault);
+            Assert.Equal("Sapphire", _runtime.Settings[("PlayStation 2", global::EmuSen.Mistress.Library.RuntimeCatalog.EngineKey)]);
+            Assert.True(Row(pane, "Sapphire").IsDefault);
+            Assert.False(Row(pane, "ExtraPS2").IsDefault);
             Assert.False(Row(pane, "pcee2").IsDefault);
             pane.Table.Select(Row(pane, "pcsx2"));
             Settle(window);
@@ -275,9 +279,12 @@ namespace EmuSen.WiseMan.Mistress
             (CoresWindow window, CoresPane pane) = Open();
             Assert.Equal(4, pane.Rows.Count);
             Assert.StartsWith("libretro publishes no cores for this kind of machine", pane.SummaryText);
+            // The catalogue was read once as Cores opened and could not be; the header says why, and a later listing does not read it again (EmuSen_Cores.md §3.8).
+            for (int i = 0; i < 4; i++) pane.Poll();
+            Assert.EndsWith("catalogue could not be read: no buildbot listing is known for this platform", pane.Header!.Facts);
             CoresPane.StartJob = CoresJobs(catalogue: false);
             pane.Refresh();
-            pane.Poll();
+            for (int i = 0; i < 4; i++) pane.Poll();
             Assert.StartsWith("No catalogue of libretro's cores yet", pane.SummaryText);
             window.Close();
         }, default);
@@ -337,5 +344,8 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
             Assert.Empty(faults);
         }, default);
+
+        // A hash the question writes in groups of eight, read back whole.
+        internal static string Ungrouped(string words) => words.Replace(" ", "").Replace("\n", "");
     }
 }

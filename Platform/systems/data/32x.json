@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": "Genesis",
   "screenscraper_system": 19,
+  "display_name": "32X",
+  "firmware_name": "32X BIOS",
   "cheat_space": "WRAM",
   "media": [],
   "byte_order": "big",

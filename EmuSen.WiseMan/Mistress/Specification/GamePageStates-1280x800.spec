@@ -98,6 +98,6 @@ tree
         83 Border at=0,702,1280,58 by=panel limit=0,0,1280,800 name=PageHelpBar paints=#1B1B1EFF,#707070FF role=none
           84 HintBar at=64,713,1152,41 by=panel heard="Load, Delete…, Favourite, Section, Back, Home" limit=0,0,1280,800 role=group
 focus none
-press down focus="SelectableCell  (Play)" page=states
+press down focus="PageLayout GamePage" page=states
 press up focus="SelectableCell  (Play)" page=states
 press back page=closed

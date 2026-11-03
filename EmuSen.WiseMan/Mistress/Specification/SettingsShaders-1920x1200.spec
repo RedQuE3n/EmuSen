@@ -15,27 +15,27 @@ tree
   0 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
     1 LayoutTransformControl at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
       2 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 paints=#1B1B1EFF role=none
-        3 WholeRow at=96,60,1728,66 by=panel heard=Sections limit=0,0,1920,1200 name=SettingsSections role=none
-          4 ToggleButton at=96,60,156,66 by=panel drawn focus heard=Display limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=DISPLAY
+        3 WholeRow at=96,60,1728,66 by=panel heard=Sections limit=0,0,1920,1200 name=SettingsSections role=tab
+          4 SectionTab at=96,60,156,66 by=panel drawn focus heard=Display limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=DISPLAY
             5 AccessText at=120,72,108,37.5 box=72,25 by=clip caps=13.999 drawn face=Barlow layout=71.9,24 limit=96,60,156,66 owner=4 paints=#D4D4D4FF role=none size=20 text=DISPLAY
-          6 ToggleButton at=264,60,172.5,66 by=panel drawn focus heard=Shaders limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=SHADERS
+          6 SectionTab at=264,60,172.5,66 by=panel drawn focus heard=Shaders limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=SHADERS
             7 AccessText at=288,72,124.5,37.5 box=83,25 by=clip caps=13.999 drawn face=Barlow layout=82.2,24 limit=264,60,172.5,66 owner=6 paints=#D4D4D4FF role=none size=20 text=SHADERS
-          8 ToggleButton at=448.5,60,279,66 by=panel drawn focus heard="Super Nintendo" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text="SUPER NINTENDO"
+          8 SectionTab at=448.5,60,279,66 by=panel drawn focus heard="Super Nintendo" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="SUPER NINTENDO"
             9 AccessText at=472.5,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=448.5,60,279,66 owner=8 paints=#EEEEF0FF role=none size=20 text="SUPER NINTENDO"
-        10 StackPanel at=96,162,1056,567 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=none
-          11 MenuRow at=96,162,1056,81 by=panel heard="Parameters, None" limit=0,0,1920,1200 name=SettingsRow.params role=listitem
-          12 MenuRow at=96,243,1056,81 by=panel heard="Search, …" limit=0,0,1920,1200 name=SettingsRow.find role=listitem
-          13 MenuRow at=96,324,1056,81 by=panel heard="None, ● In use" limit=0,0,1920,1200 name=SettingsRow.use:None role=listitem
-          14 MenuRow at=96,405,1056,81 by=panel heard=CRT limit=0,0,1920,1200 name=SettingsRow.use:CRT role=listitem
-          15 MenuRow at=96,486,1056,81 by=panel heard="CRT (Lottes)" limit=0,0,1920,1200 name="SettingsRow.use:CRT (Lottes)" role=listitem
-          16 MenuRow at=96,567,1056,81 by=panel heard=Scanlines limit=0,0,1920,1200 name=SettingsRow.use:Scanlines role=listitem
-          17 MenuRow at=96,648,1056,81 by=panel heard="Simple CRT" limit=0,0,1920,1200 name="SettingsRow.use:Simple CRT" role=listitem
+        10 SelectionStack at=96,162,1056,567 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=list
+          11 MenuRow at=96,162,1056,81 by=panel focus heard="Parameters, None" limit=0,0,1920,1200 name=SettingsRow.params role=listitem
+          12 MenuRow at=96,243,1056,81 by=panel focus heard="Search, …" limit=0,0,1920,1200 name=SettingsRow.find role=listitem
+          13 MenuRow at=96,324,1056,81 by=panel focus heard="None, ● In use" limit=0,0,1920,1200 name=SettingsRow.use:None role=listitem
+          14 MenuRow at=96,405,1056,81 by=panel focus heard=CRT limit=0,0,1920,1200 name=SettingsRow.use:CRT role=listitem
+          15 MenuRow at=96,486,1056,81 by=panel focus heard="CRT (Lottes)" limit=0,0,1920,1200 name="SettingsRow.use:CRT (Lottes)" role=listitem
+          16 MenuRow at=96,567,1056,81 by=panel focus heard=Scanlines limit=0,0,1920,1200 name=SettingsRow.use:Scanlines role=listitem
+          17 MenuRow at=96,648,1056,81 by=panel focus heard="Simple CRT" limit=0,0,1920,1200 name="SettingsRow.use:Simple CRT" role=listitem
         18 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#26262BFF role=none
           19 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none
             20 TextBlock at=1236,198,552,79.5 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="The parameters of None, for the Super Nintendo." layout=351.03,52.8 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="The parameters of None, for the Super Nintendo."
         21 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
           22 HintBar at=96,1074,1728,45 by=panel heard="Open, Back, Home" limit=0,0,1920,1200 role=group
 focus none
-press down focus="SettingsLayout SettingsScreen" settings="display Display › Shaders › Super Nintendo find" top=none
-press up focus="SettingsLayout SettingsScreen" settings="display Display › Shaders › Super Nintendo params" top=none
-press back focus="SettingsLayout SettingsScreen" settings="display Display › Shaders shader:SNES" top=none
+press down focus="MenuRow SettingsRow.find" settings="display Display › Shaders › Super Nintendo find" top=none
+press up focus="MenuRow SettingsRow.params" settings="display Display › Shaders › Super Nintendo params" top=none
+press back focus="MenuRow SettingsRow.shader:SNES" settings="display Display › Shaders shader:SNES" top=none

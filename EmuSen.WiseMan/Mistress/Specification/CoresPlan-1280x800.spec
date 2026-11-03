@@ -27,14 +27,14 @@ tree
                   13 ScrollViewer allow="a text box scrolls its own text" at=987,107,218,30 name=PART_ScrollViewer paints=#D4D4D4FF part role=scrollviewer
                     14 TextBlock allow="a text box scrolls its own text" at=987,110,218,24 box=218,24 caps=13.999 face=Barlow heard=Search in=13 layout=59.32,24 name=PART_Placeholder paints=#8D8D91FF part role=text size=20 text=Search
               15 Border at=64,100,912,44 by=panel limit=0,0,1280,800 name=AdaptiveNavigation role=none
-                16 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=none
-                  17 ToggleButton at=80,100,34,44 by=panel focus heard=All limit=0,0,1280,800 paints=#D4D4D4FF role=button text=All
+                16 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=tab
+                  17 SectionTab at=80,100,34,44 by=panel focus heard=All limit=0,0,1280,800 paints=#D4D4D4FF role=tabitem text=All
                     18 TextBlock at=80,108,34,24 box=34,24 by=clip caps=13.999 face=Barlow heard=ALL layout=33.56,24 limit=80,100,34,44 owner=17 paints=#D4D4D4FF role=text size=20 text=ALL
-                  19 ToggleButton at=146,100,154,44 by=panel focus heard="Super Nintendo" limit=0,0,1280,800 paints=#D4D4D4FF role=button text="Super Nintendo"
+                  19 SectionTab at=146,100,154,44 by=panel focus heard="Super Nintendo" limit=0,0,1280,800 paints=#D4D4D4FF role=tabitem text="Super Nintendo"
                     20 TextBlock at=146,108,154,24 box=154,24 by=clip caps=13.999 face=Barlow heard="SUPER NINTENDO" layout=153.46,24 limit=146,100,154,44 owner=19 paints=#D4D4D4FF role=text size=20 text="SUPER NINTENDO"
-                  21 ToggleButton at=332,100,114,44 by=panel focus heard=PlayStation limit=0,0,1280,800 paints=#D4D4D4FF role=button text=PlayStation
+                  21 SectionTab at=332,100,114,44 by=panel focus heard=PlayStation limit=0,0,1280,800 paints=#D4D4D4FF role=tabitem text=PlayStation
                     22 TextBlock at=332,108,114,24 box=114,24 by=clip caps=13.999 face=Barlow heard=PLAYSTATION layout=113.56,24 limit=332,100,114,44 owner=21 paints=#D4D4D4FF role=text size=20 text=PLAYSTATION
-                  23 ToggleButton at=478,100,128,44 by=panel focus heard="PlayStation 2" limit=0,0,1280,800 paints=#4C9AE8FF,#EEEEF0FF role=button text="PlayStation 2"
+                  23 SectionTab at=478,100,128,44 by=panel focus heard="PlayStation 2" limit=0,0,1280,800 paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="PlayStation 2"
                     24 TextBlock at=478,108,128,24 box=128,24 by=clip caps=13.999 face=Barlow heard="PLAYSTATION 2" layout=127.7,24 limit=478,100,128,44 owner=23 paints=#EEEEF0FF role=text size=20 text="PLAYSTATION 2"
             25 Grid at=64,160,1152,542 by=panel limit=0,0,1280,800 role=none
               26 Grid at=64,160,691,542 by=panel limit=0,0,1280,800 role=none

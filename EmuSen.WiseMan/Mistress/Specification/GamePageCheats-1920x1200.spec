@@ -44,19 +44,19 @@ tree
                 29 PadGlyph at=1261.5,502.5,45,45 by=panel heard=Y limit=0,0,1920,1200 role=image
                 30 Path at=1321.5,508.5,33,33 by=panel limit=0,0,1920,1200 nohit role=none
                 31 TextBlock at=1369.5,501,154.5,48 box=103,32 by=panel caps=18.1987 drawn face=Barlow heard=Favourite layout=102.36,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Favourite
-        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 role=none
-          33 ToggleButton at=504,594,160.5,66 by=panel drawn focus heard=Options limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=OPTIONS
+        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 name=PageSections role=tab
+          33 SectionTab at=504,594,160.5,66 by=panel drawn focus heard=Options limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=OPTIONS
             34 AccessText at=528,606,112.5,37.5 box=75,25 by=clip caps=13.999 drawn face=Barlow layout=74.88,24 limit=504,594,160.5,66 owner=33 paints=#D4D4D4FF role=none size=20 text=OPTIONS
-          35 ToggleButton at=676.5,594,150,66 by=panel drawn focus heard=Cheats limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text=CHEATS
+          35 SectionTab at=676.5,594,150,66 by=panel drawn focus heard=Cheats limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=CHEATS
             36 AccessText at=700.5,606,102,37.5 box=68,25 by=clip caps=13.999 drawn face=Barlow layout=67.06,24 limit=676.5,594,150,66 owner=35 paints=#EEEEF0FF role=none size=20 text=CHEATS
         37 Border at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageContent role=none
-          38 StackPanel at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageRows role=none
-            39 MenuRow at=96,696,1728,81 by=panel heard="Infinite lives, On" limit=0,0,1920,1200 name=PageRow.0 role=listitem
-            40 MenuRow at=96,777,1728,81 by=panel heard="All doors open, Off" limit=0,0,1920,1200 name=PageRow.1 role=listitem
-            41 MenuRow at=96,858,1728,81 by=panel heard="Start with the choir, Off" limit=0,0,1920,1200 name=PageRow.2 role=listitem
+          38 SelectionStack at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageRows role=list
+            39 MenuRow at=96,696,1728,81 by=panel focus heard="Infinite lives, On" limit=0,0,1920,1200 name=PageRow.0 role=listitem
+            40 MenuRow at=96,777,1728,81 by=panel focus heard="All doors open, Off" limit=0,0,1920,1200 name=PageRow.1 role=listitem
+            41 MenuRow at=96,858,1728,81 by=panel focus heard="Start with the choir, Off" limit=0,0,1920,1200 name=PageRow.2 role=listitem
         42 Border at=0,1053,1920,87 by=panel limit=0,0,1920,1200 name=PageHelpBar paints=#1B1B1EFF,#707070FF role=none
           43 HintBar at=96,1069.5,1728,61.5 by=panel heard="On · Off, Favourite, Options, Home" limit=0,0,1920,1200 role=group
 focus none
-press down focus="PageLayout GamePage" page=Cheats
-press up focus="PageLayout GamePage" page=Cheats
-press back focus="PageLayout GamePage" page=options
+press down focus="MenuRow PageRow.1" page=Cheats
+press up focus="MenuRow PageRow.0" page=Cheats
+press back focus="MenuRow PageRow.cheats" page=options

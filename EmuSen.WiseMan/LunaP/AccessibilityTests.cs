@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.VisualTree;
@@ -13,8 +14,11 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Input;
+using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.WiseMan.Mistress.BigPicture;
 
 namespace EmuSen.WiseMan.LunaP
 {
@@ -185,6 +189,103 @@ namespace EmuSen.WiseMan.LunaP
             string[] helps = browse.Select(b => ControlAutomationPeer.CreatePeerForElement(b).GetHelpText() ?? "").ToArray();
             Assert.DoesNotContain("", helps);
             Assert.Equal(helps.Length, helps.Distinct().Count());
+        });
+
+        // The words a big-screen settings row is drawn with, as a reader should hear them: its label and its value.
+        private static string Spoken(PageRow row) =>
+            MenuRow.Describe(row.Label, row.Status ?? (row.Kind == PageRowKind.Asks ? "…" : null), MenuRowKind.Action, false);
+
+        private static AutomationPeer PeerNamed(Control root, string name) =>
+            ControlAutomationPeer.CreatePeerForElement(root.GetVisualDescendants().OfType<Control>().First(c => c.Name == name));
+
+        private static string Selection(Control root, string name) =>
+            string.Join("|", PeerNamed(root, name).GetProvider<ISelectionProvider>()!.GetSelection().Select(p => p.GetName()));
+
+        // What a reader is given on a big-screen page: the element holding the focus, which must be the selected row and the rows' one selection.
+        private static string Heard(Control layout, string rows = "SettingsRows")
+        {
+            var focused = TopLevel.GetTopLevel(layout)!.FocusManager!.GetFocusedElement() as Control;
+            Assert.NotNull(focused);
+            AutomationPeer peer = ControlAutomationPeer.CreatePeerForElement(focused!);
+            Assert.True(peer.HasKeyboardFocus(), $"{focused!.Name} does not report the focus");
+            Assert.True(peer.GetProvider<ISelectionItemProvider>()?.IsSelected, $"{focused!.Name} is not reported selected");
+            Assert.Equal(peer.GetName(), Selection(layout, rows));
+            return peer.GetName();
+        }
+
+        // Down the page from the focused row to its last, the reader told each row's label and value in turn, the focus passing from row to row and never resting on the screen between.
+        private static int Walk(SettingsLayout layout, Action down) =>
+            Walk(layout, () => layout.Rows, () => layout.Focused, "SettingsRows", down);
+
+        private static int Walk(Control layout, Func<IReadOnlyList<PageRow>> rows, Func<string?> focus, string rowsName, Action down)
+        {
+            var told = new List<object?>();
+            TopLevel.GetTopLevel(layout)!.AddHandler(InputElement.GotFocusEvent, (_, e) => told.Add(e.Source));
+            for (int steps = 1; ; steps++)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                PageRow row = rows().Single(r => r.Key == focus());
+                Assert.Equal(Spoken(row), Heard(layout, rowsName));
+                if (row.Key == rows()[^1].Key) return steps;
+                told.Clear();
+                down();
+                Assert.True(told.Count > 0, $"the move from {row.Key} was not told");
+                Assert.DoesNotContain(layout, told);
+            }
+        }
+
+        // Settings ▸ Consoles ▸ a console's page by pad: the chosen section and the row the pad is on are what a reader hears selected, at every step.
+        [Fact]
+        public Task Settings_tells_a_reader_the_row_the_pad_is_on_through_a_console_s_page() => ThemedLibraryPadTests.Run(s =>
+        {
+            SettingsLayout layout = SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, SettingsScreen.Consoles);
+            Assert.Equal("Consoles", Selection(layout, "SettingsSections"));
+            Assert.Equal(Spoken(layout.Rows[0]), Heard(layout));
+            SettingsPad.To(s.Window, s.Pad, "console:PlayStation");
+            Assert.Equal(Spoken(layout.Rows.Single(r => r.Key == "console:PlayStation")), Heard(layout));
+            s.Pad.A();
+            Assert.Equal(2, layout.Trail.Count);
+            Assert.Equal(layout.Trail[^1], Selection(layout, "SettingsSections"));
+            Assert.True(Walk(layout, () => s.Pad.Down()) >= 4, "the console's page had too few rows to walk");
+        });
+
+        // A game's page by pad: its chosen section selected, the page holding the focus in its actions, then each row of Options told selected as the pad walks it.
+        [Fact]
+        public Task A_game_s_page_tells_a_reader_the_row_the_pad_is_on() => ThemedLibraryPadTests.Run(s =>
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.X();
+            PageLayout layout = s.Window.GamePageLayout!;
+            for (int i = 0; i < 6 && s.Window.GamePageShown!.Section != GamePage.Options; i++) s.Pad.R1();
+            Assert.Equal(GamePage.Options, s.Window.GamePageShown!.Section);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Options", Selection(layout, "PageSections"));
+            Assert.True(layout.Focused.InActions);
+            Assert.Same(layout, TopLevel.GetTopLevel(layout)!.FocusManager!.GetFocusedElement());
+            Assert.Equal("", Selection(layout, "PageRows"));
+            s.Pad.Down();
+            Assert.False(layout.Focused.InActions);
+            IReadOnlyList<PageRow> Rows() => ((PageContent.Rows)layout.Content!).Items;
+            Assert.True(Walk(layout, Rows, () => layout.Focused.Key, "PageRows", () => s.Pad.Down()) >= 3, "the page had too few rows to walk");
+        });
+
+        // A running engine's own rows from its options, through the fake host: the same, each heading and held row included.
+        [Fact]
+        public Task A_running_engine_s_rows_are_told_as_the_pad_walks_them() => UiTest.Run(() =>
+        {
+            IReadOnlyList<SettingRow> rows = WindowFitAuditTests.HostedRows();
+            var host = new SettingsHostFake { Rows = c => c == "PlayStation 2" ? rows : RuntimeCatalog.SettingsFor(c), RunningConsole = "PlayStation 2" };
+            var screen = new SettingsScreen(host, SettingsScreen.Consoles);
+            screen.OpenPath(SettingsScreen.Consoles, "console:PlayStation 2");
+            var layout = new SettingsLayout { Form = AdaptiveForm.BigScreen };
+            _ = new EmuSen.Mistress.Views.SettingsView(screen, layout, () => null);
+            MenuPanel.SetScale(layout, 1);
+            using var shown = new Showing(new Window { Width = 1280, Height = 800, Content = layout });
+            shown.Window.Show();
+            layout.Focus();
+            Assert.Contains(layout.Rows, r => r.Key == "tc_deinterlace");
+            Assert.True(Walk(layout, () => layout.Move(0, 1)) == layout.Rows.Count);
         });
 
         private sealed class Showing : IDisposable

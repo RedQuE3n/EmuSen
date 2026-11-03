@@ -17,8 +17,8 @@ tree
       2 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#1B1B1EFF role=none
         3 DockPanel at=64,40,1152,44 by=panel limit=0,0,1280,800 role=none
           4 TextBlock at=1145,50,71,24 box=71,24 by=panel caps=13.999 drawn face=Barlow heard="3 games" layout=70.48,24 limit=0,0,1280,800 name=GalleryCount paints=#8D8D91FF role=text size=20 text="3 games"
-          5 WholeRow at=64,40,1057,44 by=panel heard=Sections limit=0,0,1280,800 name=GallerySections role=none
-            6 ToggleButton at=64,40,122,44 by=panel drawn focus heard=Weekend limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text=WEEKEND
+          5 WholeRow at=64,40,1057,44 by=panel heard=Sections limit=0,0,1280,800 name=GallerySections role=tab
+            6 SectionTab at=64,40,122,44 by=panel drawn focus heard=Weekend limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=WEEKEND
               7 AccessText at=80,48,90,25 box=90,25 by=clip caps=13.999 drawn face=Barlow layout=89.36,24 limit=64,40,122,44 owner=6 paints=#EEEEF0FF role=none size=20 text=WEEKEND
         8 Panel at=142,108,996,504 by=panel heard=Weekend limit=0,0,1280,800 name=GalleryGrid role=none
           9 CoverCard at=136.6,100.8,190.8,254.4 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1280,800 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Aurora Drift (Synthetic).sfc" role=none

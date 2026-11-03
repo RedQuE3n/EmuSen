@@ -44,19 +44,19 @@ tree
                 29 PadGlyph at=1261.5,502.5,45,45 by=panel heard=Y limit=0,0,1920,1200 role=image
                 30 Path at=1321.5,508.5,33,33 by=panel limit=0,0,1920,1200 nohit role=none
                 31 TextBlock at=1369.5,501,154.5,48 box=103,32 by=panel caps=18.1987 drawn face=Barlow heard=Favourite layout=102.36,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Favourite
-        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 role=none
-          33 ToggleButton at=504,594,154.5,66 by=panel drawn focus heard=Details limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=DETAILS
+        32 WholeRow at=504,594,1320,66 by=panel heard=Sections limit=0,0,1920,1200 name=PageSections role=tab
+          33 SectionTab at=504,594,154.5,66 by=panel drawn focus heard=Details limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text=DETAILS
             34 AccessText at=528,606,106.5,37.5 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.98,24 limit=504,594,154.5,66 owner=33 paints=#D4D4D4FF role=none size=20 text=DETAILS
-          35 ToggleButton at=670.5,594,297,66 by=panel drawn focus heard="Scrape This Game" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=button text="SCRAPE THIS GAME"
+          35 SectionTab at=670.5,594,297,66 by=panel drawn focus heard="Scrape This Game" limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="SCRAPE THIS GAME"
             36 AccessText at=694.5,606,249,37.5 box=166,25 by=clip caps=13.999 drawn face=Barlow layout=165.22,24 limit=670.5,594,297,66 owner=35 paints=#EEEEF0FF role=none size=20 text="SCRAPE THIS GAME"
         37 Border at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageContent role=none
-          38 StackPanel at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageRows role=none
+          38 SelectionStack at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageRows role=list
             39 TextBlock at=96,696,1728,79.5 box=1152,53 by=panel caps=15.3989 drawn face=Barlow heard="ScreenScraper cannot be asked: this build carries no developer credentials and EmuSen's developer file is not on this computer." layout=1078.2,52.8 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=22 text="ScreenScraper cannot be asked: this build carries no developer credentials and EmuSen's developer file is not on this computer."
-            40 MenuRow at=96,793.5,1728,81 by=panel heard="By the file's checksums…" limit=0,0,1920,1200 name=PageRow.file role=listitem
-            41 MenuRow at=96,874.5,1728,81 by=panel heard=No limit=0,0,1920,1200 name=PageRow.no role=listitem
+            40 MenuRow at=96,793.5,1728,81 by=panel focus heard="By the file's checksums…" limit=0,0,1920,1200 name=PageRow.file role=listitem
+            41 MenuRow at=96,874.5,1728,81 by=panel focus heard=No limit=0,0,1920,1200 name=PageRow.no role=listitem
         42 Border at=0,1053,1920,87 by=panel limit=0,0,1920,1200 name=PageHelpBar paints=#1B1B1EFF,#707070FF role=none
           43 HintBar at=96,1069.5,1728,61.5 by=panel heard="Choose, Favourite, No, Home" limit=0,0,1920,1200 role=group
 focus none
-press down focus="PageLayout GamePage" page="Scrape This Game"
-press up focus="PageLayout GamePage" page="Scrape This Game"
-press back focus="PageLayout GamePage" page=details
+press down focus="MenuRow PageRow.no" page="Scrape This Game"
+press up focus="MenuRow PageRow.file" page="Scrape This Game"
+press back focus="MenuRow PageRow.scrape" page=details

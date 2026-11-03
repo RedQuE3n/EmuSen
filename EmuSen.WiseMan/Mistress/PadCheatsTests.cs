@@ -57,7 +57,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            pad.A();
+            OwnLook.Play(window, pad);
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             return (window, pad);
         }

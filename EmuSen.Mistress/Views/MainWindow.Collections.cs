@@ -51,18 +51,22 @@ namespace EmuSen.Mistress.Views
             return _collections.FirstOrDefault(c => c.Id == id);
         }
 
-        private async Task RenameCollectionAsync()
+        private Task RenameCollectionAsync() => RenameCollectionAsync(ShownCollection);
+
+        private async Task RenameCollectionAsync(GameCollection? shown)
         {
-            if (ShownCollection is not GameCollection collection) return;
+            if (shown is not GameCollection collection) return;
             if (await Dialogs.PromptAsync(this, "Rename Collection", $"A new name for {collection.Name}", collection.Name, "Rename") is not string name) return;
             StatusText.Text = _records.RenameCollection(collection.Id, name) ? $"Renamed {collection.Name} to {name}" : $"There is already a collection called {name}.";
             ShowLibraryEntries();
         }
 
         // The games stay where they are; only the list of them goes.
-        private async Task DeleteCollectionAsync()
+        private Task DeleteCollectionAsync() => DeleteCollectionAsync(ShownCollection);
+
+        private async Task DeleteCollectionAsync(GameCollection? shown)
         {
-            if (ShownCollection is not GameCollection collection) return;
+            if (shown is not GameCollection collection) return;
             if (!await Dialogs.ConfirmAsync(this, "Delete Collection", $"Delete the collection {collection.Name}? The games in it are not touched.", "Delete", "Cancel")) return;
             _records.DeleteCollection(collection.Id);
             _appSettings.LibraryCollection = AllGamesKey;

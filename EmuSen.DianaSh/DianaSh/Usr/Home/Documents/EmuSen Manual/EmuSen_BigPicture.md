@@ -11819,3 +11819,93 @@ its run:
 | B on a deeper page closes the whole page (`GamePage.Back`) | `GamePageTests`, the Options and Details cases |
 | Resume plays the newest state whatever slot was chosen | `GamePageTests`' Play and Resume case |
 | The window's pad router passes the page by (`MainWindow.Pad.cs`) | 22 of the page's recordings, their pressed transitions |
+
+## 51. Home and the grid: U5 of the unified interface (2026-11-03)
+
+Screens 1 and 2 of `EmuSen_Interface.md` §4, the List card and search of §18.1, Start Console of §18.3 and Collections of
+§18.4, and the desktop's Home of §17.5 (D4), built on LunaP's `HubLayout`, `GalleryLayout` and `CoverCard` (LunaP §212)
+from two plain descriptions that name no Avalonia type, `EmuSen.Mistress/Pages/HomeScreen.cs` and `GamesScreen.cs`: their
+words, rows, places, hints, sorts and what each press does. `MainWindow.OwnLook.cs` is their host (`IHomeHost`,
+`IGamesHost`), the one place they read the window and ask it to act.
+
+### 51.1 Where they show
+
+EmuSen's own look ("EmuSen (built in)" in the theme list, §4.56) is now Home and the grid on the big screen, in the
+library's place: a big-screen session with no theme chosen, or one whose theme did not load, shows Home first. The desktop's
+library, its sidebar and its pad hints are no longer drawn on the big screen (§51.5). On the desktop, `Home` is the first row
+of the sidebar, above LIBRARY, and shows Home's desktop form in the library's content area; the library is still the
+window's first view (§51.6).
+
+### 51.2 Home
+
+- **Continue**, while a game is suspended: its paused frame in the poster slot shaped for video (`PosterSlot.Video` holds
+  the scraped clip for Pass 12), `CONTINUE PLAYING`, the name, and `<console> · Paused 12 minutes ago`. A resumes, X opens
+  the game's page, Y makes it a favourite.
+- **Recent**: the games played last, newest first, the suspended one left out, whole covers only on one baseline; A plays,
+  X opens the page, Y favourites. The focused cover's name stands under the shelf and its fan art, else its cover, is the
+  background at 40 per cent, blurred, under the scrim's gradient.
+- **The places**, each with one line: Games (`1,284 games`), Scraper (`41 no art`, from the Home card's own count of
+  `scrape ls`), Packages, Library, Cores (`⚠ 1 to approve` in Attention while one waits), Settings (`Dark · 60% sound`) and
+  Power (`Exit`, or `Quit` in Steam's Game Mode). The desktop has Library Manager, Cheats and Big Picture instead of
+  Library and Power. Settings and Power open the Home card at those pages, with `Home` over them as a breadcrumb.
+- **Focus** starts on Continue, else on the first recent game, else on Games. Select is Search, which opens the grid on
+  All with the keyboard docked. Start on Home puts the focus back where Home starts.
+- **The status line**: the controllers connected, the battery where the device reports one, and the time.
+
+### 51.3 The grid
+
+The console strip (All, Favourites, Recent, then each console with a game) with the count at its right, five covers across
+at 1280 and six at 16:9, two whole rows, the focused game's name and facts under them. A plays, X opens the page, Y
+favourites, the shoulders step the strip, Select opens the List card, Start goes to Home, B clears a search, then leaves a
+collection, then goes to Home. Leaving a game by Back to Library returns to the grid where the player left it.
+
+**The List card** is the Card form's page set (the Home card's `PadCard`), titled `<section> · <count>` under the breadcrumb
+`List`: `Search ▸`, `Sort ◂ Name ▸` (Name, Last played, Most played, Year, Rating), `Filter ▸` (every game, or one of the
+player's collections, shown in the strip's place), `Jump to ◂ G ▸`, `Random game`, `Start Console ▸` where a console starts
+empty, and `Collections ▸`; the pane says what the row does and what the list shows now.
+
+**Search** closes the card and docks the keyboard (LunaP §212.7): the field over one row of covers, the count reading `12 of
+1,284 games` as the player types, the shoulders moving between the keys and the covers, X finishing, B erasing and closing
+on an empty field.
+
+### 51.4 Collections
+
+A tool screen (`CollectionsWindow`, on the frame of §16.1): `COLLECTIONS` with how many and how many games, the sections All,
+Mine and Automatic, the player's collections with their counts, Favourites and Recently played greyed as `Automatic · n`,
+then `New collection…`; the pane shows the collection's covers, its play time and what the buttons do. A opens a collection
+as a section of the grid (on the desktop, the sidebar's row), X opens its page (`Rename…`, `Add the selected game`,
+`Remove…`), Y adds the game in hand. It is reached from the List card's `Collections ▸`.
+
+### 51.5 Retired
+
+The big screen's use of the desktop library: the console facet in the search bar, the library list's, header's and hint's
+big-screen sizes, and the big screen's pad on the sidebar list. Start over the own look goes to Home the screen, so the Home
+card is drawn over a theme and on the desktop only (`EmuSen_Interface.md` §0.9).
+
+### 51.6 Left, and why
+
+1. **Live lines for Packages and Library**: no surface gives a count without listing every file (§49.6); they read as
+   descriptions until the platform library keeps a summary, decided for U7.
+2. **Cheats' line on the desktop** (`12 on · 3 games`): the active cheats are read per game when it starts, and no
+   listing sums them; a `cheats ls` count would carry it.
+3. **Rating as a sort**: the grid sorts by rating where games.db holds one; the host does not read ratings yet, so the sort
+   falls back to the name.
+4. **The desktop's Home as the window's first view** and the grid's header row, search and sort in the desktop mockup:
+   D1's (`EmuSen_Interface.md` §17.9), which re-records the main window's states.
+5. **Setup**, the first-run face of the desktop's Home: the tools' panes in order under one header; a stage of its own.
+6. **The ES-DE collection settings** (`CollectionSettingsWindow`) stay for the themed views' grouping and automatic
+   collections until Settings ▸ Library (U6).
+7. **The fade of the facts** under the grid (Fade, 150 ms) is drawn at once; the recordings capture a still state.
+
+### 51.7 How it is held
+
+`HomeScreenTests` and `GamesScreenTests` (the plain classes on fake hosts, no window); LunaP's `HubLayoutTests` (21);
+`WindowFitAuditTests.OwnLook.cs`, eleven states at 1280 × 800 and 1920 × 1200 with Down, Up and B recorded, and the same
+big-screen states audited and pictured at 1920 × 1080 and 1280 × 720 (`EmuSen_InterfaceSpec.md` §6.3.22).
+
+**Seeded faults (2026-11-03)**, each reverted after its run: Start on Home opening the card instead of staying on Home
+(missed at first, since no test pressed Start on Home itself; `PadMenuTests`' back-to-library case now does, and catches
+it); Start on the grid opening the card instead of going Home (both `Home` recordings and `PadMenuTests`); the shelf
+keeping the suspended game beside Continue (`OwnLookScreenTests` and the `Home` and `HomeDesktop` recordings); B on the grid
+leaving a search in place (`OwnLookScreenTests`' grid case); the List card offering Y as a favourite (both `GamesListCard`
+recordings).

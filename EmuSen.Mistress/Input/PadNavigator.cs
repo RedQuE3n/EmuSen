@@ -110,5 +110,8 @@ namespace EmuSen.Mistress.Input
         public bool ShowsCover { get; init; }
         public bool ShowsTools { get; init; }
         public Func<string>? Status { get; init; }
+
+        // While this row is on, the card's pane shows these lines: what the row does, and what the list shows now (EmuSen_Interface.md §18.1).
+        public Func<List<(string Line, string Muted)>>? PaneLines { get; init; }
     }
 }

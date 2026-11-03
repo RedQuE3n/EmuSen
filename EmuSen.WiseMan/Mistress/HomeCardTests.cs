@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // A game running in a big-screen session, or on the desktop, then left for the library with the game kept.
-        private (MainWindow Window, PadDriver Pad) Suspended(bool bigScreen = true, bool gameMode = false)
+        private (MainWindow Window, PadDriver Pad) Suspended(bool bigScreen = false, bool gameMode = false)
         {
             File.WriteAllBytes(Path.Combine(_romDir, Game + ".sfc"), PadRewindReelTests.ChangingBackdrop());
             var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen, StateDirectory = Path.Combine(_root, "States") };
@@ -173,14 +173,23 @@ namespace EmuSen.WiseMan.Mistress
         public Task Power_holds_exit_big_picture_and_quit_and_in_game_mode_quit_alone(bool bigScreen, bool gameMode, string[] rows) => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Suspended(bigScreen, gameMode);
-            pad.Start();
-            Assert.True(PadMenu.Card(window).IsVisible);
-            PadMenu.Choose(window, pad, MainWindow.PowerMenu, exact: true);
+            if (bigScreen)
+            {
+                // On the big screen's own look Power is a place on Home, which opens the card at its page (EmuSen_BigPicture.md §51.2).
+                window.HomeLayout!.FocusOn(HubRow.Places, "power");
+                pad.A();
+            }
+            else
+            {
+                pad.Start();
+                Assert.True(PadMenu.Card(window).IsVisible);
+                PadMenu.Choose(window, pad, MainWindow.PowerMenu, exact: true);
+            }
             Assert.Equal(rows, PadMenu.Lines(window));
             PadMenu.Choose(window, pad, MainWindow.QuitEmuSenRow, exact: true);
             Assert.Equal("The game closes, then EmuSen.", PadMenu.Big(window).Subtitle);
             PadMenu.Answer(window, pad, yes: false);
-            Assert.Equal(2, PadMenu.Depth(window));
+            Assert.Equal(bigScreen ? 1 : 2, PadMenu.Depth(window));
             Done(window);
         }, default);
     }

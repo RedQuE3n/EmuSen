@@ -155,6 +155,7 @@ namespace EmuSen.Mistress.Views
             else if (_gamePage is not null) GamePagePadCommand(button);
             else if (LibraryView.IsVisible && ThemedLibraryShown && button == UiButton.Screensaver && _themed?.SelectedGame is { Folder: false, IsCollection: false } game) ShowGamePage(game.File);
             else if (LibraryView.IsVisible && ThemedLibraryShown) ThemedPadCommand(button);
+            else if (OwnScreenShown) OwnScreenPadCommand(button);
             else if (LibraryView.IsVisible) LibraryPadCommand(button);
         }
 

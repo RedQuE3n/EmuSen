@@ -596,7 +596,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.True(window.ScrapeRunning);
 
             pad.Start();
-            EmuSen.WiseMan.Fixtures.PadMenu.Choose(window, pad, MainWindow.ScraperRow, exact: true);
+            window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "scraper");
+            pad.A();
             ScraperWindow scraper = Assert.IsType<ScraperWindow>(Sheets(window).Current);
             PumpUntil(() => scraper.Pane.Following, "the Scraper to follow the run: " + scraper.Pane.Notice);
         });

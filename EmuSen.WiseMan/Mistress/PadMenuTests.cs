@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            if (bigScreen) pad.A();
+            if (bigScreen) OwnLook.Play(window, pad);
             else Call(window, "LaunchSelectedLibraryEntry");
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             return (window, pad);
@@ -396,11 +396,20 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(Running(window));
             Assert.True(window.GetControl<Control>("LibraryView").IsVisible);
 
-            // Exit closes the window.
+            // Exit closes the window; on the big screen's own look Power is a place of Home (EmuSen_BigPicture.md §51.2).
             bool closed = false;
             window.Closed += (_, _) => closed = true;
-            pad.Start();
-            Enter(window, pad, MainWindow.PowerMenu);
+            if (bigScreen)
+            {
+                pad.Start();
+                window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "power");
+                pad.A();
+            }
+            else
+            {
+                pad.Start();
+                Enter(window, pad, MainWindow.PowerMenu);
+            }
             Enter(window, pad, "Quit EmuSen");
             PadMenu.Answer(window, pad, yes: true);
             Assert.True(closed);
@@ -424,10 +433,23 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(frames, MistressGame.TotalFrames(window));
 
             pad.Start();
-            Assert.Equal(MainWindow.ContinueRow, PadMenu.Lines(window)[0]);
             WindowFitAuditTests.Settle(window);
-            Assert.True(PadMenu.Card(window).IsVisible);
-            Assert.Equal("frame", PadMenu.Pane(window).Showing);
+            if (bigScreen)
+            {
+                // Start over the own look is Home, where Continue has the focus (EmuSen_Interface.md §0.9).
+                Assert.Equal(EmuSen.LunaP.Controls.HubRow.Continue, window.HomeLayout!.Focused.Row);
+                // Start on Home stays on Home, with no card over it.
+                window.HomeLayout.FocusOn(EmuSen.LunaP.Controls.HubRow.Places);
+                pad.Start();
+                Assert.False(PadMenu.IsOpen(window));
+                Assert.Equal(EmuSen.LunaP.Controls.HubRow.Continue, window.HomeLayout.Focused.Row);
+            }
+            else
+            {
+                Assert.Equal(MainWindow.ContinueRow, PadMenu.Lines(window)[0]);
+                Assert.True(PadMenu.Card(window).IsVisible);
+                Assert.Equal("frame", PadMenu.Pane(window).Showing);
+            }
             pad.A();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             Assert.False(window.IsPaused);

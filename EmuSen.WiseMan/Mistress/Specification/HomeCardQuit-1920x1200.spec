@@ -13,7 +13,7 @@ palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #2
 walk none: the pad moves the menu's own selection, not the focus
 tree
   0 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
-    1 AdaptiveLayout at=0,0,1920,1200 by=panel heard=Home limit=0,0,1920,1200 name=PadCard role=pane
+    1 AdaptiveLayout at=0,0,1920,1200 by=panel heard=Power limit=0,0,1920,1200 name=PadCard role=pane
       2 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
         3 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveCardScrim paints=#0000008C role=none
           4 MenuPanel at=0,0,1920,1200 by=panel heard="Quit EmuSen?" limit=0,0,1920,1200 name=AdaptiveCard role=menu
@@ -25,6 +25,6 @@ tree
                     10 ListBoxItem at=96,234,636,81 by=fixed-scroll drawn focus heard=No in=9 limit=96,234,636,162 op paints=#333337FF,#D4D4D4FF role=listitem text=No
                     11 ListBoxItem at=96,315,636,81 by=fixed-scroll drawn focus heard=Yes in=9 limit=96,234,636,162 op paints=#333337FF,#D4D4D4FF role=listitem text=Yes
 focus none
-press down menu="open at 1: Yes" top=none
-press up menu="open at 0: No" top=none
-press back menu="open at 1: Quit EmuSen..." top=none
+press down focus="HubLayout HomeScreen" menu="open at 1: Yes" top=none
+press up focus="HubLayout HomeScreen" menu="open at 0: No" top=none
+press back focus="HubLayout HomeScreen" menu="open at 1: Quit EmuSen..." top=none

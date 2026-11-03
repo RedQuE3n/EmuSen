@@ -7,23 +7,23 @@ root Border
 unit 1.5
 slack 2
 floor 16
-frame 350.48,144.5,1219.05,872
+frame 330,164,1260,872
 title "Continue Playing"
 case Resume
 palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #26262BFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #707070FF #8D8D91FF #9CDCFEFF #D08770FF #D37070FF #D4D4D4FF #DAA520FF #DCDCDCFF #EEEEF0FF #FF4500FF #FFD700FF #FFFFFFFF
 tree
-  0 ContentControl at=350,294,1221,693 by=panel limit=350.48,294,1219.05,692 paints=#D4D4D4FF role=none seen=350.48,294,1219.05,692
-    1 StackPanel at=410,336,1101,627 by=panel limit=350.48,294,1219.05,692 role=none
-      2 Image at=755,336,411.43,360 by=panel drawn limit=350.48,294,1219.05,692 role=image
-      3 TextBlock at=410,714,1101,43.5 box=734,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Would you like to continue your last game?" layout=332.38,28.8 limit=350.48,294,1219.05,692 paints=#D4D4D4FF role=text size=24 text="Would you like to continue your last game?"
-      4 HintText at=410,775.5,1101,36 box=734,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="Cobalt Harbor (Synthetic) was left on Thursday 15 October, 09:30. Resume where you left off, or start it again." layout=701.7,24 limit=350.48,294,1219.05,692 paints=#8D8D91FF role=text size=20 text="Cobalt Harbor (Synthetic) was left on Thursday 15 October, 09:30. Resume where you left off, or start it again."
-      5 LunaSwitch at=410,829.5,280.5,48 by=panel drawn focus heard="Do not ask again" limit=350.48,294,1219.05,692 name=RememberResumeSwitch op paints=#8D8D91FF,#D4D4D4FF role=button
-        6 TextBlock at=488,832.5,193.5,43.5 box=129,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Do not ask again" layout=128.76,28.8 limit=410,829.5,280.5,48 owner=5 paints=#D4D4D4FF role=text size=24 text="Do not ask again"
-      7 ButtonBar at=1188.5,895.5,322.5,66 by=panel limit=350.48,294,1219.05,692 paints=#D4D4D4FF role=toolbar
-        8 Button at=1188.5,895.5,151.5,66 by=clip drawn focus heard=RESUME limit=1188.5,895.5,322.5,66 name=ResumeButton op paints=#707070FF,#D4D4D4FF role=button text=Resume
-          9 TextBlock at=1214,904.5,100.5,48 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=RESUME layout=66.64,31.2 limit=1188.5,895.5,151.5,66 owner=8 paints=#EEEEF0FF role=text size=26 text=RESUME
-        10 Button at=1352,895.5,159,66 by=clip drawn focus heard=RESTART limit=1188.5,895.5,322.5,66 name=RestartButton op paints=#707070FF,#D4D4D4FF role=button text=Restart
-          11 TextBlock at=1377.5,904.5,108,48 box=72,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=RESTART layout=71.34,31.2 limit=1352,895.5,159,66 owner=10 paints=#D4D4D4FF role=text size=26 text=RESTART
+  0 ContentControl at=330,314,1260,693 by=panel limit=330,314,1260,692 paints=#D4D4D4FF role=none seen=330,314,1260,692
+    1 StackPanel at=390,356,1140,627 by=panel limit=330,314,1260,692 role=none
+      2 Image at=754.5,356,411.43,360 by=panel drawn limit=330,314,1260,692 role=image
+      3 TextBlock at=390,734,1140,43.5 box=760,29 by=panel caps=16.7988 drawn face="Barlow Condensed" heard="Would you like to continue your last game?" layout=332.38,28.8 limit=330,314,1260,692 paints=#D4D4D4FF role=text size=24 text="Would you like to continue your last game?"
+      4 HintText at=390,795.5,1140,36 box=760,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="Cobalt Harbor (Synthetic) was left on Thursday 15 October, 09:30. Resume where you left off, or start it again." layout=701.7,24 limit=330,314,1260,692 paints=#8D8D91FF role=text size=20 text="Cobalt Harbor (Synthetic) was left on Thursday 15 October, 09:30. Resume where you left off, or start it again."
+      5 LunaSwitch at=390,849.5,280.5,48 by=panel drawn focus heard="Do not ask again" limit=330,314,1260,692 name=RememberResumeSwitch op paints=#8D8D91FF,#D4D4D4FF role=button
+        6 TextBlock at=468,852.5,193.5,43.5 box=129,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Do not ask again" layout=128.76,28.8 limit=390,849.5,280.5,48 owner=5 paints=#D4D4D4FF role=text size=24 text="Do not ask again"
+      7 ButtonBar at=1207.5,915.5,322.5,66 by=panel limit=330,314,1260,692 paints=#D4D4D4FF role=toolbar
+        8 Button at=1207.5,915.5,151.5,66 by=clip drawn focus heard=RESUME limit=1207.5,915.5,322.5,66 name=ResumeButton op paints=#707070FF,#D4D4D4FF role=button text=Resume
+          9 TextBlock at=1233,924.5,100.5,48 box=67,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=RESUME layout=66.64,31.2 limit=1207.5,915.5,151.5,66 owner=8 paints=#EEEEF0FF role=text size=26 text=RESUME
+        10 Button at=1371,915.5,159,66 by=clip drawn focus heard=RESTART limit=1207.5,915.5,322.5,66 name=RestartButton op paints=#707070FF,#D4D4D4FF role=button text=Restart
+          11 TextBlock at=1396.5,924.5,108,48 box=72,32 by=clip caps=18.1987 drawn face="Barlow Condensed" heard=RESTART layout=71.34,31.2 limit=1371,915.5,159,66 owner=10 paints=#D4D4D4FF role=text size=26 text=RESTART
 focus 8
 edge 5 up same
 edge 5 down 8

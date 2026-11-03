@@ -168,9 +168,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var window = new MainWindow { Width = w, Height = h };
             window.Show();
             var pad = new PadDriver(window);
-            window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            if (bigScreen) pad.A();
-            else Call(window, "LaunchSelectedLibraryEntry");
+            Settle(window);
+            if (bigScreen) OwnLook.Play(window, pad, Path.Combine(_romDir, game + (n64 ? ".z64" : ".sfc")));
+            else
+            {
+                OwnLook.Select(window, Path.Combine(_romDir, game + (n64 ? ".z64" : ".sfc")));
+                Call(window, "LaunchSelectedLibraryEntry");
+            }
             // The launch's questions are asked off the interface thread and answered within 100 ms only when the machine is idle, so the game is waited for (EmuSen_Debugging_Tools_Reference_v5.md §3.69).
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (!window.GetControl<Control>("GameFrame").IsVisible && clock.ElapsedMilliseconds < 15_000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }

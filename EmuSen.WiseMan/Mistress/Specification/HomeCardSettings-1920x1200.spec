@@ -13,7 +13,7 @@ palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #2
 walk none: the pad moves the menu's own selection, not the focus
 tree
   0 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 role=none
-    1 AdaptiveLayout at=0,0,1920,1200 by=panel heard=Home limit=0,0,1920,1200 name=PadCard role=pane
+    1 AdaptiveLayout at=0,0,1920,1200 by=panel heard=Settings limit=0,0,1920,1200 name=PadCard role=pane
       2 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
         3 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveCardScrim paints=#0000008C role=none
           4 MenuPanel at=0,0,1920,1200 by=panel heard=Settings limit=0,0,1920,1200 name=AdaptiveCard role=menu
@@ -31,6 +31,6 @@ tree
                     16 ListBoxItem at=96,720,636,81 by=fixed-scroll drawn focus heard=Firmware in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Firmware
                     17 ListBoxItem at=96,801,636,81 by=fixed-scroll drawn focus heard=Preferences in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Preferences
 focus none
-press down menu="open at 1: Controller Bindings" top=none
-press up menu="open at 0: Players & Controllers" top=none
-press back menu="open at 5: Settings" top=none
+press down focus="HubLayout HomeScreen" menu="open at 1: Controller Bindings" top=none
+press up focus="HubLayout HomeScreen" menu="open at 0: Players & Controllers" top=none
+press back focus="HubLayout HomeScreen" top=none

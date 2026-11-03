@@ -64,6 +64,18 @@ namespace EmuSen.Mistress.Views
             UpdateMenuBackdrop();
         }
 
+        // The Card form over the library at a page of its own: the grid's List card, and Home's Settings and Power (EmuSen_Interface.md §18.1).
+        private void OpenCard(string title, Func<List<PadMenuEntry>> rows, string? breadcrumb = null)
+        {
+            OpenPadMenu();
+            if (_padMenuInGame) return;
+            _homeGame = null;
+            _padMenuPages.Clear();
+            _padMenuPages.Add(new PadMenuPage(title, rows, breadcrumb));
+            PadCard.Title = title;
+            ShowPadMenuPage();
+        }
+
         public const string SaveStateRow = "Save State", LoadStateRow = "Load State";
 
         // The Pause Card's first page: carry on, go back, save, load, the speed, the console's own rows where they apply, then the game's options and the ways out - see EmuSen_BigPicture.md §48.3.

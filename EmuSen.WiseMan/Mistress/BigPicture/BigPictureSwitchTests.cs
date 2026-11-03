@@ -78,6 +78,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static void ChooseFromPadMenu(ThemedSession s, string entry)
         {
             s.Pad.Start();
+            // Over the big screen's own look Start is Home, whose Settings and Power places open the card at their pages (EmuSen_BigPicture.md §51.2).
+            if (s.Window.HomeLayout is { } home)
+            {
+                home.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, entry.Contains("Big Picture", StringComparison.Ordinal) || entry.StartsWith("Quit", StringComparison.Ordinal) ? "power" : "settings");
+                s.Pad.A();
+            }
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
             PadMenu.Choose(s.Window, s.Pad, entry, exact: true);
             s.Settle();
@@ -92,9 +98,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Preferences' "Start in big screen mode", read off the window whichever tab is shown.
         private static LunaSwitch StartSwitch(Window preferences) =>
             (LunaSwitch)typeof(PreferencesWindow).GetField("_bigScreen", Hidden)!.GetValue(preferences)!;
-
-        private static Popup FacetPopup(MainWindow w) =>
-            w.GetControl<FilterBar>("LibraryFilter").GetVisualDescendants().OfType<ComboBox>().First().GetVisualDescendants().OfType<Popup>().First();
 
         private readonly record struct Look(double ListSize, double HeaderSize, double HintSize);
 
@@ -128,12 +131,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(w.IsFullScreen);
             Assert.False(w.GetControl<Control>("MenuStrip").IsVisible);
             Assert.False(w.GetControl<Control>("LibrarySidebarPane").IsVisible);
-            Assert.True(w.GetControl<FilterBar>("LibraryFilter").ShowFacet);
             Assert.Equal(themed, s.Shown);
-            Assert.Equal(!themed, w.GetControl<Control>("LibraryContent").IsVisible);
+            Assert.False(w.GetControl<Control>("LibraryContent").IsVisible);
+            Assert.Equal(!themed, w.HomeLayout is not null);
             Assert.True(Sheets(w).PresentsWindows);
             Assert.Contains(EmbeddedPopups.StyleClass, w.Classes);
-            Assert.Equal(24, List(w).FontSize);
             Assert.False(AppSettings.Load().BigScreen);
         }
 
@@ -150,13 +152,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 return;
             }
 
-            string? game = List(s.Window).Selected?.Title;
-            s.Pad.Down();
-            Assert.NotEqual(game, List(s.Window).Selected?.Title);
-            FilterBar filter = s.Window.GetControl<FilterBar>("LibraryFilter");
-            string console = filter.Facet as string ?? "";
+            // The own look's Home takes the pad: Right moves its focus (EmuSen_BigPicture.md §51.2).
+            s.Window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "games");
+            EmuSen.LunaP.Controls.HubFocus focus = s.Window.HomeLayout.Focused;
             s.Pad.Right();
-            Assert.NotEqual(console, filter.Facet as string);
+            Assert.NotEqual(focus, s.Window.HomeLayout!.Focused);
+            FilterBar filter = s.Window.GetControl<FilterBar>("LibraryFilter");
 
             // A search typed in big picture's own box, which the desktop's shares.
             filter.SearchText = "Relay";
@@ -197,6 +198,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ChooseFromPadMenu(s, "Big Picture");
             AssertBigPicture(s, theme);
             s.Pad.Start();
+            if (w.HomeLayout is { } home)
+            {
+                home.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "power");
+                s.Pad.A();
+            }
             Assert.DoesNotContain(MenuLines(w), l => l.Contains("Full Screen"));
             s.Pad.B();
             Press(s, Key.Escape);
@@ -335,7 +341,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.DoesNotContain(EmbeddedPopups.StyleClass, w.Classes);
 
             Press(s, Key.F10);
-            Assert.True(FacetPopup(w).ShouldUseOverlayLayer);
             ChooseFromPadMenu(s, "Preferences");
             Assert.True(Sheets(w).IsPresenting);
             Assert.Empty(w.OwnedWindows);
@@ -346,7 +351,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(Sheets(w).IsPresenting);
 
             Press(s, Key.F10);
-            Assert.False(FacetPopup(w).ShouldUseOverlayLayer);
             Call(w, "ShowPreferences");
             s.Settle();
             Assert.False(Sheets(w).IsPresenting);
@@ -362,8 +366,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using ThemedSession s = Desktop(theme: false);
             MainWindow w = s.Window;
             Press(s, Key.F10);
-            Select(s, "Brass Lantern (Synthetic)");
-            s.Pad.A();
+            OwnLook.Play(w, s.Pad, Path.Combine(s.RomDirectory, "Brass Lantern (Synthetic).sfc"));
             s.Settle();
             Assert.True(w.GetControl<Control>("GameFrame").IsVisible);
 

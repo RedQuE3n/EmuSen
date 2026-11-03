@@ -625,6 +625,26 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
 - **Recordings.** Thirty-two new states, the themed Select sheet and the Home card's game row taken again, and twenty-six retired with their
   windows (`EmuSen_InterfaceSpec.md` §6.3.20).
 
+## 13b. U5 as built (2026-11-03)
+
+- **LunaP (§212 there).** `HubLayout`, a canonical layout for a hub in both forms (Continue in a poster slot shaped for
+  video, a shelf of whole covers on one baseline, places with a live line each, the help bar generated from the focus);
+  `GalleryLayout`, the big screen's grid of covers under the strip with the focused item's name and facts, and search with
+  the keyboard docked at the foot (`OnScreenKeyboard.CreateDocked`, `KeyboardLayout.Search`); `CoverCard`, a cover in its
+  box shape on its cell's foot or the generated card with its mark and title, with the ring, scale and shadow of §5.4.
+- **EmuSen (`EmuSen_BigPicture.md` §51).** Screens 1 and 2 from two plain classes, `HomeScreen` and `GamesScreen`; the List
+  card of §18.1 and the Start Console page of §18.3 on the Card form (the Home card's `PadCard`); Collections of §18.4 as a
+  tool screen; the desktop's Home in the sidebar's first row. Start over the own look goes to Home the screen (§0.9).
+- **Retired.** The desktop library drawn on the big screen, with its console facet and big-screen sizes; the Home card over
+  the own look, which over a theme and on the desktop stays.
+- **Departures, measured.** The docked keyboard runs from 398 to the help band, as the mockup draws it, not from 470; a
+  generated card's mark keeps its size and its title is shrunk no further than 18 units, so a short box stays legible under
+  the fit audit; the facts under the grid change at once rather than over Fade.
+- **Not in U5.** Live lines for Packages, Library and the desktop's Cheats, waiting on summaries no surface gives; the
+  desktop's Home as the window's first view and its grid's header row, which are D1's; Setup; the ES-DE collection settings,
+  which move with U6 (`EmuSen_BigPicture.md` §51.6).
+- **Recordings.** `EmuSen_InterfaceSpec.md` §6.3.22.
+
 ---
 
 ## 14. Sources (opened 2026-11-01)

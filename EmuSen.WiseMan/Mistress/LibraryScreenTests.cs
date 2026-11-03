@@ -284,7 +284,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Fact]
-        public Task Big_screen_hides_the_sidebar_and_gives_the_console_back_to_the_filter_bar() => Session.Dispatch(() =>
+        public Task Big_screen_hides_the_sidebar_and_shows_Home() => Session.Dispatch(() =>
         {
             Rom("Alpha.sfc");
             new AppSettings { RomDirectory = _romDir, BigScreen = true }.Save();
@@ -292,7 +292,8 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
 
             Assert.False(window.GetControl<Control>("LibrarySidebarPane").IsVisible);
-            Assert.True(window.GetControl<FilterBar>("LibraryFilter").ShowFacet);
+            Assert.NotNull(window.HomeLayout);
+            Assert.False(window.GetControl<Control>("LibraryContent").IsVisible);
             window.Close();
         }, default);
 
@@ -316,7 +317,7 @@ namespace EmuSen.WiseMan.Mistress
 
             Assert.False(window.GetControl<Control>("LibrarySidebarPane").IsVisible);
             Assert.False(window.GetControl<Control>("MenuStrip").IsVisible);
-            Assert.True(window.GetControl<FilterBar>("LibraryFilter").ShowFacet);
+            Assert.NotNull(window.HomeLayout);
             window.Close();
         }, default);
 

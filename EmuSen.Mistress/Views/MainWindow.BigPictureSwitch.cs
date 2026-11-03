@@ -55,12 +55,8 @@ namespace EmuSen.Mistress.Views
         {
             _bigScreen = on;
             MenuStrip.IsVisible = !on;
-            // A desktop sidebar costs a handheld its width, so the console choice goes back in the filter bar - see EmuSen_Settings_Reference.md §4.33.
+            // The big screen draws EmuSen's own look or a theme in the library's place, never the desktop's sidebar - see EmuSen_BigPicture.md §51.
             LibrarySidebarPane.IsVisible = !on;
-            LibraryFilter.ShowFacet = on;
-            Enlarge(LibraryList, TemplatedControl.FontSizeProperty, on, 24);
-            Enlarge(LibraryHeaderText, TextBlock.FontSizeProperty, on, 17);
-            Enlarge(LibraryHintText, TextBlock.FontSizeProperty, on, 17);
 
             // One window on screen in a big-screen session, so the others are drawn inside this one - see EmuSen_Settings_Reference.md §4.45.2.
             Sheets.PresentsWindows = on;
@@ -71,12 +67,7 @@ namespace EmuSen.Mistress.Views
             ApplyBigStatusLine(on);
 
             if (on && _themed is null) SetUpThemedLibrary();
-        }
-
-        private static void Enlarge(AvaloniaObject control, StyledProperty<double> size, bool on, double points)
-        {
-            if (on) control.SetValue(size, points);
-            else control.ClearValue(size);
+            if (LibraryView.IsVisible) ShowOwnLook(ThemedLibraryShown);
         }
 
         // Enters or leaves big picture, the one guard for Game Mode and for the event its own full screen raises: layout, library, popups, sheets and the window's state.

@@ -342,7 +342,14 @@ namespace EmuSen.Tools.Scraper
             (double? fraction, string line, bool running, string? said) = ScraperPlan.Progress(answer);
             // A run the scraper stopped by itself, not at the player's Stop, failed: no developer credentials, the quota, the server.
             if (!running && !_stopAsked && ScraperPlan.State(answer) == "stopped") _failedInRun = Math.Max(_failedInRun, 1);
-            if (running) SetProgress(fraction, line);
+            if (running)
+            {
+                SetProgress(fraction, line);
+                (int done, int total) = ScraperPlan.Counts(answer);
+                ToolSummary progress = ScraperPlan.Running(done, total);
+                Header = new AdaptiveHeader("SCRAPER", Facts: progress.Line);
+                SummaryChanged?.Invoke(progress);
+            }
             else End(said);
         }
 

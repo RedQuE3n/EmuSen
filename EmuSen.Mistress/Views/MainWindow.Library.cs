@@ -74,6 +74,7 @@ namespace EmuSen.Mistress.Views
             ScanArtwork();
             ApplyOnlineCovers();
             SetUpScraping();
+            SetUpToolSummaries();
             ApplyScraping();
         }
 

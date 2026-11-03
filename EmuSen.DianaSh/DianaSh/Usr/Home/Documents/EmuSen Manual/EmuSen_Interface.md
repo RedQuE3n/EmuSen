@@ -1607,3 +1607,13 @@ approve it.`, `41 games have no art yet; the Scraper fetches it from ScreenScrap
 B comes back here.` Before a tool has said anything the sentence is what the tool does (`HomeScreen.About`). Themes says
 which look is in use and Collections how many the player has. Not built: the mockup's `was installed today` and `on
 PCEE2`, since the summary holds no install date and A opens the tool, not the core.
+
+### 19.7 A scrape running
+
+While a scrape runs, the Scraper's summary is the run's progress, `Scraping 0 of 3` (`ScraperPlan.Running`, the
+Scraper's own words), on every surface that shows its line: Home's place, the Home card's Tools row and its pane, the
+pad menu's row and the Scraper's header. Mistress's own run gives it through the host's summary while its state is
+running; the Scraper window's run through `SummaryChanged` at each step. When the run ends the count comes back, and the
+run's end marks it to be read again at the next Home. Found on 2026-11-03 by `ScrapeStatusWindowTests`, where the pad
+menu's Scraper row had lost the progress its status had shown before U7; held since by `ToolSummaryTests`, one seeded
+fault caught (the progress not taking the Scraper's place: both classes).

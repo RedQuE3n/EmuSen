@@ -96,7 +96,7 @@ namespace EmuSen.Mistress.Views
 
         // A tool's row: its live line as the value, and in the pane its state as its own library says it, then what A and B do (EmuSen_Interface.md §19.6).
         private PadMenuEntry Tool(string name, Action show, string place) =>
-            new(() => name, show) { Opens = true, Label = () => name, Value = () => SummaryOf(place)?.MarkedBrief, PaneSaid = () => (name, SummaryOf(place)?.Sentence ?? HomeScreen.About(place), Hint(name)) };
+            new(() => name, show) { Opens = true, Label = () => name, Status = () => ToolLine(place), Value = () => SummaryOf(place)?.MarkedBrief, PaneSaid = () => (name, SummaryOf(place)?.Sentence ?? HomeScreen.About(place), Hint(name)) };
 
         private PadMenuEntry Said(string name, Action show, Func<string> value, Func<string> sentence) =>
             new(() => name, show) { Opens = true, Label = () => name, Value = value, PaneSaid = () => (name, sentence(), Hint(name)) };

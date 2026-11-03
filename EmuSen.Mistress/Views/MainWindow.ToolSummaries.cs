@@ -7,6 +7,7 @@ using Avalonia.Threading;
 using EmuSen.Galaxia.Models;
 using EmuSen.Galaxia.Native;
 using EmuSen.Mistress.Pages;
+using EmuSen.Mistress.Scraping;
 using EmuSen.Tools.Cores;
 using EmuSen.Tools.Packages;
 using EmuSen.Tools.Scraper;
@@ -61,7 +62,20 @@ namespace EmuSen.Mistress.Views
             return done.Task;
         }
 
-        internal ToolSummary? SummaryOf(string place) => _toolSummaries.GetValueOrDefault(place);
+        // The tool's line as last heard; the Scraper's is the run's progress while Mistress's own run goes (EmuSen_Interface.md §19.7).
+        internal ToolSummary? SummaryOf(string place) =>
+            place == HomeScreen.Scraper && _scrapeRun is { State: ScrapeRunState.Running } run ? ScraperPlan.Running(run.Done, run.Total) : _toolSummaries.GetValueOrDefault(place);
+
+        private bool _scrapeWasRunning;
+
+        // A run's every step redraws the lines; its end makes the Scraper's count stale, read again at the next Home.
+        private void SetUpToolSummaries() => ScrapeChanged += () =>
+        {
+            bool running = _scrapeRun is { State: ScrapeRunState.Running };
+            if (_scrapeWasRunning && !running) ToolDataChanged(HomeScreen.Scraper);
+            _scrapeWasRunning = running;
+            ToolSummariesChanged();
+        };
 
         // Asked once a minute at most, only while Home, a card over it or the desktop's library shows; never while a game runs (EmuSen_Interface.md §19).
         private void AskToolSummaries()

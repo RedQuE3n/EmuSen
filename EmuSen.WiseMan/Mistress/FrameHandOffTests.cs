@@ -39,6 +39,23 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { (4.0 / 3.0, 288), (0.0, 0) }, shapes);
         }, default);
 
+        // §10y: a ring picture replaced before the screen took it is given back at once, so a paused or hidden screen never holds the core; one the screen took is not.
+        [Fact]
+        public Task Ring_pictures_replaced_before_the_screen_took_them_are_given_back_and_a_shown_one_is_not() => Session.Dispatch(() =>
+        {
+            var (given, shown) = (new List<ulong>(), new List<ulong>());
+            var ring = EmuSen.Serenity.Slang.SlangRing.Borrow(null!, 1);
+            var handOff = new FrameHandOff((_, _, _, _, _, _, _, _, _, _, picture) => shown.Add(picture!.Value.Value), (picture, width, height) => given.Add(picture.Value));
+            EmuSen.Serenity.Slang.RingPicture Picture(ulong value) => new(ring, (int)(value % 3), value, 1, 0);
+            for (ulong v = 1; v <= 5; v++) handOff.OfferInRing(Picture(v), 64, 48, (long)v, 0, 0);
+            Assert.Equal(new ulong[] { 1, 2, 3, 4 }, given);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new ulong[] { 5 }, shown);
+            handOff.OfferInRing(Picture(6), 64, 48, 6, 0, 0);
+            handOff.EndSession();
+            Assert.Equal(new ulong[] { 1, 2, 3, 4 }, given);
+        }, default);
+
         // A frame replaced before the screen took it goes back to the hand-off's buffers; one presented is the screen's until it gives it back.
         [Fact]
         public Task Frames_replaced_before_the_screen_took_them_go_back_and_a_presented_one_is_the_screen_s() => Session.Dispatch(() =>

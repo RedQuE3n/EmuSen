@@ -120,6 +120,9 @@ namespace EmuSen.Mistress.Views
 
         private bool _sheetPaused;
 
+        // The card's pages a sheet it opened lies over, to come back to on the page and row it left - see EmuSen_Interface.md §2.9.
+        private List<PadMenuPage>? _cardUnderSheet;
+
         // A sheet over a game pauses it, and its last one resumes only what it paused - the pad menu's rule (§4.29).
         private void OnSheetsChanged()
         {
@@ -132,6 +135,22 @@ namespace EmuSen.Mistress.Views
                 return;
             }
 
+            if (_cardUnderSheet is { } pages)
+            {
+                // A sheet the card opened comes back to the card's page and row, which keeps the pause until it closes - see EmuSen_LibretroHost.md §10z.
+                (_cardUnderSheet, _sheetPaused) = (null, false);
+                if (!GameOnScreen || !IsPaused) return;
+                if (!_padMenuOpen) OpenPadMenu();
+                if (!_padMenuOpen) { ResumeEmulation(); return; }
+                _padMenuPaused = true;
+                if (_padMenuInGame && pages.Count > 0)
+                {
+                    _padMenuPages.Clear();
+                    _padMenuPages.AddRange(pages);
+                    ShowPadMenuPage(turned: false);
+                }
+                return;
+            }
             if (_sheetPaused && GameOnScreen && IsPaused && !_padMenuOpen) ResumeEmulation();
             _sheetPaused = false;
         }

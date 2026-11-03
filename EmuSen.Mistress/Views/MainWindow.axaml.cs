@@ -158,7 +158,7 @@ namespace EmuSen.Mistress.Views
 
         public MainWindow()
         {
-            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring));
+            _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring), (picture, width, height) => _ringRelease.Release(picture, width, height));
             EarlyLoader = OpenSession;
             // Mistress scrapes, so no shell of this process opens a scraper of its own (EmuSen_LibraryTools.md §8).
             ScrapingLend.Withdraw();

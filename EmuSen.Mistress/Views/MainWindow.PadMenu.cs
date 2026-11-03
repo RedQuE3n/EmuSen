@@ -250,8 +250,11 @@ namespace EmuSen.Mistress.Views
                 EnterPadMenuPage(new PadMenuPage(question, () => QuestionRows(entry, PadMenuBack), entry.QuestionDetail, question: true), at, key: null);
                 return;
             }
-            if (entry.Closes) ClosePadMenu();
+            _padMenuPages[^1].At = at;
+            List<PadMenuPage> pages = [.. _padMenuPages];
+            if (entry.Closes) ClosePadMenuHoldingPause();
             entry.Accept();
+            HandOverHeldPause(pages);
             if (_padMenuOpen && !entry.Closes && at < _padMenuEntries.Count && ReferenceEquals(_padMenuEntries[at], entry)) RefreshPadMenuText(at);
         }
 
@@ -280,7 +283,11 @@ namespace EmuSen.Mistress.Views
 
         private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "home/") + title;
 
-        private void ClosePadMenu()
+        private void ClosePadMenu() => ClosePadMenu(holdPause: false);
+
+        private void ClosePadMenuHoldingPause() => ClosePadMenu(holdPause: true);
+
+        private void ClosePadMenu(bool holdPause)
         {
             if (!_padMenuOpen) return;
 
@@ -293,8 +300,23 @@ namespace EmuSen.Mistress.Views
             UpdateMenuBackdrop();
 
             // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.
-            if (_padMenuPaused && GameOnScreen) ResumeEmulation();
+            if (_padMenuPaused && GameOnScreen)
+            {
+                if (holdPause) _pauseHeld = true;
+                else ResumeEmulation();
+            }
             _padMenuPaused = false;
+        }
+
+        // Held while a closing card's entry runs: the pause goes to the sheet it opened, else back to the game - see EmuSen_LibretroHost.md §10z.
+        private bool _pauseHeld;
+
+        private void HandOverHeldPause(List<PadMenuPage> pages)
+        {
+            if (!_pauseHeld) return;
+            _pauseHeld = false;
+            if (Sheets.IsPresenting && GameOnScreen) (_sheetPaused, _cardUnderSheet) = (true, pages);
+            else if (GameOnScreen && IsPaused && !_padMenuOpen) ResumeEmulation();
         }
 
         private void RefreshPadMenuText(int keep)

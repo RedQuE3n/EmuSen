@@ -854,14 +854,19 @@ impl Device {
         }
     }
 
-    /// A timeline value signalled once everything submitted before it on the queue has finished: a ring's pictures
-    /// given back in the order they were read (EmuSen_LibretroHost.md §10x).
-    pub(crate) fn signal_in_order(&self, semaphore: vk::Semaphore, value: u64) -> Result<(), String> {
+    /// A timeline value signalled once everything submitted before it on the queue has finished, unless `given` says
+    /// as much or more was already: a ring's pictures given back only ever upwards, whichever thread gives them
+    /// (EmuSen_LibretroHost.md §10x, §10y). False when nothing was signalled.
+    pub(crate) fn signal_in_order(&self, semaphore: vk::Semaphore, value: u64, given: &std::sync::atomic::AtomicU64) -> Result<bool, String> {
         let _held = locked(&self.inner.submit);
+        if given.fetch_max(value, std::sync::atomic::Ordering::AcqRel) >= value {
+            return Ok(false);
+        }
         let (signals, values) = ([semaphore], [value]);
         let mut timeline = vk::TimelineSemaphoreSubmitInfo::default().signal_semaphore_values(&values);
         let submit = vk::SubmitInfo::default().signal_semaphores(&signals).push_next(&mut timeline);
-        unsafe { self.inner.device.queue_submit(self.inner.queue, &[submit], vk::Fence::null()) }.check("vkQueueSubmit")
+        unsafe { self.inner.device.queue_submit(self.inner.queue, &[submit], vk::Fence::null()) }.check("vkQueueSubmit")?;
+        Ok(true)
     }
 
     /// Waits for everything the device has been given, with the queue held as Vulkan asks.

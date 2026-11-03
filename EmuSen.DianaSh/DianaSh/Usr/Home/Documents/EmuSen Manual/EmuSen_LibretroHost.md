@@ -2253,6 +2253,95 @@ Results:
 **Left.** A runner that dies while its game is paused is noticed at the next frame the game runs, because nothing
 calls it in between.
 
+## 10y. The game kept running behind the Pause Card's settings, with nobody reading the ring (2026-11-02)
+
+**What was seen.** On the handheld on 2026-11-02, build cf971987b (with §10x), Select and Start opened the Pause
+Card at 17:52:56. The tester went to Game Options, Display, Graphics and changed PCEE2's Internal Resolution from 1x
+to 2x. At 17:53:06 the error log said `emulation halt: … the core stopped answering within 10 s and was stopped`, and
+the runner was gone. The UI stayed responsive: §10x's bounds held.
+
+**Reproduced on the desktop** [M, 2026-11-02, out/ at cf971987b, a fresh home, PCEE2 installed by pad, the picture in
+the ring]:
+- The Pause Card left open for 16 s did nothing.
+- Opening Game Options, Display and then Graphics ended the session at 18:04:57 and again at 18:08:17. The second
+  time, Graphics opened at about 18:08:07, 10 s before the halt.
+- A stack of the runner taken 3 s after Graphics opened showed its main thread inside `advance`:
+  `retro_run` → `video_refresh` → `Gpu::frame` → `Gpu::submit` → `vkWaitForFences`. Mesa's submit thread was
+  waiting on the ring's `done`. So an advance was issued as Graphics opened, and it blocked.
+- After the halt the presenter's next read gave up within its bound ("the core's picture 1832 did not arrive within
+  2 s", §10x).
+- A second handheld run with nothing changed narrowed it the same way. The card left idle for 20 s did nothing. The
+  halt came 10 s after Graphics opened while its rows were stepped through.
+
+**The cause.** The guess that the paused core itself blocks the window's calls (`RuntimeCatalog.SettingsOf`, a row's
+notes) is refuted. The runner was serving `advance`, not a settings call, and with the fix the same steps leave the
+status at "Paused" with no frame run.
+
+The advance comes from the hand-over between the card and the sheet:
+- `ClosePadMenu` resumes what the card paused while the game is still on screen;
+- `OnSheetsChanged` then pauses again for the sheet;
+- in between, the emulation thread can run a frame or more.
+
+Those frames, and any offered just before the card covered the screen, are dropped by the frame hand-off when a newer
+one replaces them before the UI thread takes them. A dropped ring picture was never read, so it was never given back.
+§10x gives back skipped pictures only when a later picture is read, and behind the card and the sheet none is. With
+the core's three slots held, an advance blocks, and the broker's 10 s deadline stops the runner. Any time the game
+runs while the screen draws no ring picture has the same effect.
+
+**The fix.**
+- *The hand-off gives back what it drops.* `FrameHandOff` takes a `releaseRing`. When a ring picture is replaced
+  before the UI thread took it, the producer thread hands it to Mistress's `SlangRingRelease`, the path that already
+  gives slots back while the screen does not draw on the device. That path reads the picture with a one-pixel draw
+  and signals `done`. A picture the session's end drops is not given back, because its ring may already be freed. A
+  screen that is covered, paused or hidden therefore never holds the core, whatever runs behind it.
+- *`done` only ever rises, whichever thread gives back* (Serenity). Every `done` signal now goes through
+  `Device::signal_in_order`. Under the queue's lock it compares the value with the ring's `given` counter and submits
+  the signal only when it is higher. A read's own `done` is signalled after its read in queue order, so the emulation
+  thread's release and the UI thread's present can interleave without a lower value ever following a higher one.
+
+**In the real window, with the fix** [M, 2026-11-02, this branch published to a scratch folder, a fresh home, PCEE2
+installed by pad, Jak in the ring]:
+- *The second handheld run's steps.* The card was left idle for 20 s. Graphics was opened and 25 rows were stepped
+  through at about 2 a second, then left 5 s. The runner lived, the status read "Paused" throughout, no frame ran,
+  and the error log gained no line.
+- *The option.* Internal Resolution was set from 1x to 2x while paused, about 3 minutes into the pause. On closing
+  Graphics the game resumed at 59.9 to 60.0 fps, and the `[fps]` line's picture went from `GPU 512x448` to
+  `GPU 1024x896`. After a restart the picture was again 1024 × 896, so the option applies on resume and is kept.
+- *A long pause.* The card was left open for 62 s and then closed with B. The runner lived and the game ran on at
+  59.9 to 60.0 fps.
+
+**Tests**, each run by name:
+- WiseMan `FrameHandOffTests.Ring_pictures_replaced_before_the_screen_took_them_are_given_back_and_a_shown_one_is_not`.
+  Pictures 1 to 4, each replaced before the screen ran, are given back; picture 5 is shown and not given back; picture
+  6, dropped when the session ended, is not given back. The test uses the new `releaseRing` parameter, so it cannot
+  build on the old code. The failing-first evidence is the desktop reproduction above.
+- `serenity`'s three ring tests (§10x, and §5.4's raise after a crash) pass on the reworked give-back.
+- Seeded faults, each caught by the WiseMan test: the replaced picture not given back; the picture the session's end
+  drops given back.
+
+## 10z. The card hands its pause to the sheet it opens, and takes it back (2026-11-02)
+
+§10y made the frames run between the card and a sheet harmless. This section stops them running at all.
+
+Decided 2026-11-02 by the tester: a game the card paused runs no frame while the player goes from the card into a
+sheet and back.
+
+- **Opening a sheet from the card.** The card's entry closes the card while keeping its pause (`ClosePadMenu` with
+  `holdPause`). The entry then runs, and `HandOverHeldPause` passes the pause to the sheet the entry opened. If the
+  entry opened no sheet, the game resumes as before.
+- **Closing that sheet.** The card opens again on the page and row it left (Graphics' sheet comes back to Display with Graphics focused), as `EmuSen_Interface.md` §2.9 has it, and owns the pause. Each B climbs one level, and the game resumes only when the card closes.
+- Before this, `ClosePadMenu` resumed the game and `OnSheetsChanged` paused it again for the sheet. Closing the sheet
+  went back to the running game, not to the card.
+
+**Test.** WiseMan `PadMenuTests.A_game_the_card_paused_runs_no_frame_from_the_card_into_a_sheet_and_back`, run by
+name. It goes from the card to Graphics, closes the sheet, and is back at the card. The status line never says
+"Running" until B closes the card. On the old code it failed ("closing the sheet comes back to the card"). It passes
+with the change, as do the 5 cases of `Each_moved_row_of_the_game_s_menu_opens_its_window`.
+
+**Seeded faults**, each caught by that test:
+- the held pause not passed to the sheet;
+- the card not opened again when the sheet closes.
+
 ## 11. Risks
 
 1. **The round trip** per frame and per cheat window miss; measured at stage 2 against P1.

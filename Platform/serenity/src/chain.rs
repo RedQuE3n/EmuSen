@@ -720,12 +720,20 @@ impl Chain {
         self.from_ring.as_ref().map(|p| (p.ready, p.value)).or_else(|| self.from_lend.as_ref().map(|(_, taken)| (taken.semaphore, taken.value)))
     }
 
-    /// The timeline signal of the frame pending, when it is a ring's picture: its slot given back, the ones it skipped
-    /// before it, and its `ready` awaited within a bound (EmuSen_LibretroHost.md §10x).
-    fn upload_signal(&self, upload: bool) -> Result<Option<(vk::Semaphore, u64)>, String> {
+    /// The pending frame's picture taken from its ring when it is one: those it skipped given back and its `ready`
+    /// awaited within a bound (EmuSen_LibretroHost.md §10x).
+    fn take_pending(&self, upload: bool) -> Result<(), String> {
         match self.from_ring.as_ref().filter(|_| upload) {
             Some(p) => p.take(&self.device, crate::ring::READY_BOUND),
-            None => Ok(None),
+            None => Ok(()),
+        }
+    }
+
+    /// The pending frame's ring picture given back after the submission that reads it.
+    fn give_back_pending(&self, upload: bool) -> Result<(), String> {
+        match self.from_ring.as_ref().filter(|_| upload) {
+            Some(p) => p.give_back(&self.device),
+            None => Ok(()),
         }
     }
 
@@ -755,8 +763,10 @@ impl Chain {
             return Ok(());
         }
         self.upload_pending = false;
-        let (wait, signal) = (self.upload_wait(true), self.upload_signal(true)?);
-        self.device.run_timed(|commands| self.record_pending_upload(commands, true), wait, signal)
+        self.take_pending(true)?;
+        let wait = self.upload_wait(true);
+        self.device.run_timed(|commands| self.record_pending_upload(commands, true), wait, None)?;
+        self.give_back_pending(true)
     }
 
     fn original_at(&self, back: usize) -> &Image {
@@ -860,7 +870,8 @@ impl Chain {
         }
         self.device.phase(point::BOUND);
         let upload = std::mem::take(&mut self.upload_pending);
-        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload)?);
+        self.take_pending(upload)?;
+        let wait = self.upload_wait(upload);
         let device = &self.device;
         device.run_unwaited(
             |commands| {
@@ -883,8 +894,9 @@ impl Chain {
             wait_free.then_some(target.free),
             target.ready,
             wait,
-            signal,
+            None,
         )?;
+        self.give_back_pending(upload)?;
         self.device.phase(point::RAN);
         Ok(())
     }
@@ -946,7 +958,8 @@ impl Chain {
         self.device.phase(point::BOUND);
 
         let upload = std::mem::take(&mut self.upload_pending);
-        let (wait, signal) = (self.upload_wait(upload), self.upload_signal(upload)?);
+        self.take_pending(upload)?;
+        let wait = self.upload_wait(upload);
         let device = &self.device;
         device.run_timed(|commands| {
             self.record_pending_upload(commands, upload);
@@ -962,7 +975,8 @@ impl Chain {
             unsafe { device.vk().cmd_copy_image_to_buffer(commands, last.image.handle, vk::ImageLayout::TRANSFER_SRC_OPTIMAL, readback.handle, &region) };
             device.host_read_barrier(commands, readback);
             device.transition(commands, &last.image, READ, 0, None, None);
-        }, wait, signal)?;
+        }, wait, None)?;
+        self.give_back_pending(upload)?;
 
         self.device.phase(point::RAN);
         self.device.phase(point::COPIED);

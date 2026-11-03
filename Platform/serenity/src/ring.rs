@@ -3,7 +3,7 @@
 //! reaches its value and given back by `done`. See EmuSen_LibretroHost.md §5.4, §5.4a and §10f.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::AtomicU64;
 use std::time::Duration;
 
 use ash::vk;
@@ -152,21 +152,25 @@ pub struct InRing {
 
 impl InRing {
     /// Before the picture is read: every picture below it given back, since a reader that skipped some never reads
-    /// them and the core may wait on their slots to make this one; then its `ready` awaited on the CPU within `bound`;
-    /// and the `done` signal its read makes, none where a later picture was given back already (EmuSen_LibretroHost.md §10x).
-    pub(crate) fn take(&self, device: &Device, bound: Duration) -> Result<Option<(vk::Semaphore, u64)>, String> {
+    /// them and the core may wait on their slots to make this one; then its `ready` awaited on the CPU within `bound`
+    /// (EmuSen_LibretroHost.md §10x).
+    pub(crate) fn take(&self, device: &Device, bound: Duration) -> Result<(), String> {
         let below = self.value.saturating_sub(1);
-        if below > 0 && self.given.fetch_max(below, Ordering::AcqRel) < below {
-            device.signal_in_order(self.done, below)?;
+        if below > 0 {
+            device.signal_in_order(self.done, below, &self.given)?;
         }
         let (semaphores, values) = ([self.ready], [self.value]);
         let info = vk::SemaphoreWaitInfo::default().semaphores(&semaphores).values(&values);
         match unsafe { device.vk().wait_semaphores(&info, bound.as_nanos() as u64) } {
-            Ok(()) => {}
-            Err(vk::Result::TIMEOUT) => return Err(format!("the core's picture {} did not arrive within {} s", self.value, bound.as_secs_f64())),
-            Err(e) => Err::<(), _>(e).check("vkWaitSemaphores")?,
+            Ok(()) => Ok(()),
+            Err(vk::Result::TIMEOUT) => Err(format!("the core's picture {} did not arrive within {} s", self.value, bound.as_secs_f64())),
+            Err(e) => Err::<(), _>(e).check("vkWaitSemaphores"),
         }
-        Ok((self.given.fetch_max(self.value, Ordering::AcqRel) < self.value).then_some((self.done, self.value)))
+    }
+
+    /// The picture given back once the reads submitted before it are done, unless a later one was already.
+    pub(crate) fn give_back(&self, device: &Device) -> Result<(), String> {
+        device.signal_in_order(self.done, self.value, &self.given).map(|_| ())
     }
 
     fn crossing(&self, take: bool) -> vk::ImageMemoryBarrier<'static> {
@@ -220,7 +224,7 @@ impl Ring {
         let out = self.device.create_buffer(bytes, vk::BufferUsageFlags::TRANSFER_DST)?;
         let d = self.device.vk();
         let picture = self.picture(slot, value, width, height);
-        let given = picture.take(&self.device, READY_BOUND)?;
+        picture.take(&self.device, READY_BOUND)?;
         self.device.run_timed(
             |cmd| {
                 picture.record(&self.device, cmd, |image| unsafe {
@@ -230,8 +234,9 @@ impl Ring {
                 self.device.host_read_barrier(cmd, &out);
             },
             Some((self.ready, value)),
-            given,
+            None,
         )?;
+        picture.give_back(&self.device)?;
         Ok(out.with_bytes(bytes as usize, |b| b.to_vec()))
     }
 

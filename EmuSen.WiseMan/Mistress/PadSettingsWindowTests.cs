@@ -92,6 +92,18 @@ namespace EmuSen.WiseMan.Mistress
             PadMenu.Choose(window, pad, entry);
         }
 
+        // B from a sheet the Pause Card opened climbs back to its page, and each B a level more, the game paused until the card closes - see EmuSen_Interface.md §2.9 and EmuSen_LibretroHost.md §10z.
+        private static void BackToTheGame(MainWindow window, PadDriver pad)
+        {
+            Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible, "B from the sheet climbs back to the Pause Card");
+            for (int level = 0; level < 4 && window.GetControl<Control>("PadMenuPanel").IsVisible; level++)
+            {
+                Assert.True(IsPaused(window));
+                pad.B();
+            }
+            Assert.False(window.GetControl<Control>("PadMenuPanel").IsVisible);
+        }
+
         private static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");
 
         private static Control Sheet(MainWindow w) => Sheets(w).SheetOf(Sheets(w).Current!)!;
@@ -145,6 +157,7 @@ namespace EmuSen.WiseMan.Mistress
             // B a screen at a time: Preferences, ES-DE's menus in Game Mode, goes back from its last submenu first (§4.72.8).
             for (int guard = 0; guard < 3 && Sheets(window).IsPresenting; guard++) pad.B();
             Assert.False(Sheets(window).IsPresenting);
+            BackToTheGame(window, pad);
             Assert.False(IsPaused(window));
             Stop(window);
             window.Close();
@@ -264,6 +277,7 @@ namespace EmuSen.WiseMan.Mistress
 
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
+            BackToTheGame(window, pad);
             Assert.False(IsPaused(window));
             Stop(window);
             window.Close();
@@ -554,6 +568,7 @@ namespace EmuSen.WiseMan.Mistress
 
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
+            BackToTheGame(window, pad);
             Assert.False(IsPaused(window));
             Stop(window);
             window.Close();
@@ -815,6 +830,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("This game has a crop of its own.", Named<HintText>("GameCropStatus").Text);
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
+            BackToTheGame(window, pad);
 
             // The console's row says what replaces it; another console's says nothing.
             Choose(window, pad, "Graphics");
@@ -824,6 +840,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.StartsWith("Game has a crop of its own", note.Text);
             Assert.False(Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(sheet).OfType<HintText>().First(t => t.Name == "N64.Overscan.Note").IsVisible);
             pad.B();
+            BackToTheGame(window, pad);
 
             // The console's own setting changed meanwhile does not reach the frame while the game has its own.
             graphics.SetValue("SNES", GraphicsSettingsWindow.OverscanKey, GraphicsSettingsWindow.NoOverscan);

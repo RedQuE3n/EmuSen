@@ -718,3 +718,9 @@ The own look's twenty-two recordings were taken again the same day, after a seco
 while the shelf and the places have the focus (`HomeShelf` and `HomePlaces` now record a suspended game); a favourite's
 heart on its own cover's corner; Start Console's rows, pane and help bar; Collections without Apply and with `▸` on its
 rows; search typed on the keys, so the highlight rests on the last key.
+
+Six more were taken again the same day. `ScrapeStatusRunning` and `ScrapeStatusFinished` (both sizes): the sheet now opens
+over the own look, which draws no status bar, so it is centred in the whole window, 13 to 39 units lower; nothing in it
+changed. `HomeCardSettings` (both sizes): Home's Settings card ends with `Tools ▸`, which keeps the Home card's Tools page
+reachable from the own look, with Theme Settings, Compressed Discs, Collections and the Shell (`EmuSen_BigPicture.md`
+§51.2).

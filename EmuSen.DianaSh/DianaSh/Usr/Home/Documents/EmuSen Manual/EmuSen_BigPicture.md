@@ -11847,7 +11847,7 @@ window's first view (§51.6).
 - **The places**, each with one line: Games (`1,284 games`), Scraper (`41 no art`, from the Home card's own count of
   `scrape ls`), Packages, Library, Cores (`⚠ 1 to approve` in Attention while one waits), Settings (`Dark · 60% sound`) and
   Power (`Exit`, or `Quit` in Steam's Game Mode). The desktop has Library Manager, Cheats and Big Picture instead of
-  Library and Power. Settings and Power open the Home card at those pages, with `Home` over them as a breadcrumb.
+  Library and Power. Settings and Power open the Home card at those pages, with `Home` over them as a breadcrumb; Settings ends with `Tools ▸`, the Home card's Tools page, so Theme Settings, Compressed Discs, Collections and the Shell keep a door in the own look.
 - **Focus** starts on Continue, else on the first recent game, else on Games. Select is Search, which opens the grid on
   All with the keyboard docked. Start on Home puts the focus back where Home starts.
 - **The status line**: the controllers connected, the battery where the device reports one, and the time.

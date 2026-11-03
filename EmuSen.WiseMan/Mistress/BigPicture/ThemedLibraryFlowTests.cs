@@ -30,10 +30,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
-        // The in-game chord, then down to the entry and A, as a player would.
+        // The in-game chord, then down to the entry and A, as a player would; over the own look, Home's Settings place, whose card holds the settings and Tools (EmuSen_BigPicture.md §51.2).
         internal static void Choose(ThemedSession s, string entry)
         {
-            s.Pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+            if (s.Window.HomeLayout is { } home)
+            {
+                home.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "settings");
+                s.Pad.A();
+            }
+            else s.Pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
             PadMenu.Choose(s.Window, s.Pad, entry);
         }

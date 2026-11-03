@@ -290,6 +290,9 @@ namespace EmuSen.Mistress.Views
             catch (Exception e) when (e is CrystalException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException) { return null; }
         }
 
+        // Home's Settings card: the settings, then Tools with the doors Home's places do not have, such as Theme Settings and Compressed Discs, as the Home card has them.
+        private List<PadMenuEntry> OwnLookSettingsRows() => [.. SettingsRows(), new(() => ToolsMenu, () => { }, closes: false) { Submenu = ToolRows, Opens = true, StartsSection = true }];
+
         private void JumpBy(int by)
         {
             if (_games?.JumpFrom(_gallery?.Focused.Key, by) is { } path) _gallery?.FocusOn(path);
@@ -357,10 +360,10 @@ namespace EmuSen.Mistress.Views
             NewCollectionAsync(null).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => _collectionsTool?.Pane.Refresh()), System.Threading.Tasks.TaskScheduler.Default);
 
         void ICollectionsHost.RenameCollection(long id) =>
-            RenameCollectionAsync(_collections.FirstOrDefault(c => c.Id == id)).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => _collectionsTool?.Pane.Refresh()), System.Threading.Tasks.TaskScheduler.Default);
+            RenameThisCollectionAsync(_collections.FirstOrDefault(c => c.Id == id)).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => _collectionsTool?.Pane.Refresh()), System.Threading.Tasks.TaskScheduler.Default);
 
         void ICollectionsHost.RemoveCollection(long id) =>
-            DeleteCollectionAsync(_collections.FirstOrDefault(c => c.Id == id)).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => _collectionsTool?.Pane.Refresh()), System.Threading.Tasks.TaskScheduler.Default);
+            DeleteThisCollectionAsync(_collections.FirstOrDefault(c => c.Id == id)).ContinueWith(_ => Avalonia.Threading.Dispatcher.UIThread.Post(() => _collectionsTool?.Pane.Refresh()), System.Threading.Tasks.TaskScheduler.Default);
 
         void ICollectionsHost.AddToCollection(long id, string path)
         {
@@ -422,7 +425,7 @@ namespace EmuSen.Mistress.Views
                 case HomeScreen.Library: ShowLibraryManager(); break;
                 case HomeScreen.Cores: ShowCores(); break;
                 case HomeScreen.Cheats: ShowCheatDatabase(); break;
-                case HomeScreen.Settings when _bigScreen: OpenCard(SettingsMenu, SettingsRows, HomeTitle); break;
+                case HomeScreen.Settings when _bigScreen: OpenCard(SettingsMenu, OwnLookSettingsRows, HomeTitle); break;
                 case HomeScreen.Settings: ShowPreferences(); break;
                 case HomeScreen.Power: OpenCard(PowerMenu, PowerRows, HomeTitle); break;
                 case HomeScreen.BigPicture: SetBigPicture(true); break;

@@ -42,7 +42,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static bool Has(ThemedSession s, string name) => SheetRoot(s).GetLogicalDescendants().OfType<Control>().Any(c => c.Name == name);
 
-        private static bool LibraryContentShown(ThemedSession s) => s.Window.GetControl<Control>("LibraryContent").IsVisible;
+        // EmuSen's own look in the library's place: Home on the big screen (EmuSen_BigPicture.md §51.1).
+        private static bool LibraryContentShown(ThemedSession s) => s.Window.HomeLayout is not null;
 
         private static TabControl TabsOf(ThemedSession s) => SheetRoot(s).GetVisualDescendants().OfType<TabControl>().First();
 
@@ -140,7 +141,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Dispatcher.UIThread.RunJobs();
                 Assert.True(again.GetControl<Control>("LibraryView").IsVisible);
                 Assert.False((bool)typeof(MainWindow).GetProperty("ThemedLibraryShown", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(again)!);
-                Assert.True(again.GetControl<Control>("LibraryContent").IsVisible);
+                Assert.NotNull(again.HomeLayout);
             }
             finally { again.Close(); }
         }, default);

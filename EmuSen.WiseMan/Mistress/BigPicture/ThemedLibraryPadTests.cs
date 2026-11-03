@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [InlineData("no theme")]
         [InlineData("not big screen")]
         [InlineData("broken theme")]
-        public Task Mistress_library_is_kept_where_the_themed_view_is_not_wanted_or_cannot_load(string why) => Session.Dispatch(() =>
+        public Task EmuSen_s_own_look_is_kept_where_the_themed_view_is_not_wanted_or_cannot_load(string why) => Session.Dispatch(() =>
         {
             Action<AppSettings> settings = why switch
             {
@@ -76,7 +76,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             };
             using var s = new ThemedSession(settings: settings);
             Assert.False(s.Shown);
-            Assert.True(s.Window.GetControl<Control>("LibraryContent").IsVisible);
+            // The big screen shows EmuSen's own look, Home first; the desktop its library (EmuSen_BigPicture.md §51.1).
+            if (why == "not big screen") Assert.True(s.Window.GetControl<Control>("LibraryContent").IsVisible);
+            else Assert.NotNull(s.Window.HomeLayout);
             if (why == "broken theme") Assert.Contains("could not be read", s.Window.GetControl<TextBlock>("StatusText").Text);
         }, default);
 

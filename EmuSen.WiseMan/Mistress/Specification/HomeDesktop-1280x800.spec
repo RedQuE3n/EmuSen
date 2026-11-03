@@ -97,12 +97,12 @@ tree
               82 Border at=806,461,250,64 by=fixed-scroll in=2 limit=0,0,1080,746 paints=#26262BFF role=none
                 83 StackPanel at=822,476,218,34 by=fixed-scroll in=2 limit=0,0,1080,746 role=none
                   84 TextBlock at=822,476,218,17 box=218,17 by=fixed-scroll caps=9.7993 drawn face="Barlow Medium" heard="Library Manager" in=2 layout=97.93,16.8 limit=0,0,1080,746 paints=#EEEEF0FF role=text size=14 text="Library Manager"
-                  85 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=822,495,218,15 box=218,15 caps=8.0862 drawn face="Adwaita Mono" heard="⚠ 2 suspect dumps" in=2 layout=91.86,14.14 name=HubPlaceStatus paints=#DAA520FF role=text size=11 text="⚠ 2 suspect dumps"
+                  85 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=822,495,218,15 box=218,15 caps=8.0862 drawn face="Adwaita Mono" heard="⚠ 2 suspect dumps" in=2 layout=91.86,14.14 name=HubPlaceStatus paints=#8D8D91FF role=text size=11 text="⚠ 2 suspect dumps"
             86 Panel at=24,541,250,64 by=fixed-scroll heard="Cores, 1 to approve" in=2 limit=0,0,1080,746 name=HubPlace.cores role=none
               87 Border at=24,541,250,64 by=fixed-scroll in=2 limit=0,0,1080,746 paints=#26262BFF role=none
                 88 StackPanel at=40,556,218,34 by=fixed-scroll in=2 limit=0,0,1080,746 role=none
                   89 TextBlock at=40,556,218,17 box=218,17 by=fixed-scroll caps=9.7993 drawn face="Barlow Medium" heard=Cores in=2 layout=34.5,16.8 limit=0,0,1080,746 paints=#EEEEF0FF role=text size=14 text=Cores
-                  90 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=40,575,218,15 box=218,15 caps=8.0862 drawn face="Adwaita Mono" heard="⚠ 1 to approve" in=2 layout=68.39,14.14 name=HubPlaceStatus paints=#DAA520FF role=text size=11 text="⚠ 1 to approve"
+                  90 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=40,575,218,15 box=218,15 caps=8.0862 drawn face="Adwaita Mono" heard="⚠ 1 to approve" in=2 layout=68.39,14.14 name=HubPlaceStatus paints=#8D8D91FF role=text size=11 text="⚠ 1 to approve"
             91 Panel at=290,541,242,64 by=fixed-scroll heard="Cheats, 12 on · 3 games" in=2 limit=0,0,1080,746 name=HubPlace.cheats role=none
               92 Border at=290,541,242,64 by=fixed-scroll in=2 limit=0,0,1080,746 paints=#26262BFF role=none
                 93 StackPanel at=306,557,210,33 by=fixed-scroll in=2 limit=0,0,1080,746 role=none

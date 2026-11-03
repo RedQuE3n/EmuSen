@@ -15,7 +15,9 @@ namespace EmuSen.Tools.Packages
         {
             if (rows.Count == 0) return null;
             int changed = rows.Count(r => r.Problem), packaged = rows.Count(r => r.Packaged);
-            return new(changed > 0 ? $"{changed:N0} changed" : packaged > 0 ? $"{packaged:N0} packaged" : "None packaged yet");
+            return changed > 0 ? new($"{changed:N0} changed", Sentence: changed == 1 ? "1 package no longer matches its record: it moved, went missing or changed." : $"{changed:N0} packages no longer match their records: each moved, went missing or changed.")
+                : packaged > 0 ? new($"{packaged:N0} packaged", Sentence: packaged == 1 ? "1 game is packaged." : $"{packaged:N0} games are packaged.")
+                : new("None packaged yet", Sentence: "No game is packaged yet.");
         }
 
         // A row's state as the State column says it.

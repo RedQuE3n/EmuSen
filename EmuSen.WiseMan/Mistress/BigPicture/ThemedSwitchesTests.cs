@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Theme Settings from the pad menu, on its Interface tab.
         internal static ThemeSettingsWindow OpenInterface(ThemedSession s)
         {
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             var sheet = Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             TabControl tabs = Named<TabControl>(sheet, "ThemeSettingsTabs");

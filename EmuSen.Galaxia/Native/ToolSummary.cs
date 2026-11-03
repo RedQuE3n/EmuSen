@@ -5,8 +5,8 @@ using System.Threading;
 
 namespace EmuSen.Galaxia.Native
 {
-    // A tool's one-line state as its own library words it: the line, a shorter one for a 150-unit place, and whether it needs the player - see EmuSen_Interface.md §19.
-    public sealed record ToolSummary(string Line, string? Short = null, bool NeedsAttention = false)
+    // A tool's one-line state as its own library words it: the line, a shorter one for a 150-unit place, whether it needs the player, and the state as a sentence - see EmuSen_Interface.md §19.
+    public sealed record ToolSummary(string Line, string? Short = null, bool NeedsAttention = false, string? Sentence = null)
     {
         public const string Mark = "⚠ ";
 

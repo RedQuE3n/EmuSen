@@ -52,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // The pad's route: the pad menu's Theme Settings, then the Themes tab, then down to the entry's Use and A.
         private static ThemeSettingsWindow OpenThemes(ThemedSession s)
         {
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             var sheet = Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             for (int i = 0; i < 3 && (TabsOf(s).SelectedItem as TabItem)?.Header as string != "Themes"; i++) s.Pad.R1();
@@ -145,7 +145,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var s = new ThemedSession(settings: a => a.LibraryStyle = AppSettings.LibraryStyleMistress);
             Assert.False(s.Shown);
             Assert.True(LibraryContentShown(s));
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             Assert.Equal("Themes", (TabsOf(s).SelectedItem as TabItem)?.Header);
@@ -178,7 +178,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var s = new ThemedSession(settings: a => a.LibraryStyle = style);
             Assert.Equal(style == AppSettings.LibraryStyleTheme, s.Shown);
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             Assert.Empty(s.Window.OwnedWindows);

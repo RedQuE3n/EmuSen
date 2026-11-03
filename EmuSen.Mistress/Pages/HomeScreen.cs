@@ -120,6 +120,17 @@ namespace EmuSen.Mistress.Pages
         private HomePlace Tool(string key, string label, bool desk) =>
             _host.Summary(key) is { } s ? new(key, label, desk ? s.Line : s.Brief, s.NeedsAttention) : new(key, label, Description(key));
 
+        // What a tool does in a sentence, said in the Home card's pane until the tool has said its state.
+        public static string About(string place) => place switch
+        {
+            Scraper => "Fetches covers, screenshots, videos and facts for the library from ScreenScraper.",
+            Packages => "Makes, checks and zips game packages, and converts discs to CHD.",
+            Library => "Finds duplicate and damaged dumps; it reads every file when it checks.",
+            Cores => "The engines each console runs on: EmuSen's own and libretro's.",
+            Cheats => "Codes for games, switched on game by game.",
+            _ => "",
+        };
+
         // What a tool does, said until it has a line of its own.
         public static string Description(string place) => place switch
         {

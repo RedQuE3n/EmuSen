@@ -18,7 +18,7 @@ tree
         3 CollectionsPane at=72,42,1776,1098 by=panel heard=Collections limit=0,0,1920,1200 role=pane
           4 Panel at=72,42,1776,1098 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
             5 Grid at=72,42,1776,1098 by=panel limit=0,0,1920,1200 role=none
-              6 Border at=72,42,1776,90 by=panel heard=COLLECTIONS limit=0,0,1920,1200 name=AdaptiveHeader role=none
+              6 AdaptiveHeaderRow at=72,42,1776,90 by=panel heard=COLLECTIONS limit=0,0,1920,1200 name=AdaptiveHeader role=none
                 7 DockPanel at=96,60,1728,72 by=panel limit=0,0,1920,1200 role=none
                   8 TextBlock at=1560,78,264,36 box=176,24 by=panel caps=13.999 drawn face=Barlow heard="1 collection · 3 games" layout=175.12,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="1 collection · 3 games"
                   9 StackPanel at=96,66,1446,58.5 by=panel limit=0,0,1920,1200 role=none

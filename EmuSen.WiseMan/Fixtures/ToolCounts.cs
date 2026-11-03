@@ -17,11 +17,11 @@ namespace EmuSen.WiseMan.Fixtures
         // The mockups' lines: 41 games without art, 3 packages changed, 2 suspect dumps, 1 core to approve, 12 cheats on in 3 games.
         public static readonly IReadOnlyDictionary<string, ToolSummary?> Mockups = new Dictionary<string, ToolSummary?>
         {
-            [HomeScreen.Scraper] = new("41 without art", "41 no art"),
-            [HomeScreen.Packages] = new("3 changed"),
-            [HomeScreen.Library] = new("2 suspect dumps", "2 suspect", NeedsAttention: true),
-            [HomeScreen.Cores] = new("1 to approve", NeedsAttention: true),
-            [HomeScreen.Cheats] = new("12 on · 3 games"),
+            [HomeScreen.Scraper] = new("41 without art", "41 no art", Sentence: "41 games have no art yet; the Scraper fetches it from ScreenScraper."),
+            [HomeScreen.Packages] = new("3 changed", Sentence: "3 packages no longer match their records: each moved, went missing or changed."),
+            [HomeScreen.Library] = new("2 suspect dumps", "2 suspect", NeedsAttention: true, Sentence: "2 files are suspect dumps: each matches no known dump, or a part of it is missing."),
+            [HomeScreen.Cores] = new("1 to approve", NeedsAttention: true, Sentence: "PCEE2, a PlayStation 2 core from libretro's buildbot, waits for your approval. Nothing downloaded runs until you approve it."),
+            [HomeScreen.Cheats] = new("12 on · 3 games", Sentence: "12 cheats are on, in 3 games."),
         };
 
         public static void Answer(IReadOnlyDictionary<string, ToolSummary?> read)

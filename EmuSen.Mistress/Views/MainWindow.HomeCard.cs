@@ -21,7 +21,7 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow
     {
         public const string HomeTitle = "Home", ContinueRow = "Continue", SelectedGameRow = "Selected game", SearchRow = "Search", ToolsMenu = "Tools", SettingsMenu = "Settings", PowerMenu = "Power";
-        public const string ScraperRow = "Scraper", CheatsRow = "Cheats", ShellRow = "Shell", ThemeSettingsRow = "Theme Settings", QuitEmuSenRow = "Quit EmuSen...";
+        public const string ScraperRow = "Scraper", CheatsRow = "Cheats", CollectionsRow = "Collections", ShellRow = "Shell", ThemeSettingsRow = "Themes", QuitEmuSenRow = "Quit EmuSen...";
 
         // The game the card was opened over, kept while it is open: its file, its name and how it becomes a favourite.
         private sealed record HomeGame(string Path, string Title, Action ToggleFavourite);
@@ -85,16 +85,26 @@ namespace EmuSen.Mistress.Views
                 Tool(LibraryManagerMenu, ShowLibraryManager, HomeScreen.Library),
                 Tool(CoresMenu, ShowCores, HomeScreen.Cores),
                 Tool(CheatsRow, ShowCheatDatabase, HomeScreen.Cheats),
+                Said(ThemeSettingsRow, ShowThemeSettings, ThemeName, () => $"{ThemeName()} is the big picture's look; A opens the themes, their variants and their options."),
+                Said(CollectionsRow, () => ShowSettings(SettingsScreen.Library, "collections"), () => $"{_collections.Count:N0}",
+                    () => _collections.Count == 1 ? "1 collection of your own, beside Favourites and Recently played." : $"{_collections.Count:N0} collections of your own, beside Favourites and Recently played."),
                 Opens(CompressedDiscsMenu, ShowCompressedDiscs),
+                Opens(ShellRow, ShowShellConsole),
             };
-            AddCollectionMenuEntries(rows);
-            if (_bigScreen) rows.Add(Opens(ThemeSettingsRow, ShowThemeSettings));
-            rows.Add(Opens(ShellRow, ShowShellConsole));
             return rows;
         }
 
+        // A tool's row: its live line as the value, and in the pane its state as its own library says it, then what A and B do (EmuSen_Interface.md §19.6).
         private PadMenuEntry Tool(string name, Action show, string place) =>
-            new(() => name, show) { Opens = true, Status = () => ToolLine(place), Label = () => name, Value = () => SummaryOf(place)?.MarkedBrief };
+            new(() => name, show) { Opens = true, Label = () => name, Value = () => SummaryOf(place)?.MarkedBrief, PaneSaid = () => (name, SummaryOf(place)?.Sentence ?? HomeScreen.About(place), Hint(name)) };
+
+        private PadMenuEntry Said(string name, Action show, Func<string> value, Func<string> sentence) =>
+            new(() => name, show) { Opens = true, Label = () => name, Value = value, PaneSaid = () => (name, sentence(), Hint(name)) };
+
+        private static string Hint(string name) => $"A opens {name}; B comes back here.";
+
+        // The big picture's look by its name, as Settings ▸ Library ▸ Themes names it.
+        private string ThemeName() => LookList.FirstOrDefault(l => EmuSen.Mistress.BigPicture.BigPictureLooks.IsCurrent(_appSettings, l))?.Name ?? "EmuSen";
 
         // A tool's live line in the pane, or what it does before it has said anything.
         private string ToolLine(string place) => SummaryOf(place)?.Marked ?? HomeScreen.Description(place);

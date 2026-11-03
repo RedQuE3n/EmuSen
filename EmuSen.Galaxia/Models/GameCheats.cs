@@ -65,8 +65,8 @@ namespace EmuSen.Galaxia.Models
                 on += enabled;
                 if (enabled > 0) games++;
             }
-            return on > 0 ? new($"{on:N0} on · {ToolSummary.Count(games, "game", "games")}")
-                : lists > 0 ? new(ToolSummary.Count(lists, "game with cheats", "games with cheats"), "none on") : null;
+            return on > 0 ? new($"{on:N0} on · {ToolSummary.Count(games, "game", "games")}", Sentence: $"{(on == 1 ? "1 cheat is" : $"{on:N0} cheats are")} on, in {ToolSummary.Count(games, "game", "games")}.")
+                : lists > 0 ? new(ToolSummary.Count(lists, "game with cheats", "games with cheats"), "none on", Sentence: $"{ToolSummary.Count(lists, "game has", "games have")} cheats saved, none of them on.") : null;
         }
 
         private static IEnumerable<string> SavedLists()

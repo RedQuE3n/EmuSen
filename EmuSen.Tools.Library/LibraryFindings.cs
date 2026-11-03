@@ -140,9 +140,10 @@ namespace EmuSen.Tools.Library
         // The tool's one-line state after a whole check: the suspect dumps first, then the duplicates; null before one has run, since a check reads every file (EmuSen_Interface.md §19).
         public static ToolSummary? StateOf(bool complete, int suspect, int duplicates) =>
             !complete ? null
-            : suspect > 0 ? new(ToolSummary.Count(suspect, "suspect dump", "suspect dumps"), $"{suspect:N0} suspect", NeedsAttention: true)
-            : duplicates > 0 ? new(ToolSummary.Count(duplicates, "duplicate", "duplicates"))
-            : new("No problems found");
+            : suspect > 0 ? new(ToolSummary.Count(suspect, "suspect dump", "suspect dumps"), $"{suspect:N0} suspect", NeedsAttention: true,
+                Sentence: suspect == 1 ? "1 file is a suspect dump: it matches no known dump, or a part of it is missing." : $"{suspect:N0} files are suspect dumps: each matches no known dump, or a part of it is missing.")
+            : duplicates > 0 ? new(ToolSummary.Count(duplicates, "duplicate", "duplicates"), Sentence: duplicates == 1 ? "1 dump is in the library more than once." : $"{duplicates:N0} dumps are in the library more than once.")
+            : new("No problems found", Sentence: "The last check found no problems.");
 
         public static string Summary(IReadOnlyList<ManagerMarked<LibraryRow>> marked)
         {

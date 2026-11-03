@@ -1510,7 +1510,8 @@ states and the other tools' pages are the window follow-ons.
 
 Each tool says its one-line state in one place, its own library, through the surface it already has; the host reads it
 and draws it, and never words it. The record is Galaxia's `ToolSummary` (beside `ToolWords`, the tools' shared words):
-the line, a shorter one for a 150-unit place, and whether it needs the player, whose sign `⚠` the place or header adds.
+the line, a shorter one for a 150-unit place, whether it needs the player, whose sign `⚠` the place or header adds, and
+the state as a sentence in the tool's own words, which the Home card's pane says (§19.6).
 
 | Tool | Owner | The line (desktop) / the short one (big screen, Home card) | Before anything is said |
 |---|---|---|---|
@@ -1572,10 +1573,14 @@ Decided 2026-11-03 on these numbers:
 
 ### 19.4 Departures, measured against the mockups
 
-- The desktop's places draw a `⚠` line in Attention where the desktop mockup draws it Muted, so every `⚠` line on
-  Home is drawn alike; the Home card's rows keep the row's own colour, as its mockup draws them.
-- The Home card's Tools page gains `Cheats` with its line, as its mockup lists it; `Compressed Discs` stays until
-  decision 10 of §0 retires it into Packages.
+- Decided 2026-11-03: the two forms differ on purpose. The big screen's places draw a `⚠` line in Attention, to call
+  the player from across the room; the desktop's keep the sign and stay Muted, as its mockup draws them (LunaP §215.4).
+  The Home card's rows keep the row's own colour, as its mockup draws them.
+- The Home card's Tools page is the mockup's: Scraper, Packages, Library Manager, Cores, Cheats, Themes (the big
+  picture's look by name) and Collections (the player's own, counted), each with `▸`; then `Compressed Discs`, until
+  decision 10 of §0 retires it into Packages, and `Shell`, whose doors must stay. Themes is the row `Theme Settings`
+  was, and Collections now shows on every Home card, not only over a theme, opening Settings ▸ Library ▸ Collections
+  as before.
 - The big screen's Cheats has no header row (§19.2).
 
 ### 19.5 Tests, measured on 2026-11-03
@@ -1592,3 +1597,13 @@ by its text rather than its stretched box).
 
 Comparison pictures, mockup left and built right, at 1280 × 800 and 1920 × 1080 and the desktop's 1280 × 800:
 `~/.cache/emusen/tmp/u7/compare/`.
+
+### 19.6 The Tools page's pane
+
+With a tool's row focused, the card's pane says, as the mockup does: the tool's name; its state as a sentence, the
+summary's own (`ToolSummary.Sentence`, worded by the tool's library beside the line, so nothing is a second source):
+`PCEE2, a PlayStation 2 core from libretro's buildbot, waits for your approval. Nothing downloaded runs until you
+approve it.`, `41 games have no art yet; the Scraper fetches it from ScreenScraper.`; and then, Muted, `A opens Cores;
+B comes back here.` Before a tool has said anything the sentence is what the tool does (`HomeScreen.About`). Themes says
+which look is in use and Collections how many the player has. Not built: the mockup's `was installed today` and `on
+PCEE2`, since the summary holds no install date and A opens the tool, not the core.

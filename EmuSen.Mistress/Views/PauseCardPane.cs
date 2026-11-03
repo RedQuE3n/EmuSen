@@ -150,6 +150,18 @@ namespace EmuSen.Mistress.Views
             Child = stack;
         }
 
+        // A tool's name, its state in a sentence, and a muted line of what A and B do (EmuSen_Interface.md §19.6).
+        public void ShowSaid(string title, string sentence, string hint, double width)
+        {
+            double u = U;
+            var stack = new StackPanel { Name = "PaneSaid", Spacing = 6 * u, Width = width };
+            stack.Children.Add(Line(title, Words * u, Ink.Text, "PaneTitle"));
+            stack.Children.Add(Line(sentence, Words * u, Ink.Text, "PaneSentence", wraps: true));
+            stack.Children.Add(Line(hint, Words * u, Ink.Muted, "PaneHint", wraps: true));
+            Showing = "said";
+            Child = stack;
+        }
+
         // What a row does in sentences, then a line in the success or error colour, such as whether firmware was found.
         public void ShowSentences(IReadOnlyList<string> sentences, (string Line, bool Good)? flag, double width)
         {

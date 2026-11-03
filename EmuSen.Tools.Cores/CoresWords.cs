@@ -12,10 +12,19 @@ namespace EmuSen.Tools.Cores
         public static ToolSummary? StateOf(IReadOnlyCollection<CoreRow> rows)
         {
             if (rows.Count == 0) return null;
-            int approve = rows.Count(r => r.AwaitsApproval), updates = rows.Count(r => r.State == "update");
-            return approve > 0 ? new($"{approve:N0} to approve", NeedsAttention: true)
-                : updates > 0 ? new("↑ " + ToolSummary.Count(updates, "update", "updates"))
-                : new($"{ToolSummary.Count(rows.Count, "core", "cores")} · {rows.Count(r => r.Installed):N0} installed");
+            int approve = rows.Count(r => r.AwaitsApproval), updates = rows.Count(r => r.State == "update"), installed = rows.Count(r => r.Installed);
+            const string Untrusted = " Nothing downloaded runs until you approve it.";
+            return approve > 0 ? new($"{approve:N0} to approve", NeedsAttention: true, Sentence: (approve == 1 ? Awaiting(rows.First(r => r.AwaitsApproval)) : $"{approve:N0} cores wait for your approval.") + Untrusted)
+                : updates > 0 ? new("↑ " + ToolSummary.Count(updates, "update", "updates"), Sentence: updates == 1 ? "A newer build of 1 core is offered." : $"Newer builds of {updates:N0} cores are offered.")
+                : new($"{ToolSummary.Count(rows.Count, "core", "cores")} · {installed:N0} installed", Sentence: $"{ToolSummary.Count(rows.Count, "core", "cores")}, {installed:N0} of them installed; none waits for your approval.");
+        }
+
+        // The one core waiting, said with its console and where it came from: "PCEE2, a PlayStation 2 core from libretro's buildbot, waits for your approval."
+        private static string Awaiting(CoreRow one)
+        {
+            string from = one.IsLibretro ? " from libretro's buildbot" : "";
+            string what = one.ConsoleNames.Count > 0 ? $", a {one.ConsoleNames[0]} core{from}," : from.Length > 0 ? $",{from}," : "";
+            return $"{one.Name}{what} waits for your approval.";
         }
 
         public static string Size(long bytes) => bytes switch

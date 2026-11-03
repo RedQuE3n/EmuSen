@@ -46,7 +46,8 @@ namespace EmuSen.Tools.Scraper
         {
             if (rows.Count == 0) return null;
             int lacking = rows.Count(r => r.Media.Count > 0 && r.Missing.Count > 0);
-            return lacking > 0 ? new($"{lacking:N0} without art", $"{lacking:N0} no art") : new("Every game has art");
+            return lacking > 0 ? new($"{lacking:N0} without art", $"{lacking:N0} no art", Sentence: (lacking == 1 ? "1 game has" : $"{lacking:N0} games have") + " no art yet; the Scraper fetches it from ScreenScraper.")
+                : new("Every game has art", Sentence: "Every game in the library has its art.");
         }
 
         public static List<string> Line(string sub, string? section, ScrapeOptions o, bool byHand = false) => Line(sub, section, null, o, byHand);

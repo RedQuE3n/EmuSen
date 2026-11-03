@@ -72,6 +72,11 @@ namespace EmuSen.WiseMan.Mistress
 
             ToolSummary approve = CoresWords.StateOf([Core("installed", "needs_approval"), Core("update"), Core("available")])!;
             Assert.Equal(("⚠ 1 to approve", true), (approve.Marked, approve.NeedsAttention));
+            Assert.Equal("c, from libretro's buildbot, waits for your approval. Nothing downloaded runs until you approve it.", approve.Sentence);
+            Assert.Equal("c, a PlayStation 2 core from libretro's buildbot, waits for your approval. Nothing downloaded runs until you approve it.",
+                CoresWords.StateOf([Core("installed", "needs_approval") with { ConsoleNames = ["PlayStation 2"] }])!.Sentence);
+            Assert.Equal("2 files are suspect dumps: each matches no known dump, or a part of it is missing.", suspect.Sentence);
+            Assert.Equal("2 games have no art yet; the Scraper fetches it from ScreenScraper.", art.Sentence);
             Assert.Equal("↑ 2 updates", CoresWords.StateOf([Core("update"), Core("update"), Core("available")])!.Marked);
             Assert.Equal("3 cores · 1 installed", CoresWords.StateOf([Core("installed"), Core("available"), Core("available")])!.Marked);
         }

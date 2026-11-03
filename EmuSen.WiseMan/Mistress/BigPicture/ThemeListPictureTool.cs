@@ -68,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             SyntheticLibrary.WriteMedia(MediaRoot);
             using var s = new ThemedSession(1280, 800, a => a.EsdeMediaDirectory = MediaRoot, themeDirectory: ArtBookNextFactAttribute.Folder);
             s.Run(500);
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             s.Pad.R1();
             s.Settle();

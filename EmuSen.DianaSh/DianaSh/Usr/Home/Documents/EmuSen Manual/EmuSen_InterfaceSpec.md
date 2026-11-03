@@ -827,3 +827,8 @@ Manager state (24), for the header's host now LunaP's `AdaptiveHeaderRow` and it
 new words; `Home`, `HomeShelf`, `HomePlaces`, `HomeNothingLeft` and `HomeDesktop`, for the places' live lines;
 `HomeCardDesktopTools` and `HomeCardDesktopToolsPage`, for the tools' lines as the rows' values and the pane's, and the
 Cheats row. `CheatDatabase` is unchanged: its header row is drawn on the desktop only.
+
+Taken again the same day after review, one cause each, both sizes: `HomeCardDesktopTools` and `HomeCardDesktopToolsPage`
+for the Tools page's Themes and Collections rows and its pane's sentence (`EmuSen_Interface.md` §19.6); `HomeDesktop`
+for the desktop's quiet `⚠` lines; `Collections`, missed in the first round, for the header's host now LunaP's
+`AdaptiveHeaderRow`.

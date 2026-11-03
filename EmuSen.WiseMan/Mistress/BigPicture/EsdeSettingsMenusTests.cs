@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task Theme_settings_is_a_sheet_of_three_tabs_and_B_closes_it(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             TabControl tabs = Named<TabControl>(s, "ThemeSettingsTabs");

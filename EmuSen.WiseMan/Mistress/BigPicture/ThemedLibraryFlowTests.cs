@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static readonly System.Collections.Generic.Dictionary<string, (string, string)> SettingsRows = new()
         {
-            ["Theme Settings"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "themes"), ["Compressed Discs"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "discs"),
+            ["Themes"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "themes"), ["Compressed Discs"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "discs"),
             ["Shell"] = (EmuSen.Mistress.Pages.SettingsScreen.EmuSen, "shell"), ["Collections"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "collections"),
         };
 

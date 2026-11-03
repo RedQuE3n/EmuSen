@@ -111,14 +111,7 @@ namespace EmuSen.Mistress.Views
 
         private void OnSettingsKey(object? sender, KeyEventArgs e)
         {
-            if (e.Handled) return;
-            UiButton? button = e.Key switch
-            {
-                Key.Up => UiButton.Up, Key.Down => UiButton.Down, Key.Left => UiButton.Left, Key.Right => UiButton.Right,
-                Key.Enter => UiButton.Accept, Key.Escape or Key.Back => UiButton.Back, Key.PageUp => UiButton.PageUp, Key.PageDown => UiButton.PageDown,
-                _ => null,
-            };
-            if (button is not { } b) return;
+            if (e.Handled || KeyAsPad(e.Key) is not { } b) return;
             SettingsPadCommand(b);
             e.Handled = true;
         }

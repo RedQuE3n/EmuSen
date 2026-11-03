@@ -723,7 +723,7 @@ fn audio(h: &Audio) -> MutexGuard<'_, AudioPlayer> {
     h.player.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
-/// Opens SDL's audio and the default device at `sample_rate`, steering `rate`, which the host keeps and lends to each submit.
+/// Opens SDL's audio and the system's default device at `sample_rate`, steering `rate`, which the host keeps and lends to each submit.
 ///
 /// # Safety
 /// `rate` from `emusen_endymion_rate_new`, live.
@@ -793,6 +793,46 @@ pub unsafe extern "C" fn emusen_endymion_audio_get(h: *const Audio, which: u32) 
         AUDIO_AVAILABLE => player.is_available() as i64,
         AUDIO_SAMPLE_RATE => player.sample_rate() as i64,
         _ => fail(status::BAD_ARGUMENT, "no such number") as i64,
+    }
+}
+
+/// SDL's playback devices, each name followed by a NUL, in SDL's order; empty where SDL's audio does not start.
+///
+/// # Safety
+/// `out` valid for `cap` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_audio_device_list(out: *mut u8, cap: usize) -> i64 {
+    let sdl = match sdl() {
+        Ok(sdl) => sdl,
+        Err(status) => return status as i64,
+    };
+    let mut names = Vec::new();
+    for (_, name) in audio::playback_devices(&sdl) {
+        names.extend_from_slice(name.as_bytes());
+        names.push(0);
+    }
+    unsafe { put(&names, out, cap) }
+}
+
+/// The device the player plays on, by a name the list gave; null or empty is the system default. ABSENT where no
+/// device has the name: the system default plays, and the words say so.
+///
+/// # Safety
+/// `h` and `rate` live; `name` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_audio_device_set(h: *mut Audio, rate: *mut Rate, name: *const u8, len: usize) -> i32 {
+    let (Some(handle), Some(rate)) = (unsafe { h.as_ref() }, unsafe { rate.as_ref() }) else {
+        return fail(status::NULL, "no handle");
+    };
+    let name = match unsafe { text(name, len) } {
+        Ok(name) => name,
+        Err(status) => return status,
+    };
+    let mut player = audio(handle);
+    if player.set_device(&mut rate.lock().value, name) {
+        0
+    } else {
+        fail(status::ABSENT, format!("No sound output is named \"{}\"; the system default plays instead.", name.unwrap_or_default()))
     }
 }
 

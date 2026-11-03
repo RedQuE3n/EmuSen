@@ -34,6 +34,7 @@ pub const EVENT_GAMEPAD_REMOVED: u32 = 0x654;
 pub const FIRST_PAD_EVENT: u32 = 0x600;
 pub const LAST_PAD_EVENT: u32 = 0x6FF;
 pub const HINT_AUDIO_DEVICE_SAMPLE_FRAMES: &str = "SDL_AUDIO_DEVICE_SAMPLE_FRAMES";
+pub const HINT_AUDIO_DRIVER: &str = "SDL_AUDIO_DRIVER";
 
 macro_rules! functions {
     ($($field:ident = $name:literal: fn($($arg:ty),*) $(-> $ret:ty)?;)*) => {
@@ -72,6 +73,8 @@ functions! {
     set_audio_stream_gain = "SDL_SetAudioStreamGain": fn(*mut c_void, f32) -> bool;
     resume_audio_stream_device = "SDL_ResumeAudioStreamDevice": fn(*mut c_void) -> bool;
     clear_audio_stream = "SDL_ClearAudioStream": fn(*mut c_void) -> bool;
+    get_audio_playback_devices = "SDL_GetAudioPlaybackDevices": fn(*mut c_int) -> *mut u32;
+    get_audio_device_name = "SDL_GetAudioDeviceName": fn(u32) -> *const c_char;
     load_wav = "SDL_LoadWAV": fn(*const c_char, *mut AudioSpec, *mut *mut u8, *mut u32) -> bool;
     convert_audio_samples = "SDL_ConvertAudioSamples": fn(*const AudioSpec, *const u8, c_int, *const AudioSpec, *mut *mut u8, *mut c_int) -> bool;
     get_gamepads = "SDL_GetGamepads": fn(*mut c_int) -> *mut u32;

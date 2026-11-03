@@ -12,6 +12,33 @@ use crate::catalog::{self, Catalog};
 use crate::json::Json;
 use crate::runtime::Runtime;
 
+/// The console setting of which firmware a machine is given, read where it is located (EmuSen_Cores.md §3.12).
+pub const PREFERENCE_KEY: &str = "FirmwarePreference";
+
+/// `FirmwarePreference`: the player's own where found else the replacement, the replacement always, or the player's own only.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Preference {
+    #[default]
+    Auto,
+    Replacement,
+    Own,
+}
+
+impl Preference {
+    /// The row's choices, in the order a window lists them, and their labels.
+    pub const CHOICES: [&str; 3] = ["auto", "replacement", "own"];
+    pub const LABELS: [&str; 3] = ["Automatic", "Open replacement", "Own firmware"];
+
+    /// A stored value; anything but the two others is auto.
+    pub fn of(value: Option<&str>) -> Preference {
+        match value {
+            Some("replacement") => Preference::Replacement,
+            Some("own") => Preference::Own,
+            _ => Preference::Auto,
+        }
+    }
+}
+
 /// One firmware entry of core info, `CoreFirmware`.
 #[derive(Clone, Debug)]
 pub struct Entry {
@@ -46,6 +73,11 @@ impl Entry {
         }
     }
 
+    /// Whether the core runs an open replacement in the file's place: exact or at a cost, not "none".
+    pub fn has_replacement(&self) -> bool {
+        self.replacement.as_ref().is_some_and(|(effect, _)| effect != "none")
+    }
+
     /// The store's request for the entry, `CoreEngine.Request`'s fields the store reads.
     pub fn request(&self) -> Request {
         Request { file: self.name.clone(), size: self.size as i32, alternates: Vec::new(), parts: self.parts.clone(), md5: self.md5.clone() }
@@ -78,6 +110,11 @@ pub fn systems_of(info: &Value) -> Vec<(String, String, bool, Vec<Entry>)> {
 pub fn can_require(info: &Value) -> bool {
     let systems = systems_of(info);
     systems.is_empty() || systems.iter().any(|(_, _, _, f)| f.is_empty() || f.iter().any(|e| e.required))
+}
+
+/// Whether any of a console's engines declares, for one of its systems, a file with an open replacement.
+pub fn replacement_offered(infos: &[&Value], systems: &[String]) -> bool {
+    infos.iter().any(|info| systems_of(info).iter().any(|(id, _, _, list)| systems.contains(id) && list.iter().any(Entry::has_replacement)))
 }
 
 /// The firmware store, `FirmwareLibrary.Directory`.

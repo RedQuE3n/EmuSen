@@ -125,6 +125,7 @@ pub static APP_SETTINGS: Schema = Schema {
         text("LibraryView", "Grid"),
         double("LibraryTileScale", "1"),
         text("LibraryCollection", "all"),
+        text("SoundOutputDevice", "System default"),
         double("Volume", "1"),
         flag("PauseInBackground", true),
         Field::new("OnlineCovers", Type::NullableBool, Initial::Null).skipped_when_null(),
@@ -371,7 +372,8 @@ mod tests {
     fn app_settings_has_every_property_and_skips_the_retired_key_while_it_is_null() {
         let new = APP_SETTINGS.new_instance();
         let text = format(&APP_SETTINGS, &new).unwrap();
-        assert_eq!(APP_SETTINGS.fields.len(), 64);
+        assert_eq!(APP_SETTINGS.fields.len(), 65);
+        assert!(text.contains("\"SoundOutputDevice\": \"System default\","));
         assert!(text.contains("\"SelectedCore\": \"All consoles\","));
         assert!(text.contains("\"BigPicture\": {},"));
         assert!(text.contains("\"NavigationVolume\": 60,"));

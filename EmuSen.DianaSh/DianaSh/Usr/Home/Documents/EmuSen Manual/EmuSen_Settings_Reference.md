@@ -300,6 +300,10 @@ kernel pads made through `/dev/uinput` are `EmuSen_Input.md` §8.12.
 
 `AudioSpec` lost its `Samples` field; the device buffer is set through the `SDL_AUDIO_DEVICE_SAMPLE_FRAMES` hint instead, held at the same 4096 frames the SDL2 build asked for. `AudioS16Sys` is gone too — SDL3 exposes only `AudioS16LE`/`AudioS16BE`, so the constructor picks by `BitConverter.IsLittleEndian`. The device itself may well open at a different rate (44100 Hz is common) and SDL resamples 32 kHz up inside the stream; that is normal and invisible to the queue accounting above. `PutAudioStreamData` takes a raw pointer, which is the only reason either frontend still sets `AllowUnsafeBlocks`.
 
+**The output device (2026-11-03).** `AppSettings.SoundOutputDevice` names the playback device the game's sound goes
+to, `"System default"` unless the player chooses another; a saved device missing at start falls back to the system
+default with one line in the error log. How devices are listed and chosen is `EmuSen_Audio_Sync.md` §7.4.
+
 **Gamepads are enumerated, not indexed.** SDL2's joystick indices are gone. `GetGamepads(out count)` returns instance IDs for the gamepads specifically, so `TryOpenFirstController` no longer walks every joystick asking `IsGameController` about it — the one-second hot-plug rescan interval (§4.4) is unchanged, but the scan behind it is cheaper. `GameController*` handles became plain `IntPtr`, `GameControllerGetButton`'s `0`/`1` became a `bool`, and `GameControllerUpdate` is `UpdateGamepads`.
 
 **Saved bindings survived the rename.** `GamepadButton` renamed the face buttons to their positions (`A`/`B`/`X`/`Y` → `South`/`East`/`West`/`North`) but kept every numeric value SDL2 used, and `gamepadbindings.json` persisted the numbers, not the names. An SDL2-era config therefore loads into the SDL3 build as the same physical buttons; `EmuSen.WiseMan/Input/GamepadBindingMapTests.cs` pins that with a verbatim copy of a file the old build wrote.

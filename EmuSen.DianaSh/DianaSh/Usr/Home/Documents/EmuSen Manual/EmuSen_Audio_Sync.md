@@ -248,3 +248,40 @@ This is the same class of defect as the `EmulatorSession.ScreenHeight` constant 
 ### 7.3 Volume is the stream's gain (2026-09-21)
 
 `AudioPlayer.Volume` (0 to 1, default 1) is applied with `SDL_SetAudioStreamGain` on the open stream, and again every time `OpenDevice` opens one, because a core with a different sample rate closes and reopens the stream (§7.2) and a gain set on the old stream would otherwise be lost silently. It scales the samples SDL mixes out; it does not touch what rate control sees, so `QueuedFrames` and the latency target are unaffected by it. Mistress's in-game bar drives it (`EmuSen_Settings_Reference.md` §4.34). Not covered by a test: with no audio device, as under the headless harness, the setter only stores the value, so the gain call itself is unexercised there.
+
+### 7.4 The output device is chosen by name (2026-11-03)
+
+Approved by the tester on 2026-11-03 for the Settings screen's sound rows. Until then the game's sound always went to
+SDL's default playback device. The player can now name another; the Settings row that offers the choice is wired when
+that screen lands, and only the component halves exist so far.
+
+- **What is listed.** `AudioPlayer.OutputDevices()` is `"System default"` (`AppSettings.SystemDefaultOutput`, the
+  one spelling) followed by SDL's playback devices by name, in SDL's order, each once. The names come from the platform
+  library's `emusen_endymion_audio_device_list` (interface 32, `EmuSen_RustPlatform.md` §45), which starts SDL's audio
+  subsystem for the call, asks `SDL_GetAudioPlaybackDevices` and `SDL_GetAudioDeviceName`, and lets the subsystem go
+  again. The list crosses as each name followed by a NUL: SDL's names are C strings, so no name can hold one, and no
+  name is altered on the way.
+- **What is kept.** A device is chosen by its name, never by SDL's id: SDL numbers a device afresh each time it
+  appears, so an id saved yesterday names nothing today, while the name a player saw is what they chose. The setting is
+  `AppSettings.SoundOutputDevice`, a string whose default is `"System default"`.
+- **How it is used.** `AudioPlayer.SetOutputDevice(name)` hands the name to `emusen_endymion_audio_device_set`; null,
+  empty and `"System default"` are the system default. The player keeps the name, not an id, and finds the device's id
+  by name each time it opens a stream, which happens at the start, on a new sample rate (§7.2) and on a new choice. An
+  open stream is reopened on the new device at the rate it had, and the rate control is reset, as a rate change resets
+  it. Should a named device refuse to open, the system default is opened in its place rather than leaving no sound.
+- **The fallback.** Where no device has the saved name, the call answers `ABSENT`, the player plays on the system
+  default, `OutputDevice` reads `"System default"`, and `AudioPlayer` writes one warning to the error log, area `audio`:
+  *The sound output "<name>" is not connected; the system default plays instead.* Nothing is written back to the
+  settings: the next start tries the saved name again, so headphones plugged in later are found then. Mistress and
+  Hotaru pass the saved name when they make their player, so the fallback happens at start.
+- **What it does not cover.** The interface's short sounds (`UiSoundPlayer`) stay on the system default. The C# half of
+  the player (`AudioPlayer.Managed`, retired with the other C# platform halves) lists only `"System default"` and treats
+  every other name as missing.
+
+**Tests.** `audio_devices.rs` in the Endymion crate, failing first: SDL's dummy driver lists one playback device, a
+player plays on it by name and stays at its rate, an unknown name answers false and plays on the default, which then
+reopens at a new rate, and null and an empty name are both the default. It loads SDL3 from the system or
+`EMUSEN_SDL3`, and says it skipped where none loads. `AudioOutputDeviceTests` in WiseMan, on the library's player
+through the C# binding: the list's first entry and its distinct names, a listed device chosen and the default chosen
+again with nothing logged, and a missing saved device falling back at start with exactly one log line, then playing at
+a new rate.

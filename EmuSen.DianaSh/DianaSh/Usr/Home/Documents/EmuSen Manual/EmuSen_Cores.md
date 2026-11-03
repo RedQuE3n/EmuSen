@@ -451,6 +451,43 @@ unknown system `ABSENT` and an empty one refused. `CoresWindowTests.The_pane_say
 _has_the_firmware` (present, not needed, no need, one question per console, and a file added found on the next
 opening). The list's mockup state of `WindowFitAuditTests.Cores_is_pictured_in_its_mockups_states` now draws the line.
 
+### 3.12 Which firmware a console runs: `FirmwarePreference` (2026-11-03)
+
+Approved by the tester on 2026-11-03 for the Settings screen's firmware rows. A console's firmware was always the
+player's own dump where one was found and the core's open replacement otherwise; the player can now hold a console to
+either. The setting is the runtime's, like `Engine` (§4.3), so a Settings row is a schema row and the frontend API is
+unchanged.
+
+- **The row.** `settings_schema` lists `FirmwarePreference` after `Engine`, kind `choice`, choices `auto`,
+  `replacement`, `own` (labels *Automatic*, *Open replacement*, *Own firmware*), default `auto`, for a console one of
+  whose engines declares, for one of the console's systems, a firmware file with an open replacement (`effect` exact
+  or accuracy, not `none`). Elsewhere the choice would change nothing, so no row is shown: the NES declares no
+  firmware, and the PlayStation 2's BIOS and a hosted libretro core's files have no replacement. The value is stored
+  in `consoles.json` by `settings_set` as every console row is; a game's own value, if one is set, is read over the
+  console's, as for every row. It takes effect when a game is next loaded.
+- **Where it is read.** `open` reads it as it reads the engine choice and hands it to the engine, which applies it in
+  the one place firmware is located for a machine, `Engine::firmware_files`, so a game, a console started empty and a
+  machine made again for a create-time setting all follow it.
+  - `auto` is the behaviour before: each file the core asks for is found in the firmware folders, and one not found
+    is run on the replacement.
+  - `replacement` gives the machine none of the files that have an open replacement, even when the player's dump is
+    present, so the core runs its replacement and its `[Firmware]` line says so. A file with no replacement is still
+    found and given, since withholding it would run nothing rather than the replacement.
+  - `own` finds the files as `auto` does; where a file with an open replacement is not found, the machine is not made
+    and the open is refused with `FIRMWARE` and a plain sentence: *game.iso cannot start: The American Sega CD's BIOS
+    (131,072 bytes) (bios_CD_U.bin) is not in your firmware folders, and the Sega CD is set to use your own firmware,
+    never the open replacement.* It never silently runs the replacement. Files with no replacement keep the refusal
+    they already had (`firmware_needed`, and a console that would run nothing).
+- **What does not change.** `firmware_status` and the firmware overview report what the folders hold, whatever the
+  preference; `firmware_needed` still lists only required files, so a refusal under `own` names its file in its words
+  rather than in that list.
+
+**Tests.** `FirmwarePreferenceTests` on the Rust runtime, a synthetic Sega CD disc (`SyntheticMdRom.Disc`) and a
+firmware folder of the test's own, written before the runtime read the setting and failing then: the Sega CD's row
+with its three choices and `auto` as the default, a value outside them refused, and no row for the NES; `auto` with no
+dump on the replacement and with one on the dump, whether set or left unset; `replacement` on the replacement with the
+dump present; `own` on the dump, and with it removed the open refused with `FIRMWARE` and the sentence above.
+
 ## 4. The data model
 
 ### 4.1 Three sources, each the owner of its facts

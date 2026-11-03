@@ -422,7 +422,7 @@ namespace EmuSen.WiseMan.Galaxia
                 string whole = JsonSerializer.Serialize(Random_(type, random, 0, nullable: false), type, ConfigJson.Options);
                 string fresh = JsonSerializer.Serialize(Activator.CreateInstance(type), type, ConfigJson.Options);
                 foreach (string text in new[] { whole, fresh })
-                    for (int cut = 0; cut <= text.Length; cut += text.Length > 3000 ? 3 : 1)
+                    for (int cut = 0; cut <= text.Length; cut += text.Length > 4000 ? 3 : 1)
                     {
                         if (cut < text.Length && char.IsLowSurrogate(text[cut])) continue;
                         Ask(model, type, text[..cut]);

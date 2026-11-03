@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 31u
+#define EMUSEN_PLATFORM_ABI_VERSION 32u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -1090,7 +1090,7 @@ int32_t emusen_endymion_pads_setting(const emusen_endymion_pads *pads, uint32_t 
 int32_t emusen_endymion_pads_rescan_due(int64_t now, int64_t last);
 
 /*
- * The game's sound to SDL's default playback device: AudioPlayer. The rate control is the host's, made by
+ * The game's sound to SDL's default playback device, or since 32 one chosen by name: AudioPlayer. The rate control is the host's, made by
  * emusen_endymion_rate_new and lent to each call; the player sets its target when the device opens. Disposing closes
  * the device and lets go of SDL's audio, and may be done more than once, as the C#'s Dispose may; freeing one never
  * disposed leaves its device open to the process's end.
@@ -1111,6 +1111,15 @@ int32_t emusen_endymion_audio_submit(emusen_endymion_audio *audio, emusen_endymi
 int64_t emusen_endymion_audio_get(const emusen_endymion_audio *audio, uint32_t which);
 int32_t emusen_endymion_audio_set_volume(emusen_endymion_audio *audio, float volume);
 float emusen_endymion_audio_volume(const emusen_endymion_audio *audio);
+
+/* Since 32: SDL's playback devices, each name followed by a NUL (SDL's names hold none), in SDL's order; empty where
+ * SDL's audio does not start. */
+int64_t emusen_endymion_audio_device_list(uint8_t *out, size_t len);
+
+/* Since 32: the device the player plays on, by a name the list gave; a null or empty name is the system default. An
+ * open device reopens at its rate, and the rate control is reset. ABSENT where no device has the name: the system
+ * default plays, and emusen_platform_last_error's words say so. */
+int32_t emusen_endymion_audio_device_set(emusen_endymion_audio *audio, emusen_endymion_rate *rate, const uint8_t *name, size_t len);
 
 /* The interface's short sounds on a stream of their own, opened by the first: UiSoundPlayer. */
 typedef struct emusen_endymion_ui emusen_endymion_ui;

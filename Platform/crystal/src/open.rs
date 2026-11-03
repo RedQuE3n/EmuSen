@@ -251,6 +251,8 @@ fn open_game(
     }
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
     e.ring_wanted = options.ring;
+    let own = crate::settings::game_values(tree, system.as_ref().map(|s| s.id.as_str()), at, package.as_deref()).into_iter().find(|(k, _)| k == crate::firmware::PREFERENCE_KEY);
+    e.firmware_preference = crate::firmware::Preference::of(own.as_ref().map(|(_, v)| v.as_str()).or(stored.value(&console, crate::firmware::PREFERENCE_KEY)));
     e.package = package;
     e.save_key = save_key;
     e.load_rom(ctx.tree, at, system, console, ctx.is_image, ctx.folders).map_err(|r| (r.status, r.words))?;
@@ -303,6 +305,7 @@ fn start_console(
     e.media_choices = crate::media::stored_choices(&media, &|k| stored.value(&console, k).map(str::to_string));
     e.device_lender = rt.lender.clone().filter(|_| options.device != 0).map(|l| (l, options.device));
     e.ring_wanted = options.ring;
+    e.firmware_preference = crate::firmware::Preference::of(stored.value(&console, crate::firmware::PREFERENCE_KEY));
     e.start_console(tree, &system_id, console.clone(), folders).map_err(|r| (r.status, r.words))?;
     Ok((e, console))
 }

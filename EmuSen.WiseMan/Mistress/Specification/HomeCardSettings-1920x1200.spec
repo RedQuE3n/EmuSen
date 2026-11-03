@@ -18,18 +18,19 @@ tree
         3 Panel at=0,0,1920,1200 by=panel limit=0,0,1920,1200 name=AdaptiveCardScrim paints=#0000008C role=none
           4 MenuPanel at=0,0,1920,1200 by=panel heard=Settings limit=0,0,1920,1200 name=AdaptiveCard role=menu
             5 HintBar at=96,1104,525,45 by=panel heard="A Choose, B Back, Menu Close" limit=0,0,1920,1200 role=group
-            6 Border at=96,234,636,648 by=panel limit=0,0,1920,1200 name=AdaptiveCardRows role=none
-              7 Border at=96,234,636,648 by=panel limit=0,0,1920,1200 name=AdaptiveContent role=none
-                8 LunaList at=96,234,636,648 by=panel heard=Menu limit=0,0,1920,1200 name=PadMenuList paints=#FFFFFFFF role=list
-                  9 ScrollViewer at=96,234,636,648 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,234,636,648
-                    10 ListBoxItem at=96,234,636,81 by=fixed-scroll drawn focus heard="Players & Controllers" in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Players & Controllers"
-                    11 ListBoxItem at=96,315,636,81 by=fixed-scroll drawn focus heard="Controller Bindings" in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Controller Bindings"
-                    12 ListBoxItem at=96,396,636,81 by=fixed-scroll drawn focus heard=Graphics in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Graphics
-                    13 ListBoxItem at=96,477,636,81 by=fixed-scroll drawn focus heard=Shaders in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Shaders
-                    14 ListBoxItem at=96,558,636,81 by=fixed-scroll drawn focus heard=Cheats in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Cheats
-                    15 ListBoxItem at=96,639,636,81 by=fixed-scroll drawn focus heard="Memory Cards" in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text="Memory Cards"
-                    16 ListBoxItem at=96,720,636,81 by=fixed-scroll drawn focus heard=Firmware in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Firmware
-                    17 ListBoxItem at=96,801,636,81 by=fixed-scroll drawn focus heard=Preferences in=9 limit=96,234,636,648 op paints=#333337FF,#D4D4D4FF role=listitem text=Preferences
+            6 Border at=96,234,636,729 by=panel limit=0,0,1920,1200 name=AdaptiveCardRows role=none
+              7 Border at=96,234,636,729 by=panel limit=0,0,1920,1200 name=AdaptiveContent role=none
+                8 LunaList at=96,234,636,729 by=panel heard=Menu limit=0,0,1920,1200 name=PadMenuList paints=#FFFFFFFF role=list
+                  9 ScrollViewer at=96,234,636,729 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,234,636,729
+                    10 ListBoxItem at=96,234,636,81 by=fixed-scroll drawn focus heard="Players & Controllers" in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text="Players & Controllers"
+                    11 ListBoxItem at=96,315,636,81 by=fixed-scroll drawn focus heard="Controller Bindings" in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text="Controller Bindings"
+                    12 ListBoxItem at=96,396,636,81 by=fixed-scroll drawn focus heard=Graphics in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text=Graphics
+                    13 ListBoxItem at=96,477,636,81 by=fixed-scroll drawn focus heard=Shaders in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text=Shaders
+                    14 ListBoxItem at=96,558,636,81 by=fixed-scroll drawn focus heard=Cheats in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text=Cheats
+                    15 ListBoxItem at=96,639,636,81 by=fixed-scroll drawn focus heard="Memory Cards" in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text="Memory Cards"
+                    16 ListBoxItem at=96,720,636,81 by=fixed-scroll drawn focus heard=Firmware in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text=Firmware
+                    17 ListBoxItem at=96,801,636,81 by=fixed-scroll drawn focus heard=Preferences in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text=Preferences
+                    18 ListBoxItem at=96,882,636,81 by=fixed-scroll drawn focus heard=Tools in=9 limit=96,234,636,729 op paints=#333337FF,#D4D4D4FF role=listitem text="Tools  ›"
 focus none
 press down focus="HubLayout HomeScreen" menu="open at 1: Controller Bindings" top=none
 press up focus="HubLayout HomeScreen" menu="open at 0: Players & Controllers" top=none

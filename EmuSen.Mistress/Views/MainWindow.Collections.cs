@@ -51,9 +51,9 @@ namespace EmuSen.Mistress.Views
             return _collections.FirstOrDefault(c => c.Id == id);
         }
 
-        private Task RenameCollectionAsync() => RenameCollectionAsync(ShownCollection);
+        private Task RenameCollectionAsync() => RenameThisCollectionAsync(ShownCollection);
 
-        private async Task RenameCollectionAsync(GameCollection? shown)
+        private async Task RenameThisCollectionAsync(GameCollection? shown)
         {
             if (shown is not GameCollection collection) return;
             if (await Dialogs.PromptAsync(this, "Rename Collection", $"A new name for {collection.Name}", collection.Name, "Rename") is not string name) return;
@@ -62,9 +62,9 @@ namespace EmuSen.Mistress.Views
         }
 
         // The games stay where they are; only the list of them goes.
-        private Task DeleteCollectionAsync() => DeleteCollectionAsync(ShownCollection);
+        private Task DeleteCollectionAsync() => DeleteThisCollectionAsync(ShownCollection);
 
-        private async Task DeleteCollectionAsync(GameCollection? shown)
+        private async Task DeleteThisCollectionAsync(GameCollection? shown)
         {
             if (shown is not GameCollection collection) return;
             if (!await Dialogs.ConfirmAsync(this, "Delete Collection", $"Delete the collection {collection.Name}? The games in it are not touched.", "Delete", "Cancel")) return;

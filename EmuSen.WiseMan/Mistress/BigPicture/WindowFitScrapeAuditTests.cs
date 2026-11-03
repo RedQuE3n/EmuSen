@@ -46,6 +46,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             InterfaceRecorder.Volatile = WindowFitAuditTests.Volatile;
             try
             {
+                if (Environment.GetEnvironmentVariable("EMUSEN_U5_PNG") is { Length: > 0 } folder) UiTest.Capture(window).SavePng(Path.Combine(folder, $"{which}-{width}x{height}.png"));
                 Assert.Empty(WindowFitAuditTests.RecordSheet(window, new PadDriver(window), which, $"{which}-{width}x{height}", presses: true, Out));
             }
             finally

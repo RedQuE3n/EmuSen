@@ -11924,3 +11924,85 @@ rows with more behind them draw `▸`, and its help bar keeps the frame's order 
 (`EmuSen_Interface.md` §0.23): A, B, the shoulders (which step All, Mine and Automatic, the strip the mockup draws), then
 Add the selected game, More and List. Search's state types its keys with the pad, so the highlight stays on the last key
 pressed. The desktop sidebar's consoles with no games are the desktop library's own rows (`FillSidebar`), not U5's.
+
+## 52. Settings: U6a of the unified interface (2026-11-03)
+
+Screen 6 of `EmuSen_Interface.md` §4 and its desktop half D5 (§17.7 there), built from one plain description,
+`Pages/SettingsScreen` (no Avalonia type), drawn by LunaP's `SettingsLayout` (`docs/LunaP.md` §213) through a thin
+`SettingsView`.
+
+### 52.1 Where it shows
+
+On the big screen Settings is a screen over everything (`ScreenContent`), as a game's page is; on the desktop it is one
+window, `SettingsWindow`, 960 × 640, the same layout's desktop form. Every door reaches the same screens: Home's Settings
+place, the Home card's Settings row, the Pause Card's Game Options rows (Players & Controllers, Console Settings, Shader
+Levers, Memory Cards, each at its page), the Settings menu (Controllers…, Display…, Sound…, Consoles…, Library…, EmuSen…,
+Settings… with `Ctrl+,`), the in-game options menu's Display Settings…, the themed view's Tools ▸ Collections, and Cores'
+Options and Firmware (a console's page). Over a game the Pause Card stays beneath and the game stays paused; a game
+Settings itself paused resumes when it closes. B closes a page, then Settings; Start goes Home. The themed view stops
+reading the directions while Settings is over it.
+
+### 52.2 The description
+
+Six sections, each a list of `PageRow`s with one sentence each and a pane (`ScreenPane`: lines with tones, and a preview:
+a frame of the game running, else of the game played last, a meter, or the two variants). A row's kind says what Left,
+Right and A do: a value stepped (`Steps`), a page (`Opens`), a question (`Asks`) or a status (`Action`). Pages are a stack
+under the section, drawn as the strip's trail. A change is saved at once and applied where it shows (the picture, the bar,
+the volume, the pads, the themed view). The desktop's search lists the rows of every section whose label or sentence holds
+the text; choosing one goes to its section.
+
+### 52.3 The sections
+
+Controllers: Players ▸ (a row per pad stepped to its player, a held button marking it; Keyboard; the press claim; the
+external controller), Controller bindings ▸, Controller type, Swap A and B, Guide chords, Only the first controller,
+Controller notices, On-screen keyboard, Left stick as the D-pad. Display: Picture shape, CRT shader and Crop overscan for
+every console at once (the shared value, or `Console's` while consoles differ, decided 2026-11-03), Shader levers ▸ (every
+CRT parameter for the console running, else the first with a television), Light or dark (`AppSettings.Appearance`), Background
+art on Home, Play videos, Smooth motion, Status bar, Messages, Frame rate. Sound: Volume, Navigation sounds, Sound volume.
+Library: ROM folder, Artwork folder, Themes (stepped through the looks; A opens Theme Settings), Scraping ▸ (with Member
+account ▸ for the sign-in, OpenVGDB and the orphaned media), Collections ▸ (the retired Game Collection Settings, with New
+collection, Finish editing and Delete a collection), Hidden games, Compressed discs, ES-DE media folder, ES-DE theme
+folder. EmuSen: Saves and states ▸, Big picture, Pause in the background, Logging ▸, Shell ▸, About. A folder is typed in
+the kit's prompt, as Game Mode shows no platform picker.
+
+### 52.4 Consoles
+
+Every console the systems table lists is a row, those an engine runs first, each group by release year, ten shown and the
+rest scrolling (ten rather than eight, accepted 2026-11-03). Its pane: games, engine, firmware and the first console-wide
+setting by its own label. Its page: Engine (the settings schema's `Engine`, the same value Cores' Make Default writes; A
+opens it as a page of choices), Firmware ▸, Memory cards ▸ (the card manager's media; dimmed where saves live in the
+cartridge), the schema's other rows (shown where their `ShownWith` holds), then CRT profile or Screen, Shader levers,
+Crop overscan and Picture shape. LB and RB on a console's page step to the console before or after it.
+
+A console's line in a list (the desktop's second line, the big screen's pane) gives the same facts from one source: its
+games, its engine and, on a console that starts empty, its firmware in a few words (`✓ BIOS found`, `⚠ BIOS not found`,
+`open replacement`).
+
+Firmware ▸ is the runtime's `firmware_status` (`EmuSen_Cores.md` §3.11), one row per need: on a console that starts empty
+the regional copies of one thing are one need, grouped by the last word their labels share less any region in brackets
+(the PlayStation's three BIOS files are `PlayStation BIOS`); a cartridge console's chips are a need each. Its value is
+`✓ Found · ` with the copy recognised, or `Not found`; `Not needed` only where the console needs nothing. Its pane says
+what runs: your own copy when found, else the open replacement. The Open replacement row comes with its wiring step. A file missing on a
+console that starts empty is needed by every game and reads `⚠ Not found`; on a cartridge console it is a chip's, such as
+the Super Nintendo's DSP-1 to DSP-4, which `firmware_status` calls required because VenusRT has no open
+replacement for some of them, but which only the games carrying the chip use: it reads `Only some games`, and the console
+reads `✓ No firmware needed`. Memory cards ▸ is the mode and the slots as schema rows (`Cards`, `Card1`, `Card2`, the card
+manager's keys), the cards in the drawer, a new card, and the saves on them through the Memory Cards window.
+
+### 52.5 Retired, and kept until U6b
+
+Retired: `CollectionSettingsWindow` (into Library ▸ Collections), `DebugSettingsWindow` (into EmuSen ▸ Logging), the pad
+menu's Settings submenu and Home's Settings card with its Tools page (Theme Settings, Compressed Discs and the Shell are
+Library and EmuSen rows). Kept with no door until U6b ports their tests (decided 2026-11-03): Preferences, Graphics
+Settings, Shader Settings, and `BigMenuForm`, whose last user is Theme Settings; until then the slang catalogue and its
+download have no door. Kept with a door: the controller binding window, until the bindings page; the Memory Cards window,
+for a card's saves; `GameCropWindow`, the game's own crop from its page; `OptionListWindow`, for the choices of the sheets
+still drawn in ES-DE's menus; `FirmwarePane`, which Preferences holds.
+
+### 52.6 How it is held
+
+`WindowFitAuditTests.Settings` records fifteen states at two sizes and audits the big screen's at 1920 × 1080 and
+1280 × 720 (`EmuSen_InterfaceSpec.md` §6.3.23); the tests that reached the retired doors walk Settings now
+(`PadMenuTests`, `EsdeSettingsMenusTests`, `ThemedCollectionsTests`, `ControllersTests`, `PlayerPreferencesTests`,
+`GameEngineAndPlayTimeTests`, `BigPictureSwitchTests`, `BigPictureThemeListTests`, `ThemeSettingsSheetTests`), through
+`SettingsPad`, which opens Settings and reaches a row as the player does.

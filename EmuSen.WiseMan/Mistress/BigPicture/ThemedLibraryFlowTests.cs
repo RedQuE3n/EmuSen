@@ -33,6 +33,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // The in-game chord, then down to the entry and A, as a player would; over the own look, Home's Settings place, whose card holds the settings and Tools (EmuSen_BigPicture.md §51.2).
         internal static void Choose(ThemedSession s, string entry)
         {
+            // Over the own look, the doors Home's Settings card had are Settings rows (EmuSen_BigPicture.md §52.6).
+            if (s.Window.HomeLayout is not null && SettingsRows.TryGetValue(entry, out (string Section, string Row) at))
+            {
+                SettingsPad.Open(s.Window, s.Pad);
+                SettingsPad.Section(s.Window, s.Pad, at.Section);
+                SettingsPad.To(s.Window, s.Pad, at.Row);
+                s.Pad.A();
+                return;
+            }
             if (s.Window.HomeLayout is { } home)
             {
                 home.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "settings");
@@ -42,6 +51,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Window.GetControl<Control>("PadMenuPanel").IsVisible);
             PadMenu.Choose(s.Window, s.Pad, entry);
         }
+
+        private static readonly System.Collections.Generic.Dictionary<string, (string, string)> SettingsRows = new()
+        {
+            ["Theme Settings"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "themes"), ["Compressed Discs"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "discs"),
+            ["Shell"] = (EmuSen.Mistress.Pages.SettingsScreen.EmuSen, "shell"), ["Collections"] = (EmuSen.Mistress.Pages.SettingsScreen.Library, "collections"),
+        };
 
         // Quit Game... from the in-game menu, and Yes to its question.
         internal static void QuitGame(ThemedSession s)

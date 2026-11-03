@@ -22,10 +22,10 @@ tree
               7 Border at=64,156,424,162 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
                 8 LunaList at=64,156,424,162 by=panel heard=Menu limit=0,0,1280,800 name=PadMenuList paints=#FFFFFFFF role=list
                   9 ScrollViewer at=64,156,424,162 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=64,156,424,162
-                    10 ListBoxItem at=64,156,424,54 by=fixed-scroll drawn focus heard=Graphics in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text=Graphics
-                    11 ListBoxItem at=64,210,424,54 by=fixed-scroll drawn focus heard=Shaders in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text=Shaders
+                    10 ListBoxItem at=64,156,424,54 by=fixed-scroll drawn focus heard="Console Settings" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Console Settings"
+                    11 ListBoxItem at=64,210,424,54 by=fixed-scroll drawn focus heard="Shader Levers" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Shader Levers"
                     12 ListBoxItem at=64,264,424,54 by=fixed-scroll drawn focus heard="Crop This Game..." in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Crop This Game..."
 focus none
-press down menu="open at 1: Shaders" top=none
-press up menu="open at 0: Graphics" top=none
+press down menu="open at 1: Shader Levers" top=none
+press up menu="open at 0: Console Settings" top=none
 press back menu="open at 2: Display" top=none

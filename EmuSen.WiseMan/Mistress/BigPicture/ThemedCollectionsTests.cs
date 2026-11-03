@@ -214,25 +214,27 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Choose(s, "Collections");
             var settings = (AppSettings)typeof(MainWindow).GetField("_appSettings", Hidden)!.GetValue(s.Window)!;
 
-            Reach(s, e => e is LunaSwitch { Name: "Autoall" });
+            // Settings ▸ Library ▸ Collections, each row turned with the pad, the themed view beneath following at once.
+            SettingsPad.To(s.Window, s.Pad, "auto" + BigPictureCollections.AllGames);
             s.Pad.A();
             Assert.Equal(["nes", "gb", "snes", "collections", "all"], Systems(s));
-            Reach(s, e => e is LunaSwitch sw && sw.Name == $"Custom{id}");
+            SettingsPad.To(s.Window, s.Pad, $"show{id}");
             s.Pad.A();
             Assert.Equal(["nes", "gb", "snes", "all"], Systems(s));
             Assert.Equal([id], settings.BigPictureCollections.HiddenCustomCollections);
             s.Pad.A();
-            Reach(s, e => e is Dropdown { Name: "CollectionGrouping" });
+            SettingsPad.To(s.Window, s.Pad, "grouping");
             s.Pad.Right(2);
             Assert.Equal(["nes", "gb", "snes", "Platform", "all"], Systems(s));
-            Reach(s, e => e is LunaSwitch { Name: "FavoritesFirst" });
+            SettingsPad.To(s.Window, s.Pad, "favfirst");
             s.Pad.A();
-            Reach(s, e => e is Dropdown { Name: "DefaultSortOrder" });
+            SettingsPad.To(s.Window, s.Pad, "sort");
             s.Pad.Right();
-            Reach(s, e => e is Dropdown { Name: "RandomEntryButton" });
+            SettingsPad.To(s.Window, s.Pad, "random");
             s.Pad.Right(2);
             s.Pad.B();
-            Assert.False(Sheets(s).IsPresenting);
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
 
             BigPictureCollections saved = AppSettings.Load().BigPictureCollections;
             Assert.Equal((BigPictureCollections.GroupNever, BigPictureCollections.RandomDisabled, "name, descending", false),
@@ -344,8 +346,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task A_collection_created_in_big_picture_is_the_library_s_own_and_North_edits_it_until_its_editing_is_finished() => Run(s =>
         {
             Choose(s, "Collections");
-            Assert.IsType<CollectionSettingsWindow>(Sheets(s).Current);
-            Reach(s, e => e is Button { Name: "CollectionCreate" });
+            Assert.Equal("newcollection", s.Window.SettingsLayoutShown!.Focused);
             s.Pad.A();
             s.Settle();
             Assert.Equal("PromptWindow", Sheets(s).Current!.GetType().Name);
@@ -354,8 +355,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             s.Settle();
 
-            // The name loses ES-DE's forbidden characters, the settings sheet closes into the edit mode, and the sidebar has the same collection.
+            // The name loses ES-DE's forbidden characters, Settings closes into the edit mode, and the sidebar has the same collection.
             Assert.False(Sheets(s).IsPresenting);
+            Assert.Null(s.Window.SettingsShown);
             GameCollection made = Records(s).Collections().Single();
             Assert.Equal("Beat Up", made.Name);
             Assert.Equal("Beat Up", s.Themed.Editing!.Name);
@@ -567,7 +569,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             long id = records.CreateCollection("Platform", DateTime.Now)!.Value;
             records.AddToCollection(id, Rom(s, ThemedSession.SnesGames[0]));
             Scraped(s, new() { [ThemedSession.SnesGames[0]] = ("Racing", 0.8f), [ThemedSession.SnesGames[1]] = ("Puzzle", null) });
-            if (sheet == "Collections") Choose(s, sheet);
+            if (sheet == "Collections")
+            {
+                // Settings ▸ Library ▸ Collections: every row is reached by Down from the first.
+                Choose(s, sheet);
+                SettingsLayout layout = s.Window.SettingsLayoutShown!;
+                var seen = new HashSet<string> { layout.Focused! };
+                for (int i = 0; i < layout.Rows.Count; i++) { s.Pad.Down(); seen.Add(layout.Focused!); }
+                Assert.Equal(layout.Rows.Select(r => r.Key).ToHashSet(), seen);
+                return;
+            }
             else
             {
                 Enter(s, sheet == "Filter Gamelist" ? "snes" : "collections");

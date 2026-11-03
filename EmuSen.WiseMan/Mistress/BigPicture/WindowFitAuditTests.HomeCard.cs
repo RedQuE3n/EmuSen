@@ -14,7 +14,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     {
         // Each state, by the rows chosen from the first page to reach it; the Desktop states open it from the desktop's library.
         // The big screen's own look reaches the card at Settings and Power from Home's places; its first page and Tools are recorded over a theme and on the desktop (EmuSen_BigPicture.md §51.5).
-        public static readonly string[] HomeCardViews = ["HomeCardSettings", "HomeCardPower", "HomeCardQuit", "HomeCardDesktop", "HomeCardDesktopGame", "HomeCardDesktopTools", "HomeCardDesktopToolsPage", "HomeCardDesktopPower"];
+        public static readonly string[] HomeCardViews = ["HomeCardPower", "HomeCardQuit", "HomeCardDesktop", "HomeCardDesktopGame", "HomeCardDesktopTools", "HomeCardDesktopToolsPage", "HomeCardDesktopPower"];
 
         // The handheld's: Steam's Game Mode, where Power holds Quit EmuSen alone.
         public static readonly string[] HomeCardHandheldViews = ["HomeCardHandheldPower"];

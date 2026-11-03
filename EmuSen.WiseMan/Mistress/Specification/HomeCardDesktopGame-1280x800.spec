@@ -27,7 +27,7 @@ tree
                     12 ListBoxItem at=64,264,424,54 by=fixed-scroll drawn focus heard=Search in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text=Search
                     13 ListBoxItem at=64,318,424,54 by=fixed-scroll drawn focus heard="Start Console" in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Start Console  ›"
                     14 ListBoxItem at=64,372,424,54 by=fixed-scroll drawn focus heard=Tools in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Tools  ›"
-                    15 ListBoxItem at=64,426,424,54 by=fixed-scroll drawn focus heard=Settings in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Settings  ›"
+                    15 ListBoxItem at=64,426,424,54 by=fixed-scroll drawn focus heard=Settings in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text=Settings
                     16 ListBoxItem at=64,480,424,54 by=fixed-scroll drawn focus heard=Power in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Power  ›"
             17 Border at=576,156,640,498 by=panel limit=0,0,1280,768 name=AdaptiveCardPane paints=#26262BFF role=none
               18 Border at=600,180,592,450 by=panel limit=0,0,1280,768 name=AdaptiveDetail role=none

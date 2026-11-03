@@ -67,6 +67,12 @@ namespace EmuSen.Galaxia.Models
         public bool ShowStatusText { get; set; } = true;
         public bool ShowFpsBar { get; set; } = true;
 
+        // Settings ▸ Display: light or dark, Home's background art and the game's clip in its picture - see EmuSen_BigPicture.md §52.3.
+        public string Appearance { get; set; } = AppearanceDark;
+        public const string AppearanceDark = "dark", AppearanceLight = "light", AppearanceSystem = "system";
+        public bool HomeArt { get; set; } = true;
+        public bool PlayVideos { get; set; } = true;
+
         // Ask, Resume or Restart when a game with a resume state starts - see EmuSen_Settings_Reference.md §4.31.
         public string ResumeOnLaunch { get; set; } = ResumeAsk;
         public const string ResumeAsk = "Ask";

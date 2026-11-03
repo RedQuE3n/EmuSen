@@ -105,146 +105,136 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(Sheets(s).IsPresenting);
         }, default);
 
-        // Game Collection Settings is one screen of rows: ES-DE's words on its switches, a submenu row to create a collection, option rows, and Back.
+        // The collection settings are Settings ▸ Library ▸ Collections: the create row, the automatic collections, option rows, and B back to the library.
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task Game_collection_settings_is_one_menu_of_switches_options_and_a_create_row(int width, int height) => Session.Dispatch(() =>
+        public Task Game_collection_settings_are_a_page_of_settings_with_a_create_row(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
             ThemedCollectionsTests.Choose(s, "Collections");
             s.Settle();
-            var sheet = Assert.IsType<CollectionSettingsWindow>(Sheets(s).Current);
-            AssertEsdeMenu(s, sheet.Form!.Menu, "Game Collection Settings");
-            string[] labels = Rows(s).Select(LabelOf).ToArray();
-            Assert.Equal(["All Games", "Favorites", "Last Played"], labels[..3]);
-            Assert.Contains("Sort favorite games above non-favorites", labels);
-            Assert.Equal(MenuRowKind.Submenu, MenuRows.GetKind(Named<Button>(s, "CollectionCreate")));
-            Assert.Equal("Create New Custom Collection", MenuRows.GetLabel(Named<Button>(s, "CollectionCreate")));
-            Assert.Equal(MenuRowKind.Option, MenuRows.GetKind(Named<Dropdown>(s, "CollectionGrouping")));
+            EmuSen.Mistress.Pages.SettingsScreen settings = s.Window.SettingsShown!;
+            Assert.Equal(["Library", "Collections"], settings.Trail);
+            string[] keys = settings.Rows.Select(r => r.Key).ToArray();
+            Assert.Equal(["newcollection", "autoall", "autofavorites", "autorecent"], keys[..4]);
+            Assert.Equal(PageRowKind.Asks, settings.Rows.Single(r => r.Key == "newcollection").Kind);
+            Assert.Equal(PageRowKind.Steps, settings.Rows.Single(r => r.Key == "grouping").Kind);
 
             // A switch row is turned by A, and the setting follows.
             bool before = s.Settings.BigPictureCollections.FavoritesFirst;
-            Reach(s, "FavoritesFirst");
+            s.Pad.Down(keys.ToList().IndexOf("favfirst"));
+            Assert.Equal("favfirst", s.Window.SettingsLayoutShown!.Focused);
             s.Pad.A();
             Assert.Equal(!before, s.Settings.BigPictureCollections.FavoritesFirst);
-            Assert.Equal(!before, RowOf(Named<LunaSwitch>(s, "FavoritesFirst")).IsOn);
             s.Pad.B();
-            Assert.False(Sheets(s).IsPresenting);
+            s.Pad.B();
+            s.Settle();
+            Assert.Null(s.Window.SettingsShown);
         }, default);
 
-        // Preferences is a menu of its tabs as submenus; R1 still steps from one to the next, and the footer says what the focused row does.
+        // Settings under a theme: the pad menu's Settings opens it, the shoulders step its sections, and the pane says what the focused row does (EmuSen_Interface.md §2.7).
+        private static SettingsLayout OpenSettings(ThemedSession s, int sections)
+        {
+            ThemedLibraryFlowTests.Choose(s, MainWindow.SettingsMenu);
+            s.Settle();
+            for (int i = 0; i < sections; i++) s.Pad.R1();
+            s.Settle();
+            return s.Window.SettingsLayoutShown!;
+        }
+
+        private static void ToRow(ThemedSession s, string key)
+        {
+            SettingsLayout layout = s.Window.SettingsLayoutShown!;
+            List<string> keys = layout.Rows.Select(r => r.Key).ToList();
+            Assert.Contains(key, keys);
+            int by = keys.IndexOf(key) - keys.IndexOf(layout.Focused!);
+            if (by > 0) s.Pad.Down(by); else if (by < 0) s.Pad.Up(-by);
+            Assert.Equal(key, layout.Focused);
+        }
+
+        private static string PaneWords(ThemedSession s) =>
+            string.Join(" ", s.Window.SettingsLayoutShown!.GetVisualDescendants().OfType<TextBlock>().Where(t => t.Name == "SettingsLine").Select(t => t.Text ?? string.Concat(t.Inlines!.OfType<Avalonia.Controls.Documents.Run>().Select(r => r.Text))));
+
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task Preferences_is_a_menu_of_submenus_which_the_shoulders_still_step_through(int width, int height) => Session.Dispatch(() =>
+        public Task Settings_steps_its_sections_with_the_shoulders_and_its_pane_says_what_a_row_does(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            s.Settle();
-            var sheet = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            AssertEsdeMenu(s, sheet.Form!.Menu, "Preferences");
-            Assert.Equal(["Library", "Scraping", "Gameplay", "Appearance", "Controllers", "Firmware"], Rows(s).Select(LabelOf));
-
-            Reach(s, "BigMenuPage2");
-            s.Pad.A();
-            Assert.Equal("Gameplay", sheet.Form.Menu.Title);
-            Reach(s, "ResumeDropdown");
-            Assert.StartsWith("Every game is saved when it is closed.", sheet.Form.Menu.Footer);
+            SettingsLayout layout = OpenSettings(s, 0);
+            Assert.Equal(["Controllers", "Display", "Sound", "Consoles", "Library", "EmuSen"], layout.Sections.Select(x => x.Label));
+            Assert.Equal(EmuSen.Mistress.Pages.SettingsScreen.Controllers, layout.SelectedSection);
             s.Pad.R1();
-            Assert.Equal("Appearance", sheet.Form.Menu.Title);
-            Assert.True(Named<Slider>(s, "NavigationVolumeSlider").IsEffectivelyVisible);
-            Reach(s, "NavigationVolumeSlider");
+            Assert.Equal(EmuSen.Mistress.Pages.SettingsScreen.Display, layout.SelectedSection);
+            s.Pad.R1();
+            ToRow(s, "soundvolume");
+            Assert.StartsWith("How loud the navigation sounds are", PaneWords(s));
+            int before = s.Settings.BigPictureInterface.NavigationVolume;
             s.Pad.Right();
-            Assert.Equal(65, s.Settings.BigPictureInterface.NavigationVolume);
-            Assert.Equal("65", RowOf(Named<Slider>(s, "NavigationVolumeSlider")).Value);
-            ThemedSwitchesTests.PutAway(s);
-            Assert.False(Sheets(s).IsPresenting);
+            Assert.Equal(Math.Min(100, before + 5), s.Settings.BigPictureInterface.NavigationVolume);
+            Assert.Equal($"{Math.Min(100, before + 5)}%", layout.Rows.Single(r => r.Key == "soundvolume").Status);
+            Assert.Empty(FitAudit.Check(layout, []));
+            s.Pad.B();
+            s.Settle();
+            Assert.Null(s.Window.SettingsShown);
         }, default);
 
-        // Firmware under a theme is ES-DE's menu like the other tabs, reached from the pad menu's Settings: rows a pad lands on, each said in the footer, and nothing that opens anything - see EmuSen_Settings_Reference.md §4.89.
+        // Firmware is Consoles ▸ the console ▸ Firmware: a row per file the runtime's firmware_status names, its status as the value, the folder and Check again; A on a file's row changes nothing (EmuSen_Interface.md §18.10).
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task The_firmware_page_under_a_theme_is_a_menu_of_rows_the_pad_reads(int width, int height) => Session.Dispatch(() =>
+        public Task The_firmware_page_under_a_theme_is_rows_of_the_runtime_s_firmware_status(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
-            ThemedLibraryFlowTests.Choose(s, PreferencesWindow.FirmwareTab);
+            SettingsLayout layout = OpenSettings(s, 3);
+            ToRow(s, layout.Rows.Single(r => r.Label == "PlayStation").Key);
+            s.Pad.A();
+            ToRow(s, "firmware");
+            s.Pad.A();
             s.Settle();
-            var sheet = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            AssertEsdeMenu(s, sheet.Form!.Menu, PreferencesWindow.FirmwareTab);
+            Assert.Equal(["Consoles", "PlayStation", "Firmware"], layout.Trail);
             int opened = EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count;
-            WindowFitAuditTests.SavePicture(s.Window, $"PreferencesFirmware-Themed-{width}x{height}");
-            Control[] rows = Rows(s);
-            var systems = FirmwareView.Current.Systems;
-            // The second row is the player's folder, a text row; every other row is a fact's.
-            var folder = Assert.IsType<PathPickerRow>(rows[1]);
-            Control[] facts = rows.Where(r => r != folder).ToArray();
-            Assert.Equal(FirmwarePane.ChosenLabel, MenuRows.GetLabel(folder.GetVisualDescendants().OfType<TextBox>().Single()));
-            Assert.Equal(new[] { FirmwarePane.FolderLabel, FirmwarePane.FolderRowLabel }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? [y.Name] : y.Items.Select(FirmwarePane.MenuLabel))), facts.Select(LabelOf));
-            Assert.All(facts, r => Assert.Equal(MenuRowKind.Action, MenuRows.GetKind(r)));
-            Assert.Equal(new[] { "Optional", "Firmware" }.Concat(systems.SelectMany(y => y.Items.Count == 0 ? ["None needed"] : y.Items.Select(i => i.FileName))), facts.Select(r => RowOf(r).Value));
-            // The file names are drawn as they are spelt, under a look that draws everything else in capitals.
-            Assert.All(facts.Where(r => r == facts[1] || (RowOf(r).Value?.EndsWith(".rom", StringComparison.Ordinal) ?? false)), r => Assert.Equal(EmuSen.LunaP.Media.LetterCase.None, RowOf(r).ValueLetterCase));
-            Assert.Equal(["Back", "Choose"], sheet.Form.Menu.Hints!.Select(h => h.Label));
-            foreach (Control row in rows)
+            var files = layout.Rows.Where(r => r.Key.StartsWith("fw:", StringComparison.Ordinal)).ToList();
+            Assert.NotEmpty(files);
+            // The PlayStation's regional BIOS files are one need, found with the copy recognised or not found, never Not needed.
+            PageRow bios = Assert.Single(files);
+            Assert.Equal("PlayStation BIOS", bios.Label);
+            Assert.True(bios.Status is "Not found" or "⚠ Not found" || bios.Status!.StartsWith("✓ Found · ", StringComparison.Ordinal), bios.Status);
+            Assert.Equal(["fwfolder", "fwcheck"], layout.Rows.Skip(files.Count).Select(r => r.Key));
+            foreach (PageRow file in files)
             {
-                var focused = (Control)TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement()!;
-                Assert.True(ReferenceEquals(row, focused) || focused.FindAncestorOfType<PathPickerRow>() == row);
-                Assert.False(string.IsNullOrEmpty(sheet.Form.Menu.Footer));
-                Assert.False(sheet.Form.Menu.IsFooterCut, sheet.Form.Menu.Footer);
-                Assert.Empty(FitAudit.Check(Sheet(s), WindowAllowances.For(sheet)));
-                Assert.Equal(row == folder ? ["Select", "Back", "Choose"] : ["Back", "Choose"], sheet.Form.Menu.Hints!.Select(h => h.Label));
-                if (row == folder)
-                {
-                    // A on the folder's row opens the text popup, and B puts it away with nothing kept.
-                    s.Pad.A();
-                    Assert.NotNull(OnScreenKeyboard.OpenOver(s.Window));
-                    s.Pad.B();
-                    s.Settle();
-                    Assert.Null(OnScreenKeyboard.OpenOver(s.Window));
-                    Assert.Null(EmuSen.Galaxia.Models.AppSettings.Load().FirmwareDirectory);
-                }
-                // A on any other row changes nothing and opens nothing.
-                else s.Pad.A();
-                Assert.Same(sheet, Sheets(s).Current);
-                Assert.Equal(PreferencesWindow.FirmwareTab, sheet.Form.Menu.Title);
-                s.Pad.Down();
-                s.Settle();
+                ToRow(s, file.Key);
+                Assert.False(string.IsNullOrEmpty(PaneWords(s)));
+                s.Pad.A();
+                Assert.Equal(["Consoles", "PlayStation", "Firmware"], layout.Trail);
+                Assert.Empty(FitAudit.Check(layout, []));
             }
             Assert.Equal(opened, EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count);
-            ThemedSwitchesTests.PutAway(s);
-            Assert.False(Sheets(s).IsPresenting);
+            Assert.Null(EmuSen.Galaxia.Models.AppSettings.Load().FirmwareDirectory);
         }, default);
 
-        // Sync to display is a switch on Gameplay, on by default, saved to graphics.json as it turns, and its menu fits - see EmuSen_Settings_Reference.md §4.87.7.
+        // Smooth motion is Display ▸ Smooth motion, on by default, saved to graphics.json as it turns without losing what else the file holds - see EmuSen_Settings_Reference.md §4.87.7.
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task Sync_to_display_is_a_gameplay_switch_on_by_default_that_is_saved_and_fits(int width, int height) => Session.Dispatch(() =>
+        public Task Smooth_motion_is_a_display_switch_on_by_default_that_is_saved_and_fits(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
             var frame = s.Window.GetControl<EmuSen.Serenity.GameFrameControl>("GameFrame");
             Assert.True(new EmuSen.Galaxia.Models.GraphicsConfig().SyncToDisplay);
             Assert.True(frame.SyncToDisplay);
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            s.Settle();
-            var sheet = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            Reach(s, "BigMenuPage2");
-            s.Pad.A();
-            Assert.Equal("Gameplay", sheet.Form!.Menu.Title);
-            Reach(s, "SyncToDisplaySwitch");
-            Assert.StartsWith("Runs one frame per refresh", sheet.Form.Menu.Footer);
-            Assert.True(RowOf(Named<LunaSwitch>(s, "SyncToDisplaySwitch")).IsOn);
-            Assert.Empty(FitAudit.Check(Sheet(s), WindowAllowances.For(sheet)));
-            // What the graphics window wrote stays in the file when the switch saves.
+            SettingsLayout layout = OpenSettings(s, 1);
+            ToRow(s, "smooth");
+            Assert.StartsWith("One frame per refresh", PaneWords(s));
+            Assert.Equal("On", layout.Rows.Single(r => r.Key == "smooth").Status);
+            Assert.Empty(FitAudit.Check(layout, []));
             var held = (EmuSen.Galaxia.Models.GraphicsConfig)typeof(MainWindow).GetField("_graphics", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.GetValue(s.Window)!;
             held.SetValue("NES", "Engine", "MoonRT (Rust)");
-            s.Pad.A();
+            s.Pad.Right();
             Assert.Equal("MoonRT (Rust)", EmuSen.Galaxia.Models.GraphicsConfig.Load().Value("NES", "Engine"));
             Assert.False(frame.SyncToDisplay);
             Assert.False(EmuSen.Galaxia.Models.GraphicsConfig.Load().SyncToDisplay);
-            Assert.False(RowOf(Named<LunaSwitch>(s, "SyncToDisplaySwitch")).IsOn);
-            s.Pad.A();
+            Assert.Equal("Off", layout.Rows.Single(r => r.Key == "smooth").Status);
+            s.Pad.Right();
             Assert.True(EmuSen.Galaxia.Models.GraphicsConfig.Load().SyncToDisplay);
             Assert.True(frame.SyncToDisplay);
-            ThemedSwitchesTests.PutAway(s);
         }, default);
 
         // Q86: A on an option row opens ES-DE's list screen: the row's name as its title, a row per choice with the current one focused, Back; the menu beneath is not drawn.

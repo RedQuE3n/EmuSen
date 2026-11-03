@@ -87,17 +87,18 @@ namespace EmuSen.Mistress.Views
         // A keyboard on the big screen steers the page as a pad would; on the desktop the page's own controls take the keys.
         private void OnGamePageKey(object? sender, KeyEventArgs e)
         {
-            if (!_bigScreen || e.Handled) return;
-            UiButton? button = e.Key switch
-            {
-                Key.Up => UiButton.Up, Key.Down => UiButton.Down, Key.Left => UiButton.Left, Key.Right => UiButton.Right,
-                Key.Enter => UiButton.Accept, Key.Escape or Key.Back => UiButton.Back, Key.PageUp => UiButton.PageUp, Key.PageDown => UiButton.PageDown,
-                _ => null,
-            };
-            if (button is not { } b) return;
+            if (!_bigScreen || e.Handled || KeyAsPad(e.Key) is not { } b) return;
             GamePagePadCommand(b);
             e.Handled = true;
         }
+
+        // The keys a big-screen page reads as the pad's buttons, one owner for the game's page and Settings.
+        private static UiButton? KeyAsPad(Key key) => key switch
+        {
+            Key.Up => UiButton.Up, Key.Down => UiButton.Down, Key.Left => UiButton.Left, Key.Right => UiButton.Right,
+            Key.Enter => UiButton.Accept, Key.Escape or Key.Back => UiButton.Back, Key.PageUp => UiButton.PageUp, Key.PageDown => UiButton.PageDown,
+            _ => null,
+        };
 
         private RomEntry EntryOf(string path) => _allScan.Entries.FirstOrDefault(e => e.FullPath == path) ?? new RomEntry(path);
 

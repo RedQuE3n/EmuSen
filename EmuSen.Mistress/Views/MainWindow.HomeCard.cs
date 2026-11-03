@@ -56,7 +56,7 @@ namespace EmuSen.Mistress.Views
             if (SearchAction() is { } search) rows.Add(new(() => SearchRow, search));
             if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsolePage));
             rows.Add(new(() => ToolsMenu, () => { }, closes: false) { Submenu = ToolRows, Opens = true, ShowsTools = true, StartsSection = rows.Count > 0, Label = () => ToolsMenu, Value = CoresWaitingValue });
-            rows.Add(Submenu(SettingsMenu, SettingsRows));
+            rows.Add(new(() => SettingsMenu, () => ShowSettings()) { Opens = true });
             rows.Add(Submenu(PowerMenu, PowerRows, startsSection: true));
             return rows;
         }

@@ -233,16 +233,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Themed.Stage.Current.Data.System.Theme.IsThemed);
         }, default);
 
-        // The sheet is also reached from Preferences ▸ Appearance.
+        // The sheet is also reached from Settings ▸ Library ▸ Themes.
         [Fact]
-        public Task Preferences_opens_the_theme_settings_sheet() => Session.Dispatch(() =>
+        public Task Settings_opens_the_theme_settings_sheet() => Session.Dispatch(() =>
         {
             using var theme = new SyntheticTheme();
             Write(theme);
             using var s = new ThemedSession(themeDirectory: theme.Root);
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            Window preferences = Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            Click(Named<Button>(preferences, "ThemeSettingsButton"));
+            SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.Library);
+            SettingsPad.To(s.Window, s.Pad, "themes");
+            s.Pad.A();
             s.Settle();
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             Assert.Empty(s.Window.OwnedWindows);

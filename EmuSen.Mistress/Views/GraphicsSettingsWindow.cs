@@ -89,17 +89,17 @@ namespace EmuSen.Mistress.Views
         }
 
         // The key the frontend's own row is stored under, beside the core's; no core declares it, so no core is handed it - see EmuSen_Settings_Reference.md §4.40.
-        public const string ScreenFilterKey = "ScreenFilter";
+        public const string ScreenFilterKey = GraphicsKeys.ScreenFilter;
 
         // The frontend's other row: the screen's shape as the core reports it, or the frame's square pixels - see EmuSen_Settings_Reference.md §4.97.
-        public const string PictureShapeKey = "PictureShape", TvShape = "tv", SquarePixels = "square";
+        public const string PictureShapeKey = GraphicsKeys.PictureShape, TvShape = GraphicsKeys.TvShape, SquarePixels = GraphicsKeys.SquarePixels;
 
         public static readonly SettingRow PictureShape = new(PictureShapeKey, "Picture shape",
             "The screen the console was made for, or each of the frame's pixels square.",
             SettingRow.Choice, TvShape, 0, 0, new[] { TvShape, SquarePixels }, new[] { "TV shape", "Square pixels" }, null, null, null, null);
 
         // The frontend's third row: what is hidden at the picture's edges, on a console that had a television - see EmuSen_Settings_Reference.md §4.99.
-        public const string OverscanKey = "Overscan", NoOverscan = "off", TvOverscan = "tv", CustomCrop = "custom";
+        public const string OverscanKey = GraphicsKeys.Overscan, NoOverscan = GraphicsKeys.NoOverscan, TvOverscan = GraphicsKeys.TvOverscan, CustomCrop = GraphicsKeys.CustomCrop;
 
         // The four edges of a custom crop, each a percentage of the picture's width or height, in the order they are shown.
         public static readonly (string Key, string Label)[] CropEdges = CropFields.Edges;

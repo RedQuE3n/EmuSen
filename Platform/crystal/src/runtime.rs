@@ -228,6 +228,8 @@ impl Runtime {
                 .str("id", &e.id)
                 .str("name", &e.name)
                 .str("console", &e.console)
+                .str("display_name", &e.display_name)
+                .str_or_null("firmware_name", e.firmware_name.as_deref())
                 .str("manufacturer", &e.manufacturer)
                 .int("release_year", e.release_year as i64)
                 .strs("extensions", &e.extensions)

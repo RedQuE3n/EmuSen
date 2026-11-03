@@ -172,21 +172,13 @@ namespace EmuSen.WiseMan.Mistress
             Settle(main);
             var shown = (CoresWindow)Sheets(main).Current!;
             CoresPane pane = shown.Pane;
+            // A home that never read the catalogue reads it once as Cores opens (EmuSen_Cores.md §3.8).
             Wait(main, pane);
             Assert.Equal(EmuSen.LunaP.Controls.AdaptiveForm.BigScreen, pane.Form);
-            Assert.DoesNotContain(pane.Rows, r => r.Stem == "pcee2");
-            Assert.StartsWith("No catalogue of libretro's cores yet", pane.Notice);
-            var path = new List<string>();
-
-            // Select opens the List card; the D-pad stays on it down to Check for Updates, whose A reads the catalogue.
-            pad.Select();
-            Settle(main);
-            Assert.True(pane.IsListToolsOpen);
-            Assert.True(DownTo(pad, main, e => Said(e) == "Check for Updates", path, stays: e => Within(e, pane.ListCard)), string.Join(" > ", path));
-            pad.A();
-            Settle(main);
-            Wait(main, pane);
             Assert.StartsWith("Read libretro's catalogue on ", pane.Notice);
+            Assert.Contains(pane.Rows, r => r.Stem == "pcee2");
+            Assert.Single(_buildbot.Asked, a => a == "/assets/frontend/info.zip");
+            var path = new List<string>();
             // Only the systems table's console names, never a raw id such as Endou's gg; sections and rows in the table's order, each console's default first (EmuSen_Interface.md §15.3).
             Assert.DoesNotContain(pane.Rows.SelectMany(r => r.Consoles), c => c is "gg" or "naomi" or "atomiswave");
             Assert.DoesNotContain(pane.Sections, s => s.Key is "console:gg");
@@ -213,7 +205,7 @@ namespace EmuSen.WiseMan.Mistress
             string installed = Path.Combine(DataStore.Cores, "libretro", "pcee2", "pcee2_libretro.so");
             Assert.True(File.Exists(installed), pane.Notice);
             Assert.Equal(core, File.ReadAllBytes(installed));
-            Assert.StartsWith("Installed pcee2.", pane.Notice);
+            Assert.StartsWith("Installed PCEE2.", pane.Notice);
             Assert.Equal("row PCEE2", Said(Focused(main)));
             CoreRow row = pane.Rows.Single(r => r.Stem == "pcee2");
             Assert.True(row.AwaitsApproval);
@@ -241,6 +233,86 @@ namespace EmuSen.WiseMan.Mistress
             main.Close();
         }, default);
 
+        // Cores opened as Settings opens it, its first listing and any first read of the catalogue taken.
+        private CoresPane OpenCores(MainWindow main)
+        {
+            typeof(MainWindow).GetMethod("ShowCores", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(main, null);
+            Settle(main);
+            CoresPane pane = ((CoresWindow)Sheets(main).Current!).Pane;
+            Wait(main, pane);
+            return pane;
+        }
+
+        private MainWindow Home()
+        {
+            string roms = Path.Combine(_root, "Roms");
+            Directory.CreateDirectory(roms);
+            new EmuSen.Galaxia.Models.AppSettings { RomDirectory = roms, BigScreen = true, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
+            var main = new MainWindow { Width = 1280, Height = 800 };
+            main.Show();
+            Settle(main);
+            return main;
+        }
+
+        // The catalogue is read once: a second opening of Cores, and B back out and in again by the pad, never fetch it again (EmuSen_Cores.md §3.8, §11).
+        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        public Task A_home_reads_the_catalogue_once_when_Cores_first_opens_and_never_again_unasked() => Session.Dispatch(() =>
+        {
+            Serve();
+            MainWindow main = Home();
+            var pad = new PadDriver(main);
+            CoresPane pane = OpenCores(main);
+            Assert.StartsWith("catalogue read ", pane.Header!.Facts!.Split(" · ")[^1]);
+            Assert.Single(_buildbot.Asked, a => a == "/assets/frontend/info.zip");
+            pad.B();
+            Settle(main);
+            Assert.Null(Sheets(main).Current as CoresWindow);
+            pane = OpenCores(main);
+            Assert.Single(_buildbot.Asked, a => a == "/assets/frontend/info.zip");
+            Assert.Contains(pane.Rows, r => r.Stem == "pcee2");
+            Assert.Null(pane.Notice);
+            main.Close();
+        }, default);
+
+        // The rows by maker, then by release within a maker, under a heading per maker the pad never lands on (EmuSen_Cores.md §3.8).
+        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        public Task Cores_lists_by_maker_under_headings_and_the_pad_walks_only_rows() => Session.Dispatch(() =>
+        {
+            Serve();
+            using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { DataStore.Cores } });
+            CoresPane.RuntimeFor = _ => (CoresRuntime)typeof(MainWindow).GetMethod("CoresRuntimeOf", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [runtime])!;
+            MainWindow main = Home();
+            var pad = new PadDriver(main);
+            CoresPane pane = OpenCores(main);
+            using JsonDocument table = JsonDocument.Parse(runtime.Systems());
+            var facts = table.RootElement.EnumerateArray().Where(s => s.TryGetProperty("manufacturer", out _))
+                .GroupBy(s => s.GetProperty("console").GetString()!).ToDictionary(g => g.Key, g => (Maker: g.First().GetProperty("manufacturer").GetString()!, Year: g.First().GetProperty("release_year").GetInt32(), Shown: g.First().GetProperty("display_name").GetString()!));
+            List<string> makers = facts.Values.Select(f => f.Maker).Distinct().ToList();
+            List<string> strip = pane.Sections.Skip(1).Select(s => s.Key["console:".Length..]).ToList();
+            Assert.Equal(strip.OrderBy(c => makers.IndexOf(facts[c].Maker)).ThenBy(c => facts[c].Year), strip);
+            Assert.Equal(strip.Select(c => facts[c].Shown), pane.Sections.Skip(1).Select(s => s.Label));
+            Assert.Contains(pane.Sections, s => s.Label == "Super Nintendo");
+            // Each maker's heading on its first row, none on the others.
+            List<string?> makerOf = pane.Shown.Select(r => r.Consoles.Count == 0 ? null : facts[r.Consoles.MinBy(strip.IndexOf)!].Maker).ToList();
+            for (int i = 0; i < makerOf.Count; i++)
+                Assert.Equal(makerOf[i] is { } m && (i == 0 || makerOf[i - 1] != m) ? m.ToUpperInvariant() : null, pane.BigScreenTable.HeadingAt(i));
+            Assert.Contains("NINTENDO", Enumerable.Range(0, makerOf.Count).Select(pane.BigScreenTable.HeadingAt));
+            Assert.Equal("Super Nintendo", pane.Rows.First(r => r.Consoles.Contains("SNES")).ConsoleNames[0]);
+            // Down from the first row reaches every row in order, the focus always on a row and never on a heading.
+            pane.BigScreenTable.Select(pane.Shown[0]);
+            pane.FocusRole(EmuSen.LunaP.Controls.AdaptiveRole.Content);
+            Settle(main);
+            var walked = new List<string> { Said(Focused(main)) };
+            for (int i = 1; i < pane.Shown.Count; i++)
+            {
+                pad.Down();
+                Settle(main);
+                walked.Add(Said(Focused(main)));
+            }
+            Assert.Equal(pane.Shown.Select(r => "row " + r.Name), walked);
+            main.Close();
+        }, default);
+
         // A buildbot that answers nothing: Check for Updates by the pad says why on the screen and in the error log, never silently (EmuSen_Cores.md §3.6).
         [RustImplementationFact("the cores listing's libretro rows, 1.5")]
         public Task A_failed_fetch_is_said_on_the_screen_and_in_the_error_log() => Session.Dispatch(() =>
@@ -256,6 +328,11 @@ namespace EmuSen.WiseMan.Mistress
             Settle(main);
             CoresPane pane = ((CoresWindow)Sheets(main).Current!).Pane;
             Wait(main, pane);
+            // The read on opening failed, and the header and the error log say why (EmuSen_Cores.md §3.8).
+            Assert.Contains("catalogue could not be read: ", pane.Header!.Facts);
+            Assert.Contains("404", pane.Header!.Facts);
+            Assert.Contains("404", File.ReadAllText(ErrorLog.PathFor(DateTime.Now)));
+            Assert.Single(_buildbot.Asked, a => a == "/assets/frontend/info.zip");
             var path = new List<string>();
             pad.Select();
             Settle(main);

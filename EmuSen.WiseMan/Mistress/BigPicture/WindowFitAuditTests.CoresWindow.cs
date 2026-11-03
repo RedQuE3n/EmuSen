@@ -23,9 +23,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             public static string Systems => JsonSerializer.Serialize(new object[]
             {
                 // PCEE2 first: the PlayStation 2's default while Sapphire is under development (EmuSen_Cores.md §4.8).
-                new { id = "ps2", console = "PlayStation 2", engines = new[] { "PCEE2", "Sapphire", "ExtraPS2" } },
-                new { id = "psx", console = "PlayStation", engines = new[] { "Diamond" } },
-                new { id = "snes", console = "SNES", engines = new[] { "VenusRT" } },
+                new { id = "snes", console = "SNES", display_name = "Super Nintendo", manufacturer = "Nintendo", release_year = 1990, engines = new[] { "VenusRT" } },
+                new { id = "psx", console = "PlayStation", display_name = "PlayStation", manufacturer = "Sony", release_year = 1994, engines = new[] { "Diamond" } },
+                new { id = "ps2", console = "PlayStation 2", display_name = "PlayStation 2", manufacturer = "Sony", release_year = 2000, engines = new[] { "PCEE2", "Sapphire", "ExtraPS2" } },
             });
 
             public static string Cores => JsonSerializer.Serialize(new object[]
@@ -87,6 +87,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return r.GetProperty("op").GetString() switch
             {
                 "core-ls" => new ScriptedJob(CoresListing(catalogue), ends: true),
+                // Offline: a home that never read the catalogue reads it once on opening, and says why it could not (EmuSen_Cores.md §3.8).
+                "core-fetch" => new ScriptedJob([new { @event = "refused", reason = "buildbot.libretro.com could not be reached" }, new { @event = "done", op = "core-fetch", counts = new Dictionary<string, int>(), catalogue = (string?)null }], ends: true),
                 _ => new ScriptedJob([new { @event = "plan", stem = "pcsx2", from = "https://buildbot.libretro.com/nightly/linux/x86_64/latest/pcsx2_libretro.so.zip", build = "2026-10-31", crc32 = "3a224a58" },
                     new { @event = "progress", stem = "pcsx2", step = "download", bytes = 18_874_368, total = 43_000_000 }], ends: false),
             };
@@ -115,14 +117,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Settle(window);
             var shown = (CoresWindow)Sheets(window).Current!;
             CoresPane pane = shown.Pane;
-            pane.Poll();
-            Settle(window);
+            for (int i = 0; i < 4 && (i == 0 || pane.Busy); i++)
+            {
+                pane.Poll();
+                Settle(window);
+            }
             Assert.Equal(AdaptiveForm.BigScreen, pane.Form);
             Assert.Equal(state == "CoresNoCatalogue" ? 4 : 9, pane.Rows.Count);
             if (state == "CoresNoCatalogue") return;
             CoreRow lrps2 = pane.Rows.First(r => r.Stem == "pcsx2");
             // CoresDetail: the core waiting for approval chosen, its pane beside the list and A asking to approve it.
-            pane.BigScreenTable.Select(state == "CoresDetail" ? pane.Rows.First(r => r.AwaitsApproval) : lrps2);
+            // LRPS2's states in the PlayStation 2's section, reached on the shoulders, since the maker order puts it last in All and the walk records only rows in view.
+            if (state != "CoresDetail")
+                for (int i = 0; i < 8 && pane.SelectedSection != "console:PlayStation 2"; i++) Assert.True(shown.OnPad(global::EmuSen.Mistress.Input.UiButton.PageDown));
+            Settle(window);
+            // The chosen row brought into view, as the D-pad that reaches it scrolls it.
+            CoreRow chosen = state == "CoresDetail" ? pane.Rows.First(r => r.AwaitsApproval) : lrps2;
+            pane.BigScreenTable.Select(chosen);
+            pane.BigScreenTable.BringRowIntoView(chosen);
+            Settle(window);
             pane.FocusRole(AdaptiveRole.Content);
             pane.Poll();
             Settle(window);

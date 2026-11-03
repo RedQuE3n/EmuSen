@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 2,
+  "display_name": "Master System",
+  "firmware_name": "Master System BIOS",
   "cheat_space": "RAM",
   "media": [],
   "byte_order": "little",

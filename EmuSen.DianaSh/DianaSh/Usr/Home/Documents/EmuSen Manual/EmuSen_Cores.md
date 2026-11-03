@@ -315,6 +315,93 @@ approval, with PCEE2 first in the PlayStation 2 section once it is the default. 
    the firmware.
 7. The search box's placeholder reads "Search cores", and the mockups' reads "Search".
 
+### 3.8 The catalogue read once, the consoles' names and makers, and the frame to the mockups (2026-11-02)
+
+Decided 2026-11-02 by the tester (§11, decisions 11 to 14) and built here.
+
+- **The catalogue, once.** When the listing that opens Cores finds no catalogue, Cores reads it at once, the first
+  time Cores is asked what is available (§4.2), with *Reading libretro's catalogue…* in the apply bar. A read that
+  fails is said in the header's facts as `catalogue could not be read: <why>`, in the apply bar, and in the error log;
+  it is tried once per opening, and Check for Updates tries again. A home with a catalogue never reads it unasked.
+  This narrows decision 5 for a home that has never read one; checking when Cores opens stays opt-in and off.
+- **Names.** The systems table gains `display_name` (`Platform/systems/data/*.json`): `Super Nintendo`, `Nintendo 64`,
+  `Game Boy`, `Game Boy Color`, and the `console` word for every other system, whose short form is already what a list
+  shows. `console` stays the key of the settings and of a section. The runtime's `systems` listing carries it; Cores'
+  Console column, strip, pane and approval read it (`CoreRow.ConsoleNames`). The table has no version of its own: its
+  JSON is part of the platform library's interface, matched exactly by the host built from the same commit
+  (`EMUSEN_PLATFORM_ABI_VERSION`), and a key added is read by name, so the version stays 31. Checked for the other
+  places a console is named: the library's sidebar, the themed systems, Setup, the scraper and the launch screen show
+  the shelves' ES-DE name (`esde_full_name`, `Sony PlayStation`) and were left as they are (§10's question below).
+- **Makers.** The table already holds `manufacturer` and `release_year`. Cores orders the consoles by maker in the
+  order the table first names them (Nintendo, Sega, Sony), within a maker by `release_year`, the table's order breaking
+  a tie (the 32X and the Saturn, both 1994); within a console the default first, then the installed cores that can run,
+  then by name. The strip follows the same order. Each maker heads its first row, as LunaP's `LunaTable.GroupOf` draws
+  it (LunaP §211.1), in both forms, only while the rows shown hold more than one maker.
+- **A core waiting for approval is no console's default** until approved, since it cannot run: the waiting mockup
+  draws PCEE2 as `⚠ To approve` beneath Sapphire, and *Make Default* is not offered on it.
+- **The frame, to the mockups** (LunaP §211.2, §211.3): rows full width with the rule under each from edge to edge and
+  the chosen row raised with its 4-unit accent bar; no strip above the first row; the header, strip and list on the
+  grid of `EmuSen_Interface.md` §15.2; `Apply…` with its Start glyph beside the meter; the help bar `A · B · Console ·
+  More · List · Apply`, and only `B · Console · List` while a job runs; the search box's word `Search`.
+- **Cores' own words, to the mockups**: a row being installed reads `Installing…`; the pane shows the download's steps
+  ticked as the tool's events arrive (§5.2: the connection, the download, the checksum, the machine, the SHA-256);
+  a build is `Nightly build of 31 October 2026`; the question's paragraphs 8 apart, the card as tall as the screen
+  above the help band; the notice names the core (`Installed PCEE2.`); the approval is in the
+  register of `EmuSen_Interface.md` §15.6, the hash in groups of eight, four to a line, for Cores and for the open
+  path's question alike.
+
+**Compared with the mockups** (superseded in part by §3.9; `~/.cache/emusen/tmp/cores-followup/compare/`, mockup left, built right, list, waiting,
+approve and installing at 1280 × 800 and 1920 × 1080, from `WindowFitAuditTests.Cores_is_pictured_in_its_mockups_states`
+holding the mockups' own cores). What still differs:
+1. The order: the mockups predate decision 13, so their strip runs PlayStation 2 first and the list has no headings.
+2. The pane's `✓ You have one.`: no surface tells Cores whether the player's firmware for a console is found (§10, Q14).
+3. The help bar's words are drawn at the host's size (about 24 units, against the mockups' 20) and its glyphs in the
+   session's pad family (the lettered `START` of the mockups is the generic family's).
+4. The help band's rule runs within the screen's side inset of 48, not edge to edge.
+5. Over the approval the dim stops at the screen's inset (28 above, 48 at the sides), where the mockup dims to the
+   screen's edges; the help band now stays undimmed and the card is centred above it, as drawn.
+6. The question's paragraphs are plain blocks: `Not tested by EmuSen.` and the hash are not in Muted Caption.
+
+**Recordings.** The four tools' 34 audited states were re-recorded on 2026-11-02 for one stated cause, the frame on the
+grid of `EmuSen_Interface.md` §15.2 (the safe area below, the help band, the strip, the question's paragraphs), after
+their pictures were held against each tool's mockup. With the maker order LRPS2 sits last under All, below the fold,
+and the recorder's walk follows only the rows in view, so Cores' listing, plan and running states now choose LRPS2 in
+the PlayStation 2's section, reached on the shoulders as the player would; a row a job acted on is also brought into
+view before it is given the focus again, wherever the order puts it.
+
+**Tests.** `CoresInstallPathTests` against the test's own buildbot, by the pad: the catalogue read as Cores first opens
+and never again on a second opening; a failed read said in the header and the error log; the strip and rows by maker
+and release with a heading on each maker's first row, and the pad's Down walking every row and never a heading.
+`CoresWindowTests` and `CoresWindowRuntimeTests` follow the words above. Seeded on 2026-11-02, each caught: the consoles
+by year alone, ignoring the maker (`Cores_lists_by_maker…`); the catalogue read on every opening
+(`A_home_reads_the_catalogue_once…`); the failure kept out of the header (`A_failed_fetch…`).
+
+### 3.9 Held to the mockups again: whole rows, the pane's two sentences, the help band (2026-11-02)
+
+Checked against `cores-list` and `cores-approve` at 1280 × 800 on 2026-11-02, five things were still not as drawn:
+
+1. **A cut row.** The list scrolled to keep Sapphire in view and drew half a row under its top edge. LunaP's
+   `LunaTable.WholeRows`, set on both of `ManagerLayout`'s tables, shows whole rows only (LunaP §211.5), so no tool
+   draws a cut row.
+2. **The pane's firmware and engine sentences.** A core's firmware need is now its own fact: the runtime's `cores`
+   listing gives each row `firmware` (since 1.8 of the frontend API): `required` where its info declares firmware for
+   its systems that has no open replacement (Sapphire's PlayStation 2 BIOS, `Replacement::None`), `optional` where
+   every one has (Diamond's), or null. The systems table gains `firmware_name`, the console's firmware in the
+   player's words (`PlayStation 2 BIOS`, `Game Boy boot ROM`), so the pane says `Needs a PlayStation 2 BIOS of your
+   own, which EmuSen never downloads.` or `Can use a PlayStation BIOS of your own, which EmuSen never downloads; it
+   runs without one.` A core that could run its console but is not its engine says so and how to change it: `Not the
+   PlayStation 2's engine while it is under development: PCEE2 is. A makes Sapphire the engine instead.` (the listing's
+   `development`, the console's stored or first engine). `✓ You have one.` waits for Q14.
+3. **The help bar** in the edge card's type and spacing (Caption 20, 40 between entries) and **4. the help band**
+   across the screen and down to its foot, with a question's dim to the screen's edges (LunaP §211.4).
+5. **The question's small print**: `Not tested by EmuSen.` and the hash in Muted Caption (`CoreApproval.SmallPrint`,
+   `ManagerLayout.Ask`'s `smallPrint`).
+
+The four tools' 34 audited states were re-recorded once more for these causes after their pictures were checked.
+Still different from the mockups: their order (before the maker order of decision 13); `✓ You have one.`; the
+glyphs in the session's pad family; and the dim behind a question at 74 per cent where the mockup's is 55, the
+frame's cover scrim being the one every question shares.
+
 ## 4. The data model
 
 ### 4.1 Three sources, each the owner of its facts
@@ -920,6 +1007,18 @@ row's one action and X opens its page; the approval is the frame's question card
 names, a minor version of the module ABI with a man-page entry, approval at the interactive prompt only. Built
 2026-11-01 (`EmuSen_DianaSh.md` §9.10, `man modules`).
 
+Asked 2026-11-02 after §3.8:
+
+13. **[routine]** The library's sidebar, the themed systems, Setup, the scraper and the launch screen name a console by
+    the shelves' ES-DE name (`esde_full_name`: `Sony PlayStation`, `Sega Genesis`), which a theme needs as it is. Show
+    `display_name` where EmuSen's own design names a console (§18.1's List card title, §18.11's breadcrumb) as each of
+    those screens is rebuilt, and keep `esde_full_name` for themes. *Recommended:* yes.
+14. **[decision]** The pane's `✓ You have one.` (`EmuSen_Interface.md` §15.4 item 3) needs an answer no surface gives:
+    whether the player's firmware for a console is found. Proposed: the runtime's `firmware_status(system)`, the
+    console's firmware as its engines declare it (`console_firmware`) each with `label`, `required` and `found`
+    (`emusen_firmware::locate`, by content), a new call of the platform library and so its version 32, handed to Cores
+    as `CoresRuntime.Firmware`; Cores keeps no copy. *Recommended:* yes, as its own small stage.
+
 ## 11. Decided 2026-10-31 by the tester
 
 Every recommendation of §10 was taken, with these particulars:
@@ -939,3 +1038,13 @@ Every recommendation of §10 was taken, with these particulars:
 8. Cores lives in the tool library `EmuSen.Tools.Cores`, hosted by Mistress now and by Home later.
 9. The command is `cores`, in `emusen.cores`.
 10. Cores the host cannot run are listed with the reason.
+
+Decided 2026-11-02 by the tester ("Yes to all", and "In core window, we should also sort by manufacturer"), built as
+§3.8 records:
+
+11. A home that has never read the catalogue reads it once when Cores opens, with its progress shown, and says plainly
+    in the header and the error log when it cannot; a home with one never reads it unasked. This narrows decision 5.
+12. A console is named in a list by the systems table's `display_name`, one owner beside its `console`.
+13. Cores sorts by maker: the strip and the rows by maker, within a maker by the table's years, within a console the
+    default, the installed, then by name, each maker a heading in both forms.
+14. The mismatches of §3.7 are fixed in the frame, LunaP's `ManagerLayout` and the tool screen, not in Cores.

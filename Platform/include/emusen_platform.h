@@ -546,7 +546,8 @@ int64_t emusen_disc_track_spans(const uint8_t *sheet, size_t sheet_len, uint8_t 
  * Every system's facts as one compact JSON array, one object a system in the table's order, each with the keys id,
  * name, console, manufacturer, release_year, extensions, cheat_systems, openvgdb_systems, cover_aspect, esde_system,
  * esde_full_name, self_delimiting_images, attached_to (a console or null), screenscraper_system (a number or null),
- * cheat_space (a memory space or null) and media (a list of objects with the keys id, title and noun), in that order. By the length-query idiom.
+ * display_name (the name a list shows, "Super Nintendo" where console is "SNES"), firmware_name (the console's firmware
+ * in the player's words, "PlayStation 2 BIOS", or null), cheat_space (a memory space or null) and media (a list of objects with the keys id, title and noun), in that order. By the length-query idiom.
  * EMUSEN_PLATFORM_PARSE with words only for a library built from a broken data file.
  */
 int64_t emusen_systems_table(uint8_t *out, size_t len);

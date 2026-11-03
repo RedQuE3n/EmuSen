@@ -65,7 +65,22 @@ namespace EmuSen.Mistress.Views
         }
 
         // The core the game would open on, where it waits for the player's approval: the routed engine's library, or a libretro core's whose hash the listing gives (EmuSen_LibretroHost.md §10m); null otherwise.
-        internal static CoreAwaiting? CoreAwaitingApproval(CrystalRuntime runtime, string romPath)
+        internal static CoreAwaiting? CoreAwaitingApproval(CrystalRuntime runtime, string romPath) =>
+            AwaitingOn(runtime, romPath) is { } core ? core with { Systems = ShownNames(runtime, core.Systems) } : null;
+
+        // A core's systems as a list names their consoles, the systems table's display_name, for the question's words (EmuSen_Cores.md §3.8).
+        private static IReadOnlyList<string> ShownNames(CrystalRuntime runtime, IReadOnlyList<string> systems)
+        {
+            try
+            {
+                using var table = JsonDocument.Parse(runtime.Systems());
+                var shown = table.RootElement.EnumerateArray().Where(s => Text(s, "id") is not null).GroupBy(s => Text(s, "id")!).ToDictionary(g => g.Key, g => Text(g.First(), "display_name") ?? Text(g.First(), "console") ?? g.Key);
+                return systems.Select(id => shown.GetValueOrDefault(id, id)).Distinct().ToArray();
+            }
+            catch (Exception e) when (e is JsonException or CrystalException) { return systems; }
+        }
+
+        private static CoreAwaiting? AwaitingOn(CrystalRuntime runtime, string romPath)
         {
             try
             {

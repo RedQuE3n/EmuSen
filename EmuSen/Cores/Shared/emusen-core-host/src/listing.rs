@@ -15,7 +15,7 @@ fn directory(player: bool) -> &'static str {
 }
 
 /// `[{"library","sidecar","sha256","abi","development","engine","report","directory","trust","name","authors","license",
-/// "systems","libretro"}]`, the libraries with a sidecar first, then the player's not yet read, then the libretro entries
+/// "systems","firmware","libretro"}]`, the libraries with a sidecar first, then the player's not yet read, then the libretro entries
 /// waiting for the approval that reads them.
 pub fn cores(j: &mut Json, d: &Discovery, trust: &Trust) {
     j.begin_array();
@@ -37,6 +37,7 @@ pub fn cores(j: &mut Json, d: &Discovery, trust: &Trust) {
             .field_strs("authors", &authors)
             .field_str("license", &s.info.license)
             .field_strs("systems", &systems);
+        str_or_null(j, "firmware", firmware_need(&s.info_json));
         match &c.entry {
             Some(e) => libretro(j, e, s.info.libretro.as_ref(), Some(&s.info.version), trust),
             None => {
@@ -52,7 +53,7 @@ pub fn cores(j: &mut Json, d: &Discovery, trust: &Trust) {
         j.key("engine").null().field_str("report", &u.report()).field_str("directory", directory(true)).field_str("trust", Standing::NotRead.word());
         j.key("name").null().field_strs::<&str>("authors", &[]);
         j.key("license").null().field_strs::<&str>("systems", &[]);
-        j.key("libretro").null().end_object();
+        j.key("firmware").null().key("libretro").null().end_object();
     }
     let listed = |e: &Entry| d.found().iter().any(|c| c.entry.as_ref().is_some_and(|f| f.folder == e.folder));
     for w in d.waiting().iter().filter(|w| !listed(&w.entry)) {
@@ -75,10 +76,23 @@ pub fn cores(j: &mut Json, d: &Discovery, trust: &Trust) {
             None => j.key("license").null(),
         };
         j.field_strs("systems", d.hosted_systems(e));
+        j.key("firmware").null();
         libretro(j, e, None, None, trust);
         j.end_object();
     }
     j.end_array();
+}
+
+/// The firmware a core's info declares for its systems: `required` where one has no open replacement, `optional` where
+/// every one has, none where it declares none (EmuSen_Cores.md §3.9).
+pub fn firmware_need(info: &Value) -> Option<&'static str> {
+    let systems = info.get("systems").and_then(Value::as_array).unwrap_or(&[]);
+    let entries: Vec<&Value> = systems.iter().flat_map(|s| s.get("firmware").and_then(Value::as_array).unwrap_or(&[])).collect();
+    if entries.is_empty() {
+        return None;
+    }
+    let replaced = |f: &Value| f.get("replacement").and_then(|r| r.get("effect")).and_then(Value::as_str).is_some_and(|e| e != "none");
+    Some(if entries.iter().any(|f| matches!(f.get("required"), Some(Value::Bool(true))) || !replaced(f)) { "required" } else { "optional" })
 }
 
 fn str_or_null(j: &mut Json, key: &str, value: Option<&str>) {
@@ -140,4 +154,24 @@ pub fn both(d: &Discovery, trust: &Trust) -> String {
     engines(&mut j, d, trust);
     j.end_object();
     j.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::firmware_need;
+    use emusen_native::json::parse;
+
+    fn need(firmware: &str) -> Option<&'static str> {
+        firmware_need(&parse(format!(r#"{{"systems":[{{"id":"ps2","firmware":{firmware}}}]}}"#).as_bytes()).unwrap())
+    }
+
+    #[test]
+    fn a_core_needs_firmware_it_cannot_run_without_and_can_use_firmware_it_can() {
+        assert_eq!(need("[]"), None);
+        assert_eq!(need(r#"[{"label":"BIOS","required":false,"replacement":{"effect":"none","cost":"runs nothing"}}]"#), Some("required"));
+        assert_eq!(need(r#"[{"label":"BIOS","required":true,"replacement":{"effect":"accuracy","cost":"c"}}]"#), Some("required"));
+        assert_eq!(need(r#"[{"label":"BIOS","required":false}]"#), Some("required"));
+        assert_eq!(need(r#"[{"label":"BIOS","required":false,"replacement":{"effect":"accuracy","cost":"c"}}]"#), Some("optional"));
+        assert_eq!(firmware_need(&parse(b"{}").unwrap()), None);
+    }
 }

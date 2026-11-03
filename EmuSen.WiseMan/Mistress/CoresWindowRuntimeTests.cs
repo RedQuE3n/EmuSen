@@ -91,7 +91,7 @@ namespace EmuSen.WiseMan.Mistress
             Settle(window);
             Assert.True(pane.Actions.First(a => a.Text == "Approve…").IsEnabled);
             Assert.True(pane.ApproveSelectedAsync().Result);
-            Assert.Contains(Sha256(CoreFile), asked);
+            Assert.Contains(Sha256(CoreFile), CoresWindowTests.Ungrouped(asked));
             pane.Refresh();
             pane.Poll();
             row = pane.Rows.Single(r => r.Stem == "testcore");
@@ -148,7 +148,7 @@ namespace EmuSen.WiseMan.Mistress
             Settle(main);
             Assert.True(pane.IsPlanOpen, "A on the row asks the approval");
             Assert.StartsWith("Approve ", pane.QuestionTitle);
-            Assert.Contains(Sha256(pcee2), pane.PlanText);
+            Assert.Contains(Sha256(pcee2), CoresWindowTests.Ungrouped(pane.PlanText));
             Assert.True(pane.Confirm());
             Settle(main);
             Assert.Null(asked);
@@ -187,7 +187,7 @@ namespace EmuSen.WiseMan.Mistress
             Settle(main);
             Assert.True(pane.IsPlanOpen, "A on the row asks the approval as the frame's card");
             Assert.Same(shown, Sheets(main).Current);
-            Assert.Contains(Sha256(pcee2), pane.PlanText);
+            Assert.Contains(Sha256(pcee2), CoresWindowTests.Ungrouped(pane.PlanText));
             Assert.True(pane.Confirm());
             Settle(main);
             Assert.Same(shown, Sheets(main).Current);
@@ -220,7 +220,7 @@ namespace EmuSen.WiseMan.Mistress
             pane.Table.Select(row);
             Settle(window);
             Assert.False(pane.ApproveSelectedAsync().Result);
-            Assert.Contains(Sha256(pcee2), asked);
+            Assert.Contains(Sha256(pcee2), CoresWindowTests.Ungrouped(asked));
             Assert.StartsWith("PCEE2 could not be approved: no core library listed has the SHA-256", told);
             window.Close();
         }, default);

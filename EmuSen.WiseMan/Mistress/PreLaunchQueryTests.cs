@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Mistress
             var clock = Stopwatch.StartNew();
             while (!ask.IsCompleted && clock.ElapsedMilliseconds < 5000) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
             Assert.True(ask.IsCompletedSuccessfully);
-            Assert.Contains(new string('a', 64), asked);
+            Assert.Contains(new string('a', 64), CoresWindowTests.Ungrouped(asked!));
             const string said = "Sony - PlayStation 2 (PCEE2) waits for your approval, so this game opens on Sapphire.";
             Assert.Equal(said, window.GetControl<TextBlock>("StatusText").Text);
             Assert.Equal(said, typeof(MainWindow).GetField("_engineFallbackNotice", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));

@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 3,
+  "display_name": "NES",
+  "firmware_name": "Famicom Disk System BIOS",
   "cheat_space": "CPUBUS",
   "media": [],
   "byte_order": "little",

@@ -32,6 +32,10 @@ pub struct System {
     pub id: String,
     pub name: String,
     pub console: String,
+    /// The console's name as the player reads it in a list, "Super Nintendo" where `console` is "SNES" (EmuSen_Cores.md §3.8).
+    pub display_name: String,
+    /// The console's firmware in the player's words, "a PlayStation 2 BIOS" without its article; none where it has none (EmuSen_Cores.md §3.9).
+    pub firmware_name: Option<String>,
     pub manufacturer: String,
     pub release_year: i32,
     /// What the console's games come as, those the runtime expands included (`.m3u`); lower case, each with its dot.
@@ -89,7 +93,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 20] = [
+pub const KEYS: [&str; 22] = [
     "id",
     "name",
     "console",
@@ -104,6 +108,8 @@ pub const KEYS: [&str; 20] = [
     "self_delimiting_images",
     "attached_to",
     "screenscraper_system",
+    "display_name",
+    "firmware_name",
     "cheat_space",
     "media",
     "byte_order",
@@ -237,6 +243,8 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         id: f.text("id")?,
         name: f.text("name")?,
         console: f.text("console")?,
+        display_name: f.text("display_name")?,
+        firmware_name: f.optional_text("firmware_name")?,
         manufacturer: f.text("manufacturer")?,
         release_year: match f.token("release_year")?.parse::<i32>() {
             Ok(year) if (1970..=2100).contains(&year) => year,
@@ -335,6 +343,8 @@ pub fn to_json(systems: &[System]) -> String {
                 Value::Bool(s.self_delimiting_images),
                 or_null(s.attached_to.as_deref().map(Value::string)),
                 or_null(s.screenscraper_system.map(Value::number)),
+                Value::string(s.display_name.as_str()),
+                or_null(s.firmware_name.as_deref().map(Value::string)),
                 or_null(s.cheat_space.as_deref().map(Value::string)),
                 Value::Array(
                     s.media
@@ -460,6 +470,9 @@ mod tests {
         assert!(!snes.self_delimiting_images);
         assert_eq!(snes.attached_to, None);
         assert_eq!(find("gbc").unwrap().release_year, 1998);
+        assert_eq!((snes.console.as_str(), snes.display_name.as_str(), snes.firmware_name.as_deref()), ("SNES", "Super Nintendo", None));
+        assert_eq!(find("ps2").unwrap().firmware_name.as_deref(), Some("PlayStation 2 BIOS"));
+        assert_eq!((sega_cd.display_name.as_str(), find("n64").unwrap().display_name.as_str()), ("Sega CD", "Nintendo 64"));
     }
 
     // Endou's two systems as Endou_Native.md §3 sources each fact: ES-DE's names, ScreenScraper's ids, the cheat database's folders.
@@ -533,7 +546,8 @@ mod tests {
         assert_eq!(refused("nes", &nes().replace("1.43", "-1")), "cover_aspect is not a positive number");
         assert_eq!(refused("nes", &nes().replace("\"self_delimiting_images\": false", "\"self_delimiting_images\": 0")), "self_delimiting_images is not true or false");
         assert_eq!(refused("nes", &nes().replace("\"screenscraper_system\": 3", "\"screenscraper_system\": 0")), "screenscraper_system is not a positive whole number");
-        assert_eq!(refused("nes", &nes().replace("\"NES\",\n  \"manufacturer\"", "\"  \",\n  \"manufacturer\"")), "console is blank");
+        assert_eq!(refused("nes", &nes().replace("\"console\": \"NES\"", "\"console\": \"  \"")), "console is blank");
+        assert_eq!(refused("nes", &nes().replace("\"display_name\": \"NES\"", "\"display_name\": \"  \"")), "display_name is blank");
         assert_eq!(refused("nes", &nes().replace("[\".nes\"]", "[]")), "extensions is empty");
         assert_eq!(refused("nes", &nes().replace("[\".nes\"]", "[\".nes\", \".nes\"]")), "extensions names one twice");
         assert_eq!(refused("nes", &nes().replace("[\".nes\"]", "[\".NES\"]")), "the extension .NES is not a dot and lower-case letters");

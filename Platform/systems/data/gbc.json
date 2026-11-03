@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 10,
+  "display_name": "Game Boy Color",
+  "firmware_name": "Game Boy Color boot ROM",
   "cheat_space": "CPUBUS",
   "media": [],
   "byte_order": "little",

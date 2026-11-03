@@ -13,6 +13,8 @@
   "self_delimiting_images": false,
   "attached_to": null,
   "screenscraper_system": 1,
+  "display_name": "Genesis",
+  "firmware_name": null,
   "cheat_space": "WRAM",
   "media": [],
   "byte_order": "big",

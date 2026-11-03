@@ -85,26 +85,30 @@ tree
             71 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=AdaptiveHelpBar paints=#707070FF role=none
               72 HintBar at=96,1074,1728,45 by=panel heard="Choose, No" limit=0,0,1920,1200 role=group
           73 Panel at=0,0,1920,1053 by=panel limit=0,0,1920,1200 name=AdaptiveCover paints=#000000B8 role=none
-            74 Border at=420,168,1080,715.5 by=panel limit=0,0,1920,1200 paints=#26262BFF,#707070FF role=none
-              75 DockPanel at=469.5,217.5,981,616.5 by=panel limit=0,0,1920,1200 role=none
-                76 TextBlock at=469.5,217.5,981,58.5 box=654,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"
-                77 StackPanel at=469.5,666,981,168 by=panel limit=0,0,1920,1200 role=none
-                  78 Button at=469.5,666,981,81 by=panel drawn focus heard=No limit=0,0,1920,1200 op paints=#D4D4D4FF role=button
-                    79 TextBlock at=511.5,682.5,46.5,48 box=31,32 by=clip caps=18.1987 drawn face=Barlow heard=No layout=30.68,31.2 limit=469.5,666,981,81 owner=78 paints=#EEEEF0FF role=text size=26 text=No
-                  80 Button at=469.5,753,981,81 by=panel drawn focus heard=Yes limit=0,0,1920,1200 op paints=#D4D4D4FF role=button
-                    81 TextBlock at=511.5,769.5,60,48 box=40,32 by=clip caps=18.1987 drawn face=Barlow heard=Yes layout=39.36,31.2 limit=469.5,753,981,81 owner=80 paints=#D4D4D4FF role=text size=26 text=Yes
-                82 StackPanel at=469.5,492,981,156 by=panel limit=0,0,1920,1200 role=none
-                  83 ToggleSwitch at=469.5,492,981,48 by=panel drawn focus heard=Theme limit=0,0,1920,1200 op paints=#8D8D91FF,#D4D4D4FF role=button
-                    84 TextBlock at=547.5,495,34.5,43.5 box=23,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Off layout=22.1,28.8 limit=469.5,492,981,48 owner=83 paints=#D4D4D4FF role=text size=24 text=Off
-                  85 ToggleSwitch at=469.5,546,981,48 by=panel drawn focus heard=Videos limit=0,0,1920,1200 op paints=#8D8D91FF,#D4D4D4FF role=button
-                    86 TextBlock at=547.5,549,34.5,43.5 box=23,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Off layout=22.1,28.8 limit=469.5,546,981,48 owner=85 paints=#D4D4D4FF role=text size=24 text=Off
-                  87 ToggleSwitch at=469.5,600,981,48 by=panel drawn focus heard=Overwrite limit=0,0,1920,1200 op paints=#8D8D91FF,#D4D4D4FF role=button
-                    88 TextBlock at=547.5,603,34.5,43.5 box=23,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Off layout=22.1,28.8 limit=469.5,600,981,48 owner=87 paints=#D4D4D4FF role=text size=24 text=Off
-                89 ScrollViewer at=469.5,294,981,198 by=panel limit=0,0,1920,1200 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=469.5,294,981,198
-                  90 StackPanel at=469.5,294,981,198 by=fixed-scroll in=89 limit=469.5,294,981,198 role=none
-                    91 TextBlock at=469.5,294,981,198 box=654,132 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply." in=89 layout=619.28,132 limit=469.5,294,981,198 paints=#D4D4D4FF role=text size=22 text="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply."
+            74 Border at=420,90,1080,871.5 by=panel limit=0,0,1920,1200 paints=#26262BFF,#707070FF role=none
+              75 DockPanel at=469.5,139.5,981,772.5 by=panel limit=0,0,1920,1200 role=none
+                76 TextBlock at=469.5,139.5,981,58.5 box=654,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"
+                77 StackPanel at=469.5,744,981,168 by=panel limit=0,0,1920,1200 role=none
+                  78 Button at=469.5,744,981,81 by=panel drawn focus heard=No limit=0,0,1920,1200 op paints=#D4D4D4FF role=button
+                    79 TextBlock at=511.5,760.5,46.5,48 box=31,32 by=clip caps=18.1987 drawn face=Barlow heard=No layout=30.68,31.2 limit=469.5,744,981,81 owner=78 paints=#EEEEF0FF role=text size=26 text=No
+                  80 Button at=469.5,831,981,81 by=panel drawn focus heard=Yes limit=0,0,1920,1200 op paints=#D4D4D4FF role=button
+                    81 TextBlock at=511.5,847.5,60,48 box=40,32 by=clip caps=18.1987 drawn face=Barlow heard=Yes layout=39.36,31.2 limit=469.5,831,981,81 owner=80 paints=#D4D4D4FF role=text size=26 text=Yes
+                82 StackPanel at=469.5,414,981,312 by=panel limit=0,0,1920,1200 role=none
+                  83 DockPanel at=469.5,414,981,81 by=panel limit=0,0,1920,1200 role=none
+                    84 ToggleSwitch at=1338,430.5,112.5,48 by=panel drawn focus heard=Videos limit=0,0,1920,1200 op paints=#8D8D91FF,#D4D4D4FF role=button
+                      85 TextBlock at=1416,433.5,34.5,43.5 box=23,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Off layout=22.1,28.8 limit=1338,430.5,112.5,48 owner=84 paints=#D4D4D4FF role=text size=24 text=Off
+                    86 TextBlock at=469.5,430.5,868.5,48 box=579,32 by=panel caps=18.1987 drawn face=Barlow heard=Videos layout=74.07,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Videos
+                  87 TextBlock at=505.5,501,945,36 box=630,24 by=panel caps=13.999 drawn face="Barlow Condensed" heard="Also fetches each game's video. Videos are large, so this stays off unless you turn it on." layout=563.26,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="Also fetches each game's video. Videos are large, so this stays off unless you turn it on."
+                  88 DockPanel at=469.5,555,981,81 by=panel limit=0,0,1920,1200 role=none
+                    89 ToggleSwitch at=1338,571.5,112.5,48 by=panel drawn focus heard=Overwrite limit=0,0,1920,1200 op paints=#8D8D91FF,#D4D4D4FF role=button
+                      90 TextBlock at=1416,574.5,34.5,43.5 box=23,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard=Off layout=22.1,28.8 limit=1338,571.5,112.5,48 owner=89 paints=#D4D4D4FF role=text size=24 text=Off
+                    91 TextBlock at=469.5,571.5,868.5,48 box=579,32 by=panel caps=18.1987 drawn face=Barlow heard=Overwrite layout=106.21,31.2 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=26 text=Overwrite
+                  92 TextBlock at=505.5,642,945,72 box=630,48 by=panel caps=13.999 drawn face="Barlow Condensed" heard="Fetches again and replaces the pictures and details you already have; off fetches only what is missing." layout=606.3,48 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="Fetches again and replaces the pictures and details you already have; off fetches only what is missing."
+                93 ScrollViewer at=469.5,216,981,198 by=panel limit=0,0,1920,1200 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=469.5,216,981,198
+                  94 StackPanel at=469.5,216,981,198 by=fixed-scroll in=93 limit=469.5,216,981,198 role=none
+                    95 TextBlock at=469.5,216,981,198 box=654,132 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply." in=93 layout=619.28,132 limit=469.5,216,981,198 paints=#D4D4D4FF role=text size=22 text="2 game(s), about 7 request(s) (at most 10), 0 already complete; 19880 request(s) left today; about 1 min.\nKinds: cover, screenshot, marquee, miximage.\nWhat is there is kept; only what is missing is fetched.\nNothing is sent to ScreenScraper until Apply."
 focus 78
-edge 78 up 87
+edge 78 up 89
 edge 78 down 80
 edge 78 left same
 edge 78 right same
@@ -112,18 +116,14 @@ edge 80 up 78
 edge 80 down same
 edge 80 left same
 edge 80 right same
-edge 83 up same
-edge 83 down 85
-edge 83 left same
-edge 83 right same
-edge 85 up 83
-edge 85 down 87
-edge 85 left same
-edge 85 right same
-edge 87 up 85
-edge 87 down 78
-edge 87 left same
-edge 87 right same
+edge 84 up same
+edge 84 down 89
+edge 84 left same
+edge 84 right same
+edge 89 up 84
+edge 89 down 78
+edge 89 left same
+edge 89 right same
 press pageup focus="Button  (No)" top=ScraperWindow
 press pagedown focus="Button  (No)" top=ScraperWindow
 press first focus="Button  (No)" top=ScraperWindow

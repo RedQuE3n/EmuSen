@@ -21,7 +21,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public static TheoryData<string, int, int> ToolScreenCases()
         {
             var data = new TheoryData<string, int, int>();
-            foreach (string which in new[] { "Cores", "CoresDetail", "Packages", "ScraperDetail", "LibraryDetail", "LibraryPlan" })
+            foreach (string which in new[] { "Cores", "CoresDetail", "Packages", "ScraperDetail", "ScraperPlan", "LibraryDetail", "LibraryPlan" })
                 foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080) }) data.Add(which, w, h);
             return data;
         }

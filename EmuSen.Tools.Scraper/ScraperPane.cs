@@ -25,13 +25,14 @@ namespace EmuSen.Tools.Scraper
         private readonly DispatcherTimer _timer;
         private readonly TextBlock _overview = new() { Name = "ScraperOverview", TextWrapping = Avalonia.Media.TextWrapping.Wrap };
         private readonly Dictionary<string, string> _outcomes = new(StringComparer.Ordinal);
-        private readonly LunaAction _markAll, _theme, _videos, _overwrite, _stop;
+        private readonly LunaAction _markAll, _videos, _overwrite, _stop;
         private readonly List<AdaptiveSection> _systems = new();
         private List<AdaptiveSection> _collections = new();
         private string? _notice, _endSaid;
         private long _since = -1;
         private bool _following, _listing;
-        private int _listed;
+        private int _listed, _failedInRun;
+        private bool _stopAsked;
 
         public ScraperPane()
         {
@@ -57,18 +58,16 @@ namespace EmuSen.Tools.Scraper
             Applying += Run;
 
             _markAll = new LunaAction("Mark All", () => MarkWhere(_ => true)) { HelpText = "Marks every game shown to be scraped; in Missing Media, every game lacking a kind asked." };
-            _theme = new LunaAction("Theme", _ => { }) { IsCheckable = true, HelpText = "Asks exactly the kinds the active big picture theme draws for each system." };
-            _videos = new LunaAction("Videos", _ => { }) { IsCheckable = true, HelpText = "Asks for videos too; they are off by default." };
-            _overwrite = new LunaAction("Overwrite", _ => { }) { IsCheckable = true, HelpText = "Fetches again and replaces what is there (ES-DE's Overwrite files and data)." };
+            _videos = new LunaAction("Videos", _ => { }) { IsCheckable = true, HelpText = "Also fetches each game's video. Videos are large, so this stays off unless you turn it on." };
+            _overwrite = new LunaAction("Overwrite", _ => { }) { IsCheckable = true, HelpText = "Fetches again and replaces the pictures and details you already have; off fetches only what is missing." };
             _stop = new LunaAction("Stop", StopRun) { HelpText = "Stops the run; the games not reached are not asked." };
             // The options are rows of the plan's question and the desktop toolbar's toggles; a change relists, since what is missing depends on the kinds asked.
-            WatchOption(_theme, relist: true);
             WatchOption(_videos, relist: true);
             WatchOption(_overwrite, relist: false);
-            SetToolActions([_markAll, LunaAction.Separator(), _theme, _videos, _overwrite, LunaAction.Separator(), _stop], bigScreenButtons: []);
+            SetToolActions([_markAll, LunaAction.Separator(), _videos, _overwrite, LunaAction.Separator(), _stop], bigScreenButtons: []);
             StopAction = _stop;
             SetListActions([_markAll]);
-            SetPlanOptions([_theme, _videos, _overwrite]);
+            SetPlanOptions([_videos, _overwrite]);
             MarksChanged += UpdateActions;
             SectionChosen += section => { _endSaid = null; Refresh().Logged("scraper", "Refresh"); };
             FilterChosen += filter => { _endSaid = null; Refresh().Logged("scraper", "Refresh"); };
@@ -80,7 +79,7 @@ namespace EmuSen.Tools.Scraper
             UpdateActions();
         }
 
-        public ScrapeOptions Options => new(_theme.IsChecked, _videos.IsChecked, _overwrite.IsChecked);
+        public ScrapeOptions Options => new(_videos.IsChecked, _overwrite.IsChecked);
 
         // The last refusal or failure the command gave, in its words; null when there was none.
         public string? Notice => _notice;
@@ -99,15 +98,22 @@ namespace EmuSen.Tools.Scraper
             SetNotice(words);
         }
 
-        // The command's answer, or null with its refusal said in the apply bar.
+        // The command's answer, or null with its refusal said in the apply bar and written to the error log.
         private string? Asked(string request)
         {
             try { return Ask(request); }
             catch (ScrapeCommandException e)
             {
-                Say(Refusal(e));
+                Failed(Refusal(e), e, request);
                 return null;
             }
+        }
+
+        // A failure said on the screen and written to the error log, so none is only on a screen since closed (EmuSen_LibraryTools.md §9.8).
+        private void Failed(string words, Exception? fault = null, string? context = null)
+        {
+            ErrorLog.Error("scraper", words, fault, context);
+            Say(words);
         }
 
         // A refusal in the player's words: a held store and a run going are said plainly.
@@ -142,7 +148,8 @@ namespace EmuSen.Tools.Scraper
             if (!_following) Finish(clearMarks: false);
             if (refused is not null || answer is null)
             {
-                Say(refused is null ? null : Refusal(refused));
+                if (refused is not null) Failed(Refusal(refused), refused, request);
+                else Say(null);
                 SetRows([]);
             }
             else
@@ -222,7 +229,7 @@ namespace EmuSen.Tools.Scraper
 
         private void UpdateActions()
         {
-            foreach (LunaAction a in new[] { _markAll, _theme, _videos, _overwrite }) a.IsEnabled = !IsRunning && !_following;
+            foreach (LunaAction a in new[] { _markAll, _videos, _overwrite }) a.IsEnabled = !IsRunning && !_following;
             _stop.IsEnabled = _following;
         }
 
@@ -291,7 +298,14 @@ namespace EmuSen.Tools.Scraper
                 _outcomes[path] = outcome;
                 _since = Math.Max(_since, serial);
             }
+            foreach ((string path, string outcome, string detail) in ScraperPlan.Failures(answer))
+            {
+                ErrorLog.Error("scraper", $"{path}: {outcome}{(detail.Length > 0 ? ": " + detail : "")}");
+                _failedInRun++;
+            }
             (double? fraction, string line, bool running, string? said) = ScraperPlan.Progress(answer);
+            // A run the scraper stopped by itself, not at the player's Stop, failed: no developer credentials, the quota, the server.
+            if (!running && !_stopAsked && ScraperPlan.State(answer) == "stopped") _failedInRun = Math.Max(_failedInRun, 1);
             if (running) SetProgress(fraction, line);
             else End(said);
         }
@@ -302,7 +316,11 @@ namespace EmuSen.Tools.Scraper
             _following = false;
             Finish();
             _endSaid = said;
-            if (said is not null) Say(said);
+            // A run that failed a game, or ended without a word, is said and logged; one that went well is only said.
+            if (_failedInRun > 0) Failed(said ?? $"{_failedInRun} game(s) could not be scraped; the error log says why.");
+            else if (said is not null) Say(said);
+            _failedInRun = 0;
+            _stopAsked = false;
             UpdateActions();
             RunEnded?.Invoke();
             Refresh().Logged("scraper", "Refresh");
@@ -311,6 +329,7 @@ namespace EmuSen.Tools.Scraper
         private void StopRun()
         {
             if (!_following) return;
+            _stopAsked = true;
             Asked(ScrapeCommand.Request(["cancel"]));
             SetProgress(null, "Stopping: the games not reached are not asked…");
         }
@@ -339,7 +358,7 @@ namespace EmuSen.Tools.Scraper
                 var lines = new List<string>
                 {
                     $"{Rows.Count} games chosen, {Rows.Count(r => r.Missing.Count > 0)} of them missing one of the kinds asked.",
-                    $"Kinds: {(o.Theme ? "what the active theme draws" : "the scraper's default")}; videos {(o.Videos ? "on" : "off")}; {(o.Overwrite ? "what is there is replaced" : "what is there is kept")}.",
+                    $"Kinds: every picture a theme can draw; videos {(o.Videos ? "on" : "off")}; {(o.Overwrite ? "what is there is replaced" : "what is there is kept")}.",
                 };
                 if (CommandAvailable() && Status() is { } status) lines.Add(status);
                 return string.Join("\n", lines);

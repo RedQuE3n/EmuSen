@@ -38,8 +38,9 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[(
 
 const USAGE: &str = "Usage: scrape ls|plan|run [--system <s>] [--favorites] [--collection <name>] [--missing <kind>|any] [<path>...] [--kinds <k,...>|theme] [--videos] [--overwrite] [--region <r>] [--language <l>] [--threads <n>] [--resume] | scrape status | scrape wait [scrape<n>]\n  Paths on standard input, one a line (the first tab-separated field), are chosen by hand. See man scrape.";
 
-/// The kinds a run asks when none is named: the scraper's own default.
-pub const DEFAULT_KINDS: [&str; 4] = ["cover", "screenshot", "marquee", "miximage"];
+/// The kinds a run asks when none is named: every picture a theme can draw, so that changing themes never needs a
+/// second scrape (decided 2026-11-02 by the tester); videos and manuals only when asked.
+pub const DEFAULT_KINDS: [&str; 9] = ["cover", "screenshot", "marquee", "titlescreen", "miximage", "backcover", "3dbox", "physicalmedia", "fanart"];
 
 /// `--missing metadata`: a game with no description, ES-DE's "No metadata".
 pub const METADATA: &str = "metadata";

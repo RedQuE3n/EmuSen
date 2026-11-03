@@ -28,6 +28,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         private string Roms => Path.Combine(_root, "Roms");
         private string Media => Path.Combine(_root, "Media");
 
+        // These cases are about Pass 8's kinds turned on over the four the default asked before 2026-11-02, so they keep those four; the default itself is the case below and ScrapeRulesTests'.
+        private static ScrapeChoices Four => new() { TitleScreens = false, BackCovers = false, Boxes3D = false, PhysicalMedia = false, FanArt = false };
+
         private static readonly ScrapeChoices AllOn = new()
         {
             TitleScreens = true, BackCovers = true, Boxes3D = true, PhysicalMedia = true, FanArt = true, Manuals = true, Videos = true,
@@ -50,7 +53,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         private Scraper Worker(ScrapeChoices? choices = null)
         {
             var client = new ScreenScraperClient(new HttpClient(_server), FakeScreenScraper.Developer, null);
-            ScrapeChoices chosen = choices ?? new ScrapeChoices();
+            ScrapeChoices chosen = choices ?? Four;
             var scraper = new Scraper(client, _store, _quota, () => chosen, (_, _) => false,
                 path => CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes, _results.Add, _clock) { IdlePoll = TimeSpan.FromMilliseconds(20) };
             _open.Add(scraper);
@@ -111,16 +114,19 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         [Fact]
-        public void With_the_new_kinds_off_as_they_are_by_default_a_game_costs_what_it_did()
+        // The default since 2026-11-02 is every picture a theme can draw, so that changing themes never needs a second scrape (the tester's decision, EmuSen_LibraryTools.md §9.7); manuals and videos stay off.
+        public void By_default_a_game_asks_every_picture_a_theme_can_draw_and_no_manual_or_video()
         {
             string rom = Rom("F-Zero (USA).sfc", 1);
             _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5) { Media = FakeGame.AllMedia });
 
-            Run(rom);
+            Run(rom, new ScrapeChoices());
 
-            Assert.Equal(5, Requests);
-            Assert.Equal(4, _server.MediaAsked.Count());
-            foreach (string folder in (string[])["backcovers", "3dboxes", "physicalmedia", "fanart", "manuals", "videos", "titlescreens"])
+            Assert.Equal(10, Requests);
+            Assert.Equal(9, _server.MediaAsked.Count());
+            foreach (string folder in (string[])["backcovers", "3dboxes", "physicalmedia", "fanart", "titlescreens"])
+                Assert.True(Directory.Exists(Stored("snes", folder)), folder);
+            foreach (string folder in (string[])["manuals", "videos"])
                 Assert.False(Directory.Exists(Stored("snes", folder)), folder);
             ScrapedRecord kept = _store.Game(RomHash.Of(rom).Md5, 4096)!;
             // The answer's offer is recorded for every kind, so turning one on later knows whether to ask.
@@ -143,7 +149,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _store.Record(old with { Offered = "cover,screenshot,marquee,miximage,titlescreen", KindsKnown = null });
             int before = Requests;
 
-            var fanArt = new ScrapeChoices { FanArt = true };
+            var fanArt = Four with { FanArt = true };
             Assert.Equal(ScrapeOutcome.Found, Run(offers, fanArt).Outcome);
             Assert.Equal(before + 2, Requests);
             ScrapeResult skipped = Run(lacks, fanArt);
@@ -217,7 +223,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             long bytes = _server.BytesSent;
             DateTime written = File.GetLastWriteTimeUtc(Stored("snes", "covers", "F-Zero (USA).png"));
 
-            ScrapeResult refreshed = Run(rom, new ScrapeChoices { Refresh = true });
+            ScrapeResult refreshed = Run(rom, Four with { Refresh = true });
 
             Assert.Equal(ScrapeOutcome.Found, refreshed.Outcome);
             Assert.Equal(4, refreshed.Unchanged);
@@ -251,7 +257,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             int before = Requests;
             _server.MediaRevision["box-2D"] = 1;
 
-            ScrapeResult refreshed = Run(rom, new ScrapeChoices { Refresh = true });
+            ScrapeResult refreshed = Run(rom, Four with { Refresh = true });
 
             Assert.Equal(before + 2, Requests);
             Assert.Contains("media=box-2D(us)", _server.MediaAsked.Last());
@@ -273,7 +279,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             long bytes = _server.BytesSent;
             string cover = Stored("snes", "covers", "F-Zero (USA).png");
 
-            ScrapeResult refreshed = Run(rom, new ScrapeChoices { Refresh = true });
+            ScrapeResult refreshed = Run(rom, Four with { Refresh = true });
 
             Assert.Equal(before + 5, Requests);
             Assert.All(_server.MediaAsked.TakeLast(4), u => Assert.Matches("[&?]sha1=[0-9a-f]{40}", u));
@@ -290,7 +296,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Run(rom);
             _server.Games.Clear();
 
-            ScrapeResult refreshed = Run(rom, new ScrapeChoices { Refresh = true });
+            ScrapeResult refreshed = Run(rom, Four with { Refresh = true });
 
             Assert.Equal(ScrapeOutcome.Found, refreshed.Outcome);
             Assert.Equal(ScrapeState.Found, _store.Game(RomHash.Of(rom).Md5, 4096)!.State);
@@ -326,13 +332,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Games.Add(new FakeGame(900, "Super Mario World") { Media = FakeGame.AllMedia });
             Run(rom, chosen: Search("Super Mario").Games.Single());
 
-            Run(rom, new ScrapeChoices { BackCovers = true });
+            Run(rom, Four with { BackCovers = true });
             string asked = _server.JeuInfos.Single();
             Assert.Equal("900", FakeScreenScraper.Param(asked, "gameid"));
             Assert.True(File.Exists(Stored("snes", "backcovers", "SMW Hack (USA).png")));
 
             _server.Games.Clear();
-            ScrapeResult later = Run(rom, new ScrapeChoices { Refresh = true });
+            ScrapeResult later = Run(rom, Four with { Refresh = true });
             Assert.Equal(ScrapeOutcome.Found, later.Outcome);
             Assert.Equal("name", _store.Game(RomHash.Of(rom).Md5, 4096)!.MatchedBy);
         }

@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             if (ScrapeNative && _appSettings.Scraping) OpenMediaStore();
-            var window = new ScraperWindow();
+            var window = new ScraperWindow(() => Wrap(() => Runtime.Systems()));
             window.Pane.RunEnded += PostCoverRefresh;
             _scraperWindow = window;
             window.Closed += (_, _) => { if (ReferenceEquals(_scraperWindow, window)) _scraperWindow = null; };

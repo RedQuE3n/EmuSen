@@ -14,6 +14,8 @@ namespace EmuSen.Tools.Cores
         // `core_approve` and `core_revoke` of a library's SHA-256.
         public required Action<string> Approve { get; init; }
         public required Action<string> Revoke { get; init; }
+        // `firmware_status` of a system id: its firmware each present, missing or not needed; null where the host has none (EmuSen_Cores.md §3.11).
+        public Func<string, string>? Firmware { get; init; }
         // `rescan`: the cores directories listed again, after a job of Cores' changed them; null where the host has none.
         public Action? Rescan { get; init; }
     }

@@ -545,6 +545,23 @@ Seeded on 2026-11-02, each caught: no focus given back after a mark; no sentence
 stopped by itself not logged. The Scraper's plan state was re-recorded for the rows' names and sentences after its
 picture was checked.
 
+### 9.9 The consoles by their names, as Cores names them (2026-11-03)
+
+The strip and the System column showed the library's system ids (`gb`, `gbc`, `genesis`, `ps2`), where Cores shows the
+systems table's `display_name` (`EmuSen_Cores.md` §3.8) and the Scraper's mockup shows `Super Nintendo`. The pane is
+now handed the runtime's `systems` listing by its host (`ScraperPane(Func<string>? systems)`, Mistress passing
+`CrystalRuntime.Systems`), the tool keeping no table of its own, and names a system by the listing's `display_name`,
+found by its `esde_system` or its id; a system the listing does not name keeps its id, and so does every system of a
+host that hands nothing in. The strip's sections are ordered by that name; each still asks `scrape ls --system <id>`,
+so the module's choice is unchanged. The column is *Console*, the pane's line `Console: Super Nintendo`, and the help
+bar's section word *Console*, as the mockup's. The strip keeps its order by name rather than Cores' order by maker and
+release, which lives in Cores alone; one order for both waits until the frame owns it.
+
+`ScraperWindowTests.The_strip_the_column_and_the_pane_name_the_consoles_as_Cores_does` opens the Scraper from
+Mistress over its Rust runtime and holds the strip, the column's cells, the pane and the section's request. The
+Scraper's eight audited states were re-recorded on 2026-11-03 for this one cause (the strip's, the pane's and the help
+bar's words), after the ScraperDetail picture was held against the mockup at 1280 × 800 and 1920 × 1080.
+
 ## 10. T6 as built: the Library Manager window (2026-11-01)
 
 ### 10.1 The tool library and its host

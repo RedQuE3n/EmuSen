@@ -264,6 +264,21 @@ pub unsafe extern "C" fn emusen_crystal_firmware_overview(rt: *mut emusen_crysta
 }
 
 /// # Safety
+/// `rt` a live runtime; `system` valid for its length; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_firmware_status(rt: *mut emusen_crystal_runtime, system: *const u8, system_len: usize, out: *mut u8, len: usize) -> i64 {
+    let answer = || -> Result<String, i32> {
+        let r = unsafe { runtime(rt) }?;
+        let system = unsafe { text(system, system_len) }?.filter(|s| !s.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, "the system must be given"))?;
+        emusen_crystal::firmware::status_json(r, system).ok_or_else(|| fail(svc::ABSENT, format!("no system is named {system}")))
+    };
+    match answer() {
+        Ok(json) => unsafe { put(json.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
 /// `rt` a live runtime; `args` valid for `args_len` bytes; `out` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_cards_op(rt: *mut emusen_crystal_runtime, op: u32, args: *const u8, args_len: usize, out: *mut u8, len: usize) -> i64 {

@@ -64,6 +64,7 @@ namespace EmuSen.Crystal.Managed
             ["emusen_crystal_firmware_needed"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, long>)&emusen_crystal_firmware_needed,
             ["emusen_crystal_firmware_install"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, int>)&emusen_crystal_firmware_install,
             ["emusen_crystal_firmware_overview"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, long>)&emusen_crystal_firmware_overview,
+            ["emusen_crystal_firmware_status"] = (nint)(delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long>)&emusen_crystal_firmware_status,
             ["emusen_crystal_save_media"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long>)&emusen_crystal_save_media,
             ["emusen_crystal_cards_op"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long>)&emusen_crystal_cards_op,
             ["emusen_crystal_subscribe"] = (nint)(delegate* unmanaged[Cdecl]<nint, uint, uint, nint>)&emusen_crystal_subscribe,

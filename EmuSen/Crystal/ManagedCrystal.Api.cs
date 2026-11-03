@@ -351,6 +351,11 @@ namespace EmuSen.Crystal.Managed
             catch (Exception e) { return Fail(e); }
         }
 
+        // 1.9's call, which the C# implementation of 1.4 does not have - see EmuSen_Cores.md §3.11.
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static long emusen_crystal_firmware_status(nint rt, byte* system, nuint system_len, byte* out_, nuint len) =>
+            Fail(new CrystalException(SessionAbi.NotSupported, $"firmware_status is not in 1.{CrystalNumbers.Minor}"));
+
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static long emusen_crystal_save_media(nint rt, uint session, byte* out_, nuint len)
         {

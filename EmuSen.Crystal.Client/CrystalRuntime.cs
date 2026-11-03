@@ -193,6 +193,9 @@ namespace EmuSen.Crystal.Client
 
         public string FirmwareOverview() => Text((o, n) => Contract.Crystal.FirmwareOverview(Handle, o, n));
 
+        // A system's firmware as the player has it, each file present, missing or not needed (frontend API 1.9).
+        public string FirmwareStatus(string system) => WithText(system, (s, sl) => Text((o, n) => Contract.Crystal.FirmwareStatus(Handle, (byte*)s, sl, o, n)));
+
         public string CardsOp(uint op, string argsJson) =>
             WithText(argsJson, (a, al) => op >= CrystalAbi.CardsCopy
                 ? Once((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n))

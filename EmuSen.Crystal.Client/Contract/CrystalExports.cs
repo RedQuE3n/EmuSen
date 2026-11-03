@@ -60,6 +60,7 @@ namespace EmuSen.Crystal.Client.Contract
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, byte*, nuint, long> firmware_needed;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, int> firmware_install;
         public delegate* unmanaged[Cdecl]<nint, byte*, nuint, long> firmware_overview;
+        public delegate* unmanaged[Cdecl]<nint, byte*, nuint, byte*, nuint, long> firmware_status;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, long> save_media;
         public delegate* unmanaged[Cdecl]<nint, uint, byte*, nuint, byte*, nuint, long> cards_op;
         public delegate* unmanaged[Cdecl]<nint, uint, uint, nint> subscribe;

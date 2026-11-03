@@ -141,7 +141,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private static readonly FieldInfo Embedded = typeof(DeveloperCredentials).GetField("EmbeddedSource", BindingFlags.Static | BindingFlags.NonPublic)!;
 
-        // A home laid out as the handheld's: the player's account in home/etc/EmuSen, EmuSen's developer file outside the home in the account's config directory, fake files and the fake server - see EmuSen_LibraryTools.md §9.8.
+        // A home laid out as the handheld's: the player's account in home/etc/EmuSen, EmuSen's developer file outside the home in the account's config directory, fake files and the fake server - see EmuSen_LibraryTools.md §9.9.
         private MainWindow HandheldHome(bool developerFile, string rom)
         {
             string home = Path.Combine(_root, "home"), userConfig = Path.Combine(_root, "dot-config", "EmuSen");
@@ -207,7 +207,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             finally { main.Close(); }
         }, default);
 
-        // A scrape that cannot run is said on the screen and written to the error log, never silent (EmuSen_LibraryTools.md §9.8).
+        // A scrape that cannot run is said on the screen and written to the error log, never silent (EmuSen_LibraryTools.md §9.9).
         [Fact]
         public Task A_scrape_that_cannot_run_is_said_on_the_screen_and_in_the_error_log() => Session.Dispatch(() =>
         {
@@ -255,6 +255,36 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(kinds, choices.Kinds().Count());
             Assert.True(s.ScrapeKindsUpgraded);
         }
+
+        // --- the consoles' names ---
+
+        // Opened from Mistress over its runtime, the strip, the Console column and the pane name each console as the systems table's display_name does, as Cores does; a section still asks by the system (EmuSen_LibraryTools.md §9.9).
+        [Fact]
+        public Task The_strip_the_column_and_the_pane_name_the_consoles_as_Cores_does() => Session.Dispatch(() =>
+        {
+            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryGrid, LogDirectory = Path.Combine(_root, "Logs") }.Save();
+            var main = new MainWindow { Width = 1280, Height = 800 };
+            main.Show();
+            ScriptedScrape script = ScriptedScrape.Install(main);
+            typeof(MainWindow).GetMethod("ShowScraper", Hidden)!.Invoke(main, null);
+            FieldInfo open = typeof(MainWindow).GetField("_scraperWindow", Hidden)!;
+            WaitFor(() => open.GetValue(main) is ScraperWindow { Pane.Rows.Count: 3 }, "the Scraper's three games listed");
+            ScraperPane pane = ((ScraperWindow)open.GetValue(main)!).Pane;
+            Assert.Equal(AdaptiveForm.Desktop, pane.Form);
+            Assert.Equal(new[] { "All", "NES", "PlayStation", "Super Nintendo" }, pane.Sections.Where(s => s.Group == "Systems").Select(s => s.Label));
+            pane.Table.Select(pane.Rows.Single(r => r.System == "snes"));
+            Dispatcher.UIThread.RunJobs();
+            string[] shown = pane.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
+            Assert.Contains("Console: Super Nintendo", shown);
+            Assert.Contains("PlayStation", shown);
+            Assert.Contains("Console", shown);
+            Assert.DoesNotContain("snes", shown);
+            Assert.DoesNotContain("psx", shown);
+            Assert.True(pane.SelectSection(pane.Sections.Single(s => s.Label == "Super Nintendo").Key));
+            pane.Refresh().GetAwaiter().GetResult();
+            Assert.Equal(new[] { "ls", "--system", "snes" }, Args(script.Asked.Last(a => Args(a)[0] == "ls")));
+            main.Close();
+        }, default);
 
         // --- the choice is the module's: each section is its words ---
 

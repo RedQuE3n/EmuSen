@@ -5,7 +5,7 @@ namespace EmuSen.Mistress.Views
     // Mistress's thin host for the Scraper tool; while it is open a run's progress is shown in it, not in the status sheet - see EmuSen_LibraryTools.md §2 and §9.
     public sealed class ScraperWindow : ToolPaneWindow
     {
-        public ScraperWindow() : this(new ScraperPane()) { }
+        public ScraperWindow(Func<string>? systems = null) : this(new ScraperPane(systems)) { }
 
         private ScraperWindow(ScraperPane pane) : base("Scraper", pane)
         {

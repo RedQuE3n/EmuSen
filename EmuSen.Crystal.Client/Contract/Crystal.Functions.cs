@@ -116,6 +116,7 @@ namespace EmuSen.Crystal.Client.Contract
         public static int FirmwareInstall(nint rt, byte* request, nuint request_len, byte* source, nuint source_len) => Table->firmware_install(rt, request, request_len, source, source_len);
 
         public static long FirmwareOverview(nint rt, byte* out_, nuint len) => Table->firmware_overview(rt, out_, len);
+        public static long FirmwareStatus(nint rt, byte* system, nuint system_len, byte* out_, nuint len) => Table->firmware_status(rt, system, system_len, out_, len);
 
         public static long SaveMedia(nint rt, uint session, byte* out_, nuint len) => Table->save_media(rt, session, out_, len);
 

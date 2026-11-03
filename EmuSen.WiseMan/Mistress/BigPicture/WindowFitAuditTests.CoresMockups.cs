@@ -70,6 +70,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 SetSetting = (console, key, value) => Settings[(console, key)] = value,
                 Approve = _ => { },
                 Revoke = _ => { },
+                // The list's mockup says "✓ You have one." under Sapphire's need: the player's PlayStation 2 BIOS is found.
+                Firmware = system => JsonSerializer.Serialize(new { system, firmware = system == "ps2" ? new[] { new { label = "PlayStation 2 BIOS (Americas)", file = "ps2-0230a-20080220.bin", required = true, status = "present" } } : [] }),
             };
         }
 

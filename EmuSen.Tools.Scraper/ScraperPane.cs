@@ -33,20 +33,24 @@ namespace EmuSen.Tools.Scraper
         private bool _following, _listing;
         private int _listed, _failedInRun;
         private bool _stopAsked;
+        private readonly Func<string>? _systemsListing;
+        private Dictionary<string, string>? _names;
 
-        public ScraperPane()
+        // `systems`: the runtime's listing, whose display names the strip, the Console column and the pane show; null shows the system ids (EmuSen_LibraryTools.md §9.9).
+        public ScraperPane(Func<string>? systems = null)
         {
+            _systemsListing = systems;
             Title = "Scraper";
             HasSearch = true;
             // The detail, a game's media as pictures, stands beside the list (EmuSen_Interface.md §16.1).
             DetailPlacement = AdaptiveDetailPlacement.Beside;
             ContentShare = 0.6;
             Header = new AdaptiveHeader("SCRAPER");
-            SectionWord = "System";
+            SectionWord = "Console";
             SearchHint = "Search games";
             RowKey = r => r.Path;
             Column(new LunaColumn<ScrapeRow>("Game", r => r.Title) { Sort = (a, b) => string.Compare(a.Title, b.Title, StringComparison.CurrentCultureIgnoreCase) }, bigScreen: true)
-                .Column(new LunaColumn<ScrapeRow>("System", r => r.System) { Width = "Auto" })
+                .Column(new LunaColumn<ScrapeRow>("Console", r => NameOf(r.System)) { Width = "Auto" })
                 .Column(new LunaColumn<ScrapeRow>("Media", ScraperPlan.Media) { Width = "Auto", Sort = (a, b) => a.Have.CompareTo(b.Have) }, bigScreen: true)
                 .Column(new LunaColumn<ScrapeRow>("Missing", ScraperPlan.Missing))
                 .Column(new LunaColumn<ScrapeRow>("Last Run", r => OutcomeOf(r) ?? ""));
@@ -109,7 +113,7 @@ namespace EmuSen.Tools.Scraper
             }
         }
 
-        // A failure said on the screen and written to the error log, so none is only on a screen since closed (EmuSen_LibraryTools.md §9.8).
+        // A failure said on the screen and written to the error log, so none is only on a screen since closed (EmuSen_LibraryTools.md §9.9).
         private void Failed(string words, Exception? fault = null, string? context = null)
         {
             ErrorLog.Error("scraper", words, fault, context);
@@ -170,11 +174,30 @@ namespace EmuSen.Tools.Scraper
 
         private void LearnSystems(IEnumerable<ScrapeRow> rows)
         {
-            var systems = rows.Select(r => r.System).Distinct().Order(StringComparer.OrdinalIgnoreCase).Select(s => new AdaptiveSection("system:" + s, s, "Systems")).ToList();
-            if (systems.Select(s => s.Key).SequenceEqual(_systems.Select(s => s.Key))) return;
+            var systems = rows.Select(r => r.System).Distinct().Select(s => new AdaptiveSection("system:" + s, NameOf(s), "Systems")).OrderBy(s => s.Label, StringComparer.CurrentCultureIgnoreCase).ToList();
+            if (systems.Select(s => (s.Key, s.Label)).SequenceEqual(_systems.Select(s => (s.Key, s.Label)))) return;
             _systems.Clear();
             _systems.AddRange(systems);
             FillSections();
+        }
+
+        // A system's name as the systems table's display_name gives it, by its ES-DE name or its id; the system itself where the table has none.
+        private string NameOf(string system)
+        {
+            if (_names is null)
+            {
+                _names = new(StringComparer.Ordinal);
+                try
+                {
+                    using JsonDocument listing = JsonDocument.Parse(_systemsListing?.Invoke() ?? "[]");
+                    foreach (JsonElement s in listing.RootElement.EnumerateArray())
+                        if (ScrapeRow.Text(s, "display_name") is { Length: > 0 } shown)
+                            foreach (string? key in new[] { ScrapeRow.Text(s, "esde_system"), ScrapeRow.Text(s, "id") })
+                                if (key is { Length: > 0 }) _names.TryAdd(key, shown);
+                }
+                catch (Exception e) when (e is JsonException or InvalidOperationException) { Say("EmuSen's runtime did not list its systems: " + e.Message); }
+            }
+            return _names.GetValueOrDefault(system, system);
         }
 
         private void LearnCollections()
@@ -339,7 +362,7 @@ namespace EmuSen.Tools.Scraper
             var panel = new StackPanel { Spacing = 6 };
             panel.Children.Add(Line(row.Title, bold: true));
             panel.Children.Add(Line(row.Path));
-            panel.Children.Add(Line($"System: {row.System}"));
+            panel.Children.Add(Line($"Console: {NameOf(row.System)}"));
             if (row.Package is { Length: > 0 } package) panel.Children.Add(Line($"Package: {package}"));
             foreach ((string kind, string? source) in row.Media) panel.Children.Add(Line($"{kind}: {ScraperPlan.Source(source)}"));
             if (OutcomeOf(row) is { } outcome) panel.Children.Add(Line($"Last run: {outcome}"));

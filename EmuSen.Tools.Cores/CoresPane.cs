@@ -37,6 +37,7 @@ namespace EmuSen.Tools.Cores
         private readonly LunaAction _install, _update, _remove, _approve, _default, _options, _verify, _check;
         private Dictionary<string, string> _consoleOf = new();
         private Dictionary<string, string> _nameOf = new(), _makerOf = new(), _firmwareOf = new();
+        private readonly Dictionary<string, string?> _haveFirmware = new();
         private List<string> _consoleOrder = new();
         private bool _fetchedOnOpen;
         private string? _catalogueFailure;
@@ -230,6 +231,7 @@ namespace EmuSen.Tools.Cores
             _nameOf = new();
             _makerOf = new();
             _firmwareOf = new();
+            _haveFirmware.Clear();
             _consoleOrder = new();
             _enginesOf = new();
             if (_runtime is null) return;
@@ -695,6 +697,7 @@ namespace EmuSen.Tools.Cores
             string size = row.Size is long n and > 0 ? $", {CoresWords.Size(n)}" : "";
             string fetched = info is { } d1 && Text(d1, "fetched") is { } when ? $", downloaded {when}" : "";
             panel.Children.Add(Line($"{by}{licence}.{build}{size}{fetched}{(build.Length + size.Length + fetched.Length > 0 ? "." : "")}"));
+            int before = panel.Children.Count;
             foreach (JsonElement f in Firmware(row))
             {
                 bool optional = f.TryGetProperty("optional", out JsonElement o) && o.ValueKind == JsonValueKind.True;
@@ -703,6 +706,8 @@ namespace EmuSen.Tools.Cores
             // A core whose need the runtime lists, said in the console's words from the systems table (EmuSen_Interface.md §15.4 item 3).
             if (Firmware(row).Count == 0 && row is { Firmware: { } need, Consoles.Count: > 0 } && _firmwareOf.TryGetValue(row.Consoles[0], out string? kind))
                 panel.Children.Add(Line(need == "required" ? $"Needs {Article(kind)} of your own, which EmuSen never downloads." : $"Can use {Article(kind)} of your own, which EmuSen never downloads; it runs without one."));
+            if (panel.Children.Count > before && HaveFirmware(row) is { } have)
+                panel.Children.Add(Line(have == "present" ? "✓ You have one." : "✗ Not found: add it in Settings → Firmware", "CoresFirmware", have switch { "present" => "LunaSuccess", "missing" => "LunaError", _ => "LunaMuted" }));
             if (row.AwaitsApproval) panel.Children.Add(Line("⚠ Waiting for your approval. Nothing downloaded runs until you approve it.", tone: "LunaAttention"));
             else if (row.Trust == "needs_refresh") panel.Children.Add(Line("⚠ EmuSen's copies beside it are older than this build: Verify refreshes them.", tone: "LunaAttention"));
             else if (row.State is "unsupported" or "not_read") panel.Children.Add(Line($"Not supported{(row.Reason is { } why ? $": {why}" : "")}.", tone: "LunaMuted"));
@@ -757,6 +762,24 @@ namespace EmuSen.Tools.Cores
             string other = Rows.FirstOrDefault(r => r.Engine == engine)?.Name ?? engine;
             string how = Form == AdaptiveForm.BigScreen ? "A makes" : "Make Default makes";
             return $"Not the {NameOf(console)}'s engine{(row.Development ? " while it is under development" : "")}: {other} is. {how} {row.Name} the engine instead.";
+        }
+
+        // The firmware of the row's first console as the runtime finds it: present where any file is, else missing or not_needed; null where it has none or the runtime cannot say (EmuSen_Cores.md §3.11).
+        private string? HaveFirmware(CoreRow row)
+        {
+            if (_runtime?.Firmware is not { } status || row.Consoles.Count == 0) return null;
+            string? system = row.Systems.FirstOrDefault(s => _consoleOf.GetValueOrDefault(s) == row.Consoles[0]) ?? row.Systems.FirstOrDefault();
+            if (system is null) return null;
+            if (_haveFirmware.TryGetValue(system, out string? known)) return known;
+            string? have = null;
+            try
+            {
+                using JsonDocument answer = JsonDocument.Parse(status(system));
+                List<string?> found = answer.RootElement.GetProperty("firmware").EnumerateArray().Select(f => Text(f, "status")).ToList();
+                have = found.Count == 0 ? null : found.Contains("present") ? "present" : found.Contains("missing") ? "missing" : "not_needed";
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException) { Logged($"EmuSen's runtime did not say the {NameOf(row.Consoles[0])}'s firmware: {e.Message}", e); }
+            return _haveFirmware[system] = have;
         }
 
         // "a PlayStation 2 BIOS", "an Atari BIOS": the firmware's description with its article.

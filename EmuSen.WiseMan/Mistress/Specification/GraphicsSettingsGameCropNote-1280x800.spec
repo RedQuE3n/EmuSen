@@ -41,8 +41,8 @@ tree
           26 TextBlock at=391,264,123,36 box=123,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard=PLAYSTATION layout=122.67,36 limit=379,258,147,48 owner=25 paints=#8D8D91FF role=text size=30 text=PLAYSTATION
         27 TabItem at=526,258,165,48 by=clip drawn focus heard="PLAYSTATION 2" limit=274,210,733,392 paints=#8D8D91FF role=tabitem sideways text="PlayStation 2"
           28 TextBlock at=538,264,141,36 box=141,36 by=clip caps=20.9985 drawn face="Barlow Condensed" heard="PLAYSTATION 2" layout=140.19,36 limit=526,258,165,48 owner=27 paints=#8D8D91FF role=text size=30 text="PLAYSTATION 2"
-        29 ScrollViewer at=286,308,709,294 by=clip fades=b limit=274,308,733,294 overflow=297 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=286,308,709,294
-          30 StackPanel at=286,316,709,583 by=scroll in=29 limit=286,308,709,294 paints=#0E0E10FF,#707070FF,#8D8D91FF,#D4D4D4FF role=none seen=286,316,709,286
+        29 ScrollViewer at=286,308,709,294 by=clip fades=b limit=274,308,733,294 overflow=462 paints=#707070FF,#D4D4D4FF,#FFFFFFFF role=scrollviewer viewport=286,308,709,294
+          30 StackPanel at=286,316,709,748 by=scroll in=29 limit=286,308,709,294 paints=#0E0E10FF,#707070FF,#8D8D91FF,#D4D4D4FF role=none seen=286,316,709,286
             31 FieldRow at=286,316,709,129 by=scroll heard="Shader and shape" in=29 limit=286,308,709,294 paints=#D4D4D4FF role=group
               32 TextBlock at=286,316,709,29 box=709,29 by=clip caps=16.7988 drawn face="Barlow Condensed" heard="Shader and shape" in=29 layout=141.36,28.8 limit=286,316,709,129 name=PART_Label paints=#D4D4D4FF part role=text size=24 text="Shader and shape"
               33 HintText at=286,349,709,48 box=709,48 by=clip caps=13.999 drawn face="Barlow Condensed" heard="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square." in=29 layout=689.14,48 limit=286,316,709,129 paints=#8D8D91FF part role=text size=20 text="The shader drawn over the picture, chosen in the Shaders window; and its shape, the console's screen's or each pixel square."
@@ -64,9 +64,9 @@ tree
 focus 35
 edge 4 up 13
 edge 4 down same
-edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0/0
+edge 4 left path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0/0
 edge 4 right 6
-edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0/0
+edge 6 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0/0
 edge 6 down same
 edge 6 left 4
 edge 6 right same
@@ -79,9 +79,11 @@ edge 35 right 37
 edge 37 up 13
 edge 37 down 45
 edge 45 up 35
-edge 45 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0/0
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0/0 up 45
-edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0/0 down 4
+edge 45 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 up 45
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0 down path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0/0 up path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/3/0/2/0
+edge path:0/3/0/0/2/3/0/0/1/0/0/0/2/0/0/1/1/0/0/0/0/4/0/2/0/0 down 4
 press pageup focus="Button 'Shaders...'" tab=GB title="Graphics Settings" top=GraphicsSettingsWindow
 press pagedown focus="Button 'Shaders...'" tab=SNES title="Graphics Settings" top=GraphicsSettingsWindow
 press first focus="Button 'Shaders...'" tab=SNES title="Graphics Settings" top=GraphicsSettingsWindow

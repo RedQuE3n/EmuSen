@@ -1,3 +1,5 @@
+using System.Linq;
+using System.Collections.Generic;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
@@ -12,6 +14,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Cores
 {
@@ -106,25 +109,20 @@ namespace EmuSen.WiseMan.Cores
         }
 
         [Fact]
-        public Task The_playstations_tab_shows_the_enhancements_under_their_heading() => Session.Dispatch(() =>
+        public Task The_playstations_page_shows_the_enhancements_together_in_order() => Session.Dispatch(() =>
         {
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), _ => { }, "PlayStation");
-            window.Show();
-            window.CaptureRenderedFrame();
-            var panel = window.GetVisualDescendants().OfType<StackPanel>().First(p => p.Children.OfType<SectionHeader>().Any(h => h.Name == "PlayStation.Group.Enhancements"));
-            var children = panel.Children.ToList();
-            int heading = children.FindIndex(c => c.Name == "PlayStation.Group.Enhancements");
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:PlayStation");
+            List<string> keys = SettingsDesk.Keys(window).ToList();
+            int first = keys.IndexOf(Enhancements[0].Key);
+            Assert.True(first >= 0, "no enhancement rows on the PlayStation's page");
             for (int i = 0; i < Enhancements.Length; i++)
             {
-                var row = Assert.IsType<FieldRow>(children[heading + 1 + i]);
+                Assert.Equal(Enhancements[i].Key, keys[first + i]);
+                EmuSen.LunaP.Controls.PageRow row = SettingsDesk.Row(window, Enhancements[i].Key);
                 Assert.Equal(Enhancements[i].Label, row.Label);
-                Assert.Contains("Vulkan", row.Hint);
-                string name = "PlayStation." + Enhancements[i].Key;
-                Assert.True(Enhancements[i].Kind == "switch"
-                    ? row.GetVisualDescendants().OfType<LunaSwitch>().Any(t => t.Name == name)
-                    : row.GetVisualDescendants().OfType<Control>().Any(c => c.Name == name), name);
+                Assert.Contains("Vulkan", row.Sentence);
+                Assert.Equal(Enhancements[i].Kind == "switch" ? new[] { SettingsScreen.On, SettingsScreen.Off } : row.Choices, row.Choices);
             }
-            Assert.Single(children.OfType<SectionHeader>());
             window.Close();
         }, default);
 

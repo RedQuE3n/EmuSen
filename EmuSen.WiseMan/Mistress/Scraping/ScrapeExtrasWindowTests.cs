@@ -17,6 +17,7 @@ using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
@@ -142,19 +143,16 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
-        public Task The_scraping_tab_offers_each_new_kind_off_and_refresh_and_saves_them() => OnUi(() =>
+        public Task Settings_scraping_offers_each_new_kind_off_and_refresh_and_saves_them() => OnUi(() =>
         {
             MainWindow window = Open();
-            var prefs = new PreferencesWindow(SettingsOf(window), window);
-            Windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            SettingsDesk.At(window, SettingsScreen.Library, "scraping");
             Pump(100);
 
-            string[] kinds = ["ScrapeBackCoversSwitch", "Scrape3DBoxesSwitch", "ScrapePhysicalMediaSwitch", "ScrapeFanArtSwitch", "ScrapeManualsSwitch", "ScrapeVideosSwitch", "ScrapeGameNamesSwitch", "ScrapeRefreshSwitch"];
-            foreach (string name in kinds) Assert.False(Named<LunaSwitch>(prefs, name).IsChecked, name);
+            string[] kinds = ["backs", "boxes3d", "physical", "fanart", "manuals", "videos", "gamenames", "refresh"];
+            foreach (string key in kinds) Assert.Equal(SettingsScreen.Off, SettingsDesk.Value(window, key));
 
-            foreach (string name in kinds) Named<LunaSwitch>(prefs, name).IsChecked = true;
+            foreach (string key in kinds) SettingsDesk.Pick(window, key, SettingsScreen.On);
             Pump(100);
             AppSettings saved = AppSettings.Load();
             Assert.True(saved.ScrapeBackCovers && saved.Scrape3DBoxes && saved.ScrapePhysicalMedia && saved.ScrapeFanArt && saved.ScrapeManuals && saved.ScrapeVideos && saved.ScrapeGameNames && saved.ScrapeRefresh);
@@ -162,16 +160,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         });
 
         [Fact]
-        public Task The_tab_s_Refresh_reaches_Scrape_This_Game() => OnUi(() =>
+        public Task Settings_Refresh_reaches_Scrape_This_Game() => OnUi(() =>
         {
             string liked = Game("Liked (USA)", 1);
             Server.Games.Add(new FakeGame(1, "Liked", Md5(liked)));
             MainWindow window = Open();
             Pump(200);
-            var prefs = new PreferencesWindow(SettingsOf(window), window);
-            Windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            SettingsDesk.At(window, SettingsScreen.Library, "scraping");
             Pump(100);
             Scrape(window, ScrapeScope.ThisGame(liked));
             RunEnds(window);
@@ -182,7 +177,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Scrape(window, ScrapeScope.ThisGame(liked));
             RunEnds(window);
             Assert.Equal(before, Server.JeuInfos.Count());
-            Named<LunaSwitch>(prefs, "ScrapeRefreshSwitch").IsChecked = true;
+            SettingsDesk.Pick(window, "refresh", SettingsScreen.On);
             Scrape(window, ScrapeScope.ThisGame(liked));
             RunEnds(window);
             Assert.Equal(before + 1, Server.JeuInfos.Count());

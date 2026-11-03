@@ -19,6 +19,7 @@ using EmuSen.Mistress.Views;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -50,42 +51,33 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static ShaderPanel Choose(ShaderSettingsWindow window, string console, string stored)
+        // Settings ▸ Display ▸ Shaders ▸ the console, and A on the shader's row, as the player uses one.
+        private static void Choose(MainWindow window, string console, string stored)
         {
-            ShaderPanel panel = window.PanelFor(console);
-            panel.List.SelectedIndex = panel.List.Models.ToList().FindIndex(e => e.Stored == stored && !e.Recent);
+            SettingsDesk.ShaderPage(window, console);
+            SettingsDesk.Choose(window, "use:" + stored);
             Dispatcher.UIThread.RunJobs();
-            panel.Use();
-            Dispatcher.UIThread.RunJobs();
-            return panel;
         }
 
-        // The row that replaced the dropdown: every tab names its console's shader and opens the Shaders window on that console - see EmuSen_Settings_Reference.md §4.48.4.
+        // Display ▸ Shaders names each console's shader on its row and opens its page, where a shader is used - see EmuSen_BigPicture.md §52.9.
         [Fact]
-        public Task Every_console_s_tab_names_its_shader_and_opens_the_shaders_window_on_that_console() => Session.Dispatch(() =>
+        public Task Every_console_s_row_names_its_shader_and_opens_its_page() => Session.Dispatch(() =>
         {
             var config = new GraphicsConfig();
-            config.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, "slang:crt/crt-royale.slangp");
-            string? told = null;
-            var window = new GraphicsSettingsWindow(config, console => told = console, null);
-            window.Show();
+            config.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, "slang:crt/crt-royale.slangp");
+            config.Save();
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Display, "shaders");
 
-            foreach (string console in CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console))
-            {
-                Assert.Single(window.GetLogicalDescendants().OfType<Button>().Where(b => b.Name == $"{console}.Shaders").Distinct());
-                string expected = console == "SNES" ? "crt-royale (RetroArch, crt)" : ScreenFilters.None;
-                Assert.Equal(expected, window.GetLogicalDescendants().OfType<TextBlock>().Distinct().Single(t => t.Name == $"{console}.ShaderInUse").Text);
-            }
+            foreach (string console in EmuSen.Mistress.Library.RuntimeCatalog.Systems.Select(s => s.Console).Distinct())
+                Assert.Equal(console == "SNES" ? "crt-royale (RetroArch, crt)" : ScreenFilters.None, SettingsDesk.Value(window, "shader:" + console));
 
-            window.GetLogicalDescendants().OfType<Button>().Distinct().Single(b => b.Name == "NES.Shaders").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            ShaderSettingsWindow shaders = Assert.IsType<ShaderSettingsWindow>(window.ShaderWindow);
-            Assert.Equal("NES", (shaders.GetLogicalDescendants().OfType<Tabs>().Single().SelectedItem as TabItem)?.Header);
-            Choose(shaders, "NES", "Scanlines");
-            Assert.Equal("NES", told);
-            Assert.Equal("Scanlines", GraphicsConfig.Load().Value("NES", GraphicsSettingsWindow.ScreenFilterKey));
-            shaders.Close();
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal("Scanlines", window.GetLogicalDescendants().OfType<TextBlock>().Distinct().Single(t => t.Name == "NES.ShaderInUse").Text);
+            SettingsDesk.Choose(window, "shader:NES");
+            Assert.Contains("use:Scanlines", SettingsDesk.Keys(window));
+            SettingsDesk.Choose(window, "use:Scanlines");
+            Assert.Equal("Scanlines", GraphicsConfig.Load().Value("NES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter));
+            Assert.Equal("● In use", SettingsDesk.Value(window, "use:Scanlines"));
+            SettingsDesk.Back(window);
+            Assert.Equal("Scanlines", SettingsDesk.Value(window, "shader:NES"));
             window.Close();
         }, default);
 
@@ -93,8 +85,8 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_game_starts_with_its_console_s_filter_and_a_change_reaches_it_at_once() => Session.Dispatch(() =>
         {
             var config = new GraphicsConfig();
-            config.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, "Simple CRT");
-            config.SetValue("NES", GraphicsSettingsWindow.ScreenFilterKey, "Scanlines");
+            config.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, "Simple CRT");
+            config.SetValue("NES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, "Scanlines");
             config.Save();
 
             var window = new MainWindow();
@@ -104,14 +96,12 @@ namespace EmuSen.WiseMan.Mistress
             GameFrameControl frame = window.GetControl<GameFrameControl>("GameFrame");
             Assert.Equal(ShaderEffect.Crt, frame.ActiveEffect);
 
-            typeof(MainWindow).GetMethod("ShowShaderSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
-            ShaderSettingsWindow settings = window.OwnedWindows.OfType<ShaderSettingsWindow>().Single();
-            Choose(settings, "NES", ScreenFilters.None);
+            Choose(window, "NES", ScreenFilters.None);
             Assert.Equal(ShaderEffect.Crt, frame.ActiveEffect);
 
-            Choose(settings, "SNES", ScreenFilters.None);
+            Choose(window, "SNES", ScreenFilters.None);
             Assert.Equal(ShaderEffect.None, frame.ActiveEffect);
-            settings.Close();
+            window.CloseSettings();
             window.Close();
         }, default);
 
@@ -133,7 +123,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             string pack = FakePack();
             var config = new GraphicsConfig();
-            config.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, "slang:crt/crt-royale.slangp");
+            config.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, "slang:crt/crt-royale.slangp");
             config.Save();
 
             var window = new MainWindow();
@@ -145,7 +135,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(frame.ActiveFilter);
 
             var own = (GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
-            own.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, "slang:crt/gone.slangp");
+            own.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, "slang:crt/gone.slangp");
             typeof(MainWindow).GetMethod("ApplyScreenFilter", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { "SNES" });
             Assert.Null(frame.ActiveSlangPreset);
             Assert.Contains("crt/gone.slangp", window.GetControl<TextBlock>("StatusText").Text);

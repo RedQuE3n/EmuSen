@@ -26,7 +26,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
     }
 
-    // The Themes tab at 1280 by 800 with EmuSen's own look chosen and with Art Book Next chosen, and Preferences' row; outside the repository.
+    // The Themes tab at 1280 by 800 with EmuSen's own look chosen and with Art Book Next chosen, and Settings' Themes row; outside the repository.
     [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class ThemeListPictureTool
@@ -83,14 +83,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
 
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
+            SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.Library);
+            SettingsPad.To(s.Window, s.Pad, "themes");
             s.Settle();
-            TabControl tabs = SheetRoot(s).GetVisualDescendants().OfType<TabControl>().First();
-            for (int i = 0; i < 6 && (tabs.SelectedItem as TabItem)?.Header as string != "Appearance"; i++) s.Pad.R1();
-            s.Settle();
-            SheetRoot(s).GetLogicalDescendants().OfType<Control>().First(c => c.Name == "BigPictureThemeDropdown").BringIntoView();
-            s.Settle();
-            Save(s.Capture(), "preferences-appearance-emusen-chosen-1280x800");
+            Save(s.Capture(), "settings-themes-emusen-chosen-1280x800");
         }, default);
     }
 }

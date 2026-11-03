@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Mistress
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public Task Closing_the_window_with_preferences_open_closes_preferences_cleanly(bool bigScreen) => Session.Dispatch(() =>
+        public Task Closing_the_window_with_settings_open_closes_settings_cleanly(bool bigScreen) => Session.Dispatch(() =>
         {
             string roms = Path.Combine(_root, "Roms");
             Directory.CreateDirectory(roms);
@@ -44,15 +44,18 @@ namespace EmuSen.WiseMan.Mistress
             new AppSettings { RomDirectory = roms, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
-            typeof(MainWindow).GetMethod("ShowPreferences", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            window.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.Library);
             Dispatcher.UIThread.RunJobs();
-            PreferencesWindow preferences = window.GetControl<SheetLayer>("Sheets").Current as PreferencesWindow ?? window.OwnedWindows.OfType<PreferencesWindow>().Single();
+            Assert.NotNull(window.SettingsShown);
+            // The desktop's Settings is a window of its own, the big screen's a screen in this one.
+            SettingsWindow? settings = window.GetControl<SheetLayer>("Sheets").Current as SettingsWindow ?? window.OwnedWindows.OfType<SettingsWindow>().SingleOrDefault();
+            Assert.Equal(!bigScreen, settings is not null);
             bool closed = false;
-            preferences.Closed += (_, _) => closed = true;
+            if (settings is not null) settings.Closed += (_, _) => closed = true;
 
             window.Close();
 
-            Assert.True(closed, "Preferences is still open");
+            Assert.True(bigScreen || closed, "Settings is still open");
         }, default);
     }
 }

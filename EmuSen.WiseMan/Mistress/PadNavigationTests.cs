@@ -263,7 +263,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Another_window_is_driven_through_its_keys() => Session.Dispatch(() =>
         {
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), null, "N64");
+            var window = new ThemeSettingsWindow(new AppSettings(), () => new System.Net.Http.HttpClient(), _ => { });
             window.Show();
             window.CaptureRenderedFrame();
 
@@ -273,6 +273,10 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal((tab + 1) % tabs.ItemCount, tabs.SelectedIndex);
             PadWindowRouter.Send(window, UiButton.PageUp);
             Assert.Equal(tab, tabs.SelectedIndex);
+
+            // The Interface tab, whose rows hold dropdowns and switches.
+            for (int i = 0; i < tabs.ItemCount && (tabs.SelectedItem as TabItem)?.Header as string != "Interface"; i++) PadWindowRouter.Send(window, UiButton.PageDown);
+            Assert.Equal("Interface", (tabs.SelectedItem as TabItem)?.Header);
 
             // Down walks the focus; somewhere along it is a dropdown, and right moves it by one.
             Dropdown? dropdown = null;
@@ -300,8 +304,11 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Accept_toggles_a_focused_switch() => Session.Dispatch(() =>
         {
-            var window = new GraphicsSettingsWindow(new GraphicsConfig(), null, "N64");
+            var window = new ThemeSettingsWindow(new AppSettings(), () => new System.Net.Http.HttpClient(), _ => { });
             window.Show();
+            var tabs = window.GetVisualDescendants().OfType<Tabs>().First();
+            for (int i = 0; i < tabs.ItemCount && (tabs.SelectedItem as TabItem)?.Header as string != "Interface"; i++) PadWindowRouter.Send(window, UiButton.PageDown);
+            window.CaptureRenderedFrame();
             window.CaptureRenderedFrame();
 
             LunaSwitch toggle = window.GetVisualDescendants().OfType<LunaSwitch>().First(s => s.IsEffectivelyVisible);
@@ -343,11 +350,11 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Accept_on_a_text_box_in_another_window_opens_the_keyboard_over_it() => Session.Dispatch(() =>
         {
-            var window = new PreferencesWindow(new AppSettings());
+            var window = new CheatDatabaseWindow();
             window.Show();
             window.CaptureRenderedFrame();
 
-            TextBox box = window.GetVisualDescendants().OfType<TextBox>().First();
+            TextBox box = window.GetVisualDescendants().OfType<TextBox>().First(t => t.IsEffectivelyVisible && t.IsEnabled);
             box.Focus();
             PadWindowRouter.Send(window, UiButton.Accept);
 

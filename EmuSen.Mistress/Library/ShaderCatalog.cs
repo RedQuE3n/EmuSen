@@ -48,6 +48,9 @@ namespace EmuSen.Mistress.Library
             ? ForPreset(stored[SlangPrefix.Length..])
             : new ShaderEntry(ScreenFilters.Find(stored).Name, ScreenFilters.Find(stored).Name, BuiltIn, null);
 
+        // A label for a stored value, for Settings' rows and the status line.
+        public static string Describe(string? stored) => For(stored) is { IsPreset: true } entry ? $"{entry.Name} (RetroArch, {entry.Group})" : For(stored).Name;
+
         // An attachment is offered its host's filters, the screen being the host's - see EmuSen_Serenity.md §3.12.
         public static IReadOnlyList<ShaderEntry> BuiltIns(string console) =>
             ScreenFilters.NamesFor(RuntimeCatalog.HostOf(console)).Select(name => new ShaderEntry(name, name, BuiltIn, null)).ToArray();

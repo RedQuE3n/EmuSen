@@ -13,6 +13,8 @@ using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
+using EmuSen.Mistress.Pages;
+using Avalonia.LogicalTree;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
@@ -25,32 +27,28 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         public ScrapeSignInTests(ITestOutputHelper output) : base(output) { }
 
-        private PreferencesWindow Prefs(MainWindow window)
+        // Settings ▸ Library ▸ Scraping ▸ Member account, in the desktop's Settings window.
+        private static void Account(MainWindow window)
         {
-            var prefs = new PreferencesWindow(new AppSettings { RomDirectory = RomDir }, window);
-            Windows.Add(prefs);
-            prefs.Show();
-            prefs.ShowTab(PreferencesWindow.ScrapingTab);
+            SettingsDesk.At(window, SettingsScreen.Library, "scraping", "account");
             Pump(100);
-            prefs.UpdateLayout();
-            return prefs;
         }
 
-        private static void Type(PreferencesWindow prefs, string user, string password)
+        private static string Line(MainWindow window) => window.SettingsShown!.Host.AccountLine;
+
+        // Log in, its two questions answered, and the answer waited for.
+        private static void LogIn(MainWindow window, string user, string password)
         {
-            Named<TextBox>(prefs, "ScreenScraperUserBox").Text = user;
-            Named<TextBox>(prefs, "ScreenScraperPasswordBox").Text = password;
+            SettingsDesk.Choose(window, "signin");
+            SettingsDesk.Answer(window, user);
+            Assert.Equal('•', SettingsDesk.Prompt(window).GetLogicalDescendants().OfType<TextBox>().Single(t => t.Name == "PART_Answer").PasswordChar);
+            SettingsDesk.Answer(window, password);
+            WaitFor(() => Answered(window), "the log in");
         }
 
-        private static string Said(Window prefs) => TextOf(prefs, "ScreenScraperSignInMessage");
+        private static bool Answered(MainWindow window) => Line(window) is { } l && l.Contains(". ", StringComparison.Ordinal) && !l.Contains("Asking ScreenScraper", StringComparison.Ordinal);
 
-        private static void Press(Window prefs, string button, Func<bool> done)
-        {
-            Click(Named<Button>(prefs, button));
-            WaitFor(done, button);
-        }
-
-        private static bool Answered(Window prefs) => Said(prefs) is { Length: > 0 } s && s != "Asking ScreenScraper...";
+        private static string Status(MainWindow window) => window.GetControl<TextBlock>("StatusText").Text ?? "";
 
         private IEnumerable<string> UserInfos => Server.Asked.Where(u => u.Contains("/ssuserInfos.php"));
 
@@ -59,22 +57,21 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             Server.Member = (User, Secret);
             MainWindow window = Open();
-            PreferencesWindow prefs = Prefs(window);
-            Assert.Equal("Not signed in: runs use EmuSen's developer credentials alone.", TextOf(prefs, "ScreenScraperMemberText"));
-            Type(prefs, User, Secret);
+            Account(window);
+            Assert.Equal("Not signed in: runs use EmuSen's developer credentials alone.", Line(window));
+            SettingsDesk.Choose(window, "signin");
+            SettingsDesk.Answer(window, User);
             Pump(300);
             Assert.Empty(Server.Asked);
             Assert.False(File.Exists(MemberAccount.PathOf));
 
-            Press(prefs, "ScreenScraperLogInButton", () => Answered(prefs));
+            SettingsDesk.Answer(window, Secret);
+            WaitFor(() => Answered(window), "the log in");
             string url = Assert.Single(Server.Asked);
             Assert.Contains("/ssuserInfos.php", url);
             Assert.Equal((User, Secret, FakeScreenScraper.DevId), (FakeScreenScraper.Param(url, "ssid"), FakeScreenScraper.Param(url, "sspassword"), FakeScreenScraper.Param(url, "devid")));
-            Assert.Equal($"Signed in as {User}.", Said(prefs));
-            Assert.Equal($"Signed in as {User} · level 3 · 10 of 20,000 requests today · 1 thread · 128 KB/s", TextOf(prefs, "ScreenScraperMemberText"));
-            Assert.False(Named<TextBox>(prefs, "ScreenScraperPasswordBox").IsVisible);
-            Assert.True(Named<Button>(prefs, "ScreenScraperLogOutButton").IsVisible);
-            Assert.False(Named<Button>(prefs, "ScreenScraperCheckButton").IsVisible);
+            Assert.Equal($"Signed in as {User} · level 3. Signed in as {User}.", Line(window));
+            Assert.Equal(["check", "signout"], SettingsDesk.Keys(window).Where(k => k is "signin" or "check" or "signout"));
 
             MemberAccount kept = MemberAccount.Load();
             Assert.Equal((User, Secret), (kept.User, kept.Password));
@@ -84,7 +81,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
             window.ShowScrapeStatus();
             Assert.Equal($"Member: {User}", TextOf(window.ScrapeStatusShown!, "ScrapeStatusMember"));
-            prefs.Close();
+            window.CloseSettings();
             Pump(100);
             Assert.Single(Server.Asked);
         });
@@ -102,25 +99,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Server.ForcedUserStatus = code;
             Server.ForcedUserBody = body;
             MainWindow window = Open();
-            PreferencesWindow prefs = Prefs(window);
-            Type(prefs, User, "FAKEMEMBERWRONG");
-            Press(prefs, "ScreenScraperLogInButton", () => Answered(prefs));
+            Account(window);
+            LogIn(window, User, "FAKEMEMBERWRONG");
             Assert.Single(UserInfos);
-            Assert.Equal(said, Said(prefs));
+            Assert.Equal($"Not signed in: runs use EmuSen's developer credentials alone. {said}", Line(window));
             Assert.False(File.Exists(MemberAccount.PathOf));
-            Assert.Equal("Not signed in: runs use EmuSen's developer credentials alone.", TextOf(prefs, "ScreenScraperMemberText"));
             foreach (string secret in new[] { "FAKEMEMBERWRONG", Secret, FakeScreenScraper.DevPassword, FakeScreenScraper.DevId })
-                Assert.DoesNotContain(secret, Said(prefs));
+                Assert.DoesNotContain(secret, Line(window));
         });
 
         [Fact]
         public Task Without_the_developer_file_log_in_says_it_cannot_be_checked_here_and_sends_nothing() => OnUi(() =>
         {
             MainWindow window = Open(developer: false);
-            PreferencesWindow prefs = Prefs(window);
-            Type(prefs, User, Secret);
-            Press(prefs, "ScreenScraperLogInButton", () => Answered(prefs));
-            Assert.StartsWith("Signing in can't be checked or used here: this build carries no developer credentials and EmuSen's developer file is not on this computer", Said(prefs));
+            Account(window);
+            LogIn(window, User, Secret);
+            Assert.Contains("Signing in can't be checked or used here: this build carries no developer credentials and EmuSen's developer file is not on this computer", Line(window));
             Assert.Empty(Server.Asked);
             Assert.False(File.Exists(MemberAccount.PathOf));
         });
@@ -129,11 +123,11 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public Task Typing_an_account_without_Log_In_keeps_nothing() => OnUi(() =>
         {
             MainWindow window = Open();
-            PreferencesWindow prefs = Prefs(window);
-            Type(prefs, User, Secret);
-            Named<TextBox>(prefs, "ScreenScraperUserBox").Focus();
-            Named<TextBox>(prefs, "ScreenScraperPasswordBox").Focus();
-            prefs.Close();
+            Account(window);
+            SettingsDesk.Choose(window, "signin");
+            SettingsDesk.Answer(window, User);
+            SettingsDesk.Cancel(window);
+            window.CloseSettings();
             Pump(100);
             Assert.False(File.Exists(MemberAccount.PathOf));
             Assert.Empty(Server.Asked);
@@ -148,16 +142,16 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             new MemberAccount(User, Secret) { Verified = DateTime.UtcNow }.Save();
             Server.Gate = new SemaphoreSlim(0);
             MainWindow window = Open(settings: a => a.OpenEmuFallback = false);
-            PreferencesWindow prefs = Prefs(window);
-            Assert.StartsWith($"Signed in as {User} · checked ", TextOf(prefs, "ScreenScraperMemberText"));
+            Account(window);
+            Assert.StartsWith($"Signed in as {User}", Line(window));
             Scrape(window, new ScrapeScope());
             WaitFor(() => Server.Asked.Count == 1, "the first lookup");
             Assert.Equal(User, FakeScreenScraper.Param(Server.Asked.Single(), "ssid"));
 
-            Click(Named<Button>(prefs, "ScreenScraperLogOutButton"));
-            Assert.Equal("Signed out: screenscraper.json was deleted. Runs now use EmuSen's developer credentials alone.", Said(prefs));
+            SettingsDesk.Choose(window, "signout");
+            Assert.Equal("Signed out: screenscraper.json was deleted. Runs now use EmuSen's developer credentials alone.", Status(window));
             Assert.False(File.Exists(MemberAccount.PathOf));
-            Assert.Equal("Not signed in: runs use EmuSen's developer credentials alone.", TextOf(prefs, "ScreenScraperMemberText"));
+            Assert.Equal("Not signed in: runs use EmuSen's developer credentials alone.", Line(window));
             int before = Server.Asked.Count;
             Server.Gate.Release(1000);
             RunEnds(window);
@@ -177,23 +171,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             File.SetUnixFileMode(MemberAccount.PathOf, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             Server.Member = (User, Secret);
             MainWindow window = Open();
-            PreferencesWindow prefs = Prefs(window);
-            Assert.Equal($"Signed in as {User} · not checked: this account was typed before Log In checked accounts. Check asks ScreenScraper once.", TextOf(prefs, "ScreenScraperMemberText"));
-            Assert.True(Named<Button>(prefs, "ScreenScraperCheckButton").IsVisible);
-            Assert.True(Named<Button>(prefs, "ScreenScraperLogOutButton").IsVisible);
+            Account(window);
+            Assert.Equal($"Signed in as {User}", Line(window));
+            Assert.Equal(["check", "signout"], SettingsDesk.Keys(window).Where(k => k is "signin" or "check" or "signout"));
             Pump(300);
             Assert.Empty(Server.Asked);
             Assert.Null(MemberAccount.Load().Verified);
             Assert.Equal(User, MemberAccount.Load().User);
 
             window.ShowScrapeStatus();
-            Assert.Equal($"Member: {User} (not checked; Check in Preferences ▸ Scraping)", TextOf(window.ScrapeStatusShown!, "ScrapeStatusMember"));
+            Assert.Equal($"Member: {User} (not checked; Check in Settings ▸ Library ▸ Scraping ▸ Member account)", TextOf(window.ScrapeStatusShown!, "ScrapeStatusMember"));
 
-            Press(prefs, "ScreenScraperCheckButton", () => Answered(prefs));
+            SettingsDesk.Choose(window, "check");
+            WaitFor(() => Answered(window), "the check");
             Assert.Single(UserInfos);
-            Assert.Equal($"Signed in as {User}.", Said(prefs));
+            Assert.EndsWith($". Signed in as {User}.", Line(window));
             Assert.NotNull(MemberAccount.Load().Verified);
-            Assert.False(Named<Button>(prefs, "ScreenScraperCheckButton").IsVisible);
             Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(MemberAccount.PathOf));
         });
 
@@ -204,9 +197,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             File.WriteAllText(MemberAccount.PathOf, $"{{\"ssid\":\"{User}\",\"sspassword\":\"FAKEMEMBERWRONG\"}}");
             Server.Member = (User, Secret);
             MainWindow window = Open();
-            PreferencesWindow prefs = Prefs(window);
-            Press(prefs, "ScreenScraperCheckButton", () => Answered(prefs));
-            Assert.Equal("ScreenScraper did not accept that name and password. The account is kept until you Log Out.", Said(prefs));
+            Account(window);
+            SettingsDesk.Choose(window, "check");
+            WaitFor(() => Answered(window), "the check");
+            Assert.EndsWith(". ScreenScraper did not accept that name and password. The account is kept until you Log Out.", Line(window));
             Assert.Equal(("FAKEMEMBERWRONG", (DateTime?)null), (MemberAccount.Load().Password, MemberAccount.Load().Verified));
         });
 
@@ -222,53 +216,44 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(User, FakeScreenScraper.Param(Server.JeuInfos.Single(), "ssid"));
         });
 
-        // On the sheet in a big-screen session: the boxes are typed on the on-screen keyboard, and Log In and Log Out are reached and pressed by the pad.
+        // On the big screen: Log in's two questions typed on the on-screen keyboard, and Log in and Log out reached and pressed by the pad.
         [Fact]
-        public Task Log_In_and_Log_Out_are_reached_and_used_by_the_pad_on_the_sheet() => OnUi(() =>
+        public Task Log_In_and_Log_Out_are_reached_and_used_by_the_pad_on_the_big_screen() => OnUi(() =>
         {
             Server.Member = ("padplayer", "padsecret");
             MainWindow window = Open(bigScreen: true);
             var pad = new PadDriver(window);
-            // Scrape Games opens the Scraper since 2026-11-01; the account stays on Preferences' Scraping tab, opened as Settings opens it.
-            typeof(MainWindow).GetMethod("ShowPreferencesAt", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, [PreferencesWindow.ScrapingTab]);
+            window.ShowSettings(SettingsScreen.Library, "scraping", "account");
             Pump(100);
-            var prefs = Assert.IsType<PreferencesWindow>(Sheets(window).Current);
-            Control sheet = RootOf(prefs);
-            window.UpdateLayout();
+            Assert.Equal("Member account", window.SettingsShown!.Trail[^1]);
 
-            HashSet<InputElement> reached = PadAudit.Reachable(sheet, pad);
-            Assert.Contains(reached, e => e is Button { Name: "ScreenScraperLogInButton" });
-            Assert.Contains(reached, e => e is TextBox { Name: "ScreenScraperPasswordBox" });
-            Assert.Empty(PadAudit.Operable(sheet).Where(c => !reached.Contains(c)).Select(PadAudit.Describe));
-
-            foreach ((string box, string text) in new[] { ("ScreenScraperUserBox", "padplayer"), ("ScreenScraperPasswordBox", "padsecret") })
+            SettingsPad.To(window, pad, "signin");
+            pad.A();
+            foreach ((string text, bool secret) in new[] { ("padplayer", false), ("padsecret", true) })
             {
-                PadAudit.Reach(sheet, pad, e => e is TextBox t && t.Name == box);
+                Pump(100);
+                Assert.Equal("PromptWindow", Sheets(window).Current!.GetType().Name);
+                Control prompt = RootOf(Sheets(window).Current!);
+                var box = (TextBox)PadAudit.Reach(prompt, pad, e => e is TextBox { Name: "PART_Answer" });
+                Assert.Equal(secret ? '•' : default, box.PasswordChar);
                 pad.A();
                 OnScreenKeyboard keyboard = OnScreenKeyboard.OpenOver(window) ?? throw new InvalidOperationException("no keyboard");
                 PadCheatsTests.TypeByPad(pad, keyboard, text);
                 pad.Start();
                 Assert.Null(OnScreenKeyboard.OpenOver(window));
+                if (!secret) Assert.Empty(Server.Asked);
+                PadAudit.Reach(prompt, pad, e => e is Button { Name: "PART_Accept" });
+                pad.A();
             }
-            Assert.Equal('•', Named<TextBox>(prefs, "ScreenScraperPasswordBox").PasswordChar);
-            Assert.Empty(Server.Asked);
-
-            PadAudit.Reach(sheet, pad, e => e is Button { Name: "ScreenScraperLogInButton" });
-            pad.A();
-            WaitFor(() => Answered(prefs), "the log in");
-            Assert.Equal("Signed in as padplayer.", Said(prefs));
+            WaitFor(() => Answered(window), "the log in");
+            Assert.EndsWith(". Signed in as padplayer.", Line(window));
             Assert.Single(Server.Asked);
-            // Log In hides once signed in; the focus is handed to Log Out rather than lost.
-            Assert.Equal("ScreenScraperLogOutButton", (window.FocusManager!.GetFocusedElement() as Control)?.Name);
 
-            window.UpdateLayout();
-            reached = PadAudit.Reachable(sheet, pad);
-            Assert.Contains(reached, e => e is Button { Name: "ScreenScraperLogOutButton" });
-            PadAudit.Reach(sheet, pad, e => e is Button { Name: "ScreenScraperLogOutButton" });
+            SettingsPad.To(window, pad, "signout");
             pad.A();
             Assert.False(File.Exists(MemberAccount.PathOf));
-            Assert.StartsWith("Signed out", Said(prefs));
-            Assert.Equal("ScreenScraperUserBox", (window.FocusManager!.GetFocusedElement() as Control)?.Name);
+            Assert.StartsWith("Signed out", Status(window));
+            Assert.Contains("signin", window.SettingsLayoutShown!.Rows.Select(r => r.Key));
         });
 
         [Fact]

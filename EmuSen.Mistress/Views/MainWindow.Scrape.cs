@@ -46,7 +46,7 @@ namespace EmuSen.Mistress.Views
 
         // The status window's cancel confirm; a test answers it instead of a person.
         internal static Func<Window, Task<bool>> ConfirmCancelScrape =
-            owner => Dialogs.ConfirmAsync(owner, "Cancel Scraping", "Stop this run? What it has not reached stays queued, and Resume in Preferences ▸ Scraping goes on from there.", "Cancel Scraping", "Keep Going");
+            owner => Dialogs.ConfirmAsync(owner, "Cancel Scraping", "Stop this run? What it has not reached stays queued, and Resume in Settings ▸ Library ▸ Scraping goes on from there.", "Cancel Scraping", "Keep Going");
 
         public event Action? ScrapeChanged;
 

@@ -11989,38 +11989,64 @@ replacement for some of them, but which only the games carrying the chip use: it
 reads `✓ No firmware needed`. Memory cards ▸ is the mode and the slots as schema rows (`Cards`, `Card1`, `Card2`, the card
 manager's keys), the cards in the drawer, a new card, and the saves on them through the Memory Cards window.
 
-### 52.5 Retired, and kept until U6b
+### 52.5 Retired
 
-Retired: `CollectionSettingsWindow` (into Library ▸ Collections), `DebugSettingsWindow` (into EmuSen ▸ Logging), the pad
-menu's Settings submenu and Home's Settings card with its Tools page (Theme Settings, Compressed Discs and the Shell are
-Library and EmuSen rows). Kept with no door until U6b ports their tests (decided 2026-11-03): Preferences, Graphics
-Settings and `BigMenuForm`, whose last user is Theme Settings. Kept with a door: the controller binding window, until the
-bindings page; the Memory Cards window, for a card's saves; `GameCropWindow`, the game's own crop from its page;
-`OptionListWindow`, for the choices of the sheets still drawn in ES-DE's menus; `FirmwarePane`, which Preferences holds;
-the Shader Settings and Active Cheats windows, through Settings.
+Retired with U6a: `CollectionSettingsWindow` (into Library ▸ Collections), `DebugSettingsWindow` (into EmuSen ▸
+Logging), the pad menu's Settings submenu and Home's Settings card with its Tools page (Theme Settings, Compressed Discs
+and the Shell are Library and EmuSen rows).
 
-**Doors restored, 2026-11-03.** The land of U6a showed four things the retired doors gave the player and Settings did
-not; each is a row of Settings now rather than a door of its own:
+Retired with U6b on 2026-11-03, each deleted rather than kept beside Settings: Preferences with every tab
+(`ControllerPreferencesPane`, `ScrapePreferencesPane`, `FirmwarePane`), Graphics Settings, Shader Settings and
+`BigMenuForm`. Theme Settings, its last user, is a sheet of its three tabs, framed on the big screen as the other tool
+sheets are (`MainWindow.FramedWindows`), and a window of its own on the desktop. `IScrapeHost`, which
+the scraping windows share, has a file of its own. What the old windows' statics owned has one owner each:
+`GraphicsKeys` the keys, `ConsoleCrop` the overscan and crop, `ShaderCatalog.Describe` a shader's name, `ShaderShelf`
+the slang pack.
 
-1. Display ▸ Shaders opens the Shader Settings window over Settings: the built-in filters, the slang catalogue with its
-   categories and Download Pack, and every parameter. Its value is the running console's shader, as Graphics Settings'
-   line named it. The Pause Card reaches it through Shader Levers, B, then the row.
-2. Library ▸ Cheats opens the Active Cheats window the library's Settings submenu opened: the last game's cheats and the
-   cheat database. A running game keeps Game Options ▸ Cheats.
-3. A console's page ends in Reset this console, which clears every row of the console's schema the engine does not hold
-   and forgets its picture, as Graphics Settings' Reset This Console did.
-4. A console's Crop overscan pane says when the running game's own crop replaces the console's, the line Graphics
-   Settings drew under its Overscan row.
+Kept with a door: the Memory Cards window, for a card's saves;
+`GameCropWindow`, the game's own crop from its page; `OptionListWindow`, for the choices of the sheets still drawn in
+ES-DE's menus; the Active Cheats window, Library ▸ Cheats.
+
+**Every setting the retired windows held has its row.** The check before deleting them, 2026-11-03, found these with
+none, and each has one now (`EmuSen_InterfaceSpec.md` §6.3.23 has the whole mapping):
+
+1. Graphics Settings' Custom crop: a third choice of Crop overscan, and a Custom crop page of the four edges, each
+   stepped by a tenth of a percent or typed, held to what one edge may hide and stored under the same keys, so a
+   player's crop carries over.
+2. A running game's own rows: a console's page shows the running engine's rows for the running game's console, as
+   Graphics Settings did (`EmuSen_Backend.md` §18.10.11), so a hosted core's option changed in a game is that core's.
+   A row the engine holds is shown with why and takes no choice; the engine's groups each have a heading.
+3. Preferences ▸ Scraping's Resume, Cancel scraping (which asks first) and Status, and its link to the Scraper: rows
+   of Library ▸ Scraping, until the Scraper's redesign takes the run's controls into the tool.
+4. Preferences ▸ Controllers' players: None, a pad playing as no one; two pads of one name numbered; a seat kept for a
+   pad pulled out, with A forgetting it. The page follows pads plugged in or pulled out while it is open.
+5. The firmware pane's Open Folder: Open EmuSen's folder on a console's Firmware page. Every folder row now follows
+   the setting's rules (`EmuSen_Config_Reference.md` §7.7): a relative path or a file refused and said, a missing
+   folder kept and said, blank back to the default.
+6. Preferences ▸ Scraping's 3D boxes: a row of what Library ▸ Scraping fetches.
+7. Preferences ▸ Appearance's Theme: Display ▸ Window colours, on the desktop (accepted 2026-11-03).
+
+The old firmware pane's words stay in each need's pane, from the runtime's firmware overview: where a file was found,
+why one of the wrong size is unused, and the first sentence of what the open version changes. Not kept, and said so
+here: the old member line's quota and threads, which are the Scraper's; and a menu's scroll indicator for an
+overflowing sheet, since no big-screen sheet is drawn as a menu now.
+
+**Doors restored, 2026-11-03,** at U6a's land: Library ▸ Cheats; a console's page's Reset this console, which clears
+every row of the console's schema the engine does not hold and forgets its picture; and Crop overscan's pane naming the
+running game's own crop.
 
 ### 52.6 How it is held
 
-`WindowFitAuditTests.Settings` records fifteen states at two sizes and audits the big screen's at 1920 × 1080 and
+`WindowFitAuditTests.Settings` records eighteen states at two sizes, the shaders' pages and the custom crop's among them since U6b, and audits the big screen's at 1920 × 1080 and
 1280 × 720 (`EmuSen_InterfaceSpec.md` §6.3.23); the tests that reached the retired doors walk Settings now
 (`PadMenuTests`, `EsdeSettingsMenusTests`, `ThemedCollectionsTests`, `ControllersTests`, `PlayerPreferencesTests`,
 `GameEngineAndPlayTimeTests`, `BigPictureSwitchTests`, `BigPictureThemeListTests`, `ThemeSettingsSheetTests`, and since the
 land's fixes `PadSettingsWindowTests`, `ThemedLibraryHostTests`, `MenusFollowupTests`, `ThemedSwitchesTests`,
 `ThemedFoldersTests`), through
-`SettingsPad`, which opens Settings and reaches a row as the player does.
+`SettingsPad`, which opens Settings and reaches a row as the player does. U6b's ports (the core-setting, shader,
+firmware, scraping and players tests) take `SettingsDesk`, the desktop form opened from the menu bar and turned through
+the window's own router; where a main window cannot give what a test needs, such as a running hosted core's own rows,
+`SettingsHostFake` hosts the one plain description.
 
 ### 52.7 The wiring step (2026-11-03)
 
@@ -12061,3 +12087,26 @@ overscan, Reduced motion after Background art on Home, Light or dark after it.
   desktop. `WindowFitAuditTests.Every_settings_state_fits_at_the_largest_text_size`: every big-screen Settings state at
   Larger at 1280 × 720 and the handheld's 1280 × 800, and `Home_and_the_grid_fit_at_the_largest_text_size` for Home, its
   shelf and places, the grid and its list card. LunaP's `KitSwitchTests`.
+
+### 52.9 Shaders
+
+Display ▸ Shaders, decided 2026-11-03 in place of the Shader Settings window. Its value is the running console's
+shader. It opens a page of the consoles, each row naming the console's shader, with the slang pack's row first: A
+downloads libretro's pack, about 54 MB, or again for a newer one, the row saying the download's progress and then how
+many presets it holds. Opened in a game it opens on the running console's page too.
+
+A console's page, from top to bottom:
+
+- **Parameters**, of the shader in use, enabled when it has any: a row per parameter, stepped by its own step or
+  through its named choices, a value back at the shader's own not kept; a heading of the pack's as a row that takes no
+  choice; Search parameters, which keeps a parameter whose name or id matches and every parameter under a matching
+  heading; and Reset all.
+- **Search**, of the shaders' names, folders and paths.
+- **The recent ones**, newest first, the five used last.
+- **The built-in filters**, None first, each used with A and marked in use.
+- **The pack's folders**, each a page of its presets.
+
+A preset missing from the pack is offered and not usable until the pack has it again.
+
+A parameter belongs to the shader in use, where the window let one be moved before the shader was used. The
+parameters read from a preset are kept for the eight presets read last.

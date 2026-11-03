@@ -56,13 +56,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(500);
             Save(s, $"{size}-gamelist-swapped");
 
-            typeof(MainWindow).GetMethod("ShowPreferences", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(s.Window, null);
+            SettingsPad.Open(s.Window, s.Pad, swapped: true);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.Controllers);
+            SettingsPad.To(s.Window, s.Pad, "swap");
             s.Settle();
-            ThemedGameOptionsTests.Reach(s, "BigMenuPage4");
-            s.Pad.B();
-            ThemedGameOptionsTests.Reach(s, "SwapPadButtonsSwitch");
             Save(s, $"{size}-controllers-swapped");
-            for (int guard = 0; guard < 4 && ThemedGameOptionsTests.Sheets(s).IsPresenting; guard++) s.Pad.A();
+            for (int guard = 0; guard < 4 && s.Window.SettingsShown is not null; guard++) s.Pad.A();
         }
 
         // The text popups: from a keyboard, centred; with Steam's keyboard asked for, in the upper part of the screen; and the themed search's.

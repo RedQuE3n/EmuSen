@@ -25,6 +25,9 @@ namespace EmuSen.Mistress.Pages
     // One firmware file a system's engines declare, as the runtime's firmware_status answers; files sharing a Need are alternatives for one need.
     public sealed record FirmwareFile(string Label, string File, bool Required, string Status, string? Need = null);
 
+    // A firmware file as the runtime's overview has it: its size, where it was found or held at the wrong size, and what the open version costs.
+    public sealed record FirmwareWords(string File, int Size, bool WrongSize, string? Effect, string? Cost, string? FoundIn, string? WrongSizeIn);
+
     // One player's seat: who plays it now, or null, and whether it is kept for a controller that went away.
     public sealed record PlayerSeat(int Player, string? Pad, bool Kept);
 
@@ -38,11 +41,15 @@ namespace EmuSen.Mistress.Pages
         string? RunningTitle { get; }
         string? RunningConsole { get; }
         string? RunningCropNote(string console);
+        ShaderShelf Shaders { get; }
+        (bool Running, int Waiting) ScrapeRun { get; }
+        void DownloadShaders();
         IReadOnlyList<SystemFacts> Systems { get; }
         IReadOnlyList<SettingRow> Schema(string console);
         string? CoreValue(string console, string key);
         void SetCoreValue(string console, string key, string? value);
         IReadOnlyList<FirmwareFile>? Firmware(string system);
+        IReadOnlyDictionary<string, FirmwareWords> FirmwareOverview();
         IReadOnlyList<CardMedium> Cards(string console);
         string NewCard(string console);
         int Games(string console);
@@ -52,6 +59,8 @@ namespace EmuSen.Mistress.Pages
         IReadOnlyList<PlayerSeat> Players { get; }
         IReadOnlyList<string> Pads { get; }
         void Seat(int pad, int player);
+        void ForgetSeat(int player);
+        int PlayerOf(int pad);
         bool PadPressed(int pad);
         IReadOnlyList<string> Looks { get; }
         int LookAt { get; }
@@ -82,11 +91,14 @@ namespace EmuSen.Mistress.Pages
         public const string Controllers = "controllers", Display = "display", Sound = "sound", Consoles = "consoles", Library = "library", EmuSen = "emusen";
 
         // The doors to what Settings does not draw itself: tools, pickers and the Shell.
-        public const string DoorShaders = "shaders", DoorCheats = "cheats", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
-        public const string DoorSignIn = "scraper:signin", DoorSignOut = "scraper:signout", DoorCheckAccount = "scraper:check", DoorOpenVgdb = "scraper:openvgdb", DoorCleanUp = "scraper:cleanup";
+        public const string DoorCheats = "cheats", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
+        public const string DoorSignIn = "scraper:signin", DoorSignOut = "scraper:signout", DoorCheckAccount = "scraper:check", DoorOpenVgdb = "scraper:openvgdb", DoorCleanUp = "scraper:cleanup", DoorScrapeResume = "scraper:resume", DoorScrapeCancel = "scraper:cancel", DoorScrapeStatus = "scraper:status";
         public const string DoorNewCollection = "collection:new", DoorFinishCollection = "collection:finish", DoorDeleteCollection = "collection:delete:", DoorCardSaves = "cardsaves:";
-        public const string DoorRomFolder = "folder:rom", DoorArtFolder = "folder:art", DoorStateFolder = "folder:state", DoorLogFolder = "folder:log", DoorFirmwareFolder = "folder:firmware", DoorMediaFolder = "folder:media", DoorThemeFolder = "folder:theme";
+        public const string DoorRomFolder = "folder:rom", DoorArtFolder = "folder:art", DoorStateFolder = "folder:state", DoorLogFolder = "folder:log", DoorFirmwareFolder = "folder:firmware", DoorOpenFirmware = "folder:openfirmware", DoorClearFirmware = "folder:clearfirmware", DoorMediaFolder = "folder:media", DoorThemeFolder = "folder:theme";
         public const string On = "On", Off = "Off";
+
+        // A pad's first choice on the Players page: it plays as no one and still steers the menus.
+        public const string NoPlayer = "None";
 
         public static readonly (string Key, string Label)[] SectionList =
             [(Controllers, "Controllers"), (Display, "Display"), (Sound, "Sound"), (Consoles, "Consoles"), (Library, "Library"), (EmuSen, "EmuSen")];

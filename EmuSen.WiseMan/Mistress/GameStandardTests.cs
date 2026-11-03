@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Mistress
         private static void Configure(float? standard)
         {
             var graphics = new GraphicsConfig();
-            graphics.SetValue("SNES", GraphicsSettingsWindow.ScreenFilterKey, CrtFilter.Name);
+            graphics.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, CrtFilter.Name);
             if (standard is { } value) graphics.SetParameter("SNES", CrtFilter.Name, TelevisionStandards.Parameter, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
             graphics.Save();
         }

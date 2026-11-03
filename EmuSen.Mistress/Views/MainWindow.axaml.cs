@@ -460,17 +460,6 @@ namespace EmuSen.Mistress.Views
             RefreshSettings();
         }
 
-        private void ShowGraphicsSettings()
-        {
-            // A core's setting reaches a running session through the runtime's settings_set; the picture's are the window's own - see §4.26.
-            var window = new GraphicsSettingsWindow(_graphics, console =>
-            {
-                if (_session is not null && console == _activeConsole) ApplyScreenFilter(console);
-            }, _session is null ? null : _activeConsole, HttpFactory, overscanNote: RunningGameCropNote,
-                runningSettings: console => _session is { } running && console == _activeConsole ? RuntimeCatalog.SettingsOf(running.Crystal) : null) { ShadersChanged = ShaderChanged };
-            _ = SheetLayer.Show(window, this);
-        }
-
         // Every console's memory cards and the like, on the running game's console, whose held cards it shows and does not change - see EmuSen_SaveMedia.md §6.5.
         private void ShowMemoryCards() => _ = SheetLayer.Show(new MemoryCardsWindow(_graphics, _session is null ? null : _activeConsole), this);
 
@@ -508,9 +497,6 @@ namespace EmuSen.Mistress.Views
         private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(_appSettings.RomDirectory), this);
 
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
-        private void ShowShaderSettings() => _ = SheetLayer.Show(NewShaderSettings(), this);
-
-        private ShaderSettingsWindow NewShaderSettings() => new(_graphics, ShaderChanged, _session is null ? null : _activeConsole, HttpFactory);
 
         private void ShaderChanged(string console)
         {
@@ -520,14 +506,14 @@ namespace EmuSen.Mistress.Views
         // On the UI thread: the filter belongs to the control that draws, not to the core - see EmuSen_Settings_Reference.md §4.40.
         private void ApplyScreenFilter(string console)
         {
-            string? stored = _graphics.Value(console, GraphicsSettingsWindow.ScreenFilterKey);
+            string? stored = _graphics.Value(console, GraphicsKeys.ScreenFilter);
             EmuSen.Serenity.Shaders.ScreenFilterChoice choice = EmuSen.Serenity.Shaders.ScreenFilters.Find(stored);
             // Before the shader, so a chain or runner built for it starts from the player's values - see EmuSen_Settings_Reference.md §4.48.3.
             GameFrame.ShaderParameters = RunningStandard(ShaderParameterValues(console, stored ?? choice.Name));
             GameFrame.ActiveEffect = choice.Effect;
             // Before the filter, whose chain starts from this console's defaults and constants - see EmuSen_Serenity.md §3.9.
             GameFrame.FilterConsole = RuntimeCatalog.HostOf(console);
-            GameFrame.SquarePixels = _graphics.Value(console, GraphicsSettingsWindow.PictureShapeKey) == GraphicsSettingsWindow.SquarePixels;
+            GameFrame.SquarePixels = _graphics.Value(console, GraphicsKeys.PictureShape) == GraphicsKeys.SquarePixels;
             GameFrame.Crop = RunningCrop(console);
             GameFrame.ActiveFilter = choice.Filter;
             GameFrame.ActiveSlangPreset = SlangPresetPath(stored);
@@ -555,32 +541,19 @@ namespace EmuSen.Mistress.Views
         // A stored "slang:" value as a file in the downloaded pack, or null; a preset since deleted is said once and drawn plain.
         private string? SlangPresetPath(string? stored)
         {
-            if (stored is null || !stored.StartsWith(GraphicsSettingsWindow.SlangPrefix, StringComparison.Ordinal)) return null;
+            if (stored is null || !stored.StartsWith(ShaderCatalog.SlangPrefix, StringComparison.Ordinal)) return null;
             if (!_slangFailuresShown)
             {
                 _slangFailuresShown = true;
                 GameFrame.SlangFailed += problem => Dispatcher.UIThread.Post(() => StatusText.Text = $"RetroArch shader not drawn: {problem}");
             }
-            string relative = stored[GraphicsSettingsWindow.SlangPrefix.Length..];
+            string relative = stored[ShaderCatalog.SlangPrefix.Length..];
             string path = System.IO.Path.GetFullPath(System.IO.Path.Combine(EmuSen.Mistress.Library.SlangPackDownload.DefaultDirectory, relative));
             if (System.IO.File.Exists(path)) return path;
             StatusText.Text = $"RetroArch shader not drawn: {relative} is not in the downloaded pack.";
             return null;
         }
 
-        private void ShowPreferences() => ShowPreferencesAt(null);
-
-        private void ShowPreferencesAt(string? tab)
-        {
-            // Non-modal, so re-scan on close rather than leaving a stale library behind it.
-            var window = new PreferencesWindow(_appSettings, this, _bigScreen ? HelpFamily : null, _gamepad, () => _session?.ControllerPorts ?? 0) { OpenThemeSettings = ShowThemeSettings, Graphics = _graphics, SyncToDisplayChanged = on => GameFrame.SyncToDisplay = on };
-            WatchPreferences(window);
-            if (tab is not null) window.ShowTab(tab);
-            window.StatusBarChanged += ApplyStatusBar;
-            // Not when it closes because this window is closing, after the records it reads have gone - see EmuSen_Settings_Reference.md §4.88.
-            window.Closed += (_, _) => { if (_recordsClosed) return; ScanArtwork(); ApplyOnlineCovers(); ApplyScraping(); if (LibraryView.IsVisible) RefreshLibrary(); };
-            _ = SheetLayer.Show(window, this);
-        }
 
         // The bar goes when it is switched off, when both its parts are, under a tool shown as a screen (EmuSen_Interface.md §15.2) or under a card (BigPicture §49.8); a big screen's counters are its HUD's - see EmuSen_Settings_Reference.md §4.51 and §4.83.6.
         private void ApplyStatusBar()

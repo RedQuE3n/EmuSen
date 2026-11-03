@@ -17,6 +17,7 @@ using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.Serenity;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -56,7 +57,7 @@ namespace EmuSen.WiseMan.Mistress
         public void The_sega_cd_and_the_32x_take_the_genesiss_screen_and_pads_and_a_console_of_its_own_keeps_its()
         {
             Assert.Equal(new[] { Genesis, Genesis, Genesis, "SNES", "GB" }, new[] { Genesis, SegaCd, "32X", "SNES", "GB" }.Select(CoreCatalog.HostOf));
-            Assert.True(GraphicsSettingsWindow.HasOverscan(SegaCd));
+            Assert.True(EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(SegaCd));
             Assert.Equal(ScreenFilters.NamesFor(Genesis), ShaderCatalog.BuiltIns(SegaCd).Select(e => e.Stored));
             Assert.True(ControllerDiagrams.IsGenesis(SegaCd) && ControllerDiagrams.IsGenesis("32X") && !ControllerDiagrams.IsGenesis("SNES"));
             Assert.Equal(LayoutOf(Genesis), LayoutOf(SegaCd));
@@ -67,16 +68,15 @@ namespace EmuSen.WiseMan.Mistress
         private static string LayoutOf(string console) => ControllerDiagrams.LayoutFor(console, ControllerDiagrams.GenesisThreeButton).ToString();
 
         [Fact]
-        public Task The_sega_cds_shader_menu_lists_the_crt_filter() => Session.Dispatch(() =>
+        public Task The_sega_cds_shader_page_lists_the_crt_filter() => Session.Dispatch(() =>
         {
             Assert.Contains(SegaCd, CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
-            var window = new ShaderSettingsWindow(new GraphicsConfig(), null, SegaCd);
-            window.Show();
-            ShaderPanel panel = window.PanelFor(SegaCd);
-            var listed = panel.List.Models.Select(e => e.Stored).ToList();
-            Assert.Contains(CrtFilter.Name, listed);
-            Assert.Contains(CrtFilters.Lottes.Name, listed);
-            Assert.Equal(window.PanelFor(Genesis).List.Models.Select(e => e.Stored), listed);
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Display, "shaders", "shader:" + SegaCd);
+            var listed = SettingsDesk.Keys(window).Where(k => k.StartsWith("use:", StringComparison.Ordinal)).ToList();
+            Assert.Contains("use:" + CrtFilter.Name, listed);
+            Assert.Contains("use:" + CrtFilters.Lottes.Name, listed);
+            SettingsDesk.At(window, SettingsScreen.Display, "shaders", "shader:" + Genesis);
+            Assert.Equal(SettingsDesk.Keys(window).Where(k => k.StartsWith("use:", StringComparison.Ordinal)), listed);
             window.Close();
         }, default);
 
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_sega_cd_frame_draws_through_the_crt_on_the_genesiss_line() => Session.Dispatch(() =>
         {
             var config = new GraphicsConfig();
-            config.SetValue(SegaCd, GraphicsSettingsWindow.ScreenFilterKey, CrtFilter.Name);
+            config.SetValue(SegaCd, EmuSen.Mistress.Library.GraphicsKeys.ScreenFilter, CrtFilter.Name);
             config.Save();
             var window = new MainWindow().WithoutBattery();
             window.Show();

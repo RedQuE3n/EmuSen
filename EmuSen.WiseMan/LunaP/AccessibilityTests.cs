@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.LunaP
     {
         public static TheoryData<string> Windows => new()
         {
-            "ActiveCheats", "CheatDatabase", "Preferences",
+            "ActiveCheats", "CheatDatabase", "ThemeSettings",
             "Vstop", "Main", "RomBrowser", "DianaShConsole",
         };
 
@@ -41,7 +41,7 @@ namespace EmuSen.WiseMan.LunaP
         {
             "ActiveCheats" => new ActiveCheatsWindow(),
             "CheatDatabase" => new CheatDatabaseWindow(),
-            "Preferences" => new PreferencesWindow(new AppSettings()),
+            "ThemeSettings" => new ThemeSettingsWindow(new AppSettings(), () => new System.Net.Http.HttpClient(), _ => { }),
             "Vstop" => new VstopWindow(),
             "Main" => new MainWindow(),
             "RomBrowser" => new RomBrowserWindow(),
@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.LunaP
                 Assert.Equal(s.Label, NameOf(s));
             }
 
-            using var prefs = new Showing(LaidOut(new PreferencesWindow(new AppSettings())));
+            using var prefs = new Showing(LaidOut(new Window { Width = 640, Height = 240, Content = new StackPanel { Children = { new PathPickerRow { BrowseTitle = "Choose the ROM folder" }, new PathPickerRow { BrowseTitle = "Choose the log folder" } } } }));
 
             // PathPickerRow names its own parts from BrowseTitle, and the Browse buttons keep their
             // caption while help text tells them apart.

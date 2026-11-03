@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         [Theory]
-        [InlineData("ShowGraphicsSettings")]
+        [InlineData("ShowMemoryCards")]
         [InlineData("ShowControllerBindings")]
         public Task A_window_closed_under_a_sheet_is_collected(string sheet) => Session.Dispatch(() =>
         {

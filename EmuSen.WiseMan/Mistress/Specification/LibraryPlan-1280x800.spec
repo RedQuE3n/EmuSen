@@ -112,18 +112,18 @@ tree
             98 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=AdaptiveHelpBar paints=#707070FF role=none
               99 HintBar at=64,716,1152,30 by=panel heard="Choose, No" limit=0,0,1280,800 role=group
           100 Panel at=0,0,1280,702 by=panel limit=0,0,1280,800 name=AdaptiveCover paints=#000000B8 role=none
-            101 Border at=280,134,720,435 by=panel limit=0,0,1280,800 paints=#26262BFF,#707070FF role=none
-              102 DockPanel at=313,167,654,369 by=panel limit=0,0,1280,800 role=none
-                103 TextBlock at=313,167,654,39 box=654,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"
-                104 StackPanel at=313,424,654,112 by=panel limit=0,0,1280,800 role=none
-                  105 Button at=313,424,654,54 by=panel drawn focus heard=No limit=0,0,1280,800 op paints=#D4D4D4FF role=button
-                    106 TextBlock at=341,435,31,32 box=31,32 by=clip caps=18.1987 drawn face=Barlow heard=No layout=30.68,31.2 limit=313,424,654,54 owner=105 paints=#EEEEF0FF role=text size=26 text=No
-                  107 Button at=313,482,654,54 by=panel drawn focus heard=Yes limit=0,0,1280,800 op paints=#D4D4D4FF role=button
-                    108 TextBlock at=341,493,40,32 box=40,32 by=clip caps=18.1987 drawn face=Barlow heard=Yes layout=39.36,31.2 limit=313,482,654,54 owner=107 paints=#D4D4D4FF role=text size=26 text=Yes
-                109 ScrollViewer at=313,218,654,194 by=panel limit=0,0,1280,800 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=313,218,654,194
-                  110 StackPanel at=313,218,654,194 by=fixed-scroll in=109 limit=313,218,654,194 role=none
-                    111 TextBlock at=313,218,654,106 box=654,106 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue" in=109 layout=653.33,105.6 limit=313,218,654,194 paints=#D4D4D4FF role=text size=22 text="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue"
-                    112 TextBlock at=313,332,654,80 box=654,80 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Only games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\"." in=109 layout=643.3,79.2 limit=313,218,654,194 paints=#D4D4D4FF role=text size=22 text="Only games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Preferences' \"List the games hidden from the library\"."
+            101 Border at=280,132,720,438 by=panel limit=0,0,1280,800 paints=#26262BFF,#707070FF role=none
+              102 DockPanel at=313,165,654,372 by=panel limit=0,0,1280,800 role=none
+                103 TextBlock at=313,165,654,39 box=654,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Apply these changes?" layout=225.5,38.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=32 text="Apply these changes?"
+                104 StackPanel at=313,425,654,112 by=panel limit=0,0,1280,800 role=none
+                  105 Button at=313,425,654,54 by=panel drawn focus heard=No limit=0,0,1280,800 op paints=#D4D4D4FF role=button
+                    106 TextBlock at=341,436,31,32 box=31,32 by=clip caps=18.1987 drawn face=Barlow heard=No layout=30.68,31.2 limit=313,425,654,54 owner=105 paints=#EEEEF0FF role=text size=26 text=No
+                  107 Button at=313,483,654,54 by=panel drawn focus heard=Yes limit=0,0,1280,800 op paints=#D4D4D4FF role=button
+                    108 TextBlock at=341,494,40,32 box=40,32 by=clip caps=18.1987 drawn face=Barlow heard=Yes layout=39.36,31.2 limit=313,483,654,54 owner=107 paints=#D4D4D4FF role=text size=26 text=Yes
+                109 ScrollViewer at=313,216,654,197 by=panel limit=0,0,1280,800 overflow=0 paints=#D4D4D4FF role=scrollviewer viewport=313,216,654,197
+                  110 StackPanel at=313,216,654,197 by=fixed-scroll in=109 limit=313,216,654,197 role=none
+                    111 TextBlock at=313,216,654,106 box=654,106 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue" in=109 layout=653.33,105.6 limit=313,216,654,197 paints=#D4D4D4FF role=text size=22 text="Hide from the library (2):\n  Amber Saga (USA) [copier].smc\n  Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue"
+                    112 TextBlock at=313,330,654,83 box=654,83 by=fixed-scroll caps=15.3989 drawn face=Barlow heard="Only games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Settings ▸ Library ▸ Hidden games." in=109 layout=620.47,82.94 limit=313,216,654,197 paints=#D4D4D4FF role=text size=22 text="Only games.db changes: no file in the library is written, moved or removed. A hidden game is shown again from here, or by Settings ▸ Library ▸ Hidden games."
 focus 105
 edge 105 up same
 edge 105 down 107

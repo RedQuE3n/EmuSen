@@ -303,7 +303,7 @@ namespace EmuSen.WiseMan.Mistress
             s.Choose("console:" + psx);
             Assert.DoesNotContain(s.Rows, r => r.Key == SettingsScreen.FirmwarePreferenceKey);
             s.Choose("firmware");
-            Assert.Equal(["fw:PlayStation BIOS", "fwreplacement", "fwfolder", "fwcheck"], s.Rows.Select(r => r.Key));
+            Assert.Equal(["fw:PlayStation BIOS", "fwreplacement", "fwfolder", "fwclear", "fwopen", "fwcheck"], s.Rows.Select(r => r.Key));
             Assert.Equal("Open replacement", s.Rows.Single(r => r.Key == "fwreplacement").Label);
             Assert.Equal("In use when none is found", Status(s, "fwreplacement"));
             s.Step("fwreplacement", 1);

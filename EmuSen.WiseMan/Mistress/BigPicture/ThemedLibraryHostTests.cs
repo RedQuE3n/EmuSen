@@ -331,7 +331,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // P45: the themed session reaches every sheet, through Settings where that is its door, and every control on each is reached by the pad at 1280 by 800.
         [Theory]
         [InlineData("Cheats")]
-        [InlineData("Shaders")]
         public Task Every_control_of_each_sheet_opened_from_the_themed_view_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession();

@@ -750,6 +750,19 @@ both sizes). Retired: `HomeCardSettings` (Home's Settings place opens Settings, 
 Home's Power place, the one place that still opens it over the own look. Taken again after review the same day:
 `SettingsDesktopConsoles` (each console's line its facts rather than one sentence for all) and `SettingsFirmware` (a row
 per need, the PlayStation's regional files one `PlayStation BIOS` row), both sizes.
+Added in U6b, 2026-11-03, both sizes: `SettingsShaders` (the Super Nintendo's shader page), `SettingsShaderParameters`
+(the CRT's parameters) and `SettingsCustomCrop` (the custom crop's four edges). Retired with their windows: the Graphics
+Settings and Shader Settings audits and recordings of `WindowFitAuditTests` (the tabs per console, the N64's note, the
+custom crop, the PlayStation's cards, the hosted PlayStation 2's tab, the sliders and the long parameter), and
+`PreferencesFirmware`; the hosted core's page is held by `WindowFitAuditTests.Hosted` through Settings' own description,
+and the players' rows by `SettingsPlayers` at both sizes. Taken again in U6b, one cause each, both sizes:
+`SettingsDesktopDisplay` for Window colours, and again as both U6 halves merged, Text size and Window colours on one page; `SettingsFirmware` for Use EmuSen's folder alone, Open EmuSen's folder and
+the need's pane saying what the open version changes; `BigPicture-ThemeSettings`, `ThemeBrowser` and
+`ThemeBrowserLongName` because Theme Settings is a framed sheet of tabs rather than ES-DE's menu, so its rows are its
+controls' own; `ThemeSettings`, added to the audited windows now that it is framed, its Options heading recorded as
+volatile since it names the test theme's folder, a fresh id each run (the normaliser reads a 32-digit id as `<id>`); `ScrapeStatusIdle` and `LibraryPlan` because their words send the player to Settings rather than
+Preferences, which wraps their text afresh.
+
 Taken again on 2026-11-03 at the land, one cause each, both sizes: `SettingsConsolePage` and `SettingsConsoles`, because
 FirmwarePreference, landed beside U6a, is a row of the Super Nintendo's schema ahead of SA-1 catch-up, so the page gains
 its row and the pane's facts line names it first; `SettingsConsolePage` again for Reset this console;
@@ -761,15 +774,15 @@ Library ▸ Cheats (`EmuSen_BigPicture.md` §52.5).
 | Old window and row | Settings |
 |---|---|
 | Preferences ▸ Library: ROM, Cover Art, Save State and Log directories | Library ▸ ROM folder, Artwork folder; EmuSen ▸ Saves and states ▸ State folder; EmuSen ▸ Logging ▸ Log folder |
-| Preferences ▸ Scraping: ScreenScraper, Member Account, Fetch, Fetch More, Game Names, Region, Language, Scrape, OpenEmu Failover, Orphaned Media | Library ▸ Scraping ▸ its rows, and Member account ▸ Log in, Check, Log out, OpenVGDB, Clean up orphaned media; today's requests and a run's Scrape, Resume and Cancel are the Scraper tool's |
+| Preferences ▸ Scraping: ScreenScraper, Member Account, Fetch, Fetch More, Game Names, Region, Language, Scrape, Resume, Cancel, Status, OpenEmu Failover, Orphaned Media | Library ▸ Scraping ▸ its rows (3D boxes among the fetched kinds since U6b), Resume, Cancel scraping (asked first), Status, Scraper, and Member account ▸ Log in, Check, Log out, OpenVGDB, Clean up orphaned media; today's requests are the Scraper tool's. Resume, Cancel and Status were said to be the Scraper's at U6a and were not; they are Settings' rows until the Scraper's redesign, a later window follow-on, takes them into the tool |
 | Preferences ▸ Gameplay: Continue Where You Left Off, Max Play Time Tracking, Smooth Motion, In the Background, Big Screen | EmuSen ▸ Saves and states ▸ Continue where you left off, Play time counted up to; Display ▸ Smooth motion; EmuSen ▸ Pause in the background, Big picture |
-| Preferences ▸ Appearance: Theme (the desktop's colours) | no row yet: the desktop's colour themes wait for D1's window |
+| Preferences ▸ Appearance: Theme (the desktop's colours) | Display ▸ Window colours, on the desktop (U6b) |
 | Preferences ▸ Appearance: Status Bar, Messages, Frame Rate, Big Picture Theme, ES-DE Theme Folder, Theme Settings, ES-DE Media, Navigation Sounds and their volume, Hidden Games | Display ▸ Status bar, Messages, Frame rate; Library ▸ Themes (stepped, A opens Theme Settings), ES-DE theme folder, ES-DE media folder, Hidden games; Sound ▸ Navigation sounds, Sound volume |
-| Preferences ▸ Controllers: the players, Keyboard, Controller Type, Button Swap, First Controller, On-Screen Keyboard, Notifications, Player 1 by press, External Controller | Controllers ▸ Players ▸ a row per pad (a held button marks its row), Keyboard, The first controller pressed, External controller first; Controllers ▸ Controller type, Swap A and B in menus, Only the first controller, On-screen keyboard, Controller notices |
-| Preferences ▸ Firmware, FirmwarePane | Consoles ▸ the console ▸ Firmware ▸ a row per file of `firmware_status`, Folder, Check again |
-| Graphics Settings, per console: the schema's rows, Shader and shape, Overscan and its note, Reset This Console | Consoles ▸ the console ▸ Engine, the schema's rows, CRT profile or Screen, Shader levers, Crop overscan (its pane naming the running game's own crop), Picture shape, Reset this console; Display ▸ Picture shape, CRT shader, Crop overscan for every console at once, Shaders |
+| Preferences ▸ Controllers: the players, Keyboard, Controller Type, Button Swap, First Controller, On-Screen Keyboard, Notifications, Player 1 by press, External Controller | Controllers ▸ Players ▸ a row per pad (a held button marks its row, None plays as no one, two of one name numbered), a row per seat kept (A forgets it), Keyboard, The first controller pressed, External controller first; Controllers ▸ Controller type, Swap A and B in menus, Only the first controller, On-screen keyboard, Controller notices |
+| Preferences ▸ Firmware, FirmwarePane | Consoles ▸ the console ▸ Firmware ▸ a row per file of `firmware_status` (its pane saying where the file was found, why one of the wrong size is unused and what the open version changes), Folder (by §7.7's rules), Use EmuSen's folder alone, Open EmuSen's folder, Check again |
+| Graphics Settings, per console: the schema's rows, the running engine's own, its groups and held rows, Shader and shape, Overscan with Custom crop and its note, Reset This Console | Consoles ▸ the console ▸ Engine, the schema's rows (the running engine's for the running game's console, under the engine's group headings, a held row shown with why), CRT profile or Screen, Shader levers, Crop overscan with Custom crop ▸ Left, Right, Top, Bottom (its pane naming the running game's own crop), Picture shape, Reset this console; Display ▸ Picture shape, CRT shader, Crop overscan for every console at once, Shaders |
 | Shader Settings: the CRT's parameters, Reset All | Display ▸ Shader levers, and Consoles ▸ the console ▸ Shader levers ▸ every CRT parameter, Reset to the tier's values |
-| Shader Settings: the slang catalogue, its categories and Download Pack | Display ▸ Shaders, the Shader Settings window, until U6b (restored 2026-11-03, `EmuSen_BigPicture.md` §52.5) |
+| Shader Settings: every filter and preset per console, its search, the recent ones, the slang catalogue's categories and Download Pack, a shader's parameters and their search | Display ▸ Shaders ▸ the pack's row and a page per console: Parameters (with Search parameters and Reset all), Search, the recent ones, the built-in filters, the pack's folders (`EmuSen_BigPicture.md` §52.9) |
 | Memory Cards: mode and slots | Consoles ▸ the console ▸ Memory cards ▸ Mode, Slot 1, Slot 2, Cards, New card; Saves on the cards opens the Memory Cards window for copying, moving and deleting saves |
 | Debug Logging: the master switch | EmuSen ▸ Logging ▸ Logging |
 | Game Collection Settings: automatic collections, custom collections shown, create, delete, finish editing, grouping, sorting, stars, folders, flatten, random entry | Library ▸ Collections ▸ its rows; Delete a collection ▸ a row each |

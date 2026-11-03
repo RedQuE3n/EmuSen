@@ -10,7 +10,7 @@ using EmuSen.LunaP.Windowing;
 namespace EmuSen.Mistress.Views
 {
     // Lists ROM files from a configured directory (AppSettings.RomDirectory,
-    // see PreferencesWindow) as a quicker alternative to the OS file picker
+    // set in Settings ▸ Library) as a quicker alternative to the OS file picker
     // for anyone repeatedly loading ROMs from the same test folder - the
     // OS picker (MainWindow's Open ROM...) still exists unchanged for
     // anyone who prefers it, or for a ROM outside that folder.

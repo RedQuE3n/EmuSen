@@ -225,11 +225,20 @@ namespace EmuSen.Mistress.Views
 
         string? ISettingsHost.RunningCropNote(string console) => RunningGameCropNote(console);
 
+        private ShaderShelf? _shaderShelf;
+
+        ShaderShelf ISettingsHost.Shaders => _shaderShelf ??= new ShaderShelf();
+
+        (bool Running, int Waiting) ISettingsHost.ScrapeRun => (((IScrapeHost)this).ScrapeRunning, ((IScrapeHost)this).Interrupted);
+
+        void ISettingsHost.DownloadShaders() => _ = ((ISettingsHost)this).Shaders.Download(HttpFactory, RefreshSettings);
+
         IReadOnlyList<SystemFacts> ISettingsHost.Systems => RuntimeCatalog.Systems;
 
         IReadOnlyList<SettingRow> ISettingsHost.Schema(string console)
         {
-            try { return RuntimeCatalog.SettingsFor(console); }
+            // The running game's own rows for its console, as its engine declares them, the console's schema for every other - see EmuSen_Backend.md §18.10.11.
+            try { return _session is { } running && console == _activeConsole ? RuntimeCatalog.SettingsOf(running.Crystal) : RuntimeCatalog.SettingsFor(console); }
             catch (CrystalException) { return []; }
         }
 
@@ -243,6 +252,22 @@ namespace EmuSen.Mistress.Views
                 if (key == RuntimeCatalog.EngineKey) RuntimeCatalog.Forget();
             }
             catch (CrystalException e) { StatusText.Text = $"The setting was not changed: {e.Message}"; }
+        }
+
+        // The runtime's firmware_overview by file: its size, where it was found and what its open version costs; empty where the runtime cannot say.
+        IReadOnlyDictionary<string, FirmwareWords> ISettingsHost.FirmwareOverview()
+        {
+            var words = new Dictionary<string, FirmwareWords>(StringComparer.Ordinal);
+            try
+            {
+                using var overview = System.Text.Json.JsonDocument.Parse(Runtime.FirmwareOverview());
+                static string? Text(System.Text.Json.JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String ? v.GetString() : null;
+                foreach (var system in overview.RootElement.GetProperty("systems").EnumerateArray())
+                    foreach (var i in system.GetProperty("items").EnumerateArray())
+                        words.TryAdd(Text(i, "file") ?? "", new FirmwareWords(Text(i, "file") ?? "", i.GetProperty("size").GetInt32(), i.GetProperty("wrong_size").GetBoolean(), Text(i, "effect"), Text(i, "cost"), Text(i, "found_in"), Text(i, "wrong_size_in")));
+            }
+            catch (Exception e) when (e is CrystalException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException) { }
+            return words;
         }
 
         // The runtime's firmware_status for a system, null where it cannot say (EmuSen_Cores.md §3.11).
@@ -286,7 +311,12 @@ namespace EmuSen.Mistress.Views
         IReadOnlyList<PlayerSeat> ISettingsHost.Players =>
             Enumerable.Range(1, 4).Select(p => new PlayerSeat(p, _gamepad.Players.SeatOf(p)?.Name, _gamepad.Players.SeatOf(p) is { } pad && !_gamepad.Pads.Contains(pad))).ToList();
 
-        IReadOnlyList<string> ISettingsHost.Pads => _gamepad.Pads.Select(p => p.Name).ToList();
+        // Two pads of one name numbered in front, from the order Endymion lists them in, so a long name trimmed at its end keeps the number.
+        IReadOnlyList<string> ISettingsHost.Pads => _gamepad.Pads.Select(p => _gamepad.Pads.Where(o => o.Name == p.Name).ToList() is { Count: > 1 } same ? $"{same.IndexOf(p) + 1} · {p.Name}" : p.Name).ToList();
+
+        void ISettingsHost.ForgetSeat(int player) => _gamepad.Players.Forget(player);
+
+        int ISettingsHost.PlayerOf(int pad) => pad >= 0 && pad < _gamepad.Pads.Count ? _gamepad.Players.PlayerOf(_gamepad.Pads[pad]) : 0;
 
         // The big picture's looks as Preferences named them: EmuSen's own first, a theme of the same name told apart by its folder.
         private List<EmuSen.Mistress.BigPicture.BigPictureLook> LookList => EmuSen.Mistress.BigPicture.BigPictureLooks.All(_appSettings).ToList();
@@ -314,7 +344,7 @@ namespace EmuSen.Mistress.Views
 
         private int _padsHeld;
 
-        // A button held on a pad marks its row on the Players page, drawn again only when what is held changes.
+        // A button held on a pad marks its row on the Players page, and a pad plugged in or pulled out adds or takes its row, drawn again only when either changes.
         private void OnSettingsPadsPolled()
         {
             if (_settings is { } bound && (bound.Model.Binding is { Keys: false, Capturing: true } || _bindHeld))
@@ -330,8 +360,9 @@ namespace EmuSen.Mistress.Views
             if (_settings is not { } view || view.Model.Trail.LastOrDefault() != "Players") return;
             int held = 0;
             for (int i = 0; i < _gamepad.Pads.Count && i < 30; i++) if (_gamepad.Pads[i].AnyPressed()) held |= 1 << i;
-            if (held == _padsHeld) return;
+            if (held == _padsHeld && _gamepad.Pads.Count == _padsShown) return;
             _padsHeld = held;
+            _padsShown = _gamepad.Pads.Count;
             RefreshSettings();
         }
 
@@ -440,6 +471,8 @@ namespace EmuSen.Mistress.Views
             view.Fill();
         }
 
+        private int _padsShown;
+
         void ISettingsHost.Seat(int pad, int player)
         {
             if (pad >= 0 && pad < _gamepad.Pads.Count) _gamepad.Assign(_gamepad.Pads[pad], player);
@@ -492,15 +525,17 @@ namespace EmuSen.Mistress.Views
         {
             switch (door)
             {
-                case SettingsScreen.DoorShaders: _ = ThenRefreshSettings(SheetLayer.Show(NewShaderSettings(), this)); break;
                 case SettingsScreen.DoorCheats: ShowActiveCheats(); break;
                 case SettingsScreen.DoorThemes: ShowThemeSettings(); break;
                 case SettingsScreen.DoorScraper: ShowScraper(); break;
                 case SettingsScreen.DoorSignIn: _ = SignInFromSettingsAsync(); break;
-                case SettingsScreen.DoorCheckAccount: _ = SaidInSettings(((IScrapeHost)this).CheckMemberAsync()); break;
+                case SettingsScreen.DoorCheckAccount: _ = SaidInSettings(((IScrapeHost)this).CheckMemberAsync(), check: true); break;
                 case SettingsScreen.DoorSignOut: StatusText.Text = ((IScrapeHost)this).SignOut(); RefreshSettings(); break;
                 case SettingsScreen.DoorOpenVgdb: _ = OpenVgdbFromSettingsAsync(); break;
                 case SettingsScreen.DoorCleanUp: _ = CleanUpFromSettingsAsync(); break;
+                case SettingsScreen.DoorScrapeResume: ((IScrapeHost)this).ResumeScrape(); RefreshSettings(); break;
+                case SettingsScreen.DoorScrapeCancel: _ = ThenRefreshSettings(((IScrapeHost)this).ConfirmCancelAsync((Avalonia.Controls.Window?)_settingsWindow ?? this)); break;
+                case SettingsScreen.DoorScrapeStatus: ((IScrapeHost)this).ShowScrapeStatus(); break;
                 case SettingsScreen.DoorCollections: ShowCollections(); break;
                 case SettingsScreen.DoorShell: ShowShellConsole(); break;
                 case SettingsScreen.DoorDiscs: ShowCompressedDiscs(); break;
@@ -514,6 +549,8 @@ namespace EmuSen.Mistress.Views
                 case SettingsScreen.DoorArtFolder: _ = AskFolderAsync("Artwork folder", _appSettings.ArtworkDirectory, p => { _appSettings.ArtworkDirectory = p; ScanArtwork(); }); break;
                 case SettingsScreen.DoorStateFolder: _ = AskFolderAsync("State folder", _appSettings.StateDirectory, p => _appSettings.StateDirectory = p); break;
                 case SettingsScreen.DoorLogFolder: _ = AskFolderAsync("Log folder", _appSettings.LogDirectory, p => _appSettings.LogDirectory = p); break;
+                case SettingsScreen.DoorOpenFirmware: OpenFirmwareFolder(); break;
+                case SettingsScreen.DoorClearFirmware: _appSettings.FirmwareDirectory = null; _appSettings.Save(); RefreshSettings(); break;
                 case SettingsScreen.DoorFirmwareFolder: _ = AskFolderAsync("Firmware folder", _appSettings.FirmwareDirectory, p => _appSettings.FirmwareDirectory = p); break;
                 case SettingsScreen.DoorMediaFolder: _ = AskFolderAsync("ES-DE media folder", _appSettings.EsdeMediaDirectory, p => _appSettings.EsdeMediaDirectory = p); break;
                 case SettingsScreen.DoorThemeFolder: _ = AskFolderAsync("ES-DE theme folder", _appSettings.BigPictureTheme, p => { _appSettings.BigPictureTheme = p; ThemeChanged(false); }); break;
@@ -551,7 +588,7 @@ namespace EmuSen.Mistress.Views
         // A name typed in; what was kept is applied and Settings drawn again.
         private async Task AskInSettingsAsync(string title, string prompt, string current, Action<string> then)
         {
-            if (await Dialogs.PromptAsync(this, title, prompt, current, "Use") is not string typed || typed.Trim().Length == 0) return;
+            if (await Dialogs.PromptAsync((Avalonia.Controls.Window?)_settingsWindow ?? this, title, prompt, current, "Use") is not string typed || typed.Trim().Length == 0) return;
             then(typed.Trim());
             RefreshSettings();
         }
@@ -568,7 +605,7 @@ namespace EmuSen.Mistress.Views
                 MemberAccount member = ((IScrapeHost)this).Member;
                 string line = !member.IsSet ? "Not signed in: runs use EmuSen's developer credentials alone." : $"Signed in as {member.User}";
                 if (member.IsSet && ((IScrapeHost)this).MemberChecked is { Level: { Length: > 0 } level }) line += $" · level {level}";
-                return _accountSaid is { Length: > 0 } said ? $"{line}. {said}" : line;
+                return _accountSaid is { Length: > 0 } said ? $"{line.TrimEnd('.')}. {said}" : line;
             }
         }
 
@@ -597,11 +634,13 @@ namespace EmuSen.Mistress.Views
             await SaidInSettings(((IScrapeHost)this).SignInAsync(user, password));
         }
 
-        private async Task SaidInSettings(Task<SignInAnswer> asked)
+        // A check that fails keeps the account it asked about, and says so.
+        private async Task SaidInSettings(Task<SignInAnswer> asked, bool check = false)
         {
             _accountSaid = "Asking ScreenScraper...";
             RefreshSettings();
-            _accountSaid = (await asked).Message;
+            SignInAnswer answer = await asked;
+            _accountSaid = answer.Message + (check && !answer.SignedIn && ((IScrapeHost)this).Member.IsSet ? " The account is kept until you Log Out." : "");
             RefreshSettings();
         }
 
@@ -619,12 +658,24 @@ namespace EmuSen.Mistress.Views
         }
 
         // A folder typed in, as Game Mode never shows the platform's picker; what was kept is saved and Settings drawn again.
-        private async Task AskFolderAsync(string title, string? current, Action<string> apply)
+        // A folder typed by the setting's rules: a relative path or a file refused and said, a missing folder kept and said, blank back to the default - see EmuSen_Config_Reference.md §7.7.
+        private async Task AskFolderAsync(string title, string? current, Action<string?> apply)
         {
-            if (await Dialogs.PromptAsync(this, title, $"The {title.ToLowerInvariant()}'s path", current ?? "", "Use") is not string typed) return;
-            apply(typed.Trim());
+            if (await Dialogs.PromptAsync((Avalonia.Controls.Window?)_settingsWindow ?? this, title, $"The {title.ToLowerInvariant()}'s path", current ?? "", "Use") is not string typed) return;
+            FolderValue folder = SettingFolders.Checked(typed.Trim());
+            StatusText.Text = folder.Problem ?? "";
+            if (folder.State is FolderState.Relative or FolderState.File) return;
+            apply(folder.State == FolderState.Unset ? null : folder.Written);
             _appSettings.Save();
             RefreshSettings();
+        }
+
+        // EmuSen's firmware folder in the file manager, made first since a file manager opens nothing for a path that does not exist; the player's own is never made.
+        private static void OpenFirmwareFolder()
+        {
+            string folder = EmuSen.Common.Firmware.FirmwareLibrary.Directory;
+            try { System.IO.Directory.CreateDirectory(folder); } catch (System.IO.IOException) { } catch (UnauthorizedAccessException) { }
+            Input.DeviceKeyboard.Launcher.Open(folder);
         }
 
         bool ISettingsHost.SystemReducesMotion => SystemReducesMotion();

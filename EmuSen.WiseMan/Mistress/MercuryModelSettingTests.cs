@@ -17,6 +17,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -46,23 +47,16 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public Task The_gb_tab_offers_auto_game_boy_and_game_boy_color_and_stores_the_choice() => UiTest.Run(() =>
+        public Task The_gb_page_offers_auto_game_boy_and_game_boy_color_and_stores_the_choice() => UiTest.Run(() =>
         {
-            var config = new GraphicsConfig();
-            string? told = null;
-            var window = new GraphicsSettingsWindow(config, console => told = console, "GB");
-            window.Show();
+            MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:GB");
+            Assert.Equal(new[] { MercuryEngines.ModelAuto, MercuryEngines.ModelGameBoy, MercuryEngines.ModelGameBoyColor }, SettingsDesk.Row(window, MercuryEngines.ModelKey).Choices);
+            Assert.Equal(MercuryEngines.ModelAuto, SettingsDesk.Value(window, MercuryEngines.ModelKey));
+            UiTest.AssertLaidOut(SettingsDesk.Of(window), "settings-gb-model");
 
-            Dropdown model = window.GetLogicalDescendants().OfType<Dropdown>().Where(d => d.Name == $"GB.{MercuryEngines.ModelKey}").Distinct().Single();
-            Assert.Equal(new[] { MercuryEngines.ModelAuto, MercuryEngines.ModelGameBoy, MercuryEngines.ModelGameBoyColor }, model.Items.Cast<object>().Select(o => o.ToString()));
-            Assert.Equal(MercuryEngines.ModelAuto, model.SelectedItem);
-            UiTest.AssertLaidOut(window, "graphics-gb-model");
-
-            model.SelectedItem = MercuryEngines.ModelGameBoyColor;
-            Dispatcher.UIThread.RunJobs();
-            Assert.Equal("GB", told);
+            SettingsDesk.Pick(window, MercuryEngines.ModelKey, MercuryEngines.ModelGameBoyColor);
             Assert.Equal(MercuryEngines.ModelGameBoyColor, ConsolesConfig.Load().Value("GB", MercuryEngines.ModelKey));
-            UiTest.AssertLaidOut(window, "graphics-gb-model-color");
+            UiTest.AssertLaidOut(SettingsDesk.Of(window), "settings-gb-model-color");
             window.Close();
         });
 

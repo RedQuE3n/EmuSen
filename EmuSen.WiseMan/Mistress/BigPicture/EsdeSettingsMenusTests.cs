@@ -46,62 +46,23 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static MenuRow RowOf(Control c) => c as MenuRow ?? c.GetVisualDescendants().OfType<MenuRow>().First();
 
-        // A sheet's menu is ES-DE's: centred, its first row's bar across the panel, a Back button under the rows, and nothing drawn outside the panel and the help bar.
-        private static void AssertEsdeMenu(ThemedSession s, MenuPanel menu, string title)
-        {
-            Assert.True(SheetLayer.GetChromeless(Sheets(s).Current!));
-            Assert.Equal(title, menu.Title);
-            Rect panel = EsdeMenusTests.InWindow(menu, menu.PanelBounds, s.Window);
-            EsdeMenusTests.AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
-            Assert.Empty(Sheet(s).GetVisualDescendants().OfType<FieldRow>().Where(r => r.IsEffectivelyVisible));
-            Button back = Named<Button>(s, "BigMenuBack");
-            Assert.True(EsdeMenusTests.InWindow(menu, menu.ButtonsBounds, s.Window).Contains(EsdeMenusTests.InWindow(back, new Rect(back.Bounds.Size), s.Window)));
-
-            var focused = (Control)TopLevel.GetTopLevel(s.Window)!.FocusManager!.GetFocusedElement()!;
-            RenderedFrame open = s.Capture();
-            MenuRow bar = RowOf(focused);
-            Assert.True(bar.IsHighlighted);
-            EsdeMenusTests.AssertBarSpans(open, EsdeMenusTests.InWindow(bar, bar.Layout(bar.Bounds.Size).Bar, s.Window), panel, bar.BarColor, bar.AccentColor);
-
-            Rect help = EsdeMenusTests.InWindow(menu.HelpBar, new Rect(menu.HelpBar.Bounds.Size), s.Window);
-            menu.IsVisible = false;
-            RenderedFrame without = s.Capture();
-            menu.IsVisible = true;
-            s.Settle();
-            ((InputElement)focused).Focus(NavigationMethod.Directional);
-            (int inside, int outside) = EsdeMenusTests.Changed(open, without, panel.Inflate(1), help.Inflate(1));
-            Assert.True(inside > 1000, $"only {inside} pixels of the panel were drawn");
-            Assert.Equal(0, outside);
-        }
-
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task Theme_settings_is_ES_DE_s_menu_its_options_first_and_themes_and_interface_as_submenus(int width, int height) => Session.Dispatch(() =>
+        public Task Theme_settings_is_a_sheet_of_three_tabs_and_B_closes_it(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
             ThemedLibraryFlowTests.Choose(s, "Theme Settings");
             s.Settle();
-            var sheet = Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
-            AssertEsdeMenu(s, sheet.Form!.Menu, "Theme Settings");
-            string[] labels = Rows(s).Select(LabelOf).ToArray();
-            Assert.Equal(["Themes", "Interface"], labels[^2..]);
-            Assert.Contains("Transitions", labels);
-            Assert.All(Rows(s)[^2..], r => Assert.Equal(MenuRowKind.Submenu, MenuRows.GetKind(r)));
+            Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
+            TabControl tabs = Named<TabControl>(s, "ThemeSettingsTabs");
+            Assert.Equal(["Options", "Themes", "Interface"], tabs.Items.OfType<TabItem>().Select(t => t.Header as string));
 
-            // A submenu is a screen of its own, titled with its name; B goes back a screen, then closes.
-            Reach(s, "BigMenuPage2");
-            s.Pad.A();
-            Assert.Equal("Interface", sheet.Form.Menu.Title);
-            Assert.Equal(1, sheet.Form.Depth);
-            Assert.Equal(MenuRowKind.Switch, MenuRows.GetKind(Named<LunaSwitch>(s, "DisplayClock")));
-            Assert.Equal("Display clock", MenuRows.GetLabel(Named<LunaSwitch>(s, "DisplayClock")));
-            Assert.Equal(MenuRowKind.Option, MenuRows.GetKind(Named<Dropdown>(s, "LaunchScreenDuration")));
-            Assert.Equal(MenuRowKind.Option, MenuRows.GetKind(Named<Slider>(s, "ScreensaverTimer")));
-            Assert.Equal(s.Settings.BigPictureInterface.ScreensaverTimer == 0 ? "Never" : $"{s.Settings.BigPictureInterface.ScreensaverTimer / 60000} min", RowOf(Named<Slider>(s, "ScreensaverTimer")).Value);
-            s.Pad.B();
-            Assert.Equal("Theme Settings", sheet.Form.Menu.Title);
-            Assert.True(Sheets(s).IsPresenting);
-            s.Pad.B();
+            for (int i = 0; i < 3 && (tabs.SelectedItem as TabItem)?.Header as string != "Interface"; i++) s.Pad.R1();
+            s.Settle();
+            Assert.Equal("Display clock", Named<LunaSwitch>(s, "DisplayClock").Label);
+            Assert.NotNull(Named<Dropdown>(s, "LaunchScreenDuration"));
+            Assert.NotNull(Named<Slider>(s, "ScreensaverTimer"));
+            ThemedSwitchesTests.PutAway(s);
             Assert.False(Sheets(s).IsPresenting);
         }, default);
 
@@ -198,8 +159,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             PageRow bios = Assert.Single(files);
             Assert.Equal("PlayStation BIOS", bios.Label);
             Assert.True(bios.Status is "Not found" or "⚠ Not found" || bios.Status!.StartsWith("✓ Found · ", StringComparison.Ordinal), bios.Status);
-            // Then Open replacement, the runtime's FirmwarePreference where the mockup draws it (decided 2026-11-03, EmuSen_Cores.md §3.13), the folder and Check again.
-            Assert.Equal(["fwreplacement", "fwfolder", "fwcheck"], layout.Rows.Skip(files.Count).Select(r => r.Key));
+            // Then Open replacement, the runtime's FirmwarePreference where the mockup draws it (decided 2026-11-03, EmuSen_Cores.md §3.13), the folder, its clearing and opening, and Check again.
+            Assert.Equal(["fwreplacement", "fwfolder", "fwclear", "fwopen", "fwcheck"], layout.Rows.Skip(files.Count).Select(r => r.Key));
             Assert.Equal("Open replacement", layout.Rows.Single(r => r.Key == "fwreplacement").Label);
             foreach (PageRow file in files)
             {
@@ -239,43 +200,35 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(frame.SyncToDisplay);
         }, default);
 
-        // Q86: A on an option row opens ES-DE's list screen: the row's name as its title, a row per choice with the current one focused, Back; the menu beneath is not drawn.
+        // Theme Settings' choices on its tabbed sheet: A opens the dropdown in the window, B leaves it unchanged, and A on a choice sets it.
         [Theory]
         [MemberData(nameof(Sizes))]
-        public Task A_on_an_option_row_opens_the_list_screen_which_chooses_or_goes_back_unchanged(int width, int height) => Session.Dispatch(() =>
+        public Task A_on_a_theme_settings_choice_opens_its_dropdown_which_chooses_or_goes_back_unchanged(int width, int height) => Session.Dispatch(() =>
         {
             using var s = new ThemedSession(width, height);
             ThemedSwitchesTests.OpenInterface(s);
-            Control interfaceSheet = Sheet(s);
             Reach(s, "LaunchScreenDuration");
+            var box = Named<Dropdown>(s, "LaunchScreenDuration");
             s.Pad.A();
             s.Settle();
-            var list = Assert.IsType<OptionListWindow>(Sheets(s).Current);
-            Assert.Equal("Launch Screen Duration", list.Menu.Title);
-            Assert.Equal(InterfaceSettingsPane.LaunchScreenChoices.Select(c => c.Text), list.Choices);
-            Assert.False(interfaceSheet.IsVisible);
-            Button current = Named<Button>(s, "OptionListChoice4");
-            Assert.True(current.IsFocused);
-            Assert.True(RowOf(current).IsHighlighted);
-            Rect panel = EsdeMenusTests.InWindow(list.Menu, list.Menu.PanelBounds, s.Window);
-            EsdeMenusTests.AssertCentred(panel, s.Window.GetControl<Control>("ScreenContent").Bounds.Size);
+            Assert.True(box.IsDropDownOpen);
+            Assert.Equal(InterfaceSettingsPane.LaunchScreenChoices.Select(c => c.Text), box.Items.Cast<object>().Select(i => (i as ContentControl)?.Content as string ?? i as string));
 
             // B leaves it unchanged, back on the row.
             s.Pad.B();
             s.Settle();
+            Assert.False(box.IsDropDownOpen);
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             Assert.Equal(BigPictureInterface.LaunchDisabled, s.Settings.BigPictureInterface.LaunchScreenDuration);
-            Assert.True(Named<Dropdown>(s, "LaunchScreenDuration").IsFocused);
 
-            // A on a choice sets it and goes back.
+            // A on a choice sets it.
             s.Pad.A();
             s.Settle();
             s.Pad.Up(3);
             s.Pad.A();
             s.Settle();
-            Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
+            Assert.False(box.IsDropDownOpen);
             Assert.Equal(BigPictureInterface.LaunchBrief, s.Settings.BigPictureInterface.LaunchScreenDuration);
-            Assert.Equal("Brief", RowOf(Named<Dropdown>(s, "LaunchScreenDuration")).Value);
             ThemedSwitchesTests.PutAway(s);
         }, default);
 
@@ -315,18 +268,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(120);
             Assert.Equal(1, menu.OpeningScale);
             s.Pad.B();
-
-            // A sheet's menu, and a submenu turned to, grow the same way.
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
-            var sheet = (ThemeSettingsWindow)Sheets(s).Current!;
-            Assert.True(sheet.Form!.Menu.OpeningScale < 1);
-            s.Run(150);
-            Assert.Equal(1, sheet.Form.Menu.OpeningScale);
-            Reach(s, "BigMenuPage2");
-            s.Pad.A();
-            Assert.True(sheet.Form.Menu.OpeningScale < 1);
-            s.Run(150);
-            ThemedSwitchesTests.PutAway(s);
 
             s.Settings.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
             s.Pad.Start();

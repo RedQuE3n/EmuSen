@@ -20,6 +20,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Views;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.WiseMan.Serenity
 {
@@ -160,31 +161,30 @@ namespace EmuSen.WiseMan.Serenity
         }, default);
 
         [Fact]
-        public Task Graphics_settings_offer_the_picture_shape_on_every_tab_tv_shape_first_and_store_its_value() => Session.Dispatch(() =>
+        public Task Settings_offer_the_picture_shape_on_every_console_s_page_tv_shape_first_and_store_its_value() => Session.Dispatch(() =>
         {
             string dir = Path.Combine(Path.GetTempPath(), "EmuSenAspectWindow_" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(dir);
             ConfigStore.OverrideDirectory = dir;
+            DataStore.OverrideDirectory = Path.Combine(dir, "Home");
             try
             {
-                var config = new GraphicsConfig();
-                string? changed = null;
-                var window = new GraphicsSettingsWindow(config, c => changed = c, "N64");
-                window.Show();
-                window.CaptureRenderedFrame();
-                Dropdown shape = window.GetVisualDescendants().OfType<Dropdown>().First(d => d.Name == "N64.PictureShape");
-                Assert.Equal("TV shape", shape.SelectedItem);
-                Assert.Equal(new[] { "TV shape", "Square pixels" }, shape.Items.Cast<object>().Select(o => o.ToString()));
-                shape.SelectedItem = "Square pixels";
-                Dispatcher.UIThread.RunJobs();
-                Assert.Equal((GraphicsSettingsWindow.SquarePixels, "N64"), (config.Value("N64", GraphicsSettingsWindow.PictureShapeKey), changed));
-                foreach (var console in CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console))
-                    Assert.Contains(Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(window).OfType<Control>(), c => c.Name == $"{console}.PictureShape");
+                MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:N64");
+                Assert.Equal("TV shape", SettingsDesk.Value(window, "consoleshape"));
+                Assert.Equal(new[] { "TV shape", "Square pixels" }, SettingsDesk.Row(window, "consoleshape").Choices);
+                SettingsDesk.Pick(window, "consoleshape", "Square pixels");
+                Assert.Equal(EmuSen.Mistress.Library.GraphicsKeys.SquarePixels, GraphicsConfig.Load().Value("N64", EmuSen.Mistress.Library.GraphicsKeys.PictureShape));
+                foreach (var console in EmuSen.Mistress.Library.RuntimeCatalog.Systems.Where(s => s.Engines.Count > 0).Select(s => s.Console).Distinct())
+                {
+                    SettingsDesk.At(window, SettingsScreen.Consoles, "console:" + console);
+                    Assert.Contains("consoleshape", SettingsDesk.Keys(window));
+                }
                 window.Close();
             }
             finally
             {
                 ConfigStore.OverrideDirectory = null;
+                DataStore.OverrideDirectory = null;
                 try { Directory.Delete(dir, recursive: true); } catch { }
             }
         }, default);

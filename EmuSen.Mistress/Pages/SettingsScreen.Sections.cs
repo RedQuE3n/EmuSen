@@ -88,10 +88,14 @@ namespace EmuSen.Mistress.Pages
             for (int i = 0; i < pads.Count; i++)
             {
                 int pad = i;
-                int seat = _host.Players.FirstOrDefault(s => s.Pad == pads[i])?.Player ?? 0;
-                Setting row = Choice($"pad{i}", pads[i], "The player this controller plays as; a button held on it marks its row.", players, seat - 1, p => _host.Seat(pad, p + 1));
+                int seat = _host.PlayerOf(i);
+                // None plays as no one and still steers the menus - see EmuSen_Input.md §8.9.
+                Setting row = Choice($"pad{i}", pads[i], seat == 0 ? "Plays as no one, and still steers the menus; a button held on it marks its row." : "The player this controller plays as; a button held on it marks its row.",
+                    [NoPlayer, .. players], seat, p => _host.Seat(pad, p));
                 rows.Add(_host.PadPressed(i) ? row with { Row = row.Row with { Status = "● " + row.Row.Status } } : row);
             }
+            foreach (PlayerSeat kept in _host.Players.Where(s => s.Kept && s.Pad is not null))
+                rows.Add(Act($"kept{kept.Player}", $"Player {kept.Player}: {kept.Pad}, disconnected", "Kept for this controller, which gets the number back when it reconnects; a new controller may take it meanwhile. A forgets it now.", () => _host.ForgetSeat(kept.Player), "Forget"));
             rows.Add(Choice("keyboardplayer", "Keyboard", "The player the keyboard plays as, beside that player's controller.", players, App.KeyboardPlayer - 1, p => { App.KeyboardPlayer = p + 1; _host.SaveApp("keyboardplayer"); }));
             rows.Add(Switch("claim", "The first controller pressed is player 1", "In a game, the first controller a button is pressed on is player 1 and the others follow in the order they are used.", App.ClaimPlayersByPress, on => App.ClaimPlayersByPress = on));
             rows.Add(Switch("external", "External controller first", "On a handheld, a controller connected to it is player 1 ahead of the built-in controls.", App.ExternalControllerFirst, on => App.ExternalControllerFirst = on));
@@ -111,8 +115,7 @@ namespace EmuSen.Mistress.Pages
             Opens("levers", "Shader levers", "The CRT's own levers for one console: the mask, the bloom, the scanlines and the glass.", null, () => { if (LeverConsole is { } c) Push("Shader levers", () => LeverRows(c), "levers"); },
                 () => LeverConsole is { } c ? new ScreenPane([new SettingsLine($"The {NameOf(c)}'s CRT, as the game running shows it."), new SettingsLine("A opens its levers; each one redraws the picture.", SettingsTone.Muted)]) { Preview = new PanePreview.Frame(FrameCaption("live preview")) } : null,
                 enabled: LeverConsole is not null),
-            Opens("shaders", "Shaders", "Each console's screen filter from every one EmuSen has: the built-in filters and the slang catalogue's presets, their parameters, and the catalogue's download.",
-                _host.RunningConsole is { } running ? Views.ShaderSettingsWindow.Describe(_host.Graphics.Value(running, GraphicsKeys.ScreenFilter)) : null, () => _host.Open(DoorShaders)),
+            ShadersRow(),
             ForEvery("crop", "Crop overscan", "What is hidden at the picture's edges on a console that had a television: the whole picture, or the part a television showed. Console's leaves each its own.",
                 TvConsoles, GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan], ["Whole picture", "TV overscan"], GraphicsKeys.NoOverscan),
             TextSizeRow(),
@@ -126,6 +129,7 @@ namespace EmuSen.Mistress.Pages
             Switch("statusbar", "Status bar", "The desktop's bar along the bottom of the window.", App.ShowStatusBar, on => App.ShowStatusBar = on),
             Switch("messages", "Messages", "The game's name, Paused, State saved and errors at the bottom left.", App.ShowStatusText, on => App.ShowStatusText = on),
             Switch("fps", "Frame rate", "The frames-per-second readout while a game runs.", App.ShowFpsBar, on => App.ShowFpsBar = on),
+            .. WindowColours(),
         ];
 
         public static readonly (string Value, string Text, double Scale)[] TextSizes =
@@ -143,6 +147,15 @@ namespace EmuSen.Mistress.Pages
                 v => { App.TextSize = v; _host.SaveApp("textsize"); },
                 () => new ScreenPane([.. TextSizes.Select(t => new SettingsLine($"{t.Text} · The quick brown fox") { Size = Math.Round(Math.Round(LunaTokens.BigScreenType.Body / LunaTokens.TextScale) * t.Scale * 2) / 2 }),
                     new SettingsLine("Text size scales every word on the big screen; nothing is cut off at any size.")]));
+
+        // The desktop window's colour theme, LunaP's own or one from its themes folder; the big screen draws in its own look.
+        private IEnumerable<Setting> WindowColours()
+        {
+            if (!_host.Desktop) yield break;
+            IReadOnlyList<string> names = LunaTheme.Available();
+            yield return Choice("colours", "Window colours", "The desktop window's colours: EmuSen's own, or a theme from LunaP's themes folder.", names, names.ToList().IndexOf(LunaTheme.Current),
+                i => LunaTheme.Apply(names[i]));
+        }
 
         private string FrameCaption(string what) => $"{_host.RunningTitle ?? "The last game"} · {what}";
 
@@ -280,6 +293,12 @@ namespace EmuSen.Mistress.Pages
                 Switch("gamenames", "ScreenScraper's names", "Show the names ScreenScraper gives rather than the files'.", App.ScrapeGameNames, on => App.ScrapeGameNames = on),
                 Switch("refresh", "Refresh what is kept", "Fetch again what a game already has.", App.ScrapeRefresh, on => App.ScrapeRefresh = on),
                 Switch("openemu", "OpenEmu's sources", "OpenVGDB and libretro's thumbnails when ScreenScraper has nothing.", App.OpenEmuFallback, on => App.OpenEmuFallback = on),
+                Act("resume", "Resume", "Goes on with the games a stopped run left queued; nothing resumes by itself.", () => _host.Open(DoorScrapeResume),
+                    _host.ScrapeRun.Waiting > 0 ? $"{Count(_host.ScrapeRun.Waiting, "game", "games")} queued" : "Nothing queued", enabled: !_host.ScrapeRun.Running && _host.ScrapeRun.Waiting > 0),
+                new(new PageRow("cancelscrape", "Cancel scraping") { Kind = PageRowKind.Asks, Status = _host.ScrapeRun.Running ? "Running" : null, Sentence = "Stops the run once you say so; what it has not reached stays queued for Resume.", IsEnabled = _host.ScrapeRun.Running },
+                    Choose: () => _host.Open(DoorScrapeCancel)),
+                Opens("status", "Status", "The run's progress, the account's limits and today's requests.", null, () => _host.Open(DoorScrapeStatus)),
+                Opens("scraper", "Scraper", "The tool that chooses which games a run fetches for and starts it.", null, () => _host.Open(DoorScraper)),
             };
             foreach ((string key, string label, Func<bool> get, Action<bool> set) in Fetches())
                 rows.Add(Switch(key, label, $"Fetch {label.ToLowerInvariant()}.", get(), set));
@@ -312,6 +331,7 @@ namespace EmuSen.Mistress.Pages
             ("titles", "Title screens", () => App.ScrapeTitleScreens, v => App.ScrapeTitleScreens = v), ("backs", "Back covers", () => App.ScrapeBackCovers, v => App.ScrapeBackCovers = v),
             ("physical", "Physical media", () => App.ScrapePhysicalMedia, v => App.ScrapePhysicalMedia = v), ("fanart", "Fan art", () => App.ScrapeFanArt, v => App.ScrapeFanArt = v),
             ("manuals", "Manuals", () => App.ScrapeManuals, v => App.ScrapeManuals = v), ("videos", "Videos", () => App.ScrapeVideos, v => App.ScrapeVideos = v),
+            ("boxes3d", "3D boxes", () => App.Scrape3DBoxes, v => App.Scrape3DBoxes = v),
         ];
 
         private IReadOnlyList<Setting> CollectionRows()

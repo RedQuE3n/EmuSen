@@ -9,8 +9,7 @@ namespace EmuSen.Mistress.Views
     // Four boxes for the edges of a crop, each a percentage of the picture, for a console's crop and for a game's - see EmuSen_Settings_Reference.md §4.99.
     public sealed class CropFields
     {
-        // The edges in the order they are shown, with the key a console's value is stored under.
-        public static readonly (string Key, string Label)[] Edges = { ("CropLeft", "Left"), ("CropRight", "Right"), ("CropTop", "Top"), ("CropBottom", "Bottom") };
+        private static readonly (string Key, string Label)[] Edges = EmuSen.Mistress.Library.ConsoleCrop.Edges;
 
         public const string Hint = "How much of the picture's width or height to hide at each edge, up to 25.";
 
@@ -44,11 +43,8 @@ namespace EmuSen.Mistress.Views
             for (int i = 0; i < _boxes.Count; i++) _boxes[i].Text = Text(_stored(i));
         }
 
-        // A percentage as typed, with a point or a comma, held to what one edge may hide; null when it is no number.
-        public static double? ParsePercent(string? text) =>
-            double.TryParse(text?.Trim().Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out double value) && double.IsFinite(value)
-                ? Math.Clamp(Math.Round(value, 1), 0, EmuSen.Serenity.PictureCrop.MostAtAnEdge * 100) : null;
+        private static double? ParsePercent(string? text) => EmuSen.Mistress.Library.ConsoleCrop.ParsePercent(text);
 
-        public static string Text(double percent) => percent.ToString("0.#", CultureInfo.InvariantCulture);
+        private static string Text(double percent) => EmuSen.Mistress.Library.ConsoleCrop.Text(percent);
     }
 }

@@ -68,20 +68,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Settle();
         }
 
-        // The Themes submenu's rows as a big-screen session draws them: EmuSen's own Use row, then a submenu row for each theme (§4.72.8).
-        private static Button[] ThemeRows(ThemedSession s) =>
-            SheetRoot(s).GetLogicalDescendants().OfType<StackPanel>().Single(p => p.Name == "BigMenuRows").Children.OfType<Button>()
-                .Where(b => b.Name == "ThemeUseBuiltIn" || b.Name?.StartsWith("BigMenuSub_") == true).ToArray();
+        // The Themes tab's rows, one per look: EmuSen's own first, then each theme with its Use button.
+        private static FieldRow[] ThemeRows(ThemedSession s) =>
+            SheetRoot(s).GetLogicalDescendants().OfType<FieldRow>().Distinct()
+                .Where(r => r.Name == "ThemeRowBuiltIn" || r.GetLogicalDescendants().OfType<Button>().Any(b => b.Name?.StartsWith("ThemeUse.", StringComparison.Ordinal) == true)).ToArray();
 
-        private static string LabelOf(Button row) => MenuRows.GetLabel(row) ?? row.Content as string ?? "";
-
-        // A theme's own submenu, reached by the pad from the Themes submenu.
-        private static void OpenTheme(ThemedSession s, string label)
-        {
-            PadAudit.Reach(SheetRoot(s), s.Pad, e => e is Button b && b.Name == "BigMenuSub_" + label);
-            s.Pad.A();
-            s.Settle();
-        }
+        private static string LabelOf(FieldRow row) => row.Label ?? "";
 
         // B until the sheet of that kind is gone, one screen at a time as ES-DE's menus go back.
         private static void BackOutOf<T>(ThemedSession s) where T : Window
@@ -98,14 +90,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var s = new ThemedSession();
             OpenThemes(s);
-            Button[] rows = ThemeRows(s);
-            Assert.Equal("ThemeUseBuiltIn", rows[0].Name);
+            FieldRow[] rows = ThemeRows(s);
+            Assert.Equal("ThemeRowBuiltIn", rows[0].Name);
             Assert.Equal("EmuSen (built in)", LabelOf(rows[0]));
             Assert.Equal("Use", Named<Button>(s, "ThemeUseBuiltIn").Content);
             Assert.True(Named<Button>(s, "ThemeUseBuiltIn").IsEnabled);
             Button theme = Named<Button>(s, $"ThemeUse.{OwnFolder(s)}");
             Assert.Equal(("In Use", false), (theme.Content, theme.IsEnabled));
-            Assert.Equal("In Use", MenuRows.GetValue(rows[1]));
+            Assert.Same(rows[1], theme.FindAncestorOfType<FieldRow>());
             _out.WriteLine(string.Join(" | ", rows.Select(LabelOf)));
         }, default);
 
@@ -159,7 +151,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal("Themes", (TabsOf(s).SelectedItem as TabItem)?.Header);
             Assert.Equal("In Use", Named<Button>(s, "ThemeUseBuiltIn").Content);
             s.Window.UpdateLayout();
-            OpenTheme(s, LabelOf(ThemeRows(s)[1]));
             UseByPad(s, $"ThemeUse.{OwnFolder(s)}");
 
             Assert.True(Sheets(s).IsPresenting);
@@ -218,9 +209,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Shown);
             OpenThemes(s);
 
-            // EmuSen's own entry is one Use row with no submenu, so nothing removes it.
-            Assert.Equal("ThemeUseBuiltIn", ThemeRows(s)[0].Name);
-            Assert.Equal(MenuRowKind.Action, MenuRows.GetKind(ThemeRows(s)[0]));
+            // EmuSen's own entry is one Use button and nothing else, so nothing removes it.
+            Assert.Equal("ThemeRowBuiltIn", ThemeRows(s)[0].Name);
+            Assert.Equal(["ThemeUseBuiltIn"], ThemeRows(s)[0].GetLogicalDescendants().OfType<Button>().Select(b => b.Name));
             Assert.True(Has(s, "ThemeRemove.synthetic-book"));
             Assert.Single(BigPictureLooks.All(AppSettings.Load()), l => l.BuiltIn);
 
@@ -235,7 +226,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(Directory.Exists(downloaded));
             Assert.False(Has(s, "ThemeRemove.synthetic-book"));
             Assert.Equal(("In Use", false), (Named<Button>(s, "ThemeUseBuiltIn").Content, Named<Button>(s, "ThemeUseBuiltIn").IsEnabled));
-            Assert.Equal("ThemeUseBuiltIn", ThemeRows(s).First().Name);
+            Assert.Equal("ThemeRowBuiltIn", ThemeRows(s).First().Name);
             Assert.False(s.Shown);
             Assert.True(LibraryContentShown(s));
             Assert.Equal(new[] { BigPictureLooks.BuiltIn }, BigPictureLooks.All(AppSettings.Load()));

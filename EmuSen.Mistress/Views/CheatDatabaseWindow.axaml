@@ -20,7 +20,7 @@
              spelled out again. It was the second of those until the 0.5.0 bump
              made the difference visible: the toolkit control names its own parts
              and the copy named nothing, so the same row was accessible in
-             PreferencesWindow and silent here. Naming the copy by hand would
+             the retired Preferences window and silent here. Naming the copy by hand would
              have closed that gap and kept the thing that caused it - which is
              the argument EmuSen_LunaP.md §6.1 already made about three copies of
              a frame hand-off sharing one bug. §7.2. -->

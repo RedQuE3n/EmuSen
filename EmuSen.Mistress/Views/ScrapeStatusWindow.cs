@@ -188,7 +188,7 @@ namespace EmuSen.Mistress.Views
             {
                 _heading.Text = "No scraping in progress.";
                 _bar.IsVisible = false;
-                _timing.Text = "Nothing is sent from this window. A run starts from Scrape This Game... or Preferences ▸ Scraping.";
+                _timing.Text = "Nothing is sent from this window. A run starts from Scrape This Game... or the Scraper.";
                 _current.IsVisible = _tallySection.IsVisible = _recentSection.IsVisible = false;
                 _why.IsVisible = _summary.IsVisible = false;
                 return;
@@ -270,7 +270,7 @@ namespace EmuSen.Mistress.Views
             string name = member.IsSet ? member.User : "";
             // The member's own name is shown to them; every other text passes the redactor.
             _member.Text = member.IsSet
-                ? $"Member: {name}" + (member.Verified is null && _host.MemberChecked is null ? " (not checked; Check in Preferences ▸ Scraping)" : "")
+                ? $"Member: {name}" + (member.Verified is null && _host.MemberChecked is null ? " (not checked; Check in Settings ▸ Library ▸ Scraping ▸ Member account)" : "")
                 : "No member account: EmuSen's developer credentials alone, with their limits.";
 
             QuotaSnapshot? q = _host.Quota;
@@ -298,7 +298,7 @@ namespace EmuSen.Mistress.Views
             text += $" {Plural(run.Requests, "request")} sent to ScreenScraper";
             text += _host.Quota is { MaxPerDay: int max } q ? $"; it counts {q.RequestsToday:N0} of {max:N0} today." : ".";
             int left = _host.Interrupted;
-            if (left > 0) text += $" {Plural(left, "game")} left queued: Resume, in Preferences ▸ Scraping, goes on with them. Nothing resumes by itself.";
+            if (left > 0) text += $" {Plural(left, "game")} left queued: Resume, in Settings ▸ Library ▸ Scraping, goes on with them. Nothing resumes by itself.";
             return text;
         }
 

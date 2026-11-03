@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.LunaP
     //
     // This is not an accessibility test, though accessibility is how the problem surfaced.
     // CheatDatabaseWindow spelled out a read-only TextBox beside a "Browse..." Button, which is
-    // exactly what luna:PathPickerRow is, and PreferencesWindow used the real control three times.
+    // exactly what luna:PathPickerRow is, and the retired Preferences window used the real control three times.
     // The two rows were indistinguishable on screen. They stopped being indistinguishable the
     // moment LunaP 0.5.0 taught PathPickerRow to name its own parts: the real one announced itself
     // and the copy stayed silent, in a window whose other nine tab stops were fine.
@@ -31,7 +31,6 @@ namespace EmuSen.WiseMan.LunaP
         private static Window[] Windows() => new Window[]
         {
             new CheatDatabaseWindow(),
-            new PreferencesWindow(new AppSettings()),
             new RomBrowserWindow(),
             new ActiveCheatsWindow(),
             new MainWindow(),
@@ -77,7 +76,7 @@ namespace EmuSen.WiseMan.LunaP
         {
             var counts = new Dictionary<string, int>();
 
-            foreach (Window window in new Window[] { new CheatDatabaseWindow(), new PreferencesWindow(new AppSettings()) })
+            foreach (Window window in new Window[] { new CheatDatabaseWindow() })
             {
                 window.Show();
                 Avalonia.Threading.Dispatcher.UIThread.RunJobs();
@@ -87,7 +86,6 @@ namespace EmuSen.WiseMan.LunaP
             }
 
             Assert.Equal(1, counts[nameof(CheatDatabaseWindow)]);
-            Assert.Equal(4, counts[nameof(PreferencesWindow)]);
         });
     }
 }

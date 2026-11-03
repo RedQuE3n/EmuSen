@@ -123,7 +123,7 @@ namespace EmuSen.Mistress.Views
         {
             List<PadMenuEntry> rows = [Opens("Console Settings", () => ShowSettings(SettingsScreen.Consoles, "console:" + _activeConsole)), Opens("Shader Levers", () => ShowSettings(SettingsScreen.Display, "levers"))];
             // The running game's own crop, where its console has an overscan to replace - see EmuSen_Settings_Reference.md §4.100.
-            if (_currentRomPath is string rom && GraphicsSettingsWindow.HasOverscan(_activeConsole)) rows.Add(Opens(CropThisGame, () => ShowGameCrop(rom, RunningGameTitle())));
+            if (_currentRomPath is string rom && EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(_activeConsole)) rows.Add(Opens(CropThisGame, () => ShowGameCrop(rom, RunningGameTitle())));
             return rows;
         }
 

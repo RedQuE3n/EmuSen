@@ -1297,6 +1297,10 @@ looks hokey and should stay put:
   first attempt left the card drawn sharp beside the sheet's panel, which `SheetLookTests` caught as 6 pixels changing
   outside the panel at 1920 × 1200.
 - The game runs no frame throughout.
+- This is the Pause Card's rule only. A tool or settings sheet opened from the Home card still closes the card first:
+  Theme Settings, Collections and the Interface tab apply their choices to the themed view beneath them, which a Home
+  card kept on screen would cover. The first build applied the rule to both cards, and 48 tests of the themed views
+  failed on it (2026-11-02). §2.9's return to Home from such a tool is a separate step.
 - Built in `ChoosePadMenuRow` (an entry that opens a screen leaves the card open beneath it), `ShowPadMenuPage` (no
   opening effect) and `UpdateMenuBackdrop` (a card uncovered does not open again).
 - Proved by WiseMan `PadMenuTests.The_card_stays_on_screen_from_page_to_page_into_a_sheet_and_back`, which steps

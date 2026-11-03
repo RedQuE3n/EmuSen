@@ -250,8 +250,8 @@ namespace EmuSen.Mistress.Views
                 EnterPadMenuPage(new PadMenuPage(question, () => QuestionRows(entry, PadMenuBack), entry.QuestionDetail, question: true), at, key: null);
                 return;
             }
-            // A screen of its own lays over the card, which keeps its page, row and pause beneath it - see EmuSen_Interface.md §18.5.
-            if (entry.Opens && entry.Closes)
+            // A screen of its own lays over the Pause Card, which keeps its page, row and pause beneath it - see EmuSen_Interface.md §18.5.
+            if (entry.Opens && entry.Closes && _padMenuInGame)
             {
                 _padMenuPages[^1].At = at;
                 entry.Accept();

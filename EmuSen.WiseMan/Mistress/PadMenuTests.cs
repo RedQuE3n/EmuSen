@@ -552,7 +552,7 @@ namespace EmuSen.WiseMan.Mistress
             s.Pad.Start();
             PadMenu.Choose(s.Window, s.Pad, row, exact: true);
             s.Settle();
-            Assert.True(PadMenu.IsOpen(s.Window), "the card stays beneath the sheet it opened (EmuSen_Interface.md §18.5)");
+            Assert.False(PadMenu.IsOpen(s.Window));
             Assert.IsType(window, Sheets(s.Window).Current);
             if (row == "Players & Controllers") Assert.Equal(PreferencesWindow.ControllersTab, PreferencesTab(s.Window));
         }, default);

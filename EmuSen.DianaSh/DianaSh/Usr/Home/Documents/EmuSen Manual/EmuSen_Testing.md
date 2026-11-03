@@ -71,9 +71,12 @@ not checked out; git objects describe that branch, the working tree does not.
 
 The rules, the first reason for a unit kept:
 
-1. **recording**: a changed recording selects its owner (a `recording` line of `inputs.json`). A file that ends as a
-   recording does (`.spec`, `.golden`, `.frame`, `.framesum`) and that no line owns selects the tier's whole set. This
-   is the rule whose absence let a `.spec`-only commit select nothing on 2026-11-01.
+1. **recording**: a changed recording selects its owner (a `recording` line of `inputs.json`), or, since 2026-11-03,
+   when the owner is mapped by case (§3.7) and the map has the group the recording's name keys
+   (`BigPicture-MainMenu-1280x800.spec` to `WindowFitAuditTests#BigPicture-MainMenu`), that group alone: two such
+   specs had run the whole audit, 17.8 minutes, on 2026-11-02. A file that ends as a recording does (`.spec`,
+   `.golden`, `.frame`, `.framesum`) and that no line owns selects the tier's whole set. This is the rule whose
+   absence let a `.spec`-only commit select nothing on 2026-11-01.
 2. **always**: a test class's own file selects the class; a unit that failed in the branch's last trial is selected
    again; a tier's `always` list.
 3. **declared**: a `folder` line adds its units. Its select entries are WiseMan filter terms (a class is chosen when
@@ -106,7 +109,14 @@ The rules, the first reason for a unit kept:
    file nothing names, a file never executed by any test, or a file that is not C# (`.axaml`, JSON tables,
    resources, `.fs`) falls to the rules below. The map is used only when its revision is at most one day older than
    the change's merge base (`impact --map-age`); an older map is said on standard error and the graph answers as
-   before.
+   before. The toolkit's own changes can count (built 2026-11-03, off by default): with `--lunap-base REV` impact
+   diffs the sibling LunaP checkout that `LunaP.props` names and each file enters as `lunap:<path>`, the name the
+   map records the toolkit's 170 files under; a `lunap:` file the map has seen selects the units that executed it,
+   and one it has never seen is claimed by no rule and closes to the tier's whole set. A LunaP change is otherwise
+   invisible to impact: the flush-help-band land (LunaP c37edcc, `MenuPanel.cs`) went green with `EsdeMenusTests`,
+   which measures that band and had executed the file, never selected; it failed in the next land. Held on
+   2026-11-03 by the tester while LunaP's move into this repository (a subtree) is decided, which would make the
+   sibling diff unnecessary; the replay case for c37edcc stands in §6 for whichever way it goes.
 5. **graph**: the file's owner and its reverse closure. Every crate reached is selected. A test project reached is
    narrowed to the units of the lines matching the file, or matching a reached crate's folder; a WiseMan file that is
    not a test class is narrowed to the classes naming its types; a project no line narrows is selected whole. This is
@@ -245,9 +255,16 @@ the pausecard land's selection (96 classes, 26.4 minutes in one process): 90 of 
 kept together that shard would be the wall, 25 minutes, and spread the prediction is 6.6. Decided 2026-11-02 by the
 tester: the collection guards state inside a process (config, SDL, firmware: `EmuSen_Galaxia.md` §3.14), which
 separate processes do not share, so its classes are spread (`EMUSEN_KEEP=1` keeps them together); what separate
-processes do share is the machine, so the classes whose sources show them touching machine-wide state are found
-by a scan (`shard --machine`: a virtual pad or uinput, a listener or a literal port, a fixed path under the home or
-`out/` that the class writes, a lock on a fixed folder, the GPU facts) and dealt as one item to one shard. The two
+processes do share is the machine, so the test project's files that show machine-wide state are found by a scan
+(`shard --machine`: a virtual pad or uinput, a listener or a literal port, a fixed path under the home or `out/`
+that the file writes, a lock on a fixed file, the GPU facts) and, since 2026-11-03, a unit is machine-global when
+the map saw it execute such a file (a class without rows, when its own files are such); those units are dealt as
+one item to one shard. `FixedRunFolder` was in the first scan as a lock and is not one: it claims the next free slot
+(`/tmp/<name>/NNN.lock`, `FileShare.None`) per process, which is what lets the audit's groups run side by side; with
+it counted, every one of the audit's 272 groups sat in the machine shard and the first four sharded lands ran 930 to
+967 s against 5 to 6 minutes for the other shards. The land's own times go back to the store after each land
+(`ingest --backfill` at the end of land.sh, a row per class and, for a class mapped by case, per group), so the
+shards are dealt by real times rather than the map's, which run about 2.4 times longer for the audit. The two
 coverage runs had already run all of the collection's classes four processes at a time: none failed the second
 time, and the one failure the first time (`CoresWindowTests`, one of ten) never recurred in three runs of the class
 alone under coverage nor bare; that run was the hard-linked one, in which other workers' sessions were rewriting

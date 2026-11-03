@@ -99,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             // The same frame with the card taken away differs only inside the panel and its shadow, the pane's surface and the help bar's band; the scrim alone changed the theme.
             double u = MenuPanel.GetScale(menu);
-            Rect help = InWindow(menu, new Rect(0, menu.Bounds.Height - 98 * u, menu.Bounds.Width, 58 * u), s.Window);
+            Rect help = InWindow(menu, new Rect(0, menu.Bounds.Height - 98 * u, menu.Bounds.Width, 98 * u), s.Window);
             Rect pane = InWindow(menu, menu.PaneBounds, s.Window);
             Rect shadow = new(panel.X, panel.Y, panel.Width + 40 * u, panel.Height);
             menu.IsVisible = false;

@@ -164,6 +164,9 @@ namespace EmuSen.WiseMan.Mistress
 
             pad.B();
             Assert.False(Sheets(window).IsPresenting);
+            // B climbs back to the Pause Card, which keeps the game paused until B closes it - see EmuSen_Interface.md §2.9.
+            Assert.True(window.IsPaused);
+            pad.B();
             Assert.False(window.IsPaused);
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (Peek(window, 0x7E0100) != 0x42 && clock.ElapsedMilliseconds < 5_000) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(5); }

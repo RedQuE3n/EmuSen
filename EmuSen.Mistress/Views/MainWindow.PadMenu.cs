@@ -250,7 +250,7 @@ namespace EmuSen.Mistress.Views
                 EnterPadMenuPage(new PadMenuPage(question, () => QuestionRows(entry, PadMenuBack), entry.QuestionDetail, question: true), at, key: null);
                 return;
             }
-            if (entry.Closes) ClosePadMenu(holdPause: true);
+            if (entry.Closes) ClosePadMenuHoldingPause();
             entry.Accept();
             HandOverHeldPause();
             if (_padMenuOpen && !entry.Closes && at < _padMenuEntries.Count && ReferenceEquals(_padMenuEntries[at], entry)) RefreshPadMenuText(at);
@@ -281,7 +281,11 @@ namespace EmuSen.Mistress.Views
 
         private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "home/") + title;
 
-        private void ClosePadMenu(bool holdPause = false)
+        private void ClosePadMenu() => ClosePadMenu(holdPause: false);
+
+        private void ClosePadMenuHoldingPause() => ClosePadMenu(holdPause: true);
+
+        private void ClosePadMenu(bool holdPause)
         {
             if (!_padMenuOpen) return;
 

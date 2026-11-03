@@ -3,6 +3,7 @@ using EmuSen.Galaxia.Library;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -83,6 +84,17 @@ namespace EmuSen.Tools.Scraper
             UpdateActions();
         }
 
+        // Raised when the whole library's listing ends, with the tool's one-line state, for the host's Home to show (EmuSen_Interface.md §19).
+        public event Action<ToolSummary?>? SummaryChanged;
+
+        // The tool's one-line state read without a window, by the same listing of the whole library, off the interface thread; null where the command is not in use or refuses.
+        public static ToolSummary? ReadSummary(CancellationToken cancel)
+        {
+            if (!CommandAvailable() || cancel.IsCancellationRequested) return null;
+            try { return ScraperPlan.StateOf(ScrapeRow.Listing(Ask(ScrapeCommand.Request(ScraperPlan.Line("ls", null, new ScrapeOptions())))).Rows); }
+            catch (Exception e) when (e is ScrapeCommandException or JsonException or InvalidOperationException) { return null; }
+        }
+
         public ScrapeOptions Options => new(_videos.IsChecked, _overwrite.IsChecked);
 
         // The last refusal or failure the command gave, in its words; null when there was none.
@@ -161,8 +173,9 @@ namespace EmuSen.Tools.Scraper
                 (List<ScrapeRow> rows, List<string> notes) = ScrapeRow.Listing(answer);
                 Say(_endSaid ?? (notes.Count > 0 ? string.Join(" ", notes.Select(ScraperPlan.Sentence)) : null));
                 SetRows(rows);
-                int lacking = rows.Count(r => r.Media.Count > 0 && r.Missing.Count > 0);
-                Header = new AdaptiveHeader("SCRAPER", Facts: $"{rows.Count} games · {lacking} missing media");
+                ToolSummary? summary = ScraperPlan.StateOf(rows);
+                Header = new AdaptiveHeader("SCRAPER", Facts: $"{ToolSummary.Count(rows.Count, "game", "games")} · {summary?.Marked ?? "nothing listed"}");
+                if (SelectedSection is null or "all" && SelectedFilter is null or "all") SummaryChanged?.Invoke(summary);
                 // The systems are learnt from the whole library only: a section or a filter lists part of it.
                 if (SelectedSection is null or "all" && SelectedFilter is null or "all") LearnSystems(rows);
             }

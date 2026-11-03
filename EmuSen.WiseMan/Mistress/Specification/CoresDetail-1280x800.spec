@@ -16,7 +16,7 @@ tree
       2 CoresPane at=48,28,1184,732 by=panel heard=Cores limit=0,0,1280,800 role=pane
         3 Panel at=48,28,1184,732 by=panel limit=0,0,1280,800 name=AdaptiveLayers role=none
           4 Grid at=48,28,1184,732 by=panel limit=0,0,1280,800 role=none
-            5 Border at=48,28,1184,60 by=panel heard=CORES limit=0,0,1280,800 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=48,28,1184,60 by=panel heard=CORES limit=0,0,1280,800 name=AdaptiveHeader role=none
               6 DockPanel at=64,40,1152,48 by=panel limit=0,0,1280,800 role=none
                 7 TextBlock at=579,51,637,26 box=637,26 by=panel caps=13.999 drawn face=Barlow heard="9 cores · 7 installed · ⚠ 1 to approve · ↑ 1 update · catalogue read 31 Oct 2026" layout=636.08,25.7 limit=0,0,1280,800 paints=#8D8D91FF role=text size=20 text="9 cores · 7 installed · ⚠ 1 to approve · ↑ 1 update · catalogue read 31 Oct 2026"
                 8 StackPanel at=64,44,503,39 by=panel limit=0,0,1280,800 role=none
@@ -136,42 +136,54 @@ edge 19 down 66
 edge 19 left 17
 edge 19 right 21
 edge 21 up same
-edge 21 down 74
-edge 21 left 19
-edge 21 right 23
-edge 23 up same
-edge 23 down 66
-edge 23 left 21
-edge 23 right 12
-edge 31 up 38
-edge 31 down 81
-edge 31 left same
-edge 31 right 12
-edge 38 up 45
-edge 38 down 31
-edge 38 left same
-edge 38 right 12
-edge 45 up 52
-edge 45 down 38
-edge 45 left same
-edge 45 right 12
-edge 52 up 59
-edge 52 down 45
-edge 52 left same
-edge 52 right 12
-edge 59 up 66
-edge 59 down 52
-edge 59 left same
-edge 59 right 12
-edge 66 up 74
-edge 66 down 59
-edge 66 left same
-edge 66 right 12
-edge 74 up "row:ListBox/0/NINTENDO: Mark: not marked, Core: VenusRT, Console: Super Nintendo, Status: ● Default"
-edge 81 up 31
-edge 81 down same
-edge 81 left same
-edge 81 right 12
+edge 21 down 83
+edge 21 left 32
+edge 21 right same
+edge 26 up same
+edge 26 down 75
+edge 26 left same
+edge 26 right 28
+edge 28 up same
+edge 28 down 75
+edge 28 left 26
+edge 28 right 30
+edge 30 up same
+edge 30 down 83
+edge 30 left 28
+edge 30 right 32
+edge 32 up same
+edge 32 down 75
+edge 32 left 30
+edge 32 right 21
+edge 40 up 47
+edge 40 down 90
+edge 40 left same
+edge 40 right 21
+edge 47 up 54
+edge 47 down 40
+edge 47 left same
+edge 47 right 21
+edge 54 up 61
+edge 54 down 47
+edge 54 left same
+edge 54 right 21
+edge 61 up 68
+edge 61 down 54
+edge 61 left same
+edge 61 right 21
+edge 68 up 75
+edge 68 down 61
+edge 68 left same
+edge 68 right 21
+edge 75 up 83
+edge 75 down 68
+edge 75 left same
+edge 75 right 21
+edge 83 up "row:ListBox/0/NINTENDO: Mark: not marked, Core: VenusRT, Console: Super Nintendo, Status: ● Default"
+edge 90 up 40
+edge 90 down same
+edge 90 left same
+edge 90 right 21
 press pageup top=CoresWindow
 press pagedown top=CoresWindow
 press first focus="TextBox Search (Search)" top=CoresWindow

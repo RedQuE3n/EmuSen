@@ -51,7 +51,7 @@ namespace EmuSen.Mistress.Views
             _homeGame = _padMenuInGame ? null : GameInHand();
             _padMenuPages.Add(new PadMenuPage(null, _padMenuInGame ? GameMenuRows : HomeRows));
             PadCard.Title = _padMenuInGame ? "Pause" : HomeTitle;
-            if (!_padMenuInGame) AskToolCounts();
+            if (!_padMenuInGame) AskToolSummaries();
 
             // Before the menu shows, so no frame runs under it - the library's own rule (§4.18).
             _padMenuPaused = _padMenuInGame && !IsPaused;

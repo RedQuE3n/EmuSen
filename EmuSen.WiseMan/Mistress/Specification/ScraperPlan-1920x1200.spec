@@ -16,7 +16,7 @@ tree
       2 ScraperPane at=72,42,1776,1098 by=panel heard=Scraper limit=0,0,1920,1200 role=pane
         3 Panel at=72,42,1776,1098 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
           4 Grid at=72,42,1776,1098 by=panel limit=0,0,1920,1200 role=none
-            5 Border at=72,42,1776,90 by=panel heard=SCRAPER limit=0,0,1920,1200 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=72,42,1776,90 by=panel heard=SCRAPER limit=0,0,1920,1200 name=AdaptiveHeader role=none
               6 DockPanel at=96,60,1728,72 by=panel limit=0,0,1920,1200 role=none
                 7 TextBlock at=1494,78,330,36 box=220,24 by=panel caps=13.999 face=Barlow heard="3 games · 3 missing media" layout=219.44,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="3 games · 3 missing media"
                 8 StackPanel at=96,66,1380,58.5 by=panel limit=0,0,1920,1200 role=none

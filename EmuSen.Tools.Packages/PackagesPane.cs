@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using System.Threading;
 using static EmuSen.Galaxia.Native.ToolEvents;
 using Avalonia;
 using Avalonia.Controls;
@@ -78,6 +79,17 @@ namespace EmuSen.Tools.Packages
             DetachedFromVisualTree += (_, _) => Stop();
             SetSections([new AdaptiveSection("all", "All", "Consoles")], "all");
             UpdateActions();
+        }
+
+        // Raised when a listing ends, with the tool's one-line state, for the host's Home to show (EmuSen_Interface.md §19).
+        public event Action<ToolSummary?>? SummaryChanged;
+
+        // The tool's one-line state read without a window, by the same listing, off the interface thread; null where the tool is not in use or the read was cancelled.
+        public static ToolSummary? ReadSummary(CancellationToken cancel)
+        {
+            if (!ToolAvailable()) return null;
+            try { return ToolSummary.Rows(StartJob(ListingRequest), PackageRow.Of, cancel) is { } rows ? PackagesWords.StateOf(rows) : null; }
+            catch (Exception e) when (e is FormatException or InvalidOperationException or JsonException) { return null; }
         }
 
         // The library's folder, AppSettings.RomDirectory, which the host gives; a game's package controls need it.
@@ -262,8 +274,11 @@ namespace EmuSen.Tools.Packages
             sections.AddRange(Rows.Select(r => r.Console).Where(c => c.Length > 0).Distinct().Order(StringComparer.CurrentCultureIgnoreCase).Select(c => new AdaptiveSection("console:" + c, c, "Consoles")));
             string selected = SelectedSection is { } s && sections.Any(x => x.Key == s) ? s : "all";
             SetSections(sections, selected);
-            int problems = Rows.Count(r => r.Problem);
-            Header = new AdaptiveHeader("PACKAGES", Facts: $"{Rows.Count} games · {Rows.Count(r => r.Packaged)} packaged · {problems} {(problems == 1 ? "problem" : "problems")}");
+            ToolSummary? summary = PackagesWords.StateOf(Rows);
+            var facts = new List<string> { summary?.Marked ?? "No games listed", $"{ToolWords.Size(Rows.Sum(r => r.PackageSize))} in packages" };
+            if (Disk(DataStore.Packages) is { Total: > 0 } disk) facts.Add($"{ToolWords.Size(disk.Free)} free");
+            Header = new AdaptiveHeader("PACKAGES", Facts: string.Join(" · ", facts));
+            SummaryChanged?.Invoke(summary);
         }
 
         // The packages' total and the free space of the disk they are on (§3).

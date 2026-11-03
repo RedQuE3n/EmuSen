@@ -10,6 +10,9 @@
 
     <DockPanel Margin="16">
 
+        <!-- The tool's header row on the desktop, EmuSen_Interface.md §19.2; the big screen's sheet keeps its own title. -->
+        <lunac:AdaptiveHeaderRow DockPanel.Dock="Top" x:Name="HeaderRow" Margin="-8,-6,-8,10" />
+
         <TextBlock DockPanel.Dock="Top"
                    Text="EmuSen ships no cheat data. Point this at a cheat folder you already have - a RetroArch cheats folder works as-is - or download one."
                    TextWrapping="Wrap"

@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Native;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -23,8 +24,13 @@ namespace EmuSen.WiseMan.Mistress
             public IReadOnlyList<string> Recent { get; set; } = ["/g/a.sfc", "/g/b.sfc"];
             public GameFacts Facts(string path) => OwnLookScreenTests.Facts(path, path == "/g/a.sfc" ? "Granite Choir" : "Basalt Run", last: Clock.AddDays(-1), hours: 14.33);
             public int GameCount { get; set; } = 1284;
-            public int? MissingMedia { get; set; } = 41;
-            public int? CoresWaiting { get; set; } = 1;
+            public Dictionary<string, ToolSummary> Summaries { get; set; } = new()
+            {
+                [HomeScreen.Scraper] = new("41 without art", "41 no art"),
+                [HomeScreen.Library] = new("2 suspect dumps", "2 suspect", NeedsAttention: true),
+                [HomeScreen.Cores] = new("1 to approve", NeedsAttention: true),
+            };
+            public ToolSummary? Summary(string place) => Summaries.GetValueOrDefault(place);
             public int ControllerCount => 2;
             public string? Battery { get; set; }
             public string SettingsLine => "Dark · 60% sound";
@@ -50,12 +56,27 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(home.Places.Single(p => p.Key == HomeScreen.Cores).NeedsAttention);
             Assert.Equal("1 to approve", home.Places.Single(p => p.Key == HomeScreen.Cores).Status);
             Assert.Equal("Exit", home.Places.Last().Status);
+            Assert.Equal("Game packages", home.Places.Single(p => p.Key == HomeScreen.Packages).Status);
+            Assert.Equal(("2 suspect", true), home.Places.Single(p => p.Key == HomeScreen.Library) is var l ? (l.Status, l.NeedsAttention) : default);
+        }
+
+        [Fact]
+        public void The_desktop_s_places_take_each_tool_s_whole_line_and_a_tool_that_has_said_nothing_its_description()
+        {
+            var host = new FakeHome { Desktop = true };
+            host.Summaries[HomeScreen.Cheats] = new("12 on · 3 games");
+            var home = new HomeScreen(host);
+            Assert.Equal(["1,284 games", "41 without art", "Game packages", "2 suspect dumps", "1 to approve", "12 on · 3 games"], home.Places.Take(6).Select(p => p.Status));
+            Assert.Equal([false, false, false, true, true, false], home.Places.Take(6).Select(p => p.NeedsAttention));
+            host.Summaries.Clear();
+            Assert.Equal(["Art and facts", "Game packages", "Checks dumps", "The engines", "Codes for games"], new HomeScreen(host).Places.Skip(1).Take(5).Select(p => p.Status));
         }
 
         [Fact]
         public void The_desktop_has_eight_places_and_Game_Mode_quits_rather_than_exits()
         {
-            var host = new FakeHome { Desktop = true, CoresWaiting = 0, Battery = "80%" };
+            var host = new FakeHome { Desktop = true, Battery = "80%" };
+            host.Summaries[HomeScreen.Cores] = new("17 cores · 5 installed");
             var home = new HomeScreen(host);
             Assert.Equal(["Games", "Scraper", "Packages", "Library Manager", "Cores", "Cheats", "Settings", "Big Picture"], home.Places.Select(p => p.Label));
             Assert.False(home.Places.Single(p => p.Key == HomeScreen.Cores).NeedsAttention);

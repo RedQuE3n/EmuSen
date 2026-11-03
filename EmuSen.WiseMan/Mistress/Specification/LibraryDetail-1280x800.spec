@@ -16,7 +16,7 @@ tree
       2 LibraryPane at=48,28,1184,732 by=panel heard="Library Manager" limit=0,0,1280,800 role=pane
         3 Panel at=48,28,1184,732 by=panel limit=0,0,1280,800 name=AdaptiveLayers role=none
           4 Grid at=48,28,1184,732 by=panel limit=0,0,1280,800 role=none
-            5 Border at=48,28,1184,60 by=panel heard="LIBRARY MANAGER" limit=0,0,1280,800 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=48,28,1184,60 by=panel heard="LIBRARY MANAGER" limit=0,0,1280,800 name=AdaptiveHeader role=none
               6 DockPanel at=64,40,1152,48 by=panel limit=0,0,1280,800 role=none
                 7 TextBlock at=762,52,454,24 box=454,24 by=panel caps=13.999 drawn face=Barlow heard="29 files · 1 same dumps · 2 broken or suspect · 0 hidden" layout=453.66,24 limit=0,0,1280,800 paints=#8D8D91FF role=text size=20 text="29 files · 1 same dumps · 2 broken or suspect · 0 hidden"
                 8 StackPanel at=64,44,686,39 by=panel limit=0,0,1280,800 role=none
@@ -119,53 +119,61 @@ edge 17 down 35
 edge 17 left same
 edge 17 right 19
 edge 19 up same
-edge 19 down 35
-edge 19 left 17
-edge 19 right 21
-edge 21 up same
-edge 21 down 35
-edge 21 left 19
-edge 21 right 23
-edge 23 up same
-edge 23 down 35
-edge 23 left 21
-edge 23 right 25
-edge 25 up same
-edge 25 down 35
-edge 25 left 23
-edge 25 right 27
-edge 27 up same
-edge 27 down 35
-edge 27 left 25
-edge 27 right 12
-edge 35 up 17
-edge 35 down 41
-edge 35 left same
-edge 35 right 27
-edge 41 up 35
-edge 41 down 47
-edge 41 left same
-edge 41 right 27
-edge 47 up 41
-edge 47 down 53
-edge 47 left same
-edge 47 right 12
-edge 53 up 47
-edge 53 down 59
-edge 53 left same
-edge 53 right 12
-edge 59 up 53
-edge 59 down 65
-edge 59 left same
-edge 59 right 12
-edge 65 up 59
-edge 65 down 71
-edge 65 left same
-edge 65 right 12
-edge 71 up 65
-edge 71 down same
-edge 71 left same
-edge 71 right 12
+edge 19 down 42
+edge 19 left 34
+edge 19 right same
+edge 24 up same
+edge 24 down 42
+edge 24 left same
+edge 24 right 26
+edge 26 up same
+edge 26 down 42
+edge 26 left 24
+edge 26 right 28
+edge 28 up same
+edge 28 down 42
+edge 28 left 26
+edge 28 right 30
+edge 30 up same
+edge 30 down 42
+edge 30 left 28
+edge 30 right 32
+edge 32 up same
+edge 32 down 42
+edge 32 left 30
+edge 32 right 34
+edge 34 up same
+edge 34 down 42
+edge 34 left 32
+edge 34 right 19
+edge 42 up 24
+edge 42 down 48
+edge 42 left same
+edge 42 right 34
+edge 48 up 42
+edge 48 down 54
+edge 48 left same
+edge 48 right 34
+edge 54 up 48
+edge 54 down 60
+edge 54 left same
+edge 54 right 19
+edge 60 up 54
+edge 60 down 66
+edge 60 left same
+edge 60 right 19
+edge 66 up 60
+edge 66 down 72
+edge 66 left same
+edge 66 right 19
+edge 72 up 66
+edge 72 down 78
+edge 72 left same
+edge 72 right 19
+edge 78 up 72
+edge 78 down same
+edge 78 left same
+edge 78 right 19
 press pageup top=LibraryWindow
 press pagedown top=LibraryWindow
 press first focus="TextBox Search files (Search)" top=LibraryWindow

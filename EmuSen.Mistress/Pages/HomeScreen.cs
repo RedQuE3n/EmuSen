@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Mistress.Pages
 {
@@ -26,8 +27,8 @@ namespace EmuSen.Mistress.Pages
         IReadOnlyList<string> Recent { get; }
         GameFacts Facts(string path);
         int GameCount { get; }
-        int? MissingMedia { get; }
-        int? CoresWaiting { get; }
+        // A tool's one-line state as its library last said it, null before it has said anything.
+        ToolSummary? Summary(string place);
         int ControllerCount { get; }
         string? Battery { get; }
         string SettingsLine { get; }
@@ -93,7 +94,7 @@ namespace EmuSen.Mistress.Pages
         public static string Played(TimeSpan played) =>
             played.TotalHours >= 1 ? $"{(int)played.TotalHours} h {played.Minutes} min" : $"{Math.Max(1, played.Minutes)} min";
 
-        // The places in the design's order, each with its live line; the desktop's eight, the big screen's seven (EmuSen_Interface.md §4, screen 1).
+        // The places in the design's order, each with its tool's live line, or what it does before the tool has said anything; the desktop's eight, the big screen's seven (EmuSen_Interface.md §4 screen 1, §19).
         public IReadOnlyList<HomePlace> Places
         {
             get
@@ -101,19 +102,34 @@ namespace EmuSen.Mistress.Pages
                 bool desk = _host.Desktop;
                 var places = new List<HomePlace>
                 {
-                    new(Games, "Games", _host.GameCount == 1 ? "1 game" : $"{_host.GameCount:N0} games"),
-                    new(Scraper, "Scraper", _host.MissingMedia is int n ? n == 0 ? "Every game has art" : desk ? $"{n:N0} without art" : $"{n:N0} no art" : "Art and facts"),
-                    new(Packages, "Packages", "Game packages"),
-                    new(Library, desk ? "Library Manager" : "Library", "Checks dumps"),
-                    new(Cores, "Cores", _host.CoresWaiting is int w && w > 0 ? $"{w} to approve" : "The engines", _host.CoresWaiting is > 0),
+                    new(Games, "Games", ToolSummary.Count(_host.GameCount, "game", "games")),
+                    Tool(Scraper, "Scraper", desk),
+                    Tool(Packages, "Packages", desk),
+                    Tool(Library, desk ? "Library Manager" : "Library", desk),
+                    Tool(Cores, "Cores", desk),
                 };
-                if (desk) places.Add(new(Cheats, "Cheats", "Codes for games"));
+                if (desk) places.Add(Tool(Cheats, "Cheats", desk));
                 places.Add(new(Settings, "Settings", _host.SettingsLine));
                 if (desk) places.Add(new(BigPicture, "Big Picture", "Open full screen"));
                 else places.Add(new(Power, "Power", _host.BigPictureForced ? "Quit" : "Exit"));
                 return places;
             }
         }
+
+        // The line without its sign, which the place draws itself in the warning colour.
+        private HomePlace Tool(string key, string label, bool desk) =>
+            _host.Summary(key) is { } s ? new(key, label, desk ? s.Line : s.Brief, s.NeedsAttention) : new(key, label, Description(key));
+
+        // What a tool does, said until it has a line of its own.
+        public static string Description(string place) => place switch
+        {
+            Scraper => "Art and facts",
+            Packages => "Game packages",
+            Library => "Checks dumps",
+            Cores => "The engines",
+            Cheats => "Codes for games",
+            _ => "",
+        };
 
         // The help bar for what is focused, as the mockups give it: Continue resumes, a recent game plays, a place opens.
         public IReadOnlyList<ScreenHint> HintsFor(string row) => row switch

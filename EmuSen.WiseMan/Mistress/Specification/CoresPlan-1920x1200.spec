@@ -16,7 +16,7 @@ tree
       2 CoresPane at=72,42,1776,1098 by=panel heard=Cores limit=0,0,1920,1200 role=pane
         3 Panel at=72,42,1776,1098 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
           4 Grid at=72,42,1776,1098 by=panel limit=0,0,1920,1200 role=none
-            5 Border at=72,42,1776,90 by=panel heard=CORES limit=0,0,1920,1200 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=72,42,1776,90 by=panel heard=CORES limit=0,0,1920,1200 name=AdaptiveHeader role=none
               6 DockPanel at=96,60,1728,72 by=panel limit=0,0,1920,1200 role=none
                 7 TextBlock at=868.5,76.5,955.5,39 box=637,26 by=panel caps=13.999 face=Barlow heard="9 cores · 7 installed · ⚠ 1 to approve · ↑ 1 update · catalogue read 31 Oct 2026" layout=636.08,25.7 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="9 cores · 7 installed · ⚠ 1 to approve · ↑ 1 update · catalogue read 31 Oct 2026"
                 8 StackPanel at=96,66,754.5,58.5 by=panel limit=0,0,1920,1200 role=none

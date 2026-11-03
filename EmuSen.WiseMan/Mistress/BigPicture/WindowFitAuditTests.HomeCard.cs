@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task Every_home_card_state_is_as_its_specification_records_it(string view, int width, int height) => Session.Dispatch(() =>
         {
             string name = $"{view}-{width}x{height}";
-            ToolCounts.Answer(41, (12, 1));
+            ToolCounts.Answer();
             (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: !view.Contains("Desktop", StringComparison.Ordinal));
             if (view.Contains("Handheld", StringComparison.Ordinal)) typeof(MainWindow).GetField("_bigScreenForced", Hidden)!.SetValue(window, true);
             InterfaceRecorder.Normalise = InterfaceSpecFiles.Normaliser(_root);

@@ -16,7 +16,7 @@ tree
       2 PackagesPane at=48,28,1184,732 by=panel heard=Packages limit=0,0,1280,800 role=pane
         3 Panel at=48,28,1184,732 by=panel limit=0,0,1280,800 name=AdaptiveLayers role=none
           4 Grid at=48,28,1184,732 by=panel limit=0,0,1280,800 role=none
-            5 Border at=48,28,1184,60 by=panel heard=PACKAGES limit=0,0,1280,800 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=48,28,1184,60 by=panel heard=PACKAGES limit=0,0,1280,800 name=AdaptiveHeader role=none
               6 DockPanel at=64,40,1152,48 by=panel limit=0,0,1280,800 role=none
                 7 TextBlock at=943,52,273,24 box=273,24 by=panel caps=13.999 drawn face=Barlow heard="6 games · 3 packaged · 1 problem" layout=272.26,24 limit=0,0,1280,800 paints=#8D8D91FF role=text size=20 text="6 games · 3 packaged · 1 problem"
                 8 StackPanel at=64,44,867,39 by=panel limit=0,0,1280,800 role=none
@@ -99,49 +99,53 @@ edge 12 down 32
 edge 12 left 25
 edge 12 right same
 edge 17 up same
-edge 17 down 32
-edge 17 left same
-edge 17 right 19
-edge 19 up same
-edge 19 down 32
-edge 19 left 17
-edge 19 right 21
-edge 21 up same
-edge 21 down 32
-edge 21 left 19
-edge 21 right 23
-edge 23 up same
-edge 23 down 32
-edge 23 left 21
-edge 23 right 25
-edge 25 up same
-edge 25 down 32
-edge 25 left 23
-edge 25 right 12
-edge 32 up 17
-edge 32 down 38
-edge 32 left same
-edge 32 right same
-edge 38 up 32
-edge 38 down 44
-edge 38 left same
-edge 38 right same
-edge 44 up 38
-edge 44 down 50
-edge 44 left same
-edge 44 right same
-edge 50 up 44
-edge 50 down 56
-edge 50 left same
-edge 50 right same
-edge 56 up 50
-edge 56 down 62
-edge 56 left same
-edge 56 right same
-edge 62 up 56
-edge 62 down same
-edge 62 left same
-edge 62 right same
+edge 17 down 37
+edge 17 left 30
+edge 17 right same
+edge 22 up same
+edge 22 down 37
+edge 22 left same
+edge 22 right 24
+edge 24 up same
+edge 24 down 37
+edge 24 left 22
+edge 24 right 26
+edge 26 up same
+edge 26 down 37
+edge 26 left 24
+edge 26 right 28
+edge 28 up same
+edge 28 down 37
+edge 28 left 26
+edge 28 right 30
+edge 30 up same
+edge 30 down 37
+edge 30 left 28
+edge 30 right 17
+edge 37 up 22
+edge 37 down 43
+edge 37 left same
+edge 37 right same
+edge 43 up 37
+edge 43 down 49
+edge 43 left same
+edge 43 right same
+edge 49 up 43
+edge 49 down 55
+edge 49 left same
+edge 49 right same
+edge 55 up 49
+edge 55 down 61
+edge 55 left same
+edge 55 right same
+edge 61 up 55
+edge 61 down 67
+edge 61 left same
+edge 61 right same
+edge 67 up 61
+edge 67 down same
+edge 67 left same
+edge 67 right same
 press pageup top=PackagesWindow
 press pagedown top=PackagesWindow
 press first focus="TextBox Search games (Search)" top=PackagesWindow

@@ -17,7 +17,7 @@ tree
       2 CoresPane at=72,42,1776,1098 by=panel heard=Cores limit=0,0,1920,1200 role=pane
         3 Panel at=72,42,1776,1098 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
           4 Grid at=72,42,1776,1098 by=panel limit=0,0,1920,1200 role=none
-            5 Border at=72,42,1776,90 by=panel heard=CORES limit=0,0,1920,1200 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=72,42,1776,90 by=panel heard=CORES limit=0,0,1920,1200 name=AdaptiveHeader role=none
               6 DockPanel at=96,60,1728,72 by=panel limit=0,0,1920,1200 role=none
                 7 TextBlock at=459,76.5,1365,39 box=910,26 by=panel caps=13.999 drawn face=Barlow heard="4 cores · 4 installed · ⚠ 1 to approve · catalogue could not be read: buildbot.libretro.com could not be reached" layout=909.58,25.7 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="4 cores · 4 installed · ⚠ 1 to approve · catalogue could not be read: buildbot.libretro.com could not be reached"
                 8 StackPanel at=96,66,345,58.5 by=panel limit=0,0,1920,1200 role=none
@@ -100,33 +100,41 @@ edge 17 down 31
 edge 17 left same
 edge 17 right 19
 edge 19 up same
-edge 19 down 31
-edge 19 left 17
-edge 19 right 21
-edge 21 up same
-edge 21 down 31
-edge 21 left 19
-edge 21 right 23
-edge 23 up same
-edge 23 down 31
-edge 23 left 21
-edge 23 right 12
-edge 31 up 17
-edge 31 down 39
-edge 31 left same
-edge 31 right 12
-edge 39 up 31
-edge 39 down 47
-edge 39 left same
-edge 39 right 12
-edge 47 up 39
-edge 47 down 54
-edge 47 left same
-edge 47 right 12
-edge 54 up 47
-edge 54 down same
+edge 19 down 38
+edge 19 left 30
+edge 19 right same
+edge 24 up same
+edge 24 down 38
+edge 24 left same
+edge 24 right 26
+edge 26 up same
+edge 26 down 38
+edge 26 left 24
+edge 26 right 28
+edge 28 up same
+edge 28 down 38
+edge 28 left 26
+edge 28 right 30
+edge 30 up same
+edge 30 down 38
+edge 30 left 28
+edge 30 right 19
+edge 38 up 24
+edge 38 down 46
+edge 38 left same
+edge 38 right 19
+edge 46 up 38
+edge 46 down 54
+edge 46 left same
+edge 46 right 19
+edge 54 up 46
+edge 54 down 61
 edge 54 left same
-edge 54 right 12
+edge 54 right 19
+edge 61 up 54
+edge 61 down same
+edge 61 left same
+edge 61 right 19
 press pageup focus="TextBox Search (Search)" top=CoresWindow
 press pagedown focus="TextBox Search (Search)" top=CoresWindow
 press first focus="TextBox Search (Search)" top=CoresWindow

@@ -16,7 +16,7 @@ tree
       2 PackagesPane at=72,42,1776,1098 by=panel heard=Packages limit=0,0,1920,1200 role=pane
         3 Panel at=72,42,1776,1098 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
           4 Grid at=72,42,1776,1098 by=panel limit=0,0,1920,1200 role=none
-            5 Border at=72,42,1776,90 by=panel heard=PACKAGES limit=0,0,1920,1200 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=72,42,1776,90 by=panel heard=PACKAGES limit=0,0,1920,1200 name=AdaptiveHeader role=none
               6 DockPanel at=96,60,1728,72 by=panel limit=0,0,1920,1200 role=none
                 7 TextBlock at=1414.5,78,409.5,36 box=273,24 by=panel caps=13.999 face=Barlow heard="6 games · 3 packaged · 1 problem" layout=272.26,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="6 games · 3 packaged · 1 problem"
                 8 StackPanel at=96,66,1300.5,58.5 by=panel limit=0,0,1920,1200 role=none

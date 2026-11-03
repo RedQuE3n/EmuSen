@@ -39,6 +39,7 @@ namespace EmuSen.Mistress.Views
 
         private void StartConsole(string console, bool reset)
         {
+            CancelToolSummaries();
             ShutDownCurrentSession(leaving: !reset);
             string name = SaveLibrary.ConsoleSessionName(console);
             int restoredCheats = DropCheatsFromAnotherGame(name);

@@ -16,7 +16,7 @@ tree
       2 LibraryPane at=72,42,1776,1098 by=panel heard="Library Manager" limit=0,0,1920,1200 role=pane
         3 Panel at=72,42,1776,1098 by=panel limit=0,0,1920,1200 name=AdaptiveLayers role=none
           4 Grid at=72,42,1776,1098 by=panel limit=0,0,1920,1200 role=none
-            5 Border at=72,42,1776,90 by=panel heard="LIBRARY MANAGER" limit=0,0,1920,1200 name=AdaptiveHeader role=none
+            5 AdaptiveHeaderRow at=72,42,1776,90 by=panel heard="LIBRARY MANAGER" limit=0,0,1920,1200 name=AdaptiveHeader role=none
               6 DockPanel at=96,60,1728,72 by=panel limit=0,0,1920,1200 role=none
                 7 TextBlock at=1134,78,690,36 box=460,24 by=panel caps=13.999 drawn face=Barlow heard="29 files · 0 same dumps · 0 broken or suspect · 0 hidden" layout=459.1,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="29 files · 0 same dumps · 0 broken or suspect · 0 hidden"
                 8 StackPanel at=96,66,1020,58.5 by=panel limit=0,0,1920,1200 role=none

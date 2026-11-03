@@ -137,6 +137,13 @@ namespace EmuSen.Tools.Library
         public static IReadOnlyList<(string Path, bool Hide)> Changes(IReadOnlyList<ManagerMarked<LibraryRow>> marked) =>
             marked.GroupBy(m => m.Row.FullPath, StringComparer.Ordinal).Select(g => (g.Key, g.First().Mark.Key == Hide.Key)).ToList();
 
+        // The tool's one-line state after a whole check: the suspect dumps first, then the duplicates; null before one has run, since a check reads every file (EmuSen_Interface.md §19).
+        public static ToolSummary? StateOf(bool complete, int suspect, int duplicates) =>
+            !complete ? null
+            : suspect > 0 ? new(ToolSummary.Count(suspect, "suspect dump", "suspect dumps"), $"{suspect:N0} suspect", NeedsAttention: true)
+            : duplicates > 0 ? new(ToolSummary.Count(duplicates, "duplicate", "duplicates"))
+            : new("No problems found");
+
         public static string Summary(IReadOnlyList<ManagerMarked<LibraryRow>> marked)
         {
             var changes = Changes(marked);

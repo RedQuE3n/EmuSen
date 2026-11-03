@@ -51,13 +51,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 : new ScriptedJob([new { @event = "start", op = "pkg-make", packages = 2, mode = "linked", zip = false, refused = Array.Empty<string>() }, new { @event = "package", index = 1, of = 2, source = "snes/Amber Saga (USA).sfc", system = "SNES", state = "made", package = "SNES/Amber Saga (USA).sfc", mode = "linked" }], ends: false);
             Call(window, "ShowPackages");
             Settle(window);
-            var shown = (PackagesWindow)Sheets(window).Current!;
+            var shown = Shown<PackagesWindow>(window);
             PackagesPane pane = shown.Pane;
             pane.Poll();
             Settle(window);
-            Assert.Equal(AdaptiveForm.BigScreen, pane.Form);
+            Assert.Equal(FormOf(window), pane.Form);
             Assert.Equal(6, pane.Rows.Count);
-            pane.BigScreenTable.Select(pane.Rows.First(r => r.Title.StartsWith("Basalt", StringComparison.Ordinal)));
+            (pane.Form == AdaptiveForm.BigScreen ? pane.BigScreenTable : pane.Table).Select(pane.Rows.First(r => r.Title.StartsWith("Basalt", StringComparison.Ordinal)));
             pane.FocusRole(AdaptiveRole.Content);
             Settle(window);
             if (state == "PackagesDetail") Assert.True(shown.OnPad(global::EmuSen.Mistress.Input.UiButton.Accept));

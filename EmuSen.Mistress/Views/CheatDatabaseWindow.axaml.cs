@@ -154,6 +154,7 @@ namespace EmuSen.Mistress.Views
             EmuSen.LunaP.Controls.MenuLook.SetFooter(this, (intro + " " + Attribution).Trim());
             GamesHeaderText.TextWrapping = Avalonia.Media.TextWrapping.Wrap;
             _inLook = true;
+            ShowFacts();
             ShowGames();
             SheetLook.SelectOnFocus(GamesList);
             SheetLook.SelectOnFocus(SystemsList);
@@ -209,10 +210,21 @@ namespace EmuSen.Mistress.Views
                 .ToList();
         }
 
+        // The header row's facts: the cheats switched on and their games, from every game's saved list, then the database's files (EmuSen_Interface.md §19).
+        private string _facts = "";
+
+        private void ShowFacts()
+        {
+            HeaderRow.Header = new EmuSen.LunaP.Controls.AdaptiveHeader("CHEATS", Facts: _facts);
+            HeaderRow.IsVisible = !_inLook;
+        }
+
         private void Refresh()
         {
             IReadOnlyList<(string System, int Count)> systems = VisibleSystems();
             int total = systems.Sum(s => s.Count);
+            _facts = $"{GameCheats.Summary(default)?.Marked ?? "no cheats saved yet"} · {total:N0} {(total == 1 ? "cheat file" : "cheat files")} in the database";
+            ShowFacts();
 
             IReadOnlyList<string> missing = MissingSystems(systems);
             SystemsList.Refresh(systems.Select(s => new CheatSystemRow(s.System, s.Count)).Concat(missing.Select(s => new CheatSystemRow(s, 0))));

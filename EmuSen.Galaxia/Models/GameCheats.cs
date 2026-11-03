@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -48,7 +49,35 @@ namespace EmuSen.Galaxia.Models
             return File.Exists ? File.Load() : Legacy.Load();
         }
 
-        public bool Save(CheatFile list) => PackageFile is { } own ? CheatFile.SaveTo(own, list) : File.Save(list);
+        // Every game's saved list, the consoles' and the packages', counted as cheats on and the games holding them; null with none saved (EmuSen_Interface.md §19).
+        public static ToolSummary? Summary(System.Threading.CancellationToken cancel)
+        {
+            int on = 0, games = 0, lists = 0;
+            foreach (string path in SavedLists())
+            {
+                if (cancel.IsCancellationRequested) return null;
+                CheatFile? list;
+                try { list = CheatFile.LoadFrom(path); }
+                catch (IOException) { continue; }
+                if (list is not { Cheats.Count: > 0 }) continue;
+                lists++;
+                int enabled = list.Cheats.Count(c => c.Enabled);
+                on += enabled;
+                if (enabled > 0) games++;
+            }
+            return on > 0 ? new($"{on:N0} on · {ToolSummary.Count(games, "game", "games")}")
+                : lists > 0 ? new(ToolSummary.Count(lists, "game with cheats", "games with cheats"), "none on") : null;
+        }
+
+        private static IEnumerable<string> SavedLists()
+        {
+            if (Directory.Exists(CheatFile.DirectoryPath))
+                foreach (string f in Directory.EnumerateFiles(CheatFile.DirectoryPath, "*.json", SearchOption.AllDirectories)) yield return f;
+            if (Directory.Exists(Library.DataStore.Packages))
+                foreach (string f in Directory.EnumerateFiles(Library.DataStore.Packages, Media.GamePackage.CheatsFile, SearchOption.AllDirectories)) yield return f;
+        }
+
+        public bool Save(CheatFile list) =>PackageFile is { } own ? CheatFile.SaveTo(own, list) : File.Save(list);
 
         // Null when nothing needed writing, else whether the write succeeded; an empty list over no saved one is nothing - see EmuSen_Config_Reference.md §3.4b.
         public bool? SaveIfChanged(CheatFile list)

@@ -115,14 +115,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             CoresPane.StartJob = CoresJobs(catalogue: state != "CoresNoCatalogue");
             Call(window, "ShowCores");
             Settle(window);
-            var shown = (CoresWindow)Sheets(window).Current!;
+            var shown = Shown<CoresWindow>(window);
             CoresPane pane = shown.Pane;
             for (int i = 0; i < 4 && (i == 0 || pane.Busy); i++)
             {
                 pane.Poll();
                 Settle(window);
             }
-            Assert.Equal(AdaptiveForm.BigScreen, pane.Form);
+            Assert.Equal(FormOf(window), pane.Form);
             Assert.Equal(state == "CoresNoCatalogue" ? 4 : 9, pane.Rows.Count);
             if (state == "CoresNoCatalogue") return;
             CoreRow lrps2 = pane.Rows.First(r => r.Stem == "pcsx2");
@@ -133,7 +133,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Settle(window);
             // The chosen row brought into view, as the D-pad that reaches it scrolls it.
             CoreRow chosen = state == "CoresDetail" ? pane.Rows.First(r => r.AwaitsApproval) : lrps2;
-            pane.BigScreenTable.Select(chosen);
+            (pane.Form == AdaptiveForm.BigScreen ? pane.BigScreenTable : pane.Table).Select(chosen);
             pane.BigScreenTable.BringRowIntoView(chosen);
             Settle(window);
             pane.FocusRole(AdaptiveRole.Content);

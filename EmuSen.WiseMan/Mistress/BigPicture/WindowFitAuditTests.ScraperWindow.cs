@@ -106,12 +106,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ScriptedScrape script = ScriptedScrape.Install(window);
             Call(window, "ShowScraper");
             Settle(window);
-            var shown = (ScraperWindow)Sheets(window).Current!;
+            var shown = Shown<ScraperWindow>(window);
             ScraperPane pane = shown.Pane;
             Settle(window);
-            Assert.Equal(AdaptiveForm.BigScreen, pane.Form);
+            Assert.Equal(FormOf(window), pane.Form);
             Assert.Equal(3, pane.Rows.Count);
-            pane.BigScreenTable.Select(pane.Rows.First(r => r.Title == ScriptedScrape.LongTitle));
+            (pane.Form == AdaptiveForm.BigScreen ? pane.BigScreenTable : pane.Table).Select(pane.Rows.First(r => r.Title == ScriptedScrape.LongTitle));
             pane.FocusRole(AdaptiveRole.Content);
             Settle(window);
             // ScraperDetail: the chosen game's media stand beside the list, so A has no page to open.

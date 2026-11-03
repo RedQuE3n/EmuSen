@@ -327,7 +327,7 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Equal(1.0, EmuSen.LunaP.Theme.LunaTokens.TextScale);
                 double Row() => window.SettingsLayoutShown!.GetVisualDescendants().OfType<EmuSen.LunaP.Controls.MenuRow>().First(r => r.Name == "SettingsRow.textsize").TextSize;
                 Assert.Equal(26, Row());
-                Assert.Equal([17d, 20d, 22d], s.PaneOf("textsize")!.Lines.Take(3).Select(l => l.Size ?? 0));
+                Assert.Equal([22d, 25.5d, 28.5d], s.PaneOf("textsize")!.Lines.Take(3).Select(l => l.Size ?? 0));
 
                 window.SettingsLayoutShown!.FocusOn("textsize");
                 window.SettingsLayoutShown!.Move(1, 0);
@@ -337,7 +337,32 @@ namespace EmuSen.WiseMan.Mistress
                 window.SettingsLayoutShown!.Move(1, 0);
                 Assert.Equal(AppSettings.TextSizeLarger, AppSettings.Load().TextSize);
                 Assert.Equal(34, Row());
+                Assert.Equal([22d, 25.5d, 28.5d], s.PaneOf("textsize")!.Lines.Take(3).Select(l => l.Size ?? 0));
                 Assert.Empty(EmuSen.WiseMan.Fixtures.FitAudit.Check(window.SettingsLayoutShown!, []));
+            }
+            finally
+            {
+                window.Close();
+                EmuSen.LunaP.Theme.LunaTokens.TextScale = 1;
+            }
+        }, default);
+
+        // The screen under Settings is drawn again at the new size as Settings closes.
+        [Fact]
+        public Task Home_under_settings_takes_the_new_text_size_as_settings_closes() => Session.Dispatch(() =>
+        {
+            (MainWindow window, _) = Open(app => app.BigScreen = true);
+            try
+            {
+                typeof(MainWindow).GetMethod("ShowHome", Hidden)!.Invoke(window, null);
+                Dispatcher.UIThread.RunJobs();
+                double HubSize() => window.HomeLayout!.GetVisualDescendants().OfType<TextBlock>().First(b => b.Name == "HubStatus").FontSize;
+                Assert.Equal(20, HubSize());
+                window.ShowSettings(SettingsScreen.Display);
+                while (Status(Model(window), "textsize") != "Larger") Model(window).Step("textsize", 1);
+                window.CloseSettings();
+                Dispatcher.UIThread.RunJobs();
+                Assert.Equal(26, HubSize());
             }
             finally
             {

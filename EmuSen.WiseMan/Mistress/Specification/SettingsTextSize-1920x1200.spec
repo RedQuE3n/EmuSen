@@ -41,10 +41,10 @@ tree
           26 MenuRow at=96,891,1056,81 by=panel heard="Play videos, On" limit=0,0,1920,1200 name=SettingsRow.videos role=listitem
         27 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#26262BFF role=none
           28 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none
-            29 TextBlock at=1236,198,552,31.5 box=368,21 by=clip caps=11.8992 drawn face=Barlow heard="Default · The quick brown fox" layout=205.16,20.4 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=17 text="Default · The quick brown fox"
-            30 TextBlock at=1236,241.5,552,36 box=368,24 by=clip caps=13.999 drawn face=Barlow heard="Large · The quick brown fox" layout=229.62,24 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=20 text="Large · The quick brown fox"
-            31 TextBlock at=1236,289.5,552,40.5 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="Larger · The quick brown fox" layout=260.57,26.4 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Larger · The quick brown fox"
-            32 TextBlock at=1236,342,552,79.5 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="Text size scales every word on the big screen; nothing is cut off at any size." layout=345.77,52.8 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Text size scales every word on the big screen; nothing is cut off at any size."
+            29 TextBlock at=1236,198,552,40.5 box=368,27 by=clip caps=15.3989 drawn face=Barlow heard="Default · The quick brown fox" layout=265.5,26.4 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Default · The quick brown fox"
+            30 TextBlock at=1236,250.5,552,46.5 box=368,31 by=clip caps=17.8488 drawn face=Barlow heard="Large · The quick brown fox" layout=292.77,30.6 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=25.5 text="Large · The quick brown fox"
+            31 TextBlock at=1236,309,552,52.5 box=368,35 by=clip caps=19.9486 drawn face=Barlow heard="Larger · The quick brown fox" layout=337.55,34.2 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=28.5 text="Larger · The quick brown fox"
+            32 TextBlock at=1236,373.5,552,79.5 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="Text size scales every word on the big screen; nothing is cut off at any size." layout=345.77,52.8 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Text size scales every word on the big screen; nothing is cut off at any size."
         33 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
           34 HintBar at=96,1074,1728,45 by=panel heard="Change, Value, Section, Back, Home" limit=0,0,1920,1200 role=group
 focus none

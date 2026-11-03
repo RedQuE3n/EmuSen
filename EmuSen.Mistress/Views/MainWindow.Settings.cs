@@ -26,6 +26,7 @@ namespace EmuSen.Mistress.Views
         private SettingsView? _settings;
         private SettingsWindow? _settingsWindow;
         private bool _settingsPaused;
+        private double _settingsScale = 1;
 
         public SettingsScreen? SettingsShown => _settings?.Model;
 
@@ -48,6 +49,7 @@ namespace EmuSen.Mistress.Views
                 AddHandler(KeyUpEvent, OnSettingsKeyUp, Avalonia.Interactivity.RoutingStrategies.Tunnel);
                 _settingsKeysWired = true;
             }
+            _settingsScale = EmuSen.LunaP.Theme.LunaTokens.TextScale;
             var model = new SettingsScreen(this, section);
             if (path.Length > 0) model.OpenPath(section, path);
             _settings = new SettingsView(model, layout, SettingsFrame);
@@ -91,6 +93,13 @@ namespace EmuSen.Mistress.Views
 
         private void SettingsClosed()
         {
+            // A text size changed in Settings reaches the screen under it as it closes: Home or the grid, a theme's view, or the card (EmuSen_BigPicture.md §52.8).
+            if (_settingsScale != EmuSen.LunaP.Theme.LunaTokens.TextScale)
+            {
+                if (OwnScreenShown) ShowOwnLook(false);
+                else if (LibraryView.IsVisible && ThemedLibraryShown) ShowThemedLibrary();
+                if (_padMenuOpen) RefreshPadMenuText(PadMenuList.SelectedIndex);
+            }
             _settings = null;
             _gamepad.Polled -= OnSettingsPadsPolled;
             if (_settingsPaused && GameOnScreen && IsPaused) ResumeEmulation();

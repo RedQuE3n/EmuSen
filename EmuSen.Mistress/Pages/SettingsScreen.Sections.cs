@@ -5,6 +5,7 @@ using System.Linq;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
+using EmuSen.LunaP.Theme;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Library;
 using EmuSen.Serenity.Shaders;
@@ -140,7 +141,7 @@ namespace EmuSen.Mistress.Pages
         private Setting TextSizeRow() =>
             Pick("textsize", "Text size", "Every word on the big screen, and the desktop's, through the interface's type scale.", TextSizes.Select(t => (t.Value, t.Text)).ToArray(), App.TextSize,
                 v => { App.TextSize = v; _host.SaveApp("textsize"); },
-                () => new ScreenPane([.. TextSizes.Select(t => new SettingsLine($"{t.Text} · The quick brown fox") { Size = Math.Round(17 * t.Scale) }),
+                () => new ScreenPane([.. TextSizes.Select(t => new SettingsLine($"{t.Text} · The quick brown fox") { Size = Math.Round(Math.Round(LunaTokens.BigScreenType.Body / LunaTokens.TextScale) * t.Scale * 2) / 2 }),
                     new SettingsLine("Text size scales every word on the big screen; nothing is cut off at any size.")]));
 
         private string FrameCaption(string what) => $"{_host.RunningTitle ?? "The last game"} · {what}";

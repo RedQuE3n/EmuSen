@@ -258,6 +258,43 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             }
             finally
             {
+                if (Avalonia.Application.Current is { } app) app.RequestedThemeVariant = ThemeVariant.Dark;
+                EmuSen.LunaP.Theme.LunaTokens.TextScale = 1;
+                ToolCounts.Quiet();
+                ResetPageClock();
+                Stop(window);
+                window.Close();
+            }
+        }, default);
+    
+        // Home and the grid at the largest text size, as the screen under Settings is drawn once it closes (EmuSen_BigPicture.md §52.8).
+        public static TheoryData<string, int, int> LargerOwnLookCases()
+        {
+            var data = new TheoryData<string, int, int>();
+            foreach (string v in new[] { "Home", "HomeShelf", "HomePlaces", "Games", "GamesListCard" })
+                foreach ((int w, int h) in new[] { (1280, 720), (1280, 800) }) data.Add(v, w, h);
+            return data;
+        }
+
+        [Theory]
+        [MemberData(nameof(LargerOwnLookCases))]
+        public Task Home_and_the_grid_fit_at_the_largest_text_size(string view, int width, int height) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = OwnLookSession(view, width, height);
+            try
+            {
+                ((AppSettings)Field(window, "_appSettings")).TextSize = AppSettings.TextSizeLarger;
+                typeof(MainWindow).GetMethod("ApplyAccessibility", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, null);
+                OpenOwnLook(window, pad, view);
+                Assert.Equal(1.3, EmuSen.LunaP.Theme.LunaTokens.TextScale);
+                PictureSettings(window, $"{view}-larger-{width}x{height}");
+                List<string> faults = FitAudit.Check(OwnLookRoot(window, view), OwnLookCuts);
+                foreach (string f in faults) _out.WriteLine($"{view} {width}x{height} larger: {f}");
+                Assert.Empty(faults);
+            }
+            finally
+            {
+                if (Avalonia.Application.Current is { } app) app.RequestedThemeVariant = ThemeVariant.Dark;
                 EmuSen.LunaP.Theme.LunaTokens.TextScale = 1;
                 ToolCounts.Quiet();
                 ResetPageClock();

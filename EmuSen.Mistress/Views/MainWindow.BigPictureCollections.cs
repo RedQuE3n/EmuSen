@@ -15,13 +15,10 @@ using EmuSen.Mistress.Library;
 namespace EmuSen.Mistress.Views
 {
     // Big picture's collections and a gamelist's options, over Mistress's own games.db records - see EmuSen_Settings_Reference.md §4.58.
-    public partial class MainWindow : ICollectionSettingsHost
+    public partial class MainWindow
     {
         // The custom collection being edited, for this session only, as ES-DE's edit mode is.
         private (long Id, string Name)? _editedCollection;
-        private CollectionSettingsWindow? _collectionSettings;
-
-        internal CollectionSettingsWindow? CollectionSettingsSheet => _collectionSettings;
 
         // The library's systems followed by ES-DE's collections, from the same records the sidebar shows.
         private IReadOnlyList<ThemedShelf> WithCollections(IReadOnlyList<ThemedShelf> systems) =>
@@ -68,7 +65,7 @@ namespace EmuSen.Mistress.Views
         private void AddCollectionMenuEntries(List<Input.PadMenuEntry> entries)
         {
             if (!ThemedLibraryShown || !LibraryView.IsVisible || _themed is null) return;
-            entries.Add(new Input.PadMenuEntry(() => "Collections", ShowCollectionSettings) { Opens = true });
+            entries.Add(new Input.PadMenuEntry(() => "Collections", () => ShowSettings(Pages.SettingsScreen.Library, "collections")) { Opens = true });
         }
 
         // Jump To, Sort Games By and Filter Gamelist first in Select's menu, then Search, which ES-DE has not (§4.58).
@@ -116,22 +113,9 @@ namespace EmuSen.Mistress.Views
             PadKeyboard.Open(_themedSearch);
         }
 
-        internal void ShowCollectionSettings()
-        {
-            if (_collectionSettings is not null) return;
-            var window = _collectionSettings = new CollectionSettingsWindow(this, _bigScreen ? HelpFamily : null);
-            window.Closed += (_, _) => { if (_collectionSettings == window) _collectionSettings = null; };
-            _ = SheetLayer.Show(window, this);
-        }
-
-        BigPictureCollections ICollectionSettingsHost.Settings => _appSettings.BigPictureCollections;
-
-        IReadOnlyList<GameCollection> ICollectionSettingsHost.Collections => _collections;
-
-        string? ICollectionSettingsHost.EditingName => _editedCollection?.Name;
 
         // ES-DE's rules for a new name: its forbidden characters dropped, a taken name numbered; then the edit mode starts on it.
-        async Task ICollectionSettingsHost.CreateCollectionAsync(Window owner)
+        private async Task CreateCollectionAsync(Window owner)
         {
             if (await Dialogs.PromptAsync(owner, "Create New Custom Collection", "Name the new collection", "", "Create") is not string typed) return;
             string name = CollectionShelves.Clean(typed);
@@ -143,7 +127,7 @@ namespace EmuSen.Mistress.Views
             ShowLibraryEntries();
         }
 
-        async Task ICollectionSettingsHost.DeleteCollectionAsync(Window owner, GameCollection collection)
+        private async Task DeleteCollectionAsync(Window owner, GameCollection collection)
         {
             if (!await AskAsync(owner, "Delete Custom Collection", $"Delete the collection {collection.Name}? The games in it are not touched.", "Delete", "Cancel")) return;
             _records.DeleteCollection(collection.Id);
@@ -155,16 +139,11 @@ namespace EmuSen.Mistress.Views
             ShowLibraryEntries();
         }
 
-        void ICollectionSettingsHost.FinishEditing()
+        private void FinishEditingCollection()
         {
             _editedCollection = null;
             ShowLibraryEntries();
         }
 
-        void ICollectionSettingsHost.CollectionSettingsChanged()
-        {
-            _appSettings.Save();
-            if (LibraryView.IsVisible) ShowThemedLibrary();
-        }
     }
 }

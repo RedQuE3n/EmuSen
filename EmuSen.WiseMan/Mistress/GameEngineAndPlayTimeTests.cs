@@ -132,12 +132,18 @@ namespace EmuSen.WiseMan.Mistress
             Launch(TimeSpan.FromHours(9));
             Assert.Equal(45 * 60, Seconds(), 3);
 
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            Window prefs = s.Window.GetControl<EmuSen.LunaP.Windowing.SheetLayer>("Sheets").Current!;
-            ThemedSwitchesTests.Named<Dropdown>(prefs, "MaxPlayTimeDropdown").SelectedItem = "No limit";
+            // Settings ▸ EmuSen ▸ Saves and states ▸ Play time counted up to, stepped to No limit.
+            SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.EmuSen);
+            SettingsPad.To(s.Window, s.Pad, "saves");
+            s.Pad.A();
+            SettingsPad.To(s.Window, s.Pad, "playtime");
+            for (int i = 0; i < 30 && SettingsPad.Value(s.Window, "playtime") != "No limit"; i++) s.Pad.Right();
             Assert.Equal(24, s.Settings.MaxPlayTimeTracking);
             Assert.Equal(24, AppSettings.Load().MaxPlayTimeTracking);
             s.Pad.B();
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
             Launch(TimeSpan.FromHours(9));
             Assert.Equal(45 * 60 + 9 * 3600, Seconds(), 3);
         }, default);

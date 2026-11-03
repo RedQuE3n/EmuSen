@@ -171,6 +171,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             BackOutOf<ThemeSettingsWindow>(s);
             Assert.True(s.Shown);
+            // The sheet was opened from Settings ▸ Library ▸ Themes, so B closes Settings onto the theme now drawn.
+            Assert.NotNull(s.Window.SettingsShown);
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
             s.Pad.A();
             Assert.Equal("gamelist", s.View);
         }, default);
@@ -237,9 +241,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(new[] { BigPictureLooks.BuiltIn }, BigPictureLooks.All(AppSettings.Load()));
         }, default);
 
-        // Preferences' Big Picture Theme row lists the same entries, writes the same setting at once, and follows a choice made on the sheet over it.
+        // Settings ▸ Library ▸ Themes lists the same entries, writes the same setting at once, and follows a choice made on the sheet A opens over it.
         [Fact]
-        public Task Preferences_and_the_themes_list_agree() => Session.Dispatch(() =>
+        public Task Settings_and_the_themes_list_agree() => Session.Dispatch(() =>
         {
             using var own = new SyntheticTheme();
             ThemedSession.Write(own);
@@ -248,25 +252,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var s = new ThemedSession(themeDirectory: own.Root, settings: _ => downloaded = Install(own.Root));
             const string name = "Synthetic Book";
             string downloadedText = $"{name} (synthetic-book)", ownText = $"{name} ({Path.GetFileName(own.Root)})";
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            TabControl tabs = TabsOf(s);
-            for (int i = 0; i < 6 && (tabs.SelectedItem as TabItem)?.Header as string != "Appearance"; i++) s.Pad.R1();
-            s.Window.UpdateLayout();
-            Dropdown row = Named<Dropdown>(s, "BigPictureThemeDropdown");
-            Assert.Equal(new[] { "EmuSen (built in)", downloadedText, ownText }, ((System.Collections.IEnumerable)row.ItemsSource!).Cast<string>());
-            Assert.Equal(ownText, row.SelectedItem);
-            Assert.False(Has(s, "LibraryStyleDropdown"));
+            SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.Section(s.Window, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.Library);
+            SettingsPad.To(s.Window, s.Pad, "themes");
+            PageRow Row() => s.Window.SettingsLayoutShown!.Rows.Single(r => r.Key == "themes");
+            Assert.Equal(new[] { "EmuSen (built in)", downloadedText, ownText }, Row().Choices);
+            Assert.Equal(ownText, Row().Status);
 
-            PadAudit.Reach(SheetRoot(s), s.Pad, e => e is Dropdown { Name: "BigPictureThemeDropdown" });
             s.Pad.Left();
             s.Pad.Left();
             s.Settle();
-            Assert.Equal("EmuSen (built in)", row.SelectedItem);
+            Assert.Equal("EmuSen (built in)", Row().Status);
             Assert.Equal(AppSettings.LibraryStyleMistress, AppSettings.Load().LibraryStyle);
             Assert.False(s.Shown);
 
-            Click(Named<Button>(s, "ThemeSettingsButton"));
+            s.Pad.A();
             s.Settle();
             Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
             Assert.Equal("Themes", (TabsOf(s).SelectedItem as TabItem)?.Header);
@@ -276,13 +276,12 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(s.Shown);
 
             BackOutOf<ThemeSettingsWindow>(s);
-            Assert.IsType<PreferencesWindow>(Sheets(s).Current);
-            row = Named<Dropdown>(s, "BigPictureThemeDropdown");
-            Assert.Equal(new[] { "EmuSen (built in)", name }, ((System.Collections.IEnumerable)row.ItemsSource!).Cast<string>());
-            Assert.Equal(name, row.SelectedItem);
-            Assert.True(ThemeDownloads.SamePath(downloaded, Named<PathPickerRow>(s, "BigPictureThemeBox").Path));
-            BackOutOf<PreferencesWindow>(s);
             Assert.False(Sheets(s).IsPresenting);
+            s.Window.SettingsShown!.Read();
+            Assert.Equal(new[] { "EmuSen (built in)", name }, s.Window.SettingsShown.Rows.Single(r => r.Key == "themes").Choices);
+            Assert.Equal(name, s.Window.SettingsShown.Rows.Single(r => r.Key == "themes").Status);
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
             Assert.True(s.Shown);
             Assert.True(ThemeDownloads.SamePath(downloaded, AppSettings.Load().BigPictureTheme!));
         }, default);

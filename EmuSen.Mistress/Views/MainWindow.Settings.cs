@@ -14,6 +14,7 @@ using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Pages;
+using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
@@ -21,6 +22,8 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow : ISettingsHost
     {
         private SettingsView? _settings;
+        private SettingsWindow? _settingsWindow;
+        private bool _settingsPaused;
 
         public SettingsScreen? SettingsShown => _settings?.Model;
 
@@ -29,17 +32,26 @@ namespace EmuSen.Mistress.Views
         // Every door: Home's place, the card's Settings, the pad menu's and the desktop's menu open Settings at a section, and a page under it where asked.
         public void ShowSettings(string section = SettingsScreen.Controllers, params string[] path)
         {
-            if (!_bigScreen)
-            {
-                ShowPreferences();
-                return;
-            }
-            if (_padMenuOpen) ClosePadMenu();
+            // Over a game the Pause Card stays beneath what it opened (EmuSen_Interface.md §18.5); over the library the card gives way.
+            if (_padMenuOpen && !_padMenuInGame) ClosePadMenu();
             CloseSettings(restoreFocus: false);
-            var layout = new SettingsLayout { Name = "SettingsScreen", PadFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily };
+            // A game under Settings stays paused until it closes, as under the card it was opened from.
+            _settingsPaused = GameOnScreen && !IsPaused;
+            if (_settingsPaused) PauseEmulation();
+            var layout = new SettingsLayout { Name = "SettingsScreen", Form = _bigScreen ? AdaptiveForm.BigScreen : AdaptiveForm.Desktop, PadFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily };
             var model = new SettingsScreen(this, section);
             if (path.Length > 0) model.OpenPath(section, path);
             _settings = new SettingsView(model, layout, SettingsFrame);
+            _gamepad.Polled -= OnSettingsPadsPolled;
+            _gamepad.Polled += OnSettingsPadsPolled;
+            if (!_bigScreen)
+            {
+                // The desktop's one Settings window, 960 by 640, a sheet over the library (EmuSen_Interface.md §17.7).
+                var window = _settingsWindow = new SettingsWindow(layout, button => { SettingsPadCommand(button); return true; });
+                window.Closed += (_, _) => { if (_settingsWindow == window) { _settingsWindow = null; SettingsClosed(); } };
+                _ = SheetLayer.Show(window, this);
+                return;
+            }
             layout.KeyDown += OnSettingsKey;
             ScreenContent.Children.Add(layout);
             StatusBar.IsVisible = false;
@@ -48,15 +60,30 @@ namespace EmuSen.Mistress.Views
 
         public void CloseSettings(bool restoreFocus = true)
         {
+            if (_settingsWindow is { } window)
+            {
+                _settingsWindow = null;
+                window.Close();
+                SettingsClosed();
+                return;
+            }
             if (_settings is not { } shown) return;
-            _settings = null;
             shown.Layout.KeyDown -= OnSettingsKey;
             ScreenContent.Children.Remove(shown.Layout);
+            SettingsClosed();
             ApplyStatusBar();
             if (!restoreFocus) return;
             if (OwnScreenShown) ShowOwnLook(false);
             if (HomeLayout is { } home) home.Focus();
             else if (ThemedLibraryShown) ThemedLibraryHost.Focus();
+        }
+
+        private void SettingsClosed()
+        {
+            _settings = null;
+            _gamepad.Polled -= OnSettingsPadsPolled;
+            if (_settingsPaused && GameOnScreen && IsPaused) ResumeEmulation();
+            _settingsPaused = false;
         }
 
         // The pad on Settings: the directions move and step, A chooses, B closes a page and then Settings, Start goes Home; the shoulders and the rest as the layout declares.
@@ -78,7 +105,8 @@ namespace EmuSen.Mistress.Views
                     else OpenPadMenu();
                     return;
             }
-            if (ToolPaneWindow.Glyph(button) is { } glyph) view.Layout.Press(glyph);
+            if (ToolPaneWindow.Glyph(button) is not { } glyph || view.Layout.Press(glyph)) return;
+            if (button is UiButton.PageUp or UiButton.PageDown && view.Model.StepConsole(button == UiButton.PageUp ? -1 : 1)) view.Fill();
         }
 
         private void OnSettingsKey(object? sender, KeyEventArgs e)
@@ -190,6 +218,43 @@ namespace EmuSen.Mistress.Views
 
         IReadOnlyList<string> ISettingsHost.Pads => _gamepad.Pads.Select(p => p.Name).ToList();
 
+        // The big picture's looks as Preferences named them: EmuSen's own first, a theme of the same name told apart by its folder.
+        private List<EmuSen.Mistress.BigPicture.BigPictureLook> LookList => EmuSen.Mistress.BigPicture.BigPictureLooks.All(_appSettings).ToList();
+
+        IReadOnlyList<string> ISettingsHost.Looks
+        {
+            get
+            {
+                List<EmuSen.Mistress.BigPicture.BigPictureLook> looks = LookList;
+                return looks.Select(l => l.BuiltIn ? $"{l.Name} (built in)" : looks.Count(o => o.Name == l.Name) > 1 ? $"{l.Name} ({System.IO.Path.GetFileName(l.Theme!.Directory)})" : l.Name).ToList();
+            }
+        }
+
+        int ISettingsHost.LookAt => Math.Max(0, LookList.FindIndex(l => EmuSen.Mistress.BigPicture.BigPictureLooks.IsCurrent(_appSettings, l)));
+
+        void ISettingsHost.ChooseLook(int at)
+        {
+            List<EmuSen.Mistress.BigPicture.BigPictureLook> looks = LookList;
+            if (at < 0 || at >= looks.Count) return;
+            EmuSen.Mistress.BigPicture.BigPictureLooks.Choose(_appSettings, looks[at]);
+            ThemeChanged(false);
+        }
+
+        bool ISettingsHost.PadPressed(int pad) => pad >= 0 && pad < _gamepad.Pads.Count && _gamepad.Pads[pad].AnyPressed();
+
+        private int _padsHeld;
+
+        // A button held on a pad marks its row on the Players page, drawn again only when what is held changes.
+        private void OnSettingsPadsPolled()
+        {
+            if (_settings is not { } view || view.Model.Trail.LastOrDefault() != "Players") return;
+            int held = 0;
+            for (int i = 0; i < _gamepad.Pads.Count && i < 30; i++) if (_gamepad.Pads[i].AnyPressed()) held |= 1 << i;
+            if (held == _padsHeld) return;
+            _padsHeld = held;
+            RefreshSettings();
+        }
+
         void ISettingsHost.Seat(int pad, int player)
         {
             if (pad >= 0 && pad < _gamepad.Pads.Count) _gamepad.Assign(_gamepad.Pads[pad], player);
@@ -232,10 +297,21 @@ namespace EmuSen.Mistress.Views
             {
                 case SettingsScreen.DoorBindings: ShowControllerBindings(); break;
                 case SettingsScreen.DoorThemes: ShowThemeSettings(); break;
-                case SettingsScreen.DoorScraper: ShowPreferencesAt(PreferencesWindow.ScrapingTab); break;
+                case SettingsScreen.DoorScraper: ShowScraper(); break;
+                case SettingsScreen.DoorSignIn: _ = SignInFromSettingsAsync(); break;
+                case SettingsScreen.DoorCheckAccount: _ = SaidInSettings(((IScrapeHost)this).CheckMemberAsync()); break;
+                case SettingsScreen.DoorSignOut: StatusText.Text = ((IScrapeHost)this).SignOut(); RefreshSettings(); break;
+                case SettingsScreen.DoorOpenVgdb: _ = OpenVgdbFromSettingsAsync(); break;
+                case SettingsScreen.DoorCleanUp: _ = CleanUpFromSettingsAsync(); break;
                 case SettingsScreen.DoorCollections: ShowCollections(); break;
                 case SettingsScreen.DoorShell: ShowShellConsole(); break;
                 case SettingsScreen.DoorDiscs: ShowCompressedDiscs(); break;
+                case SettingsScreen.DoorNewCollection: _ = NewCollectionAsync(); break;
+                case SettingsScreen.DoorFinishCollection: FinishEditingCollection(); RefreshSettings(); break;
+                case var d when d.StartsWith(SettingsScreen.DoorDeleteCollection, StringComparison.Ordinal) && long.TryParse(d[SettingsScreen.DoorDeleteCollection.Length..], out long id) && _collections.FirstOrDefault(c => c.Id == id) is { } doomed:
+                    _ = CollectionThenRefresh(DeleteCollectionAsync(this, doomed)); break;
+                case var d when d.StartsWith(SettingsScreen.DoorCardSaves, StringComparison.Ordinal):
+                    _ = SheetLayer.Show(new MemoryCardsWindow(_graphics, d[SettingsScreen.DoorCardSaves.Length..]), this); break;
                 case SettingsScreen.DoorRomFolder: _ = AskFolderAsync("ROM folder", _appSettings.RomDirectory, p => { _appSettings.RomDirectory = p; RefreshLibrary(); }); break;
                 case SettingsScreen.DoorArtFolder: _ = AskFolderAsync("Artwork folder", _appSettings.ArtworkDirectory, p => { _appSettings.ArtworkDirectory = p; ScanArtwork(); }); break;
                 case SettingsScreen.DoorStateFolder: _ = AskFolderAsync("State folder", _appSettings.StateDirectory, p => _appSettings.StateDirectory = p); break;
@@ -244,6 +320,68 @@ namespace EmuSen.Mistress.Views
                 case SettingsScreen.DoorMediaFolder: _ = AskFolderAsync("ES-DE media folder", _appSettings.EsdeMediaDirectory, p => _appSettings.EsdeMediaDirectory = p); break;
                 case SettingsScreen.DoorThemeFolder: _ = AskFolderAsync("ES-DE theme folder", _appSettings.BigPictureTheme, p => { _appSettings.BigPictureTheme = p; ThemeChanged(false); }); break;
             }
+        }
+
+        string? ISettingsHost.ScrapeUser => ((IScrapeHost)this).Member is { IsSet: true } m ? m.User : null;
+
+        long? ISettingsHost.OpenVgdbBytes => ((IScrapeHost)this).OpenVgdbBytes;
+
+        // The account in one line, as the old Scraping tab said it, with the last answer ScreenScraper gave.
+        string ISettingsHost.AccountLine
+        {
+            get
+            {
+                MemberAccount member = ((IScrapeHost)this).Member;
+                string line = !member.IsSet ? "Not signed in: runs use EmuSen's developer credentials alone." : $"Signed in as {member.User}";
+                if (member.IsSet && ((IScrapeHost)this).MemberChecked is { Level: { Length: > 0 } level }) line += $" · level {level}";
+                return _accountSaid is { Length: > 0 } said ? $"{line}. {said}" : line;
+            }
+        }
+
+        private string? _accountSaid;
+
+        string? ISettingsHost.EditingCollection => _editedCollection?.Name;
+
+        // A collection made from Settings starts its editing at once, so Settings closes onto the library where its games are added with Y.
+        private async Task NewCollectionAsync()
+        {
+            await CreateCollectionAsync(this);
+            if (_editedCollection is not null) CloseSettings();
+            else RefreshSettings();
+        }
+
+        private async Task CollectionThenRefresh(Task done)
+        {
+            await done;
+            RefreshSettings();
+        }
+
+        private async Task SignInFromSettingsAsync()
+        {
+            if (await Dialogs.PromptAsync(this, "ScreenScraper", "Your ScreenScraper user name", "", "Next") is not string user) return;
+            if (await Dialogs.PromptAsync(this, "ScreenScraper", $"The password for {user}", "", "Log In", secret: true) is not string password) return;
+            await SaidInSettings(((IScrapeHost)this).SignInAsync(user, password));
+        }
+
+        private async Task SaidInSettings(Task<SignInAnswer> asked)
+        {
+            _accountSaid = "Asking ScreenScraper...";
+            RefreshSettings();
+            _accountSaid = (await asked).Message;
+            RefreshSettings();
+        }
+
+        private async Task OpenVgdbFromSettingsAsync()
+        {
+            var host = (IScrapeHost)this;
+            _accountSaid = host.OpenVgdbBytes is null ? await host.DownloadOpenVgdbAsync() : await host.RemoveOpenVgdbAsync();
+            RefreshSettings();
+        }
+
+        private async Task CleanUpFromSettingsAsync()
+        {
+            _accountSaid = await ((IScrapeHost)this).CleanUpOrphansAsync();
+            RefreshSettings();
         }
 
         // A folder typed in, as Game Mode never shows the platform's picker; what was kept is saved and Settings drawn again.

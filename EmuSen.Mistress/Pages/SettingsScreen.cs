@@ -49,7 +49,15 @@ namespace EmuSen.Mistress.Pages
         IReadOnlyList<PlayerSeat> Players { get; }
         IReadOnlyList<string> Pads { get; }
         void Seat(int pad, int player);
+        bool PadPressed(int pad);
+        IReadOnlyList<string> Looks { get; }
+        int LookAt { get; }
+        void ChooseLook(int at);
         bool Logging { get; set; }
+        string? ScrapeUser { get; }
+        string AccountLine { get; }
+        long? OpenVgdbBytes { get; }
+        string? EditingCollection { get; }
         void SaveApp(string? what = null);
         void SaveGraphics(string? console);
         void Open(string door);
@@ -63,6 +71,8 @@ namespace EmuSen.Mistress.Pages
 
         // The doors to what Settings does not draw itself: tools, pickers and the Shell.
         public const string DoorBindings = "bindings", DoorThemes = "themes", DoorScraper = "scraper", DoorCollections = "collections", DoorShell = "shell", DoorLibraryManager = "librarymanager", DoorDiscs = "discs";
+        public const string DoorSignIn = "scraper:signin", DoorSignOut = "scraper:signout", DoorCheckAccount = "scraper:check", DoorOpenVgdb = "scraper:openvgdb", DoorCleanUp = "scraper:cleanup";
+        public const string DoorNewCollection = "collection:new", DoorFinishCollection = "collection:finish", DoorDeleteCollection = "collection:delete:", DoorCardSaves = "cardsaves:";
         public const string DoorRomFolder = "folder:rom", DoorArtFolder = "folder:art", DoorStateFolder = "folder:state", DoorLogFolder = "folder:log", DoorFirmwareFolder = "folder:firmware", DoorMediaFolder = "folder:media", DoorThemeFolder = "folder:theme";
         public const string On = "On", Off = "Off";
 
@@ -101,8 +111,24 @@ namespace EmuSen.Mistress.Pages
 
         public bool OnChoicePage => _pages.Count > 0 && _pages[^1].Choices;
 
-        // The rows read again from the settings, as after a change made elsewhere.
-        public void Read() => _rows = _pages.Count > 0 ? _pages[^1].Rows() : SectionRows(_section);
+        private string _search = "";
+
+        public string SearchText => _search;
+
+        // The rows read again from the settings, as after a change made elsewhere; a search lists the rows of every section whose words hold it.
+        public void Read() => _rows = _search.Length > 0 ? Found() : _pages.Count > 0 ? _pages[^1].Rows() : SectionRows(_section);
+
+        // The desktop's search across all six sections; choosing a found row goes to its section first.
+        public void Search(string text)
+        {
+            _search = text?.Trim() ?? "";
+            if (_search.Length > 0) _pages.Clear();
+            Read();
+        }
+
+        private IReadOnlyList<Setting> Found() => SectionList.SelectMany(s => SectionRows(s.Key)
+            .Where(r => r.Row.Label.Contains(_search, StringComparison.OrdinalIgnoreCase) || (r.Row.Sentence ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase))
+            .Select(r => r with { Row = r.Row with { Key = s.Key + "/" + r.Row.Key, Label = $"{r.Row.Label}" }, Choose = () => { string key = r.Row.Key; _search = ""; ChooseSection(s.Key); Choose(key); } })).ToList();
 
         public void ChooseSection(string key)
         {
@@ -162,6 +188,7 @@ namespace EmuSen.Mistress.Pages
             var hints = new List<ScreenHint> { new("South", row?.Kind == PageRowKind.Opens ? "Open" : "Change") };
             if (_rows.Any(r => r.Row.Kind == PageRowKind.Steps)) hints.Add(new("DPadLeftRight", "Value"));
             if (_pages.Count == 0) hints.Add(new("Shoulders", "Section"));
+            else if (_section == Consoles && _pages.Count == 1) hints.Add(new("Shoulders", "Console"));
             hints.Add(new("East", "Back"));
             hints.Add(new("Start", "Home"));
             return hints;

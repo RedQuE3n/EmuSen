@@ -152,31 +152,28 @@ namespace EmuSen.WiseMan.Mistress
             using var s = new ThemedSession(1280, 800);
             PadDriver second = s.Pad.Plug("Second Pad");
             s.Pad.Tick();
-            ThemedLibraryFlowTests.Choose(s, "Preferences");
-            s.Settle();
-            SheetLayer sheets = s.Window.GetControl<SheetLayer>("Sheets");
-            var prefs = Assert.IsType<PreferencesWindow>(sheets.Current);
-            Control sheet = sheets.SheetOf(prefs)!;
-            PadAudit.Reach(sheet, s.Pad, e => e is Control { Name: "BigMenuPage4" });
+            // Settings ▸ Controllers ▸ Players: a row per pad, stepped with the pad, a held button marking its row.
+            SettingsLayout layout = SettingsPad.Open(s.Window, s.Pad);
+            SettingsPad.To(s.Window, s.Pad, "players");
             s.Pad.A();
-            Assert.Equal("Controllers", prefs.Form!.Menu.Title);
-
-            Dropdown choice = Named<Dropdown>(sheet, "PadPlayerDropdown1");
-            Assert.Equal("Second Pad", MenuRows.GetLabel(choice));
-            PadAudit.Reach(sheet, s.Pad, e => ReferenceEquals(e, choice));
+            Assert.Equal("Second Pad", layout.Rows.Single(r => r.Key == "pad1").Label);
+            SettingsPad.To(s.Window, s.Pad, "pad1");
             s.Pad.Right();
             Assert.Equal(3, s.Pad.Gamepad.Players.PlayerOf(s.Pad.Gamepad.Pads[1]));
-            Assert.Equal("Player 3", choice.SelectedItem);
+            Assert.Equal("Player 3", SettingsPad.Value(s.Window, "pad1"));
 
             second.Pad.Press(SDL.GamepadButton.LeftShoulder);
             s.Pad.Tick();
-            Assert.True(choice.Classes.Contains("identify"));
-            Assert.NotNull(MenuRows.GetValueColor(choice));
+            s.Settle();
+            Assert.Equal("● Player 3", SettingsPad.Value(s.Window, "pad1"));
             second.Pad.Release(SDL.GamepadButton.LeftShoulder);
             s.Pad.Tick();
-            Assert.False(choice.Classes.Contains("identify"));
-            Assert.Empty(FitAudit.Check(sheet, WindowAllowances.For(prefs)));
-            ThemedSwitchesTests.PutAway(s);
+            s.Settle();
+            Assert.Equal("Player 3", SettingsPad.Value(s.Window, "pad1"));
+            Assert.Empty(FitAudit.Check(layout, []));
+            s.Pad.B();
+            s.Pad.B();
+            Assert.Null(s.Window.SettingsShown);
         }, default);
     }
 }

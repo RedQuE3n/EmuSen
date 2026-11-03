@@ -79,7 +79,8 @@ namespace EmuSen.Mistress.Pages
             {
                 int pad = i;
                 int seat = _host.Players.FirstOrDefault(s => s.Pad == pads[i])?.Player ?? 0;
-                rows.Add(Choice($"pad{i}", pads[i], "The player this controller plays as.", players, seat - 1, p => _host.Seat(pad, p + 1)));
+                Setting row = Choice($"pad{i}", pads[i], "The player this controller plays as; a button held on it marks its row.", players, seat - 1, p => _host.Seat(pad, p + 1));
+                rows.Add(_host.PadPressed(i) ? row with { Row = row.Row with { Status = "● " + row.Row.Status } } : row);
             }
             rows.Add(Choice("keyboardplayer", "Keyboard", "The player the keyboard plays as, beside that player's controller.", players, App.KeyboardPlayer - 1, p => { App.KeyboardPlayer = p + 1; _host.SaveApp("keyboardplayer"); }));
             rows.Add(Switch("claim", "The first controller pressed is player 1", "In a game, the first controller a button is pressed on is player 1 and the others follow in the order they are used.", App.ClaimPlayersByPress, on => App.ClaimPlayersByPress = on));
@@ -208,7 +209,7 @@ namespace EmuSen.Mistress.Pages
                 Opens("rom", "ROM folder", "The folder the library lists, read in place and never moved.", rom, () => _host.Open(DoorRomFolder),
                     () => Said($"{Count(_host.AllGames, "game", "games")} under {rom}, read in place and never moved.", "A opens the folder picker; new games are found on the next start or with Check Again in the Library Manager.")),
                 Opens("art", "Artwork folder", "Box art, named like the game's file; blank keeps it beside the games.", App.ArtworkDirectory is { Length: > 0 } a ? a : "beside the games", () => _host.Open(DoorArtFolder)),
-                Opens("themes", "Themes", "The big picture's look: EmuSen's own, or an ES-DE theme's, with its options.", BigPictureLooks.Current(App).Name, () => _host.Open(DoorThemes)),
+                Choice("themes", "Themes", "The big picture's look: EmuSen's own, or an ES-DE theme's; Left and Right choose one, A opens the themes and their options.", _host.Looks, _host.LookAt, i => _host.ChooseLook(i)) with { Choose = () => _host.Open(DoorThemes) },
                 Opens("scraping", "Scraping", "Where art and facts come from, and what is fetched.", App.Scraping ? "ScreenScraper" : "Off", () => Push("Scraping", ScrapingRows, "scraping")),
                 Opens("collections", "Collections", "The automatic collections shown, your own, and how lists are sorted.", _host.CustomCollections.Count.ToString(CultureInfo.InvariantCulture), () => Push("Collections", CollectionRows, "collections")),
                 Choice("hidden", "Hidden games", "Games hidden from the library. Their files are never touched; listing them lets you unhide them on their page.", ["Not listed", "Listed"], App.ShowHiddenGames ? 1 : 0,
@@ -224,7 +225,7 @@ namespace EmuSen.Mistress.Pages
             var rows = new List<Setting>
             {
                 Switch("screenscraper", "Use ScreenScraper", "Art and facts from ScreenScraper, for the games the Scraper is asked to fetch.", App.Scraping, on => App.Scraping = on),
-                Opens("account", "Member account", "Your ScreenScraper account, for more requests a day and faster ones.", null, () => _host.Open(DoorScraper)),
+                Opens("account", "Member account", "Your ScreenScraper account, for more requests a day and faster ones.", _host.ScrapeUser ?? "Not signed in", () => Push("Member account", AccountRows, "account"), () => Said(_host.AccountLine)),
                 Pick("region", "Region", "Whose box art and names come first.", Regions, App.ScrapeRegion ?? "", v => { App.ScrapeRegion = v; _host.SaveApp("region"); }),
                 Switch("regionfallback", "Other regions after", "Else world, USA, Europe, Japan, then any.", App.ScrapeRegionFallback, on => App.ScrapeRegionFallback = on),
                 Pick("language", "Language", "The language of descriptions and names.", Languages, App.ScrapeLanguage ?? "en", v => { App.ScrapeLanguage = v; _host.SaveApp("language"); }),
@@ -235,6 +236,25 @@ namespace EmuSen.Mistress.Pages
             foreach ((string key, string label, Func<bool> get, Action<bool> set) in Fetches())
                 rows.Add(Switch(key, label, $"Fetch {label.ToLowerInvariant()}.", get(), set));
             return rows;
+        }
+
+        // The member account's sign-in, kept only when ScreenScraper accepts it; OpenVGDB's download and the cleanup of media whose game is gone.
+        private IReadOnlyList<Setting> AccountRows()
+        {
+            var rows = new List<Setting>();
+            if (_host.ScrapeUser is null)
+                rows.Add(Asks("signin", "Log in", "Your user name and password, checked with one request to ScreenScraper and kept only if accepted, in a file only you can read.", () => _host.Open(DoorSignIn)));
+            else
+            {
+                rows.Add(Act("check", "Check", "Asks ScreenScraper about the account kept.", () => _host.Open(DoorCheckAccount), _host.ScrapeUser));
+                rows.Add(Asks("signout", "Log out", "Deletes the account's file.", () => _host.Open(DoorSignOut)));
+            }
+            rows.Add(Asks("openvgdb", "OpenVGDB", "OpenEmu's game database, used when ScreenScraper has nothing; A downloads it, or removes the copy kept.", () => _host.Open(DoorOpenVgdb)) with
+            {
+                Row = new PageRow("openvgdb", "OpenVGDB") { Kind = PageRowKind.Asks, Status = _host.OpenVgdbBytes is long b ? $"{b / 1048576.0:0.#} MB" : "Not downloaded", Sentence = "OpenEmu's game database, used when ScreenScraper has nothing; A downloads it, or removes the copy kept." },
+            });
+            rows.Add(Asks("cleanup", "Clean up orphaned media", "Media whose game is gone, moved out of the library's art.", () => _host.Open(DoorCleanUp)));
+            return rows.Select(r => r with { Pane = r.Pane ?? (() => Said(_host.AccountLine, r.Row.Sentence ?? "")) }).ToList();
         }
 
         private IEnumerable<(string, string, Func<bool>, Action<bool>)> Fetches() =>
@@ -254,8 +274,16 @@ namespace EmuSen.Mistress.Pages
                 c.AutoCollections.Remove(value);
                 if (on) c.AutoCollections.Add(value);
             });
+            var mine = new List<Setting>();
+            if (_host.EditingCollection is { } editing)
+                mine.Add(Act("finish", $"Finish editing {editing}", "Ends adding games to the collection with Y in a game list.", () => _host.Open(DoorFinishCollection)));
+            mine.Add(Asks("newcollection", "New collection", "Name a collection, then add games to it with Y in any game list until you finish editing.", () => _host.Open(DoorNewCollection)));
+            if (_host.CustomCollections.Count > 0)
+                mine.Add(Opens("deletecollection", "Delete a collection", "The games stay where they are; only the list of them goes.", null,
+                    () => Push("Delete a collection", () => _host.CustomCollections.Select(g => Asks("delete" + g.Id, g.Name, $"Deletes the collection {g.Name}; its games are not touched.", () => _host.Open(DoorDeleteCollection + g.Id))).ToList(), "deletecollection")));
             return
             [
+                .. mine,
                 Auto(BigPictureCollections.AllGames, "All Games"),
                 Auto(BigPictureCollections.Favorites, "Favorites"),
                 Auto(BigPictureCollections.LastPlayed, "Last Played"),

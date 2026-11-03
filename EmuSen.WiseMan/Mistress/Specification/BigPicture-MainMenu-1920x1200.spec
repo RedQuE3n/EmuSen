@@ -24,7 +24,7 @@ tree
                   9 ScrollViewer at=96,234,636,324 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,234,636,324
                     10 ListBoxItem at=96,234,636,81 by=fixed-scroll drawn focus heard="Start Console" in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Start Console  ›"
                     11 ListBoxItem at=96,315,636,81 by=fixed-scroll drawn focus heard=Tools in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Tools  ›"
-                    12 ListBoxItem at=96,396,636,81 by=fixed-scroll drawn focus heard=Settings in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Settings  ›"
+                    12 ListBoxItem at=96,396,636,81 by=fixed-scroll drawn focus heard=Settings in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text=Settings
                     13 ListBoxItem at=96,477,636,81 by=fixed-scroll drawn focus heard=Power in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Power  ›"
 focus none
 press pageup menu="open at 0: Start Console" top=none

@@ -53,7 +53,6 @@ namespace EmuSen.WiseMan.Mistress
 
         internal static readonly string[] GameOptions = ["Cheats", MainWindow.ControllersMenu, MainWindow.DisplayMenu];
         internal static readonly string[] Leave = ["Back to Library", "Restart Game...", "Quit Game...", "Quit EmuSen..."];
-        internal static readonly string[] Settings = ["Players & Controllers", "Controller Bindings", "Graphics", "Shaders", "Cheats", "Memory Cards", "Firmware", "Preferences"];
 
         // One synthetic game, started from the library: as Game Mode starts it with a big screen, else on the desktop.
         private (MainWindow Window, PadDriver Pad) Playing(bool bigScreen, int width = 1280, int height = 800)
@@ -155,7 +154,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal([MainWindow.ContinueRow, "Cobalt Harbor (Synthetic)", MainWindow.SearchRow, MainWindow.StartConsoleMenu, MainWindow.ToolsMenu, MainWindow.SettingsMenu, MainWindow.PowerMenu], PadMenu.Lines(window));
             Assert.Equal([4, 6], Enumerable.Range(0, 7).Where(i => PadMenu.Entries(window)[i].StartsSection));
             Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CompressedDiscsMenu, MainWindow.ShellRow], SubmenuLines(window, MainWindow.ToolsMenu));
-            Assert.Equal(Settings, SubmenuLines(window, MainWindow.SettingsMenu));
+            Assert.Null(PadMenu.Entries(window).Single(e => e.Text() == MainWindow.SettingsMenu).Submenu);
             Assert.Equal(["Full Screen", "Big Picture", MainWindow.QuitEmuSenRow], SubmenuLines(window, MainWindow.PowerMenu));
             Assert.True(PadMenu.Card(window).IsVisible);
             Assert.False(window.GetControl<Control>("PadMenuDesk").IsVisible);
@@ -458,9 +457,32 @@ namespace EmuSen.WiseMan.Mistress
 
         public static TheoryData<string, Type> InGameWindows() => new()
         {
-            { "Cheats", typeof(ActiveCheatsWindow) }, { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) },
-            { "Graphics", typeof(GraphicsSettingsWindow) }, { "Shaders", typeof(ShaderSettingsWindow) },
+            { "Cheats", typeof(ActiveCheatsWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) },
         };
+
+        public static TheoryData<string, string, string> InGameSettings() => new()
+        {
+            { "Players & Controllers", "controllers", "Controllers › Players" }, { "Console Settings", "consoles", "Consoles › Super Nintendo" }, { "Shader Levers", "display", "Display › Shader levers" },
+        };
+
+        // The game's options that were settings windows open Settings at their page, over the card, the game paused beneath.
+        [Theory]
+        [MemberData(nameof(InGameSettings))]
+        public Task Each_settings_row_of_the_game_s_menu_opens_settings_at_its_page(string row, string section, string trail) => Session.Dispatch(() =>
+        {
+            (MainWindow w, PadDriver pad) = Playing(bigScreen: true);
+            Chord(pad);
+            PadMenu.Choose(w, pad, row, exact: true);
+            Assert.True(PadMenu.IsOpen(w), "the card stays beneath what it opened (EmuSen_Interface.md §18.5)");
+            Assert.Equal(section, w.SettingsShown!.Section);
+            Assert.Equal(trail, string.Join(" › ", w.SettingsShown.Trail));
+            Assert.True(w.IsPaused);
+            pad.B();
+            pad.B();
+            Assert.Null(w.SettingsShown);
+            Assert.True(PadMenu.IsOpen(w));
+            Done(w);
+        }, default);
 
         // Every row that moved into a submenu still opens its window, over the game, which stays paused under it.
         [Theory]
@@ -473,7 +495,6 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(PadMenu.IsOpen(w), "the card stays beneath the sheet it opened (EmuSen_Interface.md §18.5)");
             Assert.IsType(window, Sheets(w).Current);
             Assert.True(w.IsPaused);
-            if (row == "Players & Controllers") Assert.Equal(PreferencesWindow.ControllersTab, PreferencesTab(w));
             Done(w);
         }, default);
 
@@ -508,14 +529,14 @@ namespace EmuSen.WiseMan.Mistress
             }
             Step(MainWindow.GameOptionsMenu, () => Enter(w, pad, MainWindow.GameOptionsMenu));
             Step(MainWindow.DisplayMenu, () => Enter(w, pad, MainWindow.DisplayMenu));
-            Step("Graphics", () => Enter(w, pad, "Graphics"));
-            Assert.IsType<GraphicsSettingsWindow>(Sheets(w).Current);
-            Assert.Equal(0, w.GetControl<Control>("PadMenuPanel").Opacity);
-            Step("the sheet closed", () => ((Window)Sheets(w).Current!).Close());
-            Assert.False(Sheets(w).IsPresenting);
+            Step("Console Settings", () => Enter(w, pad, "Console Settings"));
+            Assert.NotNull(w.SettingsShown);
+            Step("Settings closed", () => pad.B());
+            Step("Settings closed", () => pad.B());
+            Assert.Null(w.SettingsShown);
             Assert.Equal(1, w.GetControl<Control>("PadMenuPanel").Opacity);
             Assert.EndsWith(MainWindow.DisplayMenu, PadMenu.DeskTitle(w));
-            Assert.Equal("Graphics", PadMenu.SelectedLine(w));
+            Assert.Equal("Console Settings", PadMenu.SelectedLine(w));
             Step("B to Game Options", () => pad.B());
             Step("B to the first page", () => pad.B());
             for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
@@ -531,15 +552,15 @@ namespace EmuSen.WiseMan.Mistress
             var said = new List<string?>();
             w.GetControl<TextBlock>("StatusText").PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) said.Add(e.NewValue as string); };
             Chord(pad);
-            PadMenu.Choose(w, pad, "Graphics", exact: true);
-            Assert.IsType<GraphicsSettingsWindow>(Sheets(w).Current);
+            PadMenu.Choose(w, pad, "Console Settings", exact: true);
+            Assert.NotNull(w.SettingsShown);
             Assert.True(w.IsPaused);
-            ((Window)Sheets(w).Current!).Close();
+            w.CloseSettings();
             Dispatcher.UIThread.RunJobs();
-            Assert.True(PadMenu.IsOpen(w), "closing the sheet comes back to the card");
+            Assert.True(PadMenu.IsOpen(w), "closing Settings comes back to the card");
             string Title() => w.GetControl<TextBlock>("PadMenuTitle").Text ?? "";
             Assert.EndsWith(MainWindow.DisplayMenu, Title());
-            Assert.Equal("Graphics", PadMenu.Lines(w)[PadMenu.Selected(w)]);
+            Assert.Equal("Console Settings", PadMenu.Lines(w)[PadMenu.Selected(w)]);
             // B climbs one level at a time and the game stays paused until the card closes (EmuSen_Interface.md §2.9).
             pad.B();
             Assert.True(PadMenu.IsOpen(w) && w.IsPaused);
@@ -554,15 +575,9 @@ namespace EmuSen.WiseMan.Mistress
             Done(w);
         }, default);
 
-        private static string? PreferencesTab(MainWindow w) =>
-            (Sheets(w).SheetOf(Sheets(w).Current!)!.GetVisualDescendants().OfType<TabControl>().Single(t => t.Name == "PreferenceTabs").SelectedItem as TabItem)?.Header as string;
-
         public static TheoryData<string, Type> MainWindows() => new()
         {
-            { "Players & Controllers", typeof(PreferencesWindow) }, { "Controller Bindings", typeof(InputSettingsWindow) }, { "Graphics", typeof(GraphicsSettingsWindow) },
-            { "Shaders", typeof(ShaderSettingsWindow) }, { "Cheats", typeof(ActiveCheatsWindow) }, { "Preferences", typeof(PreferencesWindow) },
-            { "Collections", typeof(CollectionSettingsWindow) }, { MainWindow.ScraperRow, typeof(ScraperWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) },
-            { "Memory Cards", typeof(MemoryCardsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Cores", typeof(CoresWindow) }, { "Shell", typeof(HotaruWindow) },
+            { MainWindow.ScraperRow, typeof(ScraperWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Cores", typeof(CoresWindow) }, { "Shell", typeof(HotaruWindow) },
         };
 
         [Theory]
@@ -576,7 +591,22 @@ namespace EmuSen.WiseMan.Mistress
             s.Settle();
             Assert.False(PadMenu.IsOpen(s.Window));
             Assert.IsType(window, Sheets(s.Window).Current);
-            if (row == "Players & Controllers") Assert.Equal(PreferencesWindow.ControllersTab, PreferencesTab(s.Window));
+        }, default);
+
+        // The Home card's Settings row opens Settings, its first section, in place of the old menu of settings windows (EmuSen_Interface.md §2.7).
+        [Fact]
+        public Task The_home_card_s_settings_row_opens_settings() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.Start();
+            PadMenu.Choose(s.Window, s.Pad, MainWindow.SettingsMenu, exact: true);
+            s.Settle();
+            Assert.False(PadMenu.IsOpen(s.Window));
+            Assert.Equal(EmuSen.Mistress.Pages.SettingsScreen.Controllers, s.Window.SettingsShown!.Section);
+            s.Pad.B();
+            s.Settle();
+            Assert.Null(s.Window.SettingsShown);
         }, default);
 
         // The desktop's keys steer the menu as the pad does, and the pointer chooses a row and goes back with its right button.

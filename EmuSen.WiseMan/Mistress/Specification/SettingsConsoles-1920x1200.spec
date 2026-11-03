@@ -42,9 +42,9 @@ tree
         27 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#26262BFF role=none
           28 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none
             29 TextBlock at=1236,198,552,79.5 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="Super Nintendo · 5 games · engine VenusRT (Rust)" layout=312.33,52.8 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="Super Nintendo · 5 games · engine VenusRT (Rust)"
-            30 TextBlock at=1236,289.5,552,82.5 by=clip drawn heard="⚠ Firmware not found: add it under Firmware" limit=1200,162,624,867 name=SettingsLine paints=#FFFFFFFF role=text
-            31 TextBlock at=1236,384,552,79.5 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="CRT profile Off · sa-1 catch-up After every S-CPU instruction (exact)" layout=323.62,52.8 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="CRT profile Off · sa-1 catch-up After every S-CPU instruction (exact)"
-            32 TextBlock at=1236,475.5,552,120 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="What every Super Nintendo game shares, unless the game's own options say otherwise." layout=353.36,79.2 limit=1200,162,624,867 name=SettingsLine paints=#8D8D91FF role=text size=22 text="What every Super Nintendo game shares, unless the game's own options say otherwise."
+            30 TextBlock at=1236,289.5,552,43.5 by=clip drawn heard="✓ No firmware needed" limit=1200,162,624,867 name=SettingsLine paints=#FFFFFFFF role=text
+            31 TextBlock at=1236,345,552,79.5 box=368,53 by=clip caps=15.3989 drawn face=Barlow heard="CRT profile Off · SA-1 catch-up After every S-CPU instruction (exact)" layout=327.23,52.8 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="CRT profile Off · SA-1 catch-up After every S-CPU instruction (exact)"
+            32 TextBlock at=1236,436.5,552,120 box=368,80 by=clip caps=15.3989 drawn face=Barlow heard="What every Super Nintendo game shares, unless the game's own options say otherwise." layout=353.36,79.2 limit=1200,162,624,867 name=SettingsLine paints=#8D8D91FF role=text size=22 text="What every Super Nintendo game shares, unless the game's own options say otherwise."
         33 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
           34 HintBar at=96,1074,1728,45 by=panel heard="Open, Section, Back, Home" limit=0,0,1920,1200 role=group
 focus none

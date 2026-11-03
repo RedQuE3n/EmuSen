@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Pages;
@@ -19,7 +20,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     {
         public static readonly string[] SettingsViews =
             ["SettingsControllers", "SettingsDisplay", "SettingsDisplayLight", "SettingsShaderLevers", "SettingsSound", "SettingsConsoles", "SettingsConsolePage", "SettingsEngine",
-             "SettingsFirmware", "SettingsMemoryCards", "SettingsLibrary", "SettingsEmuSen"];
+             "SettingsFirmware", "SettingsMemoryCards", "SettingsLibrary", "SettingsEmuSen", "SettingsDesktopDisplay", "SettingsDesktopConsoles", "SettingsDesktopSearch"];
 
         public static TheoryData<string, int, int> SettingsCases()
         {
@@ -32,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public static TheoryData<string, int, int> SettingsFitCases()
         {
             var data = new TheoryData<string, int, int>();
-            foreach (string v in SettingsViews)
+            foreach (string v in SettingsViews.Where(v => !v.Contains("Desktop", StringComparison.Ordinal)))
                 foreach ((int w, int h) in new[] { (1920, 1080), (1280, 720) }) data.Add(v, w, h);
             return data;
         }
@@ -40,6 +41,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Home's Settings place, then the shoulders to the section and the directions to the row, as the player goes.
         private static void OpenSettings(MainWindow w, PadDriver pad, string view)
         {
+            // The desktop's doors are the Settings menu's: Settings ▸ Display… and Settings ▸ Consoles…, and the window's search.
+            if (view.Contains("Desktop", StringComparison.Ordinal))
+            {
+                if (view == "SettingsDesktopDisplay" && Avalonia.Application.Current is { } app) app.RequestedThemeVariant = ThemeVariant.Light;
+                w.ShowSettings(view == "SettingsDesktopConsoles" ? SettingsScreen.Consoles : SettingsScreen.Display);
+                Settle(w);
+                if (view == "SettingsDesktopDisplay") w.SettingsLayoutShown!.FocusOn("crt");
+                if (view == "SettingsDesktopSearch") w.SettingsLayoutShown!.GetVisualDescendants().OfType<TextBox>().First(t => t.Name == "SettingsSearch").Text = "volume";
+                Settle(w);
+                return;
+            }
             pad.Down(1);
             pad.Right(5);
             pad.A();
@@ -74,7 +86,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             if (Environment.GetEnvironmentVariable("EMUSEN_U6_PNG") is not { Length: > 0 } folder) return;
             Directory.CreateDirectory(folder);
-            UiTest.Capture(w).SavePng(Path.Combine(folder, name + ".png"));
+            // The desktop's Settings is a window of its own, so its picture is that window's.
+            Window shown = w.SettingsLayoutShown is { } layout && TopLevel.GetTopLevel(layout) is Window own ? own : w;
+            UiTest.Capture(shown).SavePng(Path.Combine(folder, name + ".png"));
         }
 
         private static SortedDictionary<string, string> SettingsSeen(MainWindow w)
@@ -84,7 +98,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return seen;
         }
 
-        private (MainWindow Window, PadDriver Pad) SettingsSession(string view, int width, int height) => OwnLookSession("Games", width, height);
+        private (MainWindow Window, PadDriver Pad) SettingsSession(string view, int width, int height) => OwnLookSession(view.Contains("Desktop", StringComparison.Ordinal) ? view : "Games", width, height);
 
         [Theory]
         [MemberData(nameof(SettingsCases))]
@@ -97,13 +111,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             try
             {
                 OpenSettings(window, pad, view);
+                bool desktop = view.Contains("Desktop", StringComparison.Ordinal);
                 Control root = window.SettingsLayoutShown!;
-                SpecDocument doc = InterfaceRecorder.Tree(root, new InterfaceRecorder.Options(name, "menu", SmallestText: FitAudit.SmallestText), out _);
+                SpecDocument doc = InterfaceRecorder.Tree(root, new InterfaceRecorder.Options(name, desktop ? "window" : "menu", SmallestText: desktop ? 0 : FitAudit.SmallestText), out _);
                 doc.Header["case"] = view;
                 doc.Header["walk"] = "none: the screen moves its own focus, drawn as a bar";
                 PictureSettings(window, name);
-                List<string> faults = FitAudit.Check(root, [], FitAudit.SmallestText);
-                InterfaceSpecFiles.Presses(doc, pad, window, () => SettingsSeen(window), UiButton.Down, UiButton.Up, UiButton.Back);
+                List<string> faults = FitAudit.Check(root, [], desktop ? 0 : FitAudit.SmallestText);
+                if (!desktop) InterfaceSpecFiles.Presses(doc, pad, window, () => SettingsSeen(window), UiButton.Down, UiButton.Up, UiButton.Back);
                 faults.AddRange(InterfaceSpecFiles.Check(doc, _out, Known));
                 Assert.Empty(faults);
             }

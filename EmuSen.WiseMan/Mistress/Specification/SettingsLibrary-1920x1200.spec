@@ -31,7 +31,7 @@ tree
         16 StackPanel at=96,162,1056,729 by=panel heard=Library limit=0,0,1920,1200 name=SettingsRows role=none
           17 MenuRow at=96,162,1056,81 by=panel heard="ROM folder, <run>/Roms" limit=0,0,1920,1200 name=SettingsRow.rom role=listitem
           18 MenuRow at=96,243,1056,81 by=panel heard="Artwork folder, beside the games" limit=0,0,1920,1200 name=SettingsRow.art role=listitem
-          19 MenuRow at=96,324,1056,81 by=panel heard="Themes, EmuSen" limit=0,0,1920,1200 name=SettingsRow.themes role=listitem
+          19 MenuRow at=96,324,1056,81 by=panel heard="Themes, EmuSen (built in)" limit=0,0,1920,1200 name=SettingsRow.themes role=listitem
           20 MenuRow at=96,405,1056,81 by=panel heard="Scraping, ScreenScraper" limit=0,0,1920,1200 name=SettingsRow.scraping role=listitem
           21 MenuRow at=96,486,1056,81 by=panel heard="Collections, 1" limit=0,0,1920,1200 name=SettingsRow.collections role=listitem
           22 MenuRow at=96,567,1056,81 by=panel heard="Hidden games, Not listed" limit=0,0,1920,1200 name=SettingsRow.hidden role=listitem

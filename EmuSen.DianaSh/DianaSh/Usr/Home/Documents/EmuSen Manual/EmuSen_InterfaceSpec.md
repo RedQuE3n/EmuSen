@@ -724,3 +724,52 @@ over the own look, which draws no status bar, so it is centred in the whole wind
 changed. `HomeCardSettings` (both sizes): Home's Settings card ends with `Tools ▸`, which keeps the Home card's Tools page
 reachable from the own look, with Theme Settings, Compressed Discs, Collections and the Shell (`EmuSen_BigPicture.md`
 §51.2).
+
+#### 6.3.23 Settings, U6a (2026-11-03)
+
+Thirty recordings were added (`WindowFitAuditTests.Settings.cs`), after the rendered states had been compared side by side
+with their approved mockups at 1280 × 800 and 1920 × 1080, and the desktop's with its mockups at 1280 × 800
+(`EmuSen_BigPicture.md` §52):
+
+- **Added: the big screen's Settings**, at 1280 × 800 and 1920 × 1200, each reached from Home's Settings place by the
+  shoulders and the directions: the six sections (`SettingsControllers`, `SettingsDisplay` on CRT shader, `SettingsSound`,
+  `SettingsConsoles` on Super Nintendo, `SettingsLibrary`, `SettingsEmuSen`), the light variant (`SettingsDisplayLight`,
+  held to the light column of the palette, which the recorder now reads for a variant other than dark), the levers
+  (`SettingsShaderLevers`), a console's page, its Engine as a page of choices, PlayStation's Firmware and Memory cards
+  (`SettingsConsolePage`, `SettingsEngine`, `SettingsFirmware`, `SettingsMemoryCards`). Down, Up and B are recorded. The
+  same states are audited and pictured at 1920 × 1080 and 1280 × 720 and not recorded.
+- **Added: the desktop's Settings window**, opened from the Settings menu: Display in the light variant on CRT shader
+  (`SettingsDesktopDisplay`), Consoles (`SettingsDesktopConsoles`), and the search across every section
+  (`SettingsDesktopSearch`).
+
+Taken again for one cause each: the card's Settings row is a door to the Settings screen rather than a submenu, so it
+draws no `›` (`HomeCardDesktop`, `HomeCardDesktopGame`, `HomeCardDesktopTools`, `BigPicture-MainMenu`, both sizes); the
+Pause Card's Display page holds Console Settings and Shader Levers in place of Graphics and Shaders (`PauseCardDisplay`,
+both sizes). Retired: `HomeCardSettings` (Home's Settings place opens Settings, recorded above) and
+`BigPicture-CollectionSettings` (the sheet is Library ▸ Collections). The pad menu's page audit reaches the card from
+Home's Power place, the one place that still opens it over the own look.
+
+**Where each old setting went.** Every row of the retired windows, and of those no door reaches until U6b, has a row:
+
+| Old window and row | Settings |
+|---|---|
+| Preferences ▸ Library: ROM, Cover Art, Save State and Log directories | Library ▸ ROM folder, Artwork folder; EmuSen ▸ Saves and states ▸ State folder; EmuSen ▸ Logging ▸ Log folder |
+| Preferences ▸ Scraping: ScreenScraper, Member Account, Fetch, Fetch More, Game Names, Region, Language, Scrape, OpenEmu Failover, Orphaned Media | Library ▸ Scraping ▸ its rows, and Member account ▸ Log in, Check, Log out, OpenVGDB, Clean up orphaned media; today's requests and a run's Scrape, Resume and Cancel are the Scraper tool's |
+| Preferences ▸ Gameplay: Continue Where You Left Off, Max Play Time Tracking, Smooth Motion, In the Background, Big Screen | EmuSen ▸ Saves and states ▸ Continue where you left off, Play time counted up to; Display ▸ Smooth motion; EmuSen ▸ Pause in the background, Big picture |
+| Preferences ▸ Appearance: Theme (the desktop's colours) | no row yet: the desktop's colour themes wait for D1's window |
+| Preferences ▸ Appearance: Status Bar, Messages, Frame Rate, Big Picture Theme, ES-DE Theme Folder, Theme Settings, ES-DE Media, Navigation Sounds and their volume, Hidden Games | Display ▸ Status bar, Messages, Frame rate; Library ▸ Themes (stepped, A opens Theme Settings), ES-DE theme folder, ES-DE media folder, Hidden games; Sound ▸ Navigation sounds, Sound volume |
+| Preferences ▸ Controllers: the players, Keyboard, Controller Type, Button Swap, First Controller, On-Screen Keyboard, Notifications, Player 1 by press, External Controller | Controllers ▸ Players ▸ a row per pad (a held button marks its row), Keyboard, The first controller pressed, External controller first; Controllers ▸ Controller type, Swap A and B in menus, Only the first controller, On-screen keyboard, Controller notices |
+| Preferences ▸ Firmware, FirmwarePane | Consoles ▸ the console ▸ Firmware ▸ a row per file of `firmware_status`, Folder, Check again |
+| Graphics Settings, per console: the schema's rows, Shader and shape, Overscan, Reset This Console | Consoles ▸ the console ▸ Engine, the schema's rows, CRT profile or Screen, Shader levers, Crop overscan, Picture shape; Display ▸ Picture shape, CRT shader, Crop overscan for every console at once |
+| Shader Settings: the CRT's parameters, Reset All | Display ▸ Shader levers, and Consoles ▸ the console ▸ Shader levers ▸ every CRT parameter, Reset to the tier's values |
+| Shader Settings: the slang catalogue, its categories and Download Pack | no row yet: unreachable until U6b |
+| Memory Cards: mode and slots | Consoles ▸ the console ▸ Memory cards ▸ Mode, Slot 1, Slot 2, Cards, New card; Saves on the cards opens the Memory Cards window for copying, moving and deleting saves |
+| Debug Logging: the master switch | EmuSen ▸ Logging ▸ Logging |
+| Game Collection Settings: automatic collections, custom collections shown, create, delete, finish editing, grouping, sorting, stars, folders, flatten, random entry | Library ▸ Collections ▸ its rows; Delete a collection ▸ a row each |
+| Settings menu: Controller Bindings | Controllers ▸ Controller bindings, the binding window until the bindings page is built |
+
+**Awaiting a step.** Approved by the tester on 2026-11-03 and coming in the step after U6a, each on a surface built beside
+it: Controllers ▸ Controller bindings as a page with the drawing, Controllers ▸ Profiles (Endymion's store) and Rumble
+(shown where the systems table reports it), Sound ▸ Output (the platform library's device list), and Consoles ▸ the
+console ▸ Firmware ▸ Open replacement (the runtime's `FirmwarePreference`). Next after those, still U6: Display ▸ Text size
+and Reduced motion. Decided for later, not U6: Sound ▸ Latency and EmuSen ▸ Updates.

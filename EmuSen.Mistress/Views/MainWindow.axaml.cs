@@ -463,8 +463,8 @@ namespace EmuSen.Mistress.Views
         // EmuSen's cores and libretro's, downloaded, updated, removed, approved and made default; the runtime's calls handed in, never the runtime itself - see EmuSen_Cores.md §3.4.
         private void ShowCores() => _ = SheetLayer.Show(new CoresWindow(CoresRuntimeOf(Runtime), new EmuSen.Tools.Cores.CoresHost
         {
-            Options = (console, engine) => _ = SheetLayer.Show(new GraphicsSettingsWindow(_graphics, null, console, HttpFactory), this),
-            Firmware = () => ShowPreferencesAt(PreferencesWindow.FirmwareTab),
+            Options = (console, engine) => ShowSettings(Pages.SettingsScreen.Consoles, "console:" + console),
+            Firmware = () => ShowSettings(Pages.SettingsScreen.Consoles),
             OpenFolder = folder => _ = Launcher.LaunchDirectoryInfoAsync(new System.IO.DirectoryInfo(folder)),
         }), this);
 
@@ -571,11 +571,6 @@ namespace EmuSen.Mistress.Views
             StatusText.IsVisible = _appSettings.ShowStatusText;
             FpsText.IsVisible = counters;
             StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible) && !(_bigScreen && OwnScreenShown) && !Sheets.IsScreenShown && !(_padMenuOpen && CardShown);
-        }
-
-        private void ShowDebugLogging()
-        {
-            _ = SheetLayer.Show(new DebugSettingsWindow(Runtime), this);
         }
 
         // The running game's console, else the library's filter: cheats are for the game being played - see EmuSen_Settings_Reference.md §4.45.5.
@@ -795,11 +790,15 @@ namespace EmuSen.Mistress.Views
                     new LunaAction("S_maller Covers", () => TileScale.Value = Math.Max(MinimumTileScale, TileScale.Value - 0.25)),
                     LunaAction.Separator(), _fullscreen, _bigPictureMenu),
                 new LunaMenu("_Settings",
-                    new LunaAction("_Controller Bindings...", ShowControllerBindings),
-                    new LunaAction("_Graphics Settings...", ShowGraphicsSettings),
-                    new LunaAction("_Shaders...", ShowShaderSettings),
-                    new LunaAction("_Debug Logging...", ShowDebugLogging),
-                    new LunaAction("_Preferences...", ShowPreferences),
+                    new LunaAction("_Controllers...", () => ShowSettings(Pages.SettingsScreen.Controllers)),
+                    new LunaAction("_Display...", () => ShowSettings(Pages.SettingsScreen.Display)),
+                    new LunaAction("S_ound...", () => ShowSettings(Pages.SettingsScreen.Sound)),
+                    new LunaAction("Co_nsoles...", () => ShowSettings(Pages.SettingsScreen.Consoles)),
+                    new LunaAction("_Library...", () => ShowSettings(Pages.SettingsScreen.Library)),
+                    new LunaAction("_EmuSen...", () => ShowSettings(Pages.SettingsScreen.EmuSen)),
+                    new LunaAction("_Settings...", () => ShowSettings()) { Shortcut = new Avalonia.Input.KeyGesture(Avalonia.Input.Key.OemComma, Avalonia.Input.KeyModifiers.Control) },
+                    LunaAction.Separator(),
+                    new LunaAction("Controller _Bindings...", ShowControllerBindings),
                     new LunaAction("Chea_t Database...", ShowCheatDatabase),
                     new LunaAction("_Active Cheats...", ShowActiveCheats),
                     new LunaAction("_Memory Cards...", ShowMemoryCards),

@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.LunaP
         public static TheoryData<string> Windows => new()
         {
             "InputSettings", "ActiveCheats", "CheatDatabase", "Preferences",
-            "DebugSettings", "Vstop", "Main", "RomBrowser", "DianaShConsole",
+            "Vstop", "Main", "RomBrowser", "DianaShConsole",
         };
 
         private static Window Build(string name) => name switch
@@ -47,7 +47,6 @@ namespace EmuSen.WiseMan.LunaP
             "ActiveCheats" => new ActiveCheatsWindow(),
             "CheatDatabase" => new CheatDatabaseWindow(),
             "Preferences" => new PreferencesWindow(new AppSettings()),
-            "DebugSettings" => new DebugSettingsWindow(),
             "Vstop" => new VstopWindow(),
             "Main" => new MainWindow(),
             "RomBrowser" => new RomBrowserWindow(),
@@ -212,10 +211,10 @@ namespace EmuSen.WiseMan.LunaP
         [Fact]
         public Task The_toolkit_still_names_its_own_controls() => UiTest.Run(() =>
         {
-            using var debug = new Showing(LaidOut(new DebugSettingsWindow()));
+            using var switchesShown = new Showing(LaidOut(new Window { Width = 480, Height = 200, Content = new StackPanel { Children = { new LunaSwitch { Label = "Show the status bar" }, new LunaSwitch { Label = "Pause the game when another window is in front" } } } }));
 
-            LunaSwitch[] switches = debug.Window.GetVisualDescendants().OfType<LunaSwitch>().ToArray();
-            Assert.True(switches.Length >= 1, $"expected the debug window's switches, found {switches.Length}");
+            LunaSwitch[] switches = switchesShown.Window.GetVisualDescendants().OfType<LunaSwitch>().ToArray();
+            Assert.True(switches.Length >= 1, $"expected the switches, found {switches.Length}");
 
             foreach (LunaSwitch s in switches)
             {

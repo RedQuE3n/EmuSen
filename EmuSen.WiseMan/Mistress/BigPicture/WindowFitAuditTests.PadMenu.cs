@@ -42,8 +42,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Call(window, "ToggleLibrary");
                     window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
                     pad.Start();
-                    // The big screen's own look reaches the card at Settings from Home's place; its first page is the desktop's and a theme's (EmuSen_BigPicture.md §51.5).
-                    if (bigScreen) { window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "settings"); pad.A(); }
+                    // The big screen's own look reaches the card only at Power from Home's place, Settings being a screen (EmuSen_BigPicture.md §52.1); its first page is the desktop's and a theme's.
+                    if (bigScreen) { window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "power"); pad.A(); }
                 }
                 else pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
                 Assert.True(PadMenu.IsOpen(window));

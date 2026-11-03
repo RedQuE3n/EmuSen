@@ -645,6 +645,19 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   which move with U6 (`EmuSen_BigPicture.md` §51.6).
 - **Recordings.** `EmuSen_InterfaceSpec.md` §6.3.22.
 
+## 13c. U6a as built (2026-11-03)
+
+- **LunaP (§213 there).** `SettingsLayout`, the third canonical layout, in both forms: the strip of sections or the trail
+  of pages, whole rows with a value and a sentence, the pane with a picture, meter or variants preview, the generated help
+  bar; on the desktop a source list, rows of 48 with their controls, the pane where a row has a picture, and search.
+- **EmuSen (`EmuSen_BigPicture.md` §52).** Screen 6 and D5 from one plain class, `SettingsScreen`: the six sections, every
+  console a row with its page (Engine as Cores' Make Default, Firmware from `firmware_status`, Memory cards), and every
+  door to Settings reaching the same screens.
+- **Retired.** `CollectionSettingsWindow`, `DebugSettingsWindow`, the pad menu's Settings submenu. Preferences, Graphics
+  Settings, Shader Settings and `BigMenuForm` have no door and retire in U6b with their tests.
+- **Not in U6a.** The rows awaiting their surfaces and the accessibility rows (`EmuSen_InterfaceSpec.md` §6.3.23).
+- **Recordings.** `EmuSen_InterfaceSpec.md` §6.3.23.
+
 ---
 
 ## 14. Sources (opened 2026-11-01)

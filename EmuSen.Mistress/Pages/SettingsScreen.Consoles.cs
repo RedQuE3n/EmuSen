@@ -43,7 +43,7 @@ namespace EmuSen.Mistress.Pages
             if (FirmwareLine(console) is { } firmware) lines.Add(firmware);
             var facts = new List<string>();
             if (HasTelevision(console)) facts.Add($"CRT profile {ScreenWord(console)}");
-            foreach (SettingRow row in ConsoleSchema(console).Where(r => r.Kind == SettingRow.Choice).Take(1)) facts.Add($"{row.Label.ToLowerInvariant()} {ValueText(console, row)}");
+            foreach (SettingRow row in ConsoleSchema(console).Where(r => r.Kind == SettingRow.Choice).Take(1)) facts.Add($"{row.Label} {ValueText(console, row)}");
             if (facts.Count > 0) lines.Add(new SettingsLine(string.Join(" · ", facts)));
             lines.Add(new SettingsLine($"What every {name} game shares, unless the game's own options say otherwise.", SettingsTone.Muted));
             return new ScreenPane(lines);
@@ -66,22 +66,35 @@ namespace EmuSen.Mistress.Pages
         private IReadOnlyList<FirmwareFile> FirmwareOf(string console) =>
             SystemsOf(console).SelectMany(id => _host.Firmware(id) ?? []).GroupBy(f => f.File, StringComparer.OrdinalIgnoreCase).Select(g => g.First()).ToList();
 
-        // The firmware in one line: found, needed and not found, or none needed.
+        // A file missing on a console that starts with a cartridge is a chip's, which only the games that carry the chip need; on one that starts empty every game does.
+        private bool NeededByAll(string console) => _host.Systems.Any(s => s.Console == console && s.StartsEmpty);
+
+        private bool MissingForAll(string console) => NeededByAll(console) && FirmwareOf(console).Any(f => f.Status == "missing");
+
+        // The firmware in one line: found, needed by every game and not found, or none needed.
         private SettingsLine? FirmwareLine(string console)
         {
             IReadOnlyList<FirmwareFile> files = FirmwareOf(console);
-            if (files.Count == 0) return new SettingsLine("No firmware needed", SettingsTone.Success) { Mark = "✓" };
-            if (files.Any(f => f.Status == "missing")) return new SettingsLine("Firmware not found: add it under Firmware", SettingsTone.Attention) { Mark = "⚠" };
-            return files.Any(f => f.Status == "present") ? new SettingsLine("Firmware found", SettingsTone.Success) { Mark = "✓" } : new SettingsLine("Firmware optional", SettingsTone.Success) { Mark = "✓" };
+            if (MissingForAll(console)) return new SettingsLine("Firmware not found: add it under Firmware", SettingsTone.Attention) { Mark = "⚠" };
+            if (files.Any(f => f.Status == "present")) return new SettingsLine("Firmware found", SettingsTone.Success) { Mark = "✓" };
+            return new SettingsLine("No firmware needed", SettingsTone.Success) { Mark = "✓" };
         }
 
         private string FirmwareValue(string console)
         {
             IReadOnlyList<FirmwareFile> files = FirmwareOf(console);
-            if (files.Count == 0) return "none needed";
-            if (files.Any(f => f.Status == "missing")) return "⚠ None found";
-            return files.Any(f => f.Status == "present") ? "✓ Found" : "optional";
+            if (MissingForAll(console)) return "⚠ None found";
+            if (files.Any(f => f.Status == "present")) return "✓ Found";
+            return files.Any(f => f.Status == "missing") ? "only some games" : "none needed";
         }
+
+        private string FileStatus(string console, FirmwareFile f) => f.Status switch
+        {
+            "present" => "✓ Found",
+            "missing" when NeededByAll(console) => "⚠ None found",
+            "missing" => "Only some games",
+            _ => "Not needed",
+        };
 
         // The keys the console page draws in rows of its own, so the schema's rows leave them out.
         private IReadOnlyList<SettingRow> ConsoleSchema(string console)
@@ -114,6 +127,21 @@ namespace EmuSen.Mistress.Pages
                 SettingRow.Count => value,
                 _ => Label(row, value),
             };
+        }
+
+        // LB and RB on a console's page: the console before or after it in the list, its page in place of this one.
+        public bool StepConsole(int by)
+        {
+            if (_section != Consoles || _pages.Count != 1) return false;
+            List<string> runs = ConsoleList.Where(s => s.Engines.Count > 0).Select(s => s.Console).ToList();
+            string from = _pages[0].From is { } key ? key["console:".Length..] : "";
+            int at = runs.IndexOf(from);
+            if (at < 0 || runs.Count < 2) return false;
+            string to = runs[((at + by) % runs.Count + runs.Count) % runs.Count];
+            _pages.RemoveAt(0);
+            Push(NameOf(to), () => ConsolePage(to), "console:" + to);
+            Read();
+            return true;
         }
 
         private IReadOnlyList<Setting> ConsolePage(string console)
@@ -214,6 +242,7 @@ namespace EmuSen.Mistress.Pages
             if (files.Count == 0) return Said($"The {NameOf(console)} needs no firmware.", "EmuSen never downloads firmware.");
             var lines = new List<SettingsLine>();
             if (FirmwareLine(console) is { } line) lines.Add(line);
+            if (!NeededByAll(console) && files.Any(f => f.Status == "missing")) lines.Add(new SettingsLine($"{Count(files.Count(f => f.Status == "missing"), "chip file", "chip files")} only some games use not found.", SettingsTone.Muted));
             lines.Add(new SettingsLine("Recognised by its content in your firmware folders. EmuSen never downloads firmware; without one, the open replacement runs most games.", SettingsTone.Muted));
             return new ScreenPane(lines);
         }
@@ -221,11 +250,12 @@ namespace EmuSen.Mistress.Pages
         private IReadOnlyList<Setting> FirmwareRows(string console)
         {
             var rows = FirmwareOf(console).Select(f => new Setting(
-                new PageRow("fw:" + f.File, f.Label) { Kind = PageRowKind.Action, Status = f.Status switch { "present" => "✓ Found", "missing" => "⚠ None found", _ => "Not needed" }, Sentence = f.File },
+                new PageRow("fw:" + f.File, f.Label) { Kind = PageRowKind.Action, Status = FileStatus(console, f), Sentence = f.File },
                 () => new ScreenPane(f.Status switch
                 {
                     "present" => [new SettingsLine($"{f.Label}: your own was recognised by its content, and the engine uses it.", SettingsTone.Success) { Mark = "✓" }, new SettingsLine("EmuSen never downloads firmware.", SettingsTone.Muted)],
-                    "missing" => [new SettingsLine($"{f.Label}: none of your own was found, and the {NameOf(console)}'s games need one.", SettingsTone.Attention) { Mark = "⚠" }, new SettingsLine($"Put your own copy ({f.File}) in your firmware folder, then Check again.", SettingsTone.Muted)],
+                    "missing" when NeededByAll(console) => [new SettingsLine($"{f.Label}: none of your own was found, and the {NameOf(console)}'s games need one.", SettingsTone.Attention) { Mark = "⚠" }, new SettingsLine($"Put your own copy ({f.File}) in your firmware folder, then Check again.", SettingsTone.Muted)],
+                    "missing" => [new SettingsLine($"{f.Label}: needed only by the games that carry its chip; none of your own was found."), new SettingsLine($"Put your own copy ({f.File}) in your firmware folder for those games, then Check again.", SettingsTone.Muted)],
                     _ => [new SettingsLine($"{f.Label}: none of your own is needed; the open replacement runs most games."), new SettingsLine($"Your own copy ({f.File}) is used when it is found.", SettingsTone.Muted)],
                 }))).ToList();
             rows.Add(Opens("fwfolder", "Folder", "Your firmware folder, searched before EmuSen's; only ever read.", _host.App.FirmwareDirectory is { Length: > 0 } d ? d : "EmuSen's folder", () => _host.Open(DoorFirmwareFolder)));
@@ -256,6 +286,7 @@ namespace EmuSen.Mistress.Pages
                 CardMedium m = medium;
                 rows.Add(Opens("cards:" + medium.Id, "Cards", "Every card in the drawer, and the saves on each.", Count(medium.Cards.Count(c => !c.GamesOwn), "card", "cards"),
                     () => Push($"{m.Title}s", () => m.Cards.Where(c => !c.GamesOwn).Select(c => Act("card:" + c.Path, c.Label, "A card in the drawer.", () => { }, c.HeldBy is { } held ? $"in {held}" : null)).ToList(), "cards:" + m.Id)));
+                rows.Add(Opens("saves:" + medium.Id, "Saves on the cards", "Each card's saves, copied, moved or deleted.", null, () => _host.Open(DoorCardSaves + console)));
                 rows.Add(Asks("new:" + medium.Id, $"New {CardMedium.InText(medium.Noun)}", "A blank card in the drawer, named for you.", () => _host.NewCard(console)));
             }
             return rows;

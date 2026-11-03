@@ -21,6 +21,8 @@ namespace EmuSen.Mistress.Views
             layout.SectionChosen += key => { Model.ChooseSection(key); Fill(); };
             layout.RowStepped += (key, by) => { Model.Step(key, by); Fill(); };
             layout.RowChosen += key => { Model.Choose(key); Fill(); };
+            layout.BackRequested += () => Back();
+            layout.SearchChanged += text => { Model.Search(text); Fill(); };
             Fill();
         }
 

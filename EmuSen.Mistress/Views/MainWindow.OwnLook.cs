@@ -423,7 +423,7 @@ namespace EmuSen.Mistress.Views
                 case HomeScreen.Cores: ShowCores(); break;
                 case HomeScreen.Cheats: ShowCheatDatabase(); break;
                 case HomeScreen.Settings when _bigScreen: ShowSettings(); break;
-                case HomeScreen.Settings: ShowPreferences(); break;
+                case HomeScreen.Settings: ShowSettings(); break;
                 case HomeScreen.Power: OpenCard(PowerMenu, PowerRows, HomeTitle); break;
                 case HomeScreen.BigPicture: SetBigPicture(true); break;
             }

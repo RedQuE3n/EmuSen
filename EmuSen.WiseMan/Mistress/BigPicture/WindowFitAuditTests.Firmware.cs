@@ -43,10 +43,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 FirmwareFiles();
                 Call(window, "ToggleLibrary");
                 window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-                pad.Start();
-                // On the big screen's own look Settings is a place of Home, opening the card at its page (EmuSen_BigPicture.md §51.2).
-                if (bigScreen) { window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "settings"); pad.A(); }
-                PadMenu.Choose(window, pad, PreferencesWindow.FirmwareTab, exact: true);
+                // No door reaches Preferences until U6b retires it (EmuSen_BigPicture.md §52.5), so its Firmware tab is opened directly.
+                Call(window, "ShowPreferencesAt", PreferencesWindow.FirmwareTab);
                 Settle(window);
                 Window top = Sheets(window).Current ?? window.OwnedWindows.OfType<PreferencesWindow>().Last();
                 var preferences = Assert.IsType<PreferencesWindow>(top);

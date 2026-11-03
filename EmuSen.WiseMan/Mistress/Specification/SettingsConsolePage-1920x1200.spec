@@ -22,7 +22,7 @@ tree
             7 AccessText at=319.5,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=295.5,60,279,66 owner=6 paints=#EEEEF0FF role=none size=20 text="SUPER NINTENDO"
         8 StackPanel at=96,162,1056,648 by=panel heard="Super Nintendo" limit=0,0,1920,1200 name=SettingsRows role=none
           9 MenuRow at=96,162,1056,81 by=panel heard="Engine, VenusRT (Rust)" limit=0,0,1920,1200 name=SettingsRow.engine role=listitem
-          10 MenuRow at=96,243,1056,81 by=panel heard="Firmware, ⚠ None found" limit=0,0,1920,1200 name=SettingsRow.firmware role=listitem
+          10 MenuRow at=96,243,1056,81 by=panel heard="Firmware, only some games" limit=0,0,1920,1200 name=SettingsRow.firmware role=listitem
           11 MenuRow at=96,324,1056,81 by=panel heard="Memory cards" limit=0,0,1920,1200 name=SettingsRow.cards role=listitem
           12 MenuRow at=96,405,1056,81 by=panel heard="SA-1 catch-up, After every S-CPU instruction (exact)" limit=0,0,1920,1200 name=SettingsRow.sa1_catch_up role=listitem
           13 MenuRow at=96,486,1056,81 by=panel heard="CRT profile, Off" limit=0,0,1920,1200 name=SettingsRow.crtprofile role=listitem
@@ -33,7 +33,7 @@ tree
           18 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none
             19 TextBlock at=1236,198,552,159 box=368,106 by=clip caps=15.3989 drawn face=Barlow heard="VenusRT (Rust), the Super Nintendo's engine: every Super Nintendo game opens on it unless the game's own options choose another." layout=340.3,105.6 limit=1200,162,624,867 name=SettingsLine paints=#D4D4D4FF role=text size=22 text="VenusRT (Rust), the Super Nintendo's engine: every Super Nintendo game opens on it unless the game's own options choose another."
         20 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=SettingsHelpBar paints=#1B1B1EFF,#707070FF role=none
-          21 HintBar at=96,1074,1728,45 by=panel heard="Change, Value, Back, Home" limit=0,0,1920,1200 role=group
+          21 HintBar at=96,1074,1728,45 by=panel heard="Change, Value, Console, Back, Home" limit=0,0,1920,1200 role=group
 focus none
 press down focus="SettingsLayout SettingsScreen" settings="consoles Consoles › Super Nintendo firmware" top=none
 press up focus="SettingsLayout SettingsScreen" settings="consoles Consoles › Super Nintendo engine" top=none

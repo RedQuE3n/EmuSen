@@ -120,10 +120,9 @@ namespace EmuSen.WiseMan.Mistress
             first.B();
             Assert.False(MenuOpen(window));
 
-            MenuEntry(window, second, "Preferences");
-            Assert.IsType<PreferencesWindow>(window.GetControl<SheetLayer>("Sheets").Current);
+            SettingsPad.Open(window, second);
             first.B();
-            Assert.False(window.GetControl<SheetLayer>("Sheets").IsPresenting);
+            Assert.Null(window.SettingsShown);
             window.Close();
         }, default);
 
@@ -233,15 +232,13 @@ namespace EmuSen.WiseMan.Mistress
             first.Tick();
             Assert.StartsWith("B  Choose      A  Back", window.GetControl<SheetLayer>("Sheets").Hint);
 
-            // On Home, B chooses: Settings opens the card at its page, B again opens Preferences, and A, the swapped Back, closes it.
-            window.HomeLayout!.FocusOn(HubRow.Places, "settings");
+            // On Home, B chooses: Settings opens, B again opens its Players page, and A, the swapped Back, closes it and then Settings.
+            SettingsPad.Open(window, first, swapped: true);
             first.B();
-            Assert.True(MenuOpen(window));
-            first.Down(Array.IndexOf(PadMenu.Lines(window), "Preferences"));
-            first.B();
-            Assert.IsType<PreferencesWindow>(window.GetControl<SheetLayer>("Sheets").Current);
+            Assert.Equal("Players", window.SettingsShown!.Trail.Last());
             first.A();
-            Assert.False(window.GetControl<SheetLayer>("Sheets").IsPresenting);
+            first.A();
+            Assert.Null(window.SettingsShown);
 
             // X and Y trade too: Y is the grammar's X, which opens the game's page (EmuSen_Interface.md §0.1), and X the grammar's Y, the favourite.
             if (MenuOpen(window)) first.A();
@@ -289,18 +286,18 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_controller_settings_persist() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver first) = LibraryOf(1, bigScreen: true);
-            MenuEntry(window, first, "Preferences");
-            var prefs = Assert.IsType<PreferencesWindow>(window.GetControl<SheetLayer>("Sheets").Current);
-            prefs.ShowTab(PreferencesWindow.ControllersTab);
-            window.UpdateLayout();
-            Dispatcher.UIThread.RunJobs();
-
-            Named<Dropdown>(window, "ControllerTypeDropdown").SelectedItem = "Nintendo";
-            Named<LunaSwitch>(window, "SwapPadButtonsSwitch").IsChecked = true;
-            Named<LunaSwitch>(window, "FirstControllerOnlySwitch").IsChecked = true;
-            Named<LunaSwitch>(window, "ControllerNotificationsSwitch").IsChecked = false;
-            Named<LunaSwitch>(window, "ClaimPlayersByPressSwitch").IsChecked = false;
-            Named<LunaSwitch>(window, "ExternalControllerFirstSwitch").IsChecked = false;
+            // Settings ▸ Controllers, each row stepped with the pad; the claims are the Players page's.
+            SettingsPad.Open(window, first);
+            void Step(string key, string to) { SettingsPad.To(window, first, key); for (int i = 0; i < 6 && SettingsPad.Value(window, key) != to; i++) first.Right(); Assert.Equal(to, SettingsPad.Value(window, key)); }
+            Step("type", "Nintendo");
+            Step("firstonly", "On");
+            Step("notices", "Off");
+            SettingsPad.To(window, first, "players");
+            first.A();
+            Step("claim", "Off");
+            Step("external", "Off");
+            first.B();
+            Step("swap", "On");
             // Each reaches the pads at once, as the others do (EmuSen_Input.md §8.13).
             first.Tick();
             Assert.Equal((false, false), (first.Gamepad.ClaimPlayersByPress, first.Gamepad.ExternalControllerFirst));

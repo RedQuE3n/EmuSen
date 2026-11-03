@@ -15,6 +15,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Media;
 using EmuSen.Mistress.Input;
+using EmuSen.Mistress.Pages;
 
 namespace EmuSen.Mistress.Views
 {
@@ -104,7 +105,7 @@ namespace EmuSen.Mistress.Views
                 Submenu(DisplayMenu, DisplayRows),
                 VolumeEntry(),
             ];
-            if (DiscDrive is not null || DriveEngine is not null) rows.Add(Opens(MemoryCardsMenu, ShowMemoryCards));
+            if (DiscDrive is not null || DriveEngine is not null) rows.Add(Opens(MemoryCardsMenu, () => ShowSettings(SettingsScreen.Consoles, "console:" + _activeConsole, "cards")));
             return rows;
         }
 
@@ -113,14 +114,14 @@ namespace EmuSen.Mistress.Views
 
         private List<PadMenuEntry> ControllersRows()
         {
-            List<PadMenuEntry> rows = [Opens("Players & Controllers", () => ShowPreferencesAt(PreferencesWindow.ControllersTab)), Opens("Controller Bindings", ShowControllerBindings)];
+            List<PadMenuEntry> rows = [Opens("Players & Controllers", () => ShowSettings(SettingsScreen.Controllers, "players")), Opens("Controller Bindings", ShowControllerBindings)];
             if (_gamepad.CanSwapPlayers && !SwapOnFirstPage) rows.Insert(0, new PadMenuEntry(() => SwapPlayersRow, SwapPlayers));
             return rows;
         }
 
         private List<PadMenuEntry> DisplayRows()
         {
-            List<PadMenuEntry> rows = [Opens("Graphics", ShowGraphicsSettings), Opens("Shaders", ShowShaderSettings)];
+            List<PadMenuEntry> rows = [Opens("Console Settings", () => ShowSettings(SettingsScreen.Consoles, "console:" + _activeConsole)), Opens("Shader Levers", () => ShowSettings(SettingsScreen.Display, "levers"))];
             // The running game's own crop, where its console has an overscan to replace - see EmuSen_Settings_Reference.md §4.100.
             if (_currentRomPath is string rom && GraphicsSettingsWindow.HasOverscan(_activeConsole)) rows.Add(Opens(CropThisGame, () => ShowGameCrop(rom, RunningGameTitle())));
             return rows;
@@ -255,7 +256,7 @@ namespace EmuSen.Mistress.Views
             {
                 _padMenuPages[^1].At = at;
                 entry.Accept();
-                if (!Sheets.IsPresenting) ClosePadMenu();
+                if (!Sheets.IsPresenting && _settings is null) ClosePadMenu();
                 return;
             }
             if (entry.Closes) ClosePadMenu();

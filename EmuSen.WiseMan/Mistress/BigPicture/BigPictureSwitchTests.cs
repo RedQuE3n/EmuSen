@@ -340,23 +340,28 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             MainWindow w = s.Window;
             Assert.DoesNotContain(EmbeddedPopups.StyleClass, w.Classes);
 
+            // In big picture Settings is a screen of the window; a switch is not a choice of how to start, so Big picture still says Off.
             Press(s, Key.F10);
-            ChooseFromPadMenu(s, "Preferences");
-            Assert.True(Sheets(w).IsPresenting);
+            s.Pad.Start();
+            SettingsPad.Open(w, s.Pad);
+            Assert.Equal(AdaptiveForm.BigScreen, w.SettingsLayoutShown!.Form);
             Assert.Empty(w.OwnedWindows);
-            // A switch is not a choice of how to start: Preferences still says what it said.
-            Assert.False(StartSwitch(Sheets(w).Current!).IsChecked == true);
+            SettingsPad.Section(w, s.Pad, EmuSen.Mistress.Pages.SettingsScreen.EmuSen);
+            Assert.Equal("Off", SettingsPad.Value(w, "bigpicture"));
             s.Pad.B();
             s.Settle();
-            Assert.False(Sheets(w).IsPresenting);
+            Assert.Null(w.SettingsShown);
 
+            // On the desktop it is a window of its own again.
             Press(s, Key.F10);
-            Call(w, "ShowPreferences");
+            w.ShowSettings(EmuSen.Mistress.Pages.SettingsScreen.EmuSen);
             s.Settle();
             Assert.False(Sheets(w).IsPresenting);
-            Window preferences = Assert.Single(w.OwnedWindows);
-            Assert.False(StartSwitch(preferences).IsChecked == true);
-            preferences.Close();
+            Window settings = Assert.Single(w.OwnedWindows);
+            Assert.IsType<SettingsWindow>(settings);
+            Assert.Equal(AdaptiveForm.Desktop, w.SettingsLayoutShown!.Form);
+            Assert.Equal("Off", SettingsPad.Value(w, "bigpicture"));
+            settings.Close();
         }, default);
 
         // In a game Esc keeps its meaning, library and back; F11 leaves big picture with the game still on screen and running.

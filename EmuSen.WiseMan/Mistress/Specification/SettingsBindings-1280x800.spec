@@ -15,10 +15,10 @@ tree
   0 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 role=none
     1 LayoutTransformControl at=0,0,1280,800 by=panel limit=0,0,1280,800 role=none
       2 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#1B1B1EFF role=none
-        3 WholeRow at=64,40,1152,44 by=panel heard=Sections limit=0,0,1280,800 name=SettingsSections role=none
-          4 ToggleButton at=64,40,159,44 by=panel drawn focus heard=Controllers limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=CONTROLLERS
+        3 WholeRow at=64,40,1152,44 by=panel heard=Sections limit=0,0,1280,800 name=SettingsSections role=tab
+          4 SectionTab at=64,40,159,44 by=panel drawn focus heard=Controllers limit=0,0,1280,800 op paints=#D4D4D4FF role=tabitem text=CONTROLLERS
             5 AccessText at=80,48,127,25 box=127,25 by=clip caps=13.999 drawn face=Barlow layout=126.94,24 limit=64,40,159,44 owner=4 paints=#D4D4D4FF role=none size=20 text=CONTROLLERS
-          6 ToggleButton at=231,40,235,44 by=panel drawn focus heard="Controller bindings" limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=button text="CONTROLLER BINDINGS"
+          6 SectionTab at=231,40,235,44 by=panel drawn focus heard="Controller bindings" limit=0,0,1280,800 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text="CONTROLLER BINDINGS"
             7 AccessText at=247,48,203,25 box=203,25 by=clip caps=13.999 drawn face=Barlow layout=202.66,24 limit=231,40,235,44 owner=6 paints=#EEEEF0FF role=none size=20 text="CONTROLLER BINDINGS"
         8 Border at=64,108,704,578 by=panel heard="Controller bindings" limit=0,0,1280,800 name=SettingsContent paints=#26262BFF role=none
           9 StackPanel at=88,132,656,530 by=clip limit=64,108,704,578 role=none
@@ -45,4 +45,4 @@ tree
 focus none
 press down focus="SettingsLayout SettingsScreen" settings="controllers Controllers › Controller bindings none" top=none
 press up focus="SettingsLayout SettingsScreen" settings="controllers Controllers › Controller bindings none" top=none
-press back focus="SettingsLayout SettingsScreen" settings="controllers  bindings" top=none
+press back focus="MenuRow SettingsRow.bindings" settings="controllers  bindings" top=none

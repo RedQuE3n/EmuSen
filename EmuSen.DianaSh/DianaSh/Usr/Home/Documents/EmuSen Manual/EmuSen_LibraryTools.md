@@ -507,7 +507,12 @@ needing to scrape again". The scraper does not follow the active theme; with no 
 picture a theme can draw (cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox, physicalmedia, fanart,
 the module's `DEFAULT_KINDS`, widened from cover, screenshot, marquee and miximage), so that changing themes never
 needs a second scrape. Videos stay a switch the player turns on, and Overwrite stays. `--kinds theme` remains the
-command's for whoever names it (`man scrape`). Mistress's Preferences keep their own kind switches.
+command's for whoever names it (`man scrape`). Mistress's Preferences follow the same decision: their nine picture
+switches are on by default, and a home that stored the old default of four (every save wrote it) is upgraded once to
+the nine (`ScrapeKindsUpgraded`, in Galaxia's settings model and `AppSettings.Upgraded` alike), while a list the player
+changed is kept. Tests: Galaxia's `the_old_four_kinds_become_the_nine_and_a_list_the_player_changed_is_kept`, and
+`ScraperWindowTests`' fresh home, old-four home and changed home. The cost to the day's quota of nine kinds against
+four is for the tester to weigh.
 
 ### 9.8 Three defects the tester found on the handheld (2026-11-02)
 

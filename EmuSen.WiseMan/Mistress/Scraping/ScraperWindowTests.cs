@@ -231,6 +231,31 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             finally { main.Close(); }
         }, default);
 
+        private const string OldFour = "{\"ScrapeCovers\":true,\"ScrapeScreenshots\":true,\"ScrapeMarquees\":true,\"ScrapeMiximages\":true,\"ScrapeTitleScreens\":false,\"ScrapeBackCovers\":false,\"Scrape3DBoxes\":false,\"ScrapePhysicalMedia\":false,\"ScrapeFanArt\":false}";
+        private const string Chosen = "{\"ScrapeCovers\":true,\"ScrapeScreenshots\":false,\"ScrapeMarquees\":true,\"ScrapeMiximages\":true,\"ScrapeTitleScreens\":false,\"ScrapeBackCovers\":false,\"Scrape3DBoxes\":false,\"ScrapePhysicalMedia\":false,\"ScrapeFanArt\":false}";
+
+        // A fresh home and one that stored the old four-kind default both ask the nine; a list the player changed is kept (EmuSen_LibraryTools.md §9.7).
+        [Theory]
+        [InlineData(null, 9)]
+        [InlineData(OldFour, 9)]
+        [InlineData(Chosen, 3)]
+        public void Preferences_ask_every_picture_a_theme_can_draw_unless_the_player_chose_otherwise(string? stored, int kinds)
+        {
+            if (stored is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ConfigStore.For("appsettings.json"))!);
+                File.WriteAllText(ConfigStore.For("appsettings.json"), stored);
+            }
+            AppSettings s = AppSettings.Load();
+            var choices = new ScrapeChoices
+            {
+                Covers = s.ScrapeCovers, Screenshots = s.ScrapeScreenshots, Marquees = s.ScrapeMarquees, TitleScreens = s.ScrapeTitleScreens, Miximages = s.ScrapeMiximages,
+                BackCovers = s.ScrapeBackCovers, Boxes3D = s.Scrape3DBoxes, PhysicalMedia = s.ScrapePhysicalMedia, FanArt = s.ScrapeFanArt, Manuals = s.ScrapeManuals, Videos = s.ScrapeVideos,
+            };
+            Assert.Equal(kinds, choices.Kinds().Count());
+            Assert.True(s.ScrapeKindsUpgraded);
+        }
+
         // --- the choice is the module's: each section is its words ---
 
         [Fact]

@@ -93,7 +93,7 @@ namespace EmuSen.Galaxia.Models
         public bool ScrapeCovers { get; set; } = true;
         public bool ScrapeScreenshots { get; set; } = true;
         public bool ScrapeMarquees { get; set; } = true;
-        public bool ScrapeTitleScreens { get; set; } = false;
+        public bool ScrapeTitleScreens { get; set; } = true;
         public bool ScrapeMiximages { get; set; } = true;
         public string ScrapeRegion { get; set; } = "auto";
         public string ScrapeLanguage { get; set; } = "en";
@@ -101,16 +101,18 @@ namespace EmuSen.Galaxia.Models
         // 0: as many workers as the member's maxthreads allows - see EmuSen_Settings_Reference.md, the scraping table.
         public int ScrapeThreads { get; set; }
 
-        // Pass 8's kinds, each off until the player turns it on, and ScreenScraper's names shown (Q30) - see EmuSen_Settings_Reference.md §4.76.
-        public bool ScrapeBackCovers { get; set; }
-        public bool Scrape3DBoxes { get; set; }
-        public bool ScrapePhysicalMedia { get; set; }
-        public bool ScrapeFanArt { get; set; }
+        // Every picture a theme can draw is on by default since 2026-11-02 (the tester's decision); manuals and videos stay off - see EmuSen_Settings_Reference.md §4.76.
+        public bool ScrapeBackCovers { get; set; } = true;
+        public bool Scrape3DBoxes { get; set; } = true;
+        public bool ScrapePhysicalMedia { get; set; } = true;
+        public bool ScrapeFanArt { get; set; } = true;
         public bool ScrapeManuals { get; set; }
         public bool ScrapeVideos { get; set; }
         public bool ScrapeGameNames { get; set; }
         public string ScrapeCriteria { get; set; } = "nocover";
         public bool ScrapeRefresh { get; set; }
+        // Whether the old four-kind default was turned into the nine once; a list chosen since is kept.
+        public bool ScrapeKindsUpgraded { get; set; }
 
         // Box art the library shows, read and never written except by Add Cover Art - see EmuSen_Settings_Reference.md §4.33.
         public string? ArtworkDirectory { get; set; }
@@ -163,6 +165,10 @@ namespace EmuSen.Galaxia.Models
         // A stored legacy default is not a choice - see EmuSen_Multicore.md §10.3.
         private static AppSettings Upgraded(AppSettings settings)
         {
+            // The old four-kind default stored by every save is no choice: it becomes the nine (EmuSen_LibraryTools.md §9.7).
+            if (!settings.ScrapeKindsUpgraded && settings is { ScrapeCovers: true, ScrapeScreenshots: true, ScrapeMarquees: true, ScrapeMiximages: true, ScrapeTitleScreens: false, ScrapeBackCovers: false, Scrape3DBoxes: false, ScrapePhysicalMedia: false, ScrapeFanArt: false })
+                settings.ScrapeTitleScreens = settings.ScrapeBackCovers = settings.Scrape3DBoxes = settings.ScrapePhysicalMedia = settings.ScrapeFanArt = true;
+            settings.ScrapeKindsUpgraded = true;
             if (!settings.SelectedCoreUpgraded && settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
             settings.SelectedCoreUpgraded = true;
             // A stored false was the old default every save wrote, so it is no choice; the failover keeps its new default either way and the old key goes - see §4.60.

@@ -52,10 +52,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private HttpMessageHandler? _handler;
 
+        // These cases are written on the four kinds the default asked before 2026-11-02; the default itself is ScrapeRulesTests'.
+        private static ScrapeChoices Four => new() { TitleScreens = false, BackCovers = false, Boxes3D = false, PhysicalMedia = false, FanArt = false };
+
         private Scraper Start(ScrapeChoices? choices = null, Func<string, string, bool>? handCover = null, bool start = true, Func<string, string>? folderOf = null, Func<string, string?>? packageOf = null)
         {
             var client = new ScreenScraperClient(new HttpClient(_handler ?? _server), FakeScreenScraper.Developer, null);
-            ScrapeChoices chosen = choices ?? new ScrapeChoices();
+            ScrapeChoices chosen = choices ?? Four;
             var scraper = new Scraper(client, _store, _quota, () => chosen, handCover ?? ((_, _) => false),
                 path => CoreCatalog.ByExtension(Path.GetExtension(path))?.OpenVgdbBytes, _results.Add, _clock)
             {
@@ -342,7 +345,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Next();
             scraper.Dispose();
 
-            Scraper titles = Start(new ScrapeChoices { TitleScreens = true });
+            Scraper titles = Start(Four with { TitleScreens = true });
             Queue(titles, rom, "snes", ScrapePriority.Shown);
             Next();
             Assert.Equal(2, _server.JeuInfos.Count());
@@ -359,7 +362,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Next();
             scraper.Dispose();
 
-            Scraper titles = Start(new ScrapeChoices { TitleScreens = true });
+            Scraper titles = Start(Four with { TitleScreens = true });
             Queue(titles, rom, "snes", ScrapePriority.Shown);
             Assert.Equal(ScrapeOutcome.Found, Next().Outcome);
             Assert.Single(_server.JeuInfos);
@@ -432,7 +435,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 Media = [("box-2D", "us", "png"), ("box-2D", "eu", "jpg"), ("box-2D", "jp", "png")],
             });
-            Scraper scraper = Start(new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
+            Scraper scraper = Start(Four with { Screenshots = false, Marquees = false, Miximages = false });
             Queue(scraper, eu, "snes", ScrapePriority.Shown);
             Next();
             Queue(scraper, kr, "snes", ScrapePriority.Shown);
@@ -499,7 +502,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             var roms = Enumerable.Range(0, 4).Select(i => Rom($"G{i} (USA).sfc", Filled(1024, 20 + i))).ToList();
             foreach ((string rom, int i) in roms.Select((r, i) => (r, i))) _server.Games.Add(new FakeGame(100 + i, $"G{i}", RomHash.Of(rom).Md5));
             _server.Gate = new SemaphoreSlim(0);
-            Scraper scraper = Start(new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
+            Scraper scraper = Start(Four with { Screenshots = false, Marquees = false, Miximages = false });
             foreach (string rom in roms) scraper.Enqueue(rom, "snes", ScrapePriority.Library);
             scraper.Start();
             _server.Gate.Release(2);
@@ -508,7 +511,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _server.Gate = null;
             int asked = _server.JeuInfos.Count();
 
-            Start(new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
+            Start(Four with { Screenshots = false, Marquees = false, Miximages = false });
             Assert.Equal(roms.Skip(1), new[] { Next(), Next(), Next() }.Select(r => r.Path));
             Assert.Equal(asked + 3, _server.JeuInfos.Count());
             Assert.Equal(roms.Count, _server.JeuInfos.Select(u => FakeScreenScraper.Param(u, "md5")).Distinct().Count());
@@ -535,7 +538,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             _quota.Observe(new ScrapeQuota(maxThreads, 128, 0, 0, 6000, 20000, 2000));
             var roms = Enumerable.Range(0, 8).Select(i => Rom($"T{i}.sfc", Filled(1024, 40 + i))).ToList();
             _server.Gate = new SemaphoreSlim(0);
-            Scraper scraper = Start(new ScrapeChoices { Threads = wanted });
+            Scraper scraper = Start(Four with { Threads = wanted });
             foreach (string rom in roms) scraper.Enqueue(rom, "snes", ScrapePriority.Library);
             scraper.Start();
             Thread.Sleep(300);

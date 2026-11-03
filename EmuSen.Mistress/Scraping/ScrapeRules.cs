@@ -18,12 +18,12 @@ namespace EmuSen.Mistress.Scraping
         public bool Covers { get; init; } = true;
         public bool Screenshots { get; init; } = true;
         public bool Marquees { get; init; } = true;
-        public bool TitleScreens { get; init; }
+        public bool TitleScreens { get; init; } = true;
         public bool Miximages { get; init; } = true;
-        public bool BackCovers { get; init; }
-        public bool Boxes3D { get; init; }
-        public bool PhysicalMedia { get; init; }
-        public bool FanArt { get; init; }
+        public bool BackCovers { get; init; } = true;
+        public bool Boxes3D { get; init; } = true;
+        public bool PhysicalMedia { get; init; } = true;
+        public bool FanArt { get; init; } = true;
         public bool Manuals { get; init; }
         public bool Videos { get; init; }
         public string Region { get; init; } = ScrapeRules.AutomaticRegion;

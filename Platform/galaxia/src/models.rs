@@ -133,21 +133,22 @@ pub static APP_SETTINGS: Schema = Schema {
         flag("ScrapeCovers", true),
         flag("ScrapeScreenshots", true),
         flag("ScrapeMarquees", true),
-        flag("ScrapeTitleScreens", false),
+        flag("ScrapeTitleScreens", true),
         flag("ScrapeMiximages", true),
         text("ScrapeRegion", "auto"),
         text("ScrapeLanguage", "en"),
         flag("ScrapeRegionFallback", true),
         int("ScrapeThreads", "0"),
-        flag("ScrapeBackCovers", false),
-        flag("Scrape3DBoxes", false),
-        flag("ScrapePhysicalMedia", false),
-        flag("ScrapeFanArt", false),
+        flag("ScrapeBackCovers", true),
+        flag("Scrape3DBoxes", true),
+        flag("ScrapePhysicalMedia", true),
+        flag("ScrapeFanArt", true),
         flag("ScrapeManuals", false),
         flag("ScrapeVideos", false),
         flag("ScrapeGameNames", false),
         text("ScrapeCriteria", "nocover"),
         flag("ScrapeRefresh", false),
+        flag("ScrapeKindsUpgraded", false),
         no_text("ArtworkDirectory"),
         no_text("FirmwareDirectory"),
         text("LibraryStyle", "Theme"),
@@ -315,7 +316,30 @@ fn upgrade_app_settings(settings: &mut Value) {
     }
     set(settings, "SelectedCoreUpgraded", Value::Bool(true));
     set(settings, "OnlineCovers", Value::Null);
+    // The old default of four kinds, stored by every save, is no choice: it becomes every picture a theme can draw (decided 2026-11-02 by the tester).
+    if !settings.get("ScrapeKindsUpgraded").and_then(Value::as_bool).unwrap_or(false) {
+        let on = |k: &str| settings.get(k).and_then(Value::as_bool);
+        if OLD_SCRAPE_KINDS.iter().all(|(k, was)| on(k) == Some(*was)) {
+            for (k, _) in OLD_SCRAPE_KINDS {
+                set(settings, k, Value::Bool(true));
+            }
+        }
+        set(settings, "ScrapeKindsUpgraded", Value::Bool(true));
+    }
 }
+
+/// The nine picture kinds as the old default stored them: four on, five off.
+const OLD_SCRAPE_KINDS: [(&str, bool); 9] = [
+    ("ScrapeCovers", true),
+    ("ScrapeScreenshots", true),
+    ("ScrapeMarquees", true),
+    ("ScrapeMiximages", true),
+    ("ScrapeTitleScreens", false),
+    ("ScrapeBackCovers", false),
+    ("Scrape3DBoxes", false),
+    ("ScrapePhysicalMedia", false),
+    ("ScrapeFanArt", false),
+];
 
 #[cfg(test)]
 mod tests {
@@ -347,13 +371,32 @@ mod tests {
     fn app_settings_has_every_property_and_skips_the_retired_key_while_it_is_null() {
         let new = APP_SETTINGS.new_instance();
         let text = format(&APP_SETTINGS, &new).unwrap();
-        assert_eq!(APP_SETTINGS.fields.len(), 63);
+        assert_eq!(APP_SETTINGS.fields.len(), 64);
         assert!(text.contains("\"SelectedCore\": \"All consoles\","));
         assert!(text.contains("\"BigPicture\": {},"));
         assert!(text.contains("\"NavigationVolume\": 60,"));
         assert!(!text.contains("OnlineCovers"));
         let old = read(&APP_SETTINGS, r#"{"OnlineCovers":false}"#);
         assert!(format(&APP_SETTINGS, &old).unwrap().contains("\"PauseInBackground\": true,\n  \"OnlineCovers\": false,\n".replace('\n', crate::model::NEW_LINE).as_str()));
+    }
+
+    #[test]
+    fn the_old_four_kinds_become_the_nine_and_a_list_the_player_changed_is_kept() {
+        let upgrade = MODELS[APP_SETTINGS_ID as usize].upgrade.unwrap();
+        let nine = ["ScrapeCovers", "ScrapeScreenshots", "ScrapeMarquees", "ScrapeMiximages", "ScrapeTitleScreens", "ScrapeBackCovers", "Scrape3DBoxes", "ScrapePhysicalMedia", "ScrapeFanArt"];
+        let on = |v: &Value| nine.iter().filter(|k| v.get(k).and_then(Value::as_bool) == Some(true)).count();
+        let mut fresh = read(&APP_SETTINGS, "{}");
+        upgrade(&mut fresh);
+        assert_eq!(on(&fresh), 9);
+        let mut old = read(&APP_SETTINGS, r#"{"ScrapeCovers":true,"ScrapeScreenshots":true,"ScrapeMarquees":true,"ScrapeMiximages":true,"ScrapeTitleScreens":false,"ScrapeBackCovers":false,"Scrape3DBoxes":false,"ScrapePhysicalMedia":false,"ScrapeFanArt":false}"#);
+        upgrade(&mut old);
+        assert_eq!((on(&old), old.get("ScrapeKindsUpgraded")), (9, Some(&Value::Bool(true))));
+        let mut changed = read(&APP_SETTINGS, r#"{"ScrapeCovers":true,"ScrapeScreenshots":false,"ScrapeMarquees":true,"ScrapeMiximages":true,"ScrapeTitleScreens":false,"ScrapeBackCovers":false,"Scrape3DBoxes":false,"ScrapePhysicalMedia":false,"ScrapeFanArt":false}"#);
+        upgrade(&mut changed);
+        assert_eq!(on(&changed), 3);
+        let mut chosen_since = read(&APP_SETTINGS, r#"{"ScrapeKindsUpgraded":true,"ScrapeCovers":true,"ScrapeScreenshots":true,"ScrapeMarquees":true,"ScrapeMiximages":true,"ScrapeTitleScreens":false,"ScrapeBackCovers":false,"Scrape3DBoxes":false,"ScrapePhysicalMedia":false,"ScrapeFanArt":false}"#);
+        upgrade(&mut chosen_since);
+        assert_eq!(on(&chosen_since), 4);
     }
 
     #[test]

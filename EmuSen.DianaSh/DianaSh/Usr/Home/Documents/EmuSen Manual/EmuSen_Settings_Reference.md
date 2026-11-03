@@ -5646,6 +5646,12 @@ quota as §4.60 describes.
 
 #### 4.76.1 More kinds (Preferences ▸ Scraping ▸ Fetch More)
 
+**Since 2026-11-02** (the tester's decision, `EmuSen_LibraryTools.md` §9.7) every picture a theme can draw is on by
+default: cover, screenshot, marquee, title screen, miximage, back cover, 3D box, physical media and fan art, so that
+changing themes never needs a second scrape; manuals and videos stay off. A home that stored the old default of four
+is moved to the nine once (`ScrapeKindsUpgraded`); a list the player changed is kept. What follows describes the kinds
+as Pass 8 added them.
+
 Six more of what ES-DE's scraper fetches, each **off** until turned on:
 
 | Switch | Setting | ScreenScraper's | Kept in `home/Media/<system>/` | On average, for a game that has one |

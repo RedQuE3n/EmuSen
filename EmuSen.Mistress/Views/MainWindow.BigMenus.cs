@@ -100,6 +100,7 @@ namespace EmuSen.Mistress.Views
         {
             MenuRows.SetLabel(row, entry.Label?.Invoke() ?? entry.Text());
             MenuRows.SetValue(row, entry.Value?.Invoke());
+            MenuRows.SetIsDimmed(row, entry.Dimmed);
             MenuRows.SetKind(row, entry.Adjust is not null ? MenuRowKind.Option : entry.Opens || entry.Submenu is not null ? MenuRowKind.Submenu : MenuRowKind.Action);
         }
 

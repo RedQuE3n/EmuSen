@@ -28,12 +28,12 @@ tree
           13 CoverCard at=519,162,270,360 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Brass Lantern (Synthetic).sfc" role=none
             14 Border at=522,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               15 Image at=522,162,264,360 by=clip drawn limit=522,162,264,360 nohit role=image
-            16 Path at=753,159,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
+            16 Path at=738,174,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
           17 CoverCard at=825,162,270,360 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Cobalt Harbor (Synthetic).sfc" role=none
             18 Border at=828,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               19 Image at=828,162,264,360 by=clip drawn limit=828,162,264,360 nohit role=image
         20 TextBlock at=96,942,1728,58.5 box=1152,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic)" layout=234.91,38.4 limit=0,0,1920,1200 name=GalleryName paints=#EEEEF0FF role=text size=32 text="Aurora Drift (Synthetic)"
-        21 TextBlock at=96,1005,1728,40.5 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="SNES · 3 h ago" layout=130.75,26.4 limit=0,0,1920,1200 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="SNES · 3 h ago"
+        21 TextBlock at=96,1005,1728,40.5 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="Super Nintendo · 3 h ago" layout=224.05,26.4 limit=0,0,1920,1200 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="Super Nintendo · 3 h ago"
         22 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=GalleryHelpBar paints=#1B1B1EFF,#707070FF role=none
           23 HintBar at=96,1074,1728,45 by=panel heard="Play, Game page, Favourite, Section, List, Home" limit=0,0,1920,1200 role=group
 focus none

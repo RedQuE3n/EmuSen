@@ -13,19 +13,25 @@ palette #0000008C #000000AA #000000B8 #000000FF #0E0E10FF #1B1B1EFF #1C1C1CE6 #2
 walk none: the screen moves its own focus, drawn as a ring or a bar
 tree
   0 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 role=none
-    1 AdaptiveLayout at=0,0,1280,800 by=panel heard="All · 8 games" limit=0,0,1280,800 name=PadCard role=pane
+    1 AdaptiveLayout at=0,0,1280,800 by=panel heard="Start Console" limit=0,0,1280,800 name=PadCard role=pane
       2 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 name=AdaptiveLayers role=none
         3 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 name=AdaptiveCardScrim paints=#0000008C role=none
           4 MenuPanel at=0,0,1280,800 by=panel heard="Start Console" limit=0,0,1280,800 name=AdaptiveCard role=menu
-            5 HintBar at=64,736,350,30 by=panel heard="A Choose, B Back, Menu Close" limit=0,0,1280,800 role=group
+            5 HintBar at=64,736,329,30 by=panel heard="A Start, B Back, Menu Close" limit=0,0,1280,800 role=group
             6 Border at=64,156,424,162 by=panel limit=0,0,1280,800 name=AdaptiveCardRows role=none
               7 Border at=64,156,424,162 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
                 8 LunaList at=64,156,424,162 by=panel heard=Menu limit=0,0,1280,800 name=PadMenuList paints=#FFFFFFFF role=list
                   9 ScrollViewer at=64,156,424,162 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=64,156,424,162
-                    10 ListBoxItem at=64,156,424,54 by=fixed-scroll drawn focus heard="Start Master System" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Start Master System"
-                    11 ListBoxItem at=64,210,424,54 by=fixed-scroll drawn focus heard="Start PlayStation" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Start PlayStation"
-                    12 ListBoxItem at=64,264,424,54 by=fixed-scroll drawn focus heard="Start PlayStation 2" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Start PlayStation 2"
+                    10 ListBoxItem at=64,156,424,54 by=fixed-scroll drawn focus heard="Master System" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="Master System"
+                    11 ListBoxItem at=64,210,424,54 by=fixed-scroll drawn focus heard=PlayStation in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text=PlayStation
+                    12 ListBoxItem at=64,264,424,54 by=fixed-scroll drawn focus heard="PlayStation 2" in=9 limit=64,156,424,162 op paints=#333337FF,#D4D4D4FF role=listitem text="PlayStation 2"
+            13 Border at=576,156,640,530 by=panel limit=0,0,1280,800 name=AdaptiveCardPane paints=#26262BFF role=none
+              14 Border at=600,180,592,482 by=panel limit=0,0,1280,800 name=AdaptiveDetail role=none
+                15 PauseCardPane at=600,180,592,86 by=panel limit=0,0,1280,800 name=PauseCardPane role=none
+                  16 StackPanel at=600,180,592,86 by=panel limit=0,0,1280,800 name=PaneSentences role=none
+                    17 TextBlock at=600,180,592,27 box=592,27 by=panel caps=15.3989 drawn face=Barlow heard="Starts a Master System with no disc in it, on Endou." layout=468.25,26.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="Starts a Master System with no disc in it, on Endou."
+                    18 TextBlock at=600,213,592,53 box=592,53 by=panel caps=15.3989 drawn face=Barlow heard="Its BIOS screen comes up; Change Disc on the Pause Card puts a game in." layout=589.14,52.8 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="Its BIOS screen comes up; Change Disc on the Pause Card puts a game in."
 focus none
-press down focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" menu="open at 1: Start PlayStation" top=none
-press up focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" menu="open at 0: Start Master System" top=none
-press back focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" menu="open at 5: Start Console" top=none
+press down focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" menu="open at 1: PlayStation" top=none
+press up focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" menu="open at 0: Master System" top=none
+press back focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=none

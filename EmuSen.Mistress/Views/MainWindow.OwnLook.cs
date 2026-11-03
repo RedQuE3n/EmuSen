@@ -241,12 +241,50 @@ namespace EmuSen.Mistress.Views
                     GamesScreen.FilterRow => new(() => row.Label, () => { }, closes: false) { Submenu = FilterRows, Opens = true, Label = () => row.Label, Value = () => games.Collection?.Name, PaneLines = pane },
                     GamesScreen.JumpRow => new(() => row.Label, () => JumpBy(1), JumpBy, closes: false) { Label = () => row.Label, Value = () => games.ListRows(_gallery?.Focused.Key).First(r => r.Key == GamesScreen.JumpRow).Value, PaneLines = pane },
                     GamesScreen.RandomRow => new(() => row.Label, () => { if (games.RandomGame() is { } p) _gallery?.FocusOn(p); }) { PaneLines = pane },
-                    GamesScreen.StartConsoleRow => new(() => row.Label, () => { }, closes: false) { Submenu = StartConsoleRows, Opens = true, PaneLines = pane },
+                    GamesScreen.StartConsoleRow => new(() => row.Label, () => OpenCard(StartConsoleMenu, StartConsolePage, HomeTitle)) { Opens = true, PaneLines = pane },
                     _ => new(() => row.Label, ShowCollections) { Opens = true, PaneLines = pane },
                 };
                 rows.Add(entry);
             }
             return rows;
+        }
+
+        // Start Console as its mockup draws it: each console that starts empty by its display name with its engine, those with none dimmed as not supported yet, and the pane's sentences with the firmware the runtime finds (EmuSen_Interface.md §18.3).
+        private List<PadMenuEntry> StartConsolePage()
+        {
+            var rows = new List<PadMenuEntry>();
+            foreach (var system in RuntimeCatalog.Systems.Where(s => s.StartsEmpty).GroupBy(s => s.Console, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+                .OrderBy(s => s.Engines.Count == 0).ThenBy(s => s.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.ReleaseYear))
+            {
+                string name = system.DisplayName is { Length: > 0 } shown ? shown : system.Name;
+                bool runs = system.Engines.Count > 0;
+                string engine = runs ? system.Engines[0] : NotSupportedYet;
+                string console = system.Console, id = system.Id;
+                rows.Add(new PadMenuEntry(() => name, runs ? () => StartConsole(console) : () => { }, closes: runs)
+                {
+                    Label = () => name, Value = () => engine, Dimmed = !runs,
+                    PaneSentences = () => runs
+                        ? ([$"Starts {Article(name)} {name} with no disc in it, on {engine}.", "Its BIOS screen comes up; Change Disc on the Pause Card puts a game in."], FirmwareLine(id))
+                        : ([$"EmuSen has no engine for the {name} yet."], null),
+                });
+            }
+            return rows;
+        }
+
+        public const string NotSupportedYet = "Not supported yet";
+
+        private static string Article(string name) => "AEIOU".Contains(char.ToUpperInvariant(name[0])) ? "an" : "a";
+
+        // The runtime's firmware_status for a system: found, not found as Cores words it, or nothing where none is needed or it cannot say (EmuSen_Cores.md §3.11).
+        private (string Line, bool Good)? FirmwareLine(string system)
+        {
+            try
+            {
+                using var answer = System.Text.Json.JsonDocument.Parse(Runtime.FirmwareStatus(system));
+                List<string?> found = answer.RootElement.GetProperty("firmware").EnumerateArray().Select(f => f.TryGetProperty("status", out var s) ? s.GetString() : null).ToList();
+                return found.Contains("present") ? ("✓ Firmware found.", true) : found.Contains("missing") ? ("✗ Not found: add it in Settings → Firmware", false) : null;
+            }
+            catch (Exception e) when (e is CrystalException or System.Text.Json.JsonException or InvalidOperationException or KeyNotFoundException) { return null; }
         }
 
         private void JumpBy(int by)
@@ -283,7 +321,7 @@ namespace EmuSen.Mistress.Views
 
         CoverItem ICollectionsHost.CoverFor(string path)
         {
-            GameFacts f = ((IGamePageHost)this).Facts(path);
+            GameFacts f = FactsShown(path);
             CoverItem item = CoverOf(path, f.Title, f.Mark, f.CoverAspect, false, "", f.Console);
             return item with { Picture = CoverPicture(item) };
         }
@@ -336,11 +374,14 @@ namespace EmuSen.Mistress.Views
         bool IHomeHost.Desktop => !_bigScreen;
 
         HomeSuspended? IHomeHost.Suspended =>
-            _session is not null && _currentRomPath is string path ? new HomeSuspended(path, RunningGameTitle(), EntryOf(path).CoreDisplayName is var c && RuntimeCatalog.ShelfByName(EntryOf(path).Shelf)?.Label is { } label ? label : c, _suspendedAt) : null;
+            _session is not null && _currentRomPath is string path ? new HomeSuspended(path, RunningGameTitle(), RuntimeCatalog.ShelfDisplayName(EntryOf(path).Shelf), _suspendedAt) : null;
 
         IReadOnlyList<string> IHomeHost.Recent => _recentSnapshot.Select(e => e.FullPath).ToList();
 
-        GameFacts IHomeHost.Facts(string path) => ((IGamePageHost)this).Facts(path);
+        GameFacts IHomeHost.Facts(string path) => FactsShown(path);
+
+        // A game's facts with its console as the systems table names it, as every list does (EmuSen_Interface.md §0.21).
+        private GameFacts FactsShown(string path) => ((IGamePageHost)this).Facts(path) with { Console = RuntimeCatalog.ShelfDisplayName(EntryOf(path).Shelf) };
 
         int IHomeHost.GameCount => _allScan.Entries.Count(Listed);
 
@@ -392,13 +433,13 @@ namespace EmuSen.Mistress.Views
         // The games the grid sorts, read once per showing of the library.
         IReadOnlyList<GridGame> IGamesHost.Games => _gridGames ??= _allScan.Entries.Where(Listed).Select(e =>
         {
-            GameFacts facts = ((IGamePageHost)this).Facts(e.FullPath);
+            GameFacts facts = FactsShown(e.FullPath);
             GameRecord? r = _recordSnapshot.GetValueOrDefault(e.FullPath);
             return new GridGame(facts, e.Shelf, r?.PlayCount ?? 0, null);
         }).ToList();
 
         IReadOnlyList<(string Key, string Label)> IGamesHost.Consoles =>
-            RuntimeCatalog.Shelves.Where(s => _allScan.Entries.Any(e => e.Shelf == s.Name && Listed(e))).Select(s => (s.Name, s.Label)).ToList();
+            RuntimeCatalog.Shelves.Where(s => _allScan.Entries.Any(e => e.Shelf == s.Name && Listed(e))).Select(s => (s.Name, RuntimeCatalog.ShelfDisplayName(s.Name))).ToList();
 
         IReadOnlyList<GridCollection> IGamesHost.Collections =>
             _collections.Select(c => new GridCollection(c.Id, c.Name, _records.Members(c.Id))).ToList();

@@ -51,7 +51,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             DateTime now = new(2026, 11, 1, 21, 42, 0);
             typeof(MainWindow).GetField("PageClock", System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic)!.SetValue(null, (Func<DateTime>)(() => now));
             bool desktop = view.Contains("Desktop", StringComparison.Ordinal);
-            bool suspended = view is "Home" or "HomeDesktop";
+            // Continue stays the hero whatever has the focus, as the shelf's and the places' mockups draw it.
+            bool suspended = view is "Home" or "HomeShelf" or "HomePlaces" or "HomeDesktop";
             (MainWindow window, PadDriver pad) = suspended
                 ? InGame(width, height, bigScreen: !desktop, more: a => a.EsdeMediaDirectory = media)
                 : Library(width, height, bigScreen: !desktop, more: a => a.EsdeMediaDirectory = media);
@@ -97,10 +98,17 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     pad.Start();
                     break;
                 case "HomeShelf":
-                    pad.Right(1);
+                    Call(w, "ToggleLibrary");
+                    Settle(w);
+                    pad.Start();
+                    pad.Down(1);
+                    pad.Right(2);
                     break;
                 case "HomePlaces":
-                    pad.Down(1);
+                    Call(w, "ToggleLibrary");
+                    Settle(w);
+                    pad.Start();
+                    pad.Down(2);
                     for (int i = 0; i < 4; i++) pad.Right(1);
                     break;
                 case "HomeNothingLeft":
@@ -114,7 +122,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     {
                         pad.Select();
                         pad.A();
-                        foreach (string key in new[] { "g", "r", "a", "n" }) w.GamesLayout!.Keyboard!.Type(key);
+                        foreach (string key in new[] { "g", "r", "a", "n" }) TypeOnKeys(w.GamesLayout!.Keyboard!, pad, key);
                     }
                     if (view == "GamesCollection")
                     {
@@ -142,6 +150,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             var covers = (CoverArtCache)typeof(MainWindow).GetField("_covers", Hidden)!.GetValue(w)!;
             for (int i = 0; i < 400 && covers.Busy; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
             Settle(w);
+        }
+
+        // A key typed as the player types it: the highlight moved onto the key, then A.
+        private static void TypeOnKeys(OnScreenKeyboard keyboard, PadDriver pad, string key)
+        {
+            (int Row, int Column) Find(string k)
+            {
+                for (int r = 0; r < keyboard.Layout.Rows.Count; r++)
+                    for (int c = 0; c < keyboard.Layout.Rows[r].Count; c++)
+                        if (keyboard.Layout.Rows[r][c].Key == k) return (r, c);
+                throw new InvalidOperationException($"no key {k}");
+            }
+            (int row, int column) = Find(key);
+            (int atRow, _) = Find(keyboard.CurrentKey);
+            if (row > atRow) pad.Down(row - atRow); else if (row < atRow) pad.Up(atRow - row);
+            (_, int atColumn) = Find(keyboard.CurrentKey);
+            if (column > atColumn) pad.Right(column - atColumn); else if (column < atColumn) pad.Left(atColumn - column);
+            Assert.Equal(key, keyboard.CurrentKey);
+            pad.A();
         }
 
         // What a state is recorded from: the screen, the card over it, or the tool's sheet.

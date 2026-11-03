@@ -27,7 +27,11 @@ namespace EmuSen.Mistress.Library
 
     // A system as the runtime's systems answer gives it.
     public sealed record SystemFacts(string Id, string Name, string Console, string Manufacturer, int ReleaseYear, string EsdeSystem, int? ScreenScraperSystem,
-        string? AttachedTo, bool StartsEmpty, IReadOnlyList<string> Engines, IReadOnlyList<string> CheatSystems, IReadOnlyList<string> OpenVgdbSystems, double? CoverAspect, PadFacts Pad);
+        string? AttachedTo, bool StartsEmpty, IReadOnlyList<string> Engines, IReadOnlyList<string> CheatSystems, IReadOnlyList<string> OpenVgdbSystems, double? CoverAspect, PadFacts Pad)
+    {
+        // The systems table's display_name, as a list names the console (EmuSen_Interface.md §0.21); null where the table gives none.
+        public string? DisplayName { get; init; }
+    }
 
     // A row of a console's settings schema, its note as the stored values stand, and the row it is shown with.
     public sealed record SettingRow(string Key, string Label, string Hint, string Kind, string Default, int Min, int Max, IReadOnlyList<string> Choices,
@@ -94,7 +98,7 @@ namespace EmuSen.Mistress.Library
                     Text(s, "manufacturer") ?? "", s.TryGetProperty("release_year", out JsonElement year) ? year.GetInt32() : 0, Text(s, "esde_system") ?? "",
                     s.TryGetProperty("screenscraper_system", out JsonElement ss) && ss.ValueKind == JsonValueKind.Number ? ss.GetInt32() : null,
                     Text(s, "attached_to"), s.GetProperty("starts_empty").GetBoolean(), Strings(s, "engines"), Strings(s, "cheat_systems"), Strings(s, "openvgdb_systems"),
-                    s.TryGetProperty("cover_aspect", out JsonElement aspect) ? aspect.GetDouble() : null, facts));
+                    s.TryGetProperty("cover_aspect", out JsonElement aspect) ? aspect.GetDouble() : null, facts) { DisplayName = Text(s, "display_name") });
             }
 
             using JsonDocument shelvesDoc = JsonDocument.Parse(CoreSettings.Runtime.Shelves());
@@ -141,6 +145,11 @@ namespace EmuSen.Mistress.Library
         // A system by the console that is its name, the first of a console's systems for a core of several.
         public static SystemFacts? SystemOf(string? console) =>
             console is null ? null : Systems.FirstOrDefault(s => string.Equals(s.Console, console, StringComparison.OrdinalIgnoreCase));
+
+        // A shelf's console as the systems table names it, by the shelf's ES-DE system; the shelf's own label where the table has no name.
+        public static string ShelfDisplayName(string? shelf) =>
+            ShelfByName(shelf) is not { } s ? shelf ?? ""
+            : Systems.FirstOrDefault(f => string.Equals(f.EsdeSystem, s.EsdeSystem, StringComparison.OrdinalIgnoreCase))?.DisplayName is { Length: > 0 } name ? name : s.Label;
 
         // The console a system of the table is, by its id.
         public static string? ConsoleOfSystem(string id) => Systems.FirstOrDefault(s => s.Id == id)?.Console;

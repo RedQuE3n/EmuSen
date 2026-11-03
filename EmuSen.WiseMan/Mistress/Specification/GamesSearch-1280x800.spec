@@ -26,10 +26,10 @@ tree
               11 AccessText at=300,48,71,25 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.14,24 limit=284,40,103,44 owner=10 paints=#D4D4D4FF role=none size=20 text=RECENT
             12 ToggleButton at=395,40,68,44 by=panel drawn focus heard=NES limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=NES
               13 AccessText at=411,48,36,25 box=36,25 by=clip caps=13.999 drawn face=Barlow layout=35.76,24 limit=395,40,68,44 owner=12 paints=#D4D4D4FF role=none size=20 text=NES
-            14 ToggleButton at=471,40,56,44 by=panel drawn focus heard=GB limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=GB
-              15 AccessText at=487,48,24,25 box=24,25 by=clip caps=13.999 drawn face=Barlow layout=23.52,24 limit=471,40,56,44 owner=14 paints=#D4D4D4FF role=none size=20 text=GB
-            16 ToggleButton at=535,40,79,44 by=panel drawn focus heard=SNES limit=0,0,1280,800 op paints=#D4D4D4FF role=button text=SNES
-              17 AccessText at=551,48,47,25 box=47,25 by=clip caps=13.999 drawn face=Barlow layout=46.76,24 limit=535,40,79,44 owner=16 paints=#D4D4D4FF role=none size=20 text=SNES
+            14 ToggleButton at=471,40,119,44 by=panel drawn focus heard="Game Boy" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="GAME BOY"
+              15 AccessText at=487,48,87,25 box=87,25 by=clip caps=13.999 drawn face=Barlow layout=86.74,24 limit=471,40,119,44 owner=14 paints=#D4D4D4FF role=none size=20 text="GAME BOY"
+            16 ToggleButton at=598,40,186,44 by=panel drawn focus heard="Super Nintendo" limit=0,0,1280,800 op paints=#D4D4D4FF role=button text="SUPER NINTENDO"
+              17 AccessText at=614,48,154,25 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=598,40,186,44 owner=16 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
         18 TextBox at=64,100,1152,44 by=panel drawn heard=Search limit=0,0,1280,800 name=GallerySearch paints=#0E0E10FF,#707070FF,#EEEEF0FF role=edit text=gran
           19 ScrollViewer at=81,101,1118,42 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
         20 Panel at=142,156,996,240 by=panel heard=All limit=0,0,1280,800 name=GalleryGrid role=none
@@ -41,8 +41,8 @@ tree
         26 OnScreenKeyboard at=0,398,1280,304 by=panel focus heard="On-screen keyboard" limit=0,0,1280,800 name=GalleryKeyboard paints=#1B1B1EFF,#707070FF role=none
           27 StackPanel at=84,415,1112,271 by=panel limit=0,0,1280,800 role=none
             28 StackPanel at=244,415,792,48 by=panel limit=0,0,1280,800 role=none
-              29 Button at=244,415,72,48 by=panel drawn heard=1 limit=0,0,1280,800 paints=#26262BFF,#4C9AE8FF,#EEEEF0FF role=button text=1
-                30 TextBlock at=276,425,7,27 box=7,27 by=clip caps=15.3989 drawn face=Barlow heard=1 layout=6.93,26.4 limit=244,415,72,48 owner=29 paints=#EEEEF0FF part role=text size=22 text=1
+              29 Button at=244,415,72,48 by=panel drawn heard=1 limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=1
+                30 TextBlock at=276,425,7,27 box=7,27 by=clip caps=15.3989 drawn face=Barlow heard=1 layout=6.93,26.4 limit=244,415,72,48 owner=29 paints=#D4D4D4FF part role=text size=22 text=1
               31 Button at=324,415,72,48 by=panel drawn heard=2 limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=2
                 32 TextBlock at=354,425,12,27 box=12,27 by=clip caps=15.3989 drawn face=Barlow heard=2 layout=11.15,26.4 limit=324,415,72,48 owner=31 paints=#D4D4D4FF part role=text size=22 text=2
               33 Button at=404,415,72,48 by=panel drawn heard=3 limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=3
@@ -116,8 +116,8 @@ tree
                 101 TextBlock at=514,593,11,27 box=11,27 by=clip caps=15.3989 drawn face=Barlow heard=v layout=10.43,26.4 limit=484,583,72,48 owner=100 paints=#D4D4D4FF part role=text size=22 text=v
               102 Button at=564,583,72,48 by=panel drawn heard=b limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=b
                 103 TextBlock at=594,593,12,27 box=12,27 by=clip caps=15.3989 drawn face=Barlow heard=b layout=11.66,26.4 limit=564,583,72,48 owner=102 paints=#D4D4D4FF part role=text size=22 text=b
-              104 Button at=644,583,72,48 by=panel drawn heard=n limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=n
-                105 TextBlock at=674,593,12,27 box=12,27 by=clip caps=15.3989 drawn face=Barlow heard=n layout=11.81,26.4 limit=644,583,72,48 owner=104 paints=#D4D4D4FF part role=text size=22 text=n
+              104 Button at=644,583,72,48 by=panel drawn heard=n limit=0,0,1280,800 paints=#26262BFF,#4C9AE8FF,#EEEEF0FF role=button text=n
+                105 TextBlock at=674,593,12,27 box=12,27 by=clip caps=15.3989 drawn face=Barlow heard=n layout=11.81,26.4 limit=644,583,72,48 owner=104 paints=#EEEEF0FF part role=text size=22 text=n
               106 Button at=724,583,72,48 by=panel drawn heard=m limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=m
                 107 TextBlock at=750,593,19,27 box=19,27 by=clip caps=15.3989 drawn face=Barlow heard=m layout=18.13,26.4 limit=724,583,72,48 owner=106 paints=#D4D4D4FF part role=text size=22 text=m
               108 Button at=804,583,72,48 by=panel drawn heard=, limit=0,0,1280,800 paints=#26262BFF,#D4D4D4FF role=button text=,

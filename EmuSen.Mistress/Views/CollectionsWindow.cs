@@ -51,7 +51,7 @@ namespace EmuSen.Mistress.Views
             SearchHint = "Search";
             RowKey = r => r.Key;
             Column(new LunaColumn<CollectionRow>("Collection", r => r.Name) { Tone = r => r.Automatic ? "LunaMuted" : null }, bigScreen: true)
-                .Column(new LunaColumn<CollectionRow>("Games", Count) { Width = "Auto", Tone = r => r.Automatic ? "LunaMuted" : null }, bigScreen: true);
+                .Column(new LunaColumn<CollectionRow>("Games", r => Form == AdaptiveForm.Desktop || r.IsNew ? Count(r) : Count(r) + "  ▸") { Width = "Auto", Tone = r => r.Automatic ? "LunaMuted" : null }, bigScreen: true);
             InSection = (r, s) => s switch { "mine" => !r.Automatic, "automatic" => r.Automatic, _ => true };
             SearchKey = r => r.Name;
             DetailFor = Detail;
@@ -66,8 +66,9 @@ namespace EmuSen.Mistress.Views
             SetToolActions([_open, _add, _rename, _remove, LunaAction.Separator(), _new], bigScreenButtons: []);
             Header = new AdaptiveHeader("COLLECTIONS");
             SetSections([new AdaptiveSection("all", "All"), new AdaptiveSection("mine", "Mine"), new AdaptiveSection("automatic", "Automatic")], "all");
-            // Nothing in Collections is marked and applied, so it has no apply bar.
+            // Nothing in Collections is marked and applied, so it has no apply bar and Start applies nothing.
             Status = null;
+            Applies = false;
             Refresh();
         }
 

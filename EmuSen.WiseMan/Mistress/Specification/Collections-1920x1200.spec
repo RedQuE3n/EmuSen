@@ -41,30 +41,30 @@ tree
                   26 Grid at=96,240,1036.5,813 by=panel limit=0,0,1920,1200 paints=#0E0E10FF role=none
                     27 LunaTable at=96,240,1036.5,813 by=panel heard=Rows limit=0,0,1920,1200 paints=#0E0E10FF,#D4D4D4FF,#FFFFFFFF role=datagrid
                       28 ScrollViewer at=96,240,1036.5,813 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=96,240,1036.5,813
-                        29 ListBoxItem at=96,240,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: Weekend, Games: 3 games" in=28 limit=96,240,1036.5,813 op paints=#333337FF,#EEEEF0FF role=listitem
+                        29 ListBoxItem at=96,240,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: Weekend, Games: 3 games  ▸" in=28 limit=96,240,1036.5,813 op paints=#333337FF,#EEEEF0FF role=listitem
                           30 DockPanel at=96,240,1036.5,79.5 by=clip in=28 limit=96,240,1036.5,81 role=none
                             31 Border at=96,240,1036.5,79.5 by=clip in=28 limit=96,240,1036.5,81 paints=#26262BFF,#4C9AE8FF role=none
-                              32 Grid at=132,240,1000.5,79.5 by=clip heard="Mark: not marked, Collection: Weekend, Games: 3 games" in=28 limit=96,240,1036.5,81 role=none
-                                33 TableCell at=132,255,714,48 box=476,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=102.99,31.2 limit=96,240,1036.5,81 owner=29 paints=#EEEEF0FF role=edit size=26 text=Weekend
-                                34 TableCell at=882,255,214.5,48 box=143,32 by=clip caps=18.1987 drawn face=Barlow heard=Games in=28 layout=91.62,31.2 limit=96,240,1036.5,81 owner=29 paints=#EEEEF0FF role=edit size=26 text="3 games"
-                        35 ListBoxItem at=96,321,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: Favourites, Games: Automatic · 2" in=28 limit=96,240,1036.5,813 op paints=#333337FF,#D4D4D4FF role=listitem
+                              32 Grid at=132,240,1000.5,79.5 by=clip heard="Mark: not marked, Collection: Weekend, Games: 3 games  ▸" in=28 limit=96,240,1036.5,81 role=none
+                                33 TableCell at=132,255,675,48 box=450,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=102.99,31.2 limit=96,240,1036.5,81 owner=29 paints=#EEEEF0FF role=edit size=26 text=Weekend
+                                34 TableCell at=843,255,253.5,51 box=169,34 by=clip caps=18.1987 drawn face=Barlow heard=Games in=28 layout=117.62,33.41 limit=96,240,1036.5,81 owner=29 paints=#EEEEF0FF role=edit size=26 text="3 games  ▸"
+                        35 ListBoxItem at=96,321,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: Favourites, Games: Automatic · 2  ▸" in=28 limit=96,240,1036.5,813 op paints=#333337FF,#D4D4D4FF role=listitem
                           36 DockPanel at=96,321,1036.5,79.5 by=clip in=28 limit=96,321,1036.5,81 role=none
                             37 Border at=96,321,1036.5,79.5 by=clip in=28 limit=96,321,1036.5,81 paints=#0E0E10FF role=none
-                              38 Grid at=132,321,1000.5,79.5 by=clip heard="Mark: not marked, Collection: Favourites, Games: Automatic · 2" in=28 limit=96,321,1036.5,81 role=none
-                                39 TableCell at=132,336,714,48 box=476,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=114.3,31.2 limit=96,321,1036.5,81 owner=35 paints=#8D8D91FF role=edit size=26 text=Favourites
-                                40 TableCell at=882,336,214.5,48 box=143,32 by=clip caps=18.1987 drawn face=Barlow heard=Games in=28 layout=142.61,31.2 limit=96,321,1036.5,81 owner=35 paints=#8D8D91FF role=edit size=26 text="Automatic · 2"
-                        41 ListBoxItem at=96,402,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: Recently played, Games: Automatic · 8" in=28 limit=96,240,1036.5,813 op paints=#333337FF,#D4D4D4FF role=listitem
+                              38 Grid at=132,321,1000.5,79.5 by=clip heard="Mark: not marked, Collection: Favourites, Games: Automatic · 2  ▸" in=28 limit=96,321,1036.5,81 role=none
+                                39 TableCell at=132,336,675,48 box=450,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=114.3,31.2 limit=96,321,1036.5,81 owner=35 paints=#8D8D91FF role=edit size=26 text=Favourites
+                                40 TableCell at=843,336,253.5,51 box=169,34 by=clip caps=18.1987 drawn face=Barlow heard=Games in=28 layout=168.61,33.41 limit=96,321,1036.5,81 owner=35 paints=#8D8D91FF role=edit size=26 text="Automatic · 2  ▸"
+                        41 ListBoxItem at=96,402,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: Recently played, Games: Automatic · 8  ▸" in=28 limit=96,240,1036.5,813 op paints=#333337FF,#D4D4D4FF role=listitem
                           42 DockPanel at=96,402,1036.5,79.5 by=clip in=28 limit=96,402,1036.5,81 role=none
                             43 Border at=96,402,1036.5,79.5 by=clip in=28 limit=96,402,1036.5,81 paints=#0E0E10FF role=none
-                              44 Grid at=132,402,1000.5,79.5 by=clip heard="Mark: not marked, Collection: Recently played, Games: Automatic · 8" in=28 limit=96,402,1036.5,81 role=none
-                                45 TableCell at=132,417,714,48 box=476,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=173.37,31.2 limit=96,402,1036.5,81 owner=41 paints=#8D8D91FF role=edit size=26 text="Recently played"
-                                46 TableCell at=882,417,214.5,48 box=143,32 by=clip caps=18.1987 drawn face=Barlow heard=Games in=28 layout=142.84,31.2 limit=96,402,1036.5,81 owner=41 paints=#8D8D91FF role=edit size=26 text="Automatic · 8"
+                              44 Grid at=132,402,1000.5,79.5 by=clip heard="Mark: not marked, Collection: Recently played, Games: Automatic · 8  ▸" in=28 limit=96,402,1036.5,81 role=none
+                                45 TableCell at=132,417,675,48 box=450,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=173.37,31.2 limit=96,402,1036.5,81 owner=41 paints=#8D8D91FF role=edit size=26 text="Recently played"
+                                46 TableCell at=843,417,253.5,51 box=169,34 by=clip caps=18.1987 drawn face=Barlow heard=Games in=28 layout=168.84,33.41 limit=96,402,1036.5,81 owner=41 paints=#8D8D91FF role=edit size=26 text="Automatic · 8  ▸"
                         47 ListBoxItem at=96,483,1036.5,81 by=fixed-scroll drawn focus heard="Mark: not marked, Collection: New collection…, Games: " in=28 limit=96,240,1036.5,813 op paints=#333337FF,#D4D4D4FF role=listitem
                           48 DockPanel at=96,483,1036.5,79.5 by=clip in=28 limit=96,483,1036.5,81 role=none
                             49 Border at=96,483,1036.5,79.5 by=clip in=28 limit=96,483,1036.5,81 paints=#0E0E10FF role=none
                               50 Grid at=132,483,1000.5,79.5 by=clip heard="Mark: not marked, Collection: New collection…, Games: " in=28 limit=96,483,1036.5,81 role=none
-                                51 TableCell at=132,498,714,48 box=476,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=181.66,31.2 limit=96,483,1036.5,81 owner=47 paints=#D4D4D4FF role=edit size=26 text="New collection…"
-                                52 TableCell at=882,498,214.5,48 by=clip drawn heard=Games in=28 limit=96,483,1036.5,81 owner=47 paints=#D4D4D4FF role=edit
+                                51 TableCell at=132,498,675,48 box=450,32 by=clip caps=18.1987 drawn face=Barlow heard=Collection in=28 layout=181.66,31.2 limit=96,483,1036.5,81 owner=47 paints=#D4D4D4FF role=edit size=26 text="New collection…"
+                                52 TableCell at=843,498,253.5,48 by=clip drawn heard=Games in=28 limit=96,483,1036.5,81 owner=47 paints=#D4D4D4FF role=edit
                 53 Border at=1156.5,240,667.5,813 by=panel limit=0,0,1920,1200 name=AdaptiveDetail paints=#26262BFF role=none
                   54 Border at=1192.5,276,595.5,741 by=panel limit=0,0,1920,1200 role=none
                     55 StackPanel at=1192.5,276,595.5,741 by=panel limit=0,0,1920,1200 role=none
@@ -82,8 +82,8 @@ tree
                             67 Image at=1543.5,411,121.5,165 by=clip drawn limit=1543.5,411,121.5,165 nohit role=image
                       68 TextBlock at=1192.5,594,595.5,79.5 box=397,53 by=panel caps=15.3989 drawn face=Barlow heard="A opens it as a section of the library; X renames it, adds games or removes it." layout=350.57,52.8 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=22 text="A opens it as a section of the library; X renames it, adds games or removes it."
               69 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=AdaptiveHelpBar paints=#707070FF role=none
-                70 HintBar at=96,1074,1728,45 by=panel heard="Open, Back, Collections, Add the selected game, More, List, Apply…" limit=0,0,1920,1200 role=group
+                70 HintBar at=96,1074,1728,45 by=panel heard="Open, Back, Collections, Add the selected game, More, List" limit=0,0,1920,1200 role=group
 focus none
-press down focus="ListBoxItem  (Mark: not marked, Collection: Weekend, Games: 3 games)" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=CollectionsWindow
+press down focus="ListBoxItem  (Mark: not marked, Collection: Weekend, Games: 3 games  ▸)" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=CollectionsWindow
 press up focus="ToggleButton 'All' (All)" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=CollectionsWindow
 press back focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=none

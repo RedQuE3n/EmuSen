@@ -113,5 +113,11 @@ namespace EmuSen.Mistress.Input
 
         // While this row is on, the card's pane shows these lines: what the row does, and what the list shows now (EmuSen_Interface.md §18.1).
         public Func<List<(string Line, string Muted)>>? PaneLines { get; init; }
+
+        // While this row is on, the card's pane shows these sentences and a line in the success or error colour (EmuSen_Interface.md §18.3).
+        public Func<(IReadOnlyList<string> Sentences, (string Line, bool Good)? Flag)>? PaneSentences { get; init; }
+
+        // A choice offered but not available, drawn muted.
+        public bool Dimmed { get; init; }
     }
 }

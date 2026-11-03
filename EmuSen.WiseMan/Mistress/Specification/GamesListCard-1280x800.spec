@@ -27,7 +27,7 @@ tree
                     12 ListBoxItem at=64,264,424,54 by=fixed-scroll drawn focus heard=Filter in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Filter  ›"
                     13 ListBoxItem at=64,318,424,54 by=fixed-scroll drawn focus heard="Jump to" in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Jump to"
                     14 ListBoxItem at=64,372,424,54 by=fixed-scroll drawn focus heard="Random game" in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Random game"
-                    15 ListBoxItem at=64,426,424,54 by=fixed-scroll drawn focus heard="Start Console" in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Start Console  ›"
+                    15 ListBoxItem at=64,426,424,54 by=fixed-scroll drawn focus heard="Start Console" in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text="Start Console"
                     16 ListBoxItem at=64,480,424,54 by=fixed-scroll drawn focus heard=Collections in=9 limit=64,156,424,378 op paints=#333337FF,#D4D4D4FF role=listitem text=Collections
             17 Border at=576,156,640,530 by=panel limit=0,0,1280,800 name=AdaptiveCardPane paints=#26262BFF role=none
               18 Border at=600,180,592,482 by=panel limit=0,0,1280,800 name=AdaptiveDetail role=none

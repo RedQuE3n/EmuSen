@@ -28,12 +28,12 @@ tree
           13 CoverCard at=346,108,180,240 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1280,800 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Brass Lantern (Synthetic).sfc" role=none
             14 Border at=348,108,176,240 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
               15 Image at=348,108,176,240 by=clip drawn limit=348,108,176,240 nohit role=image
-            16 Path at=502,106,24,24 by=panel limit=0,0,1280,800 name=CoverHeart nohit role=none
+            16 Path at=492,116,24,24 by=panel limit=0,0,1280,800 name=CoverHeart nohit role=none
           17 CoverCard at=550,108,180,240 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1280,800 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Cobalt Harbor (Synthetic).sfc" role=none
             18 Border at=552,108,176,240 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
               19 Image at=552,108,176,240 by=clip drawn limit=552,108,176,240 nohit role=image
         20 TextBlock at=64,628,1152,39 box=1152,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic)" layout=234.91,38.4 limit=0,0,1280,800 name=GalleryName paints=#EEEEF0FF role=text size=32 text="Aurora Drift (Synthetic)"
-        21 TextBlock at=64,670,1152,27 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="SNES · 3 h ago" layout=130.75,26.4 limit=0,0,1280,800 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="SNES · 3 h ago"
+        21 TextBlock at=64,670,1152,27 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="Super Nintendo · 3 h ago" layout=224.05,26.4 limit=0,0,1280,800 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="Super Nintendo · 3 h ago"
         22 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=GalleryHelpBar paints=#1B1B1EFF,#707070FF role=none
           23 HintBar at=64,716,1152,30 by=panel heard="Play, Game page, Favourite, Section, List, Home" limit=0,0,1280,800 role=group
 focus none

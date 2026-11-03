@@ -712,3 +712,9 @@ been compared side by side with their approved mockups at 1280 × 800 and 1920 �
 - **Retired: the card's first page, the game and Tools over the big screen's own look** (`HomeCard`, `HomeCardGame`,
   `HomeCardTools`, `HomeCardToolsPage`, both sizes): Start there goes to Home the screen (`EmuSen_Interface.md` §0.9); the
   same pages are recorded on the desktop above and over a theme (`BigPicture-MainMenu`).
+
+The own look's twenty-two recordings were taken again the same day, after a second side-by-side comparison
+(`EmuSen_BigPicture.md` §51.8), for these causes only: consoles named by their display names; Continue kept as the hero
+while the shelf and the places have the focus (`HomeShelf` and `HomePlaces` now record a suspended game); a favourite's
+heart on its own cover's corner; Start Console's rows, pane and help bar; Collections without Apply and with `▸` on its
+rows; search typed on the keys, so the highlight rests on the last key.

@@ -46,7 +46,7 @@ namespace EmuSen.Mistress.Views
             PadCard.Header = new AdaptiveHeader(PageTitle(page), under is null ? null : FitSubtitle(card, under), _padMenuInGame ? RunningGameCover() : null, page.Title == PowerMenu && !_padMenuInGame ? BigMenuFooter : null);
             PadCard.SwapsAcceptAndBack = _appSettings.SwapPadButtons;
             bool resumes = _padMenuInGame && !nested && !page.Question;
-            PadCard.AcceptWord = resumes ? "Select" : "Choose";
+            PadCard.AcceptWord = resumes ? "Select" : page.Title == StartConsoleMenu ? "Start" : "Choose";
             PadCard.BackWord = resumes ? "Resume" : "Back";
             SetCardActions();
         }
@@ -74,7 +74,8 @@ namespace EmuSen.Mistress.Views
             PadMenuEntry? entry = _padMenuOpen && at >= 0 && at < _padMenuEntries.Count ? _padMenuEntries[at] : null;
             string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot} {entry.Label?.Invoke()}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
                 : entry.ShowsTools ? "tools " + string.Join(" | ", ToolLines()) : entry.Status is { } status ? $"status {entry.Text()}: {status()}"
-                : entry.PaneLines is { } paneLines ? "lines " + string.Join(" | ", paneLines().Select(l => l.Line + l.Muted)) : "none";
+                : entry.PaneLines is { } paneLines ? "lines " + string.Join(" | ", paneLines().Select(l => l.Line + l.Muted))
+                : entry.PaneSentences is not null ? "said " + entry.Text() : "none";
             if (key == _paneShowing) return;
             if (CardShown && (key.StartsWith("slots", StringComparison.Ordinal) != (_paneShowing?.StartsWith("slots", StringComparison.Ordinal) ?? false))) SetCardActions();
             _paneShowing = key;
@@ -86,6 +87,7 @@ namespace EmuSen.Mistress.Views
             else if (key.StartsWith("tools", StringComparison.Ordinal)) ShowLinesPane(ToolLines());
             else if (entry?.Status is { } line) ShowLinesPane([(entry.Text(), line())]);
             else if (entry?.PaneLines is { } lines) ShowLinesPane(lines());
+            else if (entry?.PaneSentences is { } said && said() is var (sentences, flag)) _pauseCardPane.ShowSentences(sentences, flag, PaneWidth * (MenuPanel.GetScale(this) is > 0 and var u ? u : 1));
             else _pauseCardPane.Clear();
         }
 

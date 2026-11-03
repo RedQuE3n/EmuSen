@@ -11909,3 +11909,18 @@ it); Start on the grid opening the card instead of going Home (both `Home` recor
 keeping the suspended game beside Continue (`OwnLookScreenTests` and the `Home` and `HomeDesktop` recordings); B on the grid
 leaving a search in place (`OwnLookScreenTests`' grid case); the List card offering Y as a favourite (both `GamesListCard`
 recordings).
+
+### 51.8 Held to the mockups again (2026-11-03)
+
+Compared side by side once more and changed to match: a console is named everywhere the own look shows one by the systems
+table's `display_name` (`Super Nintendo`, `Game Boy`; `RuntimeCatalog.ShelfDisplayName`, `SystemFacts.DisplayName`), in
+the strip, Continue's line, the facts under the grid and the desktop's Recent cards; Continue stays the hero whatever has
+the focus, the focused cover's name standing only under the shelf; a favourite's heart sits on its own cover's top right
+corner (LunaP §212.10); Start Console, on the Home card and from the List card, lists each console that starts empty by its
+display name with its engine, a console with no engine dimmed as `Not supported yet`, the pane saying what A does and the
+firmware the runtime's `firmware_status` finds (`✓ Firmware found.` in Success, or Cores' `✗ Not found: add it in Settings
+→ Firmware` in Error), and its help bar `Start · Back · Close`; Collections names no Apply (`ManagerLayout.Applies`), its
+rows with more behind them draw `▸`, and its help bar keeps the frame's order decided for every tool screen
+(`EmuSen_Interface.md` §0.23): A, B, the shoulders (which step All, Mine and Automatic, the strip the mockup draws), then
+Add the selected game, More and List. Search's state types its keys with the pad, so the highlight stays on the last key
+pressed. The desktop sidebar's consoles with no games are the desktop library's own rows (`FillSidebar`), not U5's.

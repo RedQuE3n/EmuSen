@@ -26,10 +26,10 @@ tree
               11 AccessText at=450,72,106.5,37.5 box=71,25 by=clip caps=13.999 drawn face=Barlow layout=70.14,24 limit=426,60,154.5,66 owner=10 paints=#D4D4D4FF role=none size=20 text=RECENT
             12 ToggleButton at=592.5,60,102,66 by=panel drawn focus heard=NES limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=NES
               13 AccessText at=616.5,72,54,37.5 box=36,25 by=clip caps=13.999 drawn face=Barlow layout=35.76,24 limit=592.5,60,102,66 owner=12 paints=#D4D4D4FF role=none size=20 text=NES
-            14 ToggleButton at=706.5,60,84,66 by=panel drawn focus heard=GB limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=GB
-              15 AccessText at=730.5,72,36,37.5 box=24,25 by=clip caps=13.999 drawn face=Barlow layout=23.52,24 limit=706.5,60,84,66 owner=14 paints=#D4D4D4FF role=none size=20 text=GB
-            16 ToggleButton at=802.5,60,118.5,66 by=panel drawn focus heard=SNES limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text=SNES
-              17 AccessText at=826.5,72,70.5,37.5 box=47,25 by=clip caps=13.999 drawn face=Barlow layout=46.76,24 limit=802.5,60,118.5,66 owner=16 paints=#D4D4D4FF role=none size=20 text=SNES
+            14 ToggleButton at=706.5,60,178.5,66 by=panel drawn focus heard="Game Boy" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text="GAME BOY"
+              15 AccessText at=730.5,72,130.5,37.5 box=87,25 by=clip caps=13.999 drawn face=Barlow layout=86.74,24 limit=706.5,60,178.5,66 owner=14 paints=#D4D4D4FF role=none size=20 text="GAME BOY"
+            16 ToggleButton at=897,60,279,66 by=panel drawn focus heard="Super Nintendo" limit=0,0,1920,1200 op paints=#D4D4D4FF role=button text="SUPER NINTENDO"
+              17 AccessText at=921,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=897,60,279,66 owner=16 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
         18 Panel at=213,162,1494,756 by=panel heard=All limit=0,0,1920,1200 name=GalleryGrid role=none
           19 CoverCard at=204.9,151.2,286.2,381.6 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Aurora Drift (Synthetic).sfc" role=none
             20 Border at=208.08,151.2,279.84,381.6 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
@@ -38,7 +38,7 @@ tree
           23 CoverCard at=519,162,270,360 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Brass Lantern (Synthetic).sfc" role=none
             24 Border at=522,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               25 Image at=522,162,264,360 by=clip drawn limit=522,162,264,360 nohit role=image
-            26 Path at=753,159,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
+            26 Path at=738,174,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
           27 CoverCard at=825,162,270,360 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Cobalt Harbor (Synthetic).sfc" role=none
             28 Border at=828,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               29 Image at=828,162,264,360 by=clip drawn limit=828,162,264,360 nohit role=image
@@ -51,7 +51,7 @@ tree
           36 CoverCard at=213,558,270,360 by=panel heard="Fable of Tiles (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Fable of Tiles (Synthetic).nes" role=none
             37 Border at=213,729,270,189 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               38 Image at=213,729,270,189 by=clip drawn limit=213,729,270,189 nohit role=image
-            39 Path at=447,555,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
+            39 Path at=435,741,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
           40 CoverCard at=519,558,270,360 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Granite Choir (Synthetic).nes" role=none
             41 Border at=519,729,270,189 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               42 Image at=519,729,270,189 by=clip drawn limit=519,729,270,189 nohit role=image
@@ -59,7 +59,7 @@ tree
             44 Border at=825,648,270,270 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               45 Image at=825,648,270,270 by=clip drawn limit=825,648,270,270 nohit role=image
         46 TextBlock at=96,942,1728,58.5 box=1152,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic)" layout=234.91,38.4 limit=0,0,1920,1200 name=GalleryName paints=#EEEEF0FF role=text size=32 text="Aurora Drift (Synthetic)"
-        47 TextBlock at=96,1005,1728,40.5 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="SNES · 3 h ago" layout=130.75,26.4 limit=0,0,1920,1200 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="SNES · 3 h ago"
+        47 TextBlock at=96,1005,1728,40.5 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="Super Nintendo · 3 h ago" layout=224.05,26.4 limit=0,0,1920,1200 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="Super Nintendo · 3 h ago"
         48 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=GalleryHelpBar paints=#1B1B1EFF,#707070FF role=none
           49 HintBar at=96,1074,1728,45 by=panel heard="Play, Game page, Favourite, Console, List, Home" limit=0,0,1920,1200 role=group
 focus none

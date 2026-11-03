@@ -637,7 +637,7 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   tool screen; the desktop's Home in the sidebar's first row. Start over the own look goes to Home the screen (§0.9).
 - **Retired.** The desktop library drawn on the big screen, with its console facet and big-screen sizes; the Home card over
   the own look, which over a theme and on the desktop stays.
-- **Departures, measured.** The docked keyboard runs from 398 to the help band, as the mockup draws it, not from 470; a
+- **Departures, measured.** A
   generated card's mark keeps its size and its title is shrunk no further than 18 units, so a short box stays legible under
   the fit audit; the facts under the grid change at once rather than over Fade.
 - **Not in U5.** Live lines for Packages, Library and the desktop's Cheats, waiting on summaries no surface gives; the
@@ -1257,7 +1257,7 @@ Close`. Over a themed view the card's Filter and Sort set the theme's own gameli
 `GamelistFilterWindow`, Jump To and Sort By sheets retire into it.
 
 **Search docks the keyboard.** A on Search closes the card and docks the keyboard (`OnScreenKeyboard`'s docked form,
-`EmuSen_Shell.md` §3, H2) at the foot of the screen: 0,470 to 702, five rows of 72 × 48 keys on SurfaceRaised, gap 8,
+`EmuSen_Shell.md` §3, H2) at the foot of the screen: 0,398 to 702 (decided 2026-11-03, as the mockup draws it), five rows of 72 × 48 keys on SurfaceRaised, gap 8,
 the focused key ringed, `Shift`, `Symbols`, `Space` and `Done` as wide keys. The search field takes the strip's row at
 64,100 1152 × 44 on InputSurface with the typed text in TextStrong and a caret; the grid above narrows as the player
 types, one row visible, and the strip's count reads `12 of 1,284 games`. Help bar `A Type · B Delete · Y Space · X

@@ -250,19 +250,36 @@ namespace EmuSen.WiseMan.LunaP
             Assert.True(Walk(layout, () => s.Pad.Down()) >= 4, "the console's page had too few rows to walk");
         });
 
-        // A game's page by pad: its chosen section selected, the page holding the focus in its actions, then each row of Options told selected as the pad walks it.
+        // A game's page by pad: each action told selected as the pad walks across them, then its chosen section selected and each row of Options told the same.
         [Fact]
-        public Task A_game_s_page_tells_a_reader_the_row_the_pad_is_on() => ThemedLibraryPadTests.Run(s =>
+        public Task A_game_s_page_tells_a_reader_the_action_and_the_row_the_pad_is_on() => ThemedLibraryPadTests.Run(s =>
         {
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.X();
             PageLayout layout = s.Window.GamePageLayout!;
+            var told = new List<object?>();
+            s.Window.AddHandler(InputElement.GotFocusEvent, (_, e) => told.Add(e.Source));
+            var heard = new List<string>();
+            for (int guard = 0; guard < 20; guard++)
+            {
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                PageAction action = layout.Actions.Single(a => a.Key == layout.Focused.Key);
+                string said = Heard(layout, "PageActions");
+                Assert.Equal(action.Value is null ? action.Text : $"{action.Text}, {action.Value}", said);
+                if (heard.Count == 0 || heard[^1] != said) heard.Add(said);
+                if (action.Key == layout.Actions[^1].Key) break;
+                told.Clear();
+                s.Pad.Right();
+                Assert.NotEmpty(told);
+                Assert.DoesNotContain(layout, told);
+            }
+            Assert.Equal(layout.Actions[^1].Key, layout.Focused.Key);
+            Assert.True(heard.Count >= 2, "the page had too few actions to walk");
             for (int i = 0; i < 6 && s.Window.GamePageShown!.Section != GamePage.Options; i++) s.Pad.R1();
             Assert.Equal(GamePage.Options, s.Window.GamePageShown!.Section);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();
             Assert.Equal("Options", Selection(layout, "PageSections"));
             Assert.True(layout.Focused.InActions);
-            Assert.Same(layout, TopLevel.GetTopLevel(layout)!.FocusManager!.GetFocusedElement());
             Assert.Equal("", Selection(layout, "PageRows"));
             s.Pad.Down();
             Assert.False(layout.Focused.InActions);

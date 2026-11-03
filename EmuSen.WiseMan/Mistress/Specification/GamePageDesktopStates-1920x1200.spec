@@ -28,7 +28,7 @@ tree
           13 Viewbox at=208,144,301,16 by=panel limit=0,0,1720,1146 role=none
             14 ViewboxContainer at=208,144,301,16 by=clip limit=208,144,301,16 role=none
               15 TextBlock at=208,144,301,16 box=301,16 by=clip caps=6.0662 drawn face=Barlow heard="SNES · 1994 · Lantern Works · Publisher P · Never played" layout=300.25,15.6 limit=208,144,301,16 name=PageFacts paints=#FFFFFFFF role=text size=8.67 text="SNES · 1994 · Lantern Works · Publisher P · Never played"
-          16 StackPanel at=208,184,1488,28 by=panel heard=Actions limit=0,0,1720,1146 name=PageActions role=none
+          16 SelectionStack at=208,184,1488,28 by=panel heard=Actions limit=0,0,1720,1146 name=PageActions role=list
             17 Button at=208,184,96,28 by=panel drawn focus heard=Play limit=0,0,1720,1146 name=PageAction.play op paints=#0E0E10FF,#4C9AE8FF,#707070FF role=button text=Play
               18 AccessText at=244,187,24,22 box=24,22 by=clip caps=6.0662 drawn face=Barlow layout=23.35,15.6 limit=208,184,96,28 owner=17 paints=#0E0E10FF role=none size=8.67 text=Play
             19 SplitButton at=320,184,201,28 by=panel focus heard="Resume: Auto · 12 min ago" limit=0,0,1720,1146 name=PageAction.resume paints=#0E0E10FF,#D4D4D4FF role=splitbutton text="Resume: Auto · 12 min ago"

@@ -250,10 +250,13 @@ namespace EmuSen.Mistress.Views
         }
 
         // Start Console as its mockup draws it: each console that starts empty by its display name with its engine, those with none dimmed as not supported yet, and the pane's sentences with the firmware the runtime finds (EmuSen_Interface.md §18.3).
-        private List<PadMenuEntry> StartConsolePage()
+        private List<PadMenuEntry> StartConsolePage() => StartConsoleEntries(RuntimeCatalog.Systems);
+
+        // The page's rows from a systems table, which a test gives with a console no engine runs.
+        public List<PadMenuEntry> StartConsoleEntries(IEnumerable<SystemFacts> systems)
         {
             var rows = new List<PadMenuEntry>();
-            foreach (var system in RuntimeCatalog.Systems.Where(s => s.StartsEmpty).GroupBy(s => s.Console, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
+            foreach (var system in systems.Where(s => s.StartsEmpty).GroupBy(s => s.Console, StringComparer.OrdinalIgnoreCase).Select(g => g.First())
                 .OrderBy(s => s.Engines.Count == 0).ThenBy(s => s.Manufacturer, StringComparer.OrdinalIgnoreCase).ThenBy(s => s.ReleaseYear))
             {
                 string name = system.DisplayName is { Length: > 0 } shown ? shown : system.Name;

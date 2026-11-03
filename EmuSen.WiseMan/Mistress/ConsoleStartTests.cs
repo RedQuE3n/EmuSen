@@ -51,6 +51,55 @@ namespace EmuSen.WiseMan.Mistress
 
         private static IReadOnlyList<string> Rows(object? entries) => ((IEnumerable<PadMenuEntry>)entries!).Select(e => e.Text()).ToList();
 
+        // Start Console's page for one system of the build's table, by its id.
+        private static PadMenuEntry PageRow(MainWindow w, string id) =>
+            w.StartConsoleEntries(EmuSen.Mistress.Library.RuntimeCatalog.Systems.Where(s => s.Id == id)).Single();
+
+        // The firmware line under the page's sentences: found, not found as Cores words it, or none for a console that needs none - see EmuSen_BigPicture.md §51.8.
+        [EmuSen.WiseMan.Crystal.RustImplementationFact("firmware_status, 1.9")]
+        public Task Start_Console_s_pane_says_whether_the_firmware_was_found() => Session.Dispatch(() =>
+        {
+            string folder = Path.Combine(_root, "MyFirmware");
+            Directory.CreateDirectory(folder);
+            AppSettings settings = AppSettings.Load();
+            settings.FirmwareDirectory = folder;
+            settings.Save();
+            var window = new MainWindow();
+            try
+            {
+                Assert.Equal(("✗ Not found: add it in Settings → Firmware", false), PageRow(window, "ps2").PaneSentences!().Flag);
+                File.WriteAllBytes(Path.Combine(folder, "ps2-0230a-20080220.bin"), new byte[4 << 20]);
+                Assert.Equal(("✓ Firmware found.", true), PageRow(window, "ps2").PaneSentences!().Flag);
+                // The PlayStation's BIOS has an open replacement, so with none in the folders it needs none, and nothing is said.
+                PadMenuEntry psx = PageRow(window, "psx");
+                Assert.Null(psx.PaneSentences!().Flag);
+                Assert.Equal("Starts a PlayStation with no disc in it, on Diamond.", psx.PaneSentences!().Sentences[0]);
+            }
+            finally { window.Close(); }
+        }, default);
+
+        // A console that starts empty but that no engine runs is offered dimmed as not supported yet, and A on it starts nothing.
+        [Fact]
+        public Task A_console_no_engine_runs_is_dimmed_as_not_supported_yet_and_starts_nothing() => Session.Dispatch(() =>
+        {
+            var window = new MainWindow();
+            try
+            {
+                var psx = EmuSen.Mistress.Library.RuntimeCatalog.Systems.First(s => s.Id == "psx");
+                var saturn = psx with { Id = "saturn", Name = "Saturn", Console = "Saturn", Engines = [], DisplayName = "Saturn", StartsEmpty = true, Manufacturer = "Sega", ReleaseYear = 1994 };
+                List<PadMenuEntry> rows = window.StartConsoleEntries([psx, saturn]);
+                PadMenuEntry row = rows.Single(r => r.Text() == "Saturn");
+                Assert.True(row.Dimmed);
+                Assert.Equal(MainWindow.NotSupportedYet, row.Value!());
+                Assert.False(row.Closes);
+                Assert.False(rows.Single(r => r.Text() == "PlayStation").Dimmed);
+                row.Accept();
+                Assert.Null(Field<object?>(window, "_session"));
+                Assert.False(window.GetControl<Control>("GameFrame").IsVisible);
+            }
+            finally { window.Close(); }
+        }, default);
+
         // The pad menu's Library > Start a Console, and the desktop library's button while the PlayStation's shelf is shown.
         [Fact]
         public Task The_entries_offer_the_consoles_that_start_empty() => Session.Dispatch(() =>

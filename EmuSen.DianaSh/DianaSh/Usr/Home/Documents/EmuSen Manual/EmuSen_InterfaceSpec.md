@@ -747,7 +747,9 @@ draws no `›` (`HomeCardDesktop`, `HomeCardDesktopGame`, `HomeCardDesktopTools`
 Pause Card's Display page holds Console Settings and Shader Levers in place of Graphics and Shaders (`PauseCardDisplay`,
 both sizes). Retired: `HomeCardSettings` (Home's Settings place opens Settings, recorded above) and
 `BigPicture-CollectionSettings` (the sheet is Library ▸ Collections). The pad menu's page audit reaches the card from
-Home's Power place, the one place that still opens it over the own look.
+Home's Power place, the one place that still opens it over the own look. Taken again after review the same day:
+`SettingsDesktopConsoles` (each console's line its facts rather than one sentence for all) and `SettingsFirmware` (a row
+per need, the PlayStation's regional files one `PlayStation BIOS` row), both sizes.
 
 **Where each old setting went.** Every row of the retired windows, and of those no door reaches until U6b, has a row:
 

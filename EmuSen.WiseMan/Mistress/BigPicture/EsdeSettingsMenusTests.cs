@@ -194,7 +194,10 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             int opened = EmuSen.WiseMan.Mistress.NoSteam.Launcher.Opened.Count;
             var files = layout.Rows.Where(r => r.Key.StartsWith("fw:", StringComparison.Ordinal)).ToList();
             Assert.NotEmpty(files);
-            Assert.All(files, f => Assert.Contains(f.Status, new[] { "✓ Found", "⚠ None found", "Only some games", "Not needed" }));
+            // The PlayStation's regional BIOS files are one need, found with the copy recognised or not found, never Not needed.
+            PageRow bios = Assert.Single(files);
+            Assert.Equal("PlayStation BIOS", bios.Label);
+            Assert.True(bios.Status is "Not found" or "⚠ Not found" || bios.Status!.StartsWith("✓ Found · ", StringComparison.Ordinal), bios.Status);
             Assert.Equal(["fwfolder", "fwcheck"], layout.Rows.Skip(files.Count).Select(r => r.Key));
             foreach (PageRow file in files)
             {

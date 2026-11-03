@@ -1,7 +1,7 @@
 # EmuSen interface specification, recorded from Mistress; EMUSEN_INTERFACE_SPEC=record rewrites it - see EmuSen_InterfaceSpec.md.
 spec 1
 state SettingsDesktopDisplay-1920x1200
-size 960 640
+size 1920 1200
 kind window
 root SettingsLayout#SettingsScreen
 unit 1
@@ -11,6 +11,7 @@ frame 0,0,960,640
 case SettingsDesktopDisplay
 palette #0000008C #000000AA #000000FF #005FB8FF #0A5A96FF #0E0E10FF #1B1B1EFF #1B6E3CFF #1B7A1BFF #1C1C1CE6 #1F1F1FFF #26262BFF #2A2A2AFF #32CD32FF #333337FF #35A064FF #4C9AE8FF #5F5F5FFF #707070FF #7A5B00FF #8A6300FF #8C8C8CFF #8D8D91FF #9CDCFEFF #A34B1EFF #B3261EFF #B32D12FF #D08770FF #D37070FF #D4D4D4FF #D6D6D6FF #DAA520FF #DCDCDCFF #EEEEF0FF #F3F3F3FF #FF4500FF #FFD700FF #FFFFFFFF
 walk none: the screen moves its own focus, drawn as a bar
+window 960 640
 tree
   0 Panel at=0,0,960,640 by=panel limit=0,0,960,640 role=none
     1 DockPanel at=0,0,960,640 by=panel limit=0,0,960,640 paints=#F3F3F3FF role=none

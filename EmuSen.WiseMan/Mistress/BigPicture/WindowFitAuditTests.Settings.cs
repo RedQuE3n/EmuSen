@@ -115,6 +115,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Control root = window.SettingsLayoutShown!;
                 SpecDocument doc = InterfaceRecorder.Tree(root, new InterfaceRecorder.Options(name, desktop ? "window" : "menu", SmallestText: desktop ? 0 : FitAudit.SmallestText), out _);
                 doc.Header["case"] = view;
+                // The desktop's Settings is a window of its own: its size is recorded beside the screen's, which names the state.
+                if (desktop) { doc.Header["window"] = doc.Header["size"]; doc.Header["size"] = $"{width} {height}"; }
                 doc.Header["walk"] = "none: the screen moves its own focus, drawn as a bar";
                 PictureSettings(window, name);
                 List<string> faults = FitAudit.Check(root, [], desktop ? 0 : FitAudit.SmallestText);

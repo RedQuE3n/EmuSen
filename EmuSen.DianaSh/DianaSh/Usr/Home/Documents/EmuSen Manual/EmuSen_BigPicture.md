@@ -11974,8 +11974,16 @@ opens it as a page of choices), Firmware ▸, Memory cards ▸ (the card manager
 cartridge), the schema's other rows (shown where their `ShownWith` holds), then CRT profile or Screen, Shader levers,
 Crop overscan and Picture shape. LB and RB on a console's page step to the console before or after it.
 
-Firmware ▸ is the runtime's `firmware_status` (`EmuSen_Cores.md` §3.11), one row per declared file. A file missing on a
-console that starts empty is needed by every game and reads `⚠ None found`; on a cartridge console it is a chip's, such as
+A console's line in a list (the desktop's second line, the big screen's pane) gives the same facts from one source: its
+games, its engine and, on a console that starts empty, its firmware in a few words (`✓ BIOS found`, `⚠ BIOS not found`,
+`open replacement`).
+
+Firmware ▸ is the runtime's `firmware_status` (`EmuSen_Cores.md` §3.11), one row per need: on a console that starts empty
+the regional copies of one thing are one need, grouped by the last word their labels share less any region in brackets
+(the PlayStation's three BIOS files are `PlayStation BIOS`); a cartridge console's chips are a need each. Its value is
+`✓ Found · ` with the copy recognised, or `Not found`; `Not needed` only where the console needs nothing. Its pane says
+what runs: your own copy when found, else the open replacement. The Open replacement row comes with its wiring step. A file missing on a
+console that starts empty is needed by every game and reads `⚠ Not found`; on a cartridge console it is a chip's, such as
 the Super Nintendo's DSP-1 to DSP-4, which `firmware_status` calls required because VenusRT has no open
 replacement for some of them, but which only the games carrying the chip use: it reads `Only some games`, and the console
 reads `✓ No firmware needed`. Memory cards ▸ is the mode and the slots as schema rows (`Cards`, `Card1`, `Card2`, the card

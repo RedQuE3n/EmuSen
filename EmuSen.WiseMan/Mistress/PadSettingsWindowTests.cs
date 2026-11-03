@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            pad.A();
+            OwnLook.Play(window, pad);
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             if (tallerBar > 0) TallerBar(window, tallerBar);
             return (window, pad);
@@ -410,7 +410,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            pad.A();
+            OwnLook.Play(window, pad);
             Choose(window, pad, "Quit Game");
             PadMenu.Answer(window, pad, yes: true);
             Assert.True(window.GetControl<Control>("LibraryView").IsVisible);

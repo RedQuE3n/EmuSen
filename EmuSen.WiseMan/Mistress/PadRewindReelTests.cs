@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Show();
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            pad.A();
+            OwnLook.Play(window, pad);
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             return (window, pad);
         }
@@ -420,7 +420,7 @@ namespace EmuSen.WiseMan.Mistress
                 window.Show();
                 var pad = new PadDriver(window);
                 window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-                pad.A();
+                OwnLook.Play(window, pad);
                 window.PauseEmulation();
                 WaitUntilParked(window);
                 typeof(MainWindow).GetMethod("LoadStateFromConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { state });

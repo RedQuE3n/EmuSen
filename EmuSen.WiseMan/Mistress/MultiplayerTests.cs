@@ -67,6 +67,12 @@ namespace EmuSen.WiseMan.Mistress
             var clock = System.Diagnostics.Stopwatch.StartNew();
             while (clock.ElapsedMilliseconds < 300) { Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(5); }
 
+            // On the big screen's own look the game is chosen in the grid, as the player chooses it (EmuSen_BigPicture.md §51.3).
+            if (bigScreen)
+            {
+                OwnLook.OpenGames(window, first);
+                window.GamesLayout!.FocusOn(Path.Combine(_romDir, file));
+            }
             // The launching A outlasts the game's first poll, as a real press does, so a test cannot pass by the poll timer's luck - see EmuSen_Input.md §8.13.8.
             first.Pad.Press(SDL.GamepadButton.South);
             first.Tick();

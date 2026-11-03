@@ -45,11 +45,11 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private (MainWindow Window, PadDriver First) LibraryOf(int games, Action<AppSettings>? settings = null)
+        private (MainWindow Window, PadDriver First) LibraryOf(int games, Action<AppSettings>? settings = null, bool bigScreen = false)
         {
             for (int i = 0; i < games; i++)
                 File.WriteAllBytes(Path.Combine(_romDir, $"Game {i:00}.sfc"), SyntheticRom.BuildBlank());
-            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true };
+            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen };
             settings?.Invoke(app);
             app.Save();
 
@@ -68,12 +68,21 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string[] MenuLines(MainWindow w) => PadMenu.AllLines(w);
 
-        private static void MenuEntry(MainWindow window, PadDriver pad, string entry)
+        // A settings entry as the player reaches it: the Home card on the desktop, Home's Settings place on the big screen's own look (EmuSen_BigPicture.md §51.2).
+        private static void MenuEntry(MainWindow window, PadDriver pad, string entry, bool swapped = false)
         {
             pad.Start();
+            if (window.HomeLayout is { } home)
+            {
+                home.FocusOn(HubRow.Places, "settings");
+                if (swapped) pad.B(); else pad.A();
+            }
             Assert.True(MenuOpen(window));
             PadMenu.Choose(window, pad, entry);
         }
+
+        // The focused cover's place in the own look's grid.
+        private static int Shown(MainWindow w) => w.GamesLayout!.Items.ToList().FindIndex(i => i.Key == w.GamesLayout.Focused.Key);
 
         private static T Named<T>(Control root, string name) where T : Control =>
             Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(root).OfType<T>().First(c => c.Name == name);
@@ -93,19 +102,20 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Two_pads_both_steer_the_library_the_menu_and_a_sheet() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = LibraryOf(5);
+            (MainWindow window, PadDriver first) = LibraryOf(5, bigScreen: true);
             PadDriver second = first.Plug("Second Pad", SDL.GamepadType.PS4);
             first.Tick();
+            OwnLook.OpenGames(window, first);
 
-            first.Down();
-            Assert.Equal(1, Selected(window));
-            second.Down();
-            Assert.Equal(2, Selected(window));
-            second.Up();
-            first.Down(2);
-            Assert.Equal(3, Selected(window));
+            first.Right();
+            Assert.Equal(1, Shown(window));
+            second.Right();
+            Assert.Equal(2, Shown(window));
+            second.Left();
+            first.Right(2);
+            Assert.Equal(3, Shown(window));
 
-            second.Start();
+            second.Select();
             Assert.True(MenuOpen(window));
             first.B();
             Assert.False(MenuOpen(window));
@@ -219,38 +229,31 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_swap_trades_A_with_B_and_X_with_Y_everywhere_in_the_interface() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = LibraryOf(3, a => a.SwapPadButtons = true);
+            (MainWindow window, PadDriver first) = LibraryOf(3, a => a.SwapPadButtons = true, bigScreen: true);
             first.Tick();
             Assert.StartsWith("B  Choose      A  Back", window.GetControl<SheetLayer>("Sheets").Hint);
 
-            first.Start();
-            Assert.True(MenuOpen(window));
-            first.A();
-            Assert.False(MenuOpen(window));
-            StringAssert(window.GetControl<TextBlock>("PadMenuHint").Text, "B  Choose      A  Close");
-
-            first.Start();
-            first.Down(Array.IndexOf(PadMenu.Lines(window), MainWindow.SettingsMenu));
+            // On Home, B chooses: Settings opens the card at its page, B again opens Preferences, and A, the swapped Back, closes it.
+            window.HomeLayout!.FocusOn(HubRow.Places, "settings");
             first.B();
-            Assert.Equal(2, PadMenu.Depth(window));
+            Assert.True(MenuOpen(window));
             first.Down(Array.IndexOf(PadMenu.Lines(window), "Preferences"));
             first.B();
             Assert.IsType<PreferencesWindow>(window.GetControl<SheetLayer>("Sheets").Current);
             first.A();
             Assert.False(window.GetControl<SheetLayer>("Sheets").IsPresenting);
 
-            // X and Y trade too: Y is the grammar's X, which opens the game's page (EmuSen_Interface.md §0.1), and X searches; the keyboard's own letters trade places.
+            // X and Y trade too: Y is the grammar's X, which opens the game's page (EmuSen_Interface.md §0.1), and X the grammar's Y, the favourite.
+            if (MenuOpen(window)) first.A();
+            OwnLook.OpenGames(window, first, swapped: true);
+            string game = window.GamesLayout!.Focused.Key!;
             first.Y();
-            Assert.Null(OnScreenKeyboard.OpenOver(window));
             Assert.NotNull(window.GamePageShown);
             first.A();
             Assert.Null(window.GamePageShown);
+            var records = (EmuSen.Mistress.Library.GameRecords)typeof(MainWindow).GetField("_records", Hidden)!.GetValue(window)!;
             first.X();
-            StringAssert(OnScreenKeyboard.OpenOver(window)!.Hint, "B  Type      A  Erase      X  Space");
-            first.Start();
-            Assert.Null(OnScreenKeyboard.OpenOver(window));
-            first.A();
-            Assert.False(window.GetControl<Control>("LibraryFilter").IsKeyboardFocusWithin);
+            Assert.True(records.IsFavourite(game));
 
             first.B();
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
@@ -285,7 +288,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_controller_settings_persist() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = LibraryOf(1);
+            (MainWindow window, PadDriver first) = LibraryOf(1, bigScreen: true);
             MenuEntry(window, first, "Preferences");
             var prefs = Assert.IsType<PreferencesWindow>(window.GetControl<SheetLayer>("Sheets").Current);
             prefs.ShowTab(PreferencesWindow.ControllersTab);

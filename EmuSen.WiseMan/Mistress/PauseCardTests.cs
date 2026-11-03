@@ -59,8 +59,7 @@ namespace EmuSen.WiseMan.Mistress
             if (gameMode) typeof(MainWindow).GetField("_bigScreenForced", Hidden)!.SetValue(window, true);
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            if (app.SwapPadButtons) pad.B();
-            else pad.A();
+            OwnLook.Play(window, pad, swapped: app.SwapPadButtons);
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             return (window, pad);
         }

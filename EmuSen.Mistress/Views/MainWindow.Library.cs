@@ -12,6 +12,7 @@ using EmuSen.LunaP.Commands;
 using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views.Covers;
 
@@ -180,7 +181,8 @@ namespace EmuSen.Mistress.Views
         }
 
         private string SidebarKey =>
-            CollectionKey != AllGamesKey ? CollectionKey
+            _desktopHome ? HomeSidebarKey
+            : CollectionKey != AllGamesKey ? CollectionKey
             : SelectedConsole == EmuSen.Mistress.Library.RuntimeCatalog.AllConsoles ? AllGamesKey
             : ConsoleKeyPrefix + SelectedConsole;
 
@@ -197,12 +199,21 @@ namespace EmuSen.Mistress.Views
             var consoles = new SourceListGroup("Consoles", EmuSen.Mistress.Library.RuntimeCatalog.Shelves
                 .Select(s => new SourceListItem(ConsoleKeyPrefix + s.Name, s.Label, _allScan.Entries.Count(e => e.Shelf == s.Name && Listed(e)).ToString()))
                 .ToArray());
-            LibrarySidebar.Fill(new[] { library, consoles, CollectionsGroup() }, SidebarKey);
+            // Home first, above the library's groups, as the desktop's mockup draws it (EmuSen_Interface.md §17.2).
+            var home = new SourceListGroup("", new[] { new SourceListItem(HomeSidebarKey, HomeScreen.Title) });
+            LibrarySidebar.Fill(new[] { home, library, consoles, CollectionsGroup() }, SidebarKey);
         }
 
         // A collection spans every console, and a console is all of its games, as OpenEmu's sidebar has it.
         private void ChooseCollection(string key)
         {
+            if (key == HomeSidebarKey)
+            {
+                ShowDesktopHome(true);
+                return;
+            }
+            if (_desktopHome) ShowDesktopHome(false);
+
             // The last row is an action, as OpenEmu's "+" is, and leaves the selection where it was.
             if (key == NewCollectionKey)
             {

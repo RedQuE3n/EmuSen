@@ -123,11 +123,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             bool home = view.StartsWith("HomeCard", StringComparison.Ordinal);
             if (home) ToolCounts.Answer(41, (12, 1));
-            (MainWindow window, PadDriver pad) = InGame(width, height);
+            // The Home card's first page is a pad's on the desktop and a theme's; the big screen's own look opens it at Power from Home's place (EmuSen_BigPicture.md §51.2).
+            bool desktop = home && view != "HomeCardPower";
+            (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: !desktop);
             if (home)
             {
                 Call(window, "ToggleLibrary");
                 pad.Start();
+                if (!desktop)
+                {
+                    window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "power");
+                    pad.A();
+                }
             }
             else pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             Assert.True(PadMenu.IsOpen(window) && PadMenu.Card(window).IsVisible);
@@ -136,7 +143,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             {
                 case "HomeCardGame": pad.Down(1); break;
                 case "HomeCardTools": PadMenu.Choose(window, pad, MainWindow.ToolsMenu, exact: true); break;
-                case "HomeCardPower": PadMenu.Choose(window, pad, MainWindow.PowerMenu, exact: true); break;
+
                 case "PauseCardRewind": pad.Down(1); break;
                 case "PauseCardSave": pad.Down(2); break;
                 case "PauseCardLoad": pad.Down(3); break;

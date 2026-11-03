@@ -41,11 +41,11 @@ namespace EmuSen.WiseMan.Mistress
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        private MainWindow Main()
+        private MainWindow Main(bool bigScreen = true)
         {
             string roms = Path.Combine(_root, "Roms");
             Directory.CreateDirectory(roms);
-            new EmuSen.Galaxia.Models.AppSettings { RomDirectory = roms, BigScreen = true, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
+            new EmuSen.Galaxia.Models.AppSettings { RomDirectory = roms, BigScreen = bigScreen, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
             var main = new MainWindow { Width = 1280, Height = 800 };
             main.Show();
             Settle(main);
@@ -180,7 +180,7 @@ namespace EmuSen.WiseMan.Mistress
             main.Show();
             var pad = new PadDriver(main);
             main.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            pad.A();
+            OwnLook.Play(main, pad);
             Settle(main);
             Control game = main.GetControl<Control>("GameFrame");
             Assert.True(game.IsVisible);
@@ -226,7 +226,8 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_home_card_keeps_every_press() => Session.Dispatch(() =>
         {
-            MainWindow main = Main();
+            // The Home card is a pad's on the desktop and over a theme; the big screen's own look goes to Home the screen (EmuSen_Interface.md §0.9).
+            MainWindow main = Main(bigScreen: false);
             var pad = new PadDriver(main);
             pad.Start();
             Settle(main);

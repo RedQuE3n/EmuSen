@@ -150,6 +150,22 @@ namespace EmuSen.Mistress.Views
             Child = stack;
         }
 
+        // What a row does in sentences, then a line in the success or error colour, such as whether firmware was found.
+        public void ShowSentences(IReadOnlyList<string> sentences, (string Line, bool Good)? flag, double width)
+        {
+            double u = U;
+            var stack = new StackPanel { Name = "PaneSentences", Spacing = 6 * u, Width = width };
+            foreach (string sentence in sentences) stack.Children.Add(Line(sentence, Words * u, Ink.Text, wraps: true));
+            if (flag is { } f)
+            {
+                TextBlock line = Line(f.Line, Words * u, Ink.Text, "PaneFlag");
+                line.Bind(TextBlock.ForegroundProperty, line.GetResourceObservable(f.Good ? "LunaSuccess" : "LunaError"));
+                stack.Children.Add(line);
+            }
+            Showing = "sentences";
+            Child = stack;
+        }
+
         private enum Ink { Strong, Text, Muted }
 
         private static TextBlock Line(string text, double size, Ink ink, string? name = null, bool wraps = false, bool centred = false)

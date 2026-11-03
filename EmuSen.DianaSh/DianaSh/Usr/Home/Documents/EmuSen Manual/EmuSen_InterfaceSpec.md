@@ -689,3 +689,32 @@ The pane is a raised surface, the open edge has its shadow, and the help bar is 
 *Continue* and *Selected game* with the game as their value, *Start Console*, *Save State* and *Load State*, and a
 submenu's way back is a breadcrumb without its arrow. The pad menu's fit case now lets a game's name as Continue's or
 Selected game's value be cut, as the card's title may be.
+
+#### 6.3.22 Home and the grid, U5 (2026-11-03)
+
+Twenty-eight recordings were added, eleven taken again and eight retired, each by one cause, after the rendered states had
+been compared side by side with their approved mockups at 1280 × 800 and 1920 × 1080 (`EmuSen_BigPicture.md` §51):
+
+- **Added: the own look** (`WindowFitAuditTests.OwnLook.cs`), at 1280 × 800 and 1920 × 1200, over the synthetic library's
+  eight games with their pictures, played over the last days, two of them favourites and three in a collection: Home with
+  a game suspended and Continue focused (`Home`), on the shelf, on the places and with nothing left (`HomeShelf`,
+  `HomePlaces`, `HomeNothingLeft`); the grid (`Games`), its List card, search with the keyboard docked, a collection in the
+  strip's place (`GamesListCard`, `GamesSearch`, `GamesCollection`); Collections and Start Console (`Collections`,
+  `StartConsole`); and the desktop's Home (`HomeDesktop`). Down, Up and B are recorded on the big-screen states. The same
+  states are audited and pictured at 1920 × 1080 and 1280 × 720 and not recorded.
+- **Added: the Home card's first page, the game and Tools on the desktop** (`HomeCardDesktopGame`, `HomeCardDesktopTools`,
+  `HomeCardDesktopToolsPage`), where a pad opens the card as before; the big screen's own look draws no card there.
+- **Taken again: the card at Settings and Power** (`HomeCardSettings`, `HomeCardPower`, `HomeCardQuit`, both sizes, and
+  `HomeCardHandheldPower`): over the own look they are reached from Home's places, so the card opens at that page with
+  `Home` over its title as the breadcrumb, one page deep rather than two.
+- **Taken again: the Resume question** (`Resume`, `ResumeLongTitle`, both sizes): the big screen's own look draws no status
+  bar, so the sheet is centred in the whole window, its frame 13 units lower and 27 wider; nothing in it changed.
+- **Retired: the card's first page, the game and Tools over the big screen's own look** (`HomeCard`, `HomeCardGame`,
+  `HomeCardTools`, `HomeCardToolsPage`, both sizes): Start there goes to Home the screen (`EmuSen_Interface.md` §0.9); the
+  same pages are recorded on the desktop above and over a theme (`BigPicture-MainMenu`).
+
+The own look's twenty-two recordings were taken again the same day, after a second side-by-side comparison
+(`EmuSen_BigPicture.md` §51.8), for these causes only: consoles named by their display names; Continue kept as the hero
+while the shelf and the places have the focus (`HomeShelf` and `HomePlaces` now record a suspended game); a favourite's
+heart on its own cover's corner; Start Console's rows, pane and help bar; Collections without Apply and with `▸` on its
+rows; search typed on the keys, so the highlight rests on the last key.

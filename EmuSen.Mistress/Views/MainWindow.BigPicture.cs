@@ -104,6 +104,7 @@ namespace EmuSen.Mistress.Views
 
             LibraryContent.IsVisible = !shown;
             ThemedLibraryHost.IsVisible = shown;
+            ShowOwnLook(shown);
             ApplyStatusBar();
             ScheduleThemedFrame();
         }

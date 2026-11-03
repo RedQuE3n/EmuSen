@@ -44,6 +44,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Call(window, "ToggleLibrary");
                 window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
                 pad.Start();
+                // On the big screen's own look Settings is a place of Home, opening the card at its page (EmuSen_BigPicture.md §51.2).
+                if (bigScreen) { window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, "settings"); pad.A(); }
                 PadMenu.Choose(window, pad, PreferencesWindow.FirmwareTab, exact: true);
                 Settle(window);
                 Window top = Sheets(window).Current ?? window.OwnedWindows.OfType<PreferencesWindow>().Last();

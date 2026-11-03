@@ -13,7 +13,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     public partial class WindowFitAuditTests
     {
         // Each state, by the rows chosen from the first page to reach it; the Desktop states open it from the desktop's library.
-        public static readonly string[] HomeCardViews = ["HomeCard", "HomeCardGame", "HomeCardTools", "HomeCardToolsPage", "HomeCardSettings", "HomeCardPower", "HomeCardQuit", "HomeCardDesktop", "HomeCardDesktopPower"];
+        // The big screen's own look reaches the card at Settings and Power from Home's places; its first page and Tools are recorded over a theme and on the desktop (EmuSen_BigPicture.md §51.5).
+        public static readonly string[] HomeCardViews = ["HomeCardSettings", "HomeCardPower", "HomeCardQuit", "HomeCardDesktop", "HomeCardDesktopGame", "HomeCardDesktopTools", "HomeCardDesktopToolsPage", "HomeCardDesktopPower"];
 
         // The handheld's: Steam's Game Mode, where Power holds Quit EmuSen alone.
         public static readonly string[] HomeCardHandheldViews = ["HomeCardHandheldPower"];
@@ -41,16 +42,20 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             {
                 Call(window, "ToggleLibrary");
                 pad.Start();
+                if (!view.Contains("Desktop", StringComparison.Ordinal))
+                {
+                    window.HomeLayout!.FocusOn(EmuSen.LunaP.Controls.HubRow.Places, view == "HomeCardSettings" ? "settings" : "power");
+                    pad.A();
+                }
                 Assert.True(PadMenu.IsOpen(window));
                 Assert.True(PadMenu.Card(window).IsVisible);
                 Settle(window);
                 switch (view)
                 {
-                    case "HomeCardGame": pad.Down(1); break;
-                    case "HomeCardTools": pad.Down(PadMenu.PathTo(window, MainWindow.ToolsMenu, exact: true)![0]); break;
-                    case "HomeCardToolsPage": PadMenu.Choose(window, pad, MainWindow.ToolsMenu, exact: true); break;
-                    case "HomeCardSettings": PadMenu.Choose(window, pad, MainWindow.SettingsMenu, exact: true); break;
-                    case "HomeCardPower" or "HomeCardDesktopPower" or "HomeCardHandheldPower": PadMenu.Choose(window, pad, MainWindow.PowerMenu, exact: true); break;
+                    case "HomeCardDesktopGame": pad.Down(1); break;
+                    case "HomeCardDesktopTools": pad.Down(PadMenu.PathTo(window, MainWindow.ToolsMenu, exact: true)![0]); break;
+                    case "HomeCardDesktopToolsPage": PadMenu.Choose(window, pad, MainWindow.ToolsMenu, exact: true); break;
+                    case "HomeCardDesktopPower": PadMenu.Choose(window, pad, MainWindow.PowerMenu, exact: true); break;
                     case "HomeCardQuit": PadMenu.Choose(window, pad, MainWindow.QuitEmuSenRow, exact: true); break;
                 }
                 Settle(window);

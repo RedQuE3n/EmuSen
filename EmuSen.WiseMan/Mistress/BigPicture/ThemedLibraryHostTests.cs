@@ -328,7 +328,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.False(sheets.IsPresenting);
             s.Settle();
             Assert.False(s.Shown);
-            Assert.True(s.Window.GetControl<Control>("LibraryContent").IsVisible);
+            Assert.NotNull(s.Window.HomeLayout);
         }, default);
 
         // P45: the themed session's pad menu reaches every sheet, and every control on each is reached by the pad at 1280 by 800.

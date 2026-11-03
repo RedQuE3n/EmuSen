@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             window.Show();
             var pad = new PadDriver(window);
             window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-            pad.A();
+            OwnLook.Play(window, pad);
             Assert.True(window.GetControl<Control>("GameFrame").IsVisible);
             MistressGame.Cheats(window).Import(new EmuSen.Galaxia.Models.CheatFile { Cheats =
             {

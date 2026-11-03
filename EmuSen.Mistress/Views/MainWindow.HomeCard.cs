@@ -54,7 +54,7 @@ namespace EmuSen.Mistress.Views
             if (_session is not null) rows.Add(new(() => ContinueRow, ToggleLibrary) { ShowsFrame = true, Label = () => ContinueRow, Value = RunningGameTitle });
             if (_homeGame is { } game) rows.Add(new(() => game.Title, () => ShowGamePage(game.Path)) { Opens = true, ShowsCover = true, Label = () => SelectedGameRow, Value = () => game.Title });
             if (SearchAction() is { } search) rows.Add(new(() => SearchRow, search));
-            if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsoleRows));
+            if (StartableConsoles.Count > 0) rows.Add(Submenu(StartConsoleMenu, StartConsolePage));
             rows.Add(new(() => ToolsMenu, () => { }, closes: false) { Submenu = ToolRows, Opens = true, ShowsTools = true, StartsSection = rows.Count > 0, Label = () => ToolsMenu, Value = CoresWaitingValue });
             rows.Add(Submenu(SettingsMenu, SettingsRows));
             rows.Add(Submenu(PowerMenu, PowerRows, startsSection: true));

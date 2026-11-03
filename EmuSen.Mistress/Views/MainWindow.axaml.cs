@@ -570,7 +570,7 @@ namespace EmuSen.Mistress.Views
             bool counters = _appSettings.ShowFpsBar && !_bigScreen;
             StatusText.IsVisible = _appSettings.ShowStatusText;
             FpsText.IsVisible = counters;
-            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible) && !Sheets.IsScreenShown && !(_padMenuOpen && CardShown);
+            StatusBar.IsVisible = _appSettings.ShowStatusBar && (_appSettings.ShowStatusText || counters) && !(ThemedLibraryShown && LibraryView.IsVisible) && !(_bigScreen && OwnScreenShown) && !Sheets.IsScreenShown && !(_padMenuOpen && CardShown);
         }
 
         private void ShowDebugLogging()
@@ -1235,6 +1235,7 @@ namespace EmuSen.Mistress.Views
             _recentSnapshot = Recent(Listed(_allScan.Entries));
             _editSnapshot = _records.AllEdits();
             _collections = _records.Collections();
+            _gridGames = null;
             ShowThemedLibrary();
             RomEntry? keptSelection = LibraryList.Selected;
             bool sameSearch = search == _lastLibrarySearch;

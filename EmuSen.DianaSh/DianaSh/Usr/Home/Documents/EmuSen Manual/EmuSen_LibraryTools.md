@@ -500,6 +500,51 @@ managed half does. A shelf's run chooses its ES-DE system's games, which is the 
   say to remove them there, so that is put to the tester.
 
 
+### 9.7 The kinds asked: every picture a theme can draw (decided 2026-11-02)
+
+Decided 2026-11-02 by the tester: the Scraper window's Theme switch goes, "if a user changes themes they may end up
+needing to scrape again". The scraper does not follow the active theme; with no `--kinds` a run asks for every
+picture a theme can draw (cover, screenshot, marquee, titlescreen, miximage, backcover, 3dbox, physicalmedia, fanart,
+the module's `DEFAULT_KINDS`, widened from cover, screenshot, marquee and miximage), so that changing themes never
+needs a second scrape. Videos stay a switch the player turns on, and Overwrite stays. `--kinds theme` remains the
+command's for whoever names it (`man scrape`). Mistress's Preferences follow the same decision: their nine picture
+switches are on by default, and a home that stored the old default of four (every save wrote it) is upgraded once to
+the nine (`ScrapeKindsUpgraded`, in Galaxia's settings model and `AppSettings.Upgraded` alike), while a list the player
+changed is kept. Tests: Galaxia's `the_old_four_kinds_become_the_nine_and_a_list_the_player_changed_is_kept`, and
+`ScraperWindowTests`' fresh home, old-four home and changed home. The cost to the day's quota of nine kinds against
+four is for the tester to weigh.
+
+### 9.8 Three defects the tester found on the handheld (2026-11-02)
+
+Reported on build b924305f6:
+
+1. **Marking moved the highlight to the search box.** A mark redraws the rows, which built their containers afresh,
+   and the focused one went with them. The frame now gives the focus back to the chosen row for every tool (LunaP
+   §211.6). Caught first by `ManagerLayoutTests.Marking_a_row_keeps_the_focus_on_it` (both forms), and held in the
+   Scraper by the pad in `ScraperWindowTests`' handheld cases.
+2. **The scraper did not work, and said nothing in the error log.** Reproduced on 2026-11-02 in the harness with a
+   home laid out as the handheld's: the player's `screenscraper.json` in `home/etc/EmuSen`, EmuSen's developer file
+   outside the home in the account's config directory, fake files of the test's own and the fake server, on the Rust
+   runtime. The candidate that the build reads the developer file only inside its home is **refuted**: Galaxia's
+   legacy config path is the account's config directory whenever the config directory is not redirected, the scraper in
+   Rust reads it (`credentials::developer`), and that layout scrapes (`A_home_laid_out_as_the_handheld_s_scrapes_with
+   _the_developer_file_outside_the_home`). With no developer file and a build that carries none, the run stops at
+   once with "this build carries no developer credentials and EmuSen's developer file is not on this computer": said
+   in the apply bar, but written nowhere, which matches the handheld's log having no scraper line. **Every scraper
+   failure is now written to the error log as well as said** (`ScraperPane.Failed`): a refused command, a refused
+   listing, each game a run failed or left to retry with the scraper's detail, and a run the scraper stopped by
+   itself rather than at the player's Stop. `A_scrape_that_cannot_run_is_said_on_the_screen_and_in_the_error_log`
+   failed before the change. The handheld's own cause is for its next log to say; the developer file's place there,
+   and whether the session's `XDG_CONFIG_HOME` moves the account's config directory, are the first things to read.
+3. **Three switches no one could read.** The plan's big-screen rows drew no names at all, only `Off` (LunaP §211.7),
+   and the switches were Theme, Videos and Overwrite. Each row now shows its name and a sentence: Videos, "Also
+   fetches each game's video. Videos are large, so this stays off unless you turn it on."; Overwrite, "Fetches again
+   and replaces the pictures and details you already have; off fetches only what is missing." Theme went (§9.7).
+
+Seeded on 2026-11-02, each caught: no focus given back after a mark; no sentence under a switch; a run the scraper
+stopped by itself not logged. The Scraper's plan state was re-recorded for the rows' names and sentences after its
+picture was checked.
+
 ## 10. T6 as built: the Library Manager window (2026-11-01)
 
 ### 10.1 The tool library and its host

@@ -37,12 +37,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 if (Refuse?.Invoke(request) is { } words) throw new ScrapeCommandException(ScrapeCommand.StoreInUse, words);
                 JsonElement r = JsonDocument.Parse(request).RootElement;
                 string sub = r.GetProperty("args")[0].GetString()!;
-                string[] kinds = ["cover", "screenshot", "marquee", "miximage"];
+                // The module's default since 2026-11-02: every picture a theme can draw (EmuSen_LibraryTools.md §9.7).
+                string[] kinds = ["cover", "screenshot", "marquee", "titlescreen", "miximage", "backcover", "3dbox", "physicalmedia", "fanart"];
                 object answer = sub switch
                 {
                     "ls" => new
                     {
-                        games = Games.Where(g => !r.GetProperty("args").EnumerateArray().Any(a => a.GetString() == "--missing") || g.Sources.Contains(null)).Select(g => new { path = g.Path, system = g.System, package = (string?)null, media = kinds.Select((k, i) => (k, g.Sources[i])).ToDictionary(x => x.k, x => x.Item2) }),
+                        games = Games.Where(g => !r.GetProperty("args").EnumerateArray().Any(a => a.GetString() == "--missing") || g.Sources.Contains(null)).Select(g => new { path = g.Path, system = g.System, package = (string?)null, media = kinds.Select((k, i) => (k, i < g.Sources.Length ? g.Sources[i] : null)).ToDictionary(x => x.k, x => x.Item2) }),
                         kinds = Games.ToDictionary(g => g.System, _ => kinds),
                         notes = new[] { "1 game(s) marked \"exclude from multi-scraper\" left out; name one to include it" },
                     },

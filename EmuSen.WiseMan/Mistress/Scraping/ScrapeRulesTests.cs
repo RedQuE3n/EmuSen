@@ -112,7 +112,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public void What_is_fetched_by_default_is_the_cover_screenshot_marquee_and_miximage()
         {
-            Assert.Equal(["cover", "screenshot", "marquee", "miximage"], new ScrapeChoices().Kinds().Select(k => k.EsdeType));
+            // Every picture a theme can draw by default since 2026-11-02 (EmuSen_LibraryTools.md §9.7).
+            Assert.Equal(["cover", "screenshot", "marquee", "titlescreen", "miximage", "backcover", "3dbox", "physicalmedia", "fanart"], new ScrapeChoices().Kinds().Select(k => k.EsdeType));
             Assert.Equal(["box-2D"], ScrapeRules.Cover.ScreenScraperTypes);
             Assert.Equal(["mixrbv2"], ScrapeRules.Miximage.ScreenScraperTypes);
             Assert.Equal("miximages", ScrapeRules.Miximage.Folder);

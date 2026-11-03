@@ -6,8 +6,8 @@ using EmuSen.LunaP.Controls;
 
 namespace EmuSen.Tools.Scraper
 {
-    // What a run asks beside its games: the active theme's kinds or the scraper's default, videos, and overwrite (ES-DE's "Overwrite files and data").
-    public sealed record ScrapeOptions(bool Theme = false, bool Videos = false, bool Overwrite = false);
+    // What a run asks beside its games: the scraper's default kinds, every picture a theme can draw, then videos and overwrite (ES-DE's "Overwrite files and data").
+    public sealed record ScrapeOptions(bool Videos = false, bool Overwrite = false);
 
     // The Scraper's words and the command lines it asks, free of any control so that they are tested alone - see EmuSen_LibraryTools.md §9.
     public static class ScraperPlan
@@ -36,7 +36,6 @@ namespace EmuSen.Tools.Scraper
         public static IReadOnlyList<string> KindWords(ScrapeOptions o)
         {
             var words = new List<string>();
-            if (o.Theme) words.AddRange(["--kinds", "theme"]);
             if (o.Videos) words.Add("--videos");
             return words;
         }
@@ -78,7 +77,7 @@ namespace EmuSen.Tools.Scraper
         public static string Text(string said, IReadOnlyList<string> kinds, ScrapeOptions o, IReadOnlyList<string> notes)
         {
             var lines = new List<string> { Sentence(said) };
-            lines.Add($"Kinds: {(kinds.Count == 0 ? "the scraper's default" : string.Join(", ", kinds))}{(o.Theme ? ", as the active theme draws them" : "")}.");
+            lines.Add($"Kinds: {(kinds.Count == 0 ? "the scraper's default" : string.Join(", ", kinds))}.");
             lines.Add(o.Overwrite ? "What is there is fetched again and replaced." : "What is there is kept; only what is missing is fetched.");
             lines.AddRange(notes.Select(Sentence));
             lines.Add("Nothing is sent to ScreenScraper until Apply.");
@@ -107,6 +106,23 @@ namespace EmuSen.Tools.Scraper
                 .Select(r => (ScrapeRow.Text(r, "path") ?? "", Outcome(ScrapeRow.Text(r, "outcome"), r.TryGetProperty("skipped", out JsonElement s) && s.ValueKind == JsonValueKind.True),
                     r.TryGetProperty("serial", out JsonElement n) && n.ValueKind == JsonValueKind.Number && n.TryGetInt64(out long serial) ? serial : 0L))
                 .Where(r => r.Item1.Length > 0).ToList();
+        }
+
+        // The run's phase word: running, done, stopped, idle.
+        public static string? State(string answer)
+        {
+            using JsonDocument doc = JsonDocument.Parse(answer);
+            return ScrapeRow.Text(doc.RootElement.GetProperty("progress"), "state");
+        }
+
+        // The games the last poll reported failed or left to retry, with the scraper's detail, for the error log.
+        public static IReadOnlyList<(string Path, string Outcome, string Detail)> Failures(string answer)
+        {
+            using JsonDocument doc = JsonDocument.Parse(answer);
+            JsonElement p = doc.RootElement.GetProperty("progress");
+            if (!p.TryGetProperty("results", out JsonElement results) || results.ValueKind != JsonValueKind.Array) return [];
+            return results.EnumerateArray().Where(r => ScrapeRow.Text(r, "outcome") is "error" or "retry")
+                .Select(r => (ScrapeRow.Text(r, "path") ?? "", Outcome(ScrapeRow.Text(r, "outcome")), ScrapeRow.Text(r, "detail") ?? "")).ToList();
         }
 
         public static string Outcome(string? word, bool skipped = false) => skipped ? "Skipped" : word switch

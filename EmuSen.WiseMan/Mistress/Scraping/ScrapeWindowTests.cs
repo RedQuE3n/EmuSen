@@ -90,7 +90,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         private MainWindow Open(bool developer = true, Action<AppSettings>? settings = null)
         {
             SetDeveloper(developer);
-            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryGrid };
+            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryGrid, ScrapeTitleScreens = false, ScrapeBackCovers = false, Scrape3DBoxes = false, ScrapePhysicalMedia = false, ScrapeFanArt = false, ScrapeKindsUpgraded = true };
+            // These windows' cases are written on the four kinds the default asked before 2026-11-02, kept as the player's choice (EmuSen_LibraryTools.md §9.7).
             settings?.Invoke(app);
             app.Save();
             var window = new MainWindow { Width = 1024, Height = 768 };

@@ -57,7 +57,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             ScriptedScrape.Restore(_ask, _available, _background);
             NoNetwork.Refuse();
             ConfigStore.OverrideDirectory = null;
+            ConfigStore.OverrideLegacyDirectory = null;
             DataStore.OverrideDirectory = null;
+            Embedded.SetValue(null, (Func<Stream?>)(() => typeof(DeveloperCredentials).Assembly.GetManifestResourceStream(DeveloperCredentials.ResourceName)));
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
@@ -116,8 +118,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 WaitFor(() => pane.Rows.Count == 1, "the library's game listed: " + pane.Notice);
                 ScrapeRow row = pane.Rows[0];
                 Assert.Equal((rom, "snes"), (row.Path, row.System));
-                Assert.Equal(["cover", "screenshot", "marquee", "miximage"], row.Media.Select(m => m.Kind));
-                Assert.Equal("0 of 4", ScraperPlan.Media(row));
+                // Every picture a theme can draw, so that changing themes never needs a second scrape (decided 2026-11-02 by the tester).
+                Assert.Equal(["cover", "screenshot", "marquee", "titlescreen", "miximage", "backcover", "3dbox", "physicalmedia", "fanart"], row.Media.Select(m => m.Kind));
+                Assert.Equal("0 of 9", ScraperPlan.Media(row));
                 Assert.True(pane.SetMark(row, ScraperPlan.Scrape.Key));
                 Assert.True(pane.OpenPlan());
                 Assert.StartsWith("1 game(s), about", pane.PlanText);
@@ -135,6 +138,123 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             }
             finally { main.Close(); }
         }, default);
+
+        private static readonly FieldInfo Embedded = typeof(DeveloperCredentials).GetField("EmbeddedSource", BindingFlags.Static | BindingFlags.NonPublic)!;
+
+        // A home laid out as the handheld's: the player's account in home/etc/EmuSen, EmuSen's developer file outside the home in the account's config directory, fake files and the fake server - see EmuSen_LibraryTools.md §9.8.
+        private MainWindow HandheldHome(bool developerFile, string rom)
+        {
+            string home = Path.Combine(_root, "home"), userConfig = Path.Combine(_root, "dot-config", "EmuSen");
+            ConfigStore.OverrideDirectory = Path.Combine(home, "etc", "EmuSen");
+            ConfigStore.OverrideLegacyDirectory = userConfig;
+            Directory.CreateDirectory(userConfig);
+            if (developerFile)
+                File.WriteAllText(Path.Combine(userConfig, DeveloperCredentials.FileName), JsonSerializer.Serialize(new { devid = FakeScreenScraper.DevId, devpassword = FakeScreenScraper.DevPassword, softname = FakeScreenScraper.SoftName }));
+            new MemberAccount("fakeplayer", "fakepassword").Save();
+            File.WriteAllBytes(rom, SyntheticRom.Build((0x100, [1, 2, 3])));
+            _server.Games.Add(new FakeGame(77, "F-Zero", RomHash.Of(rom).Md5));
+            NoNetwork.Serve(_server);
+            // The build's own source of the developer's identity, the files then what the build carries, which here is nothing.
+            NoNetwork.DeveloperSource.SetValue(null, (Func<DeveloperCredentials?>)DeveloperCredentials.Load);
+            Embedded.SetValue(null, (Func<Stream?>)(() => null));
+            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryGrid, Scraping = true, BigScreen = true, LogDirectory = Path.Combine(_root, "Logs") }.Save();
+            var main = new MainWindow { Width = 1280, Height = 800 };
+            main.Show();
+            return main;
+        }
+
+        private ScraperPane OpenScraper(MainWindow main)
+        {
+            typeof(MainWindow).GetMethod("ShowScraper", Hidden)!.Invoke(main, null);
+            FieldInfo open = typeof(MainWindow).GetField("_scraperWindow", Hidden)!;
+            WaitFor(() => open.GetValue(main) is ScraperWindow, "the Scraper shown");
+            ScraperPane pane = ((ScraperWindow)open.GetValue(main)!).Pane;
+            WaitFor(() => pane.Rows.Count == 1, "the library's game listed: " + pane.Notice);
+            return pane;
+        }
+
+        // The marked game run by the pad: X marks it, Start asks the plan, A on Yes runs it.
+        private void RunByPad(MainWindow main, ScraperPane pane)
+        {
+            pane.BigScreenTable.Select(pane.Rows[0]);
+            pane.FocusRole(AdaptiveRole.Content);
+            Dispatcher.UIThread.RunJobs();
+            Assert.True(pane.Press(EmuSen.LunaP.Controls.PadGlyphButton.West));
+            Assert.Equal(ScraperPlan.Scrape.Key, pane.MarkOf(pane.Rows[0])?.Key);
+            Dispatcher.UIThread.RunJobs();
+            // The mark keeps the focus on the game, not the search box (LunaP §211.6).
+            object? focused = (TopLevel.GetTopLevel(main)?.FocusManager?.GetFocusedElement() as Control)?.GetSelfAndVisualAncestors().OfType<ListBoxItem>().FirstOrDefault()?.DataContext;
+            Assert.Same(pane.Rows[0], focused);
+            Assert.True(pane.Press(EmuSen.LunaP.Controls.PadGlyphButton.Start));
+            Assert.True(pane.IsPlanOpen);
+            Assert.True(pane.Press(EmuSen.LunaP.Controls.PadGlyphButton.Start));
+            WaitFor(() => { pane.Poll(); return !pane.Following; }, "the run to end");
+        }
+
+        [Fact]
+        public Task A_home_laid_out_as_the_handheld_s_scrapes_with_the_developer_file_outside_the_home() => Session.Dispatch(() =>
+        {
+            Assert.True(ScrapeCommand.Available, ScrapeCommand.Report);
+            string rom = Path.Combine(_romDir, "F-Zero (USA).sfc");
+            MainWindow main = HandheldHome(developerFile: true, rom);
+            try
+            {
+                ScraperPane pane = OpenScraper(main);
+                RunByPad(main, pane);
+                Assert.Single(_server.JeuInfos);
+                Assert.Equal("Found", pane.OutcomeOf(pane.Rows.Single()));
+            }
+            finally { main.Close(); }
+        }, default);
+
+        // A scrape that cannot run is said on the screen and written to the error log, never silent (EmuSen_LibraryTools.md §9.8).
+        [Fact]
+        public Task A_scrape_that_cannot_run_is_said_on_the_screen_and_in_the_error_log() => Session.Dispatch(() =>
+        {
+            Assert.True(ScrapeCommand.Available, ScrapeCommand.Report);
+            string rom = Path.Combine(_romDir, "F-Zero (USA).sfc");
+            MainWindow main = HandheldHome(developerFile: false, rom);
+            try
+            {
+                ScraperPane pane = OpenScraper(main);
+                RunByPad(main, pane);
+                Assert.Empty(_server.JeuInfos);
+                string said = pane.Notice ?? pane.OutcomeOf(pane.Rows.Single()) ?? "";
+                _out.WriteLine($"notice: {pane.Notice}; outcome: {pane.OutcomeOf(pane.Rows.Single())}");
+                Assert.False(string.IsNullOrWhiteSpace(said), "the screen says why nothing was scraped");
+                string log = ErrorLog.PathFor(DateTime.Now);
+                Assert.True(File.Exists(log), "the error log was written");
+                string logged = File.ReadAllText(log);
+                Assert.Contains("scraper", logged);
+                Assert.DoesNotContain(FakeScreenScraper.DevPassword, logged);
+            }
+            finally { main.Close(); }
+        }, default);
+
+        private const string OldFour = "{\"ScrapeCovers\":true,\"ScrapeScreenshots\":true,\"ScrapeMarquees\":true,\"ScrapeMiximages\":true,\"ScrapeTitleScreens\":false,\"ScrapeBackCovers\":false,\"Scrape3DBoxes\":false,\"ScrapePhysicalMedia\":false,\"ScrapeFanArt\":false}";
+        private const string Chosen = "{\"ScrapeCovers\":true,\"ScrapeScreenshots\":false,\"ScrapeMarquees\":true,\"ScrapeMiximages\":true,\"ScrapeTitleScreens\":false,\"ScrapeBackCovers\":false,\"Scrape3DBoxes\":false,\"ScrapePhysicalMedia\":false,\"ScrapeFanArt\":false}";
+
+        // A fresh home and one that stored the old four-kind default both ask the nine; a list the player changed is kept (EmuSen_LibraryTools.md §9.7).
+        [Theory]
+        [InlineData(null, 9)]
+        [InlineData(OldFour, 9)]
+        [InlineData(Chosen, 3)]
+        public void Preferences_ask_every_picture_a_theme_can_draw_unless_the_player_chose_otherwise(string? stored, int kinds)
+        {
+            if (stored is not null)
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(ConfigStore.For("appsettings.json"))!);
+                File.WriteAllText(ConfigStore.For("appsettings.json"), stored);
+            }
+            AppSettings s = AppSettings.Load();
+            var choices = new ScrapeChoices
+            {
+                Covers = s.ScrapeCovers, Screenshots = s.ScrapeScreenshots, Marquees = s.ScrapeMarquees, TitleScreens = s.ScrapeTitleScreens, Miximages = s.ScrapeMiximages,
+                BackCovers = s.ScrapeBackCovers, Boxes3D = s.Scrape3DBoxes, PhysicalMedia = s.ScrapePhysicalMedia, FanArt = s.ScrapeFanArt, Manuals = s.ScrapeManuals, Videos = s.ScrapeVideos,
+            };
+            Assert.Equal(kinds, choices.Kinds().Count());
+            Assert.True(s.ScrapeKindsUpgraded);
+        }
 
         // --- the choice is the module's: each section is its words ---
 

@@ -34,11 +34,11 @@ tree
           19 MenuRow at=64,216,704,54 by=panel heard="Shader levers" limit=0,0,1280,800 name=SettingsRow.levers role=listitem
           20 MenuRow at=64,270,704,54 by=panel heard=Shaders limit=0,0,1280,800 name=SettingsRow.shaders role=listitem
           21 MenuRow at=64,324,704,54 by=panel heard="Crop overscan, Whole picture" limit=0,0,1280,800 name=SettingsRow.crop role=listitem
-          22 MenuRow at=64,378,704,54 by=panel heard="Light or dark, Light" limit=0,0,1280,800 name=SettingsRow.variant role=listitem
+          22 MenuRow at=64,378,704,54 by=panel heard="Text size, Default" limit=0,0,1280,800 name=SettingsRow.textsize role=listitem
           23 MenuRow at=64,432,704,54 by=panel heard="Background art on Home, On" limit=0,0,1280,800 name=SettingsRow.art role=listitem
-          24 MenuRow at=64,486,704,54 by=panel heard="Play videos, On" limit=0,0,1280,800 name=SettingsRow.videos role=listitem
-          25 MenuRow at=64,540,704,54 by=panel heard="Smooth motion, On" limit=0,0,1280,800 name=SettingsRow.smooth role=listitem
-          26 MenuRow at=64,594,704,54 by=panel heard="Status bar, On" limit=0,0,1280,800 name=SettingsRow.statusbar role=listitem
+          24 MenuRow at=64,486,704,54 by=panel heard="Reduced motion, System" limit=0,0,1280,800 name=SettingsRow.motion role=listitem
+          25 MenuRow at=64,540,704,54 by=panel heard="Light or dark, Light" limit=0,0,1280,800 name=SettingsRow.variant role=listitem
+          26 MenuRow at=64,594,704,54 by=panel heard="Play videos, On" limit=0,0,1280,800 name=SettingsRow.videos role=listitem
         27 Border at=800,108,416,578 by=panel limit=0,0,1280,800 name=SettingsPane paints=#FFFFFFFF role=none
           28 StackPanel at=824,132,368,530 by=clip limit=800,108,416,578 role=none
             29 StackPanel at=824,132,368,160 by=clip limit=800,108,416,578 name=SettingsVariants role=none
@@ -52,6 +52,6 @@ tree
         37 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=SettingsHelpBar paints=#8C8C8CFF,#F3F3F3FF role=none
           38 HintBar at=64,716,1152,30 by=panel heard="Change, Value, Section, Back, Home" limit=0,0,1280,800 role=group
 focus none
-press down focus="SettingsLayout SettingsScreen" settings="display  art" top=none
+press down focus="SettingsLayout SettingsScreen" settings="display  videos" top=none
 press up focus="SettingsLayout SettingsScreen" settings="display  variant" top=none
 press back focus="HubLayout HomeScreen" top=none

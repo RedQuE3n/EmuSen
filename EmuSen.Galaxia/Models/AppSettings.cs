@@ -73,6 +73,12 @@ namespace EmuSen.Galaxia.Models
         public bool HomeArt { get; set; } = true;
         public bool PlayVideos { get; set; } = true;
 
+        // Settings ▸ Display's accessibility rows: the type scale's step and whether motion is reduced, the system's preference unless chosen - see EmuSen_BigPicture.md §52.8.
+        public string TextSize { get; set; } = TextSizeDefault;
+        public const string TextSizeDefault = "default", TextSizeLarge = "large", TextSizeLarger = "larger";
+        public string ReducedMotion { get; set; } = ReducedMotionSystem;
+        public const string ReducedMotionSystem = "system", ReducedMotionOn = "on", ReducedMotionOff = "off";
+
         // Ask, Resume or Restart when a game with a resume state starts - see EmuSen_Settings_Reference.md §4.31.
         public string ResumeOnLaunch { get; set; } = ResumeAsk;
         public const string ResumeAsk = "Ask";

@@ -799,3 +799,9 @@ bindings page instead, without recordings: `WindowFitAuditTests.Every_consoles_b
 and the PlayStation's pads and their digital ones, the Saturn's and the Dreamcast's, the Genesis's three-button, six-button
 and Team Player fourth player, the Nintendo 64's, and the keyboard's page with the longest key names, each at
 1280 × 800, 1920 × 1080 and 1280 × 720.
+
+Item 7 the same day (`EmuSen_BigPicture.md` §52.8), compared with the text-size and Display mockups first. Added:
+`SettingsTextSize`, both sizes, Display with the Text size row focused and its samples in the pane. Taken again, one cause:
+`SettingsDisplay`, `SettingsDisplayLight` and `SettingsDesktopDisplay`, both sizes, for the Text size and Reduced motion
+rows and Light or dark moved after them, as the mockup orders the section. Every big-screen state is audited at the
+largest text size at 1280 × 720 and 1280 × 800 without recordings.

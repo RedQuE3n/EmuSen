@@ -449,6 +449,7 @@ namespace EmuSen.Mistress.Views
             switch (what)
             {
                 case "variant": ApplyAppearance(); break;
+                case "textsize" or "motion": ApplyAccessibility(); RefreshSettings(); break;
                 case "statusbar" or "messages" or "fps": ApplyStatusBar(); break;
                 case "volume": SetVolume(_appSettings.Volume); break;
                 case "deadzone": _gamepad.StickDeadzone = _appSettings.StickDeadzone; break;
@@ -615,6 +616,38 @@ namespace EmuSen.Mistress.Views
             apply(typed.Trim());
             _appSettings.Save();
             RefreshSettings();
+        }
+
+        bool ISettingsHost.SystemReducesMotion => SystemReducesMotion();
+
+        // Text size and reduced motion through LunaP's own switches, so every layout and movement of the kit follows at once (EmuSen_BigPicture.md §52.8).
+        private void ApplyAccessibility()
+        {
+            EmuSen.LunaP.Theme.LunaTokens.TextScale = SettingsScreen.ScaleOf(_appSettings.TextSize);
+            EmuSen.LunaP.Theme.LunaMotion.Reduced = _appSettings.ReducedMotion switch
+            {
+                AppSettings.ReducedMotionOn => true,
+                AppSettings.ReducedMotionOff => false,
+                _ => SystemReducesMotion(),
+            };
+        }
+
+        private static bool? _systemReducesMotion;
+
+        // The desktop's own preference, read once: KDE's AnimationDurationFactor of 0, or GNOME's enable-animations off in its settings file.
+        private static bool SystemReducesMotion() => _systemReducesMotion ??= DesktopReducesMotion();
+
+        private static bool DesktopReducesMotion()
+        {
+            try
+            {
+                string config = Environment.GetEnvironmentVariable("XDG_CONFIG_HOME") is { Length: > 0 } x ? x : System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".config");
+                string kde = System.IO.Path.Combine(config, "kdeglobals");
+                if (System.IO.File.Exists(kde) && System.IO.File.ReadLines(kde).Any(l => l.Replace(" ", "") is "AnimationDurationFactor=0" or "AnimationDurationFactor=0.0")) return true;
+                string gtk = System.IO.Path.Combine(config, "gtk-3.0", "settings.ini");
+                return System.IO.File.Exists(gtk) && System.IO.File.ReadLines(gtk).Any(l => l.Replace(" ", "") is "gtk-enable-animations=0" or "gtk-enable-animations=false");
+            }
+            catch (Exception e) when (e is System.IO.IOException or UnauthorizedAccessException) { return false; }
         }
 
         // Light, dark, or the desktop's own choice, through the palette's variant.

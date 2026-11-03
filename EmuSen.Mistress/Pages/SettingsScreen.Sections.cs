@@ -114,15 +114,34 @@ namespace EmuSen.Mistress.Pages
                 _host.RunningConsole is { } running ? Views.ShaderSettingsWindow.Describe(_host.Graphics.Value(running, GraphicsKeys.ScreenFilter)) : null, () => _host.Open(DoorShaders)),
             ForEvery("crop", "Crop overscan", "What is hidden at the picture's edges on a console that had a television: the whole picture, or the part a television showed. Console's leaves each its own.",
                 TvConsoles, GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan], ["Whole picture", "TV overscan"], GraphicsKeys.NoOverscan),
+            TextSizeRow(),
+            Switch("art", "Background art on Home", "The focused game's art behind Home, dimmed and blurred.", App.HomeArt, on => App.HomeArt = on),
+            Pick("motion", "Reduced motion", "No movement, shorter fades. System follows the desktop's own setting.", MotionChoices, App.ReducedMotion, v => { App.ReducedMotion = v; _host.SaveApp("motion"); },
+                () => Said(App.ReducedMotion switch { AppSettings.ReducedMotionOn => "Nothing moves: a page appears at once, and a fade takes a moment.", AppSettings.ReducedMotionOff => "Pages and shelves move as they are drawn to.", _ => $"The desktop's own setting: {(_host.SystemReducesMotion ? "reduced" : "full")} motion." }, "Applies at once, on the big screen and the desktop.")),
             Pick("variant", "Light or dark", "Dark is the big screen's default; Light, or the desktop's own choice.", Appearances, App.Appearance, v => { App.Appearance = v; _host.SaveApp("variant"); },
                 () => new ScreenPane([new SettingsLine("Dark is the big screen's default; Light follows the desktop's choice when you ask it to.")]) { Preview = new PanePreview.Variants("Dark", "Light") }),
-            Switch("art", "Background art on Home", "The focused game's art behind Home, dimmed and blurred.", App.HomeArt, on => App.HomeArt = on),
             Switch("videos", "Play videos", "A game's clip plays in its picture once the focus rests on it, where it has one.", App.PlayVideos, on => App.PlayVideos = on),
             Switch("smooth", "Smooth motion", "One frame per refresh when the display's rate is within 1% of the console's, the sound resampled by the difference.", _host.Graphics.SyncToDisplay, on => { _host.Graphics.SyncToDisplay = on; _host.SaveGraphics(null); }),
             Switch("statusbar", "Status bar", "The desktop's bar along the bottom of the window.", App.ShowStatusBar, on => App.ShowStatusBar = on),
             Switch("messages", "Messages", "The game's name, Paused, State saved and errors at the bottom left.", App.ShowStatusText, on => App.ShowStatusText = on),
             Switch("fps", "Frame rate", "The frames-per-second readout while a game runs.", App.ShowFpsBar, on => App.ShowFpsBar = on),
         ];
+
+        public static readonly (string Value, string Text, double Scale)[] TextSizes =
+            [(AppSettings.TextSizeDefault, "Default", 1.0), (AppSettings.TextSizeLarge, "Large", 1.15), (AppSettings.TextSizeLarger, "Larger", 1.3)];
+
+        public static readonly (string Value, string Text)[] MotionChoices =
+            [(AppSettings.ReducedMotionSystem, "System"), (AppSettings.ReducedMotionOn, On), (AppSettings.ReducedMotionOff, Off)];
+
+        // The scale a text size names; Default for one the file does not know.
+        public static double ScaleOf(string? size) => TextSizes.FirstOrDefault(t => t.Value == size).Scale is > 0 and var s ? s : 1.0;
+
+        // Text size: every word through LunaP's type scale, the pane a sample of each size as the mockup draws it.
+        private Setting TextSizeRow() =>
+            Pick("textsize", "Text size", "Every word on the big screen, and the desktop's, through the interface's type scale.", TextSizes.Select(t => (t.Value, t.Text)).ToArray(), App.TextSize,
+                v => { App.TextSize = v; _host.SaveApp("textsize"); },
+                () => new ScreenPane([.. TextSizes.Select(t => new SettingsLine($"{t.Text} · The quick brown fox") { Size = Math.Round(17 * t.Scale) }),
+                    new SettingsLine("Text size scales every word on the big screen; nothing is cut off at any size.")]));
 
         private string FrameCaption(string what) => $"{_host.RunningTitle ?? "The last game"} · {what}";
 

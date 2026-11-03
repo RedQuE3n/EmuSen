@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     public partial class WindowFitAuditTests
     {
         public static readonly string[] SettingsViews =
-            ["SettingsControllers", "SettingsBindings", "SettingsDisplay", "SettingsDisplayLight", "SettingsShaderLevers", "SettingsSound", "SettingsConsoles", "SettingsConsolePage", "SettingsEngine",
+            ["SettingsControllers", "SettingsBindings", "SettingsDisplay", "SettingsTextSize", "SettingsDisplayLight", "SettingsShaderLevers", "SettingsSound", "SettingsConsoles", "SettingsConsolePage", "SettingsEngine",
              "SettingsFirmware", "SettingsMemoryCards", "SettingsLibrary", "SettingsEmuSen", "SettingsDesktopDisplay", "SettingsDesktopConsoles", "SettingsDesktopSearch"];
 
         public static TheoryData<string, int, int> SettingsCases()
@@ -79,6 +79,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     pad.Left(1);
                     break;
                 case "SettingsDisplay": Section(1); To(k => k == "crt"); break;
+                case "SettingsTextSize": Section(1); To(k => k == "textsize"); break;
                 case "SettingsDisplayLight": Section(1); To(k => k == "variant"); pad.Right(1); break;
                 case "SettingsShaderLevers": Section(1); To(k => k == "levers"); pad.A(); break;
                 case "SettingsSound": Section(2); break;
@@ -228,5 +229,42 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 window.Close();
             }
         }, default);
+    
+        // Every big-screen state of Settings at the largest text size, at 1280 × 720 and the handheld's 1280 × 800: nothing cut off at any size (EmuSen_BigPicture.md §52.8).
+        public static TheoryData<string, int, int> LargerTextCases()
+        {
+            var data = new TheoryData<string, int, int>();
+            foreach (string v in SettingsViews.Where(v => !v.Contains("Desktop", StringComparison.Ordinal)))
+                foreach ((int w, int h) in new[] { (1280, 720), (1280, 800) }) data.Add(v, w, h);
+            return data;
+        }
+
+        [Theory]
+        [MemberData(nameof(LargerTextCases))]
+        public Task Every_settings_state_fits_at_the_largest_text_size(string view, int width, int height) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = SettingsSession(view, width, height);
+            try
+            {
+                var app = (AppSettings)Field(window, "_appSettings");
+                app.TextSize = AppSettings.TextSizeLarger;
+                typeof(MainWindow).GetMethod("ApplyAccessibility", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!.Invoke(window, null);
+                OpenSettings(window, pad, view);
+                Assert.Equal(1.3, EmuSen.LunaP.Theme.LunaTokens.TextScale);
+                PictureSettings(window, $"{view}-larger-{width}x{height}");
+                List<string> faults = FitAudit.Check(window.SettingsLayoutShown!, []);
+                foreach (string f in faults) _out.WriteLine($"{view} {width}x{height} larger: {f}");
+                Assert.Empty(faults);
+            }
+            finally
+            {
+                EmuSen.LunaP.Theme.LunaTokens.TextScale = 1;
+                ToolCounts.Quiet();
+                ResetPageClock();
+                Stop(window);
+                window.Close();
+            }
+        }, default);
     }
 }
+

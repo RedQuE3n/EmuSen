@@ -34,11 +34,11 @@ tree
           19 MenuRow at=96,324,1056,81 by=panel heard="Shader levers" limit=0,0,1920,1200 name=SettingsRow.levers role=listitem
           20 MenuRow at=96,405,1056,81 by=panel heard=Shaders limit=0,0,1920,1200 name=SettingsRow.shaders role=listitem
           21 MenuRow at=96,486,1056,81 by=panel heard="Crop overscan, Whole picture" limit=0,0,1920,1200 name=SettingsRow.crop role=listitem
-          22 MenuRow at=96,567,1056,81 by=panel heard="Light or dark, Dark" limit=0,0,1920,1200 name=SettingsRow.variant role=listitem
+          22 MenuRow at=96,567,1056,81 by=panel heard="Text size, Default" limit=0,0,1920,1200 name=SettingsRow.textsize role=listitem
           23 MenuRow at=96,648,1056,81 by=panel heard="Background art on Home, On" limit=0,0,1920,1200 name=SettingsRow.art role=listitem
-          24 MenuRow at=96,729,1056,81 by=panel heard="Play videos, On" limit=0,0,1920,1200 name=SettingsRow.videos role=listitem
-          25 MenuRow at=96,810,1056,81 by=panel heard="Smooth motion, On" limit=0,0,1920,1200 name=SettingsRow.smooth role=listitem
-          26 MenuRow at=96,891,1056,81 by=panel heard="Status bar, On" limit=0,0,1920,1200 name=SettingsRow.statusbar role=listitem
+          24 MenuRow at=96,729,1056,81 by=panel heard="Reduced motion, System" limit=0,0,1920,1200 name=SettingsRow.motion role=listitem
+          25 MenuRow at=96,810,1056,81 by=panel heard="Light or dark, Dark" limit=0,0,1920,1200 name=SettingsRow.variant role=listitem
+          26 MenuRow at=96,891,1056,81 by=panel heard="Play videos, On" limit=0,0,1920,1200 name=SettingsRow.videos role=listitem
         27 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#26262BFF role=none
           28 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none
             29 Panel at=1236,198,552,414 by=clip limit=1200,162,624,867 name=SettingsPicture role=none

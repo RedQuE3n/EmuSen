@@ -12038,3 +12038,23 @@ The Controllers section's rows follow the mockup's order: Players, Controller bi
 Guide chords, then Keyboard keys and Hotkeys, then U6a's others, then the stick's rows and the reset.
 `SettingsWiringTests` holds the rows' behaviour; the recordings taken again are listed in `EmuSen_InterfaceSpec.md` §6.3.24.
 
+### 52.8 Text size and Reduced motion (2026-11-03)
+
+The last rows of U6 (`EmuSen_Interface.md` §2.7), drawn where the Display mockups draw them: Text size after Crop
+overscan, Reduced motion after Background art on Home, Light or dark after it.
+
+- **Text size** `◂ Default ▸`, Large, Larger: `AppSettings.TextSize` (`default`, `large`, `larger`, in both halves of
+  the settings model), the type scale's factor 1, 1.15 and 1.3 through LunaP's `LunaTokens.TextScale` (`docs/LunaP.md`
+  §214), never a scale per control. The pane shows a line of each size, as the mockup draws it. A step saves the setting,
+  sets the scale, and draws Settings again at once; LunaP's size resources follow on both forms, and every other screen
+  draws the new size as it next fills. The mockup's Larger sample is a little larger than 1.3; the kit's limit was set at
+  1.3 because 1.5 cut the section strip's captions, measured on 2026-11-03 (`docs/LunaP.md` §214).
+- **Reduced motion** `◂ System ▸`, On, Off: `AppSettings.ReducedMotion`, through LunaP's `LunaMotion.Reduced`: a glide
+  jumps, a fade takes 120 ms, the ring stops breathing. System reads the desktop's own preference once, KDE's
+  `AnimationDurationFactor` of 0 in `kdeglobals` or `gtk-enable-animations` off in GTK 3's `settings.ini`; a desktop
+  that keeps it elsewhere reads as full motion. The pane says which applies.
+- **Applied at start** from the saved settings, before the first screen is built.
+- **Tests.** `SettingsWiringTests`: the text size saved, the kit's scale set and the focused row drawn larger at once, and
+  Settings still whole at Larger; reduced motion saved, the kit's switch set, a glide jumping, and System following the
+  desktop. `WindowFitAuditTests.Every_settings_state_fits_at_the_largest_text_size`: every big-screen Settings state at
+  Larger at 1280 × 720 and the handheld's 1280 × 800. LunaP's `KitSwitchTests`.

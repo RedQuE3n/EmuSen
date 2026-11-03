@@ -125,6 +125,8 @@ pub static APP_SETTINGS: Schema = Schema {
         text("Appearance", "dark"),
         flag("HomeArt", true),
         flag("PlayVideos", true),
+        text("TextSize", "default"),
+        text("ReducedMotion", "system"),
         text("ResumeOnLaunch", "Ask"),
         text("LibraryView", "Grid"),
         double("LibraryTileScale", "1"),
@@ -376,8 +378,8 @@ mod tests {
     fn app_settings_has_every_property_and_skips_the_retired_key_while_it_is_null() {
         let new = APP_SETTINGS.new_instance();
         let text = format(&APP_SETTINGS, &new).unwrap();
-        assert_eq!(APP_SETTINGS.fields.len(), 69);
-        assert!(text.contains("\"Appearance\": \"dark\",\n  \"HomeArt\": true,\n  \"PlayVideos\": true,"));
+        assert_eq!(APP_SETTINGS.fields.len(), 71);
+        assert!(text.contains("\"Appearance\": \"dark\",\n  \"HomeArt\": true,\n  \"PlayVideos\": true,\n  \"TextSize\": \"default\",\n  \"ReducedMotion\": \"system\","));
         assert!(text.contains("\"SoundOutputDevice\": \"System default\","));
         assert!(text.contains("\"SelectedCore\": \"All consoles\","));
         assert!(text.contains("\"BigPicture\": {},"));

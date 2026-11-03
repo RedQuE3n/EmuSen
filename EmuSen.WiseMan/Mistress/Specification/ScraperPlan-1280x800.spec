@@ -30,12 +30,12 @@ tree
                 16 WholeRow at=64,100,912,44 by=panel limit=0,0,1280,800 role=none
                   17 ToggleButton at=80,100,34,44 by=panel focus heard=All limit=0,0,1280,800 paints=#4C9AE8FF,#EEEEF0FF role=button text=All
                     18 TextBlock at=80,108,34,24 box=34,24 by=clip caps=13.999 face=Barlow heard=ALL layout=33.56,24 limit=80,100,34,44 owner=17 paints=#EEEEF0FF role=text size=20 text=ALL
-                  19 ToggleButton at=146,100,36,44 by=panel focus heard=nes limit=0,0,1280,800 paints=#D4D4D4FF role=button text=nes
+                  19 ToggleButton at=146,100,36,44 by=panel focus heard=NES limit=0,0,1280,800 paints=#D4D4D4FF role=button text=NES
                     20 TextBlock at=146,108,36,24 box=36,24 by=clip caps=13.999 face=Barlow heard=NES layout=35.76,24 limit=146,100,36,44 owner=19 paints=#D4D4D4FF role=text size=20 text=NES
-                  21 ToggleButton at=214,100,34,44 by=panel focus heard=psx limit=0,0,1280,800 paints=#D4D4D4FF role=button text=psx
-                    22 TextBlock at=214,108,34,24 box=34,24 by=clip caps=13.999 face=Barlow heard=PSX layout=33.78,24 limit=214,100,34,44 owner=21 paints=#D4D4D4FF role=text size=20 text=PSX
-                  23 ToggleButton at=280,100,47,44 by=panel focus heard=snes limit=0,0,1280,800 paints=#D4D4D4FF role=button text=snes
-                    24 TextBlock at=280,108,47,24 box=47,24 by=clip caps=13.999 face=Barlow heard=SNES layout=46.76,24 limit=280,100,47,44 owner=23 paints=#D4D4D4FF role=text size=20 text=SNES
+                  21 ToggleButton at=214,100,114,44 by=panel focus heard=PlayStation limit=0,0,1280,800 paints=#D4D4D4FF role=button text=PlayStation
+                    22 TextBlock at=214,108,114,24 box=114,24 by=clip caps=13.999 face=Barlow heard=PLAYSTATION layout=113.56,24 limit=214,100,114,44 owner=21 paints=#D4D4D4FF role=text size=20 text=PLAYSTATION
+                  23 ToggleButton at=360,100,154,44 by=panel focus heard="Super Nintendo" limit=0,0,1280,800 paints=#D4D4D4FF role=button text="Super Nintendo"
+                    24 TextBlock at=360,108,154,24 box=154,24 by=clip caps=13.999 face=Barlow heard="SUPER NINTENDO" layout=153.46,24 limit=360,100,154,44 owner=23 paints=#D4D4D4FF role=text size=20 text="SUPER NINTENDO"
             25 Grid at=64,160,1152,542 by=panel limit=0,0,1280,800 role=none
               26 Grid at=64,160,691,542 by=panel limit=0,0,1280,800 role=none
                 27 Border at=64,160,691,432 by=panel limit=0,0,1280,800 name=AdaptiveContent role=none
@@ -77,7 +77,7 @@ tree
                     63 StackPanel at=795,184,397,532 by=scroll in=62 limit=795,184,397,494 paints=#D4D4D4FF role=none seen=795,184,397,494
                       64 TextBlock at=795,184,397,116 box=397,116 by=scroll caps=22.3984 face="Barlow Condensed" heard="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)" in=62 layout=365.18,115.2 limit=795,184,397,494 paints=#EEEEF0FF role=text size=32 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
                       65 TextBlock at=795,306,397,80 box=397,80 by=scroll caps=15.3989 face=Barlow heard="/r/psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue" in=62 layout=376.4,79.2 limit=795,184,397,494 paints=#D4D4D4FF role=text size=22 text="/r/psx/Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3).cue"
-                      66 TextBlock at=795,392,397,27 box=397,27 by=scroll caps=15.3989 face=Barlow heard="System: psx" in=62 layout=113.15,26.4 limit=795,184,397,494 paints=#D4D4D4FF role=text size=22 text="System: psx"
+                      66 TextBlock at=795,392,397,27 box=397,27 by=scroll caps=15.3989 face=Barlow heard="Console: PlayStation" in=62 layout=190.92,26.4 limit=795,184,397,494 paints=#D4D4D4FF role=text size=22 text="Console: PlayStation"
                       67 TextBlock at=795,425,397,27 box=397,27 by=scroll caps=15.3989 face=Barlow heard="cover: ScreenScraper" in=62 layout=201.76,26.4 limit=795,184,397,494 paints=#D4D4D4FF role=text size=22 text="cover: ScreenScraper"
                       68 TextBlock at=795,458,397,27 box=397,27 by=scroll caps=15.3989 face=Barlow heard="screenshot: missing" in=62 layout=188.21,26.4 limit=795,184,397,494 paints=#D4D4D4FF role=text size=22 text="screenshot: missing"
                       69 TextBlock at=795,491,397,27 box=397,27 by=scroll caps=15.3989 face=Barlow heard="marquee: missing" in=62 layout=167.42,26.4 limit=795,184,397,494 paints=#D4D4D4FF role=text size=22 text="marquee: missing"

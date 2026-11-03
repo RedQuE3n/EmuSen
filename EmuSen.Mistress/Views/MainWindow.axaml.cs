@@ -476,6 +476,7 @@ namespace EmuSen.Mistress.Views
             SetSetting = (console, key, value) => Wrap(() => { runtime.SetSetting(console, key, value); RuntimeCatalog.Forget(); return 0; }),
             Approve = sha => Wrap(() => { runtime.CoreApprove(sha); return 0; }),
             Revoke = sha => Wrap(() => { runtime.CoreRevoke(sha); return 0; }),
+            Firmware = system => Wrap(() => runtime.FirmwareStatus(system)),
             Rescan = () => Wrap(() => { runtime.Rescan(); RuntimeCatalog.Forget(); return 0; }),
         };
 

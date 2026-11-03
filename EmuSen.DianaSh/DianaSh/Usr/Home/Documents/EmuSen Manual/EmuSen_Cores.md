@@ -391,7 +391,7 @@ Checked against `cores-list` and `cores-approve` at 1280 × 800 on 2026-11-02, f
    own, which EmuSen never downloads.` or `Can use a PlayStation BIOS of your own, which EmuSen never downloads; it
    runs without one.` A core that could run its console but is not its engine says so and how to change it: `Not the
    PlayStation 2's engine while it is under development: PCEE2 is. A makes Sapphire the engine instead.` (the listing's
-   `development`, the console's stored or first engine). `✓ You have one.` waits for Q14.
+   `development`, the console's stored or first engine). `✓ You have one.` waits for Q14 (built in §3.11).
 3. **The help bar** in the edge card's type and spacing (Caption 20, 40 between entries) and **4. the help band**
    across the screen and down to its foot, with a question's dim to the screen's edges (LunaP §211.4).
 5. **The question's small print**: `Not tested by EmuSen.` and the hash in Muted Caption (`CoreApproval.SmallPrint`,
@@ -412,6 +412,44 @@ the focus (§3.7). A row the player chose in between was taken from them: in the
 approval, and when a busy machine let the poll fall inside the test's settle, the waiting row came back and Approve…
 was enabled. Now the acted-on row is chosen again only while nothing else is chosen. `A_row_chosen_while_the_list_is
 _read_again_after_an_approval_stays_chosen` waits past the poll on purpose; it failed before the change.
+
+### 3.11 Whether the player has the firmware: `firmware_status` (2026-11-03)
+
+Decided 2026-11-02 by the tester (§10, Q14) and built here. The pane of `EmuSen_Interface.md` §15.4 item 3 says under
+the need sentence whether the player's firmware for the console is found: `✓ You have one.`, or `✗ Not found: add it
+in Settings → Firmware`. No surface answered that, so the runtime gained one call.
+
+- **The call.** `emusen_crystal_firmware_status(rt, system)`, frontend API 1.9, exported by the platform library and
+  bound as `CrystalRuntime.FirmwareStatus(system)`. It answers `{"system","firmware":[{"label","file","required",
+  "status"}]}`: each file the system's engines declare, once by name; the native engines' declarations where one
+  lists the system, else the hosted cores' (the Saturn's and the Dreamcast's, §4.10). `required` is the cores
+  listing's own rule (§3.9), declared required or with no open replacement, now one function of the core host's
+  listing (`firmware_needed`) that both answers use. `status` is `present` where `emusen_firmware::locate` finds the
+  file in the firmware folders, by name and size and then by content, as the Firmware settings' overview finds it;
+  otherwise `missing` where it is required and `not_needed` where it is not. A system that needs no firmware has an
+  empty list; a system neither the systems table nor an engine names is `ABSENT`; an empty name is `BAD_ARGUMENT`.
+- **What it reads.** Only what the overview already reads: the folders `FirmwareLibrary.Folders` names, each file of
+  the declared size opened and measured, and an MD5 taken only of a file of the declared size, kept by path, length
+  and time for the life of the process (`EmuSen_Firmware.md` §7.6). The answer names the declared files, never the
+  player's own file names or folders.
+- **Versioning.** The call is the frontend API's, so its minor goes to 9 (`EMUSEN_CRYSTAL_MINOR`, `abi::MINOR`,
+  `CrystalAbi.Minor`, a line `@1.9` in `Platform/crystal/abi/v1/baseline.txt`), as `core_approve` took 1.3. The
+  platform library's own number (31) counts `emusen_platform.h` alone and is unchanged: no call of that header moved,
+  and every earlier frontend API function the library added left it as it was. (Q14 had named it version 32 of the
+  platform library; the rule of `EmuSen_Surfaces.md` §6.1 puts the call in the frontend API.) The C# implementation of
+  the frontend API, at 1.4 and being retired, answers `NOT_SUPPORTED`; every program runs the Rust one.
+- **Cores.** `CoresRuntime.Firmware`, handed in by Mistress, is asked once per console while a listing stands, for the
+  row's first console's system, and only when a need sentence is shown. `present` anywhere in the answer is
+  `✓ You have one.` in Success; otherwise `✗ Not found…`, in Error where a file is required and in Muted where none is
+  (Diamond's optional BIOS). No answer, or a refusal, shows no line and writes the error log. The mockups offer no
+  control on the line, so none was added: the row's page keeps its *Firmware* row to the settings' pane.
+
+**Tests.** `FirmwareStatusTests` on the Rust runtime over the build's engines and a firmware folder of the test's own:
+the PlayStation 2's three BIOSes missing and then one present by name in the player's folder, a file of the right
+name and the wrong size not counted, the PlayStation's not needed and then present in the store, the NES's none, an
+unknown system `ABSENT` and an empty one refused. `CoresWindowTests.The_pane_says_under_the_need_whether_the_player
+_has_the_firmware` (present, not needed, no need, one question per console, and a file added found on the next
+opening). The list's mockup state of `WindowFitAuditTests.Cores_is_pictured_in_its_mockups_states` now draws the line.
 
 ## 4. The data model
 
@@ -1028,7 +1066,7 @@ Asked 2026-11-02 after §3.8:
     whether the player's firmware for a console is found. Proposed: the runtime's `firmware_status(system)`, the
     console's firmware as its engines declare it (`console_firmware`) each with `label`, `required` and `found`
     (`emusen_firmware::locate`, by content), a new call of the platform library and so its version 32, handed to Cores
-    as `CoresRuntime.Firmware`; Cores keeps no copy. *Recommended:* yes, as its own small stage.
+    as `CoresRuntime.Firmware`; Cores keeps no copy. *Recommended:* yes, as its own small stage. *Built 2026-11-03 as frontend API 1.9, §3.11.*
 
 ## 11. Decided 2026-10-31 by the tester
 

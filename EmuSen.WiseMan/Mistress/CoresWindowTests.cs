@@ -94,6 +94,52 @@ namespace EmuSen.WiseMan.Mistress
 
         private static CoreRow Row(CoresPane pane, string stemOrEngine) => pane.Rows.First(r => r.Stem == stemOrEngine || r.Engine == stemOrEngine);
 
+        // Each file of firmware_status's answer for a system, all of one status.
+        private static string FirmwareAnswer(string system, string status, bool required) =>
+            JsonSerializer.Serialize(new { system, firmware = new[] { new { label = "BIOS", file = system + ".bin", required, status } } });
+
+        private static string? FirmwareLine(CoresPane pane) => pane.GetVisualDescendants().OfType<TextBlock>().FirstOrDefault(t => t.Name == "CoresFirmware")?.Text;
+
+        // Under the need, whether the player has the console's firmware as the runtime's firmware_status finds it; nothing for a core that needs none (EmuSen_Cores.md §3.11).
+        [Fact]
+        public Task The_pane_says_under_the_need_whether_the_player_has_the_firmware() => Session.Dispatch(() =>
+        {
+            var answers = new Dictionary<string, string> { ["ps2"] = FirmwareAnswer("ps2", "present", true), ["psx"] = FirmwareAnswer("psx", "not_needed", false), ["snes"] = FirmwareAnswer("snes", "missing", true) };
+            var asked = new List<string>();
+            CoresRuntime fake = _runtime.Runtime;
+            // The fake's listing with the needs the real one gives: Sapphire's BIOS required, Diamond's optional, VenusRT's none.
+            System.Text.Json.Nodes.JsonArray cores = System.Text.Json.Nodes.JsonNode.Parse(fake.Cores())!.AsArray(), systems = System.Text.Json.Nodes.JsonNode.Parse(fake.Systems())!.AsArray();
+            foreach (System.Text.Json.Nodes.JsonNode? c in cores) c!["firmware"] = (string?)c["engine"] switch { "Sapphire" => "required", "Diamond" => "optional", _ => null };
+            foreach (System.Text.Json.Nodes.JsonNode? s in systems) s!["firmware_name"] = (string?)s["id"] switch { "ps2" => "PlayStation 2 BIOS", "psx" => "PlayStation BIOS", _ => null };
+            CoresPane.RuntimeFor = _ => new CoresRuntime { Cores = () => cores.ToJsonString(), Systems = () => systems.ToJsonString(), Setting = fake.Setting, SetSetting = fake.SetSetting, Approve = fake.Approve, Revoke = fake.Revoke,
+                Firmware = system => { asked.Add(system); return answers[system]; } };
+            (CoresWindow window, CoresPane pane) = Open();
+            pane.Table.Select(Row(pane, "Sapphire"));
+            Settle(window);
+            Assert.Equal("✓ You have one.", FirmwareLine(pane));
+            pane.Table.Select(Row(pane, "Diamond"));
+            Settle(window);
+            Assert.Equal("✗ Not found: add it in Settings → Firmware", FirmwareLine(pane));
+            // VenusRT says no need, so its console's firmware is not asked about.
+            pane.Table.Select(Row(pane, "VenusRT"));
+            Settle(window);
+            Assert.Null(FirmwareLine(pane));
+            Assert.DoesNotContain("snes", asked);
+            // Each console asked once while the listing stands, whatever the rows chosen.
+            pane.Table.Select(Row(pane, "Sapphire"));
+            Settle(window);
+            Assert.Equal(new[] { "ps2", "psx" }, asked);
+            window.Close();
+
+            // The firmware the player added since is found when Cores opens again.
+            answers["psx"] = FirmwareAnswer("psx", "present", false);
+            (window, pane) = Open();
+            pane.Table.Select(Row(pane, "Diamond"));
+            Settle(window);
+            Assert.Equal("✓ You have one.", FirmwareLine(pane));
+            window.Close();
+        }, default);
+
         // The tester's path on 2026-11-01: Cores as a big-screen sheet, A on its Search box, then B, as Mistress routes the pad - see EmuSen_Settings_Reference.md §4.45.6.
         [Fact]
         public Task B_on_the_big_screen_search_keyboard_erases_then_puts_it_away() => Session.Dispatch(() =>

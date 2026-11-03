@@ -127,6 +127,7 @@ fn emusen_crystal_events_drain int64_t (emusen_crystal_runtime *, uint32_t, uint
 fn emusen_crystal_firmware_install int32_t (emusen_crystal_runtime *, const uint8_t *, size_t, const uint8_t *, size_t) @1.0
 fn emusen_crystal_firmware_needed int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t *, size_t) @1.0
 fn emusen_crystal_firmware_overview int64_t (emusen_crystal_runtime *, uint8_t *, size_t) @1.0
+fn emusen_crystal_firmware_status int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, uint8_t *, size_t) @1.9
 fn emusen_crystal_frame int32_t (emusen_crystal_runtime *, uint32_t, emusen_crystal_frame_info *) @1.0
 fn emusen_crystal_frame_advance int32_t (emusen_crystal_runtime *, uint32_t) @1.4
 fn emusen_crystal_framelog_add int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, uint32_t, uint32_t) @1.0

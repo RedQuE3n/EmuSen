@@ -230,6 +230,50 @@ pub fn needed_json(rt: &Runtime, at: &str, engine: Option<&str>) -> String {
     j.finish()
 }
 
+/// A system's firmware as the player has it, `firmware_status`: each file its engines declare, once, with whether it is
+/// needed and found by `locate` as the overview finds it; the native engines' declarations, else the hosted cores'. None
+/// for a system neither the table nor an engine names (EmuSen_Cores.md §3.11).
+pub fn status_json(rt: &Runtime, system: &str) -> Option<String> {
+    let discovery = rt.discovery();
+    let declared = |native: bool| -> Vec<(Entry, bool)> {
+        let mut found: Vec<(Entry, bool)> = Vec::new();
+        for core in discovery.found().iter().filter(|c| c.entry.is_none() == native) {
+            for s in core.sidecar.info_json.get("systems").and_then(Value::as_array).unwrap_or(&[]) {
+                if s.get("id").and_then(Value::as_str) != Some(system) {
+                    continue;
+                }
+                for f in s.get("firmware").and_then(Value::as_array).unwrap_or(&[]) {
+                    let (e, needed) = (Entry::read(f), emusen_core_host::listing::firmware_needed(f));
+                    match found.iter_mut().find(|(have, _)| have.name == e.name) {
+                        Some(have) => have.1 |= needed,
+                        None if e.size > 0 => found.push((e, needed)),
+                        None => {}
+                    }
+                }
+            }
+        }
+        found
+    };
+    let lists = |native: bool| discovery.found().iter().any(|c| c.entry.is_none() == native && systems_of(&c.sidecar.info_json).iter().any(|(id, _, _, _)| id == system));
+    if emusen_systems::find(system).is_none() && !lists(true) && !lists(false) {
+        return None;
+    }
+    let wanted = if lists(true) { declared(true) } else { declared(false) };
+    let searched = folders(&emusen_galaxia::tree::tree());
+    let mut j = Json::new();
+    j.begin_object().str("system", system).key_array("firmware");
+    for (e, needed) in &wanted {
+        let status = match emusen_firmware::locate(&e.request(), &searched) {
+            Some(_) => "present",
+            None if *needed => "missing",
+            None => "not_needed",
+        };
+        j.begin_object().str("label", &e.label).str("file", &e.name).bool("required", *needed).str("status", status).end_object();
+    }
+    j.end_array().end_object();
+    Some(j.finish())
+}
+
 /// A discovered engine a player is offered and whose library is there to run.
 fn shipped<'d>(core: Option<&'d Discovered>) -> Option<&'d Discovered> {
     core.filter(|c| !c.sidecar.development && c.sidecar.library_path.is_file())

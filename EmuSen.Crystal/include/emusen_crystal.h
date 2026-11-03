@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 8u
+#define EMUSEN_CRYSTAL_MINOR 9u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -474,6 +474,14 @@ int32_t emusen_crystal_firmware_install(emusen_crystal_runtime *rt, const uint8_
 /* reads. {"folder","folders":[path],"systems":[{"name","engine","items":[{"label","file","size","present",
  * "wrong_size","effect","cost","found_in","wrong_size_in"}]}]}: each discovered system's firmware. */
 int64_t emusen_crystal_firmware_overview(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
+
+/* reads, since 1.9. {"system","firmware":[{"label","file","required","status"}]}: each firmware file the system's engines
+ * declare, once, the native engines' where one lists the system, else the hosted cores'; "required" where one declares
+ * it required or it has no open replacement; "status" "present" where the firmware folders hold it by name or content
+ * as firmware_overview finds it, else "missing" where it is required and "not_needed" where it is not. An empty list
+ * for a system that needs none; ABSENT for a system neither the table nor an engine names (EmuSen_Cores.md 3.11). */
+int64_t emusen_crystal_firmware_status(emusen_crystal_runtime *rt, const uint8_t *system, size_t system_len, uint8_t *out,
+                                       size_t len);
 
 /* ---- Save media ------------------------------------------------------------------------------------------ */
 

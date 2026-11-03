@@ -91,8 +91,13 @@ pub fn firmware_need(info: &Value) -> Option<&'static str> {
     if entries.is_empty() {
         return None;
     }
-    let replaced = |f: &Value| f.get("replacement").and_then(|r| r.get("effect")).and_then(Value::as_str).is_some_and(|e| e != "none");
-    Some(if entries.iter().any(|f| matches!(f.get("required"), Some(Value::Bool(true))) || !replaced(f)) { "required" } else { "optional" })
+    Some(if entries.iter().any(|f| firmware_needed(f)) { "required" } else { "optional" })
+}
+
+/// Whether one firmware entry of an info is needed: declared required, or with no open replacement (EmuSen_Cores.md §3.9).
+pub fn firmware_needed(entry: &Value) -> bool {
+    let replaced = entry.get("replacement").and_then(|r| r.get("effect")).and_then(Value::as_str).is_some_and(|e| e != "none");
+    matches!(entry.get("required"), Some(Value::Bool(true))) || !replaced
 }
 
 fn str_or_null(j: &mut Json, key: &str, value: Option<&str>) {

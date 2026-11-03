@@ -122,7 +122,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private (MainWindow, PadDriver) OpenCard(string view, int width, int height, Color? under)
         {
             bool home = view.StartsWith("HomeCard", StringComparison.Ordinal);
-            if (home) ToolCounts.Answer(41, (12, 1));
+            if (home) ToolCounts.Answer();
             // The Home card's first page is a pad's on the desktop and a theme's; the big screen's own look opens it at Power from Home's place (EmuSen_BigPicture.md §51.2).
             bool desktop = home && view != "HomeCardPower";
             (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: !desktop);

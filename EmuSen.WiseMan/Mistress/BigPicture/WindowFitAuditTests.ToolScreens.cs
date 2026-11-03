@@ -1,6 +1,8 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using EmuSen.Mistress.Views;
+using Avalonia.Controls;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
@@ -25,6 +27,47 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080) }) data.Add(which, w, h);
             return data;
         }
+
+        // The form the window shows its tools in.
+        private static EmuSen.LunaP.Controls.AdaptiveForm FormOf(MainWindow window) => Field(window, "_bigScreen") is true ? EmuSen.LunaP.Controls.AdaptiveForm.BigScreen : EmuSen.LunaP.Controls.AdaptiveForm.Desktop;
+
+        // The tool the window showed: the big screen's sheet, or on the desktop the window it owns.
+        private static T Shown<T>(MainWindow window) where T : Window =>
+            Sheets(window).Current as T ?? window.OwnedWindows.OfType<T>().Last();
+
+        public static TheoryData<string> DesktopToolCases() => new() { "Cores", "Packages", "Scraper", "Library", "CheatDatabase" };
+
+        // The tools on the desktop at the mockups' 1280 by 800, each its own window, pictured beside the desktop mockups (EmuSen_Interface.md §19).
+        [WindowLookPngTheory]
+        [MemberData(nameof(DesktopToolCases))]
+        public Task A_tool_on_the_desktop_is_pictured_at_the_mockups_size(string which) => Session.Dispatch(() =>
+        {
+            ToolCounts.Answer();
+            (MainWindow window, PadDriver pad) = InGame(1280, 800, bigScreen: false);
+            try
+            {
+                if (which == "CheatDatabase")
+                {
+                    CheatFiles();
+                    Call(window, "ShowCheatDatabase");
+                }
+                else OpenInGame(window, pad, which);
+                Settle(window);
+                Window tool = Shown<Window>(window);
+                tool.Width = 1280;
+                tool.Height = 800;
+                Settle(window);
+                Settle(tool);
+                SavePicture(tool, $"{which}Desktop-1280x800");
+                tool.Close();
+            }
+            finally
+            {
+                ToolCounts.Quiet();
+                Stop(window);
+                window.Close();
+            }
+        }, default);
 
         [WindowLookPngTheory]
         [MemberData(nameof(ToolScreenCases))]

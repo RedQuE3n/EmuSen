@@ -211,7 +211,7 @@ namespace EmuSen.Mistress.Views
             if (IsRunning(path)) { _cheats.SetEnabled(id, on); _activeCheatsWindow.Current?.Refresh(); return; }
             if (CheatsFor(path) is not { } cheats || cheats.Load() is not { } file || id < 0 || id >= file.Cheats.Count) return;
             file.Cheats[id].Enabled = on;
-            cheats.Save(file);
+            if (cheats.Save(file)) ToolDataChanged(Pages.HomeScreen.Cheats);
         }
 
         // A code is read by the running game's console, so one is added only while the game runs.

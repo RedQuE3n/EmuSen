@@ -818,3 +818,20 @@ Item 7 the same day (`EmuSen_BigPicture.md` §52.8), compared with the text-size
 `SettingsDisplay`, `SettingsDisplayLight` and `SettingsDesktopDisplay`, both sizes, for the Text size and Reduced motion
 rows and Light or dark moved after them, as the mockup orders the section. Every big-screen state is audited at the
 largest text size at 1280 × 720 and 1280 × 800 without recordings.
+
+#### 6.3.25 The tools' header rows and Home's live lines, U7 (2026-11-03)
+
+Compared side by side with the approved mockups at 1280 × 800 and 1920 × 1080, and the desktop's at 1280 × 800, before
+recording (`EmuSen_Interface.md` §19). Taken again, one cause each, both sizes: every Cores, Packages, Scraper and Library
+Manager state (24), for the header's host now LunaP's `AdaptiveHeaderRow` and its facts one text per fact, in the tools'
+new words; `Home`, `HomeShelf`, `HomePlaces`, `HomeNothingLeft` and `HomeDesktop`, for the places' live lines;
+`HomeCardDesktopTools` and `HomeCardDesktopToolsPage`, for the tools' lines as the rows' values and the pane's, and the
+Cheats row. `CheatDatabase` is unchanged: its header row is drawn on the desktop only.
+
+Taken again the same day after review, one cause each, both sizes: `HomeCardDesktopTools` and `HomeCardDesktopToolsPage`
+for the Tools page's Themes and Collections rows and its pane's sentence (`EmuSen_Interface.md` §19.6); `HomeDesktop`
+for the desktop's quiet `⚠` lines; `Collections`, missed in the first round, for the header's host now LunaP's
+`AdaptiveHeaderRow`.
+
+Taken again on 2026-11-03, cause merged with the reader fix (every section strip a tab list, the drawn rows focusable): the
+36 U7 states above whose recordings both changes touched, recorded once over both.

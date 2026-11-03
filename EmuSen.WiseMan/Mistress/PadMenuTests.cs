@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Mistress
             pad.Start();
             Assert.Equal([MainWindow.ContinueRow, "Cobalt Harbor (Synthetic)", MainWindow.SearchRow, MainWindow.StartConsoleMenu, MainWindow.ToolsMenu, MainWindow.SettingsMenu, MainWindow.PowerMenu], PadMenu.Lines(window));
             Assert.Equal([4, 6], Enumerable.Range(0, 7).Where(i => PadMenu.Entries(window)[i].StartsSection));
-            Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CompressedDiscsMenu, MainWindow.ShellRow], SubmenuLines(window, MainWindow.ToolsMenu));
+            Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CheatsRow, MainWindow.ThemeSettingsRow, MainWindow.CollectionsRow, MainWindow.CompressedDiscsMenu, MainWindow.ShellRow], SubmenuLines(window, MainWindow.ToolsMenu));
             Assert.Null(PadMenu.Entries(window).Single(e => e.Text() == MainWindow.SettingsMenu).Submenu);
             Assert.Equal(["Full Screen", "Big Picture", MainWindow.QuitEmuSenRow], SubmenuLines(window, MainWindow.PowerMenu));
             Assert.True(PadMenu.Card(window).IsVisible);
@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.Mistress
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.Start();
             Assert.Equal([s.Game!, MainWindow.SearchRow, MainWindow.StartConsoleMenu, MainWindow.ToolsMenu, MainWindow.SettingsMenu, MainWindow.PowerMenu], PadMenu.Lines(s.Window));
-            Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CompressedDiscsMenu, "Collections", MainWindow.ThemeSettingsRow, MainWindow.ShellRow], SubmenuLines(s.Window, MainWindow.ToolsMenu));
+            Assert.Equal([MainWindow.ScraperRow, MainWindow.PackagesMenu, MainWindow.LibraryManagerMenu, MainWindow.CoresMenu, MainWindow.CheatsRow, MainWindow.ThemeSettingsRow, MainWindow.CollectionsRow, MainWindow.CompressedDiscsMenu, MainWindow.ShellRow], SubmenuLines(s.Window, MainWindow.ToolsMenu));
             Assert.Equal(["Exit Big Picture", MainWindow.QuitEmuSenRow], SubmenuLines(s.Window, MainWindow.PowerMenu));
             Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(s.Window).Title);
 
@@ -577,7 +577,7 @@ namespace EmuSen.WiseMan.Mistress
 
         public static TheoryData<string, Type> MainWindows() => new()
         {
-            { MainWindow.ScraperRow, typeof(ScraperWindow) }, { "Theme Settings", typeof(ThemeSettingsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Cores", typeof(CoresWindow) }, { "Shell", typeof(HotaruWindow) },
+            { MainWindow.ScraperRow, typeof(ScraperWindow) }, { "Themes", typeof(ThemeSettingsWindow) }, { "Compressed Discs", typeof(CompressedDiscsWindow) }, { "Packages", typeof(PackagesWindow) }, { "Library Manager", typeof(LibraryWindow) }, { "Cores", typeof(CoresWindow) }, { "Shell", typeof(HotaruWindow) },
         };
 
         [Theory]

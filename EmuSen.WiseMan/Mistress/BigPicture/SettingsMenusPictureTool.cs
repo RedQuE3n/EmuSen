@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private void Walk(ThemedSession s, string p)
         {
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             Save(s, $"{p}-theme-settings");
             TabControl tabs = Sheets(s).SheetOf(Sheets(s).Current!)!.GetVisualDescendants().OfType<TabControl>().First(t => t.Name == "ThemeSettingsTabs");
             for (int i = 0; i < 4 && (tabs.SelectedItem as TabItem)?.Header as string != "Interface"; i++) s.Pad.R1();

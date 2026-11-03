@@ -14,6 +14,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using EmuSen.WiseMan.Mistress.BigPicture;
@@ -147,21 +148,28 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_tools_row_lists_each_tool_s_line_and_a_tool_s_row_shows_its_own() => Session.Dispatch(() =>
         {
-            ToolCounts.Answer(41, (12, 1));
+            ToolCounts.Answer();
             (MainWindow window, PadDriver pad) = Suspended();
             pad.Start();
             pad.Down(PadMenu.PathTo(window, MainWindow.ToolsMenu, exact: true)![0]);
             PauseCardPane pane = PadMenu.Pane(window);
             Assert.Equal("lines", pane.Showing);
             string[] words = pane.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
-            Assert.Equal([MainWindow.ScraperRow, "41 games missing media", MainWindow.PackagesMenu, MainWindow.PackagesLine, MainWindow.LibraryManagerMenu, MainWindow.LibraryManagerLine, MainWindow.CoresMenu, "1 core waiting for approval"], words);
+            Assert.Equal([MainWindow.ScraperRow, "41 without art", MainWindow.PackagesMenu, "3 changed", MainWindow.LibraryManagerMenu, "⚠ 2 suspect dumps", MainWindow.CoresMenu, "⚠ 1 to approve", MainWindow.CheatsRow, "12 on · 3 games"], words);
 
             pad.A();
             pad.Down(3);
             Assert.Equal(MainWindow.CoresMenu, PadMenu.SelectedLine(window));
             words = pane.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
-            Assert.Equal([MainWindow.CoresMenu, "1 core waiting for approval"], words);
-            pad.Down();
+            Assert.Equal("said", pane.Showing);
+            Assert.Equal([MainWindow.CoresMenu, ToolCounts.Mockups[HomeScreen.Cores]!.Sentence, "A opens Cores; B comes back here."], words);
+            Assert.Equal("⚠ 1 to approve", PadMenu.Entries(window)[3].Value?.Invoke());
+            Assert.Equal("41 no art", PadMenu.Entries(window)[0].Value?.Invoke());
+            pad.Down(2);
+            Assert.Equal(MainWindow.ThemeSettingsRow, PadMenu.SelectedLine(window));
+            Assert.Equal("said", pane.Showing);
+            pad.Down(2);
+            Assert.Equal(MainWindow.CompressedDiscsMenu, PadMenu.SelectedLine(window));
             Assert.Equal("none", pane.Showing);
             Done(window);
         }, default);

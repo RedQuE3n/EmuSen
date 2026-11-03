@@ -92,9 +92,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ScriptLibrary(window, running: state == "LibraryRunning");
             Call(window, "ShowLibraryManager");
             Settle(window);
-            var shown = (LibraryWindow)Sheets(window).Current!;
+            var shown = Shown<LibraryWindow>(window);
             LibraryPane pane = shown.Pane;
-            Assert.Equal(AdaptiveForm.BigScreen, pane.Form);
+            Assert.Equal(FormOf(window), pane.Form);
             pane.Records = new ScriptedRecords(pane.Library!.TrimEnd('/'));
             for (int i = 0; i < 4 && pane.Busy; i++) pane.Poll();
             if (state == "LibraryRunning")
@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Settle(window);
             Assert.True(pane.Complete);
             Assert.Equal(7, pane.Rows.Count);
-            pane.BigScreenTable.Select(pane.Rows.First(r => r.Title == LongDump));
+            (pane.Form == AdaptiveForm.BigScreen ? pane.BigScreenTable : pane.Table).Select(pane.Rows.First(r => r.Title == LongDump));
             pane.FocusRole(AdaptiveRole.Content);
             Settle(window);
             // LibraryDetail: the chosen file's detail stands beside the list, so no page is opened; A would ask to hide it.

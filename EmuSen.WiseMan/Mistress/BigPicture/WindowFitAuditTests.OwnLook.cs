@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             records.ToggleFavourite(Path.Combine(_romDir, played[5]));
             if (records.CreateCollection("Weekend", now) is long id)
                 foreach (string g in played.Take(3)) records.AddToCollection(id, Path.Combine(_romDir, g));
-            ToolCounts.Answer(41, (12, 1));
+            ToolCounts.Answer();
             Call(window, "ShowLibraryEntries");
             Settle(window);
             return (window, pad);

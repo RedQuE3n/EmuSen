@@ -467,12 +467,17 @@ namespace EmuSen.Mistress.Views
         private void ShowCompressedDiscs() => _ = SheetLayer.Show(new CompressedDiscsWindow(_appSettings.RomDirectory, _appSettings), this);
 
         // EmuSen's cores and libretro's, downloaded, updated, removed, approved and made default; the runtime's calls handed in, never the runtime itself - see EmuSen_Cores.md §3.4.
-        private void ShowCores() => _ = SheetLayer.Show(new CoresWindow(CoresRuntimeOf(Runtime), new EmuSen.Tools.Cores.CoresHost
+        private void ShowCores()
         {
-            Options = (console, engine) => ShowSettings(Pages.SettingsScreen.Consoles, "console:" + console),
-            Firmware = () => ShowSettings(Pages.SettingsScreen.Consoles),
-            OpenFolder = folder => _ = Launcher.LaunchDirectoryInfoAsync(new System.IO.DirectoryInfo(folder)),
-        }), this);
+            var window = new CoresWindow(CoresRuntimeOf(Runtime), new EmuSen.Tools.Cores.CoresHost
+            {
+                Options = (console, engine) => ShowSettings(Pages.SettingsScreen.Consoles, "console:" + console),
+                Firmware = () => ShowSettings(Pages.SettingsScreen.Consoles),
+                OpenFolder = folder => _ = Launcher.LaunchDirectoryInfoAsync(new System.IO.DirectoryInfo(folder)),
+            });
+            window.Pane.SummaryChanged += s => ToolSummaryHeard(Pages.HomeScreen.Cores, s);
+            _ = SheetLayer.Show(window, this);
+        }
 
         internal static EmuSen.Tools.Cores.CoresRuntime CoresRuntimeOf(CrystalRuntime runtime) => new()
         {
@@ -494,7 +499,12 @@ namespace EmuSen.Mistress.Views
         }
 
         // The library's games as packages, made, checked, zipped and converted through the library tool's jobs; the library is only read - see EmuSen_Packages.md §7.
-        private void ShowPackages() => _ = SheetLayer.Show(new PackagesWindow(_appSettings.RomDirectory), this);
+        private void ShowPackages()
+        {
+            var window = new PackagesWindow(_appSettings.RomDirectory);
+            window.Pane.SummaryChanged += s => ToolSummaryHeard(Pages.HomeScreen.Packages, s);
+            _ = SheetLayer.Show(window, this);
+        }
 
         // Its own window, on the running game's console - see EmuSen_Settings_Reference.md §4.48.
 
@@ -917,6 +927,7 @@ namespace EmuSen.Mistress.Views
             try { list = _cheats.ToFile(); }
             catch (CrystalException) { return; }
             bool? kept = target.SaveIfChanged(list);
+            if (kept == true) ToolDataChanged(Pages.HomeScreen.Cheats);
             if (kept == true) Console.WriteLine($"[cheats] Kept {list.Cheats.Count} cheat(s) for {target.Name} in {target.File.Path}");
             else if (kept == false) ErrorLog.Error("cheats", $"Could not keep the cheat list for {target.Name}", new IOException(target.File.Path));
         }
@@ -1009,6 +1020,7 @@ namespace EmuSen.Mistress.Views
         // resumeFrom is a state to load before the first frame runs, and loading a game already opened off this thread - see EmuSen_Settings_Reference.md §4.31.
         private void LoadGame(string path, string displayName, string? resumeFrom, bool reset, Task<GameSession>? loading = null)
         {
+            CancelToolSummaries();
             ShutDownCurrentSession(leaving: !reset);
             int restoredCheats = DropCheatsFromAnotherGame(path);
 
@@ -1337,6 +1349,7 @@ namespace EmuSen.Mistress.Views
 
         public void ResumeEmulation()
         {
+            CancelToolSummaries();
             _paused = false;
             _halted = false;
             Send(s => s.Run(CrystalSessionAbi.RunResume));

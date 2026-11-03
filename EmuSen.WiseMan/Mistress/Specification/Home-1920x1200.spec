@@ -57,26 +57,26 @@ tree
               42 StackPanel at=114,945,189,72 by=panel limit=0,0,1920,1200 role=none
                 43 TextBlock at=114,945,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Games layout=57.52,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Games
                 44 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=114,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard="8 games" layout=70.88,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="8 games"
-          45 Panel at=346.5,933,225,96 by=panel heard="Scraper, Art and facts" limit=0,0,1920,1200 name=HubPlace.scraper role=none
+          45 Panel at=346.5,933,225,96 by=panel heard="Scraper, 41 no art" limit=0,0,1920,1200 name=HubPlace.scraper role=none
             46 Border at=346.5,933,225,96 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
               47 StackPanel at=364.5,945,189,72 by=panel limit=0,0,1920,1200 role=none
                 48 TextBlock at=364.5,945,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Scraper layout=66.6,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Scraper
-                49 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=364.5,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard="Art and facts" layout=107.54,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="Art and facts"
-          50 Panel at=597,933,225,96 by=panel heard="Packages, Game packages" limit=0,0,1920,1200 name=HubPlace.packages role=none
+                49 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=364.5,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard="41 no art" layout=69.16,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="41 no art"
+          50 Panel at=597,933,225,96 by=panel heard="Packages, 3 changed" limit=0,0,1920,1200 name=HubPlace.packages role=none
             51 Border at=597,933,225,96 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
               52 StackPanel at=615,945,189,72 by=panel limit=0,0,1920,1200 role=none
                 53 TextBlock at=615,945,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Packages layout=81.6,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Packages
-                54 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=615,981,189,36 box=126,24 caps=13.999 drawn ellipsis face=Barlow heard="Game packages" layout=119.4,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="Game packages"
-          55 Panel at=847.5,933,225,96 by=panel heard="Library, Checks dumps" limit=0,0,1920,1200 name=HubPlace.library role=none
+                54 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=615,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard="3 changed" layout=87.24,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="3 changed"
+          55 Panel at=847.5,933,225,96 by=panel heard="Library, 2 suspect" limit=0,0,1920,1200 name=HubPlace.library role=none
             56 Border at=847.5,933,225,96 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
-              57 StackPanel at=865.5,945,189,72 by=panel limit=0,0,1920,1200 role=none
-                58 TextBlock at=865.5,945,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Library layout=60.36,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Library
-                59 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=865.5,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard="Checks dumps" layout=123.44,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="Checks dumps"
-          60 Panel at=1098,933,225,96 by=panel heard="Cores, The engines" limit=0,0,1920,1200 name=HubPlace.cores role=none
+              57 StackPanel at=865.5,943.5,189,75 by=panel limit=0,0,1920,1200 role=none
+                58 TextBlock at=865.5,943.5,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Library layout=60.36,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Library
+                59 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=865.5,979.5,189,39 box=126,26 caps=14.7021 drawn face="Adwaita Mono" heard="⚠ 2 suspect" layout=104.76,25.7 name=HubPlaceStatus paints=#DAA520FF role=text size=20 text="⚠ 2 suspect"
+          60 Panel at=1098,933,225,96 by=panel heard="Cores, 1 to approve" limit=0,0,1920,1200 name=HubPlace.cores role=none
             61 Border at=1098,933,225,96 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
-              62 StackPanel at=1116,945,189,72 by=panel limit=0,0,1920,1200 role=none
-                63 TextBlock at=1116,945,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Cores layout=48.32,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Cores
-                64 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=1116,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard="The engines" layout=101.72,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text="The engines"
+              62 StackPanel at=1116,943.5,189,75 by=panel limit=0,0,1920,1200 role=none
+                63 TextBlock at=1116,943.5,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Cores layout=48.32,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Cores
+                64 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=1116,979.5,189,39 box=126,26 caps=14.7021 drawn face="Adwaita Mono" heard="⚠ 1 to approve" layout=124.34,25.7 name=HubPlaceStatus paints=#DAA520FF role=text size=20 text="⚠ 1 to approve"
           65 Panel at=1348.5,933,225,96 by=panel heard="Settings, Dark · 60% sound" limit=0,0,1920,1200 name=HubPlace.settings role=none
             66 Border at=1348.5,933,225,96 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
               67 StackPanel at=1366.5,945,189,72 by=panel limit=0,0,1920,1200 role=none

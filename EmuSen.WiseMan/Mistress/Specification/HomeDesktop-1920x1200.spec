@@ -83,31 +83,31 @@ tree
                 68 StackPanel at=40,477,378,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
                   69 TextBlock at=40,477,378,17 box=378,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard=Games in=2 layout=40.8,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text=Games
                   70 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=40,496,378,14 box=378,14 caps=5.133 drawn face=Barlow heard="8 games" in=2 layout=38.98,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="8 games"
-            71 Panel at=450,461,402,64 by=fixed-scroll heard="Scraper, Art and facts" in=2 limit=0,0,1720,1146 name=HubPlace.scraper role=none
+            71 Panel at=450,461,402,64 by=fixed-scroll heard="Scraper, 41 without art" in=2 limit=0,0,1720,1146 name=HubPlace.scraper role=none
               72 Border at=450,461,402,64 by=fixed-scroll in=2 limit=0,0,1720,1146 paints=#26262BFF role=none
                 73 StackPanel at=466,477,370,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
                   74 TextBlock at=466,477,370,17 box=370,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard=Scraper in=2 layout=47.38,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text=Scraper
-                  75 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=466,496,370,14 box=370,14 caps=5.133 drawn face=Barlow heard="Art and facts" in=2 layout=59.15,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="Art and facts"
-            76 Panel at=868,461,402,64 by=fixed-scroll heard="Packages, Game packages" in=2 limit=0,0,1720,1146 name=HubPlace.packages role=none
+                  75 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=466,496,370,14 box=370,14 caps=5.133 drawn face=Barlow heard="41 without art" in=2 layout=61.71,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="41 without art"
+            76 Panel at=868,461,402,64 by=fixed-scroll heard="Packages, 3 changed" in=2 limit=0,0,1720,1146 name=HubPlace.packages role=none
               77 Border at=868,461,402,64 by=fixed-scroll in=2 limit=0,0,1720,1146 paints=#26262BFF role=none
                 78 StackPanel at=884,477,370,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
                   79 TextBlock at=884,477,370,17 box=370,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard=Packages in=2 layout=58.14,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text=Packages
-                  80 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=884,496,370,14 box=370,14 caps=5.133 drawn face=Barlow heard="Game packages" in=2 layout=73.35,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="Game packages"
-            81 Panel at=1286,461,410,64 by=fixed-scroll heard="Library Manager, Checks dumps" in=2 limit=0,0,1720,1146 name=HubPlace.library role=none
+                  80 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=884,496,370,14 box=370,14 caps=5.133 drawn face=Barlow heard="3 changed" in=2 layout=47.98,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="3 changed"
+            81 Panel at=1286,461,410,64 by=fixed-scroll heard="Library Manager, 2 suspect dumps" in=2 limit=0,0,1720,1146 name=HubPlace.library role=none
               82 Border at=1286,461,410,64 by=fixed-scroll in=2 limit=0,0,1720,1146 paints=#26262BFF role=none
-                83 StackPanel at=1302,477,378,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
-                  84 TextBlock at=1302,477,378,17 box=378,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard="Library Manager" in=2 layout=97.93,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text="Library Manager"
-                  85 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=1302,496,378,14 box=378,14 caps=5.133 drawn face=Barlow heard="Checks dumps" in=2 layout=67.89,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="Checks dumps"
-            86 Panel at=24,541,410,64 by=fixed-scroll heard="Cores, The engines" in=2 limit=0,0,1720,1146 name=HubPlace.cores role=none
+                83 StackPanel at=1302,476,378,34 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
+                  84 TextBlock at=1302,476,378,17 box=378,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard="Library Manager" in=2 layout=97.93,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text="Library Manager"
+                  85 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=1302,495,378,15 box=378,15 caps=5.3908 drawn face="Adwaita Mono" heard="⚠ 2 suspect dumps" in=2 layout=91.86,14.14 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="⚠ 2 suspect dumps"
+            86 Panel at=24,541,410,64 by=fixed-scroll heard="Cores, 1 to approve" in=2 limit=0,0,1720,1146 name=HubPlace.cores role=none
               87 Border at=24,541,410,64 by=fixed-scroll in=2 limit=0,0,1720,1146 paints=#26262BFF role=none
-                88 StackPanel at=40,557,378,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
-                  89 TextBlock at=40,557,378,17 box=378,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard=Cores in=2 layout=34.5,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text=Cores
-                  90 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=40,576,378,14 box=378,14 caps=5.133 drawn face=Barlow heard="The engines" in=2 layout=55.95,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="The engines"
-            91 Panel at=450,541,402,64 by=fixed-scroll heard="Cheats, Codes for games" in=2 limit=0,0,1720,1146 name=HubPlace.cheats role=none
+                88 StackPanel at=40,556,378,34 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
+                  89 TextBlock at=40,556,378,17 box=378,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard=Cores in=2 layout=34.5,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text=Cores
+                  90 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=40,575,378,15 box=378,15 caps=5.3908 drawn face="Adwaita Mono" heard="⚠ 1 to approve" in=2 layout=68.39,14.14 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="⚠ 1 to approve"
+            91 Panel at=450,541,402,64 by=fixed-scroll heard="Cheats, 12 on · 3 games" in=2 limit=0,0,1720,1146 name=HubPlace.cheats role=none
               92 Border at=450,541,402,64 by=fixed-scroll in=2 limit=0,0,1720,1146 paints=#26262BFF role=none
                 93 StackPanel at=466,557,370,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
                   94 TextBlock at=466,557,370,17 box=370,17 by=fixed-scroll caps=6.5329 drawn face="Barlow Medium" heard=Cheats in=2 layout=41.36,16.8 limit=0,0,1720,1146 paints=#EEEEF0FF role=text size=9.33 text=Cheats
-                  95 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=466,576,370,14 box=370,14 caps=5.133 drawn face=Barlow heard="Codes for games" in=2 layout=77.16,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="Codes for games"
+                  95 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=466,576,370,14 box=370,14 caps=5.133 drawn face=Barlow heard="12 on · 3 games" in=2 layout=68.35,13.2 name=HubPlaceStatus paints=#8D8D91FF role=text size=7.33 text="12 on · 3 games"
             96 Panel at=868,541,402,64 by=fixed-scroll heard="Settings, Dark · 60% sound" in=2 limit=0,0,1720,1146 name=HubPlace.settings role=none
               97 Border at=868,541,402,64 by=fixed-scroll in=2 limit=0,0,1720,1146 paints=#26262BFF role=none
                 98 StackPanel at=884,557,370,33 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none

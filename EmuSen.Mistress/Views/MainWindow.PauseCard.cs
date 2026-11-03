@@ -73,7 +73,7 @@ namespace EmuSen.Mistress.Views
             int at = PadMenuList.SelectedIndex;
             PadMenuEntry? entry = _padMenuOpen && at >= 0 && at < _padMenuEntries.Count ? _padMenuEntries[at] : null;
             string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot} {entry.Label?.Invoke()}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
-                : entry.ShowsTools ? "tools " + string.Join(" | ", ToolLines()) : entry.Status is { } status ? $"status {entry.Text()}: {status()}"
+                : entry.ShowsTools ? "tools " + string.Join(" | ", ToolLines()) : entry.PaneSaid is { } paneSaid ? "said-tool " + paneSaid() : entry.Status is { } status ? $"status {entry.Text()}: {status()}"
                 : entry.PaneLines is { } paneLines ? "lines " + string.Join(" | ", paneLines().Select(l => l.Line + l.Muted))
                 : entry.PaneSentences is not null ? "said " + entry.Text() : "none";
             if (key == _paneShowing) return;
@@ -85,6 +85,7 @@ namespace EmuSen.Mistress.Views
             else if (key == "frame") ShowContinuePane();
             else if (key.StartsWith("cover", StringComparison.Ordinal)) ShowCoverPane();
             else if (key.StartsWith("tools", StringComparison.Ordinal)) ShowLinesPane(ToolLines());
+            else if (entry?.PaneSaid is { } toolSaid && toolSaid() is var (title, sentence, hint)) _pauseCardPane.ShowSaid(title, sentence, hint, PaneWidth * (MenuPanel.GetScale(this) is > 0 and var su ? su : 1));
             else if (entry?.Status is { } line) ShowLinesPane([(entry.Text(), line())]);
             else if (entry?.PaneLines is { } lines) ShowLinesPane(lines());
             else if (entry?.PaneSentences is { } said && said() is var (sentences, flag)) _pauseCardPane.ShowSentences(sentences, flag, PaneWidth * (MenuPanel.GetScale(this) is > 0 and var u ? u : 1));

@@ -25,6 +25,8 @@ namespace EmuSen.Mistress.Views
             if (ScrapeNative && _appSettings.Scraping) OpenMediaStore();
             var window = new ScraperWindow(() => Wrap(() => Runtime.Systems()));
             window.Pane.RunEnded += PostCoverRefresh;
+            window.Pane.RunEnded += () => ToolDataChanged(Pages.HomeScreen.Scraper);
+            window.Pane.SummaryChanged += s => ToolSummaryHeard(Pages.HomeScreen.Scraper, s);
             _scraperWindow = window;
             window.Closed += (_, _) => { if (ReferenceEquals(_scraperWindow, window)) _scraperWindow = null; };
             _ = SheetLayer.Show(window, this);

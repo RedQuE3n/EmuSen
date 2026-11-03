@@ -79,7 +79,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using ThemedSession s = ArtBookNext();
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Run(500);
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             Save(s.Capture(), "settings-options-1280x800");
             s.Pad.R1();

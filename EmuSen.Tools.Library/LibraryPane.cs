@@ -95,6 +95,12 @@ namespace EmuSen.Tools.Library
             new("broken", "Broken or Suspect", "Findings"), new("unrecognised", "Unrecognised", "Findings"), new("hidden", "Hidden", "Findings"),
         ];
 
+        // Raised when a whole check ends, with the tool's one-line state, for the host's Home to show (EmuSen_Interface.md §19).
+        public event Action<ToolSummary?>? SummaryChanged;
+
+        // The tool's one-line state from the last whole check, null before one has run.
+        public ToolSummary? Summary => LibraryFindings.StateOf(Complete, _broken.Count, _dumps.Count);
+
         // The library's folder, AppSettings.RomDirectory, which the host gives.
         public string? Library { get; set; }
 
@@ -233,6 +239,7 @@ namespace EmuSen.Tools.Library
             if (_stopping) Say("The check was stopped, so the lists hold only what was read before it.");
             Redraw();
             UpdateActions();
+            if (Complete) SummaryChanged?.Invoke(Summary);
         }
 
         private void Take(string line)
@@ -260,7 +267,12 @@ namespace EmuSen.Tools.Library
         {
             string library = Library ?? "";
             SetRows(library.Length == 0 ? [] : LibraryFindings.Rows(library, _dumps, _broken, _scraped, _hidden, _consoles, Exists, PackageOf));
-            Header = new AdaptiveHeader("LIBRARY MANAGER", Facts: $"{library.Length} files · {_dumps.Count} same dumps · {_broken.Count} broken or suspect · {_hidden.Count} hidden");
+            var facts = new List<string> { ToolSummary.Count(_consoles.Count, "file", "files") };
+            if (_broken.Count > 0) facts.Add(ToolSummary.Mark + ToolSummary.Count(_broken.Count, "suspect dump", "suspect dumps"));
+            if (_dumps.Count > 0) facts.Add(ToolSummary.Count(_dumps.Count, "duplicate", "duplicates"));
+            if (_hidden.Count > 0) facts.Add($"{_hidden.Count:N0} hidden");
+            facts.Add(Complete ? "checked today" : _job is not null ? "checking" : "not checked");
+            Header = new AdaptiveHeader("LIBRARY MANAGER", Facts: string.Join(" · ", facts));
             _overview.Text = OverviewText;
         }
 

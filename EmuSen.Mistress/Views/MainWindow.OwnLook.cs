@@ -13,6 +13,8 @@ using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Pages;
 
+using EmuSen.Galaxia.Native;
+
 namespace EmuSen.Mistress.Views
 {
     // EmuSen's own look: Home and the grid of covers on LunaP's HubLayout and GalleryLayout, the desktop's Home pane, and what they read and ask of the window - see EmuSen_BigPicture.md §51.
@@ -141,11 +143,13 @@ namespace EmuSen.Mistress.Views
                 : null;
             bool wasEmpty = _homeLayout.Shelf.Count == 0;
             _homeLayout.SetShelf(_home.Shelf.Select(g => CoverOf(g.Path, g.Title, g.Mark, g.Aspect, g.Favourite, g.Facts, g.Line)));
-            _homeLayout.SetPlaces(_home.Places.Select(p => new HubPlace(p.Key, p.Label) { Status = p.Status, NeedsAttention = p.NeedsAttention }));
+            _homeLayout.SetPlaces(HomePlaces());
             // A shelf that fills for the first time takes the focus where a hub starts, as if Home had opened on it.
             if (wasEmpty && _homeLayout.Shelf.Count > 0 && _homeLayout.Focused.Row == HubRow.Places) _homeLayout.FocusStart();
-            AskToolCounts();
+            AskToolSummaries();
         }
+
+        private IEnumerable<HubPlace> HomePlaces() => _home.Places.Select(p => new HubPlace(p.Key, p.Label) { Status = p.Status, NeedsAttention = p.NeedsAttention });
 
         private static string RowName(HubRow row) => row switch { HubRow.Continue => "continue", HubRow.Shelf => "shelf", _ => "places" };
 
@@ -388,9 +392,7 @@ namespace EmuSen.Mistress.Views
 
         int IHomeHost.GameCount => _allScan.Entries.Count(Listed);
 
-        int? IHomeHost.MissingMedia => _missingMedia;
-
-        int? IHomeHost.CoresWaiting => _coresWaiting;
+        ToolSummary? IHomeHost.Summary(string place) => SummaryOf(place);
 
         int IHomeHost.ControllerCount => _gamepad.Pads.Count;
 

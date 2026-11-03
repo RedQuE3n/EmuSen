@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static ThemeSettingsWindow Open(ThemedSession s)
         {
-            ThemedLibraryFlowTests.Choose(s, "Theme Settings");
+            ThemedLibraryFlowTests.Choose(s, "Themes");
             s.Settle();
             return Assert.IsType<ThemeSettingsWindow>(Sheets(s).Current);
         }

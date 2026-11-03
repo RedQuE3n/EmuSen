@@ -31,20 +31,23 @@ tree
                     16 ListBoxItem at=96,720,636,81 by=fixed-scroll drawn focus heard=Power in=9 limit=96,234,636,567 op paints=#333337FF,#D4D4D4FF role=listitem text="Power  ›"
             17 Border at=864,234,960,763 by=panel limit=0,0,1920,1168 name=AdaptiveCardPane paints=#26262BFF role=none
               18 Border at=900,270,888,691 by=panel limit=0,0,1920,1168 name=AdaptiveDetail role=none
-                19 PauseCardPane at=900,270,888,370 by=panel limit=0,0,1920,1168 name=PauseCardPane role=none
-                  20 StackPanel at=900,270,888,370 by=panel limit=0,0,1920,1168 name=PaneLines role=none
+                19 PauseCardPane at=900,270,888,473 by=panel limit=0,0,1920,1168 name=PauseCardPane role=none
+                  20 StackPanel at=900,270,888,473 by=panel limit=0,0,1920,1168 name=PaneLines role=none
                     21 StackPanel at=900,270,888,79 by=panel limit=0,0,1920,1168 role=none
                       22 TextBlock at=900,270,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard=Scraper layout=109.89,39.6 limit=0,0,1920,1168 paints=#EEEEF0FF role=text size=22 text=Scraper
-                      23 TextBlock at=900,313,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="41 games missing media" layout=305.16,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="41 games missing media"
+                      23 TextBlock at=900,313,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="41 without art" layout=168.3,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="41 without art"
                     24 StackPanel at=900,367,888,79 by=panel limit=0,0,1920,1168 role=none
                       25 TextBlock at=900,367,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard=Packages layout=134.64,39.6 limit=0,0,1920,1168 paints=#EEEEF0FF role=text size=22 text=Packages
-                      26 TextBlock at=900,410,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="Makes, checks and zips game packages" layout=497.85,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="Makes, checks and zips game packages"
-                    27 StackPanel at=900,464,888,79 by=panel limit=0,0,1920,1168 role=none
+                      26 TextBlock at=900,410,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="3 changed" layout=130.86,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="3 changed"
+                    27 StackPanel at=900,464,888,82 by=panel limit=0,0,1920,1168 role=none
                       28 TextBlock at=900,464,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard="Library Manager" layout=226.81,39.6 limit=0,0,1920,1168 paints=#EEEEF0FF role=text size=22 text="Library Manager"
-                      29 TextBlock at=900,507,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="Finds duplicate and damaged dumps" layout=467.1,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="Finds duplicate and damaged dumps"
-                    30 StackPanel at=900,561,888,79 by=panel limit=0,0,1920,1168 role=none
-                      31 TextBlock at=900,561,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard=Cores layout=79.73,39.6 limit=0,0,1920,1168 paints=#EEEEF0FF role=text size=22 text=Cores
-                      32 TextBlock at=900,604,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="1 core waiting for approval" layout=330.06,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="1 core waiting for approval"
+                      29 TextBlock at=900,507,888,39 box=888,39 by=panel caps=14.7021 drawn face="Adwaita Mono" heard="⚠ 2 suspect dumps" layout=250.53,38.55 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="⚠ 2 suspect dumps"
+                    30 StackPanel at=900,564,888,82 by=panel limit=0,0,1920,1168 role=none
+                      31 TextBlock at=900,564,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard=Cores layout=79.73,39.6 limit=0,0,1920,1168 paints=#EEEEF0FF role=text size=22 text=Cores
+                      32 TextBlock at=900,607,888,39 box=888,39 by=panel caps=14.7021 drawn face="Adwaita Mono" heard="⚠ 1 to approve" layout=186.51,38.55 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="⚠ 1 to approve"
+                    33 StackPanel at=900,664,888,79 by=panel limit=0,0,1920,1168 role=none
+                      34 TextBlock at=900,664,888,40 box=888,40 by=panel caps=15.3989 drawn face=Barlow heard=Cheats layout=95.63,39.6 limit=0,0,1920,1168 paints=#EEEEF0FF role=text size=22 text=Cheats
+                      35 TextBlock at=900,707,888,36 box=888,36 by=panel caps=13.999 drawn face=Barlow heard="12 on · 3 games" layout=186.42,36 limit=0,0,1920,1168 paints=#8D8D91FF role=text size=20 text="12 on · 3 games"
 focus none
 press down menu="open at 5: Settings" top=none
 press up menu="open at 4: Tools" top=none

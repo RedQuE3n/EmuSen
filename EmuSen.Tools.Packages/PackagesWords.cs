@@ -1,5 +1,7 @@
 using EmuSen.Galaxia.Native;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text.Json;
 using static EmuSen.Galaxia.Native.ToolEvents;
 
@@ -8,6 +10,16 @@ namespace EmuSen.Tools.Packages
     // The listing's states and each job's outcome in Packages' words, the tool's own kept where none fits - see EmuSen_Packages.md §7.
     public static class PackagesWords
     {
+        // The tool's one-line state: the packages whose state needs a look, else how many are packaged; null before anything is listed (EmuSen_Interface.md §19).
+        public static ToolSummary? StateOf(IReadOnlyCollection<PackageRow> rows)
+        {
+            if (rows.Count == 0) return null;
+            int changed = rows.Count(r => r.Problem), packaged = rows.Count(r => r.Packaged);
+            return changed > 0 ? new($"{changed:N0} changed", Sentence: changed == 1 ? "1 package no longer matches its record: it moved, went missing or changed." : $"{changed:N0} packages no longer match their records: each moved, went missing or changed.")
+                : packaged > 0 ? new($"{packaged:N0} packaged", Sentence: packaged == 1 ? "1 game is packaged." : $"{packaged:N0} games are packaged.")
+                : new("None packaged yet", Sentence: "No game is packaged yet.");
+        }
+
         // A row's state as the State column says it.
         // The state with its glyph, a word beside a mark: ✓ for a package in order, ⚠ for a problem (EmuSen_Interface.md §5.7).
         public static string Status(PackageRow row) => row.Problem ? "⚠ " + State(row) : row.Packaged ? "✓ " + State(row) : State(row);

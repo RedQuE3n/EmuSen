@@ -1497,3 +1497,113 @@ are reached by the shoulders at 1280 and drawn at 16:9.
 
 **Decided 2026-11-01 by the tester:** §18 as written, the seven decisions and the four routine items as recommended;
 recorded in §0 as 9 to 19.
+
+---
+
+## 19. U7 as built (2026-11-03)
+
+The tools' header rows of §4 screen 5 and §15.2, and the tools' live lines on Home's places, on the Home card's Tools
+page and on the desktop's Home (§10, U7). The tools' bodies are as they were: the Scraper's screen, plan and running
+states and the other tools' pages are the window follow-ons.
+
+### 19.1 One summary per tool
+
+Each tool says its one-line state in one place, its own library, through the surface it already has; the host reads it
+and draws it, and never words it. The record is Galaxia's `ToolSummary` (beside `ToolWords`, the tools' shared words):
+the line, a shorter one for a 150-unit place, whether it needs the player, whose sign `⚠` the place or header adds, and
+the state as a sentence in the tool's own words, which the Home card's pane says (§19.6).
+
+| Tool | Owner | The line (desktop) / the short one (big screen, Home card) | Before anything is said |
+|---|---|---|---|
+| Games | Mistress's library scan | `1,284 games` | — |
+| Scraper | `ScraperPlan.StateOf` over `scrape ls`'s rows | `41 without art` / `41 no art`; `Every game has art` | `Art and facts` |
+| Packages | `PackagesWords.StateOf` over `pkg-ls`'s rows | `3 changed` (a package moved, missing, changed or unreadable), else `5 packaged`, else `None packaged yet` | `Game packages` |
+| Library Manager | `LibraryFindings.StateOf` after a whole check | `⚠ 2 suspect dumps` / `⚠ 2 suspect`, else `1 duplicate`, else `No problems found` | `Checks dumps` |
+| Cores | `CoresWords.StateOf` over the runtime's `cores` and `core-ls` (offline) | `⚠ 1 to approve`, else `↑ 2 updates`, else `17 cores · 5 installed` (§15.8) | `The engines` |
+| Cheats | Galaxia's `GameCheats.Summary` over every saved list, the consoles' and the packages' | `12 on · 3 games`, else `4 games with cheats` / `none on` | `Codes for games` |
+
+Each pane raises `SummaryChanged` with the same summary when its listing ends (the Library Manager's when a whole check
+ends), and builds its header's facts from the same words, so the header and Home cannot disagree. Accepted 2026-11-03
+as **[routine]**: Packages' `changed` counts the packages in a problem state, as the mockup words it.
+
+### 19.2 The header row
+
+LunaP's `AdaptiveHeaderRow` (its §215), which the frame now draws its header with, so Cores' row is reused and not
+copied: the name at the left; on the big screen the facts right-aligned, on the desktop after the name; a fact that
+begins with `⚠` in Attention and the rest Muted; on the desktop the focused row's one action at the right, filled Accent
+(`ManagerLayout.ActionFor`, the action A does on the big screen). The facts, as built:
+
+- Packages: `3 changed · 263 KB in packages · 410 GB free`.
+- Scraper: `1,284 games · 41 without art`.
+- Library Manager: `1,284 files · ⚠ 2 suspect dumps · 1 duplicate · checked today` (`checking`, `not checked`). The
+  count of files had been the length of the library folder's path, a defect found here and fixed.
+- Cores: as §15.10.
+- Cheats: the database window, which is not yet on the frame (§16.2), carries the row on the desktop (`CHEATS`,
+  `12 on · 3 games · 7 cheat files in the database`). On the big screen its centred sheet keeps its own title. Measured
+  on 2026-11-03: the facts as the sheet's subtitle took 40 units and left the list of games 75 high, under the fit
+  audit's floor, so the big screen's row waits for the Cheats rebuild.
+
+The desktop toolbars are unchanged; trimming them to the mockups' few buttons and a More menu is the follow-on.
+
+### 19.3 When the lines are read
+
+Measured on 2026-11-03 on the desktop (Ryzen 7 7700X), each read twice, with its managed allocation, by
+`WindowFitAuditTests.Each_tools_summary_read_is_timed` (run under `EMUSEN_U7_COST=1`; `EMUSEN_U7_LIBRARY` names a real
+library, read only). **[M]**
+
+| Read | The library of 9,328 files | 1,000 synthetic games |
+|---|---|---|
+| Scraper, `scrape ls` | 2,124 and 2,140 ms, 19.5 MB | 132 and 131 ms, 2.1 MB |
+| Packages, `pkg-ls` | 208 and 206 ms, 8.7 MB | 7 and 18 ms, 0.8 MB |
+| Cores, `cores` and `core-ls` | 0.4 and 0.3 ms, 43 KB | 0.3 and 0.3 ms, 43 KB |
+| Cheats, every saved list | 0.2 and 0.1 ms, 141 KB (2 lists) | 2.4 and 4.6 ms, 5.1 MB (300 lists) |
+
+Decided 2026-11-03 on these numbers:
+
+1. The Scraper's and Packages' reads, which cost seconds on a large library, are made once a session at the first Home,
+   and again only when their data changes: their own window's listing (which reports its summary), a scrape run's end.
+2. The Cores' and Cheats' reads are made at most once a minute; a saved cheat list asks again at the next Home.
+3. Every read runs on a thread of the lowest priority, off the interface thread, only while Home, a card over it or the
+   desktop's library shows, never while a game is on screen; a game starting cancels a read still running, and its
+   answer is dropped.
+4. Until a read answers, the place shows its description, never a stale or zero count. A read that cannot say (a
+   command not in use, a refusal) keeps the last line heard.
+5. The Library Manager has no read of its own, since its check reads every file: its line is its description until a
+   whole check runs in the session.
+
+### 19.4 Departures, measured against the mockups
+
+- Decided 2026-11-03: the two forms differ on purpose. The big screen's places draw a `⚠` line in Attention, to call
+  the player from across the room; the desktop's keep the sign and stay Muted, as its mockup draws them (LunaP §215.4).
+  The Home card's rows keep the row's own colour, as its mockup draws them.
+- The Home card's Tools page is the mockup's: Scraper, Packages, Library Manager, Cores, Cheats, Themes (the big
+  picture's look by name) and Collections (the player's own, counted), each with `▸`; then `Compressed Discs`, until
+  decision 10 of §0 retires it into Packages, and `Shell`, whose doors must stay. Themes is the row `Theme Settings`
+  was, and Collections now shows on every Home card, not only over a theme, opening Settings ▸ Library ▸ Collections
+  as before.
+- The big screen's Cheats has no header row (§19.2).
+
+### 19.5 Tests, measured on 2026-11-03
+
+`ToolSummaryTests` 4 (each tool's words, the cheats' count, a Packages listing through a real job saying the line its
+read without a window says, the host's schedule and keeping), `OwnLookScreenTests`, `HomeCardTests`, the tool windows'
+classes (`PackagesWindowTests`, `ScraperWindowTests`, `LibraryWindowTests`, `CoresWindowTests`,
+`CoresWindowRuntimeTests`), and the audits and recordings of `EmuSen_InterfaceSpec.md` §6.3.25. LunaP's whole suite,
+1,990, with `HeaderRowTests` 4. Seeded faults, each caught: a window's listing not kept (a stale line;
+`ToolSummaryTests`, `HomeCardTests`); Packages counting packaged games as changed (`ToolSummaryTests`); the Library
+Manager's warning dropped (`ToolSummaryTests`); in LunaP the warning fact drawn Muted, the header action left at the
+previous row's, and the desktop's facts at the right edge (`HeaderRowTests`; the last after the test measured the name
+by its text rather than its stretched box).
+
+Comparison pictures, mockup left and built right, at 1280 × 800 and 1920 × 1080 and the desktop's 1280 × 800:
+`~/.cache/emusen/tmp/u7/compare/`.
+
+### 19.6 The Tools page's pane
+
+With a tool's row focused, the card's pane says, as the mockup does: the tool's name; its state as a sentence, the
+summary's own (`ToolSummary.Sentence`, worded by the tool's library beside the line, so nothing is a second source):
+`PCEE2, a PlayStation 2 core from libretro's buildbot, waits for your approval. Nothing downloaded runs until you
+approve it.`, `41 games have no art yet; the Scraper fetches it from ScreenScraper.`; and then, Muted, `A opens Cores;
+B comes back here.` Before a tool has said anything the sentence is what the tool does (`HomeScreen.About`). Themes says
+which look is in use and Collections how many the player has. Not built: the mockup's `was installed today` and `on
+PCEE2`, since the summary holds no install date and A opens the tool, not the core.

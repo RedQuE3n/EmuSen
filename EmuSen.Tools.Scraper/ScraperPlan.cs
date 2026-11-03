@@ -1,3 +1,4 @@
+using EmuSen.Galaxia.Native;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -38,6 +39,15 @@ namespace EmuSen.Tools.Scraper
             var words = new List<string>();
             if (o.Videos) words.Add("--videos");
             return words;
+        }
+
+        // The tool's one-line state: the games the theme's kinds find without art, else that every game has it; null before anything is listed (EmuSen_Interface.md §19).
+        public static ToolSummary? StateOf(IReadOnlyCollection<ScrapeRow> rows)
+        {
+            if (rows.Count == 0) return null;
+            int lacking = rows.Count(r => r.Media.Count > 0 && r.Missing.Count > 0);
+            return lacking > 0 ? new($"{lacking:N0} without art", $"{lacking:N0} no art", Sentence: (lacking == 1 ? "1 game has" : $"{lacking:N0} games have") + " no art yet; the Scraper fetches it from ScreenScraper.")
+                : new("Every game has art", Sentence: "Every game in the library has its art.");
         }
 
         public static List<string> Line(string sub, string? section, ScrapeOptions o, bool byHand = false) => Line(sub, section, null, o, byHand);

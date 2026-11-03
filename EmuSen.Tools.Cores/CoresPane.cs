@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Threading;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -110,6 +111,28 @@ namespace EmuSen.Tools.Cores
             DetachedFromVisualTree += (_, _) => Stop();
             SetSections([new AdaptiveSection("all", "All", "Consoles")], "all");
             UpdateActions();
+        }
+
+        // Raised when a listing is shown, with the tool's one-line state, for the host's Home to show (EmuSen_Interface.md §19).
+        public event Action<ToolSummary?>? SummaryChanged;
+
+        // The tool's one-line state read without a window, offline from the runtime's cores and the core tool's listing, off the interface thread; null where neither answers or the read was cancelled.
+        public static ToolSummary? ReadSummary(CoresRuntime? runtime, CancellationToken cancel)
+        {
+            var empty = new Dictionary<string, string>();
+            var listed = new List<CoreRow>();
+            try
+            {
+                if (runtime is not null)
+                {
+                    using JsonDocument cores = JsonDocument.Parse(runtime.Cores());
+                    foreach (JsonElement c in cores.RootElement.EnumerateArray())
+                        if (OfRuntime(c, empty, (_, _) => false) is { } row) listed.Add(row);
+                }
+                List<CoreRow> tool = ToolAvailable() ? ToolSummary.Rows(StartJob(ListingRequest), e => Text(e, "event") == "core" ? OfTool(e, empty) : null, cancel) ?? [] : [];
+                return cancel.IsCancellationRequested ? null : CoresWords.StateOf(Joined(listed, tool));
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException or FormatException) { return null; }
         }
 
         // Whether a job is running.
@@ -640,6 +663,7 @@ namespace EmuSen.Tools.Cores
             if (updates > 0) facts.Add($"↑ {updates} {(updates == 1 ? "update" : "updates")}");
             facts.Add(_catalogue is not null ? $"catalogue read {CoresWords.Day(_catalogue)}" : _catalogueFailure is not null ? $"catalogue could not be read: {_catalogueFailure.TrimEnd('.')}" : "catalogue not read yet");
             Header = new AdaptiveHeader("CORES", Facts: string.Join(" · ", facts));
+            SummaryChanged?.Invoke(CoresWords.StateOf(Rows));
         }
 
         // /Cores' total and its disk's free space (EmuSen_Cores.md §2.1).

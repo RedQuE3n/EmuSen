@@ -25,6 +25,7 @@ namespace EmuSen.Mistress.Views
             }
             if (ScrapeNative && _appSettings.Scraping) OpenMediaStore();
             var window = new LibraryWindow(_appSettings.RomDirectory, new Records(this));
+            window.Pane.SummaryChanged += s => ToolSummaryHeard(Pages.HomeScreen.Library, s);
             _libraryWindow = window;
             window.Closed += (_, _) => { if (ReferenceEquals(_libraryWindow, window)) _libraryWindow = null; };
             _ = SheetLayer.Show(window, this);

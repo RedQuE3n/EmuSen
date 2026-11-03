@@ -1303,6 +1303,27 @@ dragged onto it joins it (§17.3). `CollectionSettingsWindow` retires.
 
 All are pages of the panel with the game as the breadcrumb (§4.4); X takes a screenshot on each; B returns.
 
+Decided 2026-11-02 by the tester, as the card is played on the handheld, because a card that redraws at every choice
+looks hokey and should stay put:
+- **Turning a page** keeps the same panel, the scrim, the paused frame and the help band. Only the rows, the header
+  with its breadcrumb and the pane change. There is no close, no reopening and no opening effect; the effect plays
+  when the card first comes on screen.
+- **A screen opened from the card** (Graphics, Shaders, Controller Bindings and the rest) lays over the card as a
+  sheet. The card stays mounted beneath, covered, and keeps its page, its row and the game's pause. Closing the sheet
+  uncovers the card where it was, without opening it again. On the big screen, under a sheet that draws its own menu,
+  the card is covered by the blurred screen the sheet stands on: the panel is drawn transparent and stays laid out. A
+  first attempt left the card drawn sharp beside the sheet's panel, which `SheetLookTests` caught as 6 pixels changing
+  outside the panel at 1920 × 1200.
+- The game runs no frame throughout.
+- This is the Pause Card's rule only. A tool or settings sheet opened from the Home card still closes the card first:
+  Theme Settings, Collections and the Interface tab apply their choices to the themed view beneath them, which a Home
+  card kept on screen would cover. The first build applied the rule to both cards, and 48 tests of the themed views
+  failed on it (2026-11-02). §2.9's return to Home from such a tool is a separate step.
+- Built in `ChoosePadMenuRow` (an entry that opens a screen leaves the card open beneath it), `ShowPadMenuPage` (no
+  opening effect) and `UpdateMenuBackdrop` (a card uncovered does not open again).
+- Proved by WiseMan `PadMenuTests.The_card_stays_on_screen_from_page_to_page_into_a_sheet_and_back`, which steps
+  page → page → sheet → back → back.
+
 - **Rewind, the reel.** The Rewind row's pane shows the three newest pictures (§2.8). A on the row opens the reel page:
   the pane holds the focused moment at 592 × 330 and, under it, a strip of six moments 88 × 66 (`Now · 1.5 s · 4 s · 8
   s · 12 s · 28 s`), the focused one ringed; the panel's rows `Go back to 4 s ago` (A), `Moment ◂ 4 s ago ▸` (Left and

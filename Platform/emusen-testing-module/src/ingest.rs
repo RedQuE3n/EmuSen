@@ -150,7 +150,7 @@ fn times(dir: &Path) -> BTreeMap<String, f64> {
 }
 
 /// One `land/<sha>/` folder as a trial.
-fn land_dir(store: &Store, snap: &Snapshot, repo: &Repo, base: &Path, sha: &str, tally: &mut Tally) -> Result<(), String> {
+fn land_dir(store: &Store, snap: &Snapshot, repo: &Repo, base: &Path, sha: &str, grouped: &std::collections::BTreeSet<String>, tally: &mut Tally) -> Result<(), String> {
     let dir = base.join("land").join(sha);
     let source = format!("land/{sha}");
     if store.has_source(&source)? {
@@ -204,6 +204,11 @@ fn land_dir(store: &Store, snap: &Snapshot, repo: &Repo, base: &Path, sha: &str,
         let parsed: Vec<TestRow> = trxs.iter().flat_map(|t| reports::trx(&std::fs::read_to_string(t).unwrap_or_default())).collect();
         let mut by: BTreeMap<String, Vec<TestRow>> = BTreeMap::new();
         for r in parsed {
+            // A class mapped by case also gets a row per group, so `shard` deals its groups by a land's own times.
+            if grouped.contains(&r.group) {
+                let key = crate::coverage::case_key(r.test.split_once('(').map_or("", |(_, a)| a)).unwrap_or_default();
+                by.entry(format!("dotnet:{}#{key}", r.group)).or_default().push(TestRow { group: r.group.clone(), test: r.test.clone(), outcome: r.outcome, seconds: r.seconds, attempts: r.attempts, message: r.message.clone() });
+            }
             by.entry(format!("dotnet:{}", r.group)).or_default().push(r);
         }
         for (u, rs) in by {
@@ -339,8 +344,9 @@ pub fn backfill(store: &Store, repo: &Repo, base: &Path) -> Result<Tally, String
         .map(|e| (mtime(&e.path()).unwrap_or(std::time::UNIX_EPOCH), e.file_name().to_string_lossy().into_owned()))
         .collect();
     shas.sort();
+    let grouped: std::collections::BTreeSet<String> = crate::coverage::Map::load(store).ok().flatten().map(|m| m.units.iter().filter_map(|u| u.split_once('#').map(|(c, _)| c.to_string())).collect()).unwrap_or_default();
     for (_, sha) in &shas {
-        land_dir(store, &snap, repo, base, sha, &mut tally)?;
+        land_dir(store, &snap, repo, base, sha, &grouped, &mut tally)?;
     }
     let mut logs: Vec<PathBuf> = std::fs::read_dir(base).map_err(|e| e.to_string())?.flatten().map(|e| e.path()).filter(|p| p.file_name().and_then(|n| n.to_str()).is_some_and(|n| n.starts_with("land-") && n.ends_with(".log"))).collect();
     logs.sort();

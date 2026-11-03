@@ -96,7 +96,7 @@ fn units(args: &[String]) -> Result<Answer, String> {
 }
 
 fn impact_cmd(args: &[String]) -> Result<Answer, String> {
-    let a = parse(args, &[], &["--base", "--head", "--tier", "--depth", "--explain", "--blast", "--repo", "--also", "--map-age", "--format", "--inputs"])?;
+    let a = parse(args, &[], &["--base", "--head", "--tier", "--depth", "--explain", "--blast", "--repo", "--also", "--map-age", "--format", "--inputs", "--lunap-base", "--lunap-head"])?;
     let repo = Repo::find(a.get("--repo"))?;
     let base = a.get("--base").unwrap_or("WiseMan");
     let head = a.get("--head");
@@ -116,15 +116,39 @@ fn impact_cmd(args: &[String]) -> Result<Answer, String> {
     if let Some(d) = a.get("--depth") {
         tier.depth = Some(d.parse().map_err(|_| "--depth needs a number".to_string())?);
     }
+    let mut notes = Vec::new();
     let files = match a.get("--explain") {
         Some(f) => vec![f.to_string()],
         None => {
             let mut f = repo.changed(base, rev)?;
             if head.is_none() {
                 f.extend(repo.uncommitted()?);
-                f.sort();
-                f.dedup();
             }
+            // The toolkit's own changes, from the sibling checkout LunaP.props names, as lunap: files; off unless asked
+            // (held 2026-11-03 while LunaP's move into this repository is decided).
+            let lunap_base = a.get("--lunap-base").unwrap_or("none");
+            if lunap_base != "none" {
+                if let Some(root) = catalogue::lunap_root(&repo) {
+                    let sibling = Repo { root };
+                    let lunap_head = a.get("--lunap-head").unwrap_or("HEAD");
+                    match sibling.changed(lunap_base, lunap_head) {
+                        Ok(mut changed) => {
+                            if lunap_head == "HEAD" {
+                                changed.extend(sibling.uncommitted().unwrap_or_default());
+                            }
+                            changed.sort();
+                            changed.dedup();
+                            if !changed.is_empty() {
+                                notes.push(format!("LunaP: {} file(s) changed against {lunap_base} in {}", changed.len(), sibling.root.display()));
+                            }
+                            f.extend(changed.into_iter().map(|p| format!("lunap:{p}")));
+                        }
+                        Err(e) => notes.push(format!("LunaP: the sibling checkout's diff against {lunap_base} could not be read ({e}); its changes are not selected")),
+                    }
+                }
+            }
+            f.sort();
+            f.dedup();
             f
         }
     };
@@ -143,7 +167,6 @@ fn impact_cmd(args: &[String]) -> Result<Answer, String> {
         }
         None => Vec::new(),
     };
-    let mut notes = Vec::new();
     let map = match &store {
         Some(s) => match coverage::fresh(&repo, s, base, rev, map_age) {
             Ok(m) => m,
@@ -244,20 +267,25 @@ fn shard_cmd(call: &Call, args: &[String]) -> Result<Answer, String> {
     let a = parse(args, &["--keep-collections", "--machine"], &["--shards", "--head", "--repo", "--tier"])?;
     let repo = Repo::find(a.get("--repo"))?;
     let snap = catalogue::Snapshot::read(&repo, a.get("--head").unwrap_or("HEAD"))?;
-    let machine = shard::machine_globals(&repo, &snap);
+    let store = store::Store::open().ok();
+    let map = store.as_ref().and_then(|s| coverage::Map::load(s).ok().flatten());
+    let files = shard::machine_files(&repo, &snap);
+    let machine = shard::machine_units(&snap, &files, map.as_ref());
     if a.has("--machine") {
-        return Ok(ok(machine.iter().map(|(c, why)| format!("machine\t{why}\t{c}\n")).collect()));
+        let mut out: String = files.iter().map(|(f, why)| format!("file\t{why}\t{f}\n")).collect();
+        out.extend(machine.iter().map(|(u, why)| format!("machine\t{why}\t{u}\n")));
+        return Ok(ok(out));
     }
     let text = match a.words.first() {
         Some(f) => std::fs::read_to_string(f).map_err(|e| format!("{f}: {e}"))?,
         None => call.stdin().ok_or("shard needs a selection file, or impact's lines on stdin")?,
     };
     let units: Vec<String> = text.lines().filter_map(impact::Pick::parse).filter(|p| p.kind == "dotnet" && p.unit != "lunap").map(|p| p.unit).collect();
-    let times = store::Store::open().map(|s| shard::times(&s)).unwrap_or_default();
+    let times = store.as_ref().map(shard::times).unwrap_or_default();
     let skip_nightly = a.get("--tier").unwrap_or("land") != "nightly";
     let shards = shard::plan(&snap, &times, &machine, &units, a.number("--shards", 4)?, a.has("--keep-collections"), 20.0);
     let mut out = String::new();
-    let held: Vec<&String> = units.iter().filter(|u| snap.class_of_unit(u).is_some_and(|c| machine.contains_key(&c.fqn))).collect();
+    let held: Vec<&String> = units.iter().filter(|u| machine.contains_key(*u) || (!u.contains('#') && snap.class_of_unit(u).is_some_and(|c| machine.contains_key(&c.fqn)))).collect();
     out.push_str(&format!("machine\t{}\t{} of the selection's units touch machine-wide state and share one shard\n", held.len(), held.len()));
     for (i, s) in shards.iter().enumerate() {
         out.push_str(&format!("shard\t{}\t{:.0}\t{}\t{}\n", i + 1, s.seconds, s.units.len(), adapters::dotnet_filter(&s.units, false, skip_nightly)));

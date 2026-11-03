@@ -108,6 +108,51 @@ fn a_new_file_selects_through_the_changed_files_that_name_it_and_else_falls_to_t
 }
 
 #[test]
+fn a_recording_selects_its_view_group_and_a_toolkit_file_its_classes_or_the_tier() {
+    let f = fixture("gaps");
+    let (s, path) = store("gaps");
+    crate::coverage::load(&s, RUN, false).unwrap();
+    s.run("DELETE FROM coverage WHERE file = '*'", &[]).unwrap();
+    let by_case = RUN.replace("covered\tWise.FooTests\t", "covered\tWise.FooTests#Main\t").replace("ran\tWise.FooTests\t", "ran\tWise.FooTests#Main\t").replace("none\tWise.BarTests\tno report (exit 1; no result line)\n", "");
+    crate::coverage::load(&s, &by_case, true).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    assert_eq!(m.group_of("Wise.FooTests", "Wise/Spec/Main@1280x800.spec").as_deref(), None, "the fixture's recording name is not keyed");
+    assert_eq!(m.group_of("Wise.FooTests", "Wise/Spec/Main-1280x800.spec").as_deref(), Some("Wise.FooTests#Main"));
+    assert_eq!(m.group_of("Wise.FooTests", "Wise/Spec/Other-1280x800.spec"), None, "a view the map has no group for runs the class whole");
+    write(&f.dir, "Wise/Spec/Main-1280x800.spec", "window Main\n");
+    git(&f.dir, &["add", "-A"]);
+    git(&f.dir, &["commit", "-q", "-m", "a keyed recording"]);
+    assert_eq!(ids(&pick_with(&f, &["Wise/Spec/Main-1280x800.spec"], Some(&m))), vec!["dotnet:Wise.FooTests#Main recording"], "the recording's own group, not the class");
+    assert_eq!(ids(&pick_with(&f, &["Wise/Spec/Main@1280x800.spec"], Some(&m))), vec!["dotnet:Wise.FooTests recording"], "no group for it: the class whole");
+    assert_eq!(ids(&pick_with(&f, &["lunap:src/Kit/Button.cs"], Some(&m))), vec!["dotnet:Wise.FooTests#Main covered"], "a toolkit file the map saw selects the units that executed it");
+    let whole = pick_with(&f, &["lunap:src/Kit/Unseen.cs"], Some(&m));
+    assert!(whole.len() >= 5 && whole.iter().all(|p| p.reason == "closed"), "a toolkit file the map never saw closes to the tier: {:?}", ids(&whole));
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn machine_units_come_from_the_map_or_a_classs_own_sources() {
+    let f = fixture("machine");
+    let (s, path) = store("machine");
+    write(&f.dir, "Wise/Pads.cs", "namespace Wise\n{\n    public class Pads\n    {\n        public static void Make() { var p = new UinputPad(); }\n    }\n}\n");
+    write(&f.dir, "Wise/BarTests.cs", "namespace Wise\n{\n    public class BarTests\n    {\n        [Fact]\n        public void Holds() { new Host.Thing(); Pads.Make(); }\n    }\n}\n");
+    git(&f.dir, &["add", "-A"]);
+    git(&f.dir, &["commit", "-q", "-m", "a pad fixture"]);
+    let snap = Snapshot::read(&f.repo, "HEAD").unwrap();
+    let files = crate::shard::machine_files(&f.repo, &snap);
+    assert_eq!(files.get("Wise/Pads.cs").map(String::as_str), Some("uinput"));
+    assert!(!files.contains_key("Wise/BarTests.cs"), "the test's own file names no pattern");
+    crate::coverage::load(&s, &RUN.replace("covered\tWise.FooTests\tHost/Thing.cs\n", "covered\tWise.FooTests\tHost/Thing.cs\ncovered\tWise.FooTests\tWise/Pads.cs\n"), false).unwrap();
+    let m = crate::coverage::Map::load(&s).unwrap().unwrap();
+    let units = crate::shard::machine_units(&snap, &files, Some(&m));
+    assert!(units.contains_key("Wise.FooTests"), "by the map: it executed the pad fixture");
+    assert!(units.contains_key("Wise.BarTests") == false, "mapped with no report, and its own sources are clean: {units:?}");
+    let without = crate::shard::machine_units(&snap, &files, None);
+    assert!(without.is_empty(), "no map and no class names a pattern in its own files: {without:?}");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn shards_are_dealt_by_time_with_a_collection_kept_together_unless_spread() {
     use crate::shard::deal;
     let units = vec![("A".to_string(), 100.0, Some("globals".to_string())), ("B".to_string(), 90.0, Some("globals".to_string())), ("C".to_string(), 80.0, None), ("D".to_string(), 10.0, None), ("E".to_string(), 5.0, Some("mars".to_string()))];

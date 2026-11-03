@@ -27,6 +27,8 @@ pub struct Map {
     pub files: BTreeMap<String, Vec<String>>,
     pub unknown: Vec<String>,
     pub classes: usize,
+    /// Every unit the map holds, classes and groups of cases alike.
+    pub units: BTreeSet<String>,
 }
 
 impl Map {
@@ -35,13 +37,14 @@ impl Map {
         let head = store.rows("SELECT id, tree, finished FROM trial WHERE tier = 'coverage' AND verdict = 'MAP' ORDER BY id DESC LIMIT 1", &[])?;
         let Some(h) = head.first() else { return Ok(None) };
         let trial: i64 = h[0].as_deref().unwrap_or("0").parse().unwrap_or(0);
-        let mut m = Map { trial, rev: h[1].clone().unwrap_or_default(), built: h[2].clone().unwrap_or_default(), files: BTreeMap::new(), unknown: Vec::new(), classes: 0 };
+        let mut m = Map { trial, rev: h[1].clone().unwrap_or_default(), built: h[2].clone().unwrap_or_default(), files: BTreeMap::new(), unknown: Vec::new(), classes: 0, units: BTreeSet::new() };
         let mut classes = BTreeSet::new();
         for r in store.rows("SELECT unit, file FROM coverage WHERE recorded = $t", &[("$t", Bound::Integer(trial))])? {
             let unit = r[0].clone().unwrap_or_default();
             let unit = unit.strip_prefix("dotnet:").unwrap_or(&unit).to_string();
             let file = r[1].clone().unwrap_or_default();
-            classes.insert(unit.clone());
+            classes.insert(unit.split('#').next().unwrap_or(&unit).to_string());
+            m.units.insert(unit.clone());
             if file == NO_REPORT {
                 m.unknown.push(unit);
             } else {
@@ -55,6 +58,15 @@ impl Map {
     /// The classes that executed a source file; none when the map never saw it.
     pub fn classes_of(&self, file: &str) -> Option<&Vec<String>> {
         if file.ends_with(".cs") { self.files.get(file) } else { None }
+    }
+
+    /// The group of a class's cases a recording belongs to (`Class#Key`, the key the recording's name gives), when
+    /// the class is mapped by case and has that group.
+    pub fn group_of(&self, class: &str, recording: &str) -> Option<String> {
+        let name = recording.rsplit('/').next().unwrap_or(recording);
+        let key = case_key(&format!("(\"{name}\")"))?;
+        let unit = format!("{class}#{key}");
+        self.units.contains(&unit).then_some(unit)
     }
 }
 

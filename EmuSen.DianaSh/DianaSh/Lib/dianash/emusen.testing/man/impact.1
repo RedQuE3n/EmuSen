@@ -2,7 +2,7 @@ NAME
     impact - the units a change can affect, with the rule and the file
 
 SYNOPSIS
-    impact [--base REV] [--head REV] [--tier T] [--depth N] [--also TERMS] [--map-age DAYS] [--inputs FILE] [--repo DIR]
+    impact [--base REV] [--head REV] [--tier T] [--depth N] [--also TERMS] [--map-age DAYS] [--inputs FILE] [--lunap-base REV] [--lunap-head REV] [--repo DIR]
     impact --explain FILE [--tier T]
     impact --base REV --head REV --blast FILE
     impact --base REV --head REV --format blast
@@ -20,9 +20,12 @@ DESCRIPTION
     The rules, in order, the first reason for a unit kept:
 
         recording  a changed recording (a line of kind 'recording' in
-                   Testing/inputs.json) selects its owner; a file ending
-                   as a recording does (.spec, .golden, ...) that no line
-                   owns selects the tier's whole set
+                   Testing/inputs.json) selects its owner, or, when the
+                   owner is mapped by case and the map has the group the
+                   recording's name keys (Main-1280x800.spec to
+                   Owner#Main), that group alone; a file ending as a
+                   recording does (.spec, .golden, ...) that no line owns
+                   selects the tier's whole set
         always     a test class's own file selects the class; a unit that
                    failed in this branch's last trial is selected again
         declared   a folder line of Testing/inputs.json matching the file
@@ -65,6 +68,17 @@ DESCRIPTION
     from that file instead of the head revision's Testing/inputs.json,
     to try a line before committing it or to replay history with
     today's lines.
+
+    The toolkit's own changes can count too: with --lunap-base REV the
+    sibling LunaP checkout that LunaP.props names is diffed from REV to
+    --lunap-head (default HEAD, with its uncommitted changes), and each
+    file enters as lunap:<path>, which the map records the toolkit's
+    files under: a file the map has seen selects the units that
+    executed it, and one it has never seen closes to the tier's whole
+    set, never to nothing. The count is said on standard error. Off by
+    default (none): held on 2026-11-03 while LunaP's move into this
+    repository is decided, which would make the sibling diff
+    unnecessary.
 
     The map is used when its revision is at most --map-age days (default
     1) older than the merge base of --base and --head; an older map, or

@@ -22,13 +22,18 @@ DESCRIPTION
     into the least loaded shard.
 
     Separate processes share no statics, but they share the machine.
-    The classes whose sources show them touching machine-wide state
-    are dealt as one item and stay in one shard: a virtual pad or
-    uinput (every process's SDL sees the pad another makes), a
-    listener or a literal port, a fixed path under the home or out/
-    that the class also writes, a lock on a fixed folder (flock,
-    FixedRunFolder), the GPU facts; --machine lists them with the
-    reason, from the sources at --head. The classes of one xunit
+    The test project's source files that show machine-wide state are
+    found by a scan (a virtual pad or uinput, which every process's
+    SDL sees; a listener or a literal port; a fixed path under the
+    home or out/ that the file also writes; a lock on a fixed file;
+    the GPU facts), and a unit is machine-global when the coverage map
+    saw it execute such a file, or, for a class the map holds no rows
+    for, when its own files are such; those units are dealt as one
+    item and stay in one shard. FixedRunFolder is not such a file: it
+    claims the next free slot (NNN.lock, FileShare.None) per process,
+    which is what lets the fit audit's groups run side by side.
+    --machine lists the files and the units with their reasons, from
+    the sources at --head and the map. The classes of one xunit
     collection ([Collection(...)], DisableParallelization) guard state
     inside a process and are spread (decided 2026-11-02 by the tester);
     --keep-collections deals each collection as one item instead. A

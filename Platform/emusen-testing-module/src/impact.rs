@@ -261,10 +261,20 @@ pub fn impact(repo: &Repo, snap: &Snapshot, ask: &Ask) -> Selection {
             continue;
         }
         let mut claimed = !lines.is_empty();
-        // recording
+        // recording; an owner mapped by case runs only the group the recording belongs to
         for l in &recording {
             for s in &l.select {
-                expand(repo, snap, tier, ask.map, s, "recording", f, &mut out);
+                let groups: Vec<(String, String)> = match ask.map {
+                    Some(m) if !s.contains(':') && s != "lunap" => snap.classes_matching(s).iter().filter_map(|c| m.group_of(&c.fqn, f).map(|g| (c.fqn.clone(), g))).collect(),
+                    _ => Vec::new(),
+                };
+                if groups.is_empty() {
+                    expand(repo, snap, tier, ask.map, s, "recording", f, &mut out);
+                } else {
+                    for (_, g) in groups {
+                        out.add("dotnet", &g, "recording", &format!("{f} (its group)"));
+                    }
+                }
             }
         }
         if recording.is_empty() && snap.inputs.is_recording(f) && !none {

@@ -1270,6 +1270,21 @@ what the list shows now, in Body (`Sorted by name, A to Z.`). Help bar `A Choose
 Close`. Over a themed view the card's Filter and Sort set the theme's own gamelist sort and filter, so the theme's
 `GamelistFilterWindow`, Jump To and Sort By sheets retire into it.
 
+**Filter ▸ Favourites** (decided 2026-11-03). The Filter page reads `Every game`, `Favourites`, then the player's
+collections. Favourites narrows the section shown to its favourites, so NES ▸ Filter ▸ Favourites is the NES
+favourites; the Filter row's value reads `Favourites` and the count `1 of 5 games`, as a search's does. Each section
+keeps its own choice while the shoulders move between sections, and it is cleared as a collection is: `Every game` on
+the Filter page, or B (after a search, before a collection is left). The Favourites tab does not offer it, since it
+would show the same games. `Every game` also leaves a collection shown in the strip's place. The description is
+`GamesScreen.FilterRows`, `ChooseFilter` and `FilterValue`.
+
+The desktop library reaches the same games by the sidebar's Favourites and a console: while the sidebar shows
+Favourites, Recently Played or a collection, the filter bar shows its `Console:` choice, and a console chosen there
+narrows the collection (the console narrows first, the collection second, as before). The bar hides the choice again
+when the sidebar shows All Games or a console, which already names the console. Before 2026-11-03 only the pad's
+shoulders stepped the console under Favourites. The ES-DE themed view already has it: its Filter Gamelist offers
+Favorite (Yes, No) as ES-DE's own does (`GamelistOptions.FilterField.Favorite`, `EmuSen_Settings_Reference.md` §4.58).
+
 **Search docks the keyboard.** A on Search closes the card and docks the keyboard (`OnScreenKeyboard`'s docked form,
 `EmuSen_Shell.md` §3, H2) at the foot of the screen: 0,398 to 702 (decided 2026-11-03, as the mockup draws it), five rows of 72 × 48 keys on SurfaceRaised, gap 8,
 the focused key ringed, `Shift`, `Symbols`, `Space` and `Done` as wide keys. The search field takes the strip's row at

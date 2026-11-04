@@ -35,7 +35,7 @@ namespace EmuSen.Mistress.Pages
     {
         public const string All = "all", Favourites = "favourites", Recent = "recent", ConsolePrefix = "console:", CollectionPrefix = "collection:";
         public const string SearchRow = "search", SortRow = "sort", FilterRow = "filter", JumpRow = "jump", RandomRow = "random", StartConsoleRow = "start-console", CollectionsRow = "collections";
-        public const string EveryGame = "Every game", ListTitle = "List";
+        public const string EveryGame = "Every game", FavouritesFilter = "Favourites", ListTitle = "List";
 
         public static readonly IReadOnlyList<string> Sorts = ["Name", "Last played", "Most played", "Year", "Rating"];
 
@@ -46,6 +46,7 @@ namespace EmuSen.Mistress.Pages
         private string _section = All;
         private long? _collection;
         private string _search = string.Empty;
+        private readonly HashSet<string> _favouritesIn = new(StringComparer.Ordinal);
 
         public IGamesHost Host => _host;
 
@@ -54,6 +55,12 @@ namespace EmuSen.Mistress.Pages
         public string Sort { get; private set; } = Sorts[0];
 
         public string SearchText => _search;
+
+        // Whether the Filter page's Favourites narrows the section shown; each section keeps its own.
+        public bool FavouritesOnly => _section != Favourites && _favouritesIn.Contains(_section);
+
+        // The Filter row's value: Favourites, the collection shown, or nothing for every game.
+        public string? FilterValue => FavouritesOnly ? FavouritesFilter : Collection?.Name;
 
         // The collection shown in the strip's place, or null.
         public GridCollection? Collection => _collection is long id ? _host.Collections.FirstOrDefault(c => c.Id == id) : null;
@@ -70,6 +77,7 @@ namespace EmuSen.Mistress.Pages
 
         public void ShowCollection(long? id)
         {
+            if (_collection is long left) _favouritesIn.Remove(CollectionPrefix + left);
             _collection = id;
             _section = id is long i ? CollectionPrefix + i : All;
         }
@@ -88,6 +96,7 @@ namespace EmuSen.Mistress.Pages
             get
             {
                 IReadOnlyList<GridGame> games = InSection();
+                if (FavouritesOnly) games = games.Where(g => g.Facts.Favourite).ToList();
                 if (_search.Trim() is { Length: > 0 } words) games = games.Where(g => g.Facts.Title.Contains(words, StringComparison.CurrentCultureIgnoreCase)).ToList();
                 return Sorted(games);
             }
@@ -129,7 +138,7 @@ namespace EmuSen.Mistress.Pages
             {
                 int all = InSection().Count, shown = Shown.Count;
                 string games = all == 1 ? "1 game" : $"{all.ToString("N0", CultureInfo.CurrentCulture)} games";
-                return _search.Trim().Length > 0 ? $"{shown.ToString("N0", CultureInfo.CurrentCulture)} of {games}" : games;
+                return _search.Trim().Length > 0 || FavouritesOnly ? $"{shown.ToString("N0", CultureInfo.CurrentCulture)} of {games}" : games;
             }
         }
 
@@ -163,7 +172,7 @@ namespace EmuSen.Mistress.Pages
             {
                 new(SearchRow, "Search", Opens: true),
                 new(SortRow, "Sort", Sort, Steps: true),
-                new(FilterRow, "Filter", Collection?.Name, Opens: true),
+                new(FilterRow, "Filter", FilterValue, Opens: true),
                 new(JumpRow, "Jump to", Letter(Shown.FirstOrDefault(g => g.Facts.Path == focused)?.Facts.Title ?? Shown.FirstOrDefault()?.Facts.Title ?? "#"), Steps: true),
                 new(RandomRow, "Random game"),
             };
@@ -177,7 +186,7 @@ namespace EmuSen.Mistress.Pages
         {
             SortRow => [(SortSentence(), "Also: " + string.Join(" · ", Sorts.Where(s => s != Sort)))],
             SearchRow => [("Type part of a name; the covers narrow as you type.", "The keyboard docks at the foot of the screen.")],
-            FilterRow => [(Collection is { } c ? $"Shows {c.Name}." : "Shows every game in the section.", "Choose a collection to show it in the strip's place.")],
+            FilterRow => [(FavouritesOnly ? "Shows the section's favourites." : Collection is { } c ? $"Shows {c.Name}." : "Shows every game in the section.", "Choose Favourites to narrow it, or a collection to show it in the strip's place.")],
             JumpRow => [("Moves to the first game under the letter.", string.Join(" ", Letters))],
             RandomRow => [("Moves to a game chosen at random.", "A plays it.")],
             StartConsoleRow => [("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")],
@@ -193,9 +202,19 @@ namespace EmuSen.Mistress.Pages
             _ => "Sorted by name, A to Z.",
         };
 
-        // The Filter page's rows: every game, then each of the player's collections.
+        // The Filter page's rows: every game, Favourites except in the Favourites section, then each of the player's collections.
         public IReadOnlyList<(string Key, string Label)> FilterRows =>
-            [("", EveryGame), .. _host.Collections.Select(c => (c.Id.ToString(CultureInfo.InvariantCulture), c.Name))];
+            [("", EveryGame), .. _section == Favourites ? Array.Empty<(string, string)>() : [(Favourites, FavouritesFilter)],
+             .. _host.Collections.Select(c => (c.Id.ToString(CultureInfo.InvariantCulture), c.Name))];
+
+        // A Filter page row chosen: every game clears the section's favourites and leaves a collection, Favourites narrows the section, a collection takes the strip's place.
+        public void ChooseFilter(string key)
+        {
+            if (key == Favourites) { if (_section != Favourites) _favouritesIn.Add(_section); return; }
+            _favouritesIn.Remove(_section);
+            if (long.TryParse(key, NumberStyles.Integer, CultureInfo.InvariantCulture, out long id)) ShowCollection(id);
+            else if (_collection is not null) ShowCollection(null);
+        }
 
         // The focused game's facts under the grid.
         public string FactsOf(GridGame game) => HomeScreen.GameOf(game.Facts, _host.Now).Facts;
@@ -216,10 +235,11 @@ namespace EmuSen.Mistress.Pages
             }
         }
 
-        // B: a search is cleared first, then a collection left, then Home.
+        // B: a search is cleared first, then the section's favourites, then a collection left, then Home.
         public bool Back()
         {
             if (_search.Length > 0) { _search = string.Empty; return true; }
+            if (FavouritesOnly) { _favouritesIn.Remove(_section); return true; }
             if (_collection is not null) { ShowCollection(null); return true; }
             _host.Home();
             return true;

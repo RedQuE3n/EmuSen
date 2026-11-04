@@ -242,7 +242,7 @@ namespace EmuSen.Mistress.Views
                 {
                     GamesScreen.SearchRow => new(() => row.Label, () => ShowGames(search: true)) { Opens = true, PaneLines = pane },
                     GamesScreen.SortRow => new(() => row.Label, () => { games.StepSort(1); FillGames(); }, by => { games.StepSort(by); FillGames(); }, closes: false) { Label = () => row.Label, Value = () => games.Sort, PaneLines = pane },
-                    GamesScreen.FilterRow => new(() => row.Label, () => { }, closes: false) { Submenu = FilterRows, Opens = true, Label = () => row.Label, Value = () => games.Collection?.Name, PaneLines = pane },
+                    GamesScreen.FilterRow => new(() => row.Label, () => { }, closes: false) { Submenu = FilterRows, Opens = true, Label = () => row.Label, Value = () => games.FilterValue, PaneLines = pane },
                     GamesScreen.JumpRow => new(() => row.Label, () => JumpBy(1), JumpBy, closes: false) { Label = () => row.Label, Value = () => games.ListRows(_gallery?.Focused.Key).First(r => r.Key == GamesScreen.JumpRow).Value, PaneLines = pane },
                     GamesScreen.RandomRow => new(() => row.Label, () => { if (games.RandomGame() is { } p) _gallery?.FocusOn(p); }) { PaneLines = pane },
                     GamesScreen.StartConsoleRow => new(() => row.Label, () => OpenCard(StartConsoleMenu, StartConsolePage, HomeTitle)) { Opens = true, PaneLines = pane },
@@ -301,7 +301,7 @@ namespace EmuSen.Mistress.Views
 
         private List<PadMenuEntry> FilterRows() =>
             _games is not { } games ? []
-            : games.FilterRows.Select(f => new PadMenuEntry(() => f.Label, () => ShowGames(collection: long.TryParse(f.Key, out long id) ? id : null))).ToList();
+            : games.FilterRows.Select(f => new PadMenuEntry(() => f.Label, () => { games.ChooseFilter(f.Key); ShowGames(); })).ToList();
 
         private CollectionsWindow? _collectionsTool;
 

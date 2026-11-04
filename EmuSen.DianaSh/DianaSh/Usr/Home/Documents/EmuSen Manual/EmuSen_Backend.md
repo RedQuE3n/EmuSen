@@ -2121,6 +2121,30 @@ that drives frames. Their twins are `emusen_crystal_open_game` and `emusen_cryst
 `games`' twin is `systems` itself, so the twin check names that one pair rather than export the same JSON twice. The
 frontend service of §3.11 keeps its two window operations and gains nothing.
 
+### 14.15 A state's game identity: hashed on the spot when the save comes first (2026-11-03)
+
+A saved state's record names the game it was made on, `RomMd5` and `RomBytes`. Both runtimes hashed the game on a
+worker as the session opened, and a state saved before that worker finished recorded none (`"RomMd5":null,
+"RomBytes":0`). Which runtime won the race varied with the machine's load, so `CrystalParityTests`'
+`A_game_opened_by_its_plain_path_and_by_its_package_reaches_one_save_both_ways` and `A_patched_game_keeps_its_own_
+battery_save_and_states_apart_from_the_original_s_both_ways` failed now and then (in the lands of 9392b0501 on
+2026-11-01 and of scrape-speed on 2026-11-03, the C# answer carrying the MD5 and the Rust one null), and a player's
+early state could carry no identity.
+
+Proved on 2026-11-03 without timing: `identity::tests::a_state_saved_while_the_hashing_thread_is_held_records_the_game
+_s_md5` holds the hashing thread and saves; before the change the record was `(None, 0)`.
+
+The rule now, in both runtimes (Rust `Platform/crystal/src/identity.rs`, C# `ManagedSession.Identity`): the worker
+still hashes from open, and a save that finds no identity yet hashes the game itself, under the identity's lock, and
+keeps what it found, which the worker then leaves as it is. A patched package's identity, set at open, still stands
+over the file's (EmuSen_GamePackages.md §5.5). Of the two corrections, a save that waits for the worker and a save that
+hashes on the spot, the second was taken: it needs no wait, no bound and no answer for a bound that runs out (a state
+written without its identity being the defect), and it is correct whichever finishes first. Its cost is a second read
+of the game, once a session at most, only when the first save comes before the worker has finished.
+
+Seeded the same day, caught by the held-thread test: the save's own hash removed. `CrystalParityTests` ran 20 times
+in a row, every case passing.
+
 ---
 
 ## 15. What was built, 2026-10-17: B5, the file services in Rust

@@ -65,7 +65,7 @@ impl Session {
     }
 
     fn record(&self, e: &Engine) -> StateRecord {
-        let (md5, bytes) = self.identity.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let (md5, bytes) = self.identity.for_state(self.game_path.as_deref());
         let game = self.game_path.is_some();
         StateRecord {
             console: self.console.clone(),

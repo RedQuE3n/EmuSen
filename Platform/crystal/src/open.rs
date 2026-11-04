@@ -170,7 +170,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
     let mut session = Session::new(sessions.next_id(), engine, path.map(str::to_string), name, empty, asked.opened, rt.events.clone());
     // A state saved on a patched package's game records the patched image it was made on (EmuSen_GamePackages.md §5.5).
     if let Some((md5, bytes)) = package.as_deref().and_then(patched_identity) {
-        *session.identity.lock().unwrap_or_else(|p| p.into_inner()) = (Some(md5), bytes as i64);
+        session.identity.set(md5, bytes as i64);
     }
     session.package = package;
     session.save_key = save_key;

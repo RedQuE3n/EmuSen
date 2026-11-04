@@ -10,6 +10,7 @@ pub mod engine;
 pub mod error_log;
 pub mod events;
 pub mod firmware;
+pub mod identity;
 pub mod info;
 pub mod input;
 pub mod json;

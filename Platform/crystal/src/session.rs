@@ -110,8 +110,8 @@ pub struct Session {
     wake: Condvar,
     /// The picture as shown, for the recorder.
     shown: Mutex<Vec<u8>>,
-    /// The game's MD5 and size, read once on a worker as the session opens; none until then.
-    pub identity: Arc<Mutex<(Option<String>, i64)>>,
+    /// The game's MD5 and size, hashed on a worker as the session opens, or by a save that comes first.
+    pub identity: crate::identity::Identity,
     pub events: Arc<crate::events::Events>,
     /// The core's log lines already raised as events.
     logged_lines: std::sync::atomic::AtomicI64,
@@ -128,19 +128,7 @@ fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
 impl Session {
     pub fn new(id: u32, engine: Engine, game_path: Option<String>, console: String, empty_console: Option<String>, opened: OpenedWith, events: Arc<crate::events::Events>) -> Session {
         let (latch, routes, rumble) = (engine.latch.clone(), engine.routes.clone(), engine.rumble.clone());
-        let identity = Arc::new(Mutex::new((None, 0)));
-        if let Some(at) = game_path.clone() {
-            let theirs = identity.clone();
-            // A patched package's identity, set at open, is never overwritten by the file's (EmuSen_GamePackages.md §5.5).
-            let _ = std::thread::Builder::new().name("crystal-identify".to_string()).spawn(move || {
-                let bytes = std::fs::metadata(&at).map_or(0, |m| m.len() as i64);
-                let md5 = emusen_galaxia::rom_hash::md5(&at).ok();
-                let mut known = theirs.lock().unwrap_or_else(|p| p.into_inner());
-                if known.0.is_none() {
-                    *known = (md5, bytes);
-                }
-            });
-        }
+        let identity = crate::identity::Identity::start(game_path.clone());
         Session {
             id,
             engine: Mutex::new(engine),

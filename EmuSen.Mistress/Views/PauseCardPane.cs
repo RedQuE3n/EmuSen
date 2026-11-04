@@ -121,8 +121,8 @@ namespace EmuSen.Mistress.Views
         {
             double u = U, side = 180 * u;
             var card = new CoverCard { Name = "PaneCover", Big = true, CellWidth = side, CellHeight = side, Item = cover with { Aspect = 1 } };
-            // The generated card is drawn on the pane's own surface, so its edge is drawn in the border token.
-            var frame = new Border { CornerRadius = new CornerRadius(Radius * u), BorderThickness = new Thickness(Math.Max(1, u)), VerticalAlignment = VerticalAlignment.Top, Child = card };
+            // The generated card is drawn on the pane's own surface, so its edge is drawn in the border token; a picture, whole at its own shape, needs none.
+            var frame = new Border { CornerRadius = new CornerRadius(Radius * u), BorderThickness = new Thickness(cover.Picture is null ? Math.Max(1, u) : 0), VerticalAlignment = VerticalAlignment.Top, Child = card };
             frame.Bind(BorderBrushProperty, frame.GetResourceObservable("LunaBorder"));
             var words = new StackPanel { Spacing = 8 * u, Margin = new Thickness(0, 48 * u, 0, 0) };
             words.Children.Add(Line(title, Words * u, Ink.Text, name: "PaneTitle", wraps: true));

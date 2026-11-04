@@ -40,11 +40,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return data;
         }
 
-        // The synthetic library's eight games with their pictures, played in a fixed order over the last days, two favourites and a collection of three.
+        // The synthetic library's eight games with their pictures at their boxes' shapes, played in a fixed order over the last days, two favourites and a collection of three.
         private (MainWindow Window, PadDriver Pad) OwnLookSession(string view, int width, int height)
         {
-            string media = Path.Combine(Path.GetTempPath(), "EmuSenOwnLookMedia");
-            SyntheticLibrary.WriteMedia(media);
+            string media = Path.Combine(Path.GetTempPath(), "EmuSenOwnLookBoxes");
+            SyntheticLibrary.WriteMedia(media, boxes: true);
             Directory.CreateDirectory(_romDir);
             foreach (string g in ThemedSession.SnesGames) File.WriteAllBytes(Path.Combine(_romDir, g + ".sfc"), SyntheticRom.BuildBlank());
             foreach (string g in ThemedSession.NesGames) File.WriteAllBytes(Path.Combine(_romDir, g + ".nes"), new byte[64]);

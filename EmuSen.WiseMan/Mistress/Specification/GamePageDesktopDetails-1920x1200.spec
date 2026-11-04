@@ -19,9 +19,9 @@ tree
           4 PosterSlot at=0,0,1720,200 by=panel heard=Poster limit=0,0,1720,1146 name=PagePoster nohit role=image
           5 Button at=24,16,80,28 by=panel drawn focus heard=Back limit=0,0,1720,1146 name=PageBack op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=button text="‹ Back"
             6 AccessText at=33,22,62,15 box=62,15 by=clip caps=6.0662 drawn face=Barlow layout=34.65,15.6 limit=24,16,80,28 owner=5 paints=#D4D4D4FF role=none size=8.67 text="‹ Back"
-          7 Border at=24,93,146,200 by=panel heard="Cobalt Harbor (Synthetic), cover" limit=0,0,1720,1146 name=PageCover paints=#26262BFF role=none
-            8 Panel at=24,93,146,200 by=clip limit=24,93,146,200 role=none
-              9 Image at=24,93,146,200 by=clip drawn limit=24,93,146,200 nohit role=image
+          7 Border at=24,93,150,200 by=panel heard="Cobalt Harbor (Synthetic), cover" limit=0,0,1720,1146 name=PageCover paints=#26262BFF role=none
+            8 Panel at=24,93,150,200 by=clip limit=24,93,150,200 role=none
+              9 Image at=24,93,150,200 by=clip drawn limit=24,93,150,200 nohit role=image
           10 Viewbox at=208,104,201,29 by=panel limit=0,0,1720,1146 role=none
             11 ViewboxContainer at=208,104,201,29 by=clip limit=208,104,201,29 role=none
               12 TextBlock at=208,104,201,29 box=201,29 by=clip caps=11.1992 drawn face="Barlow Condensed Medium" heard="Cobalt Harbor (Synthetic)" layout=200.21,28.8 limit=208,104,201,29 name=PageTitle paints=#FFFFFFFF role=text size=16 text="Cobalt Harbor (Synthetic)"

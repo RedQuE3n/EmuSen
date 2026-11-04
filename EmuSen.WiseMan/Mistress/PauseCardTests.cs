@@ -225,11 +225,8 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => window.GetControl<TextBlock>("StatusText").Text?.StartsWith("State loaded", StringComparison.Ordinal) == true, "the load");
             Assert.False(PadMenu.IsOpen(window));
             (long after, long latest, int count) = Reel(window);
-            if (EmuSen.WiseMan.Crystal.DivergenceRowTests.KeepsRewindAcrossALoad)
-            {
-                Assert.Equal(oldest, after);
-                Assert.True(latest >= newest && count >= 3, $"the reel kept up to {newest}: {after}..{latest}, {count} moments");
-            }
+            Assert.Equal(oldest, after);
+            Assert.True(latest >= newest && count >= 3, $"the reel kept up to {newest}: {after}..{latest}, {count} moments");
             Done(window);
         }, default);
 

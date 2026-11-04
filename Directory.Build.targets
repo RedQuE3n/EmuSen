@@ -1,10 +1,5 @@
 <Project>
 
-  <!-- A program whose frontend API runs on the Rust Crystal unless EMUSEN_CRYSTAL_NATIVE says otherwise sets EmuSenCrystalNative to true, which the binding reads from its entry assembly - see EmuSen_Backend.md §29.27 and EmuSen_Surfaces.md §6.2. -->
-  <ItemGroup Condition="'$(EmuSenCrystalNative)' == 'true'">
-    <AssemblyMetadata Include="EmuSen.CrystalNative" Value="1" />
-  </ItemGroup>
-
   <!-- A folder that received Rust cores never keeps one its sidecar does not describe: the build fails instead - see EmuSen_RustPlatform.md §28.10. -->
   <Target Name="EmuSenCheckOutputCores" AfterTargets="CopyFilesToOutputDirectory">
     <MSBuild Projects="$(MSBuildThisFileDirectory)EmuSen/Cores/CheckCoreSidecars.proj" Targets="Check" Properties="Folder=$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(OutDir)'))" />

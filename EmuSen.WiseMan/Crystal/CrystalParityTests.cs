@@ -10,11 +10,12 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Fixtures;
+using System.Runtime.CompilerServices;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The parity class of step B7: each call made of the C# implementation and of Rust's through the C ABI, and their answers and the files they leave compared - see EmuSen_Backend.md §29.7. Part (a)'s first piece: the runtime, its engines and cores, the systems, the shelves and a file's route.
+    // The parity class of step B7: each call made of the Rust through the C ABI, its answers and the files it leaves held to the C# implementation's, recorded before it was deleted - see EmuSen_Backend.md §29.7 and §40.8. Part (a)'s first piece: the runtime, its engines and cores, the systems, the shelves and a file's route.
     [Collection(TestCollections.ProcessGlobals)]
     public partial class CrystalParityTests : IDisposable
     {
@@ -31,8 +32,12 @@ namespace EmuSen.WiseMan.Crystal
 
         public void Dispose()
         {
-            CoreDiscovery.UseDirectories(null);
-            CoreDiscovery.UseDevelopment(null);
+            try { FinishGolden(); }
+            finally { Clean(); }
+        }
+
+        private void Clean()
+        {
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
@@ -40,52 +45,34 @@ namespace EmuSen.WiseMan.Crystal
 
         private static readonly string[] Listings = { "systems", "shelves", "engines", "cores" };
 
-        // Each implementation in turn, a fresh runtime over the same directories, its answers in the order asked.
+        // A fresh runtime over the directories, its answers in the order asked.
         private static List<string> Answers(CrystalImpl impl, IReadOnlyList<string> cores, Func<CrystalImpl, nint, IEnumerable<string>> asks, bool development = false)
         {
-            // The C# implementation's discovery is the process's, so a flag one runtime was given is put back before the next.
-            CoreDiscovery.UseDevelopment(null);
-            CoreDiscovery.UseDirectories(cores);
             nint rt = impl.New(cores, development);
             try { return asks(impl, rt).ToList(); }
             finally { impl.Free(rt); }
         }
 
-        private void Same(IReadOnlyList<string> cores, Func<CrystalImpl, nint, IEnumerable<string>> asks, bool development = false, Func<string, string>? normal = null)
+        private void Same(IReadOnlyList<string> cores, Func<CrystalImpl, nint, IEnumerable<string>> asks, bool development = false, Func<string, string>? normal = null, [CallerMemberName] string test = "")
         {
             normal ??= s => s;
-            List<string> managed = Answers(CrystalImpl.Managed, cores, asks, development).Select(normal).ToList();
-            List<string> native = Answers(CrystalImpl.Native, cores, asks, development).Select(normal).ToList();
-            Compare(managed, native);
+            Settle(Impls.Select(i => Answers(i, cores, asks, development).Select(normal).ToList()).ToList(), test);
+        }
+
+        // The answers of one run, held to the golden.
+        private List<string> Each(Func<CrystalImpl, IEnumerable<string>> run, [CallerMemberName] string test = "")
+        {
+            var runs = Impls.Select(i => run(i).ToList()).ToList();
+            Settle(runs, test);
+            return runs[0];
         }
 
         // The Rust's answer with what only it gives set aside: the cores listing's libretro key (1.5) and firmware key (1.8), the systems listing's display_name, firmware_name and rumble (1.11), the FirmwarePreference row (EmuSen_Cores.md §3.12), and its minor in a refusal's words - see EmuSen_Backend.md §34.
         internal static string AsCSharp(string answer) =>
-            System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(answer, "(?<=\"self_delimiting_images\":(true|false)),\"rumble\":(true|false)", "").Replace(",\"libretro\":null", "", StringComparison.Ordinal), ",\\{\"key\":\"FirmwarePreference\"[^{}]*\\}", ""), "(?<=\"systems\":\\[[^\\]]*\\]),\"firmware\":(null|\"required\"|\"optional\")|,\"display_name\":\"[^\"]*\",\"firmware_name\":(null|\"[^\"]*\")", ""), $@"(?<= (in|to) ){EmuSen.Crystal.Client.Contract.CrystalAbi.Major}\.{EmuSen.Crystal.Client.Contract.CrystalAbi.Minor}\b", $"{EmuSen.Crystal.Managed.CrystalNumbers.Major}.{EmuSen.Crystal.Managed.CrystalNumbers.Minor}");
+            System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(System.Text.RegularExpressions.Regex.Replace(answer, "(?<=\"self_delimiting_images\":(true|false)),\"rumble\":(true|false)", "").Replace(",\"libretro\":null", "", StringComparison.Ordinal), ",\\{\"key\":\"FirmwarePreference\"[^{}]*\\}", ""), "(?<=\"systems\":\\[[^\\]]*\\]),\"firmware\":(null|\"required\"|\"optional\")|,\"display_name\":\"[^\"]*\",\"firmware_name\":(null|\"[^\"]*\")", ""), $@"(?<= (in|to) ){EmuSen.Crystal.Client.Contract.CrystalAbi.Major}\.{EmuSen.Crystal.Client.Contract.CrystalAbi.Minor}\b", CSharpVersion);
 
-        private void Compare(List<string> managed, List<string> native)
-        {
-            native = native.Select(AsCSharp).ToList();
-            Assert.Equal(managed.Count, native.Count);
-            string? first = null;
-            for (int i = 0; i < managed.Count; i++)
-            {
-                if (managed[i] == native[i]) continue;
-                int at = Enumerable.Range(0, Math.Min(managed[i].Length, native[i].Length)).FirstOrDefault(k => managed[i][k] != native[i][k], Math.Min(managed[i].Length, native[i].Length));
-                int from = Math.Max(0, at - 160);
-                _output.WriteLine($"answer {i}, first difference at {at}\nC#:   ...{managed[i][from..Math.Min(managed[i].Length, at + 160)]}\nRust: ...{native[i][from..Math.Min(native[i].Length, at + 160)]}");
-                bool equalValues = !managed[i].StartsWith("status") && !native[i].StartsWith("status") && SameJson(managed[i], native[i]);
-                first ??= equalValues ? $"answer {i} holds the same values in another order or spelling" : $"answer {i} differs";
-            }
-            if (first is not null) Assert.Fail(first);
-        }
-
-        // Whether two answers are JSON of the same values, false where either is not JSON.
-        private static bool SameJson(string a, string b)
-        {
-            try { return JsonNode.DeepEquals(JsonNode.Parse(a), JsonNode.Parse(b)); }
-            catch (System.Text.Json.JsonException) { return false; }
-        }
+        // The frontend API's version the C# implementation spoke when its answers were recorded.
+        private const string CSharpVersion = "1.4";
 
         // The build's own tree: every project core, the two test cores, the build's manifest.
         private static IReadOnlyList<string> BuildTree => new[] { AppContext.BaseDirectory, Path.Combine(AppContext.BaseDirectory, "cores") };
@@ -134,7 +121,6 @@ namespace EmuSen.WiseMan.Crystal
             {
                 string before = impl.Read("engines", rt);
                 File.Delete(sidecar);
-                CoreDiscovery.Rescan();
                 int status = impl.Rescan(rt);
                 string after = impl.Read("engines", rt);
                 File.WriteAllBytes(sidecar, kept);
@@ -145,8 +131,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void The_first_listing_copies_graphics_json_s_consoles_once_and_writes_the_same_file()
         {
-            var bytes = new List<byte[]>();
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            Each(impl =>
             {
                 string consoles = Path.Combine(ConfigStore.Directory, ConsolesConfig.FileName);
                 if (File.Exists(consoles)) File.Delete(consoles);
@@ -156,9 +141,8 @@ namespace EmuSen.WiseMan.Crystal
                 graphics.SetValue("SNES", "Engine", "Venus (C#)");
                 graphics.Save();
                 Answers(impl, BuildTree, (i, rt) => new[] { i.Read("systems", rt) });
-                bytes.Add(File.ReadAllBytes(consoles));
-            }
-            Assert.Equal(System.Text.Encoding.UTF8.GetString(bytes[0]), System.Text.Encoding.UTF8.GetString(bytes[1]));
+                return new[] { File.ReadAllText(consoles) };
+            });
             Same(BuildTree, (impl, rt) => new[] { impl.Read("systems", rt) });
         }
 
@@ -254,15 +238,13 @@ namespace EmuSen.WiseMan.Crystal
                 using (var e = archive.CreateEntry("Disc (Track 2).bin").Open()) e.Write(disc.AudioTrack);
                 using (var e = new StreamWriter(archive.CreateEntry("Disc.cue").Open())) e.Write(disc.Cue.Replace("{name}", "Disc"));
             }
-            var unpacked = new List<string>();
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            Each(impl =>
             {
                 if (Directory.Exists(DataStore.Unpacked)) Directory.Delete(DataStore.Unpacked, recursive: true);
                 Answers(impl, BuildTree, (i, rt) => new[] { i.FirmwareNeeded(rt, zippedDisc, null) });
-                unpacked.Add(!Directory.Exists(DataStore.Unpacked) ? "" : string.Join("\n", Directory.EnumerateFiles(DataStore.Unpacked, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
-                    .Select(f => $"{Path.GetRelativePath(DataStore.Unpacked, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)))}")));
-            }
-            Assert.Equal(unpacked[0], unpacked[1]);
+                return new[] { !Directory.Exists(DataStore.Unpacked) ? "" : string.Join("\n", Directory.EnumerateFiles(DataStore.Unpacked, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+                    .Select(f => $"{Path.GetRelativePath(DataStore.Unpacked, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)))}")) };
+            });
             Directory.CreateDirectory(DataStore.Firmware);
             File.WriteAllBytes(Path.Combine(DataStore.Firmware, "scph5501.bin"), new byte[12]);
             Same(BuildTree, (impl, rt) => cases.Select(c => impl.FirmwareNeeded(rt, c, null))
@@ -279,14 +261,12 @@ namespace EmuSen.WiseMan.Crystal
             File.WriteAllBytes(wrong, new byte[3000]);
             string request = "{\"core\":\"V1TestCore\",\"chip\":\"Boot ROM\",\"file\":\"boot.rom\",\"size\":64,\"purpose\":\"optional\",\"alternate_names\":[]}";
             string big = request.Replace("\"size\":64", "\"size\":1024");
-            var written = new List<string>();
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            Each(impl =>
             {
                 if (Directory.Exists(DataStore.Firmware)) Directory.Delete(DataStore.Firmware, recursive: true);
                 Answers(impl, new[] { tree }, (i, rt) => new[] { i.FirmwareInstall(rt, request, right) });
-                written.Add(Convert.ToHexString(File.ReadAllBytes(Path.Combine(DataStore.Firmware, "boot.rom"))));
-            }
-            Assert.Equal(written[0], written[1]);
+                return new[] { Convert.ToHexString(File.ReadAllBytes(Path.Combine(DataStore.Firmware, "boot.rom"))) };
+            });
             Same(new[] { tree }, (impl, rt) => new[]
             {
                 impl.FirmwareInstall(rt, request, right), impl.FirmwareInstall(rt, big, wrong), impl.FirmwareInstall(rt, request, Path.Combine(_root, "absent.rom")),
@@ -327,12 +307,10 @@ namespace EmuSen.WiseMan.Crystal
             string drawer = Path.Combine(DataStore.Saves, "PlayStation", "Cards");
             string Card(string name) => Path.Combine(drawer, name);
             string J(params (string Key, object Value)[] pairs) => System.Text.Json.JsonSerializer.Serialize(pairs.ToDictionary(p => p.Key, p => p.Value));
-            var trees = new List<string>();
-            var answers = new List<List<string>>();
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            List<string> answers = Each(impl =>
             {
                 PlantCards();
-                answers.Add(Answers(impl, BuildTree, (i, rt) => new[]
+                return Answers(impl, BuildTree, (i, rt) => new[]
                 {
                     i.CardsOp(rt, 0, J(("console", "PlayStation"))), i.CardsOp(rt, 0, J(("console", "Sega CD"))), i.CardsOp(rt, 0, J(("console", "Nintendo 64"))),
                     i.CardsOp(rt, 0, J(("console", "SNES"))), i.CardsOp(rt, 0, J(("console", "Nowhere"))), i.CardsOp(rt, 0, "{}"),
@@ -347,15 +325,10 @@ namespace EmuSen.WiseMan.Crystal
                     i.CardsOp(rt, 7, J(("from", Card("mine.mcr")), ("to", Card("Copy.mcr")))), i.CardsOp(rt, 7, J(("from", Card("mine.mcr")), ("to", Card("Copy.mcr")))),
                     i.CardsOp(rt, 8, J(("from", Card("Copy.mcr")), ("to", Card("Renamed.mcr")))), i.CardsOp(rt, 8, J(("from", Card("Gone.mcr")), ("to", Card("x.mcr")))),
                     i.CardsOp(rt, 99, "{}"), i.CardsOp(rt, 0, J(("console", "PlayStation"))),
-                }).ToList());
-                trees.Add(string.Join("\n", Directory.EnumerateFiles(DataStore.Saves, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
+                }).Append(string.Join("\n", Directory.EnumerateFiles(DataStore.Saves, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
                     .Select(f => $"{Path.GetRelativePath(DataStore.Saves, f)} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(f)))}")));
-            }
-            for (int k = 0; k < answers[0].Count; k++)
-                if (answers[0][k] != answers[1][k]) _output.WriteLine($"answer {k}\nC#:   {answers[0][k]}\nRust: {answers[1][k]}");
-            Assert.Equal(answers[0], answers[1].Select(AsCSharp));
-            Assert.Equal(trees[0], trees[1]);
-            Assert.Contains("\"done\":true", answers[0][11]);
+            });
+            Assert.Contains("\"done\":true", answers[11]);
         }
 
         [Fact]

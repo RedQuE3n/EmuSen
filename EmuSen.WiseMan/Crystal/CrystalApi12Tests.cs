@@ -12,7 +12,7 @@ using CrystalContract = EmuSen.Crystal.Client.Contract.Crystal;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // What 1.2 added to the frontend API: the config's lent SQLite, its cores directories and its development flag, honoured by the C# implementation - see EmuSen_Backend.md §29.11, Q1.
+    // What 1.2 added to the frontend API: the config's lent SQLite, its cores directories and its development flag - see EmuSen_Backend.md §29.11, Q1.
     [Collection(TestCollections.ProcessGlobals)]
     public unsafe class CrystalApi12Tests : IDisposable
     {
@@ -100,14 +100,14 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal((8, 16, 24), ((int)System.Runtime.InteropServices.Marshal.OffsetOf<CrystalConfig>("sqlite"), (int)System.Runtime.InteropServices.Marshal.OffsetOf<CrystalConfig>("cores"), (int)System.Runtime.InteropServices.Marshal.OffsetOf<CrystalConfig>("cores_len")));
         }
 
-        // A config of 1.2's 32 bytes still names its directories in both implementations, once the struct grew past it - see EmuSen_Backend.md §29.40.9.
+        // A config of 1.2's 32 bytes still names its directories, once the struct grew past it - see EmuSen_Backend.md §29.40.9.
         [Fact]
         public void A_config_of_1_2_s_size_still_names_its_cores()
         {
             string plain = PlainTree("sized", development: false);
             CoreManifest.Write(plain);
             byte[] cores = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new[] { plain }));
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            foreach (CrystalImpl impl in new[] { CrystalImpl.Native })
             {
                 fixed (byte* c = cores)
                 {

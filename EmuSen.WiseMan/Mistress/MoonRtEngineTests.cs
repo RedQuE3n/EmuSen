@@ -67,48 +67,6 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A stored Moon (C#) runs the game on MoonRT with no notice; frames, rewind and a state saved and loaded all work there.
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_stored_csharp_choice_plays_on_MoonRT_with_rewind_and_its_states() => Session.Dispatch(() =>
-        {
-            Assert.True(MoonEngines.Available, MoonEngines.Report);
-            Choose("Moon (C#)");
-            MainWindow window = Start();
-            WindowGame game = Game(window);
-            Assert.IsType<EmuSen.Cores.Native.CoreEngine>(game.Core);
-            Assert.Null(game.EngineNotice);
-            Assert.DoesNotContain("not available", Status(window).Text ?? "");
-            WaitFor(() => game.TotalFrames > 90 && Rewind(window).Depth > 0);
-
-            Status(window).Text = "";
-            Invoke(window, "SaveState");
-            WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
-            using var reader = MoonEngines.Create();
-            reader.LoadRom(_rom);
-            reader.LoadState(StatePath(window));
-            Assert.True(reader.TotalFrames > 60);
-            window.Close();
-        }, default);
-
-        // A build without MoonRT's library, or its sidecar, loads no NES game, and the status says why in the player's words; discovery is per process call, so no child process is needed.
-        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
-        public Task Without_its_library_an_nes_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
-        {
-            EmuSen.Cores.Native.CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "nothing") });
-            try
-            {
-                var window = new MainWindow();
-                window.Show();
-                Invoke(window, "LoadRom", _rom, "Program.nes");
-                string status = Status(window).Text ?? "";
-                Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
-                Assert.StartsWith("Failed to load Program.nes: ", status);
-                Assert.Contains($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing (no sidecar for it was found beside the program)", status);
-                window.Close();
-            }
-            finally { EmuSen.Cores.Native.CoreDiscovery.UseDirectories(null); }
-        }, default);
-
         private MainWindow Start()
         {
             var window = new MainWindow();
@@ -132,7 +90,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private static WindowGame Game(MainWindow window) => new(window);
 
-        private static EmuSen.Common.RewindBuffer Rewind(MainWindow window) => MistressGame.Rewind(window);
 
         private static string StatePath(MainWindow window) =>
             (string)typeof(MainWindow).GetProperty("CurrentStatePath", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;

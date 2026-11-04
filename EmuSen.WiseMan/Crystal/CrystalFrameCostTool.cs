@@ -91,10 +91,8 @@ namespace EmuSen.WiseMan.Crystal
                 impl.Free(rt);
                 return impl.Name;
             }
-            Through(CrystalImpl.Managed, out double managed);
             Through(CrystalImpl.Native, out double native);
             output.WriteLine($"RunFrame, the refresh and the drain on the C# engine: {direct:F3} us a frame");
-            output.WriteLine($"the C# frame call and drain through its exports: {managed:F3} us ({managed - direct:+0.000;-0.000})");
             output.WriteLine($"the Rust frame call and drain through its exports: {native:F3} us ({native - direct:+0.000;-0.000})");
         }
 

@@ -56,8 +56,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return Path.Combine(psx, Path.GetRelativePath(source, game));
         }
 
-        private static CoreEngine? Engine(MainWindow w) => MistressGame.Engine(w);
-
         private string Launch(string game, string duration, bool cold)
         {
             string? linked = null;
@@ -83,8 +81,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Thread.Sleep(Math.Max(0, 16 - (int)ms));
             }
             double started = clock.Elapsed.TotalMilliseconds;
-            var core = Engine(s.Window);
-            bool framed = core is not null && SpinWait.SpinUntil(() => core.TotalFrames >= 1, TimeSpan.FromSeconds(60));
+            bool framed = MistressGame.Live(s.Window) is not null && SpinWait.SpinUntil(() => MistressGame.TotalFrames(s.Window) >= 1, TimeSpan.FromSeconds(60));
             double firstFrame = clock.Elapsed.TotalMilliseconds;
             LaunchScreenTests.Stop(s.Window);
             return $"{(cold ? "cold" : "warm")} {duration} | A to screen {toScreen:F0} ms{(screen ? "" : " (no screen)")} | the step that loaded {loadStep:F0} ms | game started {started:F0} ms | first frame {(framed ? $"{firstFrame:F0} ms" : "none")}";

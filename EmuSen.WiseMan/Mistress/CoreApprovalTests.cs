@@ -72,46 +72,5 @@ namespace EmuSen.WiseMan.Mistress
             return path;
         }
 
-        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
-        public Task A_players_core_is_asked_about_once_and_approved_through_the_runtime() => Session.Dispatch(() =>
-        {
-            string player = Path.Combine(_root, "Cores");
-            string core = Core(player);
-            CoreDiscovery.UseDirectories(Array.Empty<string>());
-            CoreDiscovery.UsePlayerDirectories(new[] { player });
-            Answer(approve: true);
-            var window = new MainWindow();
-            Ask(window, Game()).GetAwaiter().GetResult();
-            Ask(window, Game()).GetAwaiter().GetResult();
-            Assert.Equal(1, _asked);
-            Assert.Contains(CoreSidecar.HashOf(core), _message);
-            Assert.Contains("full permissions", _message);
-            Assert.Contains(Path.GetFileName(core), _message);
-            Assert.Equal($"{CoreSidecar.HashOf(core)}  {Path.GetFileName(core)}\n", File.ReadAllText(CoreTrust.ApprovalsPath));
-            window.Close();
-        }, default);
-
-        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
-        public Task Declined_nothing_is_recorded_and_a_shipped_core_is_never_asked_about() => Session.Dispatch(() =>
-        {
-            string player = Path.Combine(_root, "Cores");
-            Core(player);
-            CoreDiscovery.UseDirectories(Array.Empty<string>());
-            CoreDiscovery.UsePlayerDirectories(new[] { player });
-            Answer(approve: false);
-            var window = new MainWindow();
-            Ask(window, Game()).GetAwaiter().GetResult();
-            Assert.Equal(1, _asked);
-            Assert.False(File.Exists(CoreTrust.ApprovalsPath));
-
-            string installed = Path.Combine(_root, "installed");
-            Core(installed);
-            CoreManifest.Write(installed);
-            CoreDiscovery.UseDirectories(new[] { installed });
-            CoreDiscovery.UsePlayerDirectories(Array.Empty<string>());
-            Ask(window, Game()).GetAwaiter().GetResult();
-            Assert.Equal(1, _asked);
-            window.Close();
-        }, default);
     }
 }

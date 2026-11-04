@@ -252,33 +252,6 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // Four pads on the N64, each port plugged in as its player's pad is, and a fifth pad, which no port hears.
-        [CSharpImplementationFact("reads MarsRT's ports from the C# machine's state layout; the Rust session's ports are held by the parity class's input cases")]
-        public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
-            var mars = Assert.IsType<CoreEngine>(SessionOf(window).Core);
-            Poll(window);
-            // Every port holds a controller at create; the ports no player holds are emptied as the next frame starts - see EmuSen_CoreAPI.md §6.36.
-            mars.RunFrame();
-            Assert.Equal(new[] { true, false, false, false }, N64Ports(mars).Select(p => p.Present));
-
-            PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4"), first.Plug("Pad 5") };
-            Poll(window);
-            // A controller plugged in reaches the machine as the next frame starts, the adapter's rule for every v1 core - see Mars_Native.md §7.5.
-            mars.RunFrame();
-            Assert.Equal(new[] { true, true, true, true }, N64Ports(mars).Select(p => p.Present));
-
-            for (int i = 0; i < others.Length; i++) others[i].Pad.Press(SDL.GamepadButton.East);
-            others[2].Pad.SetAxis(SDL.GamepadAxis.LeftX, 1);
-            Poll(window);
-            mars.RunFrame();
-            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, N64Ports(mars).Select(p => p.Buttons));
-            Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, N64Ports(mars).Select(p => p.StickX));
-            Assert.Equal(5, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[4]));
-            window.Close();
-        }, default);
-
         // A J-Cart game in a big-screen session: four pads play, players 3 and 4 on the cartridge's ports, and the bindings window offers four players with three-button pads for 3 and 4 - see EmuSen_Settings_Reference.md §4.103.
         [Fact]
         public Task Four_pads_play_a_genesis_j_cart_game_and_the_bindings_window_offers_its_players() => Session.Dispatch(() =>

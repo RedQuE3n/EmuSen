@@ -162,10 +162,11 @@ namespace EmuSen.WiseMan.Mistress
                 pad.A();
                 string status = window.GetControl<TextBlock>("StatusText").Text ?? "";
                 if (!window.GetControl<Control>("GameFrame").IsVisible) return $"not opened: {status}";
-                EmuSen.Cores.ICore? running = MistressGame.Live(window) is null ? null : MistressGame.Core(window);
-                if (running is not CoreEngine core) return $"opened on {running?.GetType().Name ?? "nothing"}: {status}";
-                bool ran = SpinWait.SpinUntil(() => core.TotalFrames >= frames, TimeSpan.FromSeconds(120));
-                return $"opened on {core.Info.Id} as {core.Machine.Info.System}, {core.TotalFrames} frames{(ran ? "" : " (stopped short)")}, path {(core.RomPath == path ? "the library's" : core.RomPath)}: {status}";
+                if (MistressGame.Live(window) is null) return $"opened on nothing: {status}";
+                bool ran = SpinWait.SpinUntil(() => MistressGame.TotalFrames(window) >= frames, TimeSpan.FromSeconds(120));
+                var info = MistressGame.Info(window);
+                string running = info.GetProperty("path").GetString()!;
+                return $"opened on {info.GetProperty("engine").GetString()} as {info.GetProperty("system").GetString()}, {info.GetProperty("total_frames").GetInt64()} frames{(ran ? "" : " (stopped short)")}, path {(running == path ? "the library's" : running)}: {status}";
             }
             catch (Exception e) { return $"threw {e.GetType().Name}: {e.Message}"; }
             finally

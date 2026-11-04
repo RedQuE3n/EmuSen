@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Cores
             return runtime;
         }
 
-        [RustImplementationFact("hosted cores on the Rust runtime")]
+        [Fact]
         public void With_no_bios_in_the_store_the_player_is_asked_for_one_bios_file_and_never_for_the_cores_own_data()
         {
             using CrystalRuntime runtime = Runtime();
@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.Contains("'pcsx2/bios' folder", only.GetProperty("chip").GetString());
         }
 
-        [RustImplementationFact("hosted cores on the Rust runtime")]
+        [Fact]
         public void The_stores_bios_is_linked_read_only_into_the_cores_folder_when_a_game_opens()
         {
             Directory.CreateDirectory(DataStore.Firmware);

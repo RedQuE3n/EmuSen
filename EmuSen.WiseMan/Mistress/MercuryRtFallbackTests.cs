@@ -52,19 +52,6 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        // Discovery pointed at a folder with no cores, as a build without the library finds none.
-        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
-        public Task Without_the_library_a_game_boy_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
-        {
-            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "NoCores") });
-            var window = new MainWindow();
-            window.Show();
-            Invoke(window, "LoadRom", _rom, "Loop.gb");
-            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
-            Assert.Equal("Failed to load Loop.gb: This build has no Game Boy core: " + CoreCatalog.MercuryRtEngine + " is missing (no sidecar for it was found beside the program).", Status(window).Text);
-            window.Close();
-        }, default);
-
         private static TextBlock Status(MainWindow window) => window.GetControl<TextBlock>("StatusText");
 
         private static void Invoke(MainWindow window, string name, params object[] args) =>

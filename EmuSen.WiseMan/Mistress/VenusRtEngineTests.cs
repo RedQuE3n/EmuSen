@@ -67,47 +67,6 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // A fresh config runs an .sfc on VenusRT on the adapter with rewind, and a stored Venus (C#) runs VenusRT with no notice and one line on the log.
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_game_runs_on_venusrt_and_a_stored_venus_choice_runs_it_too() => Session.Dispatch(() =>
-        {
-            if (!Found) return;
-            Assert.Null(ConsolesConfig.Load().Value("SNES", CoreCatalog.EngineKey));
-            Assert.Null(CoreFactory.ConfiguredEngine(_rom));
-            foreach (bool stored in new[] { false, true })
-            {
-                if (stored)
-                {
-                    ConsolesConfig config = ConsolesConfig.Load();
-                    config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
-                    config.Save();
-                    Assert.Equal(VenusRtCoreAbiTests.Engine, CoreFactory.ConfiguredEngine(_rom));
-                }
-                MainWindow window = Start();
-                WindowGame game = Game(window);
-                var core = Assert.IsType<CoreEngine>(game.Core);
-                Assert.Equal("venusrt", core.Info.Id);
-                Assert.Null(game.EngineNotice);
-                WaitFor(() => game.TotalFrames > 60 && Rewind(window).Depth > 0);
-                window.Close();
-            }
-        }, default);
-
-        // Without VenusRT's library an SNES game does not load, and the status line says why.
-        [CSharpImplementationFact("moves the C# discovery's directories (CoreDiscovery.UseDirectories), which the Rust takes from its config once a process")]
-        public Task Without_the_library_an_snes_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
-        {
-            if (!Found) return;
-            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "NoCores") });
-            var window = new MainWindow();
-            window.Show();
-            typeof(MainWindow).GetMethod("LoadRom", BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(string), typeof(string) }, null)!.Invoke(window, new object[] { _rom, "Adapter.sfc" });
-            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
-            Assert.Equal("Failed to load Adapter.sfc: This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).",
-                window.FindControl<TextBlock>("StatusText")!.Text);
-            window.Close();
-        }, default);
-
         // An empty firmware folder: neither an ordinary game nor a DSP-1 cartridge asks for anything, and the cartridge runs on the replacement with no notice (VenusRT_Native.md §66).
         [Fact]
         public Task An_ordinary_game_on_venusrt_prompts_for_no_firmware() => Session.Dispatch(async () =>
@@ -156,6 +115,5 @@ namespace EmuSen.WiseMan.Mistress
 
         private static WindowGame Game(MainWindow window) => new(window);
 
-        private static RewindBuffer Rewind(MainWindow window) => MistressGame.Rewind(window);
     }
 }

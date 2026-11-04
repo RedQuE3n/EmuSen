@@ -153,7 +153,7 @@ namespace EmuSen.WiseMan.Mistress
             return there(Focused(main));
         }
 
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task A_fresh_home_installs_PCEE2_by_the_pad_from_the_buildbot_and_a_PlayStation_2_disc_routes_to_it() => Session.Dispatch(() =>
         {
             byte[] core = Serve();
@@ -255,7 +255,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // The catalogue is read once: a second opening of Cores, and B back out and in again by the pad, never fetch it again (EmuSen_Cores.md §3.8, §11).
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task A_home_reads_the_catalogue_once_when_Cores_first_opens_and_never_again_unasked() => Session.Dispatch(() =>
         {
             Serve();
@@ -275,7 +275,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // The rows by maker, then by release within a maker, under a heading per maker the pad never lands on (EmuSen_Cores.md §3.8).
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task Cores_lists_by_maker_under_headings_and_the_pad_walks_only_rows() => Session.Dispatch(() =>
         {
             Serve();
@@ -314,7 +314,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // A buildbot that answers nothing: Check for Updates by the pad says why on the screen and in the error log, never silently (EmuSen_Cores.md §3.6).
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task A_failed_fetch_is_said_on_the_screen_and_in_the_error_log() => Session.Dispatch(() =>
         {
             string roms = Path.Combine(_root, "Roms");

@@ -101,17 +101,6 @@ namespace EmuSen.WiseMan.Cores
             {
                 Assert.Equal(new[] { "Native Genesis", "Genesis Plus GX" }, CoreDiscovery.ForSystem("md").Select(c => c.EngineName));
                 Assert.Equal(new[] { "PCEE2", "Native PS2" }, CoreDiscovery.ForSystem("ps2").Select(c => c.EngineName));
-                Assert.Equal("Native Genesis", EmuSen.Crystal.Managed.ManagedRuntime.Schema("Genesis", null).First(r => r.Key == CoreCatalog.EngineKey).Default);
-                var ps2 = EmuSen.Crystal.Managed.ManagedRuntime.Schema("PlayStation 2", null).First(r => r.Key == CoreCatalog.EngineKey);
-                Assert.Equal("PCEE2", ps2.Default);
-                Assert.Equal(new[] { "PCEE2", "Native PS2" }, ps2.Choices!);
-                using var runtime = new EmuSen.Crystal.Managed.ManagedRuntime();
-                const uint console = EmuSen.Crystal.Managed.CrystalNumbers.ScopeConsole;
-                Assert.Equal("Native Genesis", runtime.GetSetting(0, console, "Genesis", CoreCatalog.EngineKey));
-                runtime.SetSetting(0, console, "Genesis", CoreCatalog.EngineKey, "Genesis Plus GX");
-                Assert.Equal("Genesis Plus GX", runtime.GetSetting(0, console, "Genesis", CoreCatalog.EngineKey));
-                runtime.SetSetting(0, console, "Genesis", CoreCatalog.EngineKey, "Native Genesis");
-                Assert.Equal("Native Genesis", runtime.GetSetting(0, console, "Genesis", CoreCatalog.EngineKey));
             }
             finally { CoreDiscovery.UsePlayerDirectories(null); }
         }

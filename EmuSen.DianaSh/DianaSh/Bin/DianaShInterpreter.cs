@@ -268,7 +268,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         }
 
         // The words a shell over a table is refused in when EMUSEN_DIANASH_NATIVE=0 meets the Rust runtime's table - see EmuSen_Settings_Reference.md §4.117.
-        public const string ForeignTableRefusal = "EMUSEN_DIANASH_NATIVE=0 puts the shell on its C# implementation, which needs the frontend API's C# implementation too: set EMUSEN_CRYSTAL_NATIVE=0 beside it, or unset EMUSEN_DIANASH_NATIVE";
+        public const string ForeignTableRefusal = "EMUSEN_DIANASH_NATIVE=0 puts the shell on its C# implementation, which needs the frontend API's C# implementation, deleted on 2026-11-04: unset EMUSEN_DIANASH_NATIVE";
 
         // Throws DianaShTableRefusedException where this process's shell cannot go over the table, before a program builds anything on it - see EmuSen_Backend.md §29.28.
         public static unsafe void CheckService(nint sessionService)

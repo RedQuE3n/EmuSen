@@ -7655,7 +7655,7 @@ every run that read games, nothing in the ROM library or the test ROMs was newer
 **Part (d) closed.** Pharaoh, emusen-shell and Mistress each run on the Rust Crystal by default, and each goes back to
 the C# with `EMUSEN_CRYSTAL_NATIVE=0`.
 
-**Left before state 3**, gathered here so that B10 has one list:
+**Left before state 3**, gathered here so that B10 has one list (*state 3 reached for the frontend API on 2026-11-04; each item's standing is in §40.8*):
 - From part (a) (§29.20):
   - a drive's read-ahead on `MEDIA_SEEK` is not in Galaxia's Rust `DiscFiles`. It fetches pages early and changes no
     answer (§29.16);
@@ -9612,3 +9612,130 @@ the fallback, and `"reason"` gives the runtime's own words for why. The shape of
 §10v has the defect, the design and the proofs.
 
 **The C# implementation** stays at the minor it implements, as in §34 and §37. Its `RouteJson` writes the key as null.
+
+## 40. State 3: the C# halves retired, 2026-11-04
+
+### 40.8 The frontend API: the C# implementation deleted
+
+*Decided 2026-11-01 by the tester, done 2026-11-04 (B10).* State 3 is reached for the frontend API. Its C#
+implementation, step B2's `ManagedCrystal`, `ManagedRuntime` and `ManagedSession` with `ManagedEvents`,
+`StateRecords`, `PlatformLend`, `PlatformRing`, `CrystalJson` and `CrystalNumbers` (`EmuSen/Crystal/`, 21 files,
+4,628 lines), is deleted, and every program reaches the API through the platform library alone.
+
+**The precondition, measured again first.** B10's original order held the deletion until hosted cores opened on the
+Rust runtime (`EmuSen_LibretroHost.md` §10h). On 2026-11-04, on the tree of `9296ecbce`, `HostedCoreLaunchTests`
+passed 6 of 6 with the suite's default and again with `EMUSEN_CRYSTAL_NATIVE=1`. The Rust core host's discovery and
+trust of libretro entries (§10k, §10m) is therefore complete, and nothing had to be built before the deletion.
+
+**The binding.** `Crystal` (`EmuSen.Crystal.Client/Contract/Crystal.cs`) fills its table from the platform library's
+exports only. A library that lacks an export, or speaks another major, is refused at the first call in words naming
+the export or the major; there is nothing to fall back to. `CrystalRuntime.Native` is gone and the runtime always lends
+the program's SQLite. The program's default key, `EmuSen.CrystalNative`, written by the MSBuild property
+`EmuSenCrystalNative` (`EmuSen_Surfaces.md` §6.2), is gone from `Directory.Build.targets`, from the three programs and
+from WiseMan, with WiseMan's module initializer `RustDefault` (§35). As decided on 2026-11-01, a leftover
+`EMUSEN_CRYSTAL_NATIVE` other than `1` is ignored, and one line says so through Galaxia's `PlatformSwitch.Announce`, to
+the host's sink and the error log (`EmuSen_Settings_Reference.md` §4.117).
+
+**What is not deleted, and why.**
+- *The C# core host* (`CoreDiscovery`, `CoreEngine`, `CoreFactory`, `CoreCatalog`, `CoreLibrary`, `CoreMachine`,
+  `CoreTrust`, `LibretroEntries` and the engine SPI). After the deletion no program reaches it. Mistress, Pharaoh,
+  emusen-shell and Hotaru read engines, cores and listings through the API's `engines` and `cores`, which the Rust core
+  host answers (checked with `grep` on 2026-11-04). Its only callers are EmuSen's own C#, MarsRT's training driver and
+  WiseMan. About 75 test files, the core fixtures (`VenusGolden`, `MoonGolden`, `MarsRt`, the Mercury rigs,
+  `GoldenTargets`) among them, drive Rust cores in-process through it. Deleting it means moving those fixtures onto
+  the API, a step of its own (Q1 below). `CoreHostParityTests` still holds its listing equal to the Rust core host's,
+  now writing the listing's JSON in the test, as the deleted `ManagedRuntime.CoresJson` and `EnginesJson` did.
+- *`EmuSen.Crystal`'s debugger, telemetry, recorder and session-service provider.* The C# DianaSh shell (DIANASH) and
+  `CrystalDebugParityTests` and `SessionServiceParityTests` still use them, so they go with DIANASH's retirement.
+- *`SpeedController`.* Only the pacing tests and their model use it now.
+
+**Tests moved to goldens.** `CrystalParityTests` (38 cases) ran each call on both implementations and compared them.
+On 2026-11-04 every one of its comparisons was recorded from the C#, while the C# still existed, into
+`EmuSen.WiseMan/Crystal/Goldens/CrystalParity.<case>.golden.gz`: 37 files, one for each case that compares, 5,979
+answers, 212 KB. The recording ran with both implementations compared at the same time, so every recorded answer
+was also the Rust's (with what only the Rust gives set aside by `AsCSharp`). The class now runs the Rust alone and
+holds each call's answers to the file, call by call (`CrystalParityTests.Golden.cs`). Before the deletion, two runs of
+the Rust alone against the files passed 38 of 38.
+- *What is made plain before the comparison:* the test's folder (`<root>`), the build's folder (`<build>`), a test
+  tree's random name, and the SHA-256 of every core library the case can list (`<sha256 of libv1_test_core.so>`).
+  A rebuild changes those hashes and nothing else. Also made plain are three files whose contents the run writes:
+  the unpacked folder's name and its `.unpacked` marker (a digest of the archive's path and time), SR10's
+  `.engine-choices-copied` marker, and a package's `package.json`, whose bytes carry the moment it was written. The
+  answers about those files still compare.
+- *What the goldens fail on, by design:* a change in any answer, a core's info or ABI minor named in a listing, a
+  frame's or state's digest from the build's engines among them. They are change detectors. A change found correct
+  is recorded again with `EMUSEN_PARITY_GOLDEN=record`, now from the Rust, after its differences are read answer by
+  answer. The file's first line then says so.
+- `States_db_is_shared_between_the_implementations` became
+  `States_db_copies_records_db_once_and_keeps_its_records_across_runtimes`, since there is no second implementation to
+  share with: records.db is copied once, and two runtimes in turn each read back the record the other saved.
+
+**Tests removed, and why.**
+- `ManagedCrystalTests`, `ManagedCrystal11Tests`, `ManagedCrystalGroupTests` and `ManagedCrystalCatalogTests` tested
+  the C# implementation's own types and statics.
+- `MistressCrystalDefaultTests` and `PharaohCrystalDefaultTests` tested the program default key and the `=0` failover.
+  `CrystalSwitchTests` now holds what replaced them: the binding is the library's, a leftover value is ignored with
+  its one line (the line is checked through the binding, since Pharaoh has no sink and writing a real player's error
+  log from a test is to be avoided), and the C# shell's variable is refused in words.
+- `CSharpImplementationFact`, `CSharpImplementationTheory` and their 17 cases (§29.27, §35). Each reached the C#
+  machine, its rewind buffer, debug target or ports, moved the C# discovery's directories, or forged a record through
+  the C# `StateRecords`. None was rewritten over the API (Q2).
+- `RustImplementationFact` became `Fact`, since `=0` no longer skips anything.
+- `CrystalHeaderTests` lost the C# mirror's half (its exports' signatures, `CrystalNumbers` and the four structs'
+  layout). The binding's half is unchanged. `DivergenceRowTests`' row 1 attached a C# engine that withholds rewind,
+  and it is removed with the C#. Row 2, `HotaruOnTheApiTests` and `PauseCardTests` keep only the Rust's answer, that
+  a state load keeps the chain (§36).
+- Rewritten over the API: `GamePackageGateTests` writes its states.db row with the new fixture `StatesDb` (the schema
+  at version 1, the row as the runtime writes it) and reads records and the game's engine through a `CrystalRuntime`.
+  The runtime opens states.db, so the reads come after the originals are compared byte for byte.
+  `IdentityAndCollectionsTests`, `PlayStationLibraryTests` and `PlayStationLaunchTimeTests` read the session's
+  `session_info`. `DevicePictureLendTests` keeps the C# host's device lend in the test folder
+  (`EmuSen.WiseMan/Serenity/PlatformLend.cs`).
+
+**Elsewhere.** `DianaShInterpreter.ForeignTableRefusal` no longer tells the reader to set `EMUSEN_CRYSTAL_NATIVE=0`.
+CI's frontend-API step no longer selects `ManagedCrystal`. `Testing/inputs.json` drops the `EmuSen/Crystal/` row and
+points the serenity row at the test folder's `PlatformLend.cs` and `ApiRingTests`. `EmuSen/Common/Imaging/PngFile.cs`
+had no other caller and is deleted.
+
+**Sizes.** Against `9296ecbce`: 4,685 lines of C# removed from `EmuSen/` and `EmuSen.Crystal.Client/` and 19 added;
+WiseMan 1,825 removed and 425 added, the goldens aside.
+
+**The list of §29.29, item by item.** The read-ahead, the subscription handles and the local offset are Rust-only
+matters that the deletion does not change. The cheat database's archive, its download, a table's life and
+`set_register` are now the Rust's alone: the archive is SERVICES' (`deflate64`, B10's decision of 2026-11-01), and the
+others are answered as §29.25 says, now with nothing to compare. The core host's 95 ms hash on a process's first open
+of MarsRT is paid by every program, as it has been since part (d). The Preferences page, a player's core started
+empty, the DianaSh command and the manifest on the handheld stay frontend work. The 25 C#-only cases are dealt with
+above, `EMUSEN_DIANASH_NATIVE=0` is refused for good, the goldens are recorded, and the tester decided on 2026-11-01
+that no played release is needed.
+
+**How it was tested** (measured on 2026-11-04 on the development desktop, Debug build):
+- `CrystalParityTests` 38 of 38 on the goldens; the `EmuSen.WiseMan.Crystal` namespace with `CoreHostParityTests`,
+  `CoreDiscoveryTests`, `GamePackageGateTests`, `HostedCoreLaunchTests`, `DevicePictureLendTests` and
+  `ShellOverSessionTests`, 255 cases. Three failed on the first run (the leftover line's two cases, read from
+  Pharaoh's output where Pharaoh has no sink, and the package gate's states.db opened before the originals were
+  compared). They were mended as described above and pass.
+- `GalaxiaParityTests`, `OffDispatcherTests`, `TestCollectionsTests` and `FrontendReferenceTests`, with every
+  Mistress, shell and core class the change touched (`IdentityAndCollectionsTests`, `MainWindowEmulationMenuTests`,
+  `PauseCardTests`, `WindowRetentionTests`, `MistressRuntimeTests`, the four engine classes, `CoreApprovalTests`,
+  `MultiplayerTests`, `PadRewindReelTests`, `MainWindowSaveStateThreadTests`, `ConsoleStartTests`,
+  `CoresInstallPathTests`, `CoresWindowRuntimeTests`, `HostedFirmwareRuntimeTests`, `ShellRuntimeAgreementTests` and
+  the two PlayStation tools): 189 of 189.
+- Seeded faults, each reverted:
+  1. the route's `reason` with its last character cut, in `Platform/crystal/src/route.rs`, was caught by the golden
+     of `Every_file_routes_the_same_on_the_build_s_tree`;
+  2. a state record's `rom_bytes` one too many, in `saving.rs`, was caught by four `CrystalParityTests` goldens and
+     by `GamePackageGateTests`;
+  3. the binding saying nothing of `=0` was caught by `CrystalSwitchTests`;
+  4. the runtime lending no SQLite was caught by `StateRefusalTests` and two `IdentityAndCollectionsTests` cases.
+
+**Questions for the tester.**
+- **Q1** [decision]: should the C# core host go next? That means moving the about 75 test files that drive cores
+  in-process onto the API or the kit, then deleting `CoreDiscovery`, `CoreEngine`, `CoreFactory`, `CoreCatalog` and
+  the engine SPI (about 4,000 lines). *Recommended:* yes, after DIANASH, since the C# shell's debugger reaches cores
+  through the same host.
+- **Q2** [routine]: the 17 removed cases held player paths: rewind and states on MarsRT, MoonRT and VenusRT, the
+  N64's four ports in a big-screen session, a state from another console or another copy of the game, a player's core
+  asked about once, a missing core library's words, and a card made once through the binding. Whether each has a
+  Rust-run twin was not checked case by case. *Recommended:* write each over the API (`session_info`, `rewind_reel`,
+  `state_record`) with the next Mistress work that touches it.

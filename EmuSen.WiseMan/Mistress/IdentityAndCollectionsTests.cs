@@ -136,7 +136,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
 
             Assert.False(File.Exists(StateRecord.SidecarPathFor(state)));
-            Assert.True(File.Exists(Path.Combine(DataStore.Library, EmuSen.Crystal.Managed.StateRecords.FileName)));
+            Assert.True(File.Exists(Path.Combine(DataStore.Library, "states.db")));
 
             window = Open();
             Assert.Equal(written, States(window).ReadState(state));
@@ -145,54 +145,6 @@ namespace EmuSen.WiseMan.Mistress
             Status(window).Text = "";
             Invoke(window, "LoadState");
             WaitFor(() => Status(window).Text?.StartsWith("State loaded") == true);
-            window.Close();
-        }, default);
-
-        // The runtime's refusal by the record, in its words, posted when the load returns; a version the machine does not read is StateRefusalTests' - see EmuSen_Backend.md §14.12, §18.10.11.
-        [CSharpImplementationTheory("forges a record in states.db through the C# implementation's StateRecords; state_load's refusal by the record is held by the parity class")]
-        [InlineData("SNES", 0, "SNES core")]
-        public Task A_state_from_another_console_is_refused_before_the_core_reads_it(string? console, int newer, string says) => Session.Dispatch(() =>
-        {
-            string rom = Counter();
-            MainWindow window = Open();
-            Invoke(window, "LoadRom", rom, "Counter.z64");
-            WaitFor(() => Field(window, "_currentRomMd5") is string);
-            SaveSlot(window);
-            string state = SaveLibrary.StatePathFor(rom, 1, _states);
-            StateRecord saved = States(window).ReadState(state)!;
-            Assert.True(States(window).WriteState(state, saved with { Console = console ?? saved.Console, StateVersion = saved.StateVersion + newer }));
-
-            Status(window).Text = "";
-            Invoke(window, "LoadState");
-            WaitFor(() => !string.IsNullOrEmpty(Status(window).Text));
-
-            Assert.StartsWith("Load State:", Status(window).Text);
-            Assert.Contains(says, Status(window).Text);
-            window.Close();
-        }, default);
-
-        [CSharpImplementationFact("forges a record in states.db through the C# implementation's StateRecords; state_record is held equal by the parity class")]
-        public Task A_state_from_a_different_copy_of_the_game_is_asked_about_and_not_loaded_if_declined() => Session.Dispatch(() =>
-        {
-            string rom = Counter();
-            MainWindow window = Open();
-            Invoke(window, "LoadRom", rom, "Counter.z64");
-            WaitFor(() => Field(window, "_currentRomMd5") is string);
-            SaveSlot(window);
-            string state = SaveLibrary.StatePathFor(rom, 1, _states);
-            Assert.True(States(window).WriteState(state, States(window).ReadState(state)! with { RomMd5 = new string('0', 32), RomFile = "Counter (Beta).z64" }));
-
-            Status(window).Text = "";
-            Invoke(window, "LoadState");
-            WaitFor(() => window.OwnedWindows.Count > 0);
-            Window ask = window.OwnedWindows.Single();
-            Assert.Contains(ask.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("Counter (Beta).z64") == true);
-            ask.Close();
-            Dispatcher.UIThread.RunJobs();
-            Thread.Sleep(100);
-            Dispatcher.UIThread.RunJobs();
-
-            Assert.DoesNotContain("State loaded", Status(window).Text ?? "");
             window.Close();
         }, default);
 
@@ -239,19 +191,10 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private static GameRecords Records(MainWindow w) => (GameRecords)Field(w, "_records")!;
-        // The runtime's records, read and written as records.db's were.
+        // The runtime's records, read as records.db's were.
         private sealed class RuntimeStates
         {
-            public StateRecord? ReadState(string path) =>
-                MistressGame.Runtime.StateRecord(path) is string json ? System.Text.Json.JsonSerializer.Deserialize<StateRecord>(json, RecordJson) : null;
-
-            private static readonly System.Text.Json.JsonSerializerOptions RecordJson = new() { PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.SnakeCaseLower };
-
-            public bool WriteState(string path, StateRecord record)
-            {
-                MistressGame.States.Write(path, record);
-                return true;
-            }
+            public StateRecord? ReadState(string path) => StatesDb.Read(MistressGame.Runtime, path);
         }
 
         private static RuntimeStates States(MainWindow w) => new();

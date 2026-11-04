@@ -625,6 +625,11 @@ Before a component's C# is deleted (state 3), its parity corpus is run once more
 golden files beside the corpus, so that after the oracle is gone the Rust is still held to what the C# produced.
 They are text and small images; no ROM, firmware or player file is among them.
 
+*The frontend API, 2026-11-04* (`EmuSen_Backend.md` §40.8): `CrystalParityTests` was recorded with both
+implementations compared in the same run, one gzip file a case under `EmuSen.WiseMan/Crystal/Goldens/`, with the test's
+and the build's folders and the core libraries' hashes made plain. After the deletion the class runs the Rust alone
+against them, and a correct change is recorded again from the Rust under `EMUSEN_PARITY_GOLDEN=record`.
+
 ### 6.7 What is run
 
 Only what a step touches: the component's Rust crate, its WiseMan classes under both switch settings, its parity
@@ -2575,6 +2580,26 @@ ignoring `listed` (the NUL case), `Takes` judging only its first text, `Takes` a
 the guard taken back out of `ErrorLog`'s writes, `DataMigration.CopyTree` and `ConfigFile<T>.Delete`, the last three
 chosen from late in the case's order so that an earlier failure could not hide them. No Rust changed and the
 interface stays 7. **Not done:** Windows, where §21.2's route through the scan is argued and not run.
+
+### 21.6 Closed at state 3, 2026-11-04
+
+`Takes` chose the C# for text that cannot cross. Once Galaxia's C# half is deleted (B10) there is no C# to choose, so
+the two cases of §21.2 get answers of their own. *Decided 2026-11-04, built with Galaxia's state 3:*
+
+1. **Half a surrogate pair: a Rust answer.** The binding's `Utf8` encodes such text with U+FFFD in place of the half,
+   as .NET's own UTF-8 encoder does when it is not strict, and the library takes it. On Linux the file then lands with
+   the same bytes as the C# wrote: §21.2 measured `a\uD800b.srm` landing as `a EF BF BD b .srm` through .NET's file
+   calls. What differs is a path handed back, which now holds U+FFFD where the caller's string held the half. Q19 left
+   that change to the C#'s retirement, and this is it. On Windows the file name is U+FFFD too, where .NET would have
+   kept the half; no route to such a name was run there (§21.2), and none is reachable from Linux.
+2. **A NUL in a call that may quote it back in a list: a refusal in words.** `AtomicFile.Write` to a path holding a
+   NUL is refused before the call, with one message, `<path>: a file name cannot hold a NUL; the previous file is
+   unchanged`, in place of the library's message split in two at the NUL. No file system takes such a name, so
+   nothing that could be written is refused.
+
+`Takes` then reduces to `Crosses`, and `Crosses` to the NUL test of `listed` calls. §21.4's three overrides remain
+as recorded there: a test or MarsRT's training driver sets them, and with no C# to fall back to, a setter given half
+a pair takes it with U+FFFD like any other text.
 
 ## 22. Interface 8, 2026-10-11: the disc crate's set module, and Galaxia's Unpacked folder
 

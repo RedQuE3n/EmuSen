@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress
             w.StartConsoleEntries(EmuSen.Mistress.Library.RuntimeCatalog.Systems.Where(s => s.Id == id)).Single();
 
         // The firmware line under the page's sentences: found, not found as Cores words it, or none for a console that needs none - see EmuSen_BigPicture.md §51.8.
-        [EmuSen.WiseMan.Crystal.RustImplementationFact("firmware_status, 1.9")]
+        [Fact]
         public Task Start_Console_s_pane_says_whether_the_firmware_was_found() => Session.Dispatch(() =>
         {
             string folder = Path.Combine(_root, "MyFirmware");

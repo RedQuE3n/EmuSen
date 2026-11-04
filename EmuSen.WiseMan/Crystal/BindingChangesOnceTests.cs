@@ -27,14 +27,5 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(dir, s.StopRecording());
         }
 
-        [CSharpImplementationFact("the fixture's tree has no engine that names a card's medium, which the Rust reads from core info (EmuSen_Backend.md §29.14)")]
-        public void A_card_made_through_the_binding_is_made_once_and_said_done()
-        {
-            string card = Path.Combine(_f.Root, "Cards", "New.mcr");
-            Directory.CreateDirectory(Path.GetDirectoryName(card)!);
-            JsonElement answer = JsonDocument.Parse(_f.Runtime.CardsOp(CrystalAbi.CardsNew, JsonSerializer.Serialize(new { path = card }))).RootElement;
-            Assert.True(answer.GetProperty("done").GetBoolean(), answer.GetProperty("words").GetString());
-            Assert.True(File.Exists(card));
-        }
     }
 }

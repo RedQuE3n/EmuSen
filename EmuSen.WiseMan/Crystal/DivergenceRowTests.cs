@@ -1,13 +1,11 @@
 using System;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
-using EmuSen.Crystal.Managed;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Fixtures;
 
@@ -29,41 +27,6 @@ namespace EmuSen.WiseMan.Crystal
             s.Frame(ref info);
             return info;
         }
-
-        // An engine that declares rewind withheld, as Mars (C#) once did.
-        private sealed class Withholding(CoreLibrary library) : CoreEngine(library), IEngineFeatures
-        {
-            public new EngineFeatures Features { get; } = new(RewindCapture: false, RewindWithheld: "withheld for the test");
-        }
-
-        private CrystalSession AttachWithholding()
-        {
-            var engine = new Withholding(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            string game = _f.Game("withheld.tst");
-            engine.LoadRom(game);
-            var runtime = (ManagedRuntime)GCHandle.FromIntPtr(_f.Runtime.Handle).Target!;
-            uint id = runtime.Attach(new CoreBundle(engine, engine.CreateDebugTarget(), null, null, null), game, "TEST").Id;
-            return _f.Runtime.SessionOf(id);
-        }
-
-        // Row 1: rewind capture is gated by the engine's opt-out in the frame call, whatever the client (Mistress gated it, Hotaru and Pharaoh did not).
-        [CSharpImplementationFact("it attaches a C# engine that withholds rewind to the C# runtime; every v1 engine allows rewind, and the Rust answers rewind_capture true")]
-        public void Row_1_rewind_capture_is_gated_by_the_engine_for_every_client()
-        {
-            CrystalSession withheld = AttachWithholding();
-            withheld.Rewind(true, intervalFrames: 1);
-            for (int i = 0; i < 10; i++) Frame(withheld);
-            Assert.Equal(0, Json(withheld.RewindReel()).GetProperty("depth").GetInt32());
-            Assert.False(Json(withheld.Info()).GetProperty("rewind_capture").GetBoolean());
-            Assert.Equal("withheld for the test", Json(withheld.Info()).GetProperty("rewind_withheld").GetString());
-
-            using CrystalSession allowed = _f.Open();
-            allowed.Rewind(true, intervalFrames: 1);
-            for (int i = 0; i < 10; i++) Frame(allowed);
-            Assert.True(Json(allowed.RewindReel()).GetProperty("depth").GetInt32() > 0);
-        }
-
-        internal static bool KeepsRewindAcrossALoad => Environment.GetEnvironmentVariable("EMUSEN_CRYSTAL_NATIVE") == "1";
 
         // Row 2: one post-load sequence, whichever way the load is asked for: the binding's call, the session's table (a shell's `state load`), a slot or the resume state.
         [Fact]
@@ -94,7 +57,7 @@ namespace EmuSen.WiseMan.Crystal
                 int held = Json(s.RewindReel()).GetProperty("depth").GetInt32();
                 load();
                 // The Rust keeps the chain across a load, its newest moment the present before it, so Rewind undoes it (EmuSen_Backend.md §36); the C# half, untouched until B10, still clears it.
-                Assert.Equal(KeepsRewindAcrossALoad ? held : 0, Json(s.RewindReel()).GetProperty("depth").GetInt32());
+                Assert.Equal(held, Json(s.RewindReel()).GetProperty("depth").GetInt32());
                 Assert.Equal("loaded", Json(events.Drain()).EnumerateArray().Single().GetProperty("op").GetString());
             }
         }

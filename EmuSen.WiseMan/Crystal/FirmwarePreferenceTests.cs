@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Crystal
         private string Players => $"[Firmware] The American Sega CD's BIOS (131,072 bytes): the player's bios_CD_U.bin, in {Folder}";
         private const string Replacement = "[Firmware] The American Sega CD's BIOS (131,072 bytes): Nephrite's own replacement";
 
-        [RustImplementationFact("FirmwarePreference")]
+        [Fact]
         public void The_console_offers_the_row_with_its_three_choices_and_auto_by_default()
         {
             using var runtime = new CrystalRuntime();
@@ -82,7 +82,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.DoesNotContain(nes.RootElement.EnumerateArray(), r => r.GetProperty("key").GetString() == Key);
         }
 
-        [RustImplementationFact("FirmwarePreference")]
+        [Fact]
         public void Auto_uses_the_players_dump_when_found_and_the_replacement_otherwise()
         {
             Assert.Equal(new[] { Replacement }, Load("auto"));
@@ -91,14 +91,14 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(new[] { Players }, Load("auto"));
         }
 
-        [RustImplementationFact("FirmwarePreference")]
+        [Fact]
         public void Replacement_uses_the_replacement_even_with_the_players_dump_present()
         {
             File.WriteAllBytes(Bios, new byte[0x2_0000]);
             Assert.Equal(new[] { Replacement }, Load("replacement"));
         }
 
-        [RustImplementationFact("FirmwarePreference")]
+        [Fact]
         public void Own_uses_the_players_dump_and_without_one_the_launch_fails_in_a_plain_sentence()
         {
             File.WriteAllBytes(Bios, new byte[0x2_0000]);

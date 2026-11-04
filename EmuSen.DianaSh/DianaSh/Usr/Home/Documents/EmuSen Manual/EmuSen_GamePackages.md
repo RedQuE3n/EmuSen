@@ -600,7 +600,9 @@ CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289 (§10); M
 - A `.zip` holding any of these, unpacked through `ArchiveImages` first (`EmuSen_Galaxia.md` §3.7).
 - An `.m3u`: each disc is converted, and a new `.m3u` naming the CHDs is written in the output.
 
-**Not converted**: `.gdi` (no Dreamcast core yet), DVD images, and a CHD.
+**Not converted**: `.gdi` (no Dreamcast core yet) and a CHD. ~~DVD images~~ *Decided 2026-11-03 by the tester, as an
+extension of the tool and of Packages, no component of its own: the PlayStation 2's discs are converted, a DVD through
+`createdvd` (§4.2a).*
 
 **Where the output goes** [C]: by default `<home>/Compressed/<the library-relative path, with .chd>`.
 
@@ -612,6 +614,35 @@ CHD (Compressed Hunks of Data) File Manager", MAME Documentation 0.289 (§10); M
   chosen §4.5's replacement. *Built 2026-10-28 (§20.1): `AppSettings.ChdOutputDirectory`, refused where it lies inside
   the library or holds it; and, for one batch, each CHD beside its original in the library (§20.2), which writes the
   CHD alone and never replaces a file.*
+
+### 4.2a The PlayStation 2: a compact disc or a DVD, as the game sees it (built 2026-11-03)
+
+**The systems.** `discs::SYSTEMS` is `psx`, `mcd` and `ps2`; `discs::DVD_SYSTEMS`, the systems whose core opens an image
+of 2,048-byte sectors as a DVD, is `ps2` alone. A PlayStation 2 disc is found as the others are: the library scan's
+routing, then the nearest console folder (`ps2`).
+
+**The rule** [C, decided 2026-11-03 by the tester]: converting never changes what the game sees, so the CHD is the
+medium the core opened the original as.
+
+1. A cue sheet, or a lone raw track (sync and 2,352-byte sectors), is a compact disc's on every system, as every core
+   opens one, and goes through `createcd` (§4.2).
+2. A lone image of 2,048-byte sectors (an `.iso`) on the PlayStation 2 is a DVD's, whatever its size and whether or not
+   it carries UDF's recognition sequence, since Sapphire opens bare 2,048-byte sectors as a DVD
+   (`cdvd::open`'s `Kind::Dvd`, `Sapphire_Native.md` §49.2), and goes through `createdvd`.
+3. On the PlayStation and the Sega CD, which read compact discs only, an `.iso` is a compact disc's, as before.
+
+~~A first rule told a DVD by the image alone: more than 449,850 sectors, or UDF's NSR descriptor in the volume
+recognition sequence, else a compact disc. Withdrawn the same day: a PlayStation 2 `.iso` of a compact disc's size with
+no UDF would have become a compact disc's CHD, which Sapphire opens as a compact disc where it opened the `.iso` as a
+DVD.~~ The gate's case of a 64-sector ISO with no UDF holds the rule: it becomes a DVD CHD, and the ISO and the CHD open
+through Sapphire's call as the same DVD.
+
+**The command.** `chdman createdvd -i <the image> -o <partial> -np <threads>` [R, MAME Documentation 0.289], from the
+image's own path; `createdvd` takes a file, not a sheet, so §4.2's scratch sheet is not chdman's input for a DVD. A
+batch's start event names both codec sets, `codecs` and `dvd_codecs`, and `chd` prints them as "(cdlz,cdzl,cdfl for a
+CD, lzma,zlib,huff,flac for a DVD, 8 threads)". Every
+other rule of §4.6 and §20 holds: the partial renamed into place after the three checks, free space, the unchanged
+source, `--beside`.
 
 ### 4.3 Verification: three checks, two of them independent of chdman
 
@@ -629,6 +660,25 @@ A conversion counts as verified only when all three checks pass in the same run 
    - This is the comparison `emusen-disc`'s own CHD test already makes, sector for sector, on synthetic sheets
      (`EmuSen_Disc.md` §5) [R].
 3. **The table of contents.** Track count, modes, index points and lead-out equal the sheet's.
+
+### 4.3a A DVD's three checks (built 2026-11-03)
+
+Each must pass, in the same run, before the package is written. The record's keys are a compact disc's (`chdman`,
+`tracks`, `toc`), so that every reader of a container's checks (the claim index's §20.3 rule, the window, the shell)
+reads a DVD's unchanged; their meaning for a DVD is:
+
+1. **`chdman`**: `chdman verify`, as for a compact disc. On the measured synthetic DVD its line was the same "Overall
+   SHA1 verification successful!" [M].
+2. **`tracks`, every sector**: the CHD opened through the call by which Sapphire's drive opens a disc,
+   `emusen_disc::open_medium(image, [], IsoForm::Mode2Form1, Lone::Detect, Kind::Dvd)` (`checks::dvd`); a CHD that
+   opens as a compact disc is refused. Each of its sectors' 2,048 bytes is read in order with `Dvd::read_user`, as the
+   drive reads it, and the stream's CRC-32, MD5 and SHA-1 compared with the original file's, taken before chdman ran.
+   A damaged hunk, which `read_user` gives as zeros, is named by `Dvd::damage`.
+3. **`toc`, the size in sectors**: the CHD's logical sectors and, on a Dual Layer disc, the first sector of layer 1
+   (`Dvd::layer_break`, `EmuSen_Disc.md` §14.2), equal to the original's as the same reader opens it.
+
+As for a compact disc, checks 2 and 3 are not run over a CHD that check 1 found damaged, and check 2 not after check 3
+fails. `chd check` runs the same three against the package's record, the original not read.
 
 **The round trip was measured** [M, chdman 0.289, `sha1sum`], using `extractcd --splitbin` in place of check 2's
 reader, which is not built:
@@ -650,6 +700,33 @@ A converted disc gets a linked package whose `game` is the CHD and whose `dump` 
 - A game opened by the CHD's plain path reaches the record through the claim index (§3.5).
 - The scraper sends the original's hashes without reading the original again (§5.5).
 - A player who chooses self-contained conversions gets the CHD inside the package instead of in `Compressed`.
+
+### 4.4a A DVD's package, and the two sizes (built 2026-11-03)
+
+**The manifest.** A DVD's `container` gains `medium: "dvd"`, its `codecs` are `createdvd`'s, and its `toc` is
+`{"sectors": n, "layer_break": n or null}`. A compact disc's container names no medium, as every package written before
+2026-11-03 does, so those are read unchanged. `dump` is as for any lone image or sheet: one track, the file's hashes,
+`form` `iso` or `cue-bin`.
+
+**The two sizes come from the record**, never from the files [C]: the original's bytes are the sum of `dump.tracks`'
+sizes, and the CHD's are `game.size` (else `game.seen.size`), both written at the conversion
+(`convert::recorded_sizes`, the one owner). `chd ls`'s disc event and `pkg ls`'s package event carry them as `original`
+and `chd`. A CHD whose file has changed since keeps its recorded sizes, its state `changed`; `chd check` reads the file.
+
+**Where they are shown.**
+
+- Packages' row: the Size column, for a converted disc, "4.3 GB → 2.7 GB (−37%)" (`PackagesWords.SizeChange`), the
+  change rounded to a whole percent, a `+` where the CHD came out larger. A disc not yet converted shows its own size
+  alone; no estimate of a CHD is ever shown.
+- Packages' pane: "Size: As CHD, 4.3 GB → 2.7 GB (−37%); the package's folder 4.0 KB".
+- The plan line: the marked conversions with their originals' total, "2 marked: convert to CHD 2 (4.9 GB)", and Apply's
+  summary "Convert 2 discs (4.9 GB) to CHD, …".
+- After a run that converted discs, the apply bar's line says what they came to: "Converted 2 discs: 4.9 GB → 3.1 GB
+  (−37%), 1.8 GB freed once the originals are removed; they are kept." The tool removes no original (§4.5), so the
+  saving is said as what removing them would free.
+- `chd ls`: "converted     ps2/d.iso  4,617,089,024 -> 2,908,766,208 bytes (-37.0%)", a disc not converted with its own
+  bytes; `chd convert`'s line and `pkg ls`'s package line give the change the same way. Before 2026-11-03 these lines
+  gave the CHD as a percentage of the original, "(63.0%)".
 
 ### 4.5 The originals: never removed by default
 
@@ -766,7 +843,16 @@ each CHD and each original.
   `fast_zstd` as optional and `ruzstd` as a dependency [M, its `Cargo.toml`]. Check 2 would catch a CHD it cannot read
   in any case.
 
-**DVD systems and the GD-ROM** wait for a core that reads them.
+**The GD-ROM** waits for a core that reads it. ~~DVD systems wait for a core that reads them.~~
+
+### 4.8a A DVD's codecs (built 2026-11-03)
+
+`createdvd`'s defaults, which chdman 0.289's `info` named "lzma (LZMA), zlib (Deflate), huff (Huffman), flac (FLAC)"
+on a synthetic DVD [M, 2026-11-03], are recorded as `lzma,zlib,huff,flac`. *Faster to decode* writes `zstd` alone: a
+DVD holds data only, so FLAC's audio has nothing to do, and §4.8's reasoning for Zstandard holds as for a compact disc's
+data [A]. The `chd` crate as `emusen-disc` builds it reads `zstd` hunks: the gate's fast case converts and verifies one
+[M]. The sizes and decode rates of real PlayStation 2 DVDs under either were not measured, since no library disc is
+converted to test.
 
 ### 4.9 Shipping chdman: the plan (decided 2026-10-25, built at step 3)
 
@@ -3144,3 +3230,64 @@ and `CompressedDiscsOutputTests` pass, 105. Cargo, `test-checked`: `emusen-libra
   two alike.
 - **Q54 [routine]: `chd convert --output` takes a shell path**, inside EmuSen's home; a folder elsewhere is named in the
   setting or the window. *Recommended:* keep the walled garden (`man hier`).
+
+## 21. Built 2026-11-03: PlayStation 2 discs, and before-and-after sizes in Packages
+
+*Decided by the tester on 2026-11-03 as an extension of the library tool and of Packages; no new component.* The design
+is §4.2a, §4.3a, §4.4a and §4.8a; `man chd`'s DVDS section is the shell's account. Measured on the development desktop
+on 2026-11-03 with the pinned chdman 0.289, on synthetic images only.
+
+**The surfaces.** `emusen.library` events gain fields only: a converted disc's `medium` (`dvd`), and `pkg ls`'s
+`original` and `chd` for a converted disc; `chd ls`'s `original` and `chd` are now the record's. The manifest gains
+`container.medium`, written for a DVD alone. `PackageRow.Original`, `Chd` and `Converted`; `PackagesWords.SizeChange`,
+`Size` and `Converted`. The service's version is unchanged, its requests being the same.
+
+**Tests** [M]:
+
+- `emusen-library-tool`, the gate's two new cases with `EMUSEN_CHDMAN` set. *A synthetic PlayStation 2 DVD*: a Dual
+  Layer volume of 320 sectors, layer 1 from 160, beside an ISO 9660 image of 64 sectors with no UDF and a sheet of one
+  raw track, all in `ps2/`; both ISOs converted by `createdvd` with all three checks passed, the DVD's package's
+  `medium`, codecs and `toc` as recorded, its CHD opening through `checks::dvd` with its 320 sectors and layer break,
+  `info`'s compression `lzma`, and the small ISO and its CHD opening through the same call as the same DVD; the sheet
+  through `createcd` with no medium; `ls` and `pkg ls` giving
+  the original's 655,360 bytes and the CHD's; `check` verifying all three and a second batch calling them `already`;
+  512 bytes appended to the CHD, `ls` calling it `changed` with the recorded size; *Faster to decode* writing `zstd`;
+  the library's listing unchanged. *A damaged DVD CHD*: a whole CHD of the volume with one byte of layer 1 changed,
+  its record's size, time and SHA-1 made its own, so chdman's verify and the size pass and check 2 alone fails it.
+  `emusen-library-module`: the start line naming both codec sets.
+- WiseMan, headless: `PackagesWindowTests`' new real-job case (a PlayStation 2 DVD and a PlayStation disc converted from the
+  window: each original's size alone before, the plan line's total, then the row's and the pane's sizes from the
+  record and the apply bar's line), its words case, and the plan case's new total; `SapphireTests`' new case, the DVD
+  converted by the library tool and opened by `CoreFactory.Load`, Sapphire's v1 core with the disc in its drive and a
+  frame run; the `PackagesPlan` states re-recorded for the plan line, after the pictures were looked at; `man.golden`'s
+  `man chd` page; the Compressed Discs window's states run against its corrected words (below).
+
+**Faults seeded**, one at a time, each put back:
+
+| Fault | Caught by |
+|---|---|
+| check 2's comparison of a DVD's sectors skipped | the gate's damaged case: the disc verified |
+| the DVD rule never answering DVD | both gate cases: no `medium`, and the CHD refused by the DVD reader |
+| `chd ls`'s CHD size read from the file, not the record | the gate's DVD case: the grown file's size given |
+
+**The answers, decided 2026-11-03 by the tester.**
+
+- **Q55: a PlayStation 2 `.iso` is a DVD's whatever its size or UDF**, so that converting never changes what the game
+  sees (§4.2a, the rule rewritten).
+- **Q56: the Compressed Discs window's words corrected now**: "PlayStation and Sega CD" became "PlayStation, PlayStation
+  2 and Sega CD", and "about half its size", an estimate a DVD does not meet, became "checked three ways before it is
+  kept", in its statement and its empty listing. Of its twelve states, the recordings do not hold the statement's
+  words, and ten compared equal; the two of `CompressedDiscsBeside`, whose statement wraps to a longer scroll, were
+  re-recorded for that cause after their pictures were looked at, and a second run compared equal.
+- **Q57: the batch's start line names both codec sets** (§4.2a).
+
+### 21.1 The sizes made readable on both forms (2026-11-03)
+
+Pictured at 1280 by 800 beside the mockups, the sizes were unreadable on the desktop and absent from the big screen's
+list. **The desktop**: `LunaTable` set its `Auto` columns flush, so neighbouring columns ran together ("PlayStation 2CHD",
+"OK4.3 GB → 2.7 GB"). The cause is in the shared table control, and it is fixed there as an opt-in extension,
+`LunaTable.ColumnGap` (docs/LunaP.md §216, LunaP branch `ps2-chd`), which Packages' desktop table sets to 24 pixels,
+its mockup's spacing; every other table is laid out as before. **The big screen**: its list gains a Size column at the
+row's end, as the tools-packages mockup draws it: "156 MB", or for a converted disc "4.3 → 2.7 GB"
+(`PackagesWords.ShortSize`), the change left to the pane; the game's name, the one `*` column, ellipsizes before the
+size does. The big screen's list states were re-recorded for that column after their pictures were looked at.

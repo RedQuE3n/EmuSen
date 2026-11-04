@@ -24,7 +24,7 @@ namespace EmuSen.Tools.Packages
             Add("Game", row.Source is { } source ? $"{source} in the library ({row.Console})" : row.Where == "package" ? $"In its package ({row.Console})" : row.Console);
             Add("State", row.Words is { Length: > 0 } words ? $"{PackagesWords.State(row)}: {ToolWords.Reason(words)}" : PackagesWords.State(row));
             if (outcome is not null) Add("Last run", outcome);
-            string sizes = row.Size > 0 ? $"the game {ToolWords.Size(row.Size)}" : "";
+            string sizes = row.Converted ? $"as CHD, {PackagesWords.SizeChange(row.Original, row.Chd)}" : row.Size > 0 ? $"the game {ToolWords.Size(row.Size)}" : "";
             if (row.Packaged) sizes += (sizes.Length > 0 ? "; " : "") + $"the package's folder {ToolWords.Size(row.PackageSize)}";
             if (sizes.Length > 0) Add("Size", char.ToUpperInvariant(sizes[0]) + sizes[1..]);
             if (row.Format.Length > 0) Add("Format", row.Convertible ? $"{row.Format}, which can be converted to CHD" : row.Format);

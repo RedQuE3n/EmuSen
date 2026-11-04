@@ -591,7 +591,8 @@ fn same_seen(doc: &Value, now: &(u64, String)) -> bool {
 
 /// `pkg ls`'s view of one package with its sizes (EmuSen_Packages.md §2): `console`, its system's console as the
 /// library's games name it; `size`, the bytes its folder holds, links not followed; `game_size`, its game's bytes where
-/// the game is found; and `convertible` where `chd convert` takes the game.
+/// the game is found; `convertible` where `chd convert` takes the game; and for a converted disc `original` and `chd`,
+/// the two sizes its record holds (EmuSen_GamePackages.md §4.4a).
 pub fn list(ctx: &Context, library: &str, folder: &str, systems: &emusen_library::scan::Systems) -> Outcome {
     let mut outcome = listed(ctx, folder).with("size", Value::number(folder_bytes(folder)));
     let places = ctx.places();
@@ -599,6 +600,9 @@ pub fn list(ctx: &Context, library: &str, folder: &str, systems: &emusen_library
     let doc = read(folder).ok();
     if let Some(system) = doc.as_ref().and_then(|d| d.get("system")).and_then(Value::as_str).and_then(system_named) {
         outcome = outcome.with("console", text(&system.console));
+    }
+    if let Some((original, chd_bytes)) = doc.as_ref().filter(|d| chd(d)).and_then(crate::convert::recorded_sizes) {
+        outcome = outcome.with("original", Value::number(original)).with("chd", Value::number(chd_bytes));
     }
     let Some(game) = doc.and_then(|doc| doc.get("game").and_then(|g| claims::place(&roots, folder, g))) else { return outcome };
     if claims::seen_of(&game).is_none() {

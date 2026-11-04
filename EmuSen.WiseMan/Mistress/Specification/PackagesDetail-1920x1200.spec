@@ -115,4 +115,4 @@ press pageup top=PackagesWindow
 press pagedown top=PackagesWindow
 press first focus="TextBox Search games (Search)" top=PackagesWindow
 press last focus="TextBox Search games (Search)" top=PackagesWindow
-press back focus="ListBoxItem  (Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK)" top=PackagesWindow
+press back focus="ListBoxItem  (Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK, Size: 1.0 MB)" top=PackagesWindow

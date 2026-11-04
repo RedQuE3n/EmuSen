@@ -4,7 +4,10 @@ using EmuSen.Cores;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Systems;
 using EmuSen.Crystal.Systems.Ps2;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
+using EmuSen.Galaxia.Models;
+using EmuSen.Galaxia.Native;
 using EmuSen.WiseMan.Fixtures;
 using Xunit.Abstractions;
 
@@ -159,6 +162,41 @@ namespace EmuSen.WiseMan.Cores
                 core.RunFrame();
                 Assert.Equal((640, 448), (core.ScreenWidth, core.ScreenHeight));
                 (core as IDisposable)?.Dispose();
+            }
+        }
+
+        // A synthetic DVD converted by the library tool through createdvd and its three checks, then opened by the frontend's launch path over the core ABI: the CHD is the DVD it was, its disc in the drive - see EmuSen_GamePackages.md §4.2a.
+        [Fact]
+        public void A_dvd_the_library_tool_converted_to_chd_opens_with_its_disc_in_the_drive()
+        {
+            Assert.True(LibraryToolJob.Available, LibraryToolJob.Report);
+            string library = Path.Combine(_root, "Roms"), ps2 = Path.Combine(library, "ps2");
+            Directory.CreateDirectory(ps2);
+            SyntheticPs2Disc.Dvd().WriteSet(ps2, "Basalt Run");
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            try
+            {
+                new AppSettings { RomDirectory = library }.Save();
+                var events = new List<string>();
+                using (IToolJob job = LibraryToolJob.Start("""{"op":"convert","paths":["ps2"]}"""))
+                {
+                    var clock = Stopwatch.StartNew();
+                    while (!job.Ended && clock.Elapsed.TotalSeconds < 60)
+                        if (job.Next(100) is { } line) events.Add(line);
+                }
+                Assert.Contains(events, l => l.Contains("\"state\":\"converted\"") && l.Contains("\"medium\":\"dvd\""));
+                string chd = Path.Combine(DataStore.Compressed, "ps2", "Basalt Run.chd");
+                Assert.True(CoreFactory.IsSupported(chd), string.Join("\n", events));
+                var bundle = CoreFactory.Load(chd);
+                var core = Assert.IsType<CoreEngine>(bundle.Core);
+                Assert.Equal(("sapphire", "ps2"), (core.Info.Id, core.Machine.Info.System));
+                Assert.True(core.Machine.Info.Drives.Single().Loaded, "the disc is in the drive at power-on");
+                core.RunFrame();
+                (core as IDisposable)?.Dispose();
+            }
+            finally
+            {
+                ConfigStore.OverrideDirectory = null;
             }
         }
 

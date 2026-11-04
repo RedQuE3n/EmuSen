@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using EmuSen.Galaxia.Native;
 using EmuSen.LunaP.Controls;
 
 namespace EmuSen.Tools.Packages
@@ -67,11 +68,15 @@ namespace EmuSen.Tools.Packages
 
         private static string Count(int n, string one, string many) => $"{n} {(n == 1 ? one : many)}";
 
-        // The apply bar's line: what is marked, by kind.
+        // The originals' bytes the marked conversions read, their sizes where they lie and never an estimate of the CHDs (EmuSen_GamePackages.md §4.4a).
+        private static long Converting(IEnumerable<PackageRow> rows) => rows.Sum(r => r.Size);
+
+        // The apply bar's line: what is marked, by kind; the conversions with their originals' size.
         public static string Summary(IReadOnlyList<ManagerMarked<PackageRow>> marked)
         {
             if (marked.Count == 0) return "Nothing marked.";
-            IEnumerable<string> kinds = Order.Select(m => (m, n: marked.Count(x => x.Mark.Key == m.Key))).Where(p => p.n > 0).Select(p => $"{p.m.Label} {p.n}");
+            IEnumerable<string> kinds = Order.Select(m => (m, rows: marked.Where(x => x.Mark.Key == m.Key).Select(x => x.Row).ToList())).Where(p => p.rows.Count > 0)
+                .Select(p => p.m.Key == Convert.Key ? $"{p.m.Label} {p.rows.Count} ({ToolWords.Size(Converting(p.rows))})" : $"{p.m.Label} {p.rows.Count}");
             return $"{Count(marked.Count, "marked", "marked")}: {string.Join(", ", kinds)}";
         }
 
@@ -88,7 +93,7 @@ namespace EmuSen.Tools.Packages
                     "make-self" => $"Make {Count(n, "package", "packages")} self-contained: each game is copied into its package, and the library's copy is left as it is.",
                     "make-zip" => $"Make {Count(n, "package", "packages")} self-contained and write each as one zip beside its folder.",
                     "zip" => $"Zip {Count(n, "self-contained package", "self-contained packages")}, each as one zip beside its folder; a zip already there is never replaced.",
-                    "convert" => $"Convert {Count(n, "disc", "discs")} to CHD, each checked three ways once it is written and given a package. The originals are never removed.",
+                    "convert" => $"Convert {Count(n, "disc", "discs")} ({ToolWords.Size(Converting(step.Rows))}) to CHD, each checked three ways once it is written and given a package. The originals are never removed.",
                     _ => $"Check {Count(n, "package", "packages")}: the game and every file hashed against the manifest.",
                 });
                 foreach (PackageRow row in step.Rows.Take(8)) text.AppendLine($"    {row.Title} ({row.Console})");

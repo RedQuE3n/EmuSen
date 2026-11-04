@@ -1,3 +1,4 @@
+using System;
 using EmuSen.Galaxia.Native;
 using System.Collections.Generic;
 using System.Globalization;
@@ -34,6 +35,30 @@ namespace EmuSen.Tools.Packages
             "refused" => "Unreadable",
             string s => s,
         };
+
+        // A converted disc's original and CHD and the change between them, "4.3 GB → 2.7 GB (−37%)" (EmuSen_GamePackages.md §4.4a).
+        public static string SizeChange(long original, long chd)
+        {
+            double change = Math.Round((chd - original) * 100.0 / original);
+            string percent = change <= 0 ? $"−{(-change).ToString("F0", CultureInfo.InvariantCulture)}%" : $"+{change.ToString("F0", CultureInfo.InvariantCulture)}%";
+            return $"{ToolWords.Size(original)} → {ToolWords.Size(chd)} ({percent})";
+        }
+
+        // The Size column: a converted disc's two sizes from its record, any other game's bytes where it lies.
+        public static string Size(PackageRow row) => row.Converted ? SizeChange(row.Original, row.Chd) : row.Size > 0 ? ToolWords.Size(row.Size) : "";
+
+        // The big screen's size at a row's end: "156 MB", or a converted disc's "4.3 → 2.7 GB", its change left to the pane.
+        public static string ShortSize(PackageRow row)
+        {
+            if (!row.Converted) return row.Size > 0 ? ToolWords.Size(row.Size) : "";
+            string before = ToolWords.Size(row.Original), after = ToolWords.Size(row.Chd);
+            int unit = before.LastIndexOf(' ');
+            return unit > 0 && after.EndsWith(before[unit..], StringComparison.Ordinal) ? $"{before[..unit]} → {after}" : $"{before} → {after}";
+        }
+
+        // The apply bar's line after a run that converted discs: how many, their sizes before and after, and what the CHDs save.
+        public static string Converted(int discs, long original, long chd) =>
+            $"Converted {discs:N0} {(discs == 1 ? "disc" : "discs")}: {SizeChange(original, chd)}, {ToolWords.Size(Math.Max(0, original - chd))} freed once the originals are removed; they are kept.";
 
         // A mode as the Mode column says it.
         public static string Mode(PackageRow row) => row.Mode switch

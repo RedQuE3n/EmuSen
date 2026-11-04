@@ -1,10 +1,11 @@
 //! Checks 2 and 3 of EmuSen_GamePackages.md §4.3, both through `emusen-disc` and the `chd` crate, an implementation
 //! other than chdman's: each original track's bytes rebuilt from the CHD and hashed against the hashes taken of the
 //! original before chdman ran, and the table of contents against the one the original disc gave. §12.2 records why
-//! the rebuilt range is found from the sheet and the CHD's own track starts, and not from the original files.
+//! the rebuilt range is found from the sheet and the CHD's own track starts, and not from the original files. A DVD's
+//! two are read as the PlayStation 2's drive reads it (§4.3a): every 2,048-byte sector in order, and its size.
 
 use emusen_disc::cue::Sheet;
-use emusen_disc::{Disc, IsoForm};
+use emusen_disc::{Disc, Dvd, IsoForm, Kind, Lone, Medium};
 use emusen_galaxia::json::{Text, Value};
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{Hasher, Hashes};
@@ -144,6 +145,85 @@ pub fn tracks(chd: &mut Disc<Bytes>, sheet: &str, expected: &[Hashes], stop: &dy
         if got.crc32 != want.crc32 || got.md5 != want.md5 || got.sha1 != want.sha1 {
             return Err(format!("track {} rebuilt from the CHD has SHA-1 {} and the original {}", t.number, got.sha1.unwrap_or_default(), want.sha1.clone().unwrap_or_default()));
         }
+    }
+    Ok(())
+}
+
+/// A DVD's record for check 3: its logical sectors and, on a Dual Layer disk, the first of layer 1 (§4.3a).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DvdToc {
+    pub sectors: u32,
+    pub layer_break: Option<u32>,
+}
+
+impl DvdToc {
+    pub fn of<B: AsRef<[u8]>>(dvd: &Dvd<B>) -> DvdToc {
+        DvdToc { sectors: dvd.sectors(), layer_break: dvd.layer_break() }
+    }
+
+    pub fn to_json(&self) -> Value {
+        Value::Object(vec![member("sectors", n(self.sectors as u64)), member("layer_break", self.layer_break.map_or(Value::Null, |l| n(l as u64)))])
+    }
+
+    pub fn from_json(v: &Value) -> Option<DvdToc> {
+        let int = |name: &str| -> Option<u64> {
+            match v.get(name)? {
+                Value::Number(t) => t.parse().ok(),
+                _ => None,
+            }
+        };
+        let layer_break = match v.get("layer_break") {
+            None | Some(Value::Null) => None,
+            Some(_) => Some(int("layer_break")? as u32),
+        };
+        Some(DvdToc { sectors: int("sectors")? as u32, layer_break })
+    }
+}
+
+/// An image as a DVD, through the call the PlayStation 2's drive opens its disc with (Sapphire's `cdvd::open`): the
+/// medium `emusen-disc` makes, 2,048-byte sectors taken for a DVD's. Refused where it opens as a compact disc.
+pub fn dvd(at: &str) -> Result<Dvd<Bytes>, String> {
+    let mapped = Mapped::open(at).map_err(|e| format!("{at}: {e}"))?;
+    match emusen_disc::open_medium(Bytes(mapped), Vec::new(), IsoForm::Mode2Form1, Lone::Detect, Kind::Dvd) {
+        Ok(Medium::Dvd(d)) => Ok(d),
+        Ok(Medium::Cd(_)) => Err("it opens as a compact disc, not a DVD".into()),
+        Err(e) => Err(format!("it does not read through EmuSen's reader: {e}")),
+    }
+}
+
+/// Check 3 for a DVD: the CHD's sectors and layer break equal the original's.
+pub fn dvd_size<B: AsRef<[u8]>>(chd: &Dvd<B>, expected: &DvdToc) -> Result<(), String> {
+    let got = DvdToc::of(chd);
+    if got.sectors != expected.sectors {
+        return Err(format!("the CHD holds {} sectors and the original {}", got.sectors, expected.sectors));
+    }
+    if got.layer_break != expected.layer_break {
+        return Err(format!("the layer break differs: the CHD's {:?}, the original's {:?}", got.layer_break, expected.layer_break));
+    }
+    Ok(())
+}
+
+/// Check 2 for a DVD: every sector's 2,048 bytes read from the CHD in order, as the drive reads them, and hashed
+/// against `expected`, the original file's hashes. Run after check 3, whose equal sizes make the two the same length.
+pub fn dvd_sectors<B: AsRef<[u8]>>(chd: &mut Dvd<B>, expected: &Hashes, stop: &dyn Fn() -> bool) -> Result<(), String> {
+    if expected.size != chd.sectors() as u64 * 2048 {
+        return Err(format!("the original holds {} bytes, not the CHD's {} sectors of 2,048", expected.size, chd.sectors()));
+    }
+    let mut hasher = Hasher::new(true);
+    let mut user = [0u8; 2048];
+    for lba in 0..chd.sectors() {
+        if lba % 4096 == 0 && stop() {
+            return Err("stopped".into());
+        }
+        chd.read_user(lba, &mut user);
+        hasher.update(&user);
+    }
+    if let Some(w) = chd.damage() {
+        return Err(format!("a sector could not be read from the CHD: {w}"));
+    }
+    let got = hasher.finish();
+    if got.crc32 != expected.crc32 || got.md5 != expected.md5 || got.sha1 != expected.sha1 {
+        return Err(format!("the sectors read from the CHD have SHA-1 {} and the original {}", got.sha1.unwrap_or_default(), expected.sha1.clone().unwrap_or_default()));
     }
     Ok(())
 }

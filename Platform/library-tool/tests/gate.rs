@@ -281,24 +281,7 @@ fn a_corrupted_chd_fails_check_two() {
     let chd = temp.at("home/Compressed/psx/Two/Two.chd");
     std::fs::remove_file(&chd).unwrap();
     tool.create_cd(&other.join("Two.cue").to_string_lossy(), &chd.to_string_lossy(), None, 2, &|| false).unwrap();
-    let manifest = temp.at("home/Packages/PlayStation/Two/Two.chd/package.json").to_string_lossy().into_owned();
-    let mut doc = emusen_galaxia::package::read(&manifest).unwrap().unwrap();
-    let seen = emusen_library_tool::convert::seen(&chd.to_string_lossy()).unwrap();
-    let sha1 = tool.info(&chd.to_string_lossy()).unwrap().sha1;
-    if let Value::Object(members) = &mut doc {
-        for (name, value) in members.iter_mut() {
-            let Value::Object(inner) = value else { continue };
-            for (field, v) in inner.iter_mut() {
-                match (name.text.as_str(), field.text.as_str()) {
-                    ("game", "size") => *v = Value::number(seen.size),
-                    ("game", "seen") => *v = emusen_library_tool::convert::obj(vec![("size", Value::number(seen.size)), ("mtime", Value::string(&emusen_library_tool::convert::utc(seen.modified)))]),
-                    ("container", "sha1") => *v = Value::string(&sha1),
-                    _ => {}
-                }
-            }
-        }
-    }
-    emusen_galaxia::package::write(&manifest, &doc).unwrap().unwrap();
+    rerecord(&tool, &temp.at("home/Packages/PlayStation/Two/Two.chd/package.json"), &chd);
     let event = check_event(&ctx, "psx/Two", "psx/Two/Two.cue");
     assert_eq!(event.get("state").and_then(Value::as_str), Some("failed"));
     assert_eq!((check_word(&event, "chdman").as_str(), check_word(&event, "toc").as_str()), ("passed", "passed"));
@@ -540,4 +523,161 @@ fn beside_the_original_adds_only_the_chd_and_never_replaces_a_file() {
     assert_eq!(state_of(&run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"], "beside": true}"#), "psx/Two/Two.cue"), "already");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
     assert!(job::start(r#"{"op": "check", "beside": true}"#, ctx.clone()).is_err());
+}
+
+/// A PlayStation 2 volume as 2,048-byte sectors: an ISO 9660 primary descriptor at sector 16 naming layer 0's sectors,
+/// the set's terminator, and on a Dual Layer disk a second descriptor at layer 1's sector 16; every other byte a
+/// pattern of its offset, never real game data.
+fn ps2_volume(sectors: usize, layer0: Option<usize>) -> Vec<u8> {
+    let mut iso: Vec<u8> = (0..sectors * 2048).map(|i| (i * 5 / 3 ^ i >> 11) as u8).collect();
+    let descriptor = |iso: &mut Vec<u8>, at: usize, kind: u8, id: &[u8; 5]| iso[at * 2048..at * 2048 + 7].copy_from_slice(&[kind, id[0], id[1], id[2], id[3], id[4], 1]);
+    let primary = |iso: &mut Vec<u8>, at: usize, n: usize| {
+        descriptor(iso, at, 1, b"CD001");
+        iso[at * 2048 + 80..at * 2048 + 84].copy_from_slice(&(n as u32).to_le_bytes());
+        iso[at * 2048 + 84..at * 2048 + 88].copy_from_slice(&(n as u32).to_be_bytes());
+    };
+    primary(&mut iso, 16, layer0.unwrap_or(sectors));
+    descriptor(&mut iso, 17, 255, b"CD001");
+    if let Some(l0) = layer0 {
+        primary(&mut iso, l0 + 16, sectors - l0);
+    }
+    iso
+}
+
+const PS2_DVD: usize = 320;
+const PS2_LAYER0: usize = 160;
+
+/// The PlayStation 2's folder: a Dual Layer DVD, an ISO of 64 sectors with no UDF, which Sapphire opens as a DVD as it
+/// opens any image of 2,048-byte sectors, and a compact disc's sheet and raw track.
+fn ps2_library(root: &Path) {
+    put(root.join("ps2/Basalt Run.iso"), &ps2_volume(PS2_DVD, Some(PS2_LAYER0)));
+    put(root.join("ps2/Plain.iso"), &ps2_volume(64, None));
+    put(root.join("ps2/Quartz/Quartz.cue"), b"FILE \"Quartz.bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\n");
+    put(root.join("ps2/Quartz/Quartz.bin"), &(0..DATA).flat_map(data_sector).collect::<Vec<u8>>());
+}
+
+fn number_of(e: &Value, name: &str) -> Option<u64> {
+    match e.get(name)? {
+        Value::Number(n) => n.parse().ok(),
+        _ => None,
+    }
+}
+
+fn disc_event<'a>(events: &'a [Value], source: &str) -> &'a Value {
+    events.iter().rev().find(|e| e.get("event").and_then(Value::as_str) == Some("disc") && e.get("source").and_then(Value::as_str) == Some(source)).unwrap_or_else(|| panic!("{source}: {}", summary(events)))
+}
+
+fn manifest_of(temp: &Temp, rel: &str) -> Value {
+    emusen_galaxia::package::parse(&std::fs::read_to_string(temp.at(&format!("home/Packages/{rel}/package.json"))).unwrap()).unwrap()
+}
+
+/// A synthetic PlayStation 2 DVD through `createdvd` (EmuSen_GamePackages.md §4.2a): checked three ways, the second
+/// and third through the reader Sapphire's drive opens a disc with, and packaged; a small ISO with no UDF a DVD too, as
+/// Sapphire opens it; a sheet through `createcd`; `ls` and `pkg ls` giving the two sizes from the record; the library
+/// unchanged.
+#[test]
+fn a_synthetic_ps2_dvd_is_written_by_createdvd_checked_three_ways_and_packaged() {
+    let Some(chdman) = chdman() else { return };
+    let temp = Temp::new("ps2dvd");
+    ps2_library(&temp.at("library"));
+    let before = listing(&temp.at("library"));
+    let ctx = context(&temp, &chdman, None);
+    let got = run(&ctx, r#"{"op": "convert", "paths": ["ps2"], "threads": 2}"#);
+    for source in ["ps2/Basalt Run.iso", "ps2/Plain.iso", "ps2/Quartz/Quartz.cue"] {
+        let e = disc_event(&got, source);
+        assert_eq!(e.get("state").and_then(Value::as_str), Some("converted"), "{source}: {}", summary(&got));
+        for c in ["chdman", "tracks", "toc"] {
+            assert_eq!(e.get("checks").and_then(|k| k.get(c)).and_then(Value::as_str), Some("passed"), "{source} {c}");
+        }
+        assert_eq!(e.get("medium").and_then(Value::as_str), source.ends_with(".iso").then_some("dvd"), "{source}");
+    }
+    let dvd = manifest_of(&temp, "PlayStation 2/Basalt Run.chd");
+    let container = dvd.get("container").unwrap();
+    assert_eq!(container.get("medium").and_then(Value::as_str), Some("dvd"));
+    assert_eq!(container.get("codecs").and_then(Value::as_str), Some(emusen_library_tool::convert::DVD_CODECS));
+    assert_eq!(container.get("toc").and_then(emusen_library_tool::checks::DvdToc::from_json), Some(emusen_library_tool::checks::DvdToc { sectors: PS2_DVD as u32, layer_break: Some(PS2_LAYER0 as u32) }));
+    assert_eq!(dvd.get("dump").and_then(|d| d.get("form")).and_then(Value::as_str), Some("iso"));
+    let chd = temp.at("home/Compressed/ps2/Basalt Run.chd");
+    let opened = emusen_library_tool::checks::dvd(&chd.to_string_lossy()).unwrap();
+    assert_eq!((opened.sectors(), opened.layer_break()), (PS2_DVD as u32, Some(PS2_LAYER0 as u32)), "Sapphire's reader opens it as the DVD it was");
+    let tool = emusen_library_tool::chdman::Chdman::open(&chdman, rom_hash_sha256(&chdman).as_deref(), "0.289").unwrap();
+    assert!(tool.info(&chd.to_string_lossy()).unwrap().compression.starts_with("lzma"), "createdvd's defaults");
+    let plain = emusen_library_tool::checks::dvd(&temp.at("library/ps2/Plain.iso").to_string_lossy()).unwrap();
+    let plain_chd = emusen_library_tool::checks::dvd(&temp.at("home/Compressed/ps2/Plain.chd").to_string_lossy()).unwrap();
+    assert_eq!((plain_chd.sectors(), plain_chd.layer_break()), (plain.sectors(), plain.layer_break()), "the small ISO and its CHD open as the same DVD");
+    let doc = manifest_of(&temp, "PlayStation 2/Quartz/Quartz.chd");
+    assert_eq!(doc.get("container").and_then(|c| c.get("medium")), None, "a sheet is a compact disc's");
+    assert!(doc.get("container").and_then(|c| c.get("toc")).and_then(emusen_library_tool::checks::Toc::from_json).is_some());
+    assert_eq!(doc.get("dump").and_then(|d| d.get("form")).and_then(Value::as_str), Some("cue-bin"));
+    let chd_bytes = std::fs::metadata(&chd).unwrap().len();
+    let listed = run(&ctx, r#"{"op": "ls", "paths": ["ps2"]}"#);
+    let basalt = disc_event(&listed, "ps2/Basalt Run.iso");
+    assert_eq!((number_of(basalt, "original"), number_of(basalt, "chd")), (Some((PS2_DVD * 2048) as u64), Some(chd_bytes)), "{}", summary(&listed));
+    let packages = run(&ctx, r#"{"op": "pkg-ls", "paths": []}"#);
+    let row = packages.iter().find(|e| e.get("package").and_then(Value::as_str) == Some("PlayStation 2/Basalt Run.chd")).unwrap_or_else(|| panic!("{}", summary(&packages)));
+    assert_eq!((number_of(row, "original"), number_of(row, "chd")), (Some((PS2_DVD * 2048) as u64), Some(chd_bytes)));
+    let checked = run(&ctx, r#"{"op": "check", "paths": ["ps2"]}"#);
+    let again = run(&ctx, r#"{"op": "convert", "paths": ["ps2"]}"#);
+    for source in ["ps2/Basalt Run.iso", "ps2/Plain.iso", "ps2/Quartz/Quartz.cue"] {
+        assert_eq!(state_of(&checked, source), "verified", "{source}: {}", summary(&checked));
+        assert_eq!(state_of(&again, source), "already", "{source}");
+    }
+    let mut grown = std::fs::OpenOptions::new().append(true).open(&chd).unwrap();
+    std::io::Write::write_all(&mut grown, &[0u8; 512]).unwrap();
+    drop(grown);
+    let listed = run(&ctx, r#"{"op": "ls", "paths": ["ps2/Basalt Run.iso"]}"#);
+    let basalt = disc_event(&listed, "ps2/Basalt Run.iso");
+    assert_eq!((basalt.get("state").and_then(Value::as_str), number_of(basalt, "chd")), (Some("changed"), Some(chd_bytes)), "the sizes are the record's, not the file's");
+    assert_eq!(listing(&temp.at("library")), before, "the library changed");
+    let fast = Temp::new("ps2fast");
+    ps2_library(&fast.at("library"));
+    let got = run(&context(&fast, &chdman, None), r#"{"op": "convert", "paths": ["ps2/Basalt Run.iso"], "fast": true}"#);
+    assert_eq!(state_of(&got, "ps2/Basalt Run.iso"), "converted", "zstd reads through emusen-disc: {}", summary(&got));
+    assert_eq!(manifest_of(&fast, "PlayStation 2/Basalt Run.chd").get("container").and_then(|c| c.get("codecs")).and_then(Value::as_str), Some("zstd"));
+}
+
+/// A whole DVD CHD, so that chdman's verify passes it and its SHA-1 and size are the package's, of a volume one byte
+/// of layer 1 apart from the dump: only check 2's read of every sector can see it.
+#[test]
+fn a_ps2_dvd_chd_whose_sectors_differ_fails_the_sector_check() {
+    let Some(chdman) = chdman() else { return };
+    let temp = Temp::new("ps2bad");
+    ps2_library(&temp.at("library"));
+    let ctx = context(&temp, &chdman, None);
+    let got = run(&ctx, r#"{"op": "convert", "paths": ["ps2/Basalt Run.iso"]}"#);
+    assert_eq!(state_of(&got, "ps2/Basalt Run.iso"), "converted", "{}", summary(&got));
+    let mut other = std::fs::read(temp.at("library/ps2/Basalt Run.iso")).unwrap();
+    other[200 * 2048 + 777] ^= 0x01;
+    put(temp.at("other/Basalt Run.iso"), &other);
+    let tool = emusen_library_tool::chdman::Chdman::open(&chdman, rom_hash_sha256(&chdman).as_deref(), "0.289").unwrap();
+    let chd = temp.at("home/Compressed/ps2/Basalt Run.chd");
+    std::fs::remove_file(&chd).unwrap();
+    tool.create_dvd(&temp.at("other/Basalt Run.iso").to_string_lossy(), &chd.to_string_lossy(), None, 2, &|| false).unwrap();
+    rerecord(&tool, &temp.at("home/Packages/PlayStation 2/Basalt Run.chd/package.json"), &chd);
+    let event = check_event(&ctx, "ps2/Basalt Run.iso", "ps2/Basalt Run.iso");
+    assert_eq!(event.get("state").and_then(Value::as_str), Some("failed"), "{}", summary(std::slice::from_ref(&event)));
+    assert_eq!((check_word(&event, "chdman").as_str(), check_word(&event, "toc").as_str()), ("passed", "passed"));
+    assert!(check_word(&event, "tracks").starts_with("failed: the sectors read from the CHD have SHA-1"), "{}", check_word(&event, "tracks"));
+}
+
+/// The package's record of its CHD made the CHD now at `chd`: its size, time and SHA-1.
+fn rerecord(tool: &emusen_library_tool::chdman::Chdman, manifest: &Path, chd: &Path) {
+    let manifest = manifest.to_string_lossy().into_owned();
+    let mut doc = emusen_galaxia::package::read(&manifest).unwrap().unwrap();
+    let seen = emusen_library_tool::convert::seen(&chd.to_string_lossy()).unwrap();
+    let sha1 = tool.info(&chd.to_string_lossy()).unwrap().sha1;
+    if let Value::Object(members) = &mut doc {
+        for (name, value) in members.iter_mut() {
+            let Value::Object(inner) = value else { continue };
+            for (field, v) in inner.iter_mut() {
+                match (name.text.as_str(), field.text.as_str()) {
+                    ("game", "size") => *v = Value::number(seen.size),
+                    ("game", "seen") => *v = emusen_library_tool::convert::obj(vec![("size", Value::number(seen.size)), ("mtime", Value::string(&emusen_library_tool::convert::utc(seen.modified)))]),
+                    ("container", "sha1") => *v = Value::string(&sha1),
+                    _ => {}
+                }
+            }
+        }
+    }
+    emusen_galaxia::package::write(&manifest, &doc).unwrap().unwrap();
 }

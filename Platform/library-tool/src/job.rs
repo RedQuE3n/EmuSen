@@ -241,7 +241,8 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
         start.push(("log", Value::string(&log_at)));
     }
     if req.op == Op::Convert {
-        start.push(("codecs", Value::string(if req.options.fast { convert::FAST_CODECS } else { "cdlz,cdzl,cdfl" })));
+        start.push(("codecs", Value::string(if req.options.fast { convert::FAST_CODECS } else { convert::CD_CODECS })));
+        start.push(("dvd_codecs", Value::string(if req.options.fast { convert::FAST_DVD_CODECS } else { convert::DVD_CODECS })));
         start.push(("threads", Value::number(threads)));
         start.push(("output", Value::string(dest.root())));
         if dest.beside() {

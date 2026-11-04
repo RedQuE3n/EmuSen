@@ -54,7 +54,7 @@ namespace EmuSen.Crystal.Client
                 {
                     size = (uint)sizeof(CrystalConfig),
                     flags = options?.Development == true ? CrystalAbi.ConfigDevelopment : 0,
-                    sqlite = Contract.Crystal.Native ? (void*)SqliteLend.Handle : null,
+                    sqlite = (void*)SqliteLend.Handle,
                     cores = c,
                     cores_len = (nuint)(cores?.Length ?? 0),
                     player_cores = p,
@@ -67,9 +67,7 @@ namespace EmuSen.Crystal.Client
 
         public nint Handle { get; private set; }
 
-        // Whether the platform library serves the API, and why the implementation is the one it is.
-        public static bool Native => Contract.Crystal.Native;
-
+        // The library and the frontend API version that serve the program.
         public static string Implementation => Contract.Crystal.Report;
 
         public static string VersionText => Encoding.UTF8.GetString(Bytes(Contract.Crystal.VersionText));

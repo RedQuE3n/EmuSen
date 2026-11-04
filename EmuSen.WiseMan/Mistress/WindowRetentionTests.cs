@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Mistress
                 UiTest.Capture(window);
                 Assert.True(window.GetControl<SheetLayer>("Sheets").Current is not null || window.SettingsShown is not null, "the door opened nothing");
             }
-            object core = EmuSen.Crystal.Client.CrystalRuntime.Native ? MistressGame.Of(window) : MistressGame.Core(window);
+            object core = MistressGame.Of(window);
             window.Close();
             return (new WeakReference(window), new WeakReference(core));
         }

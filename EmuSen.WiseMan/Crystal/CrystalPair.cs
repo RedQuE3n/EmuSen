@@ -3,12 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using EmuSen.Crystal.Client.Contract;
-using EmuSen.Crystal.Managed;
 using EmuSen.Galaxia.Native;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // One implementation of the frontend API reached by its exports' names, the C# one or the platform library's, so the parity class drives both through the C ABI whatever the binding's switch chose - see EmuSen_Backend.md §29.7.
+    // The frontend API reached by its exports' names through the C ABI, as the parity class drove both implementations before the C# one was deleted - see EmuSen_Backend.md §29.7 and §40.8.
     public sealed unsafe class CrystalImpl
     {
         private readonly Func<string, nint> _export;
@@ -21,9 +20,7 @@ namespace EmuSen.WiseMan.Crystal
 
         public string Name { get; }
 
-        public static CrystalImpl Managed { get; } = new("C#", ManagedCrystal.Export);
-
-        // The e_sqlite3 the C# loads, lent to each runtime as a program lends it, so both keep states.db.
+        // The e_sqlite3 the program loads, lent to the runtime as a program lends it, so it keeps states.db.
         private static readonly Lazy<nint> LentSqlite = new(() =>
         {
             SQLitePCL.Batteries_V2.Init();

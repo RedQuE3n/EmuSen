@@ -378,28 +378,5 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [CSharpImplementationFact("clears the C# engine's rewind buffer behind the session")]
-        public Task With_no_history_the_row_says_so_and_opens_nothing() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
-            WaitFor(() => MistressGame.Rewind(window).SnapshotBytes > 0);
-            window.PauseEmulation();
-            WaitUntilParked(window);
-            MistressGame.Rewind(window).Clear();
-
-            pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-            string[] lines = PadMenu.Lines(window);
-            int at = Array.FindIndex(lines, l => l.StartsWith("Rewind", StringComparison.Ordinal));
-            Assert.Equal("Rewind  (nothing to go back to yet)", lines[at]);
-            pad.Down(at);
-            pad.A();
-            Settle(window);
-            Assert.Equal(1, PadMenu.Depth(window));
-            Assert.True(PadMenu.IsOpen(window));
-            pad.B();
-
-            Stop(window);
-            window.Close();
-        }, default);
     }
 }

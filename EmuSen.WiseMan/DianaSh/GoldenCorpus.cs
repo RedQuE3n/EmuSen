@@ -348,12 +348,9 @@ namespace EmuSen.WiseMan.DianaSh
             return steps;
         }
 
-        // A core case's game opened on the binding's runtime, whichever implementation the switch chose, and its frames run.
+        // A core case's game opened on the binding's runtime and its frames run.
         private CrystalSession OpenOnCrystal(GoldenCase c)
         {
-            // EMUSEN_GOLDEN_CRYSTAL_EXPECT names the implementation the run must be on, so a fallback fails it.
-            if (Environment.GetEnvironmentVariable("EMUSEN_GOLDEN_CRYSTAL_EXPECT") is { Length: > 0 } expect && (expect == "rust") != EmuSen.Crystal.Client.Contract.Crystal.Native)
-                throw new InvalidOperationException($"the corpus ran on {EmuSen.Crystal.Client.Contract.Crystal.Report}, not {expect}");
             _crystal ??= new CrystalRuntime();
             CrystalSession session = _crystal.Open(new CrystalOpen { Path = _targets.ImageOf(c.Target), Engine = GoldenTargets.EngineOf(c.Target), NoBattery = true });
             for (int f = 0; f < c.Frames; f++)

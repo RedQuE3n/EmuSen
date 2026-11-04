@@ -44,7 +44,7 @@ namespace EmuSen.WiseMan.Crystal
                 .Select(f => $"{f.GetProperty("file").GetString()} {f.GetProperty("required").GetBoolean()} {f.GetProperty("status").GetString()}").ToArray();
         }
 
-        [RustImplementationFact("firmware_status, 1.9")]
+        [Fact]
         public void A_console_s_firmware_is_present_missing_or_not_needed_as_the_folders_hold_it()
         {
             using CrystalRuntime runtime = Runtime();
@@ -78,7 +78,7 @@ namespace EmuSen.WiseMan.Crystal
             return doc.RootElement.GetProperty("firmware").EnumerateArray().ToDictionary(f => f.GetProperty("file").GetString()!, f => f.GetProperty("need").GetString()!);
         }
 
-        [RustImplementationFact("firmware_status's need, 1.11")]
+        [Fact]
         public void Files_an_engine_declares_alternatives_share_its_need_and_a_cartridges_chips_do_not()
         {
             using CrystalRuntime runtime = Runtime();
@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(snes.Count, snes.Values.Distinct().Count());
         }
 
-        [RustImplementationFact("firmware_status, 1.9")]
+        [Fact]
         public void A_system_no_table_or_engine_names_is_absent_and_none_is_refused()
         {
             using CrystalRuntime runtime = Runtime();

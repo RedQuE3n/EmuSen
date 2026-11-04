@@ -60,7 +60,7 @@ namespace EmuSen.WiseMan.Serenity
                     if (probe is null) { _output.WriteLine($"not run: {why}"); return; }
                 int lends = 0;
                 using var plain = (CoreEngine)CoreFactory.Loaded(path);
-                using var lent = (CoreEngine)CoreFactory.Loaded(path, lender: () => { lends++; return EmuSen.Crystal.Managed.PlatformLend.Make(device.DeviceHandle, _ => { }); });
+                using var lent = (CoreEngine)CoreFactory.Loaded(path, lender: () => { lends++; return PlatformLend.Make(device.DeviceHandle, _ => { }); });
                 Assert.Equal(1, lends);
                 Assert.NotNull(lent.Lend);
                 using var chain = new SlangChain(device, SlangPreset.Load(EmuSen.Serenity.Shaders.BuiltInPreset.Write(EmuSen.Serenity.Shaders.BuiltInShaders.AsFilter(ShaderEffect.None, false), null)));
@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Serenity
                     lentCopies.Add(Digest(copy));
                     plainCopies.Add(Digest(plain.GetFrameBufferRgba()));
                     if (!lent.PictureOnDevice) continue;
-                    SlangLend borrowed = SlangLend.Borrow(device, ((EmuSen.Crystal.Managed.PlatformLend)lent.Lend!).Handle);
+                    SlangLend borrowed = SlangLend.Borrow(device, ((PlatformLend)lent.Lend!).Handle);
                     Assert.True(chain.AdvanceLent(borrowed), $"frame {f}: no picture was taken");
                     Assert.False(chain.AdvanceLent(borrowed), $"frame {f}: a picture taken twice");
                     byte[] read = chain.Render(lent.ScreenWidth, lent.ScreenHeight);

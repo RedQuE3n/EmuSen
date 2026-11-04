@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -16,16 +17,16 @@ namespace EmuSen.WiseMan.Crystal
         private static string TwinScriptPath(string name) => Path.Combine(AppContext.BaseDirectory, "Crystal", "TwinScripts", name + ".script");
 
         // A twin script run by each implementation in turn over the same cores and planted files, then the Saves tree it left.
-        private void SameTwins(string script, IReadOnlyList<string> cores, IReadOnlyDictionary<string, string> values, Action? plant = null) =>
-            SameTwinText(File.ReadAllText(TwinScriptPath(script)), cores, values, plant);
+        private void SameTwins(string script, IReadOnlyList<string> cores, IReadOnlyDictionary<string, string> values, Action? plant = null, [CallerMemberName] string test = "") =>
+            SameTwinText(File.ReadAllText(TwinScriptPath(script)), cores, values, plant, test);
 
-        private void SameTwinText(string text, IReadOnlyList<string> cores, IReadOnlyDictionary<string, string> values, Action? plant = null)
+        private void SameTwinText(string text, IReadOnlyList<string> cores, IReadOnlyDictionary<string, string> values, Action? plant = null, [CallerMemberName] string test = "")
         {
             bool logging = DebugLogging.MasterEnabled;
             var runs = new List<List<string>>();
             try
             {
-                foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+                foreach (CrystalImpl impl in Impls)
                 {
                     if (Directory.Exists(DataStore.Saves)) Directory.Delete(DataStore.Saves, recursive: true);
                     plant?.Invoke();
@@ -42,7 +43,7 @@ namespace EmuSen.WiseMan.Crystal
             }
             finally { DebugLogging.MasterEnabled = logging; }
             for (int k = 0; k < runs[0].Count; k++) _output.WriteLine($"{k}: {runs[0][k]}");
-            Compare(runs[0], runs[1]);
+            Settle(runs, test);
         }
 
         // The test core's games: a plain one, one with a processor that cannot halt, a second game.

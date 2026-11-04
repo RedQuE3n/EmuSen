@@ -79,78 +79,6 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_game_runs_on_MarsRT_with_rewind_and_still_does_when_the_retired_Mars_is_stored() => Session.Dispatch(() =>
-        {
-            Assert.True(MarsRt.Available, MarsRt.Report);
-            MainWindow window = Start();
-            WindowGame game = Game(window);
-            Assert.IsType<CoreEngine>(game.Core);
-            Assert.Null(game.EngineNotice);
-            Assert.DoesNotContain("not available", Status(window).Text ?? "");
-
-            long? serial = game.FrameSerial;
-            WaitFor(() => game.TotalFrames > 60 && game.FrameSerial != serial);
-            Assert.True(Rewind(window).Depth > 0, "MarsRT's frames left no rewind history");
-            Assert.Equal("true", ((ICoreSettings)game.Core).Get("ExpansionPak"));
-            window.Close();
-
-            Choose("Mars (C#)");
-            window = Start();
-            Assert.IsType<CoreEngine>(Game(window).Core);
-            Assert.Null(Game(window).EngineNotice);
-            WaitFor(() => Game(window).TotalFrames > 60 && Rewind(window).Depth > 0);
-            window.Close();
-        }, default);
-
-        // The hotkey held on MarsRT with its workers and deferred picture: the game goes back, then plays on when let go - see Mars_Native.md §6.6.3.
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on() => Session.Dispatch(() =>
-        {
-            Choose(CoreCatalog.MarsRtEngine);
-            MainWindow window = Start();
-            WindowGame game = Game(window);
-            WaitFor(() => game.TotalFrames > 120 && Rewind(window).Depth > 20);
-            var core = Assert.IsType<CoreEngine>(game.Core);
-            Assert.True(core.Get("ThreadedRdp") == "true" && core.Get("DeferredPresentation") == "true", "Mistress did not give MarsRT its workers and the deferred picture");
-
-            long reached = game.TotalFrames;
-            FieldInfo held = typeof(MainWindow).GetField("_rewindHeld", BindingFlags.Instance | BindingFlags.NonPublic)!;
-            held.SetValue(window, true);
-            WaitFor(() => game.TotalFrames < reached - 40);
-            held.SetValue(window, false);
-            long back = game.TotalFrames;
-            WaitFor(() => game.TotalFrames > back + 60);
-            window.Close();
-        }, default);
-
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_state_saved_and_loaded_by_the_hotkeys_on_MarsRT_takes_the_game_back_to_it() => Session.Dispatch(() =>
-        {
-            Choose(CoreCatalog.MarsRtEngine);
-            MainWindow window = Start();
-            WindowGame game = Game(window);
-
-            Status(window).Text = "";
-            Invoke(window, "SaveState");
-            WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
-            string state = StatePath(window);
-
-            long saved = BitConverter.ToInt64(File.ReadAllBytes(state), 12);
-            Assert.True(saved > 20);
-
-            WaitFor(() => game.TotalFrames > saved + 60);
-            Status(window).Text = "";
-            Invoke(window, "LoadState");
-            WaitFor(() => Status(window).Text?.StartsWith("State loaded") == true);
-            window.PauseEmulation();
-            WaitUntilParked(window);
-
-            Assert.IsType<CoreEngine>(game.Core);
-            Assert.InRange(game.TotalFrames, saved, saved + 60);
-            window.Close();
-        }, default);
-
         // The mark is in a block the game never writes, so it is in the file afterwards only if the start read it - see Mars_Save.md §7.
         [Fact]
         public Task A_battery_save_is_read_when_MarsRT_starts_a_game_and_written_when_it_stops() => Session.Dispatch(() =>
@@ -240,7 +168,6 @@ namespace EmuSen.WiseMan.Mistress
 
         private static WindowGame Game(MainWindow window) => new(window);
 
-        private static RewindBuffer Rewind(MainWindow window) => MistressGame.Rewind(window);
 
         private static string StatePath(MainWindow window) =>
             (string)typeof(MainWindow).GetProperty("CurrentStatePath", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;

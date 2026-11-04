@@ -9068,12 +9068,13 @@ version are not the ones this build speaks, or when it cannot make a shell:
 **With the frontend API on the Rust runtime** (*decided 2026-10-19 by the tester*, `EmuSen_Backend.md` §29.28).
 `EMUSEN_DIANASH_NATIVE=0` means the C# shell and the C# runtime together. The C# shell's commands need the C#
 runtime's own provider, so it cannot be put over a session that the platform library's Crystal made. A program whose
-frontend API is on the Rust runtime refuses such a pairing before it builds anything on the session. Today that is
-Pharaoh and emusen-shell, by their own default or by `EMUSEN_CRYSTAL_NATIVE=1`. The program prints one line and
-exits with code 1:
+frontend API is on the Rust runtime refuses such a pairing before it builds anything on the session. Since
+2026-11-04 every program is: the frontend API's C# implementation was deleted (`EmuSen_Backend.md` §40.8), so the
+C# shell has no runtime to run over, and `EMUSEN_DIANASH_NATIVE=0` is refused wherever a game is open. The program
+prints one line and exits with code 1:
 
 ```
-[ERROR] EMUSEN_DIANASH_NATIVE=0 puts the shell on its C# implementation, which needs the frontend API's C# implementation too: set EMUSEN_CRYSTAL_NATIVE=0 beside it, or unset EMUSEN_DIANASH_NATIVE
+[ERROR] EMUSEN_DIANASH_NATIVE=0 puts the shell on its C# implementation, which needs the frontend API's C# implementation, deleted on 2026-11-04: unset EMUSEN_DIANASH_NATIVE
 ```
 
 emusen-shell's window shows the same words at its prompt when a game is launched from it.
@@ -9083,12 +9084,14 @@ the shell. Its console window opens a shell with no game and shows the words at 
 again each time the game changes. The window's own commands (`pause`, `resume`, `coretop`, `vstop`, `feed`, `clear`)
 still work; the commands that need the game report that none is loaded.
 
-| `EMUSEN_DIANASH_NATIVE` | `EMUSEN_CRYSTAL_NATIVE` | Pharaoh, emusen-shell and Mistress's console |
-|---|---|---|
-| unset | unset | the Rust shell over the Rust runtime |
-| `0` | `0` | the C# shell over the C# runtime, the whole failover |
-| `0` | unset or `1` | refused, in the words above |
-| unset | `0` | the Rust shell over the C# runtime |
+| `EMUSEN_DIANASH_NATIVE` | Pharaoh, emusen-shell and Mistress's console |
+|---|---|
+| unset | the Rust shell over the Rust runtime |
+| `0` | refused, in the words above |
+
+`EMUSEN_CRYSTAL_NATIVE` chose between the two runtimes until 2026-11-04. A value other than `1` is now ignored: the
+binding writes one line to the host's sink and the error log, `EMUSEN_CRYSTAL_NATIVE=0 is ignored: the frontend API's
+C# implementation was deleted, and libemusen_platform.so serves it.`, and the program runs on the platform library.
 
 The check is DianaSh's own (`DianaShInterpreter.CheckService`, which `CreateForService` makes first, raising
 `DianaShTableRefusedException`). Pharaoh and emusen-shell call it once, right after their session opens; Mistress's

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json.Nodes;
 using EmuSen.Cores.Native;
-using EmuSen.Crystal.Managed;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -46,17 +45,35 @@ namespace EmuSen.WiseMan.Cores
         private static string Tool => Environment.GetEnvironmentVariable(ToolVariable) is { Length: > 0 } tool ? tool
             : Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-host.exe" : "emusen-core-host");
 
-        // The C# host's listing, as the frontend API's cores and engines answer it, with every core opened first when asked.
+        // The C# host's listing in the shape of the frontend API's cores and engines, as its C# implementation answered them until 2026-11-04, with every core opened first when asked.
         private static JsonObject CSharp(string[] directories, bool open, params string[] player)
         {
             CoreDiscovery.UseDirectories(directories);
             CoreDiscovery.UsePlayerDirectories(player);
             if (open) foreach (DiscoveredCore core in CoreDiscovery.Found) core.Open();
-            return new JsonObject
-            {
-                ["cores"] = JsonNode.Parse(ManagedRuntime.CoresJson()),
-                ["engines"] = JsonNode.Parse(ManagedRuntime.EnginesJson()),
-            };
+            static JsonArray Strings(IEnumerable<string> values) => new(values.Select(v => (JsonNode?)JsonValue.Create(v)).ToArray());
+            var cores = new JsonArray();
+            foreach (DiscoveredCore c in CoreDiscovery.Found)
+                cores.Add(new JsonObject
+                {
+                    ["library"] = c.Sidecar.LibraryPath, ["sidecar"] = c.Sidecar.SidecarPath, ["sha256"] = c.Sidecar.Sha256, ["abi"] = c.Sidecar.Abi, ["development"] = c.Sidecar.Development,
+                    ["engine"] = c.EngineName, ["report"] = c.Report, ["directory"] = c.Player ? "player" : "installation", ["trust"] = c.Standing, ["name"] = c.Info.Name,
+                    ["authors"] = Strings(c.Info.Authors), ["license"] = c.Info.License, ["systems"] = Strings(c.Info.Systems.Select(s => s.Id)),
+                });
+            foreach (UnreadCore u in CoreDiscovery.Unread)
+                cores.Add(new JsonObject
+                {
+                    ["library"] = u.LibraryPath, ["sidecar"] = null, ["sha256"] = u.Sha256, ["abi"] = null, ["development"] = false, ["engine"] = null, ["report"] = u.Report,
+                    ["directory"] = "player", ["trust"] = "not_read", ["name"] = null, ["authors"] = new JsonArray(), ["license"] = null, ["systems"] = new JsonArray(),
+                });
+            var engines = new JsonArray();
+            foreach (DiscoveredCore c in CoreDiscovery.Found)
+                engines.Add(new JsonObject
+                {
+                    ["name"] = c.EngineName, ["id"] = c.Info.Id, ["version"] = c.Info.Version, ["systems"] = Strings(c.Info.Systems.Where(CoreDiscovery.Offered).Select(s => s.Id)),
+                    ["available"] = File.Exists(c.Sidecar.LibraryPath), ["report"] = c.Report, ["trust"] = c.Standing,
+                });
+            return new JsonObject { ["cores"] = cores, ["engines"] = engines };
         }
 
         // The Rust core host's listing of the same directories, from its tool in a process of its own.

@@ -1,74 +1,61 @@
 using System;
-using System.Reflection;
-using System.Reflection.Emit;
+using System.Collections.Generic;
+using System.Linq;
+using EmuSen.DianaSh.DianaSh.Bin;
+using EmuSen.WiseMan.Fixtures;
 using Xunit;
 using CrystalContract = EmuSen.Crystal.Client.Contract.Crystal;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The binding's choice of implementation: EMUSEN_CRYSTAL_NATIVE when set, else the program's own default - see EmuSen_Backend.md §29.27.
+    // The binding is the platform library's alone, and a leftover EMUSEN_CRYSTAL_NATIVE=0 is ignored with one line - see EmuSen_Backend.md §40.8.
     public class CrystalSwitchTests
     {
-        // A program's assembly, carrying the key with this value, or none.
-        private static Assembly Program(string? value, string key = "EmuSen.CrystalNative")
+        private static (int Exit, string Output) Pharaoh(string? crystal, string? dianash = null) =>
+            ProgramRun.Run("EmuSen.Pharaoh.dll", "game.nes", SyntheticNesRom.Build(),
+                new Dictionary<string, string?> { [ProgramRun.CrystalVariable] = crystal, [ProgramRun.DianaShVariable] = dianash }, "{game}", "1", "--nobattery");
+
+        private static IEnumerable<string> Lines(string output) => output.Split('\n').Select(l => l.TrimEnd('\r'));
+
+        // The line Pharaoh says its runtime in, after one frame of a synthetic NES image.
+        private static (string Line, string Output) RuntimeLine(string? crystal)
         {
-            var name = new AssemblyName("CrystalSwitchProgram" + Guid.NewGuid().ToString("N"));
-            CustomAttributeBuilder[] attributes = value is null ? [] :
-                [new CustomAttributeBuilder(typeof(AssemblyMetadataAttribute).GetConstructor([typeof(string), typeof(string)])!, [key, value])];
-            return AssemblyBuilder.DefineDynamicAssembly(name, AssemblyBuilderAccess.Run, attributes);
+            var (exit, output) = Pharaoh(crystal);
+            Assert.True(exit == 0, $"Pharaoh exited {exit}: {output}");
+            return (Lines(output).Single(l => l.StartsWith("[ROM] Runtime: ", StringComparison.Ordinal)), output);
         }
 
         [Fact]
-        public void The_variable_unset_and_the_program_s_metadata_give_the_rust()
-        {
-            Assert.True(CrystalContract.Asked(null, Program("1")));
-            Assert.True(CrystalContract.Asked("", Program("1")));
-        }
+        public void The_suite_s_binding_is_the_platform_library_s() => Assert.Contains(", frontend API 1.", CrystalContract.Report);
 
         [Fact]
-        public void The_variable_0_overrides_the_metadata_to_the_csharp()
+        public void With_the_variable_unset_Pharaoh_runs_on_the_platform_library_and_says_nothing_of_it()
         {
-            Assert.False(CrystalContract.Asked("0", Program("1")));
+            var (line, output) = RuntimeLine(null);
+            Assert.Contains("frontend API 1.", line);
+            Assert.DoesNotContain("is ignored", output);
         }
 
-        [Fact]
-        public void The_variable_1_gives_the_rust_without_metadata()
-        {
-            Assert.True(CrystalContract.Asked("1", Program(null)));
-            Assert.True(CrystalContract.Asked("1", null));
-        }
-
-        [Fact]
-        public void No_metadata_and_no_variable_give_the_csharp()
-        {
-            Assert.False(CrystalContract.Asked(null, Program(null)));
-            Assert.False(CrystalContract.Asked(null, null));
-        }
-
-        [Fact]
-        public void Only_the_key_with_the_value_1_names_the_rust()
-        {
-            Assert.False(CrystalContract.Asked(null, Program("0")));
-            Assert.False(CrystalContract.Asked(null, Program("true")));
-            Assert.False(CrystalContract.Asked(null, Program("1", key: "EmuSen.Other")));
-        }
-
-        // Each program's own default, set by EmuSenCrystalNative in its project; Hotaru runs inside emusen-shell.
+        // The line goes to the host's sink and the error log, so it is read from the binding rather than from a program's output.
         [Theory]
-        [InlineData("EmuSen.Pharaoh", true)]
-        [InlineData("emusen-shell", true)]
-        [InlineData("EmuSen.Mistress", true)]
-        [InlineData("EmuSen.WiseMan", true)]
-        public void Each_program_names_its_default(string program, bool rust) => Assert.Equal(rust, CrystalContract.DefaultsToRust(Assembly.Load(program)));
+        [InlineData("0")]
+        [InlineData("csharp")]
+        public void A_leftover_variable_is_ignored_with_one_line(string value) =>
+            Assert.StartsWith($"{CrystalContract.Variable}={value} is ignored: the frontend API's C# implementation was deleted, and ", CrystalContract.Ignored(value));
 
-        // The suite itself runs on the Rust unless the variable is 0, whichever host enters it.
-        [Fact]
-        public void The_suite_runs_on_the_rust_unless_the_variable_is_0() =>
-            Assert.True(CrystalContract.Native == (Environment.GetEnvironmentVariable(CrystalContract.Variable) != "0"), CrystalContract.Report);
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("1")]
+        public void An_unset_variable_or_1_is_said_nothing_of(string? value) => Assert.Null(CrystalContract.Ignored(value));
 
-        // The default fills only an unset variable; one the suite was started with is left as given.
         [Fact]
-        public void The_suite_s_default_fills_only_an_unset_variable() =>
-            Assert.Equal(string.IsNullOrEmpty(RustDefault.Given) ? "1" : RustDefault.Given, Environment.GetEnvironmentVariable(CrystalContract.Variable));
+        public void The_csharp_shell_s_variable_is_refused_in_words()
+        {
+            var (exit, output) = Pharaoh(null, "0");
+            Assert.Equal(1, exit);
+            Assert.Contains($"[ERROR] {DianaShInterpreter.ForeignTableRefusal}", Lines(output));
+            Assert.DoesNotContain("Unhandled exception", output);
+        }
     }
 }

@@ -98,13 +98,13 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Contains($"[ROM] Runtime: {CrystalRuntime.Implementation}", File.ReadAllLines(log));
         }, default);
 
-        // Run at each pairing of EMUSEN_CRYSTAL_NATIVE and EMUSEN_DIANASH_NATIVE: only the C# shell over the Rust runtime is refused.
+        // Run at each EMUSEN_DIANASH_NATIVE: the C# shell is refused over the runtime's table.
         [Fact]
         public Task The_console_over_a_running_game_refuses_only_the_csharp_shell_over_the_rust_runtime_in_words() => Session.Dispatch(() =>
         {
             MainWindow window = Started();
             HotaruWindow console = Console(window);
-            bool refused = CrystalRuntime.Native && !DianaShNative.Active;
+            bool refused = !DianaShNative.Active;
 
             if (refused)
             {

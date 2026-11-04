@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static string Sha256(string file) => Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(file)));
 
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task The_window_offers_a_waiting_libretro_core_with_its_cores_hash_and_its_approval_makes_it_an_engine() => Session.Dispatch(() =>
         {
             using CrystalRuntime runtime = Runtime();
@@ -112,7 +112,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // The handheld's state on 2026-11-01: PCEE2 and Flycast installed, neither approved, no approvals file; the big-screen form driven by the pad.
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task The_big_screen_form_approves_an_installed_core_with_the_pad() => Session.Dispatch(() =>
         {
             Directory.Delete(Entry, recursive: true);
@@ -157,7 +157,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // The tester's run on 2026-11-01: PCEE2 installed while Mistress ran, so the runtime's listing predated it; Approve on its page asked nothing until Cores listed the directories again. The real question, Dialogs.ConfirmAsync over the sheet-hosted window, answered by the pad.
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task A_core_installed_while_Mistress_runs_is_approved_through_the_real_question_by_pad() => Session.Dispatch(() =>
         {
             Directory.Delete(Entry, recursive: true);
@@ -196,7 +196,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // A host that cannot list the directories again: the page's Approve asks with the hash the entry records, and the runtime's refusal is said, never dropped (EmuSen_Cores.md §3.5).
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public Task Without_a_rescan_the_question_is_still_asked_and_the_refusal_said() => Session.Dispatch(() =>
         {
             Directory.Delete(Entry, recursive: true);
@@ -226,7 +226,7 @@ namespace EmuSen.WiseMan.Mistress
         }, default);
 
         // The tester's run on 2026-11-01: PCEE2 installed and waiting, Jak opened on Sapphire without a question. The route names the console's waiting default where no layer chose an engine, and Mistress asks about it first with the engine the game opens on otherwise (EmuSen_LibretroHost.md §10t).
-        [RustImplementationFact("the route's waiting default, 1.6")]
+        [Fact]
         public void The_consoles_waiting_default_is_asked_about_ahead_of_the_native_fallback()
         {
             Directory.Delete(Entry, recursive: true);
@@ -262,7 +262,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // The tester's run on 2026-11-01: PCEE2 approved in Cores mid-session, its copies an earlier build's, and Jak then opened on Sapphire with nothing said. The approval refreshes the copies and reads the entry, so the route gives the default (EmuSen_LibretroHost.md §10v).
-        [RustImplementationFact("the route's held default, 1.7")]
+        [Fact]
         public void The_default_approved_mid_session_over_an_earlier_builds_copies_is_the_routes_engine()
         {
             (string pcee2, string game) = EarlierBuildsPcee2();
@@ -281,7 +281,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // An approved default whose copies cannot be refreshed: the game opens on the fallback with the reason said, never silently, and nothing is asked (EmuSen_LibretroHost.md §10v).
-        [RustImplementationFact("the route's held default, 1.7")]
+        [Fact]
         public void An_approved_default_that_cannot_be_read_gives_its_reason_and_no_silent_fallback()
         {
             (string pcee2, string game) = EarlierBuildsPcee2();
@@ -305,7 +305,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.StartsWith("Sony - PlayStation 2 (PCEE2) could not be used, so this game opens on Sapphire: ", (string)Mistress("HeldNotice", core!, "Sapphire", Field("Held")!)!);
         }
 
-        [RustImplementationFact("the cores listing's libretro rows, 1.5")]
+        [Fact]
         public void Mistress_asks_about_a_libretro_core_by_its_cores_file_and_hash()
         {
             using CrystalRuntime runtime = Runtime();

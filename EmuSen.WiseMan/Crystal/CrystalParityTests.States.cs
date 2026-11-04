@@ -98,9 +98,9 @@ namespace EmuSen.WiseMan.Crystal
             }, also: () => TreeOf(elsewhere) + "\n" + TreeOf(DataStore.Library).Split('\n').Count(l => l.StartsWith("states.db")));
         }
 
-        // D8 and the records shared: whichever opens states.db first copies records.db's rows once, and each reads the other's records to the byte.
+        // D8: the first runtime to open states.db copies records.db's rows once, and a record saved by one runtime is read to the byte by the next.
         [Fact]
-        public void States_db_is_shared_between_the_implementations()
+        public void States_db_copies_records_db_once_and_keeps_its_records_across_runtimes()
         {
             string tree = TestTree(plain: false);
             string game = Path.Combine(_root, "plain.tst");
@@ -126,13 +126,12 @@ namespace EmuSen.WiseMan.Crystal
                 return new[] { saved, path, i.Read("state_record", rt, path) };
             })[2];
             string ReadBy(CrystalImpl impl, string path) => Answers(impl, new[] { tree }, (i, rt) => new[] { i.Read("state_record", rt, path) })[0];
-            string byManaged = SaveAndRead(CrystalImpl.Managed, 1);
+            string first = SaveAndRead(CrystalImpl.Native, 1);
             string once = Copied();
             string slot1 = Path.Combine(DataStore.SaveStates, "plain.state"), slot2 = Path.Combine(DataStore.SaveStates, "plain.slot2.state");
-            Assert.Equal(byManaged, ReadBy(CrystalImpl.Native, slot1));
-            Assert.Equal(ReadBy(CrystalImpl.Managed, copied), ReadBy(CrystalImpl.Native, copied));
-            string byNative = SaveAndRead(CrystalImpl.Native, 2);
-            Assert.Equal(byNative, ReadBy(CrystalImpl.Managed, slot2));
+            Assert.Equal(first, ReadBy(CrystalImpl.Native, slot1));
+            string second = SaveAndRead(CrystalImpl.Native, 2);
+            Assert.Equal(second, ReadBy(CrystalImpl.Native, slot2));
             Assert.Equal(once, Copied());
             Assert.StartsWith("records.db ", once);
             Assert.Contains("\"core\":\"Old Core\"", ReadBy(CrystalImpl.Native, copied));

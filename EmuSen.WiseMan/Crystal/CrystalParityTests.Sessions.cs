@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -28,10 +29,10 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         // Each implementation over the same planted files, its answers followed by the Saves and Unpacked trees it leaves.
-        private void SameWithFiles(IReadOnlyList<string> cores, Action plant, Func<CrystalImpl, nint, IEnumerable<string>> asks, Func<string>? also = null)
+        private void SameWithFiles(IReadOnlyList<string> cores, Action plant, Func<CrystalImpl, nint, IEnumerable<string>> asks, Func<string>? also = null, [CallerMemberName] string test = "")
         {
             var runs = new List<List<string>>();
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            foreach (CrystalImpl impl in Impls)
             {
                 foreach (string d in new[] { DataStore.Saves, DataStore.Unpacked })
                     if (Directory.Exists(d)) Directory.Delete(d, recursive: true);
@@ -43,7 +44,7 @@ namespace EmuSen.WiseMan.Crystal
                 runs.Add(answers);
             }
             for (int k = 0; k < runs[0].Count; k++) _output.WriteLine($"{k}: {runs[0][k]}");
-            Compare(runs[0], runs[1]);
+            Settle(runs, test);
         }
 
         private static uint Id(string opened) => uint.TryParse(opened, out uint id) ? id : 999;
@@ -138,9 +139,8 @@ namespace EmuSen.WiseMan.Crystal
                     yield return i.Call("close", rt, Id(o));
                 }
             }
-            List<string> managed = Answers(CrystalImpl.Managed, BuildTree, Asks, development: true), native = Answers(CrystalImpl.Native, BuildTree, Asks, development: true);
+            List<string> managed = Each(i => Answers(i, BuildTree, Asks, development: true));
             for (int k = 0; k < managed.Count; k++) _output.WriteLine($"{k}: {managed[k]}");
-            Compare(managed, native);
             Assert.Equal(new[] { "sg1000", "sms", "sg1000" }, new[] { 1, 4, 7 }.Select(k => (string?)System.Text.Json.Nodes.JsonNode.Parse(managed[k])!["system"]));
         }
 

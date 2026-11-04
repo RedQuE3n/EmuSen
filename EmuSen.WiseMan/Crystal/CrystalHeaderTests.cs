@@ -7,12 +7,11 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using EmuSen.Crystal.Client.Contract;
-using EmuSen.Crystal.Managed;
 using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // emusen_crystal.h against the binding and the C# implementation: every export, number and struct field, both mirrors - see EmuSen_Backend.md §14.
+    // emusen_crystal.h against the binding: every export, number and struct field - see EmuSen_Backend.md §14.
     public class CrystalHeaderTests
     {
         private static string Repo => ConfigRoot.Managed.Directory;
@@ -54,15 +53,6 @@ namespace EmuSen.WiseMan.Crystal
             ["const emusen_crystal_config *"] = typeof(CrystalConfig*), ["const emusen_crystal_open_params *"] = typeof(CrystalOpenParams*),
             ["emusen_crystal_frame_info *"] = typeof(CrystalFrameInfo*), ["const void *"] = typeof(nint),
             ["emusen_crystal_raw_info *"] = typeof(CrystalRawInfo*),
-        };
-
-        private static Type ManagedType(string c) => c switch
-        {
-            "const emusen_crystal_config *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.ConfigV1")!.MakePointerType(),
-            "const emusen_crystal_open_params *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.OpenParamsV1")!.MakePointerType(),
-            "emusen_crystal_frame_info *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.FrameInfoV1")!.MakePointerType(),
-            "emusen_crystal_raw_info *" => typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.RawInfoV1")!.MakePointerType(),
-            _ => Client[c],
         };
 
         private static string Pascal(string name) => string.Concat(name["emusen_crystal_".Length..].Split('_').Select(w => char.ToUpperInvariant(w[0]) + w[1..]));
@@ -107,21 +97,6 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
-        // The C# implementation exports every function of the header, each an UnmanagedCallersOnly entry of its signature.
-        [Fact]
-        public void The_C_sharp_implementation_exports_every_function_with_its_signature()
-        {
-            foreach (var (name, returns, parameters) in Exports())
-            {
-                Assert.NotEqual(0, ManagedCrystal.Export(name));
-                MethodInfo m = typeof(ManagedCrystal).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static) ?? throw new Xunit.Sdk.XunitException($"no entry {name}");
-                Assert.NotNull(m.GetCustomAttribute<UnmanagedCallersOnlyAttribute>());
-                Assert.Equal(ManagedType(returns), m.ReturnType);
-                Assert.Equal(parameters.Select(ManagedType), m.GetParameters().Select(p => p.ParameterType));
-            }
-            Assert.Equal(0, ManagedCrystal.Export("emusen_crystal_nothing"));
-        }
-
         private static Dictionary<string, long> Defines(string header, string pattern) =>
             Regex.Matches(header, @"^#define (" + pattern + @")\s+\(?(-?\d+)u?\)?\s*(?:/\*.*)?$", RegexOptions.Multiline).ToDictionary(m => m.Groups[1].Value, m => long.Parse(m.Groups[2].Value));
 
@@ -130,32 +105,28 @@ namespace EmuSen.WiseMan.Crystal
         private static Dictionary<string, long> Constants(Type type) =>
             type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static).Where(f => f.IsLiteral && f.Name != "Version").ToDictionary(f => f.Name, f => Convert.ToInt64(f.GetRawConstantValue()));
 
-        // Both sides' numbers are the header's: the binding's two classes and the implementation's.
+        // The binding's two classes hold every number the headers define.
         [Fact]
-        public void Every_number_the_headers_define_is_both_mirrors()
+        public void Every_number_the_headers_define_is_the_binding_s()
         {
             var crystal = Defines(Header, @"EMUSEN_CRYSTAL_\w+").Where(d => !d.Key.EndsWith("_VERSION")).ToDictionary(d => PascalOf(d.Key, "EMUSEN_CRYSTAL_"), d => d.Value);
             var session = Defines(SessionHeader, @"EMUSEN_(?:SVC|SESSION)_\w+").Where(d => !d.Key.EndsWith("_VERSION")).ToDictionary(d => PascalOf(d.Key, "EMUSEN_(SVC|SESSION)_"), d => d.Value);
             Assert.Equal(crystal.OrderBy(d => d.Key), Constants(typeof(CrystalAbi)).OrderBy(d => d.Key));
             Assert.Equal(session.OrderBy(d => d.Key), Constants(typeof(CrystalSessionAbi)).OrderBy(d => d.Key));
-            var managed = Constants(typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed.CrystalNumbers")!).ToDictionary(d => d.Key, d => d.Value);
-            // The C# implementation stays at the minor it implements, at most the header's, until B10 deletes it - see EmuSen_Backend.md §34.
-            Assert.True(Convert.ToInt64(managed["Minor"]) <= Convert.ToInt64(crystal["Minor"]), $"the C# implementation's minor {managed["Minor"]} is past the header's {crystal["Minor"]}");
-            Assert.Equal(crystal.Where(d => d.Key != "Minor").OrderBy(d => d.Key), managed.Where(d => d.Key != "Minor").OrderBy(d => d.Key));
             Assert.Equal((CrystalAbi.Major << 16) | CrystalAbi.Minor, CrystalAbi.Version);
         }
 
-        private static readonly (string C, Type Client, string Managed)[] Structs =
+        private static readonly (string C, Type Client)[] Structs =
         {
-            ("emusen_crystal_config", typeof(CrystalConfig), "ConfigV1"),
-            ("emusen_crystal_open_params", typeof(CrystalOpenParams), "OpenParamsV1"),
-            ("emusen_crystal_frame_info", typeof(CrystalFrameInfo), "FrameInfoV1"),
-            ("emusen_crystal_raw_info", typeof(CrystalRawInfo), "RawInfoV1"),
+            ("emusen_crystal_config", typeof(CrystalConfig)),
+            ("emusen_crystal_open_params", typeof(CrystalOpenParams)),
+            ("emusen_crystal_frame_info", typeof(CrystalFrameInfo)),
+            ("emusen_crystal_raw_info", typeof(CrystalRawInfo)),
         };
 
-        // Each struct as a C compiler lays it out from the header, and both mirrors laid out alike, field by field by name.
+        // Each struct as a C compiler lays it out from the header, and the binding's laid out alike, field by field by name.
         [Fact]
-        public void A_C_compiler_lays_the_structs_out_as_both_mirrors_do()
+        public void A_C_compiler_lays_the_structs_out_as_the_binding_does()
         {
             string? cc = new[] { "cc", "clang", "gcc" }.FirstOrDefault(p => (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator).Any(d => File.Exists(Path.Combine(d, p))));
             if (cc is null) return;
@@ -171,17 +142,10 @@ namespace EmuSen.WiseMan.Crystal
                 string exe = Path.Combine(dir, "layout");
                 Run(cc, $"-std=c99 -Wall -Wextra -Werror -pedantic -I\"{Include}\" -o \"{exe}\" \"{Path.Combine(dir, "layout.c")}\"");
                 var printed = Run(exe, "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' ')).ToDictionary(p => p[0], p => int.Parse(p[1]));
-                foreach (var (c, client, managedName) in Structs)
+                foreach (var (c, client) in Structs)
                 {
-                    Type managed = typeof(ManagedCrystal).Assembly.GetType("EmuSen.Crystal.Managed." + managedName)!;
                     Assert.Equal(printed[c], Marshal.SizeOf(client));
-                    Assert.Equal(printed[c], Marshal.SizeOf(managed));
-                    Assert.Equal(client.GetFields().Select(f => f.Name), managed.GetFields().Where(f => !f.IsLiteral).Select(f => f.Name));
-                    foreach (FieldInfo f in client.GetFields())
-                    {
-                        Assert.Equal(printed[$"{c}.{f.Name}"], (int)Marshal.OffsetOf(client, f.Name));
-                        Assert.Equal(printed[$"{c}.{f.Name}"], (int)Marshal.OffsetOf(managed, f.Name));
-                    }
+                    foreach (FieldInfo f in client.GetFields()) Assert.Equal(printed[$"{c}.{f.Name}"], (int)Marshal.OffsetOf(client, f.Name));
                 }
             }
             finally

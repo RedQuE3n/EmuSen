@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.WiseMan.Cores;
@@ -11,24 +12,17 @@ namespace EmuSen.WiseMan.Crystal
     // The frontend API's 1.3: the player's directory, core_approve and core_revoke, their answers and the approvals' file compared - see EmuSen_Backend.md §29.40.
     public partial class CrystalParityTests
     {
-        // Each implementation over installation and player's directories, the approvals' file and the asks' leftovers cleared first by the asks.
-        private List<string> SameWithPlayer(IReadOnlyList<string> cores, IReadOnlyList<string> player, Func<CrystalImpl, nint, IEnumerable<string>> asks)
+        // The runtime over installation and player's directories, the approvals' file and the asks' leftovers cleared first by the asks.
+        private List<string> SameWithPlayer(IReadOnlyList<string> cores, IReadOnlyList<string> player, Func<CrystalImpl, nint, IEnumerable<string>> asks, [CallerMemberName] string test = "")
         {
             var runs = new List<List<string>>();
-            foreach (CrystalImpl impl in new[] { CrystalImpl.Managed, CrystalImpl.Native })
+            foreach (CrystalImpl impl in Impls)
             {
-                CoreDiscovery.UseDevelopment(null);
-                CoreDiscovery.UseDirectories(cores);
-                CoreDiscovery.UsePlayerDirectories(player);
                 nint rt = impl.New(cores, false, player);
                 try { runs.Add(asks(impl, rt).ToList()); }
-                finally
-                {
-                    impl.Free(rt);
-                    CoreDiscovery.UsePlayerDirectories(null);
-                }
+                finally { impl.Free(rt); }
             }
-            Compare(runs[0], runs[1]);
+            Settle(runs, test);
             return runs[0];
         }
 

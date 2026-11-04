@@ -11,6 +11,7 @@ pub mod client;
 pub mod clock;
 pub mod consoles;
 pub mod credentials;
+pub mod fingerprint;
 mod json;
 pub mod kinds;
 pub mod layout;
@@ -78,6 +79,8 @@ pub struct Test {
     pub roots: Option<String>,
     pub clock: Option<i64>,
     pub offline: bool,
+    /// The size above which a file is fingerprinted, lowered so a test's files can be small (§9.12).
+    pub fingerprint_above: Option<u64>,
 }
 
 /// The settings a host gives at open and when Preferences closes.
@@ -147,7 +150,13 @@ impl Settings {
         if let Some(t) = r.get("test") {
             if !t.is_null() {
                 let connect = json::text_or_none(t, "connect")?.map(|c| c.parse::<SocketAddr>().map_err(|_| Error::BadRequest("The request's test.connect is not an address.".into()))).transpose()?;
-                s.test = Test { connect, roots: json::text_or_none(t, "roots")?, clock: json::integer_or_none(t, "clock")?, offline: json::flag(t, "offline", false)? };
+                s.test = Test {
+                    connect,
+                    roots: json::text_or_none(t, "roots")?,
+                    clock: json::integer_or_none(t, "clock")?,
+                    offline: json::flag(t, "offline", false)?,
+                    fingerprint_above: json::integer_or_none(t, "fingerprint_above")?.map(|v| v.max(0) as u64),
+                };
             }
         }
         Ok(s)
@@ -179,6 +188,7 @@ pub struct Scraper {
     pub(crate) sqlite: Arc<Sqlite>,
     library: Option<&'static emusen_library::Library>,
     pub(crate) runs: run::Runs,
+    pub(crate) background: fingerprint::Background,
     art: RwLock<artwork::Index>,
     root: String,
     /// The store held alone across processes, let go after everything above has closed (EmuSen_LibraryTools.md §8.8).
@@ -189,6 +199,7 @@ impl Drop for Scraper {
     fn drop(&mut self) {
         self.stop_workers();
         self.stop_failover();
+        self.stop_background();
     }
 }
 
@@ -214,6 +225,7 @@ impl Scraper {
             sqlite,
             library,
             runs: run::Runs::default(),
+            background: fingerprint::Background::default(),
             art: RwLock::new(art),
             root: root.to_string(),
             _held: held,
@@ -259,6 +271,11 @@ impl Scraper {
 
     pub fn settings(&self) -> Settings {
         self.settings.read().unwrap_or_else(|p| p.into_inner()).clone()
+    }
+
+    /// The size above which a file is fingerprinted: 1 GB, or a test's own.
+    pub(crate) fn fingerprint_above(&self) -> u64 {
+        self.settings.read().unwrap_or_else(|p| p.into_inner()).test.fingerprint_above.unwrap_or(fingerprint::ABOVE)
     }
 
     pub fn library(&self) -> Result<&'static emusen_library::Library, Error> {

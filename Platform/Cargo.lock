@@ -621,6 +621,8 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
+ "libc",
+ "sha1",
 ]
 
 [[package]]

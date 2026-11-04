@@ -5,7 +5,7 @@
 
 use crate::Error;
 use crate::kinds;
-use crate::store::{CLEANUP_FOLDER, FOLDERS_STEP, Store};
+use crate::store::{CLEANUP_FOLDER, FOLDERS_STEP, Key, Store};
 use emusen_galaxia::dotnet_files;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
@@ -94,24 +94,24 @@ pub fn put_in_folders(store: &Store, folder_of_rom: &dyn Fn(&str) -> String, now
         return Ok(0);
     }
     let rows = store.all_media_rows()?;
-    let mut roms: HashMap<(String, i64), Vec<String>> = HashMap::new();
-    for (p, md5, bytes) in store.all_files()? {
-        roms.entry((md5, bytes)).or_default().push(p);
+    let mut roms: HashMap<Key, Vec<String>> = HashMap::new();
+    for (p, key) in store.all_files()? {
+        roms.entry(key).or_default().push(p);
     }
     struct Entry {
-        rows: Vec<(String, i64, String, Option<String>)>,
+        rows: Vec<(Key, String, Option<String>)>,
         folders: BTreeSet<String>,
         top: bool,
     }
     let mut plan: BTreeMap<String, Entry> = BTreeMap::new();
     let mut order: Vec<String> = Vec::new();
-    for (md5, bytes, ty, flat) in rows {
+    for (key, ty, flat) in rows {
         if parts(&flat).len() != 3 {
             continue;
         }
         let stem = path::file_name_without_extension(STYLE, &flat).to_string();
         let folders: Vec<String> = roms
-            .get(&(md5.clone(), bytes))
+            .get(&key)
             .map(|ps| ps.iter().filter(|p| path::file_name_without_extension(STYLE, p) == stem).map(|p| folder_of_rom(p)).collect())
             .unwrap_or_default();
         if !plan.contains_key(&flat) {
@@ -120,7 +120,7 @@ pub fn put_in_folders(store: &Store, folder_of_rom: &dyn Fn(&str) -> String, now
         let entry = plan.entry(flat.clone()).or_insert_with(|| Entry { rows: Vec::new(), folders: BTreeSet::new(), top: false });
         let own = folders.iter().filter(|f| !f.is_empty()).min().cloned();
         let top_here = folders.iter().any(|f| f.is_empty());
-        entry.rows.push((md5, bytes, ty, if top_here { None } else { own }));
+        entry.rows.push((key, ty, if top_here { None } else { own }));
         entry.folders.extend(folders.iter().filter(|f| !f.is_empty()).cloned());
         entry.top |= top_here;
     }
@@ -154,11 +154,11 @@ pub fn put_in_folders(store: &Store, folder_of_rom: &dyn Fn(&str) -> String, now
             };
             store.record_move(flat, target, how, now)?;
         }
-        for (md5, bytes, ty, folder) in &entry.rows {
+        for (key, ty, folder) in &entry.rows {
             let Some(folder) = folder else { continue };
             let target = relative(&system, &kind, folder, &name);
             if dotnet_files::file_exists(&path::combine(STYLE, &store.root, &target)) {
-                store.repoint_media(md5, *bytes, ty, &target)?;
+                store.repoint_media(key, ty, &target)?;
             }
         }
     }

@@ -710,6 +710,94 @@ took 31.5 s and 29.4 s one at a time (270 to 289 MB/s, one core's hashing) and 8
 986 MB/s). On this device concurrency helps 2.7 to 3.7 times; whether a cap per device is wanted waits for the
 handheld's log, whose storage this does not measure.
 
+### 9.12 A big disc found by its name and size, its checksums taken later (2026-11-04)
+
+Decided by the tester on 2026-11-04 after the handheld's own scrape log proved the cause: one run of
+`Clock Tower 3 (USA).iso` took 81,654 ms of wall time, of which `hash_ms` 74,720 (the whole disc read for its three
+digests at about 50 MB/s from the handheld's storage) and `server_ms` 6,805 (the lookup and six pictures). Reading the
+disc, not ScreenScraper, was 92% of the game's time. §9.11 had measured that a lookup by name and size names the same
+game as the hashed one for the five desktop discs, and had dropped it only because `media.db` keys every record by the
+file's MD5. The key now has a second form.
+
+**What changed.** For a file above 1 GB (1,000,000,000 bytes, `fingerprint::ABOVE`); a file of 1 GB or less is
+hashed in full exactly as before:
+
+1. **A fingerprint.** The SHA-1 of the file's first and last MiB, read in one pass of 2 MiB (`fingerprint::of`). With
+   the size it keys the game. It lives in its own column, `fingerprint`, never in `md5`.
+2. **Name and size first.** `jeuInfos` is sent with `romnom` and `romtaille` and no `crc`, `md5` or `sha1`
+   (`Hashes::name_and_size`). Found, the record is kept under the fingerprint, `matched_by` is `name+size`, and the
+   path index's MD5 is empty and its CRC32 and SHA-1 null.
+3. **The hash lookup after a miss only.** A miss reads the file in full (`hash_once`), keeps the three digests beside
+   the fingerprint, and asks by them as before; found, `matched_by` is `file`. The record keeps the fingerprint key
+   either way, so a file is keyed once, when first seen, by its size.
+4. **The checksums later.** When a run's last worker ends, a thread (`Scraper::hash_later`) takes the digests of every
+   fingerprinted file whose path index lacks them, at the lowest priority the system has (Linux: nice 19 and the idle
+   I/O class through `ioprio_set`; macOS: `PRIO_DARWIN_BG`; Windows: `THREAD_MODE_BACKGROUND_BEGIN`). It runs only
+   while no game is on screen: the host says so with the change `playing {running}` (Mistress at `StartEmulationThread`,
+   `StopEmulationThread` and when the scraper opens), the thread waits while a game runs, and the hashing asks every
+   64 KiB and abandons the file the moment one starts, to begin it again afterwards. A file whose size or time changed
+   is skipped. Nothing waits on the thread; the handle's close stops and joins it. The digests land in the path index
+   (`Store::fill_hashes`), where a file's CRC32 and SHA-1 already lived; the game's rows keep their key and do not move.
+5. **One owner of "which key".** `store::Key` holds the rule: a file with a fingerprint is found by it, one without by
+   its MD5 (`Key::of_file`). The game's rows carry the key in `md5` and `fingerprint` (`md5` empty under a
+   fingerprint), and every lookup that went by MD5 goes by the key: the path index joined to its game (`store::joined`,
+   behind `found`, `record`, `outcomes`, `forget`, `forget_unfound`, `metadata`), the plan, a run's media, a rename's
+   copies (`paths_of`) and the layout step. The library, Home, the game page and the Scraper's rows all read through
+   those. The reads `game` and `stored` take `fingerprint` beside `md5`, and a record's JSON carries `fingerprint`.
+6. **The scrape log.** Each lookup's line gains `match=name+size|hash` and every request line `fingerprint_ms`, owed
+   to the next line as `hash_ms` is; the run line gains `fingerprint_ms` and `read_bytes`, the bytes of game files
+   read to identify them.
+
+**Schema 5.** `media.db` schema 5 rebuilds `scrape_game` and `scrape_media` with `fingerprint TEXT NOT NULL DEFAULT ''`
+in their primary keys (`(md5, bytes, fingerprint)`, and `type` for media), copying every row, and adds the same
+column to `scrape_file`. Two discs of one size keep their own records. A record from schema 4 keeps its MD5 key: a big
+file already in the path index with its MD5 is not fingerprinted again, so nothing is re-scraped. The C# `MediaStore`
+takes the same migration and the same join while it exists (B10 retires it): its `RememberFile` keys a file read in
+full by its MD5, as the Rust `remember_file` does, and its `CachedFile` passes over a fingerprinted row with no MD5 yet.
+
+**What it cannot tell apart.** Two files of one size whose first and last MiB agree share a fingerprint, so a patched
+image of a disc that keeps its size and both ends would share the original's record. ScreenScraper's name-and-size
+lookup has the same blind spot (§9.11: three of its five "hash" matches were name matches on its side). A file read in
+full anew (its size or time changed) is keyed by its fingerprint again only when it is above 1 GB.
+
+**Measured on 2026-11-04** on the desktop, the same five discs, kinds and member account as §9.10 and §9.11, the
+discs' pages warm as they were then, through the scraper's own run (`Scraper::start` with 99 threads asked):
+
+| | before (§9.11) | after |
+|---|---:|---:|
+| wall | 26.6 s | **15.9 s** (−40%) |
+| hash, all discs | 27.0 s | **2.7 s** (ATV Offroad Fury alone, 0.88 GB, below the threshold) |
+| fingerprints, four discs | - | 5 ms (about 1 ms each) |
+| read to identify the discs | 8.49 GB | 0.89 GB |
+| server | 61.7 s | 60.2 s |
+| requests | 50, all found | 50, all found |
+
+The four discs above 1 GB were each found by their first lookup, `match=name+size`, with `hash_ms=-`; none fell back.
+ATV Offroad Fury, at 0.88 GB, was hashed and asked by its digests as before (`match=hash`). The run is now bound by
+ScreenScraper: the lookup and nine pictures of the slowest game. On the handheld the prediction for its logged run is
+that the 74.7 s of `hash_ms` for Clock Tower 3 becomes about 0.04 s (2 MiB at its 50 MB/s), so that game's 81.7 s
+should fall to about 7 s, the server's share; main checks it there. The checksums of the four big discs were then owed
+to the background thread, which the driver's exit stopped and joined; they are taken in the next session that sits
+with no game on screen.
+
+**Tests**, on the fake server and synthetic files only. `ScrapeFingerprintTests` (WiseMan; the test lowers the
+threshold to 32 MiB through the scraper's `test.fingerprint_above` seam, over sparse 64 MiB files):
+`A_big_file_is_found_by_name_and_size_with_two_mib_read` (no digest sent, `read_bytes=2097152`, the record empty of
+MD5 under its fingerprint, its cover found by the key), `A_big_file_not_found_by_name_falls_back_to_its_hashes` (two
+lookups, `name+size` then `hash`, 2 MiB plus the whole file read, the path index holding MD5 and fingerprint),
+`The_checksums_arrive_later_and_never_while_a_game_is_on_screen` (nothing for 1.5 s while marked playing, then the
+three digests, the record's key unchanged) and `A_big_file_s_art_is_found_again_by_its_fingerprint_after_a_restart`
+(a new window, no request, `read_bytes=0`, the cover still found). `tests/fingerprint_store.rs` holds the migration
+from schema 4 keeping every row, two discs of one size apart, a fingerprinted game found again after the store is
+reopened, and the digests arriving without moving it; `fingerprint.rs` the 1 GB boundary and the 2 MiB read;
+`ScrapeStoreParityTests` the two stores' schema 5 at every version and the fingerprinted rows read alike through both.
+Seeded on 2026-11-04, each caught: a full read before the name-and-size lookup (three `ScrapeFingerprintTests`, by
+`read_bytes`); the fingerprint written into the `md5` column (`fingerprint_store.rs`); the background hashing
+ignoring a game on screen, its wait and its per-chunk check both removed (`The_checksums_arrive_later...`); the join
+going by MD5 alone (`fingerprint_store.rs`, the two discs of one size); the migration dropping `kinds_known`
+(`fingerprint_store.rs`). Removing only the wait was not caught, rightly: the per-chunk check still abandoned every
+file while the game ran, so no digest arrived during it.
+
 ## 10. T6 as built: the Library Manager window (2026-11-01)
 
 ### 10.1 The tool library and its host

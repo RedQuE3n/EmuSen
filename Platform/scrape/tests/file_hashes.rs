@@ -13,7 +13,7 @@ fn a_file_s_three_hashes_are_kept_at_its_size_and_time_and_a_changed_file_misses
         let store = Store::open(sqlite, &dir.to_string_lossy()).unwrap();
         assert_eq!(store.cached_file("/r/ps2/A.iso", 10, 5).unwrap(), None);
         store.remember_file("/r/ps2/A.iso", 10, 5, "md5a", "crca", "sha1a").unwrap();
-        let kept = Cached { md5: "md5a".into(), crc32: Some("crca".into()), sha1: Some("sha1a".into()) };
+        let kept = Cached { md5: "md5a".into(), crc32: Some("crca".into()), sha1: Some("sha1a".into()), fingerprint: String::new() };
         assert_eq!(store.cached_file("/r/ps2/A.iso", 10, 5).unwrap(), Some(kept));
         assert_eq!(store.cached_file("/r/ps2/A.iso", 11, 5).unwrap(), None, "a new size is a new file");
         assert_eq!(store.cached_file("/r/ps2/A.iso", 10, 6).unwrap(), None, "a new time is a new file");

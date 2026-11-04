@@ -36,6 +36,9 @@ namespace EmuSen.Mistress.Scraping
         // The kinds Offered speaks for; an answer kept before Pass 8 knew only ScrapeRules.FirstKinds (§38).
         public string? KindsKnown { get; init; }
 
+        // A big file's fingerprint where the record is keyed by it, else empty (EmuSen_LibraryTools.md §9.12).
+        public string Fingerprint { get; init; } = "";
+
         // Whether this answer says the game has a kind, or cannot say because the kind came after it was kept.
         public bool MayOffer(string esdeType)
         {
@@ -137,7 +140,57 @@ namespace EmuSen.Mistress.Scraping
             ALTER TABLE scrape_file ADD COLUMN crc32 TEXT;
             ALTER TABLE scrape_file ADD COLUMN sha1 TEXT;
             """,
+            """
+            CREATE TABLE scrape_game_v5 (
+                md5           TEXT    NOT NULL,
+                bytes         INTEGER NOT NULL,
+                status        TEXT    NOT NULL CHECK (status IN ('Found', 'Unknown', 'Error')),
+                game_id       INTEGER,
+                rom_id        INTEGER,
+                system_id     INTEGER,
+                name          TEXT,
+                description   TEXT,
+                developer     TEXT,
+                publisher     TEXT,
+                genre         TEXT,
+                players       TEXT,
+                rating        REAL,
+                release_date  TEXT,
+                region        TEXT,
+                language      TEXT,
+                matched_by    TEXT,
+                offered       TEXT,
+                detail        TEXT,
+                fetched_at    TEXT    NOT NULL,
+                kinds_known   TEXT,
+                fingerprint   TEXT    NOT NULL DEFAULT '',
+                PRIMARY KEY (md5, bytes, fingerprint)
+            );
+            INSERT INTO scrape_game_v5 (md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known)
+                SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known FROM scrape_game;
+            DROP TABLE scrape_game;
+            ALTER TABLE scrape_game_v5 RENAME TO scrape_game;
+            CREATE TABLE scrape_media_v5 (
+                md5          TEXT    NOT NULL,
+                bytes        INTEGER NOT NULL,
+                type         TEXT    NOT NULL,
+                path         TEXT    NOT NULL,
+                region       TEXT,
+                sha1         TEXT,
+                fetched_at   TEXT    NOT NULL,
+                fingerprint  TEXT    NOT NULL DEFAULT '',
+                PRIMARY KEY (md5, bytes, fingerprint, type)
+            );
+            INSERT INTO scrape_media_v5 (md5, bytes, type, path, region, sha1, fetched_at)
+                SELECT md5, bytes, type, path, region, sha1, fetched_at FROM scrape_media;
+            DROP TABLE scrape_media;
+            ALTER TABLE scrape_media_v5 RENAME TO scrape_media;
+            ALTER TABLE scrape_file ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';
+            """,
         };
+
+        // A game's rows joined to the path index's file f by its key: a big file's fingerprint, else its MD5 - see EmuSen_LibraryTools.md §9.12.
+        private static string Joined(string t) => $"{t}.md5 = CASE WHEN f.fingerprint = '' THEN f.md5 ELSE '' END AND {t}.fingerprint = f.fingerprint AND {t}.bytes = f.bytes";
 
         public static int SchemaVersion => Migrations.Length;
 
@@ -253,7 +306,7 @@ namespace EmuSen.Mistress.Scraping
 
         // "Scrape this game" asks again even where ScreenScraper once had nothing: an Unknown or Error answer is forgotten.
         public void ForgetUnfound(string path) => Write(
-            "DELETE FROM scrape_game WHERE status <> 'Found' AND EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND f.md5 = scrape_game.md5 AND f.bytes = scrape_game.bytes)",
+            "DELETE FROM scrape_game WHERE status <> 'Found' AND EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND " + Joined("scrape_game") + ")",
             ("$path", path));
 
         public int QueueLength => (int)(long)(ReadScalar("SELECT COUNT(*) FROM scrape_queue") ?? 0L);
@@ -283,7 +336,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return null;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT md5, crc32, sha1 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified";
+                command.CommandText = "SELECT md5, crc32, sha1 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified AND md5 <> ''";
                 command.Parameters.AddWithValue("$path", path);
                 command.Parameters.AddWithValue("$bytes", bytes);
                 command.Parameters.AddWithValue("$modified", modified);
@@ -294,7 +347,7 @@ namespace EmuSen.Mistress.Scraping
         }
 
         public void RememberFile(string path, long bytes, long modified, string md5, string? crc32 = null, string? sha1 = null) => Write(
-            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1) VALUES ($path, $bytes, $modified, $md5, $crc32, $sha1) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = excluded.crc32, sha1 = excluded.sha1",
+            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1) VALUES ($path, $bytes, $modified, $md5, $crc32, $sha1) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = excluded.crc32, sha1 = excluded.sha1, fingerprint = ''",
             ("$path", path), ("$bytes", bytes), ("$modified", modified), ("$md5", md5), ("$crc32", crc32), ("$sha1", sha1));
 
         // Every file last hashed to a game, for telling a renamed file from a second copy.
@@ -305,7 +358,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return all;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT path FROM scrape_file WHERE md5 = $md5 AND bytes = $bytes";
+                command.CommandText = "SELECT path FROM scrape_file WHERE md5 = $md5 AND bytes = $bytes AND fingerprint = ''";
                 command.Parameters.AddWithValue("$md5", md5);
                 command.Parameters.AddWithValue("$bytes", bytes);
                 using SqliteDataReader row = command.ExecuteReader();
@@ -318,15 +371,15 @@ namespace EmuSen.Mistress.Scraping
 
         public void Record(ScrapedRecord r) => Write("""
             INSERT OR REPLACE INTO scrape_game (md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating,
-                release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known)
+                release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known, fingerprint)
             VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $developer, $publisher, $genre, $players, $rating,
-                $release, $region, $language, $matched, $offered, $detail, $fetched, $known)
+                $release, $region, $language, $matched, $offered, $detail, $fetched, $known, $fingerprint)
             """,
             ("$md5", r.Md5), ("$bytes", r.Bytes), ("$status", r.State.ToString()), ("$game", r.GameId), ("$rom", r.RomId), ("$system", r.SystemId),
             ("$name", r.Name), ("$description", r.Description), ("$developer", r.Developer), ("$publisher", r.Publisher), ("$genre", r.Genre),
             ("$players", r.Players), ("$rating", r.Rating), ("$release", r.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
             ("$region", r.Region), ("$language", r.Language), ("$matched", r.MatchedBy), ("$offered", r.Offered), ("$detail", r.Detail),
-            ("$fetched", Stamp(r.FetchedAt)), ("$known", r.KindsKnown));
+            ("$fetched", Stamp(r.FetchedAt)), ("$known", r.KindsKnown), ("$fingerprint", r.Fingerprint));
 
         public ScrapedRecord? Game(string md5, long bytes)
         {
@@ -334,7 +387,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return null;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = GameColumns + " WHERE md5 = $md5 AND bytes = $bytes";
+                command.CommandText = GameColumns + " WHERE md5 = $md5 AND bytes = $bytes AND fingerprint = ''";
                 command.Parameters.AddWithValue("$md5", md5);
                 command.Parameters.AddWithValue("$bytes", bytes);
                 using SqliteDataReader row = command.ExecuteReader();
@@ -350,7 +403,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return all;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT f.path, g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found'";
+                command.CommandText = "SELECT f.path, g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known, g.fingerprint FROM scrape_file f JOIN scrape_game g ON " + Joined("g") + " WHERE g.status = 'Found'";
                 using SqliteDataReader row = command.ExecuteReader();
                 while (row.Read()) all[row.GetString(0)] = ReadGame(row, 1);
             }
@@ -364,7 +417,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return null;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found' AND f.path = $path";
+                command.CommandText = "SELECT g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known, g.fingerprint FROM scrape_file f JOIN scrape_game g ON " + Joined("g") + " WHERE g.status = 'Found' AND f.path = $path";
                 command.Parameters.AddWithValue("$path", path);
                 using SqliteDataReader row = command.ExecuteReader();
                 return row.Read() ? ReadGame(row) : null;
@@ -379,9 +432,9 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return all;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = """
-                    SELECT f.path, g.status, EXISTS (SELECT 1 FROM scrape_media m WHERE m.md5 = g.md5 AND m.bytes = g.bytes AND m.type = 'cover')
-                    FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes
+                command.CommandText = $"""
+                    SELECT f.path, g.status, EXISTS (SELECT 1 FROM scrape_media m WHERE m.md5 = g.md5 AND m.fingerprint = g.fingerprint AND m.bytes = g.bytes AND m.type = 'cover')
+                    FROM scrape_file f JOIN scrape_game g ON {Joined("g")}
                     """;
                 using SqliteDataReader row = command.ExecuteReader();
                 while (row.Read()) all[row.GetString(0)] = (Enum.Parse<ScrapeState>(row.GetString(1)), row.GetInt64(2) != 0);
@@ -400,7 +453,7 @@ namespace EmuSen.Mistress.Scraping
             {
                 if (_closed) return all;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT type, path, region, sha1 FROM scrape_media WHERE md5 = $md5 AND bytes = $bytes ORDER BY type";
+                command.CommandText = "SELECT type, path, region, sha1 FROM scrape_media WHERE md5 = $md5 AND bytes = $bytes AND fingerprint = '' ORDER BY type";
                 command.Parameters.AddWithValue("$md5", md5);
                 command.Parameters.AddWithValue("$bytes", bytes);
                 using SqliteDataReader row = command.ExecuteReader();
@@ -418,7 +471,7 @@ namespace EmuSen.Mistress.Scraping
                 if (_closed) return files;
                 using (SqliteCommand find = _db.CreateCommand())
                 {
-                    find.CommandText = "SELECT m.path FROM scrape_file f JOIN scrape_media m ON m.md5 = f.md5 AND m.bytes = f.bytes WHERE f.path = $path";
+                    find.CommandText = "SELECT m.path FROM scrape_file f JOIN scrape_media m ON " + Joined("m") + " WHERE f.path = $path";
                     find.Parameters.AddWithValue("$path", path);
                     using SqliteDataReader row = find.ExecuteReader();
                     while (row.Read()) files.Add(System.IO.Path.Combine(Root, row.GetString(0)));
@@ -428,7 +481,7 @@ namespace EmuSen.Mistress.Scraping
                 {
                     using SqliteCommand drop = _db.CreateCommand();
                     drop.Transaction = step;
-                    drop.CommandText = $"DELETE FROM {table} WHERE EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND f.md5 = {table}.md5 AND f.bytes = {table}.bytes)";
+                    drop.CommandText = $"DELETE FROM {table} WHERE EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND {Joined(table)})";
                     drop.Parameters.AddWithValue("$path", path);
                     drop.ExecuteNonQuery();
                 }
@@ -669,7 +722,7 @@ namespace EmuSen.Mistress.Scraping
 
         // --- plumbing ---
 
-        private const string GameColumns = "SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known FROM scrape_game";
+        private const string GameColumns = "SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known, fingerprint FROM scrape_game";
 
         private static ScrapedRecord ReadGame(SqliteDataReader row, int o = 0) => new(row.GetString(o), row.GetInt64(o + 1), Enum.Parse<ScrapeState>(row.GetString(o + 2)))
         {
@@ -682,6 +735,7 @@ namespace EmuSen.Mistress.Scraping
             Region = Text(row, o + 14), Language = Text(row, o + 15), MatchedBy = Text(row, o + 16), Offered = Text(row, o + 17), Detail = Text(row, o + 18),
             FetchedAt = DateTime.Parse(row.GetString(o + 19), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
             KindsKnown = Text(row, o + 20),
+            Fingerprint = row.GetString(o + 21),
         };
 
         private static string? Text(SqliteDataReader row, int i) => row.IsDBNull(i) ? null : row.GetString(i);

@@ -22,6 +22,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private static ReplayServer? _replay;
 
+        // The size above which the scraper in Rust fingerprints a file, lowered so a test's big files can be small; null for its 1 GB.
+        public static long? FingerprintAbove;
+
         // A test's own fake server for both halves: the C#'s HttpClient over it, and the scraper in Rust sent to it over HTTPS at the real addresses, on the test's clock when it has one.
         public static void Serve(HttpMessageHandler handler, IScrapeClock? clock = null)
         {
@@ -31,7 +34,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             ScrapeTest.SetValue(null, (Func<string?>)(() =>
             {
                 long? ticks = clock is null or SystemScrapeClock ? null : clock.Now.UtcTicks - DateTimeOffset.UnixEpoch.UtcTicks;
-                return $"{{\"connect\":\"{replay.Address}\",\"roots\":{System.Text.Json.JsonSerializer.Serialize(ReplayServer.RootPem)}" + (ticks is long t ? $",\"clock\":{t}" : "") + "}";
+                return $"{{\"connect\":\"{replay.Address}\",\"roots\":{System.Text.Json.JsonSerializer.Serialize(ReplayServer.RootPem)}" + (ticks is long t ? $",\"clock\":{t}" : "")
+                    + (FingerprintAbove is long above ? $",\"fingerprint_above\":{above}" : "") + "}";
             }));
         }
 
@@ -49,6 +53,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             HttpFactory.SetValue(null, Factory);
             DeveloperSource.SetValue(null, NoDeveloper);
             ScrapeTest.SetValue(null, Offline);
+            FingerprintAbove = null;
             _replay?.Dispose();
             _replay = null;
         }

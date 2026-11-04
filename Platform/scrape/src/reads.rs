@@ -1,7 +1,7 @@
 //! `emusen_scrape_get`: one read, `{"what": …}`, as `emusen_scrape.h` lists them. See EmuSen_Backend.md §30.3.
 
 use crate::json::{self, float_or_null, number_or_null, quoted, strings_into, text_or_null};
-use crate::store::{Record, Stored};
+use crate::store::{Key, Record, Stored};
 use crate::{Error, Scraper, kinds, layout};
 use emusen_dotnet::json::Value;
 
@@ -42,6 +42,8 @@ pub(crate) fn record_json(out: &mut String, r: &Record) {
     out.push_str(&quoted(&crate::store::stamp(r.fetched_at)));
     out.push_str(",\"kinds_known\":");
     text_or_null(out, r.kinds_known.as_deref());
+    out.push_str(",\"fingerprint\":");
+    out.push_str(&quoted(&r.fingerprint));
     out.push('}');
 }
 
@@ -62,6 +64,13 @@ fn stored_json(out: &mut String, media: &[Stored]) {
         out.push('}');
     }
     out.push(']');
+}
+
+/// The key a request names: `md5` and `bytes`, or a big file's `fingerprint` and `bytes`.
+fn key_of(r: &Value) -> Result<Key, Error> {
+    let md5 = json::text_or_none(r, "md5")?.unwrap_or_default();
+    let fingerprint = json::text_or_none(r, "fingerprint")?.unwrap_or_default();
+    Ok(Key::of_file(&md5, &fingerprint, json::integer(r, "bytes")?))
 }
 
 /// The games a request names, `[{"path", "system"}]`.
@@ -104,10 +113,10 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
             }
             out.push('}');
         }
-        "stored" => stored_json(&mut out, &s.store().media(&json::text(r, "md5")?, json::integer(r, "bytes")?)?),
+        "stored" => stored_json(&mut out, &s.store().media(&key_of(r)?)?),
         "game" => {
-            let (md5, bytes) = (json::text(r, "md5")?, json::integer(r, "bytes")?);
-            match s.store().game(&md5, bytes)? {
+            let key = key_of(r)?;
+            match s.store().game(&key)? {
                 Some(rec) => record_json(&mut out, &rec),
                 None => out.push_str("null"),
             }

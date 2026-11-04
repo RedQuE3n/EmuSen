@@ -99,10 +99,10 @@ int32_t emusen_scrape_cancel(emusen_scrape *s);
 /* One read, {"what": ...}:
  *   kinds                    [{"type", "folder", "screenscraper": [...], "payload"}], ES-DE's eleven kinds
  *   record {path}            the found record of the path's game, or null
- *   game {md5, bytes}        the record by its hashes, of any state, or null
+ *   game {md5, bytes}        the record by its key, of any state, or null; a big file's by {fingerprint, bytes}
  *   found                    every found record by path
  *   outcomes                 {path: {"state", "has_cover"}}
- *   stored {md5, bytes}      [{"type", "path", "region", "sha1"}]
+ *   stored {md5, bytes}      [{"type", "path", "region", "sha1"}]; a big file's by {fingerprint, bytes}
  *   queue                    [{"path", "system", "priority", "attempts"}]
  *   orphans {games}          the store's files whose game is not among games [{"path", "system"}], under their systems
  *   moves                    [{"from", "to", "how"}], the layout step's record
@@ -131,6 +131,7 @@ int64_t emusen_scrape_get(emusen_scrape *s, const uint8_t *request, size_t len, 
  *   check                    the same of the stored account
  *   search {path, system, text}  one jeuRecherche, paced and counted: {"status", "games": [{"pick", ...}], "detail"}
  *   art_added {console, stem, path}  a picture the player placed, joined to the art index
+ *   playing {running}        whether a game is on screen; a big file's checksums are taken only while none is
  *   openvgdb_download        OpenVGDB's newest release fetched: {"tag"} or {"failed"}
  *   openvgdb_remove          OpenVGDB deleted: {"bytes"}
  * A change that asks the server blocks for that one request; a host calls it off its interface thread. */

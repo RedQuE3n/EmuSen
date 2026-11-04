@@ -124,12 +124,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                     if (version >= 1)
                     {
                         Execute(c, "INSERT INTO scrape_game (md5, bytes, status, rating, fetched_at, name) VALUES ('aa', 1, 'Found', 0.8000000119, '2026-01-01T00:00:00.000Z', 'Café'), ('bb', 2, 'Unknown', NULL, '2026-01-02T00:00:00.000Z', NULL)");
-                        Execute(c, "INSERT INTO scrape_media VALUES ('aa', 1, 'cover', 'snes/covers/A.png', 'us', NULL, '2026-01-01T00:00:00.000Z')");
+                        Execute(c, "INSERT INTO scrape_media (md5, bytes, type, path, region, sha1, fetched_at) VALUES ('aa', 1, 'cover', 'snes/covers/A.png', 'us', NULL, '2026-01-01T00:00:00.000Z')");
                         Execute(c, "INSERT INTO scrape_file (path, bytes, modified, md5) VALUES ('/r/snes/A.sfc', 1, 5, 'aa')");
                         Execute(c, "INSERT INTO scrape_queue (path, system, priority, seq) VALUES ('/r/snes/A.sfc', 'snes', 2, 1)");
                         Execute(c, "INSERT INTO quota_day (day, requests) VALUES ('2026-01-01', 3)");
                     }
                     if (version >= 2) Execute(c, "INSERT INTO store_step VALUES ('folders', '2026-01-01T00:00:00.000Z')");
+                    if (version >= 5) FingerprintRows(c);
                 }
                 string a = Path.Combine(_root, $"v{version}", "csharp"), b = Path.Combine(_root, $"v{version}", "rust");
                 CopyTree(seed, a);
@@ -151,6 +152,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             var rust = Assert.Throws<MediaServiceException>(() => MediaService.Open(newer, Settings()));
             Assert.Equal((MediaServiceException.NewerFile, csharp.Message), (rust.Status, rust.Message));
             Assert.Equal(before, File.ReadAllBytes(Path.Combine(newer, MediaStore.FileName)));
+        }
+
+        // A big disc keyed by its fingerprint, as schema 5 keeps it: an empty MD5 in its rows and in the path index until its checksums are taken (EmuSen_LibraryTools.md §9.12).
+        private static void FingerprintRows(SqliteConnection c)
+        {
+            Execute(c, "INSERT INTO scrape_game (md5, bytes, status, fetched_at, name, matched_by, fingerprint) VALUES ('', 4700000000, 'Found', '2026-01-03T00:00:00.000Z', 'Big', 'name+size', 'f1'), ('', 4700000000, 'Found', '2026-01-03T00:00:00.000Z', 'Other', 'name+size', 'f2')");
+            Execute(c, "INSERT INTO scrape_media (md5, bytes, type, path, region, sha1, fetched_at, fingerprint) VALUES ('', 4700000000, 'cover', 'ps2/covers/Big.png', 'us', NULL, '2026-01-03T00:00:00.000Z', 'f1')");
+            Execute(c, "INSERT INTO scrape_file (path, bytes, modified, md5, fingerprint) VALUES ('/r/ps2/Big.iso', 4700000000, 7, '', 'f1'), ('/r/ps2/Other.iso', 4700000000, 7, 'm2', 'f2')");
         }
 
         private static readonly string[] Texts = ["Game", "Café du Monde", "It's \"quoted\"", "", "  ", "Δέλτα", "line\nbreak", "日本語"];
@@ -183,19 +192,24 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private static string Rec(ScrapedRecord r) => string.Join("|", r.Md5, r.Bytes, r.State, r.GameId, r.RomId, r.SystemId, r.Name, r.Description, r.Developer, r.Publisher, r.Genre, r.Players,
             r.Rating is float f ? BitConverter.SingleToInt32Bits(f).ToString(CultureInfo.InvariantCulture) : "", r.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), r.Region, r.Language, r.MatchedBy, r.Offered, r.Detail,
-            r.FetchedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture), r.KindsKnown);
+            r.FetchedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture), r.KindsKnown, r.Fingerprint);
 
         private static string? S(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).ValueKind == JsonValueKind.Number ? e.GetProperty(name).GetRawText() : e.GetProperty(name).GetString();
 
         private static string Rec(JsonElement e) => string.Join("|", S(e, "md5"), S(e, "bytes"), S(e, "state"), S(e, "game_id"), S(e, "rom_id"), S(e, "system_id"), S(e, "name"), S(e, "description"), S(e, "developer"),
             S(e, "publisher"), S(e, "genre"), S(e, "players"), e.GetProperty("rating").ValueKind == JsonValueKind.Null ? "" : BitConverter.SingleToInt32Bits(e.GetProperty("rating").GetSingle()).ToString(CultureInfo.InvariantCulture),
-            S(e, "release_date"), S(e, "region"), S(e, "language"), S(e, "matched_by"), S(e, "offered"), S(e, "detail"), S(e, "fetched_at"), S(e, "kinds_known"));
+            S(e, "release_date"), S(e, "region"), S(e, "language"), S(e, "matched_by"), S(e, "offered"), S(e, "detail"), S(e, "fetched_at"), S(e, "kinds_known"), S(e, "fingerprint"));
 
         [Fact]
         public void Generated_records_read_alike_through_both()
         {
             string a = Path.Combine(_root, "records");
             using (MediaStore seed = MediaStore.Open(a)) Seed(seed, new Random(2026));
+            using (var c = new SqliteConnection($"Data Source={Path.Combine(a, MediaStore.FileName)};Pooling=False"))
+            {
+                c.Open();
+                FingerprintRows(c);
+            }
             using MediaStore csharp = MediaStore.Open(a);
             using MediaService rust = MediaService.Open(a, Settings());
 
@@ -203,6 +217,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             using (JsonDocument doc = JsonDocument.Parse(rust.Get("{\"what\":\"found\"}")))
                 Assert.Equal(found, doc.RootElement.EnumerateObject().Select(p => p.Name + " " + Rec(p.Value)).Order(StringComparer.Ordinal).ToList());
             Assert.True(found.Count > 10, $"{found.Count}");
+            Assert.Contains(found, f => f.StartsWith("/r/ps2/Big.iso ", StringComparison.Ordinal) && f.Contains("|Big|"));
+            Assert.Contains(found, f => f.StartsWith("/r/ps2/Other.iso ", StringComparison.Ordinal) && f.Contains("|Other|"));
 
             var outcomes = csharp.OutcomesByPath().Select(kv => $"{kv.Key} {kv.Value.State} {kv.Value.HasCover}").Order(StringComparer.Ordinal).ToList();
             using (JsonDocument doc = JsonDocument.Parse(rust.Get("{\"what\":\"outcomes\"}")))
@@ -219,7 +235,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 c.Open();
                 using var q = c.CreateCommand();
-                q.CommandText = "SELECT md5, bytes FROM scrape_game";
+                q.CommandText = "SELECT md5, bytes FROM scrape_game WHERE fingerprint = ''";
                 using var row = q.ExecuteReader();
                 while (row.Read())
                 {

@@ -107,13 +107,16 @@ pub struct Request<'a> {
     pub cap: Duration,
     pub hash: Option<Duration>,
     pub quota: Option<Quota>,
+    /// How an info lookup asked: `name+size` with no digests, `hash` with them; none for a picture.
+    pub matched: Option<&'a str>,
+    pub fingerprint: Option<Duration>,
 }
 
 /// A request's line: tab-separated `name=value` fields, `-` for what the answer did not say.
 pub fn request_line(r: &Request) -> String {
     let q = r.quota;
     format!(
-        "request\tgame={}\tkind={}\tstatus={}\toutcome={}\tbytes={}\tms={}\tworker={}\tthreads={}/{}\tpace_ms={}\tcap_ms={}\thash_ms={}\tmaxthreads={}\tmaxrequestspermin={}\tmaxdownloadspeed={}\trequeststoday={}",
+        "request\tgame={}\tkind={}\tstatus={}\toutcome={}\tbytes={}\tms={}\tworker={}\tthreads={}/{}\tpace_ms={}\tcap_ms={}\thash_ms={}\tmaxthreads={}\tmaxrequestspermin={}\tmaxdownloadspeed={}\trequeststoday={}\tmatch={}\tfingerprint_ms={}",
         r.game,
         r.kind,
         r.code,
@@ -130,6 +133,8 @@ pub fn request_line(r: &Request) -> String {
         or_dash(q.and_then(|q| q.max_requests_per_minute)),
         or_dash(q.and_then(|q| q.max_download_kbps)),
         or_dash(q.and_then(|q| q.requests_today)),
+        r.matched.unwrap_or("-"),
+        r.fingerprint.map_or_else(|| "-".to_string(), |h| ms(h).to_string()),
     )
 }
 
@@ -146,6 +151,9 @@ pub struct Tally {
     pub server: Duration,
     pub hash: Duration,
     pub idle: Duration,
+    pub fingerprint: Duration,
+    /// The bytes of game files read to identify them: a fingerprint's two MiB, a full hash's whole file.
+    pub read: u64,
 }
 
 impl Tally {
@@ -160,18 +168,20 @@ impl Tally {
         self.server += o.server;
         self.hash += o.hash;
         self.idle += o.idle;
+        self.fingerprint += o.fingerprint;
+        self.read += o.read;
     }
 
     /// The workers' time not spent waiting, asking or hashing: the run's own work between requests.
     pub fn own(&self) -> Duration {
-        self.worker.saturating_sub(self.pace + self.cap + self.server + self.hash + self.idle)
+        self.worker.saturating_sub(self.pace + self.cap + self.server + self.hash + self.idle + self.fingerprint)
     }
 }
 
 /// The run's last line: its counts, its wall time, and the workers' time by where it went.
 pub fn summary_line(end: &str, t: &Tally, wall: Duration) -> String {
     format!(
-        "run\tend={end}\tgames={}\trequests={}\tbytes={}\twall_ms={}\tworkers={}\tworker_ms={}\tpace_ms={}\tcap_ms={}\tserver_ms={}\thash_ms={}\tidle_ms={}\town_ms={}",
+        "run\tend={end}\tgames={}\trequests={}\tbytes={}\twall_ms={}\tworkers={}\tworker_ms={}\tpace_ms={}\tcap_ms={}\tserver_ms={}\thash_ms={}\tidle_ms={}\town_ms={}\tfingerprint_ms={}\tread_bytes={}",
         t.games,
         t.requests,
         t.bytes,
@@ -184,6 +194,8 @@ pub fn summary_line(end: &str, t: &Tally, wall: Duration) -> String {
         ms(t.hash),
         ms(t.idle),
         ms(t.own()),
+        ms(t.fingerprint),
+        t.read,
     )
 }
 
@@ -195,25 +207,38 @@ pub struct Lane {
     pub pace: Duration,
     pub cap: Duration,
     pub hash: Option<Duration>,
+    pub fingerprint: Option<Duration>,
 }
+
+/// What a lane owed its next request's line: its pace, its cap, its hashing and its fingerprinting.
+pub type Owed = (Duration, Duration, Option<Duration>, Option<Duration>);
 
 impl Lane {
     pub fn new(index: usize) -> Lane {
-        Lane { index, started: Instant::now(), tally: Tally { workers: 1, ..Tally::default() }, pace: Duration::ZERO, cap: Duration::ZERO, hash: None }
+        Lane { index, started: Instant::now(), tally: Tally { workers: 1, ..Tally::default() }, pace: Duration::ZERO, cap: Duration::ZERO, hash: None, fingerprint: None }
     }
 
-    pub fn hashed(&mut self, took: Duration) {
+    /// A file read in full for its hashes.
+    pub fn hashed(&mut self, took: Duration, read: u64) {
         self.tally.hash += took;
+        self.tally.read += read;
         self.hash = Some(self.hash.unwrap_or_default() + took);
     }
 
+    /// A big file's two ends read for its fingerprint.
+    pub fn fingerprinted(&mut self, took: Duration, read: u64) {
+        self.tally.fingerprint += took;
+        self.tally.read += read;
+        self.fingerprint = Some(self.fingerprint.unwrap_or_default() + took);
+    }
+
     /// A request answered: counted, and what it owed handed to its line and cleared.
-    pub fn sent(&mut self, bytes: u64, took: Duration) -> (Duration, Duration, Option<Duration>) {
+    pub fn sent(&mut self, bytes: u64, took: Duration) -> Owed {
         self.tally.requests += 1;
         self.tally.bytes += bytes;
         self.tally.server += took;
-        let owed = (self.pace, self.cap, self.hash);
-        (self.pace, self.cap, self.hash) = (Duration::ZERO, Duration::ZERO, None);
+        let owed = (self.pace, self.cap, self.hash, self.fingerprint);
+        (self.pace, self.cap, self.hash, self.fingerprint) = (Duration::ZERO, Duration::ZERO, None, None);
         owed
     }
 
@@ -244,13 +269,15 @@ mod tests {
             cap: Duration::ZERO,
             hash: Some(Duration::from_millis(40)),
             quota: Some(Quota { max_threads: Some(4), max_download_kbps: Some(512), requests_today: Some(17), requests_ko_today: None, max_requests_per_minute: Some(160), max_requests_per_day: None, max_requests_ko_per_day: None }),
+            matched: Some("name+size"),
+            fingerprint: Some(Duration::from_millis(12)),
         };
         assert_eq!(
             request_line(&r),
-            "request\tgame=A Game (USA).iso\tkind=info\tstatus=200\toutcome=found\tbytes=2048\tms=321\tworker=2\tthreads=3/4\tpace_ms=1500\tcap_ms=0\thash_ms=40\tmaxthreads=4\tmaxrequestspermin=160\tmaxdownloadspeed=512\trequeststoday=17"
+            "request\tgame=A Game (USA).iso\tkind=info\tstatus=200\toutcome=found\tbytes=2048\tms=321\tworker=2\tthreads=3/4\tpace_ms=1500\tcap_ms=0\thash_ms=40\tmaxthreads=4\tmaxrequestspermin=160\tmaxdownloadspeed=512\trequeststoday=17\tmatch=name+size\tfingerprint_ms=12"
         );
-        let media = request_line(&Request { kind: "cover", hash: None, quota: None, ..r });
-        assert!(media.ends_with("hash_ms=-\tmaxthreads=-\tmaxrequestspermin=-\tmaxdownloadspeed=-\trequeststoday=-"), "{media}");
+        let media = request_line(&Request { kind: "cover", hash: None, quota: None, matched: None, fingerprint: None, ..r });
+        assert!(media.ends_with("hash_ms=-\tmaxthreads=-\tmaxrequestspermin=-\tmaxdownloadspeed=-\trequeststoday=-\tmatch=-\tfingerprint_ms=-"), "{media}");
     }
 
     #[test]
@@ -276,12 +303,14 @@ mod tests {
         let mut lane = Lane::new(0);
         lane.pace += Duration::from_millis(10);
         lane.tally.pace += Duration::from_millis(10);
-        lane.hashed(Duration::from_millis(5));
-        assert_eq!(lane.sent(100, Duration::from_millis(30)), (Duration::from_millis(10), Duration::ZERO, Some(Duration::from_millis(5))));
-        assert_eq!(lane.sent(50, Duration::from_millis(20)), (Duration::ZERO, Duration::ZERO, None));
+        lane.hashed(Duration::from_millis(5), 4096);
+        lane.fingerprinted(Duration::from_millis(3), 2 << 20);
+        assert_eq!(lane.sent(100, Duration::from_millis(30)), (Duration::from_millis(10), Duration::ZERO, Some(Duration::from_millis(5)), Some(Duration::from_millis(3))));
+        assert_eq!(lane.sent(50, Duration::from_millis(20)), (Duration::ZERO, Duration::ZERO, None, None));
         let mut t = lane.ended();
         t.worker = Duration::from_millis(100);
-        assert_eq!((t.requests, t.bytes, t.own()), (2, 150, Duration::from_millis(35)));
+        assert_eq!((t.requests, t.bytes, t.read, t.own()), (2, 150, 4096 + (2 << 20), Duration::from_millis(32)));
+        assert!(summary_line("done", &t, Duration::from_millis(120)).ends_with("\tfingerprint_ms=3\tread_bytes=2101248"));
         assert!(summary_line("done", &t, Duration::from_millis(120)).starts_with("run\tend=done\tgames=0\trequests=2\tbytes=150\twall_ms=120\tworkers=1\tworker_ms=100\tpace_ms=10\t"));
     }
 }

@@ -17,7 +17,8 @@ namespace EmuSen.WiseMan.Fixtures
         private const int HandlerAt = 0x1400;
 
         // With the RSP left out the machine never touches the display processor, so a state stays exact to the byte.
-        public static byte[] Build(bool rsp = true, bool eeprom = true)
+        // fullLines gives the VI NTSC's line length, so the machine runs at about 60 fields a second where a short line runs it about six times faster.
+        public static byte[] Build(bool rsp = true, bool eeprom = true, bool fullLines = false)
         {
             var rom = SyntheticN64Rom.Build(length: DataAt + DataLength, uniqueCode: eeprom ? "ED" : "WM", version: (byte)(eeprom ? 0x10 : 0x00),
                 patches: (0, Bytes(BootStub())));
@@ -25,7 +26,7 @@ namespace EmuSen.WiseMan.Fixtures
             var image = new byte[ImageLength];
             Put(image, 0x0180, new uint[] { 0x3C1A_8000, 0x375A_0000 | (uint)HandlerAt, 0x0340_0008, 0 });
             Put(image, HandlerAt, Handler(rsp).Build());
-            Put(image, 0x0400, Program().Build());
+            Put(image, 0x0400, Program(fullLines).Build());
             Put(image, 0x0800, RspProgram());
             byte[] dmem = new byte[0x200];
             for (int i = 0; i < 32; i++) dmem[i] = (byte)(0x13 * i + 7);
@@ -52,7 +53,7 @@ namespace EmuSen.WiseMan.Fixtures
             return a.Build();
         }
 
-        private static Asm Program()
+        private static Asm Program(bool fullLines)
         {
             var a = new Asm(0x8000_0400);
             // One of each exception the handler steps over.
@@ -67,7 +68,7 @@ namespace EmuSen.WiseMan.Fixtures
             a.W(Ori(T0, 0, 2)).W(Mtc0(T0, Wired));
             // The VI: a short field, its interrupt on line 2.
             a.Lui(T0, 0xA440);
-            foreach (var (offset, value) in new (int, uint)[] { (0x00, 0x0000_320E), (0x04, 0x0010_0000), (0x08, 320), (0x0C, 2), (0x14, 0x03E5_2239), (0x18, 0x20D), (0x1C, 0x200), (0x20, 0x0C15_0C15), (0x24, 0x006C_02EC), (0x28, 0x0025_01FF), (0x2C, 0x000E_0204), (0x30, 0x200), (0x34, 0x400) })
+            foreach (var (offset, value) in new (int, uint)[] { (0x00, 0x0000_320E), (0x04, 0x0010_0000), (0x08, 320), (0x0C, 2), (0x14, 0x03E5_2239), (0x18, 0x20D), (0x1C, fullLines ? 0x0C15u : 0x200u), (0x20, 0x0C15_0C15), (0x24, 0x006C_02EC), (0x28, 0x0025_01FF), (0x2C, 0x000E_0204), (0x30, 0x200), (0x34, 0x400) })
             {
                 a.Lui(T1, (ushort)(value >> 16)).W(Ori(T1, T1, (ushort)value)).W(Sw(T1, T0, (short)offset));
             }

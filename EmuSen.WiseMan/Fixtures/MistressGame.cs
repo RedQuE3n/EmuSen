@@ -26,6 +26,20 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static long TotalFrames(MainWindow window) => Info(window).GetProperty("total_frames").GetInt64();
 
+        // The engine the session runs, as session_info names it.
+        public static string Engine(MainWindow window) => Info(window).GetProperty("engine").GetString()!;
+
+        // The moments the session's rewind holds, as rewind_reel counts them; a capture withheld fails the test in the runtime's words.
+        public static int RewindDepth(MainWindow window)
+        {
+            if (Info(window).GetProperty("rewind_withheld").GetString() is string withheld) throw new Xunit.Sdk.XunitException($"rewind is withheld: {withheld}");
+            using var reel = System.Text.Json.JsonDocument.Parse(Of(window).Crystal.RewindReel());
+            return reel.RootElement.GetProperty("depth").GetInt32();
+        }
+
+        // A core setting as the session sees it: the game's, else the console's, else the default.
+        public static string? Setting(MainWindow window, string key) => Of(window).Crystal.Setting(key);
+
         // A byte of one of the session's memory spaces, read through space_read.
         public static byte Peek(MainWindow window, string space, int address)
         {

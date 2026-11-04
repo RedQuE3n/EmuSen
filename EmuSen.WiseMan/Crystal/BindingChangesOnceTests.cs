@@ -27,5 +27,19 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(dir, s.StopRecording());
         }
 
+        // The build's own engines name the card's medium, which the runtime reads from core info (EmuSen_Backend.md §29.14).
+        [Fact]
+        public void A_card_made_through_the_binding_is_made_once_and_said_done()
+        {
+            using var runtime = new CrystalRuntime();
+            string card = Path.Combine(_f.Root, "Cards", "New.mcr");
+            Directory.CreateDirectory(Path.GetDirectoryName(card)!);
+            JsonElement answer = JsonDocument.Parse(runtime.CardsOp(CrystalAbi.CardsNew, JsonSerializer.Serialize(new { path = card }))).RootElement;
+            Assert.True(answer.GetProperty("done").GetBoolean(), answer.GetProperty("words").GetString());
+            Assert.True(File.Exists(card));
+            JsonElement again = JsonDocument.Parse(runtime.CardsOp(CrystalAbi.CardsNew, JsonSerializer.Serialize(new { path = card }))).RootElement;
+            Assert.False(again.GetProperty("done").GetBoolean(), "a second new over the card made it again");
+        }
+
     }
 }

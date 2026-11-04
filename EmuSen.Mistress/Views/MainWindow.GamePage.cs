@@ -131,7 +131,7 @@ namespace EmuSen.Mistress.Views
             string? system = SystemOf(entry);
             string? Find(string type) => system is null ? null : MediaSourcesNow().Locate(system, path, type).Path;
             string? shot = Find(ScrapeRules.Screenshot.EsdeType);
-            return new GameArt(CoverPathFor(entry), Find(ScrapeRules.FanArt.EsdeType) ?? shot ?? Find(ScrapeRules.TitleScreen.EsdeType), shot, Find(ScrapeRules.Video.EsdeType));
+            return new GameArt(CoverPathFor(entry), Find(ScrapeRules.FanArt.EsdeType) ?? shot ?? Find(ScrapeRules.TitleScreen.EsdeType), shot, Find(ScrapeRules.Video.EsdeType), Find(ScrapeRules.Marquee.EsdeType));
         }
 
         IReadOnlyList<GameState> IGamePageHost.States(string path)
@@ -355,7 +355,7 @@ namespace EmuSen.Mistress.Views
             }
             if (!await SameGameOrConfirmedAsync(StateRecordsOnApi.Read(Runtime, state), path)) return;
             await PrepareGameAsync(path);
-            LoadGame(path, Path.GetFileName(path), resumeFrom: state, reset: false);
+            await UnderLaunchScreenAsync(LaunchCardFor(path, null, StateLineFor(path, state)), () => LoadGame(path, Path.GetFileName(path), resumeFrom: state, reset: false));
         }
 
         void IGamePageHost.ToggleFavourite(string path)

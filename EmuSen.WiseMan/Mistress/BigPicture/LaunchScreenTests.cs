@@ -20,7 +20,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
-    // Pass 11: ES-DE's launch screen between the resume question and the game - see EmuSen_BigPicture.md §33.
+    // The launch screen between the resume question and the game, under every look - see EmuSen_Interface.md §18.3.
     [Collection(TestCollections.ProcessGlobals)]
     public class LaunchScreenTests
     {
@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return media;
         }
 
-        internal static ThemedSession Open(string duration, double width = 1280, double height = 800, Action<AppSettings>? more = null)
+        internal static ThemedSession Open(string duration, double width = 1280, double height = 800, Action<AppSettings>? more = null, Action<string>? roms = null)
         {
             string? media = null;
             return new ThemedSession(width, height, settings: a =>
@@ -73,16 +73,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 a.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningScaleUp;
                 a.EsdeMediaDirectory = media;
                 more?.Invoke(a);
-            }, roms: r => media = Media(Path.GetDirectoryName(r)!));
+            }, roms: r => { media = Media(Path.GetDirectoryName(r)!); roms?.Invoke(r); });
         }
 
-        // Each duration holds the game back to within one 16 ms poll of its end, and not a poll longer.
+        // Normal's hold, which Open's sessions use.
+        internal static readonly int Hold = (int)LaunchScreen.HoldFor(BigPictureInterface.LaunchNormal).TotalMilliseconds;
+
+        // Each choice holds the game back for its least time, to within one 16 ms poll, and not a poll longer; ES-DE's Popup reads as Brief.
         [Theory]
-        [InlineData(BigPictureInterface.LaunchNormal, 3000)]
-        [InlineData(BigPictureInterface.LaunchBrief, 1700)]
-        [InlineData(BigPictureInterface.LaunchLong, 4500)]
-        [InlineData(BigPictureInterface.LaunchPopup, 1700)]
-        public Task Each_duration_starts_the_game_at_its_end(string duration, int ms) => Session.Dispatch(() =>
+        [InlineData(BigPictureInterface.LaunchNormal, 2000)]
+        [InlineData(BigPictureInterface.LaunchBrief, 1000)]
+        [InlineData(BigPictureInterface.LaunchLong, 3000)]
+        [InlineData(BigPictureInterface.LaunchPopup, 1000)]
+        public Task Each_choice_holds_the_game_for_its_least_time(string duration, int ms) => Session.Dispatch(() =>
         {
             using var s = Open(duration);
             ThemedLibraryPadTests.Enter(s, "snes");
@@ -91,7 +94,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.Equal(["launch"], s.Sounds);
             LaunchScreen screen = Assert.IsType<LaunchScreen>(Screen(s));
-            Assert.Equal(duration == BigPictureInterface.LaunchPopup, screen.Popup);
             Assert.Equal(pressed + TimeSpan.FromMilliseconds(ms), screen.Due);
             Assert.Null(Running(s.Window));
             Assert.False(GameShown(s));
@@ -131,7 +133,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(loaded.Wait(TimeSpan.FromSeconds(30)), "the disc was not loaded while the screen showed");
             Assert.True(File.Exists(marker));
             Assert.Null(Running(s.Window));
-            s.Run(3000 - 16);
+            s.Run(Hold - 16);
             Assert.Null(Running(s.Window));
             Assert.NotNull(Screen(s));
             s.Run(16);
@@ -270,15 +272,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Stop(s.Window);
         }, default);
 
-        // The setting is stored as ES-DE spells it, and Normal is the default a new appsettings.json gets.
+        // The stored values stay ES-DE's and Normal is the default; Popup is no longer offered and reads as Brief.
         [Fact]
-        public void Normal_is_the_default_and_the_values_are_ES_DE_s()
+        public void Normal_is_the_default_and_the_stored_values_stay_compatible()
         {
             Assert.Equal("normal", new BigPictureInterface().LaunchScreenDuration);
-            Assert.Equal(["normal", "brief", "long", "popup", "disabled"], InterfaceSettingsPane.LaunchScreenChoices.Select(c => c.Value));
-            Assert.Equal(3000, LaunchScreen.DurationOf("normal").TotalMilliseconds);
-            Assert.Equal(3000, LaunchScreen.DurationOf("anything else").TotalMilliseconds);
-            Assert.Equal(0, LaunchScreen.DurationOf("disabled").TotalMilliseconds);
+            Assert.Equal(["normal", "brief", "long", "disabled"], InterfaceSettingsPane.LaunchScreenChoices.Select(c => c.Value));
+            Assert.Equal(2000, LaunchScreen.HoldFor("normal").TotalMilliseconds);
+            Assert.Equal(1000, LaunchScreen.HoldFor("popup").TotalMilliseconds);
+            Assert.Equal(2000, LaunchScreen.HoldFor("anything else").TotalMilliseconds);
+            Assert.False(LaunchScreen.Shows("disabled"));
         }
 
         [Fact]
@@ -300,10 +303,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 s.Pad.A();
                 LaunchScreen screen = Assert.IsType<LaunchScreen>(Screen(s));
                 Assert.Equal(game, screen.GameName);
-                Assert.Equal("Super Nintendo", screen.SystemName);
+                Assert.StartsWith("Super Nintendo · ", screen.SystemName);
                 Assert.Equal(art, screen.ArtPath);
-                double h = 800;
-                Assert.Equal(art is null ? 256.0 : 437.0, screen.CardBounds.Height, 3);
+                Assert.Equal(game == Aurora, screen.ShowsMarquee);
                 s.Run(3000);
                 Assert.Equal(Rom(s, game), Running(s.Window));
                 ThemedLibraryFlowTests.QuitGame(s);
@@ -335,7 +337,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var s = Open(BigPictureInterface.LaunchNormal);
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.A();
-            s.Run(500);
+            s.Run(Hold / 2);
             s.Pad.Down();
             s.Pad.B();
             s.Pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
@@ -411,7 +413,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.A();
             Assert.False(Sheets(s).IsPresenting);
             LaunchScreen screen = Assert.IsType<LaunchScreen>(Screen(s));
-            Assert.Equal(answered + TimeSpan.FromMilliseconds(3000), screen.Due);
+            Assert.Equal(answered + TimeSpan.FromMilliseconds(Hold), screen.Due);
             s.Run(3000);
             Assert.Equal(Rom(s, Aurora), Running(s.Window));
             Stop(s.Window);
@@ -525,96 +527,179 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static (byte, byte, byte) Rgb(Color c) => (c.R, c.G, c.B);
 
-        // §15's pixel style: the card where ES-DE draws it, in the menus' colour, over the view blurred and shaded everywhere else.
+        // EmuSen's own look on a stepped clock, with the media folder of Open.
+        internal static ThemedSession OwnLook(double width = 1280, double height = 800, Action<string>? roms = null) =>
+            Open(BigPictureInterface.LaunchNormal, width, height, a => a.LibraryStyle = AppSettings.LibraryStyleMistress, roms);
+
+        private static void PlayOwn(ThemedSession s, string game)
+        {
+            EmuSen.WiseMan.Fixtures.OwnLook.Play(s.Window, s.Pad, game);
+            s.Settle();
+        }
+
+        // The own look shows it: the name, the console and engine, the marquee large in a 480 by 240 box with its aspect kept, and the game only after Pan.
+        [Fact]
+        public Task The_own_look_shows_it_with_the_marquee_large_and_starts_after_Pan() => Session.Dispatch(() =>
+        {
+            using var s = OwnLook();
+            PlayOwn(s, Rom(s, Aurora));
+            LaunchScreen screen = Assert.IsType<LaunchScreen>(Screen(s));
+            Assert.Equal(Aurora, screen.GameName);
+            Assert.StartsWith("Super Nintendo · ", screen.SystemName);
+            Assert.Equal(MainWindow.LoadingLine, screen.Line);
+            Assert.True(screen.ShowsMarquee);
+            Assert.Equal(Path.Combine(s.Settings.EsdeMediaDirectory!, "snes", "marquees", Aurora + ".png"), screen.ArtPath);
+            Assert.Equal(new Size(480, 180), screen.ArtSize);
+            Rect art = screen.ArtControl.Bounds;
+            Assert.Equal(800.0 / 300, art.Width / art.Height, 2);
+            Assert.Null(Running(s.Window));
+            s.Run(Hold - 16);
+            Assert.Null(Running(s.Window));
+            s.Run(16);
+            Assert.Equal(Rom(s, Aurora), Running(s.Window));
+            Assert.Null(Screen(s));
+            Stop(s.Window);
+        }, default);
+
+        // With no marquee the cover stands there, 240 wide, its aspect kept.
+        [Fact]
+        public Task The_own_look_falls_back_to_the_cover() => Session.Dispatch(() =>
+        {
+            using var s = OwnLook();
+            PlayOwn(s, Rom(s, Brass));
+            LaunchScreen screen = Assert.IsType<LaunchScreen>(Screen(s));
+            Assert.False(screen.ShowsMarquee);
+            Assert.Equal(Path.Combine(s.Settings.EsdeMediaDirectory!, "snes", "covers", Brass + ".png"), screen.ArtPath);
+            Assert.Equal(new Size(240, 320), screen.ArtSize);
+            // The fixture's covers share one crimson and orange picture, whose mean is 240, 113, 58.
+            Assert.InRange(screen.Hue.R, 230, 250);
+            Assert.InRange(screen.Hue.G, 105, 121);
+            Assert.InRange(screen.Hue.B, 50, 66);
+            s.Run(Hold);
+            Assert.Equal(Rom(s, Brass), Running(s.Window));
+            Stop(s.Window);
+        }, default);
+
+        // The screen is held past Pan until the game is loaded, then the frame.
+        [Fact]
+        public Task The_own_look_holds_it_until_the_game_is_loaded() => Session.Dispatch(() =>
+        {
+            string bin = "";
+            using var s = OwnLook(roms: r =>
+            {
+                Directory.CreateDirectory(Path.Combine(r, "psx"));
+                bin = Path.Combine(r, "psx", "Opal Wait.bin");
+                File.WriteAllBytes(bin, SyntheticPsxDisc.Build().DataTrack);
+            });
+            using var gate = new System.Threading.ManualResetEventSlim();
+            using var loaded = new System.Threading.ManualResetEventSlim();
+            var open = MistressGame.OwnOpen(s.Window);
+            MistressGame.EarlyLoad(s.Window, what => { gate.Wait(); try { return open(what); } finally { loaded.Set(); } });
+            PlayOwn(s, bin);
+            Assert.NotNull(Screen(s));
+            s.Run(Hold + 160);
+            Assert.Null(Running(s.Window));
+            Assert.NotNull(Screen(s));
+            gate.Set();
+            Assert.True(loaded.Wait(TimeSpan.FromSeconds(30)));
+            Pump();
+            Assert.Equal(bin, Running(s.Window));
+            Assert.True(GameShown(s));
+            Assert.Null(Screen(s));
+            Stop(s.Window);
+        }, default);
+
+        // The desktop's list shows the cover where a game has no marquee; a state chosen on a page names its slot.
+        [Fact]
+        public Task The_desktop_shows_it_with_the_cover_where_there_is_no_marquee() => Session.Dispatch(() =>
+        {
+            using var s = Open(BigPictureInterface.LaunchNormal, more: a => a.BigScreen = false);
+            EmuSen.WiseMan.Fixtures.OwnLook.Select(s.Window, Rom(s, Brass));
+            typeof(MainWindow).GetMethod("LaunchSelectedLibraryEntry", Hidden)!.Invoke(s.Window, null);
+            s.Settle();
+            LaunchScreen screen = Assert.IsType<LaunchScreen>(Screen(s));
+            Assert.Equal(Brass, screen.GameName);
+            Assert.False(screen.ShowsMarquee);
+            Assert.Equal(new Size(240, 320), screen.ArtSize);
+            s.Run(Hold);
+            Assert.Equal(Rom(s, Brass), Running(s.Window));
+            Stop(s.Window);
+        }, default);
+
+        // The group sits on the mockup's line, 330 units down, art then words, scaled with the window.
         [Theory]
         [InlineData(1280, 800)]
-        [InlineData(1920, 1200)]
-        public Task The_card_is_drawn_where_ES_DE_draws_it_over_the_view_blurred(int w, int h) => Session.Dispatch(() =>
+        [InlineData(1920, 1080)]
+        public Task The_art_and_the_words_sit_where_the_mockup_draws_them(int w, int h) => Session.Dispatch(() =>
         {
-            using var s = Open(BigPictureInterface.LaunchNormal, w, h);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            RenderedFrame before = s.Capture();
-            s.Pad.A();
-            s.Run(200);
-            RenderedFrame during = s.Capture();
+            using var s = OwnLook(w, h);
+            PlayOwn(s, Rom(s, Brass));
+            s.Run(Hold / 2);
             LaunchScreen screen = Screen(s)!;
-            double hh = Host(s).Bounds.Height;
-            Rect card = InWindow(s, screen.CardBounds);
-            Assert.Equal(1.0, screen.CardScale);
-            // ES-DE at 1280x800: a card 709 by 437 px centred 356 px down, scaled with the height (§33.2); the width holds in the menus' Barlow Condensed (P190).
-            Assert.Equal(437.0 / 800 * hh, card.Height, 3);
-            Assert.InRange(card.Width, 709.0 / 800 * hh - 1.5, 709.0 / 800 * hh + 1.5);
-            Assert.Equal(Host(s).Bounds.Width / 2, screen.CardBounds.Center.X, 3);
-            Assert.Equal(356.0 / 800 * hh, screen.CardBounds.Center.Y, 3);
+            double unit = Math.Min(w / 1280.0, h / 800.0);
+            Rect art = new(screen.ArtControl.TranslatePoint(default, s.Window)!.Value, screen.ArtControl.Bounds.Size * unit);
+            Assert.Equal(LaunchScreen.CentreY * unit + (h - 800 * unit) / 2, art.Center.Y, 0);
+            Assert.Equal(240 * unit, art.Width, 0);
+            Assert.InRange(screen.Progress, 0.2, 0.4);
+            s.Run(Hold);
+            Stop(s.Window);
+        }, default);
 
-            double inset = LaunchScreen.CornerRadius * hh + 2;
-            foreach (Point p in new[] { card.TopLeft + new Vector(inset, 3), card.TopRight + new Vector(-inset, 3), card.BottomLeft + new Vector(inset, -3), card.BottomRight + new Vector(-inset, -3) })
-                Assert.Equal(Rgb(Panel), At(during, p.X, p.Y));
-            foreach (Point p in new[] { card.TopLeft + new Vector(-3, -3), card.BottomRight + new Vector(3, 3), card.TopLeft + new Vector(1, 1) })
-                Assert.NotEqual(Rgb(Panel), At(during, p.X, p.Y));
+        // Under Reduced motion the bar stands at its value from the start.
+        [Fact]
+        public Task Under_reduced_motion_the_bar_does_not_move() => Session.Dispatch(() =>
+        {
+            using var s = OwnLook();
+            EmuSen.LunaP.Theme.LunaMotion.Reduced = true;
+            try
+            {
+                PlayOwn(s, Rom(s, Aurora));
+                LaunchScreen screen = Screen(s)!;
+                Assert.Equal(LaunchScreen.BarShown, screen.Progress);
+                Assert.False(screen.Moving(s.Now));
+                s.Run(Hold);
+                Assert.Equal(Rom(s, Aurora), Running(s.Window));
+            }
+            finally { EmuSen.LunaP.Theme.LunaMotion.Reduced = false; }
+            Stop(s.Window);
+        }, default);
 
-            Rect art = InWindow(s, new Rect(Host(s).Bounds.Width / 2 - LaunchScreen.ArtWidth * hh / 2, screen.CardBounds.Y + LaunchScreen.ArtCentre * hh - LaunchScreen.ArtHeight * hh / 2,
-                LaunchScreen.ArtWidth * hh, LaunchScreen.ArtHeight * hh));
-            Assert.Equal(Rgb(Colors.MediumPurple), At(during, art.X + art.Width * 0.25, art.Center.Y + art.Height * 0.2));
-            Assert.Equal(Rgb(Colors.Gold), At(during, art.X + art.Width * 0.75, art.Center.Y + art.Height * 0.2));
-
-            (int lit, int changed) = LitAndChanged(before, during, card);
-            _out.WriteLine($"{w}x{h}: card {card}; outside it {changed} of the {lit} pixels that were not black changed");
-            Assert.True(changed >= lit * 0.98, $"only {changed} of {lit} lit pixels outside the card changed");
-            s.Run(3000);
+        // A disc game from the own look starts once the hold is over with the window's own loop running and no pad tick, so a screen held for a disc is released.
+        [Fact]
+        public Task A_disc_game_starts_once_the_hold_is_over() => Session.Dispatch(() =>
+        {
+            string bin = "";
+            using var s = OwnLook(roms: r =>
+            {
+                Directory.CreateDirectory(Path.Combine(r, "psx"));
+                bin = Path.Combine(r, "psx", "Opal Plain.bin");
+                File.WriteAllBytes(bin, SyntheticPsxDisc.Build().DataTrack);
+            });
+            PlayOwn(s, bin);
+            Assert.NotNull(Screen(s));
+            s.Now += TimeSpan.FromMilliseconds(Hold);
+            // The dispatcher's own loop for the hold and a second more, so its timers and frames run (LunaP §88.7).
+            var loop = new Avalonia.Threading.DispatcherFrame();
+            var stop = new Avalonia.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(Hold + 1000) };
+            stop.Tick += (_, _) => { stop.Stop(); loop.Continue = false; };
+            stop.Start();
+            Avalonia.Threading.Dispatcher.UIThread.PushFrame(loop);
+            Assert.Equal(bin, Running(s.Window));
             Assert.True(GameShown(s));
+            Assert.Null(Screen(s));
             Stop(s.Window);
         }, default);
 
-        // The scale-up: half size at the press, whole 117 ms later, about the card's centre.
+        // Start Console shows the console with no game's name and no picture.
         [Fact]
-        public Task The_card_scales_up_from_half_its_size_about_its_centre() => Session.Dispatch(() =>
+        public void Start_Console_s_card_names_the_console_and_no_game()
         {
-            using var s = Open(BigPictureInterface.LaunchNormal);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            s.Pad.A();
-            LaunchScreen screen = Screen(s)!;
-            RenderedFrame first = s.Capture();
-            Rect card = InWindow(s, screen.CardBounds);
-            Assert.Equal(0.5, screen.CardScale, 3);
-            Rect half = new(card.Center.X - card.Width / 4, card.Center.Y - card.Height / 4, card.Width / 2, card.Height / 2);
-            Assert.Equal(Rgb(Panel), At(first, half.X + 12, half.Y + 3));
-            Assert.NotEqual(Rgb(Panel), At(first, half.X - 12, half.Y + 3));
-            Assert.NotEqual(Rgb(Panel), At(first, card.X + 24, card.Y + 3));
-            s.Run(58);
-            Assert.InRange(screen.CardScale, 0.7, 0.8);
-            s.Run(60);
-            Assert.Equal(1.0, screen.CardScale);
-            RenderedFrame whole = s.Capture();
-            Assert.Equal(Rgb(Panel), At(whole, card.X + 24, card.Y + 3));
-            s.Run(3000);
-            Stop(s.Window);
-        }, default);
-
-        // The popup blurs nothing: outside its pill the frame is the view's own, and it fades in over half a second.
-        [Fact]
-        public Task The_popup_is_a_pill_at_the_top_that_fades_in_and_leaves_the_view_as_it_was() => Session.Dispatch(() =>
-        {
-            using var s = Open(BigPictureInterface.LaunchPopup);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            RenderedFrame before = s.Capture();
-            s.Pad.A();
-            LaunchScreen screen = Screen(s)!;
-            Assert.Equal(0, screen.PopupOpacity);
-            s.Run(250);
-            Assert.InRange(screen.PopupOpacity, 0.45, 0.55);
-            s.Run(300);
-            Assert.Equal(1, screen.PopupOpacity);
-            RenderedFrame during = s.Capture();
-            Rect pill = InWindow(s, screen.PopupBounds);
-            Assert.Equal(16, pill.Y, 3);
-            Assert.InRange(pill.Center.X, 639.5, 640.5);
-            Assert.Equal(Rgb(Panel), At(during, pill.X + pill.Width * 0.5, pill.Y + 2));
-            Assert.Equal(0, DifferingOutside(during, before, pill));
-            Assert.True(DifferingOutside(during, before, default) > 500);
-            s.Run(1200);
-            Stop(s.Window);
-        }, default);
+            string console = EmuSen.Mistress.Library.RuntimeCatalog.ConsolesThatStartEmpty.FirstOrDefault() ?? "PlayStation";
+            LaunchCard card = MainWindow.LaunchCardForConsole(console);
+            Assert.Null(card.Name);
+            Assert.Null(card.Art);
+            Assert.Equal(MainWindow.NoDiscLine, card.Line);
+        }
 
         // A window closed while the screen shows starts nothing afterwards, when its timer would have come due (§15.14's lesson).
         [Fact]
@@ -632,15 +717,18 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Null(Running(s.Window));
         }, default);
 
-        // Desktop big picture (F10) shows it; the desktop's own list starts a game at once, as it did.
+        // The desktop's list and desktop big picture (F10) both show it.
         [Fact]
-        public Task F10_big_picture_shows_it_and_the_desktop_list_does_not() => Session.Dispatch(() =>
+        public Task F10_big_picture_and_the_desktop_list_both_show_it() => Session.Dispatch(() =>
         {
             using var s = Open(BigPictureInterface.LaunchNormal, more: a => a.BigScreen = false);
             Assert.False(s.Shown);
             s.Window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
             typeof(MainWindow).GetMethod("LaunchSelectedLibraryEntry", Hidden)!.Invoke(s.Window, null);
             s.Settle();
+            Assert.NotNull(Screen(s));
+            Assert.Null(Running(s.Window));
+            s.Run(Hold);
             Assert.NotNull(Running(s.Window));
             Assert.True(GameShown(s));
             Assert.Null(Screen(s));
@@ -664,13 +752,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task The_Interface_tab_s_row_stores_the_setting() => Session.Dispatch(() =>
         {
             using var s = Open(BigPictureInterface.LaunchNormal);
-            ThemedSwitchesTests.Choose(s, "LaunchScreenDuration", "Popup");
-            Assert.Equal(BigPictureInterface.LaunchPopup, s.Settings.BigPictureInterface.LaunchScreenDuration);
-            Assert.Equal(BigPictureInterface.LaunchPopup, AppSettings.Load().BigPictureInterface.LaunchScreenDuration);
+            ThemedSwitchesTests.Choose(s, "LaunchScreenDuration", "Disabled");
+            Assert.Equal(BigPictureInterface.LaunchDisabled, s.Settings.BigPictureInterface.LaunchScreenDuration);
+            Assert.Equal(BigPictureInterface.LaunchDisabled, AppSettings.Load().BigPictureInterface.LaunchScreenDuration);
             ThemedLibraryPadTests.Enter(s, "snes");
             s.Pad.A();
-            Assert.True(Screen(s)!.Popup);
-            s.Run(1700);
+            Assert.Null(Screen(s));
+            Assert.Equal(Rom(s, Aurora), Running(s.Window));
             Stop(s.Window);
         }, default);
     }

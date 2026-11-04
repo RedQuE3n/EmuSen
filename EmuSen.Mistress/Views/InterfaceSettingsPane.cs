@@ -30,7 +30,6 @@ namespace EmuSen.Mistress.Views
             (BigPictureInterface.LaunchNormal, "Normal"),
             (BigPictureInterface.LaunchBrief, "Brief"),
             (BigPictureInterface.LaunchLong, "Long"),
-            (BigPictureInterface.LaunchPopup, "Popup"),
             (BigPictureInterface.LaunchDisabled, "Disabled"),
         ];
 
@@ -77,7 +76,7 @@ namespace EmuSen.Mistress.Views
                 Content = Switch("ListScrollOverlay", "Enable quick scrolling overlay", S.ListScrollOverlay, on => S.ListScrollOverlay = on),
             },
             Ui.Header("On Screen"),
-            Choice("LaunchScreenDuration", "Launch Screen Duration", "How long the game's name and marquee (else its cover) show before it starts: Normal 3 s, Brief 1.7 s, Long 4.5 s, as ES-DE measures; Popup, a notice at the top for 1.7 s; Disabled, at once.",
+            Choice("LaunchScreenDuration", "Launch Screen Duration", "The least time EmuSen's launch screen, the game's name with its marquee (else its cover), shows before the game: Brief 1 s, Normal 2 s, Long 3 s, each held until the first frame; Disabled starts it at once.",
                 LaunchScreenChoices, S.LaunchScreenDuration, v => S.LaunchScreenDuration = v),
             Choice("MenuOpeningEffect", "Menu Opening Animation", "Scale-up grows each menu, and the launch screen's card, from half its size over a ninth of a second, as ES-DE does; None shows them whole at once.",
                 OpeningChoices, S.MenuOpeningEffect, v => S.MenuOpeningEffect = v),

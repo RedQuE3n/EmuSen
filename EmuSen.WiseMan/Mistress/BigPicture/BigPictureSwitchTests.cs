@@ -467,7 +467,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             EmuSen.Galaxia.ConfigStore.OverrideDirectory = root;
             try
             {
-                new AppSettings { BigScreen = true }.Save();
+                new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, BigScreen = true }.Save();
                 Assert.False(MainWindow.EmbedsPopupsAtStart([], Env("KDE")));
                 Assert.True(MainWindow.EmbedsPopupsAtStart([], Env("gamescope")));
                 Assert.True(MainWindow.EmbedsPopupsAtStart([], Env(null, "1")));

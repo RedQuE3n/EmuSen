@@ -1333,6 +1333,29 @@ cards; a picture full screen in the window on double click).
   320 and, beside it, `STARTING` in Caption upper Muted, the name in Display, the console and engine in Body Muted, a
   progress bar 320 × 8 and its line (`Loading the state in Slot 3`); held at least Pan (320 ms) and until the core's
   first frame, then the frame. ES-DE's measured launch screen and popup (`EmuSen_Settings_Reference.md` §4.71) retire.
+
+  **Built 2026-11-03, in every look** (the tester's decisions of that day). Every start shows it: a game from Home, the
+  grid or its page, the desktop's list and its Play from the Start, the themed view, a state chosen on a game's page
+  (`Loading the state in Slot 3`), a resume (`Loading where you left off`), and Start Console, which names the
+  console and its engine with no game's name and no picture (the line `Starting with no disc in it`; no picture of a
+  console exists in the library's media yet). One control, `LaunchScreen`, draws it from one description,
+  `LaunchCard`, which `MainWindow.LaunchCardFor` fills through the game page's media lookup (`GameArt`, which gained
+  the marquee); no path rule of its own.
+  - **The marquee is shown large where the game has one**, in the cover's place: fitted inside a box of 480 × 240 units,
+    its aspect kept and never stretched (an 800 × 300 marquee draws 480 × 180). With no marquee the cover stands
+    there, fitted inside 240 × 320 with 8 units of rounding, as the mockup draws it; with neither, the words alone.
+  - **Layout.** The mockup's 1280 × 800 units scaled uniformly to the window: art, a gap of 48, then the words (at least
+    320 wide), centred across and centred 330 units down; Caption 20, Display 44 Barlow Condensed Medium, Body 22. The
+    hue is the art's mean colour from a 16 × 16 copy, drawn as a radial wash from 35% at the group's centre to Void at the
+    edges, which stands for the blur. The bar fills to 60% over the hold; under Reduced motion it stands at 60% from the
+    start, unanimated.
+  - **How long** (decided 2026-11-03: the tester wants the marquee seen, and on a fast core a 320 ms hold only flashes
+    it). The setting Launch Screen Duration is the least time the screen shows, and it is held until the game is loaded
+    as well: Brief 1 s, Normal 2 s (the default), Long 3 s, Disabled shows none. The stored values stay ES-DE's
+    (`brief`, `normal`, `long`, `disabled`); ES-DE's Popup is no longer offered, and a stored `popup` reads as Brief.
+  - **What changed in the themed view.** ES-DE's card (*Launching Game* in capitals over the view blurred and shaded,
+    its 117 ms scale-up and its measured geometry), its popup pill and its 3 s, 1.7 s and 4.5 s durations retire into
+    this screen; a themed start now shows the same screen as every other look. The pad still does nothing while it is up.
 - **The screensaver** keeps Dim, Black and Slideshow; the slideshow shows the library's own pictures (screenshots,
   title screens, clips when §5.9 lands) letterboxed on Void with a caption bar 120 tall on CaptionSurface: the cover
   60 × 80, the name in Title, the console and `any button wakes` in Caption Muted. A on the caption opens that game's

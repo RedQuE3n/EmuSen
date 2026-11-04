@@ -20,15 +20,16 @@ namespace EmuSen.Mistress.Views
         // Runs while a game is on screen, stopped for the library and for pauses - see §4.32.
         private readonly Stopwatch _playClock = new();
 
-        // Every way a game is started from outside it: firmware, then the resume question, then from big picture the launch screen (§4.71), then the load.
+        // Every way a game is started from outside it: firmware, then the resume question, then the launch screen in every look (EmuSen_Interface.md §18.3), then the load.
         private async Task StartGameAsync(string path, string displayName, BigPicture.Scene.SceneGame? bigPicture = null)
         {
             await PrepareGameAsync(path);
             // The window closed while the questions were asked off the interface thread: nothing starts in it - see EmuSen_Debugging_Tools_Reference_v5.md §3.69.
             if (_recordsClosed) return;
             if (await ChooseResumeAsync(path) is not { } choice || _recordsClosed) return;
-            Task<GameSession>? loading = bigPicture is not null ? LoadUnderLaunchScreen(path) : null;
-            if (bigPicture is not null && !await ShowLaunchScreenAsync(bigPicture))
+            bool resume = choice == ResumeChoice.Resume;
+            Task<GameSession>? loading = LoadUnderLaunchScreen(path);
+            if (!await ShowLaunchScreenAsync(LaunchCardFor(path, bigPicture?.Name, resume ? ResumingLine : LoadingLine)))
             {
                 LetGo(loading);
                 return;
@@ -49,11 +50,10 @@ namespace EmuSen.Mistress.Views
                 LetGo(loading);
                 return;
             }
-            LoadGame(path, displayName, choice == ResumeChoice.Resume ? ResumeStatePath(path) : null, reset: false, loading);
-            if (bigPicture is null) return;
+            LoadGame(path, displayName, resume ? ResumeStatePath(path) : null, reset: false, loading);
             bool failed = _currentRomPath != path;
             CloseLaunchScreen();
-            if (failed) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
+            if (failed && (_bigScreen || bigPicture is not null)) PadNotice.Show(StatusText.Text ?? $"Failed to load {displayName}");
         }
 
         // A session opened for a launch that will not happen is closed once its open ends.
@@ -63,7 +63,7 @@ namespace EmuSen.Mistress.Views
         // The game opened on a worker as the launch screen opens, so the screen's time covers the disc's read; null opens it after, as before - see Diamond_Players.md §12.8.3.
         private Task<GameSession>? LoadUnderLaunchScreen(string path)
         {
-            if (EarlyLoader is not { } open || LaunchScreen.DurationOf(_appSettings.BigPictureInterface.LaunchScreenDuration) <= TimeSpan.Zero || path == _currentRomPath) return null;
+            if (EarlyLoader is not { } open || !LaunchScreenOn || path == _currentRomPath) return null;
             CrystalOpen what = new() { Path = path };
             return Task.Run(() => open(what));
         }

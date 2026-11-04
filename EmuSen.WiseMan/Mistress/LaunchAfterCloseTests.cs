@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(Path.Combine(_root, "Roms"));
             // A file no core opens, so the launch ends on its failure path, which shows the library again.
             File.WriteAllBytes(Path.Combine(_root, "Roms", "Broken.sfc"), [1, 2, 3]);
-            new AppSettings { RomDirectory = Path.Combine(_root, "Roms"), LibraryView = AppSettings.LibraryList, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = Path.Combine(_root, "Roms"), LibraryView = AppSettings.LibraryList, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = AppSettings.ResumeNever }.Save();
         }
 
         public void Dispose()

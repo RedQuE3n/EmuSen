@@ -162,6 +162,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             else File.WriteAllBytes(Path.Combine(_romDir, game + ".sfc"), PadRewindReelTests.ChangingBackdrop());
             var app = new AppSettings
             {
+                BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled },
                 RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, BigScreen = bigScreen,
                 ResumeOnLaunch = resumeAsk ? AppSettings.ResumeAsk : AppSettings.ResumeNever,
                 StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"),

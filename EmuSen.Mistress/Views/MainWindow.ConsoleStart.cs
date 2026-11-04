@@ -35,7 +35,7 @@ namespace EmuSen.Mistress.Views
             RuntimeCatalog.ShelfByName(shelf)?.Core.Console is string console && RuntimeCatalog.StartsEmpty(console) ? console : null;
 
         // Run from the menus: no game to ask about, so no firmware or resume question comes first.
-        private void StartConsole(string console) => StartConsole(console, reset: false);
+        private void StartConsole(string console) => UnderLaunchScreenAsync(LaunchCardForConsole(console), () => StartConsole(console, reset: false)).Logged("launch", $"Starting {console}");
 
         private void StartConsole(string console, bool reset)
         {

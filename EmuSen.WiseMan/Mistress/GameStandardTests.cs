@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(roms);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            new AppSettings { RomDirectory = roms, LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = Path.Combine(_root, "States"), ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = roms, LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = Path.Combine(_root, "States"), ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             _rom = Path.Combine(roms, "Game.smc");
         }
 

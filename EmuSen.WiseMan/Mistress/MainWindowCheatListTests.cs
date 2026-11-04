@@ -37,6 +37,7 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             new AppSettings
             {
+                BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled },
                 RomDirectory = _romDir,
                 LogDirectory = Path.Combine(_root, "Logs"),
                 StateDirectory = Path.Combine(_root, "States"),

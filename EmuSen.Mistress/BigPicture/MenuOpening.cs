@@ -6,8 +6,8 @@ namespace EmuSen.Mistress.BigPicture
     // ES-DE's menu opening effect: a menu grows from half its size to its own over 117 ms, or appears whole - see EmuSen_Settings_Reference.md §4.72.10.
     public sealed class MenuOpening
     {
-        public static readonly TimeSpan Time = LaunchScreen.ScaleUpTime;
-        public const double From = LaunchScreen.ScaleFrom;
+        public static readonly TimeSpan Time = TimeSpan.FromMilliseconds(117);
+        public const double From = 0.5;
 
         private MenuPanel? _panel;
         private TimeSpan _started;

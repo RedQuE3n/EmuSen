@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             _stateDir = Path.Combine(_root, "States");
             // Or every load in here writes into the real user log/state trees.
-            new AppSettings { RomDirectory = _romDir, LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = _stateDir, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = _romDir, LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = _stateDir, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             File.WriteAllBytes(Path.Combine(_romDir, "Playable.smc"), SyntheticRom.BuildBlank());
         }
 

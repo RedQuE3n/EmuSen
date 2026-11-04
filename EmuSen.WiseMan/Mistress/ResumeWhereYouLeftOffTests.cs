@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Mistress
         private string ResumeState => SaveLibrary.ResumeStatePathFor(_romPath, _states);
 
         private void Settings(string resume) =>
-            new AppSettings { RomDirectory = Path.GetDirectoryName(_romPath), LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = _states, ResumeOnLaunch = resume }.Save();
+            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = Path.GetDirectoryName(_romPath), LogDirectory = Path.Combine(_root, "Logs"), StateDirectory = _states, ResumeOnLaunch = resume }.Save();
 
         [Fact]
         public Task Closing_a_game_writes_where_it_was_and_the_picture_on_screen() => Session.Dispatch(() =>

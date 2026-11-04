@@ -140,7 +140,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         }
 
         // The Big Picture views: the two scenes, and what opens over them.
-        public static readonly string[] BigPictureViews = ["System", "Gamelist", "MainMenu", "GameOptions", "ThemeSettings", "SearchKeyboard", "LaunchScreen", "Screensaver"];
+        public static readonly string[] BigPictureViews = ["System", "Gamelist", "MainMenu", "GameOptions", "ThemeSettings", "SearchKeyboard", "LaunchScreen", "LaunchScreenCover", "Screensaver"];
 
         public static TheoryData<string, int, int> ViewCases()
         {
@@ -157,7 +157,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             string name = $"BigPicture-{view}-{width}x{height}";
             using ThemedSession s = view switch
             {
-                "LaunchScreen" => LaunchScreenTests.Open(BigPictureInterface.LaunchNormal, width, height),
+                "LaunchScreen" or "LaunchScreenCover" => LaunchScreenTests.Open(BigPictureInterface.LaunchNormal, width, height),
                 "Screensaver" => ScreensaverTests.Open(i => { i.ScreensaverTimer = 60000; i.ScreensaverType = BigPictureInterface.SaverSlideshow; }, width, height),
                 _ => new ThemedSession(width, height),
             };
@@ -193,10 +193,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         ThemedGameOptionsTests.Choose(s, "Search...");
                         Assert.Empty(RecordOver(s, view, name, OnScreenKeyboard.OpenOver(s.Window)!, "overlay", walk: true, UiButton.Back));
                         return;
-                    case "LaunchScreen":
+                    case "LaunchScreen" or "LaunchScreenCover":
                         ThemedLibraryPadTests.Enter(s, "snes");
+                        if (view == "LaunchScreenCover") s.Pad.Down();
                         s.Pad.A();
-                        s.Run(400);
+                        s.Run(LaunchScreenTests.Hold - 16);
                         List<string> launch = RecordOver(s, view, name, LaunchScreenTests.Host(s), "overlay", walk: false);
                         Stop(s.Window);
                         Assert.Empty(launch);

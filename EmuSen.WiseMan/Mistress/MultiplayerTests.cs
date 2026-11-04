@@ -55,7 +55,7 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver First) Playing(string file, byte[] image, Action<AppSettings>? settings = null, bool bigScreen = false, bool letGo = true)
         {
             File.WriteAllBytes(Path.Combine(_romDir, file), image);
-            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen };
+            var app = new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen };
             settings?.Invoke(app);
             app.Save();
 

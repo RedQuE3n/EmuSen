@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            new AppSettings { RomDirectory = _romDir, LogDirectory = _logDir }.Save();
+            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = _romDir, LogDirectory = _logDir }.Save();
         }
 
         public void Dispose()

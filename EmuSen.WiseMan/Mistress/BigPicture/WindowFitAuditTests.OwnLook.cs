@@ -77,6 +77,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             var app = new AppSettings
             {
+                BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled },
                 RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, BigScreen = bigScreen, ResumeOnLaunch = AppSettings.ResumeNever,
                 StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats"),
             };

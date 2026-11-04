@@ -241,10 +241,14 @@ namespace EmuSen.Mistress.Views
                     continue;
                 }
                 SceneGame game = ThemedGame(pick);
-                return new Slide(picture, game, LaunchContent(game).System, esde);
+                return new Slide(picture, game, SlideSystemName(pick.Shelf), esde);
             }
             return null;
         }
+
+        // The system as ES-DE names it on the slide's caption.
+        private static string SlideSystemName(string? shelfName) =>
+            EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(shelfName) is { } shelf ? (shelf.EsdeFullName is { Length: > 0 } full ? full : shelf.Name) : "";
 
         private Slide? NextCustomSlide()
         {

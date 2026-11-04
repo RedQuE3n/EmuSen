@@ -1629,7 +1629,7 @@ fault caught (the progress not taking the Scraper's place: both classes).
 ## 20. The Pause Card's pages as built (2026-11-03)
 
 §18.5 built on the card's page mechanism: each page a `PadMenuPage` turned in place, with its own words for A and for
-Left and Right in the help band (`AdaptiveLayout.SideWord`, docs/LunaP.md §216) and Start's entry left off, as the
+Left and Right in the help band (`AdaptiveLayout.SideWord`, docs/LunaP.md §217) and Start's entry left off, as the
 mockups draw these pages. The game runs no frame on any page; a screen a page opens lays over the card as a sheet.
 
 ### 20.1 Rewind, the reel
@@ -1721,7 +1721,7 @@ the desktop the Pause Card's panel slides in from the left edge while the help b
 go back out the same ways when it closes. The pane stays where it is and fades in and out over the same duration and
 easing (decided at review the same day: drawn whole at once, it popped beside a panel still arriving). The scrim and
 the paused frame stay put. LunaP draws it
-(`MenuPanel.SlideOut`, docs/LunaP.md §217) and `CardSlide` drives it over the motion tokens Enter (200 ms, ease-out)
+(`MenuPanel.SlideOut`, docs/LunaP.md §218) and `CardSlide` drives it over the motion tokens Enter (200 ms, ease-out)
 and Exit (160 ms, ease-in), advanced with the interface's clock on each pad tick.
 
 - It plays only as the card comes on screen and as it goes: a page turn, and a sheet closing over the card, move nothing.

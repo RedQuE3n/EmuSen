@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver Pad) Suspended(bool bigScreen = false, bool gameMode = false)
         {
             File.WriteAllBytes(Path.Combine(_romDir, Game + ".sfc"), PadRewindReelTests.ChangingBackdrop());
-            var app = new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen, StateDirectory = Path.Combine(_root, "States") };
+            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen, StateDirectory = Path.Combine(_root, "States") };
             app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
             app.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };

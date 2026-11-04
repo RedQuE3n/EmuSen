@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreDiscovery.UseDevelopment(false);
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled, MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone }, RomDirectory = Path.Combine(_root, "Roms"), StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats") }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = Path.Combine(_root, "Roms"), StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats") }.Save();
         }
 
         public void Dispose()

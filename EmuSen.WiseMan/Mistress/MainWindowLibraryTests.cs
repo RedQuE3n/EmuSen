@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.Mistress
         // disk before it is constructed.
         private void ConfigureRomDirectory(string? directory)
         {
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = directory }.Save();
+            new AppSettings { RomDirectory = directory }.Save();
         }
 
         private void WriteRom(string fileName) =>

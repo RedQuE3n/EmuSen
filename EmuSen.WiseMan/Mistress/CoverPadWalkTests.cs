@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             string roms = Path.Combine(_root, "Roms");
             Directory.CreateDirectory(roms);
-            new EmuSen.Galaxia.Models.AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = roms, BigScreen = bigScreen, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
+            new EmuSen.Galaxia.Models.AppSettings { RomDirectory = roms, BigScreen = bigScreen, LogDirectory = Path.Combine(_root, "Logs"), ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever }.Save();
             var main = new MainWindow { Width = 1280, Height = 800 };
             main.Show();
             Settle(main);
@@ -173,7 +173,7 @@ namespace EmuSen.WiseMan.Mistress
             string roms = Path.Combine(_root, "Roms");
             Directory.CreateDirectory(roms);
             File.WriteAllBytes(Path.Combine(roms, "Cobalt Harbor (Synthetic).sfc"), PadRewindReelTests.ChangingBackdrop());
-            var app = new EmuSen.Galaxia.Models.AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = roms, LibraryView = EmuSen.Galaxia.Models.AppSettings.LibraryList, ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever, BigScreen = true, StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs") };
+            var app = new EmuSen.Galaxia.Models.AppSettings { RomDirectory = roms, LibraryView = EmuSen.Galaxia.Models.AppSettings.LibraryList, ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever, BigScreen = true, StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs") };
             app.BigPictureInterface.MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone;
             app.Save();
             var main = new MainWindow { Width = 1280, Height = 800 };

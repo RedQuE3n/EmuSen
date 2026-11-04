@@ -36,6 +36,9 @@ namespace EmuSen.Mistress.BigPicture
 
         public static bool Shows(string? setting) => HoldFor(setting) > TimeSpan.Zero;
 
+        // Whether a new window shows launch screens; the test assembly turns it off once, and a test about the screen turns its own window's on.
+        public static bool ShownByDefault { get; set; } = true;
+
         private readonly Border _back = new();
         private readonly Viewbox _view = new() { Stretch = Stretch.Uniform };
         private readonly Grid _design = new() { Width = DesignWidth, Height = DesignHeight };

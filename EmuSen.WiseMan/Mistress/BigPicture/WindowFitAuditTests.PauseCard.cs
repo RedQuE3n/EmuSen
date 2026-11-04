@@ -88,8 +88,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats"),
             };
             app.BigPictureInterface.MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone;
-            // WaitFor runs posted jobs only, never the dispatcher's timers or frames, so a launch screen would hold the game past its wait; the screen is not this test's subject.
-            app.BigPictureInterface.LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled;
             app.Save();
             var window = new MainWindow { Width = width, Height = height };
             window.Show();

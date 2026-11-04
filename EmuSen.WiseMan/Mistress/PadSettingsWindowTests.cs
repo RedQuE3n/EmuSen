@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver Pad) GameModeWithAGame()
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled, MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
 
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
@@ -387,7 +387,6 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
             new AppSettings
             {
-                BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled },
                 RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeAsk, BigScreen = true,
                 StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"),
             }.Save();
@@ -657,7 +656,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task In_desktop_mode_a_real_window_is_driven_and_every_control_reached(string opener) => Session.Dispatch(() =>
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled, MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
 
@@ -687,7 +686,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task In_desktop_mode_the_settings_window_s_logging_page_is_driven_and_every_row_reached() => Session.Dispatch(() =>
         {
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled, MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
             window.ShowSettings(SettingsScreen.EmuSen, "logging");
@@ -714,7 +713,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_desktop_search_presses_only_in_a_window_grown_to_its_tab() => Session.Dispatch(() =>
         {
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled, MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
             typeof(MainWindow).GetMethod("ShowThemeSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
@@ -736,7 +735,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task With_a_custom_crop_chosen_its_four_numbers_are_reached_by_the_pad() => Session.Dispatch(() =>
         {
-            new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled, MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var graphics = new GraphicsConfig();
             graphics.SetValue("NES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.CustomCrop);
             graphics.Save();

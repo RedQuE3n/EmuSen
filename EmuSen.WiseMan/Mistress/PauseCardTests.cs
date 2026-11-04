@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver Pad) Playing(Action<AppSettings>? more = null, bool gameMode = false)
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), PadRewindReelTests.ChangingBackdrop());
-            var app = new AppSettings { BigPictureInterface = { LaunchScreenDuration = EmuSen.Galaxia.Models.BigPictureInterface.LaunchDisabled }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true, StateDirectory = Path.Combine(_root, "States") };
+            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true, StateDirectory = Path.Combine(_root, "States") };
             app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
             more?.Invoke(app);
             app.Save();

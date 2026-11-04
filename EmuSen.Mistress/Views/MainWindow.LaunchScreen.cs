@@ -22,7 +22,10 @@ namespace EmuSen.Mistress.Views
 
         internal bool LaunchScreenOpen => _launchScreen?.IsOpen == true;
 
-        private bool LaunchScreenOn => LaunchScreen.Shows(_appSettings.BigPictureInterface.LaunchScreenDuration);
+        // This window's switch, from LaunchScreen.ShownByDefault; a test about the screen sets it.
+        internal bool LaunchScreens { get; set; } = LaunchScreen.ShownByDefault;
+
+        private bool LaunchScreenOn => LaunchScreens && LaunchScreen.Shows(_appSettings.BigPictureInterface.LaunchScreenDuration);
 
         public const string LoadingLine = "Loading the game", ResumingLine = "Loading where you left off", NoDiscLine = "Starting with no disc in it";
 

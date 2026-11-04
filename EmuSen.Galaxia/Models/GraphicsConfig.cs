@@ -69,7 +69,7 @@ namespace EmuSen.Galaxia.Models
         public bool Save() => File.Save(this);
 
         public static GraphicsConfig Load() =>
-            GalaxiaNative.Active ? File.LoadNative(upgrade: false) ?? ConfigFile<GraphicsConfig>.NewNative(upgrade: false) : File.Load(() => new GraphicsConfig());
+            File.LoadNative(upgrade: false) ?? ConfigFile<GraphicsConfig>.NewNative(upgrade: false);
 
         public static bool Exists => File.Exists;
 

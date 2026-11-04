@@ -74,58 +74,47 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void A_manifest_is_taken_and_laid_out_to_the_same_bytes_both_ways()
+        public void A_manifest_is_taken_and_laid_out_to_the_bytes_the_csharp_laid_out()
         {
+            int n = 0;
             foreach (string text in Accepted())
             {
-                string managed = GamePackage.Managed.Format(GamePackage.Managed.Parse(text));
-                Assert.Equal(managed, GalaxiaNative.PackageFormat(text));
-                Assert.Equal(managed, GalaxiaNative.PackageFormat(managed));
-                Assert.Equal(managed, GamePackage.Managed.Format(GamePackage.Managed.Parse(managed)));
+                string native = G($"{n++}", GalaxiaNative.PackageFormat(text));
+                Assert.Equal(native, GalaxiaNative.PackageFormat(native));
             }
         }
 
         [Fact]
-        public void A_manifest_is_refused_alike_both_ways_with_the_same_words()
+        public void A_manifest_is_refused_as_the_csharp_refused_it_with_the_same_words()
         {
             int n = 0;
             foreach (string text in Refused())
             {
-                PackageRefusedException managed = Assert.Throws<PackageRefusedException>(() => GamePackage.Managed.Parse(text));
                 PackageRefusedException native = Assert.Throws<PackageRefusedException>(() => GalaxiaNative.PackageFormat(text));
-                Assert.True(managed.Newer == native.Newer, text);
-                // A text that is not JSON is refused by each reader in its own words; every other refusal is worded alike.
-                if (managed.Message.StartsWith("the manifest is not JSON", StringComparison.Ordinal)) Assert.StartsWith("the manifest is not JSON", native.Message);
-                else Assert.True(managed.Message == native.Message, $"{text}\n  C#:   {managed.Message}\n  Rust: {native.Message}");
-                n++;
+                // A text that is not JSON was refused by each reader in its own words; every other refusal was worded alike.
+                const string NotJson = "the manifest is not JSON";
+                G($"{n++}", $"newer {native.Newer}: {(native.Message.StartsWith(NotJson, StringComparison.Ordinal) ? NotJson : native.Message)}");
             }
             Assert.True(n > 60);
         }
 
         [Fact]
-        public void A_manifest_is_written_and_read_back_to_the_same_bytes_both_ways()
+        public void A_manifest_is_written_and_read_back_to_the_bytes_the_csharp_wrote()
         {
             int n = 0;
             foreach (string text in Accepted())
             {
-                string managedFile = At("packages", $"managed {n}", "package.json"), nativeFile = At("packages", $"native {n++}", "package.json");
-                var document = GamePackage.Managed.Parse(text);
-                Assert.True(AtomicFile.Managed.Write(managedFile, new UTF8Encoding(false).GetBytes(GamePackage.Managed.Format(document))));
+                string nativeFile = At("packages", $"native {n}", "package.json");
+                var document = GamePackage.Parse(text).Document;
                 Assert.True(GalaxiaNative.PackageWrite(nativeFile, document.ToJsonString()));
-                Assert.Equal(File.ReadAllBytes(managedFile), File.ReadAllBytes(nativeFile));
-                Assert.Equal(GamePackage.Managed.Format(GamePackage.Managed.Parse(File.ReadAllText(nativeFile))), GalaxiaNative.PackageFormat(GalaxiaNative.PackageRead(managedFile)));
+                string written = G($"{n++}", File.ReadAllText(nativeFile));
+                Assert.Equal(written, GalaxiaNative.PackageFormat(GalaxiaNative.PackageRead(nativeFile)));
             }
             string blocked = Put(At("packages", "a file"));
-            Assert.False(GalaxiaNative.PackageWrite(Path.Combine(blocked, "package.json"), GamePackage.Managed.Parse(Accepted().Skip(1).First()).ToJsonString()));
-            Assert.Single(Reported());
-            Assert.False(AtomicFile.Managed.Write(Path.Combine(blocked, "package.json"), new byte[1]));
+            Assert.False(GalaxiaNative.PackageWrite(Path.Combine(blocked, "package.json"), GamePackage.Parse(Accepted().Skip(1).First()).Document.ToJsonString()));
             Assert.Single(Reported());
             foreach (string missing in new[] { At("packages", "absent.json"), At("packages", "no", "folder", "package.json") })
-            {
-                Exception managed = Assert.ThrowsAny<Exception>(() => GamePackage.Managed.Parse(File.ReadAllText(missing)));
-                Exception native = Assert.ThrowsAny<Exception>(() => GalaxiaNative.PackageRead(missing));
-                Assert.True(managed.GetType() == native.GetType(), $"{missing}: {managed.GetType().Name} and {native.GetType().Name}");
-            }
+                G(missing, Assert.ThrowsAny<Exception>(() => GalaxiaNative.PackageRead(missing)).GetType().Name);
         }
     }
 }

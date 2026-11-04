@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.Galaxia
 
         // Every file of the library: its path, size, modification time and MD5.
         private string Listing() => string.Join("\n", Directory.EnumerateFiles(_library, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)
-            .Select(f => $"{f} {new FileInfo(f).Length} {File.GetLastWriteTimeUtc(f).Ticks} {RomHash.Managed.Md5(f)}"));
+            .Select(f => $"{f} {new FileInfo(f).Length} {File.GetLastWriteTimeUtc(f).Ticks} {Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(File.ReadAllBytes(f)))}"));
 
         private static List<JsonElement> Run(string request)
         {

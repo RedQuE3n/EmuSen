@@ -14,7 +14,7 @@ namespace EmuSen.Galaxia.Models
         // The no-filter choice; CoreCatalog re-exports this so a UI has one spelling.
         public const string AllConsoles = "All consoles";
 
-        // What the value was defaulted to while nothing read it - see Upgraded() below.
+        // What the value was defaulted to while nothing read it, which the library upgrades - see EmuSen_Multicore.md §10.3.
         public const string LegacySelectedCoreDefault = "SNES (Venus)";
 
         public string SelectedCore { get; set; } = AllConsoles;
@@ -176,26 +176,9 @@ namespace EmuSen.Galaxia.Models
 
         public void Save() => File.Save(this);
 
-        public static AppSettings Load() => GalaxiaNative.Active ? LoadNative() : Upgraded(File.Load(() => new AppSettings()));
+        public static AppSettings Load() => LoadNative();
 
         // The file read, bound and upgraded by the library, or a new instance it made and upgraded - see EmuSen_RustPlatform.md §11.2.
         internal static AppSettings LoadNative() => File.LoadNative(upgrade: true) ?? ConfigFile<AppSettings>.NewNative(upgrade: true);
-
-        // The C# rule, named so that a test can ask it whichever way the switch is set.
-        internal static AppSettings LoadManaged() => Upgraded(File.LoadManaged() ?? new AppSettings());
-
-        // A stored legacy default is not a choice - see EmuSen_Multicore.md §10.3.
-        private static AppSettings Upgraded(AppSettings settings)
-        {
-            // The old four-kind default stored by every save is no choice: it becomes the nine (EmuSen_LibraryTools.md §9.7).
-            if (!settings.ScrapeKindsUpgraded && settings is { ScrapeCovers: true, ScrapeScreenshots: true, ScrapeMarquees: true, ScrapeMiximages: true, ScrapeTitleScreens: false, ScrapeBackCovers: false, Scrape3DBoxes: false, ScrapePhysicalMedia: false, ScrapeFanArt: false })
-                settings.ScrapeTitleScreens = settings.ScrapeBackCovers = settings.Scrape3DBoxes = settings.ScrapePhysicalMedia = settings.ScrapeFanArt = true;
-            settings.ScrapeKindsUpgraded = true;
-            if (!settings.SelectedCoreUpgraded && settings.SelectedCore == LegacySelectedCoreDefault) settings.SelectedCore = AllConsoles;
-            settings.SelectedCoreUpgraded = true;
-            // A stored false was the old default every save wrote, so it is no choice; the failover keeps its new default either way and the old key goes - see §4.60.
-            settings.OnlineCovers = null;
-            return settings;
-        }
     }
 }

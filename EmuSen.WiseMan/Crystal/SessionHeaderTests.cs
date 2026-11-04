@@ -14,7 +14,7 @@ namespace EmuSen.WiseMan.Crystal
     // emusen_session.h is the service's machine-checked half; these hold the C# mirror and the provider to it - see EmuSen_DianaSh.md §13.6.
     public class SessionHeaderTests
     {
-        private static string Repo => ConfigRoot.Managed.Directory;
+        private static string Repo => ConfigRoot.Directory;
         private static string HeaderPath => Path.Combine(Repo, "EmuSen.Crystal", "include", "emusen_session.h");
         private static string Header => File.ReadAllText(HeaderPath);
 

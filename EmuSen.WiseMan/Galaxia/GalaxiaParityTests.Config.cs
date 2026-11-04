@@ -456,7 +456,7 @@ namespace EmuSen.WiseMan.Galaxia
         {
             var answers = new List<string>();
             var said = new List<List<string>>();
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 string root = At(side + "-" + name);
                 Directory.CreateDirectory(root);
@@ -471,14 +471,12 @@ namespace EmuSen.WiseMan.Galaxia
                 answers.Add($"{shown} | error {(config.LastLoadError is null ? "none" : "said")} | {string.Join(" ; ", Listing(root).Select(JustWritten))} | folders {folders}");
                 said.Add(Reported().Select(m => m.Replace(root, "<root>")).ToList());
             }
-            Assert.True(answers[0] == answers[1], $"{name}:\n  C#: {answers[0]}\n  library: {answers[1]}");
-            Assert.True(said[0].Count == said[1].Count, $"{name}: C# said {said[0].Count} things and the library {said[1].Count}");
-            foreach ((string managed, string native) in said[0].Zip(said[1]))
+            G($"{typeof(T).Name} {name}", answers[0]);
+            // The frame is Galaxia's and exact; the words between were each implementation's own.
+            G($"{typeof(T).Name} {name} said", said[0].Select(native => native[..native.IndexOf(": ", StringComparison.Ordinal)]));
+            foreach (string native in said[0])
             {
-                // The frame is Galaxia's and exact; the words between are each implementation's own.
-                Assert.StartsWith("<root>" + Path.DirectorySeparatorChar, managed);
-                Assert.Equal(managed[..managed.IndexOf(": ", StringComparison.Ordinal)], native[..native.IndexOf(": ", StringComparison.Ordinal)]);
-                Assert.EndsWith(" Falling back to defaults.", managed);
+                Assert.StartsWith("<root>" + Path.DirectorySeparatorChar, native);
                 Assert.EndsWith(" Falling back to defaults.", native);
             }
         }
@@ -490,9 +488,9 @@ namespace EmuSen.WiseMan.Galaxia
             return at > 0 && long.TryParse(line[(at + 3)..], out long ticks) && ticks > DateTime.UtcNow.AddMinutes(-10).Ticks ? line[..at] + " | just written" : line;
         }
 
-        private static T? LoadSide<T>(ConfigFile<T> file, bool native) where T : class => native ? file.LoadNative(upgrade: false) : file.LoadManaged();
+        private static T? LoadSide<T>(ConfigFile<T> file, bool native) where T : class => file.Load();
 
-        private static bool SaveSide<T>(ConfigFile<T> file, bool native, T value) where T : class => native ? file.SaveNative(value) : file.SaveManaged(value);
+        private static bool SaveSide<T>(ConfigFile<T> file, bool native, T value) where T : class => file.Save(value);
 
         private void FileScenarios<T>(Func<Random, T> make, string good, string bad, T? unwritable = null) where T : class
         {
@@ -538,15 +536,16 @@ namespace EmuSen.WiseMan.Galaxia
             // What cannot be serialized is not saved, and its folder is made all the same.
             if (unwritable is not null) FileBothWays<T>("saved what cannot be written", _ => { }, (file, native) => SaveSide(file, native, unwritable), category: "group");
 
-            FileBothWays<T>("deleted", root => Put_(root, etc, "settings.json", good), (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
-            FileBothWays<T>("deleted when absent", root => Directory.CreateDirectory(Path.Combine(root, etc)), (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
-            FileBothWays<T>("deleted with no folder", _ => { }, (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
-            FileBothWays<T>("deleted when a folder", root => Directory.CreateDirectory(Path.Combine(root, etc, "settings.json")), (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
+            FileBothWays<T>("deleted", root => Put_(root, etc, "settings.json", good), (file, native) => file.Delete());
+            FileBothWays<T>("deleted when absent", root => Directory.CreateDirectory(Path.Combine(root, etc)), (file, native) => file.Delete());
+            FileBothWays<T>("deleted with no folder", _ => { }, (file, native) => file.Delete());
+            FileBothWays<T>("deleted when a folder", root => Directory.CreateDirectory(Path.Combine(root, etc, "settings.json")), (file, native) => file.Delete());
         }
 
         [Fact]
-        public void A_models_file_is_loaded_saved_migrated_and_deleted_the_same_both_ways()
+        public void A_models_file_is_loaded_saved_migrated_and_deleted_as_the_csharp_did()
         {
+            _case = nameof(A_models_file_is_loaded_saved_migrated_and_deleted_as_the_csharp_did);
             FileScenarios(random => (AudioConfig)Random_(typeof(AudioConfig), random, 0, false)!, "{ \"SampleRate\": 44100, // by hand\n \"mastervolume\": 0.8, }", "{\"SampleRate\":\"fast\"}",
                 new AudioConfig { RateControlMaxDeviation = double.NaN });
             FileScenarios(random => (AppSettings)Random_(typeof(AppSettings), random, 0, false)!, "{\"SelectedCore\":\"SNES (Venus)\",\"OnlineCovers\":false,\"BigPicture\":{\"/themes/é\":{\"Variant\":\"dark\"}}}", "{\"Volume\":null}", new AppSettings { StickDeadzone = double.PositiveInfinity });
@@ -557,6 +556,7 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void A_file_whose_type_is_a_frontends_goes_through_the_same_file_rules()
         {
+            _case = nameof(A_file_whose_type_is_a_frontends_goes_through_the_same_file_rules);
             FileScenarios(random => new Dictionary<string, Dictionary<string, int>> { ["NES"] = new() { ["Up"] = random.Next(100), ["é<>"] = -1 }, ["SNES Player 2"] = new() },
                 "{\"NES\":{\"Up\":38,/* a key */\"B\":90,},}", "{\"NES\":{\"Up\":\"DPadUpp\"}}");
 
@@ -571,7 +571,7 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void Settings_are_upgraded_the_same_way_whether_read_or_made()
+        public void Settings_are_upgraded_as_the_csharp_upgraded_them_whether_read_or_made()
         {
             (string Name, string? File)[] cases =
             {
@@ -581,26 +581,19 @@ namespace EmuSen.WiseMan.Galaxia
             };
             foreach ((string name, string? file) in cases)
             {
-                var loaded = new List<string>();
-                var said = new List<int>();
-                foreach (string side in new[] { "managed", "native" })
-                {
-                    Side(side + "-upgrade-" + name);
-                    if (file is not null) Put(Path.Combine(ConfigStore.OverrideDirectory!, "appsettings.json"), file);
-                    loaded.Add(Json(side == "native" ? AppSettings.LoadNative() : AppSettings.LoadManaged()));
-                    said.Add(Reported().Count);
-                }
-                Assert.True(loaded[0] == loaded[1], $"{name}: {FirstDifference(loaded[0], loaded[1])}");
-                Assert.True(said[0] == said[1], $"{name}: {said[0]} and {said[1]} things said");
-                Assert.Contains("\"SelectedCoreUpgraded\": true", loaded[1]);
-                Assert.DoesNotContain("OnlineCovers", loaded[1]);
+                Side("native-upgrade-" + name);
+                if (file is not null) Put(Path.Combine(ConfigStore.OverrideDirectory!, "appsettings.json"), file);
+                string loaded = G(name, Json(AppSettings.LoadNative()));
+                G(name + " said", Reported().Count);
+                Assert.Contains("\"SelectedCoreUpgraded\": true", loaded);
+                Assert.DoesNotContain("OnlineCovers", loaded);
             }
             Assert.Equal(Json(new AudioConfig()), Json(ConfigFile<AudioConfig>.NewNative(upgrade: false)));
             Assert.Equal(Json(new GraphicsConfig()), Json(ConfigFile<GraphicsConfig>.NewNative(upgrade: false)));
         }
 
         [Fact]
-        public void A_cheat_list_goes_to_any_path_and_the_lists_are_named_the_same_both_ways()
+        public void A_cheat_list_goes_to_any_path_and_the_lists_are_named_as_the_csharp_named_them()
         {
             var random = new Random(31);
             var lists = Enumerable.Range(0, 12).Select(_ => (CheatFile)Random_(typeof(CheatFile), random, 0, false)!).ToList();
@@ -610,34 +603,28 @@ namespace EmuSen.WiseMan.Galaxia
             {
                 string Path_(string side) => At(side, "exports", $"list {i} é", "deep", "mine.json");
                 string OnDisk(string side) => File.Exists(Path_(side)) ? File.ReadAllText(Path_(side)) : Directory.Exists(Path.GetDirectoryName(Path_(side))) ? "no file, its folder made" : "nothing";
-                bool savedManaged = CheatFile.Managed.SaveTo(Path_("managed"), lists[i]), savedNative = CheatFile.SaveToNative(Path_("native"), lists[i]);
-                Assert.True(savedManaged == savedNative, $"list {i}: saved {savedManaged} and {savedNative}");
-                Assert.True(OnDisk("managed") == OnDisk("native"), $"list {i}: {FirstDifference(OnDisk("managed"), OnDisk("native"))}");
-                // Each reads what the other wrote, and what it wrote itself.
-                foreach (string side in new[] { "managed", "native" })
-                    Assert.True(Json(CheatFile.Managed.LoadFrom(Path_(side))) == Json(CheatFile.LoadFromNative(Path_(side))), $"list {i} read from {side}");
+                G($"list {i} saved", CheatFile.SaveToNative(Path_("native"), lists[i]));
+                G($"list {i} on disk", OnDisk("native"));
+                G($"list {i} read back", Json(CheatFile.LoadFromNative(Path_("native"))));
             }
             Assert.Equal("no file, its folder made", File.Exists(At("native", "exports", $"list {lists.Count - 2} é", "deep", "mine.json")) ? "a file" : Directory.Exists(At("native", "exports", $"list {lists.Count - 2} é", "deep")) ? "no file, its folder made" : "nothing");
 
             foreach (string unreadable in new[] { At("absent.json"), _temp, "" })
-            {
-                Assert.Null(CheatFile.Managed.LoadFrom(unreadable));
                 Assert.Null(CheatFile.LoadFromNative(unreadable));
-            }
-            Assert.Equal(CheatFile.Managed.SaveTo("", lists[0]), CheatFile.SaveToNative("", lists[0]));
+            G("saved to no path", CheatFile.SaveToNative("", lists[0]));
             // A path that is a folder: written straight, so nothing is left beside it, where a temp file and a rename would strand one.
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 Directory.CreateDirectory(At(side, "taken", "list.json"));
-                Assert.False(side == "native" ? CheatFile.SaveToNative(At(side, "taken", "list.json"), lists[0]) : CheatFile.Managed.SaveTo(At(side, "taken", "list.json"), lists[0]));
+                Assert.False(CheatFile.SaveToNative(At(side, "taken", "list.json"), lists[0]));
                 Assert.Equal(new[] { At(side, "taken", "list.json") }, Directory.GetFileSystemEntries(At(side, "taken")));
             }
 
             string[] names = { "zelda", "Mario", "alttp", "ALTTP2", "_x", "é", "É2", "a.b", "", "Z", "[bracket", "9lives", "日本", "😀", "~tilde", "a b", "A", "a" };
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 Side(side + "-names");
-                Assert.Empty(side == "native" ? CheatFile.ListNamesNative() : CheatFile.Managed.ListNames());
+                Assert.Empty(CheatFile.ListNamesNative());
                 string folder = Path.Combine(ConfigStore.OverrideDirectory!, CheatFile.CategoryDirName);
                 foreach (string name in names) Put(Path.Combine(folder, name + ".json"), "{}");
                 Put(Path.Combine(folder, "notes.txt"), "x");
@@ -649,27 +636,22 @@ namespace EmuSen.WiseMan.Galaxia
                     Directory.CreateSymbolicLink(Path.Combine(folder, "folder-link.json"), At("nowhere"));
                 }
             }
-            Side("managed-names");
-            IReadOnlyList<string> managed = CheatFile.Managed.ListNames();
             Side("native-names");
-            IReadOnlyList<string> native = CheatFile.ListNamesNative();
-            Assert.Equal(managed, native);
+            IReadOnlyList<string> native = G("names", CheatFile.ListNamesNative());
             Assert.Contains("dangling", native);
             // A dangling link made for a folder: a file to Unix's listing, a folder to Windows'.
             if (Links.Allowed) Assert.Equal(!OperatingSystem.IsWindows(), native.Contains("folder-link"));
             Assert.DoesNotContain("a folder", native);
             Assert.True(native.Count >= names.Length - 2, string.Join(",", native));
 
-            var different = new List<string>();
             for (int c = 0; c < 0x3000; c++)
             {
                 if (char.IsSurrogate((char)c)) continue;
                 foreach (string name in new[] { ((char)c).ToString(), "a" + (char)c + "b" })
-                    if (CheatFile.Managed.IsValidName(name) != GalaxiaNative.CheatNameValid(name)) different.Add($"U+{c:X4}");
+                    GSweep("valid", $"U+{c:X4} [{name}]", GalaxiaNative.CheatNameValid(name));
             }
             foreach (string? name in new[] { null, "", " ", ".", "..", "...", "a/b", "Zelda (U) [!]", "\t", "con", "a\\b" })
-                if (CheatFile.Managed.IsValidName(name!) != GalaxiaNative.CheatNameValid(name)) different.Add($"'{name}'");
-            AssertNone(different, "names");
+                G($"valid '{name}'", GalaxiaNative.CheatNameValid(name));
         }
 
         private static string? Listed(GameCheats? list) => list is null ? null : $"{list.Category} | {list.Name}";
@@ -678,14 +660,7 @@ namespace EmuSen.WiseMan.Galaxia
         [Fact]
         public void A_games_list_is_named_as_the_csharp_names_it()
         {
-            var different = new List<string>();
-            int asked = 0;
-            void Compare(string? console, string? romPath)
-            {
-                asked++;
-                string? managed = Listed(GameCheats.Managed.For(console, romPath)), native = Listed(GameCheats.ForNative(console, romPath));
-                if (managed != native) different.Add($"'{console}' '{romPath}': {managed ?? "none"} and {native ?? "none"}");
-            }
+            void Compare(string? console, string? romPath) => GSweep("lists", $"'{console}' '{romPath}'", Listed(GameCheats.ForNative(console, romPath)), test: nameof(A_games_list_is_named_as_the_csharp_names_it));
 
             string?[] consoles = { null, "", " ", "\t", "\u2003", "\u001F", ".", "..", "...", "SNES", " SNES ", "Game Boy", "a/b", "a\\b", "a:b", "Sega CD/32X", "\0", "é", "日本", "😀", "con", "a*b?" };
             string?[] paths =
@@ -711,21 +686,19 @@ namespace EmuSen.WiseMan.Galaxia
                 Compare("SNES", one + ".smc");
                 Compare("SNES", "/roms/a" + one + "b.c" + one + "d");
             }
-            AssertNone(different, $"of {asked} lists");
-
-            Assert.Equal($"{Path.Combine("cheats", "SNES")} | Gamma", Listed(GameCheats.Managed.For("SNES", "/roms/Gamma.smc")));
+            Assert.Equal($"{Path.Combine("cheats", "SNES")} | Gamma", Listed(GameCheats.ForNative("SNES", "/roms/Gamma.smc")));
             Assert.Equal("cheats | Gamma", Listed(GameCheats.ForNative(" ", "Gamma")));
             Assert.Null(GameCheats.ForNative("SNES", ".."));
         }
 
         private static string? WriteSide(bool native, DateTime now, string level, string area, string message, Exception? fault, string? context) =>
-            native ? ErrorLog.WriteNative(now, level, area, message, fault, context) : ErrorLog.Managed.Write(now, level, area, message, fault, context);
+            ErrorLog.WriteNative(now, level, area, message, fault, context);
 
         // One sequence of log calls run on each side in its own folder; the answers and the folder are compared.
         private void LogBothWays(string name, Action<string> arrange, Func<bool, string, object?> act)
         {
             var results = new List<string>();
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 string folder = At(side + "-log-" + name, "Logs");
                 ErrorLog.DirectoryOverride = folder;
@@ -735,14 +708,21 @@ namespace EmuSen.WiseMan.Galaxia
                 string listing = !Directory.Exists(folder) ? "no folder" : string.Join(" ; ", Directory.EnumerateFiles(folder).Select(f => $"{Path.GetFileName(f)}={Held(f)}").OrderBy(l => l, StringComparer.Ordinal));
                 results.Add($"{(answer as string)?.Replace(folder, "<logs>") ?? answer ?? "null"} | {listing}");
             }
-            Assert.True(results[0] == results[1], $"{name}:\n  C#: {results[0]}\n  library: {results[1]}");
+            G(name, results[0], nameof(An_error_is_logged_as_the_same_bytes_in_the_same_file_both_ways));
         }
 
         // A log file by what it holds, briefly; a link that names nothing holds nothing.
         private static string Held(string file)
         {
-            try { byte[] bytes = File.ReadAllBytes(file); return $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16]}/{bytes.Length}"; }
+            try { byte[] bytes = Unplaced(File.ReadAllBytes(file)); return $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16]}/{bytes.Length}"; }
             catch (FileNotFoundException) { return "a dangling link"; }
+        }
+
+        // A log's bytes with what a stack trace says of the build, the checkout's folder and a source line, written by name, so that the golden holds in any checkout.
+        private static byte[] Unplaced(byte[] bytes)
+        {
+            string text = Encoding.Latin1.GetString(bytes).Replace(Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(Repo)), "<repo>");
+            return Encoding.Latin1.GetBytes(System.Text.RegularExpressions.Regex.Replace(text, @":line \d+", ":line <n>"));
         }
 
         [Fact]
@@ -800,11 +780,11 @@ namespace EmuSen.WiseMan.Galaxia
 
             LogBothWays("a file where the folder should be", folder => Put(folder, "a file"), (native, _) => WriteSide(native, now, "ERROR", "test", "nowhere to go", null, null));
             LogBothWays("the day's file is a folder", folder => Directory.CreateDirectory(Path.Combine(folder, $"emusen_{now:yyyyMMdd}.log")), (native, _) => WriteSide(native, now, "ERROR", "test", "m", null, null));
-            LogBothWays("the path for a day", _ => { }, (native, folder) => native ? GalaxiaNative.LogPath(GalaxiaNative.LogRoot(folder), $"{now:yyyyMMdd}") : ErrorLog.Managed.PathFor(now));
+            LogBothWays("the path for a day", _ => { }, (native, folder) => GalaxiaNative.LogPath(GalaxiaNative.LogRoot(folder), $"{now:yyyyMMdd}"));
         }
 
         [Fact]
-        public void The_log_folder_is_chosen_the_same_way_both_ways()
+        public void The_log_folder_is_chosen_as_the_csharp_chose_it()
         {
             ErrorLog.DirectoryOverride = null;
             Put(At("blocker"), "a file");
@@ -815,60 +795,49 @@ namespace EmuSen.WiseMan.Galaxia
             };
             foreach ((string name, string? settings) in cases)
             {
-                var roots = new List<string>();
-                var said = new List<int>();
-                foreach (string side in new[] { "managed", "native" })
-                {
-                    Side(side + "-root-" + name);
-                    if (settings is not null) Put(Path.Combine(ConfigStore.OverrideDirectory!, "appsettings.json"), settings);
-                    roots.Add(side == "native" ? GalaxiaNative.LogRoot(null) : ErrorLog.Managed.Root());
-                    said.Add(Reported().Count);
-                }
-                Assert.True(roots[0] == roots[1], $"{name}: {roots[0]} and {roots[1]}");
-                Assert.True(said[0] == said[1], $"{name}: {said[0]} and {said[1]} things said");
+                Side("native-root-" + name);
+                if (settings is not null) Put(Path.Combine(ConfigStore.OverrideDirectory!, "appsettings.json"), settings);
+                G(name, GalaxiaNative.LogRoot(null));
+                G(name + " said", Reported().Count);
             }
             Assert.True(Directory.Exists(At("made", "Logs é")));
-            Assert.Equal(ErrorLog.Managed.DefaultRoot, GalaxiaNative.Directory(GalaxiaDirectory.LogDefault));
+            G("default", GalaxiaNative.Directory(GalaxiaDirectory.LogDefault));
             Assert.Equal(At("given"), GalaxiaNative.LogRoot(At("given")));
 
             foreach (string? directory in new[] { null, "", " ", "\t", At("usable", "a", "b"), At("blocker", "under"), At("blocker") })
             {
-                bool managed = ErrorLog.Managed.Usable(directory);
+                G($"usable [{directory}]", GalaxiaNative.LogUsable(directory));
                 if (directory is not null && Directory.Exists(At("usable"))) Directory.Delete(At("usable"), recursive: true);
-                Assert.True(managed == GalaxiaNative.LogUsable(directory), $"Usable({directory})");
             }
         }
 
         [Fact]
-        public void A_suggestion_is_the_same_sentence_both_ways()
+        public void A_suggestion_is_the_sentence_the_csharp_gave()
         {
             string[] alphabet = { "a", "b", "c", "A", "B", "e", "t", "h", "é", "É", "ß", "İ", "ı", "K", "\u212a", "σ", "ς", "Σ", "😀", "\ud801\udc00", "\ud801\udc28", "1", "_", "-", " ", "日", "ǅ", "ǆ" };
             var random = new Random(77);
             string Word(int most) => string.Concat(Enumerable.Range(0, random.Next(0, most)).Select(_ => alphabet[random.Next(random.Next(3) == 0 ? alphabet.Length : 8)]));
-            var different = new List<string>();
             for (int i = 0; i < 6000; i++)
             {
                 string typed = Word(9);
                 string[] candidates = Enumerable.Range(0, random.Next(0, 9)).Select(_ => random.Next(4) == 0 ? Damaged(typed.Length == 0 ? "x" : typed, random) : Word(9)).Where(c => GalaxiaNative.Crosses(c, listed: true)).ToArray();
                 int max = random.Next(-1, 5);
                 string a = Word(9), b = random.Next(3) == 0 ? a.ToUpperInvariant() : Word(9);
-                if (Suggestion.Managed.Distance(a, b) != GalaxiaNative.SuggestDistance(a, b)) different.Add($"distance '{a}' '{b}'");
-                string managed = Suggestion.Managed.Hint(typed, candidates, max), native = GalaxiaNative.SuggestHint(typed, candidates, max);
-                if (managed != native) different.Add($"hint '{typed}' among [{string.Join("|", candidates)}] max {max}: [{managed}] and [{native}]");
-                if (!Suggestion.Managed.Nearest(typed, candidates, max).SequenceEqual(GalaxiaNative.SuggestNearest(typed, candidates, max))) different.Add($"nearest '{typed}' among [{string.Join("|", candidates)}] max {max}");
+                GSweep("random", $"distance '{a}' '{b}'", GalaxiaNative.SuggestDistance(a, b));
+                GSweep("random", $"hint '{typed}' among [{string.Join("|", candidates)}] max {max}", GalaxiaNative.SuggestHint(typed, candidates, max));
+                GSweep("random", $"nearest '{typed}' among [{string.Join("|", candidates)}] max {max}", GalaxiaNative.SuggestNearest(typed, candidates, max));
             }
             for (int c = 1; c < 0x10000; c++)
             {
                 if (char.IsSurrogate((char)c)) continue;
                 string text = ((char)c).ToString();
                 foreach (string other in new[] { text.ToUpperInvariant(), text.ToLowerInvariant(), "a", "i", "I", "k", "K", "s", "S" })
-                    if (Suggestion.Managed.Distance(text, other) != GalaxiaNative.SuggestDistance(text, other)) different.Add($"distance U+{c:X4} '{other}'");
+                    GSweep("every character", $"distance U+{c:X4} '{other}'", GalaxiaNative.SuggestDistance(text, other), size: 1000);
             }
-            AssertNone(different, "suggestions");
 
             string[] commands = { "cheat", "cat", "clear", "cls" };
             Assert.Equal(" Did you mean 'cheat'?", GalaxiaNative.SuggestHint("chaet", commands, 2));
-            Assert.Equal(Suggestion.Managed.Hint("cl", commands, 2), GalaxiaNative.SuggestHint("cl", commands, 2));
+            G("cl", GalaxiaNative.SuggestHint("cl", commands, 2));
         }
 
         [Fact]
@@ -879,21 +848,18 @@ namespace EmuSen.WiseMan.Galaxia
                 .Where(c => !(OperatingSystem.IsMacOS() && c == "\uffff")).ToArray();
             var random = new Random(5);
             var different = new List<string>();
-            foreach (string side in new[] { "managed", "native" }) Directory.CreateDirectory(At(side + "-order", "etc", CheatFile.CategoryDirName));
+            string folder = At("native-order", "etc", CheatFile.CategoryDirName);
+            Directory.CreateDirectory(folder);
             for (int round = 0; round < 60; round++)
             {
                 var names = Enumerable.Range(0, random.Next(2, 14)).Select(_ => string.Concat(Enumerable.Range(0, random.Next(1, 5)).Select(_ => alphabet[random.Next(alphabet.Length)]))).Distinct().ToList();
-                var listed = new List<IReadOnlyList<string>>();
-                foreach (string side in new[] { "managed", "native" })
-                {
-                    string folder = At(side + "-order", "etc", CheatFile.CategoryDirName);
-                    foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
-                    foreach (string name in names) File.WriteAllText(Path.Combine(folder, name + ".json"), "{}");
-                    ConfigStore.OverrideDirectory = At(side + "-order", "etc");
-                    listed.Add(side == "native" ? CheatFile.ListNamesNative() : CheatFile.Managed.ListNames());
-                }
-                // Names that differ only by case sort by the folder's own order, which two folders need not share.
-                if (!listed[0].SequenceEqual(listed[1], StringComparer.OrdinalIgnoreCase)) different.Add($"[{string.Join("|", listed[0])}] and [{string.Join("|", listed[1])}]");
+                foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
+                foreach (string name in names) File.WriteAllText(Path.Combine(folder, name + ".json"), "{}");
+                ConfigStore.OverrideDirectory = At("native-order", "etc");
+                IReadOnlyList<string> listed = CheatFile.ListNamesNative();
+                List<string> ordered = Directory.GetFiles(folder, "*.json").Select(Path.GetFileNameWithoutExtension).Select(n => n!).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
+                // Names that differ only by case sort by the folder's own order, which .NET's sort need not share.
+                if (!listed.SequenceEqual(ordered, StringComparer.OrdinalIgnoreCase)) different.Add($"[{string.Join("|", listed)}] and [{string.Join("|", ordered)}]");
             }
             AssertNone(different, "orders");
         }

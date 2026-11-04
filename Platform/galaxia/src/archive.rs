@@ -1,10 +1,12 @@
 //! The archives a game may be packed in, the C# `ArchiveImages`' reading: a zip's central directory, the entry play
-//! opens, and an entry's first bytes inflated without unpacking. Only a plain zip of stored and deflated entries is read;
-//! `emusen-cheats`' installer reads as .NET does, through `dotnet_zip` (EmuSen_Backend.md §40.1). See §28.2. Since game
+//! opens, and an entry's first bytes inflated without unpacking. Only a plain zip of stored and deflated entries is read,
+//! its end record and directory read by `dotnet_zip`, the one reader of both, which `emusen-cheats`' installer reads
+//! whole as .NET does (EmuSen_Backend.md §40.1, §40.2). See §28.2. Since game
 //! packages' step 7 the same plain zip is also written, with each file's time to the tick, and an entry is copied out
 //! whole and checked against its CRC-32 (EmuSen_GamePackages.md §19). Written from PKWARE's APPNOTE.TXT, never from an
 //! archiver's source.
 
+use crate::dotnet_zip::{self, u16_at, u32_at};
 use crate::image_sets;
 use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use std::io::{Read, Seek, SeekFrom};
@@ -44,21 +46,12 @@ pub struct End {
     pub total: usize,
 }
 
-fn u16_at(b: &[u8], at: usize) -> Option<u16> {
-    b.get(at..at + 2).map(|s| u16::from_le_bytes([s[0], s[1]]))
-}
-
-fn u32_at(b: &[u8], at: usize) -> Option<u32> {
-    b.get(at..at + 4).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
-}
 
 /// The end record in the last bytes of an archive, `tail`, which begin `tail_offset` bytes in; a form not read here
 /// is refused with why.
 pub fn end_of(tail: &[u8]) -> Result<End, String> {
-    let lowest = tail.len().saturating_sub(22 + 0xFFFF);
-    let end = (lowest..=tail.len().saturating_sub(22)).rev().find(|&at| u32_at(tail, at) == Some(0x0605_4B50));
-    let Some(end) = end.filter(|_| tail.len() >= 22) else { return Err("no end of central directory".into()) };
-    if end >= 20 && u32_at(tail, end - 20) == Some(0x0706_4B50) {
+    let Some(end) = dotnet_zip::find_end(tail) else { return Err("no end of central directory".into()) };
+    if end >= 20 && u32_at(tail, end - 20) == Some(dotnet_zip::ZIP64_LOCATOR) {
         return Err("a Zip64 archive".into());
     }
     let (disk, cd_disk) = (u16_at(tail, end + 4).unwrap_or(1), u16_at(tail, end + 6).unwrap_or(1));
@@ -70,30 +63,23 @@ pub fn end_of(tail: &[u8]) -> Result<End, String> {
     Ok(End { start: start as u64, size: size as u64, total: total as usize })
 }
 
-/// The entries of a central directory that begins `at` bytes into `bytes`, `total` of them by the end record.
+/// The entries of a central directory that begins `at` bytes into `bytes`, `total` of them by the end record; each read
+/// by `dotnet_zip`, and refused here where it is Zip64, spanned, encrypted, of another method or named with a NUL.
 pub fn directory(bytes: &[u8], mut at: usize, total: usize) -> Result<Vec<ZipEntry>, String> {
     let mut list = Vec::new();
-    while u32_at(bytes, at) == Some(0x0201_4B50) {
-        let h = |o: usize| u16_at(bytes, at + o).ok_or_else(|| "a short header".to_string());
-        let w = |o: usize| u32_at(bytes, at + o).ok_or_else(|| "a short header".to_string());
-        let (made_by, flags, method) = (h(4)?, h(8)?, h(10)?);
-        let (dos_time, crc32) = (w(12)?, w(16)?);
-        let (compressed, length, n, m, k) = (w(20)?, w(24)?, h(28)? as usize, h(30)? as usize, h(32)? as usize);
-        let (external, offset) = (w(38)?, w(42)?);
-        if compressed == u32::MAX || length == u32::MAX || offset == u32::MAX || h(34)? != 0 {
+    while u32_at(bytes, at) == Some(dotnet_zip::CENTRAL) {
+        let e = dotnet_zip::central_entry(bytes, &mut at).ok_or("a short entry")?;
+        if e.zip64 || e.disk != 0 {
             return Err("a Zip64 or spanned entry".into());
         }
-        if flags & 1 != 0 || (method != 0 && method != 8) {
+        if e.flags & 1 != 0 || (e.method != 0 && e.method != 8) {
             return Err("an encrypted entry or a method other than stored and deflate".into());
         }
-        let Some(name) = bytes.get(at + 46..at + 46 + n) else { return Err("a short name".into()) };
-        let full_name = String::from_utf8_lossy(name).into_owned();
-        if full_name.contains('\0') {
+        if e.full_name.contains('\0') {
             return Err("a name holding a NUL".into());
         }
-        let extra = bytes.get(at + 46 + n..at + 46 + n + m).unwrap_or(&[]);
-        list.push(ZipEntry { platform: (made_by >> 8) as u8, method, dos_time, compressed: compressed as usize, length: length as u64, external, offset: offset as usize, full_name, crc32, modified: modified_of(extra) });
-        at += 46 + n + m + k;
+        let modified = modified_of(&bytes[e.extra.clone()]);
+        list.push(ZipEntry { platform: e.platform, method: e.method, dos_time: e.dos_time, compressed: e.compressed as usize, length: e.length, external: e.external, offset: e.offset as usize, full_name: e.full_name, crc32: e.crc32, modified });
     }
     if list.len() != total {
         return Err("an entry count the directory does not hold".into());
@@ -141,15 +127,7 @@ pub fn image_entry(at: &str, is_image: impl Fn(&str) -> bool) -> Result<Option<S
 pub fn read_entry(at: &str, entry: &str, length: usize) -> Result<Vec<u8>, String> {
     let entries = entries_of(at)?;
     let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| equals_ignore_case(&e.full_name, entry))).ok_or_else(|| format!("the archive holds no {entry}"))?;
-    let mut file = std::fs::File::open(at).map_err(|x| x.to_string())?;
-    let mut local = [0u8; 30];
-    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| x.to_string())?;
-    file.read_exact(&mut local).map_err(|x| x.to_string())?;
-    if u32_at(&local, 0) != Some(0x0403_4B50) {
-        return Err("a damaged local header".into());
-    }
-    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
-    file.seek(SeekFrom::Start(data)).map_err(|x| x.to_string())?;
+    let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| "a damaged local header".into()))?;
     let want = (length as u64).min(e.length) as usize;
     let raw = file.take(e.compressed as u64);
     let mut out = Vec::with_capacity(want);
@@ -187,18 +165,24 @@ fn modified_of(extra: &[u8]) -> Option<std::time::SystemTime> {
     seconds
 }
 
+/// The archive opened at an entry's bytes, past its local header; an error's words, or none for a damaged header.
+fn at_data(at: &str, e: &ZipEntry) -> Result<std::fs::File, Option<String>> {
+    let mut file = std::fs::File::open(at).map_err(|x| Some(x.to_string()))?;
+    let mut local = [0u8; 30];
+    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| Some(x.to_string()))?;
+    file.read_exact(&mut local).map_err(|x| Some(x.to_string()))?;
+    if u32_at(&local, 0) != Some(dotnet_zip::LOCAL) {
+        return Err(None);
+    }
+    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
+    file.seek(SeekFrom::Start(data)).map_err(|x| Some(x.to_string()))?;
+    Ok(file)
+}
+
 /// An entry copied out whole into `out`, inflated where deflated, and checked: its length and CRC-32 against the
 /// directory's, refused with both where they differ, so that a damaged zip is never taken for its files.
 pub fn copy_entry(at: &str, e: &ZipEntry, out: &mut dyn std::io::Write) -> Result<(), String> {
-    let mut file = std::fs::File::open(at).map_err(|x| x.to_string())?;
-    let mut local = [0u8; 30];
-    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| x.to_string())?;
-    file.read_exact(&mut local).map_err(|x| x.to_string())?;
-    if u32_at(&local, 0) != Some(0x0403_4B50) {
-        return Err(format!("{} has a damaged local header", e.full_name));
-    }
-    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
-    file.seek(SeekFrom::Start(data)).map_err(|x| x.to_string())?;
+    let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| format!("{} has a damaged local header", e.full_name)))?;
     let raw = file.take(e.compressed as u64);
     let mut reader: Box<dyn Read> = if e.method == 0 { Box::new(raw) } else { Box::new(flate2::read::DeflateDecoder::new(raw)) };
     let mut crc = crate::rom_hash::Crc32::default();
@@ -313,7 +297,7 @@ impl ZipWriter {
         let extra = time_fields(modified);
         let offset = self.at;
         let header = |crc: u32, compressed: u32, out: &mut Vec<u8>| {
-            out.extend_from_slice(&0x0403_4B50u32.to_le_bytes());
+            out.extend_from_slice(&dotnet_zip::LOCAL.to_le_bytes());
             out.extend_from_slice(&20u16.to_le_bytes());
             out.extend_from_slice(&0x0800u16.to_le_bytes());
             out.extend_from_slice(&method.to_le_bytes());
@@ -368,7 +352,7 @@ impl ZipWriter {
             return Err(format!("{name} reaches past 4 GiB, which a zip without Zip64 does not hold"));
         }
         let d = &mut self.directory;
-        d.extend_from_slice(&0x0201_4B50u32.to_le_bytes());
+        d.extend_from_slice(&dotnet_zip::CENTRAL.to_le_bytes());
         d.extend_from_slice(&((3u16 << 8) | 20).to_le_bytes());
         d.extend_from_slice(&20u16.to_le_bytes());
         d.extend_from_slice(&0x0800u16.to_le_bytes());
@@ -400,7 +384,7 @@ impl ZipWriter {
         let directory = std::mem::take(&mut self.directory);
         self.write(&directory)?;
         let mut end = Vec::with_capacity(22);
-        end.extend_from_slice(&0x0605_4B50u32.to_le_bytes());
+        end.extend_from_slice(&dotnet_zip::END.to_le_bytes());
         end.extend_from_slice(&[0, 0, 0, 0]);
         end.extend_from_slice(&(self.entries as u16).to_le_bytes());
         end.extend_from_slice(&(self.entries as u16).to_le_bytes());

@@ -3,17 +3,18 @@ using System.Text;
 
 namespace EmuSen.Galaxia.Native
 {
-    // MediumLock's calls into emusen-galaxia's medium lock, under Galaxia's switch; a text that cannot cross keeps the C# table - see EmuSen_Backend.md §15.2.
+    // MediumLock's calls into emusen-galaxia's medium lock; a lone surrogate crosses as U+FFFD - see EmuSen_Backend.md §15.2, §40.2.
     internal static unsafe class MediumLockNative
     {
         private const int Absent = -1030;
 
+        // The three exports, the library refused in words where it lacks one.
         private static readonly Lazy<(nint Take, nint Release, nint Holder)> Exports = new(() =>
-            (PlatformLibrary.Export("emusen_galaxia_medium_lock_take"), PlatformLibrary.Export("emusen_galaxia_medium_lock_release"), PlatformLibrary.Export("emusen_galaxia_medium_lock_holder")));
-
-        // Whether the library's lock is in use for these texts: Galaxia's switch chose the library, it has the lock, and each text crosses.
-        public static bool Takes(string path, string? holder) =>
-            GalaxiaNative.Takes(path, holder, listed: true) && Exports.Value.Take != 0 && Exports.Value.Release != 0 && Exports.Value.Holder != 0;
+        {
+            var found = (PlatformLibrary.Export("emusen_galaxia_medium_lock_take"), PlatformLibrary.Export("emusen_galaxia_medium_lock_release"), PlatformLibrary.Export("emusen_galaxia_medium_lock_holder"));
+            if (found.Item1 == 0 || found.Item2 == 0 || found.Item3 == 0) throw new DllNotFoundException($"{PlatformLibrary.FileName} has no medium lock ({PlatformLibrary.Report}); Galaxia has had no C# implementation since 2026-11-04.");
+            return found;
+        });
 
         public static ulong Take(string path, string holder, bool shared)
         {

@@ -108,7 +108,7 @@ namespace EmuSen.Galaxia.Native
         private readonly object _gate = new();
         private volatile int _chosen;
 
-        public PlatformSwitch(Func<string?> variable, Func<(bool Available, string Report)> load, Action<string> announce, string component = "Galaxia")
+        public PlatformSwitch(Func<string?> variable, Func<(bool Available, string Report)> load, Action<string> announce, string component)
         {
             _variable = variable;
             _load = load;
@@ -116,7 +116,7 @@ namespace EmuSen.Galaxia.Native
             _component = component;
         }
 
-        // The one line a fallback writes, to the host's sink and to the error log, which is by then on the C#.
+        // The one line a fallback writes, to the host's sink and to the error log.
         public static void Announce(string message)
         {
             ConfigDiagnostics.Report(message);
@@ -170,7 +170,7 @@ namespace EmuSen.Galaxia.Native
         }
     }
 
-    // Galaxia's half of emusen_platform, and the switch that chooses it over the C# - see EmuSen_RustPlatform.md §3.9 and §10.2.
+    // Galaxia, emusen_platform's half of it; there is no other since 2026-11-04 - see EmuSen_RustPlatform.md §3.9, §10.2 and EmuSen_Backend.md §40.2.
     internal static unsafe class GalaxiaNative
     {
         public const string Variable = "EMUSEN_GALAXIA_NATIVE";
@@ -184,20 +184,23 @@ namespace EmuSen.Galaxia.Native
         // Held while an override moves and while the library first takes the overrides, so neither side misses a change.
         internal static readonly object Gate = new();
 
-        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => (PlatformLibrary.Available, PlatformLibrary.Report), Announce);
         private static volatile bool _attached;
 
-        // State 2: the library unless the variable is 0; a library that is absent or refused leaves the C#, said once - see EmuSen_RustPlatform.md §13.
-        public static bool Active => Chosen.Active;
+        // The thread attaching the library calls in before it is attached; every other caller waits for it - see EmuSen_Backend.md §40.2.
+        [ThreadStatic] private static bool _attaching;
 
-        // The one line a fallback writes, as every component's switch writes it.
-        internal static void Announce(string message) => PlatformSwitch.Announce(message);
-
-        // The library itself, whichever the switch chose: what a parity test calls.
+        // The library itself: what a test asks before it calls.
         public static bool Ready => PlatformLibrary.Available;
 
         // Whether the library is in the process already; asking never loads it.
         public static bool Loaded => _attached;
+
+        // The library in the process before any call, loaded on the first; without it Galaxia cannot answer, and says so in words.
+        internal static void Up()
+        {
+            if (_attached || _attaching) return;
+            if (!PlatformLibrary.Available) throw new DllNotFoundException($"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.Report}); Galaxia has had no C# implementation since 2026-11-04.");
+        }
 
         // The model a C# class is, or null for a type whose vocabulary belongs to a frontend - see EmuSen_RustPlatform.md §4.1.
         public static GalaxiaModel? ModelOf(Type type) =>
@@ -289,6 +292,13 @@ namespace EmuSen.Galaxia.Native
 
         // Resolves the exports and hands the library what only the host knows; the name of a missing export, or null.
         internal static string? Attach(nint handle)
+        {
+            _attaching = true;
+            try { return Bind(handle); }
+            finally { _attaching = false; }
+        }
+
+        private static string? Bind(nint handle)
         {
             var found = new nint[Exports.Length];
             for (int i = 0; i < Exports.Length; i++)
@@ -395,10 +405,10 @@ namespace EmuSen.Galaxia.Native
             fixed (byte* p = text.Bytes) _setCrashLog(p, text.Length);
         }
 
-        // A string as the interface takes it: UTF-8 with its length, null told apart from empty - see EmuSen_RustPlatform.md §3.4.
+        // A string as the interface takes it: UTF-8 with its length, null told apart from empty, each lone surrogate as U+FFFD as .NET's own encoder writes it - see EmuSen_RustPlatform.md §3.4, §21.6.
         private readonly struct Utf8
         {
-            private static readonly UTF8Encoding Strict = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+            private static readonly UTF8Encoding Mended = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: false);
             private static readonly byte[] Empty = new byte[1];
 
             public readonly byte[]? Bytes;
@@ -406,8 +416,9 @@ namespace EmuSen.Galaxia.Native
 
             public Utf8(string? text)
             {
+                Up();
                 if (text is null) return;
-                Bytes = text.Length == 0 ? Empty : Strict.GetBytes(text);
+                Bytes = text.Length == 0 ? Empty : Mended.GetBytes(text);
                 Length = text.Length == 0 ? 0 : (nuint)Bytes.Length;
             }
         }
@@ -425,14 +436,12 @@ namespace EmuSen.Galaxia.Native
             return true;
         }
 
-        // Whether a facade hands these texts to the library: chosen, and each crosses; listed for text the library may quote back in a list - see EmuSen_RustPlatform.md §21.
-        public static bool Takes(string? a, string? b = null, bool listed = false) => Active && Crosses(a, listed) && Crosses(b, listed);
-
         private delegate long Query(byte* output, nuint length);
 
         // The length-query idiom, once: a small buffer first, so a path costs one call. Null for ABSENT.
         private static string? Text(Query query)
         {
+            Up();
             const int Small = 512;
             byte* small = stackalloc byte[Small];
             long length = query(small, Small);
@@ -447,6 +456,7 @@ namespace EmuSen.Galaxia.Native
 
         private static string? Text(Query query, long length)
         {
+            Up();
             while (true)
             {
                 byte[] large = new byte[length];
@@ -536,9 +546,10 @@ namespace EmuSen.Galaxia.Native
             return Text((o, n) => { fixed (byte* pr = r.Bytes, pe = e.Bytes) return _savePath((uint)kind, pr, r.Length, pe, e.Length, slot, o, n); })!;
         }
 
-        // Null for no file, and for one that would not read, which the library has said why.
+        // Null for no file, and for one that would not read, which the library has said why; a name holding a NUL is no file, as .NET's File.Exists has it.
         public static byte[]? FileRead(string path)
         {
+            if (path.Contains('\0')) return null;
             Utf8 file = new(path);
             fixed (byte* p = file.Bytes)
             {
@@ -557,8 +568,14 @@ namespace EmuSen.Galaxia.Native
             }
         }
 
+        // A name holding a NUL is refused before the call in one message, since the library's words come back as a list the NUL would split - see EmuSen_RustPlatform.md §21.6.
         public static bool FileWrite(string path, byte[] contents)
         {
+            if (path.Contains('\0') || contents is null)
+            {
+                ConfigDiagnostics.Report(contents is null ? $"{path}: {new ArgumentNullException("bytes").Message} The previous file is unchanged." : $"{path}: a file name cannot hold a NUL; the previous file is unchanged");
+                return false;
+            }
             Utf8 file = new(path);
             int status;
             fixed (byte* p = file.Bytes, c = contents) status = _fileWrite(p, file.Length, c, (nuint)contents.Length);

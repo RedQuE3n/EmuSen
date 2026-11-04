@@ -35,7 +35,7 @@ namespace EmuSen.Galaxia.Models
         // Null when the path gives no usable name; derived names are sanitized, not refused, because nobody typed them; a package root moves the list into the package.
         public static GameCheats? For(string? console, string? romPath, string? packageRoot = null)
         {
-            GameCheats? named = GalaxiaNative.Takes(console, romPath) ? ForNative(console, romPath) : Managed.For(console, romPath);
+            GameCheats? named = ForNative(console, romPath);
             return named is null || string.IsNullOrWhiteSpace(packageRoot) ? named : new GameCheats(named.Category, named.Name, packageRoot);
         }
 
@@ -90,22 +90,5 @@ namespace EmuSen.Galaxia.Models
 
         private static bool Same(CheatFile a, CheatFile b) =>
             JsonSerializer.Serialize(a, ConfigJson.Options) == JsonSerializer.Serialize(b, ConfigJson.Options);
-
-        // The C# rule: what the library's is held to while Galaxia's C# stands - see EmuSen_RustPlatform.md §3.9 and §20.
-        internal static class Managed
-        {
-            public static GameCheats? For(string? console, string? romPath)
-            {
-                if (string.IsNullOrEmpty(romPath)) return null;
-                string name = Sanitized(Path.GetFileNameWithoutExtension(romPath));
-                if (!CheatFile.Managed.IsValidName(name)) return null;
-                string? folder = string.IsNullOrWhiteSpace(console) ? null : Sanitized(console);
-                bool flat = folder is null || !CheatFile.Managed.IsValidName(folder);
-                return new GameCheats(flat ? CheatFile.CategoryDirName : Path.Combine(CheatFile.CategoryDirName, folder!), name);
-            }
-
-            private static string Sanitized(string text) =>
-                new(text.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c).ToArray());
-        }
     }
 }

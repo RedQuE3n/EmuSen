@@ -125,20 +125,20 @@ namespace EmuSen.Galaxia.Models
 
         // The name is typed by the player, so it is checked rather than sanitized: rewriting it would save to a file they didn't name.
         public static bool IsValidName(string name) =>
-            GalaxiaNative.Takes(name) ? GalaxiaNative.CheatNameValid(name) : Managed.IsValidName(name);
+            GalaxiaNative.CheatNameValid(name);
 
         public static ConfigFile<CheatFile> For(string name) =>
             new(CategoryDirName, name + ".json");
 
         // Any path the player picked, outside the auto-loaded set - see EmuSen_Settings_Reference.md §4.15.
-        public static bool SaveTo(string path, CheatFile file) => GalaxiaNative.Takes(path) ? SaveToNative(path, file) : Managed.SaveTo(path, file);
+        public static bool SaveTo(string path, CheatFile file) => SaveToNative(path, file);
 
         // Null for missing, unreadable or corrupt, matching ConfigFile.Load's own contract.
-        public static CheatFile? LoadFrom(string path) => GalaxiaNative.Takes(path) ? LoadFromNative(path) : Managed.LoadFrom(path);
+        public static CheatFile? LoadFrom(string path) => LoadFromNative(path);
 
         public static string DirectoryPath => Path.Combine(ConfigStore.Directory, CategoryDirName);
 
-        public static IReadOnlyList<string> ListNames() => GalaxiaNative.Active ? ListNamesNative() : Managed.ListNames();
+        public static IReadOnlyList<string> ListNames() => ListNamesNative();
 
         // The list is serialized here and written there; one that will not serialize still has its folder made, as before.
         internal static bool SaveToNative(string path, CheatFile file)
@@ -179,58 +179,6 @@ namespace EmuSen.Galaxia.Models
             catch
             {
                 return Array.Empty<string>();
-            }
-        }
-
-        // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
-        internal static class Managed
-        {
-            public static bool IsValidName(string name) =>
-                !string.IsNullOrWhiteSpace(name)
-                && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0
-                && name != "." && name != "..";
-
-            public static bool SaveTo(string path, CheatFile file)
-            {
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-                    File.WriteAllText(path, System.Text.Json.JsonSerializer.Serialize(file, ConfigJson.Options));
-                    return true;
-                }
-                catch
-                {
-                    return false;
-                }
-            }
-
-            public static CheatFile? LoadFrom(string path)
-            {
-                try
-                {
-                    return System.Text.Json.JsonSerializer.Deserialize<CheatFile>(File.ReadAllText(path), ConfigJson.Options);
-                }
-                catch
-                {
-                    return null;
-                }
-            }
-
-            public static IReadOnlyList<string> ListNames()
-            {
-                try
-                {
-                    return Directory.EnumerateFiles(Path.Combine(ConfigStore.Managed.Directory, CategoryDirName), "*.json")
-                        .Select(Path.GetFileNameWithoutExtension)
-                        .Where(n => !string.IsNullOrEmpty(n))
-                        .Select(n => n!)
-                        .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-                }
-                catch
-                {
-                    return Array.Empty<string>();
-                }
             }
         }
     }

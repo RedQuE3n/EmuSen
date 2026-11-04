@@ -162,7 +162,6 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         private static string? Attach()
         {
             if (!PlatformLibrary.Available) return PlatformLibrary.Report;
-            if (!PlatformLibrary.GalaxiaActive) return "Galaxia runs on its C#, and the Rust shell reads the tree through the library's";
             if (Check(PlatformLibrary.Export, out nint[] found) is { } refused) return refused;
             int next = 0;
             AbiVersion = (delegate* unmanaged[Cdecl]<uint>)found[next++];

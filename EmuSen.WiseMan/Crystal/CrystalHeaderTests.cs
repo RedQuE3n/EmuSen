@@ -14,7 +14,7 @@ namespace EmuSen.WiseMan.Crystal
     // emusen_crystal.h against the binding: every export, number and struct field - see EmuSen_Backend.md §14.
     public class CrystalHeaderTests
     {
-        private static string Repo => ConfigRoot.Managed.Directory;
+        private static string Repo => ConfigRoot.Directory;
         private static string Include => Path.Combine(Repo, "EmuSen.Crystal", "include");
         private static string Header => File.ReadAllText(Path.Combine(Include, "emusen_crystal.h"));
         private static string SessionHeader => File.ReadAllText(Path.Combine(Include, "emusen_session.h"));

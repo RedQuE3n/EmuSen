@@ -2,7 +2,9 @@
 //! 22 bytes, a Zip64 end where a field of the plain one is at its maximum, every central directory entry with its Zip64
 //! extra field, and the words of the `InvalidDataException` .NET throws for an archive it refuses whole. An entry's bytes
 //! are read with the checks `ZipArchiveEntry.Open` makes, stored, deflated and Deflate64 alike. Measured against .NET
-//! 10.0.112 by WiseMan's `CheatArchiveFormsTests`. See EmuSen_Backend.md §40.1.
+//! 10.0.112 by WiseMan's `CheatArchiveFormsTests`. See EmuSen_Backend.md §40.1. The one reader of a zip's end record
+//! and central directory: `archive`, the games' reader, takes its entries from here and refuses what it does not read
+//! (§40.2).
 
 use std::io::Read;
 
@@ -22,6 +24,11 @@ pub mod words {
 /// One central directory entry, its Zip64 fields resolved.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Entry {
+    /// Whether a field held Zip64's sentinel, resolved from the Zip64 extra field.
+    pub zip64: bool,
+    pub crc32: u32,
+    /// Where the entry's extra fields lie in the bytes it was read from.
+    pub extra: std::ops::Range<usize>,
     pub platform: u8,
     pub flags: u16,
     pub method: u16,
@@ -41,11 +48,11 @@ pub struct Archive<'a> {
     pub entries: Vec<Entry>,
 }
 
-fn u16_at(b: &[u8], at: usize) -> Option<u16> {
+pub(crate) fn u16_at(b: &[u8], at: usize) -> Option<u16> {
     b.get(at..at.checked_add(2)?).map(|s| u16::from_le_bytes([s[0], s[1]]))
 }
 
-fn u32_at(b: &[u8], at: usize) -> Option<u32> {
+pub(crate) fn u32_at(b: &[u8], at: usize) -> Option<u32> {
     b.get(at..at.checked_add(4)?).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
 }
 
@@ -53,11 +60,18 @@ fn u64_at(b: &[u8], at: usize) -> Option<u64> {
     b.get(at..at.checked_add(8)?).map(|s| u64::from_le_bytes(s.try_into().unwrap()))
 }
 
-const END: u32 = 0x0605_4B50;
+pub(crate) const END: u32 = 0x0605_4B50;
 const ZIP64_END: u32 = 0x0606_4B50;
-const ZIP64_LOCATOR: u32 = 0x0706_4B50;
-const CENTRAL: u32 = 0x0201_4B50;
-const LOCAL: u32 = 0x0403_4B50;
+pub(crate) const ZIP64_LOCATOR: u32 = 0x0706_4B50;
+pub(crate) const CENTRAL: u32 = 0x0201_4B50;
+pub(crate) const LOCAL: u32 = 0x0403_4B50;
+
+/// The end record's place: the last signature from 22 bytes before the end back over a comment's 64 KiB.
+pub(crate) fn find_end(zip: &[u8]) -> Option<usize> {
+    let from = zip.len().checked_sub(18)?;
+    let lowest = from.saturating_sub(0xFFFF + 4);
+    (lowest..from.saturating_sub(3)).rev().find(|&at| u32_at(zip, at) == Some(END))
+}
 
 /// `ZipArchive`'s constructor and its `Entries`: the archive, or the words .NET throws.
 pub fn open(zip: &[u8]) -> Result<Archive<'_>, &'static str> {
@@ -65,9 +79,7 @@ pub fn open(zip: &[u8]) -> Result<Archive<'_>, &'static str> {
     if len < 18 {
         return Err(words::DIRECTORY_CORRUPT);
     }
-    let from = len - 18;
-    let lowest = from.saturating_sub(0xFFFF + 4);
-    let end = (lowest..from.saturating_sub(3)).rev().find(|&at| u32_at(zip, at) == Some(END)).ok_or(words::END_NOT_FOUND)?;
+    let end = find_end(zip).ok_or(words::END_NOT_FOUND)?;
     let field16 = |o: usize| u16_at(zip, end + o).ok_or(words::DIRECTORY_CORRUPT);
     let (this_disk, central_disk, on_disk, total) = (field16(4)?, field16(6)?, field16(8)?, field16(10)?);
     let start = u32_at(zip, end + 16).ok_or(words::DIRECTORY_CORRUPT)?;
@@ -117,12 +129,12 @@ pub fn open(zip: &[u8]) -> Result<Archive<'_>, &'static str> {
 }
 
 /// `ZipCentralDirectoryFileHeader.TryReadBlock`: an entry and the place after it, or none where the directory ends.
-fn central_entry(zip: &[u8], at: &mut usize) -> Option<Entry> {
+pub(crate) fn central_entry(zip: &[u8], at: &mut usize) -> Option<Entry> {
     let h = *at;
     if u32_at(zip, h)? != CENTRAL || h + 46 > zip.len() {
         return None;
     }
-    let (made_by, flags, method, dos_time) = (u16_at(zip, h + 4)?, u16_at(zip, h + 8)?, u16_at(zip, h + 10)?, u32_at(zip, h + 12)?);
+    let (made_by, flags, method, dos_time, crc32) = (u16_at(zip, h + 4)?, u16_at(zip, h + 8)?, u16_at(zip, h + 10)?, u32_at(zip, h + 12)?, u32_at(zip, h + 16)?);
     let (mut compressed, mut length) = (u32_at(zip, h + 20)? as u64, u32_at(zip, h + 24)? as u64);
     let (n, m, k) = (u16_at(zip, h + 28)? as usize, u16_at(zip, h + 30)? as usize, u16_at(zip, h + 32)? as usize);
     let mut disk = u16_at(zip, h + 34)? as u32;
@@ -163,7 +175,8 @@ fn central_entry(zip: &[u8], at: &mut usize) -> Option<Entry> {
         x += 4 + size;
     }
     *at = h + 46 + n + m + k;
-    Some(Entry { platform: (made_by >> 8) as u8, flags, method, dos_time, compressed, length, external, offset, disk, full_name: String::from_utf8_lossy(name).into_owned() })
+    let zip64 = want_length || want_compressed || want_offset || want_disk;
+    Some(Entry { zip64, crc32, extra: h + 46 + n..h + 46 + n + m, platform: (made_by >> 8) as u8, flags, method, dos_time, compressed, length, external, offset, disk, full_name: String::from_utf8_lossy(name).into_owned() })
 }
 
 impl Archive<'_> {

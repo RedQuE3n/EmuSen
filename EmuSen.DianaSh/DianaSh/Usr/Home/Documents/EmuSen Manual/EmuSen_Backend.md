@@ -9461,7 +9461,8 @@ is on the Rust unless the variable is 0, and a variable the suite was started wi
 
 **The other switches.** `EMUSEN_SYSTEMS_NATIVE`, `_SERVICES_`, `_GALAXIA_`, `_ENDYMION_`, `_LIBRARY_`, `_SCRAPE_`,
 `_SERENITY_` and `_DIANASH_` each go through `PlatformSwitch`, which takes the Rust half whenever its library loads and
-the variable is not `0`; none needed a change.
+the variable is not `0`; none needed a change. *Since 2026-11-04* `_SYSTEMS_`, `_SERVICES_` (§40.1) and `_GALAXIA_`
+(§40.2) name no switch: their C# halves are deleted and a leftover `0` is ignored with one line.
 
 **The tools.** `land.sh` and the blast map run `dotnet test` with no variable set, so they take the Rust default with no
 change to them.
@@ -9699,7 +9700,114 @@ NES channels' view ignoring the mutes: `DebugCodeParityTests` (the NES unit view
 
 **Not done here.** Galaxia's `MediumLock` keeps its two halves until §40.2; `SaveMediaManagerParityTests` still compares
 them. Galaxia's `archive.rs`, the games' archive reader, reads the central directory with code of its own beside
-`dotnet_zip`; folding the two into one reader is left to §40.2.
+`dotnet_zip`; folding the two into one reader is left to §40.2. Both were done there.
+
+### 40.2 Galaxia
+
+**What went.** `EMUSEN_GALAXIA_NATIVE`, Galaxia's `PlatformSwitch`, `GalaxiaNative.Active` and `Takes`, and
+`PlatformLibrary.GalaxiaActive` are gone, with the C# half of every facade: the tree's rules (`ConfigRoot`,
+`ConfigStore`, `DataStore`, `DataMigration`), the save names (`SaveLibrary`), `AtomicFile`, `RomHash`, `ErrorLog`, the
+package manifest's reader and writer (`GamePackage`) and the claim index with "one game, one save" (`GamePackages`),
+`MappedFile`'s .NET mapping and its `madvise` and `PrefetchVirtualMemory` advice, the cheat lists (`CheatFile`,
+`GameCheats`), the suggestion text (`Suggestion`), `ConfigFile<T>`'s own reading, writing and migration, the C#
+settings upgrade (`AppSettings.Upgraded`) and `MediumLock`'s C# table. Shipped C# lost 1,448 lines and gained 160.
+CI's step "Test Galaxia on its C#" is gone; the step on the platform library stays, reporting. Galaxia's `.cs` files
+keep their `LoadNative`, `SaveNative` and `NewNative` names, which the model classes call; the suffix now names nothing
+but the one half.
+
+**The library, loaded at the first call.** Nothing chooses any more. Every call of the binding, through its UTF-8
+argument or its length-query helper, first makes sure the platform library is in the process (`GalaxiaNative.Up`),
+which loads it and attaches Galaxia exactly as before. A library that is absent, of another interface or without an
+export Galaxia calls is refused in words, `libemusen_platform.so is not in use (<why>); Galaxia has had no C#
+implementation since 2026-11-04.`, as a `DllNotFoundException` at that first call. The thread attaching the library
+calls into it before the attachment is done, to hand it the overrides and the crash log's path; that thread alone
+passes the check while it attaches (`[ThreadStatic]`), and every other caller waits on the library's `Lazy`. The crash
+log's path is now the library's own Logs folder, asked once the exports are bound. A leftover `EMUSEN_GALAXIA_NATIVE=0`
+is ignored with `RetiredSwitch`'s one line, said once Galaxia is attached, since the line goes through Galaxia's error
+log.
+
+**Text that cannot cross** (`EmuSen_RustPlatform.md` §21.6, decided 2026-11-04). `GalaxiaNative.Utf8` encodes with
+.NET's replacing UTF-8 encoder, so half a surrogate pair crosses as U+FFFD, the bytes .NET's own file calls wrote for
+such a name (§21.2's measurement). A path handed back now holds U+FFFD where the caller's held the half, and an error
+log entry holding such text is written with U+FFFD, where the C# entry was left unwritten (the one recorded answer that
+changed, below). A NUL in a call whose words come back as a list is answered before the call:
+`AtomicFile.Write` refuses with the one message `<path>: a file name cannot hold a NUL; the previous file is unchanged`,
+`AtomicFile.TryRead` answers no file, as `File.Exists` does for such a name, a suggestion's candidate holding a NUL is
+left out of the list, and `MediumLock` refuses the path with `Path.GetFullPath`'s own `ArgumentException`. No file
+system takes such a name, so nothing that could be written is refused. `GalaxiaNative.Crosses` stays as the test of a
+text, which `PlatformText.Mend` and the debug views of §40.1 ask.
+
+**The medium lock.** `MediumLock` holds the library's handle alone; a lock another program holds is still "another
+program", and one the library holds still keeps another opener out, both now checked against .NET's own exclusive
+`FileStream` in `SaveMediaManagerParityTests`.
+
+**The zip readers, one owner.** `archive.rs`, the games' reader (the library tool, scraping, the core tool, game
+packages and disc sets), read a zip's end record and central directory with code of its own beside `dotnet_zip`
+(§40.1). The end record's search and each directory entry are now `dotnet_zip`'s (`find_end`, `central_entry`, its
+`Entry` gaining the CRC-32, the extra fields' place and whether a field was Zip64's), and `archive.rs` keeps only its
+policy: it refuses a Zip64 or spanned archive or entry, an encrypted one, a method other than stored and deflate, and a
+name holding a NUL, as before. The search windows were the same (the last 22 bytes back over 64 KiB of comment). One
+edge changed: a directory entry cut short in its extra field or comment was read with what was there and is now
+refused as "a short entry", as .NET refuses it.
+
+**How it is graded now.** `GalaxiaParityTests` compared the C# and the library side by side. Its answers were
+recorded on 2026-11-04 into 35 files (34 kept, below), `EmuSen.WiseMan/Crystal/Goldens/GalaxiaParity.<case>.golden.gz`, and
+`SaveMediaManagerParityTests`' lock sequence into `MediumLockSequence.golden.gz`. They were recorded from the library on
+the tree of `d130bcc20`, on which the classes comparing the two halves had passed in full in the land run of b10-a
+(`GalaxiaParityTests` 74 of 74, `SaveMediaManagerParityTests` 4 of 4), with the same seeded inputs; each recorded answer
+was therefore also the C#'s. The test's folder, the checkout and the home folder are written as `<root>`, `<repo>` and
+`<home>`. A sweep is held as digests of 64 answers (1,000 for the suggestion's distance over every character).
+A class run checks every golden its test touched when the test ends (`GalaxiaParityTests.Golden.cs`).
+- *Kept live, since the oracle is .NET:* the path rules, blank text and caseless equality, a file's and a folder's
+  existence, `System.Text.Json`'s numbers, escapes and models, a file's decoding, the three hashes of a dump (.NET's
+  MD5, SHA-1 and a CRC-32 written in the test), a ROM's MD5, the order of the cheat lists (now held to
+  `StringComparer.OrdinalIgnoreCase` rather than to the C#'s list), and a written file read back beside one
+  `File.WriteAllBytes` wrote.
+- *Recorded again:* the error log's case "text that is not valid", whose C# entry was not written and whose library
+  entry now is (above); the file's first line says so. Its cases "whole" and "appended" were recorded again the same
+  day with each log's stack trace made plain: the checkout's folder as `<repo>` and a source line as `<n>`. Recorded in
+  one checkout folder, they failed in another, 42 bytes shorter, the difference in length of the two folders, in the
+  trace's file paths; no other case's bytes hold a trace, and no other answer changed.
+- *Held to their parts, not to a recording:* the program's own migrations read this checkout's old tree and this
+  machine's previous config folder, which no override moves, so their recorded answers were the recording machine's
+  (none copied in one checkout, seven in another). `The_programs_own_migrations_are_the_explicit_ones_they_were_made_of`
+  holds each to the explicit migrations the C# composed it of (the old tree to the home, then the previous config folder
+  to the config folder; the seed to the home), into a second redirected destination, count and listing alike, and the
+  remaining library folders to the explicit call's; the explicit migrations' answers are recorded by the classes above.
+- *Replaced:* `Text_with_no_utf8_is_answered_by_every_facade_as_the_csharp_answers_it` and
+  `A_path_holding_a_nul_is_said_as_one_message_by_whichever_side_writes_it` held each facade to the C#. They became
+  `Half_a_surrogate_pair_is_answered_by_every_facade_as_the_text_with_U_FFFD` (every facade, its answer, the files it
+  leaves and its words, given the half and given U+FFFD, alike),
+  `A_file_named_with_half_a_pair_lands_with_the_bytes_dotnet_writes` and
+  `A_path_holding_a_nul_is_refused_in_one_message_and_read_as_no_file`. Run on the C# of `0995fe07a` before the
+  deletion, the first and the third failed (a path handed back held the half; the C#'s words for the NUL were .NET's
+  "Null character in path"), and the second passed, as §21.2 measured.
+- *Changed with the switch:* `The_switch_is_what_the_variable_says` became
+  `The_library_is_in_use_and_names_its_interface`. `A_missing_library_falls_back_to_the_csharp_and_says_so_once_in_the_log`
+  became `A_missing_library_is_said_once_in_the_log`: `PlatformLibrary.Open` on a folder without the library says so,
+  and `PlatformSwitch`, which Endymion, Serenity, the library, scraping and DianaSh still use until §40.9, is held for a
+  component that has a C# half. `LogFolderWithoutConfigTests` drops the C#'s column, `SettingPathsOpenTests` no longer
+  passes the variable to its child, and `GamePackageGateTests` takes its MD5 from .NET.
+- No test class was deleted.
+
+**What is not deleted, and why.** `PlatformSwitch` itself (§40.9). `GalaxiaNative.Crosses`, the test of a text, above.
+`ConfigJson`, which the frontends' own types and the models' binding still use.
+
+**Seeded faults, 2026-11-04.** Each was seeded, the named class run, and the source restored. The binding's encoder
+made strict again: `Half_a_surrogate_pair_is_answered_by_every_facade_as_the_text_with_U_FFFD`. The NUL guard taken out
+of the write: `A_path_holding_a_nul_is_refused_in_one_message_and_read_as_no_file`. `MediumLock` never letting the
+library's handle go: `SaveMediaManagerParityTests`' lock sequence against `MediumLockSequence.golden.gz`. The directory
+entry's CRC-32 read from the compressed size's offset in `dotnet_zip`: `emusen-galaxia`'s
+`a_package_zipped_and_unpacked_keeps_every_file_and_its_time_to_the_tick`, through `archive.rs`'s check of a copied
+entry. The goldens' own check was seen to fail a test from its `Dispose` when the recorded log answer differed.
+
+**How it was tested** (measured on 2026-11-04 on the development desktop, Debug build): `GalaxiaParityTests`,
+`OffDispatcherTests`, `TestCollectionsTests`, `FrontendReferenceTests`, `RetiredSwitchTests`,
+`SaveMediaManagerParityTests`, `LogFolderWithoutConfigTests`, `SettingPathsOpenTests`, `GamePackageGateTests`,
+`CheatArchiveFormsTests`, `CheatServicesParityTests`, `ChtFileTests`, `CrystalHeaderTests`, `SessionHeaderTests`,
+`SystemTableParityTests` and the three switch classes left, 141 passed and 8 skipped (`SettingPathsOpenTests`' open
+questions, skipped by design); `cargo test` of `emusen-galaxia`, `emusen-cheats`, `emusen-library-tool`,
+`emusen-core-tool` and `emusen-scrape`, every test passing.
 
 ### 40.8 The frontend API: the C# implementation deleted
 

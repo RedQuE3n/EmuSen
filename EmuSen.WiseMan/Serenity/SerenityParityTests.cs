@@ -734,7 +734,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_library_has_every_export_this_half_calls_and_no_other()
         {
-            string header = File.ReadAllText(Path.Combine(EmuSen.Galaxia.ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
+            string header = File.ReadAllText(Path.Combine(EmuSen.Galaxia.ConfigRoot.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in SerenityNative.Exports) Assert.Contains(export + "(", header);
             Assert.Equal(SerenityNative.Exports.Count(e => e.StartsWith("emusen_serenity_", StringComparison.Ordinal)), Regex.Matches(header, @"^\w+ \*?emusen_serenity_\w+\(", RegexOptions.Multiline).Count);
         }

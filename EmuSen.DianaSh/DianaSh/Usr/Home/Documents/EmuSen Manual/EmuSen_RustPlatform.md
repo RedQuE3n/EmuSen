@@ -638,6 +638,11 @@ implementations compared in the same run, one gzip file a case under `EmuSen.Wis
 and the build's folders and the core libraries' hashes made plain. After the deletion the class runs the Rust alone
 against them, and a correct change is recorded again from the Rust under `EMUSEN_PARITY_GOLDEN=record`.
 
+*Galaxia, 2026-11-04* (`EmuSen_Backend.md` §40.2): `GalaxiaParityTests` was recorded from the library on the tree on
+which the class comparing the two halves had last passed in full, with the same seeded inputs, so that each answer is
+also the C#'s; the test's folder, the checkout and the home are made plain. Where the class held the library to .NET
+rather than to the C#, the oracle stays live.
+
 ### 6.7 What is run
 
 Only what a step touches: the component's Rust crate, its WiseMan classes under both switch settings, its parity
@@ -2605,7 +2610,10 @@ the two cases of §21.2 get answers of their own. *Decided 2026-11-04, built wit
    unchanged`, in place of the library's message split in two at the NUL. No file system takes such a name, so
    nothing that could be written is refused.
 
-`Takes` then reduces to `Crosses`, and `Crosses` to the NUL test of `listed` calls. §21.4's three overrides remain
+`Takes` then reduces to `Crosses`, and `Crosses` to the NUL test of `listed` calls. *Built 2026-11-04*
+(`EmuSen_Backend.md` §40.2): `Takes` is gone; of the listed calls, `AtomicFile.Write` refuses in the words above,
+`AtomicFile.TryRead` answers no file, a suggestion's candidate holding a NUL is left out, and `MediumLock` refuses the
+path with `Path.GetFullPath`'s `ArgumentException`. Two tests were written first and failed on the C#. §21.4's three overrides remain
 as recorded there: a test or MarsRT's training driver sets them, and with no C# to fall back to, a setter given half
 a pair takes it with U+FFFD like any other text.
 

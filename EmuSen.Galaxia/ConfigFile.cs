@@ -31,7 +31,7 @@ namespace EmuSen.Galaxia
         public bool Exists => File.Exists(Path);
 
         // Null for missing, unreadable or corrupt - callers fall back to their own defaults rather than crash, see §2.2.
-        public T? Load() => GalaxiaNative.Takes(_category, FileName) ? LoadNative(upgrade: false) : LoadManaged();
+        public T? Load() => LoadNative(upgrade: false);
 
         // Why the last Load returned null, or null if it didn't or the file simply wasn't there - see EmuSen_Config_Reference.md §6.2.
         public string? LastLoadError { get; private set; }
@@ -39,9 +39,9 @@ namespace EmuSen.Galaxia
         public T Load(Func<T> defaultFactory) => Load() ?? defaultFactory();
 
         // False when the write failed; best-effort by design, a change that can't reach the disk just won't survive a restart - see §2.2.
-        public bool Save(T value) => GalaxiaNative.Takes(_category, FileName) ? SaveNative(value) : SaveManaged(value);
+        public bool Save(T value) => SaveNative(value);
 
-        public bool Delete() => GalaxiaNative.Takes(_category, FileName) ? DeleteNative() : DeleteManaged();
+        public bool Delete() => DeleteNative();
 
         // The library reads the file, and for a model binds and upgrades it; this binds what comes back to the class - see EmuSen_RustPlatform.md §11.2.
         internal T? LoadNative(bool upgrade)
@@ -92,87 +92,6 @@ namespace EmuSen.Galaxia
             catch
             {
                 return false;
-            }
-        }
-
-        // The C# rule: the default, and what the library's is held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
-        internal T? LoadManaged()
-        {
-            try
-            {
-                string path = Path;
-                if (!File.Exists(path))
-                {
-                    string? migrated = MigrateFromLegacy(path);
-                    if (migrated is null) return null;
-                    path = migrated;
-                }
-
-                T? value = JsonSerializer.Deserialize<T>(File.ReadAllText(path), ConfigJson.Options);
-                LastLoadError = null;
-                return value;
-            }
-            catch (Exception ex)
-            {
-                LastLoadError = ex.Message;
-                ConfigDiagnostics.Report($"{Path}: {ex.Message} Falling back to defaults.");
-                return null;
-            }
-        }
-
-        internal bool SaveManaged(T value)
-        {
-            try
-            {
-                string path = Path;
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(path)!);
-                WriteAtomic(path, JsonSerializer.Serialize(value, ConfigJson.Options));
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        internal bool DeleteManaged()
-        {
-            try
-            {
-                File.Delete(Path);
-                return true;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        // Full write then rename, so an interrupted save leaves the previous config intact instead of a truncated one - see §2.3.
-        private static void WriteAtomic(string path, string contents)
-        {
-            string temp = path + ".tmp";
-            File.WriteAllText(temp, contents);
-            File.Move(temp, path, overwrite: true);
-        }
-
-        // Returns the path to read from, or null if there was nothing to migrate. Copies rather than moves - see §1.4.
-        private string? MigrateFromLegacy(string destination)
-        {
-            if (_category is not null) return null;
-
-            string? legacy = ConfigStore.LegacyPathFor(FileName);
-            if (legacy is null || !File.Exists(legacy)) return null;
-
-            try
-            {
-                Directory.CreateDirectory(System.IO.Path.GetDirectoryName(destination)!);
-                File.Copy(legacy, destination);
-                return destination;
-            }
-            catch
-            {
-                return legacy;
             }
         }
     }

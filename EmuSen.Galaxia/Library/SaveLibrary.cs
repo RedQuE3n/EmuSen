@@ -21,8 +21,8 @@ namespace EmuSen.Galaxia.Library
         // One folder per console, named as the ROM library names them (NES, SNES, N64, GB, GBC); a packaged game's in its package, by the package's name and a patched one's list key - see EmuSen_GamePackages.md §3.5, §5.5.
         public static string SramPathFor(string romPath, string console, string? packageRoot = null, string? saveKey = null)
         {
-            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.Takes(romPath, console) ? GalaxiaNative.SavePath(GalaxiaSave.Sram, romPath, console) : Managed.SramPathFor(romPath, console);
-            return GalaxiaNative.Takes(packageRoot, saveKey) ? GalaxiaNative.SavePath(GalaxiaSave.PackageSram, packageRoot, saveKey) : Managed.PackageSramPathFor(packageRoot, saveKey);
+            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.SavePath(GalaxiaSave.Sram, romPath, console);
+            return GalaxiaNative.SavePath(GalaxiaSave.PackageSram, packageRoot, saveKey);
         }
 
         // The folders of a console's shared and named save media, beside its per-game saves: removable ones, and the console's own - see EmuSen_SaveMedia.md §3.3.
@@ -57,25 +57,25 @@ namespace EmuSen.Galaxia.Library
 
         // Where SNES and N64 saves went before 2026-09-28, read once to copy them into their console's folder, never written.
         public static string FlatSramPathFor(string romPath) =>
-            GalaxiaNative.Takes(romPath) ? GalaxiaNative.SavePath(GalaxiaSave.FlatSram, romPath) : Managed.FlatSramPathFor(romPath);
+            GalaxiaNative.SavePath(GalaxiaSave.FlatSram, romPath);
 
         // directoryOverride is a parameter, not an AppSettings read, and a package root is one too, which wins - see EmuSen_Galaxia.md §5.1.
         public static string StatePathFor(string romPath, int slot = DefaultStateSlot, string? directoryOverride = null, string? packageRoot = null, string? saveKey = null)
         {
-            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.State, romPath, directoryOverride, slot) : Managed.StatePathFor(romPath, slot, directoryOverride);
-            return GalaxiaNative.Takes(packageRoot, saveKey) ? GalaxiaNative.SavePath(GalaxiaSave.PackageState, packageRoot, saveKey, slot) : Managed.PackageStatePathFor(packageRoot, slot, saveKey);
+            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.SavePath(GalaxiaSave.State, romPath, directoryOverride, slot);
+            return GalaxiaNative.SavePath(GalaxiaSave.PackageState, packageRoot, saveKey, slot);
         }
 
         // Written when a game is closed and offered at its next start - see EmuSen_Galaxia.md §5.2.
         public static string ResumeStatePathFor(string romPath, string? directoryOverride = null, string? packageRoot = null, string? saveKey = null)
         {
-            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.Takes(romPath, directoryOverride) ? GalaxiaNative.SavePath(GalaxiaSave.ResumeState, romPath, directoryOverride) : Managed.ResumeStatePathFor(romPath, directoryOverride);
-            return GalaxiaNative.Takes(packageRoot, saveKey) ? GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, packageRoot, saveKey) : Managed.PackageResumeStatePathFor(packageRoot, saveKey);
+            if (string.IsNullOrWhiteSpace(packageRoot)) return GalaxiaNative.SavePath(GalaxiaSave.ResumeState, romPath, directoryOverride);
+            return GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, packageRoot, saveKey);
         }
 
         // The picture on screen when a state was written, beside it - see EmuSen_Galaxia.md §5.2.
         public static string PicturePathFor(string statePath) =>
-            GalaxiaNative.Takes(statePath) ? GalaxiaNative.SavePath(GalaxiaSave.Picture, statePath) : Managed.PicturePathFor(statePath);
+            GalaxiaNative.SavePath(GalaxiaSave.Picture, statePath);
 
         // A packaged state's record, beside it with .json, or null for a state outside a package's states folder, the twin of saves.rs' package_record_path - see EmuSen_GamePackages.md §18.1.
         public static string? PackageRecordPathFor(string statePath)
@@ -83,45 +83,6 @@ namespace EmuSen.Galaxia.Library
             string full = Path.GetFullPath(statePath);
             if (Path.GetDirectoryName(full) is not { } folder || Path.GetFileName(folder) != Media.GamePackage.StatesFolder) return null;
             return Path.GetDirectoryName(folder) is { } root && File.Exists(Path.Combine(root, Media.GamePackage.FileName)) ? Path.ChangeExtension(full, ".json") : null;
-        }
-
-        // The C# rules: the default, and what the library's are held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
-        internal static class Managed
-        {
-            public static string SramPathFor(string romPath, string console) =>
-                Path.Combine(DataStore.Managed.Saves, console, Path.GetFileNameWithoutExtension(romPath) + SramExtension);
-
-            public static string FlatSramPathFor(string romPath) =>
-                Path.Combine(DataStore.Managed.Saves, Path.GetFileNameWithoutExtension(romPath) + SramExtension);
-
-            public static string StatePathFor(string romPath, int slot, string? directoryOverride)
-            {
-                string directory = string.IsNullOrWhiteSpace(directoryOverride) ? DataStore.Managed.SaveStates : directoryOverride;
-                string stem = Path.GetFileNameWithoutExtension(romPath);
-                string suffix = slot == DefaultStateSlot ? "" : $".slot{slot}";
-                return Path.Combine(directory, stem + suffix + StateExtension);
-            }
-
-            public static string ResumeStatePathFor(string romPath, string? directoryOverride)
-            {
-                string directory = string.IsNullOrWhiteSpace(directoryOverride) ? DataStore.Managed.SaveStates : directoryOverride;
-                return Path.Combine(directory, Path.GetFileNameWithoutExtension(romPath) + ".resume" + StateExtension);
-            }
-
-            public static string PicturePathFor(string statePath) => Path.ChangeExtension(statePath, ".png");
-
-            // A package's own name, its folder's less the extension, which does not change when its game moves - see EmuSen_GamePackages.md §14.
-            public static string PackageStem(string root) => Path.GetFileNameWithoutExtension(Path.TrimEndingDirectorySeparator(root));
-
-            // The package's name, and a patched game's ".patched-<key>" after it - see EmuSen_GamePackages.md §5.5.
-            public static string PackageName(string root, string? saveKey) => string.IsNullOrEmpty(saveKey) ? PackageStem(root) : $"{PackageStem(root)}.patched-{saveKey}";
-
-            public static string PackageSramPathFor(string root, string? saveKey = null) => Path.Combine(root, Media.GamePackage.SavesFolder, PackageName(root, saveKey) + SramExtension);
-
-            public static string PackageStatePathFor(string root, int slot, string? saveKey = null) =>
-                Path.Combine(root, Media.GamePackage.StatesFolder, PackageName(root, saveKey) + (slot == DefaultStateSlot ? "" : $".slot{slot}") + StateExtension);
-
-            public static string PackageResumeStatePathFor(string root, string? saveKey = null) => Path.Combine(root, Media.GamePackage.StatesFolder, PackageName(root, saveKey) + ".resume" + StateExtension);
         }
     }
 }

@@ -11,25 +11,33 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.WiseMan.Galaxia
 {
-    // The claim index, "one game, one save" and a packaged game's save names, by both halves over the same generated trees - see EmuSen_GamePackages.md §14 and EmuSen_Galaxia.md §3.11.
+    // The claim index, "one game, one save" and a packaged game's save names over generated trees, held to the C#'s recorded answers - see EmuSen_GamePackages.md §14 and EmuSen_Galaxia.md §3.11.
     public partial class GalaxiaParityTests
     {
         private static byte[] Cartridge(int seed, int length = 4096) => Enumerable.Range(0, length).Select(i => (byte)(i * 7 + seed)).ToArray();
+
+        // A file's size and its time to the second, as a manifest's seen records them.
+        private static (long Size, string Mtime) Seen(string at)
+        {
+            var info = new FileInfo(at);
+            DateTime utc = info.LastWriteTimeUtc;
+            return (info.Length, new DateTime(utc.Ticks - utc.Ticks % TimeSpan.TicksPerSecond, DateTimeKind.Utc).ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture));
+        }
 
         // A linked package for a library file, its dump and seen as pkg make records them.
         private static void LinkedPackage(string folder, string library, string rel, string system = "snes", string? extra = null)
         {
             string game = Path.Combine(library, rel);
             File.SetLastWriteTimeUtc(game, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));   // both sides' trees record the same seen time, wherever their writing falls on the clock
-            RomHashes h = RomHash.Managed.Of(game, 0, -1, default);
+            RomHashes h = RomHash.Of(game, 0, -1, default);
             var p = GamePackage.Create(Path.GetFileNameWithoutExtension(game), system, "linked", new PackageFile("image", "library", rel, h.Size));
-            var seen = GamePackages.Managed.SeenOf(game)!.Value;
+            var seen = Seen(game);
             ((JsonObject)p.Document["game"]!)["seen"] = new JsonObject { ["size"] = seen.Size, ["mtime"] = seen.Mtime };
             p.Document["dump"] = new JsonObject { ["file"] = new JsonObject { ["crc32"] = h.Crc32, ["md5"] = h.Md5, ["sha1"] = h.Sha1 } };
             if (extra is not null) foreach (var (k, v) in JsonNode.Parse(extra)!.AsObject().ToList()) p.Document[k] = v?.DeepClone();
             Directory.CreateDirectory(folder);
-            Assert.True(GamePackage.Managed.Format(p.Document).Length > 0);
-            File.WriteAllText(Path.Combine(folder, GamePackage.FileName), GamePackage.Managed.Format(p.Document));
+            Assert.True(p.Format().Length > 0);
+            File.WriteAllText(Path.Combine(folder, GamePackage.FileName), p.Format());
         }
 
         // One tree: linked packages, a converted disc's, a nested console folder, a refused manifest, a hidden folder, a package with no library game, and loose files.
@@ -68,28 +76,27 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void The_claim_index_is_the_same_both_ways()
+        public void The_claim_index_is_the_csharp_s()
         {
             PackagePlaces places = ClaimsTree("index");
-            string managed = Shown(GamePackages.Managed.Index(places));
-            Assert.Equal(managed, Shown(GamePackages.Index(places)));
-            Assert.Contains("Disc.cue", managed);
-            Assert.DoesNotContain("Hidden", managed);
-            Assert.Contains(Path.Combine(places.Packages, "Broken", "Bad.sfc"), managed);
+            string native = G("index", Shown(GamePackages.Index(places)));
+            Assert.Contains("Disc.cue", native);
+            Assert.DoesNotContain("Hidden", native);
+            Assert.Contains(Path.Combine(places.Packages, "Broken", "Bad.sfc"), native);
             PackagePlaces noLibrary = places with { Library = null };
-            Assert.Equal(Shown(GamePackages.Managed.Index(noLibrary)), Shown(GamePackages.Index(noLibrary)));
+            G("no library", Shown(GamePackages.Index(noLibrary)));
             Assert.Equal("\n--\n", Shown(GamePackages.Index(places with { Packages = At("claims", "none") })));
         }
 
-        // Each half resolves the same paths over its own copy of the tree, since resolving may rewrite a manifest, and the two trees end alike.
+        // The paths resolve over a tree as the C# resolved them, rewriting the manifests as it did, since resolving may rewrite one.
         [Fact]
-        public void A_path_resolves_alike_both_ways_and_each_rewrites_its_manifests_alike()
+        public void A_path_resolves_as_the_csharp_resolved_it_and_rewrites_its_manifests_alike()
         {
             var runs = new List<List<string>>();
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 PackagePlaces p = ClaimsTree(side);
-                Func<string, PackageResolution> resolve = side == "managed" ? at => GamePackages.Managed.Resolve(p, at) : at => GamePackages.Resolve(at, p);
+                Func<string, PackageResolution> resolve = at => GamePackages.Resolve(at, p);
                 string lib = p.Library!;
                 var a = new List<string>();
                 string[] paths =
@@ -120,7 +127,7 @@ namespace EmuSen.WiseMan.Galaxia
                 a.Add(string.Join("\n", Directory.EnumerateFiles(Path.Combine(root, "Packages"), "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal).Select(f => Path.GetRelativePath(root, f) + "\n" + File.ReadAllText(f))));
                 runs.Add(a.Select(x => x.Replace(root, "<root>")).ToList());
             }
-            for (int i = 0; i < runs[0].Count; i++) Assert.True(runs[0][i] == runs[1][i], $"answer {i}\n  C#:   {runs[0][i]}\n  Rust: {runs[1][i]}");
+            for (int i = 0; i < runs[0].Count; i++) G($"answer {i}", runs[0][i]);
             List<string> m = runs[0];
             Assert.EndsWith("<root>/Packages/SNES/Alpha.sfc | False", m[0]);
             Assert.StartsWith("<root>/Compressed/psx/Disc.chd | <root>/Packages/PlayStation/Disc.chd", m[6]);
@@ -136,16 +143,16 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void A_packaged_game_s_saves_and_states_are_named_alike_both_ways_by_the_package_s_own_name()
+        public void A_packaged_game_s_saves_and_states_are_named_as_the_csharp_named_them_by_the_package_s_own_name()
         {
             string[] roots = { At("Packages", "SNES", "Zelda (U).sfc"), At("p.q") + Path.DirectorySeparatorChar, "relative/pkg", At("Packages", "PlayStation", "a.b.chd") };
             foreach (string root in roots)
                 foreach (string? key in new[] { null, "", "0a1b2c3d" })
                 {
-                    Assert.Equal(SaveLibrary.Managed.PackageSramPathFor(root, key), GalaxiaNative.SavePath(GalaxiaSave.PackageSram, root, key));
-                    Assert.Equal(SaveLibrary.Managed.PackageResumeStatePathFor(root, key), GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, root, key));
+                    G($"sram [{root}] [{key}]", Caught(() => GalaxiaNative.SavePath(GalaxiaSave.PackageSram, root, key)));
+                    G($"resume [{root}] [{key}]", Caught(() => GalaxiaNative.SavePath(GalaxiaSave.PackageResumeState, root, key)));
                     foreach (int slot in new[] { 1, 2, 0, -1, int.MaxValue })
-                        Assert.Equal(SaveLibrary.Managed.PackageStatePathFor(root, slot, key), GalaxiaNative.SavePath(GalaxiaSave.PackageState, root, key, slot));
+                        G($"state [{root}] [{key}] {slot}", Caught(() => GalaxiaNative.SavePath(GalaxiaSave.PackageState, root, key, slot)));
                 }
             Assert.Equal(Path.Combine(roots[0], "saves", "Zelda (U).patched-0a1b2c3d.srm"), SaveLibrary.SramPathFor("/roms/x.sfc", "SNES", roots[0], "0a1b2c3d"));
             Assert.Equal(Path.Combine(roots[3], "states", "a.b.patched-0a1b2c3d.slot3.state"), SaveLibrary.StatePathFor("/roms/psx/a.b.cue", 3, null, roots[3], "0a1b2c3d"));

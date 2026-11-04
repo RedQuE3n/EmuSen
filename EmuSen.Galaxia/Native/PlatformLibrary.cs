@@ -14,7 +14,7 @@ namespace EmuSen.Galaxia.Native
 
         private static readonly Lazy<(nint Handle, string Report)> Library = new(() => Open(AppContext.BaseDirectory));
 
-        // Asking loads the library; nothing asks while Galaxia's switch is 0 and the others are unset.
+        // Asking loads the library, and Galaxia with it.
         public static bool Available => Library.Value.Handle != 0;
 
         // Why the library is or is not in use, for a log line or a test's message.
@@ -35,9 +35,6 @@ namespace EmuSen.Galaxia.Native
             fixed (byte* w = words) read(w, (nuint)words.Length);
             return System.Text.Encoding.UTF8.GetString(words);
         }
-
-        // Whether Galaxia's own switch chose the library, which a component reading the tree through it needs - see EmuSen_DianaSh.md §13.7.
-        public static bool GalaxiaActive => GalaxiaNative.Active;
 
         public static string FileName =>
             OperatingSystem.IsWindows() ? $"{Name}.dll" : OperatingSystem.IsMacOS() ? $"lib{Name}.dylib" : $"lib{Name}.so";
@@ -61,8 +58,9 @@ namespace EmuSen.Galaxia.Native
 
             if (GalaxiaNative.Attach(handle) is { } missing) return (0, $"{FileName} has no {missing}");
 
-            // The C# path on purpose: this runs while the library is still being decided on.
-            GalaxiaNative.SetCrashLog(Path.Combine(EmuSen.Galaxia.Library.DataStore.Managed.Logs, $"{Name}_crash_{Environment.ProcessId}.txt"));
+            GalaxiaNative.SetCrashLog(Path.Combine(GalaxiaNative.Directory(GalaxiaDirectory.Logs)!, $"{Name}_crash_{Environment.ProcessId}.txt"));
+            // Galaxia is attached by now, so the line a leftover 0 earns goes through it; a failure to say it never refuses the library.
+            try { RetiredSwitch.Note(GalaxiaNative.Variable, "Galaxia"); } catch (Exception) { }
             return (handle, $"{path}, interface {version}");
         }
     }

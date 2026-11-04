@@ -9,7 +9,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.WiseMan.Galaxia
 {
-    // Text the library cannot take, asked of every facade that hands it a caller's text - see EmuSen_RustPlatform.md §21.
+    // Text the library cannot take as it is, asked of every facade that hands it a caller's text: half a surrogate pair crosses as U+FFFD, and a NUL in a call quoted back in a list is refused - see EmuSen_RustPlatform.md §21.6.
     public partial class GalaxiaParityTests
     {
         // UTF-16 with half a surrogate pair: a high alone, a low alone, a high at the end, a pair the wrong way round.
@@ -45,117 +45,117 @@ namespace EmuSen.WiseMan.Galaxia
             return line[23..];
         }
 
-        // One case run twice, each in a folder of its own, through the facade and through the C#: the answers, the files left and the words said must agree.
-        private void BothAlike(string name, Func<string, object?> facade, Func<string, object?> csharp)
+        // One case run twice, each in a folder of its own, with the text and with the text as .NET's encoder writes it: the answers, the files left and the words said must agree.
+        private void BothAlike(string name, string text, Func<string, string, object?> act)
         {
             var seen = new List<string>();
-            foreach ((string side, Func<string, object?> act) in new[] { ("facade", facade), ("csharp", csharp) })
+            foreach ((string side, string given) in new[] { ("half", text), ("mended", PlatformText.Mend(text)) })
             {
                 string root = At("text", name, side);
                 Directory.CreateDirectory(root);
                 ConfigStore.OverrideDirectory = Path.Combine(root, "etc");
                 ConfigStore.OverrideLegacyDirectory = Path.Combine(root, "legacy");
-                string answer = Answered(() => act(root), root);
+                string answer = Answered(() => act(root, given), root);
                 seen.Add($"{answer} | {string.Join(" ; ", Listing(root).Select(JustWritten))} | said {string.Join(" || ", Reported()).Replace(root, "<root>")}");
             }
-            Assert.True(seen[0] == seen[1], $"{name}:\n  facade: {seen[0]}\n  C#: {seen[1]}");
+            Assert.True(seen[0] == seen[1], $"{name}:\n  half a pair: {seen[0]}\n  U+FFFD:      {seen[1]}");
         }
 
         [Fact]
-        public void Text_with_no_utf8_is_answered_by_every_facade_as_the_csharp_answers_it()
+        public void Half_a_surrogate_pair_is_answered_by_every_facade_as_the_text_with_U_FFFD()
         {
-            Assert.Equal(GalaxiaNative.Active, GalaxiaNative.Takes("é 日本 😀", null));
             DataStore.OverrideDirectory = At("data");
             Side("text-paths");
             for (int i = 0; i < Unpaired.Length; i++)
             {
-                string text = Unpaired[i], rom = At("roms", text + ".sfc"), folder = At(text);
-                Assert.False(GalaxiaNative.Takes(text));
-                Assert.False(GalaxiaNative.Takes("SNES", text));
-                // The binding refuses such text before the call, which is why no facade may hand it over.
-                Assert.ThrowsAny<ArgumentException>(() => GalaxiaNative.SavePath(GalaxiaSave.Sram, rom, "SNES"));
+                string text = Unpaired[i], mended = PlatformText.Mend(text);
+                Assert.NotEqual(text, mended);
+                string Rom_(string t) => At("roms", t + ".sfc");
+                string Folder(string t) => At(t);
+                void Same(Func<string, object?> facade) => Assert.Equal(Answered(() => facade(mended), _temp), Answered(() => facade(text), _temp));
 
-                Assert.Equal(SaveLibrary.Managed.SramPathFor(rom, "SNES"), SaveLibrary.SramPathFor(rom, "SNES"));
-                Assert.Equal(SaveLibrary.Managed.SramPathFor("x.sfc", text), SaveLibrary.SramPathFor("x.sfc", text));
-                Assert.Equal(SaveLibrary.Managed.FlatSramPathFor(rom), SaveLibrary.FlatSramPathFor(rom));
-                Assert.Equal(SaveLibrary.Managed.StatePathFor(rom, 2, null), SaveLibrary.StatePathFor(rom, 2));
-                Assert.Equal(SaveLibrary.Managed.StatePathFor("x.sfc", 1, folder), SaveLibrary.StatePathFor("x.sfc", 1, folder));
-                Assert.Equal(SaveLibrary.Managed.ResumeStatePathFor(rom, null), SaveLibrary.ResumeStatePathFor(rom));
-                Assert.Equal(SaveLibrary.Managed.ResumeStatePathFor("x.sfc", folder), SaveLibrary.ResumeStatePathFor("x.sfc", folder));
-                Assert.Equal(SaveLibrary.Managed.PicturePathFor(rom), SaveLibrary.PicturePathFor(rom));
-                Assert.Equal(ConfigStore.Managed.For(text), ConfigStore.For(text));
-                Assert.Equal(ConfigStore.Managed.For(text, "list.json"), ConfigStore.For(text, "list.json"));
-                Assert.Equal(ConfigStore.Managed.LegacyPathFor(text), ConfigStore.LegacyPathFor(text));
-                Assert.Equal(ConfigRoot.Managed.ComputeFor(folder, false, At("home")), ConfigRoot.ComputeFor(folder, false, At("home")));
-                Assert.Equal(ConfigRoot.Managed.ComputeFor(At("base"), true, folder), ConfigRoot.ComputeFor(At("base"), true, folder));
-                Assert.Equal(ConfigRoot.Managed.MacDataDirectoryFor(folder), ConfigRoot.MacDataDirectoryFor(folder));
-                Assert.Equal(ConfigRoot.Managed.BundleContentsFor(Path.Combine(folder, "Contents", "MacOS")), ConfigRoot.BundleContentsFor(Path.Combine(folder, "Contents", "MacOS")));
-                Assert.Equal(ConfigRoot.Managed.SeedDirectoryFor(Path.Combine(folder, "Contents", "MacOS"), true), ConfigRoot.SeedDirectoryFor(Path.Combine(folder, "Contents", "MacOS"), true));
-                Assert.Equal(DataMigration.Managed.LegacyRootFor(folder), DataMigration.LegacyRootFor(folder));
-                Assert.Equal(CheatFile.Managed.IsValidName(text), CheatFile.IsValidName(text));
+                Same(t => SaveLibrary.SramPathFor(Rom_(t), "SNES"));
+                Same(t => SaveLibrary.SramPathFor("x.sfc", t));
+                Same(t => SaveLibrary.FlatSramPathFor(Rom_(t)));
+                Same(t => SaveLibrary.StatePathFor(Rom_(t), 2));
+                Same(t => SaveLibrary.StatePathFor("x.sfc", 1, Folder(t)));
+                Same(t => SaveLibrary.ResumeStatePathFor(Rom_(t)));
+                Same(t => SaveLibrary.ResumeStatePathFor("x.sfc", Folder(t)));
+                Same(t => SaveLibrary.PicturePathFor(Rom_(t)));
+                Same(t => ConfigStore.For(t));
+                Same(t => ConfigStore.For(t, "list.json"));
+                Same(t => ConfigStore.LegacyPathFor(t));
+                Same(t => ConfigRoot.ComputeFor(Folder(t), false, At("home")));
+                Same(t => ConfigRoot.ComputeFor(At("base"), true, Folder(t)));
+                Same(t => ConfigRoot.MacDataDirectoryFor(Folder(t)));
+                Same(t => ConfigRoot.BundleContentsFor(Path.Combine(Folder(t), "Contents", "MacOS")));
+                Same(t => ConfigRoot.SeedDirectoryFor(Path.Combine(Folder(t), "Contents", "MacOS"), true));
+                Same(t => DataMigration.LegacyRootFor(Folder(t)));
+                Same(t => CheatFile.IsValidName(t));
+                Same(t => global::EmuSen.Galaxia.Text.Suggestion.Hint(t, new[] { t, "cheat" }));
+                // A path handed back holds U+FFFD where the caller's held the half.
+                Assert.Equal(Path.Combine(DataStore.Saves, mended + ".srm"), SaveLibrary.FlatSramPathFor(text + ".srm"));
 
-                string Rom(string root) => Put(Path.Combine(root, "roms", text + ".sfc"), "rom " + i);
-                CheatFile List() => new() { Cheats = { new CheatFileEntry { Description = "cheat " + text } } };
-                BothAlike($"save {i}", root => AtomicFile.Write(Path.Combine(root, "Saves", text + ".srm"), new byte[] { 1, 2, 3 }) + " " + Answered(() => AtomicFile.TryRead(Path.Combine(root, "Saves", text + ".srm")), root),
-                    root => AtomicFile.Managed.Write(Path.Combine(root, "Saves", text + ".srm"), new byte[] { 1, 2, 3 }) + " " + Answered(() => AtomicFile.Managed.TryRead(Path.Combine(root, "Saves", text + ".srm")), root));
-                BothAlike($"hash {i}", root => RomHash.Md5(Rom(root)), root => RomHash.Managed.Md5(Rom(root)));
-                BothAlike($"cheats to a path {i}", root => CheatFile.SaveTo(Path.Combine(root, text, "list.json"), List()) + " " + Answered(() => CheatFile.LoadFrom(Path.Combine(root, text, "list.json")), root),
-                    root => CheatFile.Managed.SaveTo(Path.Combine(root, text, "list.json"), List()) + " " + Answered(() => CheatFile.Managed.LoadFrom(Path.Combine(root, text, "list.json")), root));
-                BothAlike($"config file {i}", root =>
+                string Rom(string root, string t) => Put(Path.Combine(root, "roms", t + ".sfc"), "rom " + i);
+                CheatFile List(string t) => new() { Cheats = { new CheatFileEntry { Description = "cheat " + t } } };
+                BothAlike($"save {i}", text, (root, t) => AtomicFile.Write(Path.Combine(root, "Saves", t + ".srm"), new byte[] { 1, 2, 3 }) + " " + Answered(() => AtomicFile.TryRead(Path.Combine(root, "Saves", t + ".srm")), root));
+                BothAlike($"hash {i}", text, (root, t) => RomHash.Md5(Rom(root, t)));
+                BothAlike($"cheats to a path {i}", text, (root, t) => CheatFile.SaveTo(Path.Combine(root, t, "list.json"), List(t)) + " " + Answered(() => CheatFile.LoadFrom(Path.Combine(root, t, "list.json")), root));
+                BothAlike($"config file {i}", text, (root, t) =>
                 {
-                    var file = new ConfigFile<CheatFile>(Path.Combine("cheats", text), text + ".json");
-                    return $"{file.Save(List())} {Answered(() => file.Load(), root)} {file.Delete()}";
-                }, root =>
-                {
-                    var file = new ConfigFile<CheatFile>(Path.Combine("cheats", text), text + ".json");
-                    return $"{file.SaveManaged(List())} {Answered(() => file.LoadManaged(), root)} {file.DeleteManaged()}";
+                    var file = new ConfigFile<CheatFile>(Path.Combine("cheats", t), t + ".json");
+                    return $"{file.Save(List(t))} {Answered(() => file.Load(), root)} {file.Delete()}";
                 });
-                BothAlike($"a game's list {i}", root =>
+                BothAlike($"a game's list {i}", text, (root, t) =>
                 {
-                    GameCheats game = GameCheats.For("SNES", Rom(root))!;
-                    return $"{game.Name} {game.SaveIfChanged(List())} {Answered(() => game.Load(), root)} {game.SaveIfChanged(List())}";
-                }, root =>
-                {
-                    GameCheats game = GameCheats.Managed.For("SNES", Rom(root))!;
-                    return $"{game.Name} {game.SaveIfChanged(List())} {Answered(() => game.Load(), root)} {game.SaveIfChanged(List())}";
+                    GameCheats game = GameCheats.For("SNES", Rom(root, t))!;
+                    return $"{game.Name} {game.SaveIfChanged(List(t))} {Answered(() => game.Load(), root)} {game.SaveIfChanged(List(t))}";
                 });
 
-                string Legacy(string root)
+                string Legacy(string root, string t)
                 {
-                    string legacy = Path.Combine(root, "legacy " + text);
-                    Put(Path.Combine(legacy, "Saves", text + ".srm"), "save");
-                    Put(Path.Combine(legacy, "Games", "SNES", text + ".sfc"), "rom");
+                    string legacy = Path.Combine(root, "legacy " + t);
+                    Put(Path.Combine(legacy, "Saves", t + ".srm"), "save");
+                    Put(Path.Combine(legacy, "Games", "SNES", t + ".sfc"), "rom");
                     return legacy;
                 }
-                BothAlike($"migration {i}", root => DataMigration.Run(Legacy(root), Path.Combine(root, "home " + text)), root => DataMigration.Managed.Run(Legacy(root), Path.Combine(root, "home " + text)));
-                BothAlike($"seed {i}", root => DataMigration.SeedFromBundle(Legacy(root), Path.Combine(root, "home")), root => DataMigration.Managed.SeedFromBundle(Legacy(root), Path.Combine(root, "home")));
-                BothAlike($"tree {i}", root => DataMigration.CopyTree(Legacy(root), Path.Combine(root, "copy")), root => DataMigration.Managed.CopyTree(Legacy(root), Path.Combine(root, "copy")));
-                BothAlike($"remaining {i}", root => DataMigration.RemainingLibraryDirectories(Legacy(root)), root => DataMigration.Managed.RemainingLibraryDirectories(Legacy(root)));
+                BothAlike($"migration {i}", text, (root, t) => DataMigration.Run(Legacy(root, t), Path.Combine(root, "home " + t)));
+                BothAlike($"seed {i}", text, (root, t) => DataMigration.SeedFromBundle(Legacy(root, t), Path.Combine(root, "home")));
+                BothAlike($"tree {i}", text, (root, t) => DataMigration.CopyTree(Legacy(root, t), Path.Combine(root, "copy")));
+                BothAlike($"remaining {i}", text, (root, t) => DataMigration.RemainingLibraryDirectories(Legacy(root, t)));
 
                 DateTime day = new(2026, 10, 10, 12, 0, 0);
-                BothAlike($"log {i}", root =>
+                BothAlike($"log {i}", text, (root, t) =>
                 {
-                    ErrorLog.DirectoryOverride = Path.Combine(root, "logs " + text);
+                    ErrorLog.DirectoryOverride = Path.Combine(root, "logs " + t);
                     ErrorLog.ResetForTests();
-                    return $"{ErrorLog.Root()} {ErrorLog.PathFor(day)} {Logged(ErrorLog.Error("test", "m"))}";
-                }, root =>
-                {
-                    ErrorLog.DirectoryOverride = Path.Combine(root, "logs " + text);
-                    ErrorLog.ResetForTests();
-                    return $"{ErrorLog.Managed.Root()} {ErrorLog.Managed.PathFor(day)} {Logged(ErrorLog.Managed.Write(DateTime.Now, "ERROR", "test", "m", null, null))}";
+                    return $"{ErrorLog.Root()} {ErrorLog.PathFor(day)} {Logged(ErrorLog.Error("test", "m " + t))}";
                 });
                 ErrorLog.DirectoryOverride = _logOverride;
             }
         }
 
-        // The words of a failed write come back as a list, each item ended by a NUL, so a path holding one would be said as two messages.
+        // The file lands with the bytes .NET's own file calls give such a name, as measured in §21.2.
         [Fact]
-        public void A_path_holding_a_nul_is_said_as_one_message_by_whichever_side_writes_it()
+        public void A_file_named_with_half_a_pair_lands_with_the_bytes_dotnet_writes()
         {
-            Assert.False(GalaxiaNative.Takes("a\0b", listed: true));
-            Assert.Equal(GalaxiaNative.Active, GalaxiaNative.Takes("a\0b"));
-            BothAlike("nul write", root => AtomicFile.Write(Path.Combine(root, "a\0b.srm"), new byte[] { 1 }), root => AtomicFile.Managed.Write(Path.Combine(root, "a\0b.srm"), new byte[] { 1 }));
-            BothAlike("nul read", root => AtomicFile.TryRead(Path.Combine(root, "a\0b.srm")), root => AtomicFile.Managed.TryRead(Path.Combine(root, "a\0b.srm")));
+            string folder = At("bytes");
+            Assert.True(AtomicFile.Write(Path.Combine(folder, "a\uD800b.srm"), new byte[] { 7 }));
+            Assert.Equal(new[] { Path.Combine(folder, "a�b.srm") }, Directory.GetFiles(folder));
+            Assert.Equal(new byte[] { 7 }, AtomicFile.TryRead(Path.Combine(folder, "a\uDC00b.srm")));
+        }
+
+        // The words of a failed write come back as a list, each item ended by a NUL, so a path holding one is refused before the call, said as one message.
+        [Fact]
+        public void A_path_holding_a_nul_is_refused_in_one_message_and_read_as_no_file()
+        {
+            string path = At("nul", "a\0b.srm");
+            Assert.False(AtomicFile.Write(path, new byte[] { 1 }));
+            Assert.Equal(new[] { $"{path}: a file name cannot hold a NUL; the previous file is unchanged" }, Reported());
+            Assert.False(Directory.Exists(At("nul")));
+            Assert.Null(AtomicFile.TryRead(path));
+            Assert.Empty(Reported());
+            Assert.Throws<ArgumentException>(() => MediumLock.TryTake(path, "Game"));
         }
     }
 }

@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             _output = output;
             Assert.True(ServiceLibrary.Ready, ServiceLibrary.Report);
-            Assert.True(PlatformLibrary.GalaxiaActive, "the lock's parity needs Galaxia's library");
+            Assert.True(PlatformLibrary.Available, PlatformLibrary.Report);
             Directory.CreateDirectory(_root);
             ConfigDiagnostics.Sink = _said.Add;
         }
@@ -178,9 +178,9 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
-        // The lock's two tables: each half's own sequence answers alike, and a file one half holds is another program's to the other.
+        // The library's lock answers its sequence as the C#'s table did, and a lock file another program holds, or one the library holds, is the other's to each.
         [Fact]
-        public void The_library_lock_and_the_csharp_lock_answer_alike_and_refuse_each_other()
+        public void The_library_lock_answers_as_the_csharp_lock_did_and_refuses_another_program()
         {
             string m = Path.Combine(_root, "lock", "m.mcr"), n = Path.Combine(_root, "lock", "n.mcr");
             string Sequence(Func<string, string, bool, MediumLock?> take, Func<string, string?> holder, string card)
@@ -196,12 +196,14 @@ namespace EmuSen.WiseMan.Crystal
                 using (MediumLock? solo = take(card, "Game C", false)) log.Add($"{solo is not null} {take(card, "Game D", true) is not null} {holder(card)}");
                 return string.Join("\n", log);
             }
-            Assert.True(MediumLockNative.Takes(n, "x"));
-            Assert.Equal(Sequence(MediumLock.Managed.TryTake, MediumLock.Managed.HolderOf, m), Sequence(MediumLock.TryTake, MediumLock.HolderOf, n));
-            using (MediumLock.Managed.TryTake(m, "Game A"))
+            _golden = new ParityGolden("MediumLockSequence");
+            Same(Sequence(MediumLock.TryTake, MediumLock.HolderOf, n));
+            _golden.Check(1);
+            Directory.CreateDirectory(Path.GetDirectoryName(m)!);
+            using (new FileStream(m + MediumLock.Suffix, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None))
                 Assert.Equal(("another program", true), (MediumLock.HolderOf(m), MediumLock.TryTake(m, "x") is null));
             using (MediumLock.TryTake(n, "Game A"))
-                Assert.Equal(("another program", true), (MediumLock.Managed.HolderOf(n), MediumLock.Managed.TryTake(n, "x") is null));
+                Assert.Throws<IOException>(() => new FileStream(n + MediumLock.Suffix, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None).Dispose());
         }
 
         // What a read or a write that failed reports, as the C# reported it.

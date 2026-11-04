@@ -251,7 +251,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(1, Named<Dropdown>(s, "GamelistSortBy").SelectedIndex);
         }, default);
 
-        // Q92: Scale-up grows a menu from half its size to its own over 117 ms, linearly; None draws it whole at once, and the launch screen's card follows the same switch.
+        // Q92: Scale-up grows a menu from half its size to its own over 117 ms, linearly; None draws it whole at once, and the launch screen's card follows the same switch; a card slides instead (EmuSen_Interface.md §20.6).
         [Fact]
         public Task The_menu_opening_grows_a_menu_over_117_ms_or_not_at_all() => Session.Dispatch(() =>
         {
@@ -259,20 +259,31 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(BigPictureInterface.OpeningScaleUp, new BigPictureInterface().MenuOpeningEffect);
             s.Settings.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningScaleUp;
             ThemedLibraryPadTests.Enter(s, "snes");
-            MenuPanel menu = PadMenu.Big(s.Window);
-            s.Pad.Start();
+            s.Pad.Select();
+            s.Settle();
+            MenuPanel menu = ThemedCollectionsTests.Named<MenuPanel>(s, "GameOptionsMenu");
             double first = menu.OpeningScale;
             Assert.InRange(first, 0.5, 0.95);
             s.Run(40, 8);
             Assert.Equal(Math.Min(1, first + 0.5 * 40 / 117.0), menu.OpeningScale, 0.02);
             s.Run(120);
             Assert.Equal(1, menu.OpeningScale);
+            s.Pad.Select();
+            s.Settle();
+
+            MenuPanel card = PadMenu.Big(s.Window);
+            s.Pad.Start();
+            Assert.Equal((1.0, 1.0), (card.OpeningScale, card.SlideOut));
+            s.Run(300);
             s.Pad.B();
+            s.Run(300);
 
             s.Settings.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
-            s.Pad.Start();
-            Assert.Equal(1, menu.OpeningScale);
-            s.Pad.B();
+            s.Pad.Select();
+            s.Settle();
+            Assert.Equal(1, ThemedCollectionsTests.Named<MenuPanel>(s, "GameOptionsMenu").OpeningScale);
+            s.Pad.Select();
+            s.Settle();
             Assert.Contains(InterfaceSettingsPane.OpeningChoices, c => c.Text == "Scale-up");
             Assert.Contains(InterfaceSettingsPane.OpeningChoices, c => c.Text == "None");
         }, default);

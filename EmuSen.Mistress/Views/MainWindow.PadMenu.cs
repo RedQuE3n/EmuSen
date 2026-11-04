@@ -92,6 +92,12 @@ namespace EmuSen.Mistress.Views
             _padMenuPages.Add(new PadMenuPage(title, rows, breadcrumb));
             PadCard.Title = title;
             ShowPadMenuPage();
+            // A card opened from another card, as Start Console from the List card, comes in as a card of its own (EmuSen_Interface.md §20.6).
+            if (_cardSlide.Moving is null)
+            {
+                _cardSlide.Enter(PadCard.CardPanel, UiClock(), MenusScaleUp);
+                RunCardSlide();
+            }
         }
 
         public const string SaveStateRow = "Save State", LoadStateRow = "Load State";
@@ -297,7 +303,7 @@ namespace EmuSen.Mistress.Views
 
         private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "home/") + title;
 
-        // The Pause Card slides out first and the game it paused resumes only once it is gone; any other card goes at once (EmuSen_Interface.md §20.6).
+        // The card slides out first, and the game it paused resumes, or the screen beneath takes the pad, only once it is gone (EmuSen_Interface.md §20.6).
         private void ClosePadMenu()
         {
             if (!_padMenuOpen) return;
@@ -307,12 +313,8 @@ namespace EmuSen.Mistress.Views
             _padQuiet = true;
             _closingResumes = _padMenuPaused;
             _padMenuPaused = false;
-            if (_padMenuInGame)
-            {
-                _cardSlide.Leave(PadCard.CardPanel, UiClock(), MenusScaleUp, PadMenuGone);
-                RunCardSlide();
-            }
-            else PadMenuGone();
+            _cardSlide.Leave(PadCard.CardPanel, UiClock(), MenusScaleUp, PadMenuGone);
+            RunCardSlide();
         }
 
         // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.

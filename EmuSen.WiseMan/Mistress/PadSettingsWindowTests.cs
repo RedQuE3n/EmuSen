@@ -398,6 +398,9 @@ namespace EmuSen.WiseMan.Mistress
             Choose(window, pad, "Quit Game");
             PadMenu.Answer(window, pad, yes: true);
             Assert.True(window.GetControl<Control>("LibraryView").IsVisible);
+            // The card slides out before the grid takes the pad again (EmuSen_Interface.md §20.6.1).
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (window.GetControl<Control>("PadMenuPanel").IsVisible && clock.ElapsedMilliseconds < 5000) { pad.Tick(); Avalonia.Threading.Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(5); }
 
             pad.A();
             var ask = Assert.IsType<ResumeWindow>(Sheets(window).Current);

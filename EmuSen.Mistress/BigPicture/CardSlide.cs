@@ -4,7 +4,7 @@ using EmuSen.LunaP.Theme;
 
 namespace EmuSen.Mistress.BigPicture
 {
-    // The Pause Card's entrance and exit: the panel in from the left edge and the help band up from the foot over Enter, both back out over Exit, at once with motion reduced - see EmuSen_Interface.md §20.6.
+    // Every card's entrance and exit on the Card form: the panel in from the left edge and the help band up from the foot over Enter, both back out over Exit, at once with motion reduced - see EmuSen_Interface.md §20.6.
     public sealed class CardSlide
     {
         private MenuPanel? _panel;

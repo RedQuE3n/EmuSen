@@ -309,6 +309,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 s.Run(3000);
                 Assert.Equal(Rom(s, game), Running(s.Window));
                 ThemedLibraryFlowTests.QuitGame(s);
+                // The card slides out before the view takes the pad (EmuSen_Interface.md §20.6.1).
+                s.Run(200);
                 Assert.Null(Running(s.Window));
                 if (s.View != "gamelist") s.Pad.A();
                 Assert.Equal("gamelist", s.View);
@@ -370,6 +372,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Null(Screen(s));
 
             ThemedLibraryFlowTests.Choose(s, "Back to Library");
+            s.Run(200);
             s.Pad.B();
             Assert.Equal("system", s.View);
             s.Pad.B();
@@ -394,6 +397,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.NotNull(Screen(s));
             s.Run(3000);
             ThemedLibraryFlowTests.QuitGame(s);
+            s.Run(200);
 
             s.Pad.A();
             Assert.IsType<ResumeWindow>(Sheets(s).Current);
@@ -753,6 +757,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var s = Open(BigPictureInterface.LaunchNormal);
             ThemedSwitchesTests.Choose(s, "LaunchScreenDuration", "Disabled");
+            s.Run(200);
             Assert.Equal(BigPictureInterface.LaunchDisabled, s.Settings.BigPictureInterface.LaunchScreenDuration);
             Assert.Equal(BigPictureInterface.LaunchDisabled, AppSettings.Load().BigPictureInterface.LaunchScreenDuration);
             ThemedLibraryPadTests.Enter(s, "snes");

@@ -71,6 +71,7 @@ namespace EmuSen.Mistress.Views
             }
             _gamepad.Poll();
             _menuOpening.Advance(UiClock());
+            _cardSlide.Advance(UiClock());
             // Before anything else reads the pad: the press that wakes the screensaver is its own (§4.75).
             if (StepScreensaver()) return;
             if (!KeyboardSteers() && !_gamepad.IsConnected) return;
@@ -154,6 +155,8 @@ namespace EmuSen.Mistress.Views
             else if (_settings is not null) SettingsPadCommand(button);
             else if (_padMenuOpen) PadMenuCommand(button);
             else if (_gamePage is not null) GamePagePadCommand(button);
+            // A card sliding out keeps the pad from the screen beneath, which Start opens it again over.
+            else if (_cardSlide.Leaving) { if (button == UiButton.Menu) OpenPadMenu(); }
             else if (LibraryView.IsVisible && ThemedLibraryShown && button == UiButton.Screensaver && _themed?.SelectedGame is { Folder: false, IsCollection: false } game) ShowGamePage(game.File);
             else if (LibraryView.IsVisible && ThemedLibraryShown) ThemedPadCommand(button);
             else if (OwnScreenShown) OwnScreenPadCommand(button);

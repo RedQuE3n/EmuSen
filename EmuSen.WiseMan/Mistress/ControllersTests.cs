@@ -118,6 +118,10 @@ namespace EmuSen.WiseMan.Mistress
             second.Select();
             Assert.True(MenuOpen(window));
             first.B();
+            Assert.False(PadMenu.IsOpen(window));
+            // The card slides out before the grid takes the pad again (EmuSen_Interface.md §20.6.1).
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (MenuOpen(window) && clock.ElapsedMilliseconds < 5000) { first.Tick(); Dispatcher.UIThread.RunJobs(); System.Threading.Thread.Sleep(5); }
             Assert.False(MenuOpen(window));
 
             SettingsPad.Open(window, second);

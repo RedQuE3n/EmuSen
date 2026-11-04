@@ -69,16 +69,23 @@ namespace EmuSen.WiseMan.Fixtures
         public static Color Colour(int game, string folder) =>
             Color.FromRgb((byte)(40 + 17 * game % 180), (byte)(60 + folder.Length * 23 % 160), (byte)(90 + 31 * game % 150));
 
-        // Writes <root>/<system>/<type>/<rom name>.png for every game; must run on the UI thread of a headless session.
-        public static void WriteMedia(string root)
+        // Real box shapes, width by height: a landscape SNES and N64 box, a tall NES case, a near-square Game Boy box (EmuSen_Interface.md §21).
+        public static IReadOnlyDictionary<string, (int W, int H)> BoxCovers { get; } = new Dictionary<string, (int, int)>
+        {
+            ["nes"] = (420, 600), ["snes"] = (560, 400), ["n64"] = (560, 400), ["gb"] = (540, 600), ["gbc"] = (540, 600),
+        };
+
+        // Writes <root>/<system>/<type>/<rom name>.png for every game, covers at each box's shape when boxes is set; must run on the UI thread of a headless session.
+        public static void WriteMedia(string root, bool boxes = false)
         {
             foreach ((ThemeSystem system, string ext) in Systems)
             {
                 IReadOnlyList<SceneGame> games = Games(system, ext);
                 for (int i = 0; i < games.Count; i++)
                 {
-                    foreach ((string folder, (int w, int h)) in MediaSizes)
+                    foreach ((string folder, (int w0, int h0)) in MediaSizes)
                     {
+                        (int w, int h) = boxes && folder == "covers" ? BoxCovers[system.Name] : (w0, h0);
                         string path = Path.Combine(root, system.Name, folder, Path.GetFileNameWithoutExtension(games[i].File) + ".png");
                         if (File.Exists(path)) continue;
                         Directory.CreateDirectory(Path.GetDirectoryName(path)!);

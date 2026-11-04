@@ -37,7 +37,7 @@ tree
           22 MenuRow at=96,567,1056,81 by=panel focus heard="Hidden games, Not listed" limit=0,0,1920,1200 name=SettingsRow.hidden role=listitem
           23 MenuRow at=96,648,1056,81 by=panel focus heard=Cheats limit=0,0,1920,1200 name=SettingsRow.cheats role=listitem
           24 MenuRow at=96,729,1056,81 by=panel focus heard="Compressed discs" limit=0,0,1920,1200 name=SettingsRow.discs role=listitem
-          25 MenuRow at=96,810,1056,81 by=panel focus heard="ES-DE media folder, <temp>/EmuSenOwnLookMedia" limit=0,0,1920,1200 name=SettingsRow.media role=listitem
+          25 MenuRow at=96,810,1056,81 by=panel focus heard="ES-DE media folder, <temp>/EmuSenOwnLookBoxes" limit=0,0,1920,1200 name=SettingsRow.media role=listitem
           26 MenuRow at=96,891,1056,81 by=panel focus heard="ES-DE theme folder, None" limit=0,0,1920,1200 name=SettingsRow.themefolder role=listitem
         27 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#26262BFF role=none
           28 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none

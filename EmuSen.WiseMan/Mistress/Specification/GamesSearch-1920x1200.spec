@@ -34,8 +34,8 @@ tree
           19 ScrollViewer at=121.5,151.5,1677,63 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
         20 Panel at=213,234,1494,360 by=panel heard=All limit=0,0,1920,1200 name=GalleryGrid role=none
           21 CoverCard at=213,234,270,360 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Granite Choir (Synthetic).nes" role=none
-            22 Border at=213,405,270,189 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
-              23 Image at=213,405,270,189 by=clip drawn limit=213,405,270,189 nohit role=image
+            22 Border at=222,234,253.5,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
+              23 Image at=222,234,252.34,360 by=clip drawn limit=222,234,253.5,360 nohit role=image
         24 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=GalleryHelpBar paints=#1B1B1EFF,#707070FF role=none
           25 HintBar at=96,1074,1728,45 by=panel heard="Type, Delete, Space, Done, Move to grid, Home" limit=0,0,1920,1200 role=group
         26 OnScreenKeyboard at=0,597,1920,456 by=panel focus heard="On-screen keyboard" limit=0,0,1920,1200 name=GalleryKeyboard paints=#1B1B1EFF,#707070FF role=none

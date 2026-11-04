@@ -28,28 +28,28 @@ tree
         13 TextBlock at=64,374,400,24 box=400,24 by=panel caps=13.999 drawn face=Barlow heard=RECENT layout=70.14,24 limit=0,0,1280,800 name=HubRecentTitle paints=#8D8D91FF role=text size=20 text=RECENT
         14 Panel at=64,416,1152,160 by=panel heard=Recent limit=0,0,1280,800 name=HubShelf role=none
           15 CoverCard at=64,416,120,160 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1280,800 name="HubTile.<run>/Roms/Aurora Drift (Synthetic).sfc" role=none
-            16 Border at=66,416,117,160 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              17 Image at=66,416,117,160 by=clip drawn limit=66,416,117,160 nohit role=image
+            16 Border at=64,490,120,86 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              17 Image at=64,490,120,85.6 by=clip drawn limit=64,490,120,86 nohit role=image
           18 CoverCard at=208,416,120,160 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1280,800 name="HubTile.<run>/Roms/Brass Lantern (Synthetic).sfc" role=none
-            19 Border at=210,416,117,160 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              20 Image at=210,416,117,160 by=clip drawn limit=210,416,117,160 nohit role=image
-            21 Path at=294,424,24,24 by=panel limit=0,0,1280,800 name=CoverHeart nohit role=none
+            19 Border at=208,490,120,86 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              20 Image at=208,490,120,85.6 by=clip drawn limit=208,490,120,86 nohit role=image
+            21 Path at=296,498,24,24 by=panel limit=0,0,1280,800 name=CoverHeart nohit role=none
           22 CoverCard at=352,416,120,160 by=panel heard="Dune Relay (Synthetic)" limit=0,0,1280,800 name="HubTile.<run>/Roms/Dune Relay (Synthetic).sfc" role=none
-            23 Border at=354,416,117,160 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              24 Image at=354,416,117,160 by=clip drawn limit=354,416,117,160 nohit role=image
+            23 Border at=352,490,120,86 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              24 Image at=352,490,120,85.6 by=clip drawn limit=352,490,120,86 nohit role=image
           25 CoverCard at=496,416,120,160 by=panel heard="Ember Circuit (Synthetic)" limit=0,0,1280,800 name="HubTile.<run>/Roms/Ember Circuit (Synthetic).sfc" role=none
-            26 Border at=498,416,117,160 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              27 Image at=498,416,117,160 by=clip drawn limit=498,416,117,160 nohit role=image
+            26 Border at=496,490,120,86 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              27 Image at=496,490,120,85.6 by=clip drawn limit=496,490,120,86 nohit role=image
           28 CoverCard at=640,416,120,160 by=panel heard="Fable of Tiles (Synthetic), favourite" limit=0,0,1280,800 name="HubTile.<run>/Roms/Fable of Tiles (Synthetic).nes" role=none
-            29 Border at=640,492,120,84 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              30 Image at=640,492,120,84 by=clip drawn limit=640,492,120,84 nohit role=image
-            31 Path at=728,500,24,24 by=panel limit=0,0,1280,800 name=CoverHeart nohit role=none
+            29 Border at=644,416,113,160 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              30 Image at=644,416,112.15,160 by=clip drawn limit=644,416,113,160 nohit role=image
+            31 Path at=724,424,24,24 by=panel limit=0,0,1280,800 name=CoverHeart nohit role=none
           32 CoverCard at=784,416,120,160 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1280,800 name="HubTile.<run>/Roms/Granite Choir (Synthetic).nes" role=none
-            33 Border at=784,492,120,84 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              34 Image at=784,492,120,84 by=clip drawn limit=784,492,120,84 nohit role=image
+            33 Border at=788,416,113,160 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              34 Image at=788,416,112.15,160 by=clip drawn limit=788,416,113,160 nohit role=image
           35 CoverCard at=928,416,120,160 by=panel heard="Hollow Comet (Synthetic)" limit=0,0,1280,800 name="HubTile.<run>/Roms/Hollow Comet (Synthetic).gb" role=none
-            36 Border at=928,456,120,120 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
-              37 Image at=928,456,120,120 by=clip drawn limit=928,456,120,120 nohit role=image
+            36 Border at=928,443,120,134 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
+              37 Image at=928,443,120,133.2 by=clip drawn limit=928,443,120,134 nohit role=image
         38 Panel at=64,622,1152,64 by=panel limit=0,0,1280,800 name=HubPlaces role=none
           39 Panel at=64,622,150,64 by=panel heard="Games, 8 games" limit=0,0,1280,800 name=HubPlace.games role=none
             40 Border at=64,622,150,64 by=panel limit=0,0,1280,800 paints=#26262BFF role=none

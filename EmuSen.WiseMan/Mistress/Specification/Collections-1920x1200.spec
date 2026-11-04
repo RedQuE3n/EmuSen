@@ -75,14 +75,14 @@ tree
                       60 TextBlock at=1192.5,352.5,595.5,40.5 box=397,27 by=panel caps=15.3989 drawn face=Barlow heard="3 games" layout=77.53,26.4 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=22 text="3 games"
                       61 WrapPanel at=1192.5,411,595.5,165 by=panel limit=0,0,1920,1200 role=none
                         62 CoverCard at=1192.5,411,150,165 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1920,1200 role=none
-                          63 Border at=1207.5,411,121.5,165 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
-                            64 Image at=1207.5,411,121.5,165 by=clip drawn limit=1207.5,411,121.5,165 nohit role=image
+                          63 Border at=1192.5,469.5,150,108 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
+                            64 Image at=1192.5,469.5,150,107 by=clip drawn limit=1192.5,469.5,150,108 nohit role=image
                         65 CoverCard at=1360.5,411,150,165 by=panel heard="Brass Lantern (Synthetic)" limit=0,0,1920,1200 role=none
-                          66 Border at=1375.5,411,121.5,165 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
-                            67 Image at=1375.5,411,121.5,165 by=clip drawn limit=1375.5,411,121.5,165 nohit role=image
+                          66 Border at=1360.5,469.5,150,108 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
+                            67 Image at=1360.5,469.5,150,107 by=clip drawn limit=1360.5,469.5,150,108 nohit role=image
                         68 CoverCard at=1528.5,411,150,165 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 role=none
-                          69 Border at=1543.5,411,121.5,165 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
-                            70 Image at=1543.5,411,121.5,165 by=clip drawn limit=1543.5,411,121.5,165 nohit role=image
+                          69 Border at=1528.5,469.5,150,108 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
+                            70 Image at=1528.5,469.5,150,107 by=clip drawn limit=1528.5,469.5,150,108 nohit role=image
                       71 TextBlock at=1192.5,594,595.5,79.5 box=397,53 by=panel caps=15.3989 drawn face=Barlow heard="A opens it as a section of the library; X renames it, adds games or removes it." layout=350.57,52.8 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=22 text="A opens it as a section of the library; X renames it, adds games or removes it."
               72 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=AdaptiveHelpBar paints=#707070FF role=none
                 73 HintBar at=96,1074,1728,45 by=panel heard="Open, Back, Collections, Add the selected game, More, List" limit=0,0,1920,1200 role=group

@@ -34,46 +34,46 @@ tree
           19 StackPanel at=24,258,1672,173 by=fixed-scroll heard=Recent in=2 limit=0,0,1720,1146 name=HubShelf role=none
             20 StackPanel at=24,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               21 CoverCard at=24,258,100,133 by=fixed-scroll heard="Aurora Drift (Synthetic)" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Aurora Drift (Synthetic).sfc" role=none
-                22 Border at=25,258,98,133 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  23 Image at=25,258,98,133 by=clip drawn in=2 limit=25,258,98,133 nohit role=image
+                22 Border at=24,320,100,72 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  23 Image at=24,320,100,71.33 by=clip drawn in=2 limit=24,320,100,72 nohit role=image
               24 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=24,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Aurora Drift (Synthetic)" in=2 layout=93.78,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Aurora Drift (Synthetic)"
               25 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=24,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard="Super Nintendo" in=2 layout=72.37,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text="Super Nintendo"
             26 StackPanel at=140,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               27 CoverCard at=140,258,100,133 by=fixed-scroll heard="Brass Lantern (Synthetic), favourite" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Brass Lantern (Synthetic).sfc" role=none
-                28 Border at=141,258,98,133 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  29 Image at=141,258,98,133 by=clip drawn in=2 limit=141,258,98,133 nohit role=image
-                30 Path at=221,262,14,14 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverHeart nohit role=none
+                28 Border at=140,320,100,72 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  29 Image at=140,320,100,71.33 by=clip drawn in=2 limit=140,320,100,72 nohit role=image
+                30 Path at=222,324,14,14 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverHeart nohit role=none
               31 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=140,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Brass Lantern (Synthetic)" in=2 layout=93.03,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Brass Lantern (Synthetic)"
               32 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=140,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard="Super Nintendo" in=2 layout=72.37,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text="Super Nintendo"
             33 StackPanel at=256,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               34 CoverCard at=256,258,100,133 by=fixed-scroll heard="Dune Relay (Synthetic)" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Dune Relay (Synthetic).sfc" role=none
-                35 Border at=257,258,98,133 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  36 Image at=257,258,98,133 by=clip drawn in=2 limit=257,258,98,133 nohit role=image
+                35 Border at=256,320,100,72 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  36 Image at=256,320,100,71.33 by=clip drawn in=2 limit=256,320,100,72 nohit role=image
               37 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=256,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Dune Relay (Synthetic)" in=2 layout=97.55,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Dune Relay (Synthetic)"
               38 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=256,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard="Super Nintendo" in=2 layout=72.37,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text="Super Nintendo"
             39 StackPanel at=372,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               40 CoverCard at=372,258,100,133 by=fixed-scroll heard="Ember Circuit (Synthetic)" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Ember Circuit (Synthetic).sfc" role=none
-                41 Border at=373,258,98,133 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  42 Image at=373,258,98,133 by=clip drawn in=2 limit=373,258,98,133 nohit role=image
+                41 Border at=372,320,100,72 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  42 Image at=372,320,100,71.33 by=clip drawn in=2 limit=372,320,100,72 nohit role=image
               43 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=372,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Ember Circuit (Synthetic)" in=2 layout=98.81,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Ember Circuit (Synthetic)"
               44 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=372,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard="Super Nintendo" in=2 layout=72.37,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text="Super Nintendo"
             45 StackPanel at=488,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               46 CoverCard at=488,258,100,133 by=fixed-scroll heard="Fable of Tiles (Synthetic), favourite" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Fable of Tiles (Synthetic).nes" role=none
-                47 Border at=488,321,100,70 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  48 Image at=488,321,100,70 by=clip drawn in=2 limit=488,321,100,70 nohit role=image
-                49 Path at=570,325,14,14 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverHeart nohit role=none
+                47 Border at=491,258,94,133 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  48 Image at=491,258,93.22,133 by=clip drawn in=2 limit=491,258,94,133 nohit role=image
+                49 Path at=567,262,14,14 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverHeart nohit role=none
               50 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=488,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Fable of Tiles (Synthetic)" in=2 layout=94.16,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Fable of Tiles (Synthetic)"
               51 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=488,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard=NES in=2 layout=19.67,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text=NES
             52 StackPanel at=604,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               53 CoverCard at=604,258,100,133 by=fixed-scroll heard="Granite Choir (Synthetic)" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Granite Choir (Synthetic).nes" role=none
-                54 Border at=604,321,100,70 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  55 Image at=604,321,100,70 by=clip drawn in=2 limit=604,321,100,70 nohit role=image
+                54 Border at=607,258,94,133 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  55 Image at=607,258,93.22,133 by=clip drawn in=2 limit=607,258,94,133 nohit role=image
               56 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=604,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Granite Choir (Synthetic)" in=2 layout=94.96,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Granite Choir (Synthetic)"
               57 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=604,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard=NES in=2 layout=19.67,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text=NES
             58 StackPanel at=720,258,100,173 by=fixed-scroll in=2 limit=0,0,1720,1146 role=none
               59 CoverCard at=720,258,100,133 by=fixed-scroll heard="Hollow Comet (Synthetic)" in=2 limit=0,0,1720,1146 name="HubTile.<run>/Roms/Hollow Comet (Synthetic).gb" role=none
-                60 Border at=720,291,100,100 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
-                  61 Image at=720,291,100,100 by=clip drawn in=2 limit=720,291,100,100 nohit role=image
+                60 Border at=720,280,100,111 by=fixed-scroll in=2 limit=0,0,1720,1146 name=CoverBox paints=#26262BFF role=none
+                  61 Image at=720,280,100,111 by=clip drawn in=2 limit=720,280,100,111 nohit role=image
               62 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=720,399,100,16 box=100,16 caps=6.0662 drawn ellipsis face=Barlow heard="Hollow Comet (Synthetic)" in=2 layout=98.88,15.6 name=HubCoverLine paints=#D4D4D4FF role=text size=8.67 text="Hollow Comet (Synthetic)"
               63 TextBlock allow="a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them" at=720,417,100,14 box=100,14 caps=5.133 drawn face=Barlow heard="Game Boy" in=2 layout=46.27,13.2 name=HubCoverLine paints=#8D8D91FF role=text size=7.33 text="Game Boy"
           64 TextBlock at=24,441,1672,14 box=1672,14 by=fixed-scroll caps=5.133 drawn face=Barlow heard=PLACES in=2 layout=37.64,13.2 limit=0,0,1720,1146 name=HubPlacesTitle paints=#8D8D91FF role=text size=7.33 text=PLACES

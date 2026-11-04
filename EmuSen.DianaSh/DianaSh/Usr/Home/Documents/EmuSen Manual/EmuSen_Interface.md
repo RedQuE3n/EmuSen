@@ -438,7 +438,7 @@ on the big screen [18]; the desktop keeps them.
 
 ### 5.8 Art
 
-Covers in the console's box shape (`CoreDescriptor.CoverAspect`), never stretched, on SurfaceRaised; screenshots in the
+Covers whole at their own picture's shape (§21), a generated card in the console's box shape (`CoreDescriptor.CoverAspect`), never stretched, on SurfaceRaised; screenshots in the
 console's picture shape; the paused frame as art on Continue and the Pause Card; a game's best art as its page's hero
 under the OnArt scrim; the focused tile's art as Home's background at 40% opacity, blurred 40 units, under the Scrim,
 on by default with a switch (§0.6); a state's picture at 160 × 120; a missing cover a generated card with the title in
@@ -1832,3 +1832,51 @@ Items 4 to 6: `GameCropTests` (5, the game's crop through Settings' description 
 game's crop stored unchanged (caught by two `GameCropTests`), a slot row that steps nothing (caught by the memory cards
 test), the handheld's Volume row stepping in a game (caught by the volume test).
 
+
+## 21. Covers whole at their own shape (2026-11-04)
+
+Reported by the tester on 2026-11-04: in the own look, NES covers stood in a cell too small with their top and bottom
+cut; SNES and N64 covers lost a side; SG-1000, Master System and PlayStation 2 covers lost their top and bottom; Game Boy,
+Game Boy Color, Genesis, Sega CD, Dreamcast and PlayStation covers looked right. The approach below was approved the
+same day.
+
+**Cause.** LunaP's `CoverCard` sized each cover's box from `CoverItem.Aspect` and filled it with the picture scaled to cover
+it, so the box's clip cut whatever overflowed (LunaP's `docs/LunaP.md` §212.13). `MainWindow.CoverOf` passed
+`CoreDescriptor.CoverAspect` as that aspect. The table holds height over width, OpenEmu's convention (Settings Reference
+§4.33: NES 1.43, SNES 0.73, N64 0.70, Master System and SG-1000 1.4, PlayStation 2 1.41), and `CoverItem.Aspect` is width
+over height, so each of those consoles got a box of the inverse shape. Consoles at 1.0 (Game Boy, PlayStation,
+Dreamcast) were unaffected, and the Genesis family's 0.7 is itself written as width over height (`Endou_Native.md`
+§14.3's open item), which is why it looked right.
+
+**Change.** The picture owns its shape: `CoverCard` and the game page's hero cover now draw a picture whole at its own
+size's shape, never cut, never stretched, and `CoverAspect` shapes only the generated card of a game with no art. The shelf
+and the grid are unchanged in layout: each cell is fixed and the cover stands on its foot within the row's height, so a
+landscape box is wider and shorter and a tall case narrower, on one baseline, as the U5 mockups draw. The disc's cover
+beside the Pause Card (`PauseCardPane.ShowCover`) keeps its border only for the generated card, since a picture no longer
+fills the square cell. The Home card's cover (`ShowBeside`) and the desktop grid's `CoverTile` already drew a picture at
+its own shape and are unchanged. §5.8's "covers in the console's box shape" now holds for generated cards only.
+
+**Generated cards, one meaning for the field.** Decided 2026-11-04 by the tester, as the same defect: `cover_aspect` means
+height over width everywhere. A generated card took it as width over height, so a game without art on the NES, Master
+System, SG-1000 or PlayStation 2 was a landscape card and one on the SNES or N64 a tall card. `GameFacts.CardShape` is the
+one conversion to LunaP's width over height, used by `CoverOf` (Home, the grid, Collections and the Pause Card's disc
+cover) and the game page's hero. The Genesis, Sega CD and 32X values, 0.7, were the one row written the other way
+(`Endou_Native.md` §14.3's open item) and are now 1.4 in `md.json`, `mcd.json` and `32x.json`, a tall box like the NES's
+and the Master System's, argued from the boxes rather than measured. The desktop grid's `CoverTile` already read the table
+as height over width; it and the game page's facts now fall back to `CoreDescriptor.DefaultCoverAspect` rather than a
+literal. `CoverShapeTests` (WiseMan) draws a generated card for each of the fourteen systems through `CoverOf` and holds its
+height over width to the table and its orientation to the real box (tall, landscape or near-square); with the conversion
+removed, the ten not near-square failed.
+
+**Tests.** The own look's synthetic library now carries covers at real box shapes (`SyntheticLibrary.BoxCovers`: SNES and
+N64 560 x 400, NES 420 x 600, Game Boy and Game Boy Color 540 x 600), written to their own temporary folder so an older
+cache of 600 x 800 pictures is never reused, so every own-look recording and fit case holds a mixed shelf and grid. The
+recordings that draw covers (Home, HomeShelf, HomePlaces, HomeNothingLeft, HomeDesktop, Games, GamesSearch,
+GamesCollection and Collections at 1280 x 800 and 1920 x 1200) were recorded again after their pictures were looked at:
+each cover whole with its white edge on all four sides, on the shelf's and the grid's baseline. The recordings made before
+the change are the seeded fault's record: the cropping code produced them, and they differ from these in every cover's
+box. The sixteen game page states at both sizes were recorded again for the hero cover alone: the SNES game's 600 x 800
+cover had stood in a 0.73 box, cut at its sides, and now stands in its own 0.75 (196 to 201 units wide at 1280 x 800);
+the page's media tiles still fill their tiles. SettingsLibrary at both sizes moved only by the media folder's new name.
+LunaP's `CoverShapeTests` hold the shapes, the bands at each edge and the fit audit at 1280 x 800, 1920 x 1080 and
+3840 x 2160.

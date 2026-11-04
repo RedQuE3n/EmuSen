@@ -53,7 +53,7 @@ namespace EmuSen.Mistress.Views
             try
             {
                 GamePage m = Model;
-                Layout.Hero = new PageHero(m.Facts.Title, m.FactsLine, Load(m.Art.Hero), Load(m.Art.Cover), m.Facts.CoverAspect, m.Facts.Mark);
+                Layout.Hero = new PageHero(m.Facts.Title, m.FactsLine, Load(m.Art.Hero), Load(m.Art.Cover), GameFacts.CardShape(m.Facts.CoverAspect), m.Facts.Mark);
                 Layout.Poster.Video = m.Art.Clip;
                 Layout.SetActions(m.Actions);
                 PageContent content = Map(m.Content);

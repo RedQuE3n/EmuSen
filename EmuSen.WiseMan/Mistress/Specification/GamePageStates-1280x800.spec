@@ -16,9 +16,9 @@ tree
     1 LayoutTransformControl at=0,0,1280,800 by=panel limit=0,0,1280,800 role=none
       2 Panel at=0,0,1280,800 by=panel limit=0,0,1280,800 paints=#1B1B1EFF role=none
         3 PosterSlot at=0,0,1280,360 by=panel heard=Poster limit=0,0,1280,800 name=PagePoster nohit role=image
-        4 Border at=64,180,196,268 by=panel heard="Cobalt Harbor (Synthetic), cover" limit=0,0,1280,800 name=PageCover paints=#26262BFF role=none
-          5 Panel at=64,180,196,268 by=clip limit=64,180,196,268 role=none
-            6 Image at=64,180,196,268 by=clip drawn limit=64,180,196,268 nohit role=image
+        4 Border at=64,180,201,268 by=panel heard="Cobalt Harbor (Synthetic), cover" limit=0,0,1280,800 name=PageCover paints=#26262BFF role=none
+          5 Panel at=64,180,201,268 by=clip limit=64,180,201,268 role=none
+            6 Image at=64,180,201,268 by=clip drawn limit=64,180,201,268 nohit role=image
         7 Viewbox at=336,226,368,53 by=panel limit=0,0,1280,800 role=none
           8 ViewboxContainer at=336,226,368,53 by=clip limit=336,226,368,53 role=none
             9 TextBlock at=336,226,368,53 box=368,53 by=clip caps=30.7979 drawn face="Barlow Condensed Medium" heard="Cobalt Harbor (Synthetic)" layout=367.05,52.8 limit=336,226,368,53 name=PageTitle paints=#FFFFFFFF role=text size=44 text="Cobalt Harbor (Synthetic)"

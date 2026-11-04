@@ -7,7 +7,7 @@
   "extensions": [".iso", ".cue", ".chd"],
   "cheat_systems": ["Sega - Mega-CD - Sega CD"],
   "openvgdb_systems": ["SCD"],
-  "cover_aspect": 0.7,
+  "cover_aspect": 1.4,
   "esde_system": "segacd",
   "esde_full_name": "Sega CD",
   "self_delimiting_images": false,

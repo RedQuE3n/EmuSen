@@ -2,32 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using EmuSen.Crystal.Cheats;
+using EmuSen.Crystal.Systems;
 
 namespace EmuSen.WiseMan.DianaSh
 {
     // RetroArch/libretro .cht import and export - see `man cheat`.
     public class ChtFileTests
     {
-        // Stands in for a core's own code decoder. Matches the SNES layout
-        // the libretro database actually uses for this system: 6 hex digits
-        // of address then 2 of value.
-        private sealed class HexCodec : ICheatCodeCodec
-        {
-            public string Name => "Test";
-            public CheatCodeKind Kind => CheatCodeKind.RamPoke;
-            public string? SpaceName => "CpuBus";
-
-            public bool CanDecode(string code) => Normalize(code).Length == 8;
-
-            public (int Address, byte Value) Decode(string code)
-            {
-                string hex = Normalize(code);
-                if (hex.Length != 8) throw new FormatException(code);
-                return (Convert.ToInt32(hex[..6], 16), Convert.ToByte(hex.Substring(6, 2), 16));
-            }
-
-            private static string Normalize(string code) => new((code ?? "").Where(Uri.IsHexDigit).ToArray());
-        }
+        // The SNES pack's Pro Action Replay codec, the layout the libretro database uses for this system: AAAAAADD, work RAM at 7E0000.
+        private static NativeCheatCodec Snes() => new("snes.par");
 
         // The shape a real libretro-database SNES file has.
         private const string SuperMarioWorld = """
@@ -45,7 +28,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void A_real_libretro_database_file_imports()
         {
-            ChtParseResult result = ChtFile.Parse(SuperMarioWorld, new HexCodec(), "CpuBus");
+            ChtParseResult result = ChtFile.Parse(SuperMarioWorld, Snes(), "CpuBus");
 
             Assert.Equal(0, result.Skipped);
             Assert.Equal(2, result.Cheats.Count);
@@ -53,9 +36,9 @@ namespace EmuSen.WiseMan.DianaSh
             ChtCheat first = result.Cheats[0];
             Assert.Equal("Infinite Maximum Coins", first.Description);
             Assert.False(first.Enabled);
-            Assert.Equal(0x7E0DBF, first.Writes.Single().Address);
+            Assert.Equal(0x0DBF, first.Writes.Single().Address);
             Assert.Equal(0x63u, first.Writes.Single().Value);
-            Assert.Equal("CpuBus", first.Writes.Single().Space);
+            Assert.Equal("WRAM", first.Writes.Single().Space);
         }
 
         // The '+' form is how RetroArch expresses a multi-address cheat.
@@ -69,12 +52,12 @@ namespace EmuSen.WiseMan.DianaSh
                 cheat0_enable = true
                 """;
 
-            ChtParseResult result = ChtFile.Parse(text, new HexCodec(), "CpuBus");
+            ChtParseResult result = ChtFile.Parse(text, Snes(), "CpuBus");
 
             ChtCheat cheat = Assert.Single(result.Cheats);
             Assert.True(cheat.Enabled);
             Assert.Equal(3, cheat.Writes.Count);
-            Assert.Equal(new[] { 0x7E0DBF, 0x7E0DC0, 0x7E0019 }, cheat.Writes.Select(w => w.Address));
+            Assert.Equal(new[] { 0x0DBF, 0x0DC0, 0x0019 }, cheat.Writes.Select(w => w.Address));
             Assert.Equal(new uint[] { 0x63, 0x04, 0xFF }, cheat.Writes.Select(w => w.Value));
         }
 
@@ -191,7 +174,7 @@ namespace EmuSen.WiseMan.DianaSh
                 cheat1_enable = false
                 """;
 
-            ChtParseResult result = ChtFile.Parse(text, new HexCodec(), "CpuBus");
+            ChtParseResult result = ChtFile.Parse(text, Snes(), "CpuBus");
 
             Assert.Equal("fine", Assert.Single(result.Cheats).Description);
             Assert.Equal(1, result.Skipped);
@@ -212,14 +195,14 @@ namespace EmuSen.WiseMan.DianaSh
                 cheat0_some_future_field = "whatever"
                 """;
 
-            Assert.Single(ChtFile.Parse(text, new HexCodec(), "CpuBus").Cheats);
+            Assert.Single(ChtFile.Parse(text, Snes(), "CpuBus").Cheats);
         }
 
         [Fact]
         public void A_file_with_no_cheats_header_yields_nothing_rather_than_throwing()
         {
-            Assert.Empty(ChtFile.Parse("nonsense\nmore nonsense", new HexCodec(), "CpuBus").Cheats);
-            Assert.Empty(ChtFile.Parse("", new HexCodec(), "CpuBus").Cheats);
+            Assert.Empty(ChtFile.Parse("nonsense\nmore nonsense", Snes(), "CpuBus").Cheats);
+            Assert.Empty(ChtFile.Parse("", Snes(), "CpuBus").Cheats);
         }
 
         // --- Export ---

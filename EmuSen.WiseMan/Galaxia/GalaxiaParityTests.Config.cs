@@ -488,9 +488,9 @@ namespace EmuSen.WiseMan.Galaxia
             return at > 0 && long.TryParse(line[(at + 3)..], out long ticks) && ticks > DateTime.UtcNow.AddMinutes(-10).Ticks ? line[..at] + " | just written" : line;
         }
 
-        private static T? LoadSide<T>(ConfigFile<T> file, bool native) where T : class => native ? file.LoadNative(upgrade: false) : file.LoadManaged();
+        private static T? LoadSide<T>(ConfigFile<T> file, bool native) where T : class => file.Load();
 
-        private static bool SaveSide<T>(ConfigFile<T> file, bool native, T value) where T : class => native ? file.SaveNative(value) : file.SaveManaged(value);
+        private static bool SaveSide<T>(ConfigFile<T> file, bool native, T value) where T : class => file.Save(value);
 
         private void FileScenarios<T>(Func<Random, T> make, string good, string bad, T? unwritable = null) where T : class
         {
@@ -536,10 +536,10 @@ namespace EmuSen.WiseMan.Galaxia
             // What cannot be serialized is not saved, and its folder is made all the same.
             if (unwritable is not null) FileBothWays<T>("saved what cannot be written", _ => { }, (file, native) => SaveSide(file, native, unwritable), category: "group");
 
-            FileBothWays<T>("deleted", root => Put_(root, etc, "settings.json", good), (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
-            FileBothWays<T>("deleted when absent", root => Directory.CreateDirectory(Path.Combine(root, etc)), (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
-            FileBothWays<T>("deleted with no folder", _ => { }, (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
-            FileBothWays<T>("deleted when a folder", root => Directory.CreateDirectory(Path.Combine(root, etc, "settings.json")), (file, native) => native ? file.DeleteNative() : file.DeleteManaged());
+            FileBothWays<T>("deleted", root => Put_(root, etc, "settings.json", good), (file, native) => file.Delete());
+            FileBothWays<T>("deleted when absent", root => Directory.CreateDirectory(Path.Combine(root, etc)), (file, native) => file.Delete());
+            FileBothWays<T>("deleted with no folder", _ => { }, (file, native) => file.Delete());
+            FileBothWays<T>("deleted when a folder", root => Directory.CreateDirectory(Path.Combine(root, etc, "settings.json")), (file, native) => file.Delete());
         }
 
         [Fact]

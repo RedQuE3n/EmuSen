@@ -19,7 +19,7 @@ namespace EmuSen.Galaxia.Library
     // A dump's identity: whole, a range, a system pack's form, a sheet's tracks - see EmuSen_Galaxia.md §5.4 and EmuSen_GamePackages.md §2.2.
     public static class RomHash
     {
-        public static string Md5(string path) => GalaxiaNative.Takes(path) ? GalaxiaNative.RomMd5(path) : Managed.Md5(path);
+        public static string Md5(string path) => GalaxiaNative.RomMd5(path);
 
         // CRC-32, MD5 and SHA-1 of a whole file in one read.
         public static RomHashes Of(string path, CancellationToken stop = default) => Of(path, 0, -1, stop);
@@ -28,10 +28,10 @@ namespace EmuSen.Galaxia.Library
         public static RomHashes Of(string path, long offset, long length, CancellationToken stop = default)
         {
             ArgumentOutOfRangeException.ThrowIfNegative(offset);
-            return GalaxiaNative.Takes(path) ? FromJson(GalaxiaNative.RomHashes(path, offset, length, stop)) : Managed.Of(path, offset, length, stop);
+            return FromJson(GalaxiaNative.RomHashes(path, offset, length, stop));
         }
 
-        public static RomHashes Of(ReadOnlySpan<byte> bytes) => GalaxiaNative.Active ? FromJson(GalaxiaNative.RomHashesOf(bytes)) : Managed.Of(bytes);
+        public static RomHashes Of(ReadOnlySpan<byte> bytes) => FromJson(GalaxiaNative.RomHashesOf(bytes));
 
         // The hashes of the comparable form a system pack's transform makes, or null where it changes nothing; this knows no console.
         public static RomHashes? Transformed(byte[] file, Func<byte[], byte[]?> transform)
@@ -42,7 +42,7 @@ namespace EmuSen.Galaxia.Library
 
         // Each track of a cue sheet, hashed over the bytes emusen-disc places it in; InvalidDataException for a sheet that is not one.
         public static IReadOnlyList<TrackHashes> Tracks(string sheetPath, CancellationToken stop = default) =>
-            GalaxiaNative.Takes(sheetPath) ? TracksFromJson(GalaxiaNative.RomTracks(sheetPath, stop)) : Managed.Tracks(sheetPath, stop);
+            TracksFromJson(GalaxiaNative.RomTracks(sheetPath, stop));
 
         internal static RomHashes FromJson(string json)
         {
@@ -59,57 +59,6 @@ namespace EmuSen.Galaxia.Library
             return doc.RootElement.EnumerateArray()
                 .Select(t => new TrackHashes(t.GetProperty("track").GetInt32(), t.GetProperty("file").GetString()!, t.GetProperty("offset").GetInt64(), FromElement(t)))
                 .ToArray();
-        }
-
-        // The C# rule: the default, and what the library's is held to until Galaxia's gate - see EmuSen_RustPlatform.md §3.9.
-        internal static class Managed
-        {
-            public static string Md5(string path)
-            {
-                using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
-                return Convert.ToHexStringLower(MD5.HashData(stream));
-            }
-
-            public static RomHashes Of(string path, long offset, long length, CancellationToken stop)
-            {
-                using var md5 = IncrementalHash.CreateHash(HashAlgorithmName.MD5);
-                using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1);
-                var crc = new Crc32();
-                byte[] buffer = new byte[1 << 16];
-                long size = 0, left = length < 0 ? long.MaxValue : length;
-                using FileStream stream = new(path, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16, FileOptions.SequentialScan);
-                if (offset > 0) stream.Seek(offset, SeekOrigin.Begin);
-                while (left > 0)
-                {
-                    stop.ThrowIfCancellationRequested();
-                    int read = stream.Read(buffer, 0, (int)Math.Min(buffer.Length, left));
-                    if (read == 0) break;
-                    md5.AppendData(buffer, 0, read);
-                    sha1.AppendData(buffer, 0, read);
-                    crc.Append(buffer.AsSpan(0, read));
-                    size += read;
-                    left -= read;
-                }
-                return new RomHashes(Convert.ToHexStringLower(md5.GetHashAndReset()), crc.Hex, Convert.ToHexStringLower(sha1.GetHashAndReset()), size);
-            }
-
-            public static RomHashes Of(ReadOnlySpan<byte> bytes)
-            {
-                var crc = new Crc32();
-                crc.Append(bytes);
-                return new RomHashes(Convert.ToHexStringLower(MD5.HashData(bytes)), crc.Hex, Convert.ToHexStringLower(SHA1.HashData(bytes)), bytes.Length);
-            }
-
-            // Where a track lies is emusen-disc's alone, asked through the platform library as ImageSets asks; the reading and hashing are C#.
-            public static IReadOnlyList<TrackHashes> Tracks(string sheetPath, CancellationToken stop)
-            {
-                string text = File.ReadAllText(sheetPath);
-                IReadOnlyList<string> names = ImageSets.CompanionNames(text, Path.GetFileName(sheetPath));
-                IReadOnlyList<string> paths = ImageSets.Companions(sheetPath);
-                return ImageSets.TrackSpans(text, Path.GetFileName(sheetPath))
-                    .Select(s => new TrackHashes(s.Track, names[s.File], s.Offset, Of(paths[s.File], s.Offset, s.Length ?? -1, stop)))
-                    .ToArray();
-            }
         }
     }
 

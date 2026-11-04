@@ -20,7 +20,7 @@ namespace EmuSen.Galaxia.Models
         public bool Save() => File.Save(this);
 
         public static AudioConfig Load() =>
-            GalaxiaNative.Active ? File.LoadNative(upgrade: false) ?? ConfigFile<AudioConfig>.NewNative(upgrade: false) : File.Load(() => new AudioConfig());
+            File.LoadNative(upgrade: false) ?? ConfigFile<AudioConfig>.NewNative(upgrade: false);
 
         public static bool Exists => File.Exists;
 

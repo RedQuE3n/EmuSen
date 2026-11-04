@@ -36,8 +36,6 @@ namespace EmuSen.WiseMan.Galaxia
                 start.ArgumentList.Add(argument);
             start.Environment["HOME"] = home;
             start.Environment.Remove("XDG_CONFIG_HOME");
-            // The child measures both halves itself, so a parent run on the C# half must not switch the library off there too.
-            start.Environment.Remove("EMUSEN_GALAXIA_NATIVE");
             start.Environment["DOTNET_CLI_TELEMETRY_OPTOUT"] = "1";
             start.Environment["DOTNET_NOLOGO"] = "1";
             start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "1";
@@ -56,9 +54,7 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal("True", found[0]);
             Assert.Equal(logs, found[1]);
             Assert.StartsWith(logs + Path.DirectorySeparatorChar, found[2]);
-            Assert.Equal(logs, found[3]);
-            Assert.StartsWith(logs + Path.DirectorySeparatorChar, found[4]);
-            Assert.Equal(Path.Combine(home, ".config", "EmuSen"), found[5]);
+            Assert.Equal(Path.Combine(home, ".config", "EmuSen"), found[3]);
         }
 
         // Run only by the test above, in its own process; it does nothing unless that process set the mark.
@@ -75,10 +71,9 @@ namespace EmuSen.WiseMan.Galaxia
             try
             {
                 string native = ErrorLog.DefaultRoot, nativeFile = ErrorLog.Error("test", "written by the library") ?? "";
-                string managed = ErrorLog.Managed.DefaultRoot, managedFile = ErrorLog.Managed.Write(DateTime.Now, "ERROR", "test", "written by the C#", null, null) ?? "";
                 ConfigStore.OverrideDirectory = null;
-                string legacy = ConfigStore.Managed.LegacyDirectory;
-                File.WriteAllLines(mark, new[] { GalaxiaNative.Active.ToString(), native, nativeFile, managed, managedFile, legacy });
+                string legacy = ConfigStore.LegacyDirectory;
+                File.WriteAllLines(mark, new[] { GalaxiaNative.Loaded.ToString(), native, nativeFile, legacy });
             }
             finally
             {

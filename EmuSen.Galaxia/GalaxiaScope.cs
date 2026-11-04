@@ -30,7 +30,7 @@ namespace EmuSen.Galaxia
         // Tests only, from EmuSen.WiseMan; the library has to be in the process first, so every thread the flow reaches is told.
         internal static GalaxiaScope Enter(string? data = null, string? config = null, string? legacy = null)
         {
-            if (!GalaxiaNative.Active) throw new InvalidOperationException("A Galaxia scope needs the platform library, which is not in use.");
+            GalaxiaNative.Up();
             var scope = new GalaxiaScope(data, config, legacy, Ambient.Value);
             Ambient.Value = scope;
             return scope;

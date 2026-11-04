@@ -629,7 +629,7 @@ jobs:
           for f in native/nano native/nano.exe native/nano.dianash.json; do if [ -f "$f" ]; then mv "$f" "$out/dianash/"; rm -f "$out/$(basename "$f")"; fi; done
           chmod +x "$out/dianash/nano" 2>/dev/null || true
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*endou* "$out"/*sapphire* "$out"/*v1_test_core* "$out"/*v1_plain_core*
-          ls -la "$out"/*emusen_platform* || echo "no platform library: Galaxia runs on its C#"
+          ls -la "$out"/*emusen_platform*
 
       # Printed in full, so each platform's digests can be read off the log.
       - name: Test the platform digests
@@ -641,16 +641,7 @@ jobs:
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~CoreHostParity|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~Endou|FullyQualifiedName~Sapphire|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
-      # Galaxia on its C#, which EMUSEN_GALAXIA_NATIVE=0 selects. These tests had not run on Windows or macOS before step 2a, so it reports and does not yet gate.
-      - name: Test Galaxia on its C#
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        env:
-          EMUSEN_GALAXIA_NATIVE: '0'
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "(FullyQualifiedName~EmuSen.WiseMan.Galaxia.|FullyQualifiedName~DianaShSandboxTests|FullyQualifiedName~HierTests)&FullyQualifiedName!~GalaxiaParityTests" --logger "console;verbosity=normal"
-
-      # The same tests through the platform library, which is Galaxia's default since step 2c, and the parity class beside them; still reporting, since a platform without the library falls back to the C# (EmuSen_RustPlatform.md §13).
+      # Galaxia's tests, on the platform library, its only half since 2026-11-04 (EmuSen_Backend.md §40.2); still reporting, as on Windows and macOS they began at step 2a.
       - name: Test Galaxia on the platform library
         if: ${{ !cancelled() }}
         working-directory: EmuSen-Project

@@ -376,7 +376,7 @@ namespace EmuSen.WiseMan.Endymion
         [Fact]
         public void The_library_has_every_export_this_half_calls_and_no_other()
         {
-            string header = System.IO.File.ReadAllText(System.IO.Path.Combine(EmuSen.Galaxia.ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
+            string header = System.IO.File.ReadAllText(System.IO.Path.Combine(EmuSen.Galaxia.ConfigRoot.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in EndymionNative.Exports) Assert.Contains(export + "(", header);
             Assert.Equal(EndymionNative.Exports.Count(e => e.StartsWith("emusen_endymion_")), System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_endymion_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count);
         }

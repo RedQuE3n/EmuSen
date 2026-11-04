@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             _output = output;
             Assert.True(ServiceLibrary.Ready, ServiceLibrary.Report);
-            Assert.True(PlatformLibrary.GalaxiaActive, "the lock's parity needs Galaxia's library");
+            Assert.True(PlatformLibrary.Available, PlatformLibrary.Report);
             Directory.CreateDirectory(_root);
             ConfigDiagnostics.Sink = _said.Add;
         }

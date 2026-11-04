@@ -684,7 +684,7 @@ namespace EmuSen.WiseMan.Endymion
         [Fact]
         public void The_library_has_every_export_the_device_half_calls()
         {
-            string header = File.ReadAllText(Path.Combine(EmuSen.Galaxia.ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
+            string header = File.ReadAllText(Path.Combine(EmuSen.Galaxia.ConfigRoot.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in DeviceNative.Exports) Assert.Contains(export + "(", header);
         }
     }

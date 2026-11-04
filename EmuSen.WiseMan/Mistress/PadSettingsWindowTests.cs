@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver Pad) GameModeWithAGame()
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
 
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
@@ -71,17 +71,22 @@ namespace EmuSen.WiseMan.Mistress
 
         public const string Shaders = "Shaders";
 
-        // Up from the top wraps to the bottom, so any entry is found by walking down from the first; Shaders is Settings ▸ Display's row, reached from the card's Shader Levers.
+        public const string ConsoleSettings = "Console Settings", ShaderLevers = "Shader Levers";
+
+        // The card opened, then a row of it, or a Settings page at Settings' own door over the card, since the card's Display is its own page (EmuSen_Interface.md §20); Shaders is Display's row.
         private static void Choose(MainWindow window, PadDriver pad, string entry)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible);
+            string console = (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
+            if (entry == ConsoleSettings) { window.ShowSettings(SettingsScreen.Consoles, "console:" + console); return; }
+            if (entry == ShaderLevers) { window.ShowSettings(SettingsScreen.Display, "levers"); return; }
             if (entry != Shaders)
             {
                 PadMenu.Choose(window, pad, entry);
                 return;
             }
-            PadMenu.Choose(window, pad, "Shader Levers");
+            window.ShowSettings(SettingsScreen.Display, "levers");
             pad.B();
             Assert.Equal(SettingsScreen.Display, window.SettingsShown!.Section);
             Assert.Empty(window.SettingsShown.Trail);
@@ -140,33 +145,10 @@ namespace EmuSen.WiseMan.Mistress
             return missing;
         }
 
+        // What Graphics held is Settings' own rows: the card's doors open Settings over the paused game, and every row of the page is reached by the pad - see EmuSen_BigPicture.md §52.5.
         [Theory]
-        [InlineData(MainWindow.CropThisGame)]
-        public Task Every_control_of_each_settings_sheet_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, entry);
-
-            Assert.True(Sheets(window).IsPresenting);
-            Assert.Empty(window.OwnedWindows);
-            Assert.True(IsPaused(window));
-
-            Assert.Empty(Unreachable(window, pad));
-
-            // B a screen at a time: Preferences, ES-DE's menus in Game Mode, goes back from its last submenu first (§4.72.8).
-            for (int guard = 0; guard < 3 && Sheets(window).IsPresenting; guard++) pad.B();
-            Assert.False(Sheets(window).IsPresenting);
-            BackToTheGame(window, pad);
-            Assert.False(IsPaused(window));
-            Stop(window);
-            window.Close();
-        }, default);
-
-        // What Graphics and Players & Controllers held is Settings' own rows: the card's doors open Settings over the paused game, and every row of the page is reached by the pad - see EmuSen_BigPicture.md §52.5.
-        [Theory]
-        [InlineData("Console Settings")]
-        [InlineData("Shader Levers")]
-        [InlineData("Players & Controllers")]
+        [InlineData(ConsoleSettings)]
+        [InlineData(ShaderLevers)]
         [InlineData(Shaders)]
         public Task Every_row_of_each_settings_page_the_card_opens_is_reached_by_the_pad(string entry) => Session.Dispatch(() =>
         {
@@ -199,7 +181,7 @@ namespace EmuSen.WiseMan.Mistress
         // A console's page on Settings, from the card's Console Settings and the shoulders, as a player steps from the running game's console to another.
         private static void ConsolePage(MainWindow window, PadDriver pad, string console)
         {
-            Choose(window, pad, "Console Settings");
+            Choose(window, pad, ConsoleSettings);
             StepTo(window, pad, console);
         }
 
@@ -239,7 +221,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Console_settings_by_pad_the_console_stepped_a_choice_stepped_and_chosen_a_switch_and_reset() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Console Settings");
+            Choose(window, pad, ConsoleSettings);
             Assert.Equal(NameOf("SNES"), window.SettingsShown!.Trail[^1]);
             Picture(window, "console-snes");
 
@@ -285,7 +267,7 @@ namespace EmuSen.WiseMan.Mistress
             var crystal = (EmuSen.Crystal.Client.CrystalSession)game.GetType().GetProperty("Crystal")!.GetValue(game)!;
             IReadOnlyList<SettingRow> running = RuntimeCatalog.SettingsOf(crystal);
 
-            Choose(window, pad, "Console Settings");
+            Choose(window, pad, ConsoleSettings);
             List<string> keys = window.SettingsLayoutShown!.Rows.Select(r => r.Key).ToList();
             Assert.Contains(keys, k => running.Any(r => r.Key == k));
             SettingRow row = running.First(r => r.Kind == SettingRow.Choice && !r.Locked && r.Choices.Count > 1 && keys.Contains(r.Key));
@@ -306,9 +288,8 @@ namespace EmuSen.WiseMan.Mistress
         public Task Settings_by_pad_a_switch_and_a_choice_on_a_page_of_another_section() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Players & Controllers");
-            Assert.Equal("Players", window.SettingsShown!.Trail[^1]);
-            Picture(window, "settings-players");
+            Choose(window, pad, ConsoleSettings);
+            Assert.Equal("Super Nintendo", window.SettingsShown!.Trail[^1]);
             pad.B();
             Assert.Empty(window.SettingsShown.Trail);
 
@@ -340,7 +321,8 @@ namespace EmuSen.WiseMan.Mistress
         public Task Controller_bindings_by_pad_the_deadzone_a_switch_a_pad_rebind_and_a_key_rebind_backed_out_of() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            Choose(window, pad, "Controller Bindings");
+            Choose(window, pad, MainWindow.ControllersMenu);
+            PadMenu.Choose(window, pad, "Bindings", exact: true);
             SettingsScreen settings = window.SettingsShown!;
             Assert.Equal("Controller bindings", settings.Trail[^1]);
             Assert.Equal("SNES", settings.Binding!.Console);
@@ -674,7 +656,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task In_desktop_mode_a_real_window_is_driven_and_every_control_reached(string opener) => Session.Dispatch(() =>
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
 
@@ -704,7 +686,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task In_desktop_mode_the_settings_window_s_logging_page_is_driven_and_every_row_reached() => Session.Dispatch(() =>
         {
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
             window.ShowSettings(SettingsScreen.EmuSen, "logging");
@@ -731,7 +713,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_desktop_search_presses_only_in_a_window_grown_to_its_tab() => Session.Dispatch(() =>
         {
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
             typeof(MainWindow).GetMethod("ShowThemeSettings", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
@@ -753,7 +735,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task With_a_custom_crop_chosen_its_four_numbers_are_reached_by_the_pad() => Session.Dispatch(() =>
         {
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var graphics = new GraphicsConfig();
             graphics.SetValue("NES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.CustomCrop);
             graphics.Save();
@@ -765,7 +747,7 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // The explicit exception to a console's games being drawn alike: a crop of the running game's own, from the pad menu, replacing the console's as it is typed - see EmuSen_Settings_Reference.md §4.100.
+        // The explicit exception to a console's games being drawn alike: a crop of the running game's own, from the Pause Card's Display, replacing the console's edge by edge - see EmuSen_Interface.md §20.
         [Fact]
         public Task A_crop_of_the_running_game_s_own_replaces_its_console_s_and_graphics_settings_says_so() => Session.Dispatch(() =>
         {
@@ -776,28 +758,31 @@ namespace EmuSen.WiseMan.Mistress
             string rom = Path.Combine(_romDir, "Game.sfc");
             graphics.SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.TvOverscan);
 
-            Choose(window, pad, MainWindow.CropThisGame);
-            var crop = Assert.IsType<GameCropWindow>(Sheets(window).Current);
-            Assert.Empty(window.OwnedWindows);
-            T Named<T>(string name) where T : Control => Sheet(window).GetVisualDescendants().OfType<T>().First(c => c.Name == name);
-
-            // Until it has one of its own the boxes show the console's, here a television's 3.3% at each edge.
-            Assert.Equal("3.3", Named<TextBox>("GameCrop.CropTop").Text);
-            Assert.Contains("the SNES's setting", Named<HintText>("GameCropStatus").Text);
-            Assert.False(Named<Button>("GameCropUseConsole").IsEnabled);
+            // Game Options ▸ Display ▸ This game's crop: Right turns it on from the console's, a television's 3.3% at each edge, and A opens its edges.
+            void Display()
+            {
+                pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
+                PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true);
+                PadMenu.Choose(window, pad, MainWindow.DisplayMenu, exact: true);
+                pad.Down(System.Array.IndexOf(PadMenu.Lines(window), MainWindow.CropThisGame));
+            }
+            Display();
+            Assert.Equal("Off", PadMenu.Entries(window)[PadMenu.Selected(window)].Value!());
             Assert.Null(records.Crop(rom));
-
-            Named<TextBox>("GameCrop.CropTop").Text = "8.7";
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            pad.Right();
+            Assert.Equal(new EmuSen.Mistress.Library.GameCrop(3.3, 3.3, 3.3, 3.3), records.Crop(rom));
+            pad.A();
+            Assert.Equal(MainWindow.CropThisGame, PadMenu.PageTitle(window));
+            Assert.Equal(["This game's crop", "Left", "Right", "Top", "Bottom"], PadMenu.Entries(window).Select(e => e.Label!()));
+            pad.Down(3);
+            for (int i = 0; i < 54; i++) pad.Right();
             Assert.Equal(new EmuSen.Mistress.Library.GameCrop(3.3, 3.3, 8.7, 3.3), records.Crop(rom));
             Assert.Equal(EmuSen.Serenity.PictureCrop.Percent(3.3, 8.7, 3.3, 3.3), frame.Crop);
-            Assert.Equal("This game has a crop of its own.", Named<HintText>("GameCropStatus").Text);
-            pad.B();
-            Assert.False(Sheets(window).IsPresenting);
-            BackToTheGame(window, pad);
+            Assert.True(IsPaused(window));
+            pad.Start();
 
             // The console's crop row in Settings says what replaces it; another console's says nothing.
-            Choose(window, pad, "Console Settings");
+            Choose(window, pad, ConsoleSettings);
             Assert.Contains(window.SettingsShown!.PaneOf("consolecrop")!.Lines, l => l.Text.StartsWith("Game has a crop of its own", StringComparison.Ordinal));
             StepTo(window, pad, "N64");
             Assert.DoesNotContain(window.SettingsShown!.PaneOf("consolecrop")!.Lines, l => l.Text.Contains("crop of its own", StringComparison.Ordinal));
@@ -808,15 +793,12 @@ namespace EmuSen.WiseMan.Mistress
             typeof(MainWindow).GetMethod("ApplyScreenFilter", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { "SNES" });
             Assert.Equal(EmuSen.Serenity.PictureCrop.Percent(3.3, 8.7, 3.3, 3.3), frame.Crop);
 
-            Choose(window, pad, MainWindow.CropThisGame);
-            crop = Assert.IsType<GameCropWindow>(Sheets(window).Current);
-            Assert.Equal("8.7", Named<TextBox>("GameCrop.CropTop").Text);
-            Named<Button>("GameCropUseConsole").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
-            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Display();
+            Assert.Equal("On", PadMenu.Entries(window)[PadMenu.Selected(window)].Value!());
+            pad.Left();
             Assert.Null(records.Crop(rom));
             Assert.Equal(EmuSen.Serenity.PictureCrop.None, frame.Crop);
-            Assert.Equal("0", Named<TextBox>("GameCrop.CropTop").Text);
-            pad.B();
+            pad.Start();
 
             Stop(window);
             window.Close();

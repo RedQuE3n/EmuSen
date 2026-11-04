@@ -1,78 +1,93 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using Avalonia.Controls;
 using Avalonia.Headless;
-using Avalonia.Interactivity;
-using Avalonia.Threading;
-using Avalonia.VisualTree;
-using EmuSen.LunaP.Controls;
-using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
-using EmuSen.Serenity;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.WiseMan.Mistress.BigPicture;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // A crop kept with one game: its window, and where the library offers it, on the desktop and in big picture - see EmuSen_Settings_Reference.md §4.100.
+    // A crop kept with one game, as Settings' one description holds it for the Pause Card's Display and the game's page alike - see EmuSen_Interface.md §20 and EmuSen_Settings_Reference.md §4.100.
     [Collection(TestCollections.ProcessGlobals)]
     public class GameCropTests
     {
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(GameCropTests).GetTypeInfo().Assembly);
 
-        private static T Named<T>(Window window, string name) where T : Control =>
-            Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(window).OfType<T>().First(c => c.Name == name);
+        private const string Game = "/r/Mario Kart 64 (Europe).z64";
 
-        private static string[] Boxes(Window window) => EmuSen.Mistress.Library.ConsoleCrop.Edges.Select(e => Named<TextBox>(window, $"GameCrop.{e.Key}").Text!).ToArray();
-
-        [Fact]
-        public Task The_window_starts_from_the_console_s_crop_and_a_number_typed_makes_the_crop_the_game_s_own() => Session.Dispatch(() =>
+        private static (SettingsHostFake Host, SettingsScreen Screen) Open()
         {
-            var told = new List<GameCrop?>();
-            var window = new GameCropWindow("Mario Kart 64 (Europe)", "N64", PictureCrop.Television, null, told.Add);
-            window.Show();
-            Assert.Equal("Crop This Game", window.Title);
-            Assert.Equal("Mario Kart 64 (Europe)", Named<TextBlock>(window, "GameCropGame").Text);
-            Assert.Equal(new[] { "3.3", "3.3", "3.3", "3.3" }, Boxes(window));
-            Assert.Equal("This game is drawn with the N64's setting.", Named<HintText>(window, "GameCropStatus").Text);
-            Assert.False(Named<Button>(window, "GameCropUseConsole").IsEnabled);
-            Assert.Empty(told);
+            var host = new SettingsHostFake { RunningConsole = "N64", RunningGame = Game };
+            var screen = new SettingsScreen(host);
+            screen.OpenGameCrop(Game, "Mario Kart 64 (Europe)");
+            return (host, screen);
+        }
 
-            Named<TextBox>(window, "GameCrop.CropTop").Text = "8,7";
-            Named<TextBox>(window, "GameCrop.CropBottom").Text = "9";
-            Named<TextBox>(window, "GameCrop.CropLeft").Text = "wide";
-            Named<TextBox>(window, "GameCrop.CropRight").Text = "40";
-            Dispatcher.UIThread.RunJobs();
-            // Three numbers are told, one for each box that held one; "wide" is no number and tells nothing.
-            Assert.Equal(3, told.Count);
-            Assert.Equal(new GameCrop(3.3, 25, 8.7, 9), told[^1]);
-            Assert.Equal(new GameCrop(3.3, 25, 8.7, 9), window.Own);
-            Assert.Equal("This game has a crop of its own.", Named<HintText>(window, "GameCropStatus").Text);
+        private static string[] Edges(SettingsScreen s) => ConsoleCrop.Edges.Select(e => s.Rows.Single(r => r.Key == "gamecrop:" + e.Key).Status!).ToArray();
 
-            Named<Button>(window, "GameCropUseConsole").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-            Dispatcher.UIThread.RunJobs();
-            Assert.Null(told[^1]);
-            Assert.Equal(4, told.Count);
-            Assert.Null(window.Own);
-            Assert.Equal(new[] { "3.3", "3.3", "3.3", "3.3" }, Boxes(window));
-            Assert.False(Named<Button>(window, "GameCropUseConsole").IsEnabled);
-            window.Close();
+        // Until it has one of its own the edges show the console's; an edge stepped or typed makes the crop the game's own, a word typed changes nothing, and a number past the most is held to it.
+        [Fact]
+        public Task The_page_starts_from_the_console_s_crop_and_an_edge_changed_makes_the_crop_the_game_s_own() => Session.Dispatch(() =>
+        {
+            (SettingsHostFake host, SettingsScreen s) = Open();
+            Assert.Equal("Mario Kart 64 (Europe)", s.Trail[^1]);
+            Assert.Equal(["This game's crop", "Left", "Right", "Top", "Bottom"], s.Rows.Select(r => r.Label));
+            Assert.Equal(SettingsScreen.Off, s.Rows[0].Status);
+            Assert.Equal(["3.3%", "3.3%", "3.3%", "3.3%"], Edges(s));
+            Assert.Equal("This game is drawn with its console's setting.", s.PaneOf("gamecrop")!.Lines[0].Text);
+            Assert.Null(host.CropOf(Game));
+
+            s.Step("gamecrop:CropTop", 1);
+            Assert.Equal(new GameCrop(3.3, 3.3, 3.4, 3.3), host.CropOf(Game));
+            host.Answer = "8,7";
+            s.Choose("gamecrop:CropTop");
+            host.Answer = "wide";
+            s.Choose("gamecrop:CropLeft");
+            host.Answer = "40";
+            s.Choose("gamecrop:CropRight");
+            Assert.Equal(new GameCrop(3.3, 25, 8.7, 3.3), host.CropOf(Game));
+            Assert.Equal(SettingsScreen.On, s.Rows[0].Status);
+            Assert.Equal("This game has a crop of its own.", s.PaneOf("gamecrop")!.Lines[0].Text);
+
+            // Off goes back to the console's, and the edges show it again.
+            s.Step("gamecrop", 1);
+            Assert.Null(host.CropOf(Game));
+            Assert.Equal(["3.3%", "3.3%", "3.3%", "3.3%"], Edges(s));
         }, default);
 
+        // A game with a crop of its own opens on it, and On from Off starts from the console's.
         [Fact]
-        public Task A_game_with_a_crop_of_its_own_opens_on_it() => Session.Dispatch(() =>
+        public Task A_game_with_a_crop_of_its_own_opens_on_it_and_on_starts_from_the_console_s() => Session.Dispatch(() =>
         {
-            var own = new GameCropWindow("Kirby 64", "N64", PictureCrop.Television, new GameCrop(2.4, 2.5, 3.5, 3.5), _ => { });
-            own.Show();
-            Assert.Equal(new[] { "2.4", "2.5", "3.5", "3.5" }, Boxes(own));
-            Assert.True(Named<Button>(own, "GameCropUseConsole").IsEnabled);
-            Assert.Equal("This game has a crop of its own.", Named<HintText>(own, "GameCropStatus").Text);
-            own.Close();
+            (SettingsHostFake host, SettingsScreen s) = Open();
+            host.SetCrop(Game, new GameCrop(2.4, 2.5, 3.5, 3.5));
+            s.Read();
+            Assert.Equal(["2.4%", "2.5%", "3.5%", "3.5%"], Edges(s));
+            Assert.Equal(SettingsScreen.On, s.Rows[0].Status);
+            s.Step("gamecrop", 1);
+            s.Step("gamecrop", 1);
+            Assert.Equal(new GameCrop(3.3, 3.3, 3.3, 3.3), host.CropOf(Game));
+        }, default);
+
+        // The Pause Card's Display offers it for a console with an overscan, and A on it opens the four edges as a page.
+        [Fact]
+        public Task Display_offers_it_for_a_game_whose_console_has_an_overscan() => Session.Dispatch(() =>
+        {
+            var host = new SettingsHostFake { RunningConsole = "N64", RunningGame = Game };
+            var s = new SettingsScreen(host);
+            s.OpenGame(SettingsScreen.GameDisplay);
+            Assert.Equal(["Picture shape", "CRT shader", "Crop overscan", "This game's crop", "Full screen"], s.Rows.Select(r => r.Label));
+            s.Choose("gamecrop");
+            Assert.Equal("This game's crop", s.Trail[^1]);
+            Assert.NotNull(host.CropOf(Game));
+
+            var handheld = new SettingsScreen(new SettingsHostFake { RunningConsole = "Game Boy", RunningGame = "/r/a.gb" });
+            handheld.OpenGame(SettingsScreen.GameDisplay);
+            Assert.DoesNotContain("This game's crop", handheld.Rows.Select(r => r.Label));
         }, default);
 
         [Fact]
@@ -90,42 +105,28 @@ namespace EmuSen.WiseMan.Mistress
 
         private static GameRecords Records(MainWindow window) => (GameRecords)typeof(MainWindow).GetField("_records", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
 
-        // A window shown as a sheet has its content on the sheet, so the box is looked for wherever the content is.
-        private static void Type(ThemedSession s, GameCropWindow window, string edge, string text)
-        {
-            Control? sheet = s.Window.GetControl<SheetLayer>("Sheets").SheetOf(window);
-            TextBox box = sheet is null ? Named<TextBox>(window, $"GameCrop.{edge}") : sheet.GetVisualDescendants().OfType<TextBox>().First(b => b.Name == $"GameCrop.{edge}");
-            box.Text = text;
-            s.Settle();
-        }
-
-        // On the desktop the game's options open it as a window of Mistress's own, and what is typed is in the library for the game.
+        // On the desktop the game's page opens Settings at the game's own crop, and what is changed is in the library for that game alone.
         [Fact]
-        public Task On_the_desktop_the_game_s_page_opens_it_as_a_window_and_the_crop_is_stored_for_that_game() => Session.Dispatch(() =>
+        public Task On_the_desktop_the_game_s_page_opens_settings_at_its_crop_and_the_crop_is_stored_for_that_game() => Session.Dispatch(() =>
         {
             using ThemedSession s = DesktopLibrary.Desktop();
-            SheetLayer sheets = s.Window.GetControl<SheetLayer>("Sheets");
             var list = DesktopLibrary.List(s.Window);
             string game = DesktopLibrary.SnesPath(s, 1), other = DesktopLibrary.SnesPath(s, 2);
             list.Select(list.Models.Single(e => e.FullPath == game));
             s.Settle();
-            // The game's page holds its options: Options ▸ Display crop opens the crop (EmuSen_BigPicture.md §50.2).
-            s.Window.ShowGamePage(game, EmuSen.Mistress.Pages.GamePage.Options);
+            s.Window.ShowGamePage(game, GamePage.Options);
             s.Window.GamePageShown!.ChooseRow("crop");
             s.Settle();
 
-            GameCropWindow crop = Assert.IsType<GameCropWindow>(s.Window.GameCropShown);
-            Assert.False(sheets.IsPresenting);
-            Assert.Contains(crop, s.Window.OwnedWindows);
-            Assert.Equal(ThemedSession.SnesGames[1], Named<TextBlock>(crop, "GameCropGame").Text);
-            Type(s, crop, "CropTop", "8.7");
-            Type(s, crop, "CropBottom", "9");
-            Assert.Equal(new GameCrop(0, 0, 8.7, 9), Records(s.Window).Crop(game));
+            SettingsScreen settings = Assert.IsType<SettingsScreen>(s.Window.SettingsShown);
+            Assert.Equal(ThemedSession.SnesGames[1], settings.Trail[^1]);
+            settings.Step("gamecrop", -1);
+            settings.Step("gamecrop:CropTop", 1);
+            GameCrop own = Assert.IsType<GameCrop>(Records(s.Window).Crop(game));
+            Assert.True(own.Top > own.Bottom, $"{own}");
             Assert.Null(Records(s.Window).Crop(other));
-            crop.Close();
+            s.Window.CloseSettings();
             s.Settle();
-            Assert.Null(s.Window.GameCropShown);
         }, default);
-
     }
 }

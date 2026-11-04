@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver Pad) GameModeWithAGame()
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), SyntheticRom.BuildBlank());
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = true }.Save();
 
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();

@@ -173,7 +173,7 @@ namespace EmuSen.Mistress.Views
             _fullscreen = new LunaAction("_Fullscreen", a => IsFullScreen = a.IsChecked) { IsCheckable = true };
             _bigPictureMenu = new LunaAction("_Big Picture", () => SetBigPicture(!_bigScreen)) { HelpText = "Full screen, in big picture mode" };
             _hardwareDashboard = new LunaAction("_Hardware Dashboard...", OpenCoretopWindow);
-            _rewindReel = new LunaAction("Re_wind...", () => OpenRewindReel(resumeAfter: false));
+            _rewindReel = new LunaAction("Re_wind...", OpenRewindReel);
             InitializeComponent();
             // Why the game's picture is read back rather than handed to the compositor on the device, logged once a window - see EmuSen_DevicePicture.md §4.4.
             GameFrame.DevicePictureReport += problem => ErrorLog.Warning("picture", problem);
@@ -1076,14 +1076,18 @@ namespace EmuSen.Mistress.Views
         private EmuSen.Serenity.Slang.SlangVulkan? PresenterDevice => GameFrame.LendableDevice;
         private volatile EmuSen.Serenity.Slang.SlangVulkan? _lentDevice;
 
+        // The game's own profile where its page or the Pause Card chose one, else the console's (EmuSen_Input.md §10.5).
+        private void ApplyBindings(string console, string? game)
+        {
+            string profile = _gamepadBindings.Resolve(console, game is not null ? _gamepadBindings.GameProfile(console, GameProfileKey(game)) : null);
+            _gamepad.Bindings = _gamepadBindings.For(console, 1, profile);
+            _gamepad.PlayerBindings = player => _gamepadBindings.For(console, player, profile);
+        }
+
         // A loaded session's pad, ports, rewind, speed, cheats, shell and screen, and the status line naming it.
         private void WireSession(GameSession session, string displayName, int restoredCheats, bool newGame)
         {
-            // The game's own profile where its page chose one, else the console's (EmuSen_Input.md §10.5).
-            string bindingsConsole = _activeConsole;
-            string profile = _gamepadBindings.Resolve(bindingsConsole, session.GamePath is { } game ? _gamepadBindings.GameProfile(bindingsConsole, GameProfileKey(game)) : null);
-            _gamepad.Bindings = _gamepadBindings.For(bindingsConsole, 1, profile);
-            _gamepad.PlayerBindings = player => _gamepadBindings.For(bindingsConsole, player, profile);
+            ApplyBindings(_activeConsole, session.GamePath);
             _gamepad.LeftStickIsAnalog = session.Axes.Contains(PadAxis.LeftX);
             _ports.Reset(session.ControllerPorts, session.Axes);
             Array.Clear(_rumbleSent);

@@ -133,6 +133,7 @@ pub static APP_SETTINGS: Schema = Schema {
         text("LibraryCollection", "all"),
         text("SoundOutputDevice", "System default"),
         double("Volume", "1"),
+        flag("Mute", false),
         flag("PauseInBackground", true),
         Field::new("OnlineCovers", Type::NullableBool, Initial::Null).skipped_when_null(),
         flag("OpenEmuFallback", true),
@@ -378,7 +379,7 @@ mod tests {
     fn app_settings_has_every_property_and_skips_the_retired_key_while_it_is_null() {
         let new = APP_SETTINGS.new_instance();
         let text = format(&APP_SETTINGS, &new).unwrap();
-        assert_eq!(APP_SETTINGS.fields.len(), 71);
+        assert_eq!(APP_SETTINGS.fields.len(), 72);
         assert!(text.contains("\"Appearance\": \"dark\",\n  \"HomeArt\": true,\n  \"PlayVideos\": true,\n  \"TextSize\": \"default\",\n  \"ReducedMotion\": \"system\","));
         assert!(text.contains("\"SoundOutputDevice\": \"System default\","));
         assert!(text.contains("\"SelectedCore\": \"All consoles\","));

@@ -1165,7 +1165,11 @@ big screen's pad menu drawn over the desktop library (a pad opens the Home card,
 | **D3** | A game's page, U4's desktop half; the game options sheet, the metadata editor window and the two library views retired | the page's states |
 | **D4** | Home and Setup, U5's desktop half | Home's states |
 | **D5** | Settings, U6's desktop half; Preferences' tabs and the nine settings windows retired | every settings window's states moved |
-| **D6** | In-game: the heads-up bar in the tokens, the Game menu, `F4`'s card; the pad menu's desktop rendering retired | the in-game states |
+| **D6** | In-game: the heads-up bar in the tokens, the Game menu, `F4`'s card; the pad menu's desktop rendering retired; the desktop card in the desktop's type with its hint line and a pane on every row, as `desktop-pause-card` draws it (accepted 2026-11-03 as a D6 step) | the in-game states |
+
+**D6, in part, built 2026-11-03 with §18.5's pages (§20.4):** `F4`'s card and the pad's card over a game are the Pause
+Card at 40 per cent of the content area, as the Home card already was; the pad menu's desktop box and its slot card
+are retired, and the Game menu's *Rewind…* and *Change Disc…* open the card on its page. The heads-up bar is still to come.
 
 D1 and D2 go beside the big screen's Cores work; D3 to D6 go with U4 to U6, each stage building both halves of its
 screen from one description (`EmuSen_LibraryTools.md` §1a).
@@ -1393,6 +1397,10 @@ looks hokey and should stay put:
   `Mode ◂ Shared · Per game ▸`, `Cards ▸` (the cards as rows: new, rename, copy); Left and Right put another card in
   and the game sees a card swap. The same rows under Consoles ▸ the console ▸ Memory cards (§18.10). `MemoryCardsWindow`
   retires.
+  - As built 2026-11-03 (§20.9): no running core takes a card swap and the runtime has no call for one, so a slot's card
+    goes in when the game next starts, and the pane says so; the live swap is queued as runtime and core work of its own
+    (decided 2026-11-03). `MemoryCardsWindow` stays, because Settings' `Saves on the cards` copies, moves and deletes
+    saves through it (accepted 2026-11-03).
 
 ### 18.6 Notices
 
@@ -1632,3 +1640,129 @@ running; the Scraper window's run through `SummaryChanged` at each step. When th
 run's end marks it to be read again at the next Home. Found on 2026-11-03 by `ScrapeStatusWindowTests`, where the pad
 menu's Scraper row had lost the progress its status had shown before U7; held since by `ToolSummaryTests`, one seeded
 fault caught (the progress not taking the Scraper's place: both classes).
+
+## 20. The Pause Card's pages as built (2026-11-03)
+
+§18.5 built on the card's page mechanism: each page a `PadMenuPage` turned in place, with its own words for A and for
+Left and Right in the help band (`AdaptiveLayout.SideWord`, docs/LunaP.md §217) and Start's entry left off, as the
+mockups draw these pages. The game runs no frame on any page; a screen a page opens lays over the card as a sheet.
+
+### 20.1 Rewind, the reel
+
+- The Rewind row's pane is unchanged (the three newest pictures). A turns to the reel page: `Go back to 4 s ago`,
+  `Moment ◂ 4 s ago ▸`, and `Hold ◂ to scrub` dimmed as a hint. The page opens on the newest held moment; the present
+  is the strip's first, named `Now`, and A there is `Stay at Now`, which closes the card and changes nothing.
+- The pane: the focused moment at 592 × 300 (the mockup's measure; §18.5's 330 did not leave the sentence room in the
+  desktop's shorter content area), the strip of six under it at 88 × 66, the focused one ringed and named in
+  TextStrong, then the sentence. The strip samples the whole reel as the mockup does: the present, the held moments
+  nearest 1.5, 4, 8 and 12 s back, and the oldest, fewer where the reel is shorter. A press of Left or Right goes to the
+  next of them, Right further back, so 28 s back is five presses; held, Left or Right scrubs one held moment, half a
+  second, at a time (`PadNavigator.IsRepeat` tells a held repeat from a press), and a moment scrubbed to between two
+  stops stands in the strip in place of the nearer one, ringed. The page opens on the 1.5 s stop.
+- Decided 2026-11-03 by the tester at review: a first build showed six consecutive half-second moments around the focus,
+  which took 56 presses to reach 28 s back; the sampled strip replaced it. The shoulders still stride five seconds and
+  the triggers go to either end, as the window's did.
+- A closes the card and returns the game to the moment, held paused until the runtime has it in place, then resumes
+  only a game the card paused. `RewindReelWindow` and its sheet are retired; the Game menu's *Rewind…* opens the card on
+  this page, on the desktop as on the big screen, and a click on a row chooses it as A does.
+
+### 20.2 Change Disc
+
+- A disc console's first page has one `Change Disc ›` row in place of Change Disc ◂ ▸, Insert Disc… and Eject Disc. Its
+  page: the game's own discs (`Basalt Run (Disc 1)` with `Inserted`, or the game's name for a single disc), the
+  console's other games in the library, `Open the tray` while a disc is in, and `Any file…` last on the desktop, which
+  keeps the card open under the file dialog. The pane is the disc's cover as the library draws it, the generated card
+  where it has none, framed in Border because the generated card is drawn on the pane's own surface, then the disc's
+  name and `A opens the tray, swaps the disc and closes it, as the console sees it.` The help reads A Put in.
+- `InsertDiscWindow` is retired; the Game menu's *Change Disc…* opens this page. A console started empty has no own
+  disc, so its page is the library's games and the tray.
+
+### 20.3 Game Options ▸ Controllers
+
+- `Player 1 ◂ pad ▸` and `Player 2 ◂ None ▸` (one row per player the console's ports hold, at least two), `Profile ◂
+  Default ▸`, `Bindings ▸`, `Swap Players` (dimmed with no player 2). The rows are a page of Settings' one description
+  (`SettingsScreen.OpenGame`), drawn on the card by `MainWindow.CardSettings`: Left and Right seat a pad through the
+  same `Seat` the Players page uses, Profile is the game's own profile through Endymion's `SetGameProfile`, applied to
+  the running game at once, and Bindings opens Settings' drawing page for the console as a sheet over the card.
+- The rows Players & Controllers and Controller Bindings that opened Settings from the card are folded into this page.
+
+### 20.4 The card on the desktop
+
+- `PauseCardShown` no longer asks for a big screen: over a game the pad menu is the Pause Card on the desktop too. The
+  box (`PadMenuDesk`), its title, detail and hint lines and the slot card beside it are retired; the list lives in
+  the card from start-up.
+- A press and release on one row chooses it. The row is found by where the pointer is, because a card's unchosen row
+  draws no background and is not hit: a click on an unchosen row reached the list's scroll presenter instead.
+- **Departure, measured against `desktop-pause-card`:** the mockup draws the desktop's card in the desktop's type, with
+  a pane on Resume and a hint line under the rows; the built card is the big screen's card scaled to the content area,
+  as the desktop's Home card is. Accepted 2026-11-03 as a later D6 step (§17.9).
+
+### 20.7 Game Options ▸ Display
+
+- `Picture shape ◂ TV shape ▸`, `CRT shader ◂ Off · Performance · Balanced · Accurate ▸`, `Crop overscan ◂ Whole picture ·
+  TV overscan · Custom crop ▸`, `This game's crop ◂ Off · On ▸` (a console with an overscan), `Full screen ◂ On · Off ▸`;
+  a console with no television has its `Screen` filter in place of the CRT and no crop rows. The first three are the
+  console page's own rows (`PictureShapeRow`, `CrtProfileRow`, `CropOverscanRows` of Settings ▸ Consoles ▸ the console),
+  shared rather than copied, the CRT row labelled as the mockup labels it.
+- The pane previews each choice on the paused frame, as Settings' Display rows do (`PausedFrame`); the frame behind the
+  card is redrawn through the shader as it changes.
+- `This game's crop`: On starts the game's own crop from its console's, Off clears it, and A opens a page of the switch
+  and the four edges, stepped by a tenth of a percent or typed, the same edge rows as Custom crop (`EdgeRows`). The
+  game's page's crop door opens Settings at this page. `GameCropWindow` and `CropFields` are retired; the console's
+  crop row names the running game's own crop as before.
+- The Display rows Console Settings, Shader Levers and Crop This Game… that opened Settings from the card are gone with
+  the page; Settings is reached from Home.
+
+### 20.8 Game Options ▸ Sound
+
+- `Volume ◂ 80% ▸` (stepped by five, Settings' own row), `Mute ◂ Off ▸` (`AppSettings.Mute`, new: the game's sound off
+  with its volume kept), `Interface sounds ◂ Off · On · 20% … On · 100% ▸` (the navigation sounds and their volume in
+  one row). Latency is left out: no setting exists, and it is decided for later (§6.3.23 of the specification).
+- Under Steam's Game Mode the Volume row reads `the device's quick menu` and does nothing, on this page and in Settings
+  ▸ Sound alike. The first page's Volume row of the card is gone with the page.
+
+### 20.9 Game Options ▸ Memory Cards
+
+- Disc consoles only: `Slot 1 ◂ Card 1 ▸`, `Slot 2 ◂ Card 2 ▸`, `Mode ◂ Shared · Per game ▸`, `Cards ▸`, built from
+  the same row builders as Settings ▸ Consoles ▸ the console ▸ Memory cards (`CardSlotRows`, `CardModeRow`,
+  `CardsRow`), in the mockup's order, and Left and Right are `Card` in the help.
+- A slot changed is stored for the console and goes in when the game next starts; the pane says so. See §18.5 for the
+  queued live swap and why `MemoryCardsWindow` stays.
+
+### 20.6 The card's slide
+
+Decided 2026-11-03 by the tester, in place of the opening that grew the card from half its size: on the big screen and
+the desktop the Pause Card's panel slides in from the left edge while the help band slides up from the foot, and both
+go back out the same ways when it closes. The pane stays where it is and fades in and out over the same duration and
+easing (decided at review the same day: drawn whole at once, it popped beside a panel still arriving). The scrim and
+the paused frame stay put. LunaP draws it
+(`MenuPanel.SlideOut`, docs/LunaP.md §218) and `CardSlide` drives it over the motion tokens Enter (200 ms, ease-out)
+and Exit (160 ms, ease-in), advanced with the interface's clock on each pad tick.
+
+- It plays only as the card comes on screen and as it goes: a page turn, and a sheet closing over the card, move nothing.
+- The game runs no frame while it plays. Closing, the card stops taking the pad at once, but the game the card paused
+  resumes only when the panel is gone; a card opened again while it slides out takes that pause over.
+- With Reduced motion, or with the menus' opening effect set to None, the card appears and leaves at once. The Home card
+  keeps its grow.
+- At rest the panel carries no transform and is laid out as before, so no recording changed.
+
+### 20.5 Tests, measured on 2026-11-03
+
+`PadRewindReelTests` (7, the window's behaviours on the page: exact moment by frame count and WRAM counter, B leaves the
+machine and the reel as they were, Now changes nothing, the card's pause resumed, strides and ends, the desktop's menu
+and click), `PauseCardPagesTests` (4: the Controllers rows, Bindings as a sheet over the card, every page frame-still with
+its rows reported selected and X a screenshot, and the slide on opening and closing only, frame-still, not on a page
+turn or a sheet's close, and at once with motion reduced), LunaP's
+`CardFormTests.A_slid_card_moves_its_rows_and_help_out_and_at_rest_is_laid_out_as_before`, `ConsoleStartTests.Change_disc_puts_a_library_game_in_and_the_console_sees_it`.
+Seeded faults, each reverted: a frame run as the reel page turns (caught by both frame-still tests), A going back one
+moment further than shown (caught by the exact-moment test), a library disc's row that puts nothing in (caught by the
+Change Disc test), the slide replayed on a page turn (caught by the slide test). Tests not about motion set the menus'
+opening effect to None, as `PadMenuTests` already did, so a closing card does not hold their game for 160 ms.
+
+Items 4 to 6: `GameCropTests` (5, the game's crop through Settings' description and the game's page's door, as
+`GameCropWindow`'s tests asserted it), `PadSettingsWindowTests.A_crop_of_the_running_game_s_own_replaces_its_console_s_and_graphics_settings_says_so`
+(through the card's Display), `PauseCardTests`' volume test (through Sound, and the handheld's row doing nothing),
+`ConsoleStartTests.Memory_cards_change_the_card_a_slot_starts_the_game_with`. Seeded faults, each reverted: an edge of the
+game's crop stored unchanged (caught by two `GameCropTests`), a slot row that steps nothing (caught by the memory cards
+test), the handheld's Volume row stepping in a game (caught by the volume test).
+

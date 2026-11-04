@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
     public partial class MainWindow
     {
         public const string QuestionNo = "No", QuestionYes = "Yes", MemoryCardsMenu = "Memory Cards", CompressedDiscsMenu = "Compressed Discs", PackagesMenu = "Packages", CoresMenu = "Cores", SwapPlayersRow = "Swap Players 1 and 2";
-        public const string GameOptionsMenu = "Game Options", LeaveMenu = "Leave", ControllersMenu = "Controllers", DisplayMenu = "Display", VolumeRow = "Volume";
+        public const string GameOptionsMenu = "Game Options", LeaveMenu = "Leave", ControllersMenu = "Controllers", DisplayMenu = "Display", SoundMenu = "Sound";
 
         // One page of the menu: its title (null for the first, whose title is the game's or Home), its rows, the row last on, and for a question the sentence under it.
         private sealed class PadMenuPage(string? title, Func<List<PadMenuEntry>> rows, string? detail = null, bool question = false)
@@ -33,6 +33,18 @@ namespace EmuSen.Mistress.Views
             public string? Detail { get; } = detail;
             public bool Question { get; } = question;
             public int At { get; set; }
+
+            // A page of the Pause Card's own (EmuSen_Interface.md §18.5): its words for A and for Left and Right in the help bar, and whether Start resumes there.
+            public string? AcceptWord { get; init; }
+            public string? SideWord { get; init; }
+            public bool StartResumes { get; init; } = true;
+
+            // Left and Right on a row with no value of its own, and the page's own buttons, such as the reel's shoulders.
+            public Action<int>? Sideways { get; init; }
+            public Func<UiButton, bool>? Pad { get; init; }
+
+            // What B does before the page closes, such as a settings page going back a level of its own.
+            public Func<bool>? Back { get; init; }
         }
 
         private readonly List<PadMenuPage> _padMenuPages = new();
@@ -53,9 +65,14 @@ namespace EmuSen.Mistress.Views
             PadCard.Title = _padMenuInGame ? "Pause" : HomeTitle;
             if (!_padMenuInGame) AskToolSummaries();
 
+            // A card opened again as it slides out takes over the pause that slide was holding for the game.
+            bool held = _cardSlide.Leaving && _closingResumes;
+            _cardSlide.Stop();
+            _closingResumes = false;
+
             // Before the menu shows, so no frame runs under it - the library's own rule (§4.18).
-            _padMenuPaused = _padMenuInGame && !IsPaused;
-            if (_padMenuPaused) PauseEmulation();
+            _padMenuPaused = _padMenuInGame && (held || !IsPaused);
+            if (_padMenuPaused && !IsPaused) PauseEmulation();
 
             PadMenuPanel.IsVisible = true;
             _padMenuOpen = true;
@@ -83,12 +100,11 @@ namespace EmuSen.Mistress.Views
         private List<PadMenuEntry> GameMenuRows() =>
         [
             new(() => "Resume", () => { }),
-            new(RewindMenuText, RewindFromPadMenu, closes: false) { Label = () => "Rewind", Value = () => RewindUnavailable() ?? RewindHeld(), ShowsReel = true },
+            new(RewindMenuText, OpenReelPage, closes: false) { Label = () => "Rewind", Value = () => RewindUnavailable() ?? RewindHeld(), ShowsReel = true },
             new(() => $"Save      <  {SlotValue()}  >", SaveState, StepStateSlot) { Label = () => SaveStateRow, Value = SlotValue, ShowsSlot = true },
             new(() => $"Load      <  {SlotValue()}  >", LoadState, StepStateSlot) { Label = () => LoadStateRow, Value = SlotValue, ShowsSlot = true },
             new(() => $"Speed      <  {DescribeSpeed(_baseSpeedPercent)}  >", () => StepSpeed(1), StepSpeed, closes: false) { Label = () => "Speed", Value = () => DescribeSpeed(_baseSpeedPercent) },
             .. DiscRows(),
-            .. DriveRows(),
             // Shown while player 2 has a pad, connected or kept, under Controllers where it would make a ninth row - see EmuSen_Input.md §8.13.
             .. (SwapOnFirstPage ? new[] { new PadMenuEntry(() => SwapPlayersRow, SwapPlayers) } : Array.Empty<PadMenuEntry>()),
             Submenu(GameOptionsMenu, GameOptionsRows, startsSection: true),
@@ -101,31 +117,20 @@ namespace EmuSen.Mistress.Views
             List<PadMenuEntry> rows =
             [
                 Opens("Cheats", ShowActiveCheats),
-                Submenu(ControllersMenu, ControllersRows),
-                Submenu(DisplayMenu, DisplayRows),
-                VolumeEntry(),
+                SettingsPageRow(ControllersMenu, SettingsScreen.GameControllers, "Choose", "Value"),
+                SettingsPageRow(DisplayMenu, SettingsScreen.GameDisplay, "Change", "Value"),
+                SettingsPageRow(SoundMenu, SettingsScreen.GameSound, "Change", "Value"),
             ];
-            if (DiscDrive is not null || DriveEngine is not null) rows.Add(Opens(MemoryCardsMenu, () => ShowSettings(SettingsScreen.Consoles, "console:" + _activeConsole, "cards")));
+            if (DriveEngine is not null) rows.Add(SettingsPageRow(MemoryCardsMenu, SettingsScreen.GameCards, "Change", "Card"));
             return rows;
         }
+
+        // A row of Game Options that turns the card to a page of Settings' description (EmuSen_Interface.md §20).
+        private PadMenuEntry SettingsPageRow(string title, string page, string accept, string side) =>
+            new(() => title, () => OpenSettingsOnCard(page, accept, side), closes: false) { Opens = true, TurnsPage = true };
 
         // The first page holds at most eight rows: seven of its own, the console's disc rows, and Swap Players only where they leave it room (EmuSen_BigPicture.md §48.3).
-        private bool SwapOnFirstPage => _gamepad.CanSwapPlayers && 7 + DiscRows().Count() + DriveRows().Count() < 8;
-
-        private List<PadMenuEntry> ControllersRows()
-        {
-            List<PadMenuEntry> rows = [Opens("Players & Controllers", () => ShowSettings(SettingsScreen.Controllers, "players")), Opens("Controller Bindings", ShowControllerBindings)];
-            if (_gamepad.CanSwapPlayers && !SwapOnFirstPage) rows.Insert(0, new PadMenuEntry(() => SwapPlayersRow, SwapPlayers));
-            return rows;
-        }
-
-        private List<PadMenuEntry> DisplayRows()
-        {
-            List<PadMenuEntry> rows = [Opens("Console Settings", () => ShowSettings(SettingsScreen.Consoles, "console:" + _activeConsole)), Opens("Shader Levers", () => ShowSettings(SettingsScreen.Display, "levers"))];
-            // The running game's own crop, where its console has an overscan to replace - see EmuSen_Settings_Reference.md §4.100.
-            if (_currentRomPath is string rom && EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(_activeConsole)) rows.Add(Opens(CropThisGame, () => ShowGameCrop(rom, RunningGameTitle())));
-            return rows;
-        }
+        private bool SwapOnFirstPage => _gamepad.CanSwapPlayers && 7 + DiscRows().Count() < 8;
 
         // Back to the library with the game kept, or an end asked first, No first.
         private List<PadMenuEntry> LeaveRows() =>
@@ -160,21 +165,13 @@ namespace EmuSen.Mistress.Views
             PadMenuPage page = _padMenuPages[^1];
             _padMenuEntries.Clear();
             _padMenuEntries.AddRange(page.Rows());
-            bool nested = _padMenuPages.Count > 1;
-
-            PadMenuTitle.Text = string.Join("  ›  ", _padMenuPages.Select(p => PageTitle(p)));
-            PadMenuDetail.Text = page.Detail;
-            PadMenuDetail.IsVisible = page.Detail is not null;
-            string change = _padMenuEntries.Any(e => e.Adjust is not null) ? "      Left Right  Change" : "";
-            string shot = _padMenuInGame ? "      X  Screenshot" : "";
-            PadMenuHint.Text = PadHints.Face(page.Question ? "A  Choose      B  No" + shot : nested ? "A  Choose      B  Back      Start  Close" + change + shot : "A  Choose      B  Close" + change + shot);
-            if (CardShown) ShowCard(page, nested);
+            ShowCard(page, _padMenuPages.Count > 1);
 
             PadMenuList.Refresh(_padMenuEntries);
             int at = Math.Clamp(page.At, 0, _padMenuEntries.Count - 1);
             PadMenuList.SelectedIndex = at;
             PadMenuList.ScrollIntoView(at);
-            UpdateSlotCard();
+            UpdateCardPane();
         }
 
         // The first page is named by the game, as the library names it, or Home; a submenu or a question by its own title.
@@ -213,6 +210,7 @@ namespace EmuSen.Mistress.Views
             int count = _padMenuEntries.Count;
             int at = Math.Max(PadMenuList.SelectedIndex, 0);
 
+            if (_padMenuPages.Count > 0 && _padMenuPages[^1].Pad is { } own && own(button)) return;
             switch (button)
             {
                 case UiButton.Up: PadMenuList.SelectedIndex = (at + count - 1) % count; break;
@@ -223,6 +221,11 @@ namespace EmuSen.Mistress.Views
                     if (_padMenuEntries[at].Adjust is { } adjust)
                     {
                         adjust(button == UiButton.Right ? 1 : -1);
+                        RefreshPadMenuText(at);
+                    }
+                    else if (_padMenuPages[^1].Sideways is { } sideways)
+                    {
+                        sideways(button == UiButton.Right ? 1 : -1);
                         RefreshPadMenuText(at);
                     }
                     break;
@@ -282,6 +285,11 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             PadMenuPage left = _padMenuPages[^1];
+            if (left.Back is { } own && own())
+            {
+                ShowPadMenuPage();
+                return;
+            }
             if (!left.Question && left.Title is { } title) _padSubmenuRows[SubmenuKey(title)] = Math.Max(PadMenuList.SelectedIndex, 0);
             _padMenuPages.RemoveAt(_padMenuPages.Count - 1);
             ShowPadMenuPage();
@@ -289,29 +297,58 @@ namespace EmuSen.Mistress.Views
 
         private string SubmenuKey(string title) => (_padMenuInGame ? "game/" : "home/") + title;
 
+        // The Pause Card slides out first and the game it paused resumes only once it is gone; any other card goes at once (EmuSen_Interface.md §20.6).
         private void ClosePadMenu()
         {
             if (!_padMenuOpen) return;
 
-            PadMenuPanel.IsVisible = false;
-            PadSlotCard.IsVisible = false;
             _padMenuOpen = false;
-            if (_gamePage is null) ApplyStatusBar();
             _padMenuPages.Clear();
             _padQuiet = true;
-            UpdateMenuBackdrop();
-
-            // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.
-            if (_padMenuPaused && GameOnScreen) ResumeEmulation();
+            _closingResumes = _padMenuPaused;
             _padMenuPaused = false;
+            if (_padMenuInGame)
+            {
+                _cardSlide.Leave(PadCard.CardPanel, UiClock(), MenusScaleUp, PadMenuGone);
+                RunCardSlide();
+            }
+            else PadMenuGone();
         }
 
+        // Only what this menu paused, and only if the game is still the screen: an entry may have closed or left it.
+        private void PadMenuGone()
+        {
+            PadMenuPanel.IsVisible = false;
+            if (_gamePage is null) ApplyStatusBar();
+            UpdateMenuBackdrop();
+            if (_closingResumes && GameOnScreen) ResumeEmulation();
+            _closingResumes = false;
+        }
+
+        private readonly EmuSen.Mistress.BigPicture.CardSlide _cardSlide = new();
+        private bool _closingResumes;
+
+        internal EmuSen.Mistress.BigPicture.CardSlide CardSlideNow => _cardSlide;
+
+        private Avalonia.Threading.DispatcherTimer? _slideTimer;
+
+        // The slide stepped with the interface's clock at the display's pace while it moves, and stopped with the window.
+        private void RunCardSlide()
+        {
+            if (_cardSlide.Moving is null) return;
+            if (_slideTimer is null)
+            {
+                _slideTimer = new Avalonia.Threading.DispatcherTimer(TimeSpan.FromMilliseconds(16), Avalonia.Threading.DispatcherPriority.Render, (_, _) => { if (!_cardSlide.Advance(UiClock())) _slideTimer?.Stop(); });
+                Closed += (_, _) => { _slideTimer?.Stop(); _cardSlide.Stop(); };
+            }
+            _slideTimer.Start();
+        }
 
         private void RefreshPadMenuText(int keep)
         {
             PadMenuList.Refresh(_padMenuEntries);
             PadMenuList.SelectedIndex = keep;
-            UpdateSlotCard();
+            UpdateCardPane();
         }
 
         private void StepStateSlot(int by)
@@ -332,47 +369,46 @@ namespace EmuSen.Mistress.Views
         {
             // Ten rows at most: a plain stack, so a divider's gap is measured with its row rather than missed by the virtualizing panel's count.
             PadMenuList.ItemsPanel = new Avalonia.Controls.Templates.FuncTemplate<Panel?>(() => new StackPanel());
-            PadMenuList.Tapped += (_, e) =>
+            // Pressed and let go on one row, found by where the pointer is, since a card's unchosen row draws no background to be hit.
+            int pressed = -1;
+            int RowAt(Avalonia.Input.PointerEventArgs e)
             {
-                if (!_padMenuOpen || e.Source is not Visual source || source.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { } row) return;
-                int at = PadMenuList.IndexFromContainer(row);
-                if (at < 0 || at >= _padMenuEntries.Count) return;
+                for (int i = 0; i < _padMenuEntries.Count; i++)
+                    if (PadMenuList.ContainerFromIndex(i) is Control row && row.TranslatePoint(default, PadMenuList) is { } top && new Rect(top, row.Bounds.Size).Contains(e.GetPosition(PadMenuList))) return i;
+                return -1;
+            }
+            PadMenuList.AddHandler(PointerPressedEvent, (_, e) =>
+            {
+                pressed = _padMenuOpen && e.GetCurrentPoint(PadMenuList).Properties.IsLeftButtonPressed ? RowAt(e) : -1;
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            PadMenuList.AddHandler(PointerReleasedEvent, (_, e) =>
+            {
+                int at = pressed;
+                pressed = -1;
+                if (!_padMenuOpen || e.InitialPressMouseButton != MouseButton.Left || at < 0 || at != RowAt(e)) return;
                 PadMenuList.SelectedIndex = at;
                 e.Handled = true;
                 PadMenuCommand(UiButton.Accept);
-            };
+            }, RoutingStrategies.Tunnel, handledEventsToo: true);
             PadMenuPanel.AddHandler(PointerPressedEvent, (_, e) =>
             {
                 if (!_padMenuOpen || !e.GetCurrentPoint(PadMenuPanel).Properties.IsRightButtonPressed) return;
                 e.Handled = true;
                 PadMenuCommand(UiButton.Back);
             }, RoutingStrategies.Tunnel);
-            PadMenuList.SelectionChanged += (_, _) => UpdateSlotCard();
-            PadMenuPanel.LayoutUpdated += (_, _) => { if (_padMenuOpen) UpdateSlotCard(); };
+            PadMenuList.SelectionChanged += (_, _) => UpdateCardPane();
+            PadMenuPanel.LayoutUpdated += (_, _) => { if (_padMenuOpen) UpdateCardPane(); };
         }
 
-        // The section a row opens or closes: on a card the last row of a section has a lighter rule, on the desktop the first has a gap and a line above it.
+        // The last row of a section has a lighter rule than the rows' own.
         private void MarkSection(Control container, int index)
         {
-            bool starts = index > 0 && _padMenuEntries[index].StartsSection;
             bool ends = index + 1 < _padMenuEntries.Count && _padMenuEntries[index + 1].StartsSection;
-            container.Classes.Set(SectionEndClass, CardShown && ends);
+            container.Classes.Set(SectionEndClass, ends);
             PaintSectionRule(container);
             if (container is not ListBoxItem item) return;
             item.TemplateApplied -= OnPadRowTemplate;
             item.TemplateApplied += OnPadRowTemplate;
-            if (!CardShown && starts)
-            {
-                item.Margin = new Thickness(0, 9, 0, 0);
-                item.BorderThickness = new Thickness(0, 1, 0, 0);
-                item.BorderBrush = this.FindResource("LunaMuted") as IBrush ?? Brushes.Gray;
-            }
-            else
-            {
-                item.ClearValue(MarginProperty);
-                item.ClearValue(Avalonia.Controls.Primitives.TemplatedControl.BorderThicknessProperty);
-                item.ClearValue(Avalonia.Controls.Primitives.TemplatedControl.BorderBrushProperty);
-            }
         }
 
         private void OnPadRowTemplate(object? sender, Avalonia.Controls.Primitives.TemplateAppliedEventArgs e)
@@ -387,57 +423,6 @@ namespace EmuSen.Mistress.Views
                 if (container.Classes.Contains(SectionEndClass)) row.RuleColor = SectionRule;
                 else row.ClearValue(MenuRow.RuleColorProperty);
             }
-        }
-
-        // Beside the desktop's box while Save State or Load State is on: the slot's picture and when it was saved, where the screen leaves room for it.
-        private void UpdateSlotCard()
-        {
-            int at = PadMenuList.SelectedIndex;
-            UpdateCardPane();
-            bool show = _padMenuOpen && !CardShown && at >= 0 && at < _padMenuEntries.Count && _padMenuEntries[at].ShowsSlot && PlaceSlotCard();
-            PadSlotCard.IsVisible = show;
-            if (!show) return;
-            string? state = StatePathForSlot(_stateSlot);
-            bool saved = state is not null && File.Exists(state);
-            PadSlotCaption.Text = saved ? $"Slot {_stateSlot}\nSaved {File.GetLastWriteTime(state!).ToString("ddd d MMM, HH:mm", CultureInfo.CurrentCulture)}" : $"Slot {_stateSlot}\nEmpty";
-            Bitmap? picture = saved ? SlotPicture(SaveLibrary.PicturePathFor(state!)) : null;
-            if (!ReferenceEquals(PadSlotPicture.Source, picture)) PadSlotPicture.Source = picture;
-            PadSlotPicture.IsVisible = picture is not null;
-        }
-
-        // To the right of the desktop's box, as wide as the room there allows up to 240 pixels; false where there is too little room for it.
-        private bool PlaceSlotCard()
-        {
-            if (PadMenuPanel.Child is not Control area || area.Bounds.Width <= 0) return false;
-            Rect box = PadMenuDesk.Bounds;
-            if (box.Width <= 0) return false;
-            double gap = 16, width = Math.Min(240, area.Bounds.Width - box.Right - 2 * gap);
-            if (width < 150) return false;
-            if (PadSlotCard.Width != width) PadSlotCard.Width = width;
-            var margin = new Thickness(box.Right + gap, box.Top, 0, 0);
-            if (PadSlotCard.Margin != margin) PadSlotCard.Margin = margin;
-            if (PadSlotCaption.FontSize != 15) PadSlotCaption.FontSize = 15;
-            return true;
-        }
-
-        private (string Path, DateTime When, Bitmap? Picture) _slotPicture = ("", default, null);
-
-        // The slot's picture, read again only when its file changes.
-        private Bitmap? SlotPicture(string path)
-        {
-            DateTime when = File.Exists(path) ? File.GetLastWriteTimeUtc(path) : default;
-            if (_slotPicture.Path == path && _slotPicture.When == when) return _slotPicture.Picture;
-            Bitmap? picture = null;
-            try
-            {
-                if (when != default) picture = new Bitmap(path);
-            }
-            catch (Exception)
-            {
-                picture = null;
-            }
-            _slotPicture = (path, when, picture);
-            return picture;
         }
     }
 }

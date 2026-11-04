@@ -11,13 +11,10 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Common;
 using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
-using EmuSen.LunaP.Controls;
-using EmuSen.LunaP.Windowing;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Crystal;
@@ -27,7 +24,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The rewind reel from the pad and the pointer: it opens paused, steps, strides, rewinds to exactly the moment, and cancels to exactly where it was - see EmuSen_Settings_Reference.md §4.49.
+    // The rewind reel as a page of the Pause Card: it opens on the card, steps, strides, goes back to exactly the moment, and B leaves everything as it was - see EmuSen_Interface.md §18.5.
     [Collection(TestCollections.ProcessGlobals)]
     public class PadRewindReelTests : IDisposable
     {
@@ -54,7 +51,7 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        // After the boot stub: the screen on, then each vertical blank the backdrop colour stepped, so every moment has its own picture.
+        // After the boot stub: the screen on, then each vertical blank the backdrop colour stepped and WRAM $10 counted, so every moment has its own picture and its own count.
         public static byte[] ChangingBackdrop() => SyntheticRom.Build((5, new byte[]
         {
             0xA9, 0x0F, 0x8D, 0x00, 0x21,       // LDA #$0F; STA $2100
@@ -71,7 +68,9 @@ namespace EmuSen.WiseMan.Mistress
         private (MainWindow Window, PadDriver Pad) WithAGame(bool bigScreen)
         {
             File.WriteAllBytes(Path.Combine(_romDir, "Game.sfc"), ChangingBackdrop());
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen }.Save();
+            var app = new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen };
+            app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
+            app.Save();
 
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();
@@ -83,47 +82,23 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         // Unthrottled with every frame drawn, so seconds of history take a fraction of one, then back to normal speed.
-        private static void Play(MainWindow window, int frames)
-        {
-            MistressGame.Play(window, frames, (until, _) => WaitFor(until));
-        }
+        private static void Play(MainWindow window, int frames) => MistressGame.Play(window, frames, (until, _) => WaitFor(until));
 
-        private static void Choose(MainWindow window, PadDriver pad, string entry)
+        // The card opened and A on its Rewind row: the reel's page, on the newest held moment.
+        private static void OpenReel(MainWindow window, PadDriver pad)
         {
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-            ChooseInOpenMenu(window, pad, entry);
-        }
-
-        private static void ChooseInOpenMenu(MainWindow window, PadDriver pad, string entry)
-        {
-            PadMenu.Choose(window, pad, entry);
-        }
-
-        private static string[] MenuLines(MainWindow window) => PadMenu.Lines(window);
-
-        private static RewindReelWindow OpenReel(MainWindow window, PadDriver pad)
-        {
-            Choose(window, pad, "Rewind");
-            WaitFor(() => Sheets(window).Current is RewindReelWindow);
+            PadMenu.Choose(window, pad, "Rewind");
             Settle(window);
-            return (RewindReelWindow)Sheets(window).Current!;
+            Assert.Equal(2, PadMenu.Depth(window));
+            Assert.Equal(MainWindow.MomentRow, PadMenu.Entries(window)[1].Label!());
+            Assert.Equal("moment", PadMenu.Pane(window).Showing);
         }
 
-        private static SheetLayer Sheets(MainWindow w) => w.GetControl<SheetLayer>("Sheets");
-        private static Control Sheet(MainWindow w) => Sheets(w).SheetOf(Sheets(w).Current!)!;
-        private static RewindBuffer Rewind(MainWindow w) => MistressGame.Rewind(w);
-        private static WindowGame Game(MainWindow w) => new(w);
-        private static TextBlock Status(MainWindow w) => w.GetControl<TextBlock>("StatusText");
-        private static object Field(MainWindow w, string name) => typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(w)!;
-        private static void SetField(MainWindow w, string name, object value) => typeof(MainWindow).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(w, value);
+        private static string Status(MainWindow w) => w.GetControl<TextBlock>("StatusText").Text ?? "";
         private static void Stop(MainWindow w) => typeof(MainWindow).GetMethod("StopEmulationThread", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(w, null);
-
-        private static byte[] Save(ICore core)
-        {
-            using var stream = new MemoryStream();
-            core.SaveState(stream);
-            return stream.ToArray();
-        }
+        private static byte Count(MainWindow w) => MistressGame.Peek(w, "WRAM", 0x10);
+        private static string Reel(MainWindow w) => MistressGame.Of(w).Crystal.RewindReel();
 
         private static void Settle(Window window)
         {
@@ -143,161 +118,179 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        // Until the frame count holds still, so the emulation thread is parked and the test may read the buffer.
+        // Until the frame count holds still, so the emulation thread is parked.
         private static long WaitUntilParked(MainWindow window)
         {
             long frames;
             do
             {
-                frames = Game(window).TotalFrames;
+                frames = MistressGame.TotalFrames(window);
                 Thread.Sleep(100);
                 Dispatcher.UIThread.RunJobs();
             }
-            while (Game(window).TotalFrames != frames);
+            while (MistressGame.TotalFrames(window) != frames);
             return frames;
         }
 
-        private static string Shown(RewindReelWindow reel) => reel.Strip.Selected!.Label;
-
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_rewinds_to_the_moment_the_reel_shows_byte_for_byte_and_leaves_a_paused_game_paused() => Session.Dispatch(() =>
+        [Fact]
+        public Task A_goes_back_to_exactly_the_moment_the_page_shows_and_leaves_a_paused_game_paused() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
             Play(window, 240);
             window.PauseEmulation();
-            WaitUntilParked(window);
-            ICore core = Game(window).Core!;
-            long frameBefore = Rewind(window).Frame;
+            long frameBefore = WaitUntilParked(window);
+            byte countBefore = Count(window);
 
-            RewindReelWindow reel = OpenReel(window, pad);
+            OpenReel(window, pad);
             Assert.True(window.IsPaused);
-            List<ReelMoment> moments = Moments(reel);
-            // Two snapshots a second of the console's own frames - see EmuSen_Settings_Reference.md §4.112.
-            Assert.Equal((int)Math.Round(Game(window).FrameRateHz / 2), Rewind(window).IntervalFrames);
-            Assert.True(moments.Count >= 240 / Rewind(window).IntervalFrames, $"{moments.Count} tiles at one every {Rewind(window).IntervalFrames} frames");
-            Assert.True(moments[^1].IsNow);
-            Assert.Same(moments[^1], reel.Strip.Selected);
-            Assert.Equal(frameBefore, moments[^1].Frame);
-            Assert.All(moments.SkipLast(1), m => Assert.False(m.IsNow));
-            Assert.Equal(moments.Select(m => m.Frame).OrderBy(f => f), moments.Select(m => m.Frame));
-            UiTest.Dump("rewind-reel-sheet-now", UiTest.Capture(window));
+            IReadOnlyList<MainWindow.ReelMark> moments = window.ReelShown;
+            double hz = MistressGame.Of(window).FrameRateHz;
+            Assert.True(moments[0].IsNow);
+            Assert.Equal(frameBefore, moments[0].Frame);
+            Assert.True(moments.Count > 240 / Math.Round(hz / 2), $"{moments.Count} moments");
+            Assert.Equal(moments.Select(m => m.Frame).OrderByDescending(f => f), moments.Select(m => m.Frame));
+            Assert.Same(moments[window.ReelStops[1]], window.ReelFocused);
+            Assert.All(moments.Skip(1), m => Assert.Equal(MainWindow.ReelMark.Ago((frameBefore - m.Frame) / hz), m.Label));
 
-            pad.Left(3);
+            pad.Right(1);
             Settle(window);
-            ReelMoment target = moments[^4];
-            Assert.Same(target, reel.Strip.Selected);
-            Assert.Equal(target.Label, window.GetVisualDescendants().OfType<TextBlock>().First(t => t.Name == "ReelCaption").Text);
-            Assert.Equal(ReelMoment.Ago((frameBefore - target.Frame) / Game(window).FrameRateHz), target.Label);
-            byte[] expected = Rewind(window).StateAt(target.Frame)!;
-            UiTest.Dump("rewind-reel-sheet-three-back", UiTest.Capture(window));
+            MainWindow.ReelMark target = moments[window.ReelStops[2]];
+            Assert.Same(target, window.ReelFocused);
+            Assert.Equal(target.Label, PadMenu.Entries(window)[1].Value!());
+            Assert.Equal($"{MainWindow.GoBackRow} to {target.Label}", PadMenu.Lines(window)[0]);
+            UiTest.Dump("rewind-reel-page", UiTest.Capture(window));
 
+            Assert.Equal(0, PadMenu.Selected(window));
             pad.A();
-            WaitFor(() => Status(window).Text?.StartsWith("Rewound", StringComparison.Ordinal) == true);
-            Assert.False(Sheets(window).IsPresenting);
+            WaitFor(() => Status(window).StartsWith("Rewound", StringComparison.Ordinal));
+            Assert.False(PadMenu.IsOpen(window));
             Assert.True(window.IsPaused);
             WaitUntilParked(window);
-
-            Assert.Equal(expected, Save(core));
-            Assert.Equal(target.Frame, Rewind(window).Frame);
-            Assert.Equal(target.Frame, Rewind(window).Moments()[^1].Frame);
-            _out.WriteLine($"{moments.Count} tiles; rewound from frame {frameBefore} to {target.Frame} ({target.Label}), {expected.Length}-byte state identical");
+            Assert.Equal(target.Frame, MistressGame.TotalFrames(window));
+            Assert.Equal((byte)(countBefore - (frameBefore - target.Frame)), Count(window));
+            _out.WriteLine($"{moments.Count} moments; back from frame {frameBefore} to {target.Frame} ({target.Label})");
 
             Stop(window);
             window.Close();
         }, default);
 
-        private static List<ReelMoment> Moments(RewindReelWindow reel)
-        {
-            var seen = new List<ReelMoment>();
-            ReelMoment? keep = reel.Strip.Selected;
-            reel.Strip.Move(int.MinValue / 2);
-            while (true)
-            {
-                seen.Add(reel.Strip.Selected!);
-                if (!reel.Strip.Move(1)) break;
-            }
-            reel.Strip.Select(keep);
-            return seen;
-        }
-
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task B_cancels_leaving_the_machine_and_the_history_exactly_as_they_were() => Session.Dispatch(() =>
+        [Fact]
+        public Task B_returns_to_the_card_leaving_the_machine_and_the_history_exactly_as_they_were() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
             Play(window, 240);
-
-            // Paused by the player, so it stays paused after B and the state after can be compared; measured before the reel reads anything.
             window.PauseEmulation();
-            WaitUntilParked(window);
-            ICore core = Game(window).Core!;
-            byte[] before = Save(core);
-            long[] history = Rewind(window).Moments().Select(m => m.Frame).ToArray();
-            int depth = Rewind(window).Depth;
+            long frames = WaitUntilParked(window);
+            byte count = Count(window);
+            string history = Reel(window);
 
-            RewindReelWindow reel = OpenReel(window, pad);
-            pad.Left(5);
+            OpenReel(window, pad);
+            pad.Right(2);
             pad.L1();
             Settle(window);
-            Assert.False(reel.Strip.Selected!.IsNow);
+            Assert.False(window.ReelFocused!.IsNow);
 
             pad.B();
-            WaitFor(() => !Sheets(window).IsPresenting);
+            Settle(window);
+            Assert.True(PadMenu.IsOpen(window));
+            Assert.Equal(1, PadMenu.Depth(window));
+            Assert.StartsWith("Rewind", PadMenu.SelectedLine(window));
+            pad.B();
             Settle(window);
             WaitUntilParked(window);
             Assert.True(window.IsPaused);
-            Assert.Equal(before, Save(core));
-            Assert.Equal(history, Rewind(window).Moments().Select(m => m.Frame).ToArray());
-            Assert.Equal(depth, Rewind(window).Depth);
+            Assert.Equal(frames, MistressGame.TotalFrames(window));
+            Assert.Equal(count, Count(window));
+            Assert.Equal(history, Reel(window));
 
             Stop(window);
             window.Close();
         }, default);
 
-        // The present is a tile, and choosing it is no rewind: the machine and the history are untouched.
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_on_now_changes_nothing() => Session.Dispatch(() =>
+        // The present is a moment on the strip, and A on it is no rewind: the card closes and nothing else changes.
+        [Fact]
+        public Task A_on_now_closes_the_card_and_changes_nothing() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
             Play(window, 120);
             window.PauseEmulation();
-            WaitUntilParked(window);
-            ICore core = Game(window).Core!;
-            byte[] before = Save(core);
-            long[] history = Rewind(window).Moments().Select(m => m.Frame).ToArray();
+            long frames = WaitUntilParked(window);
+            string history = Reel(window);
 
-            RewindReelWindow reel = OpenReel(window, pad);
-            pad.Left(2);
+            OpenReel(window, pad);
             pad.Right(2);
-            Assert.True(reel.Strip.Selected!.IsNow);
+            pad.Left(3);
+            Assert.True(window.ReelFocused!.IsNow);
+            Assert.Equal("Stay at Now", PadMenu.Lines(window)[0]);
             pad.A();
-            WaitFor(() => !Sheets(window).IsPresenting);
             Settle(window);
             WaitUntilParked(window);
 
-            Assert.Equal(before, Save(core));
-            Assert.Equal(history, Rewind(window).Moments().Select(m => m.Frame).ToArray());
+            Assert.False(PadMenu.IsOpen(window));
+            Assert.Equal(frames, MistressGame.TotalFrames(window));
+            Assert.Equal(history, Reel(window));
             Assert.True(window.IsPaused);
-            Assert.False(Status(window).Text?.StartsWith("Rewind", StringComparison.Ordinal), $"choosing Now said '{Status(window).Text}'");
+            Assert.False(Status(window).StartsWith("Rewound", StringComparison.Ordinal), $"choosing Now said '{Status(window)}'");
 
             Stop(window);
             window.Close();
         }, default);
 
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task A_from_the_menu_rewinds_and_resumes_the_game_the_menu_paused() => Session.Dispatch(() =>
+        // The card paused the game, so after going back it plays on from the moment, which the reel still holds.
+        [Fact]
+        public Task A_from_the_card_goes_back_and_resumes_the_game_the_card_paused() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
             Play(window, 240);
 
-            RewindReelWindow reel = OpenReel(window, pad);
-            pad.Left(10);
-            Settle(window);
-            ReelMoment target = reel.Strip.Selected!;
+            OpenReel(window, pad);
+            Assert.True(window.IsPaused);
+            pad.Right(2);
+            MainWindow.ReelMark target = window.ReelFocused!;
             pad.A();
-            WaitFor(() => Status(window).Text?.StartsWith("Rewound", StringComparison.Ordinal) == true);
+            WaitFor(() => Status(window).StartsWith("Rewound", StringComparison.Ordinal));
             Assert.False(window.IsPaused);
-            Assert.Contains(target.Frame, Rewind(window).Moments().Select(m => m.Frame));
+            Assert.Contains($"\"frame\":{target.Frame}", Reel(window).Replace(" ", ""));
 
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // As ingame-rewind-reel draws it: the strip is the present and moments sampled across the whole reel, a press steps between them, and Right held scrubs one held moment, half a second, at a time.
+        [Fact]
+        public Task A_press_steps_between_the_strip_s_stops_and_holding_scrubs_half_a_second_at_a_time() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
+            Play(window, 900);
+            OpenReel(window, pad);
+            IReadOnlyList<MainWindow.ReelMark> moments = window.ReelShown;
+            int[] stops = window.ReelStops.ToArray();
+            Assert.Equal(6, stops.Length);
+            Assert.True(moments[stops[0]].IsNow);
+            for (int i = 0; i < MainWindow.StopSeconds.Length; i++) Assert.InRange(moments[stops[i + 1]].SecondsBack, MainWindow.StopSeconds[i] - 0.3, MainWindow.StopSeconds[i] + 0.3);
+            Assert.Equal(moments.Count - 1, stops[^1]);
+            Assert.Equal(6, PadMenu.Pane(window).GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("PaneMoment", StringComparison.Ordinal) == true && b.Name != "PaneMoment" && b.Name != "PaneMoments"));
+
+            pad.Right(4);
+            Assert.Same(moments[stops[5]], window.ReelFocused);
+            pad.Left(2);
+            Assert.Same(moments[stops[3]], window.ReelFocused);
+
+            TimeSpan now = TimeSpan.FromSeconds(100);
+            typeof(MainWindow).GetProperty("UiClock", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(window, (Func<TimeSpan>)(() => now));
+            pad.Pad.Press(SDL.GamepadButton.DPadRight);
+            pad.Tick();
+            Assert.Same(moments[stops[4]], window.ReelFocused);
+            for (int i = 1; i <= 3; i++)
+            {
+                now += TimeSpan.FromMilliseconds(i == 1 ? 450 : 90);
+                pad.Tick();
+                Assert.Same(moments[stops[4] + i], window.ReelFocused);
+            }
+            pad.Pad.Release(SDL.GamepadButton.DPadRight);
+            pad.Tick();
+            Settle(window);
+            Assert.Equal(1, PadMenu.Pane(window).GetVisualDescendants().OfType<Border>().Count(b => b.Name?.StartsWith("PaneMoment", StringComparison.Ordinal) == true && b.BorderThickness.Left > 0));
             Stop(window);
             window.Close();
         }, default);
@@ -308,185 +301,102 @@ namespace EmuSen.WiseMan.Mistress
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
             Play(window, 900);
 
-            RewindReelWindow reel = OpenReel(window, pad);
-            List<ReelMoment> moments = Moments(reel);
-            double reach = moments[0].SecondsBack;
-            Assert.True(reach > 12, $"{reach:F1} seconds held");
+            OpenReel(window, pad);
+            IReadOnlyList<MainWindow.ReelMark> moments = window.ReelShown;
+            Assert.True(moments[^1].SecondsBack > 12, $"{moments[^1].SecondsBack:F1} seconds held");
 
-            // Every label is its distance at the console's own rate, which is not 60 - the SNES's is 60.0988.
-            long now = moments[^1].Frame;
-            double hz = Game(window).FrameRateHz;
-            Assert.All(moments, m => Assert.Equal(m.IsNow ? "Now" : ReelMoment.Ago((now - m.Frame) / hz), m.Label));
+            pad.Press(UiButton.Last);
+            Assert.Same(moments[0], window.ReelFocused);
+            pad.L1();
+            Settle(window);
+            MainWindow.ReelMark once = window.ReelFocused!;
+            Assert.InRange(once.SecondsBack, MainWindow.StrideSeconds, MainWindow.StrideSeconds + 0.5);
+            Assert.True(moments[moments.ToList().IndexOf(once) - 1].SecondsBack < MainWindow.StrideSeconds);
 
             pad.L1();
             Settle(window);
-            ReelMoment once = reel.Strip.Selected!;
-            Assert.InRange(once.SecondsBack, RewindReelWindow.StrideSeconds, RewindReelWindow.StrideSeconds + 0.5);
-            ReelMoment newer = moments[moments.IndexOf(once) + 1];
-            Assert.True(newer.SecondsBack < RewindReelWindow.StrideSeconds);
-
-            pad.L1();
-            Settle(window);
-            ReelMoment twice = reel.Strip.Selected!;
-            Assert.InRange(twice.SecondsBack - once.SecondsBack, RewindReelWindow.StrideSeconds, RewindReelWindow.StrideSeconds + 0.5);
+            MainWindow.ReelMark twice = window.ReelFocused!;
+            Assert.InRange(twice.SecondsBack - once.SecondsBack, MainWindow.StrideSeconds, MainWindow.StrideSeconds + 0.5);
 
             pad.R1();
             Settle(window);
-            Assert.InRange(twice.SecondsBack - reel.Strip.Selected!.SecondsBack, RewindReelWindow.StrideSeconds, RewindReelWindow.StrideSeconds + 0.5);
+            Assert.InRange(twice.SecondsBack - window.ReelFocused!.SecondsBack, MainWindow.StrideSeconds, MainWindow.StrideSeconds + 0.5);
 
             pad.Press(UiButton.First);
-            Assert.Same(moments[0], reel.Strip.Selected);
+            Assert.Same(moments[^1], window.ReelFocused);
+            pad.Right();
+            Assert.Same(moments[^1], window.ReelFocused);
             pad.Press(UiButton.Last);
-            Assert.Same(moments[^1], reel.Strip.Selected);
-            pad.Press(UiButton.First);
-            pad.Left();
-            Assert.Same(moments[0], reel.Strip.Selected);
+            Assert.Same(moments[0], window.ReelFocused);
 
-            // B resumes the game the menu paused.
-            pad.B();
-            WaitFor(() => !Sheets(window).IsPresenting);
-            Assert.False(window.IsPaused);
-            Stop(window);
-            window.Close();
-        }, default);
-
-        [Fact]
-        public Task Every_control_on_the_reel_is_reached_by_the_pad() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
-            Play(window, 120);
-            RewindReelWindow reel = OpenReel(window, pad);
-
-            Control sheet = Sheet(window);
-            Assert.Same(reel.Strip, window.FocusManager!.GetFocusedElement());
-            List<InputElement> operable = PadAudit.Operable(sheet);
-            operable.Add(reel.Strip);
-            HashSet<InputElement> reached = PadAudit.Reachable(sheet, pad);
-            _out.WriteLine($"operable: {string.Join(", ", operable.Select(PadAudit.Describe))}; reached: {string.Join(", ", reached.Select(PadAudit.Describe))}");
-            Assert.Empty(operable.Where(e => !reached.Contains(e)).Select(PadAudit.Describe));
-            Assert.Contains(operable, e => e is Button { Name: "RewindHereButton" });
-            Assert.Contains(operable, e => e is Button { Name: "CancelRewindButton" });
-
-            // A on the Cancel button is the button's, not the strip's.
-            var cancel = (Button)PadAudit.Reach(sheet, pad, e => e is Button { Name: "CancelRewindButton" });
+            // Every row is reached by Down and drawn; the last a dimmed hint that does nothing.
+            pad.Down(2);
+            Assert.True(PadMenu.Entries(window)[2].Dimmed);
             pad.A();
-            WaitFor(() => !Sheets(window).IsPresenting);
+            Assert.Equal(2, PadMenu.Depth(window));
+
+            // B goes back to the card, and B again resumes the game the card paused.
+            pad.B();
+            pad.B();
+            Settle(window);
+            Assert.False(PadMenu.IsOpen(window));
             Assert.False(window.IsPaused);
+            Stop(window);
+            window.Close();
+        }, default);
+
+        // On the desktop the Game menu's Rewind opens the card on its reel page, and a click on Go back chooses it as A does.
+        [Fact]
+        public Task On_the_desktop_the_menu_s_rewind_opens_the_card_on_the_reel_and_a_click_goes_back() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = WithAGame(bigScreen: false);
+            Play(window, 240);
+            window.PauseEmulation();
+            long frameBefore = WaitUntilParked(window);
+
+            typeof(MainWindow).GetMethod("OpenRewindReel", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null);
+            Settle(window);
+            Assert.True(PadMenu.IsOpen(window) && PadMenu.Card(window).IsVisible);
+            Assert.Equal(2, PadMenu.Depth(window));
+            Assert.Equal("moment", PadMenu.Pane(window).Showing);
+            pad.Right(2);
+            MainWindow.ReelMark target = window.ReelFocused!;
+            Settle(window);
+            UiTest.Dump("rewind-reel-desktop", UiTest.Capture(window));
+
+            ListBoxItem row = PadMenu.List(window).GetVisualDescendants().OfType<ListBoxItem>().First(i => PadMenu.List(window).IndexFromContainer(i) == 0);
+            Point at = row.TranslatePoint(new Point(row.Bounds.Width / 2, row.Bounds.Height / 2), window)!.Value;
+            window.MouseDown(at, MouseButton.Left);
+            window.MouseUp(at, MouseButton.Left);
+            WaitFor(() => Status(window).StartsWith("Rewound", StringComparison.Ordinal));
+            WaitUntilParked(window);
+            Assert.Equal(target.Frame, MistressGame.TotalFrames(window));
+            Assert.True(target.Frame < frameBefore);
+            Assert.True(window.IsPaused);
 
             Stop(window);
             window.Close();
         }, default);
 
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task With_no_history_the_entry_says_so_and_opens_nothing() => Session.Dispatch(() =>
+        [CSharpImplementationFact("clears the C# engine's rewind buffer behind the session")]
+        public Task With_no_history_the_row_says_so_and_opens_nothing() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = WithAGame(bigScreen: true);
-            WaitFor(() => Rewind(window).SnapshotBytes > 0);
+            WaitFor(() => MistressGame.Rewind(window).SnapshotBytes > 0);
             window.PauseEmulation();
             WaitUntilParked(window);
-            Rewind(window).Clear();
+            MistressGame.Rewind(window).Clear();
 
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-            string[] lines = MenuLines(window);
+            string[] lines = PadMenu.Lines(window);
             int at = Array.FindIndex(lines, l => l.StartsWith("Rewind", StringComparison.Ordinal));
             Assert.Equal("Rewind  (nothing to go back to yet)", lines[at]);
             pad.Down(at);
             pad.A();
             Settle(window);
-            Assert.False(Sheets(window).IsPresenting);
-            Assert.True(window.GetControl<Control>("PadMenuPanel").IsVisible);
+            Assert.Equal(1, PadMenu.Depth(window));
+            Assert.True(PadMenu.IsOpen(window));
             pad.B();
-
-            Stop(window);
-            window.Close();
-        }, default);
-
-        // EMUSEN_REWIND_REEL_GAME="<rom>|<state>" renders the reel over a real game, for a person to look at; unset, it does nothing.
-        [Fact]
-        public Task A_real_game_on_the_reel_is_rendered_for_a_look() => Session.Dispatch(() =>
-        {
-            if (Environment.GetEnvironmentVariable("EMUSEN_REWIND_REEL_GAME")?.Split('|') is not [string rom, string state])
-            {
-                _out.WriteLine("EMUSEN_REWIND_REEL_GAME unset, not run");
-                return;
-            }
-
-            foreach (bool bigScreen in new[] { true, false })
-            {
-                foreach (string old in Directory.GetFiles(_romDir)) File.Delete(old);
-                File.Copy(rom, Path.Combine(_romDir, Path.GetFileName(rom)));
-                new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, BigScreen = bigScreen }.Save();
-                var window = new MainWindow { Width = 1280, Height = 800 };
-                window.Show();
-                var pad = new PadDriver(window);
-                window.GetControl<ListBox>("LibraryList").SelectedIndex = 0;
-                OwnLook.Play(window, pad);
-                window.PauseEmulation();
-                WaitUntilParked(window);
-                typeof(MainWindow).GetMethod("LoadStateFromConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { state });
-                window.ResumeEmulation();
-                Play(window, 720);
-                string name = Path.GetFileNameWithoutExtension(rom) + (bigScreen ? "-sheet" : "-desktop");
-
-                if (bigScreen)
-                {
-                    RewindReelWindow reel = OpenReel(window, pad);
-                    pad.Left(6);
-                    Settle(window);
-                    UiTest.Dump("rewind-reel-" + name, UiTest.Capture(window));
-                    pad.L1();
-                    Settle(window);
-                    UiTest.Dump("rewind-reel-" + name + "-stride", UiTest.Capture(window));
-                    pad.B();
-                }
-                else
-                {
-                    typeof(MainWindow).GetMethod("OpenRewindReel", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { false });
-                    WaitFor(() => window.OwnedWindows.OfType<RewindReelWindow>().Any());
-                    RewindReelWindow reel = window.OwnedWindows.OfType<RewindReelWindow>().Single();
-                    reel.Strip.Move(-6);
-                    Settle(reel);
-                    UiTest.Dump("rewind-reel-" + name, UiTest.Capture(reel));
-                    reel.Close();
-                }
-
-                Stop(window);
-                window.Close();
-            }
-        }, default);
-
-        [CSharpImplementationFact("reads the C# engine's machine, rewind buffer or debug target behind the session")]
-        public Task On_the_desktop_a_click_chooses_and_a_double_click_rewinds() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver _) = WithAGame(bigScreen: false);
-            Play(window, 240);
-            window.PauseEmulation();
-            WaitUntilParked(window);
-            ICore core = Game(window).Core!;
-
-            typeof(MainWindow).GetMethod("OpenRewindReel", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, new object[] { false });
-            WaitFor(() => window.OwnedWindows.OfType<RewindReelWindow>().Any());
-            RewindReelWindow reel = window.OwnedWindows.OfType<RewindReelWindow>().Single();
-            Settle(reel);
-            UiTest.Dump("rewind-reel-desktop-now", UiTest.Capture(reel));
-
-            TileGridItem tile = reel.Strip.GetVisualDescendants().OfType<TileGridItem>().Where(t => t.IsVisible && !t.IsSelected).OrderBy(t => t.Bounds.X).Last();
-            Point at = tile.TranslatePoint(new Point(tile.Bounds.Width / 2, tile.Bounds.Height / 2), reel)!.Value;
-            reel.MouseDown(at, MouseButton.Left);
-            reel.MouseUp(at, MouseButton.Left);
-            Settle(reel);
-            ReelMoment target = reel.Strip.Selected!;
-            Assert.False(target.IsNow);
-            byte[] expected = Rewind(window).StateAt(target.Frame)!;
-            UiTest.Dump("rewind-reel-desktop-chosen", UiTest.Capture(reel));
-
-            // The second press is the double-tap, and the reel is gone before its release.
-            reel.MouseDown(at, MouseButton.Left);
-            WaitFor(() => Status(window).Text?.StartsWith("Rewound", StringComparison.Ordinal) == true);
-            Assert.Same(target, reel.DialogResult);
-            WaitUntilParked(window);
-            Assert.Equal(expected, Save(core));
-            Assert.True(window.IsPaused);
 
             Stop(window);
             window.Close();

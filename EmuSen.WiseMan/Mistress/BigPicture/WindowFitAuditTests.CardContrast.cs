@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     // Every word a card draws read against what is actually behind it, over the brightest and the darkest screen beneath - see EmuSen_BigPicture.md §49.8.
     public partial class WindowFitAuditTests
     {
-        public static readonly string[] CardContrastViews = ["HomeCard", "HomeCardGame", "HomeCardTools", "HomeCardPower", "PauseCard", "PauseCardRewind", "PauseCardSave", "PauseCardLoad", "PauseCardGameOptions", "PauseCardLeave"];
+        public static readonly string[] CardContrastViews = ["HomeCard", "HomeCardGame", "HomeCardTools", "HomeCardPower", "PauseCard", "PauseCardRewind", "PauseCardSave", "PauseCardLoad", "PauseCardGameOptions", "PauseCardLeave", "PauseCardReel", "PauseCardChangeDisc", "PauseCardControllers", "PauseCardDesktop", "PauseCardDesktopReel", "PauseCardDisplay", "PauseCardSound", "PauseCardMemoryCards"];
 
         public static TheoryData<string, string> CardContrastCases()
         {
@@ -65,9 +65,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [CardPngFact]
         public Task The_cards_drawn_for_comparing_with_their_design() => Session.Dispatch(() =>
         {
-            string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "tmp", "pausecard", "built");
+            string folder = Environment.GetEnvironmentVariable("EMUSEN_CARD_PNG_DIR") is { Length: > 0 } chosen ? chosen : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "tmp", "pausecard", "built");
             Directory.CreateDirectory(folder);
-            foreach (string view in CardContrastViews)
+            // EMUSEN_CARD_PNG_VIEWS names the states to draw, comma-separated; unset, every one and the two tools.
+            string[]? only = Environment.GetEnvironmentVariable("EMUSEN_CARD_PNG_VIEWS")?.Split(',', StringSplitOptions.RemoveEmptyEntries);
+            foreach (string view in CardContrastViews.Append("PauseCardSliding").Where(v => only is null || only.Contains(v)))
                 foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080) })
                     foreach ((string name, Color? under) in new[] { ("plain", (Color?)null), ("white", Colors.White) })
                     {
@@ -75,7 +77,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                         try { Capture(window).Save(Path.Combine(folder, $"{view}-{name}-{w}x{h}.png")); }
                         finally { Stop(window); window.Close(); }
                     }
-            foreach (string tool in new[] { "Cores", "PackagesPlan" })
+            foreach (string tool in only is null ? new[] { "Cores", "PackagesPlan" } : [])
                 foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080) })
                 {
                     (MainWindow window, PadDriver pad) = InGame(w, h);
@@ -124,8 +126,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             bool home = view.StartsWith("HomeCard", StringComparison.Ordinal);
             if (home) ToolCounts.Answer();
             // The Home card's first page is a pad's on the desktop and a theme's; the big screen's own look opens it at Power from Home's place (EmuSen_BigPicture.md §51.2).
-            bool desktop = home && view != "HomeCardPower";
-            (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: !desktop);
+            bool desktop = home && view != "HomeCardPower" || view.StartsWith("PauseCardDesktop", StringComparison.Ordinal);
+            (MainWindow window, PadDriver pad) = view is "PauseCardChangeDisc" or "PauseCardMemoryCards" ? InDiscGame(width, height) : InGame(width, height, bigScreen: !desktop);
+            if (view.Contains("Reel", StringComparison.Ordinal)) MistressGame.Play(window, 900, (until, what) => WaitFor(until, what));
             if (home)
             {
                 Call(window, "ToggleLibrary");
@@ -149,6 +152,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "PauseCardLoad": pad.Down(3); break;
                 case "PauseCardGameOptions": PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true); break;
                 case "PauseCardLeave": PadMenu.Choose(window, pad, MainWindow.LeaveMenu, exact: true); break;
+                case "PauseCardReel" or "PauseCardDesktopReel": PadMenu.Choose(window, pad, "Rewind"); pad.Right(1); break;
+                case "PauseCardChangeDisc": PadMenu.Choose(window, pad, MainWindow.ChangeDiscMenu, exact: true); break;
+                case "PauseCardDisplay": PadMenu.Choose(window, pad, MainWindow.DisplayMenu, exact: true); break;
+                case "PauseCardSound": PadMenu.Choose(window, pad, MainWindow.SoundMenu, exact: true); break;
+                case "PauseCardMemoryCards": PadMenu.Choose(window, pad, MainWindow.MemoryCardsMenu, exact: true); break;
+                case "PauseCardSliding": pad.Down(1); PadMenu.Big(window).SlideOut = 0.5; break;
+                case "PauseCardControllers": PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true); PadMenu.Choose(window, pad, MainWindow.ControllersMenu, exact: true); break;
             }
             if (under is { } colour)
             {

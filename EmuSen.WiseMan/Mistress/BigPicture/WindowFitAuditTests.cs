@@ -36,19 +36,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private const BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
         // The windows a player reaches in a game, and those reached from the themed library.
-        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "GameCrop", "ActiveCheatsGenesis", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "InsertDiscPlayStation", "InsertDiscEmpty", "ActiveCheatsPlayStation", "RewindReel",
+        public static readonly string[] InGameWindows = ["ActiveCheats", "ActiveCheatsGeneral", "CheatDatabase", "ActiveCheatsGenesis", "MemoryCardsPlayStation", "MemoryCardsPlayStationHeld", "MemoryCardsPlayStation2", "MemoryCardsPlayStation2Held", "MemoryCardsGenesis", "MemoryCardsSegaCD", "MemoryCardsN64", "CompressedDiscsEmpty", "CompressedDiscs", "CompressedDiscsRunning", "CompressedDiscsFinished", "CompressedDiscsFailed", "CompressedDiscsBeside", "Cores", "CoresDetail", "CoresPlan", "CoresRunning", "CoresNoCatalogue", "Packages", "PackagesDetail", "PackagesPlan", "PackagesRunning", "Scraper", "ScraperDetail", "ScraperPlan", "ScraperRunning", "Library", "LibraryDetail", "LibraryPlan", "LibraryRunning", "ActiveCheatsPlayStation",
             "Resume", "ActiveCheatsLongCheat", "ResumeLongTitle", "Shell"];
         // The installed themes' date, fixed because digit widths decide where the state line wraps.
         private static readonly DateTimeOffset ThemeInstallDate = new(2026, 11, 1, 12, 0, 0, TimeSpan.Zero);
 
         public static readonly string[] ThemedWindows = ["ScrapeStatusIdle", "GamelistFilter", "FolderEditor", "ThemeSettings", "ThemeBrowser", "ThemeDetail", "ThemeAbout",
-            "GameCropLongTitle", "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
+            "ThemeBrowserLongName", "ThemeDetailLongName", "ThemeAboutLongName"];
 
         // Which window each case opens; the scraping status's running and finished states and Find by Name's results are WindowFitScrapeAuditTests'.
         internal static readonly Dictionary<string, Type> Opens = new()
         {
             ["ActiveCheats"] = typeof(ActiveCheatsWindow), ["ActiveCheatsGeneral"] = typeof(ActiveCheatsWindow), ["CheatDatabase"] = typeof(CheatDatabaseWindow),
-            ["GameCrop"] = typeof(GameCropWindow), ["GameCropLongTitle"] = typeof(GameCropWindow), ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow),
+            ["ActiveCheatsGenesis"] = typeof(ActiveCheatsWindow), ["MemoryCardsPlayStation"] = typeof(MemoryCardsWindow),
             ["MemoryCardsPlayStationHeld"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2"] = typeof(MemoryCardsWindow), ["MemoryCardsPlayStation2Held"] = typeof(MemoryCardsWindow), ["MemoryCardsGenesis"] = typeof(MemoryCardsWindow),
             ["MemoryCardsSegaCD"] = typeof(MemoryCardsWindow), ["MemoryCardsN64"] = typeof(MemoryCardsWindow), ["CompressedDiscsEmpty"] = typeof(CompressedDiscsWindow), ["CompressedDiscs"] = typeof(CompressedDiscsWindow),
             ["CompressedDiscsRunning"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFinished"] = typeof(CompressedDiscsWindow), ["CompressedDiscsFailed"] = typeof(CompressedDiscsWindow), ["CompressedDiscsBeside"] = typeof(CompressedDiscsWindow),
@@ -56,8 +56,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             ["CoresNoCatalogue"] = typeof(CoresWindow), ["Packages"] = typeof(PackagesWindow), ["PackagesDetail"] = typeof(PackagesWindow), ["PackagesPlan"] = typeof(PackagesWindow),
             ["PackagesRunning"] = typeof(PackagesWindow), ["Scraper"] = typeof(ScraperWindow), ["ScraperDetail"] = typeof(ScraperWindow), ["ScraperPlan"] = typeof(ScraperWindow),
             ["ScraperRunning"] = typeof(ScraperWindow), ["Library"] = typeof(LibraryWindow), ["LibraryDetail"] = typeof(LibraryWindow), ["LibraryPlan"] = typeof(LibraryWindow),
-            ["LibraryRunning"] = typeof(LibraryWindow), ["InsertDiscPlayStation"] = typeof(InsertDiscWindow), ["InsertDiscEmpty"] = typeof(InsertDiscWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow),
-            ["RewindReel"] = typeof(RewindReelWindow), ["Resume"] = typeof(ResumeWindow), ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow),
+            ["LibraryRunning"] = typeof(LibraryWindow), ["ActiveCheatsPlayStation"] = typeof(ActiveCheatsWindow),
+            ["Resume"] = typeof(ResumeWindow), ["ScrapeStatusIdle"] = typeof(ScrapeStatusWindow), ["GamelistFilter"] = typeof(GamelistFilterWindow),
             ["FolderEditor"] = typeof(FolderEditorWindow), ["ThemeSettings"] = typeof(ThemeSettingsWindow), ["ThemeBrowser"] = typeof(ThemeBrowserWindow), ["ThemeDetail"] = typeof(ThemeDetailWindow),
             ["ThemeAbout"] = typeof(ThemeAboutWindow), ["ActiveCheatsLongCheat"] = typeof(ActiveCheatsWindow), ["Shell"] = typeof(HotaruWindow), ["ResumeLongTitle"] = typeof(ResumeWindow),
             ["ThemeBrowserLongName"] = typeof(ThemeBrowserWindow),
@@ -318,26 +318,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 case "LibraryRunning":
                     ShowLibraryManager(window, which);
                     break;
-                case "InsertDiscPlayStation":
-                case "InsertDiscEmpty":
-                    ShowInsertDisc(window, empty: which.EndsWith("Empty", StringComparison.Ordinal));
-                    break;
                 case "ActiveCheatsPlayStation":
                     Call(window, "ShowActiveCheats");
                     SelectTab(window, "PlayStation");
                     break;
-                case "GameCrop":
-                    ((EmuSen.Mistress.Library.GameRecords)Field(window, "_records")).SetCrop((string)Field(window, "_currentRomPath"), new EmuSen.Mistress.Library.GameCrop(12.5, 12.5, 12.5, 12.5));
-                    Call(window, "ShowGameCrop", (string)Field(window, "_currentRomPath"), "Cobalt Harbor (Synthetic)");
-                    break;
                 case "ActiveCheatsGenesis":
                     Call(window, "ShowActiveCheats");
                     SelectTab(window, "Genesis");
-                    break;
-                case "RewindReel":
-                    MistressGame.Play(window, 120, (until, what) => WaitFor(until, what));
-                    Choose(window, pad, "Rewind");
-                    WaitFor(() => Sheets(window).Current is RewindReelWindow, "the reel");
                     break;
                 case "Resume":
                 case "ResumeLongTitle":
@@ -415,12 +402,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             {
                 case "ScrapeStatusIdle":
                     s.Window.ShowScrapeStatus();
-                    break;
-                case "GameCropLongTitle":
-                    string longRom = Path.Combine(s.RomDirectory, LongTitle + ".sfc");
-                    if (File.Exists(rom)) File.Copy(rom, longRom, overwrite: true);
-                    else File.WriteAllBytes(longRom, PadRewindReelTests.ChangingBackdrop());
-                    Call(s.Window, "ShowGameCrop", longRom, LongTitle);
                     break;
                 case "ThemeBrowserLongName":
                 case "ThemeDetailLongName":

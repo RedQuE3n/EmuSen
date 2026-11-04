@@ -233,17 +233,28 @@ namespace EmuSen.Mistress.Pages
 
         private IReadOnlyList<Setting> SoundRows()
         {
-            int volume = (int)Math.Round(Math.Clamp(App.Volume, 0, 1) * 100);
             int sounds = Math.Clamp(App.BigPictureInterface.NavigationVolume, 0, 100);
             return
             [
-                Percent("volume", "Volume", "The game's volume.", volume, v => { App.Volume = v / 100.0; _host.SaveApp("volume"); },
-                    () => new ScreenPane([new SettingsLine("The game's volume. On the handheld this row defers to the device's quick menu.")]) { Preview = new PanePreview.Meter(volume / 100.0) }),
+                VolumeRow(),
                 Switch("navsounds", "Navigation sounds", "The sounds for moving, choosing and going back, on a stream of their own beside the game's; a theme without one plays EmuSen's.", App.NavigationSounds, on => App.NavigationSounds = on),
                 Percent("soundvolume", "Sound volume", "How loud the navigation sounds are, beside the game's own volume.", sounds, v => { App.BigPictureInterface.NavigationVolume = v; _host.SaveApp("soundvolume"); },
                     () => new ScreenPane([new SettingsLine("How loud the navigation sounds are, beside the game's own volume.")]) { Preview = new PanePreview.Meter(sounds / 100.0) }),
                 OutputRow(),
             ];
+        }
+
+        // The game's volume, stepped by five; under Steam's Game Mode the device's quick menu holds it, and the row says so and does nothing (EmuSen_Interface.md §6).
+        private Setting VolumeRow(bool game = false)
+        {
+            int volume = (int)Math.Round(Math.Clamp(App.Volume, 0, 1) * 100);
+            if (_host.VolumeOnDevice)
+                return Act("volume", "Volume", "On the handheld the device's own quick menu holds the volume.", () => { }, DeviceVolume) with
+                {
+                    Pane = () => Said("On the handheld the device's own quick menu holds the volume, and this row says so."),
+                };
+            return Percent("volume", "Volume", "The game's volume.", volume, v => { App.Volume = v / 100.0; _host.SaveApp("volume"); },
+                () => new ScreenPane([new SettingsLine(game ? $"{volume}%. On the handheld the device's own quick menu holds the volume, and this row says so." : "The game's volume. On the handheld this row defers to the device's quick menu.")]) { Preview = new PanePreview.Meter(volume / 100.0) });
         }
 
         // Sound ▸ Output: System default first, then the connected devices by name; a saved device not connected now is kept and listed (EmuSen_Audio_Sync.md §7.4).

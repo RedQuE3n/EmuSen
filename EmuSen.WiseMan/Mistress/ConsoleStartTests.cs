@@ -33,7 +33,7 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             CoreDiscovery.UseDevelopment(false);
-            new AppSettings { RomDirectory = Path.Combine(_root, "Roms"), StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats") }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = Path.Combine(_root, "Roms"), StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats") }.Save();
         }
 
         public void Dispose()
@@ -137,8 +137,8 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Null(typeof(MainWindow).GetField("_currentRomPath", Hidden)!.GetValue(window));
                 string state = (string)typeof(MainWindow).GetProperty("CurrentStatePath", Hidden)!.GetValue(window)!;
                 Assert.Equal("PlayStation (no disc).state", Path.GetFileName(state));
-                Assert.Equal(new[] { "Insert Disc..." }, Rows(Call(window, "DriveRows")));
-                Assert.Contains("Insert Disc...", Rows(Call(window, "GameMenuRows")));
+                Assert.Equal(new[] { MainWindow.ChangeDiscMenu }, Rows(Call(window, "DiscRows")));
+                Assert.Contains(MainWindow.ChangeDiscMenu, Rows(Call(window, "GameMenuRows")));
                 Assert.Equal(("psx", System.Text.Json.JsonValueKind.Null), (MistressGame.Info(window).GetProperty("system").GetString(), MistressGame.Info(window).GetProperty("game").ValueKind));
             }
             finally
@@ -148,7 +148,93 @@ namespace EmuSen.WiseMan.Mistress
             }
         }, default);
 
-        // With a disc row and a second pad the Pause Card's first page would reach nine rows, so Swap Players goes under Game Options > Controllers, and Memory Cards shows for the disc console - see EmuSen_BigPicture.md §48.3.
+        // Change Disc as a page of the card: the console's games and any file on the desktop; A puts one in and the console sees it, and Open the tray takes it out (EmuSen_Interface.md §18.5).
+        [Fact]
+        public Task Change_disc_puts_a_library_game_in_and_the_console_sees_it() => Session.Dispatch(() =>
+        {
+            SyntheticPsxDisc.Build().WriteSet(Path.Combine(_root, "Roms"), "Amber Saga");
+            var window = new MainWindow();
+            window.Show();
+            try
+            {
+                var pad = new PadDriver(window);
+                Call(window, "StartConsole", "PlayStation");
+                EmuSen.Mistress.GameSession session = MistressGame.Of(window);
+                Assert.Equal(-1, session.Discs.Index);
+                pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
+                PadMenu.Choose(window, pad, MainWindow.ChangeDiscMenu, exact: true);
+                Assert.Equal(2, PadMenu.Depth(window));
+                Assert.Equal(new[] { "Amber Saga", MainWindow.AnyFileRow }, PadMenu.Lines(window));
+                Assert.True(window.IsPaused);
+                BigPicture.WindowFitAuditTests.Settle(window);
+                Assert.Equal("cover", PadMenu.Pane(window).Showing);
+                Assert.Equal(["Put in", "Back", "Screenshot"], PadMenu.Big(window).Hints!.Select(h => h.Label));
+
+                pad.A();
+                Assert.False(PadMenu.IsOpen(window));
+                WaitFor(() => session.Discs is { Index: 0, LidOpen: false }, "the disc in the drive and the lid closed");
+                WaitFor(() => window.GetControl<TextBlock>("StatusText").Text == "Amber Saga is in", "the status");
+
+                pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
+                PadMenu.Choose(window, pad, MainWindow.ChangeDiscMenu, exact: true);
+                Assert.Contains(MainWindow.OpenTrayRow, PadMenu.Lines(window));
+                PadMenu.Choose(window, pad, MainWindow.OpenTrayRow, exact: true);
+                WaitFor(() => session.Discs.Index == -1, "the tray open");
+            }
+            finally
+            {
+                typeof(MainWindow).GetMethod("ShowLibrary", Hidden)!.Invoke(window, null);
+                window.Close();
+            }
+        }, default);
+
+        // Game Options ▸ Memory Cards on a disc console: the slots, the mode and the drawer, Settings' rows; a slot's card changed is kept for the console and goes in when the game next starts (EmuSen_Interface.md §20.9).
+        [Fact]
+        public Task Memory_cards_change_the_card_a_slot_starts_the_game_with() => Session.Dispatch(() =>
+        {
+            var window = new MainWindow();
+            window.Show();
+            try
+            {
+                var pad = new PadDriver(window);
+                Call(window, "StartConsole", "PlayStation");
+                void Open()
+                {
+                    pad.Chord(SDL3.SDL.GamepadButton.Back, SDL3.SDL.GamepadButton.Start);
+                    PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true);
+                    PadMenu.Choose(window, pad, MainWindow.MemoryCardsMenu, exact: true);
+                }
+                Open();
+                Assert.Equal(new[] { "Slot 1", "Slot 2", "Mode", "Cards" }, PadMenu.Entries(window).Select(e => e.Label!()));
+                Assert.Equal(["Change", "Card", "Back"], PadMenu.Big(window).Hints!.Select(h => h.Label).Take(3));
+                string before = PadMenu.Entries(window)[0].Value!()!;
+                pad.Right();
+                string after = PadMenu.Entries(window)[0].Value!()!;
+                Assert.NotEqual(before, after);
+                Assert.Contains(PadMenu.Entries(window)[0].PaneScreen!()!.Lines, l => l.Text.Contains("when the game next starts", StringComparison.Ordinal));
+                pad.Start();
+                Open();
+                Assert.Equal(after, PadMenu.Entries(window)[0].Value!());
+            }
+            finally
+            {
+                typeof(MainWindow).GetMethod("ShowLibrary", Hidden)!.Invoke(window, null);
+                window.Close();
+            }
+        }, default);
+
+        private static void WaitFor(Func<bool> condition, string what)
+        {
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            while (!condition())
+            {
+                Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+                if (clock.ElapsedMilliseconds > 20_000) Assert.Fail($"timed out waiting for {what}");
+                System.Threading.Thread.Sleep(5);
+            }
+        }
+
+        // With Change Disc and a second pad the Pause Card's first page would reach nine rows, so Swap Players is left to Game Options ▸ Controllers, and Memory Cards shows for the disc console - see EmuSen_BigPicture.md §48.3.
         [Fact]
         public Task A_ninth_row_sends_swap_players_under_controllers() => Session.Dispatch(() =>
         {
@@ -164,7 +250,9 @@ namespace EmuSen.WiseMan.Mistress
                 IReadOnlyList<string> first = Rows(Call(window, "GameMenuRows"));
                 Assert.Equal(8, first.Count);
                 Assert.DoesNotContain(MainWindow.SwapPlayersRow, first);
-                Assert.Equal(MainWindow.SwapPlayersRow, Rows(Call(window, "ControllersRows"))[0]);
+                var controllers = new EmuSen.Mistress.Pages.SettingsScreen(window);
+                controllers.OpenGame(EmuSen.Mistress.Pages.SettingsScreen.GameControllers);
+                Assert.Contains("Swap Players", controllers.Rows.Select(r => r.Label));
                 Assert.Contains(MainWindow.MemoryCardsMenu, Rows(Call(window, "GameOptionsRows")));
             }
             finally

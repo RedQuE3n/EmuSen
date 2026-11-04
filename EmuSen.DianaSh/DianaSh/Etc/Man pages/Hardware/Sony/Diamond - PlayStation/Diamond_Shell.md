@@ -699,9 +699,9 @@ Nephrite's follow-up, not built here: an empty start for `mcd`, once the stall i
 - The library toolbar's *Start PlayStation*, shown while the sidebar shows the PlayStation.
 - In big picture, *Start PlayStation With No Disc* as the first row of *Gamelist Options*.
 - The pad menu's *Library* → *Start a Console*.
-- In a session with a drive: Emulation → *Insert Disc...* and *Eject Disc*, and the same two rows in the game's pad menu.
-- *Insert Disc...* opens `InsertDiscWindow`, built with LunaP and framed as a menu in big picture. It lists the console's
-  library games, with *Browse...* on the desktop only.
+- In a session with a drive: Emulation → *Change Disc...* and *Eject Disc*, and the Pause Card's *Change Disc* row.
+- *Change Disc* is a page of the Pause Card since 2026-11-03 (`EmuSen_Interface.md` §20): the game's own discs, the
+  console's library games, *Open the tray*, and *Any file…* on the desktop only. `InsertDiscWindow` is retired.
 - `EmuSen_Settings_Reference.md` §4.120 is the player-facing summary.
 
 **DianaSh.**

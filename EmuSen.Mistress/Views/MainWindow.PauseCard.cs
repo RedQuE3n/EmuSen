@@ -26,8 +26,8 @@ namespace EmuSen.Mistress.Views
         private string? _paneShowing;
         private readonly Dictionary<string, (DateTime When, Bitmap? Picture)> _slotPictures = new(StringComparer.Ordinal);
 
-        // The Pause Card shows over a game in a big-screen session; over the library the Home card does (§49).
-        internal bool PauseCardShown => _bigScreen && _padMenuInGame;
+        // The Pause Card shows over a game, on the desktop as on the big screen (EmuSen_Interface.md §17.8); over the library the Home card does (§49).
+        internal bool PauseCardShown => _padMenuInGame;
 
         private void SetUpPauseCard()
         {
@@ -39,15 +39,16 @@ namespace EmuSen.Mistress.Views
         private void ShowCard(PadMenuPage page, bool nested)
         {
             MenuPanel card = PadCard.CardPanel;
-            string? under = page.Question ? page.Detail : nested ? string.Join(" › ", _padMenuPages.SkipLast(1).Select(p => PageTitle(p))) : page.Detail;
+            string? under = page.Question ? page.Detail : nested ? string.Join(_padMenuInGame ? " · " : " › ", _padMenuPages.SkipLast(1).Select(p => PageTitle(p))) : page.Detail;
             card.SubtitleLetterCase = LunaP.Media.LetterCase.None;
             // With no pad's own family known the card letters its glyphs as an Xbox pad, the kit's default and the game's page's.
             card.HintFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily;
             PadCard.Header = new AdaptiveHeader(PageTitle(page), under is null ? null : FitSubtitle(card, under), _padMenuInGame ? RunningGameCover() : null, page.Title == PowerMenu && !_padMenuInGame ? BigMenuFooter : null);
             PadCard.SwapsAcceptAndBack = _appSettings.SwapPadButtons;
             bool resumes = _padMenuInGame && !nested && !page.Question;
-            PadCard.AcceptWord = resumes ? "Select" : page.Title == StartConsoleMenu ? "Start" : "Choose";
+            PadCard.AcceptWord = page.AcceptWord ?? (resumes ? "Select" : page.Title == StartConsoleMenu ? "Start" : "Choose");
             PadCard.BackWord = resumes ? "Resume" : "Back";
+            PadCard.SideWord = page.SideWord;
             SetCardActions();
         }
 
@@ -56,11 +57,12 @@ namespace EmuSen.Mistress.Views
         {
             int at = PadMenuList.SelectedIndex;
             bool slot = at >= 0 && at < _padMenuEntries.Count && _padMenuEntries[at].ShowsSlot;
+            PadMenuPage? page = _padMenuPages.Count > 0 ? _padMenuPages[^1] : null;
             var actions = new List<LunaAction>();
             if (HomeFavouriteHere) actions.Add(new LunaAction("Favourite", ToggleHomeFavourite) { PadButton = PadHints.Glyph(PadGlyphButton.North) });
             if (slot) actions.Add(new LunaAction("Change slot", () => { }) { PadButton = PadGlyphButton.DPadLeftRight });
             if (_padMenuInGame) actions.Add(new LunaAction("Screenshot", TakeScreenshot) { PadButton = PadHints.Glyph(PadGlyphButton.West) });
-            actions.Add(new LunaAction(_padMenuInGame ? "Resume" : "Close", ClosePadMenu) { PadButton = PadGlyphButton.Start });
+            if (page?.StartResumes != false) actions.Add(new LunaAction(_padMenuInGame ? "Resume" : "Close", ClosePadMenu) { PadButton = PadGlyphButton.Start });
             PadCard.SetActions(actions);
         }
 
@@ -72,16 +74,20 @@ namespace EmuSen.Mistress.Views
         {
             int at = PadMenuList.SelectedIndex;
             PadMenuEntry? entry = _padMenuOpen && at >= 0 && at < _padMenuEntries.Count ? _padMenuEntries[at] : null;
-            string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot} {entry.Label?.Invoke()}" : entry.ShowsReel ? "reel" : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
+            string key = entry is null ? "none" : entry.ShowsSlot ? $"slots {_stateSlot} {entry.Label?.Invoke()}" : entry.ShowsReel ? "reel" : entry.ShowsMoment ? $"moment {_reelAt} {_reel.Count}"
+                : entry.PaneBeside is not null ? "beside " + entry.Text() : entry.ShowsFrame ? "frame" : entry.ShowsCover ? $"cover {_homeGame is { } g && _records.IsFavourite(g.Path)}"
                 : entry.ShowsTools ? "tools " + string.Join(" | ", ToolLines()) : entry.PaneSaid is { } paneSaid ? "said-tool " + paneSaid() : entry.Status is { } status ? $"status {entry.Text()}: {status()}"
                 : entry.PaneLines is { } paneLines ? "lines " + string.Join(" | ", paneLines().Select(l => l.Line + l.Muted))
-                : entry.PaneSentences is not null ? "said " + entry.Text() : "none";
+                : entry.PaneSentences is not null ? "said " + entry.Text()
+                : entry.PaneScreen is { } screen ? "screen " + entry.Text() + (screen() is { } sp ? string.Join(" | ", sp.Lines.Select(l => l.Text)) + sp.Preview : "") : "none";
             if (key == _paneShowing) return;
             if (CardShown && (key.StartsWith("slots", StringComparison.Ordinal) != (_paneShowing?.StartsWith("slots", StringComparison.Ordinal) ?? false))) SetCardActions();
             _paneShowing = key;
             if (!CardShown) _pauseCardPane.Clear();
             else if (key.StartsWith("slots", StringComparison.Ordinal)) _pauseCardPane.ShowSlots(SlotStrip(), _stateSlot, SlotSentence(entry!));
             else if (key == "reel") ShowReelPane();
+            else if (key.StartsWith("moment", StringComparison.Ordinal)) ShowMomentPane();
+            else if (entry?.PaneBeside is { } beside && beside() is var (cover, discTitle, discSaid)) _pauseCardPane.ShowCover(cover, discTitle, discSaid);
             else if (key == "frame") ShowContinuePane();
             else if (key.StartsWith("cover", StringComparison.Ordinal)) ShowCoverPane();
             else if (key.StartsWith("tools", StringComparison.Ordinal)) ShowLinesPane(ToolLines());
@@ -89,6 +95,7 @@ namespace EmuSen.Mistress.Views
             else if (entry?.Status is { } line) ShowLinesPane([(entry.Text(), line())]);
             else if (entry?.PaneLines is { } lines) ShowLinesPane(lines());
             else if (entry?.PaneSentences is { } said && said() is var (sentences, flag)) _pauseCardPane.ShowSentences(sentences, flag, PaneWidth * (MenuPanel.GetScale(this) is > 0 and var u ? u : 1));
+            else if (entry?.PaneScreen?.Invoke() is { } pane) _pauseCardPane.ShowScreen(pane, pane.Preview is EmuSen.Mistress.Pages.PanePreview.Frame ? PausedFrame() : null, PaneWidth * (MenuPanel.GetScale(this) is > 0 and var us ? us : 1));
             else _pauseCardPane.Clear();
         }
 
@@ -185,23 +192,6 @@ namespace EmuSen.Mistress.Views
             for (int y = 0; y < height; y++)
                 Marshal.Copy(rgba.Slice(y * width * 4, width * 4).ToArray(), 0, target.Address + y * target.RowBytes, width * 4);
             return bitmap;
-        }
-
-        // On the desktop the menu owns the volume; under Steam's Game Mode the device's quick menu does, and the row says so (§48.5).
-        private PadMenuEntry VolumeEntry()
-        {
-            if (_bigScreenForced)
-                return new(() => $"{VolumeRow}      Quick Access Menu", () => Notify("The volume is set in the device's quick access menu"), closes: false) { Label = () => VolumeRow, Value = () => "Quick Access Menu" };
-            return new(() => $"{VolumeRow}      <  {VolumePercent()}  >", () => { }, StepVolume, closes: false) { Label = () => VolumeRow, Value = VolumePercent };
-        }
-
-        private string VolumePercent() => $"{Math.Round(Math.Clamp(_appSettings.Volume, 0, 1) * 100):0}%";
-
-        private void StepVolume(int by)
-        {
-            double next = Math.Clamp(Math.Round(_appSettings.Volume * 10 + by) / 10, 0, 1);
-            if (_hudVolume is not null) _hudVolume.Value = next;
-            else SetVolume(next);
         }
 
         private readonly GuideChordReader _guideChords = new();

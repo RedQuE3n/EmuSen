@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_gamepad_starts_after_the_window_s_first_frame_and_not_before() => Session.Dispatch(() =>
         {
-            new AppSettings { RomDirectory = _romDir, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow();
             var gamepad = (EmuSen.Endymion.Input.GamepadManager)typeof(MainWindow).GetField("_gamepad", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;
             Assert.False(gamepad.Started);
@@ -114,7 +114,7 @@ namespace EmuSen.WiseMan.Mistress
             for (int i = 0; i < games; i++)
                 File.WriteAllBytes(Path.Combine(_romDir, $"Game {i:00}.sfc"), SyntheticRom.BuildBlank());
             // The list's grammar; the covers' is LibraryScreenTests' - see EmuSen_Settings_Reference.md §4.33.
-            new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList }.Save();
+            new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = _romDir, LibraryView = AppSettings.LibraryList }.Save();
 
             var window = new MainWindow();
             window.Show();

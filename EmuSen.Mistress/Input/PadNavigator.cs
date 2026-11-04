@@ -16,6 +16,7 @@ namespace EmuSen.Mistress.Input
 
         private readonly bool[] _held = new bool[All.Length];
         private readonly TimeSpan[] _next = new TimeSpan[All.Length];
+        private readonly bool[] _repeat = new bool[All.Length];
         private readonly List<UiButton> _pressed = new();
         private bool _chordHeld;
 
@@ -31,6 +32,7 @@ namespace EmuSen.Mistress.Input
             {
                 int i = (int)button;
                 bool down = held(button);
+                _repeat[i] = false;
 
                 if (down && !_held[i])
                 {
@@ -41,6 +43,7 @@ namespace EmuSen.Mistress.Input
                 {
                     _pressed.Add(button);
                     _next[i] = now + RepeatEvery;
+                    _repeat[i] = true;
                 }
 
                 _held[i] = down;
@@ -48,6 +51,9 @@ namespace EmuSen.Mistress.Input
 
             return _pressed;
         }
+
+        // Whether this tick's press of the button came from holding it, not from its going down.
+        public bool IsRepeat(UiButton button) => _repeat[(int)button];
 
         // True once, as the menu chord goes down: the guide button, or the two middle buttons together - see §4.29.
         public bool MenuChord(Func<UiButton, bool> held)
@@ -92,6 +98,9 @@ namespace EmuSen.Mistress.Input
         // A submenu's rows, built each time it is entered: A enters it and B comes back (§4.69.8).
         public Func<List<PadMenuEntry>>? Submenu { get; init; }
 
+        // A row whose A turns the card to a page of its own built when entered, such as Change Disc (EmuSen_Interface.md §18.5).
+        public bool TurnsPage { get; init; }
+
         // A yes-or-no asked before Accept runs, No first, and the sentence under the question.
         public string? Question { get; init; }
         public string? QuestionDetail { get; init; }
@@ -105,6 +114,15 @@ namespace EmuSen.Mistress.Input
         // While this row is on, the Pause Card's pane shows the reel's newest moments, or the paused frame (EmuSen_BigPicture.md §48.4).
         public bool ShowsReel { get; init; }
         public bool ShowsFrame { get; init; }
+
+        // While this row is on, the pane shows the reel page's focused moment and its strip (EmuSen_Interface.md §18.5).
+        public bool ShowsMoment { get; init; }
+
+        // While this row is on, the pane shows this picture beside a title, lines and a muted hint, such as a disc's cover.
+        public Func<(EmuSen.LunaP.Controls.CoverItem Cover, string Title, string Sentence)>? PaneBeside { get; init; }
+
+        // While this row is on, the pane shows what Settings' description says of it: its lines, and a meter or the paused frame where it has a picture.
+        public Func<EmuSen.Mistress.Pages.ScreenPane?>? PaneScreen { get; init; }
 
         // While this row is on, the Home card's pane shows the game's cover, every tool's status, or this row's own status line (EmuSen_BigPicture.md §49.4).
         public bool ShowsCover { get; init; }

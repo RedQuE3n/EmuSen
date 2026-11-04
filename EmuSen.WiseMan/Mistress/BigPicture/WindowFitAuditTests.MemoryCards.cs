@@ -54,22 +54,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(shown, t => t.Name?.StartsWith(console + ".", StringComparison.Ordinal) == true && t.Name.EndsWith(".About", StringComparison.Ordinal) && t.IsEffectivelyVisible);
         }
 
-        // The PlayStation's Insert Disc chooser over a running console: its library games, one with a long title, or none - see Diamond_Shell.md §1.5.
-        internal static void ShowInsertDisc(MainWindow window, bool empty)
-        {
-            IReadOnlyList<(string Title, string Path)> discs = empty ? [] :
-            [
-                ("Amber Saga", "/games/Amber Saga.cue"),
-                ("Basalt Run - The Long Way Round Through the Mountains of the North (Disc 2 of 3)", "/games/Basalt Run (Disc 2).cue"),
-                ("Cobalt Harbor", "/games/Cobalt Harbor.chd"),
-            ];
-            Call(window, "PresentInsertDisc", "PlayStation", discs, false);
-            Settle(window);
-            var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<Control>().ToList();
-            Assert.Contains(shown, c => c.Name == (empty ? "InsertDiscAbout" : "InsertDisc1") && c.IsEffectivelyVisible);
-            Assert.DoesNotContain(shown, c => c.Name == "InsertDiscBrowse");
-        }
-
         // The PlayStation 2's tab, offered with the system: a shared card with two saves, one with a long title, a game's own beside it, and the card held by a running game - see Sapphire_Plan.md §8 (G11), Sapphire_Native.md §30.16 and §49.1.
         internal static void ShowMemoryCardsPs2(MainWindow window, bool held)
         {

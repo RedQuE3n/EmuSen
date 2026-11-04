@@ -79,7 +79,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
             MenuPanel menu = PadMenu.Big(s.Window);
             Assert.True(PadMenu.Card(s.Window).IsVisible);
-            Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.Equal(MainWindow.HomeTitle, menu.Title);
             Assert.Equal(MenuAnchor.Edge, menu.Anchor);
             Rect panel = InWindow(menu, menu.PanelBounds, s.Window);
@@ -200,7 +199,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var s = new ThemedSession(settings: a => { a.BigScreen = false; a.LibraryStyle = EmuSen.Galaxia.Models.AppSettings.LibraryStyleMistress; });
             s.Pad.Start();
             s.Settle();
-            Assert.False(s.Window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.True(PadMenu.Card(s.Window).IsVisible);
             Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(s.Window).Title);
             Assert.False(s.Window.GetControl<BlurBackdrop>("MenuBackdrop").IsVisible);

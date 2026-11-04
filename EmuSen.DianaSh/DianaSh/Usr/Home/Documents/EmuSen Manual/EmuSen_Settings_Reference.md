@@ -2536,6 +2536,10 @@ checkout lacked 9e8d201, which the after build needs, and the script stopped as 
 
 ### 4.49 Rewind as a reel of pictures (2026-09-24)
 
+**Superseded 2026-11-03.** The reel is a page of the Pause Card, and `RewindReelWindow` is retired: the rows Go back,
+Moment ◂ ▸ and Hold, the focused moment large and six moments in a strip, the shoulders and triggers as before
+(`EmuSen_Interface.md` §20.1). What follows is the history of the window.
+
 **What was asked for.** In a game, choosing Rewind from the quick menu should pull up a reel to go back through and
 select the point to rewind to. Holding Backspace already walked the
 history back a snapshot at a time (§4.21b, `EmuSen_Rewind_And_FastForward.md` §4); there was no way to see the
@@ -8580,6 +8584,10 @@ Each fills the picture's rectangle for its own game and harms the other (`EmuSen
 
 ### 4.100 A crop kept with one game (2026-10-07)
 
+**Superseded 2026-11-03.** `GameCropWindow` is retired. The game's own crop is a row and a page of Settings' one
+description: `This game's crop ◂ Off · On ▸` on the Pause Card's Display, A opening its four edges, and the game's page's
+door opening Settings at the same page (`EmuSen_Interface.md` §20.7). What follows is the history of the window.
+
 **Decided 2026-10-07 by the tester: a game may have a crop of its own, set by the player, which replaces its console's while that game runs.** It is the explicit exception to the rule that every game of a console is displayed alike (`EmuSen_CRT.md` §14): named, set by the player for one game, stored, and said on the screen where the console's setting would otherwise seem ignored. It exists because one game's margins are that game's (§4.99): *Mario Kart 64* (Europe)'s bars come off with 1.3, 1.1, 8.7 and 9, which would cut 21 lines from the top of the American game.
 
 **Where it is kept.** In the player's library, `games.db` (§4.32), in the game's own row: four columns, `crop_left`, `crop_right`, `crop_top` and `crop_bottom`, percentages of the picture as §4.99's are, null together for a game with none. Schema 6 adds them; a file of schema 5 gains them in place and keeps its rows. They follow the game as the rest of its row does: a file renamed or moved is found again by its MD5 (§4.37) and `GameRecords.Move` carries the crop with it, keeping the crop of a row already at the new path. It is not in `graphics.json`, which holds consoles and is written by hand as much as by the program.
@@ -9153,9 +9161,9 @@ memory card manager, or whose player's BIOS shows its own.
 - **The session.** It runs as *PlayStation (no disc)*. Its save states are filed under that name; it is not recorded in
   Continue Playing or play time and offers no resume on leaving; the cards in its slots are the shared ones whatever the
   card mode, since there is no game whose own to use (§9 Q5 of the design). Restart starts the console again.
-- **The disc.** In a running session whose machine has a drive, Emulation → *Insert Disc...* and *Eject Disc*, and the
-  game's pad menu's *Insert Disc...* and *Eject Disc*. *Insert Disc...* opens a chooser of the console's games in the
-  library, with *Browse...* for any file on the desktop, framed as a menu in big picture; the disc goes in as on a
+- **The disc.** In a running session whose machine has a drive, Emulation → *Change Disc...* and *Eject Disc*, and the
+  Pause Card's *Change Disc* page (since 2026-11-03, `EmuSen_Interface.md` §20): the game's own discs, the console's
+  games in the library, *Open the tray*, and *Any file…* for any file on the desktop; the disc goes in as on a
   console, the lid opened, the disc in and the lid closed a second later, and the core judges it. A disc refused leaves
   the lid open and the session's discs as they were. *Change Disc* lists the discs put in as well as a set's.
 - **Tests.** `ConsoleStartTests` (the entries, the session's name, its states and its rows), `DiamondShellTests` (the

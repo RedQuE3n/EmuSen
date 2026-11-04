@@ -52,7 +52,7 @@ namespace EmuSen.Mistress.Views
             SetUpBigMenus();
             ApplyBigScreen(WantsBigScreen());
 
-            PadMenuList.Label = entry => entry.Submenu is null ? entry.Text() : entry.Text() + "  ›";
+            PadMenuList.Label = entry => entry.Submenu is null && !entry.TurnsPage ? entry.Text() : entry.Text() + "  ›";
             SetUpPadMenuPointer();
             _padTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
             _padTimer.Tick += (_, _) => PadTick();

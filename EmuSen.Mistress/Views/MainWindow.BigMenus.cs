@@ -58,7 +58,7 @@ namespace EmuSen.Mistress.Views
         // The running game as the library names it, with no extension or folder (Q81): the themed view's name, else the sidebar's.
         private string RunningGameTitle()
         {
-            if (_currentRomPath is not { } path) return PadMenuTitle.Text ?? "Game";
+            if (_currentRomPath is not { } path) return _consoleSession is { } console ? $"{console} (no disc)" : "Game";
             if (_appSettings.LibraryStyle == EmuSen.Galaxia.Models.AppSettings.LibraryStyleTheme) return MetadataFor(path).Title;
             return DisplayTitle(new EmuSen.Mistress.Library.RomEntry(path));
         }
@@ -66,32 +66,19 @@ namespace EmuSen.Mistress.Views
         // ES-DE's title for a game's options, whatever the entry (Q85).
         internal const string GameOptionsMenuTitle = "Gamelist Options";
 
-        // The pad menu's list moves into the card when one is shown, and back into the desktop's box after.
+        // The pad menu's list lives in the card, over a game or the library, on the desktop as on the big screen (EmuSen_Interface.md §17.8).
         private void PlacePadMenu()
         {
-            bool card = CardShown;
-            bool placed = card ? ReferenceEquals(PadCard.Content, PadMenuList) : PadMenuDock.Children.Contains(PadMenuList);
-            if (placed && PadMenuDesk.IsVisible == !card && PadCard.IsVisible == card) return;
-            bool wasCard = ReferenceEquals(PadCard.Content, PadMenuList);
-            PadMenuDock.Children.Remove(PadMenuList);
-            if (wasCard) PadCard.Content = null;
-            if (card)
+            if (!ReferenceEquals(PadCard.Content, PadMenuList))
             {
+                if (PadMenuList.Parent is Panel holder) holder.Children.Remove(PadMenuList);
+                PadMenuList.IsVisible = true;
                 PadCard.Content = PadMenuList;
-                if (!wasCard) MenuRows.Apply(PadMenuList);
+                MenuRows.Apply(PadMenuList);
                 PadMenuList.ClearValue(MaxHeightProperty);
                 PadMenuPanel.Background = null;
             }
-            else
-            {
-                MenuRows.Remove(PadMenuList);
-                PadMenuList.ClearValue(MaxHeightProperty);
-                PadMenuList.Background = Brushes.Transparent;
-                PadMenuDock.Children.Add(PadMenuList);
-                PadMenuPanel.Background = new SolidColorBrush(Color.FromArgb(0xD0, 0, 0, 0));
-            }
-            PadMenuDesk.IsVisible = !card;
-            PadCard.IsVisible = card;
+            PadCard.IsVisible = true;
             UpdateMenuBackdrop();
         }
 
@@ -139,7 +126,13 @@ namespace EmuSen.Mistress.Views
                 bool uncovered = card && ReferenceEquals(shown, PadCard.CardPanel) && _cardCovered;
                 _cardCovered = card && shown is not null && !ReferenceEquals(shown, PadCard.CardPanel);
                 _menuShown = shown;
-                if (shown is not null && !uncovered) BeginMenuOpening(shown);
+                // The Pause Card slides in where other menus grow (EmuSen_Interface.md §20.6).
+                if (shown is not null && !uncovered && card && _padMenuInGame && ReferenceEquals(shown, PadCard.CardPanel))
+                {
+                    _cardSlide.Enter(shown, UiClock(), MenusScaleUp);
+                    RunCardSlide();
+                }
+                else if (shown is not null && !uncovered) BeginMenuOpening(shown);
             }
         }
 

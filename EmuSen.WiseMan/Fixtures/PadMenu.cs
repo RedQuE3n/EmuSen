@@ -26,7 +26,8 @@ namespace EmuSen.WiseMan.Fixtures
         private static IEnumerable<string> All(List<PadMenuEntry> rows) =>
             rows.SelectMany(e => e.Submenu is { } sub ? new[] { e.Text() }.Concat(All(sub())) : [e.Text()]);
 
-        public static bool IsOpen(MainWindow w) => w.GetControl<Control>("PadMenuPanel").IsVisible;
+        // Open while it takes the pad: a Pause Card sliding out is already closed (EmuSen_Interface.md §20.6).
+        public static bool IsOpen(MainWindow w) => (bool)typeof(MainWindow).GetField("_padMenuOpen", Hidden)!.GetValue(w)!;
 
         public static ListBox List(MainWindow w) => w.GetControl<ListBox>("PadMenuList");
 
@@ -41,8 +42,8 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static PauseCardPane Pane(MainWindow w) => (PauseCardPane)Card(w).Detail!;
 
-        // The desktop's title line: the pages' titles joined into a breadcrumb.
-        public static string DeskTitle(MainWindow w) => w.GetControl<TextBlock>("PadMenuTitle").Text ?? "";
+        // The card's header: the page shown, its title.
+        public static string PageTitle(MainWindow w) => Big(w).Title ?? "";
 
         // How many pages deep the menu is: 1 on its first page.
         public static int Depth(MainWindow w) => ((System.Collections.ICollection)typeof(MainWindow).GetField("_padMenuPages", Hidden)!.GetValue(w)!).Count;

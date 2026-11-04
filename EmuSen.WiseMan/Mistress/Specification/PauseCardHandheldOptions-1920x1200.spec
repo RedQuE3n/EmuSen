@@ -25,7 +25,7 @@ tree
                     10 ListBoxItem at=96,234,636,81 by=fixed-scroll drawn focus heard=Cheats in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text=Cheats
                     11 ListBoxItem at=96,315,636,81 by=fixed-scroll drawn focus heard=Controllers in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Controllers  ›"
                     12 ListBoxItem at=96,396,636,81 by=fixed-scroll drawn focus heard=Display in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Display  ›"
-                    13 ListBoxItem at=96,477,636,81 by=fixed-scroll drawn focus heard=Volume in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Volume      Quick Access Menu"
+                    13 ListBoxItem at=96,477,636,81 by=fixed-scroll drawn focus heard=Sound in=9 limit=96,234,636,324 op paints=#333337FF,#D4D4D4FF role=listitem text="Sound  ›"
 focus none
 press down menu="open at 1: Controllers" top=none
 press up menu="open at 0: Cheats" top=none

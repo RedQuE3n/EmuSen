@@ -1799,7 +1799,9 @@ Tests (`CardSlideTests`): each of the six openings above slides in over Enter an
 with it and no grow; the grid takes no press while the List card slides out; a page turn into Filter and back moves
 nothing; with motion reduced the List card comes and goes at once. `EsdeSettingsMenusTests`' opening test reads the grow
 on the Gamelist Options sheet now, and that the Home card slides instead. Four `LaunchScreenTests`, which keep
-Scale-up on a stepped clock, run the clock 200 ms after a card closes before the next press, as a player's hand would.
+Scale-up on a stepped clock, run the clock 200 ms after a card closes before the next press, as a player's hand would; so does
+`ControllersTests.Two_pads_both_steer_the_library_the_menu_and_a_sheet` on the real clock, which now reads the card as
+closed when it stops taking the pad rather than when its panel is hidden.
 The slide is also stepped on each pad tick, so a stepped clock moves it without the display's timer. Measured on
 2026-11-04: `CardSlideTests` 9 (the picture tool skipped), `PauseCardPagesTests` 4, `PadMenuTests` 26, `HomeCardTests` 10,
 `EsdeSettingsMenusTests` 14, `EsdeMenusTests` 7, `ConsoleStartTests` 7, `LaunchScreenTests` 29,

@@ -9751,7 +9751,7 @@ edge changed: a directory entry cut short in its extra field or comment was read
 refused as "a short entry", as .NET refuses it.
 
 **How it is graded now.** `GalaxiaParityTests` compared the C# and the library side by side. Its answers were
-recorded on 2026-11-04 into 35 files, `EmuSen.WiseMan/Crystal/Goldens/GalaxiaParity.<case>.golden.gz`, and
+recorded on 2026-11-04 into 35 files (34 kept, below), `EmuSen.WiseMan/Crystal/Goldens/GalaxiaParity.<case>.golden.gz`, and
 `SaveMediaManagerParityTests`' lock sequence into `MediumLockSequence.golden.gz`. They were recorded from the library on
 the tree of `d130bcc20`, on which the classes comparing the two halves had passed in full in the land run of b10-a
 (`GalaxiaParityTests` 74 of 74, `SaveMediaManagerParityTests` 4 of 4), with the same seeded inputs; each recorded answer
@@ -9764,7 +9764,16 @@ A class run checks every golden its test touched when the test ends (`GalaxiaPar
   `StringComparer.OrdinalIgnoreCase` rather than to the C#'s list), and a written file read back beside one
   `File.WriteAllBytes` wrote.
 - *Recorded again:* the error log's case "text that is not valid", whose C# entry was not written and whose library
-  entry now is (above); the file's first line says so.
+  entry now is (above); the file's first line says so. Its cases "whole" and "appended" were recorded again the same
+  day with each log's stack trace made plain: the checkout's folder as `<repo>` and a source line as `<n>`. Recorded in
+  one checkout folder, they failed in another, 42 bytes shorter, the difference in length of the two folders, in the
+  trace's file paths; no other case's bytes hold a trace, and no other answer changed.
+- *Held to their parts, not to a recording:* the program's own migrations read this checkout's old tree and this
+  machine's previous config folder, which no override moves, so their recorded answers were the recording machine's
+  (none copied in one checkout, seven in another). `The_programs_own_migrations_are_the_explicit_ones_they_were_made_of`
+  holds each to the explicit migrations the C# composed it of (the old tree to the home, then the previous config folder
+  to the config folder; the seed to the home), into a second redirected destination, count and listing alike, and the
+  remaining library folders to the explicit call's; the explicit migrations' answers are recorded by the classes above.
 - *Replaced:* `Text_with_no_utf8_is_answered_by_every_facade_as_the_csharp_answers_it` and
   `A_path_holding_a_nul_is_said_as_one_message_by_whichever_side_writes_it` held each facade to the C#. They became
   `Half_a_surrogate_pair_is_answered_by_every_facade_as_the_text_with_U_FFFD` (every facade, its answer, the files it

@@ -577,16 +577,31 @@ namespace EmuSen.WiseMan.Galaxia
 
         // The process's own old tree and config, with both destinations redirected so nothing is written outside the test's folder.
         [Fact]
-        public void The_programs_own_migrations_copy_what_the_csharp_did_with_their_destinations_redirected()
+        public void The_programs_own_migrations_are_the_explicit_ones_they_were_made_of()
         {
+            // Their sources are this checkout's and this machine's, not the test's, so each is held to the explicit migrations the C# composed it of, whose answers are recorded above - see EmuSen_Backend.md §40.2.
+            string legacy = GalaxiaNative.Directory(GalaxiaDirectory.LegacyRoot)!;
             foreach (GalaxiaMigrate what in new[] { GalaxiaMigrate.Own, GalaxiaMigrate.OwnConfig, GalaxiaMigrate.OwnSeed })
             {
-                DataStore.OverrideDirectory = At("native", what.ToString(), "home");
-                ConfigStore.OverrideDirectory = At("native", what.ToString(), "etc");
-                G($"{what} copied", GalaxiaNative.Migrate(what));
-                G($"{what} listing", Listing(At("native", what.ToString())));
+                int Into(string side, Func<int> migrate)
+                {
+                    DataStore.OverrideDirectory = At(side, what.ToString(), "home");
+                    ConfigStore.OverrideDirectory = At(side, what.ToString(), "etc");
+                    return migrate();
+                }
+                int Config() => GalaxiaNative.Migrate(GalaxiaMigrate.Tree, ConfigStore.PreviousDirectory, ConfigStore.Directory);
+                int own = Into("own", () => GalaxiaNative.Migrate(what));
+                int spelled = Into("spelled", () => what switch
+                {
+                    GalaxiaMigrate.Own => GalaxiaNative.Migrate(GalaxiaMigrate.Between, legacy, DataStore.UsrHome) + Config(),
+                    GalaxiaMigrate.OwnConfig => Config(),
+                    _ => GalaxiaNative.Migrate(GalaxiaMigrate.Seed, ConfigRoot.SeedDirectory, DataStore.UsrHome),
+                });
+                Assert.Equal(spelled, own);
+                Assert.Equal(Listing(At("spelled", what.ToString())), Listing(At("own", what.ToString())));
             }
-            G("remaining", GalaxiaNative.RemainingLibrary(null));
+            Assert.Equal(GalaxiaNative.RemainingLibrary(legacy), GalaxiaNative.RemainingLibrary(null));
+            Reported();
         }
 
         [Theory]

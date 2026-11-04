@@ -714,8 +714,15 @@ namespace EmuSen.WiseMan.Galaxia
         // A log file by what it holds, briefly; a link that names nothing holds nothing.
         private static string Held(string file)
         {
-            try { byte[] bytes = File.ReadAllBytes(file); return $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16]}/{bytes.Length}"; }
+            try { byte[] bytes = Unplaced(File.ReadAllBytes(file)); return $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16]}/{bytes.Length}"; }
             catch (FileNotFoundException) { return "a dangling link"; }
+        }
+
+        // A log's bytes with what a stack trace says of the build, the checkout's folder and a source line, written by name, so that the golden holds in any checkout.
+        private static byte[] Unplaced(byte[] bytes)
+        {
+            string text = Encoding.Latin1.GetString(bytes).Replace(Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(Repo)), "<repo>");
+            return Encoding.Latin1.GetBytes(System.Text.RegularExpressions.Regex.Replace(text, @":line \d+", ":line <n>"));
         }
 
         [Fact]

@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                     {
                         Execute(c, "INSERT INTO scrape_game (md5, bytes, status, rating, fetched_at, name) VALUES ('aa', 1, 'Found', 0.8000000119, '2026-01-01T00:00:00.000Z', 'Café'), ('bb', 2, 'Unknown', NULL, '2026-01-02T00:00:00.000Z', NULL)");
                         Execute(c, "INSERT INTO scrape_media VALUES ('aa', 1, 'cover', 'snes/covers/A.png', 'us', NULL, '2026-01-01T00:00:00.000Z')");
-                        Execute(c, "INSERT INTO scrape_file VALUES ('/r/snes/A.sfc', 1, 5, 'aa')");
+                        Execute(c, "INSERT INTO scrape_file (path, bytes, modified, md5) VALUES ('/r/snes/A.sfc', 1, 5, 'aa')");
                         Execute(c, "INSERT INTO scrape_queue (path, system, priority, seq) VALUES ('/r/snes/A.sfc', 'snes', 2, 1)");
                         Execute(c, "INSERT INTO quota_day (day, requests) VALUES ('2026-01-01', 3)");
                     }

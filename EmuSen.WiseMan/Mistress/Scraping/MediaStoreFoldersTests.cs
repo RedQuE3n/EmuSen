@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 db.Open();
                 using SqliteCommand c = db.CreateCommand();
-                c.CommandText = "DROP TABLE store_move; DROP TABLE store_step; ALTER TABLE scrape_game DROP COLUMN kinds_known; PRAGMA user_version = 1;";
+                c.CommandText = "DROP TABLE store_move; DROP TABLE store_step; ALTER TABLE scrape_game DROP COLUMN kinds_known; ALTER TABLE scrape_file DROP COLUMN crc32; ALTER TABLE scrape_file DROP COLUMN sha1; PRAGMA user_version = 1;";
                 c.ExecuteNonQuery();
             }
             // The picture already moved and the row not yet written, as a crash between the two would leave it.

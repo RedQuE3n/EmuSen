@@ -6326,7 +6326,7 @@ case the page for scrape
 target none
 covers 1
 $ man scrape
-out 7650
+out 8063
 NAME
     scrape - choose games, see what pictures they have, plan and run a scrape
 
@@ -6455,6 +6455,12 @@ DESCRIPTION
 FILES
     Media/media.db and Media/...    the scraper's store, the only place
                                     pictures are written
+    <log folder>/scrape_<yyyyMMdd>.log
+                                    one line a ScreenScraper request (its
+                                    game, kind, status, bytes, time, worker
+                                    and waits) and one a run, in the error
+                                    log's folder; no credential is written
+                                    (EmuSen_LibraryTools.md section 9.10)
     The library is only read.
 
 EXAMPLES

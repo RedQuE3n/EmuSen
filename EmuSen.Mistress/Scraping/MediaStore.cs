@@ -133,6 +133,10 @@ namespace EmuSen.Mistress.Scraping
             """
             ALTER TABLE scrape_game ADD COLUMN kinds_known TEXT;
             """,
+            """
+            ALTER TABLE scrape_file ADD COLUMN crc32 TEXT;
+            ALTER TABLE scrape_file ADD COLUMN sha1 TEXT;
+            """,
         };
 
         public static int SchemaVersion => Migrations.Length;
@@ -270,23 +274,28 @@ namespace EmuSen.Mistress.Scraping
 
         // --- the file hash cache ---
 
-        public string? CachedMd5(string path, long bytes, long modified)
+        public string? CachedMd5(string path, long bytes, long modified) => CachedFile(path, bytes, modified)?.Md5;
+
+        // A file's hashes at this size and time: the MD5, and the CRC32 and SHA-1 where they were kept too (EmuSen_LibraryTools.md §9.11).
+        public (string Md5, string? Crc32, string? Sha1)? CachedFile(string path, long bytes, long modified)
         {
             lock (_gate)
             {
                 if (_closed) return null;
                 using SqliteCommand command = _db.CreateCommand();
-                command.CommandText = "SELECT md5 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified";
+                command.CommandText = "SELECT md5, crc32, sha1 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified";
                 command.Parameters.AddWithValue("$path", path);
                 command.Parameters.AddWithValue("$bytes", bytes);
                 command.Parameters.AddWithValue("$modified", modified);
-                return command.ExecuteScalar() as string;
+                using SqliteDataReader row = command.ExecuteReader();
+                if (!row.Read()) return null;
+                return (row.GetString(0), row.IsDBNull(1) ? null : row.GetString(1), row.IsDBNull(2) ? null : row.GetString(2));
             }
         }
 
-        public void RememberFile(string path, long bytes, long modified, string md5) => Write(
-            "INSERT INTO scrape_file (path, bytes, modified, md5) VALUES ($path, $bytes, $modified, $md5) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5",
-            ("$path", path), ("$bytes", bytes), ("$modified", modified), ("$md5", md5));
+        public void RememberFile(string path, long bytes, long modified, string md5, string? crc32 = null, string? sha1 = null) => Write(
+            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1) VALUES ($path, $bytes, $modified, $md5, $crc32, $sha1) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = excluded.crc32, sha1 = excluded.sha1",
+            ("$path", path), ("$bytes", bytes), ("$modified", modified), ("$md5", md5), ("$crc32", crc32), ("$sha1", sha1));
 
         // Every file last hashed to a game, for telling a renamed file from a second copy.
         public IReadOnlyList<string> PathsOf(string md5, long bytes)

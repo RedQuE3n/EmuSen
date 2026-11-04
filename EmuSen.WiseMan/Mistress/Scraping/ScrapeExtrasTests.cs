@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             {
                 db.Open();
                 using var c = db.CreateCommand();
-                c.CommandText = "ALTER TABLE scrape_game DROP COLUMN kinds_known; PRAGMA user_version = 2;";
+                c.CommandText = "ALTER TABLE scrape_game DROP COLUMN kinds_known; ALTER TABLE scrape_file DROP COLUMN crc32; ALTER TABLE scrape_file DROP COLUMN sha1; PRAGMA user_version = 2;";
                 c.ExecuteNonQuery();
             }
 

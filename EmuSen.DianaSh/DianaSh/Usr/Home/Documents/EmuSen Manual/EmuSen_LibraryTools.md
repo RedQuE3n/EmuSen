@@ -562,6 +562,154 @@ Mistress over its Rust runtime and holds the strip, the column's cells, the pane
 Scraper's eight audited states were re-recorded on 2026-11-03 for this one cause (the strip's, the pane's and the help
 bar's words), after the ScraperDetail picture was held against the mockup at 1280 × 800 and 1920 × 1080.
 
+### 9.10 Why a run is slow: the scrape log and a measured run (2026-11-03)
+
+**The symptom.** On the handheld on 2026-11-03 a run over the new PS2 games, the nine default kinds (§9.7), managed
+about 4 games a minute over 20 minutes and about 1 a minute in the last 5: 570 pictures for about 76 games, with
+EmuSen under 10% CPU, the account at ScreenScraper's highest membership and `ScrapeThreads` 0 (so Mistress asks for
+the account's `maxthreads`). Nothing logged the time of a request, so the cause was unproven.
+
+**The scrape log.** Every run now writes `scrape_<yyyyMMdd>.log` into the error log's folder (Galaxia's
+`error_log::root`: the `LogDirectory` setting, else its fallback), one line a ScreenScraper request and one when the
+run's workers end (`Platform/scrape/src/runlog.rs`). Lines are tab-separated `name=value` fields after the local time:
+
+    <time>  request  game=<file>  kind=info|cover|...  status=<HTTP, 0 for none>  outcome=<answer or media outcome>
+            bytes=  ms=<send to last byte>  worker=<index>  threads=<live>/<allowed>  pace_ms=  cap_ms=  hash_ms=
+            maxthreads=  maxrequestspermin=  maxdownloadspeed=  requeststoday=
+    <time>  run  end=done|stopped|cancelled  games=  requests=  bytes=  wall_ms=  workers=  worker_ms=  pace_ms=
+            cap_ms=  server_ms=  hash_ms=  idle_ms=  own_ms=
+
+`pace_ms` is the time the worker waited for the per-minute pace before this request, `cap_ms` the time it was held
+after its previous file for `maxdownloadspeed`, `hash_ms` the time spent hashing this game's file before its lookup;
+the quota fields are the answer's own (a media file carries none, `-`). The run line sums the workers' time:
+`own_ms` is what is left of it after the waits, the requests, the hashing and `idle_ms` (no game due, or paused), that
+is the scraper's own work between requests. Every line passes the redactor, and none holds an address, a key or the
+account's name. The file is a day's, and is kept as the error log's are: once in a process's life, the first run removes
+the `scrape_*.log` files last written more than fourteen days before (`runlog::prune`, Galaxia's `KEEP_DAYS`); a full
+run of a day's 20,000 requests writes about 3 MB.
+
+`ScrapeLogTests` (WiseMan, over the fake ScreenScraper): `Each_request_is_one_line_with_its_kind_status_timing_worker
+_and_quota_and_the_run_one_summary` holds a line for every request the server answered (seven for three games), the
+fields, the quota of a lookup and the one run line; `Nothing_the_scrape_log_holds_is_a_credential_or_an_address`
+holds that no developer id or password, member name or password, credential parameter or URL is written. Both failed
+with the log switched off. Seeded on 2026-11-03, each caught: the request's URL written unredacted with its
+`devpassword` (the second test); the media lines left out (the count); a lookup's quota left out (the quota
+assertion); the run line left out (the single run line). Two unit tests in `runlog.rs` hold the line's format and
+the lane's hand-over of its waits.
+
+**The measured run.** On 2026-11-03 on the desktop, through the platform library's own `scrape run --system ps2
+--threads 99` (as Mistress's `ThreadsWanted` asks), in a throwaway home with the desktop's member account: five PS2
+discs of 0.88 to 2.17 GB, copied from the NAS to local NVMe, no art yet, the nine default kinds. 50 requests (5
+lookups, 45 pictures), all found, 22.1 MB, **41.6 s wall**, about 7 games a minute. The account's answers said
+`maxthreads=6`, `maxrequestspermin=7168`, `maxdownloadspeed=2176` (KB/s). Where the workers' 149.4 s went:
+
+| bucket | s | share | what it is |
+|---|---:|---:|---|
+| server | 65.2 | 44% | the requests themselves |
+| idle | 57.0 | 38% | workers with no game due (six workers, five games) |
+| hash | 26.9 | 18% | MD5, CRC32 and SHA-1 of each disc, before its lookup |
+| pace | 0.01 | 0% | the per-minute pace, 9 ms apart at 7168 a minute |
+| cap | 0 | 0% | the download cap: no file came faster than 2176 KB/s |
+| own | 0.3 | 0% | the scraper's own work between requests |
+
+Read off the lines:
+
+1. **The pace and the cap cost nothing** at this membership: 12 ms of pace in the whole run, no cap wait.
+2. **A request is about 0.9 s whatever its size.** The 45 pictures averaged 485 KB and 1.10 s; fitted, ms = 875 +
+   465 per MB, so 80% of a picture's time is the exchange's fixed cost and the transfer runs at about 2.1 MB/s a
+   stream (near `maxdownloadspeed`, which the server appears to apply itself). Lookups took 1.3 to 4.5 s. Smaller
+   images would save at most the 20% that is transfer.
+3. **A game's pictures are fetched one after another** by its worker: nine pictures, about 10 s, plus the lookup.
+   The six threads work six games at once, so a worker's game takes hash + lookup + about 10 s.
+4. **The first game runs alone.** Workers are added after a game ends (`ensure_workers`), and until the first
+   answer says `maxthreads` the quota allows one: the first 20.1 s of the 41.6 s ran on one thread
+   (`threads=1/6`).
+5. **Hashing reads the whole disc.** 2.8 to 6.9 s a disc, 313 to 322 MB/s, one core, from the page cache; four discs
+   hashed at once kept that rate each. A disc's MD5 is cached by size and time, but its CRC32 and SHA-1 are not, so
+   a later run that asks again hashes every disc again (`process_inner`: the cached MD5 leaves `hashes` empty and
+   the lookup hashes the file).
+
+**The cause on the handheld, predicted from these numbers.** The server side caps a worker at a game every 11 to
+15 s, so six workers could do 24 to 33 games a minute; the handheld's 4 a minute means about 90 s a game a worker,
+and 75 s of that is not the server, the pace or the cap. The handheld's PS2 discs average about 3.5 GB (the NAS's
+57 run 0.9 to 7.9 GB), and six workers hash six of them at once from one storage device. At the desktop's 315 MB/s a
+disc would take 11 s and the CPU would show several busy cores; under 10% CPU over 20 minutes says the hashing waits
+on the storage instead, about 180 MB/s shared by six readers (76 games of about 3.5 GB in about 25 minutes). The
+slowdown at the end fits the larger discs or more readers on a slower card. **Prediction 1**: the handheld's log
+shows `hash_ms` of 40 s or more for a 4 GB disc and `server_ms` under a fifth of the workers' time. **Prediction 2**:
+`pace_ms` and `cap_ms` stay near zero there as here. Both are for the handheld's next run's log; the desktop
+cannot show the handheld's storage.
+
+**The fix the numbers support (proposed, not built).** First, measure the handheld (the two predictions). If the
+hashing is the cost: (a) keep a file's CRC32 and SHA-1 with its MD5 in the store, so that no disc is hashed twice
+across runs (moves `hash_ms` of every later run to 0; for the 76 games about 75 s a game a worker); (b) for a disc
+image above a size threshold, look it up by its name and size before hashing it, and hash only when that misses: the
+gain is the whole of `hash_ms` for the games found that way, at the cost of a second lookup for the rest, and its
+matching must first be measured against the hashed lookup on the same games before it can be the default; (c) hash
+on one reader at a time per storage device while the other workers fetch pictures, if the handheld's log shows six
+concurrent readers slower than one. Second, wherever the cost lies: add the workers as soon as the first answer
+gives `maxthreads` rather than after the first game ends (saves one game's time a run, 20 s here). Fetching a game's
+pictures in parallel would not help with six games in flight, since `maxthreads` bounds the requests in flight.
+
+**A two-pass order** (cover, screenshot, marquee and mix image for every game first, then the rest) does not make a
+run faster on these numbers: the same 50 requests are made, each at the same fixed cost, and the second pass needs
+each game's answer again, a second lookup a game (10% more requests) and, with the CRC32 and SHA-1 uncached, a second
+hash of every disc, the cost that dominates. It would bring the first pictures sooner; it is worth it only after (a),
+and only with the first answer's media kept for the second pass.
+
+### 9.11 A file hashed once, and the workers started with the first answer (2026-11-03)
+
+Items (a) and the early workers of §9.10, built on 2026-11-03; the name-and-size lookup (b) waits for proof that it
+matches the same games as the hashed lookup.
+
+- **The three hashes are kept.** `media.db` schema 4 adds `crc32` and `sha1` to `scrape_file`, beside the MD5, keyed
+  as before by the file's path, size and time (`Store::cached_file`, `Store::remember_file`). A file is read once,
+  for all three digests in one pass (`hash_once`), and a later lookup of it at the same size and time reads nothing;
+  a file whose size or time changed misses and is read again. A row from schema 3 has no CRC32 or SHA-1, so its file
+  is read once more and the row completed. The C# `MediaStore` takes the same migration and the C# `Scraper` the same
+  rule (`CachedFile`, `HashOnce`), so the two write the same rows (`ScrapeReplayParityTests`); a row written with an
+  MD5 alone has its other two cleared, so a changed file is never sent with old digests.
+- **The workers start with the first answer.** `ask` adds the workers as soon as an answer carries the account's
+  limits (`quota.observe`), rather than after the first game ends.
+
+Measured on 2026-11-03 on the desktop, the same five discs, kinds and command as §9.10, in a fresh home (50 requests,
+all found):
+
+| | before (§9.10) | after |
+|---|---:|---:|
+| wall | 41.6 s | **26.6 s** (−36%) |
+| hash, all discs | 26.9 s | 27.0 s |
+| server | 65.2 s | 61.7 s |
+| idle | 57.0 s | 34.2 s |
+| first game alone | 20.1 s | 0 (the other four began at the first answer) |
+
+The hashing is unchanged in a first run, as it must be: each disc is read once in both. The cache's gain is in every
+later run over the same files (a refresh, a resume, a game asked again), where `hash_ms` is `-` instead of the 2.8 to
+6.9 s a disc here, and on the handheld the predicted 40 s or more a 4 GB disc.
+
+Tests, each failing first with its change switched off: `ScrapeLogTests.A_file_asked_again_is_not_hashed_again`
+(the second lookup of a game writes `hash_ms=-`) and `The_other_workers_start_with_the_first_answer` (the first
+picture's line says `threads=3/3` where the account allows three); `tests/file_hashes.rs` holds the three hashes kept
+at a size and time and a changed file missing. Seeded on 2026-11-03, each caught by `file_hashes.rs`: the CRC32
+stored as the SHA-1; the cache keyed without the size. `ScrapeStoreParityTests` holds the two stores' migration
+alike at every version, its seed's `scrape_file` row now naming its columns; the two tests that build an older file
+from a new one (`ScrapeExtrasTests`, `MediaStoreFoldersTests`) drop schema 4's columns as well.
+
+**The name-and-size lookup (b) is dropped.** Measured on 2026-11-03 on the same five discs (17 requests): a
+`jeuInfos` with no hashes, by the file's name and size, named the same game and rom as the hashed lookup for all five.
+But the answer's own rom record carries the file's MD5, CRC32 and SHA-1 for two of them only (Ape Escape 2, ATV
+Offroad Fury); for Dark Cloud and Armored Core 3 the size agrees and no rom ScreenScraper lists has the file's MD5, and
+for Ape Escape 3 not even the size agrees. So three of the five "hash" lookups were name matches on ScreenScraper's
+side, and the agreement says nothing about a disc whose name is not its dump's. Nor can the answer's digests stand in
+for the file's in `media.db`, which keys every record by the file's own MD5; a stand-in key would change what that
+column means. The hash cache and the early workers stand, and the handheld's scrape log decides what comes next.
+
+**Hashing several discs at once**, measured the same day on the desktop's NVMe with each file's pages dropped first
+(`posix_fadvise(POSIX_FADV_DONTNEED)` through `dd iflag=nocache`, checked with `fincore`): the five discs, 8.49 GB,
+took 31.5 s and 29.4 s one at a time (270 to 289 MB/s, one core's hashing) and 8.6 s and 10.9 s all at once (777 to
+986 MB/s). On this device concurrency helps 2.7 to 3.7 times; whether a cap per device is wanted waits for the
+handheld's log, whose storage this does not measure.
+
 ## 10. T6 as built: the Library Manager window (2026-11-01)
 
 ### 10.1 The tool library and its host

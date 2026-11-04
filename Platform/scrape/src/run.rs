@@ -11,6 +11,7 @@ use crate::openemu;
 use crate::quota::{BUSY_WAIT, Gate, Status, TOO_MANY_WAIT};
 use crate::redact::redact;
 use crate::rules;
+use crate::runlog::{self, Lane, Log, Tally};
 use crate::store::{Priority, Queued, Record, State, Stored};
 use crate::{Error, Scraper, layout};
 use emusen_dotnet::date::TICKS_PER_SECOND;
@@ -20,7 +21,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const MAX_ATTEMPTS: i32 = 5;
 pub const RECENT_LIMIT: usize = 200;
@@ -197,6 +198,10 @@ struct Workers {
     stopped_by_quota: AtomicBool,
     handles: Mutex<Vec<JoinHandle<()>>>,
     signal: Stop,
+    /// The scrape log, and the workers' accounts as each ends (EmuSen_LibraryTools.md §9.10).
+    log: Log,
+    tally: Mutex<Tally>,
+    started: Instant,
 }
 
 /// The failover's worker and what it was asked this session, `CoverFetcher`.
@@ -343,6 +348,9 @@ impl Scraper {
             stopped_by_quota: AtomicBool::new(false),
             handles: Mutex::new(Vec::new()),
             signal: Stop::default(),
+            log: Log::beside_error_log(),
+            tally: Mutex::new(Tally::default()),
+            started: Instant::now(),
         });
         if let (Some(pick), true) = (pick, one) {
             if let Some(game) = self.runs.picks.lock().unwrap_or_else(|p| p.into_inner()).get(&pick).cloned() {
@@ -388,18 +396,36 @@ impl Scraper {
     }
 
     /// Every request waits out a pause first, then the quota's turn: Some(true) to go, Some(false) stopped, None cancelled.
-    fn turn(&self, w: &Workers) -> Option<bool> {
+    fn turn(&self, w: &Workers, lane: &mut Lane) -> Option<bool> {
+        let paused = Instant::now();
         if !self.wait_while_paused(&w.stop) {
             return None;
         }
-        self.quota.take_turn_with(&|| self.store(), &self.clock, &w.stop).ok().flatten()
+        lane.tally.idle += paused.elapsed();
+        let waited = Instant::now();
+        let go = self.quota.take_turn_with(&|| self.store(), &self.clock, &w.stop).ok().flatten();
+        lane.pace += waited.elapsed();
+        lane.tally.pace += waited.elapsed();
+        go
+    }
+
+    /// A request's line in the scrape log, what it waited for handed over from the lane.
+    #[allow(clippy::too_many_arguments)]
+    fn logged(&self, w: &Workers, lane: &mut Lane, game: &str, kind: &str, code: u16, outcome: &str, bytes: u64, took: Duration, quota: Option<crate::answer::Quota>) {
+        let (pace, cap, hash) = lane.sent(bytes, took);
+        let live = *w.live.lock().unwrap_or_else(|p| p.into_inner());
+        let allowed = self.quota.threads(w.choices.threads);
+        w.log.write(&runlog::request_line(&runlog::Request { game, kind, code, outcome, bytes, took, worker: lane.index, live, allowed, pace, cap, hash, quota }));
     }
 
     fn work(&self, index: usize, w: &Arc<Workers>) {
+        let mut lane = Lane::new(index);
         loop {
+            let paused = Instant::now();
             if w.stop.is_stopped() || !self.wait_while_paused(&w.stop) {
                 break;
             }
+            lane.tally.idle += paused.elapsed();
             let gate = {
                 let store = self.store();
                 self.quota.check(&store, &self.clock).map(|g| g.0).unwrap_or(Gate::Go)
@@ -429,22 +455,22 @@ impl Scraper {
                     break;
                 }
                 let now = self.clock.now();
-                match earliest {
-                    Some(due) if !others_busy && due > now => {
-                        if !self.clock.delay(due - now, &w.stop) {
-                            break;
-                        }
-                    }
-                    _ => {
-                        if w.signal.wait(IDLE_POLL) && w.stop.is_stopped() {
-                            break;
-                        }
-                    }
+                let idle = Instant::now();
+                let go_on = match earliest {
+                    Some(due) if !others_busy && due > now => self.clock.delay(due - now, &w.stop),
+                    _ => !(w.signal.wait(IDLE_POLL) && w.stop.is_stopped()),
+                };
+                lane.tally.idle += idle.elapsed();
+                if !go_on {
+                    break;
                 }
                 continue;
             };
-            let turn = self.process(&item, w);
+            let turn = self.process(&item, w, &mut lane);
             w.held.lock().unwrap_or_else(|p| p.into_inner()).remove(&item.path);
+            if !matches!(turn, Turn::Cancelled) {
+                lane.tally.games += 1;
+            }
             match turn {
                 Turn::Done(result) => self.arrived(result),
                 Turn::Io(words) => {
@@ -456,6 +482,7 @@ impl Scraper {
             }
             self.ensure_workers(w);
         }
+        w.tally.lock().unwrap_or_else(|p| p.into_inner()).add(&lane.ended());
         let last = {
             let mut live = w.live.lock().unwrap_or_else(|p| p.into_inner());
             *live -= 1;
@@ -469,6 +496,8 @@ impl Scraper {
             } else {
                 Phase::Done
             };
+            let tally = *w.tally.lock().unwrap_or_else(|p| p.into_inner());
+            w.log.write(&runlog::summary_line(end.word(), &tally, w.started.elapsed()));
             if !w.stop.is_stopped() {
                 self.scraper_finished(end);
             }
@@ -588,8 +617,8 @@ impl Scraper {
         }
     }
 
-    fn process(&self, item: &Queued, w: &Workers) -> Turn {
-        match self.process_inner(item, w) {
+    fn process(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Turn {
+        match self.process_inner(item, w, lane) {
             Ok(Some(result)) => Turn::Done(result),
             Ok(None) => Turn::Cancelled,
             Err(words) => Turn::Io(words),
@@ -605,7 +634,18 @@ impl Scraper {
         }
     }
 
-    fn process_inner(&self, item: &Queued, w: &Workers) -> Result<Option<Finished>, String> {
+    /// A file read once for its three hashes, which the path index keeps at its size and time; none when stopped.
+    fn hash_once(&self, rom: &str, bytes: i64, modified: i64, w: &Workers, lane: &mut Lane) -> Result<Option<Hashes>, String> {
+        let began = Instant::now();
+        let hashed = Scraper::hashes(rom, &w.stop)?;
+        lane.hashed(began.elapsed());
+        if let Some(h) = &hashed {
+            self.store().remember_file(rom, bytes, modified, &h.md5, &h.crc32, &h.sha1).map_err(|e| e.words())?;
+        }
+        Ok(hashed)
+    }
+
+    fn process_inner(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Result<Option<Finished>, String> {
         let rom = item.path.as_str();
         if !file_exists(rom) {
             self.store().dequeue(rom).map_err(|e| e.words())?;
@@ -616,16 +656,15 @@ impl Scraper {
             return Ok(Some(Finished { skipped: true, ..Finished::new(item, Outcome::Missing, "this game's console has no ScreenScraper system") }));
         };
         let (bytes, modified) = file_info(rom).ok_or_else(|| format!("Could not find file '{rom}'."))?;
-        let mut hashes: Option<Hashes> = None;
-        let cached = self.store().cached_md5(rom, bytes, modified).map_err(|e| e.words())?;
-        let md5 = match cached {
-            Some(md5) => md5,
+        let cached = self.store().cached_file(rom, bytes, modified).map_err(|e| e.words())?;
+        let (md5, mut hashes) = match cached {
+            Some(c) => {
+                let full = c.crc32.zip(c.sha1).map(|(crc32, sha1)| Hashes { md5: c.md5.clone(), crc32, sha1, size: bytes as u64 });
+                (c.md5, full)
+            }
             None => {
-                let Some(h) = Scraper::hashes(rom, &w.stop)? else { return Ok(None) };
-                let md5 = h.md5.clone();
-                self.store().remember_file(rom, bytes, modified, &md5).map_err(|e| e.words())?;
-                hashes = Some(h);
-                md5
+                let Some(h) = self.hash_once(rom, bytes, modified, w, lane)? else { return Ok(None) };
+                (h.md5.clone(), Some(h))
             }
         };
         let settings = self.settings();
@@ -635,7 +674,7 @@ impl Scraper {
         let wanted: Vec<Kind> = choices.kinds.iter().copied().filter(|k| !(hand_cover && k.esde_type == kinds::COVER.esde_type)).collect();
 
         if let Some(picked) = self.runs.chosen.lock().unwrap_or_else(|p| p.into_inner()).remove(rom) {
-            return self.keep(item, &md5, bytes, &picked, &choices, &wanted, "name", true, w, &settings);
+            return self.keep(item, &md5, bytes, &picked, &choices, &wanted, "name", true, w, lane, &settings);
         }
 
         let known = self.store().game(&md5, bytes).map_err(|e| e.words())?;
@@ -653,14 +692,14 @@ impl Scraper {
         }
         let by_name = known.as_ref().is_some_and(|k| k.state == State::Found && k.matched_by.as_deref() == Some("name") && k.game_id.is_some());
 
-        match self.turn(w) {
+        match self.turn(w, lane) {
             None => return Ok(None),
             Some(false) => return Ok(Some(self.stopped(item))),
             Some(true) => {}
         }
-        let hashes = match hashes {
+        let hashes = match hashes.take() {
             Some(h) => h,
-            None => match Scraper::hashes(rom, &w.stop)? {
+            None => match self.hash_once(rom, bytes, modified, w, lane)? {
                 Some(h) => h,
                 None => return Ok(None),
             },
@@ -670,15 +709,15 @@ impl Scraper {
         // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (EmuSen_GamePackages.md §5.5).
         let patched = if by_name { None } else { patched_first(rom) };
         let first = patched.clone().unwrap_or_else(|| hashes.clone());
-        let Some(mut answer) = self.ask(w, system_id, first, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
+        let Some(mut answer) = self.ask(w, lane, system_id, first, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
         let mut matched_by = if by_name { "name" } else if patched.is_some() { "patched" } else { "file" };
         if patched.is_some() && answer.status == Status::NotFound {
-            match self.turn(w) {
+            match self.turn(w, lane) {
                 None => return Ok(None),
                 Some(false) => return Ok(Some(self.stopped(item))),
                 Some(true) => {}
             }
-            let Some(second) = self.ask(w, system_id, hashes, &file_name, None) else { return Ok(None) };
+            let Some(second) = self.ask(w, lane, system_id, hashes, &file_name, None) else { return Ok(None) };
             answer = second;
             matched_by = "file";
         }
@@ -688,13 +727,13 @@ impl Scraper {
             if let Some(first) = core_first {
                 let file = std::fs::read(rom).map_err(|e| io(e, rom))?;
                 if let Some(h) = emusen_galaxia::rom_hash::transformed(&file, |f| emusen_systems::openvgdb::bytes(&first, f)) {
-                    match self.turn(w) {
+                    match self.turn(w, lane) {
                         None => return Ok(None),
                         Some(false) => return Ok(Some(self.stopped(item))),
                         Some(true) => {}
                     }
                     self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
-                    let Some(second) = self.ask(w, system_id, Hashes { md5: h.md5, crc32: h.crc32, sha1: h.sha1.unwrap_or_default(), size: h.size }, &file_name, None) else { return Ok(None) };
+                    let Some(second) = self.ask(w, lane, system_id, Hashes { md5: h.md5, crc32: h.crc32, sha1: h.sha1.unwrap_or_default(), size: h.size }, &file_name, None) else { return Ok(None) };
                     if second.status == Status::Found {
                         matched_by = "transformed";
                     }
@@ -709,7 +748,7 @@ impl Scraper {
         match answer.status {
             Status::Found => {
                 let game = answer.game.expect("a found answer has its game");
-                self.keep(item, &md5, bytes, &game, &choices, &wanted, matched_by, choices.refresh, w, &settings)
+                self.keep(item, &md5, bytes, &game, &choices, &wanted, matched_by, choices.refresh, w, lane, &settings)
             }
             Status::NotFound if known.as_ref().is_some_and(|k| k.state == State::Found) => {
                 self.store().dequeue(rom).map_err(|e| e.words())?;
@@ -735,15 +774,22 @@ impl Scraper {
     }
 
     /// One `jeuInfos`, its quota observed and counted; none when the run stopped while it was asked.
-    fn ask(&self, w: &Workers, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
+    fn ask(&self, w: &Arc<Workers>, lane: &mut Lane, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
         let (client, cancel, name) = (w.client.clone(), w.cancel.clone(), file_name.to_string());
         let answer = crate::clock::detached(&w.stop, move || client.jeu_infos(system_id, &hashes, &name, game_id, &cancel))?;
+        let e = answer.exchange;
+        self.logged(w, lane, file_name, "info", e.code, answer.status.name(), e.bytes, e.took, answer.quota);
         let store = self.store();
-        let _ = self.quota.observe(&store, &self.clock, answer.quota);
+        let observed = self.quota.observe(&store, &self.clock, answer.quota).unwrap_or(false);
         if matches!(answer.status, Status::Found | Status::NotFound | Status::Malformed | Status::BadRequest) {
             let _ = self.quota.counted(&store, &self.clock, answer.status == Status::NotFound);
         }
         let _ = self.quota.answered(&store, &self.clock, answer.status);
+        drop(store);
+        // The account's maxthreads is known from the first answer that carries it, so the other workers start now (§9.10).
+        if observed {
+            self.ensure_workers(w);
+        }
         Some(answer)
     }
 
@@ -767,7 +813,7 @@ impl Scraper {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn keep(&self, item: &Queued, md5: &str, bytes: i64, game: &crate::answer::Game, choices: &Choices, wanted: &[Kind], matched_by: &str, refresh: bool, w: &Workers, settings: &crate::Settings) -> Result<Option<Finished>, String> {
+    fn keep(&self, item: &Queued, md5: &str, bytes: i64, game: &crate::answer::Game, choices: &Choices, wanted: &[Kind], matched_by: &str, refresh: bool, w: &Workers, lane: &mut Lane, settings: &crate::Settings) -> Result<Option<Finished>, String> {
         let rom = item.path.as_str();
         let stem = path::file_name_without_extension(STYLE, rom).to_string();
         let file_name = path::file_name(STYLE, rom).to_string();
@@ -823,7 +869,7 @@ impl Scraper {
                 }
                 local_sha1 = Some(sha);
             }
-            match self.turn(w) {
+            match self.turn(w, lane) {
                 None => return Ok(None),
                 Some(false) => break,
                 Some(true) => {}
@@ -839,7 +885,12 @@ impl Scraper {
             if w.stop.is_stopped() {
                 return Ok(None);
             }
-            self.throttle(&got, &w.stop);
+            if got.code != 0 {
+                self.logged(w, lane, &file_name, kind.esde_type, got.code, &format!("{:?}", got.outcome), got.received, got.took, None);
+            }
+            let held = self.throttle(&got, &w.stop);
+            lane.cap += held;
+            lane.tally.cap += held;
             if got.outcome == MediaOutcome::Unchanged {
                 unchanged += 1;
                 continue;
@@ -860,15 +911,17 @@ impl Scraper {
     }
 
     /// The member's `maxdownloadspeed`, in KB/s, held by waiting after a file that came faster.
-    fn throttle(&self, got: &client::MediaAnswer, stop: &Stop) {
-        let Some(speed) = self.quota.limits().and_then(|l| l.max_download_kbps).filter(|&s| s > 0) else { return };
+    fn throttle(&self, got: &client::MediaAnswer, stop: &Stop) -> Duration {
+        let Some(speed) = self.quota.limits().and_then(|l| l.max_download_kbps).filter(|&s| s > 0) else { return Duration::ZERO };
         if got.outcome != MediaOutcome::Saved {
-            return;
+            return Duration::ZERO;
         }
         let owed = emusen_dotnet::date::ticks_from_seconds(got.bytes as f64 / (speed as f64 * 1024.0)) - client::ticks(got.took);
+        let began = Instant::now();
         if owed > 0 {
             self.clock.delay(owed, stop);
         }
+        began.elapsed()
     }
 
     fn has_cover(&self, md5: &str, bytes: i64) -> bool {

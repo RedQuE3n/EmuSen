@@ -6326,7 +6326,7 @@ case the page for scrape
 target none
 covers 1
 $ man scrape
-out 8063
+out 9080
 NAME
     scrape - choose games, see what pictures they have, plan and run a scrape
 
@@ -6439,6 +6439,19 @@ DESCRIPTION
     that was interrupted, with the games it had queued. A run already
     going, whether started in EmuSen or in another shell, is refused.
 
+  Big files
+    A file above 1 GB (a DVD image, most often) is not read whole before
+    its lookup. Its fingerprint, the size and a SHA-1 of its first and last
+    MiB, is read in one pass of about 2 MiB, and ScreenScraper is asked by
+    the file's name and size alone. Only when that finds nothing is the
+    file read in full and asked by its MD5, CRC32 and SHA-1, as before. The
+    game's record is kept under the fingerprint, says it matched by
+    name+size, and its checksums stay empty until a thread of the lowest
+    CPU and I/O priority takes them, only while no game is on screen; it
+    stops the moment one starts and nothing waits for it. A file of 1 GB
+    or less is hashed in full as always (EmuSen_LibraryTools.md section
+    9.12).
+
     A run that outlasts the line's budget goes on in the background as
     scrape<n>: 'ps' lists it with how many games are done, 'scrape wait'
     follows it again, and 'kill scrape<n>' cancels it (the games not
@@ -6458,9 +6471,13 @@ FILES
     <log folder>/scrape_<yyyyMMdd>.log
                                     one line a ScreenScraper request (its
                                     game, kind, status, bytes, time, worker
-                                    and waits) and one a run, in the error
+                                    and waits, match=name+size|hash and
+                                    fingerprint_ms) and one a run (with
+                                    fingerprint_ms and read_bytes, the
+                                    bytes of game files read), in the error
                                     log's folder; no credential is written
-                                    (EmuSen_LibraryTools.md section 9.10)
+                                    (EmuSen_LibraryTools.md sections 9.10
+                                    and 9.12)
     The library is only read.
 
 EXAMPLES

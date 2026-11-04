@@ -52,6 +52,15 @@ namespace EmuSen.WiseMan.Mistress
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
+        // A runtime that finds no cores, as a build without the library finds none, opens no Game Boy game and says why; the window takes such words into its status line, which MoonRtEngineTests holds.
+        [Fact]
+        public void Without_the_library_a_game_boy_game_does_not_load_and_the_status_says_why()
+        {
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime(new EmuSen.Crystal.Client.CrystalRuntimeOptions { Cores = new[] { Path.Combine(_root, "NoCores") } });
+            var refused = Assert.Throws<EmuSen.Crystal.Client.CrystalException>(() => runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _rom, NoBattery = true }));
+            Assert.Equal("This build has no Game Boy core: " + CoreCatalog.MercuryRtEngine + " is missing (no sidecar for it was found beside the program).", refused.Message);
+        }
+
         private static TextBlock Status(MainWindow window) => window.GetControl<TextBlock>("StatusText");
 
         private static void Invoke(MainWindow window, string name, params object[] args) =>

@@ -28,6 +28,27 @@ namespace EmuSen.WiseMan.Crystal
             return info;
         }
 
+        // Row 1: rewind capture is gated inside the frame call, whatever the client: a snapshot longer than a frame withholds it in words, one within a frame keeps capturing - see EmuSen_Backend.md §38.
+        [Fact]
+        public void Row_1_rewind_capture_is_gated_by_the_engine_for_every_client()
+        {
+            using CrystalSession withheld = _f.Open(_f.Game("withheld.tst", 0x5D, 1, 2, 3));
+            withheld.Rewind(true, intervalFrames: 1);
+            for (int i = 0; i < 10; i++) Frame(withheld);
+            Assert.Equal(0, Json(withheld.RewindReel()).GetProperty("depth").GetInt32());
+            JsonElement info = Json(withheld.Info());
+            Assert.False(info.GetProperty("rewind_capture").GetBoolean());
+            string why = info.GetProperty("rewind_withheld").GetString()!;
+            Assert.StartsWith("a snapshot of ", why);
+            Assert.Contains("longer than a frame", why);
+
+            using CrystalSession allowed = _f.Open();
+            allowed.Rewind(true, intervalFrames: 1);
+            for (int i = 0; i < 10; i++) Frame(allowed);
+            Assert.True(Json(allowed.RewindReel()).GetProperty("depth").GetInt32() > 0);
+            Assert.True(Json(allowed.Info()).GetProperty("rewind_capture").GetBoolean());
+        }
+
         // Row 2: one post-load sequence, whichever way the load is asked for: the binding's call, the session's table (a shell's `state load`), a slot or the resume state.
         [Fact]
         public unsafe void Row_2_every_way_of_loading_a_state_runs_one_sequence()

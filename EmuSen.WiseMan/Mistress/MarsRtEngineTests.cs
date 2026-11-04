@@ -43,6 +43,9 @@ namespace EmuSen.WiseMan.Mistress
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMarsRtEngineTests", Guid.NewGuid().ToString("N"));
         private readonly string _rom;
 
+        // The same program at NTSC's rate, where a snapshot fits in a frame and rewind keeps its history (EmuSen_Backend.md §38).
+        private readonly string _ntscRom;
+
         public MarsRtEngineTests()
         {
             string roms = Path.Combine(_root, "Roms");
@@ -51,6 +54,8 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             _rom = Path.Combine(roms, "System.z64");
             File.WriteAllBytes(_rom, SyntheticN64System.Build(rsp: true));
+            _ntscRom = Path.Combine(roms, "Ntsc.z64");
+            File.WriteAllBytes(_ntscRom, SyntheticN64System.Build(rsp: true, fullLines: true));
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs") }.Save();
 
             // This collection runs alone, so the process-wide switch can be held off here and put back.
@@ -76,6 +81,74 @@ namespace EmuSen.WiseMan.Mistress
         {
             MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:N64");
             Assert.True(!SettingsDesk.Keys(window).Contains("engine") || SettingsDesk.Row(window, "engine").Choices?.Count == 1, "the page offers a choice of engine");
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task A_game_runs_on_MarsRT_with_rewind_and_still_does_when_the_retired_Mars_is_stored() => Session.Dispatch(() =>
+        {
+            Assert.True(MarsRt.Available, MarsRt.Report);
+            MainWindow window = Start(_ntscRom);
+            WindowGame game = Game(window);
+            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.Null(game.EngineNotice);
+            Assert.DoesNotContain("not available", Status(window).Text ?? "");
+            WaitFor(() => game.TotalFrames > 60 && MistressGame.RewindDepth(window) > 0);
+            Assert.Equal("true", MistressGame.Setting(window, "ExpansionPak"));
+            window.Close();
+
+            Choose("Mars (C#)");
+            window = Start(_ntscRom);
+            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.Null(Game(window).EngineNotice);
+            WaitFor(() => Game(window).TotalFrames > 60 && MistressGame.RewindDepth(window) > 0);
+            window.Close();
+        }, default);
+
+        // The hotkey held on MarsRT with its workers and deferred picture: the game goes back, then plays on when let go - see Mars_Native.md §6.6.3.
+        [Fact]
+        public Task Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on() => Session.Dispatch(() =>
+        {
+            Choose(CoreCatalog.MarsRtEngine);
+            MainWindow window = Start(_ntscRom);
+            WindowGame game = Game(window);
+            WaitFor(() => game.TotalFrames > 150 && MistressGame.RewindDepth(window) > 4);
+            Assert.True(MistressGame.Setting(window, "ThreadedRdp") == "true" && MistressGame.Setting(window, "DeferredPresentation") == "true", "Mistress did not give MarsRT its workers and the deferred picture");
+
+            long reached = game.TotalFrames;
+            FieldInfo held = typeof(MainWindow).GetField("_rewindHeld", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            held.SetValue(window, true);
+            WaitFor(() => game.TotalFrames < reached - 40);
+            held.SetValue(window, false);
+            long back = game.TotalFrames;
+            WaitFor(() => game.TotalFrames > back + 60);
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task A_state_saved_and_loaded_by_the_hotkeys_on_MarsRT_takes_the_game_back_to_it() => Session.Dispatch(() =>
+        {
+            Choose(CoreCatalog.MarsRtEngine);
+            MainWindow window = Start();
+            WindowGame game = Game(window);
+
+            Status(window).Text = "";
+            Invoke(window, "SaveState");
+            WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
+            string state = StatePath(window);
+
+            long saved = BitConverter.ToInt64(File.ReadAllBytes(state), 12);
+            Assert.True(saved > 20);
+
+            WaitFor(() => game.TotalFrames > saved + 60);
+            Status(window).Text = "";
+            Invoke(window, "LoadState");
+            WaitFor(() => Status(window).Text?.StartsWith("State loaded") == true);
+            window.PauseEmulation();
+            WaitUntilParked(window);
+
+            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.InRange(game.TotalFrames, saved, saved + 60);
             window.Close();
         }, default);
 
@@ -132,11 +205,11 @@ namespace EmuSen.WiseMan.Mistress
             }
         }
 
-        private MainWindow Start()
+        private MainWindow Start(string? rom = null)
         {
             var window = new MainWindow();
             window.Show();
-            Invoke(window, "LoadRom", _rom, "System.z64");
+            Invoke(window, "LoadRom", rom ?? _rom, Path.GetFileName(rom ?? _rom));
             WaitFor(() => Game(window).TotalFrames > 20);
             return window;
         }

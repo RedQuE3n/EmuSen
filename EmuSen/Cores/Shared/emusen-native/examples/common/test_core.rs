@@ -154,6 +154,10 @@ pub const STATUS_OLD_HOST: i32 = -1999;
 /// Not a fault, since 1.13: an image whose payload begins with `HELD_CHEATS` holds the cheats at the end of every
 /// fourth frame, its own pokes and a host's, as a console whose cheat device holds off does (EmuSen_CoreAPI.md §6.37).
 pub const HELD_CHEATS: u8 = 0xC4;
+/// Not a fault, since 2026-11-04: an image whose payload begins with `SLOW_SNAPSHOT` takes `SLOW_SNAPSHOT_MS` to save
+/// its state, longer than a frame, so that a host's rule for a snapshot longer than a frame can be held through its API.
+pub const SLOW_SNAPSHOT: u8 = 0x5D;
+pub const SLOW_SNAPSHOT_MS: u64 = 40;
 /// The test core's one unit (since 1.13): the timer, its count and the frames it has run.
 pub const TIMER_UNIT: u32 = 256;
 /// RAM's byte whose bit n says port n has no controller (`PRESENCE`, since 1.13), kept in the state as a console keeps it.
@@ -244,6 +248,8 @@ pub struct TestCore {
     lent: bool,
     /// `PAINTED`: whether the picture is the libretro test core's, its painter on the lent device, and this frame's record.
     painted: bool,
+    /// `SLOW_SNAPSHOT`: whether a state takes longer than a frame to save.
+    slow_snapshot: bool,
     painter: Option<Box<dyn Paint>>,
     handed: Option<DeviceFrame>,
     /// `RAW_PICTURE` (since 1.10): the encodings kept, and the red byte of each pixel of the last frame drawn while
@@ -345,6 +351,7 @@ impl TestCore {
             shared_console: r.shared_console,
             lent: r.device.is_some(),
             painted: body.first() == Some(&PAINTED),
+            slow_snapshot: body.first() == Some(&SLOW_SNAPSHOT),
             painter: r.device.as_ref().filter(|_| body.first() == Some(&PAINTED)).and_then(|d| PAINTER.and_then(|make| make(d))),
             handed: None,
             raw_mask: 0,
@@ -485,6 +492,9 @@ impl StateMachine for TestCore {
     }
 
     fn save_state(&self, out: &mut [u8]) -> Result<usize, StateError> {
+        if self.slow_snapshot {
+            std::thread::sleep(std::time::Duration::from_millis(SLOW_SNAPSHOT_MS));
+        }
         let n = self.state_size();
         let out = out.get_mut(..n).ok_or(StateError::TooSmall)?;
         out[..4].copy_from_slice(MAGIC);

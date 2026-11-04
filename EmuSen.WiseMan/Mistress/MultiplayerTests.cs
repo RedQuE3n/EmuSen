@@ -96,6 +96,22 @@ namespace EmuSen.WiseMan.Mistress
 
         private static void Poll(MainWindow w) => typeof(MainWindow).GetMethod("PollGamepad", Hidden)!.Invoke(w, null);
 
+        // Each N64 port as the session's machine holds it after one frame: its state saved through the API and read by a MarsRT of the test's own.
+        private (bool Present, ushort Buttons, sbyte StickX)[] N64PortsAfterAFrame(MainWindow window)
+        {
+            MistressGame.RunFrames(window, 1);
+            string state = Path.Combine(Path.GetTempPath(), "EmuSenMultiplayerN64_" + Guid.NewGuid().ToString("N") + ".state");
+            try
+            {
+                MistressGame.Of(window).Crystal.SaveState(state);
+                using var reader = new MarsRtTestCore() { Options = TestCores.NoBattery };
+                reader.LoadRom(MistressGame.Info(window).GetProperty("game").GetProperty("path").GetString()!);
+                reader.LoadState(state);
+                return N64Ports(reader);
+            }
+            finally { File.Delete(state); }
+        }
+
         // Each N64 port as MarsRT's state holds it, found by the state layout's names - see Mars_Serial.md §3.
         private static (bool Present, ushort Buttons, sbyte StickX)[] N64Ports(CoreEngine core)
         {
@@ -249,6 +265,31 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal((SnesB, SnesStart), SnesPads(window));
             window.KeyRelease(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null);
             Assert.Equal((SnesB, (ushort)0), SnesPads(window));
+            window.Close();
+        }, default);
+
+        // Four pads on the N64, each port plugged in as its player's pad is, and a fifth pad, which no port hears.
+        [Fact]
+        public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
+            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Poll(window);
+            // Every port holds a controller at create; the ports no player holds are emptied as the next frame starts - see EmuSen_CoreAPI.md §6.36.
+            Assert.Equal(new[] { true, false, false, false }, N64PortsAfterAFrame(window).Select(p => p.Present));
+
+            PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4"), first.Plug("Pad 5") };
+            Poll(window);
+            // A controller plugged in reaches the machine as the next frame starts, the adapter's rule for every v1 core - see Mars_Native.md §7.5.
+            Assert.Equal(new[] { true, true, true, true }, N64PortsAfterAFrame(window).Select(p => p.Present));
+
+            for (int i = 0; i < others.Length; i++) others[i].Pad.Press(SDL.GamepadButton.East);
+            others[2].Pad.SetAxis(SDL.GamepadAxis.LeftX, 1);
+            Poll(window);
+            var ports = N64PortsAfterAFrame(window);
+            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, ports.Select(p => p.Buttons));
+            Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, ports.Select(p => p.StickX));
+            Assert.Equal(5, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[4]));
             window.Close();
         }, default);
 

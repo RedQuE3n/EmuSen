@@ -148,6 +148,54 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // The runtime's refusal by the record, in its words, posted when the load returns; a version the machine does not read is StateRefusalTests' - see EmuSen_Backend.md §14.12, §18.10.11.
+        [Theory]
+        [InlineData("SNES", 0, "SNES core")]
+        public Task A_state_from_another_console_is_refused_before_the_core_reads_it(string? console, int newer, string says) => Session.Dispatch(() =>
+        {
+            string rom = Counter();
+            MainWindow window = Open();
+            Invoke(window, "LoadRom", rom, "Counter.z64");
+            WaitFor(() => Field(window, "_currentRomMd5") is string);
+            SaveSlot(window);
+            string state = SaveLibrary.StatePathFor(rom, 1, _states);
+            StateRecord saved = States(window).ReadState(state)!;
+            Assert.True(States(window).WriteState(state, saved with { Console = console ?? saved.Console, StateVersion = saved.StateVersion + newer }));
+
+            Status(window).Text = "";
+            Invoke(window, "LoadState");
+            WaitFor(() => !string.IsNullOrEmpty(Status(window).Text));
+
+            Assert.StartsWith("Load State:", Status(window).Text);
+            Assert.Contains(says, Status(window).Text);
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task A_state_from_a_different_copy_of_the_game_is_asked_about_and_not_loaded_if_declined() => Session.Dispatch(() =>
+        {
+            string rom = Counter();
+            MainWindow window = Open();
+            Invoke(window, "LoadRom", rom, "Counter.z64");
+            WaitFor(() => Field(window, "_currentRomMd5") is string);
+            SaveSlot(window);
+            string state = SaveLibrary.StatePathFor(rom, 1, _states);
+            Assert.True(States(window).WriteState(state, States(window).ReadState(state)! with { RomMd5 = new string('0', 32), RomFile = "Counter (Beta).z64" }));
+
+            Status(window).Text = "";
+            Invoke(window, "LoadState");
+            WaitFor(() => window.OwnedWindows.Count > 0);
+            Window ask = window.OwnedWindows.Single();
+            Assert.Contains(ask.GetVisualDescendants().OfType<TextBlock>(), t => t.Text?.Contains("Counter (Beta).z64") == true);
+            ask.Close();
+            Dispatcher.UIThread.RunJobs();
+            Thread.Sleep(100);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.DoesNotContain("State loaded", Status(window).Text ?? "");
+            window.Close();
+        }, default);
+
         [Fact]
         public Task A_collection_made_from_the_sidebar_shows_its_games_and_deleting_it_leaves_them() => Session.Dispatch(() =>
         {
@@ -191,10 +239,16 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         private static GameRecords Records(MainWindow w) => (GameRecords)Field(w, "_records")!;
-        // The runtime's records, read as records.db's were.
+        // The runtime's records, read through the API and written into its states.db as the runtime writes them, as records.db's were.
         private sealed class RuntimeStates
         {
             public StateRecord? ReadState(string path) => StatesDb.Read(MistressGame.Runtime, path);
+
+            public bool WriteState(string path, StateRecord record)
+            {
+                StatesDb.Write(Path.Combine(DataStore.Library, "states.db"), path, record);
+                return true;
+            }
         }
 
         private static RuntimeStates States(MainWindow w) => new();

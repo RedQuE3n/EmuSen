@@ -91,6 +91,31 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        [Fact]
+        public Task A_state_loaded_by_the_hotkey_while_the_game_runs_takes_the_machine_back_to_it() => Session.Dispatch(() =>
+        {
+            MainWindow window = Start();
+            SaveThroughTheHotkey(window);
+            long saved;
+            using (MarsRtTestCore state = Load(StatePath(window))) saved = state.TotalFrames;
+
+            WaitFor(() => Game(window).TotalFrames > saved + 60);
+
+            Status(window).Text = "";
+            Invoke(window, "LoadState");
+            WaitFor(() => Status(window).Text?.StartsWith("State loaded") == true);
+            window.PauseEmulation();
+            WaitUntilParked(window);
+
+            Assert.InRange(Game(window).TotalFrames, saved, saved + 60);
+            // The parked machine saved through the session's own call and read back by a MarsRT of its own, outside the window's session.
+            string parked = Path.Combine(_root, "parked.state");
+            MistressGame.Of(window).Crystal.SaveState(parked);
+            using (MarsRtTestCore loaded = Load(parked)) AssertOneInstant(loaded);
+
+            window.Close();
+        }, default);
+
         private MainWindow Start()
         {
             var window = new MainWindow();

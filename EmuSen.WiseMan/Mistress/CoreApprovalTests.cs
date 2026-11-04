@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json.Nodes;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Headless;
@@ -43,6 +44,7 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            MistressGame.Runtime.Rescan();
         }
 
         private void Answer(bool approve) => Confirm.SetValue(null, (Func<MainWindow, string, string, Task<bool>>)((_, _, message) => { _asked++; _message = message; return Task.FromResult(approve); }));
@@ -64,6 +66,60 @@ namespace EmuSen.WiseMan.Mistress
             File.Copy(CoreSidecar.PathFor(built), CoreSidecar.PathFor(copy));
             return copy;
         }
+
+        // The plain test core in the player's Cores folder as an engine of its own, "Approval Core", the one engine of the files ending .apt, and the window's runtime listing it again.
+        private string PlayersCore()
+        {
+            string copy = Core(DataStore.Cores);
+            var sidecar = (JsonObject)JsonNode.Parse(File.ReadAllText(CoreSidecar.PathFor(copy)))!;
+            sidecar["info"]!["id"] = "approval-core";
+            sidecar["info"]!["display_name"] = "Approval Core";
+            var system = (JsonObject)sidecar["info"]!["systems"]![0]!;
+            system["id"] = "approval";
+            system["extensions"] = new JsonArray(".apt");
+            File.WriteAllText(CoreSidecar.PathFor(copy), sidecar.ToJsonString());
+            MistressGame.Runtime.Rescan();
+            return copy;
+        }
+
+        private string PlayersGame()
+        {
+            string path = Path.Combine(_root, "game.apt");
+            File.WriteAllBytes(path, CoreAdapterTests.Image(1, 2, 3, 4));
+            return path;
+        }
+
+        [Fact]
+        public Task A_players_core_is_asked_about_once_and_approved_through_the_runtime() => Session.Dispatch(() =>
+        {
+            string core = PlayersCore();
+            Answer(approve: true);
+            var window = new MainWindow();
+            Ask(window, PlayersGame()).GetAwaiter().GetResult();
+            Ask(window, PlayersGame()).GetAwaiter().GetResult();
+            Assert.Equal(1, _asked);
+            Assert.Contains(CoreSidecar.HashOf(core), _message!.Replace(" ", "").Replace("\n", ""));
+            Assert.Contains("full permissions", _message);
+            Assert.Contains(Path.GetFileName(core), _message);
+            Assert.Equal($"{CoreSidecar.HashOf(core)}  {Path.GetFileName(core)}\n", File.ReadAllText(CoreTrust.ApprovalsPath));
+            window.Close();
+        }, default);
+
+        [Fact]
+        public Task Declined_nothing_is_recorded_and_a_shipped_core_is_never_asked_about() => Session.Dispatch(() =>
+        {
+            PlayersCore();
+            Answer(approve: false);
+            var window = new MainWindow();
+            Ask(window, PlayersGame()).GetAwaiter().GetResult();
+            Assert.Equal(1, _asked);
+            Assert.False(File.Exists(CoreTrust.ApprovalsPath));
+
+            // The build's own test core, vouched for by its manifest, runs the .tst game with no question.
+            Ask(window, Game()).GetAwaiter().GetResult();
+            Assert.Equal(1, _asked);
+            window.Close();
+        }, default);
 
         private string Game()
         {

@@ -9679,7 +9679,8 @@ the Rust alone against the files passed 38 of 38.
   log from a test is to be avoided), and the C# shell's variable is refused in words.
 - `CSharpImplementationFact`, `CSharpImplementationTheory` and their 17 cases (§29.27, §35). Each reached the C#
   machine, its rewind buffer, debug target or ports, moved the C# discovery's directories, or forged a record through
-  the C# `StateRecords`. None was rewritten over the API (Q2).
+  the C# `StateRecords`. *Decided 2026-11-04 by the tester* (Q2): each is written again over the API under its own
+  name, asserting what it asserted; §40.8.1 lists them.
 - `RustImplementationFact` became `Fact`, since `=0` no longer skips anything.
 - `CrystalHeaderTests` lost the C# mirror's half (its exports' signatures, `CrystalNumbers` and the four structs'
   layout). The binding's half is unchanged. `DivergenceRowTests`' row 1 attached a C# engine that withholds rewind,
@@ -9734,8 +9735,48 @@ that no played release is needed.
   in-process onto the API or the kit, then deleting `CoreDiscovery`, `CoreEngine`, `CoreFactory`, `CoreCatalog` and
   the engine SPI (about 4,000 lines). *Recommended:* yes, after DIANASH, since the C# shell's debugger reaches cores
   through the same host.
-- **Q2** [routine]: the 17 removed cases held player paths: rewind and states on MarsRT, MoonRT and VenusRT, the
-  N64's four ports in a big-screen session, a state from another console or another copy of the game, a player's core
-  asked about once, a missing core library's words, and a card made once through the binding. Whether each has a
-  Rust-run twin was not checked case by case. *Recommended:* write each over the API (`session_info`, `rewind_reel`,
-  `state_record`) with the next Mistress work that touches it.
+- **Q2** [routine]: the 17 C#-only cases held player paths; should they be written over the API? *Decided 2026-11-04
+  by the tester: yes, now.* Done in §40.8.1.
+
+#### 40.8.1 The seventeen cases, written over the API (2026-11-04)
+
+Each case keeps its name and its class, and asserts what it asserted, read through the frontend API where it read the
+C# machine. Three helpers serve them: `MistressGame.Engine`, `RewindDepth` and `Setting` read `session_info`,
+`rewind_reel` and `settings_get`. `RewindDepth` fails in the runtime's words when rewind is withheld. `StatesDb.Write`
+forges a row of the runtime's states.db.
+
+| Class: case | What it holds | Read now through |
+|---|---|---|
+| `MarsRtEngineTests`: a game runs on MarsRT with rewind, and still does when the retired Mars is stored | the engine, no notice, frames and rewind history, the Expansion Pak on; a stored "Mars (C#)" runs MarsRT | `session_info`'s `engine`, `rewind_reel`, `settings_get` |
+| `MarsRtEngineTests`: holding rewind steps the game back, letting go plays it on | the workers and deferred picture given; the hotkey's hold and release | `settings_get`, `rewind_reel`, the frame count |
+| `MarsRtEngineTests`: a state saved and loaded by the hotkeys takes the game back to it | the frame after the load within 60 of the saved one, on MarsRT | `session_info` |
+| `MoonRtEngineTests`: a stored C# choice plays on MoonRT with rewind and its states | the engine, no notice, rewind history; the saved state loads elsewhere with its frames | `session_info`, `rewind_reel`, a second runtime's `state_load` |
+| `MoonRtEngineTests`, `VenusRtEngineTests`, `MercuryRtFallbackTests`: without the library a game does not load and says why | "This build has no NES (SNES, Game Boy) core: … is missing (no sidecar for it was found beside the program)." | `open` on a runtime of the test's over an empty folder |
+| `VenusRtEngineTests`: a game runs on VenusRT, and a stored Venus (C#) runs it too | the route's engine both ways, the session's engine, no notice, rewind history | `route`, `session_info`, `rewind_reel` |
+| `MainWindowSaveStateThreadTests`: a state loaded by the hotkey takes the machine back to it | the frame after the load, and the parked machine's state one instant | the session's `state_save`, read by a MarsRT of the test's |
+| `MultiplayerTests`: four pads play the N64's four ports in a big-screen session | each port's presence, buttons and stick after a frame; the fifth pad is player 5 | the session's `state_save` after one frame, read by a MarsRT of the test's with the state layout |
+| `PadRewindReelTests`: with no history the row says so and opens nothing | the row's words and that it opens no reel | the chain emptied by `rewind_set` off |
+| `CoreApprovalTests`: a player's core is asked about once and approved through the runtime | one question naming the hash, permissions and file; the approvals file's line | the window's runtime rescanning the player's `Cores` folder |
+| `CoreApprovalTests`: declined, nothing is recorded, and a shipped core is never asked about | one question; no approvals file; the build's test core, in its manifest, asked nothing | the same |
+| `IdentityAndCollectionsTests`: a state from another console is refused before the core reads it | "Load State:" and the console named | a row forged in states.db |
+| `IdentityAndCollectionsTests`: a state from another copy of the game is asked about, not loaded if declined | the question names the other file; nothing loads | the same |
+| `DivergenceRowTests`: row 1, rewind capture gated by the engine for every client | depth 0, `rewind_capture` false and the words; another session keeps capturing | `rewind_reel`, `session_info` |
+| `BindingChangesOnceTests`: a card made through the binding is made once and said done | done the first time, "already exists" the second | `cards_op` on a runtime over the build's engines |
+
+**What the port needed beyond the tests.**
+- *Row 1.* The Rust withholds rewind for one reason, a snapshot longer than a frame (§38), where the C# took an
+  engine's declaration. The test core gains an image tag for it, `SLOW_SNAPSHOT` (`0x5D`), whose state takes 40 ms
+  to save. No existing image begins with that byte.
+- *MarsRT's rewind.* The two rewind cases first failed with `rewind is withheld: a snapshot of MarsRT (Rust) takes
+  4 ms, longer than a frame (2.8 ms)`. `SyntheticN64System` sets a short VI line on purpose, so the machine runs
+  about 357 fields a second, and §38's rule holds at that rate. This is no defect: a game at NTSC's rate has a frame
+  of 16.7 ms. The cases now run the same program with NTSC's line length (`fullLines`), and the hold case waits for
+  five moments rather than twenty-one, since moments come six times more slowly.
+- *A missing library.* The window's runtime is one a process and always finds the build's cores, so the words are held
+  at the API. `MoonRtEngineTests` also holds the window's side of a refusal (no session; "Failed to load …: " and the
+  runtime's words) with a file no core takes.
+
+**Tested** (2026-11-04): the classes above with `CrystalParityTests`, `CoreHostParityTests`, `GalaxiaParityTests`,
+`OffDispatcherTests`, `TestCollectionsTests` and `FrontendReferenceTests`: 191 of 191. Seeded faults, each reverted and
+each caught by its case: Mistress never approving (`CoreApprovalTests`), the reel row never saying "nothing to go back
+to yet" (`PadRewindReelTests`), and the status line dropping the runtime's words (`MoonRtEngineTests`).

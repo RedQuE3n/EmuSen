@@ -90,6 +90,51 @@ namespace EmuSen.WiseMan.Mistress
 
         private static WindowGame Game(MainWindow window) => new(window);
 
+        // A stored Moon (C#) runs the game on MoonRT with no notice; frames, rewind and a state saved and loaded all work there.
+        [Fact]
+        public Task A_stored_csharp_choice_plays_on_MoonRT_with_rewind_and_its_states() => Session.Dispatch(() =>
+        {
+            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            Choose("Moon (C#)");
+            MainWindow window = Start();
+            WindowGame game = Game(window);
+            Assert.Equal(CoreCatalog.MoonRtEngine, MistressGame.Engine(window));
+            Assert.Null(game.EngineNotice);
+            Assert.DoesNotContain("not available", Status(window).Text ?? "");
+            WaitFor(() => game.TotalFrames > 90 && MistressGame.RewindDepth(window) > 0);
+
+            Status(window).Text = "";
+            Invoke(window, "SaveState");
+            WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
+            string state = StatePath(window);
+            window.Close();
+            using var reader = new EmuSen.Crystal.Client.CrystalRuntime();
+            using var opened = reader.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _rom, NoBattery = true });
+            opened.LoadState(state);
+            using var info = System.Text.Json.JsonDocument.Parse(opened.Info());
+            Assert.Equal(CoreCatalog.MoonRtEngine, info.RootElement.GetProperty("engine").GetString());
+            Assert.True(info.RootElement.GetProperty("total_frames").GetInt64() > 60);
+        }, default);
+
+        // A build without MoonRT's library, or its sidecar, opens no NES game and says why in the player's words; the window's own runtime always finds the build's cores, so a runtime of the test's names the missing one.
+        [Fact]
+        public Task Without_its_library_an_nes_game_does_not_load_and_the_status_says_why() => Session.Dispatch(() =>
+        {
+            using (var runtime = new EmuSen.Crystal.Client.CrystalRuntime(new EmuSen.Crystal.Client.CrystalRuntimeOptions { Cores = new[] { Path.Combine(_root, "nothing") } }))
+            {
+                var refused = Assert.Throws<EmuSen.Crystal.Client.CrystalException>(() => runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _rom, NoBattery = true }));
+                Assert.Equal($"This build has no NES core: {CoreCatalog.MoonRtEngine} is missing (no sidecar for it was found beside the program).", refused.Message);
+            }
+            // The window takes a refusal of the runtime's into its status line and holds no session.
+            string unknown = Path.Combine(_root, "Program.xyz");
+            File.WriteAllBytes(unknown, new byte[16]);
+            var window = new MainWindow();
+            window.Show();
+            Invoke(window, "LoadRom", unknown, "Program.xyz");
+            Assert.Null(typeof(MainWindow).GetField("_session", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.StartsWith("Failed to load Program.xyz: No core in this build handles '.xyz'", Status(window).Text ?? "");
+            window.Close();
+        }, default);
 
         private static string StatePath(MainWindow window) =>
             (string)typeof(MainWindow).GetProperty("CurrentStatePath", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!;

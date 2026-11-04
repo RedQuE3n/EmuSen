@@ -165,7 +165,7 @@ namespace EmuSen.WiseMan.Mistress
                 if (MistressGame.Live(window) is null) return $"opened on nothing: {status}";
                 bool ran = SpinWait.SpinUntil(() => MistressGame.TotalFrames(window) >= frames, TimeSpan.FromSeconds(120));
                 var info = MistressGame.Info(window);
-                string running = info.GetProperty("path").GetString()!;
+                string running = info.GetProperty("game").GetProperty("path").GetString()!;
                 return $"opened on {info.GetProperty("engine").GetString()} as {info.GetProperty("system").GetString()}, {info.GetProperty("total_frames").GetInt64()} frames{(ran ? "" : " (stopped short)")}, path {(running == path ? "the library's" : running)}: {status}";
             }
             catch (Exception e) { return $"threw {e.GetType().Name}: {e.Message}"; }

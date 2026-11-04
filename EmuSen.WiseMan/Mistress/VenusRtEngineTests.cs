@@ -115,5 +115,46 @@ namespace EmuSen.WiseMan.Mistress
 
         private static WindowGame Game(MainWindow window) => new(window);
 
+        // The engine the window's runtime routes the game to.
+        private string RoutedEngine()
+        {
+            using var route = System.Text.Json.JsonDocument.Parse(MistressGame.Runtime.Route(_rom));
+            return route.RootElement.GetProperty("engine").GetString()!;
+        }
+
+        // A fresh config runs an .sfc on VenusRT on the adapter with rewind, and a stored Venus (C#) runs VenusRT with no notice.
+        [Fact]
+        public Task A_game_runs_on_venusrt_and_a_stored_venus_choice_runs_it_too() => Session.Dispatch(() =>
+        {
+            if (!Found) return;
+            Assert.Null(ConsolesConfig.Load().Value("SNES", CoreCatalog.EngineKey));
+            Assert.Equal(VenusRtCoreAbiTests.Engine, RoutedEngine());
+            foreach (bool stored in new[] { false, true })
+            {
+                if (stored)
+                {
+                    ConsolesConfig config = ConsolesConfig.Load();
+                    config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
+                    config.Save();
+                    Assert.Equal(VenusRtCoreAbiTests.Engine, RoutedEngine());
+                }
+                MainWindow window = Start();
+                WindowGame game = Game(window);
+                Assert.Equal(VenusRtCoreAbiTests.Engine, MistressGame.Engine(window));
+                Assert.Null(game.EngineNotice);
+                WaitFor(() => game.TotalFrames > 60 && MistressGame.RewindDepth(window) > 0);
+                window.Close();
+            }
+        }, default);
+
+        // Without VenusRT's library an SNES game does not open, in the player's words; the window's own runtime always finds the build's cores, so a runtime of the test's names the missing one.
+        [Fact]
+        public void Without_the_library_an_snes_game_does_not_load_and_the_status_says_why()
+        {
+            if (!Found) return;
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime(new EmuSen.Crystal.Client.CrystalRuntimeOptions { Cores = new[] { Path.Combine(_root, "NoCores") } });
+            var refused = Assert.Throws<EmuSen.Crystal.Client.CrystalException>(() => runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _rom, NoBattery = true }));
+            Assert.Equal("This build has no SNES core: VenusRT (Rust) is missing (no sidecar for it was found beside the program).", refused.Message);
+        }
     }
 }

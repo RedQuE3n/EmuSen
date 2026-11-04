@@ -1,10 +1,9 @@
 using System;
 using System.Text;
-using EmuSen.Crystal.Systems;
 
-namespace EmuSen.Crystal.Media
+namespace EmuSen.WiseMan.Fixtures
 {
-    // A data track's first sectors as user data, from an .iso's 2,048-byte sectors or a raw track's 2,352-byte ones, and the ISO 9660 lookup a pack's recogniser reads a file by - see EmuSen_CoreAPI_Extensions.md §8.4.
+    // A data track's sectors as user data and its root's ISO 9660 lookup, the check of the synthetic discs; the shipped recognisers are emusen-systems' since 2026-11-04 - see EmuSen_Backend.md §40.1.
     public sealed class DiscSectors
     {
         public const int User = 2048, Raw = 2352;
@@ -75,21 +74,6 @@ namespace EmuSen.Crystal.Media
                 }
             }
             return null;
-        }
-
-        // How far into an image a recogniser reads for a root file, past where a DVD's bridge volume puts its directory and first files - see Sapphire_Native.md §3.2.
-        public const int RootFileLimit = 32 << 20;
-
-        // A root file read through the probe from the first asked bytes on, asking for as much as the volume places it in, up to limit; null where absent, cut short or past the limit.
-        public static byte[]? RootFileThrough(IMediaProbe probe, int asked, byte[] head, string name, int limit)
-        {
-            while (true)
-            {
-                if (new DiscSectors(head).Reach(name, out long needs) is { } file) return file;
-                if (needs <= asked || needs > limit || head.Length < asked) return null;
-                asked = (int)needs;
-                head = probe.Read(asked);
-            }
         }
     }
 }

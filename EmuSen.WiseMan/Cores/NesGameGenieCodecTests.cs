@@ -109,7 +109,8 @@ namespace EmuSen.WiseMan.Cores
             foreach (string line in MesenCases)
             {
                 string[] parts = line.Split(' ');
-                (int address, byte value, byte? compare) = NesGameGenieCodec.DecodeFull(parts[0]);
+                (int address, byte value) = NesSystem.GameGenie().Decode(parts[0]);
+                byte? compare = NesSystem.GameGenie().DecodeCompare(parts[0]);
 
                 Assert.Equal(int.Parse(parts[1], NumberStyles.HexNumber), address);
                 Assert.Equal(byte.Parse(parts[2], NumberStyles.HexNumber), value);

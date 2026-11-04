@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             string path = Path.Combine(DataStore.Saves, "PlayStation", game + ".mcr");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.WriteAllBytes(path, SaveMediaManagerTests.WithSave(PsxCardFormat.Instance.Format(), save, game, new[] { block }, 7));
+            File.WriteAllBytes(path, SaveMediaManagerTests.WithSave(PsxCardFormat.Instance.Format()!, save, game, new[] { block }, 7));
             return path;
         }
 

@@ -24,7 +24,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             graphics.Save();
             string card = SaveLibrary.CardPathFor("PlayStation", "Card 1", ".mcr");
             Directory.CreateDirectory(Path.GetDirectoryName(card)!);
-            byte[] saves = SaveMediaManagerTests.WithSave(SaveMediaManagerTests.WithSave(PsxCardFormat.Instance.Format(), "BASLUS-00067DRACULA", "ＤＲＡＣＵＬＡ　Ｘ　ＣＨＲＯＮＩＣＬＥ　ＳＡＶＥ", new[] { 0 }, 1), "BESCES-00344TOMB", "Tomb Raider II, Venice, a long title", new[] { 1, 2, 3 }, 2);
+            byte[] saves = SaveMediaManagerTests.WithSave(SaveMediaManagerTests.WithSave(PsxCardFormat.Instance.Format()!, "BASLUS-00067DRACULA", "ＤＲＡＣＵＬＡ　Ｘ　ＣＨＲＯＮＩＣＬＥ　ＳＡＶＥ", new[] { 0 }, 1), "BESCES-00344TOMB", "Tomb Raider II, Venice, a long title", new[] { 1, 2, 3 }, 2);
             File.WriteAllBytes(card, saves);
             File.WriteAllBytes(Path.Combine(DataStore.Saves, "PlayStation", "Amber Saga.mcr"), PsxCardFormat.Instance.Format());
             if (held && MediumLock.TryTake(card, "Amber Saga", shared: true) is { } taken) window.Closed += (_, _) => taken.Dispose();

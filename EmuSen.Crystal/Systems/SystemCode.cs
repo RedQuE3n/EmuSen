@@ -9,7 +9,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.Systems
 {
-    // The packs' code in emusen-systems, reached through the platform library under the systems table's switch; each caller keeps its C# as failover - see EmuSen_Backend.md §13.
+    // The packs' code in emusen-systems, reached through the platform library; there is no C# twin since 2026-11-04 - see EmuSen_Backend.md §13, §40.1.
     public static unsafe class SystemCode
     {
         private const int Absent = -1030, BadArgument = -1033, Refused = -1034;
@@ -22,12 +22,6 @@ namespace EmuSen.Crystal.Systems
             "emusen_systems_code", "emusen_systems_recognise", "emusen_systems_route", "emusen_systems_openvgdb", "emusen_systems_header",
             "emusen_systems_disassemble", "emusen_systems_board_name", "emusen_systems_view",
         };
-
-        // The library's code is in use: the switch chose the table.
-        public static bool Active => SystemTable.Active;
-
-        // Whether a text crosses to the library as it is; text that does not stays on the C#.
-        public static bool Takes(string? text) => PlatformText.Crosses(text);
 
         public sealed record MediumModule(string Id, int Length, int Capacity, string Unit);
 
@@ -100,8 +94,8 @@ namespace EmuSen.Crystal.Systems
 
         public static IReadOnlyList<CodecPair> CodecPairs => CodecTable.Value.Pairs;
 
-        // A pack's codec: the library's under the codec's id, the C# codec as its failover, or the C# alone under the switch's 0.
-        public static ICheatCodeCodec Codec(string id, ICheatCodeCodec managed) => Active ? new NativeCheatCodec(id, managed) : managed;
+        // A pack's codec, the library's under the codec's id.
+        public static ICheatCodeCodec Codec(string id) => new NativeCheatCodec(id);
 
         // A code's answers from the library's codec, as JSON.
         internal static JsonDocument CheatDecode(string codec, string code)
@@ -176,27 +170,27 @@ namespace EmuSen.Crystal.Systems
             }
         }
 
-        // The decision among candidates, each claim by the candidate's place; null where a text cannot cross, for the C# to decide.
-        public static Routed? Route(string fileName, string? folder, IReadOnlyList<SystemEntry> candidates, IReadOnlyList<(int At, Recognition Claim)> claims)
+        // The decision among candidates, each claim by the candidate's place; a lone surrogate in a name crosses as U+FFFD.
+        public static Routed Route(string fileName, string? folder, IReadOnlyList<SystemEntry> candidates, IReadOnlyList<(int At, Recognition Claim)> claims)
         {
-            if (!Takes(fileName) || !Takes(folder) || candidates.Any(c => !Takes(c.Id) || !Takes(c.Name) || !Takes(c.EsdeSystem))) return null;
+            static string M(string text) => PlatformText.Mend(text);
             var stream = new System.IO.MemoryStream();
             using (var w = new Utf8JsonWriter(stream))
             {
                 w.WriteStartObject();
-                w.WriteString("file", fileName);
-                if (folder is null) w.WriteNull("folder"); else w.WriteString("folder", folder);
+                w.WriteString("file", M(fileName));
+                if (folder is null) w.WriteNull("folder"); else w.WriteString("folder", M(folder));
                 w.WriteStartArray("candidates");
-                foreach (SystemEntry c in candidates) { w.WriteStartObject(); w.WriteString("id", c.Id); w.WriteString("name", c.Name); w.WriteString("esde", c.EsdeSystem); w.WriteEndObject(); }
+                foreach (SystemEntry c in candidates) { w.WriteStartObject(); w.WriteString("id", M(c.Id)); w.WriteString("name", M(c.Name)); w.WriteString("esde", M(c.EsdeSystem)); w.WriteEndObject(); }
                 w.WriteEndArray();
                 w.WriteStartArray("claims");
                 foreach (var (at, claim) in claims)
                 {
                     w.WriteStartObject();
                     w.WriteNumber("at", at);
-                    w.WriteString("system", claim.SystemId);
-                    if (claim.Serial is null) w.WriteNull("serial"); else w.WriteString("serial", claim.Serial);
-                    if (claim.Region is null) w.WriteNull("region"); else w.WriteString("region", claim.Region);
+                    w.WriteString("system", M(claim.SystemId));
+                    if (claim.Serial is null) w.WriteNull("serial"); else w.WriteString("serial", M(claim.Serial));
+                    if (claim.Region is null) w.WriteNull("region"); else w.WriteString("region", M(claim.Region));
                     w.WriteEndObject();
                 }
                 w.WriteEndArray();
@@ -310,8 +304,8 @@ namespace EmuSen.Crystal.Systems
             });
         }
 
-        // A pack's views: the library's fronting the C# views, or the C# alone under the switch's 0.
-        public static ISystemDebugViews Views(string system, ISystemDebugViews managed) => Active ? new NativeDebugViews(system, managed) : managed;
+        // A pack's views, the library's.
+        public static ISystemDebugViews Views(string system) => new NativeDebugViews(system);
 
         // One view's answer, reading memory in the rounds the view asks for; null where the system has no such view.
         internal static (JsonDocument Answer, byte[] Payload)? View(byte[] request, IReadOnlyList<Debugger.IDebugMemorySpace> spaces)

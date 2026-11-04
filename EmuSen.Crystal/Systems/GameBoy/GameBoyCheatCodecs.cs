@@ -8,17 +8,10 @@ namespace EmuSen.Crystal.Systems.GameBoy
         // The space a GameShark poke lands in: the CPU's bus, as the engine names it.
         public const string CpuBus = "CPUBUS";
 
-        // "Game Genie", not "Game Boy Game Genie", so `add`'s detected-format message reads as it always has.
-        public static ICheatCodeCodec ManagedGameGenie() =>
-            new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null, GbGameGenieCodec.CanDecode, GbGameGenieCodec.Decode, GbGameGenieCodec.DecodeCompare);
+        // Each codec is emusen-systems' under its id - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("gb.gg");
 
-        public static ICheatCodeCodec ManagedGameShark() =>
-            new DelegateCheatCodec("GameShark", CheatCodeKind.RamPoke, CpuBus, GbGameSharkCodec.CanDecode, GbGameSharkCodec.Decode);
-
-        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
-        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("gb.gg", ManagedGameGenie());
-
-        public static ICheatCodeCodec GameShark() => SystemCode.Codec("gb.gs", ManagedGameShark());
+        public static ICheatCodeCodec GameShark() => SystemCode.Codec("gb.gs");
 
         // The pair the engine and a console chosen in the UI get: detected, then explicit.
         public static (ICheatCodeCodec AutoDetect, ICheatCodeCodec Explicit) Pair() => (GameShark(), GameGenie());

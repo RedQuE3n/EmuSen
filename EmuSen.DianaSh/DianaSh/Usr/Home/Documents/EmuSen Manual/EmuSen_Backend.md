@@ -679,7 +679,7 @@ behind a switch until the tester agrees to state 3, and says how it is proven. T
 | **B7** | **Crystal in Rust**: `emusen-crystal` over B1 to B6: sessions and the frame call, input, speed, rewind, states and `states.db`, settings and `consoles.json`, save-media placement, cheat application, the debugger's registries, expressions and bridge, telemetry, the recorder, the session service's table; exported as `emusen_crystal_*` from the platform library. Built in four parts, each graded before the next: (a) life, frame, input, speed, rewind, states, settings, media; (b) the debugger; (c) the service table; (d) the per-program switch | the parity class runs scripted sessions through the binding on both implementations and compares frame and audio digests, state bytes, files written, events drained and every service function's JSON; the debugger's golden corpus with Crystal's table; then state 2 per program: **Pharaoh first**, then emusen-shell, then Mistress, each after a full blast-radius run on Linux and the three systems' CI | `EMUSEN_CRYSTAL_NATIVE=0`, per process, the B2 implementation. *Designed 2026-10-18, §29; its four questions decided the same day (§29.11)* |
 | **B8** | **The library in Rust**: `emusen-library` and `emusen_library.h`; the scan, identity over Galaxia's extended `RomHash`, `games.db` with its migrations, play time, collections and edits; Mistress's `Library/` behind the binding | a parity class: a generated library scanned by both into separate databases, compared row for row; every `games.db` version of the migration tests opened by both; the SQLite rule of `EmuSen_RustPlatform.md` §2.8 kept, one copy of SQLite per process (the C# lends `e_sqlite3` as Q25 there decided) [R]. *Built 2026-10-18, §28: state 2* | `EMUSEN_LIBRARY_NATIVE=0` |
 | **B9** | **Scraping in Rust**, if D13 says so: `emusen-scrape`, the ScreenScraper client, its quota, the media store and `media.db` | recorded ScreenScraper answers replayed to both, the requests compared byte for byte with the credentials redacted (`ScrapeRedactor`), and the stores compared; no live request in a test. *Designed 2026-10-18, §30; its questions in §30.9* | `EMUSEN_SCRAPE_NATIVE=0` |
-| **B10** | **State 3, one component at a time**: goldens recorded from the C# where a step's parity class does not already leave a record (`EmuSen_RustPlatform.md` §6.6) [R], then the C# deleted at the tester's word after a release played | per component, the tester's word | none, by definition |
+| **B10** | **State 3, one component at a time**: goldens recorded from the C# where a step's parity class does not already leave a record (`EmuSen_RustPlatform.md` §6.6) [R], then the C# deleted at the tester's word after a release played. *Decided 2026-11-01 and 2026-11-04: the release condition is dropped and the C# halves go now; the systems table, the packs' code and the file services reached state 3 on 2026-11-04 (§40.1)* | per component, the tester's word | none, by definition |
 
 ★ The smallest first step that gives value.
 
@@ -9614,6 +9614,92 @@ the fallback, and `"reason"` gives the runtime's own words for why. The shape of
 **The C# implementation** stays at the minor it implements, as in §34 and §37. Its `RouteJson` writes the key as null.
 
 ## 40. State 3: the C# halves retired, 2026-11-04
+
+Decided 2026-11-01 by the tester: the old runtime is retired, and the condition of §6's B10 row, a release played on the
+C# before its deletion, is dropped, there being no outside users. Decided 2026-11-04: it is done now, ahead of the
+windows' follow-ons. The reason given was cost: every stage paid for writing a change twice, and three of the
+2026-11-03 landings that failed were gaps between the two halves (a setting written in C# only, the C# scraper behind
+the Rust one, a race in the C# Crystal's save).
+
+Each component is retired in its own landing, in this order: the systems table with the packs' code, and the file
+services (§40.1); Galaxia (§40.2); Endymion (§40.3); the library (§40.4); scraping (§40.5); Serenity (§40.6);
+DianaSh (§40.7); Crystal (§40.8), worked beside them and landed first; and last `PlatformSwitch` itself, once nothing chooses (§40.9). A component whose Rust
+half cannot yet do the C# half's job keeps its number here with the reason. The method is `EmuSen_RustPlatform.md`
+§6.6's [R]: before the C# is deleted, every parity class that compared the halves over generated inputs records the
+C#'s answers as goldens, and the class is then held to the goldens alone.
+
+A leftover `EMUSEN_<NAME>_NATIVE=0` is ignored. The first time the component loads, one line goes to the host's
+diagnostics and the error log: "`EMUSEN_SYSTEMS_NATIVE=0 is ignored: the systems table has had no C# implementation
+since 2026-11-04 and runs on libemusen_platform.so.`" (`RetiredSwitch`, held by `RetiredSwitchTests`).
+
+### 40.1 The systems table, the packs' code and the file services
+
+**What went.** `EMUSEN_SYSTEMS_NATIVE` and `EMUSEN_SERVICES_NATIVE`, and every branch on them, are gone from shipped
+code. Deleted from the systems side: the packs' literal entries and media (`SystemPacks.Literals`, `MediumLiterals`,
+`ManagedCodecs`, and the `Literal` of each pack, the PlayStation 2's, the Saturn's and the Dreamcast's added since B1
+among them), the C# cheat codecs and Game Genie ciphers, the card formats of the PlayStation, the N64 and the Sega CD,
+the recognisers and the routing decision, the iNES and Game Boy header readers, the OpenVGDB rules, the debugger views of
+five consoles, and the 6502, SM83, VR4300 and RSP disassemblers. From the services side: the C# firmware store
+(Galaxia's `SettingFolders.Firmware` with it), the card manager, the `.cht` reader and writer, the database's index,
+pruner and installer, and the `HttpClient` download. Shipped C# lost 5,611 lines and gained 385. Each pack is now its
+table row (`SystemTable.Entry(id)`, `SystemTable.Medium(id, extension, format)`), each codec `SystemCode.Codec(id)`, each
+medium `LibraryMediumFormat`, each pack's views `SystemCode.Views(id)`, and the PlayStation 2 card is the same
+`LibraryMediumFormat` as the others. `DiscSectors`, which no shipped code read once the recognisers had gone, moved to
+WiseMan's fixtures, where the synthetic discs are checked with it.
+
+**Text that could not cross.** The C# halves took over any text the library could not take: a path or name holding a
+lone surrogate. With no C# to fall back on, such a text now crosses with each lone surrogate as U+FFFD
+(`PlatformText.Mend`), which is what .NET's own UTF-8 encoder writes, so a file reached by the name is the file .NET
+would have reached. `CheatCodecParityTests` holds a code holding one to the code holding U+FFFD.
+
+**What the library gained.** Two jobs the C# had done alone moved into Rust, both written on the branch paused on
+2026-10-20 and finished here. (a) The NES's unit views, the sprites, the channels, the address map, the summary and the
+boards' labels, are answered by `emusen_systems_view`, and the Master System's unit label too. (b) The cheat installer
+reads every zip form .NET's `ZipArchive` reads, through Galaxia's `dotnet_zip`: Zip64, data descriptors, Deflate64
+through the `deflate64` crate (0.1.12, MIT, a port of .NET's own inflater; decided 2026-11-01, and listed in
+`THIRD_PARTY_NOTICES.md`), and a failure per entry, refusing a whole archive in .NET's words. Before, the Rust left any
+form but a plain zip to the C#.
+
+**How it is graded now.** The goldens are under `EmuSen.WiseMan/Crystal/Goldens`, one gzip file of one line a case,
+recorded from the C# on 2026-11-04 (`EMUSEN_PARITY_GOLDEN=record`, `ParityGolden`) and checked against the C# and the
+Rust alike before the deletion: 35 files over the table's facts, the recognisers and the bytes each reads, routing,
+OpenVGDB rules, header readers, every codec answer and both Game Genie encoders, the three card formats, the
+disassemblers, the views and the bytes each view reads, the board names, the firmware store, the card manager's
+scripts, the `.cht` texts and writes, and the database's trees. A sweep too large to keep as text is held as digests of
+up to 64 answers (1,000 for the random MIPS words). Three corrections were made to the recording before it was taken as
+final, each found when the Rust was first run against the goldens alone:
+
+1. The view classes digested the bytes a view read before the view had run, since the digest was an argument
+   evaluated ahead of the calls, so every recorded read was the empty digest. The views are now called first; the four
+   view goldens were recorded again.
+2. The `.cht` texts were gathered from WiseMan's sources in the order the file system listed them, so a new source
+   file shifted every case. The class now reads its texts from the golden that holds them.
+3. The NES's unit views are held by their answers alone. The C# had answered them with no Rust twin; the Rust's
+   views give the same answers but read OAM and the cartridge's spaces in another order, and no space they read has a
+   side effect.
+
+Two classes keep a live oracle, because the thing compared is .NET itself rather than EmuSen's C#: the download is held
+to `HttpClient` (`DotNetFetch`, in WiseMan's fixtures) and the installer to `ZipArchive` (`DotNetCheatInstall`), as
+`CheatDownloadParityTests`, `CheatArchiveFormsTests` and the archive case of `CheatServicesParityTests` do.
+
+No test class was deleted. Tests that used a C# codec, view or table as a helper now use the library's through the
+pack: the codecs' decodes, `SystemCode.CheatEncode` for the encoders, the NES palette read back through the library's
+palette view (`NesMasterPalette`). Assertions on C# internals alone were dropped: the SNES Game Genie's digit and order
+tables, the C# DMA register namer, the PlayStation GameShark/Xploder digit test and the C# routing decision beside the
+library's. Two expectations were corrected to the library's answers, which were the C# codecs' answers too: a Mega
+Drive Game Genie address decodes to its word's even address within the cartridge's 4 MiB, and a malformed PlayStation
+code is refused as "neither a PlayStation GameShark nor an Xploder code" by the pack's codec, which tells the two
+apart.
+
+**Seeded faults, 2026-11-04.** Each was seeded, the named classes run, and the source restored. A notice said on every
+call, not once: `RetiredSwitchTests`. A lone surrogate mended to `?` rather than U+FFFD: `CheatCodecParityTests`. The
+NES channels' view ignoring the mutes: `DebugCodeParityTests` (the NES unit views). Deflate64 no longer inflated:
+`CheatArchiveFormsTests`. The PlayStation 2's pack losing its recogniser: `SystemTableParityTests` (two),
+`SystemCodeParityTests` and `SapphireTests`' routing case.
+
+**Not done here.** Galaxia's `MediumLock` keeps its two halves until §40.2; `SaveMediaManagerParityTests` still compares
+them. Galaxia's `archive.rs`, the games' archive reader, reads the central directory with code of its own beside
+`dotnet_zip`; folding the two into one reader is left to §40.2.
 
 ### 40.8 The frontend API: the C# implementation deleted
 

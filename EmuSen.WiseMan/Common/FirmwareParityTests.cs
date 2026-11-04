@@ -5,9 +5,11 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.WiseMan.Fixtures;
 
+using EmuSen.WiseMan.Crystal;
+
 namespace EmuSen.WiseMan.Common
 {
-    // emusen-firmware held to the C# store on generated trees: the folders' order and its reports, every image found whole, split or by content, the overview's facts, and installs - see EmuSen_Backend.md §15.1 and EmuSen_Firmware.md §7.
+    // emusen-firmware held to the C# store's answers, recorded as goldens before it was deleted, on generated trees: the folders' order and its reports, every image found whole, split or by content, the overview's facts, and installs - see EmuSen_Backend.md §15.1, §40.1 and EmuSen_Firmware.md §7.
     [Collection(TestCollections.ProcessGlobals)]
     public class FirmwareParityTests : IDisposable
     {
@@ -36,10 +38,12 @@ namespace EmuSen.WiseMan.Common
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        private static void Same(string managed, string native)
-        {
-            if (managed != native) Assert.Fail($"C#:   {managed}\nRust: {native}");
-        }
+        private ParityGolden? _golden;
+
+        // A text with the test's own folders named as the golden names them.
+        private string Plain(string text) => text.Replace(_root, "<root>", StringComparison.Ordinal).Replace(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "<home>", StringComparison.Ordinal);
+
+        private void Same(string answer) => _golden!.Add(_golden.Count.ToString(), Plain(answer));
 
         private static string Shown(FirmwareFound? f) => f is null ? "none" : $"{f.Folder} [{string.Join(",", f.Names)}] {string.Join(",", f.Parts.Select(p => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(p))[..16] + ":" + p.Length))}{(f.ByContent ? " by content" : "")}";
 
@@ -47,7 +51,7 @@ namespace EmuSen.WiseMan.Common
 
         private static string Md5(byte[] bytes) => Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(bytes));
 
-        // A value of every kind §7.7 names, in an order that leaves each half's memory of what it said in the same state.
+        // A value of every kind §7.7 names, in the order whose reports the golden holds.
         private IEnumerable<string?> Settings()
         {
             string file = Path.Combine(_root, "a-file");
@@ -66,15 +70,13 @@ namespace EmuSen.WiseMan.Common
         {
             var settings = Settings().ToArray();
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var managed = new List<string>();
-            foreach (string? value in settings) managed.Add($"{value}: {string.Join(" | ", FirmwareLibrary.Managed.Folders(new AppSettings { FirmwareDirectory = value }))}");
-            var saidManaged = _said.ToList();
-            _said.Clear();
             var native = new List<string>();
-            foreach (string? value in settings) native.Add($"{value}: {string.Join(" | ", FirmwareNative.Folders(value, home, DataStore.Firmware)!)}");
-            Assert.Equal(managed, native);
-            Same(string.Join("\n", saidManaged), string.Join("\n", _said));
-            Assert.True(saidManaged.Count >= 4, string.Join("\n", saidManaged));
+            foreach (string? value in settings) native.Add($"{value}: {string.Join(" | ", FirmwareNative.Folders(value, home, DataStore.Firmware))}");
+            _golden = new ParityGolden("FirmwareFolders");
+            foreach (string line in native) _golden.Add(_golden.Count.ToString(), Plain(line));
+            Same(string.Join("\n", _said));
+            _golden.Check(27);
+            Assert.True(_said.Count >= 4, string.Join("\n", _said));
         }
 
         // One generated tree: three folders, files of the right size, the wrong one, a folder or a link where a file is asked for, and files that will not open.
@@ -117,30 +119,33 @@ namespace EmuSen.WiseMan.Common
         public void Every_image_of_generated_trees_is_found_and_located_alike()
         {
             int found = 0, split = 0, wrong = 0, content = 0;
+            _golden = new ParityGolden("FirmwareTrees");
             for (int seed = 1; seed <= 150; seed++)
             {
                 var (requests, folders) = Tree(seed);
                 foreach (FirmwareRequest r in requests)
                 {
-                    FirmwareFound? m = FirmwareLibrary.Managed.Find(r, folders);
+                    FirmwareFound? m = FirmwareLibrary.Find(r, folders);
                     string what = $"seed {seed}: {r.FileName} {r.Size} [{string.Join(",", r.AlternateNames)}] [{string.Join(";", r.Parts.Select(p => string.Join(",", p)))}] [{string.Join(",", r.Md5.Select(d => d[..6]))}] in {string.Join(",", folders.Select(Path.GetFileName))}: ";
-                    Same(what + Shown(m), what + Shown(FirmwareNative.Find(r, folders)));
-                    var located = FirmwareLibrary.Managed.Locate(r, folders);
-                    Same(what + Shown(located), what + Shown(FirmwareNative.Locate(r, folders)));
+                    Same(what + Shown(m));
+                    var located = FirmwareLibrary.Locate(r, folders);
+                    Same(what + Shown(located));
                     found += m is null ? 0 : 1;
                     split += m is { Whole: false } ? 1 : 0;
                     wrong += located.WrongSizeIn is null ? 0 : 1;
                     content += m is { ByContent: true } ? 1 : 0;
                 }
             }
+            _golden.Check(1000);
             Assert.True(found > 100 && split > 10 && wrong > 50 && content > 20, $"found {found}, split {split}, wrong {wrong}, by content {content}");
         }
 
-        // The checksum cases of EmuSen_Firmware.md §7.7 on stand-ins of random bytes whose MD5 the test declares: each half answers as the rule says.
+        // The checksum cases of EmuSen_Firmware.md §7.7 on stand-ins of random bytes whose MD5 the test declares: the store answers as the rule says.
         [Fact]
-        public void A_file_is_recognised_by_its_content_alike_in_both_halves()
+        public void A_file_is_recognised_by_its_content_as_the_rule_says()
         {
             var random = new Random(7);
+            _golden = new ParityGolden("FirmwareByContent");
             byte[] Bytes(int n) { var b = new byte[n]; random.NextBytes(b); return b; }
             string Folder(string name) => Directory.CreateDirectory(Path.Combine(_root, "content", name)).FullName;
             string chosen = Folder("chosen"), store = Folder("store"), elsewhere = Folder("elsewhere"), absent = Path.Combine(_root, "content", "absent");
@@ -148,9 +153,9 @@ namespace EmuSen.WiseMan.Common
             var r = new FirmwareRequest("TESTCORE", "WIDGET", "widget.rom", 64, "a made-up chip") { AlternateNames = ["w.bin"], Md5 = [Md5(image), Md5(shortOne)] };
             void Expect(string what, IReadOnlyList<string> folders, string? folder, string? name, bool byContent, byte[]? bytes = null)
             {
-                FirmwareFound? m = FirmwareLibrary.Managed.Find(r, folders), n = FirmwareNative.Find(r, folders);
-                Same(what + ": " + Shown(m), what + ": " + Shown(n));
-                Same(what + ": " + Shown(FirmwareLibrary.Managed.Locate(r, folders)), what + ": " + Shown(FirmwareNative.Locate(r, folders)));
+                FirmwareFound? m = FirmwareLibrary.Find(r, folders);
+                Same(what + ": " + Shown(m));
+                Same(what + ": " + Shown(FirmwareLibrary.Locate(r, folders)));
                 Assert.Equal((what, folder, name, byContent), (what, m?.Folder, m?.Names[0], m?.ByContent ?? false));
                 if (bytes is not null) Assert.Equal(bytes, m!.Parts[0]);
             }
@@ -180,9 +185,10 @@ namespace EmuSen.WiseMan.Common
             Expect("the checksums in the core's order before the names'", [order], order, "b.bin", true, image);
             File.Copy(Path.Combine(order, "b.bin"), Path.Combine(order, "B.bin"));
             Expect("then the names in ordinal order", [order], order, "B.bin", true, image);
+            _golden.Check(18);
         }
 
-        // A file rewritten in place under its name is hashed again by each half, whose memory of checksums is keyed by the modification time too - see EmuSen_Firmware.md §7.6.
+        // A file rewritten in place under its name is hashed again, the memory of checksums being keyed by the modification time too - see EmuSen_Firmware.md §7.6.
         [Fact]
         public void A_file_rewritten_in_place_is_recognised_by_its_new_content()
         {
@@ -191,15 +197,15 @@ namespace EmuSen.WiseMan.Common
             var r = new FirmwareRequest("TESTCORE", "WIDGET", "widget.rom", 64, "a made-up chip") { Md5 = [Md5(then)] };
             var old = r with { Md5 = [Md5(first)] };
             File.WriteAllBytes(file, first);
-            Assert.Equal((true, true), (FirmwareLibrary.Managed.Find(old, [folder]) is not null, FirmwareNative.Find(old, [folder]) is not null));
+            Assert.NotNull(FirmwareLibrary.Find(old, [folder]));
             File.WriteAllBytes(file, then);
             File.SetLastWriteTimeUtc(file, DateTime.UtcNow.AddMinutes(1));
-            Assert.Equal((false, false), (FirmwareLibrary.Managed.Find(old, [folder]) is not null, FirmwareNative.Find(old, [folder]) is not null));
-            Assert.Equal((true, true), (FirmwareLibrary.Managed.Find(r, [folder]) is { ByContent: true }, FirmwareNative.Find(r, [folder]) is { ByContent: true }));
+            Assert.Null(FirmwareLibrary.Find(old, [folder]));
+            Assert.True(FirmwareLibrary.Find(r, [folder]) is { ByContent: true });
         }
 
         [Fact]
-        public void Installs_write_the_same_files_and_refuse_alike()
+        public void Installs_write_and_refuse_as_the_csharp_did()
         {
             var r = new FirmwareRequest("TESTCORE", "WIDGET", "widget.rom", 64, "a made-up chip");
             string picks = Directory.CreateDirectory(Path.Combine(_root, "picks")).FullName;
@@ -209,25 +215,23 @@ namespace EmuSen.WiseMan.Common
             File.SetUnixFileMode(Path.Combine(picks, "locked"), UnixFileMode.None);
             string blocked = Path.Combine(_root, "blocked");
             File.WriteAllBytes(blocked, [1]);
+            _golden = new ParityGolden("FirmwareInstalls");
             foreach (string source in new[] { "right", "short", "locked", "absent" })
                 foreach (string store in new[] { "store", "deep/store", "blocked" })
                 {
-                    string managedStore = store == "blocked" ? blocked : Path.Combine(_root, "m-" + source, store), nativeStore = store == "blocked" ? blocked : Path.Combine(_root, "n-" + source, store);
-                    FirmwareLibrary.Directory = managedStore;
-                    bool m = FirmwareLibrary.Managed.Install(r, Path.Combine(picks, source));
+                    string nativeStore = store == "blocked" ? blocked : Path.Combine(_root, "n-" + source, store);
                     bool n;
                     try { n = FirmwareNative.Install(r, Path.Combine(picks, source), nativeStore); }
                     catch (ServiceFault fault) when (fault.Status == ServiceFault.Io) { n = false; }
-                    FirmwareLibrary.ResetDirectory();
-                    Assert.Equal((source, store, m), (source, store, n));
                     string Contents(string s) => File.Exists(Path.Combine(s, "widget.rom")) ? Convert.ToHexString(File.ReadAllBytes(Path.Combine(s, "widget.rom"))) : "none";
-                    Assert.Equal(Contents(managedStore), Contents(nativeStore));
+                    _golden.Add($"{source} into {store}", $"{n} {Contents(nativeStore)}");
                 }
+            _golden.Check(12);
         }
 
-        // The facade under the switch reaches the same answers as the C# through the public calls.
+        // The public calls find a split image in the player's folder before the store.
         [Fact]
-        public void The_public_calls_answer_as_the_managed_store()
+        public void The_public_calls_find_a_split_image_in_the_chosen_folder()
         {
             string chosen = Directory.CreateDirectory(Path.Combine(_root, "Chosen")).FullName;
             new AppSettings { FirmwareDirectory = chosen }.Save();
@@ -235,7 +239,7 @@ namespace EmuSen.WiseMan.Common
             File.WriteAllBytes(Path.Combine(chosen, "w.lo"), [1, 2, 3, 4]);
             File.WriteAllBytes(Path.Combine(chosen, "w.hi"), [5, 6, 7, 8]);
             Assert.Equal([chosen, DataStore.Firmware], FirmwareLibrary.Folders);
-            Assert.Equal(Shown(FirmwareLibrary.Managed.Find(r, FirmwareLibrary.Folders)), Shown(FirmwareLibrary.Find(r)));
+            Assert.Equal($"{chosen} [w.lo,w.hi] {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(new byte[] { 1, 2, 3, 4 }))[..16]}:4,{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(new byte[] { 5, 6, 7, 8 }))[..16]}:4", Shown(FirmwareLibrary.Find(r)));
             Assert.Equal([1, 2, 3, 4], FirmwareLibrary.TryLoadParts(r)![0]);
             Assert.Null(FirmwareLibrary.TryLoad(r));
             Assert.True(FirmwareLibrary.IsInstalled(r));

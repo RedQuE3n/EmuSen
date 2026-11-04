@@ -1,5 +1,5 @@
-//! The C layer over emusen-firmware, for the C# `FirmwareLibrary` and `FirmwareOverview` behind
-//! `EMUSEN_SERVICES_NATIVE` (EmuSen_Backend.md §15). Each call takes one JSON request; nothing is decided here.
+//! The C layer over emusen-firmware, for the C# `FirmwareLibrary` and `FirmwareOverview`, their only
+//! implementation since 2026-11-04 (EmuSen_Backend.md §15, §40.1). Each call takes one JSON request; nothing is decided here.
 
 use crate::{fail, given, put, report, status};
 use emusen_dotnet::json::{self, Value};

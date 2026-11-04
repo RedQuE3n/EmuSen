@@ -12,25 +12,31 @@ namespace EmuSen.WiseMan.DianaSh
         private static ICheatCodeCodec Poke => SystemPacks.For("md")!.AutoDetectCodec!();
         private static ICheatCodeCodec Patch => SystemPacks.For("md")!.ExplicitCodec!();
 
+        // A Game Genie code's address, the word's even one, and the word it writes, by the library's codec.
+        private static (int, ushort) Genie(string code) => (Patch.Decode(code).Address, (ushort)Assert.Single(Patch.DecodeWrites(code)!).Value);
+
+        private static string Encode(int address, ushort value) => SystemCode.CheatEncode("md.gg", address, value);
+
         [Fact]
         public void The_game_genie_method_documents_worked_example_decodes_to_its_address_and_word()
         {
-            Assert.Equal((0x009C76, (ushort)0x5478), GenesisCheatFormats.DecodeGameGenie("SCRA-BJX0"));
-            Assert.Equal((0x009C76, (ushort)0x5478), GenesisCheatFormats.DecodeGameGenie("scra-bjx0"));
-            Assert.Equal("SCRA-BJX0", GenesisCheatFormats.EncodeGameGenie(0x009C76, 0x5478));
+            Assert.Equal((0x009C76, (ushort)0x5478), Genie("SCRA-BJX0"));
+            Assert.Equal((0x009C76, (ushort)0x5478), Genie("scra-bjx0"));
+            Assert.Equal("SCRA-BJX0", Encode(0x009C76, 0x5478));
         }
 
+        // Every address in the 4 MiB the codec patches, and every word, through the library's encoder and back.
         [Fact]
         public void Every_address_and_word_survives_encoding_and_decoding()
         {
             var random = new Random(1988);
             for (int i = 0; i < 2000; i++)
             {
-                int address = random.Next(0x100_0000);
+                int address = random.Next(0x40_0000);
                 ushort value = (ushort)random.Next(0x1_0000);
-                string code = GenesisCheatFormats.EncodeGameGenie(address, value);
-                Assert.True(GenesisCheatFormats.IsGameGenie(code), code);
-                Assert.Equal((address, value), GenesisCheatFormats.DecodeGameGenie(code));
+                string code = Encode(address, value);
+                Assert.True(Patch.CanDecode(code), code);
+                Assert.Equal((address & ~1, value), Genie(code));
             }
         }
 
@@ -38,7 +44,7 @@ namespace EmuSen.WiseMan.DianaSh
         [InlineData("SCRA-BJIO")]
         [InlineData("SCRABJX0")]
         [InlineData("SCRA-BJX")]
-        public void A_code_outside_the_genies_form_is_not_one(string code) => Assert.False(GenesisCheatFormats.IsGameGenie(code));
+        public void A_code_outside_the_genies_form_is_not_one(string code) => Assert.False(Patch.CanDecode(code));
 
         [Fact]
         public void A_game_genie_code_is_the_word_its_address_falls_in()
@@ -46,7 +52,7 @@ namespace EmuSen.WiseMan.DianaSh
             var writes = Patch.DecodeWrites("SCRA-BJX0")!;
             var w = Assert.Single(writes);
             Assert.Equal((0x009C76, 0x5478u, 2, true), (w.Address, w.Value, w.Width, w.BigEndian));
-            string odd = GenesisCheatFormats.EncodeGameGenie(0x009C77, 0x1234);
+            string odd = Encode(0x009C77, 0x1234);
             Assert.Equal(0x009C76, Assert.Single(Patch.DecodeWrites(odd)!).Address);
         }
 

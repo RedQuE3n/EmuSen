@@ -1,4 +1,4 @@
-//! The C layer over emusen-savemedia, the card manager, for the C# `SaveMediaManager` behind `EMUSEN_SERVICES_NATIVE`,
+//! The C layer over emusen-savemedia, the card manager, for the C# `SaveMediaManager`, its only implementation,
 //! and over Galaxia's medium lock, for the C# `MediumLock` behind Galaxia's own switch (EmuSen_Backend.md §15.2).
 
 use crate::{fail, fail_io, given, put, report, required, status, text};

@@ -155,6 +155,19 @@ namespace EmuSen.Galaxia.Native
     public static class PlatformText
     {
         public static bool Crosses(string? text, bool listed = false) => GalaxiaNative.Crosses(text, listed);
+
+        // The text with each lone surrogate as U+FFFD, which is how .NET's UTF-8 encoder writes it, for a facade with no C# to leave it to - see EmuSen_Backend.md §40.1.
+        public static string Mend(string text)
+        {
+            if (Crosses(text)) return text;
+            var b = new System.Text.StringBuilder(text.Length);
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) b.Append(text[i]).Append(text[++i]);
+                else b.Append(char.IsSurrogate(text[i]) ? '�' : text[i]);
+            }
+            return b.ToString();
+        }
     }
 
     // Galaxia's half of emusen_platform, and the switch that chooses it over the C# - see EmuSen_RustPlatform.md §3.9 and §10.2.

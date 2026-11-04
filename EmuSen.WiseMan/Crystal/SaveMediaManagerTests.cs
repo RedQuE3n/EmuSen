@@ -13,7 +13,7 @@ namespace EmuSen.WiseMan.Crystal
     public class SaveMediaManagerTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSaveMediaManager_" + Guid.NewGuid().ToString("N"));
-        private static readonly PsxCardFormat Psx = PsxCardFormat.Instance;
+        private static readonly ISaveMediumFormat Psx = PsxCardFormat.Instance;
 
         public SaveMediaManagerTests()
         {
@@ -75,7 +75,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_formatted_card_is_psx_spxs_directory_block()
         {
-            byte[] card = Psx.Format();
+            byte[] card = Psx.Format()!;
             Assert.Equal(131_072, card.Length);
             Assert.Equal(new byte[] { (byte)'M', (byte)'C' }, card[..2]);
             Assert.Equal(0x0E, card[0x7F]);
@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_cards_saves_are_listed_with_their_blocks_names_and_titles()
         {
-            byte[] card = WithSave(WithSave(Psx.Format(), "BASLUS-00067DRACULA", "ＤＲＡＣＵＬＡ　１", new[] { 0 }, 0xA1), "BESCES-00344TOMB", "Tomb 2", new[] { 1, 4, 2 }, 0xB2);
+            byte[] card = WithSave(WithSave(Psx.Format()!, "BASLUS-00067DRACULA", "ＤＲＡＣＵＬＡ　１", new[] { 0 }, 0xA1), "BESCES-00344TOMB", "Tomb 2", new[] { 1, 4, 2 }, 0xB2);
             var listing = Psx.Read(card);
             Assert.Equal(new[] { ("BASLUS-00067DRACULA", "DRACULA 1", 1, "SLUS-00067", false), ("BESCES-00344TOMB", "Tomb 2", 3, "SCES-00344", false) },
                 listing.Saves.Select(s => (s.Id, s.Title, s.Units, s.Game, s.Damaged)));
@@ -104,8 +104,8 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_copy_takes_the_lowest_free_blocks_and_writes_the_chain_with_its_checksums()
         {
-            byte[] from = WithSave(Psx.Format(), "BESCES-00344TOMB", "Tomb 2", new[] { 1, 4, 2 }, 0xB2);
-            byte[] to = WithSave(Psx.Format(), "BASLUS-00067DRACULA", "Dracula", new[] { 0 }, 0xA1);
+            byte[] from = WithSave(Psx.Format()!, "BESCES-00344TOMB", "Tomb 2", new[] { 1, 4, 2 }, 0xB2);
+            byte[] to = WithSave(Psx.Format()!, "BASLUS-00067DRACULA", "Dracula", new[] { 0 }, 0xA1);
             MediumEdit edit = Psx.Copy(from, "BESCES-00344TOMB", to);
             byte[] card = edit.Image!;
             Assert.Equal(new uint[] { 0x51, 0x51, 0x52, 0x53 }, Enumerable.Range(1, 4).Select(f => BinaryPrimitives.ReadUInt32LittleEndian(card.AsSpan(f * 128))));
@@ -115,7 +115,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(from[(5 * 8192)..(6 * 8192)], card[(3 * 8192)..(4 * 8192)]);
             Assert.Equal(new[] { "BASLUS-00067DRACULA", "BESCES-00344TOMB" }, Psx.Read(card).Saves.Select(s => s.Id));
             Assert.Contains("already holds", Psx.Copy(from, "BESCES-00344TOMB", card).Refusal);
-            byte[] full = Psx.Format();
+            byte[] full = Psx.Format()!;
             for (int b = 0; b < 15; b++) full = WithSave(full, $"BASLUS-0000{b:X}", "x", new[] { b }, 1);
             Assert.Equal("BESCES-00344TOMB needs 3 block(s) and the card has 0 free", Psx.Copy(from, "BESCES-00344TOMB", full).Refusal);
         }
@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_delete_marks_the_frames_deleted_and_keeps_the_blocks()
         {
-            byte[] card = WithSave(Psx.Format(), "BESCES-00344TOMB", "Tomb 2", new[] { 1, 4, 2 }, 0xB2);
+            byte[] card = WithSave(Psx.Format()!, "BESCES-00344TOMB", "Tomb 2", new[] { 1, 4, 2 }, 0xB2);
             byte[] gone = Psx.Delete(card, "BESCES-00344TOMB").Image!;
             Assert.Equal(new uint[] { 0xA1, 0xA3, 0xA2 }, new[] { 2, 3, 5 }.Select(f => BinaryPrimitives.ReadUInt32LittleEndian(gone.AsSpan(f * 128))));
             Assert.Equal(card[8192..], gone[8192..]);
@@ -134,16 +134,16 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void An_import_is_all_or_none_and_reads_the_games_cards_only()
         {
-            string shared = Card("Cards/Card 1.mcr", WithSave(Psx.Format(), "BASLUS-00001A", "Kept", new[] { 0 }, 1));
-            string amber = Card("Amber Saga.mcr", WithSave(WithSave(Psx.Format(), "BASLUS-00002B", "Amber one", new[] { 0, 1, 2, 3, 4, 5, 6, 7 }, 2), "BASLUS-00001A", "Kept", new[] { 8 }, 1));
-            string basalt = Card("Basalt Run.mcr", WithSave(Psx.Format(), "BASLUS-00003C", "Basalt", new[] { 0, 1, 2, 3, 4, 5, 6 }, 3));
+            string shared = Card("Cards/Card 1.mcr", WithSave(Psx.Format()!, "BASLUS-00001A", "Kept", new[] { 0 }, 1));
+            string amber = Card("Amber Saga.mcr", WithSave(WithSave(Psx.Format()!, "BASLUS-00002B", "Amber one", new[] { 0, 1, 2, 3, 4, 5, 6, 7 }, 2), "BASLUS-00001A", "Kept", new[] { 8 }, 1));
+            string basalt = Card("Basalt Run.mcr", WithSave(Psx.Format()!, "BASLUS-00003C", "Basalt", new[] { 0, 1, 2, 3, 4, 5, 6 }, 3));
             byte[] before = File.ReadAllBytes(shared), amberBefore = File.ReadAllBytes(amber);
             MediaOutcome refused = SaveMediaManager.Import(shared, new[] { amber, basalt });
             Assert.False(refused.Done);
             Assert.Contains("14 free block(s) of 15 and these need 15", refused.Words);
             Assert.Contains("8 block(s)  BASLUS-00002B  Amber one  (from Amber Saga.mcr)", refused.Words);
             Assert.Equal(before, File.ReadAllBytes(shared));
-            File.WriteAllBytes(basalt, WithSave(Psx.Format(), "BASLUS-00003C", "Basalt", new[] { 0, 1, 2, 3, 4, 5 }, 3));
+            File.WriteAllBytes(basalt, WithSave(Psx.Format()!, "BASLUS-00003C", "Basalt", new[] { 0, 1, 2, 3, 4, 5 }, 3));
             MediaOutcome done = SaveMediaManager.Import(shared, new[] { amber, basalt });
             Assert.True(done.Done, done.Words);
             Assert.Equal("2 save(s), 14 block(s), imported onto Card 1.mcr; 1 already on it left as they are", done.Words);
@@ -155,8 +155,8 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_held_card_is_refused_and_a_move_copies_before_it_deletes()
         {
-            string from = Card("Amber Saga.mcr", WithSave(Psx.Format(), "BASLUS-00002B", "Amber", new[] { 0, 1 }, 2));
-            string to = Card("Cards/Card 1.mcr", Psx.Format());
+            string from = Card("Amber Saga.mcr", WithSave(Psx.Format()!, "BASLUS-00002B", "Amber", new[] { 0, 1 }, 2));
+            string to = Card("Cards/Card 1.mcr", Psx.Format()!);
             using (MediumLock.TryTake(to, "Basalt Run", shared: true))
             {
                 MediaOutcome held = SaveMediaManager.CopySave(from, "1", to);
@@ -175,7 +175,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             string blue = Path.Combine(DataStore.Saves, "PlayStation", "Cards", "Blue.mcr"), red = Path.Combine(Path.GetDirectoryName(blue)!, "Red.mcr");
             Assert.True(SaveMediaManager.New(blue).Done);
-            Assert.True(PsxCardFormat.IsFormatted(File.ReadAllBytes(blue)));
+            Assert.Equal(PsxCardFormat.Instance.Format(), File.ReadAllBytes(blue));
             Assert.False(SaveMediaManager.New(blue).Done);
             Assert.True(SaveMediaManager.Duplicate(blue, red).Done);
             Assert.False(SaveMediaManager.Duplicate(blue, red).Done);

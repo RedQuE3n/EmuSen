@@ -1,5 +1,5 @@
 //! The C layer over emusen-cheats, for the C# `ChtFile`, `CheatDatabase`, `CheatDatabasePruner` and
-//! `CheatDatabaseInstaller.Install` behind `EMUSEN_SERVICES_NATIVE` (EmuSen_Backend.md §15.3). A database is a handle,
+//! `CheatDatabaseInstaller.Install`, their only implementation (EmuSen_Backend.md §15.3, §40.1). A database is a handle,
 //! scanned once and never changed, so any thread may ask it.
 
 use crate::{bytes, fail, fail_io, given, put, required, status};
@@ -244,18 +244,27 @@ pub unsafe extern "C" fn emusen_cheats_prune_apply(request_data: *const u8, requ
     answer(run(), out, len)
 }
 
-/// A downloaded archive installed under `target`: out `{"installed", "skipped"}`. NOT_SUPPORTED, having written
-/// nothing, for an archive whose form is left to the C#; IO, NOT_FOUND or ACCESS where the target could not be made.
+/// A downloaded archive installed under `target`, as .NET's reader installs it: out `{"installed", "skipped"}`, with
+/// `threw` (`exception` and `words`) where .NET threw part way, the entries before it written; REFUSED with the JSON
+/// `{"exception", "words"}` as the last error for an archive .NET refuses whole; IO, NOT_FOUND or ACCESS where the target
+/// could not be made.
 ///
 /// # Safety
 /// `zip` must be valid for `zip_len` bytes, `target` for `target_len`; `out` for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_cheats_install(zip: *const u8, zip_len: usize, target: *const u8, target_len: usize, out: *mut u8, len: usize) -> i64 {
+    let thrown = |t: &install::Thrown| object(vec![("exception", Value::string(t.exception)), ("words", Value::string(t.words.as_str()))]);
     let run = || -> Result<String, i32> {
         let (zip, target) = unsafe { (bytes(zip, zip_len)?, required(target, target_len)?) };
         match install::install(zip, target) {
-            Ok(done) => Ok(compact(&object(vec![("installed", Value::number(done.installed)), ("skipped", Value::number(done.skipped))]))),
-            Err(Refusal::Unsupported(why)) => Err(fail(status::NOT_SUPPORTED, why)),
+            Ok((done, threw)) => {
+                let mut members = vec![("installed", Value::number(done.installed)), ("skipped", Value::number(done.skipped))];
+                if let Some(t) = &threw {
+                    members.push(("threw", thrown(t)));
+                }
+                Ok(compact(&object(members)))
+            }
+            Err(Refusal::Thrown(t)) => Err(fail(status::REFUSED, compact(&thrown(&t)))),
             Err(Refusal::Io(e)) => Err(fail_io(&e)),
         }
     };

@@ -1,6 +1,6 @@
 //! The archives a game may be packed in, the C# `ArchiveImages`' reading: a zip's central directory, the entry play
 //! opens, and an entry's first bytes inflated without unpacking. Only a plain zip of stored and deflated entries is read;
-//! the central directory's reader is shared with `emusen-cheats`' installer. See EmuSen_Backend.md §28.2. Since game
+//! `emusen-cheats`' installer reads as .NET does, through `dotnet_zip` (EmuSen_Backend.md §40.1). See §28.2. Since game
 //! packages' step 7 the same plain zip is also written, with each file's time to the tick, and an entry is copied out
 //! whole and checked against its CRC-32 (EmuSen_GamePackages.md §19). Written from PKWARE's APPNOTE.TXT, never from an
 //! archiver's source.

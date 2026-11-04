@@ -137,8 +137,8 @@ namespace EmuSen.WiseMan.Cores
             }
             string smb = Rom(image, "Smb.nes");
             var cheats = new CheatRegistry();
-            var (address, value) = NesGameGenieCodec.Decode("SXIOPO");
-            cheats.AddRomPatch(address, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "infinite lives");
+            var (address, value) = NesSystem.GameGenie().Decode("SXIOPO");
+            cheats.AddRomPatch(address, value, NesSystem.GameGenie().DecodeCompare("SXIOPO"), "infinite lives");
             var coded = (CoreEngine)CoreFactory.Load(smb, cheats: cheats, options: TestCores.NoBattery).Core;
             var plain = (CoreEngine)CoreFactory.Load(smb, options: TestCores.NoBattery).Core;
             for (int f = 0; f < 900; f++)
@@ -167,8 +167,8 @@ namespace EmuSen.WiseMan.Cores
             cheats.AddRomPatch(0xFFFF, 0x01, 0xFF, "last");
             cheats.AddRomPatch(0x4020, 0x02, null, "first");
             cheats.AddRomPatch(0x3FFF, 0x03, null, "below the range");
-            var (gg, value) = NesGameGenieCodec.Decode("SXIOPO");
-            cheats.AddRomPatch(gg, value, NesGameGenieCodec.DecodeCompare("SXIOPO"), "six");
+            var (gg, value) = NesSystem.GameGenie().Decode("SXIOPO");
+            cheats.AddRomPatch(gg, value, NesSystem.GameGenie().DecodeCompare("SXIOPO"), "six");
             int disabled = cheats.AddRomPatch(0x9200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 

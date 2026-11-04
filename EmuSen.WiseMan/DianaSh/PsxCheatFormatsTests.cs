@@ -74,12 +74,12 @@ namespace EmuSen.WiseMan.DianaSh
         [InlineData("C1000000 4000+30002000 0001", "delays the codes")]
         [InlineData("C2001000 0010+80002000 0000", "copies a block")]
         [InlineData("D4000000 0800+30002000 0001", "tests the pad's buttons")]
-        [InlineData("12001000 00000001", "not a PlayStation GameShark code")]
+        [InlineData("12001000 00000001", "neither a PlayStation GameShark nor an Xploder code")]
         [InlineData("D0001000 0005", "guards nothing")]
         [InlineData("50000502 0000+D0001000 0001", "must be followed by the 30 or 80 line")]
         public void A_code_emusen_does_not_apply_is_refused_with_its_reason(string code, string words)
         {
-            var e = Assert.Throws<FormatException>(() => PsxCheatFormats.GameSharkWrites(code));
+            var e = Assert.Throws<FormatException>(() => Either.DecodeWrites(code));
             _output.WriteLine(e.Message);
             Assert.Contains(words, e.Message);
         }
@@ -126,16 +126,13 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 for (int n = 0; n < 2000; n++)
                 {
-                    var plain = new byte[6];
-                    random.NextBytes(plain);
-                    plain[0] &= 0xF8;
-                    var e = Encrypt(plain, key);
-                    var line = new PsxCheatFormats.Line((uint)(e[0] << 24 | e[1] << 16 | e[2] << 8 | e[3]), (ushort)(e[4] << 8 | e[5]));
-                    var d = PsxCheatFormats.Decrypt(line);
-                    Assert.Equal(((uint)(plain[0] << 24 | plain[1] << 16 | plain[2] << 8 | plain[3]), (ushort)(plain[4] << 8 | plain[5])), (d.Command, d.Value));
+                    int address = random.Next(0x20_0000);
+                    byte value = (byte)random.Next(256);
+                    var e = Encrypt(new byte[] { 0x30, (byte)(address >> 16), (byte)(address >> 8), (byte)address, 0, value }, key);
+                    Assert.Equal((address, value), Xploder.Decode($"{e[0]:X2}{e[1]:X2}{e[2]:X2}{e[3]:X2} {e[4]:X2}{e[5]:X2}"));
                 }
             }
-            Assert.Contains("encryption key 2", Assert.Throws<FormatException>(() => PsxCheatFormats.XploderWrites("32001000 0001")).Message);
+            Assert.Contains("encryption key 2", Assert.Throws<FormatException>(() => Xploder.DecodeWrites("32001000 0001")).Message);
         }
 
         [Fact]
@@ -147,7 +144,6 @@ namespace EmuSen.WiseMan.DianaSh
             var e = Encrypt(new byte[] { 0x30, 0x00, 0x10, 0x00, 0x00, 0x42 }, 5);
             string encrypted = $"{e[0]:X2}{e[1]:X2}{e[2]:X2}{e[3]:X2} {e[4]:X2}{e[5]:X2}";
             Assert.Equal((0x1000, (byte)0x42), Xploder.Decode(encrypted));
-            Assert.True(PsxCheatFormats.IsGameShark("D0001000 0001+30001000 0001") && !PsxCheatFormats.IsGameShark("70001000 0005+30002000 0077"));
             foreach (string code in new[] { "40000000 0005+30001000 0001", "B0050002 0001+10001000 0001", "F0001000 0001+30001000 0001" })
                 _output.WriteLine(Assert.Throws<FormatException>(() => Either.DecodeWrites(code)).Message);
         }

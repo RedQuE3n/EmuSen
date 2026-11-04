@@ -5,40 +5,10 @@ namespace EmuSen.Crystal.Systems.GameBoy
     {
         public const string GameBoyId = "gb", GameBoyColorId = "gbc";
 
-        // The C# literals, the failover; each entry is the systems table's row with its literal's code - see EmuSen_Backend.md §12.
-        public static readonly SystemEntry GameBoyLiteral = new(
-            GameBoyId,
-            "Game Boy",
-            "GB",
-            "Nintendo",
-            1989,
-            new[] { ".gb" },
-            new[] { "Nintendo - Game Boy" },
-            new[] { "GB" },
-            file => file,
-            1.0,
-            "gb",
-            "Game Boy",
-            ScreenScraperSystem: 9);
+        // The systems table's rows - see EmuSen_Backend.md §12.
+        public static readonly SystemEntry GameBoy = SystemTable.Entry(GameBoyId), GameBoyColor = SystemTable.Entry(GameBoyColorId);
 
-        public static readonly SystemEntry GameBoyColorLiteral = new(
-            GameBoyColorId,
-            "Game Boy Color",
-            "GBC",
-            "Nintendo",
-            1998,
-            new[] { ".gbc" },
-            new[] { "Nintendo - Game Boy Color" },
-            new[] { "GBC" },
-            file => file,
-            1.0,
-            "gbc",
-            "Game Boy Color",
-            ScreenScraperSystem: 10);
-
-        public static readonly SystemEntry GameBoy = SystemTable.Entry(GameBoyLiteral), GameBoyColor = SystemTable.Entry(GameBoyColorLiteral);
-
-        public static readonly SystemPack GameBoyPack = new(GameBoy, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyId, GameBoyDebugViews.Instance), ByteOrder: "little"),
-            GameBoyColorPack = new(GameBoyColor, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyColorId, GameBoyDebugViews.Instance), ByteOrder: "little");
+        public static readonly SystemPack GameBoyPack = new(GameBoy, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyId)),
+            GameBoyColorPack = new(GameBoyColor, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyColorId));
     }
 }

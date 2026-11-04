@@ -625,6 +625,14 @@ Before a component's C# is deleted (state 3), its parity corpus is run once more
 golden files beside the corpus, so that after the oracle is gone the Rust is still held to what the C# produced.
 They are text and small images; no ROM, firmware or player file is among them.
 
+*As built, 2026-11-04 (`EmuSen_Backend.md` §40).* The goldens are `EmuSen.WiseMan/Crystal/Goldens/*.golden.gz`, one
+line a case, written by `ParityGolden` under `EMUSEN_PARITY_GOLDEN=record` from the C# answers and checked against both
+halves before the deletion; a sweep too large for text is kept as digests. A recording is final only once the Rust has
+passed against it alone: the first such run found the views' read digests taken before the views ran and the `.cht`
+texts gathered in the file system's order, both corrected and recorded again before the C# went. Where the thing a class
+compares is .NET itself (`HttpClient`, `ZipArchive`), the oracle stays live in WiseMan's fixtures rather than becoming a
+golden.
+
 *The frontend API, 2026-11-04* (`EmuSen_Backend.md` §40.8): `CrystalParityTests` was recorded with both
 implementations compared in the same run, one gzip file a case under `EmuSen.WiseMan/Crystal/Goldens/`, with the test's
 and the build's folders and the core libraries' hashes made plain. After the deletion the class runs the Rust alone

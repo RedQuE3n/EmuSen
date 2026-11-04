@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Compares_and_wide_writes_are_forwarded_where_a_format_has_them()
         {
-            Assert.Equal(NesGameGenieCodec.DecodeCompare("SXIOPOVK"), NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
+            Assert.Equal((byte)0xCE, NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
             Assert.NotNull(NesSystem.GameGenie().DecodeCompare("SXIOPOVK"));
             Assert.Null(SnesSystem.GameGenie().DecodeCompare("DD62-6DAD"));
             Assert.Equal(3, N64System.GameShark().DecodeWrites("8110FB40 FFFF+8110FB42 F801+80001003 0000")!.Count);

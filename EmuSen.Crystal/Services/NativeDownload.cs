@@ -11,12 +11,10 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.Services
 {
-    // One download on emusen-net, the platform's HTTP client, under the file services' switch; it fails with the exception HttpClient would throw - see EmuSen_Backend.md §16.
+    // One download on emusen-net, the platform's HTTP client, the only download since 2026-11-04; it fails with the exception HttpClient would throw - see EmuSen_Backend.md §16.
     public sealed unsafe class NativeDownload : IDisposable
     {
         public const int Running = 0, Done = 1, Failed = 2, Cancelled = 3;
-
-        public static bool Active => ServiceLibrary.Active;
 
         private nint _handle;
 
@@ -25,7 +23,7 @@ namespace EmuSen.Crystal.Services
         {
             byte[] request = ServiceLibrary.Request(w =>
             {
-                w.WriteString("url", url);
+                w.WriteString("url", ServiceLibrary.Mend(url));
                 if (timeout == Timeout.InfiniteTimeSpan) w.WriteNull("timeout_ms"); else w.WriteNumber("timeout_ms", (long)Math.Ceiling(timeout.TotalMilliseconds));
                 ServiceLibrary.WriteText(w, "test_roots", testRoots);
             });

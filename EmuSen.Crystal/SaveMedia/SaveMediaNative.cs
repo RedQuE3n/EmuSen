@@ -9,24 +9,15 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.SaveMedia
 {
-    // SaveMediaManager's calls into emusen-savemedia; the medium a file is, by its extension, crosses as data - see EmuSen_Backend.md §15.2.
+    // SaveMediaManager's calls into emusen-savemedia; the medium a file is, by its extension, crosses as data, and a lone surrogate as U+FFFD - see EmuSen_Backend.md §15.2, §40.1.
     public static class SaveMediaNative
     {
-        // Where the services' switch, the packs' code and Galaxia's lock all chose the library, so a card is read by the modules and held by the lock the rest of the program uses.
-        public static bool Active => ServiceLibrary.Active && SystemCode.Active && PlatformLibrary.GalaxiaActive;
-
-        // Whether a call goes to the library: chosen, every text crosses, and every medium named is one the library's table knows.
-        public static bool Takes(IEnumerable<string> files, string? save) => Active && Crosses(files, save);
-
-        public static bool Crosses(IEnumerable<string> files, string? save) =>
-            ServiceLibrary.Takes(save) && files.All(f => ServiceLibrary.Takes(f) && (SaveMediaManager.MediumOf(f) is not { } m || SystemTable.Media.Any(r => r.Id == m.Id)));
-
         private static byte[] Request(string op, IEnumerable<string> files, Action<Utf8JsonWriter> args) => ServiceLibrary.Request(w =>
         {
             w.WriteString("op", op);
             args(w);
             w.WriteStartObject("media");
-            foreach (string file in files.Distinct(StringComparer.Ordinal)) ServiceLibrary.WriteText(w, file, SaveMediaManager.MediumOf(file)?.Id);
+            foreach (string file in files.Distinct(StringComparer.Ordinal)) ServiceLibrary.WriteText(w, PlatformText.Mend(file), SaveMediaManager.MediumOf(file)?.Id);
             w.WriteEndObject();
         });
 
@@ -48,7 +39,7 @@ namespace EmuSen.Crystal.SaveMedia
 
         public static MediumCard? Open(string path)
         {
-            using JsonDocument d = Call(Request("open", [path], w => w.WriteString("file", path)));
+            using JsonDocument d = Call(Request("open", [path], w => w.WriteString("file", PlatformText.Mend(path))));
             JsonElement card = d.RootElement.GetProperty("card");
             if (card.ValueKind == JsonValueKind.Null) return null;
             JsonElement l = card.GetProperty("listing");
@@ -60,21 +51,21 @@ namespace EmuSen.Crystal.SaveMedia
         }
 
         public static MediaOutcome CopySave(string from, string save, string to) =>
-            Outcome(Request("copy", [from, to], w => { w.WriteString("from", from); w.WriteString("save", save); w.WriteString("to", to); }));
+            Outcome(Request("copy", [from, to], w => { w.WriteString("from", PlatformText.Mend(from)); w.WriteString("save", PlatformText.Mend(save)); w.WriteString("to", PlatformText.Mend(to)); }));
 
         public static MediaOutcome MoveSave(string from, string save, string to) =>
-            Outcome(Request("move", [from, to], w => { w.WriteString("from", from); w.WriteString("save", save); w.WriteString("to", to); }));
+            Outcome(Request("move", [from, to], w => { w.WriteString("from", PlatformText.Mend(from)); w.WriteString("save", PlatformText.Mend(save)); w.WriteString("to", PlatformText.Mend(to)); }));
 
         public static MediaOutcome DeleteSave(string card, string save) =>
-            Outcome(Request("delete", [card], w => { w.WriteString("card", card); w.WriteString("save", save); }));
+            Outcome(Request("delete", [card], w => { w.WriteString("card", PlatformText.Mend(card)); w.WriteString("save", PlatformText.Mend(save)); }));
 
         public static MediaOutcome Import(string to, IReadOnlyList<string> from) =>
-            Outcome(Request("import", [to, .. from], w => { w.WriteString("to", to); ServiceLibrary.WriteList(w, "from", from); }));
+            Outcome(Request("import", [to, .. from], w => { w.WriteString("to", PlatformText.Mend(to)); ServiceLibrary.WriteList(w, "from", from); }));
 
-        public static MediaOutcome New(string path) => Outcome(Request("new", [path], w => w.WriteString("file", path)));
+        public static MediaOutcome New(string path) => Outcome(Request("new", [path], w => w.WriteString("file", PlatformText.Mend(path))));
 
-        public static MediaOutcome Duplicate(string from, string to) => Outcome(Request("duplicate", [from, to], w => { w.WriteString("from", from); w.WriteString("to", to); }));
+        public static MediaOutcome Duplicate(string from, string to) => Outcome(Request("duplicate", [from, to], w => { w.WriteString("from", PlatformText.Mend(from)); w.WriteString("to", PlatformText.Mend(to)); }));
 
-        public static MediaOutcome Rename(string from, string to) => Outcome(Request("rename", [from, to], w => { w.WriteString("from", from); w.WriteString("to", to); }));
+        public static MediaOutcome Rename(string from, string to) => Outcome(Request("rename", [from, to], w => { w.WriteString("from", PlatformText.Mend(from)); w.WriteString("to", PlatformText.Mend(to)); }));
     }
 }

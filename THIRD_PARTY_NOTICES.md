@@ -119,6 +119,7 @@ and TLS client, `ureq` over `rustls` with `ring`, certificates checked against t
 | [crc](https://github.com/mrhooray/crc-rs) | 3.4.0 | MIT OR Apache-2.0 | Rui Hu, Akhil Velagapudi | Nephrite, Diamond, platform |
 | [crc-catalog](https://github.com/akhilles/crc-catalog) | 2.5.0 | MIT OR Apache-2.0 | Akhil Velagapudi | Nephrite, Diamond, platform |
 | [crypto-common](https://github.com/RustCrypto/traits) | 0.2.2 | MIT OR Apache-2.0 | Copyright (c) 2021-2026 RustCrypto Developers | platform |
+| [deflate64](https://github.com/anatawa12/deflate64-rs) | 0.1.12 | MIT | Copyright (c) .NET Foundation and Contributors; Copyright (c) anatawa12 2023 | platform |
 | [digest](https://github.com/RustCrypto/traits) | 0.11.3 | MIT OR Apache-2.0 | Copyright (c) 2017-2025 RustCrypto Developers; Copyright (c) 2017 Artyom Pavlov | platform |
 | [equivalent](https://github.com/indexmap-rs/equivalent) | 1.0.2 | Apache-2.0 OR MIT | Copyright (c) 2016--2023 | MarsRT |
 | [find-msvc-tools](https://github.com/rust-lang/cc-rs) | 0.1.14 | MIT OR Apache-2.0 | Copyright (c) 2014 Alex Crichton | platform (builds `ring`; not shipped) |

@@ -38,10 +38,9 @@ namespace EmuSen.Crystal.Systems
         int? ScreenScraperSystem = null);
 
     // A console's system pack: its entry, its cheat codecs and its debugger views, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
-    // PlayerControllers answers each player's controller id from the console's settings (EmuSen_Settings_Reference.md §4.102); Media names its save media and their format modules (EmuSen_SaveMedia.md §6.2); ByteOrder is the table's byte_order literal (EmuSen_Backend.md §18.7).
+    // PlayerControllers answers each player's controller id from the console's settings (EmuSen_Settings_Reference.md §4.102); Media names its save media and their format modules (EmuSen_SaveMedia.md §6.2).
     public sealed record SystemPack(SystemEntry Entry, Func<ICheatCodeCodec>? AutoDetectCodec, Func<ICheatCodeCodec>? ExplicitCodec,
-        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, ISystemDebugViews? DebugViews = null, IReadOnlyList<SaveMedia.SaveMediumEntry>? Media = null,
-        string? ByteOrder = null);
+        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, ISystemDebugViews? DebugViews = null, IReadOnlyList<SaveMedia.SaveMediumEntry>? Media = null);
 
     // The packs by system id, in the systems table's order; a system without one is shown by its engine's own name and has no codecs.
     public static class SystemPacks
@@ -53,41 +52,9 @@ namespace EmuSen.Crystal.Systems
             SegaDisc.SegaDiscSystems.SaturnPack, SegaDisc.SegaDiscSystems.DreamcastPack,
         };
 
-        // Each pack's C# literal entry in the same order: the failover under EMUSEN_SYSTEMS_NATIVE=0 and the parity class's oracle - see EmuSen_Backend.md §12.
-        public static IReadOnlyList<SystemEntry> Literals { get; } = new[]
-        {
-            Nes.NesSystem.Literal, Snes.SnesSystem.Literal, Genesis.GenesisSystems.MegaDriveLiteral, Genesis.GenesisSystems.MegaCdLiteral, Genesis.GenesisSystems.S32xLiteral, Psx.PsxSystem.Literal,
-            GameBoy.GameBoySystems.GameBoyLiteral, GameBoy.GameBoySystems.GameBoyColorLiteral, N64.N64System.Literal, Sms.SmsSystems.MasterSystemLiteral, Sms.SmsSystems.Sg1000Literal, Ps2.Ps2System.Literal,
-            SegaDisc.SegaDiscSystems.SaturnLiteral, SegaDisc.SegaDiscSystems.DreamcastLiteral,
-        };
-
-        // Each pack's C# literal media by its system's id, in the table's order: the parity class's oracle for the table's media - see EmuSen_Backend.md §13.
-        public static IReadOnlyList<(string System, SaveMedia.SaveMediumEntry Medium)> MediumLiterals { get; } = new[]
-        {
-            (Genesis.GenesisSystems.MegaCdId, Genesis.GenesisSystems.RamCartridgeLiteral), (Genesis.GenesisSystems.MegaCdId, Genesis.GenesisSystems.BackupRamLiteral),
-            (Psx.PsxSystem.Id, Psx.PsxSystem.CardLiteral), (N64.N64System.Id, N64.N64System.PakLiteral), (Ps2.Ps2System.Id, Ps2.Ps2System.CardLiteral),
-        };
-
-        // Each pack's codecs by the library's ids with the C# codecs' factories, in the table's order: the parity class's oracle for the library's codecs - see EmuSen_Backend.md §13.
-        public static IReadOnlyList<(string System, (string Id, Func<ICheatCodeCodec> Managed)? Auto, (string Id, Func<ICheatCodeCodec> Managed)? Explicit)> ManagedCodecs { get; } = new (string, (string, Func<ICheatCodeCodec>)?, (string, Func<ICheatCodeCodec>)?)[]
-        {
-            (Nes.NesSystem.Id, ("nes.raw", Nes.NesSystem.ManagedRaw), ("nes.gg", Nes.NesSystem.ManagedGameGenie)),
-            (Snes.SnesSystem.Id, ("snes.par", Snes.SnesSystem.ManagedProActionReplay), ("snes.gg", Snes.SnesSystem.ManagedGameGenie)),
-            (Genesis.GenesisSystems.MegaDriveId, ("md.ar", Genesis.GenesisSystems.ManagedActionReplay), ("md.gg", Genesis.GenesisSystems.ManagedGameGenie)),
-            (Genesis.GenesisSystems.MegaCdId, ("md.ar", Genesis.GenesisSystems.ManagedActionReplay), ("md.gg", Genesis.GenesisSystems.ManagedGameGenie)),
-            (Genesis.GenesisSystems.S32xId, ("md.ar", Genesis.GenesisSystems.ManagedActionReplay), ("md.gg", Genesis.GenesisSystems.ManagedGameGenie)),
-            (Psx.PsxSystem.Id, ("psx.gs", Psx.PsxSystem.ManagedGameShark), ("psx.xp", Psx.PsxSystem.ManagedXploder)),
-            (GameBoy.GameBoySystems.GameBoyId, ("gb.gs", GameBoy.GameBoyCheatCodecs.ManagedGameShark), ("gb.gg", GameBoy.GameBoyCheatCodecs.ManagedGameGenie)),
-            (GameBoy.GameBoySystems.GameBoyColorId, ("gb.gs", GameBoy.GameBoyCheatCodecs.ManagedGameShark), ("gb.gg", GameBoy.GameBoyCheatCodecs.ManagedGameGenie)),
-            (N64.N64System.Id, ("n64.gs", N64.N64System.ManagedGameShark), null),
-            (Sms.SmsSystems.MasterSystemId, ("sms.par", Sms.SmsSystems.ManagedProActionReplay), ("sms.gg", Sms.SmsSystems.ManagedGameGenie)),
-            (Sms.SmsSystems.Sg1000Id, ("sms.par", Sms.SmsSystems.ManagedProActionReplay), ("sms.gg", Sms.SmsSystems.ManagedGameGenie)),
-        };
-
         public static SystemPack? For(string? systemId) => All.FirstOrDefault(p => p.Entry.Id == systemId);
 
-        // Whether a system's memory holds a multi-byte value big-end first: the table's byte_order where the switch chose it, else the pack's literal.
-        public static bool BigEndian(string? systemId) =>
-            For(systemId) is { } pack && (SystemTable.Active && SystemTable.ByteOrders.TryGetValue(pack.Entry.Id, out string? order) ? order : pack.ByteOrder) == "big";
+        // Whether a system's memory holds a multi-byte value big-end first: the table's byte_order - see EmuSen_Backend.md §18.7.
+        public static bool BigEndian(string? systemId) => For(systemId) is { } pack && SystemTable.ByteOrders.TryGetValue(pack.Entry.Id, out string? order) && order == "big";
     }
 }

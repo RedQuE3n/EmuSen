@@ -1,9 +1,5 @@
 using System;
 using System.IO;
-using System.IO.Compression;
-using System.Net.Http;
-using System.Net.Security;
-using System.Security.Cryptography.X509Certificates;
 using EmuSen.Crystal.Services;
 
 namespace EmuSen.Crystal.Cheats
@@ -35,42 +31,11 @@ namespace EmuSen.Crystal.Cheats
         // The whole call's limit, redirects and body included.
         public static readonly TimeSpan FetchTimeout = TimeSpan.FromMinutes(5);
 
-        public static Stream Fetch(string url)
-        {
-            if (FetchOverride is not null) return FetchOverride(url);
-            if (!NativeDownload.Active || !ServiceLibrary.Takes(url)) return ManagedFetch(url, FetchTimeout);
-            return new MemoryStream(NativeDownload.Fetch(url, FetchTimeout));
-        }
+        public static Stream Fetch(string url) => FetchOverride is not null ? FetchOverride(url) : new MemoryStream(NativeDownload.Fetch(url, FetchTimeout));
 
-        // The C# download: the failover and the parity class's oracle; testRoot is trusted beside the system's store for a test's own server - see EmuSen_Backend.md §16.
-        public static Stream ManagedFetch(string url, TimeSpan timeout, X509Certificate2? testRoot = null)
-        {
-            using var http = testRoot is null ? new HttpClient() : new HttpClient(Trusting(testRoot));
-            http.Timeout = timeout;
-            // ZipArchive must seek, and an HTTP response stream cannot.
-            byte[] bytes = http.GetByteArrayAsync(url).GetAwaiter().GetResult();
-            return new MemoryStream(bytes);
-        }
-
-        private static SocketsHttpHandler Trusting(X509Certificate2 root)
-        {
-            var handler = new SocketsHttpHandler();
-            handler.SslOptions.RemoteCertificateValidationCallback = (_, certificate, _, errors) =>
-            {
-                if (errors == SslPolicyErrors.None) return true;
-                if (errors != SslPolicyErrors.RemoteCertificateChainErrors || certificate is null) return false;
-                using var chain = new X509Chain();
-                chain.ChainPolicy.TrustMode = X509ChainTrustMode.CustomRootTrust;
-                chain.ChainPolicy.CustomTrustStore.Add(root);
-                chain.ChainPolicy.RevocationMode = X509RevocationMode.NoCheck;
-                return chain.Build(X509CertificateLoader.LoadCertificate(certificate.GetRawCertData()));
-            };
-            return handler;
-        }
-
+        // Every .cht entry written under the target as .NET's zip reader would write it, by emusen-cheats - see EmuSen_Backend.md §15.3, §40.1.
         public static CheatDatabaseInstallResult Install(Stream zip, string targetDirectory)
         {
-            if (!CheatsNative.Active || !Services.ServiceLibrary.Takes(targetDirectory)) return ManagedInstall(zip, targetDirectory);
             byte[] bytes;
             using (zip)
             {
@@ -79,45 +44,7 @@ namespace EmuSen.Crystal.Cheats
                 zip.CopyTo(copy);
                 bytes = copy.ToArray();
             }
-            return CheatsNative.Install(bytes, targetDirectory) ?? ManagedInstall(new MemoryStream(bytes), targetDirectory);
-        }
-
-        // The C# install: the failover, an archive of a form the library leaves to it, and the parity class's oracle - see EmuSen_Backend.md §15.3.
-        public static CheatDatabaseInstallResult ManagedInstall(Stream zip, string targetDirectory)
-        {
-            Directory.CreateDirectory(targetDirectory);
-            // Without its trailing separator, or root + '/' below would match no entry at all - see EmuSen_Backend.md §15.3.
-            string root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(targetDirectory));
-
-            int installed = 0, skipped = 0;
-            using var archive = new ZipArchive(zip, ZipArchiveMode.Read);
-
-            foreach (ZipArchiveEntry entry in archive.Entries)
-            {
-                if (entry.FullName.EndsWith('/') || entry.Length == 0 && entry.Name.Length == 0) continue;
-                if (!entry.Name.EndsWith(".cht", StringComparison.OrdinalIgnoreCase)) { skipped++; continue; }
-
-                // Zip-slip: an entry naming ../.. must not write outside the target.
-                string destination = Path.GetFullPath(Path.Combine(root, entry.FullName));
-                if (!destination.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.Ordinal))
-                {
-                    skipped++;
-                    continue;
-                }
-
-                try
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-                    entry.ExtractToFile(destination, overwrite: true);
-                    installed++;
-                }
-                catch
-                {
-                    skipped++;
-                }
-            }
-
-            return new CheatDatabaseInstallResult { Installed = installed, Skipped = skipped };
+            return CheatsNative.Install(bytes, targetDirectory);
         }
     }
 }

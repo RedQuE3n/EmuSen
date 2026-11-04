@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Media;
 using EmuSen.Crystal.Systems;
 
 namespace EmuSen.Crystal.Systems.Psx
@@ -15,79 +14,14 @@ namespace EmuSen.Crystal.Systems.Psx
         // The space name the PlayStation's engines share, so a cheat means the same memory on each.
         public const string Ram = "RAM";
 
-        // The C# literal, the failover; Entry is the systems table's row with this literal's code - see EmuSen_Backend.md §12.
-        public static readonly SystemEntry Literal = new(
-            Id,
-            "Sony PlayStation",
-            "PlayStation",
-            "Sony",
-            1994,
-            new[] { ".psexe", ".psx", ".cue", ".bin", ".iso", ".chd", ".m3u" },
-            new[] { "Sony - PlayStation" },
-            new[] { "PSX" },
-            file => file,
-            1.0,
-            "psx",
-            "Sony PlayStation",
-            SelfDelimitingImages: false,
-            Recognise: Recognise,
-            ScreenScraperSystem: 57);
-
-        public static readonly SystemEntry Entry = SystemTable.Entry(Literal);
+        // The systems table's row, its recogniser the library's - see EmuSen_Backend.md §12, §13.3.
+        public static readonly SystemEntry Entry = SystemTable.Entry(Id);
 
         // A disc's format named and not opened yet: unencrypted .pbp, a later step - see Diamond_CDROM.md §8.2.
         public static readonly IReadOnlyList<string> DiscExtensions = new[] { ".pbp" };
 
         // What the core's own info lists: the pack's but .m3u, which the runtime expands and no core receives - see EmuSen_CoreAPI_Extensions.md §2.4.
         public static readonly IReadOnlyList<string> CoreExtensions = new[] { ".psexe", ".psx", ".cue", ".bin", ".iso", ".chd" };
-
-        // The licence text's first line, at the start of sector 4's user data (psx-spx "System Area").
-        private static readonly byte[] Licence = System.Text.Encoding.ASCII.GetBytes("          Licensed  by          ");
-
-        // Whether an .iso's user sectors or a raw track's 2,352-byte ones hold a PlayStation disc, the recogniser routing by content asks - see EmuSen_CoreAPI_Extensions.md §8.4, Diamond_CDROM.md §8.
-        public static bool IsDisc(ReadOnlySpan<byte> image)
-        {
-            if (image.Length >= 4 * 2048 + 32 && image.Slice(4 * 2048, 32).SequenceEqual(Licence)) return true;
-            ReadOnlySpan<byte> sync = stackalloc byte[] { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
-            int raw = 4 * 2352;
-            if (image.Length < raw + 24 + 32 || !image[..12].SequenceEqual(sync) || !image.Slice(raw, 12).SequenceEqual(sync)) return false;
-            int data = raw + (image[raw + 15] == 1 ? 16 : 24);
-            return image.Slice(data, 32).SequenceEqual(Licence);
-        }
-
-        // The licence's market and the BOOT line's serial; null for no PlayStation disc, or for one whose SYSTEM.CNF names a BOOT2 program, the PlayStation 2's - see EmuSen_CoreAPI_Extensions.md §8.4, Sapphire_Plan.md §4.1.
-        public static Recognition? Recognise(IMediaProbe probe)
-        {
-            byte[] head = probe.Read(12 * 1024);
-            if (!IsDisc(head)) return null;
-            head = probe.Read(160 * 1024);
-            var four = new DiscSectors(head).Sector(4);
-            string line2 = four.Length <= 32 ? "" : Encoding.ASCII.GetString(four.Slice(32, Math.Min(38, four.Length - 32)));
-            string region = line2.Contains("Amer") ? "Americas" : line2.Contains("Euro") ? "Europe" : "Japan";
-            byte[]? config = DiscSectors.RootFileThrough(probe, 160 * 1024, head, "SYSTEM.CNF", DiscSectors.RootFileLimit);
-            if (Ps2.Ps2System.Boot2(config) is not null) return null;
-            return new Recognition(Id, SerialOf(config), region);
-        }
-
-        // SYSTEM.CNF's BOOT line as the game's serial: "cdrom:\SLUS_007.70;1" is SLUS-00770 - see Diamond_Plan.md §4.1.
-        public static string? SerialOf(byte[]? config)
-        {
-            if (config is null) return null;
-            foreach (string line in Encoding.ASCII.GetString(config).Split('\n'))
-            {
-                if (!line.TrimStart().StartsWith("BOOT", StringComparison.OrdinalIgnoreCase) || line.IndexOf('=') < 0) continue;
-                return SerialOfFile(line[(line.IndexOf('=') + 1)..].Trim());
-            }
-            return null;
-        }
-
-        // A boot line's program as a serial: "cdrom:\SLUS_007.70;1" is SLUS-00770, as the PlayStation 2's pack takes BOOT2's.
-        public static string? SerialOfFile(string file)
-        {
-            file = file[(Math.Max(file.LastIndexOf('\\'), file.LastIndexOf(':')) + 1)..];
-            file = file.Split(';')[0].Replace(".", "").Replace('_', '-').Trim().ToUpperInvariant();
-            return file.Length is >= 6 and <= 12 && file.Contains('-') ? file : null;
-        }
 
         // The BIOS a console of each market holds, all optional, the core's open replacement in their place - see Diamond_Plan.md §5.9.
         public static readonly IReadOnlyList<(string Market, string Name, long Size)> Bios = new[]
@@ -111,21 +45,14 @@ namespace EmuSen.Crystal.Systems.Psx
             return players;
         }
 
-        // A code told GameShark or Xploder by its types' first digits, psx-spx's table, as a cheat file's or a player's code is.
-        public static ICheatCodeCodec ManagedGameShark() => new DelegateCheatCodec("GameShark or Xploder", CheatCodeKind.RamPoke, Ram,
-            PsxCheatFormats.IsEither, c => PsxCheatFormats.OneByte(PsxCheatFormats.EitherWrites(c), c), decodeWrites: PsxCheatFormats.EitherWrites);
+        // Each codec is emusen-systems' under its id, the first telling GameShark from Xploder by its types' first digits - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec GameShark() => SystemCode.Codec("psx.gs");
 
-        public static ICheatCodeCodec ManagedXploder() => new DelegateCheatCodec("Xploder", CheatCodeKind.RamPoke, Ram,
-            PsxCheatFormats.IsXploder, c => PsxCheatFormats.OneByte(PsxCheatFormats.XploderWrites(c), c), decodeWrites: PsxCheatFormats.XploderWrites);
+        public static ICheatCodeCodec Xploder() => SystemCode.Codec("psx.xp");
 
-        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
-        public static ICheatCodeCodec GameShark() => SystemCode.Codec("psx.gs", ManagedGameShark());
+        // The memory card, its two slots the core's files 0 and 4: the table's words with the pack's extension and module - see EmuSen_SaveMedia.md §7.1, EmuSen_Backend.md §13.
+        public static readonly SaveMedia.SaveMediumEntry Card = SystemTable.Medium(PsxCardFormat.Id, ".mcr", PsxCardFormat.Instance);
 
-        public static ICheatCodeCodec Xploder() => SystemCode.Codec("psx.xp", ManagedXploder());
-
-        // The memory card, its two slots the core's files 0 and 4; Card is the table's words with this literal's extension and module - see EmuSen_SaveMedia.md §7.1, EmuSen_Backend.md §13.
-        public static readonly SaveMedia.SaveMediumEntry CardLiteral = new("psx.card", "Memory Card", "Card", ".mcr", PsxCardFormat.Instance), Card = SystemTable.Medium(CardLiteral);
-
-        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers, Media: new[] { Card }, ByteOrder: "little");
+        public static readonly SystemPack Pack = new(Entry, GameShark, Xploder, PlayerControllers, Media: new[] { Card });
     }
 }

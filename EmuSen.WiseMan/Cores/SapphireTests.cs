@@ -122,14 +122,11 @@ namespace EmuSen.WiseMan.Cores
                 string extension = Path.GetExtension(file);
                 var candidates = SystemPacks.All.Select(p => p.Entry).Where(e => e.Extensions.Contains(extension)).ToArray();
                 Assert.Contains(candidates, c => c.Id == "ps2");
-                var managed = Enumerable.Range(0, candidates.Length).Select(at => (at, SystemPacks.Literals.Single(l => l.Id == candidates[at].Id).Recognise?.Invoke(new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
                 var native = Enumerable.Range(0, candidates.Length).Select(at => (at, candidates[at].Recognise?.Invoke(new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
-                Assert.True(managed.Length == 1 && native.Length == 1, $"{label}: claimed by {managed.Length} and {native.Length}");
+                Assert.True(native.Length == 1, $"{label}: claimed by {native.Length}");
                 foreach (string? folder in new[] { null, "psx", "ps2", "segacd", "roms" })
                 {
-                    var m = SystemRouting.DecideManaged(file, () => folder, candidates, managed);
                     var n = SystemCode.Route(file, folder, candidates, native)!;
-                    Assert.Equal((expected, serial), (m.System?.Id, m.Recognition?.Serial));
                     Assert.Equal((expected, serial), (n.System?.Id, n.Recognition?.Serial));
                 }
             }

@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Cores
                 if (f < 220 || backdrop == 0x0F) continue;
                 checkedFrames++;
                 byte[] frame = core.GetFrameBufferRgba();
-                byte[] sky = NesDebugViews.MasterPalette.AsSpan(backdrop * 3, 3).ToArray();
+                byte[] sky = NesMasterPalette.Bytes.AsSpan(backdrop * 3, 3).ToArray();
                 for (int x = 0; x < 256; x++)
                 {
                     int p = ((32 * 256) + x) * 4;

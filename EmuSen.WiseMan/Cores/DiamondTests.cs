@@ -672,7 +672,7 @@ namespace EmuSen.WiseMan.Cores
                 bool core;
                 try { using var m = new CoreMachine(library, image, "", Array.Empty<(uint, byte[])>()); core = true; }
                 catch (CoreRefusedException) { core = false; }
-                Assert.True(core == PsxSystem.IsDisc(image), $"{name}: the core {(core ? "opens" : "refuses")} it");
+                Assert.True(core == PsxSystem.Entry.Recognise!(new ImageProbe(image)) is not null, $"{name}: the core {(core ? "opens" : "refuses")} it");
             }
         }
     }

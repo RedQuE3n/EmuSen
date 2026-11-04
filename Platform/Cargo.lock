@@ -236,6 +236,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4583a4551df46e2792f82ceeac45e850d2e2d5debba0b91f102385cda5b11f06"
 
 [[package]]
+name = "deflate64"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac6b926516df9c60bfa16e107b21086399f8285a44ca9711344b9e553c5146e2"
+
+[[package]]
 name = "der-parser"
 version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -324,7 +330,6 @@ dependencies = [
  "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
- "flate2",
  "libc",
 ]
 
@@ -462,6 +467,7 @@ dependencies = [
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "deflate64",
  "emusen-disc",
  "emusen-dotnet",
  "flate2",

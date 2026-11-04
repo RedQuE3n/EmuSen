@@ -8,36 +8,16 @@ using EmuSen.Crystal.Systems;
 using EmuSen.Crystal.Systems.Genesis;
 using EmuSen.Crystal.Systems.N64;
 using EmuSen.Crystal.Systems.Psx;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The save media's format modules in emusen-systems held to the C# modules on generated cards, paks and backup RAMs: every listing, every copy and delete byte for byte or refused in the same words - see EmuSen_Backend.md §13.
+    // The save media's format modules in emusen-systems held to the C# modules' answers on generated cards, paks and backup RAMs, recorded as goldens before the C# was deleted: every listing, every copy and delete byte for byte or refused in the same words - see EmuSen_Backend.md §13, §40.1.
     public class SaveMediaParityTests
     {
-        // Each format's two halves: the library's module, whichever the switch chose, and the C#.
-        private static readonly (ISaveMediumFormat Native, ISaveMediumFormat Managed)[] Formats =
-        {
-            (Library(PsxCardFormat.Instance.Medium), PsxCardFormat.Instance.Managed), (Library(N64PakFormat.Instance.Medium), N64PakFormat.Instance.Managed),
-            (Library(SegaCdBramFormat.BackupRam.Medium), SegaCdBramFormat.BackupRam.Managed), (Library(SegaCdBramFormat.RamCartridge.Medium), SegaCdBramFormat.RamCartridge.Managed),
-        };
+        private static readonly ISaveMediumFormat[] Formats = { PsxCardFormat.Instance, N64PakFormat.Instance, SegaCdBramFormat.BackupRam, SegaCdBramFormat.RamCartridge };
 
-        // The library's module called directly, so the class compares the two halves whatever EMUSEN_SYSTEMS_NATIVE says.
-        private static ISaveMediumFormat Library(string medium) => new LibraryFormat(medium);
-
-        private sealed class LibraryFormat(string medium) : ISaveMediumFormat
-        {
-            public string Medium => medium;
-            public int Length => SystemCode.Module(medium).Length;
-            public int Capacity => SystemCode.Module(medium).Capacity;
-            public string Unit => SystemCode.Module(medium).Unit;
-            public MediumListing Read(ReadOnlySpan<byte> image) => SystemCode.MediaRead(medium, image);
-            public MediumEdit Copy(ReadOnlySpan<byte> from, string save, ReadOnlySpan<byte> to) => SystemCode.MediaCopy(medium, from, save, to);
-            public MediumEdit Delete(ReadOnlySpan<byte> image, string save) => SystemCode.MediaDelete(medium, image, save);
-            public byte[]? Format() => SystemCode.MediaFormat(medium);
-        }
-
-        private static ISaveMediumFormat Native(string medium) => Formats.Single(f => f.Managed.Medium == medium).Native;
-        private static ISaveMediumFormat Managed(string medium) => Formats.Single(f => f.Managed.Medium == medium).Managed;
+        private static ISaveMediumFormat Native(string medium) => Formats.Single(f => f.Medium == medium);
 
         // A listing or an edit as text, or the exception's type, so two halves compare as one string.
         private static string Shown(Func<MediumListing> read)
@@ -60,23 +40,22 @@ namespace EmuSen.WiseMan.Crystal
             catch (Exception e) { return "threw " + e.GetType().Name; }
         }
 
-        private static void Same(string what, string native, string managed, List<string> differences)
-        {
-            if (native != managed) differences.Add($"{what}:\n  library: {native}\n  C#:      {managed}");
-        }
+        [ThreadStatic] private static ParityGolden? _golden;
 
-        // Every listing, and a copy of each save onto `to` and a delete of each, compared; one name not on the card besides.
-        private static void Compare(string medium, byte[] image, byte[] to, string label, List<string> differences)
+        private static void Same(string what, string answer) => _golden!.Add(what, answer);
+
+        // Every listing, and a copy of each save onto `to` and a delete of each; one name not on the card besides.
+        private static void Compare(string medium, byte[] image, byte[] to, string label)
         {
-            ISaveMediumFormat n = Native(medium), m = Managed(medium);
-            Same($"{label} read", Shown(() => n.Read(image)), Shown(() => m.Read(image)), differences);
+            ISaveMediumFormat n = Native(medium);
+            Same($"{label} read", Shown(() => n.Read(image)));
             IEnumerable<string> names;
-            try { names = m.Read(image).Saves.Select(s => s.Id).Append("NOT-ON-IT").Distinct().ToArray(); }
+            try { names = n.Read(image).Saves.Select(s => s.Id).Append("NOT-ON-IT").Distinct().ToArray(); }
             catch (ArgumentOutOfRangeException) { names = new[] { "NOT-ON-IT" }; }
             foreach (string save in names)
             {
-                Same($"{label} copy {save}", Shown(() => n.Copy(image, save, to)), Shown(() => m.Copy(image, save, to)), differences);
-                Same($"{label} delete {save}", Shown(() => n.Delete(image, save)), Shown(() => m.Delete(image, save)), differences);
+                Same($"{label} copy {save}", Shown(() => n.Copy(image, save, to)));
+                Same($"{label} delete {save}", Shown(() => n.Delete(image, save)));
             }
         }
 
@@ -84,26 +63,22 @@ namespace EmuSen.WiseMan.Crystal
         public void The_library_gives_every_medium_a_module_with_the_csharps_facts()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            foreach (var (n, m) in Formats)
-            {
-                Assert.Equal((m.Length, m.Capacity, m.Unit), (n.Length, n.Capacity, n.Unit));
-                Assert.Equal(m.Format(), n.Format());
-            }
+            var golden = new ParityGolden("MediumModules");
+            foreach (ISaveMediumFormat n in Formats)
+                golden.Add(n.Medium, $"{n.Length} {n.Capacity} {n.Unit} {(n.Format() is { } f ? Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(f)) : "null")}");
+            golden.Check(4);
         }
 
         [Fact]
-        public void Every_literal_medium_equals_its_data_files_words()
+        public void Every_pack_medium_carries_its_data_files_words()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            Assert.Equal(SystemPacks.MediumLiterals.Select(l => (l.System, l.Medium.Id, l.Medium.Title, l.Medium.Noun)),
-                SystemTable.Media.Select(r => (r.System, r.Id, r.Title, r.Noun)));
-            foreach (var (_, literal) in SystemPacks.MediumLiterals)
+            Assert.Equal(new[] { "mcd.ramcart", "mcd.backup", "psx.card", "n64.pak", "ps2.card" }, SystemTable.Media.Select(r => r.Id));
+            foreach (SystemTable.RowMedium row in SystemTable.Media)
             {
-                SaveMediumEntry pack = SaveMediumFormats.Entry(literal.Id)!;
-                Assert.Equal((literal.Title, literal.Noun, literal.Extension), (pack.Title, pack.Noun, pack.Extension));
-                Assert.Same(literal.Format, pack.Format);
-                if (SystemTable.Active) Assert.NotSame(literal, pack);
-                else Assert.Same(literal, pack);
+                SaveMediumEntry pack = SaveMediumFormats.Entry(row.Id)!;
+                Assert.Equal((row.Title, row.Noun), (pack.Title, pack.Noun));
+                Assert.Equal(row.Id, pack.Format!.Medium);
             }
         }
 
@@ -200,9 +175,9 @@ namespace EmuSen.WiseMan.Crystal
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(20261017);
-            var differences = new List<string>();
+            _golden = new ParityGolden("PsxCards");
             for (int i = 0; i < 300; i++)
-                Compare(PsxCardFormat.Id, RandomCard(r, Managed(PsxCardFormat.Id)), RandomCard(r, Managed(PsxCardFormat.Id)), $"card {i}", differences);
+                Compare(PsxCardFormat.Id, RandomCard(r, Native(PsxCardFormat.Id)), RandomCard(r, Native(PsxCardFormat.Id)), $"card {i}");
             byte[] noise = new byte[PsxCardFormat.CardLength];
             for (int i = 0; i < 40; i++)
             {
@@ -211,12 +186,13 @@ namespace EmuSen.WiseMan.Crystal
                 noise[1] = (byte)'C';
                 noise[0x7F] = Xor(noise);
                 for (int e = 1; e <= 15; e++) if (r.Next(2) == 0) BinaryPrimitives.WriteUInt32LittleEndian(noise.AsSpan(e * 128), (uint)r.Next(0x50, 0x54));
-                Compare(PsxCardFormat.Id, noise.ToArray(), RandomCard(r, Managed(PsxCardFormat.Id)), $"noise {i}", differences);
+                Compare(PsxCardFormat.Id, noise.ToArray(), RandomCard(r, Native(PsxCardFormat.Id)), $"noise {i}");
             }
             foreach (int length in new[] { 0, 1, PsxCardFormat.CardLength - 1, PsxCardFormat.CardLength + 1 })
-                Compare(PsxCardFormat.Id, new byte[length], Managed(PsxCardFormat.Id).Format()!, $"{length} bytes", differences);
-            Compare(PsxCardFormat.Id, new byte[PsxCardFormat.CardLength], new byte[PsxCardFormat.CardLength], "zeros", differences);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
+                Compare(PsxCardFormat.Id, new byte[length], Native(PsxCardFormat.Id).Format()!, $"{length} bytes");
+            Compare(PsxCardFormat.Id, new byte[PsxCardFormat.CardLength], new byte[PsxCardFormat.CardLength], "zeros");
+            _golden!.Check();
+            _golden = null;
         }
 
         // Every lead and trail of code page 932, and every lone byte, through a title, so the library's table is held to .NET's whole.
@@ -228,7 +204,7 @@ namespace EmuSen.WiseMan.Crystal
             for (int b = 1; b < 256; b++) sequences.Add(new[] { (byte)b });
             foreach (int lead in Enumerable.Range(0x81, 0x1F).Concat(Enumerable.Range(0xE0, 0x1D)))
                 for (int trail = 1; trail < 256; trail++) sequences.Add(new[] { (byte)lead, (byte)trail, (byte)0x41 });
-            var differences = new List<string>();
+            _golden = new ParityGolden("PsxTitles");
             var titles = new List<byte[]>();
             var current = new List<byte>();
             foreach (byte[] s in sequences)
@@ -239,12 +215,13 @@ namespace EmuSen.WiseMan.Crystal
             titles.Add(current.ToArray());
             for (int c = 0; c * 15 < titles.Count; c++)
             {
-                byte[] card = Managed(PsxCardFormat.Id).Format()!;
+                byte[] card = Native(PsxCardFormat.Id).Format()!;
                 for (int e = 0; e < 15 && c * 15 + e < titles.Count; e++) PsxSave(card, Encoding.ASCII.GetBytes($"BASLUS-{c:D3}{e:D2}"), titles[c * 15 + e], new[] { e }, 0);
-                Same($"titles card {c}", Shown(() => Native(PsxCardFormat.Id).Read(card)), Shown(() => Managed(PsxCardFormat.Id).Read(card)), differences);
+                Same($"titles card {c}", Shown(() => Native(PsxCardFormat.Id).Read(card)));
             }
             Assert.True(titles.Count > 700, $"{titles.Count} titles");
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(5)));
+            _golden!.Check();
+            _golden = null;
         }
 
         // ---- The N64's Controller Pak -------------------------------------------------------------------------------
@@ -263,7 +240,7 @@ namespace EmuSen.WiseMan.Crystal
 
         internal static byte[] RandomPak(Random r)
         {
-            byte[] pak = Managed(N64PakFormat.Id).Format()!;
+            byte[] pak = Native(N64PakFormat.Id).Format()!;
             var free = Enumerable.Range(5, 123).OrderBy(_ => r.Next()).ToList();
             int notes = r.Next(0, 8);
             for (int n = 0; n < notes; n++)
@@ -294,18 +271,19 @@ namespace EmuSen.WiseMan.Crystal
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1996);
-            var differences = new List<string>();
-            for (int i = 0; i < 300; i++) Compare(N64PakFormat.Id, RandomPak(r), RandomPak(r), $"pak {i}", differences);
+            _golden = new ParityGolden("N64Paks");
+            for (int i = 0; i < 300; i++) Compare(N64PakFormat.Id, RandomPak(r), RandomPak(r), $"pak {i}");
             byte[] noise = new byte[N64PakFormat.PakLength];
             for (int i = 0; i < 40; i++)
             {
                 r.NextBytes(noise);
-                Managed(N64PakFormat.Id).Format()!.AsSpan(0, 3 * 256).CopyTo(noise);
-                Compare(N64PakFormat.Id, noise.ToArray(), RandomPak(r), $"noise {i}", differences);
+                Native(N64PakFormat.Id).Format()!.AsSpan(0, 3 * 256).CopyTo(noise);
+                Compare(N64PakFormat.Id, noise.ToArray(), RandomPak(r), $"noise {i}");
             }
             foreach (int length in new[] { 0, N64PakFormat.PakLength - 1 })
-                Compare(N64PakFormat.Id, new byte[length], RandomPak(r), $"{length} bytes", differences);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
+                Compare(N64PakFormat.Id, new byte[length], RandomPak(r), $"{length} bytes");
+            _golden!.Check();
+            _golden = null;
         }
 
         // ---- The Sega CD's backup RAM -------------------------------------------------------------------------------
@@ -322,7 +300,7 @@ namespace EmuSen.WiseMan.Crystal
             BinaryPrimitives.WriteUInt16BigEndian(u.AsSpan(28), 1);
             BinaryPrimitives.WriteUInt16BigEndian(u.AsSpan(30), (ushort)blocks);
             byte[] stored = new byte[64];
-            SegaCdBramFormat.BlockCode.Encode(u, stored);
+            SegaCdBlockCode.Encode(u, stored);
             stored.CopyTo(image, s - 0x80);
             for (int k = 0; k < 4; k++)
             {
@@ -369,71 +347,61 @@ namespace EmuSen.WiseMan.Crystal
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1991);
-            var differences = new List<string>();
+            _golden = new ParityGolden("SegaCdBackupRams");
             foreach (string medium in new[] { SegaCdBramFormat.BackupRam.Medium, SegaCdBramFormat.RamCartridge.Medium })
             {
-                ISaveMediumFormat m = Managed(medium);
-                for (int i = 0; i < 200; i++) Compare(medium, RandomBram(r, m), RandomBram(r, m), $"{medium} {i}", differences);
+                ISaveMediumFormat m = Native(medium);
+                for (int i = 0; i < 200; i++) Compare(medium, RandomBram(r, m), RandomBram(r, m), $"{medium} {i}");
                 foreach (int length in new[] { 0, 0x1000, 0x2001, 0x4000, 0x10_0000 })
-                    Compare(medium, new byte[length], RandomBram(r, m), $"{medium} {length} bytes", differences);
+                    Compare(medium, new byte[length], RandomBram(r, m), $"{medium} {length} bytes");
             }
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(20)));
+            _golden!.Check();
+            _golden = null;
         }
 
-        // A footer counting 255 or 256 files puts the last entries' directory block outside the volume: each half lists the entries it can read, says why, refuses to write to it and throws nothing - see EmuSen_Backend.md §13.5.
+        // A footer counting 255 or 256 files puts the last entries' directory block outside the volume: the module lists the entries it can read, says why, refuses to write to it and throws nothing - see EmuSen_Backend.md §13.5.
         [Theory]
         [InlineData(255)]
         [InlineData(256)]
-        public void A_directory_reaching_outside_the_volume_is_listed_as_damaged_in_both(int files)
+        public void A_directory_reaching_outside_the_volume_is_listed_as_damaged(int files)
         {
-            foreach (ISaveMediumFormat format in new[] { Managed(SegaCdBramFormat.BackupRam.Medium), Native(SegaCdBramFormat.BackupRam.Medium) })
-            {
-                byte[] good = BramOne(format, "KEEP_______"u8.ToArray(), 2, 0x5A, false);
-                byte[] image = (byte[])good.Clone();
-                for (int k = 0; k < 4; k++) BinaryPrimitives.WriteUInt16BigEndian(image.AsSpan(0x2000 - 0x28 + 2 * k), (ushort)files);
-                MediumListing listing = format.Read(image);
-                Assert.True(listing.Formatted);
-                Assert.NotNull(listing.Problem);
-                Assert.Equal(254, listing.Saves.Count);
-                Assert.Equal("KEEP_______", listing.Saves[0].Id);
-                Assert.NotNull(format.Copy(good, "KEEP_______", image).Refusal);
-                Assert.NotNull(format.Delete(image, "KEEP_______").Refusal);
-                Assert.NotNull(format.Copy(image, "KEEP_______", format.Format()!).Image);
-            }
-            byte[] damaged = Managed(SegaCdBramFormat.BackupRam.Medium).Format()!;
-            for (int k = 0; k < 4; k++) BinaryPrimitives.WriteUInt16BigEndian(damaged.AsSpan(0x2000 - 0x28 + 2 * k), (ushort)files);
-            var differences = new List<string>();
-            Compare(SegaCdBramFormat.BackupRam.Medium, damaged, Managed(SegaCdBramFormat.BackupRam.Medium).Format()!, "damaged", differences);
-            Assert.Empty(differences);
+            ISaveMediumFormat format = Native(SegaCdBramFormat.BackupRam.Medium);
+            byte[] good = BramOne(format, "KEEP_______"u8.ToArray(), 2, 0x5A, false);
+            byte[] image = (byte[])good.Clone();
+            for (int k = 0; k < 4; k++) BinaryPrimitives.WriteUInt16BigEndian(image.AsSpan(0x2000 - 0x28 + 2 * k), (ushort)files);
+            MediumListing listing = format.Read(image);
+            Assert.True(listing.Formatted);
+            Assert.NotNull(listing.Problem);
+            Assert.Equal(254, listing.Saves.Count);
+            Assert.Equal("KEEP_______", listing.Saves[0].Id);
+            Assert.NotNull(format.Copy(good, "KEEP_______", image).Refusal);
+            Assert.NotNull(format.Delete(image, "KEEP_______").Refusal);
+            Assert.NotNull(format.Copy(image, "KEEP_______", format.Format()!).Image);
         }
 
-        // Cards written by each side read by the other: the library's copies and deletes listed by the C#, and the C#'s by the library.
+        // Cards edited by the library, each copy and delete held to the C#'s image of the same edit.
         [Fact]
-        public void Edits_by_each_half_read_back_by_the_other()
+        public void Edits_read_back_as_the_csharps_did()
         {
+            var golden = new ParityGolden("MediumEdits");
             var r = new Random(7);
-            foreach (var (n, m) in Formats)
+            foreach (ISaveMediumFormat n in Formats)
             {
-                byte[] by = n.Format()!, other = m.Format()!;
+                byte[] other = n.Format()!;
                 for (int i = 0; i < 20; i++)
                 {
-                    byte[] source = m.Medium == PsxCardFormat.Id ? RandomCard(r, m) : m.Medium == N64PakFormat.Id ? RandomPak(r) : RandomBram(r, m);
-                    foreach (SaveEntry save in m.Read(source).Saves.Where(s => !s.Damaged).Take(2))
+                    byte[] source = n.Medium == PsxCardFormat.Id ? RandomCard(r, n) : n.Medium == N64PakFormat.Id ? RandomPak(r) : RandomBram(r, n);
+                    foreach (SaveEntry save in n.Read(source).Saves.Where(s => !s.Damaged).Take(2))
+                        if (n.Copy(source, save.Id, other).Image is { } b) other = b;
+                    golden.Add($"{n.Medium} {i} copied", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(other)) + " " + Shown(() => n.Read(other)));
+                    if (n.Read(other).Saves.FirstOrDefault() is { } first)
                     {
-                        if (n.Copy(source, save.Id, by).Image is { } a) by = a;
-                        if (m.Copy(source, save.Id, other).Image is { } b) other = b;
-                    }
-                    Assert.Equal(Shown(() => m.Read(by)), Shown(() => n.Read(by)));
-                    Assert.Equal(Shown(() => n.Read(other)), Shown(() => m.Read(other)));
-                    Assert.Equal(by, other);
-                    if (m.Read(by).Saves.FirstOrDefault() is { } first)
-                    {
-                        by = n.Delete(by, first.Id).Image!;
-                        other = m.Delete(other, first.Id).Image!;
-                        Assert.Equal(by, other);
+                        other = n.Delete(other, first.Id).Image!;
+                        golden.Add($"{n.Medium} {i} deleted {first.Id}", Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(other)));
                     }
                 }
             }
+            golden.Check(80);
         }
     }
 }

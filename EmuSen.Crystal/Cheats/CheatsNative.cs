@@ -11,26 +11,21 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.Cheats
 {
-    // The cheat files and the database's calls into emusen-cheats, under the file services' switch; what cannot cross stays on the C# - see EmuSen_Backend.md §15.3.
+    // The cheat files and the database's calls into emusen-cheats; a lone surrogate crosses as U+FFFD - see EmuSen_Backend.md §15.3, §40.1.
     public static unsafe class CheatsNative
     {
-        public static bool Active => ServiceLibrary.Active;
-
-        // A codec the library names by id, or null; a C# codec of no id keeps the read on the C#.
-        private static bool Named(ICheatCodeCodec? codec, out string? id)
+        // A codec's id as the library names it; a codec no pack gives is refused, since the library decodes by id.
+        private static string? Named(ICheatCodeCodec? codec, string parameter) => codec switch
         {
-            id = codec is NativeCheatCodec native ? native.Id : null;
-            return codec is null || id is not null;
-        }
-
-        public static bool TakesParse(string text, ICheatCodeCodec? codec, string space, ICheatCodeCodec? patch) =>
-            SystemCode.Active && Named(codec, out _) && Named(patch, out _) && PlatformText.Crosses(text) && PlatformText.Crosses(space);
+            null => null,
+            NativeCheatCodec native => native.Id,
+            _ => throw new ArgumentException($"{codec.Name} is no codec of a system pack's, which emusen-cheats decodes by id", parameter),
+        };
 
         public static ChtParseResult Parse(string text, ICheatCodeCodec? codec, string space, ICheatCodeCodec? patch)
         {
-            Named(codec, out string? codecId);
-            Named(patch, out string? patchId);
-            byte[] request = ServiceLibrary.Request(w => { w.WriteString("text", text); ServiceLibrary.WriteText(w, "codec", codecId); w.WriteString("space", space); ServiceLibrary.WriteText(w, "patch", patchId); });
+            string? codecId = Named(codec, nameof(codec)), patchId = Named(patch, nameof(patch));
+            byte[] request = ServiceLibrary.Request(w => { w.WriteString("text", ServiceLibrary.Mend(text)); ServiceLibrary.WriteText(w, "codec", codecId); w.WriteString("space", ServiceLibrary.Mend(space)); ServiceLibrary.WriteText(w, "patch", patchId); });
             JsonDocument d;
             try { d = ServiceLibrary.CallJson("emusen_cheats_parse", request, Math.Max(1024, text.Length * 2)); }
             catch (ServiceFault fault) when (fault.Status == ServiceFault.BadArgument) { throw new ArgumentOutOfRangeException(); }
@@ -64,7 +59,7 @@ namespace EmuSen.Crystal.Cheats
         private static void Write(Utf8JsonWriter j, CheatWrite w)
         {
             j.WriteStartObject();
-            j.WriteString("space", w.Space ?? "");
+            j.WriteString("space", ServiceLibrary.Mend(w.Space ?? ""));
             j.WriteNumber("address", w.Address);
             j.WriteNumber("value", w.Value);
             j.WriteNumber("width", w.Width);
@@ -77,9 +72,6 @@ namespace EmuSen.Crystal.Cheats
             j.WriteEndObject();
         }
 
-        public static bool TakesWrite(IReadOnlyList<ChtCheat> cheats) =>
-            cheats.All(c => c.Description is not null && c.Writes is not null && PlatformText.Crosses(c.Description) && c.Writes.All(w => PlatformText.Crosses(w.Space)));
-
         public static string Write(IReadOnlyList<ChtCheat> cheats)
         {
             byte[] request = ServiceLibrary.Request(j =>
@@ -88,7 +80,7 @@ namespace EmuSen.Crystal.Cheats
                 foreach (ChtCheat c in cheats)
                 {
                     j.WriteStartObject();
-                    j.WriteString("desc", c.Description);
+                    j.WriteString("desc", ServiceLibrary.Mend(c.Description));
                     j.WriteBoolean("enabled", c.Enabled);
                     j.WriteString("kind", c.Kind.ToString());
                     j.WriteStartArray("writes");
@@ -117,6 +109,7 @@ namespace EmuSen.Crystal.Cheats
             public static Database Open(string directory)
             {
                 byte[] d = Encoding.UTF8.GetBytes(directory);
+                if (PlatformLibrary.Export("emusen_cheats_database_open") == 0) throw new InvalidOperationException($"The file services are emusen_platform's, and it gives none: {ServiceLibrary.Report}");
                 var db = new Database();
                 fixed (byte* p = d) db.SetHandle(((delegate* unmanaged[Cdecl]<byte*, nuint, nint>)PlatformLibrary.Export("emusen_cheats_database_open"))(p, (nuint)d.Length));
                 return db;
@@ -169,13 +162,13 @@ namespace EmuSen.Crystal.Cheats
 
             public IReadOnlyList<int> Games(string system, string? filter)
             {
-                using JsonDocument d = JsonDocument.Parse(Ask("emusen_cheats_database_query", ServiceLibrary.Request(w => { w.WriteString("op", "games"); w.WriteString("system", system); ServiceLibrary.WriteText(w, "filter", filter); }), 4096));
+                using JsonDocument d = JsonDocument.Parse(Ask("emusen_cheats_database_query", ServiceLibrary.Request(w => { w.WriteString("op", "games"); w.WriteString("system", ServiceLibrary.Mend(system)); ServiceLibrary.WriteText(w, "filter", filter); }), 4096));
                 return d.RootElement.EnumerateArray().Select(e => e.GetInt32()).ToArray();
             }
 
             public IReadOnlyList<int> Find(string text, int limit)
             {
-                using JsonDocument d = JsonDocument.Parse(Ask("emusen_cheats_database_query", ServiceLibrary.Request(w => { w.WriteString("op", "find"); w.WriteString("text", text); w.WriteNumber("limit", limit); }), 1024));
+                using JsonDocument d = JsonDocument.Parse(Ask("emusen_cheats_database_query", ServiceLibrary.Request(w => { w.WriteString("op", "find"); w.WriteString("text", ServiceLibrary.Mend(text)); w.WriteNumber("limit", limit); }), 1024));
                 return d.RootElement.EnumerateArray().Select(e => e.GetInt32()).ToArray();
             }
 
@@ -198,31 +191,46 @@ namespace EmuSen.Crystal.Cheats
         {
             byte[] request = ServiceLibrary.Request(w =>
             {
-                w.WriteString("directory", directory);
+                w.WriteString("directory", ServiceLibrary.Mend(directory));
                 w.WriteStartArray("removing");
-                foreach (PrunedSystem s in plan.Removing) { w.WriteStartObject(); w.WriteString("system", s.System); w.WriteString("path", s.Path); w.WriteEndObject(); }
+                foreach (PrunedSystem s in plan.Removing) { w.WriteStartObject(); w.WriteString("system", ServiceLibrary.Mend(s.System)); w.WriteString("path", ServiceLibrary.Mend(s.Path)); w.WriteEndObject(); }
                 w.WriteEndArray();
             });
             using JsonDocument d = ServiceLibrary.CallJson("emusen_cheats_prune_apply", request, 1024);
             return (d.RootElement.GetProperty("removed").GetInt32(), ServiceLibrary.Words(d.RootElement, "failed"));
         }
 
-        // An archive installed by the library; null where its form is the C#'s, nothing having been written.
-        public static CheatDatabaseInstallResult? Install(byte[] zip, string target)
+        // An archive installed by the library as .NET's reader installs it; what .NET would have thrown, whole or part way, is thrown here.
+        public static CheatDatabaseInstallResult Install(byte[] zip, string target)
         {
             byte[] t = Encoding.UTF8.GetBytes(target);
-            var call = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)PlatformLibrary.Export("emusen_cheats_install");
+            nint export = PlatformLibrary.Export("emusen_cheats_install");
+            if (export == 0) throw new InvalidOperationException($"The file services are emusen_platform's, and it gives none: {ServiceLibrary.Report}");
+            var call = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)export;
             byte[] buffer = new byte[256];
             long n;
             fixed (byte* z = zip)
             fixed (byte* tp = t)
             fixed (byte* b = buffer) n = call(z, (nuint)zip.Length, tp, (nuint)t.Length, b, (nuint)buffer.Length);
-            if (n == ServiceFault.NotSupported) return null;
+            if (n == ServiceFault.Refused) Throw(JsonDocument.Parse(ServiceLibrary.LastError()).RootElement);
             if (n == ServiceFault.Access) throw new UnauthorizedAccessException(ServiceLibrary.LastError());
             if (n == ServiceFault.NotFound) throw new DirectoryNotFoundException(ServiceLibrary.LastError());
             if (n < 0) throw new IOException(ServiceLibrary.LastError());
             using JsonDocument d = JsonDocument.Parse(buffer.AsMemory(0, (int)n));
+            if (d.RootElement.TryGetProperty("threw", out JsonElement threw)) Throw(threw);
             return new CheatDatabaseInstallResult { Installed = d.RootElement.GetProperty("installed").GetInt32(), Skipped = d.RootElement.GetProperty("skipped").GetInt32() };
+        }
+
+        // The exception .NET threw, by its name and words.
+        private static void Throw(JsonElement thrown)
+        {
+            string words = thrown.GetProperty("words").GetString()!;
+            if (thrown.GetProperty("exception").GetString() == "ArgumentException")
+            {
+                const string parameter = " (Parameter 'path')";
+                throw words.EndsWith(parameter, StringComparison.Ordinal) ? new ArgumentException(words[..^parameter.Length], "path") : new ArgumentException(words);
+            }
+            throw new InvalidDataException(words);
         }
     }
 }

@@ -11,7 +11,7 @@ using EmuSen.Crystal.Telemetry;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The packs' debugger code in emusen-systems held to the C#: every opcode of the three disassemblers and generated VR4300 words, the NES's board names, and every view on generated memory, every tile and tilemap entry and the bytes each view reads included - see EmuSen_Backend.md §13.5.
+    // The packs' debugger code in emusen-systems held to the C#'s answers, recorded as goldens before it was deleted: every opcode of the three disassemblers and generated VR4300 words, the NES's board names, and every view on generated memory, every tile and tilemap entry and the bytes each view reads included - see EmuSen_Backend.md §13.5, §40.1.
     public class DebugCodeParityTests
     {
         private static string Shown(Func<object?> answer)
@@ -36,53 +36,61 @@ namespace EmuSen.WiseMan.Crystal
             catch (Exception e) { return $"threw {e.GetType().Name}: {e.Message}"; }
         }
 
-        private static void Same(List<string> differences, string what, Func<object?> native, Func<object?> managed)
+        [ThreadStatic] private static ParityGolden? _golden;
+
+        // The group a case's answer is digested with, for a sweep; null to keep the answer as text.
+        [ThreadStatic] private static Func<string, string?>? _group;
+
+        private static void Same(string what, Func<object?> answer, string? reads = null)
         {
-            string n = Shown(native), m = Shown(managed);
-            if (n != m) differences.Add($"{what}:\n  library: {n}\n  C#:      {m}");
+            string recorded = reads is null ? Shown(answer) : Shown(answer) + " reads " + reads;
+            if (_group?.Invoke(what) is { } group) _golden!.AddChunked(group, recorded, 64);
+            else _golden!.Add(what, recorded);
         }
 
         private static string Native(SystemCode.Instruction i, bool reference) => reference ? (i.Kind is { } k ? $"({k}, {i.Target})" : "null") : $"{i.Length} {i.Mnemonic} {i.Operands}";
 
         [Fact]
-        public void Every_6502_and_sm83_opcode_disassembles_alike()
+        public void Every_6502_and_sm83_opcode_disassembles_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            var differences = new List<string>();
+            _golden = new ParityGolden("Disassemblers6502Sm83");
+            _group = what => System.Text.RegularExpressions.Regex.Replace(what, @"\b[0-9A-F]{2}\b|-?\d+", "#");
             byte[] operands = { 0x00, 0x01, 0x7F, 0x80, 0xFE, 0xFF, 0x34 };
             int[] addresses = { 0, 0x8000, 0xFFFE, -1, 0x7FFF_FFFF, int.MinValue };
             int[] references = { 0, 0x12, 0x1234, 0xFFFF, 0x10000, -5, 0x80 };
             for (int op = 0; op < 256; op++)
             {
                 byte o = (byte)op;
-                Same(differences, $"6502 {o:X2} length", () => SystemCode.Disassemble("6502", new[] { o }, 0, 0).Length, () => Nes6502Disassembler.LengthOfManaged(o));
-                Same(differences, $"6502 {o:X2} mnemonic", () => SystemCode.Disassemble("6502", new[] { o }, 0, 0).Mnemonic, () => Nes6502Disassembler.MnemonicOfManaged(o));
-                Same(differences, $"sm83 {o:X2} length", () => SystemCode.Disassemble("sm83", new[] { o }, 0, 0).Length, () => Sm83Disassembler.LengthOfManaged(o));
+                Same($"6502 {o:X2} length", () => SystemCode.Disassemble("6502", new[] { o }, 0, 0).Length);
+                Same($"6502 {o:X2} mnemonic", () => SystemCode.Disassemble("6502", new[] { o }, 0, 0).Mnemonic);
+                Same($"sm83 {o:X2} length", () => SystemCode.Disassemble("sm83", new[] { o }, 0, 0).Length);
                 foreach (int a in addresses)
                     foreach (byte lo in operands)
                         foreach (byte hi in new byte[] { 0x00, 0xC3, 0xFF })
                         {
-                            Same(differences, $"6502 {o:X2} {lo:X2} {hi:X2} at {a}", () => SystemCode.Disassemble("6502", new[] { o, lo, hi }, a, 0).Operands, () => Nes6502Disassembler.FormatOperandManaged(o, a, lo, hi));
-                            Same(differences, $"sm83 {o:X2} {lo:X2} {hi:X2} at {a}", () => SystemCode.Disassemble("sm83", new[] { o, lo, hi }, a, 0).Operands, () => Sm83Disassembler.FormatOperandManaged(o, a, lo, hi));
+                            Same($"6502 {o:X2} {lo:X2} {hi:X2} at {a}", () => SystemCode.Disassemble("6502", new[] { o, lo, hi }, a, 0).Operands);
+                            Same($"sm83 {o:X2} {lo:X2} {hi:X2} at {a}", () => SystemCode.Disassemble("sm83", new[] { o, lo, hi }, a, 0).Operands);
                         }
                 foreach (int r in references)
                 {
-                    Same(differences, $"6502 {o:X2} refers {r}", () => Native(SystemCode.Disassemble("6502", new[] { o }, 0, r), true), () => Nes6502Disassembler.ClassifyStaticReferenceManaged(o, r)?.ToString() ?? "null");
+                    Same($"6502 {o:X2} refers {r}", () => Native(SystemCode.Disassemble("6502", new[] { o }, 0, r), true));
                     foreach (int a in addresses)
-                        Same(differences, $"sm83 {o:X2} refers {r} at {a}", () => Native(SystemCode.Disassemble("sm83", new[] { o }, a, r), true), () => Sm83Disassembler.ClassifyStaticReferenceManaged(o, r, a)?.ToString() ?? "null");
+                        Same($"sm83 {o:X2} refers {r} at {a}", () => Native(SystemCode.Disassemble("sm83", new[] { o }, a, r), true));
                 }
                 for (int suffix = 0; suffix < 256; suffix++)
                 {
                     byte x = (byte)suffix;
-                    Same(differences, $"sm83 {o:X2} {x:X2} mnemonic", () => SystemCode.Disassemble("sm83", new[] { o, x }, 0, 0).Mnemonic, () => Sm83Disassembler.MnemonicOfManaged(o, x));
+                    Same($"sm83 {o:X2} {x:X2} mnemonic", () => SystemCode.Disassemble("sm83", new[] { o, x }, 0, 0).Mnemonic);
                 }
             }
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+            _golden.Check(1000);
+            (_golden, _group) = (null, null);
         }
 
         // Each primary opcode with every function and register field the decode reads, and random words besides, at addresses that wrap.
         [Fact]
-        public void Every_vr4300_word_disassembles_alike()
+        public void Every_vr4300_word_disassembles_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1996);
@@ -97,23 +105,23 @@ namespace EmuSen.WiseMan.Crystal
                     }
             for (int i = 0; i < 200_000; i++) words.Add((uint)r.Next() ^ (uint)r.Next() << 1);
             uint[] addresses = { 0x8000_0400, 0xFFFF_FFFC, 0, 0xBFC0_07C0, 0x7FFF_FFF8 };
-            var differences = new List<string>();
+            var golden = new ParityGolden("Vr4300");
+            int structured = words.Count - 200_000;
             int n = 0;
             foreach (uint w in words)
             {
                 uint a = addresses[n++ % addresses.Length];
-                var m = Vr4300Disassembler.DecodeManaged(w, a);
                 var i = SystemCode.Disassemble("vr4300", new[] { (byte)(w >> 24), (byte)(w >> 16), (byte)(w >> 8), (byte)w }, unchecked((int)a), 0);
-                string managed = $"{m.Mnemonic} {m.Operands} {m.Kind} {(m.Kind is null ? 0 : m.Target)}", native = $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : unchecked((uint)i.Target))}";
-                if (managed != native && differences.Count < 10) differences.Add($"{w:X8} at {a:X8}:\n  library: {native}\n  C#:      {managed}");
+                string native = $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : unchecked((uint)i.Target))}";
+                golden.AddChunked(n <= structured ? "words" : "random words", native, n <= structured ? 64 : 1000);
             }
+            golden.Check(500);
             Assert.True(words.Count > 290_000, $"{words.Count} words");
-            Assert.True(differences.Count == 0, string.Join("\n", differences));
         }
 
         // Each primary opcode with every function, element and register field the RSP's decode reads, and random words besides, at IMEM addresses that wrap - see EmuSen_Backend.md §18.7.
         [Fact]
-        public void Every_rsp_word_disassembles_alike()
+        public void Every_rsp_word_disassembles_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1997);
@@ -129,31 +137,28 @@ namespace EmuSen.WiseMan.Crystal
                     }
             for (int i = 0; i < 200_000; i++) words.Add((uint)r.Next() ^ (uint)r.Next() << 1);
             uint[] addresses = { 0, 0xFFC, 0x800, 0x1004, 0xFFFF_FFFC };
-            var differences = new List<string>();
+            var golden = new ParityGolden("Rsp");
+            int structured = words.Count - 200_000;
             int n = 0;
             foreach (uint w in words)
             {
                 uint a = addresses[n++ % addresses.Length];
-                var m = RspDisassembler.DecodeManaged(w, a);
                 var i = SystemCode.Disassemble("rsp", new[] { (byte)(w >> 24), (byte)(w >> 16), (byte)(w >> 8), (byte)w }, unchecked((int)a), 0);
-                string managed = $"{m.Mnemonic} {m.Operands} {m.Kind} {(m.Kind is null ? 0 : m.Target)}", native = $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : unchecked((uint)i.Target))}";
-                if (managed != native && differences.Count < 10) differences.Add($"{w:X8} at {a:X8}:\n  library: {native}\n  C#:      {managed}");
+                string native = $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : unchecked((uint)i.Target))}";
+                golden.AddChunked(n <= structured ? "words" : "random words", native, n <= structured ? 64 : 1000);
             }
+            golden.Check(500);
             Assert.True(words.Count > 340_000, $"{words.Count} words");
-            Assert.True(differences.Count == 0, string.Join("\n", differences));
         }
 
-        // The N64 pack's views against the C# moved from the MarsRT shim: each space's decode, the physical map over its boundaries, and the summary on generated registers - see EmuSen_Backend.md §18.7.
+        // The N64 pack's views against the C#'s answers: each space's decode, the physical map over its boundaries, and the summary on generated registers - see EmuSen_Backend.md §18.7.
         [Fact]
-        public void The_n64_views_answer_alike()
+        public void The_n64_views_answer_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(64);
-            var differences = new List<string>();
-            void Same(string what, object? native, object? managed)
-            {
-                if (!Equals(native?.ToString(), managed?.ToString()) && differences.Count < 10) differences.Add($"{what}:\n  library: {native}\n  C#:      {managed}");
-            }
+            var golden = new ParityGolden("N64Views");
+            void Same(string what, object? native) => golden.Add(what, native?.ToString() ?? "null");
             string Text(MarsInstruction i) => $"{i.Mnemonic} {i.Operands} {i.Kind} {(i.Kind is null ? 0 : i.Target)}";
             string Place(PhysicalAddress p) => $"{p.Space} {p.Offset} {p.IsAddressable}";
             string[] spaces = { "RDRAM", "rdram", "DMEM", "IMEM", "PIFRAM", "ROM", "CPU", "VI", "nothing" };
@@ -162,31 +167,33 @@ namespace EmuSen.WiseMan.Crystal
                 uint word = (uint)r.Next() ^ (uint)r.Next() << 1, at = (uint)r.Next() ^ (uint)r.Next() << 1;
                 if (i % 4 == 0) at &= 0xFFF;
                 string space = spaces[i % spaces.Length];
-                Same($"{space} {word:X8} at {at:X8}", Text(N64Views.DecodeIn(space, word, at)), Text(N64Views.DecodeInManaged(space, word, at)));
+                Same($"{space} {word:X8} at {at:X8}", Text(N64Views.DecodeIn(space, word, at)));
             }
             var addresses = new List<uint> { 0, 0x003F_FFFF, 0x0040_0000, 0x007F_FFFF, 0x0080_0000, 0x03EF_FFFF, 0x03F0_0000, 0x03FF_FFFF, 0x0400_0000, 0x0400_0FFF, 0x0400_1000, 0x0403_FFFF,
                 0x0404_0000, 0x04FF_FFFF, 0x0500_0000, 0x07FF_FFFF, 0x0800_0000, 0x0FFF_FFFF, 0x1000_0000, 0x1FBF_FFFF, 0x1FC0_0000, 0x1FC0_07BF, 0x1FC0_07C0, 0x1FC0_07FF, 0x1FC0_0800, 0xFFFF_FFFF };
             for (int i = 0; i < 2_000; i++) addresses.Add((uint)r.Next() ^ (uint)r.Next() << 1);
             foreach (uint a in addresses)
                 foreach (long rdram in new long[] { 0, 4 << 20, 8 << 20 })
-                    Same($"physical {a:X8} with {rdram}", Place(N64Views.Physical(a, rdram)), Place(N64Views.PhysicalManaged(a, rdram)));
+                    Same($"physical {a:X8} with {rdram}", Place(N64Views.Physical(a, rdram)));
             for (int round = 0; round < 50; round++)
             {
                 var vi = new[] { "CONTROL", "ORIGIN", "WIDTH", "V_INTR", "V_CURRENT", "BURST", "V_SYNC" }.Take(round % 10 == 0 ? 3 : 7)
                     .Select(n => new DebugRegisterValue(round % 7 == 0 ? n.ToLowerInvariant() : n, (ulong)r.NextInt64(), 32)).ToArray();
                 var registers = new[] { new DebugRegisterValue("PC", (ulong)r.NextInt64(), 64), new DebugRegisterValue("sp", (ulong)r.NextInt64(), 64), new DebugRegisterValue("ra", (ulong)r.NextInt64(), 64) };
-                Same($"summary {round}", N64Views.Summary(registers, vi), N64Views.SummaryManaged(registers, vi));
-                Same($"summary without a VI {round}", N64Views.Summary(registers, null), N64Views.SummaryManaged(registers, null));
-                Same($"summary without ra {round}", N64Views.Summary(registers[..2], vi) ?? "null", N64Views.SummaryManaged(registers[..2], vi) ?? "null");
+                Same($"summary {round}", N64Views.Summary(registers, vi));
+                Same($"summary without a VI {round}", N64Views.Summary(registers, null));
+                Same($"summary without ra {round}", N64Views.Summary(registers[..2], vi) ?? "null");
             }
-            Assert.True(differences.Count == 0, string.Join("\n", differences));
+            golden.Check(10000);
         }
 
         [Fact]
-        public void Every_mapper_number_names_the_same_board()
+        public void Every_mapper_number_names_the_golden_board()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
-            for (int mapper = -2; mapper < 4100; mapper++) Assert.Equal(NesSystem.BoardNamesManaged.GetValueOrDefault(mapper), SystemCode.BoardName(mapper));
+            var golden = new ParityGolden("BoardNames");
+            for (int mapper = -2; mapper < 4100; mapper++) golden.Add(mapper.ToString(), SystemCode.BoardName(mapper) ?? "null");
+            golden.Check(4000);
         }
 
         // A space over bytes that records every read, in order, and wraps an address outside it.
@@ -211,104 +218,103 @@ namespace EmuSen.WiseMan.Crystal
             return b;
         }
 
-        // A call on both halves over spaces of the same bytes, each half's reads logged; the answers and the reads compared, the reads as a set where the library may read a space whole.
-        private static void Both(List<string> differences, string what, (string Name, byte[] Data, bool SideEffects)[] spaces, Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, object?> call, ISystemDebugViews managed, string system, bool whole = false)
+        // A call on the library's views over spaces whose every read is logged; the reads digested as a set where the library may read a space whole.
+        private static void Both(string what, (string Name, byte[] Data, bool SideEffects)[] spaces, Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, object?> call, string system, bool whole = false)
         {
-            var nativeLog = new List<string>();
-            var managedLog = new List<string>();
-            var n = spaces.Select(s => (IDebugMemorySpace)new Logged(s.Name, s.Data, s.SideEffects, nativeLog)).ToArray();
-            var m = spaces.Select(s => (IDebugMemorySpace)new Logged(s.Name, s.Data, s.SideEffects, managedLog)).ToArray();
-            Same(differences, what, () => call(new NativeDebugViews(system, managed), n), () => call(managed, m));
-            bool sameReads = whole ? nativeLog.Order().SequenceEqual(managedLog.Order()) : nativeLog.SequenceEqual(managedLog);
-            if (!sameReads) differences.Add($"{what}: the reads differ ({nativeLog.Count} by the library, {managedLog.Count} by the C#)");
+            var log = new List<string>();
+            var n = spaces.Select(s => (IDebugMemorySpace)new Logged(s.Name, s.Data, s.SideEffects, log)).ToArray();
+            string answer = Shown(() => call(new NativeDebugViews(system), n));
+            Same(what, () => answer, Reads(whole ? log.Order(StringComparer.Ordinal) : log));
         }
 
         [Fact]
-        public void Every_nes_view_answers_alike_and_reads_alike()
+        public void Every_nes_view_answers_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1983);
-            var differences = new List<string>();
-            ISystemDebugViews views = NesDebugViews.Instance;
+            _golden = new ParityGolden("NesViews");
+            _group = what => what.StartsWith("tile", StringComparison.Ordinal) ? System.Text.RegularExpressions.Regex.Replace(what, @"-?\d+", "#") : null;
             foreach (int chrSize in new[] { 0, 16, 8190, 8192 })
                 foreach (bool sideEffects in new[] { false, true })
                 {
                     var spaces = new[] { ("PALETTE", Random(r, 32), false), ("CHR", Random(r, chrSize), sideEffects), ("CIRAM", Random(r, 2048), false) };
                     string label = $"chr {chrSize} {(sideEffects ? "with" : "without")} side effects";
-                    Both(differences, $"palettes {label}", spaces, (v, s) => v.Palettes(s), views, "nes");
-                    Both(differences, $"swatch {label}", spaces, (v, s) => v.PaletteSwatch(s), views, "nes");
-                    Both(differences, $"tile sheet {label}", spaces, (v, s) => v.TileSheet(s), views, "nes", whole: !sideEffects);
+                    Both($"palettes {label}", spaces, (v, s) => v.Palettes(s), "nes");
+                    Both($"swatch {label}", spaces, (v, s) => v.PaletteSwatch(s), "nes");
+                    Both($"tile sheet {label}", spaces, (v, s) => v.TileSheet(s), "nes", whole: !sideEffects);
                 }
             var empty = new[] { ("palette", Array.Empty<byte>(), false), ("chr", Array.Empty<byte>(), false) };
-            Both(differences, "palettes of empty spaces", empty, (v, s) => v.Palettes(s), views, "nes");
-            Both(differences, "palettes named in lower case", new[] { ("palette", Random(r, 32), false) }, (v, s) => v.Palettes(s), views, "nes");
+            Both("palettes of empty spaces", empty, (v, s) => v.Palettes(s), "nes");
+            Both("palettes named in lower case", new[] { ("palette", Random(r, 32), false) }, (v, s) => v.Palettes(s), "nes");
             var ciram = new[] { ("CIRAM", Random(r, 4096), false) };
             for (int address = -1; address < 0x1000; address++)
             {
                 int a = address;
-                Both(differences, $"tilemap entry {a}", ciram, (v, s) => v.DecodeTilemapEntry(s[0], a), views, "nes");
+                Both($"tilemap entry {a}", ciram, (v, s) => v.DecodeTilemapEntry(s[0], a), "nes");
             }
             var chr = new[] { ("CHR", Random(r, 8192), false) };
             for (int address = 0; address < 8192; address += 16)
                 foreach (int bpp in new[] { 2, 4 })
                 {
                     int a = address, b = bpp;
-                    Both(differences, $"tile {a} at {b}bpp", chr, (v, s) => v.DecodeTilePixels(s[0], a, b), views, "nes");
+                    Both($"tile {a} at {b}bpp", chr, (v, s) => v.DecodeTilePixels(s[0], a, b), "nes");
                 }
-            Both(differences, "stride", chr, (v, s) => v.TilemapEntryStride, views, "nes");
-            Both(differences, "vectors", chr, (v, s) => v.InterruptVectors, views, "nes");
-            Both(differences, "dma", chr, (v, s) => v.DmaChannels(s), views, "nes");
-            Both(differences, "dma destination", chr, (v, s) => v.NameDmaDestination(0x18), views, "nes");
-            Both(differences, "symbols", chr, (v, s) => v.SymbolNames, views, "nes");
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+            Both("stride", chr, (v, s) => v.TilemapEntryStride, "nes");
+            Both("vectors", chr, (v, s) => v.InterruptVectors, "nes");
+            Both("dma", chr, (v, s) => v.DmaChannels(s), "nes");
+            Both("dma destination", chr, (v, s) => v.NameDmaDestination(0x18), "nes");
+            Both("symbols", chr, (v, s) => v.SymbolNames, "nes");
+            _golden.Check();
+            (_golden, _group) = (null, null);
         }
 
         [Fact]
-        public void Every_snes_view_answers_alike_and_reads_alike()
+        public void Every_snes_view_answers_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1990);
-            var differences = new List<string>();
-            ISystemDebugViews views = SnesDebugViews.Instance;
+            _golden = new ParityGolden("SnesViews");
+            _group = what => what.StartsWith("tile", StringComparison.Ordinal) ? System.Text.RegularExpressions.Regex.Replace(what, @"-?\d+", "#") : null;
             for (int n = 0; n < 6; n++)
             {
                 byte[] io = Random(r, n == 5 ? 0x3FF : 0x400);
                 var spaces = new[] { ("VRAM", Random(r, n == 4 ? 0x8000 : 0x10000), n == 3), ("CGRAM", Random(r, 512), false), ("IO", io, false) };
-                Both(differences, $"palettes {n}", spaces, (v, s) => v.Palettes(s), views, "snes");
-                Both(differences, $"swatch {n}", spaces, (v, s) => v.PaletteSwatch(s), views, "snes");
-                Both(differences, $"tile sheet {n}", spaces, (v, s) => v.TileSheet(s), views, "snes");
-                Both(differences, $"dma {n}", spaces, (v, s) => v.DmaChannels(s), views, "snes");
+                Both($"palettes {n}", spaces, (v, s) => v.Palettes(s), "snes");
+                Both($"swatch {n}", spaces, (v, s) => v.PaletteSwatch(s), "snes");
+                Both($"tile sheet {n}", spaces, (v, s) => v.TileSheet(s), "snes");
+                Both($"dma {n}", spaces, (v, s) => v.DmaChannels(s), "snes");
             }
-            Both(differences, "no spaces", Array.Empty<(string, byte[], bool)>(), (v, s) => v.Palettes(s), views, "snes");
+            Both("no spaces", Array.Empty<(string, byte[], bool)>(), (v, s) => v.Palettes(s), "snes");
             var vram = new[] { ("VRAM", Random(r, 0x10000), false) };
             for (int address = 0; address < 0x10000; address += 2)
             {
                 int a = address;
-                Both(differences, $"tilemap entry {a}", vram, (v, s) => v.DecodeTilemapEntry(s[0], a), views, "snes");
+                Both($"tilemap entry {a}", vram, (v, s) => v.DecodeTilemapEntry(s[0], a), "snes");
             }
             for (int address = 0; address < 0x10000; address += 32)
                 foreach (int bpp in new[] { 2, 4, 8, 3 })
                 {
                     int a = address, b = bpp;
-                    Both(differences, $"tile {a} at {b}bpp", vram, (v, s) => v.DecodeTilePixels(s[0], a, b), views, "snes");
+                    Both($"tile {a} at {b}bpp", vram, (v, s) => v.DecodeTilePixels(s[0], a, b), "snes");
                 }
             for (int register = 0; register < 256; register++)
             {
                 byte g = (byte)register;
-                Both(differences, $"dma destination {g:X2}", vram, (v, s) => v.NameDmaDestination(g), views, "snes");
+                Both($"dma destination {g:X2}", vram, (v, s) => v.NameDmaDestination(g), "snes");
             }
-            Both(differences, "stride", vram, (v, s) => v.TilemapEntryStride, views, "snes");
-            Both(differences, "vectors", vram, (v, s) => v.InterruptVectors, views, "snes");
-            Both(differences, "symbols", vram, (v, s) => v.SymbolNames, views, "snes");
+            Both("stride", vram, (v, s) => v.TilemapEntryStride, "snes");
+            Both("vectors", vram, (v, s) => v.InterruptVectors, "snes");
+            Both("symbols", vram, (v, s) => v.SymbolNames, "snes");
             string[] names = { "PB", "PC", "A", "X", "Y", "S", "D", "DB", "P", "E" };
             for (int n = 0; n < 400; n++)
             {
                 var registers = names.Where(_ => n % 7 != 0 || r.Next(10) > 0).Select(x => new DebugRegisterValue(r.Next(4) == 0 ? x.ToLowerInvariant() : x, (ulong)r.NextInt64() * (ulong)r.Next(1, 3), 16)).ToArray();
-                Both(differences, $"summary {n}", vram, (v, s) => v.Summary(registers), views, "snes");
+                Both($"summary {n}", vram, (v, s) => v.Summary(registers), "snes");
                 foreach (string symbol in new[] { "flag.c", "FLAG.N", "flag.m", "sp", "DBR", "pc", "" })
-                    Both(differences, $"symbol {symbol} {n}", vram, (v, s) => v.Symbol(symbol, registers), views, "snes");
+                    Both($"symbol {symbol} {n}", vram, (v, s) => v.Symbol(symbol, registers), "snes");
             }
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+            _golden.Check();
+            (_golden, _group) = (null, null);
         }
 
         private static DebugUnit GbUnit(Random r, string name, string kind, params (string Name, int Bits)[] registers) =>
@@ -330,17 +336,14 @@ namespace EmuSen.WiseMan.Crystal
             return units.ToArray();
         }
 
-        // A call on both halves over the same spaces and units, each half's reads logged and compared in order.
-        private static void BothWithUnits(List<string> differences, string what, (string Name, byte[] Data, bool SideEffects)[] spaces, DebugUnit[] units, string system,
+        // A call on the library's views over spaces and units, the reads logged in order.
+        private static void BothWithUnits(string what, (string Name, byte[] Data, bool SideEffects)[] spaces, DebugUnit[] units, string system,
             Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, object?> call)
         {
-            ISystemDebugViews managed = GameBoyDebugViews.Instance;
-            var nativeLog = new List<string>();
-            var managedLog = new List<string>();
-            var n = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, nativeLog)).ToArray();
-            var m = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, managedLog)).ToArray();
-            Same(differences, what, () => call(new NativeDebugViews(system, managed), n, units), () => call(managed, m, units));
-            if (!nativeLog.SequenceEqual(managedLog)) differences.Add($"{what}: the reads differ ({nativeLog.Count} by the library, {managedLog.Count} by the C#)");
+            var log = new List<string>();
+            var n = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, log)).ToArray();
+            string answer = Shown(() => call(new NativeDebugViews(system), n, units));
+            Same(what, () => answer, Reads(log));
         }
 
         // Units as an engine of the two Sega consoles lists them, a unit left out at times and values past their widths at times - see Endou_Native.md §15.4.
@@ -371,26 +374,18 @@ namespace EmuSen.WiseMan.Crystal
             return units.ToArray();
         }
 
-        // A call on both halves of the Master System's or the SG-1000's views over the same spaces and units, the reads compared in order.
-        private static void BothSms(List<string> differences, string what, (string Name, byte[] Data, bool SideEffects)[] spaces, DebugUnit[] units, bool sg1000,
-            Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, object?> call)
-        {
-            ISystemDebugViews managed = sg1000 ? EmuSen.Crystal.Systems.Sms.SmsDebugViews.Sg1000 : EmuSen.Crystal.Systems.Sms.SmsDebugViews.MasterSystem;
-            var nativeLog = new List<string>();
-            var managedLog = new List<string>();
-            var n = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, nativeLog)).ToArray();
-            var m = spaces.Select(x => (IDebugMemorySpace)new Logged(x.Name, x.Data, x.SideEffects, managedLog)).ToArray();
-            Same(differences, what, () => call(new NativeDebugViews(sg1000 ? "sg1000" : "sms", managed), n, units), () => call(managed, m, units));
-            if (!nativeLog.SequenceEqual(managedLog)) differences.Add($"{what}: the reads differ ({nativeLog.Count} by the library, {managedLog.Count} by the C#)");
-        }
+        // A call on the library's views of the Master System or the SG-1000 over spaces and units, the reads logged in order.
+        private static void BothSms(string what, (string Name, byte[] Data, bool SideEffects)[] spaces, DebugUnit[] units, bool sg1000,
+            Func<ISystemDebugViews, IReadOnlyList<IDebugMemorySpace>, IReadOnlyList<DebugUnit>, object?> call) => BothWithUnits(what, spaces, units, sg1000 ? "sg1000" : "sms", call);
 
         // Every view of the two Sega consoles on generated spaces and units, every tilemap entry and tile of a VRAM's first part, and the address map's edges - see Endou_Native.md §15.5.
         [Fact]
-        public void Every_sms_view_answers_alike_and_reads_alike()
+        public void Every_sms_view_answers_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1985);
-            var differences = new List<string>();
+            _golden = new ParityGolden("SmsViews");
+            _group = what => what.StartsWith("tile", StringComparison.Ordinal) ? System.Text.RegularExpressions.Regex.Replace(what, @"-?\d+", "#") : null;
             for (int round = 0; round < 64; round++)
             {
                 bool sg1000 = round % 2 == 1;
@@ -401,20 +396,20 @@ namespace EmuSen.WiseMan.Crystal
                 var all = spaces.ToArray();
                 DebugUnit[] units = round % 13 == 12 ? Array.Empty<DebugUnit>() : SmsUnits(r, sg1000);
                 string label = $"round {round} ({(sg1000 ? "sg1000" : "sms")})";
-                BothSms(differences, $"palettes {label}", all, units, sg1000, (v, s, u) => v.Palettes(s, u));
-                BothSms(differences, $"palettes without units {label}", all, units, sg1000, (v, s, u) => v.Palettes(s));
-                BothSms(differences, $"swatch {label}", all, units, sg1000, (v, s, u) => v.PaletteSwatch(s, u));
-                BothSms(differences, $"tile sheet {label}", all, units, sg1000, (v, s, u) => v.TileSheet(s));
-                BothSms(differences, $"sprites {label}", all, units, sg1000, (v, s, u) => v.Sprites(s, u));
+                BothSms($"palettes {label}", all, units, sg1000, (v, s, u) => v.Palettes(s, u));
+                BothSms($"palettes without units {label}", all, units, sg1000, (v, s, u) => v.Palettes(s));
+                BothSms($"swatch {label}", all, units, sg1000, (v, s, u) => v.PaletteSwatch(s, u));
+                BothSms($"tile sheet {label}", all, units, sg1000, (v, s, u) => v.TileSheet(s));
+                BothSms($"sprites {label}", all, units, sg1000, (v, s, u) => v.Sprites(s, u));
                 uint mutes = (uint)r.Next(16);
-                BothSms(differences, $"channels {label}", all, units, sg1000, (v, s, u) => v.AudioChannels(s, u, mutes));
+                BothSms($"channels {label}", all, units, sg1000, (v, s, u) => v.AudioChannels(s, u, mutes));
                 string[] names = { "AF", "BC", "DE", "HL", "AF'", "BC'", "DE'", "HL'", "IX", "IY", "SP", "PC", "I", "R", "WZ", "IM", "IFF1", "IFF2" };
                 var registers = names.Where(x => x != "PC" || round % 9 != 7).Select(x => new DebugRegisterValue(x, (ulong)r.Next(0x20000), 16)).ToArray();
-                BothSms(differences, $"summary {label}", all, units, sg1000, (v, s, u) => v.Summary(registers, s, u));
-                BothSms(differences, $"summary without units {label}", all, units, sg1000, (v, s, u) => v.Summary(registers));
-                foreach (DebugUnit unit in units) BothSms(differences, $"label {unit.Name} {label}", all, units, sg1000, (v, s, u) => v.UnitLabel(unit) ?? "null");
+                BothSms($"summary {label}", all, units, sg1000, (v, s, u) => v.Summary(registers, s, u));
+                BothSms($"summary without units {label}", all, units, sg1000, (v, s, u) => v.Summary(registers));
+                foreach (DebugUnit unit in units) BothSms($"label {unit.Name} {label}", all, units, sg1000, (v, s, u) => v.UnitLabel(unit) ?? "null");
                 foreach (int address in new[] { -1, 0, 0x7FFF, 0xBFFF, 0xC000, 0xC3FF, 0xC400, 0xDFFF, 0xE000, 0xFFFC, 0xFFFF, 0x10000 })
-                    BothSms(differences, $"address {address:X} {label}", all, units, sg1000, (v, s, u) => v.ResolvePhysical(address, s, u));
+                    BothSms($"address {address:X} {label}", all, units, sg1000, (v, s, u) => v.ResolvePhysical(address, s, u));
             }
             var bank = new[] { ("VRAM", Random(r, 0x4000), false) };
             foreach (bool sg1000 in new[] { false, true })
@@ -422,31 +417,33 @@ namespace EmuSen.WiseMan.Crystal
                 for (int address = -1; address < 0x1000; address += 3)
                 {
                     int a = address;
-                    BothSms(differences, $"tilemap entry {a} {sg1000}", bank, Array.Empty<DebugUnit>(), sg1000, (v, s, u) => v.DecodeTilemapEntry(s[0], a));
+                    BothSms($"tilemap entry {a} {sg1000}", bank, Array.Empty<DebugUnit>(), sg1000, (v, s, u) => v.DecodeTilemapEntry(s[0], a));
                 }
                 for (int address = 0; address < 0x2000; address += 8)
                     foreach (int bpp in new[] { 1, 2, 4 })
                     {
                         int a = address, b = bpp;
-                        BothSms(differences, $"tile {a} at {b}bpp {sg1000}", bank, Array.Empty<DebugUnit>(), sg1000, (v, s, u) => v.DecodeTilePixels(s[0], a, b));
+                        BothSms($"tile {a} at {b}bpp {sg1000}", bank, Array.Empty<DebugUnit>(), sg1000, (v, s, u) => v.DecodeTilePixels(s[0], a, b));
                     }
                 var none = Array.Empty<DebugUnit>();
-                BothSms(differences, $"stride {sg1000}", bank, none, sg1000, (v, s, u) => v.TilemapEntryStride);
-                BothSms(differences, $"vectors {sg1000}", bank, none, sg1000, (v, s, u) => v.InterruptVectors);
-                BothSms(differences, $"max sprites {sg1000}", bank, none, sg1000, (v, s, u) => v.MaxSprites);
-                BothSms(differences, $"dma {sg1000}", bank, none, sg1000, (v, s, u) => v.DmaChannels(s, u));
-                BothSms(differences, $"symbols {sg1000}", bank, none, sg1000, (v, s, u) => v.SymbolNames);
+                BothSms($"stride {sg1000}", bank, none, sg1000, (v, s, u) => v.TilemapEntryStride);
+                BothSms($"vectors {sg1000}", bank, none, sg1000, (v, s, u) => v.InterruptVectors);
+                BothSms($"max sprites {sg1000}", bank, none, sg1000, (v, s, u) => v.MaxSprites);
+                BothSms($"dma {sg1000}", bank, none, sg1000, (v, s, u) => v.DmaChannels(s, u));
+                BothSms($"symbols {sg1000}", bank, none, sg1000, (v, s, u) => v.SymbolNames);
             }
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+            _golden.Check();
+            (_golden, _group) = (null, null);
         }
 
         // Every Game Boy view on generated spaces and units in each console mode, every tilemap entry and tile of a VRAM bank, and the address map from end to end - see EmuSen_Backend.md §17.10.
         [Fact]
-        public void Every_game_boy_view_answers_alike_and_reads_alike()
+        public void Every_game_boy_view_answers_as_the_golden_says()
         {
             Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1989);
-            var differences = new List<string>();
+            _golden = new ParityGolden("GameBoyViews");
+            _group = what => what.StartsWith("tile", StringComparison.Ordinal) ? System.Text.RegularExpressions.Regex.Replace(what, @"-?\d+", "#") : null;
             for (int round = 0; round < 48; round++)
             {
                 bool colour = round % 3 == 0, twoBanks = colour || round % 3 == 1;
@@ -460,20 +457,20 @@ namespace EmuSen.WiseMan.Crystal
                 var all = spaces.ToArray();
                 DebugUnit[] units = round % 17 == 16 ? Array.Empty<DebugUnit>() : GbUnits(r, colour);
                 string label = $"round {round} ({(colour ? "colour" : twoBanks ? "compatibility" : "dmg")})";
-                BothWithUnits(differences, $"palettes {label}", all, units, system, (v, s, u) => v.Palettes(s, u));
-                BothWithUnits(differences, $"palettes without units {label}", all, units, system, (v, s, u) => v.Palettes(s));
-                BothWithUnits(differences, $"swatch {label}", all, units, system, (v, s, u) => v.PaletteSwatch(s, u));
-                BothWithUnits(differences, $"tile sheet {label}", all, units, system, (v, s, u) => v.TileSheet(s));
-                BothWithUnits(differences, $"sprites {label}", all, units, system, (v, s, u) => v.Sprites(s, u));
+                BothWithUnits($"palettes {label}", all, units, system, (v, s, u) => v.Palettes(s, u));
+                BothWithUnits($"palettes without units {label}", all, units, system, (v, s, u) => v.Palettes(s));
+                BothWithUnits($"swatch {label}", all, units, system, (v, s, u) => v.PaletteSwatch(s, u));
+                BothWithUnits($"tile sheet {label}", all, units, system, (v, s, u) => v.TileSheet(s));
+                BothWithUnits($"sprites {label}", all, units, system, (v, s, u) => v.Sprites(s, u));
                 uint mutes = (uint)r.Next(32);
-                BothWithUnits(differences, $"channels {label}", all, units, system, (v, s, u) => v.AudioChannels(s, u, mutes));
-                BothWithUnits(differences, $"dma {label}", all, units, system, (v, s, u) => v.DmaChannels(s, u));
+                BothWithUnits($"channels {label}", all, units, system, (v, s, u) => v.AudioChannels(s, u, mutes));
+                BothWithUnits($"dma {label}", all, units, system, (v, s, u) => v.DmaChannels(s, u));
                 string[] names = { "A", "F", "BC", "DE", "HL", "SP", "PC", "Z", "N", "H", "C", "IME", "HALT", "IE", "IF", "Cycles" };
                 var registers = names.Where(x => x != "PC" || round % 9 != 8).Select(x => new DebugRegisterValue(x, (ulong)r.Next(0x20000), 16)).ToArray();
-                BothWithUnits(differences, $"summary {label}", all, units, system, (v, s, u) => v.Summary(registers, s, u));
-                BothWithUnits(differences, $"summary without units {label}", all, units, system, (v, s, u) => v.Summary(registers));
+                BothWithUnits($"summary {label}", all, units, system, (v, s, u) => v.Summary(registers, s, u));
+                BothWithUnits($"summary without units {label}", all, units, system, (v, s, u) => v.Summary(registers));
                 foreach (int address in new[] { -1, 0, 0x3FFF, 0x4000, 0x7FFF, 0x8000, 0x9FFF, 0xA000, 0xC000, 0xCFFF, 0xD000, 0xDFFF, 0xE000, 0xFE00, 0xFE9F, 0xFEA0, 0xFF00, 0xFF7F, 0xFF80, 0xFFFE, 0xFFFF, 0x10000 })
-                    BothWithUnits(differences, $"address {address:X} {label}", all, units, system, (v, s, u) => v.ResolvePhysical(address, s, u));
+                    BothWithUnits($"address {address:X} {label}", all, units, system, (v, s, u) => v.ResolvePhysical(address, s, u));
             }
             var bank = new[] { ("VRAM", Random(r, 0x4000), false) };
             foreach (bool colour in new[] { false, true })
@@ -482,23 +479,76 @@ namespace EmuSen.WiseMan.Crystal
                 for (int address = -1; address < 0x2000; address += 3)
                 {
                     int a = address;
-                    BothWithUnits(differences, $"tilemap entry {a} {(colour ? "colour" : "dmg")}", bank, units, "gb", (v, s, u) => v.DecodeTilemapEntry(s[0], a, s, u));
-                    BothWithUnits(differences, $"tilemap entry without units {a}", bank, units, "gb", (v, s, u) => v.DecodeTilemapEntry(s[0], a));
+                    BothWithUnits($"tilemap entry {a} {(colour ? "colour" : "dmg")}", bank, units, "gb", (v, s, u) => v.DecodeTilemapEntry(s[0], a, s, u));
+                    BothWithUnits($"tilemap entry without units {a}", bank, units, "gb", (v, s, u) => v.DecodeTilemapEntry(s[0], a));
                 }
             }
             for (int address = 0; address < 0x4000; address += 16)
                 foreach (int bpp in new[] { 2, 4 })
                 {
                     int a = address, b = bpp;
-                    BothWithUnits(differences, $"tile {a} at {b}bpp", bank, Array.Empty<DebugUnit>(), "gbc", (v, s, u) => v.DecodeTilePixels(s[0], a, b));
+                    BothWithUnits($"tile {a} at {b}bpp", bank, Array.Empty<DebugUnit>(), "gbc", (v, s, u) => v.DecodeTilePixels(s[0], a, b));
                 }
             var none = Array.Empty<DebugUnit>();
-            BothWithUnits(differences, "stride", bank, none, "gb", (v, s, u) => v.TilemapEntryStride);
-            BothWithUnits(differences, "vectors", bank, none, "gb", (v, s, u) => v.InterruptVectors);
-            BothWithUnits(differences, "max sprites", bank, none, "gb", (v, s, u) => v.MaxSprites);
-            BothWithUnits(differences, "dma destination", bank, none, "gb", (v, s, u) => v.NameDmaDestination(0x51));
-            BothWithUnits(differences, "symbols", bank, none, "gb", (v, s, u) => v.SymbolNames);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
+            BothWithUnits("stride", bank, none, "gb", (v, s, u) => v.TilemapEntryStride);
+            BothWithUnits("vectors", bank, none, "gb", (v, s, u) => v.InterruptVectors);
+            BothWithUnits("max sprites", bank, none, "gb", (v, s, u) => v.MaxSprites);
+            BothWithUnits("dma destination", bank, none, "gb", (v, s, u) => v.NameDmaDestination(0x51));
+            BothWithUnits("symbols", bank, none, "gb", (v, s, u) => v.SymbolNames);
+            _golden.Check();
+            (_golden, _group) = (null, null);
         }
+
+        // Units as an NES engine lists them, a unit left out at times and values past their widths at times - see EmuSen_Backend.md §23.2.
+        private static DebugUnit[] NesUnits(Random r)
+        {
+            var units = new List<DebugUnit>();
+            if (r.Next(8) > 0) units.Add(GbUnit(r, "PPU", "video", ("PPUCTRL", 8), ("PPUMASK", 8), ("PPUSTATUS", 8), ("v", 15), ("t", 15), ("x", 3), ("Scanline", 9)));
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "Board", "cartridge", ("Mapper", r.Next(3) == 0 ? 12 : 7)));
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "Cartridge", "cartridge", ("Mirroring", 2), ("Battery", 1), ("ChrRam", 1)));
+            foreach (string pulse in new[] { "Pulse 1", "Pulse 2" })
+                if (r.Next(7) > 0) units.Add(GbUnit(r, pulse, "channel", ("TimerPeriod", 11), ("SweepShift", 3), ("SweepNegate", 1), ("OnesComplement", 1), ("LengthCounter", 8), ("ConstantVolume", 1), ("Volume", 4), ("Decay", 4), ("Duty", 2), ("SweepEnabled", 1)));
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "Triangle", "channel", ("LengthCounter", 8), ("TimerPeriod", 11), ("ControlFlag", 1)));
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "Noise", "channel", ("LengthCounter", 8), ("ConstantVolume", 1), ("Volume", 4), ("Decay", 4), ("PeriodIndex", 4), ("ShortMode", 1)));
+            if (r.Next(6) > 0) units.Add(GbUnit(r, "DMC", "channel", ("OutputLevel", 7), ("BytesRemaining", 12), ("RateIndex", 4), ("SampleAddress", 16), ("SampleLength", 12), ("Loop", 1)));
+            return units.ToArray();
+        }
+
+        // The NES views that read the units, which the C# answered alone until 2026-11-04: the sprites, the channels, the address map, the boards' labels and the summary - see EmuSen_Backend.md §40.1.
+        [Fact]
+        public void Every_nes_unit_view_matches_the_golden()
+        {
+            var r = new Random(1985_10_18);
+            var golden = new ParityGolden("NesUnitViews");
+            ISystemDebugViews views = NesSystem.Pack.DebugViews!;
+            for (int round = 0; round < 64; round++)
+            {
+                var log = new List<string>();
+                byte[] oam = Random(r, round % 9 == 8 ? 200 : 256);
+                for (int i = 0; i + 3 < oam.Length; i += 4) if (r.Next(3) == 0) oam[i] = (byte)(r.Next(2) == 0 ? 0 : 240 + r.Next(16));
+                var spaces = new List<IDebugMemorySpace> { new Logged(round % 7 == 6 ? "oam" : "OAM", oam, false, log), new Logged("PRGROM", Random(r, 0x4000 << (round % 4)), false, log), new Logged("CHR", Random(r, round % 5 == 4 ? 0 : 0x2000 << (round % 3)), false, log) };
+                DebugUnit[] units = round % 13 == 12 ? Array.Empty<DebugUnit>() : NesUnits(r);
+                string[] names = { "A", "X", "Y", "S", "PC", "P" };
+                var registers = names.Where(x => x != "PC" || round % 9 != 7).Select(x => new DebugRegisterValue(x, (ulong)r.Next(0x20000), 16)).ToArray();
+                uint mutes = (uint)r.Next(32);
+                string label = $"round {round}";
+                golden.Add($"sprites {label}", () => views.Sprites(spaces, units), Show);
+                golden.Add($"max sprites {label}", () => views.MaxSprites, Show);
+                golden.Add($"channels {label}", () => views.AudioChannels(spaces, units, mutes), Show);
+                golden.Add($"summary {label}", () => views.Summary(registers, spaces, units), Show);
+                foreach (DebugUnit unit in units) golden.Add($"label {unit.Name} {label}", () => views.UnitLabel(unit), Show);
+                foreach (int address in new[] { -1, 0, 0x7FF, 0x800, 0x1FFF, 0x2000, 0x2007, 0x2008, 0x3FFF, 0x4000, 0x401F, 0x4020, 0x5FFF, 0x6000, 0x7FFF, 0x8000, 0xFFFF, 0x10000 })
+                    golden.Add($"address {address:X} {label}", () => views.ResolvePhysical(address, spaces, units), Show);
+            }
+            foreach (long mapper in new long[] { -1, 0, 1, 4, 5, 79, 80, 4095, 1L << 40 })
+                golden.Add($"label of mapper {mapper}", () => views.UnitLabel(new DebugUnit(0, "Board", "cartridge", new[] { new DebugRegisterValue("Mapper", unchecked((ulong)mapper), 64) })), Show);
+            golden.Add("label of a unit that is no cartridge", () => views.UnitLabel(new DebugUnit(0, "Board", "video", new[] { new DebugRegisterValue("Mapper", 1, 8) })), Show);
+            golden.Check(1000);
+        }
+
+        private static string Show(object? answer) => Shown(() => answer);
+
+        // A view's reads, in order, as a short digest.
+        private static string Reads(IEnumerable<string> log) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(string.Join("\n", log))))[..16];
     }
 }

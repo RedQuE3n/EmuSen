@@ -1,49 +1,17 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Systems;
-using EmuSen.Crystal.Systems.Genesis;
-using EmuSen.Crystal.Systems.Snes;
-using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The cheat codecs in emusen-systems held to the C# codecs: every code of the cheat tests and the golden corpus, and generated codes, through every codec, each answer or refusal the same - see EmuSen_Backend.md §13.
+    // The cheat codecs in emusen-systems held to the C# codecs' answers as recorded before they were deleted: every code of the cheat tests and the golden corpus, and generated codes, through every codec, each answer or refusal - see EmuSen_Backend.md §13, §40.1.
     public class CheatCodecParityTests
     {
-        private static readonly string Root = ConfigRoot.Managed.Directory;
-
-        // The files whose codes the class takes: every cheat test, and the shell's recordings of `cheat`.
-        private static readonly string[] Sources =
-        {
-            "EmuSen.WiseMan/Cores/CheatCodecAdapterTests.cs", "EmuSen.WiseMan/Cores/NesGameGenieCodecTests.cs", "EmuSen.WiseMan/Cores/MoonCheatTests.cs",
-            "EmuSen.WiseMan/Cores/MarsCheatTests.cs", "EmuSen.WiseMan/Cores/MercuryRtCoreTests.cs", "EmuSen.WiseMan/Cores/MercuryDebugTargetTests.cs",
-            "EmuSen.WiseMan/Cores/DiamondTests.cs", "EmuSen.WiseMan/Cores/MoonRtFrontendTests.cs", "EmuSen.WiseMan/Cores/MarsRtFrontendTests.cs",
-            "EmuSen.WiseMan/DianaSh/GenesisCheatFormatsTests.cs", "EmuSen.WiseMan/DianaSh/SnesSystemPackTests.cs", "EmuSen.WiseMan/DianaSh/PsxCheatFormatsTests.cs",
-            "EmuSen.WiseMan/DianaSh/CheatChtCommandTests.cs", "EmuSen.WiseMan/DianaSh/CheatMasterSwitchTests.cs", "EmuSen.WiseMan/DianaSh/CheatDatabaseTests.cs",
-            "EmuSen.WiseMan/DianaSh/CheatPruneCommandTests.cs", "EmuSen.WiseMan/DianaSh/CheatDatabaseGamesTests.cs", "EmuSen.WiseMan/Mistress/ActiveCheatsWindowTests.cs",
-            "EmuSen.WiseMan/Mistress/CheatDatabaseWindowTests.cs", "EmuSen.WiseMan/Mistress/ConsoleContextTests.cs", "EmuSen.WiseMan/Properties/CodecProperties.cs",
-        };
-
-        // Every string literal of the sources, and every argument after `cheat` in the golden corpus, as written.
-        internal static IReadOnlyList<string> TestCodes()
-        {
-            var codes = new SortedSet<string>(StringComparer.Ordinal);
-            foreach (string source in Sources)
-                foreach (Match m in Regex.Matches(File.ReadAllText(Path.Combine(Root, source)), "\"((?:[^\"\\\\\\n]|\\\\.)*)\""))
-                    codes.Add(Regex.Unescape(m.Groups[1].Value));
-            foreach (string line in File.ReadAllLines(Path.Combine(Root, "EmuSen.WiseMan", "DianaSh", "Golden", "cheat.golden")).Where(l => l.StartsWith("$ cheat ", StringComparison.Ordinal)))
-            {
-                string[] words = line[8..].Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                foreach (string word in words) codes.Add(word);
-                if (words.Length > 1) codes.Add(string.Join(' ', words[1..]));
-            }
-            return codes.ToArray();
-        }
+        // The codes of the cheat tests and of the golden corpus's `cheat` file as they stood on 2026-11-04, kept in the golden whose keys they are.
+        internal static IReadOnlyList<string> TestCodes() =>
+            ParityGolden.Read("CheatCodesOfTheTests").Select(l => l.Key).Where(k => k.StartsWith("nes.raw ", StringComparison.Ordinal)).Select(k => k["nes.raw ".Length..]).ToArray();
 
         private const string Hex = "0123456789ABCDEFabcdef";
         private static readonly string[] Separators = { " ", "-", ":", "+", "\n", "\t", " ", ",", "", " + ", "\r\n" };
@@ -95,93 +63,69 @@ namespace EmuSen.WiseMan.Crystal
             catch (Exception e) { return $"threw {e.GetType().Name}: {e.Message}"; }
         }
 
-        private static IEnumerable<(string Id, Func<ICheatCodeCodec> Managed)> Codecs() =>
-            SystemPacks.ManagedCodecs.SelectMany(c => new[] { c.Auto, c.Explicit }).OfType<(string Id, Func<ICheatCodeCodec> Managed)>().DistinctBy(c => c.Id);
+        // Every codec once, in the order of the table's pairs.
+        private static IEnumerable<string> Codecs() => SystemCode.CodecPairs.SelectMany(p => new[] { p.Auto, p.Explicit }).OfType<string>().Distinct();
 
-        private static List<string> Compare(IEnumerable<string> codes)
+        private static void Record(IReadOnlyList<string> codes, ParityGolden golden, bool keyByCode = true)
         {
-            var differences = new List<string>();
-            foreach (var (id, factory) in Codecs())
+            foreach (string id in Codecs())
             {
-                ICheatCodeCodec managed = factory(), native = new NativeCheatCodec(id, factory());
-                foreach (string code in codes)
+                ICheatCodeCodec codec = new NativeCheatCodec(id);
+                for (int at = 0; at < codes.Count; at++)
                 {
-                    foreach (var (what, ask) in new (string, Func<ICheatCodeCodec, object?>)[]
-                    {
-                        ("CanDecode", c => c.CanDecode(code)), ("Decode", c => c.Decode(code)), ("DecodeCompare", c => c.DecodeCompare(code)), ("DecodeWrites", c => c.DecodeWrites(code)),
-                    })
-                    {
-                        string n = Shown(() => ask(native)), m = Shown(() => ask(managed));
-                        if (n != m) differences.Add($"{id} {what} '{code}':\n  library: {n}\n  C#:      {m}");
-                    }
+                    string code = codes[at];
+                    string answers = string.Join(" | ", new Func<object?>[] { () => codec.CanDecode(code), () => codec.Decode(code), () => codec.DecodeCompare(code), () => codec.DecodeWrites(code) }.Select(Shown));
+                    if (keyByCode) golden.Add($"{id} {code}", answers);
+                    else golden.AddChunked(id, answers, 50);
                 }
             }
-            return differences;
         }
 
         [Fact]
-        public void Every_codec_has_the_csharps_name_kind_space_and_place()
+        public void Every_code_of_the_cheat_tests_decodes_as_recorded_through_every_codec()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            foreach (var (id, factory) in Codecs())
-            {
-                ICheatCodeCodec managed = factory();
-                SystemCode.CodecFacts facts = SystemCode.Codecs.Single(c => c.Id == id);
-                Assert.Equal((managed.Name, managed.Kind, managed.SpaceName), (facts.Name, facts.Kind, facts.Space));
-            }
-            Assert.Equal(SystemPacks.ManagedCodecs.Select(c => (c.System, c.Auto?.Id, c.Explicit?.Id)), SystemCode.CodecPairs.Select(p => (p.System, p.Auto, p.Explicit)));
-            Assert.Equal(SystemCode.Codecs.Select(c => c.Id).Order(StringComparer.Ordinal), Codecs().Select(c => c.Id).Order(StringComparer.Ordinal));
-            foreach (var (system, auto, _) in SystemPacks.ManagedCodecs)
-                Assert.Equal(auto?.Managed().SpaceName, SystemTable.CheatSpaces[system]);
-        }
-
-        [Fact]
-        public void Each_pack_hands_out_the_codec_the_switch_chose()
-        {
-            foreach (SystemPack pack in SystemPacks.All)
-                foreach (ICheatCodeCodec? codec in new[] { pack.AutoDetectCodec?.Invoke(), pack.ExplicitCodec?.Invoke() })
-                    if (codec is not null) Assert.Equal(SystemTable.Active, codec is NativeCheatCodec);
-            Assert.Equal(11, SystemPacks.All.Count(p => p.AutoDetectCodec is not null));
-        }
-
-        [Fact]
-        public void Every_code_of_the_cheat_tests_decodes_alike_through_every_codec()
-        {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
             var codes = TestCodes();
             Assert.True(codes.Count > 900, $"{codes.Count} codes");
-            var differences = Compare(codes);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(15)));
+            var golden = new ParityGolden("CheatCodesOfTheTests");
+            Record(codes, golden);
+            golden.Check(9000);
         }
 
         [Fact]
-        public void Generated_codes_decode_alike_through_every_codec()
+        public void Generated_codes_decode_as_recorded_through_every_codec()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            var differences = Compare(GeneratedCodes());
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(15)));
+            var golden = new ParityGolden("CheatCodesGenerated");
+            Record(GeneratedCodes(), golden, keyByCode: false);
+            golden.Check(1000);
         }
 
-        // The two Game Genie encoders, the other way: every patch the cheat tests decode, and generated ones, encoded alike.
+        // A lone surrogate crosses as U+FFFD, which no codec takes as a digit, so a code holding one decodes as the code holding U+FFFD - see EmuSen_Backend.md §40.1.
         [Fact]
-        public void The_game_genie_encoders_agree()
+        public void A_code_holding_a_lone_surrogate_decodes_as_one_holding_the_replacement()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            var r = new Random(1990);
-            var differences = new List<string>();
-            var patches = Enumerable.Range(0, 3000).Select(_ => (r.Next(int.MinValue, int.MaxValue), (uint)r.Next())).ToList();
-            foreach (string code in TestCodes())
+            foreach (string id in Codecs())
+                foreach (string code in new[] { "7E0DBE:\uD800", "\uDC00AAAA-AAAA", "800F\uD83D1234 0001" })
+                {
+                    string text = ParityGolden.Unescape(code);
+                    ICheatCodeCodec codec = new NativeCheatCodec(id);
+                    Assert.Equal(Shown(() => codec.CanDecode(EmuSen.Galaxia.Native.PlatformText.Mend(text))) + Shown(() => codec.DecodeWrites(EmuSen.Galaxia.Native.PlatformText.Mend(text))),
+                        Shown(() => codec.CanDecode(text)) + Shown(() => codec.DecodeWrites(text)));
+                }
+        }
+
+        // The two Game Genie encoders, the other way: every patch the cheat tests decoded on 2026-11-04, and generated ones, encoded as recorded.
+        [Fact]
+        public void The_game_genie_encoders_encode_as_recorded()
+        {
+            var golden = new ParityGolden("GameGenieEncoders");
+            foreach (var (key, _) in ParityGolden.Read("GameGenieEncoders"))
             {
-                if (SnesCheatFormats.IsGameGenie(code)) { var (a, v) = SnesCheatFormats.DecodeGameGenie(code); patches.Add((a, v)); }
-                if (GenesisCheatFormats.IsGameGenie(code)) { var (a, v) = GenesisCheatFormats.DecodeGameGenie(code); patches.Add((a, v)); }
+                string[] parts = key.Split(' ');
+                int address = int.Parse(parts[0]);
+                uint value = uint.Parse(parts[1]);
+                golden.Add(key, $"{SystemCode.CheatEncode("snes.gg", address, value)} | {SystemCode.CheatEncode("md.gg", address, value)}");
             }
-            foreach (var (address, value) in patches)
-            {
-                string snes = SnesCheatFormats.EncodeGameGenie(address, (byte)value), genesis = GenesisCheatFormats.EncodeGameGenie(address, (ushort)value);
-                if (SystemCode.CheatEncode("snes.gg", address, value) != snes) differences.Add($"snes {address:X} {value:X}: {snes}");
-                if (SystemCode.CheatEncode("md.gg", address, value) != genesis) differences.Add($"genesis {address:X} {value:X}: {genesis}");
-            }
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(15)));
+            golden.Check(3000);
         }
     }
 }

@@ -164,7 +164,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             var host = new FakeGames();
             var games = new GamesScreen(host);
-            Assert.Equal([("", GamesScreen.EveryGame), ("7", "Weekend")], games.FilterRows);
+            Assert.Equal([("", GamesScreen.EveryGame), (GamesScreen.Favourites, "Favourites"), ("7", "Weekend")], games.FilterRows);
             games.ShowCollection(7);
             Assert.Equal([(GamesScreen.CollectionPrefix + "7", "Weekend")], games.Sections);
             Assert.Equal(["Fable of Tiles", "Hollow Comet"], games.Shown.Select(g => g.Facts.Title));
@@ -173,6 +173,31 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(games.Collection);
             games.Back();
             Assert.Equal(["home"], host.Said);
+        }
+
+        [Fact]
+        public void Filter_Favourites_narrows_each_section_to_its_own_and_is_cleared_as_a_collection_is()
+        {
+            var host = new FakeGames();
+            var games = new GamesScreen(host);
+            games.ChooseSection(GamesScreen.ConsolePrefix + "SNES");
+            games.ChooseFilter(GamesScreen.Favourites);
+            Assert.Equal(["Granite Choir"], games.Shown.Select(g => g.Facts.Title));
+            Assert.Equal("1 of 2 games", games.CountLine);
+            Assert.Equal("Favourites", games.ListRows(null).Single(r => r.Key == GamesScreen.FilterRow).Value);
+            games.ChooseSection(GamesScreen.ConsolePrefix + "NES");
+            Assert.Equal("1 game", games.CountLine);
+            Assert.Null(games.FilterValue);
+            games.ChooseSection(GamesScreen.ConsolePrefix + "SNES");
+            Assert.Equal("1 of 2 games", games.CountLine);
+            games.ChooseFilter("");
+            Assert.Equal("2 games", games.CountLine);
+            games.ChooseFilter(GamesScreen.Favourites);
+            Assert.True(games.Back());
+            Assert.Equal("2 games", games.CountLine);
+            Assert.Empty(host.Said);
+            games.ChooseSection(GamesScreen.Favourites);
+            Assert.DoesNotContain(GamesScreen.Favourites, games.FilterRows.Select(f => f.Key));
         }
 
         [Fact]

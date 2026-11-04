@@ -1235,6 +1235,8 @@ namespace EmuSen.Mistress.Views
         private void ShowLibraryEntries()
         {
             UpdateStartConsoleButton();
+            // Favourites or a collection is narrowed to a console by the bar's facet, as the grid's Filter narrows a console to its favourites (EmuSen_Interface.md §18.1).
+            LibraryFilter.ShowFacet = CollectionKey != AllGamesKey;
             string search = LibraryFilter.SearchText;
             _recordSnapshot = _records.All();
             _recentSnapshot = Recent(Listed(_allScan.Entries));

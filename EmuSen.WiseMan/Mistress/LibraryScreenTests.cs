@@ -226,6 +226,37 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // The sidebar's Favourites with a console from the bar's facet: that console's favourites, the facet shown only while a collection is (EmuSen_Interface.md §18.1).
+        [Fact]
+        public Task Favourites_are_narrowed_to_a_console_by_the_bar_s_console_choice() => Session.Dispatch(() =>
+        {
+            Rom("Alpha.sfc");
+            Rom("Beta.sfc");
+            File.WriteAllBytes(Path.Combine(_romDir, "Gamma.nes"), new byte[64]);
+            using (GameRecords records = GameRecords.Load())
+            {
+                records.ToggleFavourite(Path.Combine(_romDir, "Beta.sfc"));
+                records.ToggleFavourite(Path.Combine(_romDir, "Gamma.nes"));
+            }
+            MainWindow window = Open();
+            var filter = window.GetControl<FilterBar>("LibraryFilter");
+            Assert.False(filter.ShowFacet);
+            string nes = Entry(window, "Gamma.nes").Shelf;
+
+            Choose(window, MainWindow.FavouritesKey);
+            Assert.True(filter.ShowFacet);
+            Assert.Equal(new[] { "Beta.sfc", "Gamma.nes" }, Shown(window).Order().ToArray());
+
+            filter.GetVisualDescendants().OfType<Dropdown>().Single().SelectedItem = nes;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal(new[] { "Gamma.nes" }, Shown(window));
+            Assert.Equal(MainWindow.FavouritesKey, Sidebar(window).SelectedKey);
+
+            Choose(window, MainWindow.ConsoleKeyPrefix + nes);
+            Assert.False(filter.ShowFacet);
+            window.Close();
+        }, default);
+
         [Fact]
         public Task Recently_played_is_the_games_started_newest_first() => Session.Dispatch(() =>
         {

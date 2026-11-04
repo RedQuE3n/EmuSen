@@ -12,6 +12,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using Xunit;
@@ -227,6 +228,57 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 ToolCounts.Quiet();
                 InterfaceRecorder.Normalise = s => s;
                 InterfaceRecorder.Volatile = _ => null;
+                ResetPageClock();
+                Stop(window);
+                window.Close();
+            }
+        }, default);
+
+        // Filter ▸ Favourites from the pad in a console's tab: only that console's favourites with the count, Every game and B restoring all, and not offered in the Favourites tab (EmuSen_Interface.md §18.1).
+        [Fact]
+        public Task The_pad_narrows_a_console_s_tab_to_its_favourites_and_back() => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = OwnLookSession("Games", 1280, 800);
+            try
+            {
+                OpenOwnLook(window, pad, "Games");
+                GalleryLayout grid = window.GamesLayout!;
+                string snes = window.GamesShown!.Host.Games.First(g => g.Facts.Path.EndsWith(".sfc", StringComparison.Ordinal)).Shelf;
+                for (int i = 0; i < 12 && window.GamesShown!.Section != GamesScreen.ConsolePrefix + snes; i++) pad.R1();
+                Assert.Equal(GamesScreen.ConsolePrefix + snes, window.GamesShown!.Section);
+                string[] Shown() => grid.Items.Select(c => Path.GetFileName(c.Key)).ToArray();
+                Assert.Equal(5, Shown().Length);
+
+                pad.Select();
+                PadMenu.Choose(window, pad, "Filter", exact: true);
+                PadMenu.Choose(window, pad, "Favourites", exact: true);
+                Settle(window);
+                Assert.Equal(["Brass Lantern (Synthetic).sfc"], Shown());
+                Assert.Equal("1 of 5 games", grid.Count);
+
+                pad.Select();
+                PadMenu.Choose(window, pad, "Filter", exact: true);
+                PadMenu.Choose(window, pad, GamesScreen.EveryGame, exact: true);
+                Settle(window);
+                Assert.Equal(5, Shown().Length);
+                Assert.Equal("5 games", grid.Count);
+
+                pad.Select();
+                PadMenu.Choose(window, pad, "Filter", exact: true);
+                PadMenu.Choose(window, pad, "Favourites", exact: true);
+                Settle(window);
+                pad.B();
+                Settle(window);
+                Assert.Equal("5 games", grid.Count);
+
+                for (int i = 0; i < 12 && window.GamesShown!.Section != GamesScreen.Favourites; i++) pad.L1();
+                pad.Select();
+                PadMenu.Choose(window, pad, "Filter", exact: true);
+                Assert.DoesNotContain("Favourites", PadMenu.Lines(window));
+            }
+            finally
+            {
+                ToolCounts.Quiet();
                 ResetPageClock();
                 Stop(window);
                 window.Close();

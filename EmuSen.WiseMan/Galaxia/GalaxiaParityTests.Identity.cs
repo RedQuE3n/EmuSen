@@ -9,7 +9,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.WiseMan.Galaxia
 {
-    // A dump's identity asked of both halves: whole, ranged, held in memory and per track - see EmuSen_GamePackages.md §3.3 and EmuSen_Galaxia.md §5.4.
+    // A dump's identity asked of the library, held to .NET's hashes and to the C#'s recorded answers: whole, ranged, held in memory and per track - see EmuSen_GamePackages.md §3.3 and EmuSen_Galaxia.md §5.4.
     public partial class GalaxiaParityTests
     {
         private static RomHashes Native(string path, long offset = 0, long length = -1, CancellationToken stop = default) =>
@@ -43,34 +43,28 @@ namespace EmuSen.WiseMan.Galaxia
             Directory.CreateDirectory(Path.GetDirectoryName(rom)!);
             File.WriteAllBytes(rom, contents);
 
-            Assert.Equal(Expected(contents), RomHash.Managed.Of(rom, 0, -1, default));
             Assert.Equal(Expected(contents), Native(rom));
-            Assert.Equal(Expected(contents), RomHash.Managed.Of(contents));
             Assert.Equal(Expected(contents), RomHash.FromJson(GalaxiaNative.RomHashesOf(contents)));
             Assert.Equal(RomHash.Md5(rom), Native(rom).Md5);
             foreach ((long offset, long take) in new (long, long)[] { (0, 0), (0, 1), (1, 3), (length / 2, -1), (length / 3, length / 3), (length, 5), (length + 10, -1), (0, length + 100), ((1 << 16) - 1, 2) })
             {
                 byte[] part = contents.Skip((int)Math.Min(offset, length)).Take(take < 0 ? int.MaxValue : (int)Math.Min(take, int.MaxValue)).ToArray();
-                Assert.Equal(Expected(part), RomHash.Managed.Of(rom, offset, take, default));
                 Assert.Equal(Expected(part), Native(rom, offset, take));
             }
         }
 
         [Fact]
-        public void A_dump_that_cannot_be_hashed_throws_alike_and_a_stop_is_a_cancellation()
+        public void A_dump_that_cannot_be_hashed_throws_as_the_csharp_threw_and_a_stop_is_a_cancellation()
         {
             Directory.CreateDirectory(At("identity"));
             foreach (string path in new[] { At("identity", "absent.bin"), At("no", "such", "folder", "rom.bin"), At("identity") })
             {
-                Exception managed = Assert.ThrowsAny<Exception>(() => RomHash.Managed.Of(path, 0, -1, default));
-                Exception native = Assert.ThrowsAny<Exception>(() => Native(path));
-                Assert.True(managed.GetType() == native.GetType(), $"{path}: {managed.GetType().Name} and {native.GetType().Name}");
+                G(path, Assert.ThrowsAny<Exception>(() => Native(path)).GetType().Name);
             }
             string rom = At("identity", "rom.bin");
             File.WriteAllBytes(rom, new byte[1 << 20]);
             using var stopped = new CancellationTokenSource();
             stopped.Cancel();
-            Assert.ThrowsAny<OperationCanceledException>(() => RomHash.Managed.Of(rom, 0, -1, stopped.Token));
             Assert.ThrowsAny<OperationCanceledException>(() => Native(rom, stop: stopped.Token));
             Assert.ThrowsAny<OperationCanceledException>(() => GalaxiaNative.RomTracks(rom, stopped.Token));
         }
@@ -104,7 +98,7 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void Each_tracks_hashes_are_its_generated_files_or_its_range_of_one_both_ways()
+        public void Each_tracks_hashes_are_its_generated_files_or_its_range_of_one()
         {
             byte[] data = Sectors(40, 2352, 1), audio = Sectors(30, 2352, 2), cooked = Sectors(12, 2048, 3), last = Sectors(7, 2352, 4);
             byte[] wave = Wave(Sectors(5, 2352, 5));
@@ -129,13 +123,12 @@ namespace EmuSen.WiseMan.Galaxia
                 string cue = Path.Combine(folder, "game.cue");
                 File.WriteAllText(cue, sheet);
                 var want = expected.Select(e => new TrackHashes(e.Track, e.File, e.Offset, Expected(e.Bytes))).ToArray();
-                Assert.Equal(want, RomHash.Managed.Tracks(cue, default));
                 Assert.Equal(want, RomHash.TracksFromJson(GalaxiaNative.RomTracks(cue, default)));
             }
         }
 
         [Fact]
-        public void A_sheet_that_cannot_be_hashed_by_track_throws_alike()
+        public void A_sheet_that_cannot_be_hashed_by_track_throws_as_the_csharp_threw()
         {
             string folder = At("tracks", "bad");
             Directory.CreateDirectory(folder);
@@ -148,9 +141,7 @@ namespace EmuSen.WiseMan.Galaxia
             foreach (var (name, text) in sheets) File.WriteAllText(Path.Combine(folder, name), text);
             foreach (string path in sheets.Keys.Select(k => Path.Combine(folder, k)).Append(Path.Combine(folder, "absent.cue")))
             {
-                Exception managed = Assert.ThrowsAny<Exception>(() => RomHash.Managed.Tracks(path, default));
-                Exception native = Assert.ThrowsAny<Exception>(() => GalaxiaNative.RomTracks(path, default));
-                Assert.True(managed.GetType() == native.GetType(), $"{path}: {managed.GetType().Name} and {native.GetType().Name}");
+                G(path, Assert.ThrowsAny<Exception>(() => GalaxiaNative.RomTracks(path, default)).GetType().Name);
             }
         }
     }

@@ -24,7 +24,7 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void A_file_is_mapped_to_the_same_bytes_and_refused_with_the_same_exception_both_ways()
+        public void A_file_is_mapped_to_its_bytes_and_refused_with_the_csharp_s_exception()
         {
             byte[] bytes = new byte[300_007];
             new Random(9).NextBytes(bytes);
@@ -32,10 +32,8 @@ namespace EmuSen.WiseMan.Galaxia
             File.WriteAllBytes(file, bytes);
             foreach (string path in new[] { file, empty, At("disc", "absent.bin"), At("no folder", "absent.bin"), At("disc") })
             {
-                var csharp = MapWith(MappedFile.Managed.Open, path);
                 var library = MapWith(MappedFile.Open, path);
-                Assert.Equal(csharp.Fault, library.Fault);
-                Assert.Equal(csharp.Bytes, library.Bytes);
+                G(path, $"{library.Fault?.Name ?? "mapped"} {Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(library.Bytes))}");
             }
             Assert.Equal(bytes, MapWith(MappedFile.Open, file).Bytes);
             Assert.Equal((typeof(FileNotFoundException), typeof(DirectoryNotFoundException), typeof(UnauthorizedAccessException)),
@@ -54,11 +52,11 @@ namespace EmuSen.WiseMan.Galaxia
 
         // While a file is mapped, another opener may do the same with it both ways: on Windows a reader comes in and a writer, a rename and a deletion are refused, as FileShare.Read has it - see EmuSen_Galaxia.md §3.8.
         [Fact]
-        public void A_held_mapping_lets_in_the_same_openers_both_ways()
+        public void A_held_mapping_lets_in_the_openers_the_csharp_let_in()
         {
             string file = At("held", "track.bin");
             var seen = new List<string>();
-            foreach ((string side, Func<string, MappedFile> open) in new (string, Func<string, MappedFile>)[] { ("C#", MappedFile.Managed.Open), ("the library", MappedFile.Open) })
+            foreach ((string side, Func<string, MappedFile> open) in new (string, Func<string, MappedFile>)[] { ("the library", MappedFile.Open) })
             {
                 Put(file);
                 File.WriteAllBytes(file, new byte[70_000]);
@@ -73,8 +71,8 @@ namespace EmuSen.WiseMan.Galaxia
                 }
                 if (File.Exists(file)) File.Delete(file);
             }
-            Assert.True(seen[0] == seen[1], $"C#: {seen[0]}; the library: {seen[1]}");
-            if (OperatingSystem.IsWindows()) Assert.Equal("reader none, writer IOException, rename IOException, deletion IOException", seen[1]);
+            G("openers", seen[0]);
+            if (OperatingSystem.IsWindows()) Assert.Equal("reader none, writer IOException, rename IOException, deletion IOException", seen[0]);
         }
 
         [DllImport("libc", EntryPoint = "mincore")]
@@ -94,7 +92,7 @@ namespace EmuSen.WiseMan.Galaxia
 
         // Advice is taken for the same ranges by Galaxia's C# and by the library, changes no byte, and on Linux brings the advised bytes into memory untouched while the rest stay on the medium - see EmuSen_Galaxia.md §3.9.
         [Fact]
-        public void Advice_is_taken_for_the_same_ranges_both_ways_and_the_advised_bytes_reach_memory()
+        public void Advice_is_taken_for_the_ranges_it_was_taken_for_and_the_advised_bytes_reach_memory()
         {
             const int MiB = 1 << 20;
             // Beside the test's own assemblies, on a disk, since a temporary folder kept in memory has nothing to bring in.
@@ -111,7 +109,7 @@ namespace EmuSen.WiseMan.Galaxia
                 string empty = Put(At("disc", "none.bin"), "");
                 (long At, long Length)[] ranges = { (0, 4096), (5 * MiB + 1234, 128 * 1024), (16 * MiB - 1, 1), (16 * MiB - 10, 1L << 30), (16 * MiB, 4096), (long.MaxValue, 1), (100, 0), (-1, 4096) };
                 bool[] taken = { true, true, true, true, false, false, false, false };
-                foreach (Func<string, MappedFile> open in new Func<string, MappedFile>[] { MappedFile.Managed.Open, MappedFile.Open })
+                foreach (Func<string, MappedFile> open in new Func<string, MappedFile>[] { MappedFile.Open })
                 {
                     using MappedFile mapped = open(file);
                     bool advises = OperatingSystem.IsLinux() || OperatingSystem.IsMacOS() || OperatingSystem.IsWindows();
@@ -121,7 +119,7 @@ namespace EmuSen.WiseMan.Galaxia
                     Assert.False(none.Advise(0, 4096));
                 }
                 if (!OperatingSystem.IsLinux()) return;
-                foreach (Func<string, MappedFile> open in new Func<string, MappedFile>[] { MappedFile.Managed.Open, MappedFile.Open })
+                foreach (Func<string, MappedFile> open in new Func<string, MappedFile>[] { MappedFile.Open })
                 {
                     using (var stream = new FileStream(file, FileMode.Open, FileAccess.Read)) Assert.Equal(0, FileAdvise((int)stream.SafeFileHandle.DangerousGetHandle(), 0, 0, 4));
                     using MappedFile mapped = open(file);

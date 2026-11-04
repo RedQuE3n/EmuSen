@@ -10,7 +10,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Galaxia
 {
-    // Galaxia's C# rules and the platform library's, asked the same things side by side - see EmuSen_RustPlatform.md §6.3 and §10.5.
+    // The platform library's Galaxia, held to .NET's own rules and to the answers recorded from the C# before its deletion - see EmuSen_RustPlatform.md §6.3, §10.5 and EmuSen_Backend.md §40.2.
     [Collection(TestCollections.ProcessGlobals)]
     public partial class GalaxiaParityTests : IDisposable
     {
@@ -28,6 +28,12 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         public void Dispose()
+        {
+            try { CheckGoldens(); }
+            finally { Clean(); }
+        }
+
+        private void Clean()
         {
             ConfigDiagnostics.Sink = null;
             ConfigDiagnostics.Reset();
@@ -59,37 +65,38 @@ namespace EmuSen.WiseMan.Galaxia
             return taken;
         }
 
-        // A run that says which of the two it used can only prove parity if the facade really took the side the variable names: state 2, the library unless 0.
+        // Galaxia has no C# half: the library is in use, whatever a leftover variable says - see EmuSen_Backend.md §40.2.
         [Fact]
-        public void The_switch_is_what_the_variable_says()
+        public void The_library_is_in_use_and_names_its_interface()
         {
-            Assert.Equal(Environment.GetEnvironmentVariable(GalaxiaNative.Variable) != "0", GalaxiaNative.Active);
+            Assert.True(GalaxiaNative.Ready, PlatformLibrary.Report);
             Assert.Contains($"interface {PlatformLibrary.InterfaceVersion}", PlatformLibrary.Report);
         }
 
-        // A folder without the library: the C#, one line to the sink and the error log however often the switch is asked, and no line for 0 - see EmuSen_RustPlatform.md §13.
+        // A folder without the library is said in words, and the switch the components with a C# half still use falls back once, said once - see EmuSen_RustPlatform.md §13.
         [Fact]
-        public void A_missing_library_falls_back_to_the_csharp_and_says_so_once_in_the_log()
+        public void A_missing_library_is_said_once_in_the_log()
         {
             string logs = At("logs");
             ErrorLog.DirectoryOverride = logs;
             string empty = Directory.CreateDirectory(At("no library")).FullName;
+            Assert.Equal(((nint)0, $"{PlatformLibrary.FileName} not found beside the assemblies"), PlatformLibrary.Open(empty));
             int loads = 0;
             foreach (string? variable in new[] { null, "1", "0" })
             {
-                var chosen = new PlatformSwitch(() => variable, () => { loads++; var opened = PlatformLibrary.Open(empty); return (opened.Handle != 0, opened.Report); }, GalaxiaNative.Announce);
+                var chosen = new PlatformSwitch(() => variable, () => { loads++; var opened = PlatformLibrary.Open(empty); return (opened.Handle != 0, opened.Report); }, PlatformSwitch.Announce, "Serenity");
                 Assert.All(Enumerable.Range(0, 5), _ => Assert.False(chosen.Active));
             }
             Assert.Equal(2, loads);
-            string expected = $"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.FileName} not found beside the assemblies); Galaxia runs on its C# implementation.";
+            string expected = $"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.FileName} not found beside the assemblies); Serenity runs on its C# implementation.";
             Assert.Equal(new[] { expected, expected }, Reported());
             string written = string.Concat(Directory.GetFiles(logs).Select(File.ReadAllText));
             Assert.Equal(2, written.Split(expected).Length - 1);
             Assert.Contains("platform", written);
 
-            var thrown = new PlatformSwitch(() => null, () => throw new DllNotFoundException("refused"), GalaxiaNative.Announce);
+            var thrown = new PlatformSwitch(() => null, () => throw new DllNotFoundException("refused"), PlatformSwitch.Announce, "Serenity");
             Assert.False(thrown.Active);
-            Assert.Equal(new[] { $"{PlatformLibrary.FileName} is not in use (DllNotFoundException: refused); Galaxia runs on its C# implementation." }, Reported());
+            Assert.Equal(new[] { $"{PlatformLibrary.FileName} is not in use (DllNotFoundException: refused); Serenity runs on its C# implementation." }, Reported());
         }
 
         // Seeded, so a failure names a case that fails again.
@@ -227,26 +234,17 @@ namespace EmuSen.WiseMan.Galaxia
             };
             bases.AddRange(Paths(300, seed: 7).Where(p => !EffectivelyEmpty(p)));
 
-            var different = new List<string>();
-            void Same(Func<string?> dotnet, string? library, string what)
-            {
-                // A base .NET refuses (on Windows, a UNC root with no share) is one no host is started from.
-                string? expected;
-                try { expected = dotnet(); } catch (ArgumentException) { return; }
-                if (expected != library) different.Add($"{what}: .NET [{expected}], the library [{library}]");
-            }
             foreach (string from in bases)
             {
                 foreach (bool macOS in new[] { false, true })
                 {
-                    Same(() => ConfigRoot.Managed.ComputeFor(from, macOS, home), GalaxiaNative.RootFor(from, macOS, home), $"root for [{from}], macOS {macOS}");
-                    Same(() => ConfigRoot.Managed.SeedDirectoryFor(from, macOS), GalaxiaNative.SeedDirectoryFor(from, macOS), $"seed for [{from}], macOS {macOS}");
+                    GSweep("roots", $"root for [{from}], macOS {macOS}", Caught(() => GalaxiaNative.RootFor(from, macOS, home)));
+                    GSweep("roots", $"seed for [{from}], macOS {macOS}", Caught(() => GalaxiaNative.SeedDirectoryFor(from, macOS)));
                 }
-                Same(() => ConfigRoot.Managed.BundleContentsFor(from), GalaxiaNative.BundleContentsFor(from), $"bundle for [{from}]");
-                Same(() => ConfigRoot.Managed.MacDataDirectoryFor(from), GalaxiaNative.MacDataDirectoryFor(from), $"Mac data for [{from}]");
-                Same(() => DataMigration.Managed.LegacyRootFor(from), GalaxiaNative.LegacyRootFor(from), $"legacy root for [{from}]");
+                GSweep("roots", $"bundle for [{from}]", Caught(() => GalaxiaNative.BundleContentsFor(from)));
+                GSweep("roots", $"Mac data for [{from}]", Caught(() => GalaxiaNative.MacDataDirectoryFor(from)));
+                GSweep("roots", $"legacy root for [{from}]", Caught(() => GalaxiaNative.LegacyRootFor(from)));
             }
-            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
 
             // The cases are not vacuous: each branch of the rule is among them.
             Assert.Equal(marked, GalaxiaNative.RootFor(nine, false, home));
@@ -271,29 +269,20 @@ namespace EmuSen.WiseMan.Galaxia
             (GalaxiaDirectory.Packages, "Packages"), (GalaxiaDirectory.Compressed, "Compressed"),
         };
 
-        private static void AssertTheTreeAgrees()
+        private void TheTree(string combination, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
         {
-            Assert.Equal(ConfigRoot.Managed.Directory, GalaxiaNative.Directory(GalaxiaDirectory.Root));
-            Assert.Equal(ConfigRoot.Managed.SeedDirectory, GalaxiaNative.Directory(GalaxiaDirectory.Seed));
-            Assert.Equal(ConfigStore.Managed.Directory, GalaxiaNative.Directory(GalaxiaDirectory.Config));
-            Assert.Equal(ConfigStore.Managed.PreviousDirectory, GalaxiaNative.Directory(GalaxiaDirectory.ConfigPrevious));
-            Assert.Equal(ConfigStore.Managed.LegacyDirectory, GalaxiaNative.Directory(GalaxiaDirectory.ConfigLegacy));
-            Assert.Equal(DataStore.Managed.UsrHome, GalaxiaNative.Directory(GalaxiaDirectory.Home));
-            Assert.Equal(DataStore.Managed.Logs, GalaxiaNative.Directory(GalaxiaDirectory.Logs));
-            Assert.Equal(DataStore.Managed.Saves, GalaxiaNative.Directory(GalaxiaDirectory.Saves));
-            Assert.Equal(DataStore.Managed.SaveStates, GalaxiaNative.Directory(GalaxiaDirectory.SaveStates));
-            Assert.Equal(DataMigration.Managed.LegacyRoot, GalaxiaNative.Directory(GalaxiaDirectory.LegacyRoot));
+            void Answer(string what, object? answer) => GSweep("tree", $"{combination} {what}", answer, test: test);
+            foreach (GalaxiaDirectory which in Enum.GetValues<GalaxiaDirectory>()) Answer(which.ToString(), GalaxiaNative.Directory(which));
             foreach ((GalaxiaDirectory which, string name) in Named)
-                Assert.Equal(Path.Combine(DataStore.Managed.UsrHome, name), GalaxiaNative.Directory(which));
-            Assert.Equal(ErrorLog.Managed.DefaultRoot, GalaxiaNative.Directory(GalaxiaDirectory.LogDefault));
+                Assert.Equal(Path.Combine(GalaxiaNative.Directory(GalaxiaDirectory.Home)!, name), GalaxiaNative.Directory(which));
             Assert.Equal(Enum.GetValues<GalaxiaDirectory>().Length, Named.Length + 11);
 
             foreach (string file in new[] { "appsettings.json", "é.json", "a b.json", "" })
             {
-                Assert.Equal(ConfigStore.Managed.For(file), GalaxiaNative.ConfigPath(null, file));
-                Assert.Equal(ConfigStore.Managed.For("cheats", file), GalaxiaNative.ConfigPath("cheats", file));
-                Assert.Equal(ConfigStore.Managed.For("", file), GalaxiaNative.ConfigPath("", file));
-                Assert.Equal(ConfigStore.Managed.LegacyPathFor(file), GalaxiaNative.LegacyConfigPath(file));
+                Answer($"config [{file}]", GalaxiaNative.ConfigPath(null, file));
+                Answer($"cheats [{file}]", GalaxiaNative.ConfigPath("cheats", file));
+                Answer($"no category [{file}]", GalaxiaNative.ConfigPath("", file));
+                Answer($"legacy [{file}]", GalaxiaNative.LegacyConfigPath(file));
             }
         }
 
@@ -308,7 +297,7 @@ namespace EmuSen.WiseMan.Galaxia
                         ConfigStore.OverrideDirectory = config;
                         ConfigStore.OverrideLegacyDirectory = legacy;
                         DataStore.OverrideDirectory = data;
-                        AssertTheTreeAgrees();
+                        TheTree($"config [{config}] legacy [{legacy}] data [{data}]");
                     }
 
             // A redirected config with no redirected legacy directory reaches no real one, on either side.
@@ -337,15 +326,15 @@ namespace EmuSen.WiseMan.Galaxia
                 DataStore.OverrideDirectory = data;
                 foreach (string rom in roms)
                 {
-                    Assert.Equal(SaveLibrary.Managed.FlatSramPathFor(rom), GalaxiaNative.SavePath(GalaxiaSave.FlatSram, rom));
-                    Assert.Equal(SaveLibrary.Managed.PicturePathFor(rom), GalaxiaNative.SavePath(GalaxiaSave.Picture, rom));
+                    GSweep("saves", $"{data} flat [{rom}]", GalaxiaNative.SavePath(GalaxiaSave.FlatSram, rom));
+                    GSweep("saves", $"{data} picture [{rom}]", GalaxiaNative.SavePath(GalaxiaSave.Picture, rom));
                     foreach (string console in consoles)
-                        Assert.Equal(SaveLibrary.Managed.SramPathFor(rom, console), GalaxiaNative.SavePath(GalaxiaSave.Sram, rom, console));
+                        GSweep("saves", $"{data} sram [{rom}] [{console}]", GalaxiaNative.SavePath(GalaxiaSave.Sram, rom, console));
                     foreach (string? directory in directories)
                     {
-                        Assert.Equal(SaveLibrary.Managed.ResumeStatePathFor(rom, directory), GalaxiaNative.SavePath(GalaxiaSave.ResumeState, rom, directory));
+                        GSweep("saves", $"{data} resume [{rom}] [{directory}]", GalaxiaNative.SavePath(GalaxiaSave.ResumeState, rom, directory));
                         foreach (int slot in slots)
-                            Assert.Equal(SaveLibrary.Managed.StatePathFor(rom, slot, directory), GalaxiaNative.SavePath(GalaxiaSave.State, rom, directory, slot));
+                            GSweep("saves", $"{data} state [{rom}] [{directory}] {slot}", GalaxiaNative.SavePath(GalaxiaSave.State, rom, directory, slot));
                     }
                 }
             }
@@ -361,26 +350,24 @@ namespace EmuSen.WiseMan.Galaxia
         [InlineData(65)]
         [InlineData(4096)]
         [InlineData((1 << 20) + 3)]
-        public void A_file_written_by_one_side_is_the_file_the_other_writes_and_reads(int length)
+        public void A_file_written_is_the_file_dotnet_writes_and_reads_back(int length)
         {
+            _case = $"{nameof(A_file_written_is_the_file_dotnet_writes_and_reads_back)}.{length}";
             byte[] contents = new byte[length];
             new Random(length).NextBytes(contents);
-            string managed = At("managed", "Saves", "SNES", "game.srm"), native = At("native", "Saves", "SNES", "game.srm");
+            string native = At("native", "Saves", "SNES", "game.srm"), dotnet = At("dotnet", "Saves", "SNES", "game.srm");
 
             foreach (byte[] bytes in new[] { new byte[] { 9, 9, 9 }, contents })
-            {
-                Assert.True(AtomicFile.Managed.Write(managed, bytes));
                 Assert.True(GalaxiaNative.FileWrite(native, bytes));
-            }
+            Directory.CreateDirectory(Path.GetDirectoryName(dotnet)!);
+            File.WriteAllBytes(dotnet, contents);
 
-            Assert.Equal(contents, File.ReadAllBytes(managed));
             Assert.Equal(contents, File.ReadAllBytes(native));
-            Assert.Equal(Mode(managed), Mode(native));
-            Assert.Equal(Mode(Path.GetDirectoryName(managed)!), Mode(Path.GetDirectoryName(native)!));
-            Assert.False(File.Exists(managed + AtomicFile.TempSuffix));
+            G("mode", Mode(native));
+            G("folder's mode", Mode(Path.GetDirectoryName(native)!));
             Assert.False(File.Exists(native + AtomicFile.TempSuffix));
-            Assert.Equal(contents, AtomicFile.Managed.TryRead(native));
-            Assert.Equal(contents, GalaxiaNative.FileRead(managed));
+            Assert.Equal(contents, GalaxiaNative.FileRead(native));
+            Assert.Equal(contents, GalaxiaNative.FileRead(dotnet));
             Assert.Empty(Reported());
         }
 
@@ -402,54 +389,39 @@ namespace EmuSen.WiseMan.Galaxia
                 loud.Add(At("read", "locked.srm"));
             }
 
-            Assert.Equal(AtomicFile.Managed.TryRead(file), GalaxiaNative.FileRead(file));
+            Assert.Equal("whole"u8.ToArray(), GalaxiaNative.FileRead(file));
             Assert.Empty(Reported());
             foreach (string path in quiet)
             {
-                Assert.Null(AtomicFile.Managed.TryRead(path));
                 Assert.Null(GalaxiaNative.FileRead(path));
                 Assert.Empty(Reported());
             }
             foreach (string path in loud)
             {
-                Assert.Null(AtomicFile.Managed.TryRead(path));
-                string managed = Assert.Single(Reported());
                 Assert.Null(GalaxiaNative.FileRead(path));
-                string native = Assert.Single(Reported());
-                foreach (string message in new[] { managed, native })
-                {
-                    Assert.StartsWith(path + ": ", message);
-                    Assert.EndsWith(" Treating it as absent.", message);
-                }
+                string message = Assert.Single(Reported());
+                Assert.StartsWith(path + ": ", message);
+                Assert.EndsWith(" Treating it as absent.", message);
             }
         }
 
         [Fact]
-        public void A_write_that_cannot_land_fails_alike_and_leaves_alike()
+        public void A_write_that_cannot_land_fails_and_leaves_what_the_csharp_left()
         {
-            foreach (string side in new[] { "managed", "native" })
-            {
-                Put(At(side, "blocker"), "a file where a directory is wanted");
-                Directory.CreateDirectory(At(side, "taken.srm"));
-                Put(At(side, "kept.srm"), "old");
-            }
-            bool Write(string side, string name) =>
-                side == "managed" ? AtomicFile.Managed.Write(At(side, name), new byte[] { 1 }) : GalaxiaNative.FileWrite(At(side, name), new byte[] { 1 });
+            Put(At("native", "blocker"), "a file where a directory is wanted");
+            Directory.CreateDirectory(At("native", "taken.srm"));
+            Put(At("native", "kept.srm"), "old");
 
             foreach (string name in new[] { Path.Combine("blocker", "game.srm"), "taken.srm" })
             {
-                foreach (string side in new[] { "managed", "native" })
-                {
-                    Assert.False(Write(side, name));
-                    string message = Assert.Single(Reported());
-                    Assert.StartsWith(At(side, name) + ": ", message);
-                    Assert.EndsWith(" The previous file is unchanged.", message);
-                }
-                Assert.Equal(File.Exists(At("managed", name) + AtomicFile.TempSuffix), File.Exists(At("native", name) + AtomicFile.TempSuffix));
+                Assert.False(GalaxiaNative.FileWrite(At("native", name), new byte[] { 1 }));
+                string message = Assert.Single(Reported());
+                Assert.StartsWith(At("native", name) + ": ", message);
+                Assert.EndsWith(" The previous file is unchanged.", message);
+                G($"temp file left by {name}", File.Exists(At("native", name) + AtomicFile.TempSuffix));
             }
-            // A write over a directory strands its temp file on both sides, which the next successful write of that name would replace.
+            // A write over a directory strands its temp file, as the C#'s did, which the next successful write of that name would replace.
             Assert.True(File.Exists(At("native", "taken.srm") + AtomicFile.TempSuffix));
-            Assert.Equal("old", File.ReadAllText(At("managed", "kept.srm")));
             Assert.Equal("old", File.ReadAllText(At("native", "kept.srm")));
         }
 
@@ -508,59 +480,44 @@ namespace EmuSen.WiseMan.Galaxia
             return File.Exists(named) ? $"a link to {Convert.ToHexString(File.ReadAllBytes(named))}" : "a dangling link";
         }
 
-        // Two listings compared whole, with the lines only one of them has named in full.
-        private static void AssertSameListing(List<string> managed, List<string> native) =>
-            Assert.True(managed.SequenceEqual(native), $"only the C#:\n{string.Join("\n", managed.Except(native))}\nonly the library:\n{string.Join("\n", native.Except(managed))}");
-
         private List<string> Told(string side) => Reported().Select(m => m.Replace(At(side), "<root>")).OrderBy(m => m, StringComparer.Ordinal).ToList();
 
         [Fact]
-        public void A_migration_copies_the_same_files_the_same_way_and_leaves_the_same_ones()
+        public void A_migration_copies_the_files_the_csharp_copied_the_same_way_and_leaves_the_same_ones()
         {
-            BuildLegacy("managed");
             BuildLegacy("native");
             List<string> romsBefore = Listing(At("native", "legacy", "Games")).Concat(Listing(At("native", "legacy", "Roms"))).ToList();
 
-            int managed = DataMigration.Managed.Run(At("managed", "legacy"), At("managed", "home"));
-            List<string> managedTold = Told("managed");
-            int native = GalaxiaNative.Migrate(GalaxiaMigrate.Between, At("native", "legacy"), At("native", "home"));
+            int native = G("copied", GalaxiaNative.Migrate(GalaxiaMigrate.Between, At("native", "legacy"), At("native", "home")));
             List<string> nativeTold = Told("native");
 
-            Assert.Equal(managed, native);
-            Assert.True(managed >= 7, $"{managed} copied");
-            AssertSameListing(Listing(At("managed", "home")), Listing(At("native", "home")));
-            AssertSameListing(Listing(At("managed", "legacy")), Listing(At("native", "legacy")));
+            Assert.True(native >= 7, $"{native} copied");
+            G("home", Listing(At("native", "home")));
+            G("legacy", Listing(At("native", "legacy")));
             Assert.Equal(romsBefore, Listing(At("native", "legacy", "Games")).Concat(Listing(At("native", "legacy", "Roms"))).ToList());
             Assert.False(Directory.Exists(At("native", "home", "Games")));
             Assert.False(Directory.Exists(At("native", "home", "Roms")));
             Assert.False(Directory.Exists(At("native", "home", "Other")));
             Assert.Equal("newer", File.ReadAllText(At("native", "home", "Saves", "kept.srm")));
 
-            // The same files were left, each said once; only .NET's words for why differ from the library's.
-            Assert.Equal(managedTold.Count, nativeTold.Count);
+            // The files the C# left, each said once; only .NET's words for why differed from the library's.
             Assert.Equal(Links.Allowed ? 2 : 1, nativeTold.Count);
-            foreach ((string m, string n) in managedTold.Zip(nativeTold))
-            {
-                Assert.Equal(m[..m.IndexOf(": ", StringComparison.Ordinal)], n[..n.IndexOf(": ", StringComparison.Ordinal)]);
-                Assert.EndsWith(" Left in place.", m);
-                Assert.EndsWith(" Left in place.", n);
-            }
+            G("left", nativeTold.Select(n => n[..n.IndexOf(": ", StringComparison.Ordinal)]));
+            Assert.All(nativeTold, n => Assert.EndsWith(" Left in place.", n));
 
-            Assert.Equal(DataMigration.Managed.Run(At("managed", "legacy"), At("managed", "home")), GalaxiaNative.Migrate(GalaxiaMigrate.Between, At("native", "legacy"), At("native", "home")));
-            AssertSameListing(Listing(At("managed", "home")), Listing(At("native", "home")));
+            G("copied again", GalaxiaNative.Migrate(GalaxiaMigrate.Between, At("native", "legacy"), At("native", "home")));
+            G("home again", Listing(At("native", "home")));
             Reported();
 
-            Assert.Equal(
-                DataMigration.Managed.RemainingLibraryDirectories(At("managed", "legacy")).Select(p => p.Replace(At("managed"), "<root>")),
-                GalaxiaNative.RemainingLibrary(At("native", "legacy")).Select(p => p.Replace(At("native"), "<root>")));
+            G("remaining", GalaxiaNative.RemainingLibrary(At("native", "legacy")).Select(p => p.Replace(At("native"), "<root>")));
             Assert.Equal(2, GalaxiaNative.RemainingLibrary(At("native", "legacy")).Count);
             Assert.Empty(Reported());
         }
 
         [Fact]
-        public void The_other_migrations_agree_on_what_they_decline_and_what_they_copy()
+        public void The_other_migrations_decline_and_copy_what_the_csharp_did()
         {
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 Put(At(side, "tree", "Saves", "a.srm"), "a");
                 Put(At(side, "tree", "Documents", "manual.md"), "page");
@@ -570,12 +527,9 @@ namespace EmuSen.WiseMan.Galaxia
                 Put(At(side, "library", "Roms", "deep", "er", "game.sfc"), "rom");
                 Stamp(At(side));
             }
-            int Between(string side, string from, string to) =>
-                side == "managed" ? DataMigration.Managed.Run(from, to) : GalaxiaNative.Migrate(GalaxiaMigrate.Between, from, to);
-            int Tree(string side, string from, string to) =>
-                side == "managed" ? DataMigration.Managed.CopyTree(from, to) : GalaxiaNative.Migrate(GalaxiaMigrate.Tree, from, to);
-            int Seed(string side, string? from, string to) =>
-                side == "managed" ? DataMigration.Managed.SeedFromBundle(from, to) : GalaxiaNative.Migrate(GalaxiaMigrate.Seed, from, to);
+            int Between(string side, string from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Between, from, to);
+            int Tree(string side, string from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Tree, from, to);
+            int Seed(string side, string? from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Seed, from, to);
             (string Name, Func<string, int> Run)[] cases =
             {
                 ("onto itself", side => Between(side, At(side, "tree"), At(side, "tree"))),
@@ -591,21 +545,20 @@ namespace EmuSen.WiseMan.Galaxia
                 ("a whole tree", side => Tree(side, At(side, "tree"), At(side, "copy"))),
             };
             foreach ((string name, Func<string, int> run) in cases)
-                Assert.True(run("managed") == run("native"), name);
+                G(name, run("native"));
             Assert.Equal(2, Seed("native", At("native", "tree"), At("native", "seeded-again")));
-            AssertSameListing(Listing(At("managed", "seeded")), Listing(At("native", "seeded")));
-            AssertSameListing(Listing(At("managed", "copy")), Listing(At("native", "copy")));
+            G("seeded", Listing(At("native", "seeded")));
+            G("copy", Listing(At("native", "copy")));
             Assert.Equal("mine", File.ReadAllText(At("native", "seeded", "Documents", "mine.md")));
             Assert.Equal(new[] { At("native", "library", "Roms") }, GalaxiaNative.RemainingLibrary(At("native", "library")));
-            Assert.Equal(DataMigration.Managed.RemainingLibraryDirectories(At("managed", "library")).Count, GalaxiaNative.RemainingLibrary(At("native", "library")).Count);
             Assert.Empty(Reported());
         }
 
         [Fact]
-        public void A_directory_that_will_not_list_stops_both_migrations_with_the_same_exception()
+        public void A_directory_that_will_not_list_stops_a_migration_with_the_csharp_s_exception()
         {
             if (OperatingSystem.IsWindows() || Environment.UserName == "root") return;
-            foreach (string side in new[] { "managed", "native" })
+            foreach (string side in new[] { "native" })
             {
                 Put(At(side, "tree", "open", "a.txt"), "a");
                 Directory.CreateDirectory(At(side, "tree", "shut"));
@@ -613,35 +566,27 @@ namespace EmuSen.WiseMan.Galaxia
             }
             try
             {
-                Assert.Throws<UnauthorizedAccessException>(() => DataMigration.Managed.CopyTree(At("managed", "tree"), At("managed", "copy")));
                 Assert.Throws<UnauthorizedAccessException>(() => GalaxiaNative.Migrate(GalaxiaMigrate.Tree, At("native", "tree"), At("native", "copy")));
             }
             finally
             {
-                foreach (string side in new[] { "managed", "native" })
+                foreach (string side in new[] { "native" })
                     File.SetUnixFileMode(At(side, "tree", "shut"), UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
             }
         }
 
         // The process's own old tree and config, with both destinations redirected so nothing is written outside the test's folder.
         [Fact]
-        public void The_programs_own_migrations_agree_with_their_destinations_redirected()
+        public void The_programs_own_migrations_copy_what_the_csharp_did_with_their_destinations_redirected()
         {
-            (GalaxiaMigrate What, Func<int> Managed)[] own =
+            foreach (GalaxiaMigrate what in new[] { GalaxiaMigrate.Own, GalaxiaMigrate.OwnConfig, GalaxiaMigrate.OwnSeed })
             {
-                (GalaxiaMigrate.Own, DataMigration.Managed.Run), (GalaxiaMigrate.OwnConfig, DataMigration.Managed.RunConfig), (GalaxiaMigrate.OwnSeed, DataMigration.Managed.SeedFromBundle),
-            };
-            foreach ((GalaxiaMigrate what, Func<int> managed) in own)
-            {
-                DataStore.OverrideDirectory = At("managed", what.ToString(), "home");
-                ConfigStore.OverrideDirectory = At("managed", what.ToString(), "etc");
-                int expected = managed();
                 DataStore.OverrideDirectory = At("native", what.ToString(), "home");
                 ConfigStore.OverrideDirectory = At("native", what.ToString(), "etc");
-                Assert.Equal(expected, GalaxiaNative.Migrate(what));
-                AssertSameListing(Listing(At("managed", what.ToString())), Listing(At("native", what.ToString())));
+                G($"{what} copied", GalaxiaNative.Migrate(what));
+                G($"{what} listing", Listing(At("native", what.ToString())));
             }
-            Assert.Equal(DataMigration.Managed.RemainingLibraryDirectories(DataMigration.Managed.LegacyRoot), GalaxiaNative.RemainingLibrary(null));
+            G("remaining", GalaxiaNative.RemainingLibrary(null));
         }
 
         [Theory]
@@ -662,8 +607,7 @@ namespace EmuSen.WiseMan.Galaxia
             Directory.CreateDirectory(Path.GetDirectoryName(rom)!);
             File.WriteAllBytes(rom, contents);
 
-            Assert.Equal(RomHash.Managed.Md5(rom), GalaxiaNative.RomMd5(rom));
-            Assert.Equal(32, GalaxiaNative.RomMd5(rom).Length);
+            Assert.Equal(Convert.ToHexStringLower(System.Security.Cryptography.MD5.HashData(contents)), GalaxiaNative.RomMd5(rom));
         }
 
         [Fact]
@@ -671,17 +615,13 @@ namespace EmuSen.WiseMan.Galaxia
         {
             Directory.CreateDirectory(At("hash"));
             foreach (string path in new[] { At("hash", "absent.bin"), At("no", "such", "folder", "rom.bin"), At("hash") })
-            {
-                Exception managed = Assert.ThrowsAny<Exception>(() => RomHash.Managed.Md5(path));
-                Exception native = Assert.ThrowsAny<Exception>(() => GalaxiaNative.RomMd5(path));
-                Assert.True(managed.GetType() == native.GetType(), $"{path}: {managed.GetType().Name} and {native.GetType().Name}");
-            }
+                G(path, Assert.ThrowsAny<Exception>(() => GalaxiaNative.RomMd5(path)).GetType().Name);
         }
 
         [Fact]
         public void The_library_has_every_export_the_facade_calls_and_no_other()
         {
-            string header = File.ReadAllText(Path.Combine(ConfigRoot.Managed.Directory, "Platform", "include", "emusen_platform.h"));
+            string header = File.ReadAllText(Path.Combine(Repo, "Platform", "include", "emusen_platform.h"));
             foreach (string export in GalaxiaNative.Exports) Assert.Contains(export + "(", header);
             Assert.Contains("emusen_platform_abi_version(", header);
             int declared = System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_(galaxia|platform)_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count;

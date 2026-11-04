@@ -138,6 +138,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "deflate64"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac6b926516df9c60bfa16e107b21086399f8285a44ca9711344b9e553c5146e2"
+
+[[package]]
 name = "diamond"
 version = "0.1.0"
 dependencies = [
@@ -219,6 +225,7 @@ dependencies = [
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
+ "deflate64",
  "emusen-disc",
  "emusen-dotnet",
  "flate2",

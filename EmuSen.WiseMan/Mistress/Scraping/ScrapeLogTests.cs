@@ -53,6 +53,37 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Assert.Contains(field, run);
         });
 
+        // A file is read once for its three hashes: a later lookup of the same file at the same size and time hashes nothing.
+        [Fact]
+        public Task A_file_asked_again_is_not_hashed_again() => OnUi(() =>
+        {
+            MainWindow window = RunThree();
+            string unknown = Path.Combine(RomDir, "B Unknown (USA).sfc");
+            int before = LogLines().Length;
+            Scrape(window, new ScrapeScope(Game: unknown));
+            RunEnds(window);
+            string again = Assert.Single(LogLines().Skip(before), l => l.Contains("\trequest\t"));
+            Assert.Contains("game=B Unknown (USA).sfc\tkind=info\t", again);
+            Assert.Contains("\thash_ms=-\t", again);
+            Assert.All(LogLines().Take(before).Where(l => l.Contains("\tkind=info\t")), l => Assert.DoesNotContain("\thash_ms=-\t", l));
+        });
+
+        // The workers the account allows start as soon as an answer says how many, not after the first game ends.
+        [Fact]
+        public Task The_other_workers_start_with_the_first_answer() => OnUi(() =>
+        {
+            Server.User = FakeScreenScraper.Quota(maxThreads: 3, perMinute: 60, perDay: 20000, koPerDay: 2000, today: 10, koToday: 1);
+            foreach ((string name, byte seed, long id) in new[] { ("A Found (USA)", (byte)10, 77L), ("B Found (USA)", (byte)20, 78L), ("C Found (USA)", (byte)30, 79L) })
+                Server.Games.Add(new FakeGame(id, name, Md5(Game(name, seed))));
+            MainWindow window = Open(settings: a => { a.OpenEmuFallback = false; a.LogDirectory = Logs; a.ScrapeThreads = 0; });
+            Scrape(window, new ScrapeScope());
+            RunEnds(window);
+            string[] requests = LogLines().Where(l => l.Contains("\trequest\t")).ToArray();
+            Assert.Contains("\tthreads=1/1\t", requests[0]);
+            string firstPicture = requests.First(l => !l.Contains("\tkind=info\t"));
+            Assert.Contains("\tthreads=3/3\t", firstPicture);
+        });
+
         [Fact]
         public Task Nothing_the_scrape_log_holds_is_a_credential_or_an_address() => OnUi(() =>
         {

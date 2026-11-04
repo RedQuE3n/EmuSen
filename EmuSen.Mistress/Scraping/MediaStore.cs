@@ -133,6 +133,10 @@ namespace EmuSen.Mistress.Scraping
             """
             ALTER TABLE scrape_game ADD COLUMN kinds_known TEXT;
             """,
+            """
+            ALTER TABLE scrape_file ADD COLUMN crc32 TEXT;
+            ALTER TABLE scrape_file ADD COLUMN sha1 TEXT;
+            """,
         };
 
         public static int SchemaVersion => Migrations.Length;
@@ -285,7 +289,7 @@ namespace EmuSen.Mistress.Scraping
         }
 
         public void RememberFile(string path, long bytes, long modified, string md5) => Write(
-            "INSERT INTO scrape_file (path, bytes, modified, md5) VALUES ($path, $bytes, $modified, $md5) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5",
+            "INSERT INTO scrape_file (path, bytes, modified, md5) VALUES ($path, $bytes, $modified, $md5) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = NULL, sha1 = NULL",
             ("$path", path), ("$bytes", bytes), ("$modified", modified), ("$md5", md5));
 
         // Every file last hashed to a game, for telling a renamed file from a second copy.

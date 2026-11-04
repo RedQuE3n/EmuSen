@@ -655,6 +655,42 @@ each game's answer again, a second lookup a game (10% more requests) and, with t
 hash of every disc, the cost that dominates. It would bring the first pictures sooner; it is worth it only after (a),
 and only with the first answer's media kept for the second pass.
 
+### 9.11 A file hashed once, and the workers started with the first answer (2026-11-03)
+
+Items (a) and the early workers of §9.10, built on 2026-11-03; the name-and-size lookup (b) waits for proof that it
+matches the same games as the hashed lookup.
+
+- **The three hashes are kept.** `media.db` schema 4 adds `crc32` and `sha1` to `scrape_file`, beside the MD5, keyed
+  as before by the file's path, size and time (`Store::cached_file`, `Store::remember_file`). A file is read once,
+  for all three digests in one pass (`hash_once`), and a later lookup of it at the same size and time reads nothing;
+  a file whose size or time changed misses and is read again. A row from schema 3 has no CRC32 or SHA-1, so its file
+  is read once more and the row completed. The C# `MediaStore` takes the same migration, and its writer, which keeps
+  only the MD5, clears the other two when it rewrites a row, so a changed file is never sent with old digests.
+- **The workers start with the first answer.** `ask` adds the workers as soon as an answer carries the account's
+  limits (`quota.observe`), rather than after the first game ends.
+
+Measured on 2026-11-03 on the desktop, the same five discs, kinds and command as §9.10, in a fresh home (50 requests,
+all found):
+
+| | before (§9.10) | after |
+|---|---:|---:|
+| wall | 41.6 s | **26.6 s** (−36%) |
+| hash, all discs | 26.9 s | 27.0 s |
+| server | 65.2 s | 61.7 s |
+| idle | 57.0 s | 34.2 s |
+| first game alone | 20.1 s | 0 (the other four began at the first answer) |
+
+The hashing is unchanged in a first run, as it must be: each disc is read once in both. The cache's gain is in every
+later run over the same files (a refresh, a resume, a game asked again), where `hash_ms` is `-` instead of the 2.8 to
+6.9 s a disc here, and on the handheld the predicted 40 s or more a 4 GB disc.
+
+Tests, each failing first with its change switched off: `ScrapeLogTests.A_file_asked_again_is_not_hashed_again`
+(the second lookup of a game writes `hash_ms=-`) and `The_other_workers_start_with_the_first_answer` (the first
+picture's line says `threads=3/3` where the account allows three); `tests/file_hashes.rs` holds the three hashes kept
+at a size and time and a changed file missing. Seeded on 2026-11-03, each caught by `file_hashes.rs`: the CRC32
+stored as the SHA-1; the cache keyed without the size. `ScrapeStoreParityTests` holds the two stores' migration
+alike at every version, its seed's `scrape_file` row now naming its columns.
+
 ## 10. T6 as built: the Library Manager window (2026-11-01)
 
 ### 10.1 The tool library and its host

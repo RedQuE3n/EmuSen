@@ -10,7 +10,7 @@ use emusen_sqlite::{Bound, Connection, Row, Sqlite};
 use std::sync::Arc;
 
 /// Each entry takes the file from the version before it; append, never edit.
-pub const MIGRATIONS: [&str; 3] = [
+pub const MIGRATIONS: [&str; 4] = [
     r#"CREATE TABLE scrape_game (
     md5           TEXT    NOT NULL,
     bytes         INTEGER NOT NULL,
@@ -80,6 +80,8 @@ CREATE TABLE store_step (
     done_at  TEXT    NOT NULL
 );"#,
     r#"ALTER TABLE scrape_game ADD COLUMN kinds_known TEXT;"#,
+    r#"ALTER TABLE scrape_file ADD COLUMN crc32 TEXT;
+ALTER TABLE scrape_file ADD COLUMN sha1 TEXT;"#,
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -111,6 +113,14 @@ impl State {
             _ => State::Error,
         }
     }
+}
+
+/// A file's hashes from the path index: the MD5 always, the CRC32 and SHA-1 where a run since schema 4 kept them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Cached {
+    pub md5: String,
+    pub crc32: Option<String>,
+    pub sha1: Option<String>,
 }
 
 /// `ScrapePriority`: shown, a console, the whole library.
@@ -440,18 +450,29 @@ ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), nex
 
     // --- the path index ---
 
-    pub fn cached_md5(&self, path: &str, bytes: i64, modified: i64) -> Result<Option<String>, Error> {
-        scalar_text(&self.db, "SELECT md5 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified", &[
-            ("$path", Bound::Text(path)),
-            ("$bytes", Bound::Integer(bytes)),
-            ("$modified", Bound::Integer(modified)),
-        ])
+    /// A file's hashes as last taken at this size and time: its MD5, and its CRC32 and SHA-1 where they were kept too.
+    pub fn cached_file(&self, path: &str, bytes: i64, modified: i64) -> Result<Option<Cached>, Error> {
+        let mut found = None;
+        self.db.query(
+            "SELECT md5, crc32, sha1 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified",
+            &[("$path", Bound::Text(path)), ("$bytes", Bound::Integer(bytes)), ("$modified", Bound::Integer(modified))],
+            |row| found = Some(Cached { md5: row.text(0), crc32: row.text_or_null(1), sha1: row.text_or_null(2) }),
+        )?;
+        Ok(found)
     }
 
-    pub fn remember_file(&self, path: &str, bytes: i64, modified: i64, md5: &str) -> Result<(), Error> {
+    /// A file's three hashes at its size and time, so that no run reads it again until it changes.
+    pub fn remember_file(&self, path: &str, bytes: i64, modified: i64, md5: &str, crc32: &str, sha1: &str) -> Result<(), Error> {
         self.write(
-            "INSERT INTO scrape_file (path, bytes, modified, md5) VALUES ($path, $bytes, $modified, $md5) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5",
-            &[("$path", Bound::Text(path)), ("$bytes", Bound::Integer(bytes)), ("$modified", Bound::Integer(modified)), ("$md5", Bound::Text(md5))],
+            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1) VALUES ($path, $bytes, $modified, $md5, $crc32, $sha1) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = excluded.crc32, sha1 = excluded.sha1",
+            &[
+                ("$path", Bound::Text(path)),
+                ("$bytes", Bound::Integer(bytes)),
+                ("$modified", Bound::Integer(modified)),
+                ("$md5", Bound::Text(md5)),
+                ("$crc32", Bound::Text(crc32)),
+                ("$sha1", Bound::Text(sha1)),
+            ],
         )?;
         Ok(())
     }

@@ -617,7 +617,7 @@ impl Scraper {
         }
     }
 
-    fn process(&self, item: &Queued, w: &Workers, lane: &mut Lane) -> Turn {
+    fn process(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Turn {
         match self.process_inner(item, w, lane) {
             Ok(Some(result)) => Turn::Done(result),
             Ok(None) => Turn::Cancelled,
@@ -634,7 +634,18 @@ impl Scraper {
         }
     }
 
-    fn process_inner(&self, item: &Queued, w: &Workers, lane: &mut Lane) -> Result<Option<Finished>, String> {
+    /// A file read once for its three hashes, which the path index keeps at its size and time; none when stopped.
+    fn hash_once(&self, rom: &str, bytes: i64, modified: i64, w: &Workers, lane: &mut Lane) -> Result<Option<Hashes>, String> {
+        let began = Instant::now();
+        let hashed = Scraper::hashes(rom, &w.stop)?;
+        lane.hashed(began.elapsed());
+        if let Some(h) = &hashed {
+            self.store().remember_file(rom, bytes, modified, &h.md5, &h.crc32, &h.sha1).map_err(|e| e.words())?;
+        }
+        Ok(hashed)
+    }
+
+    fn process_inner(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Result<Option<Finished>, String> {
         let rom = item.path.as_str();
         if !file_exists(rom) {
             self.store().dequeue(rom).map_err(|e| e.words())?;
@@ -645,19 +656,15 @@ impl Scraper {
             return Ok(Some(Finished { skipped: true, ..Finished::new(item, Outcome::Missing, "this game's console has no ScreenScraper system") }));
         };
         let (bytes, modified) = file_info(rom).ok_or_else(|| format!("Could not find file '{rom}'."))?;
-        let mut hashes: Option<Hashes> = None;
-        let cached = self.store().cached_md5(rom, bytes, modified).map_err(|e| e.words())?;
-        let md5 = match cached {
-            Some(md5) => md5,
+        let cached = self.store().cached_file(rom, bytes, modified).map_err(|e| e.words())?;
+        let (md5, mut hashes) = match cached {
+            Some(c) => {
+                let full = c.crc32.zip(c.sha1).map(|(crc32, sha1)| Hashes { md5: c.md5.clone(), crc32, sha1, size: bytes as u64 });
+                (c.md5, full)
+            }
             None => {
-                let began = Instant::now();
-                let hashed = Scraper::hashes(rom, &w.stop)?;
-                lane.hashed(began.elapsed());
-                let Some(h) = hashed else { return Ok(None) };
-                let md5 = h.md5.clone();
-                self.store().remember_file(rom, bytes, modified, &md5).map_err(|e| e.words())?;
-                hashes = Some(h);
-                md5
+                let Some(h) = self.hash_once(rom, bytes, modified, w, lane)? else { return Ok(None) };
+                (h.md5.clone(), Some(h))
             }
         };
         let settings = self.settings();
@@ -690,17 +697,12 @@ impl Scraper {
             Some(false) => return Ok(Some(self.stopped(item))),
             Some(true) => {}
         }
-        let hashes = match hashes {
+        let hashes = match hashes.take() {
             Some(h) => h,
-            None => {
-                let began = Instant::now();
-                let hashed = Scraper::hashes(rom, &w.stop)?;
-                lane.hashed(began.elapsed());
-                match hashed {
-                    Some(h) => h,
-                    None => return Ok(None),
-                }
-            }
+            None => match self.hash_once(rom, bytes, modified, w, lane)? {
+                Some(h) => h,
+                None => return Ok(None),
+            },
         };
         self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
         let file_name = path::file_name(STYLE, rom).to_string();
@@ -772,17 +774,22 @@ impl Scraper {
     }
 
     /// One `jeuInfos`, its quota observed and counted; none when the run stopped while it was asked.
-    fn ask(&self, w: &Workers, lane: &mut Lane, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
+    fn ask(&self, w: &Arc<Workers>, lane: &mut Lane, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
         let (client, cancel, name) = (w.client.clone(), w.cancel.clone(), file_name.to_string());
         let answer = crate::clock::detached(&w.stop, move || client.jeu_infos(system_id, &hashes, &name, game_id, &cancel))?;
         let e = answer.exchange;
         self.logged(w, lane, file_name, "info", e.code, answer.status.name(), e.bytes, e.took, answer.quota);
         let store = self.store();
-        let _ = self.quota.observe(&store, &self.clock, answer.quota);
+        let observed = self.quota.observe(&store, &self.clock, answer.quota).unwrap_or(false);
         if matches!(answer.status, Status::Found | Status::NotFound | Status::Malformed | Status::BadRequest) {
             let _ = self.quota.counted(&store, &self.clock, answer.status == Status::NotFound);
         }
         let _ = self.quota.answered(&store, &self.clock, answer.status);
+        drop(store);
+        // The account's maxthreads is known from the first answer that carries it, so the other workers start now (§9.10).
+        if observed {
+            self.ensure_workers(w);
+        }
         Some(answer)
     }
 

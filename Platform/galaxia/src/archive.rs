@@ -127,15 +127,7 @@ pub fn image_entry(at: &str, is_image: impl Fn(&str) -> bool) -> Result<Option<S
 pub fn read_entry(at: &str, entry: &str, length: usize) -> Result<Vec<u8>, String> {
     let entries = entries_of(at)?;
     let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| equals_ignore_case(&e.full_name, entry))).ok_or_else(|| format!("the archive holds no {entry}"))?;
-    let mut file = std::fs::File::open(at).map_err(|x| x.to_string())?;
-    let mut local = [0u8; 30];
-    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| x.to_string())?;
-    file.read_exact(&mut local).map_err(|x| x.to_string())?;
-    if u32_at(&local, 0) != Some(dotnet_zip::LOCAL) {
-        return Err("a damaged local header".into());
-    }
-    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
-    file.seek(SeekFrom::Start(data)).map_err(|x| x.to_string())?;
+    let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| "a damaged local header".into()))?;
     let want = (length as u64).min(e.length) as usize;
     let raw = file.take(e.compressed as u64);
     let mut out = Vec::with_capacity(want);
@@ -173,18 +165,24 @@ fn modified_of(extra: &[u8]) -> Option<std::time::SystemTime> {
     seconds
 }
 
+/// The archive opened at an entry's bytes, past its local header; an error's words, or none for a damaged header.
+fn at_data(at: &str, e: &ZipEntry) -> Result<std::fs::File, Option<String>> {
+    let mut file = std::fs::File::open(at).map_err(|x| Some(x.to_string()))?;
+    let mut local = [0u8; 30];
+    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| Some(x.to_string()))?;
+    file.read_exact(&mut local).map_err(|x| Some(x.to_string()))?;
+    if u32_at(&local, 0) != Some(dotnet_zip::LOCAL) {
+        return Err(None);
+    }
+    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
+    file.seek(SeekFrom::Start(data)).map_err(|x| Some(x.to_string()))?;
+    Ok(file)
+}
+
 /// An entry copied out whole into `out`, inflated where deflated, and checked: its length and CRC-32 against the
 /// directory's, refused with both where they differ, so that a damaged zip is never taken for its files.
 pub fn copy_entry(at: &str, e: &ZipEntry, out: &mut dyn std::io::Write) -> Result<(), String> {
-    let mut file = std::fs::File::open(at).map_err(|x| x.to_string())?;
-    let mut local = [0u8; 30];
-    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| x.to_string())?;
-    file.read_exact(&mut local).map_err(|x| x.to_string())?;
-    if u32_at(&local, 0) != Some(dotnet_zip::LOCAL) {
-        return Err(format!("{} has a damaged local header", e.full_name));
-    }
-    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
-    file.seek(SeekFrom::Start(data)).map_err(|x| x.to_string())?;
+    let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| format!("{} has a damaged local header", e.full_name)))?;
     let raw = file.take(e.compressed as u64);
     let mut reader: Box<dyn Read> = if e.method == 0 { Box::new(raw) } else { Box::new(flate2::read::DeflateDecoder::new(raw)) };
     let mut crc = crate::rom_hash::Crc32::default();

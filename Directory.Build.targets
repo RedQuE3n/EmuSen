@@ -5,4 +5,12 @@
     <AssemblyMetadata Include="EmuSen.CrystalNative" Value="1" />
   </ItemGroup>
 
+  <!-- A folder that received Rust cores never keeps one its sidecar does not describe: the build fails instead - see EmuSen_RustPlatform.md §28.10. -->
+  <Target Name="EmuSenCheckOutputCores" AfterTargets="CopyFilesToOutputDirectory">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)EmuSen/Cores/CheckCoreSidecars.proj" Targets="Check" Properties="Folder=$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(OutDir)'))" />
+  </Target>
+  <Target Name="EmuSenCheckPublishedCores" AfterTargets="CopyFilesToPublishDirectory">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)EmuSen/Cores/CheckCoreSidecars.proj" Targets="Check" Properties="Folder=$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(PublishDir)'))" />
+  </Target>
+
 </Project>

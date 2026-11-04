@@ -1,0 +1,20 @@
+<Project>
+  <!-- Fails when a library beside a sidecar in $(Folder) is missing or is not the one its sidecar's SHA-256 describes, the runtime's own rule, so no build or publish leaves a folder whose cores would be refused; run by Directory.Build.targets after each copy, or by hand with -p:Folder=<dir> - see EmuSen_RustPlatform.md §28.10. -->
+  <Target Name="Check">
+    <PropertyGroup>
+      <_Folder>$([MSBuild]::NormalizeDirectory('$(MSBuildStartupDirectory)', '$(Folder)'))</_Folder>
+    </PropertyGroup>
+    <ItemGroup>
+      <_Sidecar Include="$(_Folder)*.core.json" />
+    </ItemGroup>
+    <ItemGroup Condition="'@(_Sidecar)' != ''">
+      <_Core Include="$(_Folder)$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('%(_Sidecar.FullPath)')), '&quot;library&quot;\s*:\s*&quot;([^&quot;/\\]+)&quot;').Groups[1].Value)" Sidecar="%(_Sidecar.Filename)%(_Sidecar.Extension)" Expected="$([System.Text.RegularExpressions.Regex]::Match($([System.IO.File]::ReadAllText('%(_Sidecar.FullPath)')), '&quot;sha256&quot;\s*:\s*&quot;([0-9a-fA-F]{64})&quot;').Groups[1].Value.ToLowerInvariant())" />
+    </ItemGroup>
+    <Error Condition="'@(_Core)' != '' And ('%(_Core.Filename)%(_Core.Extension)' == '' Or '%(_Core.Expected)' == '')" Text="%(_Core.Sidecar) in $(_Folder) names no library or no SHA-256." />
+    <Error Condition="'@(_Core)' != '' And !Exists('%(_Core.FullPath)')" Text="%(_Core.Sidecar) in $(_Folder) describes %(_Core.Filename)%(_Core.Extension), which is missing; a game on that core would not start." />
+    <GetFileHash Condition="'@(_Core)' != ''" Files="@(_Core)" Algorithm="SHA256" HashEncoding="hex">
+      <Output TaskParameter="Items" ItemName="_Hashed" />
+    </GetFileHash>
+    <Error Condition="'@(_Hashed)' != '' And '$([System.String]::Copy(%(_Hashed.FileHash)).ToLowerInvariant())' != '%(_Hashed.Expected)'" Text="%(_Hashed.Filename)%(_Hashed.Extension) in $(_Folder) is not the library its sidecar describes (SHA-256 $([System.String]::Copy(%(_Hashed.FileHash)).ToLowerInvariant()), sidecar %(_Hashed.Expected)); a game on that core would not start. Copy the library from beside the sidecar it was built with, or rebuild - see EmuSen_RustPlatform.md §28.10." />
+  </Target>
+</Project>

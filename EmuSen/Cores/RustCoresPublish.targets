@@ -45,15 +45,15 @@
     <Message Condition="'$(_EmuSenPlatformForeignFound)' != 'true' And '$(EmuSenPlatformRequired)' != 'true'" Importance="high"
              Text="No $(_EmuSenPlatformPublishFile) for $(RuntimeIdentifier): this publish runs the platform components on their C# implementations. Build it with the Rust cores workflow and pass -p:EmuSenNativePrebuilt=&lt;dir&gt; holding $(RuntimeIdentifier)/$(_EmuSenPlatformPublishFile)." />
     <ItemGroup Condition="'$(_EmuSenPlatformForeignFound)' == 'true'">
-      <ResolvedFileToPublish Include="$(_EmuSenPlatformForeign)" RelativePath="$(_EmuSenPlatformPublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />
+      <ResolvedFileToPublish Include="$(_EmuSenPlatformForeign)" RelativePath="$(_EmuSenPlatformPublishFile)" CopyToPublishDirectory="Always" AssetType="native" />
     </ItemGroup>
     <ItemGroup>
       <_EmuSenForeignPrebuilt Include="@(_EmuSenForeignLibrary->'%(Prebuilt)')" Condition="'%(_EmuSenForeignLibrary.Prebuilt)' != '' And Exists('%(_EmuSenForeignLibrary.Prebuilt)')" />
-      <ResolvedFileToPublish Include="@(_EmuSenForeignPrebuilt)" RelativePath="%(_EmuSenForeignPrebuilt.PublishFile)" CopyToPublishDirectory="PreserveNewest" AssetType="native" />
+      <ResolvedFileToPublish Include="@(_EmuSenForeignPrebuilt)" RelativePath="%(_EmuSenForeignPrebuilt.PublishFile)" CopyToPublishDirectory="Always" AssetType="native" />
       <!-- A core ABI v1 library's sidecar, <library>.core.json, beside it in the prebuilt folder as the workflow uploads it; discovery lists a v1 core by it alone - see EmuSen_CoreAPI.md §7.1. -->
       <_EmuSenForeignSidecarCandidate Include="@(_EmuSenForeignPrebuilt->'%(Identity).core.json')" />
       <_EmuSenForeignSidecar Include="@(_EmuSenForeignSidecarCandidate)" Condition="Exists('%(_EmuSenForeignSidecarCandidate.Identity)')" />
-      <ResolvedFileToPublish Include="@(_EmuSenForeignSidecar)" RelativePath="%(_EmuSenForeignSidecar.PublishFile).core.json" CopyToPublishDirectory="PreserveNewest" />
+      <ResolvedFileToPublish Include="@(_EmuSenForeignSidecar)" RelativePath="%(_EmuSenForeignSidecar.PublishFile).core.json" CopyToPublishDirectory="Always" />
     </ItemGroup>
     <!-- The host's cores.manifest names the host's libraries, so the publish carries one of the prebuilt ones instead - see EmuSen_Backend.md §27.5. -->
     <GetFileHash Condition="'@(_EmuSenForeignPrebuilt)' != ''" Files="@(_EmuSenForeignPrebuilt)" Algorithm="SHA256" HashEncoding="hex">
@@ -64,7 +64,7 @@
     </ItemGroup>
     <WriteLinesToFile File="$(IntermediateOutputPath)$(RuntimeIdentifier).cores.manifest" Lines="@(_EmuSenForeignManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <ItemGroup>
-      <ResolvedFileToPublish Include="$(IntermediateOutputPath)$(RuntimeIdentifier).cores.manifest" RelativePath="cores.manifest" CopyToPublishDirectory="PreserveNewest" />
+      <ResolvedFileToPublish Include="$(IntermediateOutputPath)$(RuntimeIdentifier).cores.manifest" RelativePath="cores.manifest" CopyToPublishDirectory="Always" />
     </ItemGroup>
   </Target>
 </Project>

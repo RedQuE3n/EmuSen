@@ -584,7 +584,9 @@ after its previous file for `maxdownloadspeed`, `hash_ms` the time spent hashing
 the quota fields are the answer's own (a media file carries none, `-`). The run line sums the workers' time:
 `own_ms` is what is left of it after the waits, the requests, the hashing and `idle_ms` (no game due, or paused), that
 is the scraper's own work between requests. Every line passes the redactor, and none holds an address, a key or the
-account's name. The file is a day's and is not pruned; a full run of a day's 20,000 requests writes about 3 MB.
+account's name. The file is a day's, and is kept as the error log's are: once in a process's life, the first run removes
+the `scrape_*.log` files last written more than fourteen days before (`runlog::prune`, Galaxia's `KEEP_DAYS`); a full
+run of a day's 20,000 requests writes about 3 MB.
 
 `ScrapeLogTests` (WiseMan, over the fake ScreenScraper): `Each_request_is_one_line_with_its_kind_status_timing_worker
 _and_quota_and_the_run_one_summary` holds a line for every request the server answered (seven for three games), the

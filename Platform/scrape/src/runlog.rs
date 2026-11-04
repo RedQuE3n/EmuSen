@@ -6,9 +6,27 @@ use crate::answer::Quota;
 use crate::redact::redact;
 use std::io::Write;
 use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Duration, Instant, SystemTime};
 
 pub const PREFIX: &str = "scrape_";
+
+static PRUNED: AtomicBool = AtomicBool::new(false);
+
+/// The day files of a folder last written more than the error log's fourteen days before `now` removed; the others kept.
+pub fn prune(folder: &str, now: SystemTime) {
+    let Some(cutoff) = now.checked_sub(Duration::from_secs(emusen_galaxia::error_log::KEEP_DAYS * 24 * 60 * 60)) else { return };
+    let Ok(entries) = std::fs::read_dir(folder) else { return };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !name.starts_with(PREFIX) || !name.ends_with(".log") {
+            continue;
+        }
+        if entry.metadata().and_then(|m| m.modified()).is_ok_and(|written| written < cutoff) {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
 
 /// Where a run's lines go, the folder found once at the run's start; with none, nothing is written.
 pub struct Log {
@@ -23,7 +41,13 @@ impl Log {
             let tree = emusen_galaxia::tree::tree();
             emusen_galaxia::error_log::root(&tree, None).0
         };
-        Log { folder: (!root.trim().is_empty()).then_some(root), gate: Mutex::new(()) }
+        let folder = (!root.trim().is_empty()).then_some(root);
+        if let Some(f) = &folder {
+            if !PRUNED.swap(true, Ordering::SeqCst) {
+                prune(f, SystemTime::now());
+            }
+        }
+        Log { folder, gate: Mutex::new(()) }
     }
 
     pub fn none() -> Log {
@@ -227,6 +251,24 @@ mod tests {
         );
         let media = request_line(&Request { kind: "cover", hash: None, quota: None, ..r });
         assert!(media.ends_with("hash_ms=-\tmaxthreads=-\tmaxrequestspermin=-\tmaxdownloadspeed=-\trequeststoday=-"), "{media}");
+    }
+
+    #[test]
+    fn a_day_file_older_than_the_error_log_s_fourteen_days_is_removed_and_nothing_else() {
+        let dir = std::env::temp_dir().join(format!("emusen-scrape-prune-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for name in ["scrape_20261001.log", "scrape_20261102.log", "emusen_20261001.log", "notes.txt"] {
+            std::fs::write(dir.join(name), b"x").unwrap();
+        }
+        let folder = dir.to_string_lossy().into_owned();
+        prune(&folder, SystemTime::now() + Duration::from_secs(13 * 24 * 60 * 60));
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 4, "thirteen days on, every file stays");
+        prune(&folder, SystemTime::now() + Duration::from_secs(15 * 24 * 60 * 60));
+        let mut left: Vec<String> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name().to_string_lossy().into_owned()).collect();
+        left.sort();
+        assert_eq!(left, ["emusen_20261001.log", "notes.txt"], "fifteen days on, only the scrape logs go");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

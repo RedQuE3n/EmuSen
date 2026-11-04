@@ -126,6 +126,12 @@ DESCRIPTION
 FILES
     Media/media.db and Media/...    the scraper's store, the only place
                                     pictures are written
+    <log folder>/scrape_<yyyyMMdd>.log
+                                    one line a ScreenScraper request (its
+                                    game, kind, status, bytes, time, worker
+                                    and waits) and one a run, in the error
+                                    log's folder; no credential is written
+                                    (EmuSen_LibraryTools.md section 9.10)
     The library is only read.
 
 EXAMPLES

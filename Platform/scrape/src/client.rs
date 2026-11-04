@@ -87,6 +87,16 @@ pub struct JeuInfos {
     pub quota: Option<Quota>,
     pub detail: String,
     pub body: Option<String>,
+    /// What the exchange itself came to, for the scrape log: the HTTP status (0 when none came), the body's bytes and how long it took.
+    pub exchange: Exchange,
+}
+
+/// One request's HTTP status (0 when none came), the bytes of its answer and how long it took from sending to the last byte.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Exchange {
+    pub code: u16,
+    pub bytes: u64,
+    pub took: Duration,
 }
 
 pub struct Search {
@@ -115,6 +125,10 @@ pub struct MediaAnswer {
     pub sha1: Option<String>,
     pub detail: String,
     pub took: Duration,
+    /// The HTTP status, 0 when no request was sent or none came back.
+    pub code: u16,
+    /// The bytes that came over the wire, whatever was kept of them.
+    pub received: u64,
 }
 
 /// The three hashes `jeuInfos` asks for, with the size.
@@ -180,19 +194,20 @@ impl Client {
     }
 
     pub fn jeu_infos(&self, system_id: i32, hashes: &Hashes, file_name: &str, game_id: Option<i64>, cancel: &Progress) -> JeuInfos {
-        let (code, body, _) = self.wire.get_text(&self.jeu_infos_url(system_id, hashes, file_name, game_id), cancel);
+        let (code, body, took) = self.wire.get_text(&self.jeu_infos_url(system_id, hashes, file_name, game_id), cancel);
+        let exchange = Exchange { code, bytes: body.as_ref().map_or(0, |b| b.len() as u64), took };
         let body = match body {
             Ok(b) => b,
-            Err(words) => return JeuInfos { status: Status::Failed, game: None, quota: None, detail: snippet(&words), body: Some(words) },
+            Err(words) => return JeuInfos { status: Status::Failed, game: None, quota: None, detail: snippet(&words), body: Some(words), exchange },
         };
         let status = Status::of(code);
         if status != Status::Found {
-            return JeuInfos { status, game: None, quota: None, detail: snippet(&body), body: Some(body) };
+            return JeuInfos { status, game: None, quota: None, detail: snippet(&body), body: Some(body), exchange };
         }
         match answer::jeu_infos(&body) {
-            Ok((None, quota)) => JeuInfos { status: Status::NotFound, game: None, quota, detail: "no game in the answer".into(), body: Some(body) },
-            Ok((Some(game), quota)) => JeuInfos { status: Status::Found, game: Some(game), quota, detail: String::new(), body: Some(body) },
-            Err(words) => JeuInfos { status: Status::Malformed, game: None, quota: None, detail: redact(&words), body: Some(body) },
+            Ok((None, quota)) => JeuInfos { status: Status::NotFound, game: None, quota, detail: "no game in the answer".into(), body: Some(body), exchange },
+            Ok((Some(game), quota)) => JeuInfos { status: Status::Found, game: Some(game), quota, detail: String::new(), body: Some(body), exchange },
+            Err(words) => JeuInfos { status: Status::Malformed, game: None, quota: None, detail: redact(&words), body: Some(body), exchange },
         }
     }
 
@@ -254,10 +269,11 @@ impl Client {
     #[allow(clippy::too_many_arguments)]
     pub fn download(&self, url: &str, target: &str, cancel: &Progress, payload: Payload, local_sha1: Option<&str>, replace: bool, declared: Option<i64>) -> Result<MediaAnswer, ()> {
         let started = Instant::now();
-        let done = |outcome, path: Option<String>, bytes, sha1, detail: String| MediaAnswer { outcome, path, bytes, sha1, detail, took: started.elapsed() };
+        let mut sent = (0u16, 0u64);
+        let done = |outcome, path: Option<String>, bytes, sha1, detail: String, sent: (u16, u64)| MediaAnswer { outcome, path, bytes, sha1, detail, took: started.elapsed(), code: sent.0, received: sent.1 };
         if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);
-            return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new()));
+            return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new(), sent));
         }
         let mut url = self.media_url(url);
         if let Some(sha1) = local_sha1.filter(|s| !s.is_empty()) {
@@ -302,11 +318,12 @@ impl Client {
             }
             Err(f) => {
                 let _ = std::fs::remove_file(&temp);
-                return Ok(done(MediaOutcome::Failed, None, 0, None, redact(&f.message)));
+                return Ok(done(MediaOutcome::Failed, None, 0, None, redact(&f.message), sent));
             }
         };
+        sent = (streamed.status, length);
         if streamed.status != 200 {
-            return Ok(done(MediaOutcome::Failed, None, 0, None, format!("HTTP {}", streamed.status)));
+            return Ok(done(MediaOutcome::Failed, None, 0, None, format!("HTTP {}", streamed.status), sent));
         }
         if !std::path::Path::new(&temp).exists() {
             if let Some(dir) = std::path::Path::new(target).parent() {
@@ -332,7 +349,7 @@ impl Client {
                 _ => text.clone(),
             };
             let path = (no == MediaOutcome::Unchanged && emusen_galaxia::dotnet_files::file_exists(target)).then(|| target.to_string());
-            return Ok(done(no, path, if no == MediaOutcome::NotAnImage { length } else { 0 }, None, detail));
+            return Ok(done(no, path, if no == MediaOutcome::NotAnImage { length } else { 0 }, None, detail, sent));
         }
         if cancel.is_cancelled() {
             let _ = std::fs::remove_file(&temp);
@@ -341,14 +358,14 @@ impl Client {
         if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
             let _ = std::fs::remove_file(&temp);
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);
-            return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new()));
+            return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new(), sent));
         }
         if let Err(e) = std::fs::rename(&temp, target) {
             let _ = std::fs::remove_file(&temp);
-            return Ok(done(MediaOutcome::Failed, None, 0, None, redact(&e.to_string())));
+            return Ok(done(MediaOutcome::Failed, None, 0, None, redact(&e.to_string()), sent));
         }
         let _ = write_error;
-        Ok(done(MediaOutcome::Saved, Some(target.to_string()), length, Some(sha.hex()), String::new()))
+        Ok(done(MediaOutcome::Saved, Some(target.to_string()), length, Some(sha.hex()), String::new(), sent))
     }
 }
 

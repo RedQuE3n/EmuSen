@@ -21,6 +21,7 @@ pub mod quota;
 pub mod redact;
 pub mod rules;
 pub mod run;
+pub mod runlog;
 pub mod store;
 pub mod zone;
 

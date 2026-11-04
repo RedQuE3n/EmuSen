@@ -126,8 +126,8 @@ namespace EmuSen.Mistress.Views
                 bool uncovered = card && ReferenceEquals(shown, PadCard.CardPanel) && _cardCovered;
                 _cardCovered = card && shown is not null && !ReferenceEquals(shown, PadCard.CardPanel);
                 _menuShown = shown;
-                // The Pause Card slides in where other menus grow (EmuSen_Interface.md §20.6).
-                if (shown is not null && !uncovered && card && _padMenuInGame && ReferenceEquals(shown, PadCard.CardPanel))
+                // Every panel on the Card form slides in where other menus grow (EmuSen_Interface.md §20.6).
+                if (shown is not null && !uncovered && shown.Anchor == MenuAnchor.Edge)
                 {
                     _cardSlide.Enter(shown, UiClock(), MenusScaleUp);
                     RunCardSlide();

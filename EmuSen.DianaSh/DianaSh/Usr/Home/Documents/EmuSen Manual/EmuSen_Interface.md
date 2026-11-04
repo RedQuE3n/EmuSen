@@ -1765,9 +1765,50 @@ and Exit (160 ms, ease-in), advanced with the interface's clock on each pad tick
 - It plays only as the card comes on screen and as it goes: a page turn, and a sheet closing over the card, move nothing.
 - The game runs no frame while it plays. Closing, the card stops taking the pad at once, but the game the card paused
   resumes only when the panel is gone; a card opened again while it slides out takes that pause over.
-- With Reduced motion, or with the menus' opening effect set to None, the card appears and leaves at once. The Home card
-  keeps its grow.
+- With Reduced motion, or with the menus' opening effect set to None, the card appears and leaves at once.
 - At rest the panel carries no transform and is laid out as before, so no recording changed.
+
+#### 20.6.1 Every card slides (2026-11-04)
+
+The tester reported on 2026-11-04 that the Games grid's List card still grew into place. Decided the same day: every
+card on the Card form enters and leaves as the Pause Card does, through the same `CardSlide`, and the grow is left to
+the menus that are not cards (the Gamelist Options sheet, Settings on the big screen). The slide is now the Card form's
+default rather than the Pause Card's: `UpdateMenuBackdrop` slides any panel anchored to the edge, which only the Card
+form's panel is (`MenuAnchor.Edge`), and `ClosePadMenu` slides every card out. A card added later gets it without asking.
+
+The cards it covers, all one `AdaptiveLayout` (`PadCard`) showing different first pages:
+
+| Card | Opened by |
+|---|---|
+| The Pause Card | Select+Start or Guide over a game |
+| The Home card | Start over the desktop's list, over the desktop's Home, over a theme's view |
+| The List card | Select on the big screen's Games grid |
+| Start Console | the List card's Start Console row |
+| Power | Home's Power place on the big screen |
+
+- Start Console is opened from the List card, which closes first. It is a new card, not a page of the List card, so
+  `OpenCard` slides it in whenever no slide is already running: the List card goes at once and Start Console comes in
+  from the left. A page turn inside any card (Filter, Tools, Start Console from the Home card, which is a submenu there)
+  stays still.
+- Closing with B or Start, the card stops taking the pad at once, and the screen beneath (the grid, the themed view,
+  Home, the desktop's list) does not take it either until the card is gone; Start pressed meanwhile opens the card again.
+  A game's page opened from the Home card takes the pad at once, since it lays over the card rather than lying beneath it.
+- At rest nothing changed: no recording moved.
+
+Tests (`CardSlideTests`): each of the six openings above slides in over Enter and out over Exit with B, the pane fading
+with it and no grow; the grid takes no press while the List card slides out; a page turn into Filter and back moves
+nothing; with motion reduced the List card comes and goes at once. `EsdeSettingsMenusTests`' opening test reads the grow
+on the Gamelist Options sheet now, and that the Home card slides instead. Four `LaunchScreenTests`, which keep
+Scale-up on a stepped clock, run the clock 200 ms after a card closes before the next press, as a player's hand would.
+The slide is also stepped on each pad tick, so a stepped clock moves it without the display's timer. Measured on
+2026-11-04: `CardSlideTests` 9 (the picture tool skipped), `PauseCardPagesTests` 4, `PadMenuTests` 26, `HomeCardTests` 10,
+`EsdeSettingsMenusTests` 14, `EsdeMenusTests` 7, `ConsoleStartTests` 7, `LaunchScreenTests` 29,
+`ThemedLibraryPadTests` 13, `WindowFitAuditTests` 831 (4 skipped, no recording changed). Seeded faults, each reverted:
+the List card popping without the slide (caught by five of the six openings and the reduced-motion test; Start Console
+still slid through `OpenCard`), a page turn replaying the slide (caught by the page-turn test), the grid taking the pad
+while the card slides out (caught by the grid test), a library card leaving at once (caught by all six openings and the
+grid test). Pictures of the List card halfway in, settled
+and halfway out: `CardSlideTests.The_list_card_halfway_through_its_slide_is_drawn_to_pictures` with EMUSEN_BIGPICTURE_PNG=1.
 
 ### 20.5 Tests, measured on 2026-11-03
 

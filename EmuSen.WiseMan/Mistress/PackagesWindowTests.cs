@@ -154,6 +154,50 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
+        // A PlayStation 2 DVD and a PlayStation disc converted by real jobs: before, each original's own size and the plan's line with their total; after, the row and its pane say the original → the CHD from the package's record, and the apply bar what the run saved - see EmuSen_GamePackages.md §4.4a.
+        [Fact]
+        public Task A_converted_disc_shows_its_sizes_from_its_record_on_the_row_and_the_pane() => Session.Dispatch(() =>
+        {
+            Assert.True(LibraryToolJob.Available, LibraryToolJob.Report);
+            Directory.CreateDirectory(Path.Combine(_library, "ps2"));
+            Directory.CreateDirectory(Path.Combine(_library, "psx"));
+            string iso = SyntheticPs2Disc.Dvd().WriteSet(Path.Combine(_library, "ps2"), "Basalt Run (Synthetic)");
+            SyntheticPsxDisc.Build(audioSeconds: 1).WriteSet(Path.Combine(_library, "psx"), "Ruby Lantern (Synthetic)");
+            new AppSettings { RomDirectory = _library }.Save();
+            List<string> before = Listing();
+            long isoBytes = new FileInfo(iso).Length, cdBytes = Directory.EnumerateFiles(Path.Combine(_library, "psx")).Sum(f => new FileInfo(f).Length);
+
+            PackagesPane.Disk = _ => (100L << 30, 400L << 30);
+            PackagesWindow window = Open();
+            PackagesPane pane = window.Pane;
+            WaitIdle(pane);
+            PackageRow dvd = Row(pane, "Basalt Run (Synthetic)"), cd = Row(pane, "Ruby Lantern (Synthetic)");
+            Assert.True(dvd.Convertible && cd.Convertible && !dvd.Converted);
+            Assert.Equal(ToolWords.Size(isoBytes), PackagesWords.Size(dvd));
+            Assert.True(pane.SetMark(dvd, PackagesPlan.Convert.Key));
+            Assert.True(pane.SetMark(cd, PackagesPlan.Convert.Key));
+            Assert.Equal($"2 marked: convert to CHD 2 ({ToolWords.Size(isoBytes + cdBytes)})", pane.SummaryText);
+            Assert.True(pane.OpenPlan());
+            Assert.Contains($"Convert 2 discs ({ToolWords.Size(isoBytes + cdBytes)}) to CHD", pane.PlanText);
+            Assert.True(pane.Confirm());
+            WaitIdle(pane);
+            WaitIdle(pane);
+
+            PackageRow done = Row(pane, "Basalt Run (Synthetic)"), cdDone = Row(pane, "Ruby Lantern (Synthetic)");
+            long chdBytes = new FileInfo(Path.Combine(DataStore.Compressed, "ps2", "Basalt Run (Synthetic).chd")).Length;
+            Assert.True(done.Packaged, string.Join("\n", pane.Rows.Select(r => $"{r.Key} {r.State} {pane.OutcomeOf(r)}")));
+            Assert.Equal((isoBytes, chdBytes), (done.Original, done.Chd));
+            Assert.True(cdDone.Converted && cdDone.Original < cdBytes, "a sheet's original is its tracks, as its record holds them");
+            Assert.Equal(PackagesWords.SizeChange(isoBytes, chdBytes), PackagesWords.Size(done));
+            pane.Table.Select(done);
+            Dispatcher.UIThread.RunJobs();
+            PackageDetail detail = window.GetVisualDescendants().OfType<PackageDetail>().Single();
+            Assert.Contains(detail.GetVisualDescendants().OfType<Avalonia.Controls.TextBlock>(), t => t.Text?.StartsWith("As CHD, " + PackagesWords.SizeChange(isoBytes, chdBytes) + "; the package's folder ", StringComparison.Ordinal) == true);
+            Assert.Equal(PackagesWords.Converted(2, done.Original + cdDone.Original, done.Chd + cdDone.Chd), pane.SummaryText);
+            Assert.Equal(before, Listing());
+            window.Close();
+        }, default);
+
         // The chosen row's package controls, its button pressed and its job followed until the list is taken again.
         private static void Press(PackagesWindow window, string name)
         {
@@ -242,7 +286,7 @@ namespace EmuSen.WiseMan.Mistress
         public void A_plan_runs_one_request_for_each_kind_of_change_in_a_fixed_order()
         {
             PackageRow a = new() { Key = "library:snes/a.sfc", Title = "a", Console = "SNES", Source = "snes/a.sfc", State = "unpackaged" };
-            PackageRow b = a with { Key = "library:psx/b.cue", Title = "b", Source = "psx/b.cue", Convertible = true };
+            PackageRow b = a with { Key = "library:psx/b.cue", Title = "b", Source = "psx/b.cue", Convertible = true, Size = 4_617_089_024 };
             PackageRow c = a with { Key = "package:NES/c.nes", Title = "c", Package = "NES/c.nes", Mode = "self-contained", State = "ok", Source = null };
             PackageRow d = a with { Key = "library:snes/d.sfc", Title = "d", Source = "snes/d.sfc" };
             var marked = new List<ManagerMarked<PackageRow>> { new(c, PackagesPlan.Check), new(b, PackagesPlan.Convert), new(a, PackagesPlan.Make), new(c, PackagesPlan.Zip), new(d, PackagesPlan.Make) };
@@ -256,10 +300,26 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("""{"op":"pkg-make","paths":["snes/a.sfc"],"zip":true}""", PackagesPlan.Steps([new(a, PackagesPlan.MakeZip)])[0].Request);
             string text = PackagesPlan.Text(marked);
             Assert.Contains("Make 2 packages, linked", text);
-            Assert.Contains("Convert 1 disc to CHD", text);
+            Assert.Contains("Convert 1 disc (4.3 GB) to CHD", text);
             Assert.Contains("The originals are never removed.", text);
             Assert.EndsWith("Nothing in the library is changed, moved or removed.", text);
-            Assert.Equal("5 marked: make, linked 2, zip 1, convert to CHD 1, check 1", PackagesPlan.Summary(marked));
+            Assert.Equal("5 marked: make, linked 2, zip 1, convert to CHD 1 (4.3 GB), check 1", PackagesPlan.Summary(marked));
+        }
+
+        // A disc not yet converted shows its own size alone; a converted one its record's original and CHD and the change, never re-read - see EmuSen_GamePackages.md §4.4a.
+        [Fact]
+        public void A_converted_discs_sizes_are_its_records_and_a_disc_not_yet_converted_shows_its_own_alone()
+        {
+            static PackageRow Of(string json) => PackageRow.Of(JsonDocument.Parse(json).RootElement)!;
+            PackageRow disc = Of("""{"event":"game","source":"ps2/d.iso","system":"PlayStation 2","state":"unpackaged","size":4617089024,"convertible":true}""");
+            Assert.Equal(("4.3 GB", false), (PackagesWords.Size(disc), disc.Converted));
+            PackageRow converted = Of("""{"event":"package","package":"PlayStation 2/d.chd","state":"ok","mode":"linked","system":"ps2","console":"PlayStation 2","where":"compressed","game":"ps2/d.chd","size":4096,"game_size":524288,"original":4617089024,"chd":2908766208}""");
+            Assert.Equal((4_617_089_024L, 2_908_766_208L), (converted.Original, converted.Chd));
+            Assert.Equal("4.3 GB → 2.7 GB (−37%)", PackagesWords.Size(converted));
+            Assert.Equal(("4.3 GB", "4.3 → 2.7 GB", "1.0 GB → 512 MB"), (PackagesWords.ShortSize(disc), PackagesWords.ShortSize(converted), PackagesWords.ShortSize(converted with { Original = 1L << 30, Chd = 512L << 20 })));
+            Assert.Equal("512 KB", PackagesWords.Size(converted with { Original = 0 }));
+            Assert.Equal("10.0 MB → 10.5 MB (+5%)", PackagesWords.SizeChange(10L << 20, 11010048));
+            Assert.Equal("Converted 2 discs: 8.6 GB → 5.4 GB (−37%), 3.2 GB freed once the originals are removed; they are kept.", PackagesWords.Converted(2, 2 * 4_617_089_024L, 2 * 2_908_766_208L));
         }
 
         // A listing of one disc, then the conversion's events or a refusal, as the tool would give them.

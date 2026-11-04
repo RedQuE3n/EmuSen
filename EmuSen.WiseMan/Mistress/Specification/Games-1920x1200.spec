@@ -31,31 +31,31 @@ tree
             16 SectionTab at=897,60,279,66 by=panel drawn focus heard="Super Nintendo" limit=0,0,1920,1200 op paints=#D4D4D4FF role=tabitem text="SUPER NINTENDO"
               17 AccessText at=921,72,231,37.5 box=154,25 by=clip caps=13.999 drawn face=Barlow layout=153.46,24 limit=897,60,279,66 owner=16 paints=#D4D4D4FF role=none size=20 text="SUPER NINTENDO"
         18 Panel at=213,162,1494,756 by=panel heard=All limit=0,0,1920,1200 name=GalleryGrid role=none
-          19 CoverCard at=204.9,151.2,286.2,381.6 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Aurora Drift (Synthetic).sfc" role=none
+          19 CoverCard at=204.9,151.2,286.2,381.6 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Aurora Drift (Synthetic).sfc" role=none
             20 Border at=208.08,151.2,279.84,381.6 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               21 Image at=208.08,151.2,279.84,381.6 by=clip drawn limit=208.08,151.2,279.84,381.6 nohit role=image
             22 Border at=196.95,140.07,302.1,403.86 by=panel limit=0,0,1920,1200 name=CoverRing nohit paints=#4C9AE8FF role=none
-          23 CoverCard at=519,162,270,360 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Brass Lantern (Synthetic).sfc" role=none
+          23 CoverCard at=519,162,270,360 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Brass Lantern (Synthetic).sfc" role=none
             24 Border at=522,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               25 Image at=522,162,264,360 by=clip drawn limit=522,162,264,360 nohit role=image
             26 Path at=738,174,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
-          27 CoverCard at=825,162,270,360 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Cobalt Harbor (Synthetic).sfc" role=none
+          27 CoverCard at=825,162,270,360 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Cobalt Harbor (Synthetic).sfc" role=none
             28 Border at=828,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               29 Image at=828,162,264,360 by=clip drawn limit=828,162,264,360 nohit role=image
-          30 CoverCard at=1131,162,270,360 by=panel heard="Dune Relay (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Dune Relay (Synthetic).sfc" role=none
+          30 CoverCard at=1131,162,270,360 by=panel heard="Dune Relay (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Dune Relay (Synthetic).sfc" role=none
             31 Border at=1134,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               32 Image at=1134,162,264,360 by=clip drawn limit=1134,162,264,360 nohit role=image
-          33 CoverCard at=1437,162,270,360 by=panel heard="Ember Circuit (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Ember Circuit (Synthetic).sfc" role=none
+          33 CoverCard at=1437,162,270,360 by=panel heard="Ember Circuit (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Ember Circuit (Synthetic).sfc" role=none
             34 Border at=1440,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               35 Image at=1440,162,264,360 by=clip drawn limit=1440,162,264,360 nohit role=image
-          36 CoverCard at=213,558,270,360 by=panel heard="Fable of Tiles (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Fable of Tiles (Synthetic).nes" role=none
+          36 CoverCard at=213,558,270,360 by=panel heard="Fable of Tiles (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Fable of Tiles (Synthetic).nes" role=none
             37 Border at=213,729,270,189 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               38 Image at=213,729,270,189 by=clip drawn limit=213,729,270,189 nohit role=image
             39 Path at=435,741,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
-          40 CoverCard at=519,558,270,360 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Granite Choir (Synthetic).nes" role=none
+          40 CoverCard at=519,558,270,360 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Granite Choir (Synthetic).nes" role=none
             41 Border at=519,729,270,189 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               42 Image at=519,729,270,189 by=clip drawn limit=519,729,270,189 nohit role=image
-          43 CoverCard at=825,558,270,360 by=panel heard="Hollow Comet (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Hollow Comet (Synthetic).gb" role=none
+          43 CoverCard at=825,558,270,360 by=panel heard="Hollow Comet (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Hollow Comet (Synthetic).gb" role=none
             44 Border at=825,648,270,270 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               45 Image at=825,648,270,270 by=clip drawn limit=825,648,270,270 nohit role=image
         46 TextBlock at=96,942,1728,58.5 box=1152,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic)" layout=234.91,38.4 limit=0,0,1920,1200 name=GalleryName paints=#EEEEF0FF role=text size=32 text="Aurora Drift (Synthetic)"

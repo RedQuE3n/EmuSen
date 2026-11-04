@@ -33,7 +33,7 @@ tree
         18 TextBox at=96,150,1728,66 by=panel drawn heard=Search limit=0,0,1920,1200 name=GallerySearch paints=#0E0E10FF,#707070FF,#EEEEF0FF role=edit text=gran
           19 ScrollViewer at=121.5,151.5,1677,63 name=PART_ScrollViewer paints=#EEEEF0FF part role=scrollviewer
         20 Panel at=213,234,1494,360 by=panel heard=All limit=0,0,1920,1200 name=GalleryGrid role=none
-          21 CoverCard at=213,234,270,360 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Granite Choir (Synthetic).nes" role=none
+          21 CoverCard at=213,234,270,360 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Granite Choir (Synthetic).nes" role=none
             22 Border at=213,405,270,189 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               23 Image at=213,405,270,189 by=clip drawn limit=213,405,270,189 nohit role=image
         24 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=GalleryHelpBar paints=#1B1B1EFF,#707070FF role=none

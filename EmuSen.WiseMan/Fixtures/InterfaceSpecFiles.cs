@@ -35,6 +35,8 @@ namespace EmuSen.WiseMan.Fixtures
             return s =>
             {
                 foreach (string root in roots.Where(r => r.Length > 0)) s = s.Replace(root, "<run>", StringComparison.Ordinal);
+                // A FixedRunFolder's numbered slot not named among the roots, whichever slot a run claimed and wherever TMPDIR points.
+                s = FixedRunFolder.Slot.Replace(s, "<sandbox>");
                 s = s.Replace(temp, "<temp>", StringComparison.Ordinal).Replace(home, "<home>", StringComparison.Ordinal);
                 // A run's own folder named by a fresh id, such as a test theme's, reads the same on every run.
                 return System.Text.RegularExpressions.Regex.Replace(s, "\\b[0-9A-Fa-f]{32}\\b", "<id>");

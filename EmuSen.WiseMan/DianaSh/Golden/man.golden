@@ -5486,7 +5486,7 @@ case the page for chd
 target none
 covers 1
 $ man chd
-out 8328
+out 10427
 NAME
     chd - convert the library's disc games to CHD, check them, list them
 
@@ -5501,10 +5501,10 @@ DESCRIPTION
     folder of the library, AppSettings.RomDirectory, written relative to
     it with / between its parts: psx, "psx/Rayman (USA)", SCD. / is the
     whole library, and so is no path for ls and check. The disc games
-    under each path are its PlayStation and Sega CD discs: a cue sheet
-    and its tracks, a lone raw track, an ISO image, or a zip holding one.
-    Which console a file is for is the library scan's own routing, then
-    the nearest console folder above it (psx, segacd).
+    under each path are its PlayStation, PlayStation 2 and Sega CD discs:
+    a cue sheet and its tracks, a lone raw track, an ISO image, or a zip
+    holding one. Which console a file is for is the library scan's own
+    routing, then the nearest console folder above it (psx, ps2, segacd).
 
     THE LIBRARY IS ONLY READ, unless a conversion is given --beside.
     Nothing under it is written, renamed or removed: no CHD, no package,
@@ -5527,6 +5527,10 @@ DESCRIPTION
            compared with those taken of the original before chdman ran;
         3  the table of contents (tracks, their pauses and starts, the
            lead-out and the disc type) equal to the original disc's.
+
+    A PlayStation 2 disc is a compact disc or a DVD, as its core opens it
+    (see DVDS); a DVD is written by chdman's createdvd, and its checks 2
+    and 3 are its own.
 
     Checks 2 and 3 are not run over a CHD that check 1 found damaged; the
     disc has failed in any case. Each converted disc is given a linked
@@ -5555,16 +5559,48 @@ DESCRIPTION
     the setting later leaves every earlier CHD found where it was, and a
     disc already converted anywhere is not converted again.
 
-    --fast writes chdman's Zstandard codecs, cdzs,cdfl, in place of its
-    defaults, cdlz,cdzl,cdfl: about 1.3 to 1.8 times faster to decode for
-    a CHD about a point larger. -j sets the threads chdman compresses
-    with; all of the machine's by default.
+    The first line of a convert names both codec sets, a CD's and a
+    DVD's. --fast writes chdman's Zstandard codecs, cdzs,cdfl, in place
+    of its defaults, cdlz,cdzl,cdfl: about 1.3 to 1.8 times faster to
+    decode for a CHD about a point larger. A DVD takes zstd in place of
+    createdvd's defaults, lzma,zlib,huff,flac. -j sets the threads
+    chdman compresses with; all of the machine's by default.
 
     'check' runs the three checks again on discs already converted,
     against their packages, wherever their CHDs are; the originals are
     not read. 'ls' lists the disc games with their state: converted, not
     converted, changed (an original changed since its conversion) or
     missing (its CHD is gone); a CHD beside its original is marked so.
+    A disc not converted shows its own bytes; a converted one the
+    original's and the CHD's and the change, 4,617,089,024 -> 2,908,766,208
+    bytes (-37.0%), both from its package's record, never from the files,
+    which 'check' reads.
+
+DVDS
+    Converting never changes what the game sees: a disc's CHD is the
+    medium its core opened the original as.
+
+        - a cue sheet, or a lone raw track of 2,352-byte sectors, is a
+          compact disc's on every console, and goes through createcd;
+        - on the PlayStation 2, a lone image of 2,048-byte sectors (an
+          .iso) is a DVD's, whatever its size and whether or not it
+          carries UDF, since Sapphire opens such an image as a DVD.
+
+    The PlayStation and the Sega CD read compact discs only, so their
+    .iso images are compact discs', as before. A DVD is written by
+    createdvd from its one file, and its three checks are:
+
+        1  chdman's verify, as for a compact disc;
+        2  every sector's 2,048 bytes read from the CHD in order, through
+           the call by which Sapphire's drive opens a disc (emusen-disc's
+           medium, 2,048-byte sectors taken for a DVD's), and their
+           CRC-32, MD5 and SHA-1 compared with the original file's;
+        3  the size in sectors, and the layer break of a Dual Layer disc,
+           equal to the original's as the same reader opens it.
+
+    The package records the container's medium, dvd, and in place of a
+    table of contents the sectors and the layer break; a compact disc's
+    package names no medium, as every package before DVDs did.
 
 BESIDE THE ORIGINAL
     --beside writes each disc's CHD into the library, in the folder of
@@ -5621,6 +5657,7 @@ CHDMAN
 EXAMPLES
     chd ls psx
     chd convert psx SCD
+    chd convert ps2
     chd convert "psx/Crash Bandicoot (USA).bin" --fast
     chd convert psx --output /Compressed-PS1
     chd convert SCD --beside
@@ -5632,8 +5669,9 @@ EXAMPLES
 SOURCES
     MAME Documentation 0.289, "chdman - CHD (Compressed Hunks of Data)
     File Manager", https://docs.mamedev.org/tools/chdman.html: the
-    commands createcd, verify and info, the codecs and createcd's
-    defaults.
+    commands createcd, createdvd, verify and info, the codecs and
+    createcd's defaults; createdvd's defaults as chdman 0.289's info
+    names them, measured 2026-11-03.
     MAME Documentation 0.289, "The MAME License",
     https://docs.mamedev.org/license.html.
     MAME Documentation 0.289, "Compiling MAME",
@@ -5643,7 +5681,8 @@ SOURCES
 SEE ALSO
     EmuSen_GamePackages.md (sections 4 and 12: the design, the checks,
     the events and the measurements; section 20: the output folder and
-    beside the original), EmuSen_Galaxia.md (section 3.10,
+    beside the original; sections 4.2a, 4.3a and 4.4a: DVDs and the two
+    sizes), EmuSen_Galaxia.md (section 3.10,
     the package manifest), EmuSen_Disc.md (how a CHD is read)
 status 0
 action none

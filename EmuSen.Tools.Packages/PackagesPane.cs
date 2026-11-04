@@ -39,6 +39,8 @@ namespace EmuSen.Tools.Packages
         private PlanStep? _step;
         private int _stepCount, _stepsDone;
         private string? _notice;
+        // The discs the run converted and their bytes before and after, from the tool's events.
+        private (int Discs, long Original, long Chd) _converted;
 
         public PackagesPane()
         {
@@ -51,7 +53,10 @@ namespace EmuSen.Tools.Packages
                 .Column(new LunaColumn<PackageRow>("Format", r => r.Format) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("Mode", PackagesWords.Mode) { Width = "Auto" })
                 .Column(new LunaColumn<PackageRow>("State", StateText) { Tone = StateTone, Width = "Auto", Alignment = Avalonia.Layout.HorizontalAlignment.Right }, bigScreen: true)
-                .Column(new LunaColumn<PackageRow>("Size", r => r.Size > 0 ? ToolWords.Size(r.Size) : "") { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) });
+                .Column(new LunaColumn<PackageRow>("Size", PackagesWords.Size) { Width = "Auto", Sort = (a, b) => a.Size.CompareTo(b.Size) });
+            // The desktop's columns spaced as its mockup draws them; the big screen's list ends with each row's size (EmuSen_GamePackages.md §21.1).
+            Table.ColumnGap = 24;
+            BigScreenTable.Column(new LunaColumn<PackageRow>("Size", PackagesWords.ShortSize) { Width = "Auto", Alignment = Avalonia.Layout.HorizontalAlignment.Right });
             MarksFor = PackagesPlan.MarksFor;
             InSection = Belongs;
             SearchKey = r => $"{r.Title} {r.Source} {r.Package}";
@@ -179,6 +184,7 @@ namespace EmuSen.Tools.Packages
         {
             Stop();
             _outcomes.Clear();
+            _converted = default;
             Say(null);
             _steps = new Queue<PlanStep>(PackagesPlan.Steps(marked));
             _stepCount = _steps.Count;
@@ -202,6 +208,7 @@ namespace EmuSen.Tools.Packages
             }
             _step = null;
             Finish();
+            if (_notice is null && _converted.Discs > 0) SetNotice(PackagesWords.Converted(_converted.Discs, _converted.Original, _converted.Chd));
             Refresh();
         }
 
@@ -255,6 +262,8 @@ namespace EmuSen.Tools.Packages
                 if (PackageRow.Of(e) is { } row) _listing.Add(row);
                 return;
             }
+            if (kind == "disc" && Text(e, "state") == "converted" && Number(e, "original") is > 0 and var original && Number(e, "chd") is > 0 and var chd)
+                _converted = (_converted.Discs + 1, _converted.Original + original, _converted.Chd + chd);
             if (PackagesWords.Outcome(e) is { } said)
             {
                 if (Text(e, "source") is { } source) _outcomes["library:" + source] = said;

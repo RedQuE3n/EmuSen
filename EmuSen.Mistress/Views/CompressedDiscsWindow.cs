@@ -36,7 +36,7 @@ namespace EmuSen.Mistress.Views
         public bool Taken { get; set; }
     }
 
-    // The library's PlayStation and Sega CD discs converted to CHD, checked again and listed, through the platform library's library tool; the library is only read - see EmuSen_GamePackages.md §13.
+    // The library's PlayStation, PlayStation 2 and Sega CD discs converted to CHD, checked again and listed, through the platform library's library tool; the library is only read - see EmuSen_GamePackages.md §13.
     public sealed class CompressedDiscsWindow : ToolWindow
     {
         // How a job is started, which a test replaces with a scripted one.
@@ -399,7 +399,7 @@ namespace EmuSen.Mistress.Views
             string[] labels = new[] { EveryFolder }.Concat(folders.Keys).ToArray();
             _folder.Fill(labels, EveryFolder);
             _filling = false;
-            if (_discs.Count == 0) Empty("No discs to convert", "The library holds no PlayStation or Sega CD disc this tool converts: a cue sheet with its tracks, a lone data track, an ISO image, or a zip of one of them.");
+            if (_discs.Count == 0) Empty("No discs to convert", "The library holds no PlayStation, PlayStation 2 or Sega CD disc this tool converts: a cue sheet with its tracks, a lone data track, an ISO image, or a zip of one of them.");
             else ShowFolder();
         }
 
@@ -459,8 +459,8 @@ namespace EmuSen.Mistress.Views
             int adds = BesideAdds;
             _besideNote.Text = Beside ? $"This writes into the library: converting adds up to {adds} CHD file{(adds == 1 ? "" : "s")} to {_library}, each beside its original as <name>.chd. No original is changed, moved or removed, and a disc whose name is already taken is left as it is." : "";
             _about.Text = Beside
-                ? $"A CHD of each PlayStation and Sega CD disc, about half its size. This batch writes each CHD into the library, beside its original; nothing already in {_library} is changed, moved or removed."
-                : $"A CHD of each PlayStation and Sega CD disc, about half its size. The library is left untouched: nothing in {_library} is changed, moved or removed. The CHDs go to {OutputFolder}.";
+                ? $"A CHD of each PlayStation, PlayStation 2 and Sega CD disc, checked three ways before it is kept. This batch writes each CHD into the library, beside its original; nothing already in {_library} is changed, moved or removed."
+                : $"A CHD of each PlayStation, PlayStation 2 and Sega CD disc, checked three ways before it is kept. The library is left untouched: nothing in {_library} is changed, moved or removed. The CHDs go to {OutputFolder}.";
             _stop.IsEnabled = batch && !_stopping;
             _resume.IsEnabled = !running && _lastConvert is not null && _counts.TryGetValue("stopped", out long stopped) && stopped > 0;
 

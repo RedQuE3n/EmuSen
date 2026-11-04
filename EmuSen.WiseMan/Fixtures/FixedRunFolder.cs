@@ -25,6 +25,10 @@ namespace EmuSen.WiseMan.Fixtures
 
         public string Root { get; }
 
+        // Any run folder's numbered slot, under /tmp or the temporary folder, as recordings must not tell one slot from another.
+        public static readonly System.Text.RegularExpressions.Regex Slot = new(
+            $"(?:/tmp|{System.Text.RegularExpressions.Regex.Escape(Path.GetTempPath().TrimEnd('/', '\\'))})[/\\\\]EmuSen[A-Za-z]+[/\\\\][0-9]{{3}}(?![0-9])");
+
         public void Dispose()
         {
             try { if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true); } catch { }

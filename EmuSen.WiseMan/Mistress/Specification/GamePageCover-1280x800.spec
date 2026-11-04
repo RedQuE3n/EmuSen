@@ -60,31 +60,31 @@ tree
                 45 Border at=57,457,164,190 by=panel limit=0,0,1280,800 nohit paints=#4C9AE8FF role=none
               46 TextBlock at=64,652,150,24 box=150,24 by=panel caps=13.999 drawn face=Barlow heard="Its own" layout=60.12,24 limit=0,0,1280,800 paints=#EEEEF0FF role=text size=20 text="Its own"
             47 StackPanel at=238,464,150,238 by=panel limit=0,0,1280,800 role=none
-              48 Panel at=238,464,150,176 by=panel heard="Borrow from Aurora Drift (Synthetic)" limit=0,0,1280,800 name="PageTile./tmp/EmuSenThemedSession/001/Roms/Aurora Drift (Synthetic).sfc" role=none
+              48 Panel at=238,464,150,176 by=panel heard="Borrow from Aurora Drift (Synthetic)" limit=0,0,1280,800 name="PageTile.<run>/Roms/Aurora Drift (Synthetic).sfc" role=none
                 49 Border at=238,464,150,176 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   50 Panel at=238,464,150,176 by=clip limit=238,464,150,176 role=none
                     51 Image at=238,464,150,176 by=clip drawn limit=238,464,150,176 nohit role=image
               52 TextBlock at=238,652,150,48 box=150,48 by=panel caps=13.999 drawn face=Barlow heard="Borrow from Aurora Drift (Synthetic)" layout=106.44,48 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="Borrow from Aurora Drift (Synthetic)"
             53 StackPanel at=412,464,150,238 by=panel limit=0,0,1280,800 role=none
-              54 Panel at=412,464,150,176 by=panel heard="Borrow from Brass Lantern (Synthetic)" limit=0,0,1280,800 name="PageTile./tmp/EmuSenThemedSession/001/Roms/Brass Lantern (Synthetic).sfc" role=none
+              54 Panel at=412,464,150,176 by=panel heard="Borrow from Brass Lantern (Synthetic)" limit=0,0,1280,800 name="PageTile.<run>/Roms/Brass Lantern (Synthetic).sfc" role=none
                 55 Border at=412,464,150,176 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   56 Panel at=412,464,150,176 by=clip limit=412,464,150,176 role=none
                     57 Image at=412,464,150,176 by=clip drawn limit=412,464,150,176 nohit role=image
               58 TextBlock at=412,652,150,48 box=150,48 by=panel caps=13.999 drawn face=Barlow heard="Borrow from Brass Lantern (Synthetic)" layout=117.88,48 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="Borrow from Brass Lantern (Synthetic)"
             59 StackPanel at=586,464,150,238 by=panel limit=0,0,1280,800 role=none
-              60 Panel at=586,464,150,176 by=panel heard="Borrow from Dune Relay (Synthetic)" limit=0,0,1280,800 name="PageTile./tmp/EmuSenThemedSession/001/Roms/Dune Relay (Synthetic).sfc" role=none
+              60 Panel at=586,464,150,176 by=panel heard="Borrow from Dune Relay (Synthetic)" limit=0,0,1280,800 name="PageTile.<run>/Roms/Dune Relay (Synthetic).sfc" role=none
                 61 Border at=586,464,150,176 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   62 Panel at=586,464,150,176 by=clip limit=586,464,150,176 role=none
                     63 Image at=586,464,150,176 by=clip drawn limit=586,464,150,176 nohit role=image
               64 TextBlock at=586,652,150,48 box=150,48 by=panel caps=13.999 drawn face=Barlow heard="Borrow from Dune Relay (Synthetic)" layout=106.44,48 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="Borrow from Dune Relay (Synthetic)"
             65 StackPanel at=760,464,150,238 by=panel limit=0,0,1280,800 role=none
-              66 Panel at=760,464,150,176 by=panel heard="Borrow from Ember Circuit (Synthetic)" limit=0,0,1280,800 name="PageTile./tmp/EmuSenThemedSession/001/Roms/Ember Circuit (Synthetic).sfc" role=none
+              66 Panel at=760,464,150,176 by=panel heard="Borrow from Ember Circuit (Synthetic)" limit=0,0,1280,800 name="PageTile.<run>/Roms/Ember Circuit (Synthetic).sfc" role=none
                 67 Border at=760,464,150,176 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   68 Panel at=760,464,150,176 by=clip limit=760,464,150,176 role=none
                     69 Image at=760,464,150,176 by=clip drawn limit=760,464,150,176 nohit role=image
               70 TextBlock at=760,652,150,48 box=150,48 by=panel caps=13.999 drawn face=Barlow heard="Borrow from Ember Circuit (Synthetic)" layout=115.78,48 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="Borrow from Ember Circuit (Synthetic)"
             71 StackPanel at=934,464,150,238 by=panel limit=0,0,1280,800 role=none
-              72 Panel at=934,464,150,176 by=panel heard="Borrow from Fable of Tiles (Synthetic)" limit=0,0,1280,800 name="PageTile./tmp/EmuSenThemedSession/001/Roms/Fable of Tiles (Synthetic).nes" role=none
+              72 Panel at=934,464,150,176 by=panel heard="Borrow from Fable of Tiles (Synthetic)" limit=0,0,1280,800 name="PageTile.<run>/Roms/Fable of Tiles (Synthetic).nes" role=none
                 73 Border at=934,464,150,176 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   74 Panel at=934,464,150,176 by=clip limit=934,464,150,176 role=none
                     75 Image at=934,464,150,176 by=clip drawn limit=934,464,150,176 nohit role=image

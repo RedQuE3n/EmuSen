@@ -39,7 +39,14 @@ namespace EmuSen.Tools.Packages
 
         public long PackageSize { get; init; }
 
-        // Whether chd convert takes the game: a CD system's disc, not yet a CHD.
+        // A converted disc's original and CHD in bytes, from its package's own record; zero for any other row (EmuSen_GamePackages.md §4.4a).
+        public long Original { get; init; }
+
+        public long Chd { get; init; }
+
+        public bool Converted => Original > 0 && Chd > 0;
+
+        // Whether chd convert takes the game: a disc of a system it converts, not yet a CHD.
         public bool Convertible { get; init; }
 
         public IReadOnlyList<string> Patches { get; init; } = [];
@@ -101,6 +108,8 @@ namespace EmuSen.Tools.Packages
                 Words = Text(e, "words") ?? (Text(e, "to") is { } to ? $"found again at {to}" : null),
                 Size = Number(e, "game_size"),
                 PackageSize = Number(e, "size"),
+                Original = Number(e, "original"),
+                Chd = Number(e, "chd"),
                 Convertible = e.TryGetProperty("convertible", out JsonElement cv) && cv.ValueKind == JsonValueKind.True,
                 Patches = e.TryGetProperty("patches", out JsonElement p) && p.ValueKind == JsonValueKind.Array ? p.EnumerateArray().Select(x => x.GetString() ?? "").ToList() : [],
                 Identity = Text(e, "identity") ?? "original",

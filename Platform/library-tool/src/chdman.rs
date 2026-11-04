@@ -1,4 +1,4 @@
-//! chdman run as a program: its version line, `createcd`, `verify` and `info`, each stopped when the batch is. What
+//! chdman run as a program: its version line, `createcd`, `createdvd`, `verify` and `info`, each stopped when the batch is. What
 //! each command does is read from MAME's documentation, "chdman", MAME Documentation 0.289; nothing of its source is
 //! read. See EmuSen_GamePackages.md §4.1 and §12.
 
@@ -100,13 +100,22 @@ impl Chdman {
     /// `createcd` from the sheet at `sheet` to `out`, with `codecs` where given (chdman's defaults otherwise) and at
     /// most `threads` compressing.
     pub fn create_cd(&self, sheet: &str, out: &str, codecs: Option<&str>, threads: usize, stop: &dyn Fn() -> bool) -> Result<(), String> {
+        self.create("createcd", sheet, out, codecs, threads, stop)
+    }
+
+    /// `createdvd` from the image of 2,048-byte sectors at `image` to `out`, as `create_cd` (EmuSen_GamePackages.md §4.2a).
+    pub fn create_dvd(&self, image: &str, out: &str, codecs: Option<&str>, threads: usize, stop: &dyn Fn() -> bool) -> Result<(), String> {
+        self.create("createdvd", image, out, codecs, threads, stop)
+    }
+
+    fn create(&self, command: &str, input: &str, out: &str, codecs: Option<&str>, threads: usize, stop: &dyn Fn() -> bool) -> Result<(), String> {
         let threads = threads.max(1).to_string();
-        let mut args = vec!["createcd", "-i", sheet, "-o", out, "-np", &threads];
+        let mut args = vec![command, "-i", input, "-o", out, "-np", &threads];
         if let Some(codecs) = codecs {
             args.extend(["-c", codecs]);
         }
         let ran = self.run(&args, stop)?;
-        if ran.ok { Ok(()) } else { Err(format!("chdman createcd failed: {}", last_words(&ran.text))) }
+        if ran.ok { Ok(()) } else { Err(format!("chdman {command} failed: {}", last_words(&ran.text))) }
     }
 
     /// `verify`: every hunk decompressed and the overall SHA-1 compared. Passed only on a clean exit that says so.

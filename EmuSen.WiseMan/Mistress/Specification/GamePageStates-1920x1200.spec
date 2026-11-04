@@ -58,21 +58,21 @@ tree
         43 Border at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageContent role=none
           44 StackPanel at=96,696,1728,357 by=panel limit=0,0,1920,1200 name=PageTiles role=none
             45 StackPanel at=96,696,300,357 by=panel limit=0,0,1920,1200 role=none
-              46 Panel at=96,696,300,225 by=panel heard="Slot 1, 2 h ago" limit=0,0,1920,1200 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).state" role=none
+              46 Panel at=96,696,300,225 by=panel heard="Slot 1, 2 h ago" limit=0,0,1920,1200 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).state" role=none
                 47 Border at=96,696,300,225 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
                   48 Panel at=96,696,300,225 by=clip limit=96,696,300,225 role=none
                     49 Image at=96,696,300,225 by=clip drawn limit=96,696,300,225 nohit role=image
               50 TextBlock at=96,939,300,36 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="Slot 1" layout=42.68,24 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=20 text="Slot 1"
               51 TextBlock at=96,981,300,36 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="2 h ago" layout=60.12,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="2 h ago"
             52 StackPanel at=432,696,300,357 by=panel limit=0,0,1920,1200 role=none
-              53 Panel at=432,696,300,225 by=panel heard="Slot 2, Yesterday" limit=0,0,1920,1200 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot2.state" role=none
+              53 Panel at=432,696,300,225 by=panel heard="Slot 2, Yesterday" limit=0,0,1920,1200 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot2.state" role=none
                 54 Border at=432,696,300,225 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
                   55 Panel at=432,696,300,225 by=clip limit=432,696,300,225 role=none
                     56 Image at=432,696,300,225 by=clip drawn limit=432,696,300,225 nohit role=image
               57 TextBlock at=432,939,300,36 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="Slot 2" layout=46.52,24 limit=0,0,1920,1200 paints=#D4D4D4FF role=text size=20 text="Slot 2"
               58 TextBlock at=432,981,300,36 box=200,24 by=panel caps=13.999 drawn face=Barlow heard=Yesterday layout=84.56,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text=Yesterday
             59 StackPanel at=768,696,300,357 by=panel limit=0,0,1920,1200 role=none
-              60 Panel at=768,696,300,225 by=panel heard="Slot 3, 3 days ago" limit=0,0,1920,1200 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state" role=none
+              60 Panel at=768,696,300,225 by=panel heard="Slot 3, 3 days ago" limit=0,0,1920,1200 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state" role=none
                 61 Border at=768,696,300,225 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
                   62 Panel at=768,696,300,225 by=clip limit=768,696,300,225 role=none
                     63 Image at=768,696,300,225 by=clip drawn limit=768,696,300,225 nohit role=image
@@ -80,7 +80,7 @@ tree
               65 TextBlock at=768,939,300,36 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="Slot 3" layout=46.3,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text="Slot 3"
               66 TextBlock at=768,981,300,36 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="3 days ago" layout=88.88,24 limit=0,0,1920,1200 paints=#8D8D91FF role=text size=20 text="3 days ago"
             67 StackPanel at=1104,696,300,357 by=panel limit=0,0,1920,1200 role=none
-              68 Panel at=1104,696,300,225 by=panel heard="Auto, Where you left off · 12 min ago" limit=0,0,1920,1200 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).resume.state" role=none
+              68 Panel at=1104,696,300,225 by=panel heard="Auto, Where you left off · 12 min ago" limit=0,0,1920,1200 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).resume.state" role=none
                 69 Border at=1104,696,300,225 by=panel limit=0,0,1920,1200 paints=#26262BFF role=none
                   70 Panel at=1104,696,300,225 by=clip limit=1104,696,300,225 role=none
                     71 Image at=1104,696,300,225 by=clip drawn limit=1104,696,300,225 nohit role=image

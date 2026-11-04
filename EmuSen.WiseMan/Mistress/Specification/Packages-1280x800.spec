@@ -48,57 +48,63 @@ tree
                 34 Grid at=64,160,1152,432 by=panel limit=0,0,1280,800 paints=#0E0E10FF role=none
                   35 LunaTable at=64,160,1152,432 by=panel heard=Rows limit=0,0,1280,800 paints=#0E0E10FF,#D4D4D4FF,#FFFFFFFF role=datagrid
                     36 ScrollViewer allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,160,1152,432 name=PART_ScrollViewer overflow=0 paints=#FFFFFFFF part role=scrollviewer viewport=64,160,1152,432
-                      37 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,160,1152,54 drawn focus heard="Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
+                      37 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,160,1152,54 drawn focus heard="Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK, Size: 1.0 MB" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
                         38 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,160,1152,53 in=36 role=none
                           39 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,160,1152,53 in=36 paints=#0E0E10FF role=none
-                            40 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,160,1128,53 heard="Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK" in=36 role=none
-                              41 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,170,928,32 box=928,32 caps=18.1987 drawn ellipsis face=Barlow heard=Game in=36 layout=925.86,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text="Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic)"
-                              42 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1040,170,152,34 box=152,34 caps=19.1128 drawn face="Adwaita Mono" heard=State in=36 layout=61.96,33.41 owner=37 paints=#35A064FF role=edit size=26 text="✓ OK"
-                      43 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,214,1152,54 drawn focus heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), State: ✓ OK" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
-                        44 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,214,1152,53 in=36 role=none
-                          45 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,214,1152,53 in=36 paints=#0E0E10FF role=none
-                            46 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,214,1128,53 heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), State: ✓ OK" in=36 role=none
-                              47 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,224,928,32 box=928,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=273.65,31.2 owner=43 paints=#D4D4D4FF role=edit size=26 text="Cobalt Harbor (Synthetic)"
-                              48 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1040,224,152,34 box=152,34 caps=19.1128 drawn face="Adwaita Mono" heard=State in=36 layout=61.96,33.41 owner=43 paints=#35A064FF role=edit size=26 text="✓ OK"
-                      49 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,268,1152,54 drawn focus heard="Mark: not marked, Game: Ruby Lantern (Synthetic), State: ⚠ Changed" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
-                        50 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,268,1152,53 in=36 role=none
-                          51 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,268,1152,53 in=36 paints=#0E0E10FF role=none
-                            52 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,268,1128,53 heard="Mark: not marked, Game: Ruby Lantern (Synthetic), State: ⚠ Changed" in=36 role=none
-                              53 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,278,928,32 box=928,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=269.57,31.2 owner=49 paints=#D4D4D4FF role=edit size=26 text="Ruby Lantern (Synthetic)"
-                              54 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1040,278,152,34 box=152,34 caps=19.1128 drawn face="Adwaita Mono" heard=State in=36 layout=128.28,33.41 owner=49 paints=#DAA520FF role=edit size=26 text="⚠ Changed"
-                      55 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,322,1152,54 drawn focus heard="Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), State: Not packaged" in=36 op paints=#333337FF,#EEEEF0FF role=listitem
-                        56 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,322,1152,53 in=36 role=none
-                          57 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,322,1152,53 in=36 paints=#26262BFF,#4C9AE8FF role=none
-                            58 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,322,1128,53 heard="Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), State: Not packaged" in=36 role=none
-                              59 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,332,928,32 box=928,32 caps=18.1987 drawn ellipsis face=Barlow heard=Game in=36 layout=926.74,31.2 owner=55 paints=#EEEEF0FF role=edit size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
-                              60 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1040,332,152,32 box=152,32 caps=18.1987 drawn face=Barlow heard=State in=36 layout=151.89,31.2 owner=55 paints=#8D8D91FF role=edit size=26 text="Not packaged"
-                      61 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,376,1152,54 drawn focus heard="Mark: not marked, Game: Ember Choir (USA), State: Not packaged" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
-                        62 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,376,1152,53 in=36 role=none
-                          63 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,376,1152,53 in=36 paints=#0E0E10FF role=none
-                            64 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,376,1128,53 heard="Mark: not marked, Game: Ember Choir (USA), State: Not packaged" in=36 role=none
-                              65 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,386,928,32 box=928,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=201.32,31.2 owner=61 paints=#D4D4D4FF role=edit size=26 text="Ember Choir (USA)"
-                              66 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1040,386,152,32 box=152,32 caps=18.1987 drawn face=Barlow heard=State in=36 layout=151.89,31.2 owner=61 paints=#8D8D91FF role=edit size=26 text="Not packaged"
-                      67 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,430,1152,54 drawn focus heard="Mark: not marked, Game: Amber Saga (USA), State: Not packaged" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
-                        68 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,430,1152,53 in=36 role=none
-                          69 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,430,1152,53 in=36 paints=#0E0E10FF role=none
-                            70 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,430,1128,53 heard="Mark: not marked, Game: Amber Saga (USA), State: Not packaged" in=36 role=none
-                              71 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,440,928,32 box=928,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=197.96,31.2 owner=67 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA)"
-                              72 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1040,440,152,32 box=152,32 caps=18.1987 drawn face=Barlow heard=State in=36 layout=151.89,31.2 owner=67 paints=#8D8D91FF role=edit size=26 text="Not packaged"
-            73 Border at=48,592,1184,110 by=panel limit=0,0,1280,800 name=AdaptiveStatus role=none
-              74 Grid at=48,610,1184,92 by=panel limit=0,0,1280,800 role=none
-                75 Grid at=48,610,1184,31 by=panel limit=0,0,1280,800 role=none
-                  76 TextBlock at=48,614,1184,27 box=1184,27 by=panel caps=15.3989 drawn face=Barlow heard="Nothing marked" layout=149.56,26.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="Nothing marked"
-                77 StackPanel at=575,658,657,44 by=panel limit=0,0,1280,800 role=none
-                  78 Button at=575,658,170,44 by=panel drawn heard="Apply the marked changes" limit=0,0,1280,800 off paints=#707070FF,#D4D4D4FF role=button
-                    79 StackPanel at=592,664,136,32 by=clip limit=575,658,170,44 off role=none
-                      80 PadGlyph at=592,669,22,22 by=clip heard=Menu limit=575,658,170,44 off role=image
-                      81 TextBlock at=624,664,83,32 box=83,32 by=clip caps=18.1987 drawn face=Barlow heard="Apply…" layout=82.71,31.2 limit=575,658,170,44 off owner=78 paints=#707070FF role=text size=26 text="Apply…"
-                  82 StackPanel at=757,658,475,44 by=panel limit=0,0,1280,800 role=none
-                    83 ProgressBar at=757,673,200,14 by=panel drawn heard=Space limit=0,0,1280,800 paints=#333337FF,#4C9AE8FF role=progressbar
-                    84 TextBlock at=965,668,267,24 box=267,24 by=panel caps=13.999 drawn face=Barlow heard="263 KB in packages · 412 GB free" layout=266.3,24 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="263 KB in packages · 412 GB free"
-            85 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=AdaptiveHelpBar paints=#707070FF role=none
-              86 HintBar at=64,716,1152,30 by=panel heard="Open, Back, Console, Mark, List, Apply…" limit=0,0,1280,800 role=group
-focus 55
+                            40 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,160,1128,53 heard="Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK, Size: 1.0 MB" in=36 role=none
+                              41 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,170,825,32 box=825,32 caps=18.1987 drawn ellipsis face=Barlow heard=Game in=36 layout=819.57,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text="Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic)"
+                              42 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=937,170,152,34 box=152,34 caps=19.1128 drawn face="Adwaita Mono" heard=State in=36 layout=61.96,33.41 owner=37 paints=#35A064FF role=edit size=26 text="✓ OK"
+                              43 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1113,170,79,32 box=79,32 caps=18.1987 drawn face=Barlow heard=Size in=36 layout=68.22,31.2 owner=37 paints=#D4D4D4FF role=edit size=26 text="1.0 MB"
+                      44 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,214,1152,54 drawn focus heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), State: ✓ OK, Size: 256 KB" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
+                        45 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,214,1152,53 in=36 role=none
+                          46 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,214,1152,53 in=36 paints=#0E0E10FF role=none
+                            47 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,214,1128,53 heard="Mark: not marked, Game: Cobalt Harbor (Synthetic), State: ✓ OK, Size: 256 KB" in=36 role=none
+                              48 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,224,825,32 box=825,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=273.65,31.2 owner=44 paints=#D4D4D4FF role=edit size=26 text="Cobalt Harbor (Synthetic)"
+                              49 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=937,224,152,34 box=152,34 caps=19.1128 drawn face="Adwaita Mono" heard=State in=36 layout=61.96,33.41 owner=44 paints=#35A064FF role=edit size=26 text="✓ OK"
+                              50 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1113,224,79,32 box=79,32 caps=18.1987 drawn face=Barlow heard=Size in=36 layout=75.48,31.2 owner=44 paints=#D4D4D4FF role=edit size=26 text="256 KB"
+                      51 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,268,1152,54 drawn focus heard="Mark: not marked, Game: Ruby Lantern (Synthetic), State: ⚠ Changed, Size: 658 MB" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
+                        52 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,268,1152,53 in=36 role=none
+                          53 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,268,1152,53 in=36 paints=#0E0E10FF role=none
+                            54 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,268,1128,53 heard="Mark: not marked, Game: Ruby Lantern (Synthetic), State: ⚠ Changed, Size: 658 MB" in=36 role=none
+                              55 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,278,825,32 box=825,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=269.57,31.2 owner=51 paints=#D4D4D4FF role=edit size=26 text="Ruby Lantern (Synthetic)"
+                              56 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=937,278,152,34 box=152,34 caps=19.1128 drawn face="Adwaita Mono" heard=State in=36 layout=128.28,33.41 owner=51 paints=#DAA520FF role=edit size=26 text="⚠ Changed"
+                              57 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1113,278,79,32 box=79,32 caps=18.1987 drawn face=Barlow heard=Size in=36 layout=78.49,31.2 owner=51 paints=#D4D4D4FF role=edit size=26 text="658 MB"
+                      58 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,322,1152,54 drawn focus heard="Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), State: Not packaged, Size: 658 MB" in=36 op paints=#333337FF,#EEEEF0FF role=listitem
+                        59 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,322,1152,53 in=36 role=none
+                          60 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,322,1152,53 in=36 paints=#26262BFF,#4C9AE8FF role=none
+                            61 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,322,1128,53 heard="Mark: not marked, Game: Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3), State: Not packaged, Size: 658 MB" in=36 role=none
+                              62 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,332,825,32 box=825,32 caps=18.1987 drawn ellipsis face=Barlow heard=Game in=36 layout=823.55,31.2 owner=58 paints=#EEEEF0FF role=edit size=26 text="Basalt Run - The Long Way Round Through the Mountains of the North (Europe) (Disc 2 of 3)"
+                              63 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=937,332,152,32 box=152,32 caps=18.1987 drawn face=Barlow heard=State in=36 layout=151.89,31.2 owner=58 paints=#8D8D91FF role=edit size=26 text="Not packaged"
+                              64 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1113,332,79,32 box=79,32 caps=18.1987 drawn face=Barlow heard=Size in=36 layout=78.49,31.2 owner=58 paints=#EEEEF0FF role=edit size=26 text="658 MB"
+                      65 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,376,1152,54 drawn focus heard="Mark: not marked, Game: Ember Choir (USA), State: Not packaged, Size: 534 MB" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
+                        66 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,376,1152,53 in=36 role=none
+                          67 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,376,1152,53 in=36 paints=#0E0E10FF role=none
+                            68 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,376,1128,53 heard="Mark: not marked, Game: Ember Choir (USA), State: Not packaged, Size: 534 MB" in=36 role=none
+                              69 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,386,825,32 box=825,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=201.32,31.2 owner=65 paints=#D4D4D4FF role=edit size=26 text="Ember Choir (USA)"
+                              70 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=937,386,152,32 box=152,32 caps=18.1987 drawn face=Barlow heard=State in=36 layout=151.89,31.2 owner=65 paints=#8D8D91FF role=edit size=26 text="Not packaged"
+                              71 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1113,386,79,32 box=79,32 caps=18.1987 drawn face=Barlow heard=Size in=36 layout=78.16,31.2 owner=65 paints=#D4D4D4FF role=edit size=26 text="534 MB"
+                      72 ListBoxItem allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,430,1152,54 drawn focus heard="Mark: not marked, Game: Amber Saga (USA), State: Not packaged, Size: 2.0 MB" in=36 op paints=#333337FF,#D4D4D4FF role=listitem
+                        73 DockPanel allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,430,1152,53 in=36 role=none
+                          74 Border allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=64,430,1152,53 in=36 paints=#0E0E10FF role=none
+                            75 Grid allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,430,1128,53 heard="Mark: not marked, Game: Amber Saga (USA), State: Not packaged, Size: 2.0 MB" in=36 role=none
+                              76 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=88,440,825,32 box=825,32 caps=18.1987 drawn face=Barlow heard=Game in=36 layout=197.96,31.2 owner=72 paints=#D4D4D4FF role=edit size=26 text="Amber Saga (USA)"
+                              77 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=937,440,152,32 box=152,32 caps=18.1987 drawn face=Barlow heard=State in=36 layout=151.89,31.2 owner=72 paints=#8D8D91FF role=edit size=26 text="Not packaged"
+                              78 TableCell allow="a game's title or state cut in the Packages table is whole in the detail while its row is chosen" at=1113,440,79,32 box=79,32 caps=18.1987 drawn face=Barlow heard=Size in=36 layout=73.29,31.2 owner=72 paints=#D4D4D4FF role=edit size=26 text="2.0 MB"
+            79 Border at=48,592,1184,110 by=panel limit=0,0,1280,800 name=AdaptiveStatus role=none
+              80 Grid at=48,610,1184,92 by=panel limit=0,0,1280,800 role=none
+                81 Grid at=48,610,1184,31 by=panel limit=0,0,1280,800 role=none
+                  82 TextBlock at=48,614,1184,27 box=1184,27 by=panel caps=15.3989 drawn face=Barlow heard="Nothing marked" layout=149.56,26.4 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=22 text="Nothing marked"
+                83 StackPanel at=575,658,657,44 by=panel limit=0,0,1280,800 role=none
+                  84 Button at=575,658,170,44 by=panel drawn heard="Apply the marked changes" limit=0,0,1280,800 off paints=#707070FF,#D4D4D4FF role=button
+                    85 StackPanel at=592,664,136,32 by=clip limit=575,658,170,44 off role=none
+                      86 PadGlyph at=592,669,22,22 by=clip heard=Menu limit=575,658,170,44 off role=image
+                      87 TextBlock at=624,664,83,32 box=83,32 by=clip caps=18.1987 drawn face=Barlow heard="Apply…" layout=82.71,31.2 limit=575,658,170,44 off owner=84 paints=#707070FF role=text size=26 text="Apply…"
+                  88 StackPanel at=757,658,475,44 by=panel limit=0,0,1280,800 role=none
+                    89 ProgressBar at=757,673,200,14 by=panel drawn heard=Space limit=0,0,1280,800 paints=#333337FF,#4C9AE8FF role=progressbar
+                    90 TextBlock at=965,668,267,24 box=267,24 by=panel caps=13.999 drawn face=Barlow heard="263 KB in packages · 412 GB free" layout=266.3,24 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="263 KB in packages · 412 GB free"
+            91 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=AdaptiveHelpBar paints=#707070FF role=none
+              92 HintBar at=64,716,1152,30 by=panel heard="Open, Back, Console, Mark, List, Apply…" limit=0,0,1280,800 role=group
+focus 58
 edge 17 up same
 edge 17 down 37
 edge 17 left 30
@@ -124,31 +130,31 @@ edge 30 down 37
 edge 30 left 28
 edge 30 right 17
 edge 37 up 22
-edge 37 down 43
+edge 37 down 44
 edge 37 left same
 edge 37 right same
-edge 43 up 37
-edge 43 down 49
-edge 43 left same
-edge 43 right same
-edge 49 up 43
-edge 49 down 55
-edge 49 left same
-edge 49 right same
-edge 55 up 49
-edge 55 down 61
-edge 55 left same
-edge 55 right same
-edge 61 up 55
-edge 61 down 67
-edge 61 left same
-edge 61 right same
-edge 67 up 61
-edge 67 down same
-edge 67 left same
-edge 67 right same
+edge 44 up 37
+edge 44 down 51
+edge 44 left same
+edge 44 right same
+edge 51 up 44
+edge 51 down 58
+edge 51 left same
+edge 51 right same
+edge 58 up 51
+edge 58 down 65
+edge 58 left same
+edge 58 right same
+edge 65 up 58
+edge 65 down 72
+edge 65 left same
+edge 65 right same
+edge 72 up 65
+edge 72 down same
+edge 72 left same
+edge 72 right same
 press pageup top=PackagesWindow
 press pagedown top=PackagesWindow
 press first focus="TextBox Search games (Search)" top=PackagesWindow
 press last focus="TextBox Search games (Search)" top=PackagesWindow
-press back focus="ListBoxItem  (Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK)" top=PackagesWindow
+press back focus="ListBoxItem  (Mark: not marked, Game: Granite Choir - The Very Long Packaged Edition With Every Subtitle (USA) (Rev 1) (Synthetic), State: ✓ OK, Size: 1.0 MB)" top=PackagesWindow

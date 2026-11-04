@@ -3,14 +3,17 @@
 //! sheet naming a library file by its absolute path (EmuSen_GamePackages.md §4.2). The library is only read.
 
 use emusen_disc::cue::{FileKind, Mode, Sheet};
+use emusen_disc::Kind;
 use emusen_dotnet::text::{compare_ignore_case, ends_with_ignore_case};
 use emusen_galaxia::dotnet_files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_galaxia::{archive, disc_set, image_sets};
 
-/// The systems whose discs the tool converts: the compact-disc consoles with a core (§4.2; DVD and GD-ROM wait).
-pub const CD_SYSTEMS: [&str; 2] = ["psx", "mcd"];
+/// The systems whose discs the tool converts: the compact-disc consoles with a core, and the PlayStation 2 (§4.2).
+pub const SYSTEMS: [&str; 3] = ["psx", "mcd", "ps2"];
+/// Of those, the systems whose drive reads a DVD, and whose core opens an image of 2,048-byte sectors as one (§4.2a).
+pub const DVD_SYSTEMS: [&str; 1] = ["ps2"];
 
 /// What a library file holding a disc is.
 const DISC_EXTENSIONS: [&str; 5] = [".cue", ".bin", ".iso", ".zip", ".m3u"];
@@ -73,14 +76,14 @@ pub fn items(library: &str, given: &[String]) -> (Vec<Item>, Vec<String>) {
     (found, refused)
 }
 
-/// A library file as the disc the tool converts, or none: a sheet, track, ISO, zip or playlist of a CD system.
+/// A library file as the disc the tool converts, or none: a sheet, track, ISO, zip or playlist of a system it converts.
 fn item_of(library: &str, at: String, systems: &emusen_library::scan::Systems) -> Option<Item> {
     if !DISC_EXTENSIONS.iter().any(|e| ends_with_ignore_case(&at, e)) {
         return None;
     }
     let rel = rel_of(library, &at);
     let id = emusen_library::scan::route(&at, systems).or_else(|| by_folder(&rel))?;
-    if !CD_SYSTEMS.contains(&id.as_str()) {
+    if !SYSTEMS.contains(&id.as_str()) {
         return None;
     }
     let system = emusen_systems::find(&id)?;
@@ -94,11 +97,11 @@ pub fn convertible(library: &str, at: &str, systems: &emusen_library::scan::Syst
 }
 
 /// Where the scan's routing names no system (no recogniser claimed the disc, and the folder holding it is no ES-DE
-/// system's), the nearest folder above it that is one of the CD systems', as a library sorted by console has it.
+/// system's), the nearest folder above it that is one of the converted systems', as a library sorted by console has it.
 fn by_folder(rel: &str) -> Option<String> {
     let folders: Vec<&str> = rel.split('/').collect();
     folders[..folders.len().saturating_sub(1)].iter().rev().find_map(|f| {
-        CD_SYSTEMS.iter().filter_map(|id| emusen_systems::find(id)).find(|s| s.esde_system.eq_ignore_ascii_case(f)).map(|s| s.id.clone())
+        SYSTEMS.iter().filter_map(|id| emusen_systems::find(id)).find(|s| s.esde_system.eq_ignore_ascii_case(f)).map(|s| s.id.clone())
     })
 }
 
@@ -123,6 +126,8 @@ impl Form {
 /// A disc made ready for chdman: the sheet it reads, the files that sheet names, and what the library held.
 pub struct Prepared {
     pub form: Form,
+    /// What chdman writes it as: a compact disc from the sheet, or a DVD from its one file of 2,048-byte sectors (§4.2a).
+    pub medium: Kind,
     /// The sheet chdman reads: the library's own for a sheet, else one line made for the lone image.
     pub sheet: String,
     /// The library's sheet, its file name and bytes, where the dump has one.
@@ -134,6 +139,12 @@ pub struct Prepared {
     pub scratch_sheet: String,
     /// The library files read for this disc, whose size and time must not change during the conversion.
     pub sources: Vec<String>,
+}
+
+/// What a lone image of 2,048-byte sectors on `system` is written as (§4.2a): a DVD where the system's core opens such an
+/// image as one, so that the CHD is the medium the game saw; a compact disc elsewhere.
+fn lone_medium(system: &str) -> Kind {
+    if DVD_SYSTEMS.contains(&system) { Kind::Dvd } else { Kind::Cd }
 }
 
 /// The sheet `TRACK` line for a lone image: a raw data track by its sync and mode byte, else an ISO 9660 image's
@@ -187,7 +198,7 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
         return Err("an .m3u is not converted by this step: name each of its discs, and the list is left as it is".into());
     }
     let image = image_of(tree, &item.path)?;
-    let (form, sheet, original, names, files) = if image_sets::is_sheet(&image) {
+    let (form, sheet, original, names, files, medium) = if image_sets::is_sheet(&image) {
         let bytes = std::fs::read(&image).map_err(|e| format!("{image}: {e}"))?;
         let text = emusen_dotnet::file::decode(&bytes);
         let parsed = Sheet::parse(&text).map_err(|e| e.to_string())?;
@@ -198,12 +209,14 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
         if let Some(gone) = files.iter().find(|f| !dotnet_files::file_exists(f)) {
             return Err(format!("the sheet names {gone}, which is not there"));
         }
-        (Form::CueBin, text, Some((path::file_name(Style::HOST, &image).to_string(), bytes)), parsed.files, files)
+        // A sheet is a compact disc's, as every core opens one (§4.2a).
+        (Form::CueBin, text, Some((path::file_name(Style::HOST, &image).to_string(), bytes)), parsed.files, files, Kind::Cd)
     } else {
         let size = std::fs::metadata(&image).map_err(|e| format!("{image}: {e}"))?.len();
         let (mode, form) = lone_mode(&image, size)?;
+        let medium = if form == Form::Iso { lone_medium(&item.system.id) } else { Kind::Cd };
         let name = path::file_name(Style::HOST, &image).to_string();
-        (form, format!("FILE \"{name}\" BINARY\n  TRACK 01 {mode}\n    INDEX 01 00:00:00\n"), None, vec![name], vec![image.clone()])
+        (form, format!("FILE \"{name}\" BINARY\n  TRACK 01 {mode}\n    INDEX 01 00:00:00\n"), None, vec![name], vec![image.clone()], medium)
     };
     std::fs::create_dir_all(scratch).map_err(|e| format!("the scratch folder {scratch} could not be made: {e}"))?;
     for (name, file) in names.iter().zip(&files) {
@@ -221,7 +234,7 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
         (false, Some(_)) => std::iter::once(image.clone()).chain(files.iter().cloned()).collect(),
         (false, None) => vec![image.clone()],
     };
-    Ok(Prepared { form, sheet, original, names, files, scratch_sheet, sources })
+    Ok(Prepared { form, medium, sheet, original, names, files, scratch_sheet, sources })
 }
 
 /// The file form of a raw sector a track of `mode` stored: what its file held for it.

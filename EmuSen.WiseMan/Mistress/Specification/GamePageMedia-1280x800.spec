@@ -58,20 +58,20 @@ tree
         43 Border at=64,464,1152,238 by=panel limit=0,0,1280,800 name=PageContent role=none
           44 StackPanel at=64,464,1152,238 by=panel limit=0,0,1280,800 name=PageTiles role=none
             45 StackPanel at=64,464,200,238 by=panel limit=0,0,1280,800 role=none
-              46 Panel at=64,464,200,150 by=panel heard="Scraped screenshot" limit=0,0,1280,800 name="PageTile./home/red/.cache/emusen/tmp/EmuSenGamePageMedia/snes/screenshots/Cobalt Harbor (Synthetic).png" role=none
+              46 Panel at=64,464,200,150 by=panel heard="Scraped screenshot" limit=0,0,1280,800 name="PageTile.<temp>/EmuSenGamePageMedia/snes/screenshots/Cobalt Harbor (Synthetic).png" role=none
                 47 Border at=64,464,200,150 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   48 Panel at=64,464,200,150 by=clip limit=64,464,200,150 role=none
                     49 Image at=64,464,200,150 by=clip drawn limit=64,464,200,150 nohit role=image
                 50 Border at=57,457,214,164 by=panel limit=0,0,1280,800 nohit paints=#4C9AE8FF role=none
               51 TextBlock at=64,626,200,24 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="Scraped screenshot" layout=168.44,24 limit=0,0,1280,800 paints=#EEEEF0FF role=text size=20 text="Scraped screenshot"
             52 StackPanel at=288,464,200,238 by=panel limit=0,0,1280,800 role=none
-              53 Panel at=288,464,200,150 by=panel heard="Title screen" limit=0,0,1280,800 name="PageTile./home/red/.cache/emusen/tmp/EmuSenGamePageMedia/snes/titlescreens/Cobalt Harbor (Synthetic).png" role=none
+              53 Panel at=288,464,200,150 by=panel heard="Title screen" limit=0,0,1280,800 name="PageTile.<temp>/EmuSenGamePageMedia/snes/titlescreens/Cobalt Harbor (Synthetic).png" role=none
                 54 Border at=288,464,200,150 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   55 Panel at=288,464,200,150 by=clip limit=288,464,200,150 role=none
                     56 Image at=288,464,200,150 by=clip drawn limit=288,464,200,150 nohit role=image
               57 TextBlock at=288,626,200,24 box=200,24 by=panel caps=13.999 drawn face=Barlow heard="Title screen" layout=97.86,24 limit=0,0,1280,800 paints=#D4D4D4FF role=text size=20 text="Title screen"
             58 StackPanel at=512,464,200,238 by=panel limit=0,0,1280,800 role=none
-              59 Panel at=512,464,200,150 by=panel heard=Marquee limit=0,0,1280,800 name="PageTile./home/red/.cache/emusen/tmp/EmuSenGamePageMedia/snes/marquees/Cobalt Harbor (Synthetic).png" role=none
+              59 Panel at=512,464,200,150 by=panel heard=Marquee limit=0,0,1280,800 name="PageTile.<temp>/EmuSenGamePageMedia/snes/marquees/Cobalt Harbor (Synthetic).png" role=none
                 60 Border at=512,464,200,150 by=panel limit=0,0,1280,800 paints=#26262BFF role=none
                   61 Panel at=512,464,200,150 by=clip limit=512,464,200,150 role=none
                     62 Image at=512,464,200,150 by=clip drawn limit=512,464,200,150 nohit role=image

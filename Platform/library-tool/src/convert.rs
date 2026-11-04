@@ -3,17 +3,22 @@
 //! required, and a disc done when its package names a CHD still at the size and time recorded with its SHA-1.
 
 use crate::chdman::Chdman;
-use crate::checks::{self, Toc};
+use crate::checks::{self, DvdToc, Toc};
 use crate::discs::{self, Item};
 use crate::{Context, Destination};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::json::{Text, Value};
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash::{self, Hashes};
+use emusen_disc::Kind;
 use std::time::{Instant, SystemTime};
 
-/// `createcd`'s codecs for *Faster to decode* (§4.8, Q7); otherwise chdman's own defaults, `cdlz,cdzl,cdfl`.
+/// `createcd`'s codecs for *Faster to decode* (§4.8, Q7); otherwise chdman's own defaults, `CD_CODECS`.
 pub const FAST_CODECS: &str = "cdzs,cdfl";
+pub const CD_CODECS: &str = "cdlz,cdzl,cdfl";
+/// `createdvd`'s defaults as chdman 0.289's `info` names them, and Zstandard alone for *Faster to decode* (§4.8a).
+pub const DVD_CODECS: &str = "lzma,zlib,huff,flac";
+pub const FAST_DVD_CODECS: &str = "zstd";
 /// Space kept free at the output beyond the original's size (§4.6).
 pub const MARGIN: u64 = 64 << 20;
 /// A partial file or scratch folder older than this was left by a process that stopped (§4.6).
@@ -227,20 +232,49 @@ fn word(r: &Result<(), String>) -> Value {
     }
 }
 
+/// What check 3 compares: a compact disc's table of contents, or a DVD's size in sectors and its layer break (§4.3a).
+pub enum Layout {
+    Cd(Toc),
+    Dvd(DvdToc),
+}
+
+impl Layout {
+    fn to_json(&self) -> Value {
+        match self {
+            Layout::Cd(t) => t.to_json(),
+            Layout::Dvd(d) => d.to_json(),
+        }
+    }
+}
+
 /// Checks 3 and 2, in that order, through EmuSen's reader; neither is run over a CHD that check 1 found damaged, since
 /// a damaged compressed map can still stop the program at open (EmuSen_Disc.md §13.3), and the disc has failed anyway.
-fn reader_checks(check1: &Result<(), String>, at: &str, toc: &Toc, sheet: &str, expected: &[Hashes], stop: &dyn Fn() -> bool) -> (Result<(), String>, Result<(), String>) {
+fn reader_checks(check1: &Result<(), String>, at: &str, layout: &Layout, sheet: &str, expected: &[Hashes], stop: &dyn Fn() -> bool) -> (Result<(), String>, Result<(), String>) {
     if check1.as_ref().is_err_and(|w| w != "stopped") {
         let words = "not run, since chdman found the CHD damaged".to_string();
         return (Err(words.clone()), Err(words));
     }
-    match checks::chd(at) {
-        Err(w) => (Err(w.clone()), Err(w)),
-        Ok(mut disc) => {
-            let t = checks::toc(&disc, toc);
-            let k = if t.is_ok() { checks::tracks(&mut disc, sheet, expected, stop) } else { Err("not run, since the table of contents differs".into()) };
-            (t, k)
-        }
+    match layout {
+        Layout::Cd(toc) => match checks::chd(at) {
+            Err(w) => (Err(w.clone()), Err(w)),
+            Ok(mut disc) => {
+                let t = checks::toc(&disc, toc);
+                let k = if t.is_ok() { checks::tracks(&mut disc, sheet, expected, stop) } else { Err("not run, since the table of contents differs".into()) };
+                (t, k)
+            }
+        },
+        Layout::Dvd(size) => match (checks::dvd(at).map_err(|w| format!("the CHD {w}")), expected) {
+            (Err(w), _) => (Err(w.clone()), Err(w)),
+            (Ok(mut dvd), [whole]) => {
+                let t = checks::dvd_size(&dvd, size);
+                let k = if t.is_ok() { checks::dvd_sectors(&mut dvd, whole, stop) } else { Err("not run, since the size in sectors differs".into()) };
+                (t, k)
+            }
+            (Ok(_), _) => {
+                let w = format!("a DVD is one file, and the record holds {}", expected.len());
+                (Err(w.clone()), Err(w))
+            }
+        },
     }
 }
 
@@ -317,9 +351,17 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         Err(e) if e.kind() == std::io::ErrorKind::Interrupted => return Outcome::new("stopped"),
         Err(e) => return Outcome::said("failed", format!("the original could not be hashed: {e}")),
     };
-    let original_toc = match checks::original(&prepared.sheet, &prepared.files) {
-        Ok(disc) => checks::toc_of(&disc),
-        Err(words) => return Outcome::said("skipped", format!("the original does not read as a disc: {words}")),
+    let dvd = prepared.medium == Kind::Dvd;
+    let layout = if dvd {
+        match checks::dvd(&prepared.files[0]) {
+            Ok(d) => Layout::Dvd(DvdToc::of(&d)),
+            Err(words) => return Outcome::said("skipped", format!("the original does not read as a DVD: {words}")),
+        }
+    } else {
+        match checks::original(&prepared.sheet, &prepared.files) {
+            Ok(disc) => Layout::Cd(checks::toc_of(&disc)),
+            Err(words) => return Outcome::said("skipped", format!("the original does not read as a disc: {words}")),
+        }
     };
     let original_bytes: u64 = prepared.files.iter().filter_map(|f| seen(f)).map(|s| s.size).sum();
     let out_dir = path::directory_name(Style::HOST, &placed.chd).unwrap_or_default();
@@ -331,11 +373,12 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         return Outcome::said("failed", format!("{free} bytes are free at {out_dir}, and the disc needs {} with the margin", original_bytes + MARGIN));
     }
     let partial = format!("{}.partial-{}", placed.chd, std::process::id());
-    let codecs = options.fast.then_some(FAST_CODECS);
+    let codecs = options.fast.then_some(if dvd { FAST_DVD_CODECS } else { FAST_CODECS });
     let remove = || {
         let _ = std::fs::remove_file(&partial);
     };
-    match chdman.create_cd(&prepared.scratch_sheet, &partial, codecs, options.threads, stop) {
+    let created = if dvd { chdman.create_dvd(&prepared.files[0], &partial, codecs, options.threads, stop) } else { chdman.create_cd(&prepared.scratch_sheet, &partial, codecs, options.threads, stop) };
+    match created {
         Ok(()) => {}
         Err(w) if w == "stopped" => {
             remove();
@@ -348,7 +391,7 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
     }
     let check1 = chdman.verify(&partial, stop);
     let expected: Vec<Hashes> = tracks.iter().map(|t| t.hashes.clone()).collect();
-    let (check3, check2) = reader_checks(&check1, &partial, &original_toc, &prepared.sheet, &expected, stop);
+    let (check3, check2) = reader_checks(&check1, &partial, &layout, &prepared.sheet, &expected, stop);
     if stop() || [&check1, &check2, &check3].iter().any(|c| c.as_ref().is_err_and(|w| w == "stopped")) {
         remove();
         return Outcome::new("stopped");
@@ -384,7 +427,7 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         }
     };
     let chd_seen = seen(&placed.chd);
-    let doc = package_of(ctx, item, placed, &prepared, &tracks, &original_toc, chdman, &info, codecs, chd_seen.as_ref(), &before, &checks_json);
+    let doc = package_of(ctx, item, placed, &prepared, &tracks, &layout, chdman, &info, codecs, chd_seen.as_ref(), &before, &checks_json);
     let manifest_at = path::combine(Style::HOST, &placed.package, package::FILE_NAME);
     if let Some((name, bytes)) = &prepared.original {
         if let Err(w) = emusen_galaxia::atomic::write(&path::combine(Style::HOST, &placed.package, name), bytes) {
@@ -402,7 +445,8 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         return Outcome::said("failed", w);
     }
     let chd_bytes = chd_seen.map_or(0, |s| s.size);
-    Outcome::new("converted")
+    let outcome = if dvd { Outcome::new("converted").with("medium", text("dvd")) } else { Outcome::new("converted") };
+    outcome
         .with("output", text(&placed.chd_rel))
         .with("where", text(placed.game_where))
         .with("package", text(&placed.package_rel))
@@ -419,7 +463,7 @@ fn package_of(
     placed: &Placed,
     prepared: &discs::Prepared,
     tracks: &[rom_hash::TrackHashes],
-    toc: &Toc,
+    layout: &Layout,
     chdman: &Chdman,
     info: &crate::chdman::Info,
     codecs: Option<&str>,
@@ -453,22 +497,28 @@ fn package_of(
             obj(m)
         })
         .collect();
-    let container = obj(vec![
-        ("type", text("chd")),
+    let dvd = matches!(layout, Layout::Dvd(_));
+    let mut container = vec![("type", text("chd"))];
+    // A compact disc's container names no medium, as every package written before DVDs were converted (§4.4a).
+    if dvd {
+        container.push(("medium", text("dvd")));
+    }
+    container.extend([
         ("program", text("chdman")),
         ("version", text(&chdman.version)),
         ("sha256", text(&chdman.sha256)),
-        ("codecs", text(codecs.unwrap_or("cdlz,cdzl,cdfl"))),
+        ("codecs", text(codecs.unwrap_or(if dvd { DVD_CODECS } else { CD_CODECS }))),
         ("compression", text(&info.compression)),
         ("sha1", text(&info.sha1)),
         ("data_sha1", text(&info.data_sha1)),
         ("source", text(&item.rel)),
         ("sources", Value::Array(sources)),
         ("sheet", text(&prepared.sheet)),
-        ("toc", toc.to_json()),
+        ("toc", layout.to_json()),
         ("checks", checks_json.clone()),
         ("converted", text(&utc(SystemTime::now()))),
     ]);
+    let container = obj(container);
     let mut doc = package::new(Some(&title), &item.system.esde_system, "linked", game);
     if let Value::Object(members) = &mut doc {
         for (name, value) in members.iter_mut() {
@@ -518,12 +568,19 @@ pub fn list(ctx: &Context, dest: &Destination, item: &Item) -> Outcome {
     } else {
         base("changed")
     };
-    let original: u64 = match doc.get("dump").and_then(|d| d.get("tracks")) {
-        Some(Value::Array(tracks)) => tracks.iter().filter_map(|t| t.get("size").and_then(number)).sum(),
-        _ => 0,
-    };
+    let (original, chd) = recorded_sizes(&doc).unwrap_or((0, 0));
     let (at, output) = recorded_place(&doc);
-    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::number(original)).with("chd", Value::number(chd.map_or(0, |s| s.size)))
+    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::number(original)).with("chd", Value::number(chd))
+}
+
+/// A converted disc's two sizes from its package's own record, no file read (EmuSen_GamePackages.md §4.4a): the
+/// original's bytes, its tracks' as `dump` records them, and the CHD's as `game` records it; none where either is not
+/// recorded.
+pub fn recorded_sizes(doc: &Value) -> Option<(u64, u64)> {
+    let Value::Array(tracks) = doc.get("dump")?.get("tracks")? else { return None };
+    let original: u64 = tracks.iter().filter_map(|t| t.get("size").and_then(number)).sum();
+    let chd = emusen_galaxia::claims::recorded_size(doc)?;
+    (original > 0 && chd > 0).then_some((original, chd))
 }
 
 /// `chd check`'s three checks of one converted disc against its package, the original not read.
@@ -537,15 +594,16 @@ pub fn check(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, st
     let Some(container) = doc.get("container") else { return Outcome::said("failed", "the package names no container") };
     let (_, output) = recorded_place(&doc);
     let Some(at) = chd_of(ctx, &placed, &doc).filter(|at| seen(at).is_some()) else { return Outcome::said("failed", format!("the CHD {output} is not there")) };
-    let toc = container.get("toc").and_then(Toc::from_json);
+    let dvd = container.get("medium").and_then(Value::as_str) == Some("dvd");
+    let layout = container.get("toc").and_then(|t| if dvd { DvdToc::from_json(t).map(Layout::Dvd) } else { Toc::from_json(t).map(Layout::Cd) });
     let sheet = container.get("sheet").and_then(Value::as_str);
     let expected: Option<Vec<Hashes>> = match doc.get("dump").and_then(|d| d.get("tracks")) {
         Some(Value::Array(t)) => t.iter().map(hashes_from).collect(),
         _ => None,
     };
-    let (Some(toc), Some(sheet), Some(expected)) = (toc, sheet, expected) else { return Outcome::said("failed", "the package does not record the table of contents, the sheet and every track's hashes") };
+    let (Some(layout), Some(sheet), Some(expected)) = (layout, sheet, expected) else { return Outcome::said("failed", "the package does not record the table of contents, the sheet and every track's hashes") };
     let verified = chdman.verify(&at, stop);
-    let (check3, check2) = reader_checks(&verified, &at, &toc, sheet, &expected, stop);
+    let (check3, check2) = reader_checks(&verified, &at, &layout, sheet, &expected, stop);
     let check1 = verified.and_then(|()| match chdman.info(&at) {
         Ok(info) if Some(info.sha1.as_str()) == container.get("sha1").and_then(Value::as_str) => Ok(()),
         Ok(info) => Err(format!("the CHD's SHA-1 is {} and the package records {}", info.sha1, container.get("sha1").and_then(Value::as_str).unwrap_or(""))),

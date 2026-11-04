@@ -289,9 +289,10 @@ fn token(e: &Value, name: &str) -> String {
     }
 }
 
+/// A converted disc's original and CHD in bytes and the saving, as Packages says them (EmuSen_GamePackages.md §4.4a).
 fn sizes(e: &Value) -> String {
     match (number(e, "original"), number(e, "chd")) {
-        (Some(o), Some(c)) if o > 0 && c > 0 => format!("{} -> {} bytes ({:.1}%)", grouped(o), grouped(c), c as f64 * 100.0 / o as f64),
+        (Some(o), Some(c)) if o > 0 && c > 0 => format!("{} -> {} bytes ({:.1}%)", grouped(o), grouped(c), (c as f64 - o as f64) * 100.0 / o as f64),
         _ => String::new(),
     }
 }
@@ -300,6 +301,14 @@ fn failed_checks(e: &Value) -> String {
     let Some(checks) = e.get("checks") else { return String::new() };
     let said: Vec<String> = ["chdman", "tracks", "toc"].iter().filter_map(|c| checks.get(c).and_then(Value::as_str).filter(|w| *w != "passed").map(|w| format!("{c} {w}"))).collect();
     if said.is_empty() { String::new() } else { format!(" ({})", said.join("; ")) }
+}
+
+/// A batch's codecs: a compact disc's, and a DVD's where the start event names them (EmuSen_GamePackages.md §4.8a).
+fn codecs(e: &Value) -> String {
+    match text(e, "dvd_codecs") {
+        "" => text(e, "codecs").to_string(),
+        dvd => format!("{} for a CD, {dvd} for a DVD", text(e, "codecs")),
+    }
 }
 
 /// One event as the line it prints, none for an event that prints nothing.
@@ -312,16 +321,16 @@ pub fn line(e: &Value) -> Option<String> {
                 text(e, "output"),
                 token(e, "adds"),
                 text(e, "chdman"),
-                text(e, "codecs"),
+                codecs(e),
                 token(e, "threads")
             )),
-            "convert" => Some(format!("Converting {} disc(s) into {} with chdman {} ({}, {} threads).", token(e, "discs"), text(e, "output"), text(e, "chdman"), text(e, "codecs"), token(e, "threads"))),
+            "convert" => Some(format!("Converting {} disc(s) into {} with chdman {} ({}, {} threads).", token(e, "discs"), text(e, "output"), text(e, "chdman"), codecs(e), token(e, "threads"))),
             "check" => Some(format!("Checking {} disc(s) with chdman {}.", token(e, "discs"), text(e, "chdman"))),
             _ => None,
         },
         "disc" if text(e, "state") == "working" => None,
         "disc" if e.get("index").is_none() => {
-            let tail = sizes(e);
+            let tail = Some(sizes(e)).filter(|t| !t.is_empty()).or_else(|| number(e, "size").filter(|&b| b > 0).map(|b| format!("{} bytes", grouped(b)))).unwrap_or_default();
             let beside = if text(e, "where") == "library" { "  beside the original" } else { "" };
             Some(format!("{:<14}{}{}{beside}", text(e, "state"), text(e, "source"), if tail.is_empty() { String::new() } else { format!("  {tail}") }))
         }
@@ -404,7 +413,9 @@ pub fn listing_line(e: &Value) -> String {
         _ => String::new(),
     };
     let size = number(e, "size").map_or(String::new(), |b| format!(", package {} bytes", grouped(b)));
-    let size = size + &number(e, "game_size").filter(|_| text(e, "where") != "package").map_or(String::new(), |b| format!(", game {} bytes", grouped(b)));
+    let converted = sizes(e);
+    let game = number(e, "game_size").filter(|_| text(e, "where") != "package").map(|b| if converted.is_empty() { format!(", game {} bytes", grouped(b)) } else { format!(", game {converted}") });
+    let size = size + &game.unwrap_or_default();
     format!("{:<9}{}  ({}, {}{patched}{size}){why}", text(e, "state"), text(e, "package"), text(e, "mode"), text(e, "system"))
 }
 
@@ -773,17 +784,22 @@ mod tests {
         assert_eq!(grouped(12), "12");
         assert_eq!(
             line(&e(r#"{"event":"disc","index":1,"of":2,"source":"psx/a.cue","state":"converted","original":1000,"chd":523,"seconds":8.2,"checks":{"chdman":"passed","tracks":"passed","toc":"passed"}}"#)).unwrap(),
-            "[1/2] psx/a.cue: converted, 1,000 -> 523 bytes (52.3%), three checks passed, 8.2 s"
+            "[1/2] psx/a.cue: converted, 1,000 -> 523 bytes (-47.7%), three checks passed, 8.2 s"
         );
         assert_eq!(
             line(&e(r#"{"event":"disc","index":2,"of":2,"source":"psx/b.cue","state":"failed","words":"a check failed","checks":{"chdman":"passed","tracks":"failed: track 2","toc":"passed"}}"#)).unwrap(),
             "[2/2] psx/b.cue: failed: a check failed (tracks failed: track 2)"
         );
-        assert_eq!(line(&e(r#"{"event":"disc","source":"psx/c.bin","state":"not converted","size":5}"#)).unwrap(), "not converted psx/c.bin");
+        assert_eq!(line(&e(r#"{"event":"disc","source":"psx/c.bin","state":"not converted","size":5}"#)).unwrap(), "not converted psx/c.bin  5 bytes");
         assert_eq!(line(&e(r#"{"event":"disc","index":1,"of":1,"source":"psx/a.cue","state":"working"}"#)), None);
         assert_eq!(line(&e(r#"{"event":"end","op":"convert","counts":{"converted":2,"failed":1},"seconds":3.5}"#)).unwrap(), "2 converted, 1 failed; 3.5 s.");
         assert!(line(&e(r#"{"event":"start","op":"convert","discs":3,"chdman":"0.289","codecs":"cdlz,cdzl,cdfl","threads":8,"output":"/r","beside":true,"adds":2,"refused":[]}"#)).unwrap().starts_with("Converting 3 disc(s) beside their originals, writing into the library /r: up to 2 CHD file(s) added"));
-        assert_eq!(line(&e(r#"{"event":"disc","source":"psx/a.cue","state":"converted","where":"library","original":1000,"chd":523}"#)).unwrap(), "converted     psx/a.cue  1,000 -> 523 bytes (52.3%)  beside the original");
+        assert_eq!(
+            line(&e(r#"{"event":"start","op":"convert","discs":2,"chdman":"0.289","codecs":"cdlz,cdzl,cdfl","dvd_codecs":"lzma,zlib,huff,flac","threads":8,"output":"/c","refused":[]}"#)).unwrap(),
+            "Converting 2 disc(s) into /c with chdman 0.289 (cdlz,cdzl,cdfl for a CD, lzma,zlib,huff,flac for a DVD, 8 threads)."
+        );
+        assert_eq!(line(&e(r#"{"event":"disc","source":"psx/a.cue","state":"converted","where":"library","original":1000,"chd":523}"#)).unwrap(), "converted     psx/a.cue  1,000 -> 523 bytes (-47.7%)  beside the original");
+        assert_eq!(line(&e(r#"{"event":"disc","source":"ps2/d.iso","state":"converted","where":"compressed","original":4617089024,"chd":2908766208,"size":4617089024}"#)).unwrap(), "converted     ps2/d.iso  4,617,089,024 -> 2,908,766,208 bytes (-37.0%)");
     }
 
     #[test]
@@ -851,6 +867,10 @@ mod tests {
         assert_eq!(
             listing_line(&e(r#"{"event":"package","package":"NES/b.nes","state":"ok","mode":"linked","system":"nes","where":"library","size":4096,"game_size":262160}"#)),
             "ok       NES/b.nes  (linked, nes, package 4,096 bytes, game 262,160 bytes)"
+        );
+        assert_eq!(
+            listing_line(&e(r#"{"event":"package","package":"PlayStation 2/d.chd","state":"ok","mode":"linked","system":"ps2","where":"compressed","size":4096,"game_size":523,"original":1000,"chd":523}"#)),
+            "ok       PlayStation 2/d.chd  (linked, ps2, package 4,096 bytes, game 1,000 -> 523 bytes (-47.7%))"
         );
         assert_eq!(listing_line(&e(r#"{"event":"package","package":"NES/c.nes","state":"ok","mode":"self-contained","system":"nes","where":"package","size":266256,"game_size":262160}"#)), "ok       NES/c.nes  (self-contained, nes, package 266,256 bytes)");
         assert_eq!(game_line(&e(r#"{"event":"game","source":"psx/a.cue","system":"PlayStation","state":"unpackaged","size":1234567,"convertible":true}"#)), "unpackaged psx/a.cue  (PlayStation, 1,234,567 bytes, chd convert takes it)");

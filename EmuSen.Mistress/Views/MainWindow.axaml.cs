@@ -1393,6 +1393,7 @@ namespace EmuSen.Mistress.Views
         private void StartEmulationThread()
         {
             _running = true;
+            ScrapePlaying(true);
             _emuThread = new Thread(EmulationLoop) { IsBackground = true, Name = "EmuSen-Emulation" };
             _emuThread.Start();
         }
@@ -1404,6 +1405,7 @@ namespace EmuSen.Mistress.Views
             _running = false;
             _emuThread.Join(); // a paused thread waits in the runtime at most a moment between looks at _running
             _emuThread = null;
+            ScrapePlaying(false);
         }
 
         // Frames until the ports are read again after a setting changed; the frame thread's.

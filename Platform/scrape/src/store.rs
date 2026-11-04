@@ -10,7 +10,7 @@ use emusen_sqlite::{Bound, Connection, Row, Sqlite};
 use std::sync::Arc;
 
 /// Each entry takes the file from the version before it; append, never edit.
-pub const MIGRATIONS: [&str; 4] = [
+pub const MIGRATIONS: [&str; 5] = [
     r#"CREATE TABLE scrape_game (
     md5           TEXT    NOT NULL,
     bytes         INTEGER NOT NULL,
@@ -82,6 +82,51 @@ CREATE TABLE store_step (
     r#"ALTER TABLE scrape_game ADD COLUMN kinds_known TEXT;"#,
     r#"ALTER TABLE scrape_file ADD COLUMN crc32 TEXT;
 ALTER TABLE scrape_file ADD COLUMN sha1 TEXT;"#,
+    r#"CREATE TABLE scrape_game_v5 (
+    md5           TEXT    NOT NULL,
+    bytes         INTEGER NOT NULL,
+    status        TEXT    NOT NULL CHECK (status IN ('Found', 'Unknown', 'Error')),
+    game_id       INTEGER,
+    rom_id        INTEGER,
+    system_id     INTEGER,
+    name          TEXT,
+    description   TEXT,
+    developer     TEXT,
+    publisher     TEXT,
+    genre         TEXT,
+    players       TEXT,
+    rating        REAL,
+    release_date  TEXT,
+    region        TEXT,
+    language      TEXT,
+    matched_by    TEXT,
+    offered       TEXT,
+    detail        TEXT,
+    fetched_at    TEXT    NOT NULL,
+    kinds_known   TEXT,
+    fingerprint   TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (md5, bytes, fingerprint)
+);
+INSERT INTO scrape_game_v5 (md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known)
+    SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known FROM scrape_game;
+DROP TABLE scrape_game;
+ALTER TABLE scrape_game_v5 RENAME TO scrape_game;
+CREATE TABLE scrape_media_v5 (
+    md5          TEXT    NOT NULL,
+    bytes        INTEGER NOT NULL,
+    type         TEXT    NOT NULL,
+    path         TEXT    NOT NULL,
+    region       TEXT,
+    sha1         TEXT,
+    fetched_at   TEXT    NOT NULL,
+    fingerprint  TEXT    NOT NULL DEFAULT '',
+    PRIMARY KEY (md5, bytes, fingerprint, type)
+);
+INSERT INTO scrape_media_v5 (md5, bytes, type, path, region, sha1, fetched_at)
+    SELECT md5, bytes, type, path, region, sha1, fetched_at FROM scrape_media;
+DROP TABLE scrape_media;
+ALTER TABLE scrape_media_v5 RENAME TO scrape_media;
+ALTER TABLE scrape_file ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';"#,
 ];
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
@@ -115,12 +160,73 @@ impl State {
     }
 }
 
-/// A file's hashes from the path index: the MD5 always, the CRC32 and SHA-1 where a run since schema 4 kept them.
+/// A file's hashes from the path index: the MD5 where the file was read in full (else empty), the CRC32 and SHA-1
+/// where a run since schema 4 kept them, and a big file's fingerprint (else empty).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cached {
     pub md5: String,
     pub crc32: Option<String>,
     pub sha1: Option<String>,
+    pub fingerprint: String,
+}
+
+impl Cached {
+    pub fn key(&self, bytes: i64) -> Key {
+        Key::of_file(&self.md5, &self.fingerprint, bytes)
+    }
+}
+
+/// What a game's rows are found by: a big file's fingerprint where its path index has one, else the file's MD5, with
+/// the size either way. The one owner of that rule (EmuSen_LibraryTools.md §9.12): a game's rows hold the key in `md5`
+/// and `fingerprint`, `md5` empty under a fingerprint, so the file's checksums arriving later never move them.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Key {
+    md5: String,
+    fingerprint: String,
+    pub bytes: i64,
+}
+
+/// The path index's file `f` as the key's `md5` column: its MD5, or empty where it has a fingerprint.
+const FILE_KEY_MD5: &str = "CASE WHEN f.fingerprint = '' THEN f.md5 ELSE '' END";
+
+/// A game's rows, in a table aliased `t`, joined to the path index's file `f` by its key.
+pub(crate) fn joined(t: &str) -> String {
+    format!("{t}.md5 = {FILE_KEY_MD5} AND {t}.fingerprint = f.fingerprint AND {t}.bytes = f.bytes")
+}
+
+/// A game's rows by a key bound as `$md5`, `$fingerprint` and `$bytes`.
+const KEYED: &str = "md5 = $md5 AND fingerprint = $fingerprint AND bytes = $bytes";
+
+impl Key {
+    pub fn md5(md5: &str, bytes: i64) -> Key {
+        Key { md5: md5.to_string(), fingerprint: String::new(), bytes }
+    }
+
+    pub fn fingerprint(fingerprint: &str, bytes: i64) -> Key {
+        Key { md5: String::new(), fingerprint: fingerprint.to_string(), bytes }
+    }
+
+    /// The rule: a file with a fingerprint is found by it, one without by its MD5.
+    pub fn of_file(md5: &str, fingerprint: &str, bytes: i64) -> Key {
+        if fingerprint.is_empty() { Key::md5(md5, bytes) } else { Key::fingerprint(fingerprint, bytes) }
+    }
+
+    pub fn is_fingerprint(&self) -> bool {
+        !self.fingerprint.is_empty()
+    }
+
+    /// What the game's `md5` column holds: the MD5, or empty under a fingerprint.
+    pub fn md5_text(&self) -> &str {
+        &self.md5
+    }
+
+    pub fn fingerprint_text(&self) -> &str {
+        &self.fingerprint
+    }
+
+    fn bound(&self) -> [(&'static str, Bound<'_>); 3] {
+        [("$md5", Bound::Text(&self.md5)), ("$fingerprint", Bound::Text(&self.fingerprint)), ("$bytes", Bound::Integer(self.bytes))]
+    }
 }
 
 /// `ScrapePriority`: shown, a console, the whole library.
@@ -163,6 +269,8 @@ impl Priority {
 pub struct Record {
     pub md5: String,
     pub bytes: i64,
+    /// A big file's fingerprint where the record is keyed by it, else empty.
+    pub fingerprint: String,
     pub state: State,
     pub game_id: Option<i64>,
     pub rom_id: Option<i64>,
@@ -186,10 +294,11 @@ pub struct Record {
 }
 
 impl Record {
-    pub fn new(md5: &str, bytes: i64, state: State, fetched_at: i64) -> Record {
+    pub fn new(key: &Key, state: State, fetched_at: i64) -> Record {
         Record {
-            md5: md5.to_string(),
-            bytes,
+            md5: key.md5.clone(),
+            bytes: key.bytes,
+            fingerprint: key.fingerprint.clone(),
             state,
             game_id: None,
             rom_id: None,
@@ -210,6 +319,10 @@ impl Record {
             fetched_at,
             kinds_known: None,
         }
+    }
+
+    pub fn key(&self) -> Key {
+        Key { md5: self.md5.clone(), fingerprint: self.fingerprint.clone(), bytes: self.bytes }
     }
 
     /// Whether this answer says the game has a kind, or cannot say because the kind came after it was kept.
@@ -277,7 +390,7 @@ fn int(v: Option<i64>) -> Bound<'static> {
     }
 }
 
-const GAME_COLUMNS: &str = "SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known FROM scrape_game";
+const GAME_COLUMNS: &str = "SELECT md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating, release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known, fingerprint FROM scrape_game";
 
 fn read_game(row: &Row, o: i32) -> Record {
     let opt = |i: i32| row.text_or_null(o + i);
@@ -304,6 +417,7 @@ fn read_game(row: &Row, o: i32) -> Record {
         detail: opt(18),
         fetched_at: instant(&row.text(o + 19)).unwrap_or(0),
         kinds_known: opt(20),
+        fingerprint: row.text(o + 21),
     }
 }
 
@@ -430,7 +544,7 @@ ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), nex
     /// "Scrape this game" asks again even where ScreenScraper once had nothing: an Unknown or Error answer is forgotten.
     pub fn forget_unfound(&self, path: &str) -> Result<(), Error> {
         self.write(
-            "DELETE FROM scrape_game WHERE status <> 'Found' AND EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND f.md5 = scrape_game.md5 AND f.bytes = scrape_game.bytes)",
+            &format!("DELETE FROM scrape_game WHERE status <> 'Found' AND EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND {})", joined("scrape_game")),
             &[("$path", Bound::Text(path))],
         )?;
         Ok(())
@@ -450,21 +564,56 @@ ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), nex
 
     // --- the path index ---
 
-    /// A file's hashes as last taken at this size and time: its MD5, and its CRC32 and SHA-1 where they were kept too.
+    /// A file's hashes as last taken at this size and time: its MD5, CRC32 and SHA-1 where they were kept, its fingerprint.
     pub fn cached_file(&self, path: &str, bytes: i64, modified: i64) -> Result<Option<Cached>, Error> {
         let mut found = None;
         self.db.query(
-            "SELECT md5, crc32, sha1 FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified",
+            "SELECT md5, crc32, sha1, fingerprint FROM scrape_file WHERE path = $path AND bytes = $bytes AND modified = $modified",
             &[("$path", Bound::Text(path)), ("$bytes", Bound::Integer(bytes)), ("$modified", Bound::Integer(modified))],
-            |row| found = Some(Cached { md5: row.text(0), crc32: row.text_or_null(1), sha1: row.text_or_null(2) }),
+            |row| found = Some(Cached { md5: row.text(0), crc32: row.text_or_null(1), sha1: row.text_or_null(2), fingerprint: row.text(3) }),
         )?;
         Ok(found)
     }
 
-    /// A file's three hashes at its size and time, so that no run reads it again until it changes.
+    /// A big file's fingerprint at its size and time, its checksums empty until they are taken (§9.12).
+    pub fn remember_fingerprint(&self, path: &str, bytes: i64, modified: i64, fingerprint: &str) -> Result<(), Error> {
+        self.write(
+            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1, fingerprint) VALUES ($path, $bytes, $modified, '', NULL, NULL, $fingerprint) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = '', crc32 = NULL, sha1 = NULL, fingerprint = excluded.fingerprint",
+            &[("$path", Bound::Text(path)), ("$bytes", Bound::Integer(bytes)), ("$modified", Bound::Integer(modified)), ("$fingerprint", Bound::Text(fingerprint))],
+        )?;
+        Ok(())
+    }
+
+    /// A fingerprinted file's three checksums, taken later, kept beside its fingerprint while it is unchanged; whether it was.
+    #[allow(clippy::too_many_arguments)]
+    pub fn fill_hashes(&self, path: &str, bytes: i64, modified: i64, fingerprint: &str, md5: &str, crc32: &str, sha1: &str) -> Result<bool, Error> {
+        Ok(self.write(
+            "UPDATE scrape_file SET md5 = $md5, crc32 = $crc32, sha1 = $sha1 WHERE path = $path AND bytes = $bytes AND modified = $modified AND fingerprint = $fingerprint AND fingerprint <> ''",
+            &[
+                ("$path", Bound::Text(path)),
+                ("$bytes", Bound::Integer(bytes)),
+                ("$modified", Bound::Integer(modified)),
+                ("$fingerprint", Bound::Text(fingerprint)),
+                ("$md5", Bound::Text(md5)),
+                ("$crc32", Bound::Text(crc32)),
+                ("$sha1", Bound::Text(sha1)),
+            ],
+        )? > 0)
+    }
+
+    /// The fingerprinted files whose checksums are still owed, by path: (path, size, time, fingerprint).
+    pub fn unhashed(&self) -> Result<Vec<(String, i64, i64, String)>, Error> {
+        let mut all = Vec::new();
+        self.db.query("SELECT path, bytes, modified, fingerprint FROM scrape_file WHERE fingerprint <> '' AND (md5 = '' OR crc32 IS NULL OR sha1 IS NULL) ORDER BY path", &[], |row| {
+            all.push((row.text(0), row.int64(1), row.int64(2), row.text(3)))
+        })?;
+        Ok(all)
+    }
+
+    /// A file's three hashes at its size and time, so that no run reads it again until it changes; keyed by its MD5.
     pub fn remember_file(&self, path: &str, bytes: i64, modified: i64, md5: &str, crc32: &str, sha1: &str) -> Result<(), Error> {
         self.write(
-            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1) VALUES ($path, $bytes, $modified, $md5, $crc32, $sha1) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = excluded.crc32, sha1 = excluded.sha1",
+            "INSERT INTO scrape_file (path, bytes, modified, md5, crc32, sha1) VALUES ($path, $bytes, $modified, $md5, $crc32, $sha1) ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5, crc32 = excluded.crc32, sha1 = excluded.sha1, fingerprint = ''",
             &[
                 ("$path", Bound::Text(path)),
                 ("$bytes", Bound::Integer(bytes)),
@@ -477,10 +626,10 @@ ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), nex
         Ok(())
     }
 
-    /// Every file last hashed to a game, for telling a renamed file from a second copy.
-    pub fn paths_of(&self, md5: &str, bytes: i64) -> Result<Vec<String>, Error> {
+    /// Every file last identified as a game, for telling a renamed file from a second copy.
+    pub fn paths_of(&self, key: &Key) -> Result<Vec<String>, Error> {
         let mut all = Vec::new();
-        self.db.query("SELECT path FROM scrape_file WHERE md5 = $md5 AND bytes = $bytes", &[("$md5", Bound::Text(md5)), ("$bytes", Bound::Integer(bytes))], |row| all.push(row.text(0)))?;
+        self.db.query(&format!("SELECT f.path FROM scrape_file f WHERE {FILE_KEY_MD5} = $md5 AND f.fingerprint = $fingerprint AND f.bytes = $bytes"), &key.bound(), |row| all.push(row.text(0)))?;
         Ok(all)
     }
 
@@ -494,12 +643,13 @@ ON CONFLICT(path) DO UPDATE SET priority = MIN(priority, excluded.priority), nex
         };
         self.write(
             "INSERT OR REPLACE INTO scrape_game (md5, bytes, status, game_id, rom_id, system_id, name, description, developer, publisher, genre, players, rating,
-    release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known)
+    release_date, region, language, matched_by, offered, detail, fetched_at, kinds_known, fingerprint)
 VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $developer, $publisher, $genre, $players, $rating,
-    $release, $region, $language, $matched, $offered, $detail, $fetched, $known)",
+    $release, $region, $language, $matched, $offered, $detail, $fetched, $known, $fingerprint)",
             &[
                 ("$md5", Bound::Text(&r.md5)),
                 ("$bytes", Bound::Integer(r.bytes)),
+                ("$fingerprint", Bound::Text(&r.fingerprint)),
                 ("$status", Bound::Text(r.state.word())),
                 ("$game", int(r.game_id)),
                 ("$rom", int(r.rom_id)),
@@ -524,9 +674,9 @@ VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $devel
         Ok(())
     }
 
-    pub fn game(&self, md5: &str, bytes: i64) -> Result<Option<Record>, Error> {
+    pub fn game(&self, key: &Key) -> Result<Option<Record>, Error> {
         let mut found = None;
-        self.db.query(&format!("{GAME_COLUMNS} WHERE md5 = $md5 AND bytes = $bytes"), &[("$md5", Bound::Text(md5)), ("$bytes", Bound::Integer(bytes))], |row| {
+        self.db.query(&format!("{GAME_COLUMNS} WHERE {KEYED}"), &key.bound(), |row| {
             if found.is_none() {
                 found = Some(read_game(row, 0));
             }
@@ -534,13 +684,13 @@ VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $devel
         Ok(found)
     }
 
-    const FOUND_COLUMNS: &'static str = "g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known";
+    const FOUND_COLUMNS: &'static str = "g.md5, g.bytes, g.status, g.game_id, g.rom_id, g.system_id, g.name, g.description, g.developer, g.publisher, g.genre, g.players, g.rating, g.release_date, g.region, g.language, g.matched_by, g.offered, g.detail, g.fetched_at, g.kinds_known, g.fingerprint";
 
     /// Every found game by the path last hashed to it.
     pub fn found_by_path(&self) -> Result<Vec<(String, Record)>, Error> {
         let mut all: Vec<(String, Record)> = Vec::new();
         self.db.query(
-            &format!("SELECT f.path, {} FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found'", Self::FOUND_COLUMNS),
+            &format!("SELECT f.path, {} FROM scrape_file f JOIN scrape_game g ON {} WHERE g.status = 'Found'", Self::FOUND_COLUMNS, joined("g")),
             &[],
             |row| all.push((row.text(0), read_game(row, 1))),
         )?;
@@ -550,7 +700,7 @@ VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $devel
     pub fn found_for(&self, path: &str) -> Result<Option<Record>, Error> {
         let mut found = None;
         self.db.query(
-            &format!("SELECT {} FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes WHERE g.status = 'Found' AND f.path = $path", Self::FOUND_COLUMNS),
+            &format!("SELECT {} FROM scrape_file f JOIN scrape_game g ON {} WHERE g.status = 'Found' AND f.path = $path", Self::FOUND_COLUMNS, joined("g")),
             &[("$path", Bound::Text(path))],
             |row| {
                 if found.is_none() {
@@ -565,19 +715,23 @@ VALUES ($md5, $bytes, $status, $game, $rom, $system, $name, $description, $devel
     pub fn outcomes_by_path(&self) -> Result<Vec<(String, State, bool)>, Error> {
         let mut all = Vec::new();
         self.db.query(
-            "SELECT f.path, g.status, EXISTS (SELECT 1 FROM scrape_media m WHERE m.md5 = g.md5 AND m.bytes = g.bytes AND m.type = 'cover')
-FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes",
+            &format!(
+                "SELECT f.path, g.status, EXISTS (SELECT 1 FROM scrape_media m WHERE m.md5 = g.md5 AND m.fingerprint = g.fingerprint AND m.bytes = g.bytes AND m.type = 'cover')
+FROM scrape_file f JOIN scrape_game g ON {}",
+                joined("g")
+            ),
             &[],
             |row| all.push((row.text(0), State::parse(&row.text(1)), row.int64(2) != 0)),
         )?;
         Ok(all)
     }
 
-    pub fn record_media(&self, md5: &str, bytes: i64, media: &Stored, now: i64) -> Result<(), Error> {
+    pub fn record_media(&self, key: &Key, media: &Stored, now: i64) -> Result<(), Error> {
         let at = stamp(now);
-        self.write("INSERT OR REPLACE INTO scrape_media (md5, bytes, type, path, region, sha1, fetched_at) VALUES ($md5, $bytes, $type, $path, $region, $sha1, $at)", &[
-            ("$md5", Bound::Text(md5)),
-            ("$bytes", Bound::Integer(bytes)),
+        self.write("INSERT OR REPLACE INTO scrape_media (md5, bytes, type, path, region, sha1, fetched_at, fingerprint) VALUES ($md5, $bytes, $type, $path, $region, $sha1, $at, $fingerprint)", &[
+            ("$md5", Bound::Text(&key.md5)),
+            ("$bytes", Bound::Integer(key.bytes)),
+            ("$fingerprint", Bound::Text(&key.fingerprint)),
             ("$type", Bound::Text(&media.ty)),
             ("$path", Bound::Text(&media.relative_path)),
             ("$region", text(&media.region)),
@@ -587,9 +741,9 @@ FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes",
         Ok(())
     }
 
-    pub fn media(&self, md5: &str, bytes: i64) -> Result<Vec<Stored>, Error> {
+    pub fn media(&self, key: &Key) -> Result<Vec<Stored>, Error> {
         let mut all = Vec::new();
-        self.db.query("SELECT type, path, region, sha1 FROM scrape_media WHERE md5 = $md5 AND bytes = $bytes ORDER BY type", &[("$md5", Bound::Text(md5)), ("$bytes", Bound::Integer(bytes))], |row| {
+        self.db.query(&format!("SELECT type, path, region, sha1 FROM scrape_media WHERE {KEYED} ORDER BY type"), &key.bound(), |row| {
             all.push(Stored { ty: row.text(0), relative_path: row.text(1), region: row.text_or_null(2), sha1: row.text_or_null(3) });
         })?;
         Ok(all)
@@ -598,13 +752,11 @@ FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes",
     /// The store's files a game's row names, and the rows of `table` keyed by that game's hash, for `forget`.
     pub(crate) fn forget_rows(&self, path: &str) -> Result<Vec<String>, Error> {
         let mut files = Vec::new();
-        self.db.query("SELECT m.path FROM scrape_file f JOIN scrape_media m ON m.md5 = f.md5 AND m.bytes = f.bytes WHERE f.path = $path", &[("$path", Bound::Text(path))], |row| {
-            files.push(row.text(0))
-        })?;
+        self.db.query(&format!("SELECT m.path FROM scrape_file f JOIN scrape_media m ON {} WHERE f.path = $path", joined("m")), &[("$path", Bound::Text(path))], |row| files.push(row.text(0)))?;
         transaction(&self.db, |db| {
             for table in ["scrape_media", "scrape_game"] {
                 db.query(
-                    &format!("DELETE FROM {table} WHERE EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND f.md5 = {table}.md5 AND f.bytes = {table}.bytes)"),
+                    &format!("DELETE FROM {table} WHERE EXISTS (SELECT 1 FROM scrape_file f WHERE f.path = $path AND {})", joined(table)),
                     &[("$path", Bound::Text(path))],
                     |_| {},
                 )?;
@@ -621,15 +773,18 @@ FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes",
         Ok(scalar_i64(&self.db, "SELECT 1 FROM store_step WHERE name = $name", &[("$name", Bound::Text(step))])?.is_some())
     }
 
-    pub(crate) fn all_media_rows(&self) -> Result<Vec<(String, i64, String, String)>, Error> {
+    pub(crate) fn all_media_rows(&self) -> Result<Vec<(Key, String, String)>, Error> {
         let mut rows = Vec::new();
-        self.db.query("SELECT md5, bytes, type, path FROM scrape_media", &[], |row| rows.push((row.text(0), row.int64(1), row.text(2), row.text(3))))?;
+        self.db.query("SELECT md5, bytes, type, path, fingerprint FROM scrape_media", &[], |row| {
+            rows.push((Key { md5: row.text(0), fingerprint: row.text(4), bytes: row.int64(1) }, row.text(2), row.text(3)))
+        })?;
         Ok(rows)
     }
 
-    pub(crate) fn all_files(&self) -> Result<Vec<(String, String, i64)>, Error> {
+    /// Every file of the path index with the key its game is found by.
+    pub(crate) fn all_files(&self) -> Result<Vec<(String, Key)>, Error> {
         let mut rows = Vec::new();
-        self.db.query("SELECT path, md5, bytes FROM scrape_file", &[], |row| rows.push((row.text(0), row.text(1), row.int64(2))))?;
+        self.db.query("SELECT path, md5, bytes, fingerprint FROM scrape_file", &[], |row| rows.push((row.text(0), Key::of_file(&row.text(1), &row.text(3), row.int64(2)))))?;
         Ok(rows)
     }
 
@@ -644,13 +799,9 @@ FROM scrape_file f JOIN scrape_game g ON g.md5 = f.md5 AND g.bytes = f.bytes",
         Ok(())
     }
 
-    pub(crate) fn repoint_media(&self, md5: &str, bytes: i64, ty: &str, path: &str) -> Result<(), Error> {
-        self.write("UPDATE scrape_media SET path = $path WHERE md5 = $md5 AND bytes = $bytes AND type = $type", &[
-            ("$path", Bound::Text(path)),
-            ("$md5", Bound::Text(md5)),
-            ("$bytes", Bound::Integer(bytes)),
-            ("$type", Bound::Text(ty)),
-        ])?;
+    pub(crate) fn repoint_media(&self, key: &Key, ty: &str, path: &str) -> Result<(), Error> {
+        let [md5, fingerprint, bytes] = key.bound();
+        self.write(&format!("UPDATE scrape_media SET path = $path WHERE {KEYED} AND type = $type"), &[("$path", Bound::Text(path)), md5, fingerprint, bytes, ("$type", Bound::Text(ty))])?;
         Ok(())
     }
 

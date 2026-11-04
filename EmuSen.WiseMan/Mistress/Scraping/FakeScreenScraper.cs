@@ -20,6 +20,9 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public string Synopsis { get; init; } = "A synthetic game written for the tests.";
         public int SystemId { get; init; } = 4;
 
+        // The file name and size that find it with no digests sent, as a big disc is asked first (EmuSen_LibraryTools.md §9.12).
+        public (string File, long Size)? ByNameAndSize { get; init; }
+
         // Every kind Pass 8 fetches as well as the first five, as §21.1's answers offered them (§38).
         public static List<(string Type, string? Region, string Format)> AllMedia =>
             [("box-2D", "us", "png"), ("ss", "wor", "png"), ("wheel-hd", "wor", "png"), ("mixrbv2", "wor", "png"), ("sstitle", "wor", "png"),
@@ -136,6 +139,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             lock (Games) game = Games.FirstOrDefault(g => g.Md5s.Contains(md5, StringComparer.OrdinalIgnoreCase));
             // A game asked by its id, as a pick from a name search is, when its hashes find nothing.
             if (game is null && long.TryParse(Param(url, "gameid"), out long gameId)) lock (Games) game = Games.FirstOrDefault(g => g.Id == gameId);
+            if (game is null && md5.Length == 0 && long.TryParse(Param(url, "romtaille"), out long size))
+                lock (Games) game = Games.FirstOrDefault(g => g.ByNameAndSize is { } n && n.File == Param(url, "romnom") && n.Size == size);
             if (game is null) return new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("Erreur : Rom/Iso/Dossier non trouvée !  ") };
 
             var response = new JsonObject { ["serveurs"] = new JsonObject(), ["jeu"] = Jeu(game, url) };

@@ -26,5 +26,9 @@ emusen-sqlite = { path = "../sqlite" }
 emusen-library = { path = "../library" }
 # Inflate, for OpenVGDB's zip; the workspace's.
 flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
+# The fingerprint of a big file's two ends (fingerprint.rs); the workspace's, from Galaxia.
+sha1 = "0.11"
 
 [target.'cfg(unix)'.dependencies]
+# The background hashing's thread at the lowest CPU and I/O priority (fingerprint.rs).
+libc = "0.2"

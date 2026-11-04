@@ -140,6 +140,17 @@ pub struct Hashes {
     pub size: u64,
 }
 
+impl Hashes {
+    /// A lookup by the file's name and size alone, its digests unread (EmuSen_LibraryTools.md §9.12).
+    pub fn name_and_size(size: u64) -> Hashes {
+        Hashes { md5: String::new(), crc32: String::new(), sha1: String::new(), size }
+    }
+
+    pub fn by_name_and_size(&self) -> bool {
+        self.md5.is_empty() && self.crc32.is_empty() && self.sha1.is_empty()
+    }
+}
+
 pub struct Client {
     pub wire: Wire,
     pub developer: Developer,
@@ -178,15 +189,11 @@ impl Client {
         let size = hashes.size.to_string();
         let name = emusen_galaxia::dotnet_path::file_name(emusen_galaxia::dotnet_path::Style::HOST, file_name).to_string();
         let id = game_id.map(|g| g.to_string());
-        let mut query: Vec<(&str, &str)> = vec![
-            ("romtype", "rom"),
-            ("systemeid", &system),
-            ("crc", &hashes.crc32),
-            ("md5", &hashes.md5),
-            ("sha1", &hashes.sha1),
-            ("romtaille", &size),
-            ("romnom", &name),
-        ];
+        let mut query: Vec<(&str, &str)> = vec![("romtype", "rom"), ("systemeid", &system)];
+        if !hashes.by_name_and_size() {
+            query.extend([("crc", hashes.crc32.as_str()), ("md5", hashes.md5.as_str()), ("sha1", hashes.sha1.as_str())]);
+        }
+        query.extend([("romtaille", size.as_str()), ("romnom", name.as_str())]);
         if let Some(id) = &id {
             query.push(("gameid", id));
         }

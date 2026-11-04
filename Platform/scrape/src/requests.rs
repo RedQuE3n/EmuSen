@@ -160,7 +160,7 @@ impl Scraper {
         if !one {
             for g in &paths {
                 let Some((_, rec)) = found.iter().find(|(p, _)| p == g) else { continue };
-                let stored = self.store().media(&rec.md5, rec.bytes)?;
+                let stored = self.store().media(&rec.key())?;
                 let lacking: Vec<kinds::Kind> = kinds.iter().copied().filter(|k| rec.may_offer(k.esde_type) && !stored.iter().any(|s| s.ty == k.esde_type)).collect();
                 if !refresh && lacking.is_empty() {
                     continue;

@@ -12,7 +12,7 @@ use crate::quota::{BUSY_WAIT, Gate, Status, TOO_MANY_WAIT};
 use crate::redact::redact;
 use crate::rules;
 use crate::runlog::{self, Lane, Log, Tally};
-use crate::store::{Priority, Queued, Record, State, Stored};
+use crate::store::{Key, Priority, Queued, Record, State, Stored};
 use crate::{Error, Scraper, layout};
 use emusen_dotnet::date::TICKS_PER_SECOND;
 use emusen_galaxia::dotnet_files::{file_exists, file_info};
@@ -411,11 +411,11 @@ impl Scraper {
 
     /// A request's line in the scrape log, what it waited for handed over from the lane.
     #[allow(clippy::too_many_arguments)]
-    fn logged(&self, w: &Workers, lane: &mut Lane, game: &str, kind: &str, code: u16, outcome: &str, bytes: u64, took: Duration, quota: Option<crate::answer::Quota>) {
-        let (pace, cap, hash) = lane.sent(bytes, took);
+    fn logged(&self, w: &Workers, lane: &mut Lane, game: &str, kind: &str, code: u16, outcome: &str, bytes: u64, took: Duration, quota: Option<crate::answer::Quota>, matched: Option<&str>) {
+        let (pace, cap, hash, fingerprint) = lane.sent(bytes, took);
         let live = *w.live.lock().unwrap_or_else(|p| p.into_inner());
         let allowed = self.quota.threads(w.choices.threads);
-        w.log.write(&runlog::request_line(&runlog::Request { game, kind, code, outcome, bytes, took, worker: lane.index, live, allowed, pace, cap, hash, quota }));
+        w.log.write(&runlog::request_line(&runlog::Request { game, kind, code, outcome, bytes, took, worker: lane.index, live, allowed, pace, cap, hash, quota, matched, fingerprint }));
     }
 
     fn work(&self, index: usize, w: &Arc<Workers>) {
@@ -501,6 +501,7 @@ impl Scraper {
             if !w.stop.is_stopped() {
                 self.scraper_finished(end);
             }
+            self.hash_later();
         }
     }
 
@@ -634,15 +635,30 @@ impl Scraper {
         }
     }
 
-    /// A file read once for its three hashes, which the path index keeps at its size and time; none when stopped.
-    fn hash_once(&self, rom: &str, bytes: i64, modified: i64, w: &Workers, lane: &mut Lane) -> Result<Option<Hashes>, String> {
+    /// A file read once for its three hashes, which the path index keeps at its size and time, beside its fingerprint
+    /// where its key is one; none when stopped.
+    fn hash_once(&self, rom: &str, key: Option<&Key>, bytes: i64, modified: i64, w: &Workers, lane: &mut Lane) -> Result<Option<Hashes>, String> {
         let began = Instant::now();
         let hashed = Scraper::hashes(rom, &w.stop)?;
-        lane.hashed(began.elapsed());
+        lane.hashed(began.elapsed(), hashed.as_ref().map_or(0, |h| h.size));
         if let Some(h) = &hashed {
-            self.store().remember_file(rom, bytes, modified, &h.md5, &h.crc32, &h.sha1).map_err(|e| e.words())?;
+            let store = self.store();
+            match key.filter(|k| k.is_fingerprint()) {
+                Some(k) => store.fill_hashes(rom, bytes, modified, k.fingerprint_text(), &h.md5, &h.crc32, &h.sha1).map(|_| ()),
+                None => store.remember_file(rom, bytes, modified, &h.md5, &h.crc32, &h.sha1),
+            }
+            .map_err(|e| e.words())?;
         }
         Ok(hashed)
+    }
+
+    /// A big file's two ends read for its fingerprint, which the path index keeps at its size and time (§9.12).
+    fn fingerprint_once(&self, rom: &str, bytes: i64, modified: i64, lane: &mut Lane) -> Result<String, String> {
+        let began = Instant::now();
+        let (fingerprint, read) = crate::fingerprint::of(rom, bytes as u64).map_err(|e| io(e, rom))?;
+        lane.fingerprinted(began.elapsed(), read);
+        self.store().remember_fingerprint(rom, bytes, modified, &fingerprint).map_err(|e| e.words())?;
+        Ok(fingerprint)
     }
 
     fn process_inner(&self, item: &Queued, w: &Arc<Workers>, lane: &mut Lane) -> Result<Option<Finished>, String> {
@@ -657,14 +673,15 @@ impl Scraper {
         };
         let (bytes, modified) = file_info(rom).ok_or_else(|| format!("Could not find file '{rom}'."))?;
         let cached = self.store().cached_file(rom, bytes, modified).map_err(|e| e.words())?;
-        let (md5, mut hashes) = match cached {
+        let (key, mut hashes) = match cached {
             Some(c) => {
-                let full = c.crc32.zip(c.sha1).map(|(crc32, sha1)| Hashes { md5: c.md5.clone(), crc32, sha1, size: bytes as u64 });
-                (c.md5, full)
+                let full = Some(c.md5.clone()).filter(|m| !m.is_empty()).zip(c.crc32.clone().zip(c.sha1.clone())).map(|(md5, (crc32, sha1))| Hashes { md5, crc32, sha1, size: bytes as u64 });
+                (c.key(bytes), full)
             }
+            None if crate::fingerprint::wanted(bytes as u64, self.fingerprint_above()) => (Key::fingerprint(&self.fingerprint_once(rom, bytes, modified, lane)?, bytes), None),
             None => {
-                let Some(h) = self.hash_once(rom, bytes, modified, w, lane)? else { return Ok(None) };
-                (h.md5.clone(), Some(h))
+                let Some(h) = self.hash_once(rom, None, bytes, modified, w, lane)? else { return Ok(None) };
+                (Key::md5(&h.md5, bytes), Some(h))
             }
         };
         let settings = self.settings();
@@ -674,20 +691,20 @@ impl Scraper {
         let wanted: Vec<Kind> = choices.kinds.iter().copied().filter(|k| !(hand_cover && k.esde_type == kinds::COVER.esde_type)).collect();
 
         if let Some(picked) = self.runs.chosen.lock().unwrap_or_else(|p| p.into_inner()).remove(rom) {
-            return self.keep(item, &md5, bytes, &picked, &choices, &wanted, "name", true, w, lane, &settings);
+            return self.keep(item, &key, &picked, &choices, &wanted, "name", true, w, lane, &settings);
         }
 
-        let known = self.store().game(&md5, bytes).map_err(|e| e.words())?;
+        let known = self.store().game(&key).map_err(|e| e.words())?;
         if let Some(k) = known.as_ref().filter(|k| k.state != State::Error) {
             if k.state == State::Unknown {
                 self.store().dequeue(rom).map_err(|e| e.words())?;
                 return Ok(Some(Finished { skipped: true, ..Finished::new(item, Outcome::Unknown, "known to be unknown") }));
             }
-            let kept = self.follow_rename(&md5, bytes, rom, &settings)?;
-            let stored = self.store().media(&md5, bytes).map_err(|e| e.words())?;
+            let kept = self.follow_rename(&key, rom, &settings)?;
+            let stored = self.store().media(&key).map_err(|e| e.words())?;
             if !choices.refresh && !wanted.iter().any(|kind| k.may_offer(kind.esde_type) && !stored.iter().any(|s| s.ty == kind.esde_type)) {
                 self.store().dequeue(rom).map_err(|e| e.words())?;
-                return Ok(Some(Finished { has_cover: self.has_cover(&md5, bytes), written: kept, matched_by: k.matched_by.clone(), skipped: true, ..Finished::new(item, Outcome::Found, "already scraped") }));
+                return Ok(Some(Finished { has_cover: self.has_cover(&key), written: kept, matched_by: k.matched_by.clone(), skipped: true, ..Finished::new(item, Outcome::Found, "already scraped") }));
             }
         }
         let by_name = known.as_ref().is_some_and(|k| k.state == State::Found && k.matched_by.as_deref() == Some("name") && k.game_id.is_some());
@@ -697,27 +714,43 @@ impl Scraper {
             Some(false) => return Ok(Some(self.stopped(item))),
             Some(true) => {}
         }
-        let hashes = match hashes.take() {
+        // A big file whose checksums are not yet taken is asked by its name and size, and read in full only after a miss (EmuSen_LibraryTools.md §9.12).
+        let quick = key.is_fingerprint() && hashes.is_none();
+        let own = match hashes.take() {
             Some(h) => h,
-            None => match self.hash_once(rom, bytes, modified, w, lane)? {
+            None if quick => Hashes::name_and_size(bytes as u64),
+            None => match self.hash_once(rom, Some(&key), bytes, modified, w, lane)? {
                 Some(h) => h,
                 None => return Ok(None),
             },
         };
+        let by_file = if quick { "name+size" } else { "file" };
         self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
         let file_name = path::file_name(STYLE, rom).to_string();
         // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (EmuSen_GamePackages.md §5.5).
         let patched = if by_name { None } else { patched_first(rom) };
-        let first = patched.clone().unwrap_or_else(|| hashes.clone());
+        let first = patched.clone().unwrap_or_else(|| own.clone());
         let Some(mut answer) = self.ask(w, lane, system_id, first, &file_name, if by_name { known.as_ref().and_then(|k| k.game_id) } else { None }) else { return Ok(None) };
-        let mut matched_by = if by_name { "name" } else if patched.is_some() { "patched" } else { "file" };
+        let mut matched_by = if by_name { "name" } else if patched.is_some() { "patched" } else { by_file };
         if patched.is_some() && answer.status == Status::NotFound {
             match self.turn(w, lane) {
                 None => return Ok(None),
                 Some(false) => return Ok(Some(self.stopped(item))),
                 Some(true) => {}
             }
-            let Some(second) = self.ask(w, lane, system_id, hashes, &file_name, None) else { return Ok(None) };
+            let Some(second) = self.ask(w, lane, system_id, own.clone(), &file_name, None) else { return Ok(None) };
+            answer = second;
+            matched_by = by_file;
+        }
+        if quick && !by_name && answer.status == Status::NotFound {
+            let Some(full) = self.hash_once(rom, Some(&key), bytes, modified, w, lane)? else { return Ok(None) };
+            match self.turn(w, lane) {
+                None => return Ok(None),
+                Some(false) => return Ok(Some(self.stopped(item))),
+                Some(true) => {}
+            }
+            self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
+            let Some(second) = self.ask(w, lane, system_id, full, &file_name, None) else { return Ok(None) };
             answer = second;
             matched_by = "file";
         }
@@ -748,15 +781,15 @@ impl Scraper {
         match answer.status {
             Status::Found => {
                 let game = answer.game.expect("a found answer has its game");
-                self.keep(item, &md5, bytes, &game, &choices, &wanted, matched_by, choices.refresh, w, lane, &settings)
+                self.keep(item, &key, &game, &choices, &wanted, matched_by, choices.refresh, w, lane, &settings)
             }
             Status::NotFound if known.as_ref().is_some_and(|k| k.state == State::Found) => {
                 self.store().dequeue(rom).map_err(|e| e.words())?;
                 let k = known.expect("matched above");
                 let detail = if by_name { "found by name; Find by Name asks again" } else { "kept; ScreenScraper no longer lists this file" };
-                Ok(Some(Finished { has_cover: self.has_cover(&md5, bytes), matched_by: k.matched_by.clone(), skipped: true, ..Finished::new(item, Outcome::Found, detail) }))
+                Ok(Some(Finished { has_cover: self.has_cover(&key), matched_by: k.matched_by.clone(), skipped: true, ..Finished::new(item, Outcome::Found, detail) }))
             }
-            Status::NotFound => Ok(Some(self.final_answer(item, State::Unknown, "not in ScreenScraper", &md5, bytes)?)),
+            Status::NotFound => Ok(Some(self.final_answer(item, State::Unknown, "not in ScreenScraper", &key)?)),
             Status::TooManyRequests | Status::ServerBusy => {
                 let wait = if answer.status == Status::ServerBusy { BUSY_WAIT } else { TOO_MANY_WAIT };
                 self.store().retry(rom, now + wait, false).map_err(|e| e.words())?;
@@ -765,7 +798,7 @@ impl Scraper {
             Status::DailyQuota | Status::DailyKoQuota | Status::BadCredentials | Status::ApiClosed | Status::Blacklisted => Ok(Some(self.stopped(item))),
             _ => {
                 if item.attempts + 1 >= MAX_ATTEMPTS || answer.status == Status::BadRequest {
-                    return Ok(Some(self.final_answer(item, State::Error, &reason(&answer), &md5, bytes)?));
+                    return Ok(Some(self.final_answer(item, State::Error, &reason(&answer), &key)?));
                 }
                 self.store().retry(rom, now + backoff(item.attempts), true).map_err(|e| e.words())?;
                 Ok(Some(Finished::new(item, Outcome::Retry, reason(&answer))))
@@ -776,9 +809,10 @@ impl Scraper {
     /// One `jeuInfos`, its quota observed and counted; none when the run stopped while it was asked.
     fn ask(&self, w: &Arc<Workers>, lane: &mut Lane, system_id: i32, hashes: Hashes, file_name: &str, game_id: Option<i64>) -> Option<client::JeuInfos> {
         let (client, cancel, name) = (w.client.clone(), w.cancel.clone(), file_name.to_string());
+        let matched = if hashes.by_name_and_size() { "name+size" } else { "hash" };
         let answer = crate::clock::detached(&w.stop, move || client.jeu_infos(system_id, &hashes, &name, game_id, &cancel))?;
         let e = answer.exchange;
-        self.logged(w, lane, file_name, "info", e.code, answer.status.name(), e.bytes, e.took, answer.quota);
+        self.logged(w, lane, file_name, "info", e.code, answer.status.name(), e.bytes, e.took, answer.quota, Some(matched));
         let store = self.store();
         let observed = self.quota.observe(&store, &self.clock, answer.quota).unwrap_or(false);
         if matches!(answer.status, Status::Found | Status::NotFound | Status::Malformed | Status::BadRequest) {
@@ -802,10 +836,10 @@ impl Scraper {
     }
 
     /// A game's last word: recorded against its hashes with the reason.
-    fn final_answer(&self, item: &Queued, state: State, detail: &str, md5: &str, bytes: i64) -> Result<Finished, String> {
+    fn final_answer(&self, item: &Queued, state: State, detail: &str, key: &Key) -> Result<Finished, String> {
         let reason = redact(detail);
         let store = self.store();
-        let mut r = Record::new(md5, bytes, state, self.clock.now());
+        let mut r = Record::new(key, state, self.clock.now());
         r.detail = Some(reason.clone());
         store.record(&r).map_err(|e| e.words())?;
         store.dequeue(&item.path).map_err(|e| e.words())?;
@@ -813,7 +847,7 @@ impl Scraper {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn keep(&self, item: &Queued, md5: &str, bytes: i64, game: &crate::answer::Game, choices: &Choices, wanted: &[Kind], matched_by: &str, refresh: bool, w: &Workers, lane: &mut Lane, settings: &crate::Settings) -> Result<Option<Finished>, String> {
+    fn keep(&self, item: &Queued, key: &Key, game: &crate::answer::Game, choices: &Choices, wanted: &[Kind], matched_by: &str, refresh: bool, w: &Workers, lane: &mut Lane, settings: &crate::Settings) -> Result<Option<Finished>, String> {
         let rom = item.path.as_str();
         let stem = path::file_name_without_extension(STYLE, rom).to_string();
         let file_name = path::file_name(STYLE, rom).to_string();
@@ -822,7 +856,7 @@ impl Scraper {
         let offered: Vec<&str> = kinds::ALL.iter().filter(|k| rules::choose_media(&game.media, k, &regions, true).is_some()).map(|k| k.esde_type).collect();
         let mut name_order = regions.clone();
         name_order.push("ss".into());
-        let mut r = Record::new(md5, bytes, State::Found, self.clock.now());
+        let mut r = Record::new(key, State::Found, self.clock.now());
         r.game_id = Some(game.id);
         r.rom_id = game.rom_id;
         r.system_id = game.system_id.or(Scraper::screenscraper_id(&item.system));
@@ -843,7 +877,7 @@ impl Scraper {
 
         let mut written = Vec::new();
         let mut unchanged = 0;
-        let stored = self.store().media(md5, bytes).map_err(|e| e.words())?;
+        let stored = self.store().media(key).map_err(|e| e.words())?;
         let root = self.root();
         let folder = settings.folder_of(rom);
         // A packaged game's art is written into its package, never over or in place of the store's (EmuSen_GamePackages.md §18.3).
@@ -886,7 +920,7 @@ impl Scraper {
                 return Ok(None);
             }
             if got.code != 0 {
-                self.logged(w, lane, &file_name, kind.esde_type, got.code, &format!("{:?}", got.outcome), got.received, got.took, None);
+                self.logged(w, lane, &file_name, kind.esde_type, got.code, &format!("{:?}", got.outcome), got.received, got.took, None, None);
             }
             let held = self.throttle(&got, &w.stop);
             lane.cap += held;
@@ -903,11 +937,11 @@ impl Scraper {
                 std::fs::remove_file(&old).map_err(|e| io(e, &old))?;
             }
             self.note(Activity { path: rom.into(), system: item.system.clone(), step: "arrived", kind: Some(kind.esde_type.into()), saved: got.path.clone() });
-            self.store().record_media(md5, bytes, &Stored { ty: kind.esde_type.into(), relative_path: relative.clone(), region: media.region.clone(), sha1: got.sha1.clone() }, self.clock.now()).map_err(|e| e.words())?;
+            self.store().record_media(key, &Stored { ty: kind.esde_type.into(), relative_path: relative.clone(), region: media.region.clone(), sha1: got.sha1.clone() }, self.clock.now()).map_err(|e| e.words())?;
             written.push(relative);
         }
         self.store().dequeue(rom).map_err(|e| e.words())?;
-        Ok(Some(Finished { has_cover: self.has_cover(md5, bytes), written, matched_by: Some(matched_by.into()), unchanged, ..Finished::new(item, Outcome::Found, "") }))
+        Ok(Some(Finished { has_cover: self.has_cover(key), written, matched_by: Some(matched_by.into()), unchanged, ..Finished::new(item, Outcome::Found, "") }))
     }
 
     /// The member's `maxdownloadspeed`, in KB/s, held by waiting after a file that came faster.
@@ -924,17 +958,17 @@ impl Scraper {
         began.elapsed()
     }
 
-    fn has_cover(&self, md5: &str, bytes: i64) -> bool {
+    fn has_cover(&self, key: &Key) -> bool {
         let root = self.root();
-        self.store().media(md5, bytes).map(|m| m.iter().any(|s| s.ty == kinds::COVER.esde_type && file_exists(&path::combine(STYLE, &root, &s.relative_path)))).unwrap_or(false)
+        self.store().media(key).map(|m| m.iter().any(|s| s.ty == kinds::COVER.esde_type && file_exists(&path::combine(STYLE, &root, &s.relative_path)))).unwrap_or(false)
     }
 
     /// A renamed or moved file takes its media to its new name and folder; a copy beside the old one gets copies.
-    fn follow_rename(&self, md5: &str, bytes: i64, rom: &str, settings: &crate::Settings) -> Result<Vec<String>, String> {
+    fn follow_rename(&self, key: &Key, rom: &str, settings: &crate::Settings) -> Result<Vec<String>, String> {
         let mut moved = Vec::new();
         let stem = path::file_name_without_extension(STYLE, rom).to_string();
         let root = self.root();
-        let media = self.store().media(md5, bytes).map_err(|e| e.words())?;
+        let media = self.store().media(key).map_err(|e| e.words())?;
         for m in media {
             if path::is_rooted(STYLE, &m.relative_path) {
                 continue;
@@ -949,7 +983,7 @@ impl Scraper {
             let old_folder = layout::folder_of(&m.relative_path);
             let still_there = self
                 .store()
-                .paths_of(md5, bytes)
+                .paths_of(key)
                 .map_err(|e| e.words())?
                 .iter()
                 .any(|p| p != rom && path::file_name_without_extension(STYLE, p) == old_stem && settings.folder_of(p) == old_folder && file_exists(p));
@@ -961,7 +995,7 @@ impl Scraper {
             } else {
                 std::fs::rename(&old, &target).map_err(|e| io(e, &old))?;
             }
-            self.store().record_media(md5, bytes, &Stored { relative_path: relative.clone(), ..m }, self.clock.now()).map_err(|e| e.words())?;
+            self.store().record_media(key, &Stored { relative_path: relative.clone(), ..m }, self.clock.now()).map_err(|e| e.words())?;
             moved.push(relative);
         }
         Ok(moved)

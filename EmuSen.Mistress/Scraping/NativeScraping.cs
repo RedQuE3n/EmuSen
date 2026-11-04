@@ -48,6 +48,7 @@ namespace EmuSen.Mistress.Scraping
             ReleaseDate = Text(e, "release_date") is string d ? DateTime.ParseExact(d, "yyyy-MM-dd", CultureInfo.InvariantCulture) : null,
             Region = Text(e, "region"), Language = Text(e, "language"), MatchedBy = Text(e, "matched_by"), Offered = Text(e, "offered"), Detail = Text(e, "detail"),
             FetchedAt = DateTime.Parse(Text(e, "fetched_at")!, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind), KindsKnown = Text(e, "kinds_known"),
+            Fingerprint = Text(e, "fingerprint") ?? "",
         };
 
         public IReadOnlyDictionary<string, ScrapedRecord> FoundByPath()
@@ -68,9 +69,9 @@ namespace EmuSen.Mistress.Scraping
             return doc.RootElement.ValueKind == JsonValueKind.Null ? null : Record(doc.RootElement);
         }
 
-        public IReadOnlyList<StoredMedia> Media(string md5, long bytes)
+        public IReadOnlyList<StoredMedia> Media(string md5, long bytes, string fingerprint = "")
         {
-            using JsonDocument doc = JsonDocument.Parse(_service.Get(JsonSerializer.Serialize(new { what = "stored", md5, bytes })));
+            using JsonDocument doc = JsonDocument.Parse(_service.Get(JsonSerializer.Serialize(new { what = "stored", md5, bytes, fingerprint })));
             return doc.RootElement.EnumerateArray().Select(m => new StoredMedia(Text(m, "type")!, Text(m, "path")!, Text(m, "region"), Text(m, "sha1"))).ToList();
         }
 
@@ -105,6 +106,9 @@ namespace EmuSen.Mistress.Scraping
 
         public IReadOnlyList<string> Forget(string path, string? system, string folder) =>
             JsonSerializer.Deserialize<string[]>(_service.Change(JsonSerializer.Serialize(new { op = "forget", path, system, folder })))!;
+
+        // Whether a game is on screen: a big file's checksums are taken only while none is (EmuSen_LibraryTools.md §9.12).
+        public void Playing(bool running) => _service.Change(JsonSerializer.Serialize(new { op = "playing", running }));
 
         public void ForgetUnfound(string path) => _service.Change(JsonSerializer.Serialize(new { op = "forget_unfound", path }));
 

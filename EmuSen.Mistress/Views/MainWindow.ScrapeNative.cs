@@ -67,6 +67,7 @@ namespace EmuSen.Mistress.Views
             try
             {
                 _native = NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(), _records.Library, NativeEmbedded());
+                ScrapePlaying(_running);
                 _scrapeTheme ??= ThemeNow();
                 ScrapingLend.Lend(_native.Service, _records.Library!, RuntimeCatalog.Shelves.Select(s => s.System), ThemeKindsFor);
                 return true;
@@ -77,6 +78,13 @@ namespace EmuSen.Mistress.Views
                 StatusText.Text = $"The media store could not be opened: {ScrapeRedactor.Redact(ex.Message)}";
                 return false;
             }
+        }
+
+        // The scraper told whether a game is on screen, so a big file's checksums are taken only while none is - see EmuSen_LibraryTools.md §9.12.
+        private void ScrapePlaying(bool running)
+        {
+            try { _native?.Playing(running); }
+            catch (MediaServiceException ex) { ErrorLog.Error("scraping", "The scraper could not be told whether a game is on screen", ex); }
         }
 
         // A run started through the scraper; its progress drained on a thread of the window's and posted to the window.
@@ -180,7 +188,7 @@ namespace EmuSen.Mistress.Views
         // What the store holds, read for the tests whichever half the switch chose.
         public IReadOnlyList<(string Path, string System)> ScrapeQueue() => _native is { } n ? n.Queue() : _mediaStore?.Queue().Select(q => (q.Path, q.System)).ToList() ?? [];
 
-        public IReadOnlyList<StoredMedia> ScrapeMedia(string md5, long bytes) => _native is { } n ? n.Media(md5, bytes) : _mediaStore?.Media(md5, bytes) ?? [];
+        public IReadOnlyList<StoredMedia> ScrapeMedia(string md5, long bytes, string fingerprint = "") => _native is { } n ? n.Media(md5, bytes, fingerprint) : _mediaStore?.Media(md5, bytes) ?? [];
 
         // Whether a run's ScreenScraper workers are live, whichever half the switch chose.
         public bool ScrapeWorkersLive => _native is not null ? ScrapeRunning && _nativeWorkers : _scraper is not null;

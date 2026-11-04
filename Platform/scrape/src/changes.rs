@@ -71,6 +71,10 @@ pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
             s.add_art(json::text_or_none(r, "console")?, &json::text(r, "stem")?, &json::text(r, "path")?);
             out.push_str("true");
         }
+        "playing" => {
+            s.set_playing(json::flag(r, "running", false)?);
+            out.push_str("true");
+        }
         "openvgdb_download" => out.push_str(&s.openvgdb_download()?),
         "openvgdb_remove" => out.push_str(&s.openvgdb_remove()?),
         _ => return Err(Error::BadRequest(format!("The request's op, {op}, is not one the scraper makes."))),

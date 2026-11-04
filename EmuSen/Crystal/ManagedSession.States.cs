@@ -44,9 +44,27 @@ namespace EmuSen.Crystal.Managed
         public static readonly string BuildName =
             System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(ManagedSession).Assembly)?.InformationalVersion ?? "unknown";
 
-        // The game's hash and size, read once on a worker as a session opens; a state saved before it is known records none.
+        // The game's hash and size, read on a worker as a session opens, or by a save that comes first - see EmuSen_Backend.md §14.15.
         private volatile string? _romMd5;
         private long _romBytes;
+        private readonly object _identifying = new();
+
+        private (string? Md5, long Bytes) Identity()
+        {
+            lock (_identifying)
+            {
+                if (_romMd5 is null && GamePath is { } path)
+                {
+                    try
+                    {
+                        Interlocked.Exchange(ref _romBytes, new FileInfo(path).Length);
+                        _romMd5 = RomHash.Md5(path);
+                    }
+                    catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+                }
+                return (_romMd5, Interlocked.Read(ref _romBytes));
+            }
+        }
 
         private void StartIdentifying()
         {
@@ -73,6 +91,7 @@ namespace EmuSen.Crystal.Managed
         private StateRecord Record()
         {
             var patched = GamePath is null ? null : PatchedIdentity();
+            var (md5, bytes) = GamePath is null || patched is not null ? (null, 0L) : Identity();
             return new()
             {
                 Console = Console,
@@ -81,8 +100,8 @@ namespace EmuSen.Crystal.Managed
                 Build = BuildName,
                 SavedAt = DateTime.Now,
                 RomFile = Path.GetFileName(GameKey),
-                RomMd5 = GamePath is null ? null : patched?.Md5 ?? _romMd5,
-                RomBytes = GamePath is null ? 0 : patched?.Size ?? Interlocked.Read(ref _romBytes),
+                RomMd5 = GamePath is null ? null : patched?.Md5 ?? md5,
+                RomBytes = GamePath is null ? 0 : patched?.Size ?? bytes,
             };
         }
 

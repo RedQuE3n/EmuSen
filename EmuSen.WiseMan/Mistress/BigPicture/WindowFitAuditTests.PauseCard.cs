@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     public partial class WindowFitAuditTests
     {
         // Each state, by the rows chosen from the first page to reach it, and the row the selection rests on.
-        public static readonly string[] PauseCardViews = ["PauseCard", "PauseCardRewind", "PauseCardSave", "PauseCardGameOptions", "PauseCardDisplay", "PauseCardLeave", "PauseCardQuitGame"];
+        public static readonly string[] PauseCardViews = ["PauseCard", "PauseCardRewind", "PauseCardSave", "PauseCardGameOptions", "PauseCardDisplay", "PauseCardLeave", "PauseCardQuitGame", "PauseCardControllers", "PauseCardDesktop", "PauseCardSound"];
 
         // The handheld's: the big-screen form at 1920 by 1200 in Steam's Game Mode, where the volume row defers and the chords are off.
         public static readonly string[] HandheldViews = ["PauseCardHandheld", "PauseCardHandheldOptions"];
@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task Every_pause_card_state_is_as_its_specification_records_it(string view, int width, int height) => Session.Dispatch(() =>
         {
             string name = $"{view}-{width}x{height}";
-            (MainWindow window, PadDriver pad) = InGame(width, height);
+            (MainWindow window, PadDriver pad) = InGame(width, height, bigScreen: view != "PauseCardDesktop");
             if (view.Contains("Handheld", StringComparison.Ordinal)) typeof(MainWindow).GetField("_bigScreenForced", Hidden)!.SetValue(window, true);
             InterfaceRecorder.Normalise = InterfaceSpecFiles.Normaliser(_root);
             InterfaceRecorder.Volatile = Volatile;
@@ -50,6 +50,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     case "PauseCardDisplay": PadMenu.Choose(window, pad, MainWindow.DisplayMenu, exact: true); break;
                     case "PauseCardLeave": PadMenu.Choose(window, pad, MainWindow.LeaveMenu, exact: true); break;
                     case "PauseCardQuitGame": PadMenu.Choose(window, pad, "Quit Game...", exact: true); break;
+                    case "PauseCardSound": PadMenu.Choose(window, pad, MainWindow.SoundMenu, exact: true); break;
+                    case "PauseCardControllers": PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true); PadMenu.Choose(window, pad, MainWindow.ControllersMenu, exact: true); break;
                 }
                 Settle(window);
                 Control root = window.GetControl<Control>("PadMenuPanel");

@@ -92,15 +92,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             pad.Down((to - Math.Max(PadMenu.Selected(w), 0) + count) % count);
         }
 
-        // The page shown: the fit audit over the menu, every card row's words inside their parts, every subtitle line inside the panel, no rows past it, and the slot's card clear of the box and the help.
+        // The page shown, on the card on the desktop as on the big screen: the fit audit over the menu, every row's words inside their parts, every subtitle line inside the panel, no rows past it, and the pane clear of the rows and the help.
         private List<string> PadMenuPageFaults(MainWindow window, bool bigScreen, string name)
         {
             Settle(window);
             bool onCard = PadMenu.Card(window).IsVisible;
-            Control root = onCard ? window.GetControl<Control>("PadMenuPanel") : window.GetControl<Control>("PadMenuDesk");
-            var faults = FitAudit.Check(root, null, smallest: onCard ? FitAudit.SmallestText : 0).Select(f => $"{name}: {f}").ToList();
-            Rect area = new(window.GetControl<Control>("PadMenuPanel").Bounds.Size);
-            Rect box;
+            if (!onCard) return [$"{name}: the menu is not drawn as a card"];
+            Control root = window.GetControl<Control>("PadMenuPanel");
+            var faults = FitAudit.Check(root, null, smallest: FitAudit.SmallestText).Select(f => $"{name}: {f}").ToList();
+            Rect box = default;
             Rect help = default;
             if (onCard)
             {
@@ -129,13 +129,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 }
                 _out.WriteLine($"PADMENU {name}: {panel.TitleLines} title line(s), {PadMenu.Lines(window).Length} rows, scroll {panel.ScrollIndicator}");
             }
-            else
-            {
-                box = window.GetControl<Control>("PadMenuDesk").Bounds;
-                if (!area.Contains(box)) faults.Add($"{name}: the menu {box} leaves the window {area}");
-                if (PadMenu.List(window).GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is { } viewer && viewer.Extent.Height > viewer.Viewport.Height + 0.5)
-                    faults.Add($"{name}: the desktop's rows scroll, {viewer.Extent.Height:F0} in {viewer.Viewport.Height:F0}");
-            }
             if (onCard && PadMenu.Pane(window) is { Child: not null } pane)
             {
                 MenuPanel panel = PadMenu.Big(window);
@@ -144,14 +137,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 if (drawn.Intersects(box)) faults.Add($"{name}: the pane {drawn} overlaps the menu {box}");
                 if (help.Width > 0 && drawn.Intersects(help)) faults.Add($"{name}: the pane {drawn} overlaps the help {help}");
                 _out.WriteLine($"PADMENU {name}: pane {pane.Showing} {drawn}");
-            }
-            Control card = window.GetControl<Control>("PadSlotCard");
-            if (card.IsVisible)
-            {
-                if (!area.Contains(card.Bounds)) faults.Add($"{name}: the slot card {card.Bounds} leaves the window {area}");
-                if (card.Bounds.Intersects(box)) faults.Add($"{name}: the slot card {card.Bounds} overlaps the menu {box}");
-                if (help.Width > 0 && card.Bounds.Intersects(help)) faults.Add($"{name}: the slot card {card.Bounds} overlaps the help {help}");
-                _out.WriteLine($"PADMENU {name}: slot card {card.Bounds}");
             }
             foreach (string fault in faults) _out.WriteLine(fault);
             SavePicture(window, name);

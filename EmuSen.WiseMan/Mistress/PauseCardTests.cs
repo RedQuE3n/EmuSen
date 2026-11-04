@@ -156,26 +156,32 @@ namespace EmuSen.WiseMan.Mistress
             Done(window);
         }, default);
 
+        // Game Options ▸ Sound: Volume steps the game's volume by five; under Steam's Game Mode it reads the device's quick menu and does nothing (EmuSen_Interface.md §6, §20).
         [Fact]
         public Task On_the_desktop_session_the_volume_row_steps_the_volume_and_in_game_mode_it_defers_to_the_quick_access_menu() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = Playing(a => a.Volume = 0.5);
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true);
-            int at = Array.FindIndex(PadMenu.Lines(window), l => l.StartsWith(MainWindow.VolumeRow, StringComparison.Ordinal));
-            pad.Down(at);
-            Assert.Equal("50%", PadMenu.Entries(window)[at].Value!());
+            PadMenu.Choose(window, pad, MainWindow.SoundMenu, exact: true);
+            Assert.Equal(["Volume", "Mute", "Interface sounds"], PadMenu.Lines(window));
+            Assert.Equal("50%", PadMenu.Entries(window)[0].Value!());
             pad.Right();
-            Assert.Equal(0.6, Settings(window).Volume, 3);
-            Assert.Equal("60%", PadMenu.Entries(window)[at].Value!());
+            Assert.Equal(0.55, Settings(window).Volume, 3);
+            Assert.Equal("55%", PadMenu.Entries(window)[0].Value!());
             Done(window);
 
             (window, pad) = Playing(gameMode: true);
             pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
             PadMenu.Choose(window, pad, MainWindow.GameOptionsMenu, exact: true);
-            PadMenuEntry volume = PadMenu.Entries(window).Single(e => e.Label?.Invoke() == MainWindow.VolumeRow);
+            PadMenu.Choose(window, pad, MainWindow.SoundMenu, exact: true);
+            PadMenuEntry volume = PadMenu.Entries(window)[0];
             Assert.Null(volume.Adjust);
-            Assert.Equal("Quick Access Menu", volume.Value!());
+            Assert.Equal(EmuSen.Mistress.Pages.SettingsScreen.DeviceVolume, volume.Value!());
+            double before = Settings(window).Volume;
+            pad.Right();
+            pad.A();
+            Assert.Equal(before, Settings(window).Volume);
             Done(window);
         }, default);
 

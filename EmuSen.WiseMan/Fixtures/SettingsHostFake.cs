@@ -24,7 +24,8 @@ namespace EmuSen.WiseMan.Fixtures
         public ShaderShelf Shaders { get; init; } = new(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "EmuSenNoPack", Guid.NewGuid().ToString("N")));
         public (bool Running, int Waiting) ScrapeRun => (false, 0);
         public void DownloadShaders() { }
-        public void Ask(string title, string prompt, string current, Action<string> then) { }
+        public string? Answer { get; set; }
+        public void Ask(string title, string prompt, string current, Action<string> then) { if (Answer is { } typed) then(typed); }
         public IReadOnlyList<SystemFacts> Systems { get; init; } = RuntimeCatalog.Systems;
         public IReadOnlyList<SettingRow> Schema(string console) => Rows(console);
         public string? CoreValue(string console, string key) => Values.GetValueOrDefault((console, key));
@@ -61,6 +62,14 @@ namespace EmuSen.WiseMan.Fixtures
         public EmuSen.Mistress.Input.HotkeyBindingMap Hotkeys { get; } = new();
         public void SaveKeys() { }
         public bool SystemReducesMotion => false;
+        public string? GameProfile { get; set; }
+        public string? RunningGame { get; init; }
+        public Dictionary<string, GameCrop> Crops { get; } = new();
+        public GameCrop? CropOf(string game) => Crops.TryGetValue(game, out GameCrop crop) ? crop : null;
+        public GameCrop ConsoleCropOf(string game) => new(3.3, 3.3, 3.3, 3.3);
+        public void SetCrop(string game, GameCrop? crop) { if (crop is { } own) Crops[game] = own; else Crops.Remove(game); }
+        public bool FullScreen { get; set; }
+        public bool VolumeOnDevice { get; init; }
         public PadFacts PadNow(string console) => RuntimeCatalog.Systems.First(s => s.Console == console).Pad;
     }
 }

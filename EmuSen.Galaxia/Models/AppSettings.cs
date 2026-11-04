@@ -98,6 +98,9 @@ namespace EmuSen.Galaxia.Models
 
         // The in-game bar's volume, 0 to 1, and OpenEmu's pause when the window is not the one in front - see EmuSen_Settings_Reference.md §4.34.
         public double Volume { get; set; } = 1.0;
+
+        // The game's sound off with its volume kept, from the Pause Card's Sound page - see EmuSen_Interface.md §20.
+        public bool Mute { get; set; }
         public bool PauseInBackground { get; set; } = true;
 
         // Read only from a file written before 2026-09-26, then dropped: OpenEmu's covers became the failover below - see EmuSen_Settings_Reference.md §4.60.

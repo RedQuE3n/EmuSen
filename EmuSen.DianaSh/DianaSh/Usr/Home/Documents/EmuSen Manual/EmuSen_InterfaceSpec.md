@@ -838,3 +838,23 @@ Taken again on 2026-11-03, cause merged with the reader fix (every section strip
 
 Taken again the same day, one cause, both sizes: `ScraperRunning`, whose header now says the run's progress
 (`Scraping 1 of 2`) in place of the count while it runs (`EmuSen_Interface.md` §19.7).
+
+#### 6.3.26 The Pause Card's pages, items 1 to 3 (2026-11-03)
+
+Compared side by side with `ingame-pause-rewind`, `ingame-rewind-reel`, `ingame-change-disc` and
+`ingame-options-controllers` at 1280 × 800 and 1920 × 1080, and the desktop's card with `desktop-pause-card` at 1280 × 800,
+before recording (`EmuSen_Interface.md` §20). Added, both sizes: `PauseCardControllers` (Game Options ▸ Controllers)
+and `PauseCardDesktop` (the Pause Card over a game on the desktop, which retired the pad menu's desktop box). Retired with
+their windows: `RewindReel`, `InsertDiscPlayStation` and `InsertDiscEmpty`. The reel page and the Change Disc page are
+audited and pictured (`WindowFitAuditTests.CardContrastViews`) and not recorded: the reel's labels follow how many frames
+the emulation thread ran before the card paused it, and the Change Disc page needs two synthetic discs in the library.
+
+#### 6.3.27 The Pause Card's pages, items 4 to 6 (2026-11-03)
+
+Compared side by side with `ingame-options-display`, `-sound` and `-memory-cards` at 1280 × 800 and 1920 × 1080 before
+recording (`EmuSen_Interface.md` §20.7–§20.9). Added, both sizes: `PauseCardSound`. Taken again, one cause each:
+`PauseCardDisplay` (both sizes), Display a page of Settings' description in place of its three doors;
+`PauseCardGameOptions` (both sizes) and `PauseCardHandheldOptions`, the Volume row replaced by `Sound ›`. Retired with
+the window: `GameCrop` and `GameCropLongTitle`. The Memory Cards page is pictured and audited, not recorded, as it needs
+a disc game. No recording changed for the slide's pane fade or the sampled reel.
+

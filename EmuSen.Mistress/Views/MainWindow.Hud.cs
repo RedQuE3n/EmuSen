@@ -58,7 +58,7 @@ namespace EmuSen.Mistress.Views
             DockPanel.SetDock(left, Dock.Left);
             DockPanel.SetDock(right, Dock.Right);
             GameHud.Content = new DockPanel { LastChildFill = false, Children = { left, right } };
-            _audioPlayer.Volume = (float)_hudVolume.Value;
+            _audioPlayer.Volume = _appSettings.Mute ? 0 : (float)_hudVolume.Value;
         }
 
         private static Control Gap(double width) => new Border { Width = width };
@@ -106,7 +106,7 @@ namespace EmuSen.Mistress.Views
 
         private void SetVolume(double volume)
         {
-            _audioPlayer.Volume = (float)volume;
+            _audioPlayer.Volume = _appSettings.Mute ? 0 : (float)volume;
             _appSettings.Volume = volume;
             _appSettings.Save();
         }

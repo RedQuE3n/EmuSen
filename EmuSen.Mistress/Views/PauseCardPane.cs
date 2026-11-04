@@ -89,6 +89,82 @@ namespace EmuSen.Mistress.Views
             Child = new StackPanel { Spacing = 12 * u, Children = { row, Line(held, Words * u, Ink.Text, name: "PaneReelCaption", wraps: true) } };
         }
 
+        // The reel page's focused moment at 592 by 300, the strip of six under it with the focused one ringed, and what A does (EmuSen_Interface.md §18.5).
+        public void ShowMoment(IImage? picture, IReadOnlyList<(IImage? Picture, string Label)> strip, int ringed, string sentence)
+        {
+            double u = U;
+            var big = new Border { Name = "PaneMoment", Width = 592 * u, Height = 300 * u, CornerRadius = new CornerRadius(Radius * u), ClipToBounds = true, Child = picture is null ? null : new Image { Source = picture, Stretch = Stretch.Uniform } };
+            big.Bind(BackgroundProperty, big.GetResourceObservable("LunaVoid"));
+            var tiles = new Grid { Name = "PaneMoments", Width = 592 * u, ColumnDefinitions = new ColumnDefinitions(string.Join(",", System.Linq.Enumerable.Repeat("*", 6))) };
+            for (int i = 0; i < strip.Count; i++)
+            {
+                (IImage? p, string label) = strip[i];
+                bool focused = i == ringed;
+                var frame = new Border
+                {
+                    Name = $"PaneMoment{i}", Width = 88 * u, Height = 66 * u, CornerRadius = new CornerRadius(6 * u), ClipToBounds = true,
+                    BorderThickness = new Thickness((focused ? Ring : 0) * u), Child = p is null ? null : new Image { Source = p, Stretch = Stretch.UniformToFill },
+                };
+                frame.Bind(BorderBrushProperty, frame.GetResourceObservable("LunaAccent"));
+                frame.Bind(BackgroundProperty, frame.GetResourceObservable("LunaVoid"));
+                TextBlock under = Line(label, Caption * u, focused ? Ink.Strong : Ink.Muted);
+                var cell = new StackPanel { Spacing = 6 * u, HorizontalAlignment = HorizontalAlignment.Left, Children = { frame, under } };
+                Grid.SetColumn(cell, i);
+                tiles.Children.Add(cell);
+            }
+            Showing = "moment";
+            Child = new StackPanel { Spacing = 8 * u, Children = { big, tiles, Line(sentence, Words * u, Ink.Text, name: "PaneSentence", wraps: true) } };
+        }
+
+        // A disc's cover at the left, or the library's generated card where it has none, and beside it the disc's name and what A does.
+        public void ShowCover(CoverItem cover, string title, string sentence)
+        {
+            double u = U, side = 180 * u;
+            var card = new CoverCard { Name = "PaneCover", Big = true, CellWidth = side, CellHeight = side, Item = cover with { Aspect = 1 } };
+            // The generated card is drawn on the pane's own surface, so its edge is drawn in the border token.
+            var frame = new Border { CornerRadius = new CornerRadius(Radius * u), BorderThickness = new Thickness(Math.Max(1, u)), VerticalAlignment = VerticalAlignment.Top, Child = card };
+            frame.Bind(BorderBrushProperty, frame.GetResourceObservable("LunaBorder"));
+            var words = new StackPanel { Spacing = 8 * u, Margin = new Thickness(0, 48 * u, 0, 0) };
+            words.Children.Add(Line(title, Words * u, Ink.Text, name: "PaneTitle", wraps: true));
+            words.Children.Add(Line(sentence, Words * u, Ink.Muted, name: "PaneHint", wraps: true));
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*"), ColumnSpacing = 24 * u, Children = { frame, words } };
+            Grid.SetColumn(words, 1);
+            Showing = "cover";
+            Child = grid;
+        }
+
+        // What Settings' description says of a row: a meter or a picture first where it has one, then its lines in their tones.
+        public void ShowScreen(Pages.ScreenPane pane, IImage? frame, double width)
+        {
+            double u = U;
+            var stack = new StackPanel { Name = "PaneScreen", Spacing = 6 * u, Width = width };
+            switch (pane.Preview)
+            {
+                case Pages.PanePreview.Meter meter:
+                    var track = new Border { Name = "PaneMeter", Height = 16 * u, CornerRadius = new CornerRadius(8 * u), Margin = new Thickness(0, 0, 0, 6 * u), ClipToBounds = true };
+                    track.Bind(BackgroundProperty, track.GetResourceObservable("LunaMuted"));
+                    var fill = new Border { HorizontalAlignment = HorizontalAlignment.Left, Width = width * Math.Clamp(meter.Fraction, 0, 1), CornerRadius = new CornerRadius(8 * u) };
+                    fill.Bind(BackgroundProperty, fill.GetResourceObservable("LunaAccent"));
+                    track.Child = fill;
+                    stack.Children.Add(track);
+                    break;
+                case Pages.PanePreview.Frame:
+                    var shown = new Border { Name = "PaneFrame", Width = width, Height = 330 * u, CornerRadius = new CornerRadius(Radius * u), ClipToBounds = true, Margin = new Thickness(0, 0, 0, 6 * u),
+                        Child = frame is null ? null : new Image { Source = frame, Stretch = Stretch.Uniform } };
+                    shown.Bind(BackgroundProperty, shown.GetResourceObservable("LunaVoid"));
+                    stack.Children.Add(shown);
+                    break;
+            }
+            foreach (SettingsLine line in pane.Lines)
+            {
+                TextBlock words = Line(line.Mark is { } mark ? $"{mark} {line.Text}" : line.Text, (line.Size ?? Words) * u, line.Tone == SettingsTone.Muted ? Ink.Muted : Ink.Text, wraps: true);
+                if (line.Tone is not (SettingsTone.Text or SettingsTone.Muted)) words.Bind(TextBlock.ForegroundProperty, words.GetResourceObservable(line.Tone == SettingsTone.Success ? "LunaSuccess" : "LunaAttention"));
+                stack.Children.Add(words);
+            }
+            Showing = "screen";
+            Child = stack;
+        }
+
         // One picture, such as the paused frame or a cover, at most the width and height given, a name under it where one is given, and a line under that.
         public void ShowPicture(IImage? picture, string caption, double width, string? title = null, double? height = null)
         {

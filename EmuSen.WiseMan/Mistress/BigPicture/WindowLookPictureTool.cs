@@ -202,13 +202,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     Save(window, $"settings-shaders-{p}", _out);
                     window.CloseSettings();
 
-                    Play(window, 120);
-                    pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start);
-                    PadMenu.Choose(window, pad, "Rewind");
-                    WaitFor(() => Sheets(window).Current is RewindReelWindow, "the reel");
-                    Save(window, $"rewind-reel-{p}", _out);
-                    CloseAll(window);
-
                     Call(window, "ShowControllerBindings");
                     Save(window, $"controller-bindings-{p}", _out);
                     window.CloseSettings();

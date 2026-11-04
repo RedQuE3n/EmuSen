@@ -121,13 +121,12 @@ namespace EmuSen.WiseMan.Mistress
 
             string[] options = SubmenuLines(window, MainWindow.GameOptionsMenu);
             Assert.Equal(GameOptions, options[..3]);
-            Assert.StartsWith("Volume      <  ", options[3]);
+            Assert.Equal(MainWindow.SoundMenu, options[3]);
             Assert.Equal(4, options.Length);
             Assert.Equal(Leave, SubmenuLines(window, MainWindow.LeaveMenu));
             Assert.Equal(["Restart Game?", "Quit Game?", "Quit EmuSen?"], rows.Single(r => r.Text() == MainWindow.LeaveMenu).Submenu!().Where(r => r.Question is not null).Select(r => r.Question!));
 
-            // The card: the game's name as its title row, the pane beside it, the frame dimmed by the card's scrim and not blurred; the help bar from its actions.
-            if (bigScreen)
+            // The card, on the desktop as on the big screen: the game's name as its title row, the pane beside it, the frame dimmed by the card's scrim and not blurred; the help bar from its actions.
             {
                 Assert.True(PadMenu.Card(window).IsVisible);
                 Assert.False(window.GetControl<Control>("MenuBackdrop").IsVisible);
@@ -139,7 +138,6 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Null(big.Footer);
                 Assert.Equal(["Select", "Resume", "Screenshot", "Resume"], big.Hints!.Select(h => h.Label));
             }
-            else Assert.Equal("Cobalt Harbor (Synthetic)", PadMenu.DeskTitle(window));
             Done(window);
         }, default);
 
@@ -157,7 +155,6 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Null(PadMenu.Entries(window).Single(e => e.Text() == MainWindow.SettingsMenu).Submenu);
             Assert.Equal(["Full Screen", "Big Picture", MainWindow.QuitEmuSenRow], SubmenuLines(window, MainWindow.PowerMenu));
             Assert.True(PadMenu.Card(window).IsVisible);
-            Assert.False(window.GetControl<Control>("PadMenuDesk").IsVisible);
             Assert.Equal(MainWindow.HomeTitle, PadMenu.Big(window).Title);
             Assert.Equal(["Choose", "Back", "Favourite", "Close"], PadMenu.Big(window).Hints!.Select(h => h.Label));
             Done(window);
@@ -201,9 +198,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(8, PadMenu.Lines(window).Length);
             pad.Down(5);
             WindowFitAuditTests.Settle(window);
-            Control panel = bigScreen ? PadMenu.Big(window) : window.GetControl<Control>("PadMenuDesk");
-            // The desktop menu keeps the desktop's text sizes, as the window audit allows it (EmuSen_Input.md §8.9).
-            List<string> faults = bigScreen ? FitAudit.Check(panel) : FitAudit.Check(panel, smallest: 0);
+            List<string> faults = FitAudit.Check(PadMenu.Big(window));
             Assert.True(faults.Count == 0, string.Join("\n", faults));
 
             pad.A();
@@ -231,12 +226,8 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(2, PadMenu.Depth(window));
             Assert.Equal(GameOptions, PadMenu.Lines(window)[..3]);
             Assert.Equal(0, PadMenu.Selected(window));
-            if (bigScreen)
-            {
-                Assert.Equal(MainWindow.GameOptionsMenu, PadMenu.Big(window).Title);
-                Assert.Equal("Cobalt Harbor (Synthetic)", PadMenu.Big(window).Subtitle);
-            }
-            else Assert.Equal("Cobalt Harbor (Synthetic)  ›  Game Options", PadMenu.DeskTitle(window));
+            Assert.Equal(MainWindow.GameOptionsMenu, PadMenu.Big(window).Title);
+            Assert.Equal("Cobalt Harbor (Synthetic)", PadMenu.Big(window).Subtitle);
 
             pad.Down(2);
             pad.B();
@@ -273,7 +264,6 @@ namespace EmuSen.WiseMan.Mistress
             pad.Down(2);
             Assert.Equal(MainWindow.SaveStateRow, PadMenu.Entries(window)[PadMenu.Selected(window)].Label!());
             WindowFitAuditTests.Settle(window);
-            Assert.False(window.GetControl<Control>("PadSlotCard").IsVisible);
             Assert.Equal("slots", pane.Showing);
             Assert.Equal(Enumerable.Range(1, 3).Select(i => $"PaneSlot{i}"), PaneSlots(pane).Select(b => b.Name));
             Assert.Equal(1, Ringed(pane));
@@ -346,13 +336,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(3, PadMenu.Depth(window));
             Assert.Equal([MainWindow.QuestionNo, MainWindow.QuestionYes], PadMenu.Lines(window));
             Assert.Equal(0, PadMenu.Selected(window));
-            if (bigScreen)
-            {
-                Assert.Equal("Restart Game?", PadMenu.Big(window).Title);
-                Assert.Contains("beginning", PadMenu.Big(window).Subtitle);
-                Assert.Equal("Back", PadMenu.Big(window).Hints![1].Label);
-            }
-            else Assert.Contains("beginning", window.GetControl<TextBlock>("PadMenuDetail").Text);
+            Assert.Equal("Restart Game?", PadMenu.Big(window).Title);
+            Assert.Contains("beginning", PadMenu.Big(window).Subtitle);
+            Assert.Equal("Back", PadMenu.Big(window).Hints![1].Label);
             pad.A();
             Assert.Equal(2, PadMenu.Depth(window));
             Assert.Equal("Restart Game...", PadMenu.SelectedLine(window));
@@ -460,30 +446,6 @@ namespace EmuSen.WiseMan.Mistress
             { "Cheats", typeof(ActiveCheatsWindow) },
         };
 
-        public static TheoryData<string, string, string> InGameSettings() => new()
-        {
-            { "Players & Controllers", "controllers", "Controllers › Players" }, { "Controller Bindings", "controllers", "Controllers › Controller bindings" }, { "Console Settings", "consoles", "Consoles › Super Nintendo" }, { "Shader Levers", "display", "Display › Shader levers" },
-        };
-
-        // The game's options that were settings windows open Settings at their page, over the card, the game paused beneath.
-        [Theory]
-        [MemberData(nameof(InGameSettings))]
-        public Task Each_settings_row_of_the_game_s_menu_opens_settings_at_its_page(string row, string section, string trail) => Session.Dispatch(() =>
-        {
-            (MainWindow w, PadDriver pad) = Playing(bigScreen: true);
-            Chord(pad);
-            PadMenu.Choose(w, pad, row, exact: true);
-            Assert.True(PadMenu.IsOpen(w), "the card stays beneath what it opened (EmuSen_Interface.md §18.5)");
-            Assert.Equal(section, w.SettingsShown!.Section);
-            Assert.Equal(trail, string.Join(" › ", w.SettingsShown.Trail));
-            Assert.True(w.IsPaused);
-            pad.B();
-            pad.B();
-            Assert.Null(w.SettingsShown);
-            Assert.True(PadMenu.IsOpen(w));
-            Done(w);
-        }, default);
-
         // Every row that moved into a submenu still opens its window, over the game, which stays paused under it.
         [Theory]
         [MemberData(nameof(InGameWindows))]
@@ -528,15 +490,15 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Equal(frames, MistressGame.TotalFrames(w));
             }
             Step(MainWindow.GameOptionsMenu, () => Enter(w, pad, MainWindow.GameOptionsMenu));
-            Step(MainWindow.DisplayMenu, () => Enter(w, pad, MainWindow.DisplayMenu));
-            Step("Console Settings", () => Enter(w, pad, "Console Settings"));
+            Step(MainWindow.ControllersMenu, () => Enter(w, pad, MainWindow.ControllersMenu));
+            Step("Bindings", () => Enter(w, pad, "Bindings"));
             Assert.NotNull(w.SettingsShown);
             Step("Settings closed", () => pad.B());
             Step("Settings closed", () => pad.B());
             Assert.Null(w.SettingsShown);
             Assert.Equal(1, w.GetControl<Control>("PadMenuPanel").Opacity);
-            Assert.EndsWith(MainWindow.DisplayMenu, PadMenu.DeskTitle(w));
-            Assert.Equal("Console Settings", PadMenu.SelectedLine(w));
+            Assert.EndsWith(MainWindow.ControllersMenu, PadMenu.PageTitle(w));
+            Assert.Equal("Bindings", PadMenu.SelectedLine(w));
             Step("B to Game Options", () => pad.B());
             Step("B to the first page", () => pad.B());
             for (int i = 0; i < 20; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(5); }
@@ -552,15 +514,17 @@ namespace EmuSen.WiseMan.Mistress
             var said = new List<string?>();
             w.GetControl<TextBlock>("StatusText").PropertyChanged += (_, e) => { if (e.Property == TextBlock.TextProperty) said.Add(e.NewValue as string); };
             Chord(pad);
-            PadMenu.Choose(w, pad, "Console Settings", exact: true);
+            PadMenu.Choose(w, pad, MainWindow.GameOptionsMenu, exact: true);
+            PadMenu.Choose(w, pad, MainWindow.ControllersMenu, exact: true);
+            PadMenu.Choose(w, pad, "Bindings", exact: true);
             Assert.NotNull(w.SettingsShown);
             Assert.True(w.IsPaused);
             w.CloseSettings();
             Dispatcher.UIThread.RunJobs();
             Assert.True(PadMenu.IsOpen(w), "closing Settings comes back to the card");
-            string Title() => w.GetControl<TextBlock>("PadMenuTitle").Text ?? "";
-            Assert.EndsWith(MainWindow.DisplayMenu, Title());
-            Assert.Equal("Console Settings", PadMenu.Lines(w)[PadMenu.Selected(w)]);
+            string Title() => PadMenu.PageTitle(w);
+            Assert.EndsWith(MainWindow.ControllersMenu, Title());
+            Assert.Equal("Bindings", PadMenu.Lines(w)[PadMenu.Selected(w)]);
             // B climbs one level at a time and the game stays paused until the card closes (EmuSen_Interface.md §2.9).
             pad.B();
             Assert.True(PadMenu.IsOpen(w) && w.IsPaused);

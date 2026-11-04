@@ -493,7 +493,10 @@ namespace EmuSen.Mistress.Views
                 case "variant": ApplyAppearance(); break;
                 case "textsize" or "motion": ApplyAccessibility(); RefreshSettings(); break;
                 case "statusbar" or "messages" or "fps": ApplyStatusBar(); break;
-                case "volume": SetVolume(_appSettings.Volume); break;
+                case "volume" or "mute":
+                    if (_hudVolume is not null && Math.Abs(_hudVolume.Value - _appSettings.Volume) > 1e-9) _hudVolume.Value = _appSettings.Volume;
+                    else SetVolume(_appSettings.Volume);
+                    break;
                 case "deadzone": _gamepad.StickDeadzone = _appSettings.StickDeadzone; break;
                 case "stickdpad": _gamepad.AnalogStickAsDpad = _appSettings.AnalogStickAsDpad; break;
                 case "mirror": ApplyKeys(); break;
@@ -526,6 +529,8 @@ namespace EmuSen.Mistress.Views
             switch (door)
             {
                 case SettingsScreen.DoorCheats: ShowActiveCheats(); break;
+                case SettingsScreen.DoorBindings: ShowSettings(SettingsScreen.Controllers, "bindings"); break;
+                case SettingsScreen.DoorSwapPlayers: SwapPlayers(); break;
                 case SettingsScreen.DoorThemes: ShowThemeSettings(); break;
                 case SettingsScreen.DoorScraper: ShowScraper(); break;
                 case SettingsScreen.DoorSignIn: _ = SignInFromSettingsAsync(); break;
@@ -679,6 +684,39 @@ namespace EmuSen.Mistress.Views
         }
 
         bool ISettingsHost.SystemReducesMotion => SystemReducesMotion();
+
+        string? ISettingsHost.RunningGame => _session is not null ? _currentRomPath : null;
+
+        GameCrop? ISettingsHost.CropOf(string game) => _records.Crop(game);
+
+        // The crop a game's console draws it with, as the four percentages its own starts from.
+        GameCrop ISettingsHost.ConsoleCropOf(string game) =>
+            GameCrop.From(ConsoleCrop.CropFor(_graphics, IsRunning(game) ? _activeConsole : RuntimeCatalog.ConsoleForRom(game) ?? _activeConsole));
+
+        // A running game follows each edge as it is changed, as it follows its console's.
+        void ISettingsHost.SetCrop(string game, GameCrop? crop)
+        {
+            if (crop is { } own) _records.SetCrop(game, own);
+            else _records.ClearCrop(game);
+            if (IsRunning(game)) ApplyScreenFilter(_activeConsole);
+        }
+
+        bool ISettingsHost.FullScreen { get => IsFullScreen; set => IsFullScreen = value; }
+
+        // Under Steam's Game Mode the device's quick menu holds the volume (EmuSen_Interface.md §6).
+        bool ISettingsHost.VolumeOnDevice => _bigScreenForced;
+
+        // The running game's own profile, null where it follows the console's; set, the game plays with it at once (EmuSen_Input.md §10.5).
+        string? ISettingsHost.GameProfile
+        {
+            get => _session?.GamePath is { } game ? _gamepadBindings.GameProfile(_activeConsole, GameProfileKey(game)) : null;
+            set
+            {
+                if (_session?.GamePath is not { } game || !_gamepadBindings.SetGameProfile(_activeConsole, GameProfileKey(game), value)) return;
+                _gamepadBindings.Save();
+                ApplyBindings(_activeConsole, game);
+            }
+        }
 
         // Text size and reduced motion through LunaP's own switches, so every layout and movement of the kit follows at once (EmuSen_BigPicture.md §52.8).
         private void ApplyAccessibility()

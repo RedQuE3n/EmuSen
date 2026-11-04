@@ -205,46 +205,66 @@ namespace EmuSen.Mistress.Pages
             }
             if (HasTelevision(console))
             {
-                IReadOnlyList<string> filters = ScreenFilters.NamesFor(console);
                 string current = _host.Graphics.Value(console, GraphicsKeys.ScreenFilter) ?? ScreenFilters.None;
-                rows.Add(Choice("crtprofile", "CRT profile", $"The television the {name}'s picture is drawn on.", ["Off", .. CrtTiers], ScreenTier(console), i =>
-                {
-                    _host.Graphics.SetValue(console, GraphicsKeys.ScreenFilter, i == 0 ? ScreenFilters.None : CrtFilter.Name);
-                    if (i > 0) _host.Graphics.SetParameter(console, CrtFilter.Name, "quality", (i - 1).ToString(CultureInfo.InvariantCulture));
-                    _host.SaveGraphics(console);
-                }));
+                rows.Add(CrtProfileRow(console));
                 rows.Add(Opens("consolelevers", "Shader levers", $"The CRT's own levers for the {name}.", null, () => Push("Shader levers", () => LeverRows(console), "consolelevers"), enabled: current == CrtFilter.Name));
-                string said = "The whole picture, the part a television showed, or a crop of your own.";
-                Setting crop = GraphicsChoice(console, "consolecrop", "Crop overscan", said, GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan, GraphicsKeys.CustomCrop], ["Whole picture", "TV overscan", "Custom crop"]);
-                rows.Add(_host.RunningCropNote(console) is { } note ? crop with { Pane = () => new ScreenPane([new SettingsLine(said), new SettingsLine(note, SettingsTone.Attention)]) } : crop);
-                if (_host.Graphics.Value(console, GraphicsKeys.Overscan) == GraphicsKeys.CustomCrop)
-                    rows.Add(Opens("consolecropedges", "Custom crop", "How much of the picture's width or height to hide at each edge.",
-                        string.Join(" · ", ConsoleCrop.Edges.Select((e, i) => $"{e.Label} {ConsoleCrop.Text(CropEdge(console, i))}%")), () => Push("Custom crop", () => CropRows(console), "consolecropedges")));
+                rows.AddRange(CropOverscanRows(console));
             }
-            else
-            {
-                IReadOnlyList<string> filters = ScreenFilters.NamesFor(console);
-                rows.Add(Choice("screen", "Screen", $"The {name}'s screen as it is drawn.", filters, filters.ToList().IndexOf(_host.Graphics.Value(console, GraphicsKeys.ScreenFilter) ?? ScreenFilters.None),
-                    i => { _host.Graphics.SetValue(console, GraphicsKeys.ScreenFilter, filters[i]); _host.SaveGraphics(console); }));
-            }
-            rows.Add(GraphicsChoice(console, "consoleshape", "Picture shape", "The screen the console was made for, or each pixel square.", GraphicsKeys.PictureShape, [GraphicsKeys.TvShape, GraphicsKeys.SquarePixels], ["TV shape", "Square pixels"]));
+            else rows.Add(ScreenRow(console));
+            rows.Add(PictureShapeRow(console));
             rows.Add(Act("reset", "Reset this console", $"Every {name} setting back to its default: the engine's rows, its picture and its shaders; a row the engine holds stays.", () => ResetConsole(console)));
             return rows;
         }
 
         private double CropEdge(string console, int edge) => ConsoleCrop.ParsePercent(_host.Graphics.Value(console, ConsoleCrop.Edges[edge].Key)) ?? 0;
 
-        // A custom crop's four edges, each stepped by a tenth of a percent or typed, held to what one edge may hide - see EmuSen_Settings_Reference.md §4.99.
-        private IReadOnlyList<Setting> CropRows(string console) => ConsoleCrop.Edges.Select((edge, i) =>
-        {
-            double now = CropEdge(console, i);
-            void Store(double percent)
+        // The television a console's picture is drawn on: off, or the CRT at one of its tiers.
+        private Setting CrtProfileRow(string console) =>
+            Choice("crtprofile", "CRT profile", $"The television the {NameOf(console)}'s picture is drawn on.", ["Off", .. CrtTiers], ScreenTier(console), i =>
             {
-                _host.Graphics.SetValue(console, edge.Key, ConsoleCrop.Text(Math.Clamp(Math.Round(percent, 1), 0, ConsoleCrop.MostPercent)));
+                _host.Graphics.SetValue(console, GraphicsKeys.ScreenFilter, i == 0 ? ScreenFilters.None : CrtFilter.Name);
+                if (i > 0) _host.Graphics.SetParameter(console, CrtFilter.Name, "quality", (i - 1).ToString(CultureInfo.InvariantCulture));
                 _host.SaveGraphics(console);
-            }
+            });
+
+        // A console with no television: its screen's filter.
+        private Setting ScreenRow(string console)
+        {
+            IReadOnlyList<string> filters = ScreenFilters.NamesFor(console);
+            return Choice("screen", "Screen", $"The {NameOf(console)}'s screen as it is drawn.", filters, filters.ToList().IndexOf(_host.Graphics.Value(console, GraphicsKeys.ScreenFilter) ?? ScreenFilters.None),
+                i => { _host.Graphics.SetValue(console, GraphicsKeys.ScreenFilter, filters[i]); _host.SaveGraphics(console); });
+        }
+
+        private Setting PictureShapeRow(string console) =>
+            GraphicsChoice(console, "consoleshape", "Picture shape", "The screen the console was made for, or each pixel square.", GraphicsKeys.PictureShape, [GraphicsKeys.TvShape, GraphicsKeys.SquarePixels], ["TV shape", "Square pixels"]);
+
+        // Crop overscan, with the running game's own crop named in its pane, and Custom crop's page while it is chosen.
+        private IEnumerable<Setting> CropOverscanRows(string console)
+        {
+            string said = "The whole picture, the part a television showed, or a crop of your own.";
+            Setting crop = GraphicsChoice(console, "consolecrop", "Crop overscan", said, GraphicsKeys.Overscan, [GraphicsKeys.NoOverscan, GraphicsKeys.TvOverscan, GraphicsKeys.CustomCrop], ["Whole picture", "TV overscan", "Custom crop"]);
+            yield return _host.RunningCropNote(console) is { } note ? crop with { Pane = () => new ScreenPane([new SettingsLine(said), new SettingsLine(note, SettingsTone.Attention)]) } : crop;
+            if (_host.Graphics.Value(console, GraphicsKeys.Overscan) == GraphicsKeys.CustomCrop)
+                yield return Opens("consolecropedges", "Custom crop", "How much of the picture's width or height to hide at each edge.", EdgesText(i => CropEdge(console, i)),
+                    () => Push("Custom crop", () => CropRows(console), "consolecropedges"));
+        }
+
+        private static string EdgesText(Func<int, double> edge) => string.Join(" · ", ConsoleCrop.Edges.Select((e, i) => $"{e.Label} {ConsoleCrop.Text(edge(i))}%"));
+
+        // A custom crop's four edges, each stepped by a tenth of a percent or typed, held to what one edge may hide - see EmuSen_Settings_Reference.md §4.99.
+        private IReadOnlyList<Setting> CropRows(string console) => EdgeRows("crop:", i => CropEdge(console, i), (i, percent) =>
+        {
+            _host.Graphics.SetValue(console, ConsoleCrop.Edges[i].Key, ConsoleCrop.Text(percent));
+            _host.SaveGraphics(console);
+        });
+
+        // Four edges read and stored through the functions given, the console's custom crop's and a game's own alike.
+        private IReadOnlyList<Setting> EdgeRows(string prefix, Func<int, double> read, Action<int, double> store) => ConsoleCrop.Edges.Select((edge, i) =>
+        {
+            double now = read(i);
+            void Store(double percent) => store(i, Math.Clamp(Math.Round(percent, 1), 0, ConsoleCrop.MostPercent));
             string most = ConsoleCrop.Text(ConsoleCrop.MostPercent);
-            return new Setting(new PageRow("crop:" + edge.Key, edge.Label) { Kind = PageRowKind.Steps, Status = $"{ConsoleCrop.Text(now)}%", Sentence = $"The part of the picture hidden at its {edge.Label.ToLowerInvariant()} edge, 0 to {most}%; A types it." },
+            return new Setting(new PageRow(prefix + edge.Key, edge.Label) { Kind = PageRowKind.Steps, Status = $"{ConsoleCrop.Text(now)}%", Sentence = $"The part of the picture hidden at its {edge.Label.ToLowerInvariant()} edge, 0 to {most}%; A types it." },
                 null, by => Store(now + by * 0.1),
                 () => _host.Ask("Custom crop", $"{edge.Label}, percent of the picture, 0 to {most}", ConsoleCrop.Text(now), text => { if (ConsoleCrop.ParsePercent(text) is { } typed) Store(typed); }));
         }).ToList();
@@ -393,24 +413,32 @@ namespace EmuSen.Mistress.Pages
                 $"{Count(card.Cards.Count(c => !c.GamesOwn), CardMedium.InText(card.Noun), CardMedium.InText(card.Noun) + "s")} in the drawer");
         }
 
-        private IReadOnlyList<Setting> CardRows(string console)
+        // Settings' Memory cards: the mode, the slots, the drawer's cards, the saves on them and a new card.
+        private IReadOnlyList<Setting> CardRows(string console) => MediaOf(console).SelectMany(medium => (Setting?[])
+        [
+            CardModeRow(console, medium), .. CardSlotRows(console, medium, game: false), CardsRow(medium),
+            Opens("saves:" + medium.Id, "Saves on the cards", "Each card's saves, copied, moved or deleted.", null, () => _host.Open(DoorCardSaves + console)),
+            Asks("new:" + medium.Id, $"New {CardMedium.InText(medium.Noun)}", "A blank card in the drawer, named for you.", () => _host.NewCard(console)),
+        ]).OfType<Setting>().ToList();
+
+        private Setting? CardModeRow(string console, CardMedium medium) =>
+            _host.Schema(console).FirstOrDefault(r => r.Key == medium.ModeKey) is { } mode ? SchemaRow(console, mode, "mode:" + medium.Id, "Mode") with { Pane = () => CardsPane(console) } : null;
+
+        // A slot's card, stepped through the drawer's; in a game the pane says it goes in when the game next starts, as no running core takes a card swap yet.
+        private IEnumerable<Setting> CardSlotRows(string console, CardMedium medium, bool game)
         {
-            var rows = new List<Setting>();
-            foreach (CardMedium medium in MediaOf(console))
+            foreach (var (slot, i) in medium.Slots.Select((s, i) => (s, i)))
             {
-                if (_host.Schema(console).FirstOrDefault(r => r.Key == medium.ModeKey) is { } mode)
-                    rows.Add(SchemaRow(console, mode, "mode:" + medium.Id, "Mode") with { Pane = () => CardsPane(console) });
-                foreach (var (slot, i) in medium.Slots.Select((s, i) => (s, i)))
-                    rows.Add(_host.Schema(console).FirstOrDefault(r => r.Key == SlotKey(medium, i)) is { } slotRow
-                        ? SchemaRow(console, slotRow, $"slot:{medium.Id}:{i}", slot.Label)
-                        : Act($"slot:{medium.Id}:{i}", slot.Label, "The card in this slot when a game starts.", () => { }, slot.Name));
-                CardMedium m = medium;
-                rows.Add(Opens("cards:" + medium.Id, "Cards", "Every card in the drawer, and the saves on each.", Count(medium.Cards.Count(c => !c.GamesOwn), "card", "cards"),
-                    () => Push($"{m.Title}s", () => m.Cards.Where(c => !c.GamesOwn).Select(c => Act("card:" + c.Path, c.Label, "A card in the drawer.", () => { }, c.HeldBy is { } held ? $"in {held}" : null)).ToList(), "cards:" + m.Id)));
-                rows.Add(Opens("saves:" + medium.Id, "Saves on the cards", "Each card's saves, copied, moved or deleted.", null, () => _host.Open(DoorCardSaves + console)));
-                rows.Add(Asks("new:" + medium.Id, $"New {CardMedium.InText(medium.Noun)}", "A blank card in the drawer, named for you.", () => _host.NewCard(console)));
+                Setting row = _host.Schema(console).FirstOrDefault(r => r.Key == SlotKey(medium, i)) is { } slotRow
+                    ? SchemaRow(console, slotRow, $"slot:{medium.Id}:{i}", slot.Label)
+                    : Act($"slot:{medium.Id}:{i}", slot.Label, "The card in this slot when a game starts.", () => { }, slot.Name);
+                string label = slot.Label;
+                yield return game ? row with { Pane = () => Said($"{row.Row.Status ?? slot.Name} is in {label}.", "Left and Right choose another card; it goes in when the game next starts.") } : row;
             }
-            return rows;
         }
+
+        private Setting CardsRow(CardMedium medium) =>
+            Opens("cards:" + medium.Id, "Cards", "Every card in the drawer, and the saves on each.", Count(medium.Cards.Count(c => !c.GamesOwn), "card", "cards"),
+                () => Push($"{medium.Title}s", () => medium.Cards.Where(c => !c.GamesOwn).Select(c => Act("card:" + c.Path, c.Label, "A card in the drawer.", () => { }, c.HeldBy is { } held ? $"in {held}" : null)).ToList(), "cards:" + medium.Id));
     }
 }

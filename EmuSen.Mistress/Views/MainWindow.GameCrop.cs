@@ -1,5 +1,5 @@
 using System;
-using EmuSen.LunaP.Windowing;
+using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Library;
 using EmuSen.Serenity;
 
@@ -8,11 +8,7 @@ namespace EmuSen.Mistress.Views
     // A crop kept with one game, which replaces its console's while that game runs - see EmuSen_Settings_Reference.md §4.100.
     public partial class MainWindow
     {
-        public const string CropThisGame = "Crop This Game...";
-
-        private GameCropWindow? _gameCrop;
-
-        public GameCropWindow? GameCropShown => _gameCrop;
+        public const string CropThisGame = "This game's crop";
 
         // Offered for a game of a console that has an overscan to replace.
         private static bool CropOffered(string path) => EmuSen.Mistress.Library.RuntimeCatalog.ConsoleForRom(path) is { } console && ConsoleCrop.HasOverscan(console);
@@ -26,21 +22,17 @@ namespace EmuSen.Mistress.Views
         // Graphics Settings' line under a console's Overscan row while the game running on it has a crop of its own.
         private string? RunningGameCropNote(string console) =>
             _session is not null && console == _activeConsole && ConsoleCrop.HasOverscan(console) && _currentRomPath is string rom && _records.Crop(rom) is not null
-                ? $"{RunningGameTitle()} has a crop of its own, which replaces this while it runs. Change it with {CropThisGame.TrimEnd('.')} in the game's options."
+                ? $"{RunningGameTitle()} has a crop of its own, which replaces this while it runs. Change it with {CropThisGame} in the Pause Card's Display."
                 : null;
 
+        // The game's page's door: Settings at the game's own crop, the switch and the four edges of Settings' one description (EmuSen_Interface.md §20).
         private void ShowGameCrop(string path, string title)
         {
-            if (_gameCrop is not null || (IsRunning(path) ? _activeConsole : EmuSen.Mistress.Library.RuntimeCatalog.ConsoleForRom(path)) is not { } console) return;
-            var window = _gameCrop = new GameCropWindow(title, console, ConsoleCrop.CropFor(_graphics, console), _records.Crop(path), crop =>
-            {
-                if (crop is { } own) _records.SetCrop(path, own);
-                else _records.ClearCrop(path);
-                // A running game follows each number as it is typed, as it follows its console's.
-                if (IsRunning(path)) ApplyScreenFilter(_activeConsole);
-            });
-            window.Closed += (_, _) => { if (ReferenceEquals(_gameCrop, window)) _gameCrop = null; };
-            _ = SheetLayer.Show(window, this);
+            if ((IsRunning(path) ? _activeConsole : EmuSen.Mistress.Library.RuntimeCatalog.ConsoleForRom(path)) is null) return;
+            ShowSettings(SettingsScreen.Display);
+            if (_settings is not { } view) return;
+            view.Model.OpenGameCrop(path, title);
+            RefreshSettings();
         }
     }
 }

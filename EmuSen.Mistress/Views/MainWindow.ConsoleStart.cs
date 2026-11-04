@@ -74,12 +74,12 @@ namespace EmuSen.Mistress.Views
             return new LunaAction("Start _Console") { Submenu = new LunaMenu("Start _Console", items), IsEnabled = items.Length > 0 };
         }
 
-        // Emulation > Insert Disc and Eject Disc, for a running machine with a drive.
+        // Emulation > Change Disc, which opens the Pause Card on its page, and Eject Disc, for a running machine with a drive.
         private LunaAction? _insertDisc, _ejectDisc;
 
         private LunaAction[] DriveMenuItems()
         {
-            _insertDisc ??= new LunaAction("_Insert Disc...", () => InsertDiscAsync().Logged("mistress", "InsertDiscAsync"));
+            _insertDisc ??= new LunaAction("_Change Disc...", OpenChangeDisc);
             _ejectDisc ??= new LunaAction("E_ject Disc", EjectDisc);
             return [_insertDisc, _ejectDisc];
         }
@@ -127,32 +127,15 @@ namespace EmuSen.Mistress.Views
             return _allScan.Entries.Where(e => e.Shelf is not null && shelves.Contains(e.Shelf) && Listed(e)).Select(e => (DisplayTitle(e), e.FullPath)).OrderBy(d => d.Item1, StringComparer.CurrentCultureIgnoreCase).ToArray();
         }
 
-        // The chooser, paused under it; a game chosen goes in, Browse asks for any file on the desktop.
-        private async Task InsertDiscAsync()
+        // Any file on the desktop, from the Change Disc page; the card stays open, the game paused, until a file is chosen.
+        private async Task PickDiscFileAsync()
         {
-            if (DriveEngine is null) return;
-            bool wasRunning = !IsPaused;
-            PauseEmulation();
-            try
-            {
-                string? chosen = await PresentInsertDisc(_activeConsole, DiscsFor(_activeConsole), browse: !_bigScreen);
-                if (chosen == InsertDiscWindow.Browse)
-                {
-                    string? startIn = Directory.Exists(_appSettings.RomDirectory) ? _appSettings.RomDirectory : null;
-                    var types = new[] { new FilePickerFileType("Disc images") { Patterns = new[] { "*.cue", "*.chd", "*.iso", "*.bin", "*.m3u", "*.zip" } }, new FilePickerFileType("All files") { Patterns = new[] { "*" } } };
-                    chosen = await Dialogs.PickFileAsync(this, "Insert Disc", types, startIn) is { } file ? file.Path : null;
-                }
-                if (chosen is not null) InsertDisc(chosen);
-            }
-            finally
-            {
-                if (wasRunning) ResumeEmulation();
-            }
+            string? startIn = Directory.Exists(_appSettings.RomDirectory) ? _appSettings.RomDirectory : null;
+            var types = new[] { new FilePickerFileType("Disc images") { Patterns = new[] { "*.cue", "*.chd", "*.iso", "*.bin", "*.m3u", "*.zip" } }, new FilePickerFileType("All files") { Patterns = new[] { "*" } } };
+            if (await Dialogs.PickFileAsync(this, "Change Disc", types, startIn) is not { } file || DriveEngine is null) return;
+            ClosePadMenu();
+            InsertDisc(file.Path);
         }
-
-        // The chooser as a sheet in a big-screen session, a LunaP window on the desktop; the path chosen, Browse, or null.
-        internal Task<string?> PresentInsertDisc(string console, IReadOnlyList<(string Title, string Path)> discs, bool browse) =>
-            SheetLayer.ShowDialog<string?>(new InsertDiscWindow(console, discs, browse), this);
 
         // On the emulation thread, as Change Disc is, so no frame runs half through the change.
         private void InsertDisc(string path) => OnDrive(session => session.InsertDisc(path), $"{Path.GetFileNameWithoutExtension(path)} is in", "Insert Disc");
@@ -177,14 +160,6 @@ namespace EmuSen.Mistress.Views
                 }
                 Dispatcher.UIThread.Post(() => { StatusText.Text = status; Notify(status); SyncMenuState(); });
             });
-        }
-
-        // The game menu's rows for a machine with a drive.
-        private IEnumerable<PadMenuEntry> DriveRows()
-        {
-            if (DriveEngine is not { } session) yield break;
-            yield return new PadMenuEntry(() => "Insert Disc...", () => InsertDiscAsync().Logged("mistress", "InsertDiscAsync")) { Opens = true };
-            if (session.Discs.Index >= 0) yield return new PadMenuEntry(() => "Eject Disc", EjectDisc);
         }
     }
 }

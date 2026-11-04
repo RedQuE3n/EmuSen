@@ -82,6 +82,13 @@ namespace EmuSen.Mistress.Pages
         void SaveKeys();
         PadFacts PadNow(string console);
         bool SystemReducesMotion { get; }
+        string? GameProfile { get; set; }
+        string? RunningGame { get; }
+        GameCrop? CropOf(string game);
+        GameCrop ConsoleCropOf(string game);
+        void SetCrop(string game, GameCrop? crop);
+        bool FullScreen { get; set; }
+        bool VolumeOnDevice { get; }
     }
 
     // Settings, as one plain description for both forms: six sections, the pages under their rows, each row's value, sentence and pane, and what each press does - see EmuSen_BigPicture.md §52 and EmuSen_Interface.md §2.7.

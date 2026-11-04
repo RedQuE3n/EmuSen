@@ -17,12 +17,10 @@ namespace EmuSen.Crystal.Services
         public int Status { get; } = status;
     }
 
-    // The file services in Rust, emusen-firmware, emusen-savemedia and emusen-cheats with emusen-net for the download, chosen together by EMUSEN_SERVICES_NATIVE; each caller keeps its C# as failover - see EmuSen_Backend.md §15, §16.
+    // The file services, emusen-firmware, emusen-savemedia and emusen-cheats with emusen-net for the download, reached through the platform library; there is no C# twin since 2026-11-04 - see EmuSen_Backend.md §15, §16, §40.1.
     public static unsafe class ServiceLibrary
     {
-        public const string Variable = "EMUSEN_SERVICES_NATIVE";
-
-        // Every export the services take; a library without one leaves all three on the C#.
+        // Every export the services take; a library without one gives no service, and Report says why.
         public static readonly IReadOnlyList<string> Exports = new[]
         {
             "emusen_firmware_folders", "emusen_firmware_find", "emusen_firmware_locate", "emusen_firmware_install",
@@ -35,25 +33,19 @@ namespace EmuSen.Crystal.Services
 
         private static readonly Lazy<(bool Ready, string Report)> Loaded = new(() =>
         {
+            RetiredSwitch.Note("EMUSEN_SERVICES_NATIVE", "the file services");
             if (!PlatformLibrary.Available) return (false, PlatformLibrary.Report);
             if (Exports.FirstOrDefault(e => PlatformLibrary.Export(e) == 0) is { } missing) return (false, $"{PlatformLibrary.FileName} has no {missing}");
             return (true, $"{PlatformLibrary.FileName}, the file services");
         });
 
-        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => Loaded.Value, PlatformSwitch.Announce, "the file services");
-
-        // State 2: the library unless the variable is 0; a library absent, refused or without an export leaves the C#, said once.
-        public static bool Active => Chosen.Active;
-
-        // The library itself, whichever the switch chose: what the parity classes call.
+        // Whether the library gives the services; without it every call throws with Report's words.
         public static bool Ready => Loaded.Value.Ready;
 
         public static string Report => Loaded.Value.Report;
 
-        // Whether a text crosses as it is: a path with a NUL or a lone surrogate stays on the C#, which refuses it as it always did.
-        public static bool Takes(string? text) => PlatformText.Crosses(text, listed: true);
-
-        public static bool TakesAll(IEnumerable<string?> texts) => texts.All(Takes);
+        // A text as it crosses, each lone surrogate as U+FFFD.
+        public static string Mend(string text) => PlatformText.Mend(text);
 
         // A request written as one JSON object.
         public static byte[] Request(Action<Utf8JsonWriter> write)
@@ -71,17 +63,18 @@ namespace EmuSen.Crystal.Services
         public static void WriteList(Utf8JsonWriter w, string name, IEnumerable<string> items)
         {
             w.WriteStartArray(name);
-            foreach (string item in items) w.WriteStringValue(item);
+            foreach (string item in items) w.WriteStringValue(Mend(item));
             w.WriteEndArray();
         }
 
         public static void WriteText(Utf8JsonWriter w, string name, string? text)
         {
-            if (text is null) w.WriteNull(name); else w.WriteString(name, text);
+            if (text is null) w.WriteNull(name); else w.WriteString(name, Mend(text));
         }
 
         private static nint Export(string name)
         {
+            if (!Ready) throw new InvalidOperationException($"The file services are emusen_platform's, and it gives none: {Report}");
             nint export = PlatformLibrary.Export(name);
             return export != 0 ? export : throw new InvalidOperationException($"{PlatformLibrary.FileName} has no {name}");
         }

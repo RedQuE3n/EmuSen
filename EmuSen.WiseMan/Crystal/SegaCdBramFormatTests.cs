@@ -2,13 +2,14 @@ using System.Buffers.Binary;
 using System.Text;
 using EmuSen.Crystal.SaveMedia;
 using EmuSen.Crystal.Systems.Genesis;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
     // The Sega CD's backup RAM format module against Nephrite_Bram.md: the block code's four vectors, a format, placement, counts and a delete as the page observed them.
     public class SegaCdBramFormatTests
     {
-        private static readonly SegaCdBramFormat Bram = SegaCdBramFormat.BackupRam;
+        private static readonly ISaveMediumFormat Bram = SegaCdBramFormat.BackupRam;
 
         private static byte[] Hex(string text) => text.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(b => Convert.ToByte(b, 16)).ToArray();
 
@@ -30,14 +31,14 @@ namespace EmuSen.WiseMan.Crystal
         private static byte[] Code(byte[] u)
         {
             byte[] stored = new byte[64];
-            SegaCdBramFormat.BlockCode.Encode(u, stored);
+            SegaCdBlockCode.Encode(u, stored);
             return stored;
         }
 
         // An image holding one file at block 1, laid out by §5 and §7 by hand rather than by the module.
         private static byte[] WithOne(string name, int blocks, byte fill)
         {
-            byte[] image = Bram.Format();
+            byte[] image = Bram.Format()!;
             image.AsSpan(64, 64 * blocks).Fill(fill);
             Code(new byte[16].Concat(Entry(name, 1, blocks)).ToArray()).CopyTo(image, 0x1F80);
             for (int k = 0; k < 4; k++)
@@ -65,17 +66,17 @@ namespace EmuSen.WiseMan.Crystal
             byte[] stored = Hex(Fox), u = new byte[32];
             for (int i = 0; i < 8; i++) stored[i] ^= 0xFC;
             for (int i = 8; i < 64; i++) stored[i] ^= 3;
-            Assert.Equal(1, SegaCdBramFormat.BlockCode.Decode(stored, u));
+            Assert.Equal(1, SegaCdBlockCode.Decode(stored, u));
             Assert.Equal("THE QUICK BROWN FOX JUMPS OVER T", Encoding.ASCII.GetString(u));
             stored[9] ^= 0xFC;
-            Assert.Equal(-1, SegaCdBramFormat.BlockCode.Decode(stored, u));
+            Assert.Equal(-1, SegaCdBlockCode.Decode(stored, u));
         }
 
         // §4: zeros, then the footer, with S/64 - 3 free, for the internal RAM and Sega's cartridge.
         [Fact]
         public void A_format_is_the_footer_over_zeros()
         {
-            byte[] image = Bram.Format();
+            byte[] image = Bram.Format()!;
             Assert.Equal(0x2000, image.Length);
             Assert.All(image[..0x1FC0], b => Assert.Equal(0, b));
             Assert.Equal(Hex("5F 5F 5F 5F 5F 5F 5F 5F 5F 5F 5F 00 00 00 00 40 00 7D 00 7D 00 7D 00 7D 00 00 00 00 00 00 00 00"), image[0x1FC0..0x1FE0]);
@@ -90,7 +91,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void Copies_place_and_count_as_the_bios_writes()
         {
-            byte[] image = Bram.Format();
+            byte[] image = Bram.Format()!;
             var free = new List<int>();
             foreach (string n in new[] { "WD_LUNAR2_3", "WD_LUNAR2_2", "WD_LUNAR2_1", "WD_LUNAR2_0" })
             {
@@ -111,7 +112,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_delete_moves_the_later_files_down()
         {
-            byte[] image = Bram.Format();
+            byte[] image = Bram.Format()!;
             image = Bram.Copy(WithOne("AAAA_______", 3, 0xAA), "AAAA_______", image).Image!;
             image = Bram.Copy(WithOne("BBBB_______", 2, 0xBB), "BBBB_______", image).Image!;
             image = Bram.Copy(WithOne("CCCC_______", 4, 0xCC), "CCCC_______", image).Image!;
@@ -122,7 +123,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.All(gone[(4 * 64)..(10 * 64)], b => Assert.Equal(0xCC, b));
             Assert.Equal(block1, gone[0x1F40..0x1F80]);
             byte[] u = new byte[32];
-            SegaCdBramFormat.BlockCode.Decode(gone.AsSpan(0x1F80, 64), u);
+            SegaCdBlockCode.Decode(gone.AsSpan(0x1F80, 64), u);
             Assert.Equal(Entry("CCCC_______", 4, 4).Concat(Entry("AAAA_______", 1, 3)), u);
             Assert.NotNull(Bram.Delete(gone, "BBBB_______").Refusal);
         }
@@ -133,7 +134,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             byte[] odd = WithOne("ODD________", 2, 0x0D);
             byte[] u = new byte[32];
-            SegaCdBramFormat.BlockCode.Decode(odd.AsSpan(0x1F80, 64), u);
+            SegaCdBlockCode.Decode(odd.AsSpan(0x1F80, 64), u);
             u[16 + 3] = 0xC1;
             Code(u).CopyTo(odd, 0x1F80);
             Assert.Equal("ODD?_______", Bram.Read(odd).Saves.Single().Id);
@@ -141,7 +142,7 @@ namespace EmuSen.WiseMan.Crystal
             image = Bram.Copy(odd, "ODD?_______", image).Image!;
             image = Bram.Copy(WithOne("CCCC_______", 1, 0xCC), "CCCC_______", image).Image!;
             image = Bram.Delete(image, "AAAA_______").Image!;
-            SegaCdBramFormat.BlockCode.Decode(image.AsSpan(0x1F80, 64), u);
+            SegaCdBlockCode.Decode(image.AsSpan(0x1F80, 64), u);
             Assert.Equal(0xC1, u[16 + 3]);
         }
     }

@@ -178,7 +178,8 @@ fn registers_of(v: Option<&Value>) -> Vec<(String, u64)> {
 
 /// One view of a system's, for a request as JSON: `system` (nes, snes, gb, gbc, n64, sms or sg1000), `view`, `spaces` (each name, size and
 /// side_effects) and what the view takes (`space`, `address`, `bpp`, `register`, `name`, `registers` as name and value, and
-/// since interface 21 `units`, each a name, a kind and its registers, and `mutes`).
+/// since interface 21 `units`, each a name, a kind and its registers, and `mutes`; since 2026-11-04 `unit`, one unit for
+/// `unit_label`, and the NES's unit views, which the C# had answered alone).
 /// `tape` is the bytes the host has read for this request so far, in the order asked. The answer is an envelope: the
 /// JSON's length in four little-endian bytes, the JSON, then any bytes. The JSON is `need` (each space, address and
 /// length, read in order and the call made again with them appended) or the view's answer. ABSENT for a system with no
@@ -206,13 +207,12 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         _ => Vec::new(),
     };
     let registers = registers_of(r.get("registers"));
+    let unit_of = |u: &Value| Unit { name: text(u.get("name")).unwrap_or_default().to_string(), kind: text(u.get("kind")).unwrap_or_default().to_string(), registers: registers_of(u.get("registers")) };
     let units: Vec<Unit> = match r.get("units") {
-        Some(Value::Array(items)) => items
-            .iter()
-            .map(|u| Unit { name: text(u.get("name")).unwrap_or_default().to_string(), kind: text(u.get("kind")).unwrap_or_default().to_string(), registers: registers_of(u.get("registers")) })
-            .collect(),
+        Some(Value::Array(items)) => items.iter().map(unit_of).collect(),
         _ => Vec::new(),
     };
+    let unit = r.get("unit").map(unit_of);
     let space = text(r.get("space")).unwrap_or_default().to_string();
     let address = int(r.get("address")).unwrap_or(0) as i32;
     let bpp = int(r.get("bpp")).unwrap_or(0) as i32;
@@ -232,6 +232,12 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("nes", "tilemap_entry") => textual(Some(nes::views::decode_tilemap_entry(m, &space, address))),
         ("nes", "tile_pixels") => pixels(nes::views::decode_tile_pixels(m, &space, address, bpp)),
         ("nes", "vectors") => (vectors_json(&nes::views::VECTORS), Vec::new()),
+        ("nes", "max_sprites") => (object(vec![("max_sprites", Value::number(nes::views::MAX_SPRITES))]), Vec::new()),
+        ("nes", "sprites") => (sprites_json(nes::views::sprites(m, &units)), Vec::new()),
+        ("nes", "audio_channels") => (channels_json(nes::views::audio_channels(&units, int(r.get("mutes")).unwrap_or(0) as u32)), Vec::new()),
+        ("nes", "physical") => (physical_json(nes::views::resolve_physical(address)), Vec::new()),
+        ("nes", "summary") => textual(nes::views::summary(&registers, m, &units)),
+        ("nes", "unit_label") => textual(unit.as_ref().and_then(nes::views::unit_label)),
         ("snes", "palettes") => (palettes_json(snes::views::palettes(m)), Vec::new()),
         ("snes", "palette_swatch") => picture(snes::views::palette_swatch(m)),
         ("snes", "tile_sheet") => picture(snes::views::tile_sheet(m)),
@@ -341,6 +347,7 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("sms" | "sg1000", "audio_channels") => (channels_json(sms::views::audio_channels(&units, int(r.get("mutes")).unwrap_or(0) as u32)), Vec::new()),
         ("sms" | "sg1000", "physical") => (physical_json(sms::views::resolve_physical(address, m, &units)), Vec::new()),
         ("sms" | "sg1000", "summary") => textual(sms::views::summary(&registers, m, &units)),
+        ("sms" | "sg1000", "unit_label") => textual(unit.as_ref().and_then(sms::views::unit_label)),
         _ => return fail(status::ABSENT, format!("{system} has no view {view}")) as i64,
     };
     let out_bytes = if memory.wants.is_empty() {

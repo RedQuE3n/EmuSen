@@ -12,7 +12,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // emusen-savemedia held to the C# card manager on generated trees of every medium's cards, free and held, each script of operations run on a copy of the tree by each half, outcomes and files compared - see EmuSen_Backend.md §15.2.
+    // emusen-savemedia held to the C# card manager's answers, recorded as goldens before it was deleted, on generated trees of every medium's cards, free and held, outcomes and files compared - see EmuSen_Backend.md §15.2, §40.1.
     [Collection(TestCollections.ProcessGlobals)]
     public class SaveMediaManagerParityTests : IDisposable
     {
@@ -41,13 +41,13 @@ namespace EmuSen.WiseMan.Crystal
 
         private static byte[] RandomImage(Random r, string extension) => extension switch
         {
-            ".mcr" => SaveMediaParityTests.RandomCard(r, PsxCardFormat.Instance.Managed),
+            ".mcr" => SaveMediaParityTests.RandomCard(r, PsxCardFormat.Instance),
             ".mpk" => SaveMediaParityTests.RandomPak(r),
-            ".brm" => SaveMediaParityTests.RandomBram(r, SegaCdBramFormat.BackupRam.Managed),
-            _ => SaveMediaParityTests.RandomBram(r, SegaCdBramFormat.RamCartridge.Managed),
+            ".brm" => SaveMediaParityTests.RandomBram(r, SegaCdBramFormat.BackupRam),
+            _ => SaveMediaParityTests.RandomBram(r, SegaCdBramFormat.RamCartridge),
         };
 
-        // One generated tree written twice, under C# and under Rust: cards of every medium, blank and empty files, a file that will not open, a folder named as a card, a file of no medium.
+        // One generated tree: cards of every medium, blank and empty files, a file that will not open, a folder named as a card, a file of no medium.
         private static void Plant(Random r, string tree)
         {
             var plan = new Random(r.Next());
@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.Crystal
                         default: File.WriteAllBytes(path, RandomImage(plan, ext)); break;
                     }
                 }
-            File.WriteAllBytes(Path.Combine(tree, "Locked.mcr"), PsxCardFormat.Instance.Managed.Format()!);
+            File.WriteAllBytes(Path.Combine(tree, "Locked.mcr"), PsxCardFormat.Instance.Format()!);
             File.SetUnixFileMode(Path.Combine(tree, "Locked.mcr"), UnixFileMode.None);
             Directory.CreateDirectory(Path.Combine(tree, "Folder.mpk"));
             File.WriteAllText(Path.Combine(tree, "notes.txt"), "not a card");
@@ -112,33 +112,29 @@ namespace EmuSen.WiseMan.Crystal
             _golden = new ParityGolden("CardManagerScripts");
             for (int seed = 1; seed <= 60; seed++)
             {
-                string managed = Path.Combine(_root, $"m{seed}"), native = Path.Combine(_root, $"n{seed}");
-                Plant(new Random(seed), managed);
-                Plant(new Random(seed), native);
+                string tree = Path.Combine(_root, $"m{seed}");
+                Plant(new Random(seed), tree);
                 var r = new Random(seed * 7919);
                 for (int step = 0; step < 30; step++)
                 {
                     string ext = Extensions[r.Next(Extensions.Length)];
                     string Name() => r.Next(14) switch { 0 => "notes.txt", 1 => "Locked.mcr", 2 => "Folder.mpk", 3 => "New" + ext, 4 => Path.Combine("Deep", "D" + ext), 5 => "A" + Extensions[r.Next(4)], _ => $"{"ABC"[r.Next(3)]}{ext}" };
                     string a = Name(), b = Name(), c = Name();
-                    var listing = SaveMediaManager.Managed.Open(Path.Combine(managed, a))?.Listing;
+                    var listing = SaveMediaManager.Open(Path.Combine(tree, a))?.Listing;
                     string save = r.Next(6) switch { 0 => "1", 1 => "2", 2 => "99", 3 => "NOSUCH", _ => listing is { Saves.Count: > 0 } ? listing.Saves[r.Next(listing.Saves.Count)].Id : "1" };
                     int op = r.Next(8), hold = r.Next(6);
                     string heldName = r.Next(2) == 0 ? a : b;
-                    string M(string n) => Path.Combine(managed, n);
-                    string N(string n) => Path.Combine(native, n);
-                    string shownManaged, shownNative;
-                    using (Hold(hold, M(heldName)))
-                        shownManaged = Run(op, M, a, b, c, save, managedHalf: true);
-                    using (Hold(hold, N(heldName)))
-                        shownNative = Run(op, N, a, b, c, save, managedHalf: false);
+                    string At(string n) => Path.Combine(tree, n);
+                    string shown;
+                    using (Hold(hold, At(heldName)))
+                        shown = Run(op, At, a, b, c, save);
                     string what = $"seed {seed} step {step}: op {op} {a} {b} {c} '{save}' hold {hold} on {heldName}\n";
-                    Same(what + shownManaged, what + shownNative);
-                    Same(what + Tree(managed), what + Tree(native));
+                    Same(what + shown);
+                    Same(what + Tree(tree));
                     ops++;
-                    done += shownManaged.StartsWith("True", StringComparison.Ordinal) ? 1 : 0;
-                    refused += shownManaged.StartsWith("False", StringComparison.Ordinal) ? 1 : 0;
-                    held += shownManaged.Contains("in use by", StringComparison.Ordinal) ? 1 : 0;
+                    done += shown.StartsWith("True", StringComparison.Ordinal) ? 1 : 0;
+                    refused += shown.StartsWith("False", StringComparison.Ordinal) ? 1 : 0;
+                    held += shown.Contains("in use by", StringComparison.Ordinal) ? 1 : 0;
                 }
             }
             _golden.Check(3600);
@@ -146,47 +142,39 @@ namespace EmuSen.WiseMan.Crystal
             Assert.True(done > 150 && refused > 300 && held > 40, $"{ops} operations: {done} done, {refused} refused, {held} held");
         }
 
-        private static string Run(int op, Func<string, string> at, string a, string b, string c, string save, bool managedHalf) => op switch
+        private static string Run(int op, Func<string, string> at, string a, string b, string c, string save) => op switch
         {
-            0 => Shown(() => managedHalf ? SaveMediaManager.Managed.Open(at(a)) : SaveMediaNative.Open(at(a))),
-            1 => Shown(() => managedHalf ? SaveMediaManager.Managed.CopySave(at(a), save, at(b)) : SaveMediaNative.CopySave(at(a), save, at(b))),
-            2 => Shown(() => managedHalf ? SaveMediaManager.Managed.MoveSave(at(a), save, at(b)) : SaveMediaNative.MoveSave(at(a), save, at(b))),
-            3 => Shown(() => managedHalf ? SaveMediaManager.Managed.DeleteSave(at(a), save) : SaveMediaNative.DeleteSave(at(a), save)),
-            4 => Shown(() => managedHalf ? SaveMediaManager.Managed.Import(at(a), [at(b), at(c), at(a)]) : SaveMediaNative.Import(at(a), [at(b), at(c), at(a)])),
-            5 => Shown(() => managedHalf ? SaveMediaManager.Managed.New(at(a)) : SaveMediaNative.New(at(a))),
-            6 => Shown(() => managedHalf ? SaveMediaManager.Managed.Duplicate(at(a), at(b)) : SaveMediaNative.Duplicate(at(a), at(b))),
-            _ => Shown(() => managedHalf ? SaveMediaManager.Managed.Rename(at(a), at(b)) : SaveMediaNative.Rename(at(a), at(b))),
+            0 => Shown(() => SaveMediaManager.Open(at(a))),
+            1 => Shown(() => SaveMediaManager.CopySave(at(a), save, at(b))),
+            2 => Shown(() => SaveMediaManager.MoveSave(at(a), save, at(b))),
+            3 => Shown(() => SaveMediaManager.DeleteSave(at(a), save)),
+            4 => Shown(() => SaveMediaManager.Import(at(a), [at(b), at(c), at(a)])),
+            5 => Shown(() => SaveMediaManager.New(at(a))),
+            6 => Shown(() => SaveMediaManager.Duplicate(at(a), at(b))),
+            _ => Shown(() => SaveMediaManager.Rename(at(a), at(b))),
         };
 
         private ParityGolden? _golden;
 
-        private void Same(string managed, string native)
-        {
-            _golden?.Add(_golden.Count.ToString(), managed.Replace(_root, "<root>", StringComparison.Ordinal));
-            if (managed != native) Assert.Fail($"C#:\n{managed}\nRust:\n{native}");
-        }
+        private void Same(string answer) => _golden!.Add(_golden.Count.ToString(), answer.Replace(_root, "<root>", StringComparison.Ordinal));
 
-        // An import whose saves exactly fill the card is taken, and one a block over is refused whole, by both halves.
+        // An import whose saves exactly fill the card is taken, and one a block over is refused whole.
         [Fact]
         public void An_import_that_exactly_fills_the_card_and_one_a_block_over_do_the_same()
         {
             foreach (int extra in new[] { 0, 1 })
             {
-                var shown = new List<string>();
-                foreach (string half in new[] { "m", "n" })
-                {
-                    string dir = Directory.CreateDirectory(Path.Combine(_root, $"fill{extra}", half)).FullName;
-                    byte[] Card(params (string Name, int[] Blocks)[] saves) => saves.Aggregate(PsxCardFormat.Instance.Managed.Format()!, (card, s) => SaveMediaManagerTests.WithSave(card, s.Name, s.Name, s.Blocks, 0x5A));
-                    File.WriteAllBytes(Path.Combine(dir, "To.mcr"), Card(extra == 0 ? [] : [("BASLUS-00001HELD", new[] { 0 })]));
-                    File.WriteAllBytes(Path.Combine(dir, "One.mcr"), Card(("BASLUS-00002BIG", Enumerable.Range(0, 8).ToArray())));
-                    File.WriteAllBytes(Path.Combine(dir, "Two.mcr"), Card(("BASLUS-00003REST", Enumerable.Range(0, 7).ToArray())));
-                    string[] from = [Path.Combine(dir, "One.mcr"), Path.Combine(dir, "Two.mcr")];
-                    shown.Add(Shown(() => half == "m" ? SaveMediaManager.Managed.Import(Path.Combine(dir, "To.mcr"), from) : SaveMediaNative.Import(Path.Combine(dir, "To.mcr"), from)) + "\n" + Tree(dir));
-                }
+                string dir = Directory.CreateDirectory(Path.Combine(_root, $"fill{extra}", "m")).FullName;
+                byte[] Card(params (string Name, int[] Blocks)[] saves) => saves.Aggregate(PsxCardFormat.Instance.Format()!, (card, s) => SaveMediaManagerTests.WithSave(card, s.Name, s.Name, s.Blocks, 0x5A));
+                File.WriteAllBytes(Path.Combine(dir, "To.mcr"), Card(extra == 0 ? [] : [("BASLUS-00001HELD", new[] { 0 })]));
+                File.WriteAllBytes(Path.Combine(dir, "One.mcr"), Card(("BASLUS-00002BIG", Enumerable.Range(0, 8).ToArray())));
+                File.WriteAllBytes(Path.Combine(dir, "Two.mcr"), Card(("BASLUS-00003REST", Enumerable.Range(0, 7).ToArray())));
+                string[] from = [Path.Combine(dir, "One.mcr"), Path.Combine(dir, "Two.mcr")];
+                string shown = Shown(() => SaveMediaManager.Import(Path.Combine(dir, "To.mcr"), from)) + "\n" + Tree(dir);
                 _golden = new ParityGolden($"CardManagerFill{extra}");
-                Same(shown[0].Replace(Path.Combine(_root, $"fill{extra}", "m"), "<dir>", StringComparison.Ordinal), shown[1].Replace(Path.Combine(_root, $"fill{extra}", "n"), "<dir>", StringComparison.Ordinal));
+                Same(shown.Replace(dir, "<dir>", StringComparison.Ordinal));
                 _golden.Check(1);
-                Assert.StartsWith(extra == 0 ? "True" : "False", shown[0]);
+                Assert.StartsWith(extra == 0 ? "True" : "False", shown);
             }
         }
 
@@ -209,35 +197,29 @@ namespace EmuSen.WiseMan.Crystal
                 return string.Join("\n", log);
             }
             Assert.True(MediumLockNative.Takes(n, "x"));
-            Same(Sequence(MediumLock.Managed.TryTake, MediumLock.Managed.HolderOf, m), Sequence(MediumLock.TryTake, MediumLock.HolderOf, n));
+            Assert.Equal(Sequence(MediumLock.Managed.TryTake, MediumLock.Managed.HolderOf, m), Sequence(MediumLock.TryTake, MediumLock.HolderOf, n));
             using (MediumLock.Managed.TryTake(m, "Game A"))
                 Assert.Equal(("another program", true), (MediumLock.HolderOf(m), MediumLock.TryTake(m, "x") is null));
             using (MediumLock.TryTake(n, "Game A"))
                 Assert.Equal(("another program", true), (MediumLock.Managed.HolderOf(n), MediumLock.Managed.TryTake(n, "x") is null));
         }
 
-        // What a read or a write that failed reports is the same from both halves.
+        // What a read or a write that failed reports, as the C# reported it.
         [Fact]
         public void A_card_that_will_not_read_is_reported_alike()
         {
-            foreach (string half in new[] { "m", "n" })
-            {
-                string dir = Directory.CreateDirectory(Path.Combine(_root, "said", half)).FullName;
-                File.WriteAllBytes(Path.Combine(dir, "Locked.mcr"), PsxCardFormat.Instance.Managed.Format()!);
-                File.SetUnixFileMode(Path.Combine(dir, "Locked.mcr"), UnixFileMode.None);
-            }
-            string Said(string half, Func<string, MediaOutcome> op)
+            string dir = Directory.CreateDirectory(Path.Combine(_root, "said", "m")).FullName;
+            File.WriteAllBytes(Path.Combine(dir, "Locked.mcr"), PsxCardFormat.Instance.Format()!);
+            File.SetUnixFileMode(Path.Combine(dir, "Locked.mcr"), UnixFileMode.None);
+            string Said(Func<string, MediaOutcome> op)
             {
                 _said.Clear();
-                string dir = Path.Combine(_root, "said", half);
                 string shown = Shown(() => op(dir));
                 return shown + "\n" + string.Join("\n", _said).Replace(dir, "<dir>", StringComparison.Ordinal);
             }
             _golden = new ParityGolden("CardManagerUnreadable");
-            Same(Said("m", d => SaveMediaManager.Managed.CopySave(Path.Combine(d, "Locked.mcr"), "1", Path.Combine(d, "B.mcr"))),
-                Said("n", d => SaveMediaNative.CopySave(Path.Combine(d, "Locked.mcr"), "1", Path.Combine(d, "B.mcr"))));
-            Same(Said("m", d => SaveMediaManager.Managed.Duplicate(Path.Combine(d, "Locked.mcr"), Path.Combine(d, "C.mcr"))),
-                Said("n", d => SaveMediaNative.Duplicate(Path.Combine(d, "Locked.mcr"), Path.Combine(d, "C.mcr"))));
+            Same(Said(d => SaveMediaManager.CopySave(Path.Combine(d, "Locked.mcr"), "1", Path.Combine(d, "B.mcr"))));
+            Same(Said(d => SaveMediaManager.Duplicate(Path.Combine(d, "Locked.mcr"), Path.Combine(d, "C.mcr"))));
             _golden.Check(2);
         }
     }

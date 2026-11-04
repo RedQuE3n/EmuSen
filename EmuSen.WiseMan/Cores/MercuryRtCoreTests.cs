@@ -159,8 +159,8 @@ namespace EmuSen.WiseMan.Cores
             cheats.AddRomPatch(0x0000, 0x02, null, "first");
             cheats.AddRomPatch(0x8000, 0x03, null, "above the range");
             const string GameGenie = "00A-17B-C49";
-            var (gg, value) = GbGameGenieCodec.Decode(GameGenie);
-            cheats.AddRomPatch(gg, value, GbGameGenieCodec.DecodeCompare(GameGenie), "nine");
+            var (gg, value) = GameBoyCheatCodecs.GameGenie().Decode(GameGenie);
+            cheats.AddRomPatch(gg, value, GameBoyCheatCodecs.GameGenie().DecodeCompare(GameGenie), "nine");
             int disabled = cheats.AddRomPatch(0x2200, 0x77, null, "off");
             cheats.SetEnabled(disabled, false);
 

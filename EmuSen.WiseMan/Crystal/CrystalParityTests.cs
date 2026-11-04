@@ -280,7 +280,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             string saves = DataStore.Saves;
             if (Directory.Exists(saves)) Directory.Delete(saves, recursive: true);
-            byte[] Card(params (string Name, int[] Blocks)[] saves) => saves.Aggregate(EmuSen.Crystal.Systems.Psx.PsxCardFormat.Instance.Managed.Format()!, (card, s) => SaveMediaManagerTests.WithSave(card, s.Name, s.Name, s.Blocks, 0x5A));
+            byte[] Card(params (string Name, int[] Blocks)[] saves) => saves.Aggregate(EmuSen.Crystal.Systems.Psx.PsxCardFormat.Instance.Format()!, (card, s) => SaveMediaManagerTests.WithSave(card, s.Name, s.Name, s.Blocks, 0x5A));
             string psx = Path.Combine(saves, "PlayStation"), drawer = Path.Combine(psx, "Cards");
             Directory.CreateDirectory(drawer);
             File.WriteAllBytes(Path.Combine(drawer, "Card 1.mcr"), Card(("BASLUS-00001ONE", new[] { 0 })));

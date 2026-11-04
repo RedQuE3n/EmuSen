@@ -60,13 +60,15 @@ namespace EmuSen.WiseMan.Properties
                 catch (ArgumentException) { return true; }
             }, iter: 500);
 
+        private static readonly EmuSen.Crystal.Cheats.ICheatCodeCodec Par = EmuSen.Crystal.Systems.Snes.SnesSystem.ProActionReplay(), Genie = EmuSen.Crystal.Systems.Snes.SnesSystem.GameGenie();
+
         // The one that matters: CanDecode must never promise a decode that then throws.
         [Fact]
         public void CanDecode_never_promises_a_decode_that_throws() =>
             Gen.String.Sample(code =>
             {
-                if (SnesCheatFormats.IsProActionReplay(code)) SnesCheatFormats.DecodeProActionReplay(code);
-                if (SnesCheatFormats.IsGameGenie(code)) SnesCheatFormats.DecodeGameGenie(code);
+                if (Par.CanDecode(code)) Par.Decode(code);
+                if (Genie.CanDecode(code)) Genie.Decode(code);
                 return true;
             }, iter: 5000);
 
@@ -75,8 +77,8 @@ namespace EmuSen.WiseMan.Properties
             Gen.Select(Gen.Char["0123456789abcdefABCDEF"].Array[8], Gen.Char["DF4709156BC8A23E"].Array[8])
                .Sample((ar, gg) =>
                {
-                   (int arAddr, _) = SnesCheatFormats.DecodeProActionReplay(new string(ar));
-                   (int ggAddr, _) = SnesCheatFormats.DecodeGameGenie(new string(gg));
+                   (int arAddr, _) = Par.Decode(new string(ar));
+                   (int ggAddr, _) = Genie.Decode(new string(gg));
                    return arAddr >= 0 && arAddr <= 0xFFFFFF && ggAddr >= 0 && ggAddr <= 0xFFFFFF;
                }, iter: 2000);
 
@@ -86,7 +88,7 @@ namespace EmuSen.WiseMan.Properties
                .Sample((code, at, sep) =>
                {
                    string plain = new(code);
-                   return SnesCheatFormats.DecodeProActionReplay(plain.Insert(at, sep.ToString())) == SnesCheatFormats.DecodeProActionReplay(plain);
+                   return Par.Decode(plain.Insert(at, sep.ToString())) == Par.Decode(plain);
                }, iter: 2000);
     }
 }

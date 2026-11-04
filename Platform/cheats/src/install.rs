@@ -1,12 +1,12 @@
-//! Installing a downloaded cheat archive, the C# `CheatDatabaseInstaller.Install`: every `.cht` entry of a zip written
-//! under the target folder, as `ZipArchiveEntry.ExtractToFile` writes it (its Unix mode on a file it makes, its time as
-//! local time), anything else or anything that would land outside the folder counted as skipped. The archive is read
-//! here only where it is plainly a zip of stored and deflated entries; anything else is the C#'s, which reads every
-//! form .NET does and refuses the rest as it always has. The download is not here (EmuSen_Backend.md SR9).
+//! Installing a downloaded cheat archive, as the C# `CheatDatabaseInstaller.Install` did: every `.cht` entry of a zip
+//! written under the target folder, as `ZipArchiveEntry.ExtractToFile` writes it (its Unix mode on a file it makes, its
+//! time as local time), anything else or anything that would land outside the folder counted as skipped. The archive is
+//! read by Galaxia's `dotnet_zip`, every form .NET's reader reads, and one it refuses is refused in its words. The
+//! download is not here (EmuSen_Backend.md SR9). See EmuSen_Backend.md §15.3 and §40.1.
 
 use emusen_dotnet::text::ends_with_ignore_case;
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use std::io::{Read, Write};
+use std::io::Write;
 
 /// What an install did: entries written, and entries passed over or that failed.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -15,48 +15,29 @@ pub struct Installed {
     pub skipped: usize,
 }
 
-/// Why the archive is left to the C#: a form not read here, or a fault the C# throws on.
+/// What .NET threw where it stopped an install: the exception's name and its words.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Thrown {
+    pub exception: &'static str,
+    pub words: String,
+}
+
+/// Why nothing was installed: the archive refused whole, or the target not made.
 #[derive(Debug)]
 pub enum Refusal {
-    Unsupported(String),
+    Thrown(Thrown),
     Io(std::io::Error),
 }
 
-use emusen_galaxia::archive::ZipEntry as Entry;
+use emusen_galaxia::dotnet_zip::{self as zip, Archive, Entry};
 
-fn u16_at(b: &[u8], at: usize) -> Option<u16> {
-    b.get(at..at + 2).map(|s| u16::from_le_bytes([s[0], s[1]]))
-}
-
-fn u32_at(b: &[u8], at: usize) -> Option<u32> {
-    b.get(at..at + 4).map(|s| u32::from_le_bytes([s[0], s[1], s[2], s[3]]))
-}
-
-/// The central directory, read whole by Galaxia's reader before anything is written; a form .NET reads differently or
-/// refuses is left to it.
-fn entries(zip: &[u8]) -> Result<Vec<Entry>, Refusal> {
-    emusen_galaxia::archive::entries_in(zip).map_err(Refusal::Unsupported)
-}
+/// `Path.GetFullPath`'s refusal of a path holding a NUL, which the C# met before its catch.
+const NUL_IN_PATH: &str = "Null character in path. (Parameter 'path')";
 
 /// `ZipArchiveEntry.Name`: after the last `/`, and for an entry made on Windows also after `\` or `:`.
 fn name_of(e: &Entry) -> &str {
     let cut = if e.platform == 0 { e.full_name.rfind(['\\', '/', ':']) } else { e.full_name.rfind('/') };
     cut.map_or(&e.full_name, |at| &e.full_name[at + 1..])
-}
-
-/// The entry's bytes from its local header on; a damaged header or stream is the `InvalidDataException` .NET throws.
-fn contents(zip: &[u8], e: &Entry) -> Option<Vec<u8>> {
-    if u32_at(zip, e.offset) != Some(0x0403_4B50) {
-        return None;
-    }
-    let data = e.offset + 30 + u16_at(zip, e.offset + 26)? as usize + u16_at(zip, e.offset + 28)? as usize;
-    let raw = zip.get(data..data.checked_add(e.compressed)?)?;
-    if e.method == 0 {
-        return Some(raw.to_vec());
-    }
-    let mut out = Vec::with_capacity(e.length.min(1 << 24) as usize);
-    flate2::read::DeflateDecoder::new(raw).read_to_end(&mut out).ok()?;
-    Some(out)
 }
 
 /// `ZipHelper.DosTimeToDateTime`: the fields, or 1 January 1980 for a time that is none.
@@ -105,7 +86,7 @@ fn local_seconds((y, mo, d, h, mi, s): (i32, i32, i32, i32, i32, i32)) -> i64 {
 }
 
 /// `ExtractToFile(destination, overwrite: true)`: made with the entry's mode or truncated once locked, written, its time set.
-fn extract(zip: &[u8], e: &Entry, destination: &str) -> Result<(), ()> {
+fn extract(archive: &Archive, e: &Entry, destination: &str) -> Result<(), ()> {
     let mut options = std::fs::OpenOptions::new();
     options.write(true).create(true).truncate(false);
     #[cfg(unix)]
@@ -119,22 +100,23 @@ fn extract(zip: &[u8], e: &Entry, destination: &str) -> Result<(), ()> {
     let mut file = options.open(destination).map_err(|_| ())?;
     file.try_lock().map_err(|_| ())?;
     file.set_len(0).map_err(|_| ())?;
-    let bytes = contents(zip, e).ok_or(())?;
+    let bytes = archive.read(e).map_err(|_| ())?;
     file.write_all(&bytes).map_err(|_| ())?;
     let when = std::time::UNIX_EPOCH.checked_add(std::time::Duration::from_secs(local_seconds(dos_fields(e.dos_time)).max(0) as u64)).ok_or(())?;
     let _ = file.set_modified(when);
     Ok(())
 }
 
-/// `CheatDatabaseInstaller.Install`, the target made first; a refusal leaves the archive to the C#, having written nothing.
-pub fn install(zip: &[u8], target: &str) -> Result<Installed, Refusal> {
-    let list = entries(zip)?;
+/// `CheatDatabaseInstaller.Install`: the target made first, then the archive opened, as .NET's reader opens it; what
+/// .NET threw part way, after the entries before it were written, comes back beside the counts.
+pub fn install(bytes: &[u8], target: &str) -> Result<(Installed, Option<Thrown>), Refusal> {
     std::fs::create_dir_all(target).map_err(Refusal::Io)?;
+    let archive = zip::open(bytes).map_err(|words| Refusal::Thrown(Thrown { exception: "InvalidDataException", words: words.to_string() }))?;
     let full = path::full_path(target);
     let root = path::trim_ending_separator(Style::HOST, &full).to_string();
     let inside = format!("{root}{}", Style::HOST.separator());
     let mut done = Installed::default();
-    for e in &list {
+    for e in &archive.entries {
         let name = name_of(e);
         if e.full_name.ends_with('/') || (e.length == 0 && name.is_empty()) {
             continue;
@@ -143,19 +125,22 @@ pub fn install(zip: &[u8], target: &str) -> Result<Installed, Refusal> {
             done.skipped += 1;
             continue;
         }
+        if e.full_name.contains('\0') {
+            return Ok((done, Some(Thrown { exception: "ArgumentException", words: NUL_IN_PATH.to_string() })));
+        }
         let destination = path::full_path(&path::combine(Style::HOST, &root, &e.full_name));
         if !destination.starts_with(&inside) {
             done.skipped += 1;
             continue;
         }
         let folder = path::directory_name(Style::HOST, &destination).unwrap_or_default();
-        if std::fs::create_dir_all(&folder).is_ok() && extract(zip, e, &destination).is_ok() {
+        if std::fs::create_dir_all(&folder).is_ok() && extract(&archive, e, &destination).is_ok() {
             done.installed += 1;
         } else {
             done.skipped += 1;
         }
     }
-    Ok(done)
+    Ok((done, None))
 }
 
 #[cfg(test)]
@@ -170,7 +155,10 @@ mod tests {
     }
 
     #[test]
-    fn what_is_not_a_plain_zip_is_left_to_the_csharp() {
-        assert!(matches!(install(&[0u8; 100], "/nonexistent-emusen"), Err(Refusal::Unsupported(_))));
+    fn what_is_not_a_zip_is_refused_in_dotnets_words() {
+        let target = std::env::temp_dir().join(format!("emusen-install-{}", std::process::id()));
+        let refused = install(&[0u8; 100], target.to_str().unwrap());
+        let _ = std::fs::remove_dir_all(&target);
+        assert!(matches!(refused, Err(Refusal::Thrown(Thrown { exception: "InvalidDataException", ref words })) if words == zip::words::END_NOT_FOUND));
     }
 }

@@ -7,12 +7,10 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Crystal.Systems
 {
-    // The systems table's facade: each pack's entry from emusen-systems' data, its code kept from the C# literal, which EMUSEN_SYSTEMS_NATIVE=0 keeps whole - see EmuSen_Backend.md §12.
+    // The systems table, emusen-systems' data read through the platform library, each pack's entry with the library's code; there is no C# table since 2026-11-04 - see EmuSen_Backend.md §12, §40.1.
     public static unsafe class SystemTable
     {
-        public const string Variable = "EMUSEN_SYSTEMS_NATIVE";
-
-        // Each data property of SystemEntry and the key the table gives it, which the parity class holds to both sides.
+        // Each data property of SystemEntry and the key the table gives it, which the schema test holds to both.
         public static readonly IReadOnlyList<(string Property, string Key)> Keys = new[]
         {
             (nameof(SystemEntry.Id), "id"), (nameof(SystemEntry.Name), "name"), (nameof(SystemEntry.Console), "console"),
@@ -34,49 +32,46 @@ namespace EmuSen.Crystal.Systems
 
         private static readonly Lazy<Table> Loaded = new(Load);
 
-        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => (Loaded.Value.Rows is not null, Loaded.Value.Report), PlatformSwitch.Announce, "the systems table");
-
-        // State 2: the library's table unless the variable is 0; a library that is absent, refused or unreadable leaves the literals, said once.
-        public static bool Active => Chosen.Active;
-
-        // The library's table itself, whichever the switch chose: what the parity class reads.
+        // Whether the library gave a table; without one no pack can be made, and the reason is Report.
         public static bool Ready => Loaded.Value.Rows is not null;
 
         public static string Report => Loaded.Value.Report;
 
-        // The table's rows in its order, each with no code; empty where the library is not in use.
-        public static IReadOnlyList<SystemEntry> Rows => Loaded.Value.Rows ?? Array.Empty<SystemEntry>();
+        private static Table Required => Loaded.Value.Rows is not null ? Loaded.Value : throw new InvalidOperationException($"The systems table is emusen_platform's, and it gave none: {Loaded.Value.Report}");
 
-        // Each row's cheat space by its system's id; empty where the library is not in use.
-        public static IReadOnlyDictionary<string, string?> CheatSpaces => Loaded.Value.CheatSpaces ?? new Dictionary<string, string?>();
+        // The table's rows in its order, each with no code.
+        public static IReadOnlyList<SystemEntry> Rows => Required.Rows!;
 
-        // Each row's byte order by its system's id, big, little or null; empty where the library is not in use.
-        public static IReadOnlyDictionary<string, string?> ByteOrders => Loaded.Value.ByteOrders ?? new Dictionary<string, string?>();
+        // Each row's cheat space by its system's id.
+        public static IReadOnlyDictionary<string, string?> CheatSpaces => Required.CheatSpaces!;
 
-        // Each row's firmware note by its system's id, null for most; empty where the library is not in use - see EmuSen_Cores.md §4.10.
-        public static IReadOnlyDictionary<string, string?> FirmwareNotes => Loaded.Value.FirmwareNotes ?? new Dictionary<string, string?>();
+        // Each row's byte order by its system's id, big, little or null.
+        public static IReadOnlyDictionary<string, string?> ByteOrders => Required.ByteOrders!;
 
-        // Every row's media in the table's order; empty where the library is not in use.
-        public static IReadOnlyList<RowMedium> Media => Loaded.Value.Media ?? Array.Empty<RowMedium>();
+        // Each row's firmware note by its system's id, null for most - see EmuSen_Cores.md §4.10.
+        public static IReadOnlyDictionary<string, string?> FirmwareNotes => Required.FirmwareNotes!;
 
-        // A pack's medium: the table's words for the literal's id with the literal's extension and format, or the literal itself under the switch's 0 or with no such medium.
-        public static SaveMedia.SaveMediumEntry Medium(SaveMedia.SaveMediumEntry literal) =>
-            Active && Media.FirstOrDefault(m => m.Id == literal.Id) is { } row ? literal with { Title = row.Title, Noun = row.Noun } : literal;
+        // Every row's media in the table's order.
+        public static IReadOnlyList<RowMedium> Media => Required.Media!;
 
         // The text the library gave, for a test that reads it as a person would.
-        public static string? Json => Loaded.Value.Json;
+        public static string Json => Required.Json!;
 
-        // A pack's entry: the table's row for the literal's id with the library's code where the literal has code of that kind, or the literal itself under the switch's 0 or with no such row.
-        public static SystemEntry Entry(SystemEntry literal) => Active && FromTable(literal) is { } row
-            ? row with { OpenVgdbBytes = file => SystemCode.OpenVgdbBytes(literal.Id, file), Recognise = literal.Recognise is null ? null : probe => SystemCode.Recognise(literal.Id, probe) }
-            : literal;
+        // A pack's entry: the table's row for the id with the library's OpenVGDB rule, and its recogniser where the library has one for the system.
+        public static SystemEntry Entry(string id)
+        {
+            SystemEntry row = Rows.FirstOrDefault(r => r.Id == id) ?? throw new InvalidOperationException($"The systems table has no row {id}");
+            bool recognises = SystemCode.Code.Any(c => c.Id == id && c.Recognises);
+            return row with { OpenVgdbBytes = file => SystemCode.OpenVgdbBytes(id, file), Recognise = recognises ? probe => SystemCode.Recognise(id, probe) : null };
+        }
 
-        // The table's row for the literal's id with its recogniser and OpenVGDB bytes, whichever the switch chose; null where there is none.
-        public static SystemEntry? FromTable(SystemEntry literal) =>
-            Rows.FirstOrDefault(r => r.Id == literal.Id) is { } row ? row with { OpenVgdbBytes = literal.OpenVgdbBytes, Recognise = literal.Recognise } : null;
+        // A pack's medium: the table's words for the id, the extension and the format module being the pack's (F28).
+        public static SaveMedia.SaveMediumEntry Medium(string id, string extension, SaveMedia.ISaveMediumFormat format) =>
+            Media.FirstOrDefault(m => m.Id == id) is { } row ? new SaveMedia.SaveMediumEntry(id, row.Title, row.Noun, extension, format) : throw new InvalidOperationException($"The systems table names no medium {id}");
 
         private static Table Load()
         {
+            RetiredSwitch.Note("EMUSEN_SYSTEMS_NATIVE", "the systems table");
             try
             {
                 if (!PlatformLibrary.Available) return new(null, PlatformLibrary.Report, null);
@@ -97,7 +92,7 @@ namespace EmuSen.Crystal.Systems
             }
         }
 
-        // The rows as entries; a code part stands in as the identity until FromTable gives a literal's.
+        // The rows as entries; a code part stands in as the identity until Entry gives the library's.
         private static IReadOnlyList<SystemEntry> Parse(string json)
         {
             using var document = JsonDocument.Parse(json);

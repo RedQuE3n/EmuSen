@@ -71,11 +71,13 @@ namespace EmuSen.WiseMan.Cores
 
         private static Memory Rdram(MarsRtTestCore core) => new(core);
 
-        private static CheatWrite Only(string code) => Assert.Single(N64GameSharkCodec.DecodeWrites(code));
+        private static readonly ICheatCodeCodec N64Gs = N64System.GameShark();
+
+        private static CheatWrite Only(string code) => Assert.Single(N64Gs.DecodeWrites(code)!);
 
         private static void Apply(MarsRtTestCore core, string code)
         {
-            core.Cheats.AddCheat(CheatKind.RamPoke, N64GameSharkCodec.DecodeWrites(code), null, code);
+            core.Cheats.AddCheat(CheatKind.RamPoke, N64Gs.DecodeWrites(code)!, null, code);
             core.ApplyCheats();
         }
 
@@ -138,10 +140,10 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void The_four_tests_decode_to_their_comparison_and_width()
         {
-            var d0 = N64GameSharkCodec.DecodeWrites("D0000200 0005+80000100 0001")[0];
-            var d1 = N64GameSharkCodec.DecodeWrites("D1000200 1234+80000100 0001")[0];
-            var d2 = N64GameSharkCodec.DecodeWrites("D2000200 0005+80000100 0001")[0];
-            var d3 = N64GameSharkCodec.DecodeWrites("D3000200 1234+80000100 0001")[0];
+            var d0 = N64Gs.DecodeWrites("D0000200 0005+80000100 0001")![0];
+            var d1 = N64Gs.DecodeWrites("D1000200 1234+80000100 0001")![0];
+            var d2 = N64Gs.DecodeWrites("D2000200 0005+80000100 0001")![0];
+            var d3 = N64Gs.DecodeWrites("D3000200 1234+80000100 0001")![0];
 
             Assert.Equal((CheatWriteType.IfEqual, 1, 0x05u), (d0.Type, d0.EffectiveWidth, d0.Value));
             Assert.Equal((CheatWriteType.IfEqual, 2, 0x1234u), (d1.Type, d1.EffectiveWidth, d1.Value));
@@ -155,7 +157,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void An_8_bit_test_compares_its_low_byte()
         {
-            Assert.Equal(0x05u, N64GameSharkCodec.DecodeWrites("D0000200 0305+80000100 0001")[0].Value);
+            Assert.Equal(0x05u, N64Gs.DecodeWrites("D0000200 0305+80000100 0001")![0].Value);
         }
 
         [Fact]
@@ -190,7 +192,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("d0000200 5+80000100 1")]
         public void Lines_decode_in_order_whatever_separates_them(string code)
         {
-            var writes = N64GameSharkCodec.DecodeWrites(code);
+            var writes = N64Gs.DecodeWrites(code)!;
 
             Assert.Equal(2, writes.Count);
             Assert.Equal((CheatWriteType.IfEqual, 0x200, 0x05u), (writes[0].Type, writes[0].Address, writes[0].Value));
@@ -210,7 +212,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("", false)]
         public void Can_decode_answers_on_shape_alone(string code, bool expected)
         {
-            Assert.Equal(expected, N64GameSharkCodec.CanDecode(code));
+            Assert.Equal(expected, N64Gs.CanDecode(code));
         }
 
         // Every refusal names its reason, so no code is kept and silently never applied - see Mars_Cheats.md §4.
@@ -237,7 +239,7 @@ namespace EmuSen.WiseMan.Cores
         [InlineData("8033B21E", "isn't an N64 GameShark code")]
         public void A_code_mars_will_not_apply_is_refused_by_name(string code, string reason)
         {
-            var ex = Assert.Throws<FormatException>(() => N64GameSharkCodec.DecodeWrites(code));
+            var ex = Assert.Throws<FormatException>(() => N64Gs.DecodeWrites(code)!);
             Assert.Contains(reason, ex.Message);
         }
 
@@ -251,10 +253,10 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void Decode_answers_only_for_a_lone_8_bit_write()
         {
-            Assert.Equal((0x33B21E, (byte)0x08), N64GameSharkCodec.Decode("8033B21E 0008"));
-            Assert.Throws<FormatException>(() => N64GameSharkCodec.Decode("81000100 1234"));
-            Assert.Throws<FormatException>(() => N64GameSharkCodec.Decode("50000302 0001+80000100 0010"));
-            Assert.Throws<FormatException>(() => N64GameSharkCodec.Decode("D0000200 0005+80000100 0001"));
+            Assert.Equal((0x33B21E, (byte)0x08), N64Gs.Decode("8033B21E 0008"));
+            Assert.Throws<FormatException>(() => N64Gs.Decode("81000100 1234"));
+            Assert.Throws<FormatException>(() => N64Gs.Decode("50000302 0001+80000100 0010"));
+            Assert.Throws<FormatException>(() => N64Gs.Decode("D0000200 0005+80000100 0001"));
         }
 
         // --- On the machine ---
@@ -483,7 +485,7 @@ namespace EmuSen.WiseMan.Cores
             if (!File.Exists(path)) return;
 
             MarsRtTestCore core = Started(path);
-            core.Cheats.AddCheat(CheatKind.RamPoke, N64GameSharkCodec.DecodeWrites("803094DD 0064"), null, "Infinite lives");
+            core.Cheats.AddCheat(CheatKind.RamPoke, N64Gs.DecodeWrites("803094DD 0064")!, null, "Infinite lives");
 
             for (int frame = 0; frame < 4; frame++) core.RunFrame();
 

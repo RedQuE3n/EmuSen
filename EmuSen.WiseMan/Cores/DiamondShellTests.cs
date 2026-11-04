@@ -133,11 +133,11 @@ namespace EmuSen.WiseMan.Cores
             config.SetValue("PlayStation", "card2", "card");
             config.Save();
             var format = EmuSen.Crystal.Systems.Psx.PsxCardFormat.Instance;
-            byte[] one = EmuSen.WiseMan.Crystal.SaveMediaManagerTests.WithSave(EmuSen.WiseMan.Crystal.SaveMediaManagerTests.WithSave(format.Format(), "BASLUS-00001AMBER", "Amber Saga", new[] { 0 }, 0xA1), "BASLUS-00002BASALT", "Basalt Run", new[] { 1, 2 }, 0xB2);
+            byte[] one = EmuSen.WiseMan.Crystal.SaveMediaManagerTests.WithSave(EmuSen.WiseMan.Crystal.SaveMediaManagerTests.WithSave(format.Format()!, "BASLUS-00001AMBER", "Amber Saga", new[] { 0 }, 0xA1), "BASLUS-00002BASALT", "Basalt Run", new[] { 1, 2 }, 0xB2);
             string card1 = SaveLibrary.CardPathFor("PlayStation", "Card 1", ".mcr"), card2 = SaveLibrary.CardPathFor("PlayStation", "Card 2", ".mcr");
             Directory.CreateDirectory(Path.GetDirectoryName(card1)!);
             File.WriteAllBytes(card1, one);
-            File.WriteAllBytes(card2, format.Format());
+            File.WriteAllBytes(card2, format.Format()!);
             using (var core = (CoreEngine)CoreFactory.CreateConsole("PlayStation"))
             {
                 Run(core, 900);

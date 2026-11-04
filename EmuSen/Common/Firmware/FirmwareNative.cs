@@ -7,36 +7,29 @@ using EmuSen.Galaxia.Models;
 
 namespace EmuSen.Common.Firmware
 {
-    // FirmwareLibrary's calls into emusen-firmware, under the file services' switch; a text that cannot cross stays on the C# - see EmuSen_Backend.md §15.1.
+    // FirmwareLibrary's calls into emusen-firmware; a lone surrogate crosses as U+FFFD - see EmuSen_Backend.md §15.1, §40.1.
     public static class FirmwareNative
     {
-        public static bool Active => ServiceLibrary.Active;
-
-        private static bool Takes(FirmwareRequest r) => ServiceLibrary.Takes(r.FileName) && ServiceLibrary.TakesAll(r.AlternateNames) && r.Parts.All(ServiceLibrary.TakesAll) && ServiceLibrary.TakesAll(r.Md5);
-
         private static void Write(Utf8JsonWriter w, FirmwareRequest r)
         {
             w.WriteStartObject("request");
-            w.WriteString("file", r.FileName);
+            w.WriteString("file", ServiceLibrary.Mend(r.FileName));
             w.WriteNumber("size", r.Size);
             ServiceLibrary.WriteList(w, "alternates", r.AlternateNames);
             w.WriteStartArray("parts");
-            foreach (var form in r.Parts) { w.WriteStartArray(); foreach (string name in form) w.WriteStringValue(name); w.WriteEndArray(); }
+            foreach (var form in r.Parts) { w.WriteStartArray(); foreach (string name in form) w.WriteStringValue(ServiceLibrary.Mend(name)); w.WriteEndArray(); }
             w.WriteEndArray();
             ServiceLibrary.WriteList(w, "md5", r.Md5);
             w.WriteEndObject();
         }
 
-        // The folders' order from the library, or null for a value the C# must read.
-        public static IReadOnlyList<string>? Folders(string? setting, string home, string store)
+        // The folders' order, the player's setting checked by Galaxia's rules and each refusal reported once.
+        public static IReadOnlyList<string> Folders(string? setting, string home, string store)
         {
-            if (!ServiceLibrary.Takes(setting) || !ServiceLibrary.Takes(home) || !ServiceLibrary.Takes(store)) return null;
-            byte[] request = ServiceLibrary.Request(w => { ServiceLibrary.WriteText(w, "setting", setting); w.WriteString("home", home); w.WriteString("store", store); });
+            byte[] request = ServiceLibrary.Request(w => { ServiceLibrary.WriteText(w, "setting", setting); w.WriteString("home", ServiceLibrary.Mend(home)); w.WriteString("store", ServiceLibrary.Mend(store)); });
             using JsonDocument d = ServiceLibrary.CallJson("emusen_firmware_folders", request, 512);
             return ServiceLibrary.Words(d.RootElement, "folders");
         }
-
-        public static bool Takes(FirmwareRequest r, IReadOnlyList<string> folders) => Takes(r) && ServiceLibrary.TakesAll(folders);
 
         public static FirmwareFound? Find(FirmwareRequest r, IReadOnlyList<string> folders)
         {
@@ -70,7 +63,7 @@ namespace EmuSen.Common.Firmware
         // True when installed, false for a wrong size; the words of a write that failed come back as a fault.
         public static bool Install(FirmwareRequest r, string source, string store)
         {
-            byte[] request = ServiceLibrary.Request(w => { Write(w, r); w.WriteString("source", source); w.WriteString("store", store); });
+            byte[] request = ServiceLibrary.Request(w => { Write(w, r); w.WriteString("source", ServiceLibrary.Mend(source)); w.WriteString("store", ServiceLibrary.Mend(store)); });
             return ServiceLibrary.CallStatus("emusen_firmware_install", request) == 1;
         }
     }

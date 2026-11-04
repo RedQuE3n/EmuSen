@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.Cores
             using var core = (CoreEngine)bundle.Core;
             for (int a = -1; a <= 0x10000; a++)
             {
-                var (target, pack) = (bundle.DebugTarget.ResolvePhysical(a), EmuSen.Crystal.Systems.Nes.NesDebugViews.Instance.ResolvePhysical(a));
+                var (target, pack) = (bundle.DebugTarget.ResolvePhysical(a), EmuSen.Crystal.Systems.Nes.NesSystem.Pack.DebugViews!.ResolvePhysical(a, Array.Empty<EmuSen.Crystal.Debugger.IDebugMemorySpace>(), Array.Empty<EmuSen.Crystal.Systems.DebugUnit>()));
                 Assert.Equal((pack?.Space, pack?.Offset, pack?.IsAddressable), (target?.Space, target?.Offset, target?.IsAddressable));
             }
         }

@@ -1,7 +1,6 @@
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.RegularExpressions;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Services;
 using EmuSen.Crystal.Systems;
@@ -11,7 +10,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // emusen-cheats held to the C# cheat files and database: every .cht text of the cheat tests and generated ones read with every console's codecs, cheats written, generated trees indexed, searched and pruned, and generated archives installed - see EmuSen_Backend.md §15.3.
+    // emusen-cheats held to the C# cheat files' and database's answers, recorded as goldens before the C# was deleted: every .cht text of the cheat tests and generated ones read with every console's codecs, cheats written, generated trees indexed, searched and pruned; generated archives installed as .NET's own zip reader installs them - see EmuSen_Backend.md §15.3, §40.1.
     [Collection(TestCollections.ProcessGlobals)]
     public class CheatServicesParityTests : IDisposable
     {
@@ -32,11 +31,7 @@ namespace EmuSen.WiseMan.Crystal
 
         private ParityGolden? _golden;
 
-        private void Same(string managed, string native)
-        {
-            _golden?.Add(_golden.Count.ToString(), managed.Replace(_root, "<root>", StringComparison.Ordinal));
-            if (managed != native) Assert.Fail($"C#:\n{managed}\nRust:\n{native}");
-        }
+        private void Same(string answer) => _golden!.Add(_golden.Count.ToString(), answer.Replace(_root, "<root>", StringComparison.Ordinal));
 
         private static string Shown(Func<ChtParseResult> parse)
         {
@@ -49,61 +44,13 @@ namespace EmuSen.WiseMan.Crystal
             catch (Exception e) { return "threw " + e.GetType().Name; }
         }
 
-        // Every .cht text the cheat tests hold, as written in their sources.
-        private static IEnumerable<string> TestTexts()
-        {
-            string root = ConfigRoot.Managed.Directory;
-            foreach (string file in Directory.EnumerateFiles(Path.Combine(root, "EmuSen.WiseMan"), "*.cs", SearchOption.AllDirectories))
-            {
-                string source = File.ReadAllText(file);
-                if (!source.Contains("cheats = ", StringComparison.Ordinal)) continue;
-                foreach (Match m in Regex.Matches(source, "\"\"\"\\s*\\n(.*?)\\n\\s*\"\"\"", RegexOptions.Singleline))
-                    if (m.Groups[1].Value.Contains("cheats", StringComparison.Ordinal)) yield return string.Join("\n", m.Groups[1].Value.Split('\n').Select(l => l.TrimStart()));
-                foreach (Match m in Regex.Matches(source, "\"((?:[^\"\\\\\\n]|\\\\.)*cheats = (?:[^\"\\\\\\n]|\\\\.)*)\""))
-                    yield return Regex.Unescape(m.Groups[1].Value);
-            }
-        }
-
-        private static readonly string[] Keys = ["desc", "enable", "code", "address", "cheat_type", "memory_search_size", "address_bit_position", "value", "big_endian", "repeat_count", "repeat_add_to_address", "repeat_add_to_value", "handler", "unknown"];
-        private static readonly string[] Numbers = ["0", "1", "2", "3", "4", "5", "-1", "65535", "4294967295", "9999999999999", " 7 ", "+3", "0x10", "1.5", "", "8\0", "8 \0", "\08", "1e3", "２"];
-
-        // A .cht text of the format's every corner: entries in any order and case, codes of the system's codecs, explicit writes, comments, quotes, CRLF, counts past and short of the entries.
-        private static string GeneratedText(Random r, IReadOnlyList<string> codes)
-        {
-            var lines = new List<string>();
-            int entries = r.Next(0, 9);
-            string count = r.Next(10) switch { 0 => "2147483647", 1 => "-2", 2 => "x", 3 => (entries + 3).ToString(), 4 => "\"" + entries + "\"", _ => entries.ToString() };
-            if (r.Next(12) != 0) lines.Add((r.Next(4) == 0 ? "CHEATS" : "cheats") + " = " + count);
-            for (int i = 0; i < entries + r.Next(2); i++)
-            {
-                string n = r.Next(15) == 0 ? "0" + i : i.ToString();
-                foreach (string key in Keys.OrderBy(_ => r.Next()).Take(r.Next(1, 7)))
-                {
-                    string value = key switch
-                    {
-                        "desc" => r.Next(5) == 0 ? "\"\"" : "\"" + new[] { "Lives", "Max \"HP\"", "é ✓", "", " spaced ", "a=b" }[r.Next(6)] + "\"",
-                        "enable" or "big_endian" => new[] { "true", "TRUE", "false", "yes", "" }[r.Next(5)],
-                        "code" => "\"" + string.Join(r.Next(3) == 0 ? " + " : "+", Enumerable.Range(0, r.Next(1, 4)).Select(_ => codes[r.Next(codes.Count)])) + "\"",
-                        _ => Numbers[r.Next(Numbers.Length)],
-                    };
-                    string name = $"cheat{n}_{key}";
-                    lines.Add((r.Next(6) == 0 ? name.ToUpperInvariant() : name) + new[] { " = ", "=", " =", "\t=\t" }[r.Next(4)] + value);
-                }
-                if (r.Next(5) == 0) lines.Add(new[] { "# comment = 1", "// note = 2", "=orphan", "no equals here", "" }[r.Next(5)]);
-            }
-            return string.Join(r.Next(5) == 0 ? "\r\n" : "\n", lines.OrderBy(_ => r.Next(4) == 0 ? r.Next() : 0));
-        }
-
         [Fact]
         public void Every_cht_text_reads_alike_with_every_consoles_codecs()
         {
-            var managed = SystemPacks.ManagedCodecs.SelectMany(c => new[] { c.Auto, c.Explicit }).OfType<(string Id, Func<ICheatCodeCodec> Managed)>().DistinctBy(c => c.Id).ToDictionary(c => c.Id, c => c.Managed);
-            NativeCheatCodec? Codec(string? id) => id is null ? null : new NativeCheatCodec(id, managed[id]());
+            NativeCheatCodec? Codec(string? id) => id is null ? null : new NativeCheatCodec(id);
             var pairs = SystemCode.CodecPairs.Select(p => (Auto: Codec(p.Auto), Explicit: Codec(p.Explicit))).Append((null, null)).ToArray();
-            var corpus = CheatCodecParityTests.TestCodes().Concat(CheatCodecParityTests.GeneratedCodes().Take(1500)).ToArray();
-            var texts = TestTexts().Distinct().ToList();
-            var r = new Random(20261017);
-            for (int i = 0; i < 1500; i++) texts.Add(GeneratedText(r, corpus));
+            // The cheat tests' texts as they stood when the golden was recorded, and the generated ones, kept in the golden whose cases they are.
+            var texts = ParityGolden.Read("ChtTexts").Where(c => c.Key.StartsWith("text ", StringComparison.Ordinal)).Select(c => c.Answer).ToList();
             int read = 0;
             var golden = new ParityGolden("ChtTexts");
             for (int t = 0; t < texts.Count; t++) golden.Add($"text {t}", texts[t]);
@@ -112,10 +59,7 @@ namespace EmuSen.WiseMan.Crystal
                 {
                     string text = texts[t];
                     string space = auto?.SpaceName ?? CheatImport.DefaultSpaceName;
-                    string what = $"{auto?.Id ?? "none"}/{patch?.Id ?? "none"}:\n{text}\n";
-                    string m = Shown(() => ChtFile.Managed.Parse(text, auto, space, patch));
-                    golden.Add($"{t} {auto?.Id ?? "none"}/{patch?.Id ?? "none"}", m);
-                    Same(what + m, what + Shown(() => CheatsNative.Parse(text, auto, space, patch)));
+                    golden.Add($"{t} {auto?.Id ?? "none"}/{patch?.Id ?? "none"}", Shown(() => ChtFile.Parse(text, auto, space, patch)));
                     read++;
                 }
             golden.Check(15000);
@@ -141,8 +85,7 @@ namespace EmuSen.WiseMan.Crystal
                         RepeatAddAddress = r.Next(-3, 300), RepeatAddValue = (uint)r.Next(3),
                     }).ToArray(),
                 }).ToList();
-                golden.Add(i.ToString(), ChtFile.Managed.Write(cheats));
-                Same(ChtFile.Managed.Write(cheats), CheatsNative.Write(cheats));
+                golden.Add(i.ToString(), ChtFile.Write(cheats));
             }
             golden.Check(2000);
         }
@@ -188,31 +131,28 @@ namespace EmuSen.WiseMan.Crystal
             _golden = new ParityGolden("CheatTrees");
             for (int seed = 1; seed <= 80; seed++)
             {
-                string m = Path.Combine(_root, $"m{seed}", "Database"), n = Path.Combine(_root, $"n{seed}", "Database");
+                string m = Path.Combine(_root, $"m{seed}", "Database");
                 Plant(new Random(seed), m);
-                Plant(new Random(seed), n);
-                CheatDatabase dm = CheatDatabase.Managed(m), dn = CheatDatabase.Library(n);
-                Assert.True(dn.Native);
+                var dm = new CheatDatabase(m);
                 string what = $"seed {seed}\n";
-                Same(what + Entries(dm.All(), m), what + Entries(dn.All(), n));
-                Same(what + string.Join(";", dm.Systems()), what + string.Join(";", dn.Systems()));
+                Same(what + Entries(dm.All(), m));
+                Same(what + string.Join(";", dm.Systems()));
                 foreach (var (system, _) in dm.Systems().Append(("SUB", 0)).Append(("absent", 0)))
                     foreach (string? filter in new[] { null, "", " mario ", "MARIO", "x" })
-                        Same(what + Entries(dm.Games(system, filter), m), what + Entries(dn.Games(system, filter), n));
+                        Same(what + Entries(dm.Games(system, filter), m));
                 foreach (string needle in needles)
                     foreach (int limit in new[] { 20, 1, 0, -1 })
                     {
-                        Same(what + needle + Entries(dm.Find(needle, limit), m), what + needle + Entries(dn.Find(needle, limit), n));
+                        Same(what + needle + Entries(dm.Find(needle, limit), m));
                         searched++;
                     }
                 string[] keep = keeps[seed % keeps.Length];
-                CheatPrunePlan pm = CheatDatabasePruner.ManagedPlan(dm, keep), pn = CheatDatabasePruner.Plan(dn, keep);
+                CheatPrunePlan pm = CheatDatabasePruner.Plan(dm, keep);
                 string Plan(CheatPrunePlan p, string tree) => $"{p.CanApply} [{p.Reason?.Replace(tree, "<tree>")}] keep {string.Join(",", p.Keeping)} remove " + string.Join(";", p.Removing.Select(s => $"{s.System} {s.Path.Replace(tree, "<tree>")} {s.Files} {s.Bytes}"));
-                Same(what + Plan(pm, m), what + Plan(pn, n));
-                var (removedM, failedM) = CheatDatabasePruner.ManagedApply(dm, pm);
-                var (removedN, failedN) = pn.CanApply ? CheatsNative.Apply(n, pn) : (0, Array.Empty<string>());
+                Same(what + Plan(pm, m));
+                var (removedM, failedM) = pm.CanApply ? CheatDatabasePruner.Apply(dm, pm) : (0, Array.Empty<string>());
                 string Failed(IReadOnlyList<string> failed) => string.Join(";", failed.Select(f => f[..(f.IndexOf(" (", StringComparison.Ordinal) + 1)]));
-                Same(what + $"{removedM} {Failed(failedM)}\n" + Tree(Path.GetDirectoryName(m)!, times: false), what + $"{removedN} {Failed(failedN)}\n" + Tree(Path.GetDirectoryName(n)!, times: false));
+                Same(what + $"{removedM} {Failed(failedM)}\n" + Tree(Path.GetDirectoryName(m)!, times: false));
                 applied += removedM;
             }
             _golden.Check(5000);
@@ -225,7 +165,7 @@ namespace EmuSen.WiseMan.Crystal
             var info = new FileInfo(p);
             if (info.LinkTarget is not null) return name + " -> link";
             if (Directory.Exists(p)) return name + "/";
-            // A file left empty by an entry that failed was truncated when each half reached it, so its time is not compared.
+            // A file left empty by an entry that failed was truncated when the install reached it, so its time is not compared.
             try { return $"{name} {Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)))[..12]} {Convert.ToString((int)File.GetUnixFileMode(p), 8)} {(info.Length == 0 || !times ? "" : File.GetLastWriteTimeUtc(p).ToString("o"))}"; }
             catch (UnauthorizedAccessException) { return name + " unreadable"; }
         }));
@@ -269,6 +209,11 @@ namespace EmuSen.WiseMan.Crystal
             catch (Exception e) { return "threw " + e.GetType().Name; }
         }
 
+        private static void Alike(string dotnet, string library)
+        {
+            if (dotnet != library) Assert.Fail($".NET:\n{dotnet}\nRust:\n{library}");
+        }
+
         [Fact]
         public void Generated_archives_install_the_same_files_with_the_same_modes_and_times()
         {
@@ -288,10 +233,10 @@ namespace EmuSen.WiseMan.Crystal
                         File.SetUnixFileMode(Path.Combine(tree, "cht", "SNES", "Game.cht"), (UnixFileMode)0x1B6);
                         File.SetLastWriteTimeUtc(Path.Combine(tree, "cht", "SNES", "Game.cht"), new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc));
                     }
-                string shownM = Installed(() => CheatDatabaseInstaller.ManagedInstall(new MemoryStream(zip), m + over));
-                string shownN = Installed(() => CheatsNative.Install(zip, n + over) ?? CheatDatabaseInstaller.ManagedInstall(new MemoryStream(zip), n + over));
+                string shownM = Installed(() => DotNetCheatInstall.Install(zip, m + over));
+                string shownN = Installed(() => CheatDatabaseInstaller.Install(new MemoryStream(zip), n + over));
                 string what = $"archive {i}\n";
-                Same(what + shownM + "\n" + Tree(Path.GetDirectoryName(m)!), what + shownN + "\n" + Tree(Path.GetDirectoryName(n)!));
+                Alike(what + shownM + "\n" + Tree(Path.GetDirectoryName(m)!), what + shownN + "\n" + Tree(Path.GetDirectoryName(n)!));
                 installed += shownM.StartsWith("threw", StringComparison.Ordinal) ? 0 : int.Parse(shownM.Split(' ')[0]);
             }
             Assert.True(installed > 400, $"{installed} files installed");

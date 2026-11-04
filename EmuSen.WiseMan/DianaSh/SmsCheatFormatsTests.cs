@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Equal((byte)((((code >> 2) & 0x03) | ((code >> 6) & 0x3C) | ((code << 6) & 0xC0)) ^ 0xBA), Genie.DecodeCompare("3A6-4AB-2A2"));
             Assert.Null(Genie.DecodeCompare("3A6-4AB"));
             Assert.Equal(CheatCodeKind.RomPatch, Genie.Kind);
-            Assert.Equal(EmuSen.Crystal.Systems.GameBoy.GbGameGenieCodec.Decode("3A6-4AB-2A2"), Genie.Decode("3A6-4AB-2A2"));
+            Assert.Equal(EmuSen.Crystal.Systems.GameBoy.GameBoyCheatCodecs.GameGenie().Decode("3A6-4AB-2A2"), Genie.Decode("3A6-4AB-2A2"));
             Assert.False(Genie.CanDecode("00C0-DE03"));
             Assert.False(Par.CanDecode("3A6-4AB-2A2"));
             Assert.False(Genie.CanDecode("00D5-BD??"));

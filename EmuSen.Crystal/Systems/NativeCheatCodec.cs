@@ -6,7 +6,7 @@ using EmuSen.Crystal.Cheats;
 
 namespace EmuSen.Crystal.Systems
 {
-    // A pack's codec answered by emusen-systems under the codec's id; text the library cannot take, or a null, goes to the C# codec it fronts - see EmuSen_Backend.md §13.
+    // A pack's codec answered by emusen-systems under the codec's id; a lone surrogate crosses as U+FFFD - see EmuSen_Backend.md §13, §40.1.
     public sealed class NativeCheatCodec : ICheatCodeCodec
     {
         private sealed record Answer(string Code, bool Can, JsonElement Decode, JsonElement Compare, JsonElement Writes);
@@ -14,27 +14,22 @@ namespace EmuSen.Crystal.Systems
         private readonly SystemCode.CodecFacts _facts;
         private Answer? _last;
 
-        public NativeCheatCodec(string id, ICheatCodeCodec managed)
+        public NativeCheatCodec(string id)
         {
             Id = id;
-            Managed = managed;
             _facts = SystemCode.Codecs.FirstOrDefault(c => c.Id == id) ?? throw new ArgumentException($"the library has no codec {id}", nameof(id));
         }
 
         public string Id { get; }
 
-        // The C# codec this one fronts, the failover and the parity class's oracle.
-        public ICheatCodeCodec Managed { get; }
-
         public string Name => _facts.Name;
         public CheatCodeKind Kind => _facts.Kind;
         public string? SpaceName => _facts.Space;
 
-        private static bool Crosses(string? code) => code is not null && SystemCode.Takes(code);
-
         // One call answers all four questions; the last code's answers are kept, as a caller asks CanDecode and then decodes the same code.
         private Answer Ask(string code)
         {
+            ArgumentNullException.ThrowIfNull(code);
             if (_last is { } last && last.Code == code) return last;
             using JsonDocument document = SystemCode.CheatDecode(Id, code);
             JsonElement r = document.RootElement;
@@ -51,11 +46,10 @@ namespace EmuSen.Crystal.Systems
             if (e.TryGetProperty("range", out _)) throw new ArgumentOutOfRangeException("index", "Index was out of range. Must be non-negative and less than the size of the collection.");
         }
 
-        public bool CanDecode(string code) => Crosses(code) ? Ask(code).Can : Managed.CanDecode(code);
+        public bool CanDecode(string code) => Ask(code).Can;
 
         public (int Address, byte Value) Decode(string code)
         {
-            if (!Crosses(code)) return Managed.Decode(code);
             JsonElement d = Ask(code).Decode;
             Refused(d);
             return (d.GetProperty("address").GetInt32(), d.GetProperty("value").GetByte());
@@ -63,7 +57,6 @@ namespace EmuSen.Crystal.Systems
 
         public byte? DecodeCompare(string code)
         {
-            if (!Crosses(code)) return Managed.DecodeCompare(code);
             JsonElement c = Ask(code).Compare;
             if (c.ValueKind == JsonValueKind.Null) return null;
             Refused(c);
@@ -72,7 +65,6 @@ namespace EmuSen.Crystal.Systems
 
         public IReadOnlyList<CheatWrite>? DecodeWrites(string code)
         {
-            if (!Crosses(code)) return Managed.DecodeWrites(code);
             JsonElement w = Ask(code).Writes;
             if (w.ValueKind == JsonValueKind.Null) return null;
             Refused(w);

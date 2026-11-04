@@ -11,7 +11,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The cheat database's download on emusen-net held to the C# HttpClient against an HTTPS server of the test's own, certificates made at test time; never the internet - see EmuSen_Backend.md §16.
+    // The cheat database's download on emusen-net held to .NET's HttpClient, the test's oracle, against an HTTPS server of the test's own, certificates made at test time; never the internet - see EmuSen_Backend.md §16, §40.1.
     [Collection(TestCollections.ProcessGlobals)]
     public class CheatDownloadParityTests : IDisposable
     {
@@ -215,16 +215,16 @@ namespace EmuSen.WiseMan.Crystal
             string url = server.Url(path);
             string id = Guid.NewGuid().ToString("N")[..8];
             server.Clear();
-            string managed = Update(() => CheatDatabaseInstaller.ManagedFetch(url, t, trusted ? c.Root : null), (b, d) => CheatDatabaseInstaller.ManagedInstall(new MemoryStream(b), d), "m" + id) + "\n" + server.Seen();
+            string managed = Update(() => DotNetFetch.Fetch(url, t, trusted ? c.Root : null), (b, d) => DotNetCheatInstall.Install(b, d), "m" + id) + "\n" + server.Seen();
             server.Clear();
             string native = Update(() => new MemoryStream(NativeDownload.Fetch(url, t, trusted ? c.Root.ExportCertificatePem() : null)),
-                (b, d) => CheatsNative.Install(b, d) ?? CheatDatabaseInstaller.ManagedInstall(new MemoryStream(b), d), "n" + id) + "\n" + server.Seen();
+                (b, d) => CheatsNative.Install(b, d), "n" + id) + "\n" + server.Seen();
             native = native.Replace(" n" + id, " m" + id);
             if (managed != native)
             {
                 string faults;
                 lock (server.Faults) faults = string.Join("\n", server.Faults);
-                Assert.Fail($"C#:\n{managed}\n\nRust:\n{native}\n\nThrown:\n{string.Join("\n", _thrown)}\n\nThe server swallowed:\n{faults}");
+                Assert.Fail($".NET:\n{managed}\n\nRust:\n{native}\n\nThrown:\n{string.Join("\n", _thrown)}\n\nThe server swallowed:\n{faults}");
             }
             return managed;
         }
@@ -332,7 +332,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Contains("RemoteCertificateNameMismatch, RemoteCertificateChainErrors", Both(misnamed, "/", trusted: false));
         }
 
-        // A trusted chain for another name: the C# oracle's test trust answers in its own words, so the Rust is held to .NET's, measured with the root as the system's store on 2026-10-18.
+        // A trusted chain for another name: the .NET oracle's test trust answers in its own words, so the Rust is held to .NET's, measured with the root as the system's store on 2026-10-18.
         [Fact]
         public void A_trusted_certificate_for_another_name_is_refused_in_dotnets_words()
         {
@@ -340,7 +340,7 @@ namespace EmuSen.WiseMan.Crystal
             var thrown = Assert.Throws<HttpRequestException>(() => NativeDownload.Fetch(misnamed.Url("/"), Usual, Made.Value.Root.ExportCertificatePem()));
             Assert.Equal("The SSL connection could not be established, see inner exception.", thrown.Message);
             Assert.Equal("The remote certificate is invalid according to the validation procedure: RemoteCertificateNameMismatch", thrown.InnerException!.Message);
-            Assert.Throws<HttpRequestException>(() => CheatDatabaseInstaller.ManagedFetch(misnamed.Url("/"), Usual, Made.Value.Root));
+            Assert.Throws<HttpRequestException>(() => DotNetFetch.Fetch(misnamed.Url("/"), Usual, Made.Value.Root));
             Assert.Empty(misnamed.Heads);
         }
 
@@ -362,7 +362,7 @@ namespace EmuSen.WiseMan.Crystal
             listener.Stop();
             string url = $"https://localhost:{port}/";
             string managed, native;
-            try { CheatDatabaseInstaller.ManagedFetch(url, Usual); managed = "fetched"; } catch (Exception e) { managed = Thrown(e); }
+            try { DotNetFetch.Fetch(url, Usual); managed = "fetched"; } catch (Exception e) { managed = Thrown(e); }
             try { NativeDownload.Fetch(url, Usual); native = "fetched"; } catch (Exception e) { native = Thrown(e); }
             Assert.Equal($"threw System.Net.Http.HttpRequestException: Connection refused (localhost:{port})\n  inner System.Net.Sockets.SocketException: Connection refused", managed);
             Assert.Equal(managed, native);
@@ -411,7 +411,7 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
-        public void The_public_fetch_takes_the_switch_and_a_bad_request_is_refused()
+        public void The_public_fetch_and_a_bad_request_is_refused()
         {
             Assert.Equal("https://buildbot.libretro.com/assets/frontend/cheats.zip", CheatDatabaseInstaller.LibretroCheatsUrl);
             Assert.Equal(TimeSpan.FromMinutes(5), CheatDatabaseInstaller.FetchTimeout);

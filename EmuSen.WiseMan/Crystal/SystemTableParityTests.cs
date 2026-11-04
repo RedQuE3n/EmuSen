@@ -10,27 +10,12 @@ using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // Each C# literal entry held to its data file in emusen-systems, field by field, whichever EMUSEN_SYSTEMS_NATIVE chose - see EmuSen_Backend.md §12.
+    // The systems table held to the C# literal entries as recorded before they were deleted, field by field, and its schema to SystemEntry - see EmuSen_Backend.md §12, §40.1.
     public class SystemTableParityTests
     {
         private static readonly PropertyInfo[] Properties = typeof(SystemEntry).GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.Name != "EqualityContract").ToArray();
 
         private static bool IsCode(PropertyInfo p) => typeof(Delegate).IsAssignableFrom(p.PropertyType);
-
-        // Every field in which two entries differ, by name with both values; code must be the very same delegate.
-        public static List<string> Differences(SystemEntry expected, SystemEntry actual)
-        {
-            var differences = new List<string>();
-            foreach (var p in Properties)
-            {
-                object? a = p.GetValue(expected), b = p.GetValue(actual);
-                bool same = IsCode(p) ? ReferenceEquals(a, b)
-                    : a is IEnumerable<string> x && b is IEnumerable<string> y ? x.SequenceEqual(y, StringComparer.Ordinal)
-                    : Equals(a, b);
-                if (!same) differences.Add($"{expected.Id}.{p.Name}: {Show(a)} and {Show(b)}");
-            }
-            return differences;
-        }
 
         private static string Show(object? value) => value switch
         {
@@ -41,25 +26,31 @@ namespace EmuSen.WiseMan.Crystal
             _ => value.ToString() ?? "",
         };
 
+        // Each pack's entry, media, byte order and codecs, under the keys the C#'s were recorded under.
         [Fact]
         public void The_table_s_facts_match_the_golden()
         {
             var golden = new ParityGolden("SystemTable");
-            foreach (SystemEntry e in SystemPacks.Literals)
+            foreach (SystemPack pack in SystemPacks.All)
             {
+                SystemEntry e = pack.Entry;
                 foreach (var p in Properties.Where(p => !IsCode(p))) golden.Add($"{e.Id}.{p.Name}", Show(p.GetValue(e)));
                 golden.Add($"{e.Id}.recognises", (e.Recognise is not null).ToString());
             }
-            foreach (SystemPack pack in SystemPacks.All) golden.Add($"{pack.Entry.Id}.byte_order", pack.ByteOrder ?? "null");
-            foreach (var (system, m) in SystemPacks.MediumLiterals) golden.Add($"{system}.medium {m.Id}", $"{m.Title}|{m.Noun}|{m.Extension}");
-            foreach (var (system, auto, patch) in SystemPacks.ManagedCodecs)
+            foreach (SystemPack pack in SystemPacks.All) golden.Add($"{pack.Entry.Id}.byte_order", SystemTable.ByteOrders[pack.Entry.Id] ?? "null");
+            foreach (SystemTable.RowMedium row in SystemTable.Media)
             {
-                golden.Add($"{system}.codecs", $"{auto?.Id ?? "null"}|{patch?.Id ?? "null"}");
-                golden.Add($"{system}.cheat_space", auto?.Managed().SpaceName ?? "null");
-                foreach (var (id, factory) in new[] { auto, patch }.OfType<(string Id, Func<EmuSen.Crystal.Cheats.ICheatCodeCodec> Managed)>())
+                var m = SystemPacks.For(row.System)!.Media!.Single(x => x.Id == row.Id);
+                golden.Add($"{row.System}.medium {m.Id}", $"{m.Title}|{m.Noun}|{m.Extension}");
+            }
+            foreach (SystemCode.CodecPair pair in SystemCode.CodecPairs)
+            {
+                golden.Add($"{pair.System}.codecs", $"{pair.Auto ?? "null"}|{pair.Explicit ?? "null"}");
+                golden.Add($"{pair.System}.cheat_space", SystemTable.CheatSpaces[pair.System] ?? "null");
+                foreach (string id in new[] { pair.Auto, pair.Explicit }.OfType<string>())
                 {
-                    var c = factory();
-                    golden.Add($"{system}.codec {id}", $"{c.Name}|{c.Kind}|{c.SpaceName ?? "null"}");
+                    SystemCode.CodecFacts c = SystemCode.Codecs.Single(x => x.Id == id);
+                    golden.Add($"{pair.System}.codec {id}", $"{c.Name}|{c.Kind}|{c.Space ?? "null"}");
                 }
             }
             golden.Check(100);
@@ -72,82 +63,56 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal(14, SystemTable.Rows.Count);
         }
 
+        // Each pack's codecs are the library's by the pair its row names, and its cheat space is the table's - see EmuSen_Backend.md §13.2.
         [Fact]
-        public void Every_literal_equals_its_data_file_field_by_field()
+        public void Each_pack_hands_out_the_library_s_codecs_by_its_pair()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            var differences = new List<string>();
-            foreach (SystemEntry literal in SystemPacks.Literals)
+            foreach (SystemPack pack in SystemPacks.All)
             {
-                if (SystemTable.FromTable(literal) is not { } row) { differences.Add($"{literal.Id}: no data file"); continue; }
-                differences.AddRange(Differences(literal, row));
+                SystemCode.CodecPair? pair = SystemCode.CodecPairs.SingleOrDefault(p => p.System == pack.Entry.Id);
+                Assert.Equal(pair?.Auto, (pack.AutoDetectCodec?.Invoke() as NativeCheatCodec)?.Id);
+                Assert.Equal(pair?.Explicit, (pack.ExplicitCodec?.Invoke() as NativeCheatCodec)?.Id);
+                Assert.Equal(SystemTable.CheatSpaces[pack.Entry.Id], pack.AutoDetectCodec?.Invoke().SpaceName);
             }
-            Assert.True(differences.Count == 0, "the data files differ from the literals:\n" + string.Join("\n", differences));
         }
 
-        // The byte order each data file states is the pack literal's, big for the N64 and the Genesis family - see EmuSen_Backend.md §18.7, §18.9.
+        // The byte order each data file states, big for the N64 and the Genesis family - see EmuSen_Backend.md §18.7, §18.9.
         [Fact]
         public void Each_pack_s_byte_order_is_its_data_file_s()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            foreach (SystemPack pack in SystemPacks.All) Assert.Equal(pack.ByteOrder, SystemTable.ByteOrders[pack.Entry.Id]);
             Assert.True(SystemPacks.BigEndian("n64") && SystemPacks.BigEndian("md") && SystemPacks.BigEndian("mcd") && SystemPacks.BigEndian("32x"));
-            Assert.False(SystemPacks.BigEndian("nes") || SystemPacks.BigEndian("unknown"));
+            Assert.False(SystemPacks.BigEndian("nes") || SystemPacks.BigEndian("psx") || SystemPacks.BigEndian("unknown"));
         }
 
         [Fact]
-        public void The_table_the_literals_and_the_packs_name_the_same_systems_in_one_order()
+        public void The_table_and_the_packs_name_the_same_systems_in_one_order()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            var literals = SystemPacks.Literals.Select(e => e.Id).ToArray();
-            Assert.Equal(literals, SystemTable.Rows.Select(e => e.Id).ToArray());
-            Assert.Equal(literals, SystemPacks.All.Select(p => p.Entry.Id).ToArray());
+            Assert.Equal(SystemTable.Rows.Select(e => e.Id), SystemPacks.All.Select(p => p.Entry.Id));
+            Assert.Equal(SystemTable.Rows.Select(e => e.Id), SystemCode.Code.Select(c => c.Id));
         }
 
         [Fact]
         public void Every_data_property_has_a_key_and_every_key_of_the_table_a_property()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
             var data = Properties.Where(p => !IsCode(p)).Select(p => p.Name).Order(StringComparer.Ordinal).ToArray();
             Assert.Equal(data, SystemTable.Keys.Select(k => k.Property).Order(StringComparer.Ordinal).ToArray());
-            using var document = JsonDocument.Parse(SystemTable.Json!);
+            using var document = JsonDocument.Parse(SystemTable.Json);
             foreach (JsonElement row in document.RootElement.EnumerateArray())
                 Assert.Equal(SystemTable.Keys.Select(k => k.Key).Concat(SystemTable.PackKeys).ToArray(), row.EnumerateObject().Select(m => m.Name).ToArray());
         }
 
-        // The library's code in place of the literal's where the switch chose the table, and a recogniser only where the literal has one - see EmuSen_Backend.md §13.3.
+        // A pack's entry carries the library's OpenVGDB rule, and its recogniser only where the library has one for the system - see EmuSen_Backend.md §13.3.
         [Fact]
-        public void Each_pack_holds_the_entry_the_switch_chose_with_the_code_it_chose()
+        public void Each_pack_s_entry_carries_the_library_s_code()
         {
-            foreach (var (pack, literal) in SystemPacks.All.Zip(SystemPacks.Literals))
+            foreach (SystemPack pack in SystemPacks.All)
             {
-                if (SystemTable.Active)
-                {
-                    Assert.NotSame(literal, pack.Entry);
-                    Assert.Equal(new[] { $"{literal.Id}.OpenVgdbBytes", $"{literal.Id}.Recognise" }.Take(literal.Recognise is null ? 1 : 2),
-                        Differences(literal, pack.Entry).Select(d => d[..d.IndexOf(':')]));
-                    Assert.Equal(literal.Recognise is null, pack.Entry.Recognise is null);
-                }
-                else Assert.Same(literal, pack.Entry);
+                SystemCode.SystemCodeFacts facts = SystemCode.Code.Single(c => c.Id == pack.Entry.Id);
+                Assert.Equal(facts.Recognises, pack.Entry.Recognise is not null);
+                Assert.Equal(pack.Entry.Id is "nes" or "gb" or "gbc", facts.Header);
+                byte[] file = { 1, 2, 3 };
+                Assert.Equal(SystemCode.OpenVgdbBytes(pack.Entry.Id, file), pack.Entry.OpenVgdbBytes(file));
             }
-            Assert.Equal(Environment.GetEnvironmentVariable(SystemTable.Variable) != "0" && SystemTable.Ready, SystemTable.Active);
-        }
-
-        // The comparison itself must see a change in any one data field, or the test above proves nothing.
-        [Fact]
-        public void The_comparison_tells_a_change_in_each_field()
-        {
-            SystemEntry nes = SystemPacks.Literals[0];
-            var changed = new SystemEntry[]
-            {
-                nes with { Id = "fc" }, nes with { Name = "Famicom" }, nes with { Console = "FC" }, nes with { Manufacturer = "Sharp" }, nes with { ReleaseYear = 1984 },
-                nes with { Extensions = new[] { ".nes", ".unf" } }, nes with { CheatSystems = Array.Empty<string>() }, nes with { OpenVgdbSystems = new[] { "FC" } },
-                nes with { CoverAspect = 1.430000001 }, nes with { EsdeSystem = "famicom" }, nes with { EsdeFullName = "Famicom" }, nes with { SelfDelimitingImages = true },
-                nes with { AttachedTo = "NES" }, nes with { ScreenScraperSystem = 4 }, nes with { OpenVgdbBytes = f => f }, nes with { Recognise = _ => null },
-            };
-            Assert.Equal(Properties.Length, changed.Length);
-            foreach (var entry in changed) Assert.Single(Differences(nes, entry));
-            Assert.Empty(Differences(nes, nes with { Extensions = nes.Extensions.ToArray() }));
         }
 
         [Fact]

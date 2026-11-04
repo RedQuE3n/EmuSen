@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using EmuSen.Galaxia.Models;
 
@@ -39,28 +38,6 @@ namespace EmuSen.Galaxia.Library
 
         // The folder CHDs are written to; the tool refuses a value that is not a full path or overlaps the library - see EmuSen_GamePackages.md §20.1.
         public static string ChdOutput(AppSettings settings) => Checked(settings.ChdOutputDirectory) is { Path: { } path } ? path : DataStore.Compressed;
-
-        // The folders firmware is looked for in, in order: the player's chosen folder when it can be used, then home/Firmware - see EmuSen_Firmware.md §2.3.
-        public static IReadOnlyList<string> Firmware(AppSettings settings)
-        {
-            FolderValue chosen = Checked(settings.FirmwareDirectory);
-            ReportOnce(nameof(AppSettings.FirmwareDirectory), chosen);
-            return chosen is { Searched: true, Path: { } path } && !SameFolder(path, DataStore.Firmware) ? [path, DataStore.Firmware] : [DataStore.Firmware];
-        }
-
-        private static string? _reported;
-
-        // A refused or absent value is said once through ConfigDiagnostics, and again only when it changes - see EmuSen_Config_Reference.md §7.7.
-        private static void ReportOnce(string setting, FolderValue value)
-        {
-            string? key = value.Problem is null ? null : setting + "\n" + value.Written;
-            if (key == _reported) return;
-            _reported = key;
-            if (value.Problem is { } problem) ConfigDiagnostics.Report($"appsettings.json: {setting}: {problem}");
-        }
-
-        private static bool SameFolder(string a, string b) =>
-            string.Equals(System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(a)), System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(b)), OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);
 
         // A folder value by §7.7's rules: blank is unset, ~ and ~/ expand to the home, a relative path or a file is refused, an absent folder is said.
         public static FolderValue Checked(string? value)

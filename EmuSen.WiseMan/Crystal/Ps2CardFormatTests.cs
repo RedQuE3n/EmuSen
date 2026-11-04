@@ -14,7 +14,7 @@ namespace EmuSen.WiseMan.Crystal
     public class Ps2CardFormatTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenPs2Card_" + Guid.NewGuid().ToString("N"));
-        private static readonly Ps2CardFormat Ps2 = Ps2CardFormat.Instance;
+        private static readonly ISaveMediumFormat Ps2 = Ps2CardFormat.Instance;
 
         public Ps2CardFormatTests()
         {

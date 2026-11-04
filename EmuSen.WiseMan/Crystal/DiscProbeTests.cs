@@ -24,7 +24,7 @@ namespace EmuSen.WiseMan.Crystal
         // Both recognisers on the image, each within five seconds, as text so that an exception is an answer too.
         private static void ReadsWithNoSerial(byte[] image)
         {
-            foreach (var recognise in new[] { PsxSystem.Literal.Recognise!, PsxSystem.Entry.Recognise! })
+            foreach (var recognise in new[] { PsxSystem.Entry.Recognise! })
             {
                 var task = Task.Run(() =>
                 {

@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Fixtures
         {
             var image = new byte[Math.Max(MinimumLength, length)];
 
-            WriteUInt32(image, 0x00, N64ImageOrder.Magic);
+            WriteUInt32(image, 0x00, 0x80371240);
             WriteUInt32(image, 0x04, 0x0000000F);
             WriteUInt32(image, 0x08, entryPoint);
             WriteUInt32(image, 0x0C, 0x0000144C);

@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.Crystal
     public class N64PakFormatTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenN64Pak_" + Guid.NewGuid().ToString("N"));
-        private static readonly N64PakFormat Pak = N64PakFormat.Instance;
+        private static readonly ISaveMediumFormat Pak = N64PakFormat.Instance;
 
         public N64PakFormatTests()
         {

@@ -9,7 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
-    // The recognisers, routing, header readers and OpenVGDB rules in emusen-systems held to the C# on generated discs, cartridges and files, the bytes each recogniser reads included - see EmuSen_Backend.md §13.3.
+    // The recognisers, routing, header readers and OpenVGDB rules in emusen-systems held on generated discs, cartridges and files to the C#'s answers as recorded before it was deleted, the bytes each recogniser reads included - see EmuSen_Backend.md §13.3, §40.1.
     public class SystemCodeParityTests
     {
         // A probe over an image that records every length a recogniser asks for.
@@ -38,19 +38,6 @@ namespace EmuSen.WiseMan.Crystal
                 };
             }
             catch (Exception e) { return $"threw {e.GetType().Name}: {e.Message}"; }
-        }
-
-        [Fact]
-        public void Every_system_has_code_where_its_literal_has()
-        {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            foreach (SystemEntry literal in SystemPacks.Literals)
-            {
-                SystemCode.SystemCodeFacts facts = SystemCode.Code.Single(c => c.Id == literal.Id);
-                Assert.Equal(literal.Recognise is not null, facts.Recognises);
-                Assert.Equal(literal.Id is "nes" or "gb" or "gbc", facts.Header);
-            }
-            Assert.Equal(SystemPacks.Literals.Select(l => l.Id), SystemCode.Code.Select(c => c.Id));
         }
 
         private static byte[] Cnf(byte[] iso, string config)
@@ -119,36 +106,24 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
-        public void Every_recogniser_answers_alike_and_reads_the_same_bytes()
+        public void Every_recogniser_answers_as_recorded_and_reads_the_same_bytes()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
-            var differences = new List<string>();
             var golden = new ParityGolden("Recognisers");
-            int count = 0;
             foreach (var (label, image) in Images())
-                foreach (SystemEntry literal in SystemPacks.Literals.Where(l => l.Recognise is not null))
+                foreach (SystemEntry entry in SystemPacks.All.Select(p => p.Entry).Where(e => e.Recognise is not null))
                 {
-                    count++;
-                    Probe managed = new(image), native = new(image);
-                    string m = Shown(() => literal.Recognise!(managed)), n = Shown(() => SystemCode.Recognise(literal.Id, native));
-                    m += " reads " + string.Join(",", managed.Asked);
-                    n += " reads " + string.Join(",", native.Asked);
-                    if (m != n) differences.Add($"{literal.Id} on {label}:\n  library: {n}\n  C#:      {m}");
-                    golden.Add($"{literal.Id} on {label}", m);
+                    Probe probe = new(image);
+                    golden.Add($"{entry.Id} on {label}", Shown(() => entry.Recognise!(probe)) + " reads " + string.Join(",", probe.Asked));
                 }
             golden.Check(1000);
-            Assert.True(count > 1000, $"{count} cases");
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
 
         [Fact]
-        public void Routing_decides_alike_among_any_candidates_claims_and_folders()
+        public void Routing_decides_as_recorded_among_any_candidates_claims_and_folders()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(84);
             var entries = SystemPacks.All.Select(p => p.Entry).ToArray();
             string?[] folders = { null, "", "roms", "psx", "PSX", "segacd", "SegaCD", "genesis", "nes", "n64", "gbc", "Ps×" };
-            var differences = new List<string>();
             var golden = new ParityGolden("Routing");
             for (int i = 0; i < 4000; i++)
             {
@@ -157,41 +132,31 @@ namespace EmuSen.WiseMan.Crystal
                     .Select(at => (at, new Recognition(candidates[at].Id, r.Next(2) == 0 ? null : $"SLUS-{r.Next(100000):D5}", r.Next(3) switch { 0 => null, 1 => "Japan", _ => "Europe" }))).ToArray();
                 string? folder = folders[r.Next(folders.Length)];
                 string file = r.Next(4) == 0 ? "Café Game (Disc 1).cue" : $"game{i}.iso";
-                string m = Show(SystemRouting.DecideManaged(file, () => folder, candidates, claims));
-                string n = Show(SystemCode.Route(file, folder, candidates, claims)!);
-                golden.Add($"{file} in {folder ?? "null"} among {string.Join(",", candidates.Select(c => c.Id))} claimed by {string.Join(",", claims.Select(c => $"{c.Item1}:{c.Item2.SystemId}:{c.Item2.Serial}:{c.Item2.Region}"))}", m);
-                if (m != n) differences.Add($"{file} in {folder ?? "null"} among {string.Join(",", candidates.Select(c => c.Id))} claimed by {string.Join(",", claims.Select(c => c.Item1))}:\n  library: {n}\n  C#:      {m}");
+                golden.Add($"{file} in {folder ?? "null"} among {string.Join(",", candidates.Select(c => c.Id))} claimed by {string.Join(",", claims.Select(c => $"{c.Item1}:{c.Item2.SystemId}:{c.Item2.Serial}:{c.Item2.Region}"))}", Show(SystemCode.Route(file, folder, candidates, claims)));
             }
             golden.Check(4000);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
 
-        // A 32X cartridge named .bin goes to the 32X by its header and a Genesis cartridge to the Genesis, wherever it sits, in both halves - see EmuSen_Backend.md §32.
+        // A 32X cartridge named .bin goes to the 32X by its header and a Genesis cartridge to the Genesis, wherever it sits - see EmuSen_Backend.md §32.
         [Fact]
-        public void A_32x_cartridge_named_bin_routes_to_the_32x_in_both_halves()
+        public void A_32x_cartridge_named_bin_routes_to_the_32x()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
             var candidates = SystemPacks.All.Select(p => p.Entry).Where(e => e.Extensions.Contains(".bin")).ToArray();
             Assert.Equal(new[] { "md", "32x", "psx", "ps2" }, candidates.Select(c => c.Id));
             foreach (var (system, expected) in new[] { ("SEGA 32X", "32x"), ("SEGA GENESIS", "md"), ("SEGA MEGA DRIVE", "md") })
             {
                 byte[] image = SyntheticMdRom.Cartridge(system);
-                var managed = Enumerable.Range(0, candidates.Length).Select(at => (at, candidates[at].Recognise?.Invoke(new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
-                var native = Enumerable.Range(0, candidates.Length).Select(at => (at, SystemCode.Recognise(candidates[at].Id, new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
+                var claims = Enumerable.Range(0, candidates.Length).Select(at => (at, candidates[at].Recognise?.Invoke(new Probe(image)))).Where(c => c.Item2 is not null).Select(c => (c.at, c.Item2!)).ToArray();
                 foreach (string? folder in new[] { null, "genesis", "sega32x", "roms" })
-                {
-                    Assert.Equal(expected, SystemRouting.DecideManaged("game.bin", () => folder, candidates, managed).System?.Id);
-                    Assert.Equal(expected, SystemCode.Route("game.bin", folder, candidates, native)!.System?.Id);
-                }
+                    Assert.Equal(expected, SystemCode.Route("game.bin", folder, candidates, claims).System?.Id);
             }
         }
 
         private static string Show(Routed routed) => $"{routed.System?.Id ?? "-"} | {(routed.Recognition is { } c ? $"{c.SystemId} {c.Serial} {c.Region}" : "-")} | {routed.Reason ?? "-"}";
 
         [Fact]
-        public void Every_openvgdb_rule_gives_the_same_bytes()
+        public void Every_openvgdb_rule_gives_the_recorded_bytes()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1983);
             var files = new List<byte[]> { Array.Empty<byte>(), new byte[] { 1 }, new byte[3], new byte[16], new byte[17], new byte[512], new byte[1536], new byte[2048] };
             foreach (int length in new[] { 4, 5, 6, 8, 16, 17, 513, 1024 + 512, 4096 + 512, 4099, 0x10000 })
@@ -202,25 +167,17 @@ namespace EmuSen.WiseMan.Crystal
                     head.AsSpan(0, Math.Min(head.Length, length)).CopyTo(file);
                     files.Add(file);
                 }
-            var differences = new List<string>();
             var golden = new ParityGolden("OpenVgdb");
-            foreach (SystemEntry literal in SystemPacks.Literals)
+            foreach (SystemEntry entry in SystemPacks.All.Select(p => p.Entry))
                 foreach (byte[] file in files)
-                {
-                    string m = Shown(() => literal.OpenVgdbBytes(file)), n = Shown(() => SystemCode.OpenVgdbBytes(literal.Id, file));
-                    golden.Add($"{literal.Id} on {file.Length} bytes {Convert.ToHexString(file.AsSpan(0, Math.Min(4, file.Length)))}", m);
-                    if (m != n) differences.Add($"{literal.Id} on {file.Length} bytes {Convert.ToHexString(file.AsSpan(0, Math.Min(4, file.Length)))}: library {n}, C# {m}");
-                }
+                    golden.Add($"{entry.Id} on {file.Length} bytes {Convert.ToHexString(file.AsSpan(0, Math.Min(4, file.Length)))}", Shown(() => entry.OpenVgdbBytes(file)));
             golden.Check(100);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
 
         [Fact]
-        public void Every_header_reads_alike()
+        public void Every_header_reads_as_recorded()
         {
-            Assert.True(SystemTable.Ready, SystemTable.Report);
             var r = new Random(1989);
-            var differences = new List<string>();
             var golden = new ParityGolden("Headers");
             for (int i = 0; i < 6000; i++)
             {
@@ -231,9 +188,7 @@ namespace EmuSen.WiseMan.Crystal
                 int length = r.Next(5) switch { 0 => r.Next(0, 40), 1 => 16 + head[4] * 0x4000, 2 => 16 + 512 + head[4] * 0x4000 - 1, _ => r.Next(16, 0x100000) };
                 byte[] image = new byte[length];
                 head.AsSpan(0, Math.Min(16, length)).CopyTo(image);
-                string m = Shown(() => NesHeader.ReadManaged(image)), n = Shown(() => SystemCode.NesHeader(image));
-                golden.Add($"nes {Convert.ToHexString(head)} {length}", m);
-                if (m != n) differences.Add($"nes {Convert.ToHexString(head)} {length}: library {n}, C# {m}");
+                golden.Add($"nes {Convert.ToHexString(head)} {length}", Shown(() => NesHeader.Read(image)));
             }
             for (int type = 0; type < 256; type++)
                 foreach (int length in new[] { 0x14F, 0x150, 0x8000, 0x8001, 0x200000 })
@@ -242,12 +197,9 @@ namespace EmuSen.WiseMan.Crystal
                     r.NextBytes(image.AsSpan(0, Math.Min(length, 0x150)));
                     if (length > 0x147) image[0x147] = (byte)type;
                     if (length > 0x149) image[0x149] = (byte)r.Next(8);
-                    string m = Shown(() => GbCartridge.ReadManaged(image)), n = Shown(() => SystemCode.GbHeader(image));
-                    golden.Add($"gb type {type:X2} {length}", m);
-                    if (m != n) differences.Add($"gb type {type:X2} {length}: library {n}, C# {m}");
+                    golden.Add($"gb type {type:X2} {length}", Shown(() => GbCartridge.Read(image)));
                 }
             golden.Check(7000);
-            Assert.True(differences.Count == 0, $"{differences.Count} difference(s):\n" + string.Join("\n", differences.Take(10)));
         }
     }
 }

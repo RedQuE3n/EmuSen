@@ -14,102 +14,24 @@ namespace EmuSen.Crystal.Systems.Genesis
         // The space names the Genesis's engines share, so a cheat means the same memory on each.
         public const string Wram = "WRAM";
 
-        // The C# literals, the failover; each entry is the systems table's row with its literal's code - see EmuSen_Backend.md §12.
-        public static readonly SystemEntry MegaDriveLiteral = new(
-            MegaDriveId,
-            "Sega Genesis / Mega Drive",
-            "Genesis",
-            "Sega",
-            1988,
-            new[] { ".md", ".gen", ".bin", ".smd" },
-            new[] { "Sega - Mega Drive - Genesis" },
-            new[] { "MD" },
-            file => file,
-            0.7,
-            "genesis",
-            "Sega Genesis",
-            SelfDelimitingImages: false,
-            Recognise: probe => IsCartridge(probe.Read(0x8010), s32x: false) ? new Recognition(MegaDriveId) : null,
-            ScreenScraperSystem: 1);
+        // The systems table's rows - see EmuSen_Backend.md §12.
+        public static readonly SystemEntry MegaDrive = SystemTable.Entry(MegaDriveId), MegaCd = SystemTable.Entry(MegaCdId), S32x = SystemTable.Entry(S32xId);
 
-        public static readonly SystemEntry MegaCdLiteral = new(
-            MegaCdId,
-            "Sega CD / Mega-CD",
-            "Sega CD",
-            "Sega",
-            1991,
-            new[] { ".iso", ".cue", ".chd" },
-            new[] { "Sega - Mega-CD - Sega CD" },
-            new[] { "SCD" },
-            file => file,
-            0.7,
-            "segacd",
-            "Sega CD",
-            SelfDelimitingImages: false,
-            // A sheet is read by its first track, which the PlayStation's pack also takes; a CHD by its folder's name - see Nephrite_OpenBios.md §11.
-            Recognise: probe => IsSegaCd(probe.Read(0x40)) ? new Recognition(MegaCdId) : null,
-            AttachedTo: MegaDriveLiteral.Console,
-            ScreenScraperSystem: 20);
+        // Each codec is emusen-systems' under its id - see EmuSen_Backend.md §13.
+        public static ICheatCodeCodec ActionReplay() => SystemCode.Codec("md.ar");
 
-        public static readonly SystemEntry S32xLiteral = new(
-            S32xId,
-            "Sega 32X",
-            "32X",
-            "Sega",
-            1994,
-            new[] { ".32x", ".bin" },
-            new[] { "Sega - 32X" },
-            new[] { "32X" },
-            file => file,
-            0.7,
-            "sega32x",
-            "Sega Mega Drive 32X",
-            SelfDelimitingImages: false,
-            // A .bin is the 32X's by its header's system name, as Nephrite reads it - see EmuSen_Backend.md §32.
-            Recognise: probe => IsCartridge(probe.Read(0x8010), s32x: true) ? new Recognition(S32xId) : null,
-            AttachedTo: MegaDriveLiteral.Console,
-            ScreenScraperSystem: 19);
+        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("md.gg");
 
-        public static readonly SystemEntry MegaDrive = SystemTable.Entry(MegaDriveLiteral), MegaCd = SystemTable.Entry(MegaCdLiteral), S32x = SystemTable.Entry(S32xLiteral);
+        // A Game Genie code for a patch, the pack's encoder.
+        public static string EncodeGameGenie(int address, ushort value) => SystemCode.CheatEncode("md.gg", address, value);
 
-        private static readonly byte[] Sync = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
+        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers);
+        // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat; each the table's words with the pack's extension and module - see EmuSen_SaveMedia.md §6.2, §7.3.
+        public static readonly SaveMedia.SaveMediumEntry BackupRam = SystemTable.Medium("mcd.backup", ".brm", SegaCdBramFormat.BackupRam),
+            RamCartridge = SystemTable.Medium("mcd.ramcart", ".crm", SegaCdBramFormat.RamCartridge);
 
-        // A compact disc's image rather than a cartridge's: a raw track's sync, or an .iso's volume descriptor at sector 16 - Nephrite's own rule, media.rs.
-        public static bool IsCompactDisc(ReadOnlySpan<byte> head) =>
-            (head.Length >= 12 && head[..12].SequenceEqual(Sync)) || (head.Length >= 0x8006 && head.Slice(0x8001, 5).SequenceEqual("CD001"u8));
-
-        // A 32X cartridge's header: 32X in its system name at $100, Nephrite's rule - see Nephrite_Native.md §2.2.
-        public static bool Is32x(ReadOnlySpan<byte> head) => head.Length >= 0x200 && head.Slice(0x100, 16).IndexOf("32X"u8) >= 0;
-
-        // A cartridge, no compact disc, of the 32X or not.
-        public static bool IsCartridge(ReadOnlySpan<byte> head, bool s32x) => !IsCompactDisc(head) && Is32x(head) == s32x;
-
-        // A Sega CD's disc: SEGADISCSYSTEM at the start of its first sector's data.
-        public static bool IsSegaCd(ReadOnlySpan<byte> head)
-        {
-            int data = head.Length >= 16 && head[..12].SequenceEqual(Sync) ? (head[15] == 1 ? 16 : 24) : 0;
-            return head.Length >= data + 14 && head.Slice(data, 14).SequenceEqual("SEGADISCSYSTEM"u8);
-        }
-
-        public static ICheatCodeCodec ManagedActionReplay() => new DelegateCheatCodec("Action Replay", CheatCodeKind.RamPoke, Wram,
-            GenesisCheatFormats.IsActionReplay, GenesisCheatFormats.DecodeActionReplay, decodeWrites: GenesisCheatFormats.ActionReplayWrites);
-
-        public static ICheatCodeCodec ManagedGameGenie() => new DelegateCheatCodec("Game Genie", CheatCodeKind.RomPatch, null,
-            GenesisCheatFormats.IsPatch, GenesisCheatFormats.DecodePatch, decodeWrites: GenesisCheatFormats.PatchWrites);
-
-        // Each codec is emusen-systems' under its id, its Managed twin the C# - see EmuSen_Backend.md §13.
-        public static ICheatCodeCodec ActionReplay() => SystemCode.Codec("md.ar", ManagedActionReplay());
-
-        public static ICheatCodeCodec GameGenie() => SystemCode.Codec("md.gg", ManagedGameGenie());
-
-        public static readonly SystemPack MegaDrivePack = new(MegaDrive, ActionReplay, GameGenie, PlayerControllers, ByteOrder: "big");
-        // The Sega CD's backup RAM inside the unit and its RAM cartridge, one format read by SegaCdBramFormat; each the table's words with its literal's extension and module - see EmuSen_SaveMedia.md §6.2, §7.3.
-        public static readonly SaveMedia.SaveMediumEntry BackupRamLiteral = new("mcd.backup", "Internal Backup RAM", "Backup RAM", ".brm", SegaCdBramFormat.BackupRam),
-            RamCartridgeLiteral = new("mcd.ramcart", "Backup RAM Cartridge", "Cartridge", ".crm", SegaCdBramFormat.RamCartridge),
-            BackupRam = SystemTable.Medium(BackupRamLiteral), RamCartridge = SystemTable.Medium(RamCartridgeLiteral);
-
-        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam }, ByteOrder: "big");
-        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers, ByteOrder: "big");
+        public static readonly SystemPack MegaCdPack = new(MegaCd, ActionReplay, GameGenie, PlayerControllers, Media: new[] { RamCartridge, BackupRam });
+        public static readonly SystemPack S32xPack = new(S32x, ActionReplay, GameGenie, PlayerControllers);
 
         public const string Pad3 = "md.pad3", Pad6 = "md.pad6";
 

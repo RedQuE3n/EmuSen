@@ -1,5 +1,5 @@
-//! The C layer over emusen-net, the platform's HTTP client, for the C# `CheatDatabaseInstaller.Fetch` behind
-//! `EMUSEN_SERVICES_NATIVE` (EmuSen_Backend.md §16). A download is a handle running on a thread of the library's own;
+//! The C layer over emusen-net, the platform's HTTP client, for the C# `CheatDatabaseInstaller.Fetch`, its only
+//! download since 2026-11-04 (EmuSen_Backend.md §16, §40.1). A download is a handle running on a thread of the library's own;
 //! the host drains its progress and waits for its end, and nothing calls the host back.
 
 use std::time::Duration;

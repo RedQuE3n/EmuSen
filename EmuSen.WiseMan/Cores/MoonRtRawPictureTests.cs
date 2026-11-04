@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Cores
             for (int i = 0; i < 256 * 240; i++)
             {
                 int v = raw.Values[2 * i] | raw.Values[2 * i + 1] << 8, c = (v & 0x3F) * 3;
-                if (v >> 9 != 0 || rgba[4 * i] != NesDebugViews.MasterPalette[c] || rgba[4 * i + 1] != NesDebugViews.MasterPalette[c + 1] || rgba[4 * i + 2] != NesDebugViews.MasterPalette[c + 2])
+                if (v >> 9 != 0 || rgba[4 * i] != NesMasterPalette.Bytes[c] || rgba[4 * i + 1] != NesMasterPalette.Bytes[c + 1] || rgba[4 * i + 2] != NesMasterPalette.Bytes[c + 2])
                     Assert.Fail($"frame {frame}, pixel ({i % 256}, {i / 256}): value {v:X3} against the frame's {rgba[4 * i]:X2}{rgba[4 * i + 1]:X2}{rgba[4 * i + 2]:X2}");
                 emphasis.Add(v >> 6);
             }
@@ -87,7 +87,7 @@ namespace EmuSen.WiseMan.Cores
                 for (int v = 0; v < 512; v++)
                 {
                     int c = (v & 0x3F) * 3;
-                    Assert.Equal(NesDebugViews.MasterPalette[c] << 16 | NesDebugViews.MasterPalette[c + 1] << 8 | NesDebugViews.MasterPalette[c + 2], palette[v]);
+                    Assert.Equal(NesMasterPalette.Bytes[c] << 16 | NesMasterPalette.Bytes[c + 1] << 8 | NesMasterPalette.Bytes[c + 2], palette[v]);
                 }
                 core.RunFrame();
                 Assert.Null(core.RawPicture);

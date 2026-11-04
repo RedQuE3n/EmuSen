@@ -241,13 +241,14 @@ namespace EmuSen.Mistress.Scraping
             var info = new FileInfo(path);
             long modified = info.LastWriteTimeUtc.Ticks;
             RomHashes? hashes = null;
-            string? md5 = _store.CachedMd5(path, info.Length, modified);
+            var cached = _store.CachedFile(path, info.Length, modified);
+            string? md5 = cached?.Md5;
+            if (cached is { Crc32: { } crc32, Sha1: { } sha1 }) hashes = new RomHashes(cached.Value.Md5, crc32, sha1, info.Length);
             if (md5 is null)
             {
-                // The file the library lists is hashed whole at any size, as ScreenScraper lists it (§46).
-                hashes = RomHash.Of(path, stop);
+                // The file the library lists is hashed whole at any size, as ScreenScraper lists it (§46), once until it changes (EmuSen_LibraryTools.md §9.11).
+                hashes = HashOnce(path, info.Length, modified, stop);
                 md5 = hashes.Md5;
-                _store.RememberFile(path, info.Length, modified, md5);
             }
 
             ScrapeChoices choices = _choices();
@@ -278,7 +279,7 @@ namespace EmuSen.Mistress.Scraping
             bool byName = known is { State: ScrapeState.Found, MatchedBy: "name", GameId: not null };
 
             if (!await TurnAsync(stop)) return Stopped(item);
-            hashes ??= RomHash.Of(path, stop);
+            hashes ??= HashOnce(path, info.Length, modified, stop);
             Activity?.Invoke(new ScrapeActivity(path, item.System, ScrapeStep.LookingUp));
             string fileName = Path.GetFileName(path);
             // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (§5.5 of EmuSen_GamePackages.md).
@@ -329,6 +330,14 @@ namespace EmuSen.Mistress.Scraping
                     ErrorLog.Warning("scraping", $"ScreenScraper could not answer; queued to retry: {ScrapeRedactor.Redact(Reason(answer))}", path);
                     return new ScrapeResult(path, item.System, ScrapeOutcome.Retry, false, [], Reason(answer));
             }
+        }
+
+        // A file read once for its three hashes, which the path index keeps at its size and time (EmuSen_LibraryTools.md §9.11).
+        private RomHashes HashOnce(string path, long bytes, long modified, CancellationToken stop)
+        {
+            RomHashes hashes = RomHash.Of(path, stop);
+            _store.RememberFile(path, bytes, modified, hashes.Md5, hashes.Crc32, hashes.Sha1);
+            return hashes;
         }
 
         // The patched image's hashes where the game is a package whose identity is "patched", else null.

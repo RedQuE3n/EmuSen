@@ -666,8 +666,9 @@ matches the same games as the hashed lookup.
   as before by the file's path, size and time (`Store::cached_file`, `Store::remember_file`). A file is read once,
   for all three digests in one pass (`hash_once`), and a later lookup of it at the same size and time reads nothing;
   a file whose size or time changed misses and is read again. A row from schema 3 has no CRC32 or SHA-1, so its file
-  is read once more and the row completed. The C# `MediaStore` takes the same migration, and its writer, which keeps
-  only the MD5, clears the other two when it rewrites a row, so a changed file is never sent with old digests.
+  is read once more and the row completed. The C# `MediaStore` takes the same migration and the C# `Scraper` the same
+  rule (`CachedFile`, `HashOnce`), so the two write the same rows (`ScrapeReplayParityTests`); a row written with an
+  MD5 alone has its other two cleared, so a changed file is never sent with old digests.
 - **The workers start with the first answer.** `ask` adds the workers as soon as an answer carries the account's
   limits (`quota.observe`), rather than after the first game ends.
 
@@ -691,7 +692,23 @@ Tests, each failing first with its change switched off: `ScrapeLogTests.A_file_a
 picture's line says `threads=3/3` where the account allows three); `tests/file_hashes.rs` holds the three hashes kept
 at a size and time and a changed file missing. Seeded on 2026-11-03, each caught by `file_hashes.rs`: the CRC32
 stored as the SHA-1; the cache keyed without the size. `ScrapeStoreParityTests` holds the two stores' migration
-alike at every version, its seed's `scrape_file` row now naming its columns.
+alike at every version, its seed's `scrape_file` row now naming its columns; the two tests that build an older file
+from a new one (`ScrapeExtrasTests`, `MediaStoreFoldersTests`) drop schema 4's columns as well.
+
+**The name-and-size lookup (b) is dropped.** Measured on 2026-11-03 on the same five discs (17 requests): a
+`jeuInfos` with no hashes, by the file's name and size, named the same game and rom as the hashed lookup for all five.
+But the answer's own rom record carries the file's MD5, CRC32 and SHA-1 for two of them only (Ape Escape 2, ATV
+Offroad Fury); for Dark Cloud and Armored Core 3 the size agrees and no rom ScreenScraper lists has the file's MD5, and
+for Ape Escape 3 not even the size agrees. So three of the five "hash" lookups were name matches on ScreenScraper's
+side, and the agreement says nothing about a disc whose name is not its dump's. Nor can the answer's digests stand in
+for the file's in `media.db`, which keys every record by the file's own MD5; a stand-in key would change what that
+column means. The hash cache and the early workers stand, and the handheld's scrape log decides what comes next.
+
+**Hashing several discs at once**, measured the same day on the desktop's NVMe with each file's pages dropped first
+(`posix_fadvise(POSIX_FADV_DONTNEED)` through `dd iflag=nocache`, checked with `fincore`): the five discs, 8.49 GB,
+took 31.5 s and 29.4 s one at a time (270 to 289 MB/s, one core's hashing) and 8.6 s and 10.9 s all at once (777 to
+986 MB/s). On this device concurrency helps 2.7 to 3.7 times; whether a cap per device is wanted waits for the
+handheld's log, whose storage this does not measure.
 
 ## 10. T6 as built: the Library Manager window (2026-11-01)
 

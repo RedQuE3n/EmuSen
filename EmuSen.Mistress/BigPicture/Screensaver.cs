@@ -220,8 +220,8 @@ namespace EmuSen.Mistress.BigPicture
             if (h <= 0 || !_overlay.IsVisible) return;
             GlyphTypeface face = Typeface;
             double left = BoxLeft * h, top = BoxTop * h, textLeft = left + TextInset * h, maxText = size.Width * 0.9;
-            Rect name = LaunchScreen.LineBox(face, textLeft, double.PositiveInfinity, top + NameCapTop * h, Cap * h, _name);
-            Rect system = LaunchScreen.LineBox(face, textLeft, double.PositiveInfinity, top + SystemCapTop * h, Cap * h, _system);
+            Rect name = LineBox(face, textLeft, double.PositiveInfinity, top + NameCapTop * h, Cap * h, _name);
+            Rect system = LineBox(face, textLeft, double.PositiveInfinity, top + SystemCapTop * h, Cap * h, _system);
             double star = _star.IsVisible ? (StarGap + StarSize) * h : 0;
             _name.MaxWidth = maxText - star;
             _system.MaxWidth = maxText;
@@ -242,6 +242,25 @@ namespace EmuSen.Mistress.BigPicture
             Canvas.SetTop(c, r.Y);
             c.Width = r.Width;
             c.Height = r.Height;
+        }
+
+        // The em size whose capitals are the given height.
+        internal static double SizeFor(GlyphTypeface face, double cap)
+        {
+            double ratio = face.CharacterToGlyphMap.TryGetGlyph('H', out ushort glyph) && face.TryGetGlyphMetrics(glyph, out GlyphMetrics m) && m.Height != 0
+                ? Math.Abs(m.Height) / face.Metrics.DesignEmHeight : 0.7;
+            return cap / ratio;
+        }
+
+        // A one-line box whose capitals start at capTop, for FontText's half-leading with a line spacing of 1.
+        internal static Rect LineBox(GlyphTypeface face, double x, double width, double capTop, double cap, FontText text)
+        {
+            double size = SizeFor(face, cap);
+            text.FontSize = size;
+            double em = face.Metrics.DesignEmHeight;
+            double ascent = Math.Abs(face.Metrics.Ascent) * size / em, descent = Math.Abs(face.Metrics.Descent) * size / em;
+            double top = capTop + cap - ascent - (size - (ascent + descent)) / 2;
+            return new Rect(x, top, width, size);
         }
     }
 }

@@ -1,266 +1,230 @@
 using System;
-using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Markup.Xaml.MarkupExtensions;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using EmuSen.Galaxia.Models;
-using EmuSen.LunaP.Controls;
 using EmuSen.LunaP.Media;
+using EmuSen.LunaP.Theme;
 
 namespace EmuSen.Mistress.BigPicture
 {
-    // ES-DE's game launch screen and its popup, on ES-DE 3.4.1's measured geometry and timing, drawn from LunaP's pieces - see EmuSen_Settings_Reference.md §4.71.
+    // What the launch screen shows: the name (none for a console started empty), console and engine, the marquee else the cover, and the progress line.
+    public sealed record LaunchCard(string? Name, string System, string? Art, bool Marquee, string Line);
+
+    // EmuSen's launch screen under every look, on the mockup's 1280 by 800 units scaled to the window - see EmuSen_Interface.md §18.3.
     public sealed class LaunchScreen : Panel
     {
-        // How long each setting holds the game back, measured from the press to the launch command (EmuSen_BigPicture.md §33).
-        public static TimeSpan DurationOf(string? setting) => TimeSpan.FromMilliseconds(setting switch
+        public const double DesignWidth = 1280, DesignHeight = 800, CentreY = 330, Gap = 48, BarWidth = 320, BarHeight = 8, CoverRadius = 8;
+        public const double HueOpacity = 0.35, BarShown = 0.6;
+        public static readonly Size CoverBox = new(240, 320), MarqueeBox = new(480, 240);
+        public const string Heading = "STARTING";
+
+        // The least time each setting holds the screen, so the marquee is seen; it also waits for the game's first frame. ES-DE's Popup reads as Brief (§18.3).
+        public static TimeSpan HoldFor(string? setting) => TimeSpan.FromMilliseconds(setting switch
         {
-            BigPictureInterface.LaunchBrief => 1700,
-            BigPictureInterface.LaunchLong => 4500,
-            BigPictureInterface.LaunchPopup => 1700,
+            BigPictureInterface.LaunchBrief or BigPictureInterface.LaunchPopup => 1000,
+            BigPictureInterface.LaunchLong => 3000,
             BigPictureInterface.LaunchDisabled => 0,
-            _ => 3000,
+            _ => 2000,
         });
 
-        public static bool IsPopup(string? setting) => setting == BigPictureInterface.LaunchPopup;
+        public static bool Shows(string? setting) => HoldFor(setting) > TimeSpan.Zero;
 
-        public static readonly TimeSpan ScaleUpTime = TimeSpan.FromMilliseconds(117);
-        public static readonly TimeSpan BackdropTime = TimeSpan.FromMilliseconds(67);
-        public static readonly TimeSpan PopupFadeTime = TimeSpan.FromMilliseconds(500);
+        // Whether a new window shows launch screens; the test assembly turns it off once, and a test about the screen turns its own window's on.
+        public static bool ShownByDefault { get; set; } = true;
 
-        public const string Heading = "Launching Game";
-        public const double ScaleFrom = 0.5, Shade = 0.2, BlurAt800 = 14;
-
-        // Fractions of the window's height, from the 1280x800, 1280x720 and 1920x1200 captures.
-        public const double CardWidth = 0.88625, CardMaxOfWidth = 0.865, CardPad = 0.0425, CardCentre = 0.445, CornerRadius = 0.02;
-        public const double TitleCap = 0.0425, NameCap = 0.054, SystemCap = 0.0325;
-        public const double ArtCardHeight = 0.54625, ArtTitleTop = 0.0625, ArtCentre = 0.240625, ArtWidth = 0.445, ArtHeight = 0.1925, ArtNameTop = 0.3775, ArtSystemTop = 0.455;
-        public const double PlainCardHeight = 0.32, PlainTitleTop = 0.06, PlainNameTop = 0.1575, PlainSystemTop = 0.23125;
-        public const double PopupTop = 0.02, PopupHeight = 0.064, PopupCap = 0.02, PopupPad = 0.025;
-
-        private readonly BlurBackdrop _backdrop = new() { Radius = 0, Shade = Colors.Transparent };
-        private readonly Placed _cardLayer = new();
-        private readonly Border _card = new();
-        private readonly FontText _title = Line();
-        private readonly FontText _name = Line();
-        private readonly FontText _system = Line();
-        private readonly FittedImage _art = new() { Fit = ImageFit.Contain, Interpolation = Avalonia.Media.Imaging.BitmapInterpolationMode.HighQuality };
-        private readonly FontText _pill = Line();
-        private readonly ScaleTransform _scale = new(1, 1);
-        private Rect _cardRect;
+        private readonly Border _back = new();
+        private readonly Viewbox _view = new() { Stretch = Stretch.Uniform };
+        private readonly Grid _design = new() { Width = DesignWidth, Height = DesignHeight };
+        private readonly Border _artFrame = new() { ClipToBounds = true, VerticalAlignment = VerticalAlignment.Center };
+        private readonly Image _art = new() { Stretch = Stretch.Fill };
+        private readonly TextBlock _heading = Words(LunaFonts.Body, "LunaMuted");
+        private readonly TextBlock _name = Words(LunaFonts.Condensed, "LunaTextStrong");
+        private readonly TextBlock _system = Words(LunaFonts.Body, "LunaMuted");
+        private readonly Border _track = new() { Width = BarWidth, Height = BarHeight, CornerRadius = new CornerRadius(BarHeight / 2), HorizontalAlignment = HorizontalAlignment.Left };
+        private readonly Border _fill = new() { Height = BarHeight, CornerRadius = new CornerRadius(BarHeight / 2), HorizontalAlignment = HorizontalAlignment.Left };
+        private readonly TextBlock _line = Words(LunaFonts.Body, "LunaMuted");
+        private readonly StackPanel _group = new() { Orientation = Orientation.Horizontal, Spacing = Gap, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        private Bitmap? _picture;
 
         public LaunchScreen()
         {
             IsVisible = false;
-            Background = Brushes.Transparent;
-            _cardLayer.Children.Add(_card);
-            _cardLayer.Children.Add(_title);
-            _cardLayer.Children.Add(_art);
-            _cardLayer.Children.Add(_name);
-            _cardLayer.Children.Add(_system);
-            _cardLayer.RenderTransform = _scale;
-            _cardLayer.Place = PlaceOnCard;
-            Children.Add(_backdrop);
-            Children.Add(_cardLayer);
-            Children.Add(_pill);
-            _title.Text = Heading;
+            Name = "LaunchScreen";
+            _back[!Border.BackgroundProperty] = new DynamicResourceExtension("LunaVoid");
+            _track[!Border.BackgroundProperty] = new DynamicResourceExtension("LunaMuted");
+            _fill[!Border.BackgroundProperty] = new DynamicResourceExtension("LunaAccent");
+            _heading.Text = Heading;
+            _name.FontWeight = FontWeight.Medium;
+            _artFrame.Child = _art;
+            _track.Child = _fill;
+            var words = new StackPanel { VerticalAlignment = VerticalAlignment.Center, MinWidth = BarWidth };
+            _name.Margin = new Thickness(0, 6, 0, 0);
+            _system.Margin = new Thickness(0, 8, 0, 0);
+            _track.Margin = new Thickness(0, 28, 0, 0);
+            _line.Margin = new Thickness(0, 12, 0, 0);
+            words.Children.Add(_heading);
+            words.Children.Add(_name);
+            words.Children.Add(_system);
+            words.Children.Add(_track);
+            words.Children.Add(_line);
+            _group.Children.Add(_artFrame);
+            _group.Children.Add(words);
+            _group.Margin = new Thickness(0, 0, 0, 2 * (DesignHeight / 2 - CentreY));
+            _design.Children.Add(_group);
+            _view.Child = _design;
+            Children.Add(_back);
+            Children.Add(_view);
         }
 
         public bool IsOpen { get; private set; }
-
-        public bool Popup { get; private set; }
 
         public TimeSpan Opened { get; private set; }
 
         public TimeSpan Due { get; private set; }
 
-        public string? GameName => IsOpen ? _name.Text : null;
+        public LaunchCard? Card { get; private set; }
 
-        public string? SystemName => IsOpen ? _system.Text : null;
+        public string? GameName => IsOpen ? Card?.Name : null;
 
-        public string? ArtPath => IsOpen ? _art.Source : null;
+        public string? SystemName => IsOpen ? Card?.System : null;
 
-        // The visual blurred behind the screen: the themed view.
-        public Visual? Backdrop { get => _backdrop.Target; set => _backdrop.Target = value; }
+        public string? ArtPath => IsOpen && _picture is not null ? Card?.Art : null;
 
-        public double CardScale => _scale.ScaleX;
+        public bool ShowsMarquee => IsOpen && _picture is not null && Card?.Marquee == true;
 
-        public Rect CardBounds => _cardRect;
+        public string? Line => IsOpen ? Card?.Line : null;
 
-        public Rect PopupBounds => _pill.Bounds;
+        // The bar's value, 0 to 1.
+        public double Progress { get; private set; }
 
-        public double PopupOpacity => _pill.Opacity;
+        // The game's hue, the art's average colour, which tints the Void.
+        public Color Hue { get; private set; }
 
-        // Whether the card grows into place, ES-DE's Scale-up, or is drawn whole at once, its None (Q92).
-        public bool ScalesUp { get; private set; } = true;
+        // The picture's box in design units, aspect kept; empty with no picture.
+        public Size ArtSize { get; private set; }
 
-        public void Open(string name, string system, string? art, bool popup, TimeSpan now, TimeSpan duration, bool scaleUp = true)
+        public Control ArtControl => _artFrame;
+
+        public TimeSpan Hold { get; private set; }
+
+        public void Open(LaunchCard card, TimeSpan now, TimeSpan hold)
         {
-            ScalesUp = scaleUp;
+            Card = card;
             IsOpen = true;
-            Popup = popup;
             Opened = now;
-            Due = now + duration;
-            _name.Text = name;
-            _system.Text = system;
-            _art.Source = art;
-            _pill.Text = $"{Heading} '{name}'";
-            _cardLayer.IsVisible = !popup;
-            _backdrop.IsVisible = !popup;
-            _pill.IsVisible = popup;
-            ApplyLook();
+            Hold = hold;
+            Due = now + hold;
+            _picture?.Dispose();
+            _picture = Load(card.Art);
+            _art.Source = _picture;
+            ArtSize = _picture is null ? default : Fit(_picture.PixelSize, card.Marquee ? MarqueeBox : CoverBox);
+            _artFrame.IsVisible = _picture is not null;
+            _artFrame.Width = ArtSize.Width;
+            _artFrame.Height = ArtSize.Height;
+            _artFrame.CornerRadius = new CornerRadius(card.Marquee ? 0 : CoverRadius);
+            Hue = HueOf(_picture);
+            _back.Child = new Border { Background = Wash(Hue) };
+            _heading.Text = Heading;
+            _name.Text = card.Name ?? "";
+            _name.IsVisible = card.Name is { Length: > 0 };
+            _system.Text = card.System;
+            _line.Text = card.Line;
+            foreach ((TextBlock t, double size) in new[] { (_heading, Type.Caption), (_name, Type.Display), (_system, Type.Body), (_line, Type.Body) }) t.FontSize = size;
+            _name.MaxWidth = _system.MaxWidth = _line.MaxWidth = DesignWidth - 128 - (ArtSize.Width > 0 ? ArtSize.Width + Gap : 0);
             IsVisible = true;
             Advance(now);
-            InvalidateMeasure();
         }
 
         public void Close()
         {
             IsOpen = false;
             IsVisible = false;
-            _backdrop.Radius = 0;
-            _backdrop.Shade = Colors.Transparent;
+            _art.Source = null;
+            _picture?.Dispose();
+            _picture = null;
         }
 
-        // Whether the entrance is still moving; after it nothing changes until Due.
-        public bool Moving(TimeSpan now) => IsOpen && now < Opened + (Popup ? PopupFadeTime : ScalesUp ? ScaleUpTime : BackdropTime);
-
+        // The bar fills over the hold, or stands at its value at once under Reduced motion.
         public void Advance(TimeSpan now)
         {
             if (!IsOpen) return;
-            double h = Bounds.Height > 0 ? Bounds.Height : 800;
-            if (Popup)
-            {
-                _pill.Opacity = Fraction(now, PopupFadeTime);
-                return;
-            }
-            double s = ScalesUp ? ScaleFrom + (1 - ScaleFrom) * Fraction(now, ScaleUpTime) : 1;
-            _scale.ScaleX = _scale.ScaleY = s;
-            double b = Fraction(now, BackdropTime);
-            _backdrop.Shade = Color.FromArgb((byte)Math.Round(255 * Shade * b), 0, 0, 0);
-            _backdrop.Radius = BlurAt800 * h / 800 * b;
-            _cardLayer.InvalidateVisual();
+            double f = LunaMotion.Reduced || Hold <= TimeSpan.Zero ? 1 : Math.Clamp((now - Opened).Ticks / (double)Hold.Ticks, 0, 1);
+            Progress = BarShown * f;
+            _fill.Width = BarWidth * Progress;
         }
 
-        private double Fraction(TimeSpan now, TimeSpan span) => Math.Clamp((now - Opened).Ticks / (double)span.Ticks, 0, 1);
+        // Whether the bar is still moving; after it nothing changes until Due.
+        public bool Moving(TimeSpan now) => IsOpen && !LunaMotion.Reduced && now < Due;
 
-        // The menus' own colours, from the look's palette, and typeface, which stand for ES-DE's menu colour scheme here - see EmuSen_InterfaceSpec.md §6.3.3.
-        private void ApplyLook()
+        private static LunaTypeScale Type => LunaTokens.Type(LunaForm.BigScreen);
+
+        // The largest size of the given aspect inside the box, never stretched.
+        public static Size Fit(PixelSize picture, Size box)
         {
-            if (Resources.MergedDictionaries.Count == 0) Resources.MergedDictionaries.Add(MenuLook.CreatePalette());
-            string? font = MenuPanel.GetFontPath(this);
-            _card[!Border.BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
-            _pill[!FontText.BackgroundProperty] = new DynamicResourceExtension("LunaSurface");
-            foreach (FontText t in new[] { _title, _name, _system, _pill })
-            {
-                t[!FontText.ForegroundProperty] = new DynamicResourceExtension("LunaSectionHeader");
-                t.FontPath = font;
-            }
+            if (picture.Width <= 0 || picture.Height <= 0) return default;
+            double scale = Math.Min(box.Width / picture.Width, box.Height / picture.Height);
+            return new Size(picture.Width * scale, picture.Height * scale);
         }
 
-        private static FontText Line() => new()
+        // Void with the hue at 35% at its centre, falling off to Void at the edges, which stands for the blur.
+        private static IBrush Wash(Color hue) => new RadialGradientBrush
         {
-            Wrap = false, LineSpacing = 1, LetterCase = LetterCase.Upper, TextAlignment = TextAlignment.Center, Ellipsis = "…",
+            Center = new RelativePoint(0.5, CentreY / DesignHeight, RelativeUnit.Relative),
+            GradientOrigin = new RelativePoint(0.5, CentreY / DesignHeight, RelativeUnit.Relative),
+            RadiusX = new RelativeScalar(0.75, RelativeUnit.Relative),
+            RadiusY = new RelativeScalar(0.75, RelativeUnit.Relative),
+            GradientStops =
+            {
+                new GradientStop(Color.FromArgb((byte)Math.Round(255 * HueOpacity), hue.R, hue.G, hue.B), 0),
+                new GradientStop(Color.FromArgb(0, hue.R, hue.G, hue.B), 1),
+            },
         };
 
-        private GlyphTypeface Typeface => (MenuPanel.GetFontPath(this) is { } path ? FontFiles.Load(path) : null) ?? FontFiles.Default;
-
-        private double SizeFor(double cap) => SizeFor(Typeface, cap);
-
-        private Rect LineBox(double x, double width, double capTop, double cap, FontText text) => LineBox(Typeface, x, width, capTop, cap, text);
-
-        // The em size whose capitals are the given height.
-        internal static double SizeFor(GlyphTypeface face, double cap)
+        private static Bitmap? Load(string? path)
         {
-            double ratio = face.CharacterToGlyphMap.TryGetGlyph('H', out ushort glyph) && face.TryGetGlyphMetrics(glyph, out GlyphMetrics m) && m.Height != 0
-                ? Math.Abs(m.Height) / face.Metrics.DesignEmHeight : 0.7;
-            return cap / ratio;
+            if (path is not { Length: > 0 } || !File.Exists(path)) return null;
+            try { return new Bitmap(path); }
+            catch (Exception e) when (e is IOException or ArgumentException or NotSupportedException or InvalidOperationException) { return null; }
         }
 
-        // A one-line box whose capitals start at capTop, for FontText's half-leading with a line spacing of 1.
-        internal static Rect LineBox(GlyphTypeface face, double x, double width, double capTop, double cap, FontText text)
+        // The picture's average colour from a 16 by 16 copy; black with no picture.
+        public static Color HueOf(Bitmap? picture)
         {
-            double size = SizeFor(face, cap);
-            text.FontSize = size;
-            double em = face.Metrics.DesignEmHeight;
-            double ascent = Math.Abs(face.Metrics.Ascent) * size / em, descent = Math.Abs(face.Metrics.Descent) * size / em;
-            double top = capTop + cap - ascent - (size - (ascent + descent)) / 2;
-            return new Rect(x, top, width, size);
-        }
-
-        private readonly Dictionary<Control, Rect> _places = new();
-
-        private Rect PlaceOnCard(Control child) => _places.TryGetValue(child, out Rect r) ? r : default;
-
-        protected override Size MeasureOverride(Size availableSize)
-        {
-            Size size = new(double.IsFinite(availableSize.Width) ? availableSize.Width : 1280, double.IsFinite(availableSize.Height) ? availableSize.Height : 800);
-            Lay(size);
-            _backdrop.Measure(size);
-            _cardLayer.Measure(size);
-            _pill.Measure(Size.Infinity);
-            return size;
-        }
-
-        protected override Size ArrangeOverride(Size finalSize)
-        {
-            Lay(finalSize);
-            _backdrop.Arrange(new Rect(finalSize));
-            _cardLayer.Arrange(new Rect(finalSize));
-            double h = finalSize.Height;
-            _pill.FontSize = SizeFor(PopupCap * h);
-            double padV = Math.Max(0, (PopupHeight * h - _pill.FontSize) / 2);
-            _pill.Padding = new Thickness(PopupPad * h, padV);
-            _pill.BackgroundCornerRadius = CornerRadius * h;
-            _pill.Measure(Size.Infinity);
-            Size pill = _pill.DesiredSize;
-            double pillWidth = Math.Min(pill.Width, finalSize.Width * CardMaxOfWidth);
-            _pill.Arrange(new Rect((finalSize.Width - pillWidth) / 2, PopupTop * h, pillWidth, PopupHeight * h));
-            return finalSize;
-        }
-
-        // The card and its lines, laid out for this size: with art or without, and wider for a long name up to its limit.
-        private void Lay(Size size)
-        {
-            double w = size.Width, h = size.Height;
-            bool art = !string.IsNullOrEmpty(_art.Source) && System.IO.File.Exists(_art.Source);
-            _art.IsVisible = art;
-            double cardHeight = (art ? ArtCardHeight : PlainCardHeight) * h;
-            double pad = CardPad * h;
-            Rect nameProbe = LineBox(0, double.PositiveInfinity, 0, NameCap * h, _name);
-            _name.Measure(new Size(double.PositiveInfinity, nameProbe.Height));
-            double maxWidth = Math.Max(CardWidth * h, CardMaxOfWidth * w);
-            double cardWidth = Math.Min(Math.Max(CardWidth * h, _name.DesiredSize.Width + 2 * pad), Math.Min(maxWidth, w));
-            double top = CardCentre * h - cardHeight / 2, left = (w - cardWidth) / 2;
-            _cardRect = new Rect(left, top, cardWidth, cardHeight);
-            _card.CornerRadius = new Avalonia.CornerRadius(CornerRadius * h);
-            double inner = cardWidth - 2 * pad;
-            _places[_card] = _cardRect;
-            _places[_title] = LineBox(left + pad, inner, top + (art ? ArtTitleTop : PlainTitleTop) * h, TitleCap * h, _title);
-            _places[_name] = LineBox(left + pad, inner, top + (art ? ArtNameTop : PlainNameTop) * h, NameCap * h, _name);
-            _places[_system] = LineBox(left + pad, inner, top + (art ? ArtSystemTop : PlainSystemTop) * h, SystemCap * h, _system);
-            _places[_art] = new Rect(w / 2 - ArtWidth * h / 2, top + ArtCentre * h - ArtHeight * h / 2, ArtWidth * h, ArtHeight * h);
-            _cardLayer.RenderTransformOrigin = new RelativePoint(w > 0 ? _cardRect.Center.X / w : 0.5, h > 0 ? _cardRect.Center.Y / h : 0.5, RelativeUnit.Relative);
-        }
-
-        // A panel that puts each child where its owner says.
-        private sealed class Placed : Panel
-        {
-            public Func<Control, Rect>? Place;
-
-            protected override Size MeasureOverride(Size availableSize)
+            if (picture is null) return Colors.Black;
+            using Bitmap small = picture.CreateScaledBitmap(new PixelSize(16, 16), BitmapInterpolationMode.MediumQuality);
+            var bytes = new byte[16 * 16 * 4];
+            IntPtr buffer = Marshal.AllocHGlobal(bytes.Length);
+            try
             {
-                foreach (Control child in Children) child.Measure(Place?.Invoke(child).Size ?? default);
-                return new Size(double.IsFinite(availableSize.Width) ? availableSize.Width : 0, double.IsFinite(availableSize.Height) ? availableSize.Height : 0);
+                small.CopyPixels(new PixelRect(0, 0, 16, 16), buffer, bytes.Length, 16 * 4);
+                Marshal.Copy(buffer, bytes, 0, bytes.Length);
             }
-
-            protected override Size ArrangeOverride(Size finalSize)
+            finally { Marshal.FreeHGlobal(buffer); }
+            bool bgra = small.Format is not { } f || f == PixelFormat.Bgra8888;
+            long r = 0, g = 0, b = 0, n = 0;
+            for (int i = 0; i < bytes.Length; i += 4)
             {
-                foreach (Control child in Children) child.Arrange(Place?.Invoke(child) ?? default);
-                return finalSize;
+                if (bytes[i + 3] == 0) continue;
+                r += bgra ? bytes[i + 2] : bytes[i];
+                g += bytes[i + 1];
+                b += bgra ? bytes[i] : bytes[i + 2];
+                n++;
             }
+            return n == 0 ? Colors.Black : Color.FromRgb((byte)(r / n), (byte)(g / n), (byte)(b / n));
+        }
+
+        private static TextBlock Words(FontFamily font, string brush)
+        {
+            var t = new TextBlock { FontFamily = font, TextTrimming = TextTrimming.CharacterEllipsis, TextWrapping = TextWrapping.NoWrap };
+            t[!TextBlock.ForegroundProperty] = new DynamicResourceExtension(brush);
+            return t;
         }
     }
 }

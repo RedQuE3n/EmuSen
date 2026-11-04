@@ -9,8 +9,8 @@ namespace EmuSen.Mistress.Pages
     public sealed record GameFacts(string Path, string Title, string Console, string? Mark, string? Year, string? Developer, string? Publisher,
         TimeSpan Played, DateTime? LastPlayed, string? Description, bool Favourite, double CoverAspect);
 
-    // The game's pictures by kind: the cover, the hero's best art, a screenshot for the overview, a clip for the poster slot.
-    public sealed record GameArt(string? Cover, string? Hero, string? Screenshot, string? Clip);
+    // The game's pictures by kind: the cover, the hero's best art, a screenshot for the overview, a clip for the poster slot, the marquee for the launch screen.
+    public sealed record GameArt(string? Cover, string? Hero, string? Screenshot, string? Clip, string? Marquee = null);
 
     // One saved state: Slot is its place ("Slot 3", "Auto"), its picture and when it was saved.
     public sealed record GameState(string Path, string Slot, string? Picture, DateTime When);

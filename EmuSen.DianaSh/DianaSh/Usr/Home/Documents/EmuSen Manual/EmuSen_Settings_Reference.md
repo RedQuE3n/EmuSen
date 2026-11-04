@@ -5137,6 +5137,10 @@ still at once. `Auto` is off in Steam's Game Mode, where Steam's own chords on t
 
 ### 4.71 Big picture: the launch screen (2026-09-27)
 
+**Retired 2026-11-03.** ES-DE's card, popup and durations below are the record of what was built; the launch screen is
+now EmuSen's own under every look, held for the setting's least time (Brief 1 s, Normal 2 s, Long 3 s) and until the
+game is loaded, with Popup no longer offered - see `EmuSen_Interface.md` §18.3.
+
 Pass 11 of `EmuSen_BigPicture.md` §21 (its §33 is the record: ES-DE measured, the predictions, the tests, the mutants
 and the pictures). This section is what a player meets. It amends §4.52's "Starting a game and coming back": between
 the resume question and the game there is now the launch screen.

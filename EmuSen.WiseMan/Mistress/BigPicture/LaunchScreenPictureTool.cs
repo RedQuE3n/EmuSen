@@ -15,11 +15,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Pass11PngFactAttribute()
         {
             if (Environment.GetEnvironmentVariable("EMUSEN_BIGPICTURE_PNG") != "1")
-                Skip = "Writes Pass 11's pictures to ~/.cache/emusen/bigpicture/png/pass11/; set EMUSEN_BIGPICTURE_PNG=1 - see EmuSen_BigPicture.md §33";
+                Skip = "Writes the launch screen's pictures to ~/.cache/emusen/tmp/launch/raw/; set EMUSEN_BIGPICTURE_PNG=1 - see EmuSen_Interface.md §18.3";
         }
     }
 
-    // Pass 11's launch screen at 1280x800 and 1920x1200, written outside the repository beside the ES-DE captures - see EmuSen_BigPicture.md §33.
+    // The launch screen's two variants at the mockup's sizes, written outside the repository for the compare with the mockup - see EmuSen_Interface.md §18.3.
     [Trait("Category", "nightly")]
     [Collection(TestCollections.ProcessGlobals)]
     public class LaunchScreenPictureTool
@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         private static readonly HeadlessUnitTestSession Session =
             HeadlessUnitTestSession.GetOrStartForAssembly(typeof(LaunchScreenPictureTool).GetTypeInfo().Assembly);
 
-        public static readonly string PngFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "bigpicture", "png", "pass11");
+        public static readonly string PngFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "tmp", "launch", "raw");
 
         internal const string LongName = "Granite Choir and the Very Long Title That Keeps Going On (Synthetic)";
 
@@ -79,44 +79,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [Pass11PngFact]
         public Task Pictures() => Session.Dispatch(() =>
         {
-            foreach ((int w, int h) in new[] { (1280, 800), (1920, 1200) })
+            foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080) })
             {
                 string size = $"{w}x{h}";
-                using (var s = Open(BigPictureInterface.LaunchNormal, w, h))
-                {
-                    ThemedLibraryPadTests.Enter(s, "snes");
-                    Save(s.Capture(), $"before-{size}");
-                    Shoot(s, LaunchScreenTests.Aurora, $"normal-marquee-{size}", 0, 17, 33, 50, 67, 83, 100, 117, 1500);
-                    Shoot(s, LaunchScreenTests.Brass, $"normal-cover-{size}", 1500);
-                    Shoot(s, LaunchScreenTests.Cobalt, $"normal-noart-{size}", 1500);
-                    Shoot(s, LongName, $"normal-longname-{size}", 1500);
-                }
-                using (var s = Open(BigPictureInterface.LaunchPopup, w, h))
-                {
-                    ThemedLibraryPadTests.Enter(s, "snes");
-                    Shoot(s, LaunchScreenTests.Aurora, $"popup-{size}", 0, 250, 500, 1500);
-                }
-                using (var s = Open(BigPictureInterface.LaunchBrief, w, h))
-                {
-                    ThemedLibraryPadTests.Enter(s, "nes");
-                    s.Pad.A();
-                    s.Run(1700);
-                    s.Run(300);
-                    Save(s.Capture(), $"failed-load-{size}");
-                }
-                if (ArtBookNextFactAttribute.Folder is { } abn && Directory.Exists(abn))
-                {
-                    using var s = Open(BigPictureInterface.LaunchNormal, w, h, abn);
-                    ThemedLibraryPadTests.Enter(s, "snes");
-                    Shoot(s, LaunchScreenTests.Aurora, $"abn-normal-{size}", 1500);
-                }
-            }
-            using (var s = Open(BigPictureInterface.LaunchNormal, 1280, 800))
-            {
-                ThemeSettingsWindow sheet = ThemedSwitchesTests.OpenInterface(s);
-                ThemedSwitchesTests.Named<EmuSen.LunaP.Controls.Dropdown>(sheet, "LaunchScreenDuration").Focus();
-                s.Settle();
-                Save(s.Capture(), "interface-tab-1280x800");
+                using var s = Open(BigPictureInterface.LaunchNormal, w, h);
+                ThemedLibraryPadTests.Enter(s, "snes");
+                Shoot(s, LaunchScreenTests.Aurora, $"marquee-{size}", LaunchScreenTests.Hold - 16);
+                Shoot(s, LaunchScreenTests.Brass, $"cover-{size}", LaunchScreenTests.Hold - 16);
+                Shoot(s, LaunchScreenTests.Cobalt, $"noart-{size}", LaunchScreenTests.Hold - 16);
+                Shoot(s, LongName, $"longname-{size}", LaunchScreenTests.Hold - 16);
             }
         }, default);
     }

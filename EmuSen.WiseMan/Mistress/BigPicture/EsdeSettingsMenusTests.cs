@@ -224,7 +224,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // A on a choice sets it.
             s.Pad.A();
             s.Settle();
-            s.Pad.Up(3);
+            s.Pad.Up(2);
             s.Pad.A();
             s.Settle();
             Assert.False(box.IsDropDownOpen);
@@ -275,19 +275,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             Assert.Contains(InterfaceSettingsPane.OpeningChoices, c => c.Text == "Scale-up");
             Assert.Contains(InterfaceSettingsPane.OpeningChoices, c => c.Text == "None");
-        }, default);
-
-        // Q92 for the launch screen: with None its card is whole from the first frame.
-        [Fact]
-        public Task With_none_the_launch_screen_card_is_whole_at_once() => Session.Dispatch(() =>
-        {
-            using var s = LaunchScreenTests.Open(BigPictureInterface.LaunchNormal, more: a => a.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone);
-            ThemedLibraryPadTests.Enter(s, "snes");
-            s.Pad.A();
-            LaunchScreen screen = LaunchScreenTests.Screen(s)!;
-            Assert.Equal(1, screen.CardScale, 3);
-            Assert.False(screen.ScalesUp);
-            s.Run(3200);
         }, default);
 
     }

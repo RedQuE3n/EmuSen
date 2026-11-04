@@ -64,6 +64,8 @@ namespace EmuSen.WiseMan.Fixtures
 
             Window = new MainWindow { Width = width, Height = height };
             Set("UiClock", (Func<TimeSpan>)(() => Now));
+            // A session that asks for the screen by its setting gets it; the suite's windows have it off (NoLaunchScreen).
+            Set("LaunchScreens", app.BigPictureInterface.LaunchScreenDuration != BigPictureInterface.LaunchDisabled);
             // On a stepped clock a game is loaded after its launch screen, not under it on a worker, whose time is the wall's - see Diamond_Players.md §12.8.3.
             MistressGame.EarlyLoad(Window, null);
             Set("UiSoundSink", (Action<string>)(path => Sounds.Add(Path.GetFileNameWithoutExtension(path))));

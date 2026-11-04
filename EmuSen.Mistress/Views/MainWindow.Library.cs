@@ -296,7 +296,7 @@ namespace EmuSen.Mistress.Views
         private async Task StartFreshAsync(RomEntry entry)
         {
             await PrepareGameAsync(entry.FullPath);
-            LoadGame(entry.FullPath, entry.FileName, resumeFrom: null, reset: false);
+            await UnderLaunchScreenAsync(LaunchCardFor(entry.FullPath, null, LoadingLine), () => LoadGame(entry.FullPath, entry.FileName, resumeFrom: null, reset: false));
         }
 
         private void ToggleFavourite(RomEntry entry)

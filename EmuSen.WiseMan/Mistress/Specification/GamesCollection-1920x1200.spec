@@ -21,15 +21,15 @@ tree
             6 SectionTab at=96,60,183,66 by=panel drawn focus heard=Weekend limit=0,0,1920,1200 op paints=#4C9AE8FF,#EEEEF0FF role=tabitem text=WEEKEND
               7 AccessText at=120,72,135,37.5 box=90,25 by=clip caps=13.999 drawn face=Barlow layout=89.36,24 limit=96,60,183,66 owner=6 paints=#EEEEF0FF role=none size=20 text=WEEKEND
         8 Panel at=213,162,1494,756 by=panel heard=Weekend limit=0,0,1920,1200 name=GalleryGrid role=none
-          9 CoverCard at=204.9,151.2,286.2,381.6 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Aurora Drift (Synthetic).sfc" role=none
+          9 CoverCard at=204.9,151.2,286.2,381.6 by=panel heard="Aurora Drift (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Aurora Drift (Synthetic).sfc" role=none
             10 Border at=208.08,151.2,279.84,381.6 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               11 Image at=208.08,151.2,279.84,381.6 by=clip drawn limit=208.08,151.2,279.84,381.6 nohit role=image
             12 Border at=196.95,140.07,302.1,403.86 by=panel limit=0,0,1920,1200 name=CoverRing nohit paints=#4C9AE8FF role=none
-          13 CoverCard at=519,162,270,360 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Brass Lantern (Synthetic).sfc" role=none
+          13 CoverCard at=519,162,270,360 by=panel heard="Brass Lantern (Synthetic), favourite" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Brass Lantern (Synthetic).sfc" role=none
             14 Border at=522,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               15 Image at=522,162,264,360 by=clip drawn limit=522,162,264,360 nohit role=image
             16 Path at=738,174,36,36 by=panel limit=0,0,1920,1200 name=CoverHeart nohit role=none
-          17 CoverCard at=825,162,270,360 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 name="GalleryTile./tmp/EmuSenWindowFit/001/Roms/Cobalt Harbor (Synthetic).sfc" role=none
+          17 CoverCard at=825,162,270,360 by=panel heard="Cobalt Harbor (Synthetic)" limit=0,0,1920,1200 name="GalleryTile.<run>/Roms/Cobalt Harbor (Synthetic).sfc" role=none
             18 Border at=828,162,264,360 by=panel limit=0,0,1920,1200 name=CoverBox paints=#26262BFF role=none
               19 Image at=828,162,264,360 by=clip drawn limit=828,162,264,360 nohit role=image
         20 TextBlock at=96,942,1728,58.5 box=1152,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic)" layout=234.91,38.4 limit=0,0,1920,1200 name=GalleryName paints=#EEEEF0FF role=text size=32 text="Aurora Drift (Synthetic)"

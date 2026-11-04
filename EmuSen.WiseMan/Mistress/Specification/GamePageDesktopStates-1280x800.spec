@@ -56,34 +56,34 @@ tree
           41 Border at=24,349,1032,385 by=fixed-scroll in=40 limit=24,349,1032,385 name=PageContent role=none
             42 WrapPanel at=28,353,1024,377 by=fixed-scroll in=40 limit=24,349,1032,385 name=PageTiles role=none
               43 StackPanel at=28,353,160,158 by=fixed-scroll in=40 limit=24,349,1032,385 role=none
-                44 Panel at=28,353,160,120 by=fixed-scroll heard="Slot 1, 2 h ago" in=40 limit=24,349,1032,385 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).state" role=none
+                44 Panel at=28,353,160,120 by=fixed-scroll heard="Slot 1, 2 h ago" in=40 limit=24,349,1032,385 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).state" role=none
                   45 Border at=28,353,160,120 by=fixed-scroll in=40 limit=24,349,1032,385 paints=#26262BFF role=none
                     46 Panel at=28,353,160,120 by=clip in=40 limit=28,353,160,120 role=none
                       47 Image at=28,353,160,120 by=clip drawn in=40 limit=28,353,160,120 nohit role=image
                 48 TextBlock at=28,481,160,14 box=160,14 by=fixed-scroll caps=7.6995 drawn face=Barlow heard="Slot 1" in=40 layout=23.47,13.2 limit=24,349,1032,385 paints=#D4D4D4FF role=text size=11 text="Slot 1"
                 49 TextBlock at=28,497,160,14 box=160,14 by=fixed-scroll caps=7.6995 drawn face=Barlow heard="2 h ago" in=40 layout=33.07,13.2 limit=24,349,1032,385 paints=#8D8D91FF role=text size=11 text="2 h ago"
               50 StackPanel at=204,353,160,158 by=fixed-scroll in=40 limit=24,349,1032,385 role=none
-                51 Panel at=204,353,160,120 by=fixed-scroll heard="Slot 2, Yesterday" in=40 limit=24,349,1032,385 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot2.state" role=none
+                51 Panel at=204,353,160,120 by=fixed-scroll heard="Slot 2, Yesterday" in=40 limit=24,349,1032,385 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot2.state" role=none
                   52 Border at=204,353,160,120 by=fixed-scroll in=40 limit=24,349,1032,385 paints=#26262BFF role=none
                     53 Panel at=204,353,160,120 by=clip in=40 limit=204,353,160,120 role=none
                       54 Image at=204,353,160,120 by=clip drawn in=40 limit=204,353,160,120 nohit role=image
                 55 TextBlock at=204,481,160,14 box=160,14 by=fixed-scroll caps=7.6995 drawn face=Barlow heard="Slot 2" in=40 layout=25.59,13.2 limit=24,349,1032,385 paints=#D4D4D4FF role=text size=11 text="Slot 2"
                 56 TextBlock at=204,497,160,14 box=160,14 by=fixed-scroll caps=7.6995 drawn face=Barlow heard=Yesterday in=40 layout=46.51,13.2 limit=24,349,1032,385 paints=#8D8D91FF role=text size=11 text=Yesterday
               57 StackPanel at=380,353,160,158 by=fixed-scroll in=40 limit=24,349,1032,385 role=none
-                58 Panel at=380,353,160,120 by=fixed-scroll heard="Slot 3, 3 days ago" in=40 limit=24,349,1032,385 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state" role=none
+                58 Panel at=380,353,160,120 by=fixed-scroll heard="Slot 3, 3 days ago" in=40 limit=24,349,1032,385 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state" role=none
                   59 Border at=380,353,160,120 by=fixed-scroll in=40 limit=24,349,1032,385 paints=#26262BFF role=none
                     60 Panel at=380,353,160,120 by=clip in=40 limit=380,353,160,120 role=none
                       61 Image at=380,353,160,120 by=clip drawn in=40 limit=380,353,160,120 nohit role=image
                   62 Border at=377,350,166,126 by=fixed-scroll in=40 limit=24,349,1032,385 nohit paints=#4C9AE8FF role=none
                   63 StackPanel at=399,441,122,24 by=fixed-scroll in=40 limit=24,349,1032,385 role=none
-                    64 Button at=399,441,50,24 by=fixed-scroll drawn focus heard=Load in=40 limit=24,349,1032,385 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state.load" op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=button text=Load
+                    64 Button at=399,441,50,24 by=fixed-scroll drawn focus heard=Load in=40 limit=24,349,1032,385 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state.load" op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=button text=Load
                       65 AccessText at=412,442,24,22 box=24,22 by=clip caps=7.6995 drawn face=Barlow in=40 layout=23.35,13.2 limit=399,441,50,24 owner=64 paints=#D4D4D4FF role=none size=11 text=Load
-                    66 Button at=465,441,56,24 by=fixed-scroll drawn focus heard=Delete in=40 limit=24,349,1032,385 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state.delete" op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=button text=Delete
+                    66 Button at=465,441,56,24 by=fixed-scroll drawn focus heard=Delete in=40 limit=24,349,1032,385 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).slot3.state.delete" op paints=#0E0E10FF,#707070FF,#D4D4D4FF role=button text=Delete
                       67 AccessText at=478,442,30,22 box=30,22 by=clip caps=7.6995 drawn face=Barlow in=40 layout=29.33,13.2 limit=465,441,56,24 owner=66 paints=#D4D4D4FF role=none size=11 text=Delete
                 68 TextBlock at=380,481,160,14 box=160,14 by=fixed-scroll caps=7.6995 drawn face=Barlow heard="Slot 3" in=40 layout=25.46,13.2 limit=24,349,1032,385 paints=#EEEEF0FF role=text size=11 text="Slot 3"
                 69 TextBlock at=380,497,160,14 box=160,14 by=fixed-scroll caps=7.6995 drawn face=Barlow heard="3 days ago" in=40 layout=48.88,13.2 limit=24,349,1032,385 paints=#8D8D91FF role=text size=11 text="3 days ago"
               70 StackPanel at=556,353,160,158 by=fixed-scroll in=40 limit=24,349,1032,385 role=none
-                71 Panel at=556,353,160,120 by=fixed-scroll heard="Auto, Where you left off · 12 min ago" in=40 limit=24,349,1032,385 name="PageTile./tmp/EmuSenThemedSession/001/Home/Saves/Save States/Cobalt Harbor (Synthetic).resume.state" role=none
+                71 Panel at=556,353,160,120 by=fixed-scroll heard="Auto, Where you left off · 12 min ago" in=40 limit=24,349,1032,385 name="PageTile.<run>/Home/Saves/Save States/Cobalt Harbor (Synthetic).resume.state" role=none
                   72 Border at=556,353,160,120 by=fixed-scroll in=40 limit=24,349,1032,385 paints=#26262BFF role=none
                     73 Panel at=556,353,160,120 by=clip in=40 limit=556,353,160,120 role=none
                       74 Image at=556,353,160,120 by=clip drawn in=40 limit=556,353,160,120 nohit role=image

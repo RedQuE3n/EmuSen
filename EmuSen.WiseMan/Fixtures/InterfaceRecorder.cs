@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Fixtures
             var a = n.Attrs;
             AutomationPeer peer = ControlAutomationPeer.CreatePeerForElement(c);
             a["role"] = peer.GetAutomationControlType().ToString().ToLowerInvariant();
-            if (c.Name is { Length: > 0 } name) a["name"] = name;
+            if (c.Name is { Length: > 0 } name) a["name"] = Normalise(name);
             if (AutomationProperties.GetLiveSetting(c) is not AutomationLiveSetting.Off and var live) a["live"] = live.ToString().ToLowerInvariant();
             if (c.TemplatedParent is not null) a["part"] = "";
             // A control whose words or measure come from the wall clock, a running game or the run's own folders is recorded by what it is and why, not by where or what it shows.

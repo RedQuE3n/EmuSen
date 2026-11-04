@@ -88,7 +88,7 @@ namespace EmuSen.Mistress.Views
         private IImage? Load(string? path) => path is null ? null : _covers.Get(path);
 
         private static CoverItem CoverOf(string path, string title, string? mark, double aspect, bool favourite, string facts, string line) =>
-            new(path, title) { Aspect = aspect, Mark = mark, IsFavourite = favourite, Facts = facts, Status = line };
+            new(path, title) { Aspect = GameFacts.CardShape(aspect), Mark = mark, IsFavourite = favourite, Facts = facts, Status = line };
 
         // A cover's picture and its art asked only for what a screen draws, through the library's cover cache.
         private IImage? CoverPicture(CoverItem item) => Load(((IGamePageHost)this).Art(item.Key).Cover);

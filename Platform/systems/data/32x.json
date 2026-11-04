@@ -7,7 +7,7 @@
   "extensions": [".32x", ".bin"],
   "cheat_systems": ["Sega - 32X"],
   "openvgdb_systems": ["32X"],
-  "cover_aspect": 0.7,
+  "cover_aspect": 1.4,
   "esde_system": "sega32x",
   "esde_full_name": "Sega Mega Drive 32X",
   "self_delimiting_images": false,

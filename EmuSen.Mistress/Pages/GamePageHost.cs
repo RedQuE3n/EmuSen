@@ -7,7 +7,11 @@ namespace EmuSen.Mistress.Pages
 {
     // What a game's page shows of one game, read fresh each time it changes; pictures are files, never loaded here - see EmuSen_BigPicture.md §50.
     public sealed record GameFacts(string Path, string Title, string Console, string? Mark, string? Year, string? Developer, string? Publisher,
-        TimeSpan Played, DateTime? LastPlayed, string? Description, bool Favourite, double CoverAspect);
+        TimeSpan Played, DateTime? LastPlayed, string? Description, bool Favourite, double CoverAspect)
+    {
+        // The table's height over width as the width over height a generated card is drawn at (EmuSen_Interface.md §21).
+        public static double CardShape(double heightOverWidth) => heightOverWidth > 0 ? 1 / heightOverWidth : 1 / Crystal.Systems.CoreDescriptor.DefaultCoverAspect;
+    }
 
     // The game's pictures by kind: the cover, the hero's best art, a screenshot for the overview, a clip for the poster slot, the marquee for the launch screen.
     public sealed record GameArt(string? Cover, string? Hero, string? Screenshot, string? Clip, string? Marquee = null);

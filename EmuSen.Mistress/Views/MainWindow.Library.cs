@@ -138,7 +138,7 @@ namespace EmuSen.Mistress.Views
             string title = DisplayTitle(entry) is var shown && shown != entry.Title ? shown : ArtworkIndex.Untagged(entry.Title);
             string tags = entry.Title.Length > title.Length ? entry.Title[title.Length..].Trim() : "";
             string subtitle = MixedConsoles ? (tags.Length > 0 ? $"{console}  ·  {FirstTag(tags)}" : console) : FirstTag(tags);
-            ((CoverTile)tile).Show(title, subtitle, console, descriptor?.CoverAspect ?? 1.365,
+            ((CoverTile)tile).Show(title, subtitle, console, descriptor?.CoverAspect ?? Crystal.Systems.CoreDescriptor.DefaultCoverAspect,
                 cover is null ? null : _covers.Get(cover), _recordSnapshot.TryGetValue(entry.FullPath, out GameRecord? r) && r.Favourite);
         }
 

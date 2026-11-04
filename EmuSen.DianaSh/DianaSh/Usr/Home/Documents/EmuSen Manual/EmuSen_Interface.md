@@ -1856,11 +1856,17 @@ beside the Pause Card (`PauseCardPane.ShowCover`) keeps its border only for the 
 fills the square cell. The Home card's cover (`ShowBeside`) and the desktop grid's `CoverTile` already drew a picture at
 its own shape and are unchanged. §5.8's "covers in the console's box shape" now holds for generated cards only.
 
-**Not changed.** The table's units. A generated card still takes `CoverAspect` as width over height, so a game without art
-on the NES, Master System, SG-1000 or PlayStation 2 is a landscape card and one on the SNES or N64 a tall card, the
-inverse of the mockups. Correcting it means reading the table as height over width in `CoverOf` and correcting the
-Genesis family's 0.7 to its box's height over width in `md.json`, `mcd.json` and `32x.json`; left for the tester's
-decision.
+**Generated cards, one meaning for the field.** Decided 2026-11-04 by the tester, as the same defect: `cover_aspect` means
+height over width everywhere. A generated card took it as width over height, so a game without art on the NES, Master
+System, SG-1000 or PlayStation 2 was a landscape card and one on the SNES or N64 a tall card. `GameFacts.CardShape` is the
+one conversion to LunaP's width over height, used by `CoverOf` (Home, the grid, Collections and the Pause Card's disc
+cover) and the game page's hero. The Genesis, Sega CD and 32X values, 0.7, were the one row written the other way
+(`Endou_Native.md` §14.3's open item) and are now 1.4 in `md.json`, `mcd.json` and `32x.json`, a tall box like the NES's
+and the Master System's, argued from the boxes rather than measured. The desktop grid's `CoverTile` already read the table
+as height over width; it and the game page's facts now fall back to `CoreDescriptor.DefaultCoverAspect` rather than a
+literal. `CoverShapeTests` (WiseMan) draws a generated card for each of the fourteen systems through `CoverOf` and holds its
+height over width to the table and its orientation to the real box (tall, landscape or near-square); with the conversion
+removed, the ten not near-square failed.
 
 **Tests.** The own look's synthetic library now carries covers at real box shapes (`SyntheticLibrary.BoxCovers`: SNES and
 N64 560 x 400, NES 420 x 600, Game Boy and Game Boy Color 540 x 600), written to their own temporary folder so an older

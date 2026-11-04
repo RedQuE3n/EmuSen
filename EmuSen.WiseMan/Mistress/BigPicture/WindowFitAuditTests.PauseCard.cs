@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
+using EmuSen.Galaxia;
+using EmuSen.Galaxia.Library;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
@@ -71,5 +74,28 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 window.Close();
             }
         }, default);
+
+        // A PlayStation game from two synthetic discs in the library, Basalt Run running and Cobalt Harbor beside it, as ingame-change-disc draws them.
+        private (MainWindow, PadDriver) InDiscGame(int width, int height)
+        {
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+            string basalt = SyntheticPsxDisc.Build().WriteSet(_romDir, "Basalt Run");
+            SyntheticPsxDisc.Build().WriteSet(_romDir, "Cobalt Harbor");
+            var app = new EmuSen.Galaxia.Models.AppSettings
+            {
+                RomDirectory = _romDir, LibraryView = EmuSen.Galaxia.Models.AppSettings.LibraryList, BigScreen = true, ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever,
+                StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats"),
+            };
+            app.BigPictureInterface.MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone;
+            app.Save();
+            var window = new MainWindow { Width = width, Height = height };
+            window.Show();
+            var pad = new PadDriver(window);
+            Settle(window);
+            OwnLook.Play(window, pad, basalt);
+            WaitFor(() => window.GetControl<Control>("GameFrame").IsVisible, "the disc game");
+            return (window, pad);
+        }
     }
 }

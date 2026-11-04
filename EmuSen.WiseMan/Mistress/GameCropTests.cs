@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Mistress
 
         // Until it has one of its own the edges show the console's; an edge stepped or typed makes the crop the game's own, a word typed changes nothing, and a number past the most is held to it.
         [Fact]
-        public void The_page_starts_from_the_console_s_crop_and_an_edge_changed_makes_the_crop_the_game_s_own()
+        public Task The_page_starts_from_the_console_s_crop_and_an_edge_changed_makes_the_crop_the_game_s_own() => Session.Dispatch(() =>
         {
             (SettingsHostFake host, SettingsScreen s) = Open();
             Assert.Equal("Mario Kart 64 (Europe)", s.Trail[^1]);
@@ -57,11 +57,11 @@ namespace EmuSen.WiseMan.Mistress
             s.Step("gamecrop", 1);
             Assert.Null(host.CropOf(Game));
             Assert.Equal(["3.3%", "3.3%", "3.3%", "3.3%"], Edges(s));
-        }
+        }, default);
 
         // A game with a crop of its own opens on it, and On from Off starts from the console's.
         [Fact]
-        public void A_game_with_a_crop_of_its_own_opens_on_it_and_on_starts_from_the_console_s()
+        public Task A_game_with_a_crop_of_its_own_opens_on_it_and_on_starts_from_the_console_s() => Session.Dispatch(() =>
         {
             (SettingsHostFake host, SettingsScreen s) = Open();
             host.SetCrop(Game, new GameCrop(2.4, 2.5, 3.5, 3.5));
@@ -71,11 +71,11 @@ namespace EmuSen.WiseMan.Mistress
             s.Step("gamecrop", 1);
             s.Step("gamecrop", 1);
             Assert.Equal(new GameCrop(3.3, 3.3, 3.3, 3.3), host.CropOf(Game));
-        }
+        }, default);
 
         // The Pause Card's Display offers it for a console with an overscan, and A on it opens the four edges as a page.
         [Fact]
-        public void Display_offers_it_for_a_game_whose_console_has_an_overscan()
+        public Task Display_offers_it_for_a_game_whose_console_has_an_overscan() => Session.Dispatch(() =>
         {
             var host = new SettingsHostFake { RunningConsole = "N64", RunningGame = Game };
             var s = new SettingsScreen(host);
@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.Mistress
             var handheld = new SettingsScreen(new SettingsHostFake { RunningConsole = "Game Boy", RunningGame = "/r/a.gb" });
             handheld.OpenGame(SettingsScreen.GameDisplay);
             Assert.DoesNotContain("This game's crop", handheld.Rows.Select(r => r.Label));
-        }
+        }, default);
 
         [Fact]
         public void It_is_offered_for_a_game_of_a_console_that_has_an_overscan()

@@ -171,29 +171,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             return (window, pad);
         }
 
-        // A PlayStation game from two synthetic discs in the library, Basalt Run running and Cobalt Harbor beside it, as ingame-change-disc draws them.
-        private (MainWindow, PadDriver) InDiscGame(int width, int height)
-        {
-            EmuSen.Galaxia.ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
-            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            string basalt = SyntheticPsxDisc.Build().WriteSet(_romDir, "Basalt Run");
-            SyntheticPsxDisc.Build().WriteSet(_romDir, "Cobalt Harbor");
-            var app = new EmuSen.Galaxia.Models.AppSettings
-            {
-                RomDirectory = _romDir, LibraryView = EmuSen.Galaxia.Models.AppSettings.LibraryList, BigScreen = true, ResumeOnLaunch = EmuSen.Galaxia.Models.AppSettings.ResumeNever,
-                StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats"),
-            };
-            app.BigPictureInterface.MenuOpeningEffect = EmuSen.Galaxia.Models.BigPictureInterface.OpeningNone;
-            app.Save();
-            var window = new MainWindow { Width = width, Height = height };
-            window.Show();
-            var pad = new PadDriver(window);
-            Settle(window);
-            OwnLook.Play(window, pad, basalt);
-            WaitFor(() => window.GetControl<Control>("GameFrame").IsVisible, "the disc game");
-            return (window, pad);
-        }
-
         // Each run of words the card and its pane draw: its ink, the colour most often under its box, and their ratio.
         internal static IEnumerable<(string What, Color Ink, Color Behind, double Ratio)> CardWords(MainWindow window)
         {

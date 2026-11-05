@@ -19,6 +19,8 @@ namespace EmuSen.WiseMan.Crystal
 
         public ParityGolden(string name) => _name = name;
 
+        public string Name => _name;
+
         public static string Folder => Path.Combine(ConfigRoot.Directory, "EmuSen.WiseMan", "Crystal", "Goldens");
 
         public string File => Path.Combine(Folder, _name + ".golden.gz");

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -8,6 +9,7 @@ using Avalonia.Headless;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture;
+using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
 using Xunit;
@@ -112,6 +114,81 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using var s = Own(a => a.BigScreen = false);
             Assert.Empty(Heard(s, () => { s.Pad.Down(); s.Pad.Start(); s.Pad.Down(); s.Pad.B(); s.Pad.Y(); }));
+        }, default);
+
+        // What one press played under a theme, as recorded: a theme's file by its name, Mistress's own by its key.
+        private static string[] Played(ThemedSession s, Action press)
+        {
+            s.Sounds.Clear();
+            press();
+            s.Settle();
+            return s.Sounds.ToArray();
+        }
+
+        // Under a theme the cards, Settings and the game page sound as under the own look, each cue resolved as the theme's view resolves it.
+        private static void Walk(ThemedSession s, Func<string, string> heard)
+        {
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.Start();
+            Assert.True(PadMenu.IsOpen(s.Window));
+            Assert.Equal([heard("scroll")], Played(s, () => s.Pad.Down()));
+            Assert.Equal([heard("back")], Played(s, () => s.Pad.Start()));
+            Assert.False(PadMenu.IsOpen(s.Window));
+
+            s.Pad.Start();
+            int[] path = PadMenu.PathTo(s.Window, MainWindow.SettingsMenu, exact: true)!;
+            while (PadMenu.Selected(s.Window) != path[0]) s.Pad.Down();
+            Assert.Equal([heard("select")], Played(s, () => s.Pad.A()));
+            Assert.NotNull(s.Window.SettingsShown);
+            Assert.Equal([heard("scroll")], Played(s, () => s.Pad.Down()));
+            Assert.Equal([heard("systembrowse")], Played(s, () => s.Pad.R1()));
+            while (s.Window.SettingsShown is not null) Assert.Equal([heard("back")], Played(s, () => s.Pad.B()));
+            if (PadMenu.IsOpen(s.Window)) Assert.Equal([heard("back")], Played(s, () => s.Pad.Start()));
+
+            s.Pad.X();
+            Assert.NotNull(s.Window.GamePageLayout);
+            Assert.Equal([heard("scroll")], Played(s, () => s.Pad.Right()));
+            while (s.Window.GamePageLayout is not null) Assert.Equal([heard("back")], Played(s, () => s.Pad.B()));
+            Assert.Equal("gamelist", s.View);
+            Assert.Equal(["scroll"], Played(s, () => s.Pad.Down()).Select(n => n.Replace(NavigationSounds.Prefix, "")).ToArray());
+        }
+
+        [Fact]
+        public Task Under_a_theme_the_cards_Settings_and_the_game_page_play_the_theme_s_own_cues() => Session.Dispatch(() =>
+        {
+            using var s = new ThemedSession();
+            Walk(s, n => n);
+        }, default);
+
+        [Fact]
+        public Task Under_a_theme_without_a_sound_the_cards_play_Mistress_s_own_for_it() => Session.Dispatch(() =>
+        {
+            using (var none = new ThemedSession(sounds: false)) Walk(none, NavigationSounds.Key);
+
+            using var some = new ThemedSession();
+            File.Delete(some.Theme.PathOf("sounds/scroll.wav"));
+            some.Themed.Forget();
+            some.Refresh();
+            Walk(some, n => n == "scroll" ? NavigationSounds.Key(n) : n);
+        }, default);
+
+        [Fact]
+        public Task Under_a_theme_the_cards_are_silent_with_the_switch_off_and_over_a_game() => Session.Dispatch(() =>
+        {
+            using (var off = new ThemedSession(settings: a => a.NavigationSounds = false))
+            {
+                ThemedLibraryPadTests.Enter(off, "snes");
+                Assert.Empty(Played(off, () => { off.Pad.Start(); off.Pad.Down(); off.Pad.Up(); off.Pad.Start(); off.Pad.X(); off.Pad.Right(); off.Pad.B(); }));
+            }
+
+            using var s = new ThemedSession();
+            ThemedLibraryPadTests.Enter(s, "snes");
+            s.Pad.A();
+            Assert.True(GameShown(s));
+            Assert.Empty(Played(s, () => s.Pad.Chord(SDL.GamepadButton.Back, SDL.GamepadButton.Start)));
+            Assert.True(PadMenu.IsOpen(s.Window));
+            Assert.Empty(Played(s, () => { s.Pad.Down(); s.Pad.Up(); s.Pad.B(); s.Pad.A(); }));
+            LaunchScreenTests.Stop(s.Window);
         }, default);
     }
 }

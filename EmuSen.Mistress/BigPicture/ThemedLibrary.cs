@@ -281,9 +281,12 @@ namespace EmuSen.Mistress.BigPicture
         public void Sound(string name)
         {
             if (PlaySound is null || Stage is null) return;
-            if (Stage.Current.Data.System.Theme.Sounds.GetValueOrDefault(name) is { Exists: true } path) PlaySound(path.Absolute);
-            else PlaySound(NavigationSounds.Key(name)); // Mistress's own for each sound a theme lacks, as THEMES.md says ES-DE falls back (§29).
+            PlaySound(SoundFor(name));
         }
+
+        // The theme's own file for a sound, else Mistress's own, as THEMES.md says ES-DE falls back (§29); the cards over the view resolve theirs here too.
+        public string SoundFor(string name) =>
+            Stage?.Current.Data.System.Theme.Sounds.GetValueOrDefault(name) is { Exists: true } path ? path.Absolute : NavigationSounds.Key(name);
 
         public void Advance(TimeSpan now)
         {

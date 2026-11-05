@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.Audio
         private static AudioPlayer Library(string? device = null)
         {
             Assert.True(DeviceNative.Ready, DeviceNative.Report);
-            var player = new AudioPlayer(32000, 256, 0.005, 4096, native: true);
+            var player = new AudioPlayer(32000, 256, 0.005, 4096);
             if (device is not null) player.SetOutputDevice(device);
             return player;
         }

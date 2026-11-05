@@ -1,27 +1,23 @@
 using System;
 using EmuSen.Endymion.Input;
-using EmuSen.Endymion.Native;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.WiseMan.Endymion
 {
-    // A port's motors reach the pad of the player the port hears, through the C#'s devices and the library's alike - see EmuSen_Input.md §9.
+    // A port's motors reach the pad of the player the port hears, through the library's devices - see EmuSen_Input.md §9.
     public class RumbleRouteTests
     {
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void A_ports_motors_reach_its_players_pad_and_nothing_past_the_games_ports(bool native)
+        [Fact]
+        public void A_ports_motors_reach_its_players_pad_and_nothing_past_the_games_ports()
         {
-            if (native) Assert.True(EndymionNative.Ready, EndymionNative.Report);
-            var devices = new SimulatedPads(native);
-            var (first, second) = (new SimulatedPad(native), new SimulatedPad(native));
+            var devices = new SimulatedPads();
+            var (first, second) = (new SimulatedPad(), new SimulatedPad());
             devices.Connect(first);
             devices.Connect(second);
-            using var manager = new GamepadManager(new GamepadBindingMap(), true, devices, native);
+            using var manager = new GamepadManager(new GamepadBindingMap(), true, devices);
             manager.Assign(manager.Pads[0], 1);
             manager.Assign(manager.Pads[1], 2);
-            var router = new PortRouter(manager, (_, _, _) => { }, (_, _, _) => { }, null, native);
+            var router = new PortRouter(manager, (_, _, _) => { }, (_, _, _) => { }, null);
             router.Reset(2, Array.Empty<PadAxis>());
 
             router.Rumble(1, 40000, 7);

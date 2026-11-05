@@ -8,10 +8,10 @@ namespace EmuSen.Galaxia.Native
     {
         private static readonly ConcurrentDictionary<string, byte> Said = new(StringComparer.Ordinal);
 
-        public static void Note(string variable, string component)
+        public static void Note(string variable, string component, string since = "2026-11-04")
         {
             if (Environment.GetEnvironmentVariable(variable) != "0" || !Said.TryAdd(variable, 0)) return;
-            string message = $"{variable}=0 is ignored: {component} has had no C# implementation since 2026-11-04 and runs on {PlatformLibrary.FileName}.";
+            string message = $"{variable}=0 is ignored: {component} has had no C# implementation since {since} and runs on {PlatformLibrary.FileName}.";
             ConfigDiagnostics.Report(message);
             Library.ErrorLog.Warning("platform", message);
         }

@@ -46,7 +46,7 @@ namespace EmuSen.Endymion.Native
         public nuint PathLength;
     }
 
-    // Endymion's half of emusen_platform, and the switch that chooses it over the C# - see EmuSen_RustPlatform.md §3.9 and §12.
+    // Endymion's half of emusen_platform, the only implementation since 2026-11-05 - see EmuSen_RustPlatform.md §3.9 and EmuSen_Backend.md §40.3.
     internal static unsafe class EndymionNative
     {
         public const string Variable = "EMUSEN_ENDYMION_NATIVE";
@@ -57,18 +57,19 @@ namespace EmuSen.Endymion.Native
         internal const uint RateTarget = 0, RateMaxDeviation = 1, RateEntry = 2, RateExit = 3, RateNominal = 4;
 
         private static readonly Lazy<string?> Attached = new(Attach);
-        private static readonly PlatformSwitch Chosen = SwitchFor(() => Environment.GetEnvironmentVariable(Variable), () => (Attached.Value is null, Attached.Value ?? ""));
 
-        // State 2: the library unless the variable is 0; one that is absent or refused leaves the C#, said once - see EmuSen_RustPlatform.md §19.
-        public static bool Active => Chosen.Active;
-
-        // Endymion's switch as the process makes it, for a test that makes one of its own over another load.
-        internal static PlatformSwitch SwitchFor(Func<string?> variable, Func<(bool Available, string Report)> load) => new(variable, load, PlatformSwitch.Announce, "Endymion");
-
-        // The library itself, whichever the switch chose: what a parity test calls.
+        // Whether the library is attached: what a test asks before it calls.
         public static bool Ready => Attached.Value is null;
 
         public static string Report => Attached.Value ?? PlatformLibrary.Report;
+
+        // The library attached before any call; without it Endymion cannot run, and says so in words.
+        internal static void Up()
+        {
+            if (Attached.Value is { } why) throw new DllNotFoundException(Refusal(why));
+        }
+
+        internal static string Refusal(string why) => $"{PlatformLibrary.FileName} is not in use for Endymion ({why}); Endymion has had no C# implementation since 2026-11-05.";
 
         internal static delegate* unmanaged[Cdecl]<nint> ResamplerNew;
         internal static delegate* unmanaged[Cdecl]<nint, int> ResamplerFree;
@@ -121,6 +122,7 @@ namespace EmuSen.Endymion.Native
         // Null when every export resolved; otherwise why the library is not in use.
         private static string? Attach()
         {
+            try { RetiredSwitch.Note(Variable, "Endymion", "2026-11-05"); } catch (Exception) { }
             if (!PlatformLibrary.Available) return PlatformLibrary.Report;
             var found = new nint[Exports.Length];
             for (int i = 0; i < Exports.Length; i++)
@@ -172,18 +174,6 @@ namespace EmuSen.Endymion.Native
             byte[] large = new byte[length];
             fixed (byte* p = large) LastError(p, (nuint)large.Length);
             return Encoding.UTF8.GetString(large);
-        }
-
-        // Whether a string has UTF-8: UTF-16 with half a surrogate pair has none.
-        internal static bool Crosses(string? text)
-        {
-            if (text is null) return true;
-            for (int i = 0; i < text.Length; i++)
-            {
-                if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) i++;
-                else if (char.IsSurrogate(text[i])) return false;
-            }
-            return true;
         }
     }
 

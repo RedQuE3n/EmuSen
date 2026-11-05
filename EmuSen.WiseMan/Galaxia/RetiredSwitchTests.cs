@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using EmuSen.Endymion.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Native;
@@ -44,6 +45,24 @@ namespace EmuSen.WiseMan.Galaxia
             RetiredSwitch.Note("EMUSEN_RETIREDTEST_NATIVE", "the test's component");
             string line = Assert.Single(_said);
             Assert.Equal($"EMUSEN_RETIREDTEST_NATIVE=0 is ignored: the test's component has had no C# implementation since 2026-11-04 and runs on {PlatformLibrary.FileName}.", line);
+        }
+
+        [Fact]
+        public void A_component_retired_later_says_its_own_date()
+        {
+            Environment.SetEnvironmentVariable("EMUSEN_RETIREDTEST2_NATIVE", "0");
+            RetiredSwitch.Note("EMUSEN_RETIREDTEST2_NATIVE", "Endymion", "2026-11-05");
+            Assert.Equal($"EMUSEN_RETIREDTEST2_NATIVE=0 is ignored: Endymion has had no C# implementation since 2026-11-05 and runs on {PlatformLibrary.FileName}.", Assert.Single(_said));
+        }
+
+        [Fact]
+        public void Endymion_without_its_library_or_sdl_refuses_in_words()
+        {
+            Assert.Equal($"{PlatformLibrary.FileName} is not in use for Endymion (not found); Endymion has had no C# implementation since 2026-11-05.", EndymionNative.Refusal("not found"));
+            Assert.True(DeviceNative.Ready, DeviceNative.Report);
+            string? why = DeviceNative.Lend("EmuSenNoSuchSdl3");
+            Assert.Equal("EmuSenNoSuchSdl3 could not be loaded", why);
+            Assert.Equal($"{PlatformLibrary.FileName} could not take this process's SDL (EmuSenNoSuchSdl3 could not be loaded); Endymion's pads and sound have had no C# implementation since 2026-11-05.", DeviceNative.Refusal(why!));
         }
     }
 }

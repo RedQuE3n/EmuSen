@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using EmuSen.Endymion.Input;
-using EmuSen.Endymion.Native;
 using EmuSen.Galaxia.Input;
 using SDL3;
 
@@ -56,18 +55,17 @@ namespace EmuSen.WiseMan.Input
             Assert.True(m.HasBuiltInControls);
         }
 
-        // The vendor and product cross the platform library as the C# reads them, and a pad that has gone keeps them.
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void Both_halves_read_a_pads_vendor_and_product_at_opening(bool native)
+        // The vendor and product cross the platform library whole, and a pad that has gone keeps them.
+        [Fact]
+        public void A_pads_vendor_and_product_are_read_at_opening_and_kept()
         {
-            if (native) Assert.True(DeviceNative.Ready, DeviceNative.Report);
-            var pad = new SimulatedPad(native) { Name = "Legion Go S", Vendor = 0x1A86, Product = 0xE310 };
+            var pad = new SimulatedPad { Name = "Legion Go S", Vendor = 0x1A86, Product = 0xE310 };
             Assert.Equal((0x1A86, 0xE310), (pad.Vendor, pad.Product));
-            var devices = new SimulatedPads(native);
+            var other = new SimulatedPad { Product = 0xE310, Vendor = 0x1A86 };
+            Assert.Equal((0x1A86, 0xE310), (other.Vendor, other.Product));
+            var devices = new SimulatedPads();
             devices.Connect(pad);
-            var manager = new GamepadManager(new GamepadBindingMap(), start: true, devices, native);
+            var manager = new GamepadManager(new GamepadBindingMap(), start: true, devices);
             ConnectedPad open = Assert.Single(manager.Pads);
             Assert.Equal((0x1A86, 0xE310, true), (open.Vendor, open.Product, open.IsBuiltIn));
             devices.Disconnect(pad);

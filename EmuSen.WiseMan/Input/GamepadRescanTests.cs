@@ -1,14 +1,16 @@
 using System;
-using System.Reflection;
 using EmuSen.Endymion.Input;
+using EmuSen.Endymion.Native;
 
 namespace EmuSen.WiseMan.Input
 {
     // The hot-plug rescan's timing: a pad dropped before any rescan must not overflow the clock, as Mistress's crash logs of 2026-09-26 showed - see EmuSen_Settings_Reference.md §4.4.
     public class GamepadRescanTests
     {
-        private static bool RescanDue(TimeSpan now, TimeSpan last) =>
-            (bool)typeof(GamepadManager).GetMethod("RescanDue", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [now, last])!;
+        public GamepadRescanTests() => Assert.True(DeviceNative.Ready, DeviceNative.Report);
+
+        // The library's rule, the one the manager's poll follows.
+        private static unsafe bool RescanDue(TimeSpan now, TimeSpan last) => DeviceNative.PadsRescanDue(now.Ticks, last.Ticks) != 0;
 
         private static TimeSpan FirstLast() => new GamepadManager(new GamepadBindingMap(), start: false).LastRescan;
 

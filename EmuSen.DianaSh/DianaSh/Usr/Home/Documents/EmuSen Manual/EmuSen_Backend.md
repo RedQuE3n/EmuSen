@@ -6036,7 +6036,8 @@ the scope is the same; the facade is more than twice §7's figure, as B3's and B
 
 - **State 3**, the C# `GameRecords` bodies, `RomLibrary.ScanManaged` and `GameReclaim`'s C# deleted at the tester's
   word after a release played (§6, B10). Until then a change to `games.db` is made in both halves, and the parity
-  classes fail on one alone; the migrations stay two lists held equal by them.
+  classes fail on one alone; the migrations stay two lists held equal by them. *Done 2026-11-05, without the release,
+  as decided on 2026-11-01 (§40.4); the migrations have one list, `db.rs`'s.*
 - **§28.7's three items stand**: SHA-1 with B9 (`identity` gains `sha1` by a minor), one rule for recent games, and the
   two routers until B7.
   *Decided 2026-10-18 by the tester, as recommended: SHA-1 is taken at B9 with the crate `sha1` 0.11, `identity`
@@ -9892,6 +9893,71 @@ the target again from the latency in milliseconds, so the first value is never r
 reached the C#'s rescan rule by reflection, which the compiler could not see; it failed with the C# gone and now holds
 the library's rule (`emusen_endymion_pads_rescan_due`), the one the manager's poll follows. `cargo test` of
 `emusen-endymion` (29) and `emusen-galaxia` (98), every test passing.
+
+### 40.4 The library
+
+**What went** (2026-11-05). `GameLibrary.Active` and its `PlatformSwitch` over `EMUSEN_LIBRARY_NATIVE`, with the C#
+half of everything it chose between: `GameRecords.OpenManaged`, its migrations and `Migrate`, and the SQL body of every
+member of `GameRecords` (the records, the hash cache, identity, moves, cover lookups, collections, edits and the row's
+crop); `GameReclaim`'s C# (`Plan`, `Hash`, `Apply` and `ReclaimPlan`, and the C# branches of `IdentifyFile`, `Reclaim`
+and `Recent`); `RomLibrary.ScanManaged` with its walk and `ShelfNamed`; `GameRecords.ThroughLibrary`; and
+`MainWindow.Identity`'s C# identity and reclaim, which hashed on a worker and wrote on the interface's thread. The
+library's calls, which had sat in a nested class beside the C#, are now `GameRecords`' own members
+(`GameRecords.Native.cs` is gone), and `RomLibrary.Scan` and `ScanNative` are one `Scan`. Shipped C# lost 890 lines and
+gained 194. The migrations, which §28.10 kept as two lists held equal by the parity class, are now one,
+`emusen-library`'s `db.rs`; WiseMan keeps the texts each version was written with as `GamesDbSchema`, to build a file
+as an older build left it.
+
+**The library, loaded at the first call.** Nothing chooses any more. A platform library that is absent, lacks an
+export or cannot be lent SQLite is refused at `GameLibrary.Open` as a `DllNotFoundException`:
+`libemusen_platform.so is not in use for the library (<why>); the library has had no C# implementation since
+2026-11-05.` Where the C# took over before, Mistress now stops at its first `GameRecords.Load` or scan. A leftover
+`EMUSEN_LIBRARY_NATIVE=0` is ignored with `RetiredSwitch`'s one line, said when the library is first loaded. The
+scraper's gate, `MediaService.Active` and the records being the library's, is now `MediaService.Active` alone (§40.5).
+
+**How it is graded now.** `LibraryParityTests` and `LibraryRecordsParityTests` compared the halves side by side. Their
+answers were recorded from the C# on 2026-11-05 into five files, `EmuSen.WiseMan/Crystal/Goldens/LibraryParity.<case>`
+(`Listings`, `Packaged`, `Reclaimed`, `Versions`) and `LibraryRecordsParity.Scripts`, with each class run on the C#
+alone through a temporary `EMUSEN_LIBRARY_GOLDEN_SIDE=csharp`. Before the deletion the C# matched them once more and
+the library matched them twice, and once more beside another test process with its test folder under another,
+longer folder.
+- *Made the same on every run,* each found when the first recording failed on the library: the test's folder is
+  written `<root>`; a zip's entries are stamped with one time, since .NET stamps them with the moment they are written
+  and the hash of a zip changed between runs; every file's modification time, and a link's own, is set to one instant
+  before each scan (`lutimes` for a link, since the hash cache keeps a link's own time as `FileInfo` reads it), and the
+  links' targets are relative, since the cache keeps a link's own length, which held the test folder's path; the
+  times the scripts give are UTC or without a zone, so no answer holds the zone of the machine; and the games handed
+  to a reclaim, identity and `recent` are in ordinal order, and a listing is shown with ties of the title order by
+  path, since the order of ties is the order the file system listed the files in. That the listing is in title
+  order at all is checked live.
+- *The floor of a golden* comes from the inputs: 6 libraries and 5 odd roots; 3 libraries each with and without
+  packages; 5 seeds of 5 answers; 7 schema versions and the newer file; and 8 scripts of 500 calls in digests of 64,
+  `8 * ((500 + 63) / 64)`, with 8 tables' dumps.
+- *Kept live:* each console's listing is the whole listing narrowed (`RomLibrary.Narrow`, which stays); the play-time
+  limit, between Mistress's `PlayTime.Tracked` and the library's `max_hours`, both shipped; and `recent` across 2026's
+  clock changes, held to .NET's own reading of each time as written, to its instant, which was the C#'s rule, since
+  that test is about the machine's zone.
+- *Changed with the deletion:* `PackageCropTests` loses its C# case; `CompressedDiscsOutputTests` scans once;
+  `CrystalParityTests`' self-contained cases, `GamePackageGateTests` and `ScrapeMediaParityTests` open and scan through
+  the library; `GameRecordsTests` and `GameMetadataTests` take the schema's version from `GamesDbSchema`.
+  `RetiredSwitchTests` holds the refusal's words. No test class was deleted, and no test reached the deleted C# by
+  reflection.
+
+**Seeded faults, 2026-11-05.** Each was seeded, the named classes run, and the source restored. A newer `games.db`
+refused with the library's own exception rather than `InvalidDataException`: `GameRecordsTests` and the `Versions`
+golden. The scan's "empty" read as a listing: `RomLibraryTests` (two) and the `Listings` golden. Play time sent in
+minutes: the `Scripts` golden. `recent` asked for one game more than the limit: the `Reclaimed` golden. In
+`emusen-library`'s `records.rs`, a move keeping the lesser of the two favourites: the `Scripts` and `Reclaimed` goldens.
+
+**How it was tested** (measured on 2026-11-05 on the development desktop, Debug build): `GalaxiaParityTests`,
+`OffDispatcherTests`, `TestCollectionsTests`, `FrontendReferenceTests`, `RetiredSwitchTests`, the two library classes,
+and every class that opens `games.db` or scans (`GameRecordsTests`, `GameMetadataTests`, `RomLibraryTests`,
+`CoverChoiceTests`, `GameEngineAndPlayTimeTests`, `GameStandardTests`, `LibraryScreenTests`,
+`ResumeWhereYouLeftOffTests`, `PlayStationLibraryTests`, `SegaCdRoutingTests`, `SettingPathsOpenTests`,
+`ThemedGameOptionsTests`, `ThemedCollectionsTests`, `IdentityAndCollectionsTests`, `GameCropTests`, `HomeCardTests`,
+`ScrapeMediaParityTests`, `ScrapeExtrasWindowTests`, `ScrapeWindowTests`, `CompressedDiscsOutputTests`,
+`PackageCropTests`, `CrystalParityTests`, `GamePackageGateTests`, `OnlineCoverWindowTests`): 297 passed and 8 skipped
+(the open questions skipped by design).
 
 ### 40.8 The frontend API: the C# implementation deleted
 

@@ -17,6 +17,8 @@ namespace EmuSen.Crystal.Client.Library
     {
         public const string Variable = "EMUSEN_LIBRARY_NATIVE";
 
+        public const string Since = "2026-11-05";
+
         private const uint Major = 1;
 
         private struct Config
@@ -51,6 +53,7 @@ namespace EmuSen.Crystal.Client.Library
 
         private static (Exports?, string) Load()
         {
+            try { RetiredSwitch.Note(Variable, "the library", Since); } catch (Exception) { }
             if (!PlatformLibrary.Available) return (null, PlatformLibrary.Report);
             nint[] found = ExportNames.Select(PlatformLibrary.Export).ToArray();
             if (Array.IndexOf(found, 0) is var missing and >= 0) return (null, $"{PlatformLibrary.FileName} has no {ExportNames[missing]}");
@@ -74,15 +77,12 @@ namespace EmuSen.Crystal.Client.Library
             return (t, $"{PlatformLibrary.FileName}, the library {t.AbiVersion() >> 16}.{t.AbiVersion() & 0xFFFF}");
         }
 
-        // The library itself, whichever the switch chose: what the parity class calls.
         public static bool Ready => Loaded.Value.Table is not null;
 
         public static string Report => Loaded.Value.Report;
 
-        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => (Ready, Report), PlatformSwitch.Announce, "the library");
-
-        // State 2: the library unless the variable is 0; a library absent or without an export leaves the C#, said once.
-        public static bool Active => Chosen.Active;
+        // The words a missing or unusable platform library is refused in; there is no C# to fall back to - see EmuSen_Backend.md §40.4.
+        public static string Refusal(string why) => $"{PlatformLibrary.FileName} is not in use for the library ({why}); the library has had no C# implementation since {Since}.";
 
         private readonly Exports _t;
         private nint _handle;
@@ -102,7 +102,7 @@ namespace EmuSen.Crystal.Client.Library
         // Opens games.db at path, migrating it; ":memory:" is a database that lives as long as the handle.
         public static GameLibrary Open(string path)
         {
-            Exports t = Loaded.Value.Table ?? throw new InvalidOperationException($"The library is not in use ({Report}).");
+            Exports t = Loaded.Value.Table ?? throw new DllNotFoundException(Refusal(Report));
             byte[] bytes = Encoding.UTF8.GetBytes(path);
             nint handle;
             int status;

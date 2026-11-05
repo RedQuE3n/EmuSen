@@ -2041,8 +2041,8 @@ or a cheat list itself, and takes it from the library entry where the scan alrea
 
 ### 14.3 The scan
 
-`RomLibrary.Scan` walks `Packages` and `Compressed` beside the library, in both its halves (`ScanManaged`, and
-`emusen_library_scan` 1.2's `packages` and `compressed` in `emusen-library`). Nothing inside a package's folder is a
+`RomLibrary.Scan` walks `Packages` and `Compressed` beside the library (`emusen_library_scan` 1.2's `packages` and
+`compressed` in `emusen-library`; the C# walk, `ScanManaged`, was deleted on 2026-11-05, `EmuSen_Backend.md` §40.4). Nothing inside a package's folder is a
 game of its own; a claimed file is not listed; each package whose game is there is one entry, shelved by the
 manifest's `system`, and its entry carries the package's folder (`RomEntry.Package`, the games answer's `package`). A
 package whose game is gone is not listed; `pkg ls` names it. No file is read for a claim. With no `Packages` folder,

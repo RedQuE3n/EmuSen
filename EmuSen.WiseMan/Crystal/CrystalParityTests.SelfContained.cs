@@ -150,7 +150,7 @@ namespace EmuSen.WiseMan.Crystal
             }
             string? Art(string library, string package)
             {
-                RomLibraryResult scanned = RomLibrary.ScanManaged(library, null, RomLibrary.Beside.Tree);
+                RomLibraryResult scanned = RomLibrary.Scan(library, RomLibrary.Beside.Tree);
                 RomEntry entry = Assert.Single(scanned.Entries);
                 Assert.Equal(package, entry.Package);
                 var sources = new MediaSources((_, _) => null, DataStore.Media, null, null, packages: new Dictionary<string, string> { [entry.FullPath] = entry.Package! });
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Crystal
                 if (Directory.Exists(DataStore.Packages)) Directory.Delete(DataStore.Packages, recursive: true);
                 Directory.CreateDirectory(Path.GetDirectoryName(zipC)!);
                 File.Copy(zip, zipC);
-                Assert.Equal(zipC, Assert.Single(RomLibrary.ScanManaged(libraryC, null, RomLibrary.Beside.Tree).Entries).FullPath);
+                Assert.Equal(zipC, Assert.Single(RomLibrary.Scan(libraryC, RomLibrary.Beside.Tree).Entries).FullPath);
             }, (i, rt) => Opened(i, rt, zipC, packageC), also: () => PackageTreeOf(packageC));
             Assert.Equal(GamePackage.MediaPathFor(packageC, "covers", ".png"), Art(libraryC, packageC));
             foreach (string rel in new[] { slot2, Path.ChangeExtension(slot2, ".json") })

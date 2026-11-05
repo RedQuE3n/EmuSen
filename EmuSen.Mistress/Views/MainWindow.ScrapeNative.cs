@@ -27,8 +27,8 @@ namespace EmuSen.Mistress.Views
         private ScrapeQuota? _nativeLimits;
         private int _nativeRun;
 
-        // State 2 needs the library through Rust too, since the scraper keeps cover lookups and follows covers chosen there.
-        private bool ScrapeNative => MediaService.Active && _records.ThroughLibrary;
+        // The scraper in Rust, beside the library whose handle it is lent, since it keeps cover lookups and follows covers chosen there.
+        private bool ScrapeNative => MediaService.Active;
 
         public NativeScraping? ScrapeNativeService => _native;
 
@@ -69,7 +69,7 @@ namespace EmuSen.Mistress.Views
                 _native = NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(), _records.Library, NativeEmbedded());
                 ScrapePlaying(_running);
                 _scrapeTheme ??= ThemeNow();
-                ScrapingLend.Lend(_native.Service, _records.Library!, RuntimeCatalog.Shelves.Select(s => s.System), ThemeKindsFor);
+                ScrapingLend.Lend(_native.Service, _records.Library, RuntimeCatalog.Shelves.Select(s => s.System), ThemeKindsFor);
                 return true;
             }
             catch (MediaServiceException ex)

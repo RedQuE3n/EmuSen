@@ -64,5 +64,12 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal("EmuSenNoSuchSdl3 could not be loaded", why);
             Assert.Equal($"{PlatformLibrary.FileName} could not take this process's SDL (EmuSenNoSuchSdl3 could not be loaded); Endymion's pads and sound have had no C# implementation since 2026-11-05.", DeviceNative.Refusal(why!));
         }
+
+        [Fact]
+        public void The_library_without_its_platform_library_refuses_in_words()
+        {
+            Assert.Equal($"{PlatformLibrary.FileName} is not in use for the library (not found); the library has had no C# implementation since 2026-11-05.", EmuSen.Crystal.Client.Library.GameLibrary.Refusal("not found"));
+            Assert.True(EmuSen.Crystal.Client.Library.GameLibrary.Ready, EmuSen.Crystal.Client.Library.GameLibrary.Report);
+        }
     }
 }

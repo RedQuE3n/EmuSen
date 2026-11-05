@@ -80,7 +80,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 }
 
                 string db = Path.Combine(root, "games.db");
-                using GameRecords records = GameRecords.OpenNative(db);
+                using GameRecords records = GameRecords.Open(db);
                 foreach (var (rom, _) in games.Where(_ => r.Next(3) == 0))
                 {
                     string from = games[r.Next(games.Count)].Rom;

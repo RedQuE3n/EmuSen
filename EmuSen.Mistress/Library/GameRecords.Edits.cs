@@ -1,69 +1,48 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace EmuSen.Mistress.Library
 {
     // The player's metadata edits, one row per field, beside the records they belong to - see EmuSen_Settings_Reference.md §4.59.
     public sealed partial class GameRecords
     {
+        private static Dictionary<string, string> Edits(JsonElement e)
+        {
+            var edits = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (JsonProperty p in e.EnumerateObject()) edits[p.Name] = p.Value.GetString()!;
+            return edits;
+        }
+
         public IReadOnlyDictionary<string, string> Edits(string path)
         {
-            if (_native is { } n) return n.Edits(path);
-            var edits = new Dictionary<string, string>(StringComparer.Ordinal);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT field, value FROM game_edit WHERE path = $path";
-            command.Parameters.AddWithValue("$path", path);
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read()) edits[row.GetString(0)] = row.GetString(1);
-            return edits;
+            using JsonDocument d = Get("edits", w => w.WriteString("path", path));
+            return Edits(d.RootElement);
         }
 
         // Every game's edits, for a library that shows many games at once.
         public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> AllEdits()
         {
-            if (_native is { } n) return n.AllEdits();
-            var all = new Dictionary<string, Dictionary<string, string>>(StringComparer.Ordinal);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT path, field, value FROM game_edit";
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read())
-            {
-                if (!all.TryGetValue(row.GetString(0), out Dictionary<string, string>? edits)) all[row.GetString(0)] = edits = new Dictionary<string, string>(StringComparer.Ordinal);
-                edits[row.GetString(1)] = row.GetString(2);
-            }
-            var shown = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
-            foreach ((string path, Dictionary<string, string> edits) in all) shown[path] = edits;
-            return shown;
+            using JsonDocument d = Get("all_edits");
+            var all = new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
+            foreach (JsonProperty p in d.RootElement.EnumerateObject()) all[p.Name] = Edits(p.Value);
+            return all;
         }
 
         // One save of the editor: a value is kept as the player's edit, a null returns the field to its scraped or default value.
-        public void SaveEdits(string path, IReadOnlyDictionary<string, string?> changes, DateTime now)
-        {
-            if (_native is { } n) { n.SaveEdits(path, changes, now); return; }
-            using SqliteTransaction step = _db.BeginTransaction();
-            foreach ((string field, string? value) in changes)
+        public void SaveEdits(string path, IReadOnlyDictionary<string, string?> changes, DateTime now) =>
+            Change("save_edits", w =>
             {
-                using SqliteCommand command = _db.CreateCommand();
-                command.Transaction = step;
-                command.CommandText = value is null
-                    ? "DELETE FROM game_edit WHERE path = $path AND field = $field"
-                    : "INSERT INTO game_edit (path, field, value, edited) VALUES ($path, $field, $value, $now) ON CONFLICT(path, field) DO UPDATE SET value = excluded.value, edited = excluded.edited";
-                command.Parameters.AddWithValue("$path", path);
-                command.Parameters.AddWithValue("$field", field);
-                if (value is not null)
-                {
-                    command.Parameters.AddWithValue("$value", value);
-                    command.Parameters.AddWithValue("$now", now.ToString("o", CultureInfo.InvariantCulture));
-                }
-                command.ExecuteNonQuery();
-            }
-            step.Commit();
-        }
+                w.WriteString("path", path);
+                w.WriteStartObject("changes");
+                foreach ((string field, string? value) in changes)
+                    if (value is null) w.WriteNull(field); else w.WriteString(field, value);
+                w.WriteEndObject();
+                w.WriteString("at", Time(now));
+            });
 
         // The editor's Clear; a cover borrowed from another game (§4.65) and a television standard chosen are the player's choices, not metadata, and stay.
-        public void ClearEdits(string path) => _ = _native is { } n ? Native(() => n.ClearEdits(path)) : Write(path, $"DELETE FROM game_edit WHERE path = $path AND field NOT IN ('{GameMetadata.CoverFrom}', '{GameMetadata.TelevisionStandard}')");
+        public void ClearEdits(string path) => Change("clear_edits", w => w.WriteString("path", path));
 
         // Q45: the game whose cover this one shows, or null to show its own again; nothing on disk but games.db changes.
         public void SetCoverChoice(string path, string? from, DateTime now) =>
@@ -77,20 +56,9 @@ namespace EmuSen.Mistress.Library
 
         public string? CoverChoice(string path) => Edits(path).TryGetValue(GameMetadata.CoverFrom, out string? from) && from.Length > 0 ? from : null;
 
-        public void SetFavourite(string path, bool favourite) => _ = _native is { } n ? Native(() => n.SetFavourite(path, favourite)) : Write(path,
-            "INSERT INTO game (path, favourite) VALUES ($path, $value) ON CONFLICT(path) DO UPDATE SET favourite = excluded.favourite", favourite ? 1 : 0);
+        public void SetFavourite(string path, bool favourite) => Change("set_favourite", w => { w.WriteString("path", path); w.WriteBoolean("favourite", favourite); });
 
         // ES-DE's editor lets the player correct the two counters; they are Mistress's records, not edits laid over them.
-        public void SetPlayStats(string path, int count, double seconds)
-        {
-            if (_native is { } n) { n.SetPlayStats(path, count, seconds); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "INSERT INTO game (path, play_count, play_seconds) VALUES ($path, $count, $seconds) "
-                + "ON CONFLICT(path) DO UPDATE SET play_count = excluded.play_count, play_seconds = excluded.play_seconds";
-            command.Parameters.AddWithValue("$path", path);
-            command.Parameters.AddWithValue("$count", Math.Max(0, count));
-            command.Parameters.AddWithValue("$seconds", Math.Max(0, seconds));
-            command.ExecuteNonQuery();
-        }
+        public void SetPlayStats(string path, int count, double seconds) => Change("set_play_stats", w => { w.WriteString("path", path); w.WriteNumber("count", count); Real(w, "seconds", seconds); });
     }
 }

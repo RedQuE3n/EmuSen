@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using EmuSen.Galaxia.Library;
-using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace EmuSen.Mistress.Library
 {
@@ -46,29 +45,20 @@ namespace EmuSen.Mistress.Library
 
         private GameCrop? RowCrop(string path)
         {
-            if (_native is { } n) return n.Crop(path);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT crop_left, crop_right, crop_top, crop_bottom FROM game WHERE path = $path AND crop_left IS NOT NULL";
-            command.Parameters.AddWithValue("$path", path);
-            using SqliteDataReader row = command.ExecuteReader();
-            return row.Read() ? new GameCrop(row.GetDouble(0), row.GetDouble(1), row.GetDouble(2), row.GetDouble(3)) : null;
+            using JsonDocument d = Get("crop", w => w.WriteString("path", path));
+            JsonElement c = d.RootElement;
+            return c.ValueKind == JsonValueKind.Null ? null : new GameCrop(Real(c.GetProperty("left")), Real(c.GetProperty("right")), Real(c.GetProperty("top")), Real(c.GetProperty("bottom")));
         }
+
+        private void SetRowCrop(string path, GameCrop crop) =>
+            Change("set_crop", w => { w.WriteString("path", path); Real(w, "left", crop.Left); Real(w, "right", crop.Right); Real(w, "top", crop.Top); Real(w, "bottom", crop.Bottom); });
+
+        private void ClearRowCrop(string path) => Change("clear_crop", w => w.WriteString("path", path));
 
         public void SetCrop(string path, GameCrop crop)
         {
             if (OpenedAs(path) is (string game, string root)) { SetPackagedCrop(game, root, GameSettings.CropText(crop.Left, crop.Right, crop.Top, crop.Bottom)); return; }
-            if (_native is { } n) { n.SetCrop(path, crop); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = """
-                INSERT INTO game (path, crop_left, crop_right, crop_top, crop_bottom) VALUES ($path, $left, $right, $top, $bottom)
-                ON CONFLICT(path) DO UPDATE SET crop_left = excluded.crop_left, crop_right = excluded.crop_right, crop_top = excluded.crop_top, crop_bottom = excluded.crop_bottom
-                """;
-            command.Parameters.AddWithValue("$path", path);
-            command.Parameters.AddWithValue("$left", crop.Left);
-            command.Parameters.AddWithValue("$right", crop.Right);
-            command.Parameters.AddWithValue("$top", crop.Top);
-            command.Parameters.AddWithValue("$bottom", crop.Bottom);
-            command.ExecuteNonQuery();
+            SetRowCrop(path, crop);
         }
 
         private void SetPackagedCrop(string path, string root, string text)
@@ -84,7 +74,5 @@ namespace EmuSen.Mistress.Library
             if (OpenedAs(path) is (string game, string root)) SetPackagedCrop(game, root, "");
             else ClearRowCrop(path);
         }
-
-        private void ClearRowCrop(string path) => _ = _native is { } n ? Native(() => n.ClearCrop(path)) : Write(path, "UPDATE game SET crop_left = NULL, crop_right = NULL, crop_top = NULL, crop_bottom = NULL WHERE path = $path");
     }
 }

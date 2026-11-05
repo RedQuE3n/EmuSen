@@ -4,7 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using EmuSen.Galaxia.Library;
-using Microsoft.Data.Sqlite;
+using System.Text.Json;
+using EmuSen.Crystal.Client.Library;
 
 namespace EmuSen.Mistress.Library
 {
@@ -20,421 +21,181 @@ namespace EmuSen.Mistress.Library
     // One of the player's own collections, with how many games it holds.
     public sealed record GameCollection(long Id, string Name, int Count);
 
-    // The player's own library in SQLite: kept, unlike the catalogue cache, so it migrates rather than rebuilds - see EmuSen_Settings_Reference.md §4.32.
+    // The player's own library in games.db, through emusen_library.h's handle: kept, unlike the catalogue cache, so it migrates rather than rebuilds - see EmuSen_Settings_Reference.md §4.32, EmuSen_Backend.md §28.5 and §40.4.
     public sealed partial class GameRecords : IDisposable
     {
-        // Each entry takes the file from the version before it; append, never edit - see §4.32.
-        private static readonly string[] Migrations =
-        {
-            """
-            CREATE TABLE game (
-                path          TEXT    PRIMARY KEY,
-                favourite     INTEGER NOT NULL DEFAULT 0 CHECK (favourite IN (0, 1)),
-                last_played   TEXT,
-                play_count    INTEGER NOT NULL DEFAULT 0,
-                play_seconds  REAL    NOT NULL DEFAULT 0
-            );
-            CREATE INDEX game_by_last_played ON game(last_played);
-            """,
-            """
-            ALTER TABLE game ADD COLUMN md5 TEXT;
-            ALTER TABLE game ADD COLUMN bytes INTEGER;
-            CREATE INDEX game_by_md5 ON game(md5);
-            CREATE TABLE file_hash (
-                path      TEXT    PRIMARY KEY,
-                bytes     INTEGER NOT NULL,
-                modified  INTEGER NOT NULL,
-                md5       TEXT    NOT NULL
-            );
-            CREATE INDEX file_hash_by_md5 ON file_hash(md5);
-            """,
-            """
-            CREATE TABLE collection (
-                id        INTEGER PRIMARY KEY,
-                name      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-                created   TEXT    NOT NULL
-            );
-            CREATE TABLE collection_game (
-                collection  INTEGER NOT NULL REFERENCES collection(id) ON DELETE CASCADE,
-                path        TEXT    NOT NULL,
-                PRIMARY KEY (collection, path)
-            );
-            CREATE INDEX collection_game_by_path ON collection_game(path);
-            """,
-            """
-            CREATE TABLE cover_lookup (
-                path      TEXT PRIMARY KEY,
-                outcome   TEXT NOT NULL CHECK (outcome IN ('Found', 'Unknown', 'NoArt')),
-                rom_name  TEXT,
-                checked   TEXT NOT NULL
-            );
-            """,
-            """
-            CREATE TABLE game_edit (
-                path    TEXT NOT NULL,
-                field   TEXT NOT NULL,
-                value   TEXT NOT NULL,
-                edited  TEXT NOT NULL,
-                PRIMARY KEY (path, field)
-            );
-            """,
-            """
-            ALTER TABLE game ADD COLUMN crop_left REAL;
-            ALTER TABLE game ADD COLUMN crop_right REAL;
-            ALTER TABLE game ADD COLUMN crop_top REAL;
-            ALTER TABLE game ADD COLUMN crop_bottom REAL;
-            """,
-        };
+        private readonly GameLibrary _lib;
 
-        public static int SchemaVersion => Migrations.Length;
-
-        // The migrations' texts, which the library holds a second copy of until state 3; the parity class compares the two.
-        public static IReadOnlyList<string> MigrationSteps => Migrations;
-
-        private readonly SqliteConnection _db;
-
-        private GameRecords(SqliteConnection db) => _db = db;
+        private GameRecords(GameLibrary lib) => _lib = lib;
 
         public static string DefaultPath => Path.Combine(DataStore.Library, "games.db");
 
         public static GameRecords Load() => Open(DefaultPath);
 
-        // Through the library when the switch says so, else the C# below - see EmuSen_Backend.md §28.5.
-        public static GameRecords Open(string path) => EmuSen.Crystal.Client.Library.GameLibrary.Active ? OpenNative(path) : OpenManaged(path);
-
-        // games.db through the C#, the failover and the parity class's oracle.
-        public static GameRecords OpenManaged(string path)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            var db = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = path, Pooling = false }.ToString());
-            db.Open();
-            using (SqliteCommand keys = db.CreateCommand()) { keys.CommandText = "PRAGMA foreign_keys = ON"; keys.ExecuteNonQuery(); }
-            Migrate(db);
-            return new GameRecords(db);
-        }
-
         // A file newer than this build is refused rather than written to - see §4.32.
-        private static void Migrate(SqliteConnection db)
+        public static GameRecords Open(string path)
         {
-            int version = Convert.ToInt32(Scalar(db, "PRAGMA user_version"));
-            if (version > Migrations.Length) throw new InvalidDataException($"games.db is schema {version}; this build knows {Migrations.Length}.");
-            for (; version < Migrations.Length; version++)
-            {
-                using SqliteTransaction step = db.BeginTransaction();
-                Execute(db, step, Migrations[version]);
-                Execute(db, step, $"PRAGMA user_version = {version + 1}");
-                step.Commit();
-            }
+            try { return new GameRecords(GameLibrary.Open(path)); }
+            catch (GameLibraryException e) when (e.Status == GameLibraryException.NewerFile) { throw new InvalidDataException(e.Message); }
         }
 
-        public GameRecord? Find(string path)
-        {
-            if (_native is { } n) return n.Find(path);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT favourite, last_played, play_count, play_seconds FROM game WHERE path = $path";
-            command.Parameters.AddWithValue("$path", path);
-            using SqliteDataReader row = command.ExecuteReader();
-            return row.Read() ? Record(row, 0) : null;
-        }
+        // The library's handle, for the scan, identity and reclaim calls Mistress makes through it.
+        internal GameLibrary Library => _lib;
 
-        // Every stored row, for a library that shows many games at once.
-        public IReadOnlyDictionary<string, GameRecord> All()
-        {
-            if (_native is { } n) return n.All();
-            var all = new Dictionary<string, GameRecord>(StringComparer.Ordinal);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT path, favourite, last_played, play_count, play_seconds FROM game";
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read()) all[row.GetString(0)] = Record(row, 1);
-            return all;
-        }
+        internal static string Time(DateTime when) => when.ToString("o", CultureInfo.InvariantCulture);
 
         public bool IsFavourite(string path) => Find(path)?.Favourite == true;
 
         public DateTime? LastPlayed(string path) => Find(path)?.LastPlayed;
 
-        public void ToggleFavourite(string path) => _ = _native is { } n ? Native(() => n.ToggleFavourite(path)) : Write(path,
-            "INSERT INTO game (path, favourite) VALUES ($path, 1) ON CONFLICT(path) DO UPDATE SET favourite = 1 - favourite");
-
-        public void Started(string path, DateTime now) => _ = _native is { } n ? Native(() => n.Started(path, now)) : Write(path,
-            "INSERT INTO game (path, play_count, last_played) VALUES ($path, 1, $value) ON CONFLICT(path) DO UPDATE SET play_count = play_count + 1, last_played = excluded.last_played",
-            now.ToString("o", CultureInfo.InvariantCulture));
-
-        public void Played(string path, TimeSpan time) => _ = _native is { } n ? Native(() => n.Played(path, time)) : Write(path,
-            "INSERT INTO game (path, play_seconds) VALUES ($path, $value) ON CONFLICT(path) DO UPDATE SET play_seconds = play_seconds + excluded.play_seconds",
-            time.TotalSeconds);
-
-        private static bool Native(Action call)
+        private static string Request(Action<Utf8JsonWriter> write)
         {
-            call();
-            return true;
+            var stream = new MemoryStream();
+            using (var w = new Utf8JsonWriter(stream))
+            {
+                w.WriteStartObject();
+                write(w);
+                w.WriteEndObject();
+            }
+            return System.Text.Encoding.UTF8.GetString(stream.ToArray());
         }
 
-        private bool Write(string path, string sql, object? value = null)
+        private static void Real(Utf8JsonWriter w, string name, double value)
         {
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = sql;
-            command.Parameters.AddWithValue("$path", path);
-            if (value is not null) command.Parameters.AddWithValue("$value", value);
-            command.ExecuteNonQuery();
-            return true;
+            if (double.IsFinite(value)) w.WriteNumber(name, value);
+            else w.WriteString(name, double.IsNaN(value) ? "NaN" : value > 0 ? "Infinity" : "-Infinity");
         }
 
-        // --- Identity by hash, so a renamed file keeps its row - see EmuSen_Settings_Reference.md §4.37.
+        private static double Real(JsonElement e) => e.ValueKind == JsonValueKind.String
+            ? e.GetString() switch { "NaN" => double.NaN, "Infinity" => double.PositiveInfinity, _ => double.NegativeInfinity }
+            : e.GetDouble();
 
-        // The cached hash of a file, while its size and modification time are the ones it was taken at.
-        public string? KnownHash(string path, long bytes, long modified)
+        private JsonDocument Get(string what, Action<Utf8JsonWriter>? more = null) =>
+            JsonDocument.Parse(Sqlite(() => _lib.Get(Request(w => { w.WriteString("what", what); more?.Invoke(w); }))));
+
+        private string Change(string op, Action<Utf8JsonWriter>? more = null) =>
+            Sqlite(() => _lib.Change(Request(w => { w.WriteString("op", op); more?.Invoke(w); })));
+
+        // SQLite's refusal as the exception Microsoft.Data.Sqlite throws for it, its code read from its words.
+        private static string Sqlite(Func<string> call)
         {
-            if (_native is { } n) return n.KnownHash(path, bytes, modified);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT md5 FROM file_hash WHERE path = $path AND bytes = $bytes AND modified = $modified";
-            command.Parameters.AddWithValue("$path", path);
-            command.Parameters.AddWithValue("$bytes", bytes);
-            command.Parameters.AddWithValue("$modified", modified);
-            return command.ExecuteScalar() as string;
+            try { return call(); }
+            catch (GameLibraryException e) when (e.Status == GameLibraryException.BadRequest && e.Message == "Cannot store 'NaN' values.")
+            {
+                throw new InvalidOperationException(e.Message);
+            }
+            catch (GameLibraryException e) when (e.Status == GameLibraryException.Database)
+            {
+                string[] words = e.Message.Split(' ', 4);
+                int code = words.Length > 2 && int.TryParse(words[2].TrimEnd(':'), out int c) ? c : 1;
+                throw new Microsoft.Data.Sqlite.SqliteException(e.Message, code);
+            }
         }
 
-        public void StoreHash(string path, long bytes, long modified, string md5)
+        private static GameRecord Record(JsonElement r) => new()
         {
-            if (_native is { } n) { n.StoreHash(path, bytes, modified, md5); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "INSERT INTO file_hash (path, bytes, modified, md5) VALUES ($path, $bytes, $modified, $md5) "
-                + "ON CONFLICT(path) DO UPDATE SET bytes = excluded.bytes, modified = excluded.modified, md5 = excluded.md5";
-            command.Parameters.AddWithValue("$path", path);
-            command.Parameters.AddWithValue("$bytes", bytes);
-            command.Parameters.AddWithValue("$modified", modified);
-            command.Parameters.AddWithValue("$md5", md5);
-            command.ExecuteNonQuery();
+            Favourite = r.GetProperty("favourite").GetBoolean(),
+            LastPlayed = r.GetProperty("last_played").ValueKind == JsonValueKind.Null ? null : DateTime.Parse(r.GetProperty("last_played").GetString()!, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
+            PlayCount = r.GetProperty("play_count").GetInt32(),
+            PlaySeconds = Real(r.GetProperty("play_seconds")),
+        };
+
+        private static string? Text(JsonDocument d) => d.RootElement.ValueKind == JsonValueKind.Null ? null : d.RootElement.GetString();
+
+        public GameRecord? Find(string path)
+        {
+            using JsonDocument d = Get("record", w => w.WriteString("path", path));
+            return d.RootElement.ValueKind == JsonValueKind.Null ? null : Record(d.RootElement);
         }
 
-        // Some file that had this hash when it was last looked at, for a state that names its ROM by contents.
-        public string? PathByHash(string md5)
+        public IReadOnlyDictionary<string, GameRecord> All()
         {
-            if (_native is { } n) return n.PathByHash(md5);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT path FROM file_hash WHERE md5 = $md5 ORDER BY path LIMIT 1";
-            command.Parameters.AddWithValue("$md5", md5);
-            return command.ExecuteScalar() as string;
-        }
-
-        // Gives a game's row the identity a rename cannot take away.
-        public void Identify(string path, string md5, long bytes)
-        {
-            if (_native is { } n) { n.Identify(path, md5, bytes); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "INSERT INTO game (path, md5, bytes) VALUES ($path, $md5, $bytes) ON CONFLICT(path) DO UPDATE SET md5 = excluded.md5, bytes = excluded.bytes";
-            command.Parameters.AddWithValue("$path", path);
-            command.Parameters.AddWithValue("$md5", md5);
-            command.Parameters.AddWithValue("$bytes", bytes);
-            command.ExecuteNonQuery();
-        }
-
-        // Rows whose file is not among those present, and which carry the hash that could find it again.
-        public IReadOnlyList<(string Path, string Md5, long Bytes)> Orphans(IReadOnlySet<string> present)
-        {
-            if (_native is { } n) return n.Orphans(present);
-            var orphans = new List<(string, string, long)>();
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT path, md5, bytes FROM game WHERE md5 IS NOT NULL AND bytes IS NOT NULL";
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read())
-                if (!present.Contains(row.GetString(0))) orphans.Add((row.GetString(0), row.GetString(1), row.GetInt64(2)));
-            return orphans;
-        }
-
-        // A renamed or moved game: its row and its collections follow it, and a row the new path already had is merged in.
-        public void Move(string from, string to)
-        {
-            if (_native is { } n) { n.Move(from, to); return; }
-            using SqliteTransaction step = _db.BeginTransaction();
-            Execute(_db, step, "INSERT INTO game (path) VALUES ($to) ON CONFLICT(path) DO NOTHING", ("$to", to));
-            Execute(_db, step, """
-                UPDATE game SET
-                    favourite    = MAX(favourite, (SELECT favourite FROM game WHERE path = $from)),
-                    play_count   = play_count + (SELECT play_count FROM game WHERE path = $from),
-                    play_seconds = play_seconds + (SELECT play_seconds FROM game WHERE path = $from),
-                    last_played  = MAX(COALESCE(last_played, ''), COALESCE((SELECT last_played FROM game WHERE path = $from), '')),
-                    md5          = COALESCE(md5, (SELECT md5 FROM game WHERE path = $from)),
-                    bytes        = COALESCE(bytes, (SELECT bytes FROM game WHERE path = $from)),
-                    crop_right   = CASE WHEN crop_left IS NULL THEN (SELECT crop_right FROM game WHERE path = $from) ELSE crop_right END,
-                    crop_top     = CASE WHEN crop_left IS NULL THEN (SELECT crop_top FROM game WHERE path = $from) ELSE crop_top END,
-                    crop_bottom  = CASE WHEN crop_left IS NULL THEN (SELECT crop_bottom FROM game WHERE path = $from) ELSE crop_bottom END,
-                    crop_left    = COALESCE(crop_left, (SELECT crop_left FROM game WHERE path = $from))
-                WHERE path = $to
-                """, ("$from", from), ("$to", to));
-            Execute(_db, step, "UPDATE game SET last_played = NULL WHERE path = $to AND last_played = ''", ("$to", to));
-            Execute(_db, step, "UPDATE OR IGNORE collection_game SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
-            Execute(_db, step, "DELETE FROM collection_game WHERE path = $from", ("$from", from));
-            Execute(_db, step, "UPDATE OR IGNORE game_edit SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
-            Execute(_db, step, "DELETE FROM game_edit WHERE path = $from", ("$from", from));
-            // A game whose cover others show keeps being theirs under its new name (§4.65).
-            Execute(_db, step, $"UPDATE game_edit SET value = $to WHERE field = '{GameMetadata.CoverFrom}' AND value = $from", ("$from", from), ("$to", to));
-            Execute(_db, step, "UPDATE OR IGNORE cover_lookup SET path = $to WHERE path = $from", ("$from", from), ("$to", to));
-            Execute(_db, step, "DELETE FROM cover_lookup WHERE path = $from", ("$from", from));
-            Execute(_db, step, "DELETE FROM game WHERE path = $from", ("$from", from));
-            step.Commit();
-        }
-
-        // --- What an online cover lookup came to, so it is not asked again - see EmuSen_Settings_Reference.md §4.39.
-
-        public string? CoverLookup(string path)
-        {
-            if (_native is { } n) return n.CoverLookup(path);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT outcome FROM cover_lookup WHERE path = $path";
-            command.Parameters.AddWithValue("$path", path);
-            return command.ExecuteScalar() as string;
-        }
-
-        // A failure is not recorded, so the next session asks again; an answer is, until the player asks again by hand.
-        public void RecordCoverLookup(string path, CoverOutcome outcome, string? romName, DateTime now)
-        {
-            if (_native is { } n) { n.RecordCoverLookup(path, outcome, romName, now); return; }
-            if (outcome == CoverOutcome.Failed) return;
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "INSERT INTO cover_lookup (path, outcome, rom_name, checked) VALUES ($path, $outcome, $name, $now) "
-                + "ON CONFLICT(path) DO UPDATE SET outcome = excluded.outcome, rom_name = excluded.rom_name, checked = excluded.checked";
-            command.Parameters.AddWithValue("$path", path);
-            command.Parameters.AddWithValue("$outcome", outcome.ToString());
-            command.Parameters.AddWithValue("$name", (object?)romName ?? DBNull.Value);
-            command.Parameters.AddWithValue("$now", now.ToString("o", CultureInfo.InvariantCulture));
-            command.ExecuteNonQuery();
-        }
-
-        public void ForgetCoverLookup(string path)
-        {
-            if (_native is { } n) { n.ForgetCoverLookup(path); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "DELETE FROM cover_lookup WHERE path = $path";
-            command.Parameters.AddWithValue("$path", path);
-            command.ExecuteNonQuery();
-        }
-
-        // --- Collections the player makes - see EmuSen_Settings_Reference.md §4.38.
-
-        public IReadOnlyList<GameCollection> Collections()
-        {
-            if (_native is { } n) return n.Collections();
-            var all = new List<GameCollection>();
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT c.id, c.name, COUNT(g.path) FROM collection c LEFT JOIN collection_game g ON g.collection = c.id GROUP BY c.id ORDER BY c.name COLLATE NOCASE";
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read()) all.Add(new GameCollection(row.GetInt64(0), row.GetString(1), row.GetInt32(2)));
+            using JsonDocument d = Get("records");
+            var all = new Dictionary<string, GameRecord>(StringComparer.Ordinal);
+            foreach (JsonProperty p in d.RootElement.EnumerateObject()) all[p.Name] = Record(p.Value);
             return all;
         }
 
-        // Null when a collection of that name, in any case, already exists.
+        public void ToggleFavourite(string path) => Change("toggle_favourite", w => w.WriteString("path", path));
+
+        public void Started(string path, DateTime now) => Change("started", w => { w.WriteString("path", path); w.WriteString("at", Time(now)); });
+
+        public void Played(string path, TimeSpan time) => Change("played", w => { w.WriteString("path", path); Real(w, "seconds", time.TotalSeconds); });
+
+        public string? KnownHash(string path, long bytes, long modified)
+        {
+            using JsonDocument d = Get("known_hash", w => { w.WriteString("path", path); w.WriteNumber("bytes", bytes); w.WriteNumber("modified", modified); });
+            return Text(d);
+        }
+
+        public void StoreHash(string path, long bytes, long modified, string md5) =>
+            Change("store_hash", w => { w.WriteString("path", path); w.WriteNumber("bytes", bytes); w.WriteNumber("modified", modified); w.WriteString("md5", md5); });
+
+        public string? PathByHash(string md5)
+        {
+            using JsonDocument d = Get("path_by_hash", w => w.WriteString("md5", md5));
+            return Text(d);
+        }
+
+        public void Identify(string path, string md5, long bytes) => Change("identify", w => { w.WriteString("path", path); w.WriteString("md5", md5); w.WriteNumber("bytes", bytes); });
+
+        public IReadOnlyList<(string Path, string Md5, long Bytes)> Orphans(IReadOnlySet<string> present)
+        {
+            using JsonDocument d = Get("orphans", w => { w.WriteStartArray("present"); foreach (string p in present) w.WriteStringValue(p); w.WriteEndArray(); });
+            return d.RootElement.EnumerateArray().Select(o => (o.GetProperty("path").GetString()!, o.GetProperty("md5").GetString()!, o.GetProperty("bytes").GetInt64())).ToList();
+        }
+
+        public void Move(string from, string to) => Change("move", w => { w.WriteString("from", from); w.WriteString("to", to); });
+
+        public string? CoverLookup(string path)
+        {
+            using JsonDocument d = Get("cover_lookup", w => w.WriteString("path", path));
+            return Text(d);
+        }
+
+        public void RecordCoverLookup(string path, CoverOutcome outcome, string? romName, DateTime now) =>
+            Change("record_cover_lookup", w =>
+            {
+                w.WriteString("path", path);
+                w.WriteString("outcome", outcome.ToString());
+                if (romName is null) w.WriteNull("rom_name"); else w.WriteString("rom_name", romName);
+                w.WriteString("at", Time(now));
+            });
+
+        public void ForgetCoverLookup(string path) => Change("forget_cover_lookup", w => w.WriteString("path", path));
+
+        public IReadOnlyList<GameCollection> Collections()
+        {
+            using JsonDocument d = Get("collections");
+            return d.RootElement.EnumerateArray().Select(c => new GameCollection(c.GetProperty("id").GetInt64(), c.GetProperty("name").GetString()!, c.GetProperty("count").GetInt32())).ToList();
+        }
+
         public long? CreateCollection(string name, DateTime now)
         {
-            if (_native is { } n) return n.CreateCollection(name, now);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "INSERT INTO collection (name, created) VALUES ($name, $now) ON CONFLICT(name) DO NOTHING RETURNING id";
-            command.Parameters.AddWithValue("$name", name);
-            command.Parameters.AddWithValue("$now", now.ToString("o", CultureInfo.InvariantCulture));
-            return command.ExecuteScalar() is long id ? id : null;
+            using JsonDocument d = JsonDocument.Parse(Change("create_collection", w => { w.WriteString("name", name); w.WriteString("at", Time(now)); }));
+            return d.RootElement.ValueKind == JsonValueKind.Null ? null : d.RootElement.GetInt64();
         }
 
-        // False when another collection already has the name.
-        public bool RenameCollection(long id, string name)
-        {
-            if (_native is { } n) return n.RenameCollection(id, name);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "UPDATE OR IGNORE collection SET name = $name WHERE id = $id";
-            command.Parameters.AddWithValue("$name", name);
-            command.Parameters.AddWithValue("$id", id);
-            command.ExecuteNonQuery();
-            return Collections().Any(c => c.Id == id && c.Name == name);
-        }
+        public bool RenameCollection(long id, string name) => Change("rename_collection", w => { w.WriteNumber("id", id); w.WriteString("name", name); }) == "true";
 
-        public void DeleteCollection(long id)
-        {
-            if (_native is { } n) { n.DeleteCollection(id); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "DELETE FROM collection WHERE id = $id";
-            command.Parameters.AddWithValue("$id", id);
-            command.ExecuteNonQuery();
-        }
+        public void DeleteCollection(long id) => Change("delete_collection", w => w.WriteNumber("id", id));
 
-        public void AddToCollection(long id, string path)
-        {
-            if (_native is { } n) { n.AddToCollection(id, path); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "INSERT OR IGNORE INTO collection_game (collection, path) VALUES ($id, $path)";
-            command.Parameters.AddWithValue("$id", id);
-            command.Parameters.AddWithValue("$path", path);
-            command.ExecuteNonQuery();
-        }
+        public void AddToCollection(long id, string path) => Change("add_to_collection", w => { w.WriteNumber("id", id); w.WriteString("path", path); });
 
-        public void RemoveFromCollection(long id, string path)
-        {
-            if (_native is { } n) { n.RemoveFromCollection(id, path); return; }
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "DELETE FROM collection_game WHERE collection = $id AND path = $path";
-            command.Parameters.AddWithValue("$id", id);
-            command.Parameters.AddWithValue("$path", path);
-            command.ExecuteNonQuery();
-        }
+        public void RemoveFromCollection(long id, string path) => Change("remove_from_collection", w => { w.WriteNumber("id", id); w.WriteString("path", path); });
 
         public IReadOnlySet<string> Members(long id)
         {
-            if (_native is { } n) return n.Members(id);
-            var members = new HashSet<string>(StringComparer.Ordinal);
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT path FROM collection_game WHERE collection = $id";
-            command.Parameters.AddWithValue("$id", id);
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read()) members.Add(row.GetString(0));
-            return members;
+            using JsonDocument d = Get("members", w => w.WriteNumber("id", id));
+            return d.RootElement.EnumerateArray().Select(m => m.GetString()!).ToHashSet(StringComparer.Ordinal);
         }
 
         public IReadOnlySet<long> CollectionsOf(string path)
         {
-            if (_native is { } n) return n.CollectionsOf(path);
-            var ids = new HashSet<long>();
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = "SELECT collection FROM collection_game WHERE path = $path";
-            command.Parameters.AddWithValue("$path", path);
-            using SqliteDataReader row = command.ExecuteReader();
-            while (row.Read()) ids.Add(row.GetInt64(0));
-            return ids;
+            using JsonDocument d = Get("collections_of", w => w.WriteString("path", path));
+            return d.RootElement.EnumerateArray().Select(m => m.GetInt64()).ToHashSet();
         }
 
-        private static void Execute(SqliteConnection db, SqliteTransaction transaction, string sql, params (string Name, object Value)[] parameters)
-        {
-            using SqliteCommand command = db.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
-            foreach ((string name, object value) in parameters) command.Parameters.AddWithValue(name, value);
-            command.ExecuteNonQuery();
-        }
-
-        private static GameRecord Record(SqliteDataReader row, int first) => new()
-        {
-            Favourite = row.GetInt64(first) != 0,
-            LastPlayed = row.IsDBNull(first + 1) ? null : DateTime.Parse(row.GetString(first + 1), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-            PlayCount = row.GetInt32(first + 2),
-            PlaySeconds = row.GetDouble(first + 3),
-        };
-
-        private static object? Scalar(SqliteConnection db, string sql)
-        {
-            using SqliteCommand command = db.CreateCommand();
-            command.CommandText = sql;
-            return command.ExecuteScalar();
-        }
-
-        private static void Execute(SqliteConnection db, SqliteTransaction transaction, string sql)
-        {
-            using SqliteCommand command = db.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = sql;
-            command.ExecuteNonQuery();
-        }
-
-        public void Dispose()
-        {
-            if (_native is { } n) n.Lib.Dispose();
-            else _db.Dispose();
-        }
+        public void Dispose() => _lib.Dispose();
     }
 }

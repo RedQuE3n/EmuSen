@@ -21,6 +21,19 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Faults the rules find in today's Mistress, each recorded with why it stands; an entry that stops failing must be removed, as PaletteReachTests' table is kept.
         internal static readonly Dictionary<string, string> Known = new()
         {
+            // The synthetic library's three consoles, NES, Super Nintendo and Game Boy, each line at rest.
+            ["paints outside the palette: Border PlanetEngineTag #337ACC24"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: Border PlanetEngineTag #4E81BCFF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: Border PlanetEngineTag #BC4E85FF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: Border PlanetEngineTag #BC934EFF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: Border PlanetEngineTag #CC338024"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: Border PlanetEngineTag #CC943324"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: TextBlock PlanetEngineTagWord #B1CFF1FF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: TextBlock PlanetEngineTagWord #F1B1D1FF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: TextBlock PlanetEngineTagWord #F1DAB1FF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: TextBlock PlanetStatus #98B1CDFF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: TextBlock PlanetStatus #CDBA98FF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
+            ["paints outside the palette: TextBlock PlanetStatus #F7A1CCFF"] = "a console's engine line is drawn in the console's own hue, content like its planet, not a theme colour (EmuSen_Interface.md §24.6)",
         };
 
         [Theory]

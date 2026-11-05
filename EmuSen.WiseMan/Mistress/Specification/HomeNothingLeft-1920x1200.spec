@@ -106,10 +106,10 @@ tree
               91 StackPanel at=1617,945,189,72 by=panel limit=0,0,1920,1200 role=none
                 92 TextBlock at=1617,945,189,36 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Power layout=53.74,24 limit=0,0,1920,1200 paints=#EEEEF0FF role=text size=20 text=Power
                 93 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=1617,981,189,36 box=126,24 caps=13.999 drawn face=Barlow heard=Exit layout=32.62,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text=Exit
-        94 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 name=HubHelpBar role=none
-          95 Panel at=0,1053,1920,147 by=panel limit=0,0,1920,1200 role=none
-            96 Border at=0,1053,1920,147 by=panel limit=0,0,1920,1200 nohit paints=#0E0E10FF,#707070FF role=none
-            97 HintBar at=96,1074,1728,45 by=panel heard="Play, Game page, Favourite, Search, Home" limit=0,0,1920,1200 role=group
+        94 Border at=0,1113,1920,87 by=panel limit=0,0,1920,1200 name=HubHelpBar role=none
+          95 Panel at=0,1113,1920,87 by=panel limit=0,0,1920,1200 role=none
+            96 Border at=0,1113,1920,87 by=panel limit=0,0,1920,1200 nohit paints=#0E0E10FF,#707070FF role=none
+            97 HintBar at=96,1134,1728,45 by=panel heard="Play, Game page, Favourite, Search, Home" limit=0,0,1920,1200 role=group
 focus none
 press down home="Places games" top=none
 press up home="Shelf <run>/Roms/Aurora Drift (Synthetic).sfc" top=none

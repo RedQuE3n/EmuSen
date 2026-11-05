@@ -1,7 +1,9 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia;
 using Avalonia.Styling;
+using EmuSen.Crystal.Client;
 using EmuSen.LunaP.Controls;
 using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Input;
@@ -66,9 +68,14 @@ namespace EmuSen.Mistress.Views
             _planetLayout.SetPlanets(_consoles.Consoles.Select(Choice));
         }
 
+        // A console's body, by its shelf's system and maker; null for a wide place.
+        private static WorldBody? BodyOfShelf(ConsoleChoice c) =>
+            c.Hue is null ? null : RuntimeCatalog.ShelfByName(c.Key) is { } shelf ? StartupSplash.BodyOf(shelf.System, RuntimeCatalog.Systems.FirstOrDefault(f => f.Id == shelf.System)?.Manufacturer) : WorldBody.Plain;
+
         private PlanetItem Choice(ConsoleChoice c) => new(c.Key, c.Name)
         {
-            Hue = c.Hue, Status = c.Status, Title = c.Title, Facts = c.Facts, Icon = ConsolesScreen.Icons.GetValueOrDefault(c.Key),
+            Hue = c.Hue, Status = c.Status, Title = c.Title, Facts = c.Facts, Icon = ConsolesScreen.Icons.GetValueOrDefault(c.Key), Body = BodyOfShelf(c),
+            Engine = c.Engine is { } e ? new PlanetEngine(e.Name, ConsolesScreen.TagOf(e), !e.Libretro) { Mark = e.Mark } : null,
             Covers = c.Covers.Select(g => CoverOf(g.Facts.Path, g.Facts.Title, g.Facts.Mark, g.Facts.CoverAspect, false, "", g.Facts.Console, HueOfShelf(g.Shelf))).ToList(),
         };
 
@@ -112,5 +119,11 @@ namespace EmuSen.Mistress.Views
         IReadOnlyList<ConsoleShelf> IGamesHost.Table => ShelfTable();
 
         void IGamesHost.ChooseConsole(string section) => ShowConsoles(ConsolesScreen.KeyOf(section));
+
+        EngineShown? IGamesHost.EngineOf(string shelf)
+        {
+            try { return RuntimeCatalog.ShelfByName(shelf) is { } s ? RuntimeCatalog.EngineOf(s.Core.Console) : null; }
+            catch (Exception e) when (e is CrystalException or System.Text.Json.JsonException) { return null; }
+        }
     }
 }

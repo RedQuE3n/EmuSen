@@ -57,10 +57,10 @@ tree
               42 Image at=550,412,180,199.8 by=clip drawn limit=550,412,180,200 nohit role=image
         43 TextBlock at=64,628,1152,39 box=1152,39 by=panel caps=22.3984 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic)" layout=234.91,38.4 limit=0,0,1280,800 name=GalleryName paints=#EEEEF0FF role=text size=32 text="Aurora Drift (Synthetic)"
         44 TextBlock at=64,670,1152,27 box=1152,27 by=panel caps=15.3989 drawn face=Barlow heard="Super Nintendo · 3 h ago" layout=224.05,26.4 limit=0,0,1280,800 name=GalleryFacts paints=#8D8D91FF role=text size=22 text="Super Nintendo · 3 h ago"
-        45 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=GalleryHelpBar role=none
-          46 Panel at=0,702,1280,98 by=panel limit=0,0,1280,800 role=none
-            47 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
-            48 HintBar at=64,716,1152,30 by=panel heard="Play, Game page, Favourite, Console, List, Consoles, Home" limit=0,0,1280,800 role=group
+        45 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 name=GalleryHelpBar role=none
+          46 Panel at=0,742,1280,58 by=panel limit=0,0,1280,800 role=none
+            47 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
+            48 HintBar at=64,756,1152,30 by=panel heard="Play, Game page, Favourite, Console, List, Consoles, Home" limit=0,0,1280,800 role=group
 focus none
 press down focus="GalleryLayout GamesScreen" games="all <run>/Roms/Fable of Tiles (Synthetic).nes" top=none
 press up focus="GalleryLayout GamesScreen" games="all <run>/Roms/Aurora Drift (Synthetic).sfc" top=none

@@ -46,6 +46,13 @@ namespace EmuSen.Mistress.Library
         public const string Switch = "switch", Count = "count", Choice = "choice";
     }
 
+    // An engine as a tile names it: its short name and whether it is a hosted libretro core - see EmuSen_Interface.md §24.6.
+    public sealed record EngineShown(string Name, bool Libretro)
+    {
+        // The mark before its name (EngineMarks); null where none was given.
+        public EmuSen.LunaP.Controls.PlanetMark? Mark { get; init; }
+    }
+
     // What opens a file, as the runtime's route answers.
     public sealed record FileRoute(string? System, string? Console, string? Engine, string? Shelf, string? Reason);
 
@@ -70,6 +77,7 @@ namespace EmuSen.Mistress.Library
             lock (Gate) _facts = null;
             Routes.Clear();
             EngineChoicesByConsole.Clear();
+            _engineNames = null;
         }
 
         private static Facts Current
@@ -222,6 +230,44 @@ namespace EmuSen.Mistress.Library
             EngineChoicesByConsole.GetOrAdd(console, c => SettingsFor(c).FirstOrDefault(r => r.Key == EngineKey)?.Choices is { Count: > 1 } choices ? choices : Array.Empty<string>());
 
         private static readonly ConcurrentDictionary<string, IReadOnlyList<string>> EngineChoicesByConsole = new(StringComparer.OrdinalIgnoreCase);
+
+        private static IReadOnlyDictionary<string, EngineShown>? _engineNames;
+
+        // The engine a console runs now, as its tile names it: the stored choice, else its row's default, else the table's first engine; null where it has none.
+        public static EngineShown? EngineOf(string console)
+        {
+            string? chosen = CoreSettings.Value(console, EngineKey) is { Length: > 0 } value ? value : SystemOf(console)?.Engines.FirstOrDefault();
+            if (chosen is null) return null;
+            IReadOnlyDictionary<string, EngineShown> names;
+            lock (Gate) names = _engineNames ??= EnginesIn(CoreSettings.Runtime.Cores(), MakerOfSystem);
+            return Shown(chosen, names);
+        }
+
+        // A chosen engine as the listing names it; an engine the listing does not hold keeps the name the choice stores.
+        public static EngineShown Shown(string chosen, IReadOnlyDictionary<string, EngineShown> names) => names.GetValueOrDefault(chosen) ?? new EngineShown(chosen, false) { Mark = EngineMarks.Of(chosen, false, null) };
+
+        // Each engine of the runtime's cores listing by the name a choice stores: a libretro core's corename, an EmuSen core's info name less the Rust port's "RT".
+        public static IReadOnlyDictionary<string, EngineShown> EnginesIn(string coresJson, Func<string, string?>? makerOf = null)
+        {
+            var names = new Dictionary<string, EngineShown>(StringComparer.Ordinal);
+            using JsonDocument cores = JsonDocument.Parse(coresJson);
+            foreach (JsonElement c in cores.RootElement.EnumerateArray())
+            {
+                if (Text(c, "engine") is not { Length: > 0 } engine) continue;
+                bool libretro = c.TryGetProperty("libretro", out JsonElement l) && l.ValueKind == JsonValueKind.Object;
+                string name = (libretro ? Text(l, "corename") : null) ?? Text(c, "name") ?? engine;
+                string shown = libretro ? name : WithoutPortMark(name);
+                string? maker = Strings(c, "systems").Select(s => makerOf?.Invoke(s)).FirstOrDefault(m => m is { Length: > 0 });
+                names.TryAdd(engine, new EngineShown(shown, libretro) { Mark = EngineMarks.Of(shown, libretro, maker) });
+            }
+            return names;
+        }
+
+        // The maker of a system of the table, by its id.
+        public static string? MakerOfSystem(string id) => Systems.FirstOrDefault(s => s.Id == id)?.Manufacturer;
+
+        // VenusRT reads Venus: the mark the four Nintendo cores kept from when their C# cores ran beside them (EmuSen_Interface.md §24.6).
+        private static string WithoutPortMark(string name) => name.Length > 2 && name.EndsWith("RT", StringComparison.Ordinal) && char.IsLower(name[^3]) ? name[..^2] : name;
 
         // What opens a file, asked once for each version of it until forgotten.
         public static FileRoute Route(string path)

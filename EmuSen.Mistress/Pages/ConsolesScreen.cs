@@ -2,14 +2,15 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Pages
 {
     // A shelf of the systems table as Choose a console names it: its key, its name, its full name, maker, year and planet hue.
     public sealed record ConsoleShelf(string Key, string Label, string FullName, string Maker, int Year, double Hue);
 
-    // One world on Choose a console: a wide place along the top or a console's planet, its words and the covers fanned beneath.
-    public sealed record ConsoleChoice(string Key, string Name, double? Hue, string Status, string Title, string Facts, IReadOnlyList<GridGame> Covers);
+    // One world on Choose a console: a wide place along the top or a console's planet, its words, the covers fanned beneath and the engine it runs on.
+    public sealed record ConsoleChoice(string Key, string Name, double? Hue, string Status, string Title, string Facts, IReadOnlyList<GridGame> Covers, EngineShown? Engine = null);
 
     // Choose a console as one plain description: All games, Favourites and Recently played, then each console of the systems table that has a game - see EmuSen_Interface.md §24.
     public sealed class ConsolesScreen(IGamesHost host)
@@ -17,6 +18,9 @@ namespace EmuSen.Mistress.Pages
         public const string Title = "Games", Subtitle = "Choose a console";
         public const string All = "all", Favourites = "favourites", Recent = "recent";
         public const int FanCount = 4;
+
+        // The engine line's tags: one of EmuSen's own cores, or a hosted libretro core.
+        public const string OwnTag = "EmuSen", LibretroTag = "libretro";
 
         // The wide places' icons, the mockup's paths in a 24-unit box.
         public static readonly IReadOnlyDictionary<string, string> Icons = new Dictionary<string, string>
@@ -60,12 +64,19 @@ namespace EmuSen.Mistress.Pages
                 {
                     List<GridGame> games = all.Where(g => g.Shelf == shelf.Key).ToList();
                     if (games.Count == 0) continue;
-                    string facts = string.Join(" · ", new[] { shelf.Maker, shelf.Year > 0 ? shelf.Year.ToString(CultureInfo.InvariantCulture) : "", Count(games.Count) }.Where(s => s.Length > 0));
-                    choices.Add(new(shelf.Key, shelf.Label, shelf.Hue, Count(games.Count), shelf.FullName, facts, Fan(games)));
+                    EngineShown? engine = _host.EngineOf(shelf.Key);
+                    string facts = string.Join(" · ", new[] { shelf.Maker, shelf.Year > 0 ? shelf.Year.ToString(CultureInfo.InvariantCulture) : "", Count(games.Count), RunsOn(engine) }.Where(s => s.Length > 0));
+                    choices.Add(new(shelf.Key, shelf.Label, shelf.Hue, Count(games.Count), shelf.FullName, facts, Fan(games), engine));
                 }
                 return choices;
             }
         }
+
+        // The tag an engine line carries: libretro for a hosted libretro core, EmuSen for one of the project's own.
+        public static string TagOf(EngineShown engine) => engine.Libretro ? LibretroTag : OwnTag;
+
+        // The facts' last words: which engine runs the console now.
+        public static string RunsOn(EngineShown? engine) => engine is null ? "" : $"runs on {engine.Name}, {(engine.Libretro ? "a libretro core" : "an EmuSen core")}";
 
         // The header's right: how many consoles and games.
         public string CountLine

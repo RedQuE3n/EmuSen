@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.Mistress.Pages
 {
@@ -32,6 +33,8 @@ namespace EmuSen.Mistress.Pages
         void Home();
         // B past everything on the grid: Choose a console, its focus on the section left.
         void ChooseConsole(string section);
+        // The engine a shelf's console runs on now, the player's choice read afresh; null where it has none.
+        EngineShown? EngineOf(string shelf);
     }
 
     // The grid of covers in EmuSen's own look as one plain description: its sections, sort, filter and search, the focused game's facts, the List card's rows and the help bar - see EmuSen_BigPicture.md §51.

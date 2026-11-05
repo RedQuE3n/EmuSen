@@ -54,42 +54,60 @@ tree
             39 StackPanel at=920,110,217,53 by=panel limit=0,0,1280,800 role=none
               40 TextBlock at=920,110,217,29 box=217,29 by=panel caps=16.7988 drawn face="Barlow Condensed Medium" heard="RECENTLY PLAYED" layout=165.9,28.8 limit=0,0,1280,800 paints=#EEEEF0FF role=text size=24 text="RECENTLY PLAYED"
               41 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=920,141,217,22 box=217,22 caps=12.5991 drawn face=Barlow heard="Last: Aurora Drift (Synthetic)" layout=216.41,21.6 name=PlanetStatus paints=#8D8D91FF role=text size=18 text="Last: Aurora Drift (Synthetic)"
-        42 Border at=0,256,1280,1 by=panel limit=0,0,1280,800 name=PlanetOrbit nohit role=none
-        43 Panel at=358,190,176,176 by=panel heard="NES, 2 games" limit=0,0,1280,800 name="PlanetCell.NES (Moon)" role=none
-          44 Border at=358,190,176,176 by=panel limit=0,0,1280,800 name=PlanetGlass nohit paints=#26262BFF role=none
-          45 StackPanel at=366,190,160,162 by=panel limit=0,0,1280,800 role=none
-            46 Panel at=366,190,160,120 by=panel limit=0,0,1280,800 role=none
-              47 PlanetGlyph at=404,208,84,84 by=panel limit=0,0,1280,800 name="Planet.NES (Moon)" nohit role=none
-            48 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=430,312,33,27 box=33,27 caps=15.3989 drawn face="Barlow Condensed Medium" heard=NES layout=32.07,26.4 name=PlanetStatus paints=#EEEEF0FF role=text size=22 text=NES
-            49 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=416,341,61,21 box=61,21 caps=11.8992 drawn face=Barlow heard="2 games" layout=60.1,20.4 name=PlanetStatus paints=#8D8D91FF role=text size=17 text="2 games"
-          50 Border at=351,183,190,190 by=panel limit=0,0,1280,800 name=HubRing nohit paints=#4C9AE8FF role=none
-        51 Panel at=552,196,176,176 by=panel heard="Game Boy, 1 game" limit=0,0,1280,800 name="PlanetCell.Game Boy (Mercury)" role=none
-          52 StackPanel at=560,196,160,162 by=panel limit=0,0,1280,800 role=none
-            53 Panel at=560,196,160,120 by=panel limit=0,0,1280,800 role=none
-              54 PlanetGlyph at=611,227,58,58 by=panel limit=0,0,1280,800 name="Planet.Game Boy (Mercury)" nohit role=none
-            55 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=599,318,82,27 box=82,27 caps=15.3989 drawn face="Barlow Condensed Medium" heard="GAME BOY" layout=81.47,26.4 name=PlanetStatus paints=#EEEEF0FF role=text size=22 text="GAME BOY"
-            56 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=615,347,50,21 box=50,21 caps=11.8992 drawn face=Barlow heard="1 game" layout=49.03,20.4 name=PlanetStatus paints=#8D8D91FF role=text size=17 text="1 game"
-        57 Panel at=746,196,176,176 by=panel heard="Super Nintendo, 5 games" limit=0,0,1280,800 name="PlanetCell.SNES (Venus)" role=none
-          58 StackPanel at=754,196,160,162 by=panel limit=0,0,1280,800 role=none
-            59 Panel at=754,196,160,120 by=panel limit=0,0,1280,800 role=none
-              60 PlanetGlyph at=805,227,58,58 by=panel limit=0,0,1280,800 name="Planet.SNES (Venus)" nohit role=none
-            61 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=762,318,143,27 box=143,27 caps=15.3989 drawn face="Barlow Condensed Medium" heard="SUPER NINTENDO" layout=142,26.4 name=PlanetStatus paints=#EEEEF0FF role=text size=22 text="SUPER NINTENDO"
-            62 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=804,347,61,21 box=61,21 caps=11.8992 drawn face=Barlow heard="5 games" layout=60.11,20.4 name=PlanetStatus paints=#8D8D91FF role=text size=17 text="5 games"
-        63 Panel at=64,586,1152,104 by=panel limit=0,0,1280,800 role=none
-          64 StackPanel at=64,607,571,77 by=panel limit=0,0,1280,800 role=none
-            65 TextBlock at=64,607,571,44 box=571,44 by=panel caps=30.7979 drawn face="Barlow Condensed Medium" heard="NINTENDO ENTERTAINMENT SYSTEM" layout=570.51,44 limit=0,0,1280,800 name=PlanetFocusTitle paints=#EEEEF0FF role=text size=44 text="NINTENDO ENTERTAINMENT SYSTEM"
-            66 TextBlock at=64,657,571,27 box=571,27 by=panel caps=15.3989 drawn face=Barlow heard="Nintendo · 1983 · 2 games" layout=230.58,26.4 limit=0,0,1280,800 name=PlanetFocusFacts paints=#8D8D91FF role=text size=22 text="Nintendo · 1983 · 2 games"
-        67 Panel at=796,586,420,104 by=panel limit=0,0,1280,800 name=PlanetFan role=none
-          68 CoverCard at=1070.28,588.79,74.45,102.42 by=panel heard="Fable of Tiles (Synthetic)" limit=0,0,1280,800 name="PlanetCover.<run>/Roms/Fable of Tiles (Synthetic).nes" nohit role=none
-            69 Border at=1070.28,588.79,74.45,102.42 by=panel limit=0,0,1280,800 name=CoverBox nohit paints=#26262BFF role=none
-              70 Image at=1070.28,588.79,73.54,102.39 by=clip drawn limit=1070.28,588.79,74.45,102.42 nohit role=image
-          71 CoverCard at=1140.97,586.56,81.06,106.87 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1280,800 name="PlanetCover.<run>/Roms/Granite Choir (Synthetic).nes" nohit role=none
-            72 Border at=1140.97,586.56,81.06,106.87 by=panel limit=0,0,1280,800 name=CoverBox nohit paints=#26262BFF role=none
-              73 Image at=1140.97,586.56,80.16,106.78 by=clip drawn limit=1140.97,586.56,81.06,106.87 nohit role=image
-        74 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=PlanetHelpBar role=none
-          75 Panel at=0,702,1280,98 by=panel limit=0,0,1280,800 role=none
-            76 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
-            77 HintBar at=64,716,1152,30 by=panel heard="Open, Back, Favourites, Random game" limit=0,0,1280,800 role=group
+        42 Border at=0,238,1280,1 by=panel limit=0,0,1280,800 name=PlanetOrbit nohit role=none
+        43 Panel at=358,180,176,190 by=panel heard="NES, 2 games" limit=0,0,1280,800 name="PlanetCell.NES (Moon)" role=none
+          44 Border at=358,180,176,190 by=panel limit=0,0,1280,800 name=PlanetGlass nohit paints=#26262BFF role=none
+          45 StackPanel at=366,180,160,178 by=panel limit=0,0,1280,800 role=none
+            46 Panel at=366,180,160,104 by=panel limit=0,0,1280,800 role=none
+              47 WorldGlyph at=404,190,84,84 by=panel limit=0,0,1280,800 name="Planet.NES (Moon)" nohit role=none
+            48 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=430,285,33,27 box=33,27 caps=15.3989 drawn face="Barlow Condensed Medium" heard=NES layout=32.07,26.4 name=PlanetStatus paints=#EEEEF0FF role=text size=22 text=NES
+            49 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=416,313,61,21 box=61,21 caps=11.8992 drawn face=Barlow heard="2 games" layout=60.1,20.4 name=PlanetStatus paints=#8D8D91FF role=text size=17 text="2 games"
+            50 DockPanel at=382,338,129,21 by=panel limit=0,0,1280,800 name=PlanetEngine role=none
+              51 MarkGlyph at=382,341,15,15 by=panel limit=0,0,1280,800 name=PlanetEngineSymbol nohit role=none
+              52 Border at=450,338,61,20 by=panel limit=0,0,1280,800 name=PlanetEngineTag paints=#BC4E85FF,#CC338024 role=none
+                53 TextBlock at=455,339,51,18 box=51,18 by=panel caps=11.8992 drawn face="Barlow Condensed Medium" heard=EMUSEN layout=50.28,18 limit=0,0,1280,800 name=PlanetEngineTagWord paints=#F1B1D1FF role=text size=17 text=EMUSEN
+              54 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=403,338,41,21 box=41,21 caps=11.8992 drawn face="Barlow Condensed Medium" heard=MOON layout=40.08,20.4 name=PlanetStatus paints=#F7A1CCFF role=text size=17 text=MOON
+          55 Path at=389,197,13,13 by=panel limit=0,0,1280,800 name=PlanetSparkle nohit role=none
+          56 Path at=492,226,10,10 by=panel limit=0,0,1280,800 name=PlanetSparkle nohit role=none
+          57 Path at=398,264,7,7 by=panel limit=0,0,1280,800 name=PlanetSparkle nohit role=none
+          58 Border at=351,173,190,204 by=panel limit=0,0,1280,800 name=HubRing nohit paints=#4C9AE8FF role=none
+        59 Panel at=552,186,176,190 by=panel heard="Game Boy, 1 game" limit=0,0,1280,800 name="PlanetCell.Game Boy (Mercury)" role=none
+          60 StackPanel at=560,186,160,178 by=panel limit=0,0,1280,800 role=none
+            61 Panel at=560,186,160,104 by=panel limit=0,0,1280,800 role=none
+              62 WorldGlyph at=611,209,58,58 by=panel limit=0,0,1280,800 name="Planet.Game Boy (Mercury)" nohit role=none
+            63 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=599,291,82,27 box=82,27 caps=15.3989 drawn face="Barlow Condensed Medium" heard="GAME BOY" layout=81.47,26.4 name=PlanetStatus paints=#EEEEF0FF role=text size=22 text="GAME BOY"
+            64 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=615,319,50,21 box=50,21 caps=11.8992 drawn face=Barlow heard="1 game" layout=49.03,20.4 name=PlanetStatus paints=#8D8D91FF role=text size=17 text="1 game"
+            65 DockPanel at=562,344,155,21 by=panel limit=0,0,1280,800 name=PlanetEngine role=none
+              66 MarkGlyph at=562,347,15,15 by=panel limit=0,0,1280,800 name=PlanetEngineSymbol nohit role=none
+              67 Border at=656,344,61,20 by=panel limit=0,0,1280,800 name=PlanetEngineTag paints=#337ACC24,#4E81BCFF role=none
+                68 TextBlock at=661,345,51,18 box=51,18 by=panel caps=11.8992 drawn face="Barlow Condensed Medium" heard=EMUSEN layout=50.28,18 limit=0,0,1280,800 name=PlanetEngineTagWord paints=#B1CFF1FF role=text size=17 text=EMUSEN
+              69 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=583,344,67,21 box=67,21 caps=11.8992 drawn face="Barlow Condensed Medium" heard=MERCURY layout=66.38,20.4 name=PlanetStatus paints=#98B1CDFF role=text size=17 text=MERCURY
+        70 Panel at=746,186,176,190 by=panel heard="Super Nintendo, 5 games" limit=0,0,1280,800 name="PlanetCell.SNES (Venus)" role=none
+          71 StackPanel at=754,186,160,178 by=panel limit=0,0,1280,800 role=none
+            72 Panel at=754,186,160,104 by=panel limit=0,0,1280,800 role=none
+              73 WorldGlyph at=805,209,58,58 by=panel limit=0,0,1280,800 name="Planet.SNES (Venus)" nohit role=none
+            74 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=762,291,143,27 box=143,27 caps=15.3989 drawn face="Barlow Condensed Medium" heard="SUPER NINTENDO" layout=142,26.4 name=PlanetStatus paints=#EEEEF0FF role=text size=22 text="SUPER NINTENDO"
+            75 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=804,319,61,21 box=61,21 caps=11.8992 drawn face=Barlow heard="5 games" layout=60.11,20.4 name=PlanetStatus paints=#8D8D91FF role=text size=17 text="5 games"
+            76 DockPanel at=766,344,136,21 by=panel limit=0,0,1280,800 name=PlanetEngine role=none
+              77 MarkGlyph at=766,347,15,15 by=panel limit=0,0,1280,800 name=PlanetEngineSymbol nohit role=none
+              78 Border at=841,344,61,20 by=panel limit=0,0,1280,800 name=PlanetEngineTag paints=#BC934EFF,#CC943324 role=none
+                79 TextBlock at=846,345,51,18 box=51,18 by=panel caps=11.8992 drawn face="Barlow Condensed Medium" heard=EMUSEN layout=50.28,18 limit=0,0,1280,800 name=PlanetEngineTagWord paints=#F1DAB1FF role=text size=17 text=EMUSEN
+              80 TextBlock allow="a console's words are one line cut with an ellipsis, its full name said beneath the rows" at=787,344,48,21 box=48,21 caps=11.8992 drawn face="Barlow Condensed Medium" heard=VENUS layout=47.01,20.4 name=PlanetStatus paints=#CDBA98FF role=text size=17 text=VENUS
+        81 Panel at=64,612,1152,104 by=panel limit=0,0,1280,800 role=none
+          82 StackPanel at=64,633,571,77 by=panel limit=0,0,1280,800 role=none
+            83 TextBlock at=64,633,571,44 box=571,44 by=panel caps=30.7979 drawn face="Barlow Condensed Medium" heard="NINTENDO ENTERTAINMENT SYSTEM" layout=570.51,44 limit=0,0,1280,800 name=PlanetFocusTitle paints=#EEEEF0FF role=text size=44 text="NINTENDO ENTERTAINMENT SYSTEM"
+            84 TextBlock at=64,683,571,27 box=571,27 by=panel caps=15.3989 drawn face=Barlow heard="Nintendo · 1983 · 2 games · runs on Moon, an EmuSen core" layout=527.67,26.4 limit=0,0,1280,800 name=PlanetFocusFacts paints=#8D8D91FF role=text size=22 text="Nintendo · 1983 · 2 games · runs on Moon, an EmuSen core"
+        85 Panel at=796,612,420,104 by=panel limit=0,0,1280,800 name=PlanetFan role=none
+          86 CoverCard at=1070.28,614.79,74.45,102.42 by=panel heard="Fable of Tiles (Synthetic)" limit=0,0,1280,800 name="PlanetCover.<run>/Roms/Fable of Tiles (Synthetic).nes" nohit role=none
+            87 Border at=1070.28,614.79,74.45,102.42 by=panel limit=0,0,1280,800 name=CoverBox nohit paints=#26262BFF role=none
+              88 Image at=1070.28,614.79,73.54,102.39 by=clip drawn limit=1070.28,614.79,74.45,102.42 nohit role=image
+          89 CoverCard at=1140.97,612.56,81.06,106.87 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1280,800 name="PlanetCover.<run>/Roms/Granite Choir (Synthetic).nes" nohit role=none
+            90 Border at=1140.97,612.56,81.06,106.87 by=panel limit=0,0,1280,800 name=CoverBox nohit paints=#26262BFF role=none
+              91 Image at=1140.97,612.56,80.16,106.78 by=clip drawn limit=1140.97,612.56,81.06,106.87 nohit role=image
+        92 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 name=PlanetHelpBar role=none
+          93 Panel at=0,742,1280,58 by=panel limit=0,0,1280,800 role=none
+            94 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
+            95 HintBar at=64,756,1152,30 by=panel heard="Open, Back, Favourites, Random game" limit=0,0,1280,800 role=group
 focus none
 press down consoles="NES (Moon)" focus="PlanetLayout ConsolesScreen" top=none
 press up consoles=favourites focus="PlanetLayout ConsolesScreen" top=none

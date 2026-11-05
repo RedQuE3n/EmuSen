@@ -30,7 +30,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             SystemFacts facts = RuntimeCatalog.Systems.FirstOrDefault(s => s.Id == system) ?? throw new Xunit.Sdk.XunitException($"{system} is not in the systems table");
             double table = facts.CoverAspect ?? throw new Xunit.Sdk.XunitException($"{system} has no cover_aspect");
-            var item = (CoverItem)typeof(MainWindow).GetMethod("CoverOf", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, ["g.rom", "Fable of Tiles", "MD", table, false, "", ""])!;
+            var item = (CoverItem)typeof(MainWindow).GetMethod("CoverOf", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, ["g.rom", "Fable of Tiles", "MD", table, false, "", "", null])!;
             var card = new CoverCard { CellWidth = 180, CellHeight = 240, Item = item };
             double drawn = card.CoverBounds.Height / card.CoverBounds.Width;
             Assert.Equal(table, drawn, 2);

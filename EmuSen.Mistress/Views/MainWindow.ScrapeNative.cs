@@ -23,6 +23,7 @@ namespace EmuSen.Mistress.Views
         private Thread? _nativePump;
         private volatile bool _nativePumping;
         private long _nativeApplied;
+        private long _nativeRetried;
         private bool _nativeWorkers;
         private ScrapeQuota? _nativeLimits;
         private int _nativeRun;
@@ -100,6 +101,7 @@ namespace EmuSen.Mistress.Views
             if (queued == 0) return false;
             _scrapeRun = new ScrapeProgress((int)queued, native.Now);
             _nativeApplied = 0;
+            _nativeRetried = 0;
             _nativeWorkers = true;
             int id = ++_nativeRun;
             ReadScrapeSnapshot();
@@ -172,6 +174,14 @@ namespace EmuSen.Mistress.Views
             foreach (JsonElement r in rows.Where(r => r.GetProperty("serial").GetInt64() > _nativeApplied))
                 if (Outcome(Text(r, "outcome")) == ScrapeOutcome.Error) ErrorLog.Warning("scraping", $"ScreenScraper could not identify the game: {ScrapeRedactor.Redact(Text(r, "detail"))}", Text(r, "path"));
             if (rows.Count > 0) _nativeApplied = Math.Max(_nativeApplied, rows.Max(r => r.GetProperty("serial").GetInt64()));
+            // Each retry said once, oldest first, in the words the C# Scraper used - see EmuSen_Backend.md §40.5.
+            foreach (JsonElement r in p.GetProperty("retried").EnumerateArray().Reverse().Where(r => r.GetProperty("serial").GetInt64() > _nativeRetried))
+            {
+                string detail = ScrapeRedactor.Redact(Text(r, "detail"));
+                if (r.GetProperty("failed").GetBoolean()) ErrorLog.Error("scraping", $"A scrape request failed and is queued to retry: {detail}", null, Text(r, "path"));
+                else ErrorLog.Warning("scraping", $"ScreenScraper could not answer; queued to retry: {detail}", Text(r, "path"));
+                _nativeRetried = r.GetProperty("serial").GetInt64();
+            }
             string state = Text(p, "state")!;
             if (state == "running")
             {

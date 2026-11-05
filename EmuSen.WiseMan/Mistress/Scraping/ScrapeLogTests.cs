@@ -84,6 +84,21 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Contains("\tthreads=3/3\t", firstPicture);
         });
 
+        // A lookup ScreenScraper could not answer is queued to retry, each retry said in the error log with its game - see EmuSen_Backend.md §40.5.
+        [Fact]
+        public Task A_retry_is_said_in_the_error_log_with_its_game() => OnUi(() =>
+        {
+            string broken = Game("D Unanswered (USA)", 40);
+            Server.StatusByMd5[Md5(broken)] = (500, "Erreur interne du serveur");
+            MainWindow window = Open(settings: a => { a.OpenEmuFallback = false; a.LogDirectory = Logs; });
+            Scrape(window, new ScrapeScope(Game: broken));
+            RunEnds(window);
+            string[] lines = File.ReadAllLines(EmuSen.Galaxia.Library.ErrorLog.PathFor(DateTime.Now));
+            int at = Array.FindIndex(lines, l => l.Contains("WARN [scraping] ScreenScraper could not answer; queued to retry: "));
+            Assert.True(at >= 0, string.Join("\n", lines));
+            Assert.Equal($"    context: {broken}", lines[at + 1]);
+        });
+
         [Fact]
         public Task Nothing_the_scrape_log_holds_is_a_credential_or_an_address() => OnUi(() =>
         {

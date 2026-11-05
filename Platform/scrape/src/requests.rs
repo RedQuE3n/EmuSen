@@ -123,6 +123,13 @@ impl Scraper {
                 text_or_null(&mut out, row.matched_by.as_deref());
                 out.push_str(&format!(",\"from_failover\":{}}}", row.from_failover));
             }
+            out.push_str("],\"retried\":[");
+            for (i, row) in p.retried.iter().filter(|row| row.serial > since).enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push_str(&format!("{{\"serial\":{},\"path\":{},\"detail\":{},\"failed\":{}}}", row.serial, quoted(&row.path), quoted(&row.detail), row.failed));
+            }
             out.push_str("],\"quota\":");
         }
         crate::reads::quota_json(self, &mut out)?;

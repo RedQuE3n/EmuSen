@@ -63,11 +63,13 @@ pub struct Finished {
     pub matched_by: Option<String>,
     pub skipped: bool,
     pub unchanged: i32,
+    /// A retry the host says in the error log: a request that failed (true) or one ScreenScraper could not answer (false); none for a busy server's wait.
+    pub said: Option<bool>,
 }
 
 impl Finished {
     fn new(item: &Queued, outcome: Outcome, detail: impl Into<String>) -> Finished {
-        Finished { path: item.path.clone(), system: item.system.clone(), outcome, has_cover: false, written: Vec::new(), detail: detail.into(), matched_by: None, skipped: false, unchanged: 0 }
+        Finished { path: item.path.clone(), system: item.system.clone(), outcome, has_cover: false, written: Vec::new(), detail: detail.into(), matched_by: None, skipped: false, unchanged: 0, said: None }
     }
 }
 
@@ -117,6 +119,15 @@ pub struct Row {
     pub from_failover: bool,
 }
 
+/// A retry the host is to say in the error log, as `Scraper` said it (EmuSen_Backend.md §40.5).
+#[derive(Clone, Debug)]
+pub struct Retried {
+    pub serial: u64,
+    pub path: String,
+    pub detail: String,
+    pub failed: bool,
+}
+
 #[derive(Clone, Debug)]
 pub struct Activity {
     pub path: String,
@@ -151,6 +162,7 @@ pub struct Progress {
     pub paused_at: Option<i64>,
     pub paused_for: i64,
     pub recent: VecDeque<Row>,
+    pub retried: VecDeque<Retried>,
     /// Whether ScreenScraper's workers still run in this run.
     pub workers_live: bool,
 }
@@ -181,6 +193,7 @@ impl Default for Progress {
             paused_at: None,
             paused_for: 0,
             recent: VecDeque::new(),
+            retried: VecDeque::new(),
             workers_live: false,
         }
     }
@@ -476,7 +489,7 @@ impl Scraper {
                 Turn::Io(words) => {
                     let backoff = backoff(item.attempts);
                     let _ = self.store().retry(&item.path, self.clock.now() + backoff, true);
-                    self.arrived(Finished::new(&item, Outcome::Retry, redact(&words)));
+                    self.arrived(Finished { said: Some(true), ..Finished::new(&item, Outcome::Retry, redact(&words)) });
                 }
                 Turn::Cancelled => break,
             }
@@ -801,7 +814,7 @@ impl Scraper {
                     return Ok(Some(self.final_answer(item, State::Error, &reason(&answer), &key)?));
                 }
                 self.store().retry(rom, now + backoff(item.attempts), true).map_err(|e| e.words())?;
-                Ok(Some(Finished::new(item, Outcome::Retry, reason(&answer))))
+                Ok(Some(Finished { said: Some(false), ..Finished::new(item, Outcome::Retry, reason(&answer)) }))
             }
         }
     }
@@ -1218,7 +1231,14 @@ fn count(p: &mut Progress, r: &Finished) {
             });
             p.recent.truncate(RECENT_LIMIT);
         }
-        Outcome::Retry => p.retrying += 1,
+        Outcome::Retry => {
+            p.retrying += 1;
+            if let Some(failed) = r.said {
+                let serial = p.serial + 1;
+                p.retried.push_front(Retried { serial, path: r.path.clone(), detail: redact(&r.detail), failed });
+                p.retried.truncate(RECENT_LIMIT);
+            }
+        }
         Outcome::Stopped => {}
     }
 }

@@ -67,6 +67,7 @@ namespace EmuSen.Mistress.Views
         private void ToggleHomeFavourite()
         {
             if (!HomeFavouriteHere) return;
+            Cue("favorite");
             _homeGame!.ToggleFavourite();
             RefreshPadMenuText(Math.Max(PadMenuList.SelectedIndex, 0));
         }

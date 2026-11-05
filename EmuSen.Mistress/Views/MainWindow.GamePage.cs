@@ -74,12 +74,12 @@ namespace EmuSen.Mistress.Views
             if (_gamePage?.Layout is not { } page) return;
             switch (button)
             {
-                case UiButton.Up: page.Move(0, -1); break;
-                case UiButton.Down: page.Move(0, 1); break;
-                case UiButton.Left: page.Move(-1, 0); break;
-                case UiButton.Right: page.Move(1, 0); break;
+                case UiButton.Up: Heard(button, page.Move(0, -1)); break;
+                case UiButton.Down: Heard(button, page.Move(0, 1)); break;
+                case UiButton.Left: Heard(button, page.Move(-1, 0)); break;
+                case UiButton.Right: Heard(button, page.Move(1, 0)); break;
                 default:
-                    if (ToolPaneWindow.Glyph(button) is { } glyph) page.Press(glyph);
+                    if (ToolPaneWindow.Glyph(button) is { } glyph) Heard(button, page.Press(glyph));
                     break;
             }
         }

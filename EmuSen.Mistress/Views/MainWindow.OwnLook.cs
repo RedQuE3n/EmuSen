@@ -189,6 +189,7 @@ namespace EmuSen.Mistress.Views
         {
             if (_games is null) return;
             _games.Back();
+            Cue("back");
             if (_ownScreen == GamesScreenName) FillGames();
         }
 
@@ -199,27 +200,27 @@ namespace EmuSen.Mistress.Views
             {
                 switch (button)
                 {
-                    case UiButton.Up: gallery.Move(0, -1); return;
-                    case UiButton.Down: gallery.Move(0, 1); return;
-                    case UiButton.Left: gallery.Move(-1, 0); return;
-                    case UiButton.Right: gallery.Move(1, 0); return;
-                    case UiButton.Menu when !gallery.IsSearchOpen || !gallery.Focused.InKeyboard: ShowHome(); return;
+                    case UiButton.Up: Heard(button, gallery.Move(0, -1)); return;
+                    case UiButton.Down: Heard(button, gallery.Move(0, 1)); return;
+                    case UiButton.Left: Heard(button, gallery.Move(-1, 0)); return;
+                    case UiButton.Right: Heard(button, gallery.Move(1, 0)); return;
+                    case UiButton.Menu when !gallery.IsSearchOpen || !gallery.Focused.InKeyboard: ShowHome(); Cue("back"); return;
                     case UiButton.Back when !gallery.IsSearchOpen: GamesBack(); return;
                 }
-                if (ToolPaneWindow.Glyph(button) is { } glyph) gallery.Press(glyph);
+                if (ToolPaneWindow.Glyph(button) is { } glyph) Heard(button, gallery.Press(glyph));
                 return;
             }
             if (HomeLayout is not { } home) return;
             switch (button)
             {
-                case UiButton.Up: home.Move(0, -1); return;
-                case UiButton.Down: home.Move(0, 1); return;
-                case UiButton.Left: home.Move(-1, 0); return;
-                case UiButton.Right: home.Move(1, 0); return;
-                case UiButton.Menu when _bigScreen: home.FocusStart(); return;
+                case UiButton.Up: Heard(button, home.Move(0, -1)); return;
+                case UiButton.Down: Heard(button, home.Move(0, 1)); return;
+                case UiButton.Left: Heard(button, home.Move(-1, 0)); return;
+                case UiButton.Right: Heard(button, home.Move(1, 0)); return;
+                case UiButton.Menu when _bigScreen: home.FocusStart(); Cue("scroll"); return;
                 case UiButton.Menu: OpenPadMenu(); return;
             }
-            if (ToolPaneWindow.Glyph(button) is { } press) home.Press(press);
+            if (ToolPaneWindow.Glyph(button) is { } press) Heard(button, home.Press(press));
         }
 
         // The List card over the grid: the Card form's page set, its rows from the grid's description (EmuSen_Interface.md §18.1).
@@ -403,7 +404,11 @@ namespace EmuSen.Mistress.Views
 
         bool IHomeHost.BigPictureForced => _bigScreenForced;
 
-        void IHomeHost.Resume() => ToggleLibrary();
+        void IHomeHost.Resume()
+        {
+            Cue("launch");
+            ToggleLibrary();
+        }
 
         void IHomeHost.Play(string path) => ((IGamesHost)this).Play(path);
 
@@ -455,13 +460,17 @@ namespace EmuSen.Mistress.Views
 
         int IGamesHost.Random(int count) => _shuffle.Next(count);
 
-        void IGamesHost.Play(string path) =>
+        void IGamesHost.Play(string path)
+        {
+            Cue("launch");
             StartGameAsync(path, Path.GetFileName(path)).Logged("launch", $"Starting {Path.GetFileName(path)}");
+        }
 
         void IGamesHost.OpenPage(string path) => ShowGamePage(path);
 
         void IGamesHost.ToggleFavourite(string path)
         {
+            Cue("favorite");
             _records.ToggleFavourite(path);
             IdentifyLater(path);
             ShowLibraryEntries();

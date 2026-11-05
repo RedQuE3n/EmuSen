@@ -395,5 +395,25 @@ namespace EmuSen.WiseMan.Mistress
                 EmuSen.LunaP.Theme.LunaMotion.Reduced = false;
             }
         }, default);
+
+        // Display's Start-up splash row, On until turned off, saved as it steps - see EmuSen_Interface.md §22.
+        [Fact]
+        public Task The_start_up_splash_row_is_on_and_saves_its_choice() => Session.Dispatch(() =>
+        {
+            (MainWindow window, _) = Open(null);
+            try
+            {
+                window.ShowSettings(SettingsScreen.Display);
+                SettingsScreen s = Model(window);
+                Assert.Equal(SettingsScreen.On, Status(s, "splash"));
+                s.Step("splash", 1);
+                Assert.Equal(SettingsScreen.Off, Status(s, "splash"));
+                Assert.False(AppSettings.Load().StartupSplash);
+            }
+            finally
+            {
+                window.Close();
+            }
+        }, default);
     }
 }

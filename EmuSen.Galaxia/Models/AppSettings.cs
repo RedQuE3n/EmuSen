@@ -79,6 +79,9 @@ namespace EmuSen.Galaxia.Models
         public string ReducedMotion { get; set; } = ReducedMotionSystem;
         public const string ReducedMotionSystem = "system", ReducedMotionOn = "on", ReducedMotionOff = "off";
 
+        // Settings ▸ Display's Start-up splash: Moonrise over big picture's start - see EmuSen_Interface.md §22.
+        public bool StartupSplash { get; set; } = true;
+
         // Ask, Resume or Restart when a game with a resume state starts - see EmuSen_Settings_Reference.md §4.31.
         public string ResumeOnLaunch { get; set; } = ResumeAsk;
         public const string ResumeAsk = "Ask";

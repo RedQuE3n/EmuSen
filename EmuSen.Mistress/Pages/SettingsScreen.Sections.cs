@@ -122,6 +122,7 @@ namespace EmuSen.Mistress.Pages
             Switch("art", "Background art on Home", "The focused game's art behind Home, dimmed and blurred.", App.HomeArt, on => App.HomeArt = on),
             Pick("motion", "Reduced motion", "No movement, shorter fades. System follows the desktop's own setting.", MotionChoices, App.ReducedMotion, v => { App.ReducedMotion = v; _host.SaveApp("motion"); },
                 () => Said(App.ReducedMotion switch { AppSettings.ReducedMotionOn => "Nothing moves: a page appears at once, and a fade takes a moment.", AppSettings.ReducedMotionOff => "Pages and shelves move as they are drawn to.", _ => $"The desktop's own setting: {(_host.SystemReducesMotion ? "reduced" : "full")} motion." }, "Applies at once, on the big screen and the desktop.")),
+            Switch("splash", "Start-up splash", "Moonrise while big picture starts: a moon, and a planet and a bell for each console. Any button skips it.", App.StartupSplash, on => App.StartupSplash = on),
             Pick("variant", "Light or dark", "Dark is the big screen's default; Light, or the desktop's own choice.", Appearances, App.Appearance, v => { App.Appearance = v; _host.SaveApp("variant"); },
                 () => new ScreenPane([new SettingsLine("Dark is the big screen's default; Light follows the desktop's choice when you ask it to.")]) { Preview = new PanePreview.Variants("Dark", "Light") }),
             Switch("videos", "Play videos", "A game's clip plays in its picture once the focus rests on it, where it has one.", App.PlayVideos, on => App.PlayVideos = on),

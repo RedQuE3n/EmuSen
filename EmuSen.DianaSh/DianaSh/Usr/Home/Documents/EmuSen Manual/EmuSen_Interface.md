@@ -1880,3 +1880,56 @@ cover had stood in a 0.73 box, cut at its sides, and now stands in its own 0.75 
 the page's media tiles still fill their tiles. SettingsLibrary at both sizes moved only by the media folder's new name.
 LunaP's `CoverShapeTests` hold the shapes, the bands at each edge and the fit audit at 1280 x 800, 1920 x 1080 and
 3840 x 2160.
+
+## 22. Moonrise, the start-up splash (2026-11-04)
+
+Decided 2026-11-04 by the tester ("do it"), from an animated draft approved the same day and revised five times that day
+(the length, the chime, then a bell per planet, each gentler). When big picture starts, about five seconds of drawn
+motion cover the start-up work: a star field fades in, a moon draws its outline and fills to a crescent with a halo, one
+planet per console drifts in on an orbit and springs into a row, a light sweeps along the row and each planet flares and
+rings its own bell as it passes, and "EMUSEN" settles in with "N CONSOLES" beneath. The drawing, its timeline and the
+bells are LunaP's `LunaSplash`, `SplashTimeline.Moonrise` and `LunaSounds.Render(SplashChime, strikes)` (`docs/LunaP.md`
+§219, which records where it differs from the draft); this section is what Mistress does with them.
+
+**When.** Once a window, when it opens in big picture (the setting, `--bigscreen` or Game Mode) with Settings ▸ Display ▸
+Start-up splash On, its default (`AppSettings.StartupSplash`, in both settings models). Never on returning from a game,
+never when big picture is entered later from the desktop, never under `--play <rom>`, and never on the desktop form. It
+draws over everything in the window, EmuSen's own look or an ES-DE theme alike: the library is built before the window
+opens and its first frame is drawn behind the splash at once.
+
+**How long.** The splash ends at whichever is later: its own 5 s, or the window's start-up work done. That work is the
+artwork index, read off the interface thread when the library is first set up (tens of thousands of files for a full
+libretro-thumbnails tree); the window keeps it as a task (`StartupWork`) the splash waits on. While the work runs past
+5 s, the finished frame holds and asks for no frames; the work's end posts the splash's last step, so it goes on that
+frame, with nothing added. The splash never delays the work: everything the window does at start runs as it did.
+
+**Skip.** Any pad button, any key but Tab and Shift, or a click shows the finished frame at once, and the splash goes as
+soon as start-up is done. The press is the splash's alone: the pad's navigator forgets it and the key is handled, so the
+library behind does not move or open anything.
+
+**Reduced motion.** The finished frame alone, held for the splash's length (or until skipped), so the console count is
+still read; nothing moves.
+
+**Planets and their colours.** One planet for each system the systems table lists with an engine, in the table's order,
+named by its `display_name`; the caption counts them. The hues are the draft's, kept in one place,
+`StartupSplash.Hues` (NES 8°, SNES 280, N64 140, Game Boy 95, Game Boy Color 320, SG-1000 205, Master System 220,
+Genesis 0, Sega CD 190, 32X 30, PlayStation 230, PlayStation 2 250, Dreamcast 25; Saturn 165, which the draft did not
+show). A system with no hue there takes one from its id, the same on every start.
+
+**The bells.** One bell per planet, climbing the G major pentatonic from G4, each struck as the sweep reaches its
+planet. The strike times depend on the count and on the row's width over the screen's height, so the bells are rendered
+for this start, once, off the interface thread, a second into the splash when the window has its size (about 1.8 s of
+sound for thirteen planets), rather than shipped as a fixed file of thirteen notes. They play through `UiSoundPlayer` on
+the interface's own stream, at the Navigation sounds volume and on the chosen sound output, beginning at the first
+strike; with Navigation sounds off or at 0 % they are never made or played, and a skip before the first strike silences
+them. At the same volume their loudest sample is under 0.8 of the quietest navigation cue's, so they sit beneath the
+menus' sounds.
+
+**Tests.** `StartupSplashTests`: it plays once at big picture's start, ringing its bells once, and not on returning from
+a game; a pad button and a key each skip it, and the press does nothing behind it; a skip while start-up works holds the
+finished frame until the work ends; reduced motion shows the still frame for the length; the setting off shows none; the
+planets are the table's systems with an engine, in their hues, and a made-up table's count follows it; the finished
+frame fits at 1280 × 800, 1920 × 1080, 1280 × 720 and 3840 × 2160, each set after the first layout; start-up slower
+than the splash ends it on the frame the work ends. Measured on 2026-11-04 against the draft, with seeded stars and the
+bundled Barlow Condensed Regular in the draft's place of Light: the frames at 1, 2, 3 s and the finished frame match in
+placement, colour and timing.

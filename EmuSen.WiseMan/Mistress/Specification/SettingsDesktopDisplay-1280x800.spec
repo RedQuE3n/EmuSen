@@ -49,8 +49,8 @@ tree
               33 Border at=676,80,244,162 by=panel limit=0,0,960,640 paints=#F3F3F3FF role=none
               34 TextBlock at=716,151,165,20 box=165,20 by=panel caps=11.1992 drawn face="Barlow Condensed" heard="Aurora Drift (Synthetic) · Off CRT" layout=164.02,19.2 limit=0,0,960,640 name=SettingsCaption nohit paints=#000000FF role=text size=16 text="Aurora Drift (Synthetic) · Off CRT"
             35 TextBlock at=676,254,244,32 box=244,32 by=panel caps=9.0994 drawn face=Barlow heard="Off: the console's pixels as they are, with no television." layout=236.05,31.2 limit=0,0,960,640 name=SettingsLine paints=#1F1F1FFF role=text size=13 text="Off: the console's pixels as they are, with no television."
-        36 ScrollViewer at=225,56,419,560 by=panel fades=b limit=0,0,960,640 overflow=226 paints=#000000FF,#8C8C8CFF role=scrollviewer viewport=225,56,419,560
-          37 StackPanel at=225,56,419,786 by=scroll heard=Display in=36 limit=225,56,419,560 name=SettingsRows paints=#000000FF,#005FB8FF,#1F1F1FFF,#5F5F5FFF,#8C8C8CFF,#D6D6D6FF,#FFFFFFFF role=none seen=225,56,419,560
+        36 ScrollViewer at=225,56,419,560 by=panel fades=b limit=0,0,960,640 overflow=278 paints=#000000FF,#8C8C8CFF role=scrollviewer viewport=225,56,419,560
+          37 StackPanel at=225,56,419,838 by=scroll heard=Display in=36 limit=225,56,419,560 name=SettingsRows paints=#000000FF,#005FB8FF,#1F1F1FFF,#5F5F5FFF,#8C8C8CFF,#D6D6D6FF,#FFFFFFFF role=none seen=225,56,419,560
             38 Border at=225,56,419,65 by=scroll focus heard="Picture shape, TV shape" in=36 limit=225,56,419,560 name=SettingsRow.shape paints=#D6D6D6FF role=none
               39 DockPanel at=233,60,403,56 by=scroll in=36 limit=225,56,419,560 role=none
                 40 ComboBox at=508,72,120,32 by=scroll drawn focus heard="Picture shape" in=36 limit=225,56,419,560 op paints=#1F1F1FFF,#5F5F5FFF,#8C8C8CFF,#FFFFFFFF role=combobox sideways
@@ -111,24 +111,24 @@ tree
                 95 StackPanel at=233,442,259,43 by=scroll in=36 limit=225,56,419,560 role=none
                   96 TextBlock at=233,442,259,16 box=259,16 by=scroll caps=9.0994 drawn face=Barlow heard="Reduced motion" in=36 layout=89.79,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Reduced motion"
                   97 TextBlock at=233,458,259,27 box=259,27 by=scroll caps=7.6995 drawn face=Barlow heard="No movement, shorter fades. System follows the desktop's own setting." in=36 layout=222.47,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text size=11 text="No movement, shorter fades. System follows the desktop's own setting."
-            98 Border at=225,490,419,52 by=scroll focus heard="Light or dark, Dark" in=36 limit=225,56,419,560 name=SettingsRow.variant paints=#D6D6D6FF role=none
+            98 Border at=225,490,419,52 by=scroll focus heard="Start-up splash, On" in=36 limit=225,56,419,560 name=SettingsRow.splash paints=#D6D6D6FF role=none
               99 DockPanel at=233,494,403,43 by=scroll in=36 limit=225,56,419,560 role=none
-                100 ComboBox at=508,500,120,32 by=scroll drawn focus heard="Light or dark" in=36 limit=225,56,419,560 op paints=#1F1F1FFF,#5F5F5FFF,#8C8C8CFF,#FFFFFFFF role=combobox sideways
-                  101 TextBlock at=520,507,76,16 box=76,16 by=clip caps=9.0994 drawn face=Barlow heard=Dark in=36 layout=25.64,15.6 limit=520,505,76,20 owner=100 paints=#1F1F1FFF role=text size=13 text=Dark
-                  102 ViewboxContainer at=606,512.73,12,6.54 by=clip in=36 limit=606,512.73,12,6.54 nohit role=none
-                103 StackPanel at=233,494,259,43 by=scroll in=36 limit=225,56,419,560 role=none
-                  104 TextBlock at=233,494,259,16 box=259,16 by=scroll caps=9.0994 drawn face=Barlow heard="Light or dark" in=36 layout=69.97,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Light or dark"
-                  105 TextBlock at=233,510,259,27 box=259,27 by=scroll caps=7.6995 drawn face=Barlow heard="Dark is the big screen's default; Light, or the desktop's own choice." in=36 layout=247.63,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text size=11 text="Dark is the big screen's default; Light, or the desktop's own choice."
-            106 Border at=225,542,419,52 by=scroll focus heard="Play videos, On" in=36 limit=225,56,419,560 name=SettingsRow.videos paints=#D6D6D6FF role=none
-              107 DockPanel at=233,546,403,43 by=scroll in=36 limit=225,56,419,560 role=none
-                108 LunaSwitch at=570,552,58,32 by=scroll drawn focus heard="Play videos" in=36 limit=225,56,419,560 op paints=#000000FF,#005FB8FF role=button
-                109 StackPanel at=233,546,321,43 by=scroll in=36 limit=225,56,419,560 role=none
-                  110 TextBlock at=233,546,321,16 box=321,16 by=scroll caps=9.0994 drawn face=Barlow heard="Play videos" in=36 layout=61.59,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Play videos"
-                  111 TextBlock at=233,562,321,27 box=321,27 by=scroll caps=7.6995 drawn face=Barlow heard="A game's clip plays in its picture once the focus rests on it, where it has one." in=36 layout=306.57,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text size=11 text="A game's clip plays in its picture once the focus rests on it, where it has one."
-            112 Border at=225,594,419,52 by=scroll focus heard="Smooth motion, On" in=36 limit=225,56,419,560 name=SettingsRow.smooth paints=#D6D6D6FF role=none seen=225,594,419,22
+                100 LunaSwitch at=570,500,58,32 by=scroll drawn focus heard="Start-up splash" in=36 limit=225,56,419,560 op paints=#000000FF,#005FB8FF role=button
+                101 StackPanel at=233,494,321,43 by=scroll in=36 limit=225,56,419,560 role=none
+                  102 TextBlock at=233,494,321,16 box=321,16 by=scroll caps=9.0994 drawn face=Barlow heard="Start-up splash" in=36 layout=85.06,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Start-up splash"
+                  103 TextBlock at=233,510,321,27 box=321,27 by=scroll caps=7.6995 drawn face=Barlow heard="Moonrise while big picture starts: a moon, and a planet and a bell for each console. Any button skips it." in=36 layout=312.97,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text size=11 text="Moonrise while big picture starts: a moon, and a planet and a bell for each console. Any button skips it."
+            104 Border at=225,542,419,52 by=scroll focus heard="Light or dark, Dark" in=36 limit=225,56,419,560 name=SettingsRow.variant paints=#D6D6D6FF role=none
+              105 DockPanel at=233,546,403,43 by=scroll in=36 limit=225,56,419,560 role=none
+                106 ComboBox at=508,552,120,32 by=scroll drawn focus heard="Light or dark" in=36 limit=225,56,419,560 op paints=#1F1F1FFF,#5F5F5FFF,#8C8C8CFF,#FFFFFFFF role=combobox sideways
+                  107 TextBlock at=520,559,76,16 box=76,16 by=clip caps=9.0994 drawn face=Barlow heard=Dark in=36 layout=25.64,15.6 limit=520,557,76,20 owner=106 paints=#1F1F1FFF role=text size=13 text=Dark
+                  108 ViewboxContainer at=606,564.73,12,6.54 by=clip in=36 limit=606,564.73,12,6.54 nohit role=none
+                109 StackPanel at=233,546,259,43 by=scroll in=36 limit=225,56,419,560 role=none
+                  110 TextBlock at=233,546,259,16 box=259,16 by=scroll caps=9.0994 drawn face=Barlow heard="Light or dark" in=36 layout=69.97,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Light or dark"
+                  111 TextBlock at=233,562,259,27 box=259,27 by=scroll caps=7.6995 drawn face=Barlow heard="Dark is the big screen's default; Light, or the desktop's own choice." in=36 layout=247.63,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text size=11 text="Dark is the big screen's default; Light, or the desktop's own choice."
+            112 Border at=225,594,419,52 by=scroll focus heard="Play videos, On" in=36 limit=225,56,419,560 name=SettingsRow.videos paints=#D6D6D6FF role=none seen=225,594,419,22
               113 DockPanel at=233,598,403,43 by=scroll in=36 limit=225,56,419,560 role=none seen=233,598,403,18
-                114 LunaSwitch at=570,604,58,32 by=scroll drawn focus heard="Smooth motion" in=36 limit=225,56,419,560 op paints=#000000FF,#005FB8FF role=button seen=570,604,58,12
+                114 LunaSwitch at=570,604,58,32 by=scroll drawn focus heard="Play videos" in=36 limit=225,56,419,560 op paints=#000000FF,#005FB8FF role=button seen=570,604,58,12
                 115 StackPanel at=233,598,321,43 by=scroll in=36 limit=225,56,419,560 role=none seen=233,598,321,18
-                  116 TextBlock at=233,598,321,16 box=321,16 by=scroll caps=9.0994 drawn face=Barlow heard="Smooth motion" in=36 layout=83.9,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Smooth motion"
-                  117 TextBlock at=233,614,321,27 box=321,27 by=scroll caps=7.6995 drawn face=Barlow heard="One frame per refresh when the display's rate is within 1% of the console's, the sound resampled by the difference." in=36 layout=292.27,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text seen=233,614,321,2 size=11 text="One frame per refresh when the display's rate is within 1% of the console's, the sound resampled by the difference."
+                  116 TextBlock at=233,598,321,16 box=321,16 by=scroll caps=9.0994 drawn face=Barlow heard="Play videos" in=36 layout=61.59,15.6 limit=225,56,419,560 paints=#1F1F1FFF role=text size=13 text="Play videos"
+                  117 TextBlock at=233,614,321,27 box=321,27 by=scroll caps=7.6995 drawn face=Barlow heard="A game's clip plays in its picture once the focus rests on it, where it has one." in=36 layout=306.57,26.4 limit=225,56,419,560 paints=#5F5F5FFF role=text seen=233,614,321,2 size=11 text="A game's clip plays in its picture once the focus rests on it, where it has one."
 focus none

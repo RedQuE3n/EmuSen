@@ -37,8 +37,8 @@ tree
           22 MenuRow at=96,567,1056,81 by=panel focus heard="Text size, Default" limit=0,0,1920,1200 name=SettingsRow.textsize role=listitem
           23 MenuRow at=96,648,1056,81 by=panel focus heard="Background art on Home, On" limit=0,0,1920,1200 name=SettingsRow.art role=listitem
           24 MenuRow at=96,729,1056,81 by=panel focus heard="Reduced motion, System" limit=0,0,1920,1200 name=SettingsRow.motion role=listitem
-          25 MenuRow at=96,810,1056,81 by=panel focus heard="Light or dark, Light" limit=0,0,1920,1200 name=SettingsRow.variant role=listitem
-          26 MenuRow at=96,891,1056,81 by=panel focus heard="Play videos, On" limit=0,0,1920,1200 name=SettingsRow.videos role=listitem
+          25 MenuRow at=96,810,1056,81 by=panel focus heard="Start-up splash, On" limit=0,0,1920,1200 name=SettingsRow.splash role=listitem
+          26 MenuRow at=96,891,1056,81 by=panel focus heard="Light or dark, Light" limit=0,0,1920,1200 name=SettingsRow.variant role=listitem
         27 Border at=1200,162,624,867 by=panel limit=0,0,1920,1200 name=SettingsPane paints=#FFFFFFFF role=none
           28 StackPanel at=1236,198,552,795 by=clip limit=1200,162,624,867 role=none
             29 StackPanel at=1236,198,552,240 by=clip limit=1200,162,624,867 name=SettingsVariants role=none

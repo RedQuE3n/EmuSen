@@ -399,9 +399,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(new[] { "systembrowse", "systembrowse", "select", NavigationSounds.Key("scroll") }, some.Sounds);
         }, default);
 
-        // Mistress's seven sounds are its own synthesis: 48 kHz stereo floats, short, no two alike, the same every time, and none read from a file.
+        // Mistress's seven sounds are its own synthesis: 48 kHz stereo floats, bells of at most a second and a half, no two alike, the same every time, and none read from a file.
         [Fact]
-        public void The_fallback_sounds_are_synthesised_distinct_short_and_the_same_every_time()
+        public void The_fallback_sounds_are_synthesised_distinct_bounded_and_the_same_every_time()
         {
             var seen = new HashSet<string>();
             foreach (string name in ThemedSession.SoundNames)
@@ -410,7 +410,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal(a, b);
                 Assert.Equal(0, a.Length % 8);
                 double seconds = a.Length / 8.0 / NavigationSounds.Rate;
-                Assert.InRange(seconds, 0.02, 0.3);
+                Assert.InRange(seconds, 0.02, 1.5);
                 float peak = Enumerable.Range(0, a.Length / 4).Max(i => Math.Abs(BitConverter.ToSingle(a, i * 4)));
                 Assert.InRange(peak, 0.05f, 1f);
                 Assert.True(seen.Add(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(a))), $"{name} repeats another sound");

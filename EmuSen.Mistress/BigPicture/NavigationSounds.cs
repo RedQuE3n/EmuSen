@@ -10,8 +10,6 @@ namespace EmuSen.Mistress.BigPicture
         public const string Prefix = "emusen-builtin:";
         public const int Rate = LunaSounds.Rate;
 
-        // ES-DE's quick system select has no cue of its own in the interface; its two tones are kept here.
-        private static readonly LunaTone[] QuickSystemSelect = [new(660, 660, 0, 0.035), new(990, 990, 0.04, 0.035)];
 
         private static readonly IReadOnlyDictionary<string, LunaSoundCue?> Cues = new Dictionary<string, LunaSoundCue?>(StringComparer.Ordinal)
         {
@@ -30,14 +28,13 @@ namespace EmuSen.Mistress.BigPicture
 
         public static bool IsBuiltIn(string path) => path.StartsWith(Prefix, StringComparison.Ordinal);
 
-        private static readonly Lazy<byte[]> Quick = new(() => LunaSounds.Render(QuickSystemSelect));
 
         // A sound as 48 kHz stereo 32-bit float, UiSoundPlayer's format; empty for a name that is not one of the seven.
         public static byte[] Samples(string keyOrName)
         {
             string name = IsBuiltIn(keyOrName) ? keyOrName[Prefix.Length..] : keyOrName;
             if (!Cues.TryGetValue(name, out LunaSoundCue? cue)) return [];
-            return cue is { } c ? LunaSounds.Samples(c) : Quick.Value;
+            return cue is { } c ? LunaSounds.Samples(c) : LunaSounds.QuickSelectSamples();
         }
     }
 }

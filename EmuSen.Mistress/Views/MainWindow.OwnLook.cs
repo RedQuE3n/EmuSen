@@ -9,6 +9,7 @@ using Avalonia.Styling;
 using EmuSen.Crystal.Client;
 using EmuSen.Galaxia.Library;
 using EmuSen.LunaP.Controls;
+using EmuSen.Mistress.BigPicture;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Pages;
@@ -43,18 +44,21 @@ namespace EmuSen.Mistress.Views
 
         public GamesScreen? GamesShown => GamesLayout is null ? null : _games;
 
-        private bool OwnScreenShown => LibraryView.IsVisible && (HomeLayout is not null || GamesLayout is not null);
+        private bool OwnScreenShown => LibraryView.IsVisible && (HomeLayout is not null || GamesLayout is not null || ConsolesLayout is not null);
 
         // Called on every showing of the library that no theme drew: the big screen's own look, or the desktop's Home pane.
         private void ShowOwnLook(bool themed)
         {
             bool home = !themed && (_bigScreen ? _ownScreen == HomeScreenName : _desktopHome);
             bool games = !themed && _bigScreen && _ownScreen == GamesScreenName;
+            bool consoles = !themed && _bigScreen && _ownScreen == ConsolesScreenName;
             if (home) FillHome();
             else if (_homeLayout is not null) _homeLayout.IsVisible = false;
             if (games) FillGames();
             else if (_gallery is not null) _gallery.IsVisible = false;
-            if (home || games) LibraryContent.IsVisible = false;
+            if (consoles) FillConsoles();
+            else if (_planetLayout is not null) _planetLayout.IsVisible = false;
+            if (home || games || consoles) LibraryContent.IsVisible = false;
         }
 
         // Start in the own look, B on the grid, and a place's way back: Home the screen, never a card over the grid (EmuSen_Interface.md §0.9).
@@ -87,8 +91,8 @@ namespace EmuSen.Mistress.Views
 
         private IImage? Load(string? path) => path is null ? null : _covers.Get(path);
 
-        private static CoverItem CoverOf(string path, string title, string? mark, double aspect, bool favourite, string facts, string line) =>
-            new(path, title) { Aspect = GameFacts.CardShape(aspect), Mark = mark, IsFavourite = favourite, Facts = facts, Status = line };
+        private static CoverItem CoverOf(string path, string title, string? mark, double aspect, bool favourite, string facts, string line, double? hue = null) =>
+            new(path, title) { Aspect = GameFacts.CardShape(aspect), Mark = mark, IsFavourite = favourite, Facts = facts, Status = line, Hue = hue };
 
         // A cover's picture and its art asked only for what a screen draws, through the library's cover cache.
         private IImage? CoverPicture(CoverItem item) => Load(((IGamePageHost)this).Art(item.Key).Cover);
@@ -109,6 +113,7 @@ namespace EmuSen.Mistress.Views
         {
             if (HomeLayout is { } home) home.Refresh();
             if (GamesLayout is { } gallery) gallery.Refresh();
+            if (ConsolesLayout is { } consoles) consoles.Refresh();
         }
 
         private static IReadOnlyList<PageHint> Hints(IReadOnlyList<ScreenHint> hints) =>
@@ -131,6 +136,8 @@ namespace EmuSen.Mistress.Views
                 _homeLayout.FocusStart();
             }
             _homeLayout.Form = _bigScreen ? AdaptiveForm.BigScreen : AdaptiveForm.Desktop;
+            _homeLayout.Night = _bigScreen && Night;
+            _homeLayout.Mark = StartupSplash.Title;
             _homeLayout.PadFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily;
             _homeLayout.IsVisible = true;
             _homeLayout.Title = HomeScreen.Title;
@@ -139,10 +146,10 @@ namespace EmuSen.Mistress.Views
             _homeLayout.Status = _home.StatusLine;
             _homeLayout.HintsFor = f => Hints(_home.HintsFor(RowName(f.Row)));
             _homeLayout.Continue = _home.Continue is { } c
-                ? new HubContinue(c.Title, c.Facts, PausedFrame()) { Caption = HomeScreen.ContinueCaption, Button = HomeScreen.ResumeWord, Video = ((IGamePageHost)this).Art(_currentRomPath ?? "").Clip }
+                ? new HubContinue(c.Title, c.Facts, PausedFrame()) { Caption = HomeScreen.ContinueCaption, Button = HomeScreen.ResumeWord, Video = ((IGamePageHost)this).Art(_currentRomPath ?? "").Clip, Hue = _currentRomPath is { } running ? HueOfShelf(EntryOf(running).Shelf) : null }
                 : null;
             bool wasEmpty = _homeLayout.Shelf.Count == 0;
-            _homeLayout.SetShelf(_home.Shelf.Select(g => CoverOf(g.Path, g.Title, g.Mark, g.Aspect, g.Favourite, g.Facts, g.Line)));
+            _homeLayout.SetShelf(_home.Shelf.Select(g => CoverOf(g.Path, g.Title, g.Mark, g.Aspect, g.Favourite, g.Facts, g.Line, HueOfShelf(EntryOf(g.Path).Shelf))));
             _homeLayout.SetPlaces(HomePlaces());
             // A shelf that fills for the first time takes the focus where a hub starts, as if Home had opened on it.
             if (wasEmpty && _homeLayout.Shelf.Count > 0 && _homeLayout.Focused.Row == HubRow.Places) _homeLayout.FocusStart();
@@ -176,11 +183,14 @@ namespace EmuSen.Mistress.Views
                 LibraryArea.Children.Add(_gallery);
             }
             _gallery.PadFamily = HelpFamily == PadFamily.Generic ? PadFamily.Xbox : HelpFamily;
+            _gallery.Night = Night;
+            _gallery.Trail = ConsolesScreen.Title;
+            _gallery.Hue = ConsolesScreen.KeyOf(_games.Section) is { } shelf ? HueOfShelf(shelf) : null;
             _gallery.IsVisible = true;
             _gallery.HintsFor = f => Hints(_games.HintsFor(f.InKeyboard, _games.SearchText.Length > 0));
             _gallery.SetSections(_games.Sections.Select(s => new AdaptiveSection(s.Key, s.Label)), _games.Section);
             DateTime now = PageClock();
-            _gallery.SetItems(_games.Shown.Select(g => CoverOf(g.Facts.Path, g.Facts.Title, g.Facts.Mark, g.Facts.CoverAspect, g.Facts.Favourite, _games.FactsOf(g), g.Facts.Console)));
+            _gallery.SetItems(_games.Shown.Select(g => CoverOf(g.Facts.Path, g.Facts.Title, g.Facts.Mark, g.Facts.CoverAspect, g.Facts.Favourite, _games.FactsOf(g), g.Facts.Console, HueOfShelf(g.Shelf))));
             _gallery.Count = _games.CountLine;
             _gallery.HintsFor = f => Hints(_games.HintsFor(f.InKeyboard, _games.SearchText.Length > 0));
         }
@@ -196,6 +206,11 @@ namespace EmuSen.Mistress.Views
         // The pad on the own look's screens: the directions move, A chooses, B climbs, Start goes Home; the rest as each screen's help bar declares.
         private void OwnScreenPadCommand(UiButton button)
         {
+            if (ConsolesLayout is { } planets)
+            {
+                ConsolesPadCommand(planets, button);
+                return;
+            }
             if (GamesLayout is { } gallery)
             {
                 switch (button)
@@ -420,7 +435,7 @@ namespace EmuSen.Mistress.Views
         {
             switch (place)
             {
-                case HomeScreen.Games when _bigScreen: ShowGames(); break;
+                case HomeScreen.Games when _bigScreen: ShowConsoles(); break;
                 case HomeScreen.Games: ShowDesktopHome(false); ChooseCollection(AllGamesKey); break;
                 case HomeScreen.Search when _bigScreen: ShowGames(search: true); break;
                 case HomeScreen.Search: ShowDesktopHome(false); SearchFromThePad(); break;

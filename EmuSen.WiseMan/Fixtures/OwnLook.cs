@@ -33,12 +33,17 @@ namespace EmuSen.WiseMan.Fixtures
             list.Select(entry);
         }
 
-        // From Home to the grid by the place, as the player goes.
+        // From Home to the grid by the place and All games on Choose a console, as the player goes.
         public static void OpenGames(MainWindow window, PadDriver pad, bool swapped = false)
         {
             if (window.GamesLayout is not null) return;
-            HubLayout home = window.HomeLayout!;
-            home.FocusOn(HubRow.Places, "games");
+            if (window.ConsolesLayout is null)
+            {
+                HubLayout home = window.HomeLayout!;
+                home.FocusOn(HubRow.Places, "games");
+                Accept(pad, swapped);
+            }
+            window.ConsolesLayout!.FocusOn(EmuSen.Mistress.Pages.ConsolesScreen.All);
             Accept(pad, swapped);
         }
 

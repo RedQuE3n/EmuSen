@@ -55,6 +55,11 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             home = Assert.IsType<HubLayout>(s.Window.HomeLayout);
             home.FocusOn(HubRow.Places, "games");
             Assert.Equal(["select"], Heard(s, () => s.Pad.A()));
+            PlanetLayout consoles = Assert.IsType<PlanetLayout>(s.Window.ConsolesLayout);
+            Assert.Equal(["scroll"], Heard(s, () => s.Pad.Down()));
+            Assert.Equal(["scroll"], Heard(s, () => s.Pad.Right()));
+            consoles.FocusOn(EmuSen.Mistress.Pages.ConsolesScreen.All);
+            Assert.Equal(["select"], Heard(s, () => s.Pad.A()));
             GalleryLayout grid = Assert.IsType<GalleryLayout>(s.Window.GamesLayout);
             Assert.Equal(["scroll"], Heard(s, () => s.Pad.Right()));
             Assert.Equal(["systembrowse"], Heard(s, () => s.Pad.R1()));
@@ -72,6 +77,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(1000);
 
             Assert.Same(grid, s.Window.GamesLayout);
+            Assert.Equal(["back"], Heard(s, () => s.Pad.B()));
+            Assert.NotNull(s.Window.ConsolesLayout);
             Assert.Equal(["back"], Heard(s, () => s.Pad.B()));
             Assert.NotNull(s.Window.HomeLayout);
 

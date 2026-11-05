@@ -2014,3 +2014,87 @@ Pause Card, nothing. Each walk ends with a press on the themed view, which still
 with three seeded faults: the theme's file ignored (the built-in always played) failed both walks; the old guard (silent
 whenever a theme is shown) failed both walks; the themed-view guard removed was not caught, because no route the themed
 view takes names a cue today, so the guard only keeps a later one from sounding twice.
+
+## 24. The night sky: Choose a console, Home and the grid (2026-11-05)
+
+Decided 2026-11-05 by the tester, from three approved mockups (canvas pages of 1280 × 800 design units: Choose a
+console, Home, and a console's games): the own look's three big-screen screens stand under Moonrise's night sky (§22),
+and a new screen, Choose a console, sits between Home's Games place and the grid. The drawing is LunaP's: `LunaSky`
+(the gradient, Moonrise's stars held still, and one glow that follows the focus), `PlanetLayout`, and the night forms of
+`HubLayout` and `GalleryLayout` (`docs/LunaP.md` §221, which also records where the kit differs from the mockups). This
+section is what Mistress does with them. The code is `ConsolesScreen` (the plain description) and
+`MainWindow.Consoles.cs`.
+
+### 24.1 Choose a console
+
+- **Reached** from Home's Games place (A). Search still opens the grid with its keyboard; the List card's rows and
+  Collections are unchanged.
+- **Along the top**, three wide places: All games (its count), Favourites ("Your hearts, every console") and Recently
+  played ("Last: " and the game played last).
+- **Then the consoles that have at least one game**, in the systems table's order (`RuntimeCatalog.Shelves`, joined to
+  `RuntimeCatalog.Systems` by the shelf's system), each a planet in its Moonrise hue (`StartupSplash.HueOf`, the one
+  owner of a console's colour), in rows that fit the screen (eleven at 1280 units: six, then five). A console the table
+  lists with no game in the library is not shown.
+- **The focused one** lifts and takes the ring, its planet grows and glows, and the sky glows in its hue. Beneath, its
+  full name (the systems table's `name`), maker, year and game count, and a fan of up to four of its covers, the
+  recently played first, each whole at its own shape.
+- **The pad.** The directions walk the rows as LunaP's layouts do (Up and Down to the nearest item of the next row); A
+  opens the grid on that console (or on All, Favourites or Recent for a place); B goes back to Home; Y opens Favourites;
+  X picks a game at random from the focused console, or from every game on All games, and opens its grid with the focus
+  on it, where A plays it. Start goes Home. The help bar reads A Open, B Back, Y Favourites, X Random game.
+- **Sounds** (§23): moving between planets plays `scroll`; A, X and Y play `select`; B plays `back`. Each planet having
+  its own note is a later change.
+
+### 24.2 The grid
+
+- **The heading** reads "GAMES ▸", the console's planet, its name and its count; at the right, the shoulders and the
+  sections they lead to. LB and RB still step the sections, wrapping, as before (All, Favourites, Recent, then each
+  console); a collection shown alone names no neighbours. The strip of section tabs gives way to this heading at
+  night, so a pointer reaches another console through B and Choose a console; the light variant keeps the strip.
+- **B** clears a search, then the section's favourites filter, then a collection, and then returns to Choose a console
+  with the focus on the section the grid shows: the console, or the place it came from. The help bar names B
+  "Consoles" (or "Clear search" while there is one), after A, X, Y, the shoulders and Select's List card, all unchanged.
+- Covers stay whole at their own shapes on a shared baseline (§21); the focused one lifts and glows in its console's hue,
+  and so does the sky (the section's hue, else the focused cover's on All, Favourites and Recent).
+
+### 24.3 Home
+
+The same places, sizes and focus order as before (§11, `docs/LunaP.md` §212), under the sky, the shelf 8 units lower
+(424, the mockup's). Continue sits in a glass panel with a small planet in its console's hue before the facts, its foot
+kept at least the mockup's 8 units above RECENT, so the focused panel's ring never crosses the label; the Recent shelf's covers are whole, the focused one
+lifts, and the sky glows in that game's console's hue, else in Continue's. The seven places are glass tiles. A small
+crescent and the EMUSEN wordmark (`StartupSplash.Title`) stand at the top right, and the status line moves to the top
+left, as the mockup has it.
+
+### 24.4 What does not change
+
+The game page keeps its art header; ES-DE themes and the desktop form are untouched. With the light variant chosen
+(Settings ▸ Display), the three screens keep the day's surfaces: no sky, opaque raised tiles and the theme's surface;
+Choose a console is drawn the same way in light, without the sky. Whether the light variant should have a day sky of its
+own is a question for the tester.
+
+### 24.5 Tests, measured on 2026-11-05
+
+`ChooseConsoleTests` (the real window, on the synthetic library): Home's Games place opens Choose a console with the
+table's three consoles that have games in its order, each in its Moonrise hue, and fewer planets than the table has
+shelves; A on a console opens its grid with its hue; the shoulders step and the heading names the neighbours; B returns
+with the focus on the console the grid shows; X picks a game of the focused console, and of every game on All games;
+the glow follows the focus and, under reduced motion, is at rest with the new hue at once; Home at night carries the
+wordmark and glows in the focused cover's hue; the light variant has no sky. `OwnLookScreenTests`: the description on a
+fake host, the table's order (reversed, the planets reverse), a console with no game left out, the choices' sections,
+X's pick, the help bar, and the grid's B reaching Choose a console. `WindowFitAuditTests`: Choose a console is a
+recorded own-look state; Home, HomeShelf, Choose a console and the grid fit at 1280 × 800, 1920 × 1080, 1280 × 720 and
+3840 × 2160, the window resized after the screen is shown so the scale follows late. The own look's recordings were made
+again for the sky behind each screen (Home, HomeShelf, HomePlaces, HomeNothingLeft and the grid's), after looking at
+each: the change is the sky, the glass, the wordmark and the heading, with every press answering as before.
+
+The fit audit does not see text crossed by a ring: it checks that text is whole and inside its parent, not that a
+sibling's stroke is drawn over it. The first build's focused Continue ring ran through RECENT at 1920 × 1080 (seen in
+its picture, 2026-11-05) and every audit passed; `PlanetLayoutTests` in LunaP now holds the ring's outer edge 8 units
+above the label's top at 1280 × 800, 1920 × 1080, 1280 × 720 and 3840 × 2160, failing on that build. A general rule for
+strokes over text is left for later.
+
+Three seeded faults, each reverted: B returning to Choose a console without its focus failed the shoulders-and-B test
+(once that test moved the grid to another console before B; with the console it was opened on, the screen's own kept
+focus hid the fault); a hard-coded list of consoles in place of the table failed five tests; a console with no game
+listed failed the description's test and the window's.

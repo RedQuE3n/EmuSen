@@ -131,6 +131,13 @@ namespace EmuSen.WiseMan.Mistress
             public void OpenPage(string path) => Said.Add("page " + path);
             public void ToggleFavourite(string path) => Said.Add("favourite " + path);
             public void Home() => Said.Add("home");
+            // The systems table's order, which is not the games' or the alphabet's; Master System has no game.
+            public IReadOnlyList<ConsoleShelf> Table { get; set; } =
+            [
+                new("NES", "NES", "Nintendo Entertainment System", "Nintendo", 1985, 8), new("SMS", "Master System", "Master System", "Sega", 1986, 220),
+                new("GB", "Game Boy", "Game Boy", "Nintendo", 1989, 95), new("SNES", "Super Nintendo", "Super Nintendo", "Nintendo", 1991, 280),
+            ];
+            public void ChooseConsole(string section) => Said.Add("consoles " + section);
         }
 
         [Fact]
@@ -160,7 +167,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public void A_collection_takes_the_strip_s_place_and_B_leaves_it_then_goes_home()
+        public void A_collection_takes_the_strip_s_place_and_B_leaves_it_then_goes_to_Choose_a_console()
         {
             var host = new FakeGames();
             var games = new GamesScreen(host);
@@ -172,7 +179,7 @@ namespace EmuSen.WiseMan.Mistress
             games.Back();
             Assert.Null(games.Collection);
             games.Back();
-            Assert.Equal(["home"], host.Said);
+            Assert.Equal(["consoles " + GamesScreen.All], host.Said);
         }
 
         [Fact]
@@ -216,17 +223,53 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public void The_grid_s_help_bar_follows_the_keyboard_and_names_B_only_when_it_clears_a_search()
+        public void The_grid_s_help_bar_follows_the_keyboard_and_names_B_for_the_consoles_or_a_search()
         {
             var host = new FakeGames();
             var games = new GamesScreen(host);
             Assert.Equal(["Type", "Delete", "Space", "Done", "Move to grid", "Home"], games.HintsFor(true, true).Select(h => h.Text));
-            Assert.Equal(["Play", "Game page", "Favourite", "Console", "List", "Home"], games.HintsFor(false, false).Select(h => h.Text));
+            Assert.Equal(["Play", "Game page", "Favourite", "Console", "List", "Consoles", "Home"], games.HintsFor(false, false).Select(h => h.Text));
             Assert.Contains("Clear search", games.HintsFor(false, true).Select(h => h.Text));
             games.Hint("page", "/g/fable.nes");
             games.Hint("favourite", "/g/fable.nes");
             games.Hint("home", null);
             Assert.Equal(["page /g/fable.nes", "favourite /g/fable.nes", "home"], host.Said);
+        }
+
+        // Choose a console (EmuSen_Interface.md §24): the three places, then each console of the table with a game, in the table's order.
+        [Fact]
+        public void Choose_a_console_lists_the_table_s_consoles_that_have_games_in_its_order()
+        {
+            var host = new FakeGames();
+            var consoles = new ConsolesScreen(host);
+            Assert.Equal([ConsolesScreen.All, ConsolesScreen.Favourites, ConsolesScreen.Recent], consoles.Places.Select(p => p.Key));
+            Assert.Equal(["4 games", "Your hearts, every console", "Last: Hollow Comet"], consoles.Places.Select(p => p.Status));
+            Assert.Equal(["NES", "GB", "SNES"], consoles.Consoles.Select(c => c.Key));
+            Assert.Equal([8.0, 95.0, 280.0], consoles.Consoles.Select(c => c.Hue!.Value));
+            ConsoleChoice snes = consoles.Consoles.Last();
+            Assert.Equal(("Super Nintendo", "2 games", "Nintendo · 1991 · 2 games"), (snes.Title, snes.Status, snes.Facts));
+            Assert.Equal(["/g/granite.sfc", "/g/aurora.sfc"], snes.Covers.Select(g => g.Facts.Path));
+            Assert.Equal("Nintendo Entertainment System", consoles.Consoles[0].Title);
+            Assert.Equal("3 consoles · 4 games", consoles.CountLine);
+            host.Table = [.. host.Table.Reverse()];
+            Assert.Equal(["SNES", "GB", "NES"], consoles.Consoles.Select(c => c.Key));
+        }
+
+        [Fact]
+        public void A_choice_opens_its_section_and_X_picks_from_the_focused_console()
+        {
+            var host = new FakeGames();
+            var consoles = new ConsolesScreen(host);
+            Assert.Equal(GamesScreen.ConsolePrefix + "SNES", ConsolesScreen.SectionOf("SNES"));
+            Assert.Equal(GamesScreen.All, ConsolesScreen.SectionOf(ConsolesScreen.All));
+            Assert.Equal("SNES", ConsolesScreen.KeyOf(GamesScreen.ConsolePrefix + "SNES"));
+            Assert.Equal(ConsolesScreen.Recent, ConsolesScreen.KeyOf(GamesScreen.Recent));
+            Assert.Null(ConsolesScreen.KeyOf(GamesScreen.CollectionPrefix + "7"));
+            Assert.Equal("/g/aurora.sfc", consoles.RandomGame("SNES"));
+            Assert.Equal("/g/fable.nes", consoles.RandomGame("NES"));
+            Assert.Equal("/g/hollow.gb", consoles.RandomGame(ConsolesScreen.All));
+            Assert.Null(consoles.RandomGame("SMS"));
+            Assert.Equal(["Open", "Back", "Favourites", "Random game"], ConsolesScreen.Hints.Select(h => h.Text));
         }
     }
 }

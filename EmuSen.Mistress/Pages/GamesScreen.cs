@@ -20,6 +20,8 @@ namespace EmuSen.Mistress.Pages
         DateTime Now { get; }
         IReadOnlyList<GridGame> Games { get; }
         IReadOnlyList<(string Key, string Label)> Consoles { get; }
+        // Every shelf of the systems table in its order, with or without games.
+        IReadOnlyList<ConsoleShelf> Table { get; }
         IReadOnlyList<GridCollection> Collections { get; }
         IReadOnlyList<string> Recent(IReadOnlyList<string> paths, int limit);
         bool CanStartConsole { get; }
@@ -28,6 +30,8 @@ namespace EmuSen.Mistress.Pages
         void OpenPage(string path);
         void ToggleFavourite(string path);
         void Home();
+        // B past everything on the grid: Choose a console, its focus on the section left.
+        void ChooseConsole(string section);
     }
 
     // The grid of covers in EmuSen's own look as one plain description: its sections, sort, filter and search, the focused game's facts, the List card's rows and the help bar - see EmuSen_BigPicture.md §51.
@@ -35,7 +39,7 @@ namespace EmuSen.Mistress.Pages
     {
         public const string All = "all", Favourites = "favourites", Recent = "recent", ConsolePrefix = "console:", CollectionPrefix = "collection:";
         public const string SearchRow = "search", SortRow = "sort", FilterRow = "filter", JumpRow = "jump", RandomRow = "random", StartConsoleRow = "start-console", CollectionsRow = "collections";
-        public const string EveryGame = "Every game", FavouritesFilter = "Favourites", ListTitle = "List";
+        public const string EveryGame = "Every game", FavouritesFilter = "Favourites", ListTitle = "List", ConsolesTitle = "Consoles";
 
         public static readonly IReadOnlyList<string> Sorts = ["Name", "Last played", "Most played", "Year", "Rating"];
 
@@ -223,7 +227,7 @@ namespace EmuSen.Mistress.Pages
         public IReadOnlyList<ScreenHint> HintsFor(bool inKeyboard, bool searched) => inKeyboard
             ? [new("South", "Type"), new("East", "Delete"), new("North", "Space"), new("West", "Done"), new("Shoulders", "Move to grid"), new("Start", HomeScreen.Title, "home")]
             : [new("South", "Play"), new("West", "Game page", "page"), new("North", "Favourite", "favourite"), new("Shoulders", Collection is null ? "Console" : "Section"), new("Select", ListTitle, "list"),
-               .. searched ? new[] { new ScreenHint("East", "Clear search", "back") } : Array.Empty<ScreenHint>(), new("Start", HomeScreen.Title, "home")];
+               new("East", searched ? "Clear search" : ConsolesTitle, "back"), new("Start", HomeScreen.Title, "home")];
 
         public void Hint(string key, string? focused)
         {
@@ -235,13 +239,13 @@ namespace EmuSen.Mistress.Pages
             }
         }
 
-        // B: a search is cleared first, then the section's favourites, then a collection left, then Home.
+        // B: a search is cleared first, then the section's favourites, then a collection left, then Choose a console.
         public bool Back()
         {
             if (_search.Length > 0) { _search = string.Empty; return true; }
             if (FavouritesOnly) { _favouritesIn.Remove(_section); return true; }
             if (_collection is not null) { ShowCollection(null); return true; }
-            _host.Home();
+            _host.ChooseConsole(_section);
             return true;
         }
     }

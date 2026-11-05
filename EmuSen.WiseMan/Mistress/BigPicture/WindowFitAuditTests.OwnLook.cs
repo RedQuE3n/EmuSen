@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -22,7 +23,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
     // EmuSen's own look: Home, the grid, the List card, search with the docked keyboard, a collection as a section, Collections and Start Console, and the desktop's Home, recorded at both sizes and audited at 16:9 and 1280 by 720 - see EmuSen_InterfaceSpec.md §6.3.22 and EmuSen_BigPicture.md §51.
     public partial class WindowFitAuditTests
     {
-        public static readonly string[] OwnLookViews = ["Home", "HomeShelf", "HomePlaces", "HomeNothingLeft", "Games", "GamesListCard", "GamesSearch", "GamesCollection", "Collections", "StartConsole", "HomeDesktop"];
+        public static readonly string[] OwnLookViews = ["Home", "HomeShelf", "HomePlaces", "HomeNothingLeft", "Consoles", "Games", "GamesListCard", "GamesSearch", "GamesCollection", "Collections", "StartConsole", "HomeDesktop"];
 
         public static TheoryData<string, int, int> OwnLookCases()
         {
@@ -114,8 +115,16 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     break;
                 case "HomeNothingLeft":
                     break;
+                case "Consoles":
+                    pad.Down(1);
+                    pad.A();
+                    Settle(w);
+                    pad.Down(1);
+                    break;
                 case "Games" or "GamesListCard" or "GamesSearch" or "GamesCollection" or "Collections" or "StartConsole":
                     pad.Down(1);
+                    pad.A();
+                    Settle(w);
                     pad.A();
                     Settle(w);
                     if (view == "GamesListCard") pad.Select();
@@ -179,6 +188,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             "StartConsole" => w.GetControl<Control>("PadMenuPanel"),
             "Collections" => w.GetControl<Control>("Sheets"),
             _ when w.GamesLayout is { } g => g,
+            _ when w.ConsolesLayout is { } c => c,
             _ => w.HomeLayout!,
         };
 
@@ -191,12 +201,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static readonly IReadOnlyList<FitAudit.Allowance> OwnLookCuts =
             [new("a place's live line is one line cut with an ellipsis, as the design draws it", c => c.Name == HubLayout.StatusName),
+             new("a console's words are one line cut with an ellipsis, its full name said beneath the rows", c => c.Name == PlanetLayout.StatusName),
+             new("a fanned cover's generated title is cut to the cover; the game's name is on its page", c => c.Name == "CoverTitle" && c.FindAncestorOfType<PlanetLayout>() is not null),
              new("a desktop cover's name and line are cut at the cover's width, as the desktop's grid cuts them", c => c.Name == HubLayout.CoverLineName)];
 
         private static SortedDictionary<string, string> OwnLookSeen(MainWindow w)
         {
             SortedDictionary<string, string> seen = Observe(w);
             if (w.HomeLayout is { } h) seen["home"] = $"{h.Focused.Row} {InterfaceRecorder.Normalise(h.Focused.Key ?? "none")}";
+            if (w.ConsolesLayout is { } c) seen["consoles"] = InterfaceRecorder.Normalise(c.Focused ?? "none");
             if (w.GamesLayout is { } g) seen["games"] = $"{w.GamesShown!.Section} {(g.Focused.InKeyboard ? "keyboard" : InterfaceRecorder.Normalise(g.Focused.Key ?? "none"))}";
             return seen;
         }
@@ -275,6 +288,43 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 pad.Select();
                 PadMenu.Choose(window, pad, "Filter", exact: true);
                 Assert.DoesNotContain("Favourites", PadMenu.Lines(window));
+            }
+            finally
+            {
+                ToolCounts.Quiet();
+                ResetPageClock();
+                Stop(window);
+                window.Close();
+            }
+        }, default);
+
+        public static TheoryData<string, int, int> SkyFitCases()
+        {
+            var data = new TheoryData<string, int, int>();
+            foreach (string v in new[] { "Home", "HomeShelf", "Consoles", "Games" })
+                foreach ((int w, int h) in new[] { (1280, 800), (1920, 1080), (1280, 720), (3840, 2160) }) data.Add(v, w, h);
+            return data;
+        }
+
+        // The three night screens at each size, the window resized after the screen is shown, so the scale follows late as a window going full screen at 4K does (EmuSen_Interface.md §24.5).
+        [Theory]
+        [MemberData(nameof(SkyFitCases))]
+        public Task The_sky_screens_fit_at_every_size_after_a_late_resize(string view, int width, int height) => Session.Dispatch(() =>
+        {
+            (MainWindow window, PadDriver pad) = OwnLookSession(view, 1280, 800);
+            try
+            {
+                OpenOwnLook(window, pad, view);
+                window.Width = width;
+                window.Height = height;
+                Settle(window);
+                Control root = OwnLookRoot(window, view);
+                Assert.Equal(new Avalonia.Size(width, height), root.Bounds.Size);
+                Assert.Contains(root.GetVisualDescendants(), c => c is LunaSky sky && sky.Bounds.Size == root.Bounds.Size);
+                PictureOwnLook(window, $"sky-{view}-{width}x{height}");
+                List<string> faults = FitAudit.Check(root, OwnLookCuts);
+                foreach (string f in faults) _out.WriteLine($"{view} {width}x{height}: {f}");
+                Assert.Empty(faults);
             }
             finally
             {

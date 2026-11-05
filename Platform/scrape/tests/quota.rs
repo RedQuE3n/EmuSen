@@ -114,3 +114,65 @@ fn pariss_day_turns_at_its_own_midnight_in_summer_and_in_winter() {
     assert_eq!(start_of_next_day(instant("2026-03-28T12:00:00Z").unwrap()), instant("2026-03-28T23:00:00Z").unwrap());
     assert_eq!(start_of_next_day(instant("2026-03-29T12:00:00Z").unwrap()), instant("2026-03-29T22:00:00Z").unwrap());
 }
+
+// The day's unrecognised games stop two percent short of their limit too, as the requests do (the C# `ScrapeQuotaTests`' case, held here since its deletion).
+#[test]
+fn the_days_unrecognised_games_stop_two_percent_short_of_their_limit() {
+    let Some(store) = store("ko") else {
+        return;
+    };
+    let clock = Clock::test(noon());
+    let quota = Manager::new(&store, &clock).unwrap();
+    quota.observe(&store, &clock, limits(60, 20000, 2000, 0, 1959, 1)).unwrap();
+    assert_eq!(quota.check(&store, &clock).unwrap().0, Gate::Go);
+    quota.observe(&store, &clock, limits(60, 20000, 2000, 0, 1960, 1)).unwrap();
+    assert_eq!(quota.check(&store, &clock).unwrap().0, Gate::Stopped);
+}
+
+// Counts are kept for the day in media.db, and a server's count replaces them.
+#[test]
+fn counts_are_kept_for_the_day_and_a_servers_count_replaces_them() {
+    let Some(store) = store("counts") else {
+        return;
+    };
+    let clock = Clock::test(noon());
+    let quota = Manager::new(&store, &clock).unwrap();
+    quota.counted(&store, &clock, false).unwrap();
+    quota.counted(&store, &clock, true).unwrap();
+    let s = quota.snapshot(&store, &clock).unwrap();
+    assert_eq!((s.requests, s.ko), (2, 1));
+    assert_eq!(store.day(&day_of(clock.now())).unwrap().requests, 2);
+    quota.observe(&store, &clock, limits(60, 20000, 2000, 40, 7, 1)).unwrap();
+    let s = quota.snapshot(&store, &clock).unwrap();
+    assert_eq!((s.requests, s.ko), (40, 7));
+}
+
+// A 431, the day's unrecognised games used up, stops until Paris's midnight and outlives a restart, as a 430 does.
+#[test]
+fn a_431_lasts_until_paris_midnight_and_a_restart() {
+    let Some(store) = store("stops431") else {
+        return;
+    };
+    let clock = Clock::test(noon());
+    let quota = Manager::new(&store, &clock).unwrap();
+    quota.answered(&store, &clock, Status::DailyKoQuota).unwrap();
+    let (gate, until, why) = quota.check(&store, &clock).unwrap();
+    assert_eq!((gate, until), (Gate::Stopped, Some(instant("2026-07-14T22:00:00Z").unwrap())));
+    assert!(why.as_deref().is_some_and(|w| w.contains("431")), "{why:?}");
+    let restarted = Manager::new(&store, &clock).unwrap();
+    assert_eq!(restarted.check(&store, &clock).unwrap().0, Gate::Stopped);
+    let later = Clock::test(instant("2026-07-14T22:00:01Z").unwrap());
+    assert_eq!(restarted.check(&store, &later).unwrap().0, Gate::Go);
+}
+
+// Each code ScreenScraper documents has its own meaning, and any other is a failure (the C# `ScreenScraperClientTests`' case, held here since its deletion).
+#[test]
+fn each_documented_code_has_its_own_meaning() {
+    let cases = [
+        (200, Status::Found), (400, Status::BadRequest), (401, Status::ServerBusy), (403, Status::BadCredentials), (404, Status::NotFound), (423, Status::ApiClosed),
+        (426, Status::Blacklisted), (429, Status::TooManyRequests), (430, Status::DailyQuota), (431, Status::DailyKoQuota), (500, Status::Failed),
+    ];
+    for (code, status) in cases {
+        assert_eq!(Status::of(code), status, "{code}");
+    }
+}

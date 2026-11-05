@@ -23,12 +23,11 @@ namespace EmuSen.Mistress.Views
         private Thread? _nativePump;
         private volatile bool _nativePumping;
         private long _nativeApplied;
+        private long _nativeRetried;
         private bool _nativeWorkers;
         private ScrapeQuota? _nativeLimits;
         private int _nativeRun;
 
-        // The scraper in Rust, beside the library whose handle it is lent, since it keeps cover lookups and follows covers chosen there.
-        private bool ScrapeNative => MediaService.Active;
 
         public NativeScraping? ScrapeNativeService => _native;
 
@@ -50,13 +49,16 @@ namespace EmuSen.Mistress.Views
 
         private byte[]? NativeEmbedded() => DeveloperFromFiles ? DeveloperCredentials.EmbeddedBlob() : DeveloperSource() is { } d ? DeveloperCredentials.Encode(d) : null;
 
-        private string NativeSettings()
+        private string NativeSettings() => NativeSettings(false);
+
+        // sourcesAlone opens a handle that finds pictures and makes nothing on disk (emusen_scrape.h 1.2).
+        private string NativeSettings(bool sourcesAlone)
         {
             string json = JsonSerializer.Serialize(new Dictionary<string, object?>
             {
                 ["roms"] = _appSettings.RomDirectory, ["art"] = ArtworkDirectory, ["esde_media"] = _appSettings.EsdeMediaDirectory, ["openemu"] = _appSettings.OpenEmuFallback,
                 ["user_agent"] = $"EmuSen/{(BuildName ?? "unknown").Split('+')[0]}", ["developer_files"] = DeveloperFromFiles,
-                ["cores"] = RuntimeCatalog.Consoles.Select(c => c.Systems).ToArray(), ["packages"] = PackagesByGame,
+                ["cores"] = RuntimeCatalog.Consoles.Select(c => c.Systems).ToArray(), ["packages"] = PackagesByGame, ["sources_alone"] = sourcesAlone,
             });
             return ScrapeTest() is string test ? json[..^1] + ",\"test\":" + test + "}" : json;
         }
@@ -67,6 +69,8 @@ namespace EmuSen.Mistress.Views
             try
             {
                 _native = NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(), _records.Library, NativeEmbedded());
+                _sources?.Dispose();
+                _sources = null;
                 ScrapePlaying(_running);
                 _scrapeTheme ??= ThemeNow();
                 ScrapingLend.Lend(_native.Service, _records.Library, RuntimeCatalog.Shelves.Select(s => s.System), ThemeKindsFor);
@@ -74,10 +78,24 @@ namespace EmuSen.Mistress.Views
             }
             catch (MediaServiceException ex)
             {
+                _storeRefused = true;
                 ErrorLog.Error("scraping", "The media store could not be opened", ex);
                 StatusText.Text = $"The media store could not be opened: {ScrapeRedactor.Redact(ex.Message)}";
                 return false;
             }
+        }
+
+        private NativeScraping? _sources;
+
+        // media.db refused to open (another program holds it, or it is newer); asked again when the settings are applied.
+        private bool _storeRefused;
+
+        // The handle pictures are found through: media.db's when it is open or there, else one for the sources alone, so that browsing covers makes no media.db - see EmuSen_Backend.md §40.5.
+        private NativeScraping SourcesHandle()
+        {
+            if (_native is { } open) return open;
+            if (!_storeRefused && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName)) && OpenNative()) return _native!;
+            return _sources ??= NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(true), _records.Library, NativeEmbedded());
         }
 
         // The scraper told whether a game is on screen, so a big file's checksums are taken only while none is - see EmuSen_LibraryTools.md §9.12.
@@ -92,7 +110,6 @@ namespace EmuSen.Mistress.Views
         {
             NativeScraping native = _native!;
             var games = resume ? [] : ChosenGames(scope);
-            if (!resume && scope.Game is not null) _fetcher?.Forget(scope.Game);
             var priority = scope.Game is not null ? ScrapePriority.Shown : scope.Shelf is not null ? ScrapePriority.Console : ScrapePriority.Library;
             long queued;
             try { queued = native.Start(games, priority, scope.Game is not null, resume, scope.Refresh && !resume, chosen, _appSettings.Scraping, _scrapeChoices); }
@@ -100,6 +117,7 @@ namespace EmuSen.Mistress.Views
             if (queued == 0) return false;
             _scrapeRun = new ScrapeProgress((int)queued, native.Now);
             _nativeApplied = 0;
+            _nativeRetried = 0;
             _nativeWorkers = true;
             int id = ++_nativeRun;
             ReadScrapeSnapshot();
@@ -172,6 +190,14 @@ namespace EmuSen.Mistress.Views
             foreach (JsonElement r in rows.Where(r => r.GetProperty("serial").GetInt64() > _nativeApplied))
                 if (Outcome(Text(r, "outcome")) == ScrapeOutcome.Error) ErrorLog.Warning("scraping", $"ScreenScraper could not identify the game: {ScrapeRedactor.Redact(Text(r, "detail"))}", Text(r, "path"));
             if (rows.Count > 0) _nativeApplied = Math.Max(_nativeApplied, rows.Max(r => r.GetProperty("serial").GetInt64()));
+            // Each retry said once, oldest first, in the words the C# Scraper used - see EmuSen_Backend.md §40.5.
+            foreach (JsonElement r in p.GetProperty("retried").EnumerateArray().Reverse().Where(r => r.GetProperty("serial").GetInt64() > _nativeRetried))
+            {
+                string detail = ScrapeRedactor.Redact(Text(r, "detail"));
+                if (r.GetProperty("failed").GetBoolean()) ErrorLog.Error("scraping", $"A scrape request failed and is queued to retry: {detail}", null, Text(r, "path"));
+                else ErrorLog.Warning("scraping", $"ScreenScraper could not answer; queued to retry: {detail}", Text(r, "path"));
+                _nativeRetried = r.GetProperty("serial").GetInt64();
+            }
             string state = Text(p, "state")!;
             if (state == "running")
             {
@@ -185,22 +211,24 @@ namespace EmuSen.Mistress.Views
             EndRun(state switch { "done" => ScrapeRunEnd.Done, "stopped" => ScrapeRunEnd.Stopped, _ => ScrapeRunEnd.Cancelled });
         }
 
-        // What the store holds, read for the tests whichever half the switch chose.
-        public IReadOnlyList<(string Path, string System)> ScrapeQueue() => _native is { } n ? n.Queue() : _mediaStore?.Queue().Select(q => (q.Path, q.System)).ToList() ?? [];
+        // What the store holds, read for the tests.
+        public IReadOnlyList<(string Path, string System)> ScrapeQueue() => _native?.Queue() ?? [];
 
-        public IReadOnlyList<StoredMedia> ScrapeMedia(string md5, long bytes, string fingerprint = "") => _native is { } n ? n.Media(md5, bytes, fingerprint) : _mediaStore?.Media(md5, bytes) ?? [];
+        public IReadOnlyList<StoredMedia> ScrapeMedia(string md5, long bytes, string fingerprint = "") => _native?.Media(md5, bytes, fingerprint) ?? [];
 
-        // Whether a run's ScreenScraper workers are live, whichever half the switch chose.
-        public bool ScrapeWorkersLive => _native is not null ? ScrapeRunning && _nativeWorkers : _scraper is not null;
+        // Whether a run's ScreenScraper workers are live.
+        public bool ScrapeWorkersLive => _native is not null && ScrapeRunning && _nativeWorkers;
 
-        // Whether the media store is open, whichever half the switch chose.
-        public bool ScrapeStoreOpen => _native is not null || _mediaStore is { IsOpen: true };
+        // Whether media.db is open; a handle for the sources alone is not it.
+        public bool ScrapeStoreOpen => _native is not null;
 
         private void StopNative()
         {
             StopPump();
             _native?.Dispose();
             _native = null;
+            _sources?.Dispose();
+            _sources = null;
         }
     }
 }

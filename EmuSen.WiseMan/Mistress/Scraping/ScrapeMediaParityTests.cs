@@ -13,7 +13,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
-    // A picture's sources and a game's metadata in Rust against their C# twins: generated stores, art folders, ES-DE folders, OpenEmu covers, packaged games' packages and covers chosen from other games, every game asked every type through both, each shelf's present types, and every field resolved - see EmuSen_Backend.md §30.6.
+    // A picture's sources held to the C#'s answers recorded before its deletion, and a game's metadata to the C#'s resolution: generated stores, art folders, ES-DE folders, OpenEmu covers, packaged games' packages and covers chosen from other games, every game asked every type, each shelf's present types, and every field resolved - see EmuSen_Backend.md §30.6 and §40.5.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class ScrapeMediaParityTests : IDisposable
     {
@@ -41,6 +41,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public void Every_game_s_pictures_present_types_and_metadata_resolve_alike()
         {
+            var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeMediaParity.Sources");
             int fromPackages = 0;
             for (int seed = 1; seed <= 3; seed++)
             {
@@ -68,7 +69,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                         if (where != 0) Put(Path.Combine(esde, system, kindFolder, (r.Next(2) == 0 ? named : stem) + extn));
                     }
                     if (r.Next(4) == 0) Put(Path.Combine(art, new[] { "SNES", "Nintendo - Game Boy", "", "GB" }[r.Next(4)], ArtworkIndex.Key(r.Next(2) == 0 ? stem : ArtworkIndex.Untagged(stem)) + ".png"));
-                    if (r.Next(4) == 0) Put(Path.Combine(store, "openemu", new[] { "SNES", "NES", "GB" }[r.Next(3)], CoverFetcher.Safe(stem) + ".png"));
+                    if (r.Next(4) == 0) Put(Path.Combine(store, "openemu", new[] { "SNES", "NES", "GB" }[r.Next(3)], stem + ".png"));
                     // A packaged game: its package named otherwise than the file, some of its art in the package and some only in the store (§18.3).
                     if (r.Next(3) == 0)
                     {
@@ -86,22 +87,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                     string from = games[r.Next(games.Count)].Rom;
                     records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.CoverFrom] = from, [GameMetadata.Developer] = r.Next(2) == 0 ? "Edited" : null, [GameMetadata.Hidden] = "1" }, new DateTime(2026, 10, 1));
                 }
-                using (MediaStore scraped = MediaStore.Open(store))
-                    foreach (var (rom, _) in games.Where(_ => r.Next(2) == 0))
-                    {
-                        string md5 = Path.GetFileName(rom).GetHashCode().ToString("x8");
-                        scraped.RememberFile(rom, 1, 1, md5);
-                        scraped.Record(new ScrapedRecord(md5, 1, ScrapeState.Found)
-                        {
-                            Name = "Scraped " + Path.GetFileNameWithoutExtension(rom), Description = r.Next(2) == 0 ? "Words." : null, Rating = r.Next(2) == 0 ? ScrapeRules.Rating(r.Next(21)) : (float)r.NextDouble(),
-                            ReleaseDate = new DateTime(1990 + r.Next(10), 1 + r.Next(12), 1 + r.Next(28)), Genre = "Racing", Players = "1-2", FetchedAt = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc),
-                        });
-                    }
-
-                ArtworkIndex index = ArtworkIndex.Scan(art, RuntimeCatalog.Consoles);
-                var edits = records.AllEdits();
-                string? CoverFrom(string p) => edits.TryGetValue(p, out var e) && e.TryGetValue(GameMetadata.CoverFrom, out string? f) && f.Length > 0 ? f : null;
-                var csharp = new MediaSources((console, title) => index.Find(console, title), store, esde, Path.Combine(store, "openemu"), CoverFrom, "", roms, packages);
+                MediaService.Open(store, "{\"developer_files\":false}").Dispose();
+                ScrapeGoldens.Seed(golden, $"seed {seed}", Path.Combine(store, MediaStore.FileName), _root);
 
                 string settings = JsonSerializer.Serialize(new Dictionary<string, object?>
                 {
@@ -110,20 +97,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 });
                 using var library = EmuSen.Crystal.Client.Library.GameLibrary.Open(db);
                 using MediaService rust = MediaService.Open(store, settings, library);
-                using MediaStore read = MediaStore.Open(store);
                 foreach (var (rom, system) in games)
                 {
                     string esdeSystem = RuntimeCatalog.ShelfByName(RuntimeCatalog.ShelfFor(rom))!.EsdeSystem;
+                    var located = new List<string>();
                     foreach (string type in Types)
                     {
-                        var expected = csharp.Locate(esdeSystem, rom, type);
-                        if (expected.Source == MediaSource.Package) fromPackages++;
-                        using JsonDocument got = JsonDocument.Parse(rust.Get(JsonSerializer.Serialize(new { what = "media", path = rom, system = esdeSystem, type })));
-                        string actual = got.RootElement.ValueKind == JsonValueKind.Null ? "None " : $"{got.RootElement.GetProperty("source").GetString()} {got.RootElement.GetProperty("path").GetString()}";
-                        string want = expected.Path is null ? "None " : $"{expected.Source switch { MediaSource.OtherGame => "other_game", MediaSource.HandPlaced => "hand", MediaSource.ScreenScraper => "screenscraper", MediaSource.EsdeFolder => "esde", MediaSource.Package => "package", _ => "openemu" }} {expected.Path}";
-                        Assert.True(want == actual, $"seed {seed}, {rom}, {type}: C# {want}, Rust {actual}");
+                        string answer;
+                        using (JsonDocument got = JsonDocument.Parse(rust.Get(JsonSerializer.Serialize(new { what = "media", path = rom, system = esdeSystem, type }))))
+                            answer = got.RootElement.ValueKind == JsonValueKind.Null ? "None " : $"{got.RootElement.GetProperty("source").GetString()} {got.RootElement.GetProperty("path").GetString()}";
+                        if (answer.StartsWith("package ", StringComparison.Ordinal)) fromPackages++;
+                        located.Add($"{type} {answer}");
                     }
-                    var metadata = GameMetadata.Resolve(rom, read.FoundFor(rom), records.Edits(rom), scrapedNames: seed % 2 == 0);
+                    golden.Add($"seed {seed} {ScrapeGoldens.Plain(rom, _root)}", ScrapeGoldens.Plain(string.Join("\n", located), _root));
+                    ScrapedRecord? found;
+                    using (JsonDocument rec = JsonDocument.Parse(rust.Get(JsonSerializer.Serialize(new { what = "record", path = rom })))) found = rec.RootElement.ValueKind == JsonValueKind.Null ? null : NativeScraping.Record(rec.RootElement);
+                    var metadata = GameMetadata.Resolve(rom, found, records.Edits(rom), scrapedNames: seed % 2 == 0);
                     using JsonDocument m = JsonDocument.Parse(rust.Get(JsonSerializer.Serialize(new { what = "metadata", path = rom, scraped_names = seed % 2 == 0 })));
                     foreach (MetadataField field in GameMetadata.Fields)
                     {
@@ -135,14 +124,15 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 foreach (var shelf in games.GroupBy(g => RuntimeCatalog.ShelfByName(RuntimeCatalog.ShelfFor(g.Rom))!.EsdeSystem))
                 {
                     var scene = shelf.Select(g => new SceneGame(Path.GetFileNameWithoutExtension(g.Rom), g.Rom) { FolderPath = GameFolders.Of(roms, g.Rom) }).ToList();
-                    var expected = csharp.Present(new ThemeSystem(shelf.Key, shelf.Key, shelf.Key), scene).Order(StringComparer.Ordinal);
-                    var actual = JsonSerializer.Deserialize<string[]>(rust.Get(JsonSerializer.Serialize(new { what = "present", system = shelf.Key, games = scene.Select(s => new { path = s.File, folder_path = s.FolderPath }) })))!.Order(StringComparer.Ordinal);
-                    Assert.Equal(expected, actual);
+                    IEnumerable<string> present = JsonSerializer.Deserialize<string[]>(rust.Get(JsonSerializer.Serialize(new { what = "present", system = shelf.Key, games = scene.Select(s => new { path = s.File, folder_path = s.FolderPath }) })))!;
+                    golden.Add($"seed {seed} present {shelf.Key}", string.Join(",", present.Order(StringComparer.Ordinal)));
                 }
                 string PackagePart(string stamp) => stamp[(stamp.LastIndexOf('|') + 1)..];
-                Assert.Equal(PackagePart(csharp.Stamp(new ThemeSystem("snes", "snes", "snes"))!), PackagePart(JsonSerializer.Deserialize<string>(rust.Get(JsonSerializer.Serialize(new { what = "stamp", system = "snes", choice = "" })))!));
+                Assert.Equal(EmuSen.Mistress.BigPicture.Scene.EsdeMediaFolder.PackageStamp(packages.Values.Order(StringComparer.Ordinal)),
+                    PackagePart(JsonSerializer.Deserialize<string>(rust.Get(JsonSerializer.Serialize(new { what = "stamp", system = "snes", choice = "" })))!));
             }
             Assert.True(fromPackages > 0, "no picture came from a package");
+            golden.Check(3 * (1 + 18));
         }
     }
 }

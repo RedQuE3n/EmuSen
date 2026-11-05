@@ -22,7 +22,7 @@ namespace EmuSen.Mistress.Views
                 SheetLayer.Activate(open);
                 return;
             }
-            if (ScrapeNative && _appSettings.Scraping) OpenMediaStore();
+            if (_appSettings.Scraping) OpenMediaStore();
             var window = new ScraperWindow(() => Wrap(() => Runtime.Systems()));
             window.Pane.RunEnded += PostCoverRefresh;
             window.Pane.RunEnded += () => ToolDataChanged(Pages.HomeScreen.Scraper);

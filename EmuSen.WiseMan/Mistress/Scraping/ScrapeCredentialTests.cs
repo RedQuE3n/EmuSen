@@ -65,20 +65,28 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.DoesNotContain("FAKEMEMBERPASS", printed);
         }
 
+        // A request that could not be sent and one refused with a page echoing it: the run's every word holds no credential - see EmuSen_Backend.md §40.5.
         [Fact]
-        public async Task A_failed_request_s_detail_carries_no_credential()
+        public void A_failed_request_s_detail_carries_no_credential()
         {
-            var failing = new ScreenScraperClientTests.Answering(r => throw new HttpRequestException($"could not reach {r.RequestUri}"));
-            var client = new ScreenScraperClient(new HttpClient(failing), new DeveloperCredentials("FAKEID9", "FAKEPW9", "EmuSen-Test"), new MemberAccount("FAKEM9", "FAKEMPW9"));
-            JeuInfosAnswer answer = await client.JeuInfosAsync(4, new RomHashes("00", "00", "00", 1), "a.sfc", CancellationToken.None);
-            Assert.Equal(ScrapeStatus.Failed, answer.Status);
-            Assert.Contains("devpassword=***", answer.Detail);
-            foreach (string secret in (string[])["FAKEID9", "FAKEPW9", "FAKEM9", "FAKEMPW9"]) Assert.DoesNotContain(secret, answer.Detail);
-
-            var page = new ScreenScraperClientTests.Answering(r => new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent($"Refused: {r.RequestUri}") });
-            JeuInfosAnswer refused = await new ScreenScraperClient(new HttpClient(page), new DeveloperCredentials("FAKEID9", "FAKEPW9", "EmuSen-Test"), null)
-                .JeuInfosAsync(4, new RomHashes("00", "00", "00", 1), "a.sfc", CancellationToken.None);
-            Assert.DoesNotContain("FAKEPW9", refused.Detail);
+            string rom = Path.Combine(_root, "Roms", "snes", "A (USA).sfc");
+            Directory.CreateDirectory(Path.GetDirectoryName(rom)!);
+            File.WriteAllBytes(rom, new byte[1024]);
+            var handlers = new System.Net.Http.HttpMessageHandler[]
+            {
+                new ScreenScraperClientTests.Answering(r => throw new HttpRequestException($"could not reach {r.RequestUri}")),
+                new ScreenScraperClientTests.Answering(r => new HttpResponseMessage(HttpStatusCode.Forbidden) { Content = new StringContent($"Refused: {r.RequestUri}") }),
+            };
+            for (int i = 0; i < handlers.Length; i++)
+            {
+                using var s = new LibraryScraper(handlers[i], Path.Combine(_root, $"Media{i}"));
+                s.Run([(rom, "snes")]);
+                s.Ends(60);
+                using System.Text.Json.JsonDocument p = s.Progress();
+                string said = p.RootElement.GetRawText();
+                Assert.NotEmpty(s.Replay.Heads);
+                foreach (string secret in (string[])[FakeScreenScraper.DevId, FakeScreenScraper.DevPassword]) Assert.DoesNotContain(secret, said);
+            }
         }
 
         [Fact]

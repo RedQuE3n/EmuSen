@@ -517,7 +517,7 @@ namespace EmuSen.Mistress.Views
                     catch (CrystalException e) { StatusText.Text = $"Rumble was not changed in the game: {e.Message}"; }
                     break;
                 case "hidden": RefreshLibrary(); break;
-                case "screenscraper" or "openemu": ApplyScraping(); ApplyOnlineCovers(); break;
+                case "screenscraper" or "openemu": ApplyScraping(); break;
                 default:
                     if (what is not null && (what.StartsWith("show", StringComparison.Ordinal) || what.StartsWith("auto", StringComparison.Ordinal) || what.StartsWith("flatten", StringComparison.Ordinal)
                         || what is "collections" or "favfirst" or "favfirstcustom" or "stars" or "folderstop") && LibraryView.IsVisible && ThemedLibraryShown) ShowThemedLibrary();

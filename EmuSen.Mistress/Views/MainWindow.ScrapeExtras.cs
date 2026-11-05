@@ -30,37 +30,15 @@ namespace EmuSen.Mistress.Views
             string name = text.Trim();
             if (name.Length == 0) return new SearchAnswer(ScrapeStatus.BadRequest, [], null, "Type a name to search for.", TimeSpan.Zero);
             if (NameSearchWhyNot is string why) return new SearchAnswer(ScrapeStatus.Failed, [], null, $"ScreenScraper cannot be used: {why}.", TimeSpan.Zero);
-            if (SystemOf(new RomEntry(path)) is not string system || !Scraper.SystemIds.TryGetValue(system, out int systemId))
+            if (SystemOf(new RomEntry(path)) is not string system || !Scraper.SystemIds.ContainsKey(system))
                 return new SearchAnswer(ScrapeStatus.BadRequest, [], null, "This game's console has no ScreenScraper system.", TimeSpan.Zero);
-            if (!OpenMediaStore() || DeveloperSource() is not { } developer) return new SearchAnswer(ScrapeStatus.Failed, [], null, DeveloperCredentials.NoneHere, TimeSpan.Zero);
-            if (_native is { } native)
-            {
-                SearchAnswer found = await Task.Run(() => native.Search(path, system, name)).ConfigureAwait(false);
-                if (found.Status is not (ScrapeStatus.BadRequest or ScrapeStatus.DailyQuota) || found.Games.Count > 0) NameSearches++;
-                if (found.Status is not (ScrapeStatus.Found or ScrapeStatus.NotFound))
-                    ErrorLog.Error("scraping", "A name search failed", null, ScrapeRedactor.Redact($"{found.Status}: {found.Detail}"));
-                return found;
-            }
-
-            ScrapeQuotaManager quota = _scrapeQuota!;
-            _http ??= HttpFactory();
-            var client = new ScreenScraperClient(_http, developer, MemberAccount.Load());
-            SearchAnswer answer;
-            try
-            {
-                if (!await quota.TakeTurnAsync(CancellationToken.None))
-                    return new SearchAnswer(ScrapeStatus.DailyQuota, [], null, ScreenScraperUnusable() ?? "the quota stopped it", TimeSpan.Zero);
-                NameSearches++;
-                answer = await client.JeuRechercheAsync(systemId, name, CancellationToken.None);
-            }
-            catch (ObjectDisposedException) { return new SearchAnswer(ScrapeStatus.Failed, [], null, "Mistress is closing.", TimeSpan.Zero); }
-            if (_scrapeClosed) return answer;
-            quota.Observe(answer.Quota);
-            if (answer.Status is ScrapeStatus.Found or ScrapeStatus.NotFound or ScrapeStatus.Malformed) quota.Counted(answer.Status == ScrapeStatus.NotFound);
-            quota.Answered(answer.Status);
-            if (answer.Status is not (ScrapeStatus.Found or ScrapeStatus.NotFound))
-                ErrorLog.Error("scraping", "A name search failed", null, ScrapeRedactor.Redact($"{answer.Status}: {answer.Detail}"));
-            return answer with { Detail = ScrapeRedactor.Redact(answer.Detail) };
+            if (!OpenMediaStore() || DeveloperSource() is null) return new SearchAnswer(ScrapeStatus.Failed, [], null, DeveloperCredentials.NoneHere, TimeSpan.Zero);
+            NativeScraping native = _native!;
+            SearchAnswer found = await Task.Run(() => native.Search(path, system, name)).ConfigureAwait(false);
+            if (found.Status is not (ScrapeStatus.BadRequest or ScrapeStatus.DailyQuota) || found.Games.Count > 0) NameSearches++;
+            if (found.Status is not (ScrapeStatus.Found or ScrapeStatus.NotFound))
+                ErrorLog.Error("scraping", "A name search failed", null, ScrapeRedactor.Redact($"{found.Status}: {found.Detail}"));
+            return found;
         }
 
         // The player's pick: a run of this one game whose lookup is the pick, so its pictures are paced and counted as a run's are.
@@ -74,28 +52,11 @@ namespace EmuSen.Mistress.Views
 
         // --- orphaned media ---
 
-        // Each system's games by the names the store files them under, for the systems the last scan found games of.
-        private IReadOnlyDictionary<string, IReadOnlySet<string>> StoreNames()
-        {
-            var names = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-            string? roms = _appSettings.RomDirectory;
-            foreach (RomEntry entry in _allScan.Entries)
-            {
-                if (SystemOf(entry) is not string system) continue;
-                if (!names.TryGetValue(system, out HashSet<string>? set)) names[system] = set = new HashSet<string>(StringComparer.Ordinal);
-                string stem = Path.GetFileNameWithoutExtension(entry.FullPath), folder = GameFolders.Of(roms, entry.FullPath);
-                set.Add(folder.Length == 0 ? stem : folder + "/" + stem);
-                for (string f = folder; f.Length > 0; f = f.Contains('/') ? f[..f.LastIndexOf('/')] : "") set.Add(f);
-            }
-            return names.ToDictionary(n => n.Key, n => (IReadOnlySet<string>)n.Value, StringComparer.Ordinal);
-        }
-
         // The files a cleanup would move; nothing when the ROM folder is missing, so an unplugged drive never reads as every game deleted.
         public IReadOnlyList<string> OrphanedMedia()
         {
             if (SettingFolders.Roms(_appSettings) is not { } roms || !Directory.Exists(roms) || !OpenMediaStore()) return [];
-            if (_native is { } n) return n.Orphans(_allScan.Entries.Where(e => SystemOf(e) is not null).Select(e => (e.FullPath, SystemOf(e)!)));
-            return _mediaStore!.Orphans(StoreNames());
+            return _native!.Orphans(_allScan.Entries.Where(e => SystemOf(e) is not null).Select(e => (e.FullPath, SystemOf(e)!)));
         }
 
         // ES-DE's "Orphaned data cleanup" for Mistress's own store: asked first with the count and size, then each file moved to CLEANUP, never deleted.
@@ -108,7 +69,7 @@ namespace EmuSen.Mistress.Views
             string message = $"{orphans.Count:N0} scraped file(s), {ScrapeSizes.Text(bytes)}, belong to games no longer in the library. "
                 + $"They are moved to home/Media/{MediaStore.CleanupFolder}/, not deleted; delete that folder yourself when you are sure. The ROM folder is not touched.";
             if (!await ConfirmCleanUp(this, message)) return "Nothing was moved.";
-            (int moved, long size, string folder) = _native is { } native2 ? native2.CleanUp(orphans, DateTimeOffset.Now) : _mediaStore!.CleanUp(orphans, DateTimeOffset.Now);
+            (int moved, long size, string folder) = _native!.CleanUp(orphans, DateTimeOffset.Now);
             _scrapeGeneration++;
             ReadScrapeSnapshot();
             ShowLibraryEntries();

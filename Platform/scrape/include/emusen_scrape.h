@@ -1,4 +1,4 @@
-/* emusen_scrape.h - scraping, version 1.1. Owned by the scraping component, emusen-scrape.
+/* emusen_scrape.h - scraping, version 1.2. Owned by the scraping component, emusen-scrape.
  *
  * Scraping below every frontend: the ScreenScraper client and its quota, the queue's run on the player's word alone,
  * OpenEmu's sources as the failover, the media store and media.db, and the order in which a game's pictures are
@@ -31,7 +31,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_SCRAPE_MAJOR 1u
-#define EMUSEN_SCRAPE_MINOR 1u
+#define EMUSEN_SCRAPE_MINOR 2u
 #define EMUSEN_SCRAPE_VERSION ((EMUSEN_SCRAPE_MAJOR << 16) | EMUSEN_SCRAPE_MINOR)
 
 #define EMUSEN_SCRAPE_NULL (-1)
@@ -50,7 +50,9 @@ typedef struct emusen_scrape emusen_scrape;
 struct emusen_library;
 
 /* Settings: {"roms", "art", "esde_media", "openemu", "user_agent", "developer_files", "cores": [[system ids], ...],
- * "test": {"connect", "roots", "clock" (.NET ticks from 1970), "offline"}}, every member optional; "test" is for tests alone, reached by no setting, variable or command. */
+ * "test": {"connect", "roots", "clock" (.NET ticks from 1970), "offline"}}, every member optional; "test" is for tests alone, reached by no setting, variable or command.
+ * Since 1.2, "sources_alone": true at open gives a handle for finding pictures alone while no media.db exists: the
+ * store in memory, no lock taken, nothing on disk made or moved; it is not for a run. */
 typedef struct emusen_scrape_config {
     uint32_t size;                           /* sizeof, so fields may be appended */
     const uint8_t *root; size_t root_len;    /* the media store; media.db in it */
@@ -83,8 +85,10 @@ int64_t emusen_scrape_start(emusen_scrape *s, const uint8_t *request, size_t len
 /* The run as it stands: {"serial", "state": "idle" | "running" | "done" | "stopped" | "cancelled", "paused", "why",
  * "total", "done", "found", "unknown", "failed", "skipped", "retrying", "unchanged", "requests", "last_failure",
  * "failover": {"asked", "found", "pending"}, "current", "last_picture", "started", "ended", "paused_ticks",
- * "working_ticks", "workers", "interrupted", "results": [...], "quota": {...}}; {"since": n} gives the results after
- * serial n. */
+ * "working_ticks", "workers", "interrupted", "results": [...], "retried": [...], "quota": {...}}; {"since": n} gives
+ * the results after serial n. Since 1.2, "retried" holds the retries the host says in its error log, each {"serial",
+ * "path", "detail", "failed"}: a request that failed, or one ScreenScraper could not answer; a busy server's wait is
+ * not among them. */
 int64_t emusen_scrape_progress(emusen_scrape *s, const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
 
 /* Waits until the run's serial passes serial, or timeout_ms ends; the serial then. A blocking wait, not a callback. */

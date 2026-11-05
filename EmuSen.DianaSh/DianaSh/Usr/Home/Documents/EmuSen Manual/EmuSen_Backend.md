@@ -9132,7 +9132,7 @@ and their clean-up, OpenVGDB's download and removal, and the sources of every pi
   cover lookups in `games.db` and follows covers chosen there. A library on the C# leaves the scraper on the C# too.
 - A sign-in opens `media.db` for its handle even when no run follows, as the quota the answer carries lives there.
 - A retry's line in the error log is not written in state 2; a game that could not be identified and a run's stop are,
-  by the window, from the drained results (§30.12).
+  by the window, from the drained results (§30.12). *Written since 2026-11-05: the progress's `retried`, 1.2 (§40.5).*
 - The tests reach the scraper through one seam, `MainWindow.ScrapeTest`, which gives the settings' `test` member; a test
   that installs a fake server through `NoNetwork.Serve` has it served to both halves, the C#'s `HttpClient` directly and
   the Rust's over HTTPS through `ReplayServer`, on the test's clock when it sets one. Every window opened without one
@@ -9958,6 +9958,87 @@ and every class that opens `games.db` or scans (`GameRecordsTests`, `GameMetadat
 `ScrapeMediaParityTests`, `ScrapeExtrasWindowTests`, `ScrapeWindowTests`, `CompressedDiscsOutputTests`,
 `PackageCropTests`, `CrystalParityTests`, `GamePackageGateTests`, `OnlineCoverWindowTests`): 297 passed and 8 skipped
 (the open questions skipped by design).
+
+### 40.5 Scraping
+
+**What went** (2026-11-05). `MediaService.Active` and its `PlatformSwitch` over `EMUSEN_SCRAPE_NATIVE`, and the C#
+half §30.14 kept whole as the failover and the oracle: `MediaStore`'s store (the queue, the records, the path index,
+the media rows, the layout step, the orphans and their cleanup, the day's counts), `Scraper` (the run), `ScreenScraperClient`
+(the requests and the downloads), `ScrapeQuotaManager` (the pace, the threads and the stops), `ScreenScraperJson`'s
+reading of the answers, `SignInAnswer.From`, `ScrapedRecord.MayOffer`, and OpenEmu's failover in C#, `CoverFetcher`,
+`OpenVgdb`'s reader and `OpenVgdbDownload`. Each was already ported: the failover is `emusen-scrape`'s `openemu.rs`, run by
+`run.rs`'s `failover_for` and recording each lookup in `games.db` through the lent library; the window's library path had
+used it since state 2. The window keeps one path at each of its seams: the run, a single game's scrape, pause, cancel,
+Log In, Check and Log Out, the name search and its Choose, a game's Clear, the orphans and their cleanup, OpenVGDB's
+download and removal, and the sources of every picture shown. What remains of the files is what the library path reads:
+the answers' records (`ScrapedRecord`, `StoredMedia`, `ScrapedGame`, `ScrapeQuota`, `SearchAnswer`, `SignInAnswer`), the
+statuses, `Scraper.SystemIds`, `MediaStore`'s paths (`DefaultRoot`, `FileName`, `CleanupFolder`, `KindFolderOf`),
+`OpenVgdb`'s path, the window's clock seam and `ScreenScraperCredentials`, which the window still reads for the developer
+file's origin and the member's account. `OpenVgdbBytes`, which no shipped code called once the C# failover had gone,
+moved to WiseMan's fixtures. Shipped C# lost 2,782 lines and gained 200. A missing platform library is refused at
+`MediaService.Open` as a `DllNotFoundException`: `libemusen_platform.so is not in use for the scraper (<why>); the
+scraper has had no C# implementation since 2026-11-05.` A leftover `EMUSEN_SCRAPE_NATIVE=0` is said once with
+`RetiredSwitch`'s line.
+
+**Two gaps closed first.**
+1. *A retry's line* (§30.14). The library's run counted a retry and pushed no result, so the window could not say it.
+   `emusen_scrape.h` 1.2 adds `retried` to a run's progress, each retry after a request that failed or one ScreenScraper
+   could not answer (a busy server's wait is not among them, as before), and the window writes each once in the C#
+   `Scraper`'s words with its game. `ScrapeLogTests`' new case failed on the library before the change and passes.
+2. *The pictures of a profile that never scraped.* The window opened the library's scraper only where `media.db`
+   existed and found pictures through the C# `MediaSources` otherwise. Decided 2026-11-05 by the tester: one owner, the
+   library, and browsing makes no `media.db`. `emusen_scrape.h` 1.2's settings member `sources_alone` opens a handle
+   whose store lives in memory, takes no lock and makes or moves nothing on disk; it finds pictures and is not for a
+   run. The window holds such a handle while no `media.db` exists (or the store is refused, as when another program holds
+   it) and drops it when the store opens. Held by `emusen-scrape`'s
+   `a_handle_for_sources_alone_makes_nothing_on_disk_and_holds_no_lock` and by `ScrapeWindowTests`'
+   `Browsing_covers_in_a_profile_that_never_scraped_makes_no_media_db`.
+
+**How it is graded now.** The three parity classes, `ScrapeReplayParityTests`, `ScrapeStoreParityTests` and
+`ScrapeMediaParityTests`, were recorded from the C# alone on 2026-11-05 into thirteen files,
+`EmuSen.WiseMan/Crystal/Goldens/ScrapeReplayParity.<case>`, `ScrapeStoreParity.<case>` and `ScrapeMediaParity.Sources`
+(the C# matched them once more, the library twice and once beside another test process in another folder). A store the C#
+seeded through its own calls is kept as its rows' statements and laid into a store the library made
+(`ScrapeGoldens.Seed`); `media.db`'s schema texts are WiseMan's `MediaDbSchema`. Made the same on every run: the test's
+folder written `<root>`, ROM files given one modification time, and a seeded record keyed by the MD5 of its file's name,
+where `string.GetHashCode`, which changes per process, had been. Kept live: the developer file's and the member's places,
+held to `ScreenScraperCredentials`; each game's metadata, held to `GameMetadata.Resolve`, which stays for the editor; and
+a package's stamp, held to `EsdeMediaFolder.PackageStamp`.
+
+**The classes that drove the C# directly**, about a hundred cases, now drive the library through the binding Mistress
+uses: `LibraryScraper` (WiseMan) opens `NativeScraping` on a store of the test's, sends it to the fake ScreenScraper
+through `ReplayServer` on the test clock, and runs, drains and ends runs as the window does; `MediaDbRows` writes a
+store's rows as the store writes them. `ScraperTests`, `ScrapeExtrasTests`, `ScrapeDiscImageTests`, `MediaStoreTests`,
+`MediaStoreFoldersTests`, `ScreenScraperClientTests`, `OnlineCoverTests`, `CoverChoiceTests`, `GameMetadataTests` and the
+C#-only cases of `ScrapeCredentialTests` and `ScrapeSignInTests` were rewritten so; `ScrapeLiveTool` runs the library's
+scraper live. Where the rule is `emusen-scrape`'s alone, a cargo test holds it: the queue's order and a retry's due time
+(`store_queue.rs`, new), each documented status's meaning, a 431's stop, the day's unrecognised games and its counts
+(`quota.rs`, four new beside the pace, threads, 430, 429 and 401 already there), and a revision's plainer names
+(`openemu_names.rs`, new). `ScrapeQuotaTests` is deleted, every case held by `quota.rs`. What changed in the rewrite:
+- *A game's package* is the runtime's: the library's run finds it by the package's claim, so the packaged cases build a
+  tree of their own whose library holds the game, where the C# had been handed a package.
+- *An answer in an unknown character set* is an error the run passes over; the C# retried it later, the error being
+  .NET's own decoder's.
+- *With no OpenVGDB*, the failover asks GitHub for the release first, as the window did; `CoverFetcher` alone asked
+  nothing.
+- *Dropped*, with the C#: `ScrapedRecord.MayOffer`'s assertions (the rule is the run's, held by
+  `A_kind_turned_on_later_asks_again_only_a_game_that_may_have_it`), the client's quota read with its answer (held by
+  `answers.rs`), `ScraperTests`' thread-limit theory, skipped as a timing race since §30.14, and an older store's
+  closed-handle answers, now `ObjectDisposedException` from the binding.
+
+**Seeded faults, 2026-11-05.** Each was seeded, the named classes run, and the source restored. The window not saying
+a retry: `ScrapeLogTests`. The window opening the store for its pictures in a profile that never scraped:
+`ScrapeWindowTests`' browsing case. A handle for the sources alone opening `media.db` on disk: `store_lock.rs` and the same
+window case. The layout step not taken at open: `MediaStoreFoldersTests` (two) and the `Layout` golden. The queue taken
+by the lowest priority first: `store_queue.rs` and `ScraperTests`' resume after the day's stop.
+
+**How it was tested** (measured on 2026-11-05 on the development desktop, Debug build): every class above, with
+`ScrapeWindowTests`, `ScrapeStatusWindowTests`, `ScraperWindowTests`, `ScrapeExtrasWindowTests`, `ThemedScrapeTests`,
+`ScrapeFingerprintTests`, `ScrapingLendTests`, `ScrapeRulesTests`, `ScrapeProgressTests`, `ScrapeLogTests`,
+`ThemedFoldersTests`, `ThemedPackagesTests`, `GamePackageGateTests`, `CrystalParityTests`, `OnlineCoverWindowTests` and
+`WindowFitAuditTests`, every case passing; `cargo test` of `emusen-scrape`, `emusen-galaxia` and `emusen-crystal`, 163
+passing. `OnlineCoverWindowTests` had read the window's deleted `_fetcher` by reflection, which the compiler could not
+see; it now reads the run's failover count.
 
 ### 40.8 The frontend API: the C# implementation deleted
 

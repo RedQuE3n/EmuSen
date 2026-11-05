@@ -18,6 +18,9 @@ namespace EmuSen.Mistress.Library
         public double PlaySeconds { get; set; }
     }
 
+    // What an online cover lookup came to, as games.db keeps it - see EmuSen_Settings_Reference.md §4.39.
+    public enum CoverOutcome { Found, Unknown, NoArt, Failed }
+
     // One of the player's own collections, with how many games it holds.
     public sealed record GameCollection(long Id, string Name, int Count);
 

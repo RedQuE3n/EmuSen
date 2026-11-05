@@ -18,7 +18,7 @@ using Microsoft.Data.Sqlite;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
-    // Runs replayed to both halves: one fake ScreenScraper served at its real addresses, the C# Scraper and the Rust run each sent to it, and their requests compared byte for byte after the redactor, their stores row for row and file for file, their results and their clocks' waits - see EmuSen_Backend.md §30.7.
+    // Runs replayed, held to the C#'s answers recorded before its deletion: one fake ScreenScraper served at its real addresses, the library's run sent to it, and its requests after the redactor, its store row for row and file for file, its results and its clock's waits held to the recording - see EmuSen_Backend.md §30.7 and §40.5.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class ScrapeReplayParityTests : IDisposable
     {
@@ -63,6 +63,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string path = Path.Combine(Roms, relative.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             File.WriteAllBytes(path, bytes);
+            // One modification time, so the path index's rows are the same on every run.
+            File.SetLastWriteTimeUtc(path, Start.UtcDateTime);
             return path;
         }
 
@@ -122,36 +124,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private sealed record Side(string Requests, string Db, string Tree, string Results, string Delays);
 
-        private static string Kinds(IEnumerable<string> written) => string.Join(",", written.Select(ScrapeProgress.KindOf));
-
-        // The C# Scraper over a store and a clock of its own, its client sent to the replay server.
-        private Side CSharp(string media, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority)
-        {
-            _replay.Clear();
-            var clock = new FakeScrapeClock(Start);
-            using MediaStore store = MediaStore.Open(media);
-            store.PutInFolders(p => GameFolders.Of(Roms, p), Start);
-            var quota = new ScrapeQuotaManager(store, clock);
-            var results = new ConcurrentQueue<ScrapeResult>();
-            using var finished = new ManualResetEventSlim();
-            using var http = _replay.Client(Agent);
-            var client = new ScreenScraperClient(http, FakeScreenScraper.Developer, null);
-            using (var scraper = new Scraper(client, store, quota, () => choices, (_, _) => false, path => bytes => OpenVgdbBytes.Of(Pack(path) is "gbc" ? "gb" : Pack(path), bytes), results.Enqueue, clock)
-            {
-                IdlePoll = TimeSpan.FromMilliseconds(20), FolderOf = p => GameFolders.Of(Roms, p),
-            })
-            {
-                scraper.Finished += _ => finished.Set();
-                store.ClearQueue();
-                foreach (var (path, system) in games) store.Enqueue(path, system, priority);
-                scraper.Start();
-                Assert.True(finished.Wait(TimeSpan.FromSeconds(60)), "the C# run did not end");
-            }
-            string said = string.Join("\n", results.Where(r => r.Outcome is not (ScrapeOutcome.Retry or ScrapeOutcome.Stopped))
-                .Select(r => $"{r.Path} {r.Outcome.ToString().ToLowerInvariant()} [{Kinds(r.Written)}] {r.Detail} skipped={r.Skipped} cover={r.HasCover} by={r.MatchedBy}"));
-            return new Side(Requests(), Dump(Path.Combine(media, MediaStore.FileName)), Tree(media), said, string.Join(",", clock.Delays.Select(d => d.Ticks)));
-        }
-
         private static string ChoicesJson(ScrapeChoices c) => JsonSerializer.Serialize(new
         {
             kinds = c.Kinds().Select(k => k.EsdeType), region = c.Region, language = c.Language, region_fallback = c.RegionFallback, threads = c.Threads,
@@ -181,32 +153,36 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             return new Side(Requests(), Dump(Path.Combine(media, MediaStore.FileName)), Tree(media), said, delays);
         }
 
-        // Each half from a copy of the same seed store; everything compared.
-        private void Both(string name, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority = ScrapePriority.Library, string? seed = null)
+        // A run on the library, held to the recording.
+        private Side Run(string media, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority) => Rust(media, games, choices, priority);
+
+        private void Hold(EmuSen.WiseMan.Crystal.ParityGolden golden, string name, Side side)
         {
-            string a = Path.Combine(_root, name, "csharp"), b = Path.Combine(_root, name, "rust");
+            golden.Add($"{name} results", ScrapeGoldens.Plain(side.Results, _root));
+            golden.Add($"{name} requests", ScrapeGoldens.Plain(side.Requests, _root));
+            golden.Add($"{name} rows", ScrapeGoldens.Plain(side.Db, _root));
+            golden.Add($"{name} tree", side.Tree);
+            golden.Add($"{name} delays", side.Delays);
+        }
+
+        // A run from a copy of the seed store, held to the recording.
+        private void Both(EmuSen.WiseMan.Crystal.ParityGolden golden, string name, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority = ScrapePriority.Library, string? seed = null)
+        {
+            string a = Path.Combine(_root, name, "store");
             if (seed is not null)
-            {
-                foreach (string dir in new[] { a, b })
-                    foreach (string f in Directory.EnumerateFiles(seed, "*", SearchOption.AllDirectories))
-                    {
-                        string target = Path.Combine(dir, Path.GetRelativePath(seed, f));
-                        Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                        File.Copy(f, target);
-                    }
-            }
-            Side csharp = CSharp(a, games, choices, priority);
-            Side rust = Rust(b, games, choices, priority);
-            Assert.Equal(csharp.Results, rust.Results);
-            Assert.Equal(csharp.Requests, rust.Requests);
-            Assert.Equal(csharp.Db, rust.Db);
-            Assert.Equal(csharp.Tree, rust.Tree);
-            Assert.Equal(csharp.Delays, rust.Delays);
+                foreach (string f in Directory.EnumerateFiles(seed, "*", SearchOption.AllDirectories))
+                {
+                    string target = Path.Combine(a, Path.GetRelativePath(seed, f));
+                    Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                    File.Copy(f, target);
+                }
+            Hold(golden, name, Run(a, games, choices, priority));
         }
 
         [Fact]
         public void A_run_of_found_unknown_transformed_and_unreadable_games_replays_alike()
         {
+            var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Mixed");
             var games = new List<(string, string)>();
             string Found(string relative, int seed, long id)
             {
@@ -228,12 +204,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string refused = Rom("snes/Refused.sfc", Filled(901, 6));
             _server.StatusByMd5[RomHash.Of(refused).Md5] = (400, "Erreur : bad request");
             games.Add((refused, "snes"));
-            Both("mixed", games, new ScrapeChoices());
+            Both(golden, "mixed", games, new ScrapeChoices());
+            golden.Check(5);
         }
 
         [Fact]
         public void Every_kind_in_another_region_and_language_with_the_fallback_off_replays_alike()
         {
+            var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Kinds");
             var games = new List<(string, string)>();
             for (int i = 0; i < 3; i++)
             {
@@ -246,25 +224,28 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 TitleScreens = true, BackCovers = true, Boxes3D = true, PhysicalMedia = true, FanArt = true, Manuals = true, Videos = true,
                 Region = "jp", Language = "fr", RegionFallback = false,
             };
-            Both("kinds", games, choices, ScrapePriority.Console);
-            Both("kinds-auto", games, new ScrapeChoices { Videos = true, Manuals = true, Language = "de" }, ScrapePriority.Shown);
+            Both(golden, "kinds", games, choices, ScrapePriority.Console);
+            Both(golden, "kinds-auto", games, new ScrapeChoices { Videos = true, Manuals = true, Language = "de" }, ScrapePriority.Shown);
+            golden.Check(2 * 5);
         }
 
         [Fact]
         public void A_second_run_refreshes_skips_and_follows_a_rename_alike()
         {
+            var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Again");
             string a = Rom("snes/Again (USA).sfc", Filled(3000, 40)), b = Rom("snes/Moved (USA).sfc", Filled(3001, 41));
             _server.Games.Add(new FakeGame(300, "Again", RomHash.Of(a).Md5));
             _server.Games.Add(new FakeGame(301, "Moved", RomHash.Of(b).Md5));
             string seed = Path.Combine(_root, "seed");
             var games = new List<(string, string)> { (a, "snes"), (b, "snes") };
-            CSharp(seed, games, new ScrapeChoices(), ScrapePriority.Library);
+            Hold(golden, "seed", Run(seed, games, new ScrapeChoices(), ScrapePriority.Library));
             string renamed = Path.Combine(Roms, "snes", "Sub", "Renamed (USA).sfc");
             Directory.CreateDirectory(Path.GetDirectoryName(renamed)!);
             File.Move(b, renamed);
             _server.MediaRevision["ss"] = 1;
-            Both("again", [(a, "snes"), (renamed, "snes")], new ScrapeChoices { Refresh = true, TitleScreens = true }, seed: seed);
-            Both("again-plain", [(a, "snes"), (renamed, "snes")], new ScrapeChoices(), seed: seed);
+            Both(golden, "again", [(a, "snes"), (renamed, "snes")], new ScrapeChoices { Refresh = true, TitleScreens = true }, seed: seed);
+            Both(golden, "again-plain", [(a, "snes"), (renamed, "snes")], new ScrapeChoices(), seed: seed);
+            golden.Check(3 * 5);
         }
 
         [Theory]
@@ -274,6 +255,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [InlineData(403)]
         public void A_status_that_stops_or_slows_the_run_replays_alike(int code)
         {
+            var golden = new EmuSen.WiseMan.Crystal.ParityGolden($"ScrapeReplayParity.Status{code}");
             var games = new List<(string, string)>();
             for (int i = 0; i < 3; i++)
             {
@@ -285,19 +267,13 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             if (code is 429 or 401)
             {
                 _once[md5] = code;
-                string a = Path.Combine(_root, $"status{code}", "csharp"), b = Path.Combine(_root, $"status{code}", "rust");
-                Side csharp = CSharp(a, games, new ScrapeChoices(), ScrapePriority.Library);
-                _once[md5] = code;
-                Side rust = Rust(b, games, new ScrapeChoices(), ScrapePriority.Library);
-                Assert.Equal(csharp.Results, rust.Results);
-                Assert.Equal(csharp.Requests, rust.Requests);
-                Assert.Equal(csharp.Db, rust.Db);
-                Assert.Equal(csharp.Tree, rust.Tree);
-                Assert.Equal(csharp.Delays, rust.Delays);
+                Hold(golden, $"status{code}", Run(Path.Combine(_root, $"status{code}", "store"), games, new ScrapeChoices(), ScrapePriority.Library));
+                golden.Check(5);
                 return;
             }
             _server.StatusByMd5[md5] = (code, $"Erreur : forced {code}");
-            Both($"status{code}", games, new ScrapeChoices());
+            Both(golden, $"status{code}", games, new ScrapeChoices());
+            golden.Check(5);
         }
 
         [Fact]
@@ -319,34 +295,24 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                     ? OnlineCoverTests.FakeServer.Png() : new System.Net.Http.HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
                 var games = new List<(string Path, string System)> { (byName, "snes"), (headered, "nes"), (unknown, "snes"), (noArt, "snes") };
 
+                var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Failover");
                 _replay.Clear();
-                string a = Path.Combine(_root, "failover", "csharp");
-                var results = new ConcurrentQueue<CoverResult>();
-                using (var http = _replay.Client(Agent))
-                using (var fetcher = new CoverFetcher(http, OpenVgdb.DefaultPath, Path.Combine(a, "openemu"), results.Enqueue))
+                string a = Path.Combine(_root, "failover", "store");
+                string counts;
                 {
-                    foreach (var (path, _) in games) fetcher.Enqueue(new RomEntry(path), RuntimeCatalog.CoreForRom(path)!);
-                    SpinWait.SpinUntil(() => results.Count == games.Count, TimeSpan.FromSeconds(30));
-                }
-                Assert.True(results.Count(r => r.Saved is not null) == 2, string.Join("; ", results.Select(r => $"{Path.GetFileName(r.RomPath)} {r.Outcome} {r.RomName} {r.Detail}")));
-                string csharpRequests = Requests();
-                string csharpTree = Directory.Exists(Path.Combine(a, "openemu")) ? Tree(Path.Combine(a, "openemu")) : "";
-
-                _replay.Clear();
-                string b = Path.Combine(_root, "failover", "rust");
-                using (MediaService rust = MediaService.Open(b, Settings().Replace("\"openemu\":false", "\"openemu\":true"), embedded: Blob))
-                {
+                    using MediaService rust = MediaService.Open(a, Settings().Replace("\"openemu\":false", "\"openemu\":true"), embedded: Blob);
                     rust.Start($"{{\"games\":{JsonSerializer.Serialize(games.Select(g => new { path = g.Path, system = g.System }))},\"enabled\":false}}");
                     var deadline = DateTime.UtcNow.AddSeconds(30);
                     while (JsonDocument.Parse(rust.Progress()).RootElement.GetProperty("state").GetString() == "running" && DateTime.UtcNow < deadline) Thread.Sleep(50);
                     using JsonDocument done = JsonDocument.Parse(rust.Progress());
-                    Assert.Equal((games.Count, results.Count(r => r.Saved is not null)),
-                        (done.RootElement.GetProperty("failover").GetProperty("asked").GetInt32(), done.RootElement.GetProperty("failover").GetProperty("found").GetInt32()));
-                    Assert.Equal("stopped", done.RootElement.GetProperty("state").GetString());
+                    counts = $"asked {done.RootElement.GetProperty("failover").GetProperty("asked").GetInt32()} found {done.RootElement.GetProperty("failover").GetProperty("found").GetInt32()} state {done.RootElement.GetProperty("state").GetString()}";
                 }
-                Assert.Equal(csharpRequests, Requests());
-                Assert.Equal(csharpTree, Directory.Exists(Path.Combine(b, "openemu")) ? TreeUnder(b) : "");
-                Assert.NotEqual("", csharpTree);
+                golden.Add("counts", counts);
+                golden.Add("requests", ScrapeGoldens.Plain(Requests(), _root));
+                string tree = Directory.Exists(Path.Combine(a, "openemu")) ? TreeUnder(a) : "";
+                golden.Add("tree", tree);
+                Assert.NotEqual("", tree);
+                golden.Check(3);
             }
             finally
             {
@@ -370,18 +336,17 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 EmuSen.WiseMan.Crystal.CrystalParityTests.PackageFor(package, Roms, "snes/Packed (USA).sfc", "snes");
                 string media = Path.Combine(package, EmuSen.Galaxia.Media.GamePackage.MediaFolder);
                 var games = new List<(string, string)> { (rom, "snes"), (plain, "snes") };
-                string a = Path.Combine(_root, "packed", "csharp"), b = Path.Combine(_root, "packed", "rust");
-                Side csharp = CSharp(a, games, new ScrapeChoices(), ScrapePriority.Library);
-                string csharpPackage = Tree(media);
-                Directory.Delete(media, recursive: true);
-                Side rust = Rust(b, games, new ScrapeChoices(), ScrapePriority.Library);
-                Assert.Equal(csharp.Results, rust.Results);
-                Assert.Equal(csharp.Db, rust.Db);
-                Assert.Equal(csharp.Tree, rust.Tree);
-                Assert.Equal(csharpPackage, Tree(media));
-                Assert.Contains("covers/Packed (USA).png", csharpPackage);
-                Assert.DoesNotContain("Packed", csharp.Tree);
-                Assert.Contains("Plain (USA).png", csharp.Tree);
+                var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Packaged");
+                Side side = Run(Path.Combine(_root, "packed", "store"), games, new ScrapeChoices(), ScrapePriority.Library);
+                string packaged = Tree(media);
+                golden.Add("results", ScrapeGoldens.Plain(side.Results, _root));
+                golden.Add("rows", ScrapeGoldens.Plain(side.Db, _root));
+                golden.Add("tree", side.Tree);
+                golden.Add("package", packaged);
+                Assert.Contains("covers/Packed (USA).png", packaged);
+                Assert.DoesNotContain("Packed", side.Tree);
+                Assert.Contains("Plain (USA).png", side.Tree);
+                golden.Check(4);
             }
             finally
             {

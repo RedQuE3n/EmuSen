@@ -14,21 +14,28 @@ using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Library;
 using Microsoft.Data.Sqlite;
 using EmuSen.Crystal.Systems;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // OpenVGDB names a game, libretro's server has its box; a fake server stands in for both - see EmuSen_Settings_Reference.md §4.39.
+    // OpenVGDB names a game, libretro's server has its box: emusen-scrape's failover, a run with ScreenScraper off, against a fake server for both - see EmuSen_Settings_Reference.md §4.39 and EmuSen_Backend.md §40.5.
+    [Collection(EmuSen.WiseMan.Fixtures.TestCollections.ProcessGlobals)]
     public class OnlineCoverTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenOnlineCoverTests", Guid.NewGuid().ToString("N"));
-        private string Db => Path.Combine(_root, "openvgdb.sqlite");
-        private string Art => Path.Combine(_root, "Artwork");
+        private string Db => OpenVgdb.DefaultPath;
+        private string Store => Path.Combine(_root, "Media");
         private string Roms => Path.Combine(_root, "Roms");
 
-        public OnlineCoverTests() => Directory.CreateDirectory(Roms);
+        public OnlineCoverTests()
+        {
+            Directory.CreateDirectory(Roms);
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+        }
 
         public void Dispose()
         {
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
@@ -91,6 +98,7 @@ namespace EmuSen.WiseMan.Mistress
         private string Rom(string name, byte[] bytes)
         {
             string path = Path.Combine(Roms, name);
+            Directory.CreateDirectory(Roms);
             File.WriteAllBytes(path, bytes);
             return path;
         }
@@ -102,21 +110,31 @@ namespace EmuSen.WiseMan.Mistress
             return bytes;
         }
 
-        private static List<CoverResult> Collect(FakeServer server, string db, string art, int count, Action<CoverFetcher> enqueue)
+        // Each game's cover lookup as the failover recorded it in games.db, by a run with ScreenScraper off; a failure is not recorded.
+        private Dictionary<string, (string Outcome, string? RomName)> Collect(FakeServer server, params string[] roms)
         {
-            var results = new BlockingCollection<CoverResult>();
-            using var fetcher = new CoverFetcher(new HttpClient(server), db, art, results.Add) { Spacing = TimeSpan.Zero };
-            enqueue(fetcher);
-            var got = new List<CoverResult>();
-            for (int i = 0; i < count; i++)
+            string games = Path.Combine(_root, "games.db");
+            using (var library = EmuSen.Crystal.Client.Library.GameLibrary.Open(games))
+            using (var s = new EmuSen.WiseMan.Mistress.Scraping.LibraryScraper(server, Store, new Dictionary<string, object?> { ["roms"] = Roms, ["openemu"] = true }, library: library))
             {
-                Assert.True(results.TryTake(out CoverResult? r, TimeSpan.FromSeconds(10)), "no result");
-                got.Add(r!);
+                s.Run(roms.Select(r => (r, EmuSen.Mistress.Library.RuntimeCatalog.ShelfByName(EmuSen.Mistress.Library.RuntimeCatalog.ShelfFor(r))!.EsdeSystem)),
+                    new EmuSen.Mistress.Scraping.ScrapeChoices(), EmuSen.Mistress.Scraping.ScrapePriority.Library, enabled: false);
+                s.Ends();
             }
-            Thread.Sleep(50);
-            Assert.Empty(results);
-            return got;
+            var found = new Dictionary<string, (string, string?)>(StringComparer.Ordinal);
+            using var c = new SqliteConnection($"Data Source={games};Mode=ReadOnly;Pooling=False");
+            c.Open();
+            using SqliteCommand q = c.CreateCommand();
+            q.CommandText = "SELECT path, outcome, rom_name FROM cover_lookup";
+            using SqliteDataReader row = q.ExecuteReader();
+            while (row.Read()) found[row.GetString(0)] = (row.GetString(1), row.IsDBNull(2) ? null : row.GetString(2));
+            return found;
         }
+
+        // Where the failover keeps a console's covers: the store's own openemu folder.
+        private string Kept(string console, string stem) => Path.Combine(Store, "openemu", console, stem + ".png");
+
+        private IEnumerable<string> Others(FakeServer server) => server.Asked.Where(u => !u.Contains("screenscraper.fr"));
 
         // The systems table's rule as the library reads it, through the platform library, for the console's first system.
         private static byte[] Bytes(string console, byte[] file) => OpenVgdbBytes.Of(Core(console).Systems[0], file);
@@ -145,16 +163,6 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(v64, Bytes("N64", n64));
         }
 
-        [Theory]
-        [InlineData("Wave Race 64 (USA) (Rev A)", "Wave Race 64 (USA) (Rev A)|Wave Race 64 (USA)")]
-        [InlineData("Legend of Zelda, The - Ocarina of Time (Europe) (En,Fr,De) (Rev A)", "Legend of Zelda, The - Ocarina of Time (Europe) (En,Fr,De) (Rev A)|Legend of Zelda, The - Ocarina of Time (Europe) (En,Fr,De)|Legend of Zelda, The - Ocarina of Time (Europe)")]
-        [InlineData("Tetris (World)", "Tetris (World)")]
-        [InlineData("Untagged", "Untagged")]
-        public void A_revision_s_box_is_also_looked_for_under_the_plainer_names(string romName, string names)
-        {
-            Assert.Equal(names.Split('|'), CoverFetcher.Names(romName).ToArray());
-        }
-
         [Fact]
         public void A_game_named_as_openvgdb_names_it_gets_libretro_s_box_in_its_console_s_folder()
         {
@@ -162,12 +170,11 @@ namespace EmuSen.WiseMan.Mistress
             string rom = Rom("Super Mario World (USA).sfc", Filled(1024, 3));
             var server = new FakeServer { Answer = url => url.Contains("thumbnails.libretro.com") ? FakeServer.Png() : new HttpResponseMessage(HttpStatusCode.NotFound) };
 
-            CoverResult result = Collect(server, Db, Art, 1, f => f.Enqueue(new RomEntry(rom), Core("SNES"))).Single();
+            var result = Collect(server, rom)[rom];
 
-            Assert.Equal(CoverOutcome.Found, result.Outcome);
-            Assert.Equal(Path.Combine(Art, "SNES", "Super Mario World (USA).png"), result.Saved);
-            Assert.True(File.Exists(result.Saved));
-            Assert.Equal("https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Mario%20World%20%28USA%29.png", server.Asked.Single());
+            Assert.Equal("Found", result.Outcome);
+            Assert.True(File.Exists(Kept("SNES", "Super Mario World (USA)")));
+            Assert.Equal("https://thumbnails.libretro.com/Nintendo%20-%20Super%20Nintendo%20Entertainment%20System/Named_Boxarts/Super%20Mario%20World%20%28USA%29.png", Others(server).Single());
         }
 
         [Fact]
@@ -179,12 +186,11 @@ namespace EmuSen.WiseMan.Mistress
             string rom = Rom("metroid-renamed.nes", ines);
             var server = new FakeServer { Answer = _ => FakeServer.Png() };
 
-            CoverResult result = Collect(server, Db, Art, 1, f => f.Enqueue(new RomEntry(rom), Core("NES"))).Single();
+            var result = Collect(server, rom)[rom];
 
-            Assert.Equal(CoverOutcome.Found, result.Outcome);
-            Assert.Equal("Metroid (USA)", result.RomName);
-            Assert.Contains("Named_Boxarts/Metroid%20%28USA%29.png", server.Asked.Single());
-            Assert.Equal(Path.Combine(Art, "NES", "metroid-renamed.png"), result.Saved);
+            Assert.Equal(("Found", "Metroid (USA)"), (result.Outcome, result.RomName));
+            Assert.Contains("Named_Boxarts/Metroid%20%28USA%29.png", Others(server).Single());
+            Assert.True(File.Exists(Kept("NES", "metroid-renamed")));
         }
 
         [Fact]
@@ -194,12 +200,12 @@ namespace EmuSen.WiseMan.Mistress
             string rom = Rom("Tetris (World) (Rev 1).gb", Filled(0x8000, 5));
             var server = new FakeServer { Answer = url => new HttpResponseMessage(url.Contains("gamefaqs") ? HttpStatusCode.Forbidden : HttpStatusCode.NotFound) };
 
-            CoverResult result = Collect(server, Db, Art, 1, f => f.Enqueue(new RomEntry(rom), Core("GB"))).Single();
+            var result = Collect(server, rom)[rom];
 
-            Assert.Equal(CoverOutcome.NoArt, result.Outcome);
-            Assert.Equal(5, server.Asked.Count);
-            Assert.Equal("https://gamefaqs.example/box/1_front.jpg", server.Asked.Last());
-            Assert.False(Directory.Exists(Art) && Directory.EnumerateFiles(Art, "*", SearchOption.AllDirectories).Any());
+            Assert.Equal("NoArt", result.Outcome);
+            Assert.Equal(5, Others(server).Count());
+            Assert.Equal("https://gamefaqs.example/box/1_front.jpg", Others(server).Last());
+            Assert.False(Directory.Exists(Path.Combine(Store, "openemu")) && Directory.EnumerateFiles(Path.Combine(Store, "openemu"), "*", SearchOption.AllDirectories).Any());
         }
 
         [Fact]
@@ -209,10 +215,8 @@ namespace EmuSen.WiseMan.Mistress
             string rom = Rom("F-Zero (USA).sfc", Filled(1024, 6));
             var server = new FakeServer { Answer = _ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>" + new string((char)0x78, 2000) + "</html>") } };
 
-            CoverResult result = Collect(server, Db, Art, 1, f => f.Enqueue(new RomEntry(rom), Core("SNES"))).Single();
-
-            Assert.Equal(CoverOutcome.NoArt, result.Outcome);
-            Assert.False(File.Exists(Path.Combine(Art, "SNES", "F-Zero (USA).png")));
+            Assert.Equal("NoArt", Collect(server, rom)[rom].Outcome);
+            Assert.False(File.Exists(Kept("SNES", "F-Zero (USA)")));
         }
 
         [Fact]
@@ -223,15 +227,10 @@ namespace EmuSen.WiseMan.Mistress
             string known = Rom("F-Zero (USA).sfc", Filled(1024, 8));
             var server = new FakeServer { Answer = _ => FakeServer.Png() };
 
-            List<CoverResult> results = Collect(server, Db, Art, 2, f =>
-            {
-                Assert.True(f.Enqueue(new RomEntry(hack), Core("SNES")));
-                Assert.True(f.Enqueue(new RomEntry(known), Core("SNES")));
-                Assert.False(f.Enqueue(new RomEntry(known), Core("SNES")));
-            });
+            var results = Collect(server, hack, known, known);
 
-            Assert.Equal(CoverOutcome.Unknown, results.Single(r => r.RomPath == hack).Outcome);
-            Assert.Single(server.Asked);
+            Assert.Equal("Unknown", results[hack].Outcome);
+            Assert.Single(Others(server));
         }
 
         [Fact]
@@ -239,32 +238,32 @@ namespace EmuSen.WiseMan.Mistress
         {
             BuildOpenVgdb(Db, ("SNES", "F-Zero (USA)", "00", null));
             string rom = Rom("F-Zero (USA).sfc", Filled(1024, 9));
-            string mine = Path.Combine(Art, "SNES", "F-Zero (USA).png");
+            string mine = Kept("SNES", "F-Zero (USA)");
             Directory.CreateDirectory(Path.GetDirectoryName(mine)!);
             File.WriteAllBytes(mine, new byte[] { 1, 2, 3 });
             var server = new FakeServer { Answer = _ => FakeServer.Png() };
 
-            CoverResult result = Collect(server, Db, Art, 1, f => f.Enqueue(new RomEntry(rom), Core("SNES"))).Single();
+            Collect(server, rom);
 
-            Assert.Empty(server.Asked);
+            Assert.Empty(Others(server));
             Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(mine));
-            Assert.Equal(CoverOutcome.Found, result.Outcome);
         }
 
+        // With no database the failover asks GitHub for OpenVGDB's release first, as the window did, and no cover server.
         [Fact]
-        public void With_no_database_every_lookup_fails_without_asking_a_server()
+        public void With_no_database_every_lookup_fails_without_asking_a_cover_server()
         {
             string rom = Rom("F-Zero (USA).sfc", Filled(1024, 10));
             var server = new FakeServer { Answer = _ => FakeServer.Png() };
 
-            CoverResult result = Collect(server, Db, Art, 1, f => f.Enqueue(new RomEntry(rom), Core("SNES"))).Single();
-
-            Assert.Equal(CoverOutcome.Failed, result.Outcome);
-            Assert.Empty(server.Asked);
+            Assert.False(Collect(server, rom).ContainsKey(rom));
+            Assert.DoesNotContain(Others(server), u => u.Contains("thumbnails.libretro.com"));
+            Assert.All(Others(server), u => Assert.Contains("github", u));
         }
 
+        // The download is the scraper's, asked through the binding Mistress's Download row calls.
         [Fact]
-        public async Task The_database_is_taken_from_the_newest_release_s_zip_and_a_bad_one_leaves_nothing()
+        public void The_database_is_taken_from_the_newest_release_s_zip_and_a_bad_one_leaves_nothing()
         {
             string built = Path.Combine(_root, "built", OpenVgdb.FileName);
             BuildOpenVgdb(built, ("SNES", "F-Zero (USA)", "00", null));
@@ -275,24 +274,27 @@ namespace EmuSen.WiseMan.Mistress
                     archive.CreateEntryFromFile(built, OpenVgdb.FileName);
                 zip = memory.ToArray();
             }
+            const string latest = "https://api.github.com/repos/OpenVGDB/OpenVGDB/releases/latest";
             const string release = """{"tag_name":"v29.0","assets":[{"name":"openvgdb.zip","browser_download_url":"https://github.example/openvgdb.zip"}]}""";
+            byte[] served = zip;
             var server = new FakeServer
             {
-                Answer = url => url == OpenVgdbDownload.LatestRelease
+                Answer = url => url == latest
                     ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(release) }
-                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) },
+                    : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(served) },
             };
-
-            Assert.Equal("v29.0", await OpenVgdbDownload.FetchAsync(new HttpClient(server), Db));
-            using (OpenVgdb? opened = OpenVgdb.Open(Db)) Assert.NotNull(opened!.ByName("F-Zero (USA)", new[] { "SNES" }));
-
-            string other = Path.Combine(_root, "other.sqlite");
-            server.Answer = url => url == OpenVgdbDownload.LatestRelease
-                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(release) }
-                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[] { 1, 2, 3 }) };
-            await Assert.ThrowsAnyAsync<Exception>(() => OpenVgdbDownload.FetchAsync(new HttpClient(server), other));
-            Assert.False(File.Exists(other));
-            Assert.False(File.Exists(other + ".part"));
+            using (var s = new EmuSen.WiseMan.Mistress.Scraping.LibraryScraper(server, Store))
+            {
+                Assert.Equal(("v29.0", (string?)null), s.Scraper.DownloadOpenVgdb());
+                Assert.True(File.Exists(Db));
+                File.Delete(Db);
+                served = new byte[] { 1, 2, 3 };
+                (string? tag, string? failed) = s.Scraper.DownloadOpenVgdb();
+                Assert.Null(tag);
+                Assert.NotNull(failed);
+            }
+            Assert.False(File.Exists(Db));
+            Assert.False(File.Exists(Db + ".part"));
         }
     }
 }

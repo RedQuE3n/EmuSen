@@ -156,7 +156,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public Task The_developer_file_appearing_asks_no_server() => OnUi(() =>
         {
             // media.db already there, as after an earlier session: the store is open when the file appears.
-            using (MediaStore.Open(DataStore.Media)) { }
+            using (new MediaDbRows(DataStore.Media)) { }
             MainWindow window = Open(developer: false);
             Pump();
             SetDeveloper(true);
@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public Task A_queue_left_by_an_earlier_session_is_offered_as_resume_and_never_resumed_by_itself() => OnUi(() =>
         {
             _server.Games.Add(new FakeGame(77, "F-Zero", Md5));
-            using (MediaStore store = MediaStore.Open(DataStore.Media)) store.Enqueue(_rom, "snes", ScrapePriority.Library);
+            using (var store = new MediaDbRows(DataStore.Media)) store.Enqueue(_rom, "snes", ScrapePriority.Library);
             MainWindow window = Open();
             Pump();
             Assert.Empty(_server.Asked);
@@ -194,7 +194,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string other = Path.Combine(_romDir, "Other (USA).sfc");
             File.WriteAllBytes(other, SyntheticRom.Build((0x100, [9])));
-            using (MediaStore store = MediaStore.Open(DataStore.Media)) store.Enqueue(other, "snes", ScrapePriority.Library);
+            using (var store = new MediaDbRows(DataStore.Media)) store.Enqueue(other, "snes", ScrapePriority.Library);
             MainWindow window = Open(settings: a => a.OpenEmuFallback = false);
             Scrape(window, ScrapeScope.ThisGame(_rom));
             RunEnds(window);
@@ -202,12 +202,26 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal(1, window.Progress!.Total);
         });
 
+        // A profile that never scraped finds its pictures through a handle for the sources alone, and browsing makes no media.db - see EmuSen_Backend.md §40.5.
+        [Fact]
+        public Task Browsing_covers_in_a_profile_that_never_scraped_makes_no_media_db() => OnUi(() =>
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(OpenEmuCover)!);
+            File.WriteAllBytes(OpenEmuCover, new byte[200]);
+            MainWindow window = Open(developer: false);
+            Pump();
+            Assert.Equal(OpenEmuCover, CoverShown(window, _rom));
+            Assert.False(File.Exists(Path.Combine(DataStore.Media, MediaStore.FileName)));
+            Assert.False(window.ScrapeStoreOpen);
+            Assert.Empty(_server.Asked);
+        });
+
         [Fact]
         public Task What_is_already_kept_is_shown_with_no_request() => OnUi(() =>
         {
             Directory.CreateDirectory(Path.GetDirectoryName(ScrapedCover)!);
             File.WriteAllBytes(ScrapedCover, new byte[200]);
-            using (MediaStore store = MediaStore.Open(DataStore.Media))
+            using (var store = new MediaDbRows(DataStore.Media))
             {
                 var info = new FileInfo(_rom);
                 store.RememberFile(_rom, info.Length, info.LastWriteTimeUtc.Ticks, Md5);
@@ -359,8 +373,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public Task A_day_already_used_up_goes_straight_to_the_failover_and_the_plan_says_so() => OnUi(() =>
         {
-            using (MediaStore store = MediaStore.Open(DataStore.Media))
-                store.SaveDay(new QuotaDay(ScrapeQuotaManager.DayOf(_clock.Now), 20000, 3, 20000, 2000, ScrapeQuotaManager.StartOfNextDay(_clock.Now), "used up"));
+            using (var store = new MediaDbRows(DataStore.Media))
+                store.SaveDay("2026-07-14", 20000, 3, 20000, 2000, new DateTimeOffset(2026, 7, 14, 22, 0, 0, TimeSpan.Zero), "used up");
             _server.Games.Add(new FakeGame(77, "F-Zero", Md5));
             MainWindow window = Open();
             Scrape(window, new ScrapeScope());
@@ -549,11 +563,14 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             }
             const string release = """{"tag_name":"v29.0","assets":[{"name":"openvgdb.zip","browser_download_url":"https://github.example/openvgdb.zip"}]}""";
             _server.Other = url =>
-                url == OpenVgdbDownload.LatestRelease ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(release) }
+                url == LatestRelease ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(release) }
                 : url == "https://github.example/openvgdb.zip" ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(zip) }
                 : url.Contains("thumbnails.libretro.com") ? OnlineCoverTests.FakeServer.Png()
                 : new HttpResponseMessage(HttpStatusCode.NotFound);
         }
+
+        // GitHub's address for OpenVGDB's newest release, which the scraper's download asks first.
+        private const string LatestRelease = "https://api.github.com/repos/OpenVGDB/OpenVGDB/releases/latest";
 
         // Settings ▸ Library ▸ Scraping ▸ Member account, where OpenVGDB's row is.
         private static void Account(MainWindow window)
@@ -584,7 +601,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Scrape(window, ScrapeScope.ThisGame(_rom));
                 RunEnds(window);
                 WaitFor(() => CoverShown(window, _rom) == OpenEmuCover, "the failover's cover");
-                Assert.DoesNotContain(OpenVgdbDownload.LatestRelease, _server.Asked);
+                Assert.DoesNotContain(LatestRelease, _server.Asked);
                 Assert.True(File.Exists(OpenVgdb.DefaultPath));
 
                 Account(window);
@@ -625,7 +642,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 SettingsDesk.Choose(window, "openvgdb");
                 WaitFor(() => File.Exists(OpenVgdb.DefaultPath) && WindowSettings(window).OpenEmuFallback, "the download");
                 Pump(100);
-                Assert.Contains(OpenVgdbDownload.LatestRelease, _server.Asked);
+                Assert.Contains(LatestRelease, _server.Asked);
                 Assert.EndsWith(" MB", SettingsDesk.Value(window, "openvgdb"));
                 SettingsDesk.Back(window);
                 Assert.Equal(SettingsScreen.On, SettingsDesk.Value(window, "openemu"));

@@ -27,6 +27,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static LunaSplash? Splash(ThemedSession s) => (LunaSplash?)typeof(MainWindow).GetProperty("SplashShown", Hidden)!.GetValue(s.Window);
 
+        // Whether the splash still takes the pad and the keys: false while it fades.
+        private static bool Taking(ThemedSession s) => (bool)typeof(MainWindow).GetProperty("SplashOpen", Hidden)!.GetValue(s.Window)!;
+
         private static string Bells => System.IO.Path.GetFileNameWithoutExtension(StartupSplash.BellsKey);
 
         private static ThemedSession Open(Task? work = null, Action<AppSettings>? more = null, double width = 1280, double height = 800) =>
@@ -42,7 +45,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(4984);
             Assert.NotNull(Splash(s));
             Assert.Equal(4.984, splash.Time, 3);
-            s.Run(32);
+            s.Run(192);
             Assert.Null(Splash(s));
             Assert.Equal(1, s.Sounds.Count(n => n == Bells));
 
@@ -57,6 +60,33 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(1, s.Sounds.Count(n => n == Bells));
         }, default);
 
+        // It fades into big picture over 150 ms at its end and on a skip, taking no press while it fades (decided 2026-11-04).
+        [Fact]
+        public Task It_fades_out_over_150_ms_at_its_end_and_on_a_skip() => Session.Dispatch(() =>
+        {
+            using (var s = Open())
+            {
+                s.Run(5008);
+                LunaSplash splash = Assert.IsType<LunaSplash>(Splash(s));
+                Assert.False(Taking(s));
+                s.Run(64);
+                Assert.InRange(splash.Opacity, 0.4, 0.7);
+                s.Run(96);
+                Assert.Null(Splash(s));
+            }
+            using (var s = Open())
+            {
+                s.Run(500);
+                s.Pad.A();
+                LunaSplash splash = Assert.IsType<LunaSplash>(Splash(s));
+                Assert.True(splash.AtEnd);
+                s.Run(80);
+                Assert.InRange(splash.Opacity, 0.3, 0.8);
+                s.Run(80);
+                Assert.Null(Splash(s));
+            }
+        }, default);
+
         [Fact]
         public Task A_pad_button_skips_to_the_end_and_does_nothing_more() => Session.Dispatch(() =>
         {
@@ -64,7 +94,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(800);
             string? system = s.System;
             s.Pad.A();
-            Assert.Null(Splash(s));
+            Assert.False(Taking(s), "a skipped splash fades and takes no press");
             Assert.Equal("system", s.View);
             Assert.Equal(system, s.System);
             s.Run(3000);
@@ -78,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Run(800);
             s.Window.KeyPress(Key.Space, RawInputModifiers.None, PhysicalKey.None, null);
             s.Settle();
-            Assert.Null(Splash(s));
+            Assert.False(Taking(s));
             Assert.Equal("system", s.View);
         }, default);
 
@@ -95,7 +125,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.True(splash.AtEnd);
             work.SetResult();
             s.Settle();
-            Assert.Null(Splash(s));
+            Assert.False(Taking(s));
         }, default);
 
         [Fact]
@@ -111,7 +141,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 s.Run(4900);
                 Assert.Same(splash, Splash(s));
                 Assert.Equal(splash.Timeline.Length, splash.Time);
-                s.Run(200);
+                s.Run(112);
                 Assert.Null(Splash(s));
             }
             finally
@@ -127,7 +157,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task The_bells_never_play_with_sounds_off(bool sounds, int volume) => Session.Dispatch(() =>
         {
             using var s = Open(more: a => { a.NavigationSounds = sounds; a.BigPictureInterface.NavigationVolume = volume; });
-            s.Run(5100);
+            s.Run(5200);
             Assert.Null(Splash(s));
             Assert.DoesNotContain(Bells, s.Sounds);
         }, default);
@@ -199,7 +229,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             TimeSpan done = s.Now;
             work.SetResult();
             s.Settle();
-            Assert.Null(Splash(s));
+            Assert.False(Taking(s));
             Assert.Equal(done, s.Now);
             Assert.True(s.Shown);
         }, default);

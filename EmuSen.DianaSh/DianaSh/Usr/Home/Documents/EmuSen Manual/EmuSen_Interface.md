@@ -1907,6 +1907,11 @@ frame, with nothing added. The splash never delays the work: everything the wind
 soon as start-up is done. The press is the splash's alone: the pad's navigator forgets it and the key is handled, so the
 library behind does not move or open anything.
 
+**Leaving.** Decided 2026-11-04 by the tester: when it ends, at its length or on a skip, the splash fades into big
+picture over 150 ms (`SplashTimeline.FadeOut`, the motion tokens' Fade), its opacity falling linearly on the interface
+clock; while it fades it takes no press, so the pad and the keys already steer the library beneath. Under reduced motion
+it cuts. The wordmark is Barlow Condensed Light, the draft's weight, bundled by LunaP for it (`docs/LunaP.md` §206.3).
+
 **Reduced motion.** The finished frame alone, held for the splash's length (or until skipped), so the console count is
 still read; nothing moves.
 
@@ -1930,6 +1935,7 @@ a game; a pad button and a key each skip it, and the press does nothing behind i
 finished frame until the work ends; reduced motion shows the still frame for the length; the setting off shows none; the
 planets are the table's systems with an engine, in their hues, and a made-up table's count follows it; the finished
 frame fits at 1280 × 800, 1920 × 1080, 1280 × 720 and 3840 × 2160, each set after the first layout; start-up slower
-than the splash ends it on the frame the work ends. Measured on 2026-11-04 against the draft, with seeded stars and the
-bundled Barlow Condensed Regular in the draft's place of Light: the frames at 1, 2, 3 s and the finished frame match in
+than the splash ends it on the frame the work ends; it fades over 150 ms at its end and after a skip, taking no press
+while it fades, and cuts under reduced motion. Measured on 2026-11-04 against the draft, with seeded stars and the
+bundled fonts (Barlow Condensed Light in both since the same day): the frames at 1, 2, 3 s and the finished frame match in
 placement, colour and timing.

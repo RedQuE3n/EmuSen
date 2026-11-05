@@ -469,7 +469,7 @@ carried as a single file:
   leaves the unpacking to the platform library, as patching is (§3.12): `GamePackages.Managed.Resolve` refuses a
   package's zip with words naming the platform library, so that a zip's files are given their times by one rule.
 - **The scan** passes over `<folder>.zip` beside a package's folder, and lists a package's zip whose folder is not
-  there as one entry, shelved by its manifest's `system` (`scan.rs`; `RomLibrary.ScanManaged`).
+  there as one entry, shelved by its manifest's `system` (`scan.rs`; the C# `RomLibrary.ScanManaged` until 2026-11-05).
 
 **Tests**: `package_zip.rs`' two cases (every file and its time to the tick through a zip and back, the stored and
 deflated entries, a damaged entry refused and nothing left, an entry climbing out refused, a game's own zip no

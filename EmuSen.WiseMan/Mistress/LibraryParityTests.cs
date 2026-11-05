@@ -7,12 +7,13 @@ using System.Linq;
 using System.Text;
 using EmuSen.Crystal.Client.Library;
 using EmuSen.Mistress.Library;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 using Microsoft.Data.Sqlite;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The library in Rust against its C# twin: generated libraries scanned by both, games.db identified and reclaimed by both into separate copies and compared row for row, every schema version opened by both - see EmuSen_Backend.md §28.6.
+    // The library held to the C# answers recorded before its deletion: generated libraries scanned, games.db identified and reclaimed and its rows, every schema version opened - see EmuSen_Backend.md §28.6 and §40.4.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class LibraryParityTests : IDisposable
     {
@@ -32,6 +33,10 @@ namespace EmuSen.WiseMan.Mistress
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
+        private static RomLibraryResult Scan(string? root, string? shelf = null, RomLibrary.Beside? beside = null) => RomLibrary.Scan(root, beside ?? RomLibrary.Beside.None, shelf);
+
+        private static GameRecords Open(string db) => GameRecords.Open(db);
+
         private static void Put(string path, byte[] bytes)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -45,13 +50,16 @@ namespace EmuSen.WiseMan.Mistress
             return image;
         }
 
+        // Each entry stamped with one time, so an archive's bytes and hash are the same on every run.
         private static void Zip(string path, params (string Name, byte[] Bytes)[] entries)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
             foreach (var (name, bytes) in entries)
             {
-                using Stream s = zip.CreateEntry(name).Open();
+                ZipArchiveEntry entry = zip.CreateEntry(name);
+                entry.LastWriteTime = new DateTimeOffset(2026, 2, 1, 12, 0, 0, TimeSpan.Zero);
+                using Stream s = entry.Open();
                 s.Write(bytes);
             }
         }
@@ -103,9 +111,10 @@ namespace EmuSen.WiseMan.Mistress
 
             string linked = Path.Combine(_root, $"elsewhere{seed}");
             Put(Path.Combine(linked, "Linked Folder Game.nes"), SyntheticNesRom.Build());
-            Directory.CreateSymbolicLink(Path.Combine(root, "Linked"), linked);
-            File.CreateSymbolicLink(Path.Combine(root, "nes", "Link To Alpha.nes"), Path.Combine(root, "Misc", "Same Title.nes"));
-            File.CreateSymbolicLink(Path.Combine(root, "nes", "Dangling.nes"), Path.Combine(root, "nothing-here.nes"));
+            // Relative targets, so a link's own length is the same in every test folder.
+            Directory.CreateSymbolicLink(Path.Combine(root, "Linked"), Path.Combine("..", $"elsewhere{seed}"));
+            File.CreateSymbolicLink(Path.Combine(root, "nes", "Link To Alpha.nes"), Path.Combine("..", "Misc", "Same Title.nes"));
+            File.CreateSymbolicLink(Path.Combine(root, "nes", "Dangling.nes"), Path.Combine("..", "nothing-here.nes"));
 
             string locked = Path.Combine(root, "Locked");
             Put(Path.Combine(locked, "Unseen.nes"), SyntheticNesRom.Build());
@@ -114,32 +123,52 @@ namespace EmuSen.WiseMan.Mistress
             return root;
         }
 
-        private static string Show(RomLibraryResult r) =>
-            $"{r.Status} | {r.Directory} | {r.CoreDisplayName}\n" + string.Join("\n", r.Entries.Select(e => $"{e.FullPath} | {e.Shelf} | {e.CoreDisplayName}"));
+        // Ties in the title order keep the order the file system listed them in, so a listing is shown with ties by path; the title order itself is checked live.
+        private string Show(RomLibraryResult r)
+        {
+            Assert.True(r.Entries.Zip(r.Entries.Skip(1)).All(p => StringComparer.OrdinalIgnoreCase.Compare(p.First.Title, p.Second.Title) <= 0), "the listing is not in title order");
+            return Plain($"{r.Status} | {r.Directory} | {r.CoreDisplayName}\n" + string.Join("\n", Ordered(r).Select(e => $"{e.FullPath} | {e.Shelf} | {e.CoreDisplayName}")));
+        }
+
+        private static IEnumerable<RomEntry> Ordered(RomLibraryResult r) =>
+            r.Entries.OrderBy(e => e.Title, StringComparer.OrdinalIgnoreCase).ThenBy(e => e.FullPath, StringComparer.Ordinal);
+
+        // The test's folder written as <root>, so a recording holds no machine's path.
+        private string Plain(string text) => text.Replace(_root, "<root>", StringComparison.Ordinal);
+
+        // A console's listing is the whole listing narrowed, held live; the whole listing is held to the recording.
+        private void Narrowed(string root, RomLibrary.Beside beside, IEnumerable<string> shelves)
+        {
+            RomLibraryResult all = Scan(root, null, beside);
+            foreach (string shelf in shelves) Assert.Equal(ShowPackaged(RomLibrary.Narrow(all, shelf)), ShowPackaged(Scan(root, shelf, beside)));
+        }
 
         [Fact]
         public void Every_generated_library_is_listed_and_shelved_alike()
         {
+            var golden = new ParityGolden("LibraryParity.Listings");
             int compared = 0;
             for (int seed = 1; seed <= 6; seed++)
             {
                 string root = Generate(seed);
-                Assert.Equal(Show(RomLibrary.ScanManaged(root)), Show(RomLibrary.ScanNative(root)));
-                foreach (string shelf in RuntimeCatalog.FilterChoices.Append("Dreamcast (Kunzite)"))
-                    Assert.Equal(Show(RomLibrary.ScanManaged(root, shelf)), Show(RomLibrary.ScanNative(root, shelf)));
-                compared += RomLibrary.ScanManaged(root).Entries.Count;
+                RomLibraryResult all = Scan(root);
+                golden.Add($"seed {seed}", Show(all));
+                Narrowed(root, RomLibrary.Beside.None, RuntimeCatalog.FilterChoices.Append("Dreamcast (Kunzite)"));
+                compared += all.Entries.Count;
             }
             Assert.True(compared > 150, $"{compared} games compared");
-            foreach (string? odd in new[] { null, "", "   ", Path.Combine(_root, "absent"), _locked[0] })
-                Assert.Equal(Show(RomLibrary.ScanManaged(odd)), Show(RomLibrary.ScanNative(odd)));
+            string?[] odd = { null, "", "   ", Path.Combine(_root, "absent"), _locked[0] };
+            for (int i = 0; i < odd.Length; i++) golden.Add($"odd root {i}", Show(Scan(odd[i])));
+            golden.Check(6 + odd.Length);
         }
 
-        private static string ShowPackaged(RomLibraryResult r) => Show(r) + "\n--\n" + string.Join("\n", r.Entries.Select(e => e.Package ?? "-"));
+        private string ShowPackaged(RomLibraryResult r) => Show(r) + "\n--\n" + Plain(string.Join("\n", Ordered(r).Select(e => e.Package ?? "-")));
 
         // Packages beside a generated library: linked ones, a converted disc's claiming its sheet, one whose game is gone, a refused manifest, a nested folder and loose files - see EmuSen_GamePackages.md §3.6.
         [Fact]
         public void A_library_with_packages_beside_it_is_listed_alike()
         {
+            var golden = new ParityGolden("LibraryParity.Packaged");
             for (int seed = 1; seed <= 3; seed++)
             {
                 string root = Generate(seed);
@@ -168,11 +197,9 @@ namespace EmuSen.WiseMan.Mistress
                 Put(Path.Combine(packages, "NES", "Broken.nes", "Inside.nes"), SyntheticNesRom.Build());
                 Put(Path.Combine(packages, "Loose.nes"), SyntheticNesRom.Build());
                 var beside = new RomLibrary.Beside(packages, compressed);
-                string managed = ShowPackaged(RomLibrary.ScanManaged(root, null, beside));
-                Assert.Equal(managed, ShowPackaged(RomLibrary.ScanNative(root, null, beside)));
-                foreach (string shelf in RuntimeCatalog.FilterChoices)
-                    Assert.Equal(ShowPackaged(RomLibrary.ScanManaged(root, shelf, beside)), ShowPackaged(RomLibrary.ScanNative(root, shelf, beside)));
-                RomLibraryResult scanned = RomLibrary.ScanManaged(root, null, beside);
+                RomLibraryResult scanned = Scan(root, null, beside);
+                golden.Add($"seed {seed}", ShowPackaged(scanned));
+                Narrowed(root, beside, RuntimeCatalog.FilterChoices);
                 foreach (string game in games) Assert.Single(scanned.Entries, e => e.FullPath == game && e.Package is not null);
                 Assert.DoesNotContain(scanned.Entries, e => e.FullPath.Contains("Inside.nes") || e.FullPath.Contains("Gone.nes") || e.FullPath.EndsWith(Path.Combine("saves", Path.GetFileName(games[0])), StringComparison.Ordinal));
                 Assert.Contains(scanned.Entries, e => e.FullPath.EndsWith("Loose.nes", StringComparison.Ordinal) && e.Package is null);
@@ -182,8 +209,9 @@ namespace EmuSen.WiseMan.Mistress
                     Assert.DoesNotContain(scanned.Entries, e => e.FullPath == cue);
                     Assert.Single(scanned.Entries, e => e.FullPath.EndsWith("Disc One.chd", StringComparison.Ordinal) && e.Shelf.StartsWith("PlayStation", StringComparison.Ordinal));
                 }
-                Assert.Equal(Show(RomLibrary.ScanManaged(root)), Show(RomLibrary.ScanNative(root, null, RomLibrary.Beside.None)));
+                golden.Add($"seed {seed} without packages", Show(Scan(root, null, RomLibrary.Beside.None)));
             }
+            golden.Check(3 * 2);
         }
 
         // Every row of every table, each value with its SQLite type, and the schema and version.
@@ -225,14 +253,30 @@ namespace EmuSen.WiseMan.Mistress
             return to;
         }
 
-        private static readonly DateTime Then = new(2026, 3, 1, 9, 30, 0, DateTimeKind.Local);
+        private static readonly DateTime Then = new(2026, 3, 1, 9, 30, 0, DateTimeKind.Utc);
+
+        // One modification time for every file under the test's folder, so the hash cache's rows are the same on every run.
+        private static readonly DateTime Settled = new(2026, 2, 1, 12, 0, 0, DateTimeKind.Utc);
+
+        private void Settle()
+        {
+            var all = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 };
+            long seconds = new DateTimeOffset(Settled).ToUnixTimeSeconds();
+            foreach (string f in Directory.EnumerateFiles(_root, "*", all))
+                if (new FileInfo(f).LinkTarget is null) File.SetLastWriteTimeUtc(f, Settled);
+                else Assert.Equal(0, lutimes(f, new[] { seconds, 0, seconds, 0 }));
+        }
+
+        // A link's own times, which the hash cache keeps for a link as FileInfo reads them.
+        [System.Runtime.InteropServices.DllImport("libc", SetLastError = true)]
+        private static extern int lutimes(string path, long[] times);
 
         // A games.db the player kept while the library looked one way, for a library that has since been renamed, moved, pruned and copied.
         private string Seeded(int seed, string root, IReadOnlyList<string> games)
         {
             var random = new Random(seed * 7919);
             string db = Path.Combine(_root, $"seed{seed}.db");
-            using (GameRecords records = GameRecords.OpenManaged(db))
+            using (GameRecords records = Open(db))
             {
                 long rpgs = records.CreateCollection("RPGs", Then)!.Value;
                 long other = records.CreateCollection("other", Then.AddDays(1))!.Value;
@@ -272,37 +316,42 @@ namespace EmuSen.WiseMan.Mistress
             return db;
         }
 
-        // P5: no row of games.db differs between the two after a scan's identity and reclaim, in any column, time columns included, since every time recorded is given.
+        // P5: every row of games.db after a scan's identity and reclaim, in every column, time columns included, since every time recorded is given and every file's time is settled.
         [Fact]
         public void A_seeded_games_db_is_identified_and_reclaimed_to_the_same_rows()
         {
+            var golden = new ParityGolden("LibraryParity.Reclaimed");
             int moved = 0, identified = 0;
             for (int seed = 1; seed <= 5; seed++)
             {
                 string root = Generate(seed + 100);
-                IReadOnlyList<string> before = RomLibrary.ScanManaged(root).Entries.Select(e => e.FullPath).ToList();
+                Settle();
+                IReadOnlyList<string> before = Scan(root).Entries.Select(e => e.FullPath).Order(StringComparer.Ordinal).ToList();
                 string seeded = Seeded(seed, root, before);
-                IReadOnlyList<string> after = RomLibrary.ScanManaged(root).Entries.Select(e => e.FullPath).ToList();
-                string a = Copy(seeded, Path.Combine(_root, $"a{seed}.db")), b = Copy(seeded, Path.Combine(_root, $"b{seed}.db"));
-                using (GameRecords managed = GameRecords.OpenManaged(a))
-                using (GameRecords native = GameRecords.OpenNative(b))
+                Settle();
+                IReadOnlyList<string> after = Scan(root).Entries.Select(e => e.FullPath).Order(StringComparer.Ordinal).ToList();
+                string db = Copy(seeded, Path.Combine(_root, $"a{seed}.db"));
+                using (GameRecords records = Open(db))
                 {
-                    int m = managed.Reclaim(after);
-                    Assert.Equal(m, native.Reclaim(after));
+                    int m = records.Reclaim(after);
+                    golden.Add($"seed {seed} moved", m.ToString(CultureInfo.InvariantCulture));
                     moved += m;
+                    var identities = new List<string>();
                     foreach (string game in after)
                     {
-                        var x = managed.IdentifyFile(game);
-                        Assert.Equal(x, native.IdentifyFile(game));
+                        var x = records.IdentifyFile(game);
+                        identities.Add($"{game} {x?.Md5 ?? "null"} {x?.Bytes}");
                         if (x is not null) identified++;
                     }
-                    Assert.Equal(managed.Recent(after, 7), native.Recent(after, 7));
-                    Assert.Equal(managed.Recent(after, 1000), native.Recent(after, 1000));
+                    golden.Add($"seed {seed} identified", Plain(string.Join("\n", identities)));
+                    golden.Add($"seed {seed} recent 7", Plain(string.Join("\n", records.Recent(after, 7))));
+                    golden.Add($"seed {seed} recent 1000", Plain(string.Join("\n", records.Recent(after, 1000))));
                 }
-                Assert.Equal(Dump(a), Dump(b));
+                golden.Add($"seed {seed} rows", Plain(Dump(db)));
             }
             Assert.True(moved >= 10, $"{moved} moved");
             Assert.True(identified > 100, $"{identified} identified");
+            golden.Check(5 * 5);
         }
 
         // A file at each version the migrations have passed through, with rows in every table its schema has.
@@ -317,7 +366,7 @@ namespace EmuSen.WiseMan.Mistress
                 command.CommandText = sql;
                 command.ExecuteNonQuery();
             }
-            for (int v = 0; v < Math.Min(version, GameRecords.SchemaVersion); v++) Run(GameRecords.MigrationSteps[v]);
+            for (int v = 0; v < Math.Min(version, GamesDbSchema.Version); v++) Run(GamesDbSchema.Steps[v]);
             if (version >= 1) Run("INSERT INTO game (path, favourite, last_played, play_count, play_seconds) VALUES ('/r/old.z64', 1, '2026-01-02T03:04:05.0000000+01:00', 3, 42.5), ('/r/ü.sfc', 0, NULL, 0, 0)");
             if (version >= 2) Run("UPDATE game SET md5 = 'abc', bytes = 1024 WHERE path = '/r/old.z64'; INSERT INTO file_hash VALUES ('/r/old.z64', 1024, 638000000000000000, 'abc')");
             if (version >= 3) Run("INSERT INTO collection (name, created) VALUES ('RPGs', '2026-01-01T00:00:00.0000000+00:00'); INSERT INTO collection_game VALUES (1, '/r/old.z64')");
@@ -331,22 +380,20 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void Every_schema_version_is_opened_by_both_to_the_same_file()
         {
-            for (int version = 0; version <= GameRecords.SchemaVersion; version++)
+            var golden = new ParityGolden("LibraryParity.Versions");
+            for (int version = 0; version <= GamesDbSchema.Version; version++)
             {
-                string start = AtVersion(version);
-                string a = Copy(start, Path.Combine(_root, $"ma{version}.db")), b = Copy(start, Path.Combine(_root, $"na{version}.db"));
-                GameRecords.OpenManaged(a).Dispose();
-                GameRecords.OpenNative(b).Dispose();
-                string managed = Dump(a);
-                Assert.Equal(managed, Dump(b));
-                Assert.Contains($"version INTEGER:{GameRecords.SchemaVersion}", managed);
+                string db = AtVersion(version);
+                Open(db).Dispose();
+                string opened = Dump(db);
+                golden.Add($"version {version}", opened);
+                Assert.Contains($"version INTEGER:{GamesDbSchema.Version}", opened);
             }
-            string newer = AtVersion(GameRecords.SchemaVersion + 1);
+            string newer = AtVersion(GamesDbSchema.Version + 1);
             byte[] bytes = File.ReadAllBytes(newer);
-            var refusedManaged = Assert.Throws<InvalidDataException>(() => GameRecords.OpenManaged(newer));
-            var refusedNative = Assert.Throws<InvalidDataException>(() => GameRecords.OpenNative(newer));
-            Assert.Equal(refusedManaged.Message, refusedNative.Message);
+            golden.Add("newer", Assert.Throws<InvalidDataException>(() => Open(newer)).Message);
             Assert.Equal(bytes, File.ReadAllBytes(newer));
+            golden.Check(GamesDbSchema.Version + 2);
         }
     }
 }

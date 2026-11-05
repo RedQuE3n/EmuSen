@@ -29,44 +29,18 @@ namespace EmuSen.Mistress.Views
 
         private static string? TryMd5(string path) => GameRecords.TryMd5(path);
 
-        // Through the library, the whole identity on a worker; on the C#, from the cache when the file is unchanged, else hashed on a worker and written back on the UI thread.
+        // The whole identity on a worker, through the library.
         private void IdentifyLater(string path)
         {
-            if (_records.ThroughLibrary)
+            Task.Run(() =>
             {
-                Task.Run(() =>
-                {
-                    try { return _records.IdentifyFile(path); }
-                    catch (Exception e) when (e is ObjectDisposedException or EmuSen.Crystal.Client.Library.GameLibraryException or Microsoft.Data.Sqlite.SqliteException) { return null; }
-                }).ContinueWith(identifying =>
-                {
-                    if (identifying.Result is not { } id) return;
-                    Dispatcher.UIThread.Post(() => { if (!_recordsClosed) Current(path, id.Md5, id.Bytes); });
-                });
-                return;
-            }
-            if (Stat(path) is not { } stat) return;
-            if (_records.KnownHash(path, stat.Bytes, stat.Modified) is string known)
+                try { return _records.IdentifyFile(path); }
+                catch (Exception e) when (e is ObjectDisposedException or EmuSen.Crystal.Client.Library.GameLibraryException or Microsoft.Data.Sqlite.SqliteException) { return null; }
+            }).ContinueWith(identifying =>
             {
-                Identified(path, known, stat.Bytes);
-                return;
-            }
-            Task.Run(() => TryMd5(path)).ContinueWith(hashing =>
-            {
-                if (hashing.Result is not string md5) return;
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if (_recordsClosed) return;
-                    _records.StoreHash(path, stat.Bytes, stat.Modified, md5);
-                    Identified(path, md5, stat.Bytes);
-                });
+                if (identifying.Result is not { } id) return;
+                Dispatcher.UIThread.Post(() => { if (!_recordsClosed) Current(path, id.Md5, id.Bytes); });
             });
-        }
-
-        private void Identified(string path, string md5, long bytes)
-        {
-            _records.Identify(path, md5, bytes);
-            Current(path, md5, bytes);
         }
 
         private void Current(string path, string md5, long bytes)
@@ -88,22 +62,19 @@ namespace EmuSen.Mistress.Views
         {
             if (_reclaiming) return;
             List<string> games = _allScan.Entries.Select(e => e.FullPath).ToList();
-            ReclaimPlan? plan = _records.ThroughLibrary ? null : _records.Plan(games);
-            if (!_records.ThroughLibrary && plan is null) return;
 
             _reclaiming = true;
             Task.Run(() =>
             {
-                if (!_records.ThroughLibrary) return (Plan: GameRecords.Hash(plan), Moved: -1);
-                try { return (Plan: (ReclaimPlan?)null, Moved: _records.Reclaim(games)); }
-                catch (Exception e) when (e is ObjectDisposedException or EmuSen.Crystal.Client.Library.GameLibraryException or Microsoft.Data.Sqlite.SqliteException) { return (Plan: null, Moved: 0); }
+                try { return _records.Reclaim(games); }
+                catch (Exception e) when (e is ObjectDisposedException or EmuSen.Crystal.Client.Library.GameLibraryException or Microsoft.Data.Sqlite.SqliteException) { return 0; }
             }).ContinueWith(reclaiming =>
             {
                 Dispatcher.UIThread.Post(() =>
                 {
                     _reclaiming = false;
                     if (_recordsClosed || !reclaiming.IsCompletedSuccessfully) return;
-                    int moved = reclaiming.Result.Moved >= 0 ? reclaiming.Result.Moved : _records.Apply(reclaiming.Result.Plan);
+                    int moved = reclaiming.Result;
                     if (moved == 0) return;
                     StatusText.Text = $"Found {moved} renamed or moved game{(moved == 1 ? "" : "s")}; {(moved == 1 ? "its" : "their")} favourites, play time and collections came along.";
                     if (LibraryView.IsVisible) ShowLibraryEntries();

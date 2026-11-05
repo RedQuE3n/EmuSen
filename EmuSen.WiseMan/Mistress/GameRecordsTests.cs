@@ -56,17 +56,17 @@ namespace EmuSen.WiseMan.Mistress
         public void A_new_file_is_stamped_with_the_schema_this_build_writes()
         {
             using (GameRecords.Open(Db)) { }
-            Assert.Equal(GameRecords.SchemaVersion, UserVersion());
+            Assert.Equal(EmuSen.WiseMan.Fixtures.GamesDbSchema.Version, UserVersion());
         }
 
         [Fact]
         public void A_file_from_a_newer_build_is_refused_rather_than_written()
         {
             using (GameRecords.Open(Db)) { }
-            SetUserVersion(GameRecords.SchemaVersion + 1);
+            SetUserVersion(EmuSen.WiseMan.Fixtures.GamesDbSchema.Version + 1);
 
             Assert.Throws<InvalidDataException>(() => GameRecords.Open(Db));
-            Assert.Equal(GameRecords.SchemaVersion + 1, UserVersion());
+            Assert.Equal(EmuSen.WiseMan.Fixtures.GamesDbSchema.Version + 1, UserVersion());
         }
 
         // A games.db from the first build of §4.32 has only the game table and user_version 1; its rows must survive the upgrade.
@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.Mistress
             GameRecord old = records.Find("/r/old.z64")!;
             Assert.True(old.Favourite);
             Assert.Equal(3, old.PlayCount);
-            Assert.Equal(GameRecords.SchemaVersion, UserVersion());
+            Assert.Equal(EmuSen.WiseMan.Fixtures.GamesDbSchema.Version, UserVersion());
             Assert.Empty(records.Collections());
         }
 
@@ -226,8 +226,8 @@ namespace EmuSen.WiseMan.Mistress
             }
 
             using GameRecords migrated = GameRecords.Open(Db);
-            Assert.Equal(6, GameRecords.SchemaVersion);
-            Assert.Equal(GameRecords.SchemaVersion, UserVersion());
+            Assert.Equal(6, EmuSen.WiseMan.Fixtures.GamesDbSchema.Version);
+            Assert.Equal(EmuSen.WiseMan.Fixtures.GamesDbSchema.Version, UserVersion());
             Assert.True(migrated.IsFavourite("/r/a.z64"));
             Assert.Null(migrated.Crop("/r/a.z64"));
             migrated.SetCrop("/r/a.z64", new GameCrop(2.4, 2.5, 3.5, 3.5));

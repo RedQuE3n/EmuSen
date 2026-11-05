@@ -143,7 +143,7 @@ namespace EmuSen.WiseMan.Galaxia
             StatesDb.Write(statesDb, state, new StateRecord { Console = "SNES", Core = "VenusRT (Rust)", StateVersion = 4, Build = "an old build", SavedAt = new DateTime(2026, 9, 1, 8, 0, 0, DateTimeKind.Utc), RomFile = "Amber Quay (Synthetic).sfc", RomMd5 = "abc", RomBytes = 9 });
             // games.db's crop, the runtime's file of the game's own settings, and the media store's art.
             string gamesDb = Path.Combine(DataStore.Library, "games.db");
-            using (var games = EmuSen.Mistress.Library.GameRecords.OpenManaged(gamesDb))
+            using (var games = EmuSen.Mistress.Library.GameRecords.Open(gamesDb))
             {
                 games.OpenedAs = p => (p, null);
                 games.SetCrop(snes, new EmuSen.Mistress.Library.GameCrop(2.5, 0, 1, 12));
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Galaxia
             StateRecord? record = StatesDb.Read(runtime, copied);
             Assert.NotNull(record);
             Assert.Equal(("VenusRT (Rust)", 4, "an old build", "abc", 9L), (record!.Core, record.StateVersion, record.Build, record.RomMd5, record.RomBytes));
-            using (var games = EmuSen.Mistress.Library.GameRecords.OpenManaged(gamesDb))
+            using (var games = EmuSen.Mistress.Library.GameRecords.Open(gamesDb))
             {
                 games.SystemOf = _ => "snes";
                 Assert.Equal(new EmuSen.Mistress.Library.GameCrop(2.5, 0, 1, 12), games.Crop(snes));

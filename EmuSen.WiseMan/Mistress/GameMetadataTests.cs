@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.Mistress
             string db = Path.Combine(_dir, "games.db");
             using (GameRecords records = GameRecords.Open(db))
             {
-                Assert.Equal(6, GameRecords.SchemaVersion);
+                Assert.Equal(6, EmuSen.WiseMan.Fixtures.GamesDbSchema.Version);
                 records.Identify(Rom, "abc", 1024);
                 records.SaveEdits(Rom, new Dictionary<string, string?> { [GameMetadata.Name] = "Mine", [GameMetadata.Rating] = "0.5" }, DateTime.UtcNow);
                 records.SaveEdits(Rom, new Dictionary<string, string?> { [GameMetadata.Rating] = null }, DateTime.UtcNow);

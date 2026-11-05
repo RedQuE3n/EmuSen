@@ -5,12 +5,13 @@ using System.IO;
 using System.Linq;
 using EmuSen.Crystal.Client.Library;
 using EmuSen.Mistress.Library;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 using Microsoft.Data.Sqlite;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // The player's records in Rust against their C# twin: scripts of every GameRecords member run on two copies of one games.db, each answer compared and the files compared row for row - see EmuSen_Backend.md §28.6.
+    // The player's records held to the C# answers recorded before its deletion: scripts of every GameRecords member, each answer and the file's rows after - see EmuSen_Backend.md §28.6 and §40.4.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class LibraryRecordsParityTests : IDisposable
     {
@@ -26,6 +27,8 @@ namespace EmuSen.WiseMan.Mistress
         {
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
+
+        private static GameRecords Open(string db) => GameRecords.Open(db);
 
         private static readonly string[] Paths =
         {
@@ -85,7 +88,8 @@ namespace EmuSen.WiseMan.Mistress
             string P() => Paths[random.Next(Paths.Length)];
             double D() => Doubles[random.Next(Doubles.Length)];
             long Id() => random.Next(-1, 8);
-            DateTime When() => new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Local).AddMinutes(random.Next(600_000)).AddTicks(random.Next(10_000_000));
+            // UTC or no zone, so that no answer holds the zone of the machine it ran on.
+            DateTime When() => new DateTime(2026, 1, 1, 0, 0, 0, random.Next(2) == 0 ? DateTimeKind.Utc : DateTimeKind.Unspecified).AddMinutes(random.Next(600_000)).AddTicks(random.Next(10_000_000));
             string path = P(), other = P(), name = Names[random.Next(Names.Length)];
             double d = D();
             long id = Id(), bytes = random.Next(0, 3) * 1024, modified = 638000000000000000 + random.Next(3);
@@ -136,26 +140,25 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void Every_member_answers_and_writes_alike_through_scripts()
         {
-            int calls = 0, differences = 0;
+            var golden = new ParityGolden("LibraryRecordsParity.Scripts");
+            int calls = 0;
             for (int seed = 1; seed <= 8; seed++)
             {
                 var random = new Random(seed);
-                string a = Path.Combine(_root, $"a{seed}.db"), b = Path.Combine(_root, $"b{seed}.db");
-                using (GameRecords managed = GameRecords.OpenManaged(a))
-                using (GameRecords native = GameRecords.OpenNative(b))
+                string db = Path.Combine(_root, $"a{seed}.db");
+                using (GameRecords records = Open(db))
                 {
                     for (int step = 0; step < 500; step++)
                     {
                         Func<GameRecords, object?> call = Step(random, step);
-                        string x = Outcome(() => call(managed)), y = Outcome(() => call(native));
-                        Assert.True(x == y, $"seed {seed} step {step}: C# {x}\nRust {y}");
+                        golden.AddChunked($"seed {seed}", $"step {step}: {Outcome(() => call(records))}", 64);
                         calls++;
                     }
                 }
-                Assert.Equal(Dump(a), Dump(b));
+                golden.Add($"seed {seed} rows", Dump(db));
             }
-            Assert.Equal(0, differences);
             Assert.Equal(4000, calls);
+            golden.Check(8 * ((500 + 63) / 64) + 8);
         }
 
         [Fact]
@@ -183,14 +186,12 @@ namespace EmuSen.WiseMan.Mistress
                 for (int m = -720; m <= 720; m += 15) times.Add(DateTime.SpecifyKind(day.AddMinutes(m), DateTimeKind.Utc).ToLocalTime());
             }
             var games = times.Select((_, i) => $"/r/{i}.sfc").ToList();
-            using GameRecords managed = GameRecords.OpenManaged(Path.Combine(_root, "zone-a.db"));
-            using GameRecords native = GameRecords.OpenNative(Path.Combine(_root, "zone-b.db"));
-            for (int i = 0; i < times.Count; i++)
-            {
-                managed.Started(games[i], times[i]);
-                native.Started(games[i], times[i]);
-            }
-            Assert.Equal(managed.Recent(games, times.Count), native.Recent(games, times.Count));
+            using GameRecords records = Open(Path.Combine(_root, "zone.db"));
+            for (int i = 0; i < times.Count; i++) records.Started(games[i], times[i]);
+            // .NET's own reading of each time as written, to its instant: the C#'s rule, held live since the oracle is .NET.
+            var expected = games.Select((g, i) => (Game: g, At: DateTime.Parse(times[i].ToString("o", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind).ToUniversalTime()))
+                .OrderByDescending(p => p.At).Select(p => p.Game).ToList();
+            Assert.Equal(expected, records.Recent(games, times.Count));
         }
     }
 }

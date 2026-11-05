@@ -10,7 +10,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // A packaged game's crop in its package's settings.json, by its plain path and by its package, through both halves of games.db's records: the row read until the package holds one, never changed, and the crop kept when the package moves - see EmuSen_GamePackages.md §18.2.
+    // A packaged game's crop in its package's settings.json, by its plain path and by its package, through games.db's records: the row read until the package holds one, never changed, and the crop kept when the package moves - see EmuSen_GamePackages.md §18.2.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class PackageCropTests : IDisposable
     {
@@ -29,12 +29,10 @@ namespace EmuSen.WiseMan.Mistress
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void A_packaged_game_s_crop_is_its_package_s_by_either_path_the_row_read_until_then_and_kept_when_it_moves(bool native)
+        [Fact]
+        public void A_packaged_game_s_crop_is_its_package_s_by_either_path_the_row_read_until_then_and_kept_when_it_moves()
         {
-            if (native) Assert.True(GameLibrary.Ready, GameLibrary.Report);
+            Assert.True(GameLibrary.Ready, GameLibrary.Report);
             string library = Path.Combine(_root, "Roms"), game = Path.Combine(library, "snes", "Crop (Synthetic).sfc");
             Directory.CreateDirectory(Path.GetDirectoryName(game)!);
             File.WriteAllBytes(game, SyntheticRom.BuildBlank());
@@ -43,7 +41,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(Path.GetDirectoryName(plain)!);
             File.WriteAllText(plain, "{\n  \"Engine\": \"VenusRT (Rust)\"\n}");
             string db = Path.Combine(_root, "games.db");
-            using GameRecords records = native ? GameRecords.OpenNative(db) : GameRecords.OpenManaged(db);
+            using GameRecords records = GameRecords.Open(db);
             records.SystemOf = _ => "snes";
             records.SetCrop(game, new GameCrop(1, 2, 3, 4));
             GameCrop? Row() { var opened = records.OpenedAs; records.OpenedAs = p => (p, null); try { return records.Crop(game); } finally { records.OpenedAs = opened; } }

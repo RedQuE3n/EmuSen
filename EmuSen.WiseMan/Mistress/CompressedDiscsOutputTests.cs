@@ -214,8 +214,7 @@ namespace EmuSen.WiseMan.Mistress
 
         private static IEnumerable<(string, Func<string, RomLibraryResult>)> Scans()
         {
-            yield return ("managed", l => RomLibrary.ScanManaged(l, null, RomLibrary.Beside.Tree));
-            yield return ("library", l => RomLibrary.ScanNative(l, null, RomLibrary.Beside.Tree));
+            yield return ("library", l => RomLibrary.Scan(l, RomLibrary.Beside.Tree));
         }
     }
 }

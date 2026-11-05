@@ -1884,7 +1884,7 @@ LunaP's `CoverShapeTests` hold the shapes, the bands at each edge and the fit au
 ## 22. Moonrise, the start-up splash (2026-11-04)
 
 Decided 2026-11-04 by the tester ("do it"), from an animated draft approved the same day and revised five times that day
-(the length, the chime, then a bell per planet, each gentler). When big picture starts, about five seconds of drawn
+(the length, the chime, then a bell per planet, each gentler). When big picture starts, about eight seconds of drawn
 motion cover the start-up work: a star field fades in, a moon draws its outline and fills to a crescent with a halo, one
 planet per console drifts in on an orbit and springs into a row, a light sweeps along the row and each planet flares and
 rings its own bell as it passes, and "EMUSEN" settles in with "N CONSOLES" beneath. The drawing, its timeline and the
@@ -1897,10 +1897,10 @@ never when big picture is entered later from the desktop, never under `--play <r
 draws over everything in the window, EmuSen's own look or an ES-DE theme alike: the library is built before the window
 opens and its first frame is drawn behind the splash at once.
 
-**How long.** The splash ends at whichever is later: its own 5 s, or the window's start-up work done. That work is the
+**How long.** The splash ends at whichever is later: its own 8 s, or the window's start-up work done. That work is the
 artwork index, read off the interface thread when the library is first set up (tens of thousands of files for a full
 libretro-thumbnails tree); the window keeps it as a task (`StartupWork`) the splash waits on. While the work runs past
-5 s, the finished frame holds and asks for no frames; the work's end posts the splash's last step, so it goes on that
+8 s, the finished frame holds and asks for no frames; the work's end posts the splash's last step, so it goes on that
 frame, with nothing added. The splash never delays the work: everything the window does at start runs as it did.
 
 **Skip.** Any pad button, any key but Tab and Shift, or a click shows the finished frame at once, and the splash goes as

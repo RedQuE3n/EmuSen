@@ -32,19 +32,21 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static string Bells => System.IO.Path.GetFileNameWithoutExtension(StartupSplash.BellsKey);
 
+        private static int LengthMs => (int)Math.Round(SplashTimeline.Moonrise.Length * 1000);
+
         private static ThemedSession Open(Task? work = null, Action<AppSettings>? more = null, double width = 1280, double height = 800) =>
             new(width, height, settings: a => { a.StartupSplash = true; more?.Invoke(a); }, startupWork: work ?? Task.CompletedTask);
 
-        // It covers the library from the first frame, which is drawn beneath it, and is gone at its 5 s with start-up done.
+        // It covers the library from the first frame, which is drawn beneath it, and is gone at its length with start-up done.
         [Fact]
         public Task It_plays_once_at_the_start_and_never_on_returning_from_a_game() => Session.Dispatch(() =>
         {
             using var s = Open();
             LunaSplash splash = Assert.IsType<LunaSplash>(Splash(s));
             Assert.True(s.Shown, "big picture is drawn behind it at once");
-            s.Run(4984);
+            s.Run(LengthMs - 16);
             Assert.NotNull(Splash(s));
-            Assert.Equal(4.984, splash.Time, 3);
+            Assert.Equal(LengthMs / 1000.0 - 0.016, splash.Time, 3);
             s.Run(192);
             Assert.Null(Splash(s));
             Assert.Equal(1, s.Sounds.Count(n => n == Bells));
@@ -66,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             using (var s = Open())
             {
-                s.Run(5008);
+                s.Run(LengthMs + 8);
                 LunaSplash splash = Assert.IsType<LunaSplash>(Splash(s));
                 Assert.False(Taking(s));
                 s.Run(64);
@@ -138,7 +140,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 LunaSplash splash = Assert.IsType<LunaSplash>(Splash(s));
                 Assert.True(splash.AtEnd);
                 Assert.Equal(splash.Timeline.Length, splash.Time);
-                s.Run(4900);
+                s.Run(LengthMs - 100);
                 Assert.Same(splash, Splash(s));
                 Assert.Equal(splash.Timeline.Length, splash.Time);
                 s.Run(112);
@@ -157,7 +159,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         public Task The_bells_never_play_with_sounds_off(bool sounds, int volume) => Session.Dispatch(() =>
         {
             using var s = Open(more: a => { a.NavigationSounds = sounds; a.BigPictureInterface.NavigationVolume = volume; });
-            s.Run(5200);
+            s.Run(LengthMs + 200);
             Assert.Null(Splash(s));
             Assert.DoesNotContain(Bells, s.Sounds);
         }, default);
@@ -209,7 +211,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Window.Width = width;
             s.Window.Height = height;
             s.Settle();
-            s.Run(5100);
+            s.Run(LengthMs + 100);
             Assert.True(splash.AtEnd);
             Assert.Equal(s.Window.ClientSize, splash.Bounds.Size);
             var box = new Rect(splash.Bounds.Size);
@@ -217,13 +219,13 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Contains(splash.Parts(), p => p.Name == "caption");
         }, default);
 
-        // Loading slower than the splash: the finished frame holds, and the splash goes on the frame the work ends, not 5 s later.
+        // Loading slower than the splash: the finished frame holds, and the splash goes on the frame the work ends, not a length later.
         [Fact]
         public Task Start_up_slower_than_the_splash_is_not_delayed_by_it() => Session.Dispatch(() =>
         {
             var work = new TaskCompletionSource();
             using var s = Open(work.Task);
-            s.Run(8000);
+            s.Run(LengthMs + 3000);
             LunaSplash splash = Assert.IsType<LunaSplash>(Splash(s));
             Assert.True(splash.AtEnd);
             TimeSpan done = s.Now;

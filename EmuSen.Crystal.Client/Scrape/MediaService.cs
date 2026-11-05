@@ -18,6 +18,8 @@ namespace EmuSen.Crystal.Client.Scrape
     {
         public const string Variable = "EMUSEN_SCRAPE_NATIVE";
 
+        public const string Since = "2026-11-05";
+
         private const uint Major = 1;
 
         private struct Config
@@ -58,6 +60,7 @@ namespace EmuSen.Crystal.Client.Scrape
 
         private static (Exports?, string) Load()
         {
+            try { RetiredSwitch.Note(Variable, "the scraper", Since); } catch (Exception) { }
             if (!PlatformLibrary.Available) return (null, PlatformLibrary.Report);
             nint[] found = ExportNames.Select(PlatformLibrary.Export).ToArray();
             if (Array.IndexOf(found, 0) is var missing and >= 0) return (null, $"{PlatformLibrary.FileName} has no {ExportNames[missing]}");
@@ -89,15 +92,12 @@ namespace EmuSen.Crystal.Client.Scrape
             return (t, $"{PlatformLibrary.FileName}, the scraper {t.AbiVersion() >> 16}.{t.AbiVersion() & 0xFFFF}");
         }
 
-        // The scraper itself, whichever the switch chose: what the parity classes call.
         public static bool Ready => Loaded.Value.Table is not null;
 
         public static string Report => Loaded.Value.Report;
 
-        private static readonly PlatformSwitch Chosen = new(() => Environment.GetEnvironmentVariable(Variable), () => (Ready, Report), PlatformSwitch.Announce, "the scraper");
-
-        // The scraper unless the variable is 0; a library absent or without an export leaves the C#, said once.
-        public static bool Active => Chosen.Active;
+        // The words a missing or unusable platform library is refused in; there is no C# to fall back to - see EmuSen_Backend.md §40.5.
+        public static string Refusal(string why) => $"{PlatformLibrary.FileName} is not in use for the scraper ({why}); the scraper has had no C# implementation since {Since}.";
 
         private readonly Exports _t;
         private nint _handle;
@@ -117,7 +117,7 @@ namespace EmuSen.Crystal.Client.Scrape
         // Opens the media store at root with the settings' JSON; the library, when given, must stay open while this does.
         public static MediaService Open(string root, string settings, GameLibrary? library = null, byte[]? embedded = null)
         {
-            Exports t = Loaded.Value.Table ?? throw new InvalidOperationException($"The scraper is not in use ({Report}).");
+            Exports t = Loaded.Value.Table ?? throw new DllNotFoundException(Refusal(Report));
             byte[] r = Encoding.UTF8.GetBytes(root), s = Encoding.UTF8.GetBytes(settings), e = embedded ?? [];
             nint handle;
             int status;

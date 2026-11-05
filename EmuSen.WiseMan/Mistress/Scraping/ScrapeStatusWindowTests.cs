@@ -427,7 +427,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         {
             string left = Game("A Left (USA)", 10);
             Server.Games.Add(new FakeGame(77, "Left", Md5(left)));
-            using (MediaStore store = MediaStore.Open(DataStore.Media)) store.Enqueue(left, "snes", ScrapePriority.Library);
+            using (var store = new MediaDbRows(DataStore.Media)) store.Enqueue(left, "snes", ScrapePriority.Library);
             MainWindow window = Open();
             window.ShowScrapeStatus();
             ScrapeStatusWindow status = window.ScrapeStatusShown!;

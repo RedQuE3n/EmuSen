@@ -97,6 +97,8 @@ pub struct Settings {
     pub cores: Vec<Vec<String>>,
     /// Each packaged game's file and its package's folder, as the host's library scan found them (EmuSen_GamePackages.md §18.3).
     pub packages: Vec<(String, String)>,
+    /// A handle for finding pictures alone, while no media.db exists: the store in memory, no lock taken, nothing on disk made or moved (EmuSen_Backend.md §40.5).
+    pub sources_alone: bool,
     pub test: Test,
 }
 
@@ -124,6 +126,7 @@ impl Settings {
             s.user_agent = json::text_or_none(r, "user_agent")?;
         }
         s.developer_files = json::flag(r, "developer_files", s.developer_files)?;
+        s.sources_alone = json::flag(r, "sources_alone", s.sources_alone)?;
         if let Some(cores) = r.get("cores") {
             s.cores = match cores {
                 Value::Array(groups) => groups
@@ -192,7 +195,7 @@ pub struct Scraper {
     art: RwLock<artwork::Index>,
     root: String,
     /// The store held alone across processes, let go after everything above has closed (EmuSen_LibraryTools.md §8.8).
-    _held: emusen_galaxia::medium_lock::MediumLock,
+    _held: Option<emusen_galaxia::medium_lock::MediumLock>,
 }
 
 impl Drop for Scraper {
@@ -212,8 +215,9 @@ impl Scraper {
             Some(start) => Clock::test(start),
             None => Clock::System,
         };
-        let held = Scraper::hold(root)?;
-        let store = store::Store::open(sqlite.clone(), root)?;
+        let alone = settings.sources_alone;
+        let held = if alone { None } else { Some(Scraper::hold(root)?) };
+        let store = if alone { store::Store::in_memory(sqlite.clone(), root)? } else { store::Store::open(sqlite.clone(), root)? };
         let quota = quota::Manager::new(&store, &clock)?;
         let art = artwork::Index::scan(settings.art.as_deref(), &consoles::cores(&settings.cores));
         let scraper = Scraper {
@@ -230,7 +234,9 @@ impl Scraper {
             root: root.to_string(),
             _held: held,
         };
-        scraper.put_in_folders()?;
+        if !alone {
+            scraper.put_in_folders()?;
+        }
         Ok(scraper)
     }
 

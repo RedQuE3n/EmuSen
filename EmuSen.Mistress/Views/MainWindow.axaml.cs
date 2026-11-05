@@ -1237,6 +1237,7 @@ namespace EmuSen.Mistress.Views
             RuntimeCatalog.Forget();
             _allScan = RomLibrary.Scan(_appSettings.RomDirectory);
             _native?.Settings(NativeSettings());
+            _sources?.Settings(NativeSettings());
             _libraryScan = RomLibrary.Narrow(_allScan, SelectedConsole);
             ShowLibraryEntries();
             ReclaimMovedGames();

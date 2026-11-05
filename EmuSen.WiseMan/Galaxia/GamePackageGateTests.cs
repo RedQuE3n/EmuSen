@@ -194,8 +194,12 @@ namespace EmuSen.WiseMan.Galaxia
             Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
             Assert.Equal("VenusRT (Rust)", runtime.GameSetting(snes, "Engine"));
             Assert.Equal("VenusRT (Rust)", runtime.GameSetting(package, "Engine"));
-            string Cover(string where) => new EmuSen.Mistress.Scraping.MediaSources((_, _) => null, DataStore.Media, null, null, romDirectory: _library,
-                packages: new Dictionary<string, string> { [snes] = where }).Locate("snes", snes, "cover").Path!;
+            string Cover(string where)
+            {
+                string settings = System.Text.Json.JsonSerializer.Serialize(new { developer_files = false, openemu = false, sources_alone = true, roms = _library, packages = new Dictionary<string, string> { [snes] = where }, test = new { offline = true } });
+                using var native = EmuSen.Mistress.Scraping.NativeScraping.Open(DataStore.Media, settings, null, null);
+                return new EmuSen.Mistress.Scraping.MediaSources(native, "").Locate("snes", snes, "cover").Path!;
+            }
             Assert.Equal(Path.Combine(package, "media", "covers", "Amber Quay (Synthetic).png"), Cover(package));
 
             // The package moved: its record, settings and art go with it.

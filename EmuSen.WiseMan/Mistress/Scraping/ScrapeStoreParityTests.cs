@@ -135,8 +135,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 }
                 string a = Path.Combine(_root, $"v{version}", "opened");
                 CopyTree(seed, a);
-                if (ScrapeGoldens.CSharp) MediaStore.Open(a).Dispose();
-                else MediaService.Open(a, Settings()).Dispose();
+                MediaService.Open(a, Settings()).Dispose();
                 golden.Add($"version {version}", Dump(Path.Combine(a, MediaStore.FileName)));
             }
 
@@ -148,12 +147,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Execute(c, $"PRAGMA user_version = {Migrations.Length + 1}");
             }
             byte[] before = File.ReadAllBytes(Path.Combine(newer, MediaStore.FileName));
-            if (ScrapeGoldens.CSharp) golden.Add("newer", $"{MediaServiceException.NewerFile} {Assert.Throws<InvalidDataException>(() => MediaStore.Open(newer)).Message}");
-            else
-            {
-                var rust = Assert.Throws<MediaServiceException>(() => MediaService.Open(newer, Settings()));
-                golden.Add("newer", $"{rust.Status} {rust.Message}");
-            }
+            var refused = Assert.Throws<MediaServiceException>(() => MediaService.Open(newer, Settings()));
+            golden.Add("newer", $"{refused.Status} {refused.Message}");
             Assert.Equal(before, File.ReadAllBytes(Path.Combine(newer, MediaStore.FileName)));
             golden.Check(Migrations.Length + 2);
         }
@@ -166,38 +161,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Execute(c, "INSERT INTO scrape_file (path, bytes, modified, md5, fingerprint) VALUES ('/r/ps2/Big.iso', 4700000000, 7, '', 'f1'), ('/r/ps2/Other.iso', 4700000000, 7, 'm2', 'f2')");
         }
 
-        private static readonly string[] Texts = ["Game", "Café du Monde", "It's \"quoted\"", "", "  ", "Δέλτα", "line\nbreak", "日本語"];
-
-        // A store seeded through the C#'s own calls with generated records, media, files, a queue and days.
-        private static void Seed(MediaStore store, Random r)
-        {
-            string? T() => r.Next(4) == 0 ? null : Texts[r.Next(Texts.Length)];
-            for (int i = 0; i < 60; i++)
-            {
-                string md5 = $"{i:x2}{r.Next():x8}";
-                long bytes = r.Next(1, 1 << 20);
-                var state = (ScrapeState)r.Next(3);
-                store.Record(new ScrapedRecord(md5, bytes, state)
-                {
-                    GameId = r.Next(3) == 0 ? null : r.Next(), RomId = r.Next(3) == 0 ? null : (long)r.Next() * 7, SystemId = r.Next(3) == 0 ? null : r.Next(200),
-                    Name = T(), Description = T(), Developer = T(), Publisher = T(), Genre = T(), Players = T(),
-                    Rating = r.Next(3) == 0 ? null : ScrapeRules.Rating(r.NextDouble() * 20),
-                    ReleaseDate = r.Next(3) == 0 ? null : new DateTime(1980 + r.Next(40), 1 + r.Next(12), 1 + r.Next(28)),
-                    Region = T(), Language = T(), MatchedBy = new[] { "file", "name", "transformed", null }[r.Next(4)], Offered = r.Next(2) == 0 ? "cover,screenshot" : null,
-                    Detail = T(), FetchedAt = Now.UtcDateTime.AddSeconds(r.Next(100000)).AddTicks(r.Next(10_000_000)), KindsKnown = r.Next(2) == 0 ? null : "cover,screenshot,marquee",
-                });
-                for (int p = 0; p < r.Next(3); p++) store.RememberFile($"/roms/snes/{(p == 0 ? "" : "Sub/")}Game {i} {p}.sfc", bytes, r.Next(), md5);
-                foreach (string type in new[] { "cover", "screenshot", "marquee", "video" }.Where(_ => r.Next(2) == 0))
-                    store.RecordMedia(md5, bytes, new StoredMedia(type, $"snes/{type}s/Game {i}.png", r.Next(2) == 0 ? null : "us", r.Next(2) == 0 ? null : "ab12"), Now.AddMinutes(i));
-            }
-            for (int i = 0; i < 20; i++) store.Enqueue($"/roms/nes/Q{r.Next(15)}.nes", "nes", (ScrapePriority)r.Next(3));
-            store.SaveDay(new QuotaDay("2026-09-27", 41, 3, 20000, 2000, Now.AddHours(5), "today's requests are used up (430)"));
-        }
-
-        private static string Rec(ScrapedRecord r) => string.Join("|", r.Md5, r.Bytes, r.State, r.GameId, r.RomId, r.SystemId, r.Name, r.Description, r.Developer, r.Publisher, r.Genre, r.Players,
-            r.Rating is float f ? BitConverter.SingleToInt32Bits(f).ToString(CultureInfo.InvariantCulture) : "", r.ReleaseDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), r.Region, r.Language, r.MatchedBy, r.Offered, r.Detail,
-            r.FetchedAt.ToString("yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture), r.KindsKnown, r.Fingerprint);
-
         private static string? S(JsonElement e, string name) => e.GetProperty(name).ValueKind == JsonValueKind.Null ? null : e.GetProperty(name).ValueKind == JsonValueKind.Number ? e.GetProperty(name).GetRawText() : e.GetProperty(name).GetString();
 
         private static string Rec(JsonElement e) => string.Join("|", S(e, "md5"), S(e, "bytes"), S(e, "state"), S(e, "game_id"), S(e, "rom_id"), S(e, "system_id"), S(e, "name"), S(e, "description"), S(e, "developer"),
@@ -208,38 +171,24 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void Generated_records_read_alike_through_both()
         {
             var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeStoreParity.Records");
-            bool cs = ScrapeGoldens.CSharp;
             string a = Path.Combine(_root, "records"), db = Path.Combine(a, MediaStore.FileName);
-            if (!cs) MediaService.Open(a, Settings()).Dispose();
-            ScrapeGoldens.Seed(golden, "seed", db, _root, () =>
-            {
-                using (MediaStore seed = MediaStore.Open(a)) Seed(seed, new Random(2026));
-                using var c = new SqliteConnection($"Data Source={db};Pooling=False");
-                c.Open();
-                FingerprintRows(c);
-            });
-            using MediaStore? csharp = cs ? MediaStore.Open(a) : null;
-            using MediaService? rust = cs ? null : MediaService.Open(a, Settings());
-            JsonDocument Get(object request) => JsonDocument.Parse(rust!.Get(JsonSerializer.Serialize(request)));
+            MediaService.Open(a, Settings()).Dispose();
+            ScrapeGoldens.Seed(golden, "seed", db, _root);
+            using MediaService rust = MediaService.Open(a, Settings());
+            JsonDocument Get(object request) => JsonDocument.Parse(rust.Get(JsonSerializer.Serialize(request)));
 
             List<string> found;
-            if (cs) found = csharp!.FoundByPath().Select(kv => kv.Key + " " + Rec(kv.Value)).Order(StringComparer.Ordinal).ToList();
-            else using (JsonDocument doc = Get(new { what = "found" })) found = doc.RootElement.EnumerateObject().Select(p => p.Name + " " + Rec(p.Value)).Order(StringComparer.Ordinal).ToList();
+            using (JsonDocument doc = Get(new { what = "found" })) found = doc.RootElement.EnumerateObject().Select(p => p.Name + " " + Rec(p.Value)).Order(StringComparer.Ordinal).ToList();
             golden.Add("found", string.Join("\n", found));
             Assert.True(found.Count > 10, $"{found.Count}");
             Assert.Contains(found, f => f.StartsWith("/r/ps2/Big.iso ", StringComparison.Ordinal) && f.Contains("|Big|"));
             Assert.Contains(found, f => f.StartsWith("/r/ps2/Other.iso ", StringComparison.Ordinal) && f.Contains("|Other|"));
 
-            List<string> outcomes;
-            if (cs) outcomes = csharp!.OutcomesByPath().Select(kv => $"{kv.Key} {kv.Value.State} {kv.Value.HasCover}").Order(StringComparer.Ordinal).ToList();
-            else using (JsonDocument doc = Get(new { what = "outcomes" })) outcomes = doc.RootElement.EnumerateObject().Select(p => $"{p.Name} {p.Value.GetProperty("state").GetString()} {p.Value.GetProperty("has_cover").GetBoolean()}").Order(StringComparer.Ordinal).ToList();
-            golden.Add("outcomes", string.Join("\n", outcomes));
+            using (JsonDocument doc = Get(new { what = "outcomes" }))
+                golden.Add("outcomes", string.Join("\n", doc.RootElement.EnumerateObject().Select(p => $"{p.Name} {p.Value.GetProperty("state").GetString()} {p.Value.GetProperty("has_cover").GetBoolean()}").Order(StringComparer.Ordinal)));
 
             foreach (string path in found.Select(f => f[..f.IndexOf(' ')]).Take(10).Append("/nothing"))
-            {
-                if (cs) golden.Add($"record {path}", csharp!.FoundFor(path) is { } r ? Rec(r) : "null");
-                else using (JsonDocument doc = Get(new { what = "record", path })) golden.Add($"record {path}", doc.RootElement.ValueKind == JsonValueKind.Null ? "null" : Rec(doc.RootElement));
-            }
+                using (JsonDocument doc = Get(new { what = "record", path })) golden.Add($"record {path}", doc.RootElement.ValueKind == JsonValueKind.Null ? "null" : Rec(doc.RootElement));
 
             using (var c = new SqliteConnection($"Data Source={db};Mode=ReadOnly;Pooling=False"))
             {
@@ -251,30 +200,22 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 {
                     string md5 = row.GetString(0);
                     long bytes = row.GetInt64(1);
-                    if (cs)
-                    {
-                        golden.Add($"game {md5} {bytes}", Rec(csharp!.Game(md5, bytes)!));
-                        golden.Add($"stored {md5} {bytes}", string.Join(";", csharp.Media(md5, bytes).Select(m => $"{m.Type},{m.RelativePath},{m.Region},{m.Sha1}")));
-                        continue;
-                    }
                     using (JsonDocument game = Get(new { what = "game", md5, bytes })) golden.Add($"game {md5} {bytes}", Rec(game.RootElement));
                     using JsonDocument stored = Get(new { what = "stored", md5, bytes });
                     golden.Add($"stored {md5} {bytes}", string.Join(";", stored.RootElement.EnumerateArray().Select(m => $"{S(m, "type")},{S(m, "path")},{S(m, "region")},{S(m, "sha1")}")));
                 }
             }
 
-            if (cs) golden.Add("queue", string.Join(";", csharp!.Queue().Select(q => $"{q.Path},{q.System},{q.Priority.ToString().ToLowerInvariant()},{q.Attempts}")));
-            else using (JsonDocument doc = Get(new { what = "queue" })) golden.Add("queue", string.Join(";", doc.RootElement.EnumerateArray().Select(q => $"{S(q, "path")},{S(q, "system")},{S(q, "priority")},{q.GetProperty("attempts").GetInt32()}")));
+            using (JsonDocument doc = Get(new { what = "queue" })) golden.Add("queue", string.Join(";", doc.RootElement.EnumerateArray().Select(q => $"{S(q, "path")},{S(q, "system")},{S(q, "priority")},{q.GetProperty("attempts").GetInt32()}")));
             golden.Check(1 + 1 + 1 + 11 + 1 + 2 * 60);
         }
 
-        // A store and a ROM folder with foldered and top-level games, their pictures stored flat, as before §30 of the Big Picture page; the store's rows seeded through the C#'s calls and recorded.
+        // A store and a ROM folder with foldered and top-level games, their pictures stored flat, as before §30 of the Big Picture page; the store's rows as the C#'s calls seeded them, from the recording.
         private (string Roms, string Media, List<(string Rom, string System)> Games) Layout(string name, int seed, EmuSen.WiseMan.Crystal.ParityGolden golden)
         {
             var r = new Random(seed);
             string roms = Path.Combine(_root, name, "Roms"), media = Path.Combine(_root, name, "seed");
             var games = new List<(string, string)>();
-            var calls = new List<Action<MediaStore>>();
             string[] folders = ["", "", "RPG", "RPG/Square", "Act ion", "Ünï"];
             for (int i = 0; i < 25; i++)
             {
@@ -283,16 +224,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Directory.CreateDirectory(Path.GetDirectoryName(rom)!);
                 if (!File.Exists(rom)) File.WriteAllBytes(rom, [(byte)i]);
                 games.Add((rom, system));
-                string md5 = $"m{i % 18:x2}";
-                calls.Add(store => store.RememberFile(rom, 64, 1, md5));
-                calls.Add(store => store.Record(new ScrapedRecord(md5, 64, ScrapeState.Found) { FetchedAt = Now.UtcDateTime }));
                 foreach (string kind in new[] { "covers", "screenshots", "marquees" }.Where(_ => r.Next(3) != 0))
                 {
                     string relative = Path.Combine(system, kind, stem + ".png");
                     string file = Path.Combine(media, relative);
                     Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                     if (!File.Exists(file)) File.WriteAllBytes(file, Encoding.UTF8.GetBytes($"{relative} {seed}"));
-                    calls.Add(store => store.RecordMedia(md5, 64, new StoredMedia(kind.TrimEnd('s'), relative, "us", null), Now));
                 }
             }
             foreach (string orphan in new[] { "snes/covers/Gone.png", "nes/marquees/Old/Gone.png", "snes/videos/Gone.mp4", "snes/covers/Half.png.part", "gb/covers/Elsewhere.png" })
@@ -301,12 +238,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 Directory.CreateDirectory(Path.GetDirectoryName(file)!);
                 File.WriteAllBytes(file, [7, 7]);
             }
-            if (!ScrapeGoldens.CSharp) MediaService.Open(media, Settings()).Dispose();
-            ScrapeGoldens.Seed(golden, $"seed {name}", Path.Combine(media, MediaStore.FileName), _root, () =>
-            {
-                using MediaStore store = MediaStore.Open(media);
-                foreach (Action<MediaStore> call in calls) call(store);
-            });
+            MediaService.Open(media, Settings()).Dispose();
+            ScrapeGoldens.Seed(golden, $"seed {name}", Path.Combine(media, MediaStore.FileName), _root);
             return (roms, media, games);
         }
 
@@ -314,7 +247,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         public void The_layout_step_a_clear_the_orphans_and_their_cleanup_move_the_same_files()
         {
             var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeStoreParity.Layout");
-            bool cs = ScrapeGoldens.CSharp;
             for (int seed = 1; seed <= 4; seed++)
             {
                 var (roms, media, games) = Layout($"layout{seed}", seed, golden);
@@ -322,42 +254,28 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 CopyTree(media, a);
                 string Rows() => ScrapeGoldens.Plain(Dump(db), _root);
 
-                using MediaStore? csharp = cs ? MediaStore.Open(a) : null;
-                csharp?.PutInFolders(p => GameFolders.Of(roms, p), Now);
-                using MediaService? rust = cs ? null : MediaService.Open(a, Settings(roms));
+                using MediaService rust = MediaService.Open(a, Settings(roms));
                 Assert.NotEqual(Tree(media), Tree(a));
                 golden.Add($"seed {seed} laid out", Tree(a));
                 golden.Add($"seed {seed} laid out rows", Rows());
 
-                if (!cs) foreach (var (rom, _) in games) Assert.Equal(GameFolders.Of(roms, rom), JsonSerializer.Deserialize<string>(rust!.Get(JsonSerializer.Serialize(new { what = "folder", path = rom }))));
+                foreach (var (rom, _) in games) Assert.Equal(GameFolders.Of(roms, rom), JsonSerializer.Deserialize<string>(rust.Get(JsonSerializer.Serialize(new { what = "folder", path = rom }))));
 
                 var (cleared, clearedSystem) = games[seed];
-                IEnumerable<string> deleted = cs ? csharp!.Forget(cleared, clearedSystem, GameFolders.Of(roms, cleared))
-                    : JsonSerializer.Deserialize<string[]>(rust!.Change(JsonSerializer.Serialize(new { op = "forget", path = cleared, system = clearedSystem })))!;
+                IEnumerable<string> deleted = JsonSerializer.Deserialize<string[]>(rust.Change(JsonSerializer.Serialize(new { op = "forget", path = cleared, system = clearedSystem })))!;
                 golden.Add($"seed {seed} forgotten", string.Join("\n", deleted.Select(f => Path.GetRelativePath(a, f)).Order(StringComparer.Ordinal)));
                 golden.Add($"seed {seed} forgotten tree", Tree(a));
                 golden.Add($"seed {seed} forgotten rows", Rows());
 
                 var kept = games.Where((_, i) => i % 3 != 0).ToList();
-                var names = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
-                foreach (var (rom, system) in kept)
-                {
-                    if (!names.TryGetValue(system, out var set)) names[system] = set = new HashSet<string>(StringComparer.Ordinal);
-                    string stem = Path.GetFileNameWithoutExtension(rom), folder = GameFolders.Of(roms, rom);
-                    set.Add(folder.Length == 0 ? stem : folder + "/" + stem);
-                    for (string f = folder; f.Length > 0; f = f.Contains('/') ? f[..f.LastIndexOf('/')] : "") set.Add(f);
-                }
-                IReadOnlyList<string> orphans = cs ? csharp!.Orphans(names.ToDictionary(n => n.Key, n => (IReadOnlySet<string>)n.Value, StringComparer.Ordinal))
-                    : JsonSerializer.Deserialize<string[]>(rust!.Get(JsonSerializer.Serialize(new { what = "orphans", games = kept.Select(g => new { path = g.Rom, system = g.System }) })))!;
+                IReadOnlyList<string> orphans = JsonSerializer.Deserialize<string[]>(rust.Get(JsonSerializer.Serialize(new { what = "orphans", games = kept.Select(g => new { path = g.Rom, system = g.System }) })))!;
                 golden.Add($"seed {seed} orphans", string.Join("\n", orphans));
                 Assert.NotEmpty(orphans);
 
                 var at = new DateTimeOffset(2026, 9, 27, 14, 30, 5, TimeSpan.FromHours(2));
                 (int moved, long bytes, string folder) cleaned;
-                if (cs) cleaned = csharp!.CleanUp(orphans, at);
-                else
                 {
-                    using JsonDocument doc = JsonDocument.Parse(rust!.Change(JsonSerializer.Serialize(new { op = "clean_up", relatives = orphans, at = at.ToString("o", CultureInfo.InvariantCulture) })));
+                    using JsonDocument doc = JsonDocument.Parse(rust.Change(JsonSerializer.Serialize(new { op = "clean_up", relatives = orphans, at = at.ToString("o", CultureInfo.InvariantCulture) })));
                     cleaned = (doc.RootElement.GetProperty("moved").GetInt32(), doc.RootElement.GetProperty("bytes").GetInt64(), doc.RootElement.GetProperty("folder").GetString()!);
                 }
                 golden.Add($"seed {seed} cleaned", $"{cleaned.moved} {cleaned.bytes} {Path.GetRelativePath(a, cleaned.folder)}");

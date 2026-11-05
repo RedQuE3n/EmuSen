@@ -3,13 +3,17 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using EmuSen.Crystal.Client.Scrape;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
+using EmuSen.WiseMan.Fixtures;
 using Microsoft.Data.Sqlite;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
-    // media.db's second migration and the store's one layout step: flat pictures of foldered games carried into their folders, nothing lost - see EmuSen_BigPicture.md §30.
+    // media.db's second migration and the store's one layout step, taken by emusen-scrape when it opens the store: flat pictures of foldered games carried into their folders, nothing lost - see EmuSen_BigPicture.md §30 and EmuSen_Backend.md §40.5.
     public class MediaStoreFoldersTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMediaStoreFolders", Guid.NewGuid().ToString("N"));
@@ -40,19 +44,57 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             .Where(f => !Path.GetFileName(f).StartsWith(MediaStore.FileName, StringComparison.Ordinal))
             .ToDictionary(f => Path.GetRelativePath(Media, f).Replace(Path.DirectorySeparatorChar, '/'), f => Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(f))));
 
-        // A game as a scrape recorded it: its file's hash under each path, and one row per kind naming its flat file.
-        private static void Scraped(MediaStore store, string md5, IEnumerable<string> roms, params (string Type, string Relative)[] media)
+        // A game as a scrape recorded it: its file's hash under each path, and one row per kind naming its flat file, written as the store keeps them.
+        private void Scraped(string md5, IEnumerable<string> roms, params (string Type, string Relative)[] media)
         {
-            foreach (string rom in roms) store.RememberFile(rom, 64, 1, md5);
-            store.Record(new ScrapedRecord(md5, 64, ScrapeState.Found) { FetchedAt = Now.UtcDateTime });
-            foreach ((string type, string relative) in media) store.RecordMedia(md5, 64, new StoredMedia(type, relative.Replace('/', Path.DirectorySeparatorChar), "us", null), Now);
+            if (!File.Exists(Db)) MediaService.Open(Media, Settings(null)).Dispose();
+            const string at = "2026-09-27T12:00:00.000Z";
+            var sql = new StringBuilder();
+            foreach (string rom in roms) sql.Append($"INSERT OR REPLACE INTO scrape_file (path, bytes, modified, md5) VALUES ({Q(rom)}, 64, 1, {Q(md5)});");
+            sql.Append($"INSERT OR REPLACE INTO scrape_game (md5, bytes, status, fetched_at) VALUES ({Q(md5)}, 64, 'Found', '{at}');");
+            foreach ((string type, string relative) in media)
+                sql.Append($"INSERT OR REPLACE INTO scrape_media (md5, bytes, type, path, region, sha1, fetched_at) VALUES ({Q(md5)}, 64, {Q(type)}, {Q(relative.Replace('/', Path.DirectorySeparatorChar))}, 'us', NULL, '{at}');");
+            Execute(sql.ToString());
         }
+
+        private static string Q(string text) => "'" + text.Replace("'", "''") + "'";
+
+        private string Db => Path.Combine(Media, MediaStore.FileName);
+
+        private void Execute(string sql)
+        {
+            using var c = new SqliteConnection($"Data Source={Db};Pooling=False");
+            c.Open();
+            using SqliteCommand command = c.CreateCommand();
+            command.CommandText = sql;
+            command.ExecuteNonQuery();
+        }
+
+        private List<string> Column(string sql)
+        {
+            using var c = new SqliteConnection($"Data Source={Db};Mode=ReadOnly;Pooling=False");
+            c.Open();
+            using SqliteCommand command = c.CreateCommand();
+            command.CommandText = sql;
+            using SqliteDataReader r = command.ExecuteReader();
+            var rows = new List<string>();
+            while (r.Read()) rows.Add(string.Join(" ", Enumerable.Range(0, r.FieldCount).Select(i => Convert.ToString(r.GetValue(i), System.Globalization.CultureInfo.InvariantCulture))));
+            return rows;
+        }
+
+        private static string Settings(string? roms) => JsonSerializer.Serialize(new { roms, developer_files = false, openemu = false, test = new { offline = true, clock = NativeScraping.Ticks(Now) } });
+
+        // The store opened by the library with the ROM folder named, which takes the layout step once.
+        private NativeScraping Opened() => NativeScraping.Open(Media, Settings(Roms), null, null);
+
+        private List<string> Moves() => Column("SELECT from_path, how, to_path FROM store_move ORDER BY from_path, to_path").Select(m => m.Replace(Path.DirectorySeparatorChar, '/')).ToList();
+
+        private bool Done() => Column("SELECT name FROM store_step").Contains("folders");
 
         [Fact]
         public void Flat_pictures_of_foldered_games_go_into_their_folders_once_and_no_picture_is_lost()
         {
             Directory.CreateDirectory(Roms);
-            using MediaStore store = MediaStore.Open(Media);
             Put("nes/covers/Alpha.png", 1);
             Put("nes/screenshots/Alpha.png", 2);
             Put("nes/covers/Bravo.png", 3);
@@ -61,19 +103,18 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Put("nes/covers/Echo.png", 6);
             string echoThere = Put("nes/covers/USA/Echo.png", 7);
             string stray = Put("nes/covers/Stray.png", 8);
-            Scraped(store, "a", [Rom("NES/USA/Alpha.nes")], ("cover", "nes/covers/Alpha.png"), ("screenshot", "nes/screenshots/Alpha.png"));
-            Scraped(store, "b", [Rom("NES/Bravo.nes")], ("cover", "nes/covers/Bravo.png"));
-            Scraped(store, "c", [Rom("NES/USA/Charlie.nes"), Rom("NES/Europe/Charlie.nes")], ("cover", "nes/covers/Charlie.png"));
-            Scraped(store, "d", [Rom("NES/Delta.nes"), Rom("NES/Hacks/Delta.nes")], ("cover", "nes/covers/Delta.png"));
-            Scraped(store, "e", [Rom("NES/USA/Echo.nes")], ("cover", "nes/covers/Echo.png"));
+            Scraped("a", [Rom("NES/USA/Alpha.nes")], ("cover", "nes/covers/Alpha.png"), ("screenshot", "nes/screenshots/Alpha.png"));
+            Scraped("b", [Rom("NES/Bravo.nes")], ("cover", "nes/covers/Bravo.png"));
+            Scraped("c", [Rom("NES/USA/Charlie.nes"), Rom("NES/Europe/Charlie.nes")], ("cover", "nes/covers/Charlie.png"));
+            Scraped("d", [Rom("NES/Delta.nes"), Rom("NES/Hacks/Delta.nes")], ("cover", "nes/covers/Delta.png"));
+            Scraped("e", [Rom("NES/USA/Echo.nes")], ("cover", "nes/covers/Echo.png"));
             Dictionary<string, string> before = Fingerprint();
 
-            int carried = store.PutInFolders(p => GameFolders.Of(Roms, p), Now);
+            using NativeScraping store = Opened();
 
             Dictionary<string, string> after = Fingerprint();
             // No picture's bytes are gone: every file there before is there after, by content.
             Assert.Empty(before.Values.Except(after.Values));
-            Assert.Equal(5, carried);
             Assert.Equal(new Dictionary<string, string>
             {
                 ["nes/covers/USA/Alpha.png"] = before["nes/covers/Alpha.png"],
@@ -98,67 +139,48 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal("nes/covers/Delta.png", Row("d", "cover"));
             Assert.Equal("nes/covers/USA/Echo.png", Row("e", "cover"));
 
-            string Log((string From, string To, string How) m) => $"{m.From.Replace(Path.DirectorySeparatorChar, '/')} {m.How} {m.To.Replace(Path.DirectorySeparatorChar, '/')}";
             Assert.Equal(
             [
                 "nes/covers/Alpha.png moved nes/covers/USA/Alpha.png", "nes/covers/Charlie.png copied nes/covers/Europe/Charlie.png",
                 "nes/covers/Charlie.png moved nes/covers/USA/Charlie.png", "nes/covers/Delta.png copied nes/covers/Hacks/Delta.png",
                 "nes/covers/Echo.png found nes/covers/USA/Echo.png", "nes/screenshots/Alpha.png moved nes/screenshots/USA/Alpha.png",
-            ], store.Moves().Select(Log));
-            Assert.True(store.Done(MediaStore.FoldersStep));
+            ], Moves());
+            Assert.True(Done());
 
-            // Once: a second call, and a reopened file, change nothing, even with a new flat picture of a foldered game.
+            // Once: a reopened store changes nothing, even with a new flat picture of a foldered game.
+            store.Dispose();
             Put("nes/covers/Foxtrot.png", 9);
-            Scraped(store, "f", [Rom("NES/USA/Foxtrot.nes")], ("cover", "nes/covers/Foxtrot.png"));
+            Scraped("f", [Rom("NES/USA/Foxtrot.nes")], ("cover", "nes/covers/Foxtrot.png"));
             Dictionary<string, string> settled = Fingerprint();
-            Assert.Equal(0, store.PutInFolders(p => GameFolders.Of(Roms, p), Now));
-            using (MediaStore again = MediaStore.Open(Media)) Assert.Equal(0, again.PutInFolders(p => GameFolders.Of(Roms, p), Now));
+            using NativeScraping again = Opened();
             Assert.Equal(settled, Fingerprint());
-            Assert.Equal("nes/covers/Foxtrot.png", Row("f", "cover"));
+            Assert.Equal("nes/covers/Foxtrot.png", again.Media("f", 64).Single(m => m.Type == "cover").RelativePath.Replace(Path.DirectorySeparatorChar, '/'));
         }
 
         [Fact]
         public void A_file_of_the_first_schema_is_migrated_in_place_with_its_rows_kept_and_a_step_interrupted_after_a_move_is_finished()
         {
             Directory.CreateDirectory(Roms);
-            using (MediaStore store = MediaStore.Open(Media))
-            {
-                Put("snes/covers/Golf.png", 10);
-                Scraped(store, "g", [Rom("SNES/Sports/Golf.sfc")], ("cover", "snes/covers/Golf.png"));
-            }
-            using (var db = new SqliteConnection($"Data Source={Path.Combine(Media, MediaStore.FileName)};Pooling=False"))
-            {
-                db.Open();
-                using SqliteCommand c = db.CreateCommand();
-                c.CommandText = "DROP TABLE store_move; DROP TABLE store_step; ALTER TABLE scrape_game DROP COLUMN kinds_known; ALTER TABLE scrape_file DROP COLUMN crc32; ALTER TABLE scrape_file DROP COLUMN sha1; ALTER TABLE scrape_file DROP COLUMN fingerprint; PRAGMA user_version = 1;";
-                c.ExecuteNonQuery();
-            }
+            Put("snes/covers/Golf.png", 10);
+            Scraped("g", [Rom("SNES/Sports/Golf.sfc")], ("cover", "snes/covers/Golf.png"));
+            Execute("DROP TABLE store_move; DROP TABLE store_step; ALTER TABLE scrape_game DROP COLUMN kinds_known; ALTER TABLE scrape_file DROP COLUMN crc32; ALTER TABLE scrape_file DROP COLUMN sha1; ALTER TABLE scrape_file DROP COLUMN fingerprint; PRAGMA user_version = 1;");
             // The picture already moved and the row not yet written, as a crash between the two would leave it.
             Directory.CreateDirectory(Path.Combine(Media, "snes", "covers", "Sports"));
             File.Move(Path.Combine(Media, "snes", "covers", "Golf.png"), Path.Combine(Media, "snes", "covers", "Sports", "Golf.png"));
 
-            using MediaStore reopened = MediaStore.Open(Media);
-            using (var db = new SqliteConnection($"Data Source={Path.Combine(Media, MediaStore.FileName)};Pooling=False"))
-            {
-                db.Open();
-                using SqliteCommand c = db.CreateCommand();
-                c.CommandText = "PRAGMA user_version";
-                Assert.Equal((long)MediaStore.SchemaVersion, c.ExecuteScalar());
-            }
-            Assert.False(reopened.Done(MediaStore.FoldersStep));
-            Assert.Single(reopened.Media("g", 64));
-            Assert.Equal(0, reopened.PutInFolders(p => GameFolders.Of(Roms, p), Now));
+            using NativeScraping reopened = Opened();
+            Assert.Equal(MediaDbSchema.Version.ToString(System.Globalization.CultureInfo.InvariantCulture), Column("PRAGMA user_version").Single());
             Assert.Equal(Path.Combine("snes", "covers", "Sports", "Golf.png"), reopened.Media("g", 64).Single().RelativePath);
-            Assert.Equal("found", reopened.Moves().Single().How);
-            Assert.True(reopened.Done(MediaStore.FoldersStep));
+            Assert.Equal("found", Moves().Single().Split(' ')[1]);
+            Assert.True(Done());
         }
 
         // Clear on a foldered game: its folder's pictures go; a game of the same stem in another folder, or at the top, keeps its own.
         [Fact]
         public void Forgetting_a_foldered_game_deletes_only_the_pictures_in_its_own_folder()
         {
-            using MediaStore store = MediaStore.Open(Media);
             string mine = Put("nes/covers/USA/Kid.png", 11), theirs = Put("nes/covers/Europe/Kid.png", 12), top = Put("nes/covers/Kid.png", 13);
+            using NativeScraping store = NativeScraping.Open(Media, Settings(null), null, null);
             IReadOnlyList<string> gone = store.Forget(Rom("NES/USA/Kid.nes"), "nes", "USA");
             Assert.Equal([Path.GetFullPath(mine)], gone);
             Assert.True(File.Exists(theirs));

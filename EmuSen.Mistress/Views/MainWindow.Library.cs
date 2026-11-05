@@ -72,7 +72,6 @@ namespace EmuSen.Mistress.Views
             LibraryList.ContextMenu = LibraryContextMenu();
             ApplyLibraryView();
             ScanArtwork();
-            ApplyOnlineCovers();
             SetUpScraping();
             SetUpToolSummaries();
             ApplyScraping();
@@ -340,6 +339,7 @@ namespace EmuSen.Mistress.Views
                 _covers.Forget(target);
                 _artwork.Add(console, entry.Title, target);
                 _native?.ArtAdded(console, entry.Title, target);
+                _sources?.ArtAdded(console, entry.Title, target);
                 StatusText.Text = $"Cover art added for {entry.Title}";
                 LibraryGrid.Refresh(_shownEntries);
             }

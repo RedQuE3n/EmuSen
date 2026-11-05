@@ -64,7 +64,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Single(entries, e => e.Title == PackagedTitle && e.Package is not null);
                 Assert.Single(entries, e => e.FullPath == chd && e.Shelf.StartsWith("PlayStation", StringComparison.Ordinal));
                 var packages = entries.Where(e => e.Package is not null).ToDictionary(e => e.FullPath, e => e.Package!);
-                Assert.Equal(cover, new EmuSen.Mistress.Scraping.MediaSources((_, _) => null, DataStore.Media, null, null, romDirectory: _romDir, packages: packages).Cover("nes", Path.Combine(_romDir, "nes", PackagedTitle + ".nes")));
+                string settings = System.Text.Json.JsonSerializer.Serialize(new { developer_files = false, openemu = false, sources_alone = true, roms = _romDir, packages, test = new { offline = true } });
+                using (var native = EmuSen.Mistress.Scraping.NativeScraping.Open(DataStore.Media, settings, null, null))
+                    Assert.Equal(cover, new EmuSen.Mistress.Scraping.MediaSources(native, "").Cover("nes", Path.Combine(_romDir, "nes", PackagedTitle + ".nes")));
                 var faults = new List<string>();
                 faults.AddRange(FitAudit.Check(list, null, smallest: 0).Select(f => $"list: {f}"));
                 faults.AddRange(FitAudit.Check(window.GetControl<SourceList>("LibrarySidebar"), null, smallest: 0).Select(f => $"sidebar: {f}"));

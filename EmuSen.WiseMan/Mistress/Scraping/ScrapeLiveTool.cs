@@ -1,15 +1,10 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading;
-using System.Threading.Tasks;
-using EmuSen.Cores;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;
 using Xunit.Abstractions;
@@ -27,192 +22,96 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
     }
 
-    // Stage (d)'s one live run (P9, P10, P60-P67): 40 random files from the library, one thread, media into ~/.cache - see EmuSen_BigPicture.md §17.
+    // Stage (d)'s live run (P9, P10, P60-P67) on the library's scraper: 40 random files from the library, media and the scrape log into ~/.cache; the developer's file is read by the scraper, never by the test - see EmuSen_BigPicture.md §17 and EmuSen_Backend.md §40.5.
     public class ScrapeLiveTool(ITestOutputHelper output)
     {
-        // Paces as the real clock does and records every wait the quota asked for.
-        private sealed class RecordingClock : IScrapeClock
+        // A store under ~/.cache on the real server, the developer file read from the config directory by the scraper.
+        private static NativeScraping Open(string outRoot, string? roms) => NativeScraping.Open(Path.Combine(outRoot, "Media"), JsonSerializer.Serialize(new Dictionary<string, object?>
         {
-            public readonly ConcurrentQueue<TimeSpan> Waits = new();
-            public DateTimeOffset Now => DateTimeOffset.UtcNow;
-            public Task Delay(TimeSpan wait, CancellationToken stop)
+            ["roms"] = roms, ["developer_files"] = true, ["openemu"] = false, ["user_agent"] = "EmuSen/scrape-live",
+            ["cores"] = RuntimeCatalog.Consoles.Select(c => c.Systems).ToArray(),
+        }), null, null);
+
+        // Every result of the run as it arrives, until it ends or three minutes pass with no change.
+        private static List<JsonElement> Drain(NativeScraping scraper, Action<JsonElement> each)
+        {
+            var seen = new List<JsonElement>();
+            long last = 0, serial = 0;
+            var quiet = Stopwatch.StartNew();
+            while (true)
             {
-                if (wait > TimeSpan.Zero) Waits.Enqueue(wait);
-                return SystemScrapeClock.Instance.Delay(wait, stop);
+                using JsonDocument p = JsonDocument.Parse(scraper.Progress(0));
+                foreach (JsonElement r in p.RootElement.GetProperty("results").EnumerateArray().Reverse().Where(r => r.GetProperty("serial").GetInt64() > last))
+                {
+                    last = r.GetProperty("serial").GetInt64();
+                    seen.Add(r.Clone());
+                    each(r);
+                    quiet.Restart();
+                }
+                if (p.RootElement.GetProperty("state").GetString() != "running" || quiet.Elapsed > TimeSpan.FromMinutes(3)) return seen;
+                serial = scraper.Wait(serial, 1000);
             }
         }
 
+        private static string Text(JsonElement r, string name) => r.GetProperty(name).ValueKind == JsonValueKind.String ? r.GetProperty(name).GetString()! : "";
+
         [ScrapeLiveFact]
-        public async Task Forty_random_files()
+        public void Forty_random_files()
         {
             string library = Environment.GetEnvironmentVariable("EMUSEN_SCRAPE_ROMS") ?? "/home/red/Documents/Roms";
             int seed = int.TryParse(Environment.GetEnvironmentVariable("EMUSEN_SCRAPE_SEED"), out int s) ? s : 20260926;
-            string developerFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", DeveloperCredentials.FileName);
-            DeveloperCredentials developer = DeveloperCredentials.Read(developerFile) ?? throw new InvalidOperationException("no developer file");
             string outRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "bigpicture", "scrape-live", DateTime.Now.ToString("yyyyMMdd-HHmmss"));
-            string answers = Path.Combine(outRoot, "answers");
-            Directory.CreateDirectory(answers);
+            Directory.CreateDirectory(outRoot);
             var log = new StringBuilder();
             void Say(string line) { string safe = ScrapeRedactor.Redact(line); log.AppendLine(safe); output.WriteLine(safe); }
 
             // The library is read, never written: the scan lists, the hash reads, nothing else touches it.
             RomLibraryResult scan = RomLibrary.Scan(library);
-            var candidates = scan.Entries.Where(e => CoreCatalog.ShelfByName(e.Shelf)?.EsdeSystem is { Length: > 0 }).ToList();
+            var candidates = scan.Entries.Where(e => RuntimeCatalog.ShelfByName(e.Shelf)?.EsdeSystem is { Length: > 0 }).ToList();
             var random = new Random(seed);
             var chosen = candidates.OrderBy(e => e.FullPath, StringComparer.Ordinal).OrderBy(_ => random.Next()).Take(40).ToList();
             Say($"library {library}: {scan.Entries.Count} files, {candidates.Count} on a shelf; seed {seed}; chosen {chosen.Count}");
-            foreach (var g in chosen.GroupBy(e => e.Shelf)) Say($"  {g.Key}: {g.Count()}");
 
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("EmuSen/stage-d-live");
-            var client = new ScreenScraperClient(http, developer, null);
-
-            var systems = await client.SystemsAsync(CancellationToken.None);
-            Say($"systemesListe: {systems.Status}; " + string.Join(", ", Scraper.SystemIds.Select(kv => $"{kv.Key}={kv.Value}:{(systems.Systems.TryGetValue(kv.Value, out string? n) ? n : "absent")}")));
-            var before = await client.UserInfosAsync(CancellationToken.None);
-            Say($"ssuserInfos before: {before.Status} {Describe(before.Quota)} {before.Detail}");
-
-            using MediaStore store = MediaStore.Open(Path.Combine(outRoot, "Media"));
-            var clock = new RecordingClock();
-            var quota = new ScrapeQuotaManager(store, clock);
-            var results = new BlockingCollection<ScrapeResult>();
-            var jeuInfos = new ConcurrentQueue<(string Path, ScrapeStatus Status, double Seconds, ScrapeQuota? Quota)>();
-            int answerIndex = 0;
-            var scraper = new Scraper(client, store, quota, () => new ScrapeChoices(), (_, _) => false,
-                p => CoreCatalog.ByExtension(Path.GetExtension(p))?.OpenVgdbBytes, results.Add, clock)
-            {
-                Answered = (path, a) =>
-                {
-                    jeuInfos.Enqueue((path, a.Status, a.Took.TotalSeconds, a.Quota));
-                    int n = Interlocked.Increment(ref answerIndex);
-                    File.WriteAllText(Path.Combine(answers, $"{n:D3}-{a.Status}.json"), ScrapeRedactor.Redact($"{Path.GetFileName(path)}\n{a.Body}"));
-                },
-            };
-
+            using NativeScraping scraper = Open(outRoot, library);
             var total = Stopwatch.StartNew();
-            var perGame = new Dictionary<string, double>();
-            foreach (RomEntry e in chosen) scraper.Enqueue(e.FullPath, CoreCatalog.ShelfByName(e.Shelf)!.EsdeSystem, ScrapePriority.Library);
-            var clockPerGame = Stopwatch.StartNew();
-            scraper.Start();
-            var finished = new List<ScrapeResult>();
-            while (finished.Count(r => r.Outcome is not (ScrapeOutcome.Retry)) < chosen.Count)
-            {
-                if (!results.TryTake(out ScrapeResult? r, TimeSpan.FromMinutes(3))) { Say("no result for three minutes; stopping"); break; }
-                perGame[r.Path] = clockPerGame.Elapsed.TotalSeconds;
-                clockPerGame.Restart();
-                finished.Add(r);
-                Say($"{finished.Count,2} {r.Outcome,-8} {r.MatchedBy ?? "",-11} cover={(r.HasCover ? "y" : "n")} media={r.Written.Count} {perGame[r.Path],6:F1}s {Path.GetFileName(r.Path)} {r.Detail}");
-                if (r.Outcome == ScrapeOutcome.Stopped) { Say("stopped: " + r.Detail); break; }
-            }
-            scraper.Dispose();
+            scraper.Start(chosen.Select(e => (e.FullPath, RuntimeCatalog.ShelfByName(e.Shelf)!.EsdeSystem)), ScrapePriority.Library, false, false, false, null, true, new ScrapeChoices());
+            int n = 0;
+            var finished = Drain(scraper, r => Say($"{++n,2} {Text(r, "outcome"),-8} {Text(r, "matched_by"),-11} cover={(r.GetProperty("has_cover").GetBoolean() ? "y" : "n")} media={r.GetProperty("kinds").GetArrayLength()} {Path.GetFileName(Text(r, "path"))} {Text(r, "detail")}"));
             total.Stop();
 
-            var after = await client.UserInfosAsync(CancellationToken.None);
-            Say($"ssuserInfos after: {after.Status} {Describe(after.Quota)} {after.Detail}");
-
-            // --- the measurements ---
-            var final = finished.Where(r => r.Outcome is ScrapeOutcome.Found or ScrapeOutcome.Unknown or ScrapeOutcome.Error).ToList();
-            int found = final.Count(r => r.Outcome == ScrapeOutcome.Found);
-            int byFile = final.Count(r => r.Outcome == ScrapeOutcome.Found && r.MatchedBy == "file");
-            int byTransform = final.Count(r => r.Outcome == ScrapeOutcome.Found && r.MatchedBy == "transformed");
-            Say($"P9: {found}/{final.Count} found; step 1 {byFile}, step 2 {byTransform}; unknown {final.Count(r => r.Outcome == ScrapeOutcome.Unknown)}, error {final.Count(r => r.Outcome == ScrapeOutcome.Error)}");
-            foreach (var shelf in final.GroupBy(r => CoreCatalog.ShelfFor(r.Path)))
-                Say($"  {shelf.Key}: {shelf.Count(r => r.Outcome == ScrapeOutcome.Found)}/{shelf.Count()} (step 2: {shelf.Count(r => r.MatchedBy == "transformed")})");
-            foreach (ScrapeResult r in final.Where(r => r.Path.EndsWith(".z64") || r.Path.EndsWith(".n64") || r.Path.EndsWith(".v64")))
-                Say($"P60: {Path.GetFileName(r.Path)}: {r.Outcome} by {r.MatchedBy ?? "-"}");
-
-            var answered = jeuInfos.ToList();
-            int requests = answered.Count, media = finished.Sum(r => r.Written.Count);
-            ScrapeQuota? first = answered.Select(a => a.Quota).FirstOrDefault(q => q is not null), last = answered.Select(a => a.Quota).LastOrDefault(q => q is not null);
-            Say($"P61: jeuInfos {requests}, media files {media}; requeststoday {first?.RequestsToday}->{last?.RequestsToday} across the answers; ssuserInfos {before.Quota?.RequestsToday}->{after.Quota?.RequestsToday}");
-            Say($"P62: quota fields present in {answered.Count(a => a.Quota is not null)}/{requests} answers; last: {Describe(last)}");
-            var foundTimes = answered.Where(a => a.Status == ScrapeStatus.Found).Select(a => a.Seconds).ToList();
-            var koTimes = answered.Where(a => a.Status == ScrapeStatus.NotFound).Select(a => a.Seconds).ToList();
-            Say($"P63: jeuInfos found {Stats(foundTimes)}; unknown {Stats(koTimes)}; per found game {Stats(final.Where(r => r.Outcome == ScrapeOutcome.Found).Select(r => perGame[r.Path]).ToList())}; per unknown game {Stats(final.Where(r => r.Outcome == ScrapeOutcome.Unknown).Select(r => perGame[r.Path]).ToList())}; whole run {total.Elapsed.TotalSeconds:F0}s");
-            var waits = clock.Waits.ToList();
-            Say($"P65: pacer waits {waits.Count}, total {waits.Sum(w => w.TotalSeconds):F1}s, interval at the end {quota.Interval.TotalSeconds:F2}s");
-
-            int regionTagged = 0, regionMatched = 0;
-            foreach (ScrapeResult r in final.Where(r => r.Outcome == ScrapeOutcome.Found))
-            {
-                string? tag = ScrapeRules.RegionOfFileName(Path.GetFileName(r.Path));
-                if (tag is not ("us" or "eu" or "jp")) continue;
-                string md5 = RomHash.Of(r.Path).Md5;
-                StoredMedia? cover = store.Media(md5, new FileInfo(r.Path).Length).FirstOrDefault(m => m.Type == "cover");
-                if (cover is null) continue;
-                regionTagged++;
-                if (cover.Region == tag) regionMatched++;
-                else Say($"  P66 miss: {Path.GetFileName(r.Path)} tagged {tag}, cover {cover.Region}");
-            }
-            Say($"P66: {regionMatched}/{regionTagged} tagged games with a cover got their own region's");
+            int found = finished.Count(r => Text(r, "outcome") == "found");
+            Say($"P9: {found}/{finished.Count} found; step 1 {finished.Count(r => Text(r, "matched_by") == "file")}, step 2 {finished.Count(r => Text(r, "matched_by") == "transformed")}; unknown {finished.Count(r => Text(r, "outcome") == "unknown")}, error {finished.Count(r => Text(r, "outcome") == "error")}; whole run {total.Elapsed.TotalSeconds:F0}s");
+            QuotaSnapshot q = scraper.Quota();
+            Say($"P61: requests today {q.RequestsToday}, ko {q.KoToday}; interval {q.Interval.TotalSeconds:F2}s");
 
             File.WriteAllText(Path.Combine(outRoot, "log.txt"), log.ToString());
-            int leaks = 0;
-            foreach (string file in Directory.EnumerateFiles(outRoot, "*", SearchOption.AllDirectories))
-            {
-                byte[] bytes = File.ReadAllBytes(file);
-                string text = Encoding.Latin1.GetString(bytes);
-                if (text.Contains(developer.DevPassword, StringComparison.Ordinal) || text.Contains(developer.DevId, StringComparison.Ordinal)) leaks++;
-            }
+            string[] secrets = DeveloperCredentials.Load() is { } d ? [d.DevId, d.DevPassword] : [];
+            int leaks = Directory.EnumerateFiles(outRoot, "*", SearchOption.AllDirectories).Count(f => secrets.Any(x => Encoding.Latin1.GetString(File.ReadAllBytes(f)).Contains(x, StringComparison.Ordinal)));
             Say($"P67: files holding a developer credential: {leaks}");
             File.WriteAllText(Path.Combine(outRoot, "log.txt"), log.ToString());
             Assert.Equal(0, leaks);
         }
 
-        // §46's live check: named files, "system=path" pairs separated by ';' in EMUSEN_SCRAPE_FILES, covers only, each answer's matched ROM written down.
+        // §46's live check: named files, "system=path" pairs separated by ';' in EMUSEN_SCRAPE_FILES, covers only.
         [ScrapeLiveFact]
-        public async Task Named_files()
+        public void Named_files()
         {
             string pairs = Environment.GetEnvironmentVariable("EMUSEN_SCRAPE_FILES") ?? throw new InvalidOperationException("set EMUSEN_SCRAPE_FILES");
-            var files = pairs.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Split('=', 2)).Select(p => (System: p[0], Path: p[1])).ToList();
-            string developerFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EmuSen", DeveloperCredentials.FileName);
-            DeveloperCredentials developer = DeveloperCredentials.Read(developerFile) ?? throw new InvalidOperationException("no developer file");
+            var files = pairs.Split(';', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Split('=', 2)).Select(p => (Path: p[1], System: p[0])).ToList();
             string outRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache", "emusen", "bigpicture", "scrape-live", DateTime.Now.ToString("yyyyMMdd-HHmmss") + "-named");
             Directory.CreateDirectory(outRoot);
             var log = new StringBuilder();
             void Say(string line) { string safe = ScrapeRedactor.Redact(line); log.AppendLine(safe); output.WriteLine(safe); }
 
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
-            http.DefaultRequestHeaders.UserAgent.ParseAdd("EmuSen/scrape-named-live");
-            var client = new ScreenScraperClient(http, developer, null);
-            using MediaStore store = MediaStore.Open(Path.Combine(outRoot, "Media"));
-            var quota = new ScrapeQuotaManager(store, SystemScrapeClock.Instance);
-            var results = new BlockingCollection<ScrapeResult>();
-            var matched = new ConcurrentDictionary<string, string>();
-            var choices = new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false };
-            var scraper = new Scraper(client, store, quota, () => choices, (_, _) => false,
-                p => CoreCatalog.ByExtension(Path.GetExtension(p))?.OpenVgdbBytes, results.Add)
+            using NativeScraping scraper = Open(outRoot, null);
+            scraper.Start(files, ScrapePriority.Shown, false, false, false, null, true, new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false });
+            var finished = Drain(scraper, r =>
             {
-                Answered = (path, a) =>
-                {
-                    var rom = a.Body is { Length: > 0 } body && a.Status == ScrapeStatus.Found ? System.Text.Json.Nodes.JsonNode.Parse(body)?["response"]?["jeu"]?["rom"] : null;
-                    matched[path] = rom is null ? $"{a.Status} {a.Detail}" : $"matched rom {rom["romfilename"]} ({rom["romsize"]} bytes, md5 {rom["rommd5"]})";
-                },
-            };
-            foreach (var f in files) scraper.Enqueue(f.Path, f.System, ScrapePriority.Shown);
-            var clock = Stopwatch.StartNew();
-            scraper.Start();
-            var finished = new List<ScrapeResult>();
-            while (finished.Count < files.Count && results.TryTake(out ScrapeResult? r, TimeSpan.FromMinutes(3)))
-            {
-                if (r.Outcome == ScrapeOutcome.Retry) continue;
-                finished.Add(r);
-                var info = new FileInfo(r.Path);
-                string md5 = store.CachedMd5(r.Path, info.Length, info.LastWriteTimeUtc.Ticks) ?? "-";
-                ScrapedRecord? game = store.Game(md5, info.Length);
-                Say($"{r.Outcome,-8} {clock.Elapsed.TotalSeconds,6:F1}s {Path.GetFileName(r.Path)} ({info.Length:N0} bytes, md5 {md5}): game {game?.GameId} \"{game?.Name}\" by {r.MatchedBy ?? "-"}; "
-                    + $"cover {(r.HasCover ? "kept" : "none")}; {matched.GetValueOrDefault(r.Path, "no answer")} {r.Detail}");
-                if (r.Outcome == ScrapeOutcome.Stopped) break;
-            }
-            scraper.Dispose();
+                ScrapedRecord? game = scraper.FoundFor(Text(r, "path"));
+                Say($"{Text(r, "outcome"),-8} {Path.GetFileName(Text(r, "path"))}: game {game?.GameId} \"{game?.Name}\" by {Text(r, "matched_by")}; cover {(r.GetProperty("has_cover").GetBoolean() ? "kept" : "none")} {Text(r, "detail")}");
+            });
             File.WriteAllText(Path.Combine(outRoot, "log.txt"), log.ToString());
             Assert.Equal(files.Count, finished.Count);
         }
-
-        private static string Describe(ScrapeQuota? q) => q is null ? "(no quota fields)" :
-            $"threads {q.MaxThreads}, {q.MaxDownloadKBps} KB/s, today {q.RequestsToday}/{q.MaxRequestsPerDay}, ko {q.RequestsKoToday}/{q.MaxRequestsKoPerDay}, per minute {q.MaxRequestsPerMinute}";
-
-        private static string Stats(List<double> xs) => xs.Count == 0 ? "n=0" :
-            $"n={xs.Count} median {xs.OrderBy(x => x).ElementAt(xs.Count / 2):F2}s range {xs.Min():F2}-{xs.Max():F2}s";
     }
 }

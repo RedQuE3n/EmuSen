@@ -148,11 +148,14 @@ namespace EmuSen.WiseMan.Mistress
         public void A_scrape_recorded_again_leaves_the_edits_as_they_were()
         {
             using GameRecords records = GameRecords.Open(Path.Combine(_dir, "games.db"));
-            using MediaStore store = MediaStore.Open(Path.Combine(_dir, "media"));
             records.SaveEdits(Rom, new Dictionary<string, string?> { [GameMetadata.Description] = "Mine" }, DateTime.UtcNow);
-            store.RememberFile(Rom, 1024, 1, "abc");
-            store.Record(Answer);
-            store.Record(Answer with { Description = "Newer." });
+            using (var rows = new EmuSen.WiseMan.Mistress.Scraping.MediaDbRows(Path.Combine(_dir, "media")))
+            {
+                rows.RememberFile(Rom, 1024, 1, "abc");
+                rows.Record(Answer);
+                rows.Record(Answer with { Description = "Newer." });
+            }
+            using NativeScraping store = NativeScraping.Open(Path.Combine(_dir, "media"), "{\"developer_files\":false,\"test\":{\"offline\":true}}", null, null);
             GameMetadata m = GameMetadata.Resolve(Rom, store.FoundFor(Rom), records.Edits(Rom));
             Assert.Equal(("Mine", "Dev"), (m.DescriptionText, m.DeveloperText));
             Assert.Equal("Newer.", store.FoundFor(Rom)!.Description);
@@ -166,9 +169,9 @@ namespace EmuSen.WiseMan.Mistress
             string outside = Path.Combine(_dir, "roms", "Aurora Drift (USA).sfc");
             Directory.CreateDirectory(Path.GetDirectoryName(outside)!);
             File.WriteAllBytes(outside, new byte[] { 1, 2, 3 });
-            using MediaStore store = MediaStore.Open(root);
-            store.RememberFile(Rom, 1024, 1, "abc");
-            store.Record(Answer);
+            var rows = new EmuSen.WiseMan.Mistress.Scraping.MediaDbRows(root);
+            rows.RememberFile(Rom, 1024, 1, "abc");
+            rows.Record(Answer);
             string cover = Path.Combine(root, "snes", "covers", "Aurora Drift (USA).png");
             string other = Path.Combine(root, "snes", "covers", "Brass Lantern.png");
             string copy = Path.Combine(root, "snes", "screenshots", "Aurora Drift (USA).jpg");
@@ -177,10 +180,12 @@ namespace EmuSen.WiseMan.Mistress
                 Directory.CreateDirectory(Path.GetDirectoryName(f)!);
                 File.WriteAllBytes(f, new byte[100]);
             }
-            store.RecordMedia("abc", 1024, new StoredMedia("cover", Path.Combine("snes", "covers", "Aurora Drift (USA).png"), "us", null), DateTimeOffset.UtcNow);
-            store.RecordMedia("abc", 1024, new StoredMedia("screenshot", Path.Combine("..", "roms", "Aurora Drift (USA).sfc"), "us", null), DateTimeOffset.UtcNow);
+            rows.RecordMedia("abc", 1024, new StoredMedia("cover", Path.Combine("snes", "covers", "Aurora Drift (USA).png"), "us", null), DateTimeOffset.UtcNow);
+            rows.RecordMedia("abc", 1024, new StoredMedia("screenshot", Path.Combine("..", "roms", "Aurora Drift (USA).sfc"), "us", null), DateTimeOffset.UtcNow);
+            rows.Dispose();
 
-            IReadOnlyList<string> gone = store.Forget(Rom, "snes");
+            using NativeScraping store = NativeScraping.Open(root, "{\"developer_files\":false,\"test\":{\"offline\":true}}", null, null);
+            IReadOnlyList<string> gone = store.Forget(Rom, "snes", "");
             Assert.Equal(new[] { copy, cover }.Order(), gone.Order());
             Assert.True(File.Exists(outside));
             Assert.True(File.Exists(other));

@@ -23,7 +23,7 @@ namespace EmuSen.Mistress.Views
                 SheetLayer.Activate(open);
                 return;
             }
-            if (ScrapeNative && _appSettings.Scraping) OpenMediaStore();
+            if (_appSettings.Scraping) OpenMediaStore();
             var window = new LibraryWindow(_appSettings.RomDirectory, new Records(this));
             window.Pane.SummaryChanged += s => ToolSummaryHeard(Pages.HomeScreen.Library, s);
             _libraryWindow = window;

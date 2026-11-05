@@ -426,7 +426,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             using var s = new ThemedSession(roms: roms =>
             {
                 RegionFolders(roms);
-                using MediaStore store = MediaStore.Open(MediaStore.DefaultRoot);
+                using var store = new EmuSen.WiseMan.Mistress.Scraping.MediaDbRows(MediaStore.DefaultRoot);
                 string rom = Path.Combine(roms, "NES", "USA", UsaGame + ".nes");
                 store.RememberFile(rom, 64, 1, "u");
                 store.Record(new ScrapedRecord("u", 64, ScrapeState.Found) { FetchedAt = DateTime.UtcNow });

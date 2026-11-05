@@ -97,6 +97,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             int at = Array.FindIndex(lines, l => l.Contains("WARN [scraping] ScreenScraper could not answer; queued to retry: "));
             Assert.True(at >= 0, string.Join("\n", lines));
             Assert.Equal($"    context: {broken}", lines[at + 1]);
+            Assert.Single(lines, l => l.Contains("WARN [scraping] ScreenScraper could not identify the game: "));
         });
 
         [Fact]

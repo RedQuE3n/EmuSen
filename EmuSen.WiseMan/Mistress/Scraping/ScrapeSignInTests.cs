@@ -256,20 +256,27 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Contains("signin", window.SettingsLayoutShown!.Rows.Select(r => r.Key));
         });
 
+        // Each answer of ssuserInfos read through the library's scraper, a failure's words redacted - see EmuSen_Backend.md §40.5.
         [Fact]
         public void A_sign_in_answer_never_carries_a_credential()
         {
             ScrapeRedactor.Register("FAKESIGNINPW");
-            SignInAnswer failed = SignInAnswer.From(ScrapeStatus.Failed, "connect to https://api.screenscraper.fr/api2/ssuserInfos.php?devid=FAKEX&devpassword=FAKEY&ssid=someone&sspassword=FAKESIGNINPW refused");
+            using var s = new LibraryScraper(Server, Path.Combine(Root, "SignInMedia"));
+            SignInAnswer As(int status, string body)
+            {
+                Server.ForcedUserStatus = status;
+                Server.ForcedUserBody = body;
+                return s.Scraper.SignIn("someone", "FAKESIGNINPW");
+            }
+            SignInAnswer failed = As(500, "connect to https://api.screenscraper.fr/api2/ssuserInfos.php?devid=FAKEX&devpassword=FAKEY&ssid=someone&sspassword=FAKESIGNINPW refused");
             Assert.Equal(SignInResult.Unreachable, failed.Result);
             Assert.DoesNotContain("FAKEY", failed.Message);
             Assert.DoesNotContain("FAKESIGNINPW", failed.Message);
-            Assert.Contains("sspassword=***", failed.Message);
 
-            Assert.Equal(SignInResult.WrongAccount, SignInAnswer.From(ScrapeStatus.BadCredentials, "Erreur de login : Vérifier les identifiants utilisateurs !").Result);
-            Assert.Equal(SignInResult.DeveloperRefused, SignInAnswer.From(ScrapeStatus.BadCredentials, "Erreur de login : Vérifier vos identifiants développeur !").Result);
-            Assert.Equal(SignInResult.WrongAccount, SignInAnswer.From(ScrapeStatus.Found, "{\"header\":{},\"response\":{\"ssuser\":null}}").Result);
-            Assert.Equal(SignInResult.Unreadable, SignInAnswer.From(ScrapeStatus.Found, "not json").Result);
+            Assert.Equal(SignInResult.WrongAccount, As(403, "Erreur de login : Vérifier les identifiants utilisateurs !").Result);
+            Assert.Equal(SignInResult.DeveloperRefused, As(403, "Erreur de login : Vérifier vos identifiants développeur !").Result);
+            Assert.Equal(SignInResult.WrongAccount, As(200, "{\"header\":{},\"response\":{\"ssuser\":null}}").Result);
+            Assert.Equal(SignInResult.Unreadable, As(200, "not json").Result);
         }
     }
 

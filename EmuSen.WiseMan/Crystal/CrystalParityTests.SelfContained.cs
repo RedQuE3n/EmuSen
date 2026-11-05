@@ -153,8 +153,9 @@ namespace EmuSen.WiseMan.Crystal
                 RomLibraryResult scanned = RomLibrary.Scan(library, RomLibrary.Beside.Tree);
                 RomEntry entry = Assert.Single(scanned.Entries);
                 Assert.Equal(package, entry.Package);
-                var sources = new MediaSources((_, _) => null, DataStore.Media, null, null, packages: new Dictionary<string, string> { [entry.FullPath] = entry.Package! });
-                (MediaSource source, string? path) = sources.Locate("test", entry.FullPath, ScrapeRules.Cover.EsdeType);
+                string settings = System.Text.Json.JsonSerializer.Serialize(new { developer_files = false, openemu = false, sources_alone = true, packages = new Dictionary<string, string> { [entry.FullPath] = entry.Package! }, test = new { offline = true } });
+                using var native = NativeScraping.Open(DataStore.Media, settings, null, null);
+                (MediaSource source, string? path) = new MediaSources(native, "").Locate("test", entry.FullPath, ScrapeRules.Cover.EsdeType);
                 Assert.Equal(MediaSource.Package, source);
                 return path;
             }

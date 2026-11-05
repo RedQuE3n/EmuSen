@@ -472,7 +472,16 @@ impl Store {
     pub fn open(sqlite: Arc<Sqlite>, root: &str) -> Result<Store, Error> {
         std::fs::create_dir_all(root).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, root)))?;
         let path = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, FILE_NAME);
-        let mut db = Connection::open(sqlite, &path)?;
+        Store::open_at(sqlite, root, &path)
+    }
+
+    /// A store of no rows that lives as long as the handle, for finding pictures while no media.db exists; nothing on disk is made.
+    pub fn in_memory(sqlite: Arc<Sqlite>, root: &str) -> Result<Store, Error> {
+        Store::open_at(sqlite, root, ":memory:")
+    }
+
+    fn open_at(sqlite: Arc<Sqlite>, root: &str, path: &str) -> Result<Store, Error> {
+        let mut db = Connection::open(sqlite, path)?;
         db.set_timeout(emusen_sqlite::COMMAND_TIMEOUT);
         let mut version = scalar_i64(&db, "PRAGMA user_version", &[])?.unwrap_or(0);
         if version > SCHEMA_VERSION {

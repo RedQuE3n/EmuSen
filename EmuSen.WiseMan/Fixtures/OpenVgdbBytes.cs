@@ -2,9 +2,9 @@ using System;
 using System.Text;
 using EmuSen.Galaxia.Native;
 
-namespace EmuSen.Mistress.Library
+namespace EmuSen.WiseMan.Fixtures
 {
-    // The bytes OpenVGDB hashed for a system's file, the systems table's rule read through the platform library's C interface; the file itself where the rule keeps it whole - see EmuSen_Backend.md §14.13.
+    // The bytes OpenVGDB hashed for a system's file, the systems table's rule read through the platform library's C interface, for the tests; the file itself where the rule keeps it whole - see EmuSen_Backend.md §14.13.
     public static unsafe class OpenVgdbBytes
     {
         public static byte[] Of(string? system, byte[] file)

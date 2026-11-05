@@ -18,7 +18,7 @@ using Microsoft.Data.Sqlite;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
-    // Runs replayed, held to the C#'s answers recorded before its deletion: one fake ScreenScraper served at its real addresses, the C# Scraper and the Rust run each sent to it, and their requests compared byte for byte after the redactor, their stores row for row and file for file, their results and their clocks' waits - see EmuSen_Backend.md §30.7.
+    // Runs replayed, held to the C#'s answers recorded before its deletion: one fake ScreenScraper served at its real addresses, the library's run sent to it, and its requests after the redactor, its store row for row and file for file, its results and its clock's waits held to the recording - see EmuSen_Backend.md §30.7 and §40.5.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class ScrapeReplayParityTests : IDisposable
     {
@@ -124,36 +124,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
 
         private sealed record Side(string Requests, string Db, string Tree, string Results, string Delays);
 
-        private static string Kinds(IEnumerable<string> written) => string.Join(",", written.Select(ScrapeProgress.KindOf));
-
-        // The C# Scraper over a store and a clock of its own, its client sent to the replay server.
-        private Side CSharp(string media, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority)
-        {
-            _replay.Clear();
-            var clock = new FakeScrapeClock(Start);
-            using MediaStore store = MediaStore.Open(media);
-            store.PutInFolders(p => GameFolders.Of(Roms, p), Start);
-            var quota = new ScrapeQuotaManager(store, clock);
-            var results = new ConcurrentQueue<ScrapeResult>();
-            using var finished = new ManualResetEventSlim();
-            using var http = _replay.Client(Agent);
-            var client = new ScreenScraperClient(http, FakeScreenScraper.Developer, null);
-            using (var scraper = new Scraper(client, store, quota, () => choices, (_, _) => false, path => bytes => OpenVgdbBytes.Of(Pack(path) is "gbc" ? "gb" : Pack(path), bytes), results.Enqueue, clock)
-            {
-                IdlePoll = TimeSpan.FromMilliseconds(20), FolderOf = p => GameFolders.Of(Roms, p),
-            })
-            {
-                scraper.Finished += _ => finished.Set();
-                store.ClearQueue();
-                foreach (var (path, system) in games) store.Enqueue(path, system, priority);
-                scraper.Start();
-                Assert.True(finished.Wait(TimeSpan.FromSeconds(60)), "the C# run did not end");
-            }
-            string said = string.Join("\n", results.Where(r => r.Outcome is not (ScrapeOutcome.Retry or ScrapeOutcome.Stopped))
-                .Select(r => $"{r.Path} {r.Outcome.ToString().ToLowerInvariant()} [{Kinds(r.Written)}] {r.Detail} skipped={r.Skipped} cover={r.HasCover} by={r.MatchedBy}"));
-            return new Side(Requests(), Dump(Path.Combine(media, MediaStore.FileName)), Tree(media), said, string.Join(",", clock.Delays.Select(d => d.Ticks)));
-        }
-
         private static string ChoicesJson(ScrapeChoices c) => JsonSerializer.Serialize(new
         {
             kinds = c.Kinds().Select(k => k.EsdeType), region = c.Region, language = c.Language, region_fallback = c.RegionFallback, threads = c.Threads,
@@ -183,9 +153,8 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             return new Side(Requests(), Dump(Path.Combine(media, MediaStore.FileName)), Tree(media), said, delays);
         }
 
-        // The half the class runs on: the C# to record the goldens, the library otherwise.
-        private Side Run(string media, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority) =>
-            ScrapeGoldens.CSharp ? CSharp(media, games, choices, priority) : Rust(media, games, choices, priority);
+        // A run on the library, held to the recording.
+        private Side Run(string media, IReadOnlyList<(string Path, string System)> games, ScrapeChoices choices, ScrapePriority priority) => Rust(media, games, choices, priority);
 
         private void Hold(EmuSen.WiseMan.Crystal.ParityGolden golden, string name, Side side)
         {
@@ -330,19 +299,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 _replay.Clear();
                 string a = Path.Combine(_root, "failover", "store");
                 string counts;
-                if (ScrapeGoldens.CSharp)
-                {
-                    var results = new ConcurrentQueue<CoverResult>();
-                    using (var http = _replay.Client(Agent))
-                    using (var fetcher = new CoverFetcher(http, OpenVgdb.DefaultPath, Path.Combine(a, "openemu"), results.Enqueue))
-                    {
-                        foreach (var (path, _) in games) fetcher.Enqueue(new RomEntry(path), RuntimeCatalog.CoreForRom(path)!);
-                        SpinWait.SpinUntil(() => results.Count == games.Count, TimeSpan.FromSeconds(30));
-                    }
-                    Assert.True(results.Count(r => r.Saved is not null) == 2, string.Join("; ", results.Select(r => $"{Path.GetFileName(r.RomPath)} {r.Outcome} {r.RomName} {r.Detail}")));
-                    counts = $"asked {results.Count} found {results.Count(r => r.Saved is not null)} state stopped";
-                }
-                else
                 {
                     using MediaService rust = MediaService.Open(a, Settings().Replace("\"openemu\":false", "\"openemu\":true"), embedded: Blob);
                     rust.Start($"{{\"games\":{JsonSerializer.Serialize(games.Select(g => new { path = g.Path, system = g.System }))},\"enabled\":false}}");

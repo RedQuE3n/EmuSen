@@ -35,8 +35,11 @@ namespace EmuSen.WiseMan.Mistress
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenCoverChoiceTests", Guid.NewGuid().ToString("N"));
 
+        private readonly List<IDisposable> _held = new();
+
         public void Dispose()
         {
+            foreach (IDisposable d in Enumerable.Reverse(_held)) d.Dispose();
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
@@ -52,9 +55,24 @@ namespace EmuSen.WiseMan.Mistress
 
         private const string Hack = "/roms/Hack of Mario (USA).nes", Base = "/roms/Mario (USA).nes", Other = "/roms/Other (USA).sfc", Loop = "/roms/Loop (USA).nes";
 
-        private MediaSources Sources(Dictionary<string, string> choices, bool handPlacedHack = true) => new(
-            (console, title) => handPlacedHack && console == "NES" && title == "Hack of Mario (USA)" ? Path.Combine(_root, "Artwork", "NES", "Hack of Mario (USA).png") : null,
-            Path.Combine(_root, "Media"), null, null, p => choices.GetValueOrDefault(p), string.Join(",", choices));
+        // The library's sources over a store holding nothing, the choices kept in a games.db of their own as the window keeps them, the player's covers in Artwork or none.
+        private MediaSources Sources(Dictionary<string, string> choices, bool handPlacedHack = true)
+        {
+            Directory.CreateDirectory(_root);
+            string db = Path.Combine(_root, $"games{_held.Count}.db");
+            using (GameRecords records = GameRecords.Open(db))
+                foreach (var (game, from) in choices) records.SetCoverChoice(game, from, new DateTime(2026, 9, 27));
+            var library = EmuSen.Crystal.Client.Library.GameLibrary.Open(db);
+            _held.Add(library);
+            string settings = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["developer_files"] = false, ["openemu"] = false, ["sources_alone"] = true, ["art"] = Path.Combine(_root, handPlacedHack ? "Artwork" : "NoArtwork"),
+                ["cores"] = RuntimeCatalog.Consoles.Select(c => c.Systems).ToArray(), ["test"] = new { offline = true },
+            });
+            var native = NativeScraping.Open(Path.Combine(_root, "Media"), settings, library, null);
+            _held.Add(native);
+            return new MediaSources(native, string.Join(",", choices));
+        }
 
         [Fact]
         public void A_chosen_game_s_cover_comes_before_even_the_player_s_own_and_only_for_covers()
@@ -83,8 +101,8 @@ namespace EmuSen.WiseMan.Mistress
             // A loop stops at the game reached twice, which shows its own cover.
             Assert.Equal(loopCover, Sources(new() { [Hack] = Loop, [Loop] = Hack }, handPlacedHack: false).Cover("nes", Hack));
             // A chosen game with no cover leaves the game its own.
-            Assert.Equal(MediaSource.HandPlaced, Sources(new() { [Hack] = Base }).Locate("nes", Hack, "cover").Source);
             Touch("Artwork", "NES", "Hack of Mario (USA).png");
+            Assert.Equal(MediaSource.HandPlaced, Sources(new() { [Hack] = Base }).Locate("nes", Hack, "cover").Source);
             Assert.Equal(MediaSource.None, Sources(new() { [Hack] = Base }, handPlacedHack: false).Locate("nes", Hack, "cover").Source);
         }
 

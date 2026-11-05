@@ -6,30 +6,56 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Mistress.Scraping;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
-    // The client against a fake server: what it sends, how it reads an answer, and which files it keeps - see EmuSen_BigPicture.md §17.
+    // The library's client against a fake server: what it sends, how it reads an answer, and which files it keeps. Each documented code's meaning is emusen-scrape's quota tests', a found game read whole is its answers test's, and a file already there is ScraperTests' - see EmuSen_BigPicture.md §17 and EmuSen_Backend.md §40.5.
+    [Collection(TestCollections.ProcessGlobals)]
     public class ScreenScraperClientTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenScreenScraperClientTests", Guid.NewGuid().ToString("N"));
 
-        public ScreenScraperClientTests() => Directory.CreateDirectory(_root);
+        public ScreenScraperClientTests()
+        {
+            Directory.CreateDirectory(_root);
+            ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+        }
 
         public void Dispose()
         {
+            ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static readonly RomHashes Hashes = new("0123456789abcdef0123456789abcdef", "cbf43926", "0123456789abcdef0123456789abcdef01234567", 524288);
+        private string Rom(string name, int length)
+        {
+            string path = Path.Combine(_root, "Roms", "snes", name);
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var bytes = new byte[length];
+            new Random(length).NextBytes(bytes);
+            File.WriteAllBytes(path, bytes);
+            return path;
+        }
+
+        // The first jeuInfos a one-game run sends.
+        private string Asked(FakeScreenScraper server, string rom, string media)
+        {
+            using var s = new LibraryScraper(server, Path.Combine(_root, media));
+            s.Run([(rom, "snes")]);
+            s.Ends();
+            return server.JeuInfos.First();
+        }
 
         [Fact]
         public void Jeu_infos_carries_the_credentials_json_the_three_hashes_the_size_the_bare_file_name_and_the_system()
         {
-            var client = new ScreenScraperClient(new HttpClient(), FakeScreenScraper.Developer, null);
-            string url = client.JeuInfosUrl(4, Hashes, "/some/where/F-Zero (USA).sfc");
+            string rom = Rom("F-Zero (USA).sfc", 4096);
+            RomHashes h = RomHash.Of(rom);
+            string url = Asked(new FakeScreenScraper(), rom, "Media");
 
             Assert.StartsWith("https://api.screenscraper.fr/api2/jeuInfos.php?", url);
             Assert.Equal(FakeScreenScraper.DevId, FakeScreenScraper.Param(url, "devid"));
@@ -38,10 +64,10 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             Assert.Equal("json", FakeScreenScraper.Param(url, "output"));
             Assert.Equal("rom", FakeScreenScraper.Param(url, "romtype"));
             Assert.Equal("4", FakeScreenScraper.Param(url, "systemeid"));
-            Assert.Equal(Hashes.Crc32, FakeScreenScraper.Param(url, "crc"));
-            Assert.Equal(Hashes.Md5, FakeScreenScraper.Param(url, "md5"));
-            Assert.Equal(Hashes.Sha1, FakeScreenScraper.Param(url, "sha1"));
-            Assert.Equal("524288", FakeScreenScraper.Param(url, "romtaille"));
+            Assert.Equal(h.Crc32, FakeScreenScraper.Param(url, "crc"));
+            Assert.Equal(h.Md5, FakeScreenScraper.Param(url, "md5"));
+            Assert.Equal(h.Sha1, FakeScreenScraper.Param(url, "sha1"));
+            Assert.Equal("4096", FakeScreenScraper.Param(url, "romtaille"));
             Assert.Equal("F-Zero (USA).sfc", FakeScreenScraper.Param(url, "romnom"));
             Assert.DoesNotContain("ssid=", url);
             Assert.DoesNotContain("sspassword=", url);
@@ -50,97 +76,77 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         [Fact]
         public void The_member_account_is_sent_only_when_both_halves_are_set()
         {
-            string with = new ScreenScraperClient(new HttpClient(), FakeScreenScraper.Developer, new MemberAccount("FAKEMEMBER", "FAKEMEMBERPW")).JeuInfosUrl(4, Hashes, "a.sfc");
-            string half = new ScreenScraperClient(new HttpClient(), FakeScreenScraper.Developer, new MemberAccount("FAKEMEMBER", "")).JeuInfosUrl(4, Hashes, "a.sfc");
+            string rom = Rom("A (USA).sfc", 1024);
+            new MemberAccount("FAKEMEMBER", "FAKEMEMBERPW") { Verified = DateTime.UtcNow }.Save();
+            string with = Asked(new FakeScreenScraper(), rom, "With");
+            new MemberAccount("FAKEMEMBER", "") { Verified = DateTime.UtcNow }.Save();
+            string half = Asked(new FakeScreenScraper(), rom, "Half");
             Assert.Equal("FAKEMEMBER", FakeScreenScraper.Param(with, "ssid"));
             Assert.Equal("FAKEMEMBERPW", FakeScreenScraper.Param(with, "sspassword"));
             Assert.DoesNotContain("ssid=", half);
         }
 
-        [Theory]
-        [InlineData(200, ScrapeStatus.Found)]
-        [InlineData(400, ScrapeStatus.BadRequest)]
-        [InlineData(401, ScrapeStatus.ServerBusy)]
-        [InlineData(403, ScrapeStatus.BadCredentials)]
-        [InlineData(404, ScrapeStatus.NotFound)]
-        [InlineData(423, ScrapeStatus.ApiClosed)]
-        [InlineData(426, ScrapeStatus.Blacklisted)]
-        [InlineData(429, ScrapeStatus.TooManyRequests)]
-        [InlineData(430, ScrapeStatus.DailyQuota)]
-        [InlineData(431, ScrapeStatus.DailyKoQuota)]
-        [InlineData(500, ScrapeStatus.Failed)]
-        public void Each_documented_code_has_its_own_meaning(int code, ScrapeStatus status)
-        {
-            Assert.Equal(status, ScreenScraperClient.StatusOf((HttpStatusCode)code));
-        }
-
         [Fact]
-        public async Task A_found_game_is_read_whole_with_its_quota()
+        public void A_game_not_found_is_not_found_and_an_answer_of_another_shape_is_malformed()
         {
-            var server = new FakeScreenScraper();
-            server.Games.Add(new FakeGame(77, "F-Zero", Hashes.Md5));
-            var client = new ScreenScraperClient(new HttpClient(server), FakeScreenScraper.Developer, null);
-
-            JeuInfosAnswer answer = await client.JeuInfosAsync(4, Hashes, "F-Zero (USA).sfc", CancellationToken.None);
-
-            Assert.Equal(ScrapeStatus.Found, answer.Status);
-            ScrapedGame game = answer.Game!;
-            Assert.Equal(77, game.Id);
-            Assert.Equal(770, game.RomId);
-            Assert.Equal(4, game.SystemId);
-            Assert.Equal("F-Zero", game.Names.Single(n => n.Key == "ss").Text);
-            Assert.Equal("Synthetic Developer", game.Developer);
-            Assert.Equal("Synthetic Publisher", game.Publisher);
-            Assert.Equal("1-2", game.Players);
-            Assert.Equal(15.0, game.Note);
-            Assert.Equal(["fr", "en"], game.Synopses.Select(s => s.Key));
-            Assert.Contains(game.Media, m => m.Type == "mixrbv2" && m.Region == "wor");
-            Assert.Equal(new ScrapeQuota(1, 128, 10, 1, 60, 20000, 2000), answer.Quota);
-        }
-
-        [Fact]
-        public async Task A_game_not_found_is_not_found_and_an_answer_of_another_shape_is_malformed()
-        {
-            var server = new FakeScreenScraper();
-            var client = new ScreenScraperClient(new HttpClient(server), FakeScreenScraper.Developer, null);
-            Assert.Equal(ScrapeStatus.NotFound, (await client.JeuInfosAsync(4, Hashes, "x.sfc", CancellationToken.None)).Status);
-
+            string rom = Rom("X (USA).sfc", 2048);
+            using (var s = new LibraryScraper(new FakeScreenScraper(), Path.Combine(_root, "NotFound")))
+            {
+                s.Run([(rom, "snes")]);
+                Assert.Equal(ScrapeOutcome.Unknown, s.Next().Outcome);
+            }
             var odd = new Answering(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("<html>maintenance</html>") });
-            JeuInfosAnswer answer = await new ScreenScraperClient(new HttpClient(odd), FakeScreenScraper.Developer, null).JeuInfosAsync(4, Hashes, "x.sfc", CancellationToken.None);
-            Assert.Equal(ScrapeStatus.Malformed, answer.Status);
+            using (var s = new LibraryScraper(odd, Path.Combine(_root, "Odd")))
+            {
+                s.Run([(rom, "snes")]);
+                LibraryScraper.Result r = s.Next();
+                Assert.Equal(ScrapeOutcome.Error, r.Outcome);
+                Assert.StartsWith("ScreenScraper's answer could not be read", r.Detail);
+            }
+        }
+
+        // The fake server, its pictures answered by the test.
+        private sealed class Pictures(FakeScreenScraper server, Func<HttpResponseMessage> picture) : DelegatingHandler(server)
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+                request.RequestUri!.AbsoluteUri.Contains("/mediaJeu.php") ? Task.FromResult(picture()) : base.SendAsync(request, cancellationToken);
         }
 
         [Fact]
-        public async Task A_picture_is_kept_under_its_final_name_and_nothing_else_is()
+        public void A_picture_is_kept_under_its_final_name_and_nothing_else_is()
         {
-            string target = Path.Combine(_root, "snes", "covers", "Game.png");
-            async Task<MediaAnswer> Get(HttpResponseMessage response) =>
-                await new ScreenScraperClient(new HttpClient(new Answering(_ => response)), FakeScreenScraper.Developer, null).DownloadAsync("https://x/mediaJeu.php", target, CancellationToken.None);
+            string rom = Rom("Game (USA).sfc", 3000);
+            Func<HttpResponseMessage>[] refused =
+            [
+                () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("NOMEDIA") },
+                () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(new string('x', 500), Encoding.UTF8, "text/html") },
+                () => Png(79),
+                () => new HttpResponseMessage(HttpStatusCode.NotFound),
+            ];
+            for (int i = 0; i < refused.Length; i++)
+            {
+                var server = new FakeScreenScraper();
+                server.Games.Add(new FakeGame(77, "Game", RomHash.Of(rom).Md5));
+                string media = Path.Combine(_root, $"Refused{i}");
+                using var s = new LibraryScraper(new Pictures(server, refused[i]), media);
+                s.Run([(rom, "snes")], new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false, TitleScreens = false, BackCovers = false, Boxes3D = false, PhysicalMedia = false, FanArt = false });
+                Assert.False(s.Next().HasCover);
+                s.Ends();
+                Assert.Empty(Directory.EnumerateFiles(media, "*", SearchOption.AllDirectories).Where(f => !Path.GetFileName(f).StartsWith(MediaStore.FileName, StringComparison.Ordinal)));
+            }
 
-            Assert.Equal(MediaOutcome.NoMedia, (await Get(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("NOMEDIA") })).Outcome);
-            Assert.Equal(MediaOutcome.NotAnImage, (await Get(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(new string('x', 500), Encoding.UTF8, "text/html") })).Outcome);
-            Assert.Equal(MediaOutcome.TooSmall, (await Get(Png(79))).Outcome);
-            Assert.Equal(MediaOutcome.Failed, (await Get(new HttpResponseMessage(HttpStatusCode.NotFound))).Outcome);
-            Assert.False(File.Exists(target));
-            Assert.Empty(Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories));
-
-            MediaAnswer saved = await Get(Png(80));
-            Assert.Equal(MediaOutcome.Saved, saved.Outcome);
-            Assert.Equal(80, new FileInfo(target).Length);
-            Assert.Equal(40, saved.Sha1!.Length);
-            Assert.False(File.Exists(target + ".part"));
-        }
-
-        [Fact]
-        public async Task A_file_already_there_is_never_replaced_or_even_asked_for()
-        {
-            string target = Path.Combine(_root, "Game.png");
-            File.WriteAllBytes(target, [1, 2, 3]);
-            var asked = new Answering(_ => Png(400));
-            MediaAnswer answer = await new ScreenScraperClient(new HttpClient(asked), FakeScreenScraper.Developer, null).DownloadAsync("https://x/m", target, CancellationToken.None);
-            Assert.Equal(MediaOutcome.AlreadyThere, answer.Outcome);
-            Assert.Equal(0, asked.Count);
-            Assert.Equal(new byte[] { 1, 2, 3 }, File.ReadAllBytes(target));
+            var kept = new FakeScreenScraper();
+            kept.Games.Add(new FakeGame(77, "Game", RomHash.Of(rom).Md5));
+            string store = Path.Combine(_root, "Kept");
+            using (var s = new LibraryScraper(new Pictures(kept, () => Png(80)), store))
+            {
+                s.Run([(rom, "snes")], new ScrapeChoices { Screenshots = false, Marquees = false, Miximages = false, TitleScreens = false, BackCovers = false, Boxes3D = false, PhysicalMedia = false, FanArt = false });
+                Assert.True(s.Next().HasCover);
+                s.Ends();
+            }
+            string cover = Path.Combine(store, "snes", "covers", "Game (USA).png");
+            Assert.Equal(80, new FileInfo(cover).Length);
+            Assert.Empty(Directory.EnumerateFiles(store, "*.part", SearchOption.AllDirectories));
         }
 
         [Fact]

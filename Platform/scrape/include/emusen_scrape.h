@@ -50,7 +50,9 @@ typedef struct emusen_scrape emusen_scrape;
 struct emusen_library;
 
 /* Settings: {"roms", "art", "esde_media", "openemu", "user_agent", "developer_files", "cores": [[system ids], ...],
- * "test": {"connect", "roots", "clock" (.NET ticks from 1970), "offline"}}, every member optional; "test" is for tests alone, reached by no setting, variable or command. */
+ * "test": {"connect", "roots", "clock" (.NET ticks from 1970), "offline"}}, every member optional; "test" is for tests alone, reached by no setting, variable or command.
+ * Since 1.2, "sources_alone": true at open gives a handle for finding pictures alone while no media.db exists: the
+ * store in memory, no lock taken, nothing on disk made or moved; it is not for a run. */
 typedef struct emusen_scrape_config {
     uint32_t size;                           /* sizeof, so fields may be appended */
     const uint8_t *root; size_t root_len;    /* the media store; media.db in it */

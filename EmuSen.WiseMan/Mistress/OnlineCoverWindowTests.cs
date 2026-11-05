@@ -63,7 +63,7 @@ namespace EmuSen.WiseMan.Mistress
             for (int i = 0; i < 80; i++) { Dispatcher.UIThread.RunJobs(); Thread.Sleep(10); }
 
             Assert.Empty(_server.Asked);
-            Assert.Null(typeof(MainWindow).GetField("_fetcher", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window));
+            Assert.Equal(0, window.Progress?.FailoverAsked ?? 0);
             window.Close();
         }, default);
 

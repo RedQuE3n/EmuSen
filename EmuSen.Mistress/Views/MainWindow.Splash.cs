@@ -20,6 +20,7 @@ namespace EmuSen.Mistress.Views
     {
         private LunaSplash? _splash;
         private TimeSpan _splashFrom;
+        private TimeSpan? _splashFadeFrom;
         private bool _splashPlayed, _splashFrameAsked, _splashSkipped, _bellsRung;
         private IReadOnlyList<double>? _bellTimes;
         private Task<byte[]>? _bells;
@@ -38,7 +39,10 @@ namespace EmuSen.Mistress.Views
 
         internal LunaSplash? SplashShown => _splash;
 
-        internal bool SplashOpen => _splash is not null;
+        // Whether it takes the pad and the keys: while it shows, not while it fades.
+        internal bool SplashOpen => _splash is not null && _splashFadeFrom is null;
+
+        internal bool SplashFading => _splashFadeFrom is not null;
 
         // Once a window, when it opens in big picture with the setting on, and not under a game started by --play.
         private void OpenStartupSplash()
@@ -59,12 +63,31 @@ namespace EmuSen.Mistress.Views
         internal void AdvanceSplash()
         {
             if (_splash is not { } splash) return;
-            TimeSpan elapsed = UiClock() - _splashFrom;
+            TimeSpan now = UiClock();
+            if (_splashFadeFrom is { } fadeFrom)
+            {
+                double faded = (now - fadeFrom).TotalSeconds / splash.Timeline.FadeOut;
+                if (faded >= 1) CloseSplash();
+                else
+                {
+                    splash.Opacity = 1 - faded;
+                    ScheduleSplash();
+                }
+                return;
+            }
+            TimeSpan elapsed = now - _splashFrom;
             if (!splash.AtEnd) splash.Time = elapsed.TotalSeconds;
             StepBells(splash, elapsed.TotalSeconds);
             if (SplashFinished(splash, elapsed) && StartupWork.IsCompleted)
             {
-                CloseSplash();
+                // A fade into big picture over the timeline's FadeOut, cut under reduced motion (EmuSen_Interface.md §22).
+                if (LunaMotion.Reduced || splash.Timeline.FadeOut <= 0) CloseSplash();
+                else
+                {
+                    _splashFadeFrom = now;
+                    splash.IsHitTestVisible = false;
+                    ScheduleSplash();
+                }
                 return;
             }
             ScheduleSplash();
@@ -74,7 +97,7 @@ namespace EmuSen.Mistress.Views
         private void ScheduleSplash()
         {
             if (_splash is not { } splash || _splashFrameAsked) return;
-            if (SplashFinished(splash, UiClock() - _splashFrom) && !BellsPending(splash)) return;
+            if (_splashFadeFrom is null && SplashFinished(splash, UiClock() - _splashFrom) && !BellsPending(splash)) return;
             _splashFrameAsked = true;
             RequestAnimationFrame(_ => { _splashFrameAsked = false; AdvanceSplash(); });
         }
@@ -82,7 +105,7 @@ namespace EmuSen.Mistress.Views
         // Any pad button, key or click: the finished frame at once, and the splash gone as soon as start-up is done.
         private void SkipSplash()
         {
-            if (_splash is not { } splash) return;
+            if (_splash is not { } splash || _splashFadeFrom is not null) return;
             _splashSkipped = true;
             splash.Finish();
             AdvanceSplash();
@@ -91,7 +114,7 @@ namespace EmuSen.Mistress.Views
         // A key held the splash takes; true while it is open, so nothing behind it hears the press.
         private bool SplashKey(Avalonia.Input.Key key, bool pressed)
         {
-            if (_splash is null) return false;
+            if (!SplashOpen) return false;
             if (pressed && key is not (Avalonia.Input.Key.Tab or Avalonia.Input.Key.LeftShift or Avalonia.Input.Key.RightShift)) SkipSplash();
             return true;
         }
@@ -108,6 +131,7 @@ namespace EmuSen.Mistress.Views
         {
             if (_splash is not { } splash) return;
             _splash = null;
+            _splashFadeFrom = null;
             (splash.Parent as Panel)?.Children.Remove(splash);
         }
 

@@ -76,6 +76,7 @@ namespace EmuSen.Mistress.Views
                 SplashPad();
                 return;
             }
+            if (SplashFading) AdvanceSplash();
             _menuOpening.Advance(UiClock());
             _cardSlide.Advance(UiClock());
             // Before anything else reads the pad: the press that wakes the screensaver is its own (§4.75).

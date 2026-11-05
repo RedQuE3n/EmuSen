@@ -125,25 +125,33 @@ namespace EmuSen.Mistress.Views
             {
                 view.Model.StepBindingConsole(button == UiButton.PageUp ? -1 : 1);
                 view.Fill();
+                Heard(button, true);
                 return;
             }
             switch (button)
             {
-                case UiButton.Up: view.Layout.Move(0, -1); return;
-                case UiButton.Down: view.Layout.Move(0, 1); return;
-                case UiButton.Left: view.Layout.Move(-1, 0); return;
-                case UiButton.Right: view.Layout.Move(1, 0); return;
+                case UiButton.Up: Heard(button, view.Layout.Move(0, -1)); return;
+                case UiButton.Down: Heard(button, view.Layout.Move(0, 1)); return;
+                case UiButton.Left: Heard(button, view.Layout.Move(-1, 0)); return;
+                case UiButton.Right: Heard(button, view.Layout.Move(1, 0)); return;
                 case UiButton.Back:
                     if (!view.Back()) CloseSettings();
+                    Heard(button, true);
                     return;
                 case UiButton.Menu:
                     CloseSettings(restoreFocus: false);
                     if (OwnScreenShown || !ThemedLibraryShown) ShowHome();
                     else OpenPadMenu();
+                    Cue("back");
                     return;
             }
-            if (ToolPaneWindow.Glyph(button) is not { } glyph || view.Layout.Press(glyph)) return;
-            if (button is UiButton.PageUp or UiButton.PageDown && view.Model.StepConsole(button == UiButton.PageUp ? -1 : 1)) view.Fill();
+            if (ToolPaneWindow.Glyph(button) is not { } glyph) return;
+            if (view.Layout.Press(glyph)) { Heard(button, true); return; }
+            if (button is UiButton.PageUp or UiButton.PageDown && view.Model.StepConsole(button == UiButton.PageUp ? -1 : 1))
+            {
+                view.Fill();
+                Heard(button, true);
+            }
         }
 
         // Keys before the screen sees them, on both forms: a binding or a hotkey listening takes the key, the tester sees what is held and Escape stops it.

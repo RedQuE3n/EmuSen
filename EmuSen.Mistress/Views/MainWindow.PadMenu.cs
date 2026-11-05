@@ -216,11 +216,15 @@ namespace EmuSen.Mistress.Views
             int count = _padMenuEntries.Count;
             int at = Math.Max(PadMenuList.SelectedIndex, 0);
 
-            if (_padMenuPages.Count > 0 && _padMenuPages[^1].Pad is { } own && own(button)) return;
+            if (_padMenuPages.Count > 0 && _padMenuPages[^1].Pad is { } own && own(button))
+            {
+                Heard(button, true);
+                return;
+            }
             switch (button)
             {
-                case UiButton.Up: PadMenuList.SelectedIndex = (at + count - 1) % count; break;
-                case UiButton.Down: PadMenuList.SelectedIndex = (at + 1) % count; break;
+                case UiButton.Up: PadMenuList.SelectedIndex = (at + count - 1) % count; Heard(button, count > 1); break;
+                case UiButton.Down: PadMenuList.SelectedIndex = (at + 1) % count; Heard(button, count > 1); break;
 
                 case UiButton.Left:
                 case UiButton.Right:
@@ -228,21 +232,23 @@ namespace EmuSen.Mistress.Views
                     {
                         adjust(button == UiButton.Right ? 1 : -1);
                         RefreshPadMenuText(at);
+                        Heard(button, true);
                     }
                     else if (_padMenuPages[^1].Sideways is { } sideways)
                     {
                         sideways(button == UiButton.Right ? 1 : -1);
                         RefreshPadMenuText(at);
+                        Heard(button, true);
                     }
                     break;
 
-                case UiButton.Accept: ChoosePadMenuRow(at); break;
+                case UiButton.Accept: Heard(button, true); ChoosePadMenuRow(at); break;
                 // X takes a screenshot on every page of the in-game menu, with no row of its own.
                 case UiButton.Screensaver when _padMenuInGame: TakeScreenshot(); break;
                 // Y makes the game in hand a favourite on the Home card (EmuSen_Interface.md §2.1).
                 case UiButton.Search: ToggleHomeFavourite(); break;
-                case UiButton.Back: PadMenuBack(); break;
-                case UiButton.Menu: ClosePadMenu(); break;
+                case UiButton.Back: PadMenuBack(); Heard(button, true); break;
+                case UiButton.Menu: ClosePadMenu(); Cue("back"); break;
             }
         }
 

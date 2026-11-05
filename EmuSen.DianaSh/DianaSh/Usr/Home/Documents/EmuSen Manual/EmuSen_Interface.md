@@ -427,7 +427,7 @@ Back, Favourite, Launch (the six EmuSen already synthesised, unchanged), Saved (
 (the reverse) and Refused (220 Hz, 120 ms). On by default at 60% (§0.5), one switch and one volume under Settings ▸
 Sound. Cues play in menus and cards, never over running gameplay except Saved, Loaded and the screenshot, 12 dB under the
 game. A theme's seven navigation sounds replace the library view's sounds and nothing else, so cards and tools sound the
-same under every theme. No music [3].
+same under every theme. No music [3]. Since 2026-11-04 the own look plays the seven navigation cues (§23).
 
 ### 5.7 Iconography
 
@@ -1939,3 +1939,55 @@ than the splash ends it on the frame the work ends; it fades over 150 ms at its 
 while it fades, and cuts under reduced motion. Measured on 2026-11-04 against the draft, with seeded stars and the
 bundled fonts (Barlow Condensed Light in both since the same day): the frames at 1, 2, 3 s and the finished frame match in
 placement, colour and timing.
+
+## 23. The own look's navigation sounds (2026-11-04)
+
+Found by the tester on 2026-11-04 and the fix approved the same day: EmuSen's own look in big picture played no
+navigation sounds. Settings ▸ Sound's Navigation sounds and its volume reached only an ES-DE theme's view.
+
+**The defect, read in the code.** The only caller of `MainWindow.PlayUiSound` was the themed view: `ThemedLibrary.Sound`
+plays the theme's file for a name, or `NavigationSounds.Key(name)` where the theme lacks it (Settings reference §4.66.2),
+and `ShowThemedLibrary` hands it `PlayUiSound` only while the switch is on. Every pad press reaches the window through
+`OnPadCommand`, which routes it to one owner: another window or sheet, the on-screen keyboard, Settings
+(`SettingsPadCommand`), the Home card and the Pause Card (`PadMenuCommand`), a game's page (`GamePagePadCommand`), the
+themed view (`ThemedPadCommand`), or the own look's Home and grid (`OwnScreenPadCommand`, on LunaP's `HubLayout` and
+`GalleryLayout`). None of the own look's routes named a sound.
+
+**The design.** One owner for each part, nothing new beside them: the seven names stay `NavigationSounds`'s, the
+synthesis LunaP's, the stream `UiSoundPlayer` behind `PlayUiSound`, which applies the volume. `OnPadCommand` notes whether
+the own look is sounding when a press arrives, routes it, and plays at most one cue for it
+(`MainWindow.OwnLookSounds.cs`). A route says what the press did in one of two ways: `Heard(button, used)`, where LunaP's
+`Move` and `Press` report whether the screen used the press, gives the button's own cue; `Cue(name)` names an outcome
+outright and outranks it, so A on a cover is a launch, not a select.
+
+| Cue | The own look's presses |
+|---|---|
+| `scroll` | a direction that moved the focus or stepped a value: Home's rows and places, the grid's covers, a game's page, Settings' rows, a card's rows; the triggers; Start on Home, which moves the focus to its start |
+| `systembrowse` | a bumper that changed section: the grid's console or section, a game page's sections, Settings' sections and its console |
+| `select` | A on a place, a menu or card row, a setting or a page's action; X for a game's page; Select for the List card; Start opening the Home card again as a card slides out |
+| `back` | B closing a page, a card, a Settings page or Settings, or clearing the grid's search, filter or collection; B at the grid's top, to Home; Start closing a card, leaving Settings or the grid for Home |
+| `favorite` | Y toggling a favourite on the grid, Home's shelf or the Home card |
+| `launch` | A on a game, on the grid, Home's shelf or a card row that starts one; A on Continue, which resumes the game left |
+| `quicksysselect` | none: the own look has no quick system select; its bumpers change section and play `systembrowse` |
+
+The themed view's choices are mirrored where both have the action (ES-DE's names for moving, changing system, choosing,
+going back, favouriting and launching). Where only the own look has one, the nearest cue was taken: Start leaving a
+screen is `back`, Start on Home is `scroll`, resuming from Continue is `launch`, stepping a setting's value is `scroll`.
+
+**When it is silent.** The own look sounds only on the big screen, with Navigation sounds on, no theme's view shown, no
+game on screen, no Pause Card open over a game, and no other window or sheet taking the pad. A volume of 0 plays nothing,
+as `PlayUiSound` already ruled. So the Pause Card and the in-game menus stay silent, the desktop form is silent, and the
+themed view keeps its own sounds unchanged. Sheets such as Game Options (through `PadWindowRouter`) and the pad keyboard
+over a text box take the pad themselves and are silent; the grid's own search keyboard is part of `GalleryLayout` and
+sounds as the grid does. A press that changes the switch is judged by the switch as it was when the
+press came.
+
+**Questions left open.** Whether the Pause Card and the in-game menus should sound over a paused game (§5.6 allows cues
+in menus and cards, never over running gameplay); whether Settings, cards and a game's page should sound under an ES-DE
+theme too, as §5.6's "cards and tools sound the same under every theme" reads; whether sheets should sound.
+
+**Tests.** `OwnLookSoundsTests`, through the window's `UiSoundSink` and the pad: each cue from a real pad path (Home,
+Settings, the grid, a game's page, the List card, a launch); none with the switch off or at volume 0; none over a running
+game or under its Pause Card; none on the desktop form. Measured on 2026-11-04 with four seeded faults, each caught: the
+cue never played (the state before this section) failed the walk; the switch ignored failed the switch-off case; `back`
+played as `select` failed the walk; the game-on-screen and Pause Card guards removed failed the over-a-game test.

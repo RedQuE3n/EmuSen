@@ -155,7 +155,14 @@ namespace EmuSen.Mistress.Views
         {
             if (button == UiButton.Guide) button = UiButton.Menu;
             if (ScreensaverFromButton(button)) return;
+            bool sounding = OwnLookSounds;
+            _ownCue = null;
+            Route(button);
+            PlayOwnCue(sounding);
+        }
 
+        private void Route(UiButton button)
+        {
             if (OtherWindow() is { } other) PadWindowRouter.Send(other, button);
             else if (EmuSen.LunaP.Controls.OnScreenKeyboard.OpenOver(this) is { } keyboard) PadKeyboard.Send(keyboard, button);
             else if (EmuSen.LunaP.Controls.MenuTextPopup.OpenOver(this) is { } popup) PadKeyboard.Send(popup, button);
@@ -163,7 +170,7 @@ namespace EmuSen.Mistress.Views
             else if (_padMenuOpen) PadMenuCommand(button);
             else if (_gamePage is not null) GamePagePadCommand(button);
             // A card sliding out keeps the pad from the screen beneath, which Start opens it again over.
-            else if (_cardSlide.Leaving) { if (button == UiButton.Menu) OpenPadMenu(); }
+            else if (_cardSlide.Leaving) { if (button == UiButton.Menu) { OpenPadMenu(); Cue("select"); } }
             else if (LibraryView.IsVisible && ThemedLibraryShown && button == UiButton.Screensaver && _themed?.SelectedGame is { Folder: false, IsCollection: false } game) ShowGamePage(game.File);
             else if (LibraryView.IsVisible && ThemedLibraryShown) ThemedPadCommand(button);
             else if (OwnScreenShown) OwnScreenPadCommand(button);

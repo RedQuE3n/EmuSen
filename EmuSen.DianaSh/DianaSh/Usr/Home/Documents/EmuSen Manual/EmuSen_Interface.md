@@ -422,9 +422,7 @@ every fade to 120 ms, stops the ring's breathing (WCAG 2.3.3 [25]) and shows pos
 
 ### 5.6 Sound
 
-Nine cues, synthesised by the project and never copied from anyone's sounds: Move (1.5 kHz, 30 ms), Section, Choose,
-Back, Favourite, Launch (the six EmuSen already synthesised, unchanged), Saved (880 then 1320 Hz, 60 ms each), Loaded
-(the reverse) and Refused (220 Hz, 120 ms). On by default at 60% (§0.5), one switch and one volume under Settings ▸
+Nine cues, synthesised by the project and never copied from anyone's sounds. Since 2026-11-05 (decided by the tester) every cue is Moonrise's bell on its G major pentatonic: Move a short D6, Section a G5, Choose G5 then D6, Back D6 then G5, Favourite G5 B5 D6 G6, Launch the splash's run from G4 to G5, Saved B5 then E6, Loaded the reverse and Refused G4 twice, damped and dull; the quick system select is E5 then A5 (`LunaP` `docs/LunaP.md` §220). On by default at 60% (§0.5), one switch and one volume under Settings ▸
 Sound. Cues play in menus and cards, never over running gameplay except Saved, Loaded and the screenshot, 12 dB under the
 game. A theme's seven navigation sounds replace the library view's sounds and nothing else, so cards and tools sound the
 same under every theme. No music [3]. Since 2026-11-04 the own look plays the seven navigation cues (§23).
@@ -558,8 +556,7 @@ Video's playback is Pass 12 (§5.9), independent of this order; a later stage tu
   focus bar; `MenuRow` and `MenuPanel` take their colours from the palette in reach.
 - **EmuSen.** The drawn menus use LunaP's Barlow Condensed (`LunaFonts.CondensedFile`) and Mistress's own copy is gone;
   a framed sheet's stock controls, headings and tabs stay in Barlow Condensed at their present sizes; the desktop is in Barlow
-  at 13; `NavigationSounds` renders LunaP's cues under ES-DE's names, the tone code moved unchanged so the sounds are the
-  same; the navigation volume defaults to 60.
+  at 13; `NavigationSounds` renders LunaP's cues under ES-DE's names, the bells are LunaP's (§5.6); the navigation volume defaults to 60.
 - **Not yet in U1.** The drawn menus' rows and a framed sheet's words stay in Barlow Condensed at their present sizes
   until the Card form rebuilds them (U2, U3): moved to Barlow at 22, the sheets failed the fit audit in 23 states,
   wider words past their bars and a controller drawing's labels under the floor (LunaP §206.3). The player's switches for light or dark, reduced motion

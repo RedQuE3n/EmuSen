@@ -1074,7 +1074,8 @@ on the first poll.
 poll, measured 2026-10-18: 0 of 800 failed alone, 0 of 800 under the sixteen busy loops, 0 of 800 beside the second
 test host, 0 of 800 in one test host beside every other Mistress test (2,255 more, all passing, 54 skipped by their
 own opt-in), and 0 of 800 under the busy loops with `EMUSEN_ENDYMION_NATIVE=0`, the C# manager in place of the
-library's. The claims are C# over either manager, so the two halves were expected to agree, and did.
+library's. The claims are C# over either manager, so the two halves were expected to agree, and did. (The C# manager
+was deleted on 2026-11-05, and the variable is ignored since: `EmuSen_Backend.md` §40.3.)
 
 #### 8.13.9 The game heard the press that launched it (2026-10-18)
 

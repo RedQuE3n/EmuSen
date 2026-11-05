@@ -8708,11 +8708,17 @@ tester's library); the window fit audit's Controller Bindings cases at both size
 Three components of the platform run on `libemusen_platform`, a library in Rust that ships beside the assemblies, by
 default, each with its C# kept behind a variable of its own (`EmuSen_RustPlatform.md` §3.9, §13 and §19):
 
-| Variable | Component | What it covers |
-|---|---|---|
-| `EMUSEN_GALAXIA_NATIVE` | Galaxia | the tree of folders, config files and their migrations, the error log, save paths, ROM hashes |
-| `EMUSEN_ENDYMION_NATIVE` | Endymion | audio output and its rate control, the pads and their routing to the console's ports, the interface sounds |
-| `EMUSEN_SERENITY_NATIVE` | Serenity's slang half | RetroArch presets: reading them, compiling their shaders, the compiled-shader cache, the Vulkan device and the chain that draws them |
+| Variable | Component | What it covers | `0` now |
+|---|---|---|---|
+| `EMUSEN_GALAXIA_NATIVE` | Galaxia | the tree of folders, config files and their migrations, the error log, save paths, ROM hashes | ignored since 2026-11-04, the C# deleted (`EmuSen_Backend.md` §40.2) |
+| `EMUSEN_ENDYMION_NATIVE` | Endymion | audio output and its rate control, the pads and their routing to the console's ports, the interface sounds | ignored since 2026-11-05, the C# deleted (`EmuSen_Backend.md` §40.3) |
+| `EMUSEN_SERENITY_NATIVE` | Serenity's slang half | RetroArch presets: reading them, compiling their shaders, the compiled-shader cache, the Vulkan device and the chain that draws them | runs the C# |
+
+*Changed 2026-11-04 and 2026-11-05:* Galaxia's and Endymion's C# halves were deleted (`EmuSen_Backend.md` §40). Their
+variables are ignored, with one line the first time the component loads, for example
+`EMUSEN_ENDYMION_NATIVE=0 is ignored: Endymion has had no C# implementation since 2026-11-05 and runs on
+libemusen_platform.so.`, and a library that does not load is refused in words at the component's first call rather than
+answered by the C#. What follows describes the switches that remain.
 
 Each is read once, the first time its component is used. `0` runs the component's C#. Any other value, or none,
 runs the library when it loads, and otherwise runs the C# and writes one line to the error log saying why, for

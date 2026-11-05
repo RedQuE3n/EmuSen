@@ -5,7 +5,6 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 using EmuSen.Endymion.Input;
-using EmuSen.Endymion.Native;
 using EmuSen.Galaxia.Input;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
@@ -29,7 +28,7 @@ namespace EmuSen.WiseMan.Input
                 : UinputPad.Unavailable;
     }
 
-    // Real kernel pads plugged, pulled and plugged back under the real SDL layer, polled as Mistress polls, under each manager - see EmuSen_Input.md §8.12.
+    // Real kernel pads plugged, pulled and plugged back under the real SDL layer, polled as Mistress polls - see EmuSen_Input.md §8.12.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class UinputHotplugTests(ITestOutputHelper output)
     {
@@ -39,29 +38,6 @@ namespace EmuSen.WiseMan.Input
         private static readonly HashSet<string> Paths = new();
 
         private static bool Mine(uint id) => SDL.GetGamepadPathForID(id) is { } path && Paths.Contains(path);
-
-        // Only the pads this test made, so a pad on the desk takes no seat.
-        private sealed class MineOnly(SdlPadDevices sdl) : IPadDevices
-        {
-            public bool Init() => sdl.Init();
-            public void Quit() => sdl.Quit();
-            public uint[] Attached() => sdl.Attached().Where(Mine).ToArray();
-            public IntPtr Open(uint id) => sdl.Open(id);
-            public void Close(IntPtr pad) => sdl.Close(pad);
-            public bool IsAttached(IntPtr pad) => sdl.IsAttached(pad);
-            public bool DevicesChanged() => sdl.DevicesChanged();
-            public void Update() => sdl.Update();
-            public bool Button(IntPtr pad, SDL.GamepadButton button) => sdl.Button(pad, button);
-            public short Axis(IntPtr pad, SDL.GamepadAxis axis) => sdl.Axis(pad, axis);
-            public string? Name(IntPtr pad) => sdl.Name(pad);
-            public SDL.GamepadType Type(IntPtr pad) => sdl.Type(pad);
-            public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => sdl.Label(pad, button);
-            public string Guid(IntPtr pad) => sdl.Guid(pad);
-            public string? Path(IntPtr pad) => sdl.Path(pad);
-            public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
-            public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
-            public void Rumble(IntPtr pad, ushort strong, ushort weak) => sdl.Rumble(pad, strong, weak);
-        }
 
         // A manager on the real devices, ticked as Mistress's 16 ms pad timer ticks it: Poll and nothing else on the thread.
         private sealed class Rig : IDisposable
@@ -73,20 +49,18 @@ namespace EmuSen.WiseMan.Input
             public readonly GamepadManager Manager;
             public readonly List<PadConnection> Changes = new();
 
-            public Rig(bool native, ITestOutputHelper output, params UinputPad[] present)
+            public Rig(ITestOutputHelper output, params UinputPad[] present)
             {
                 _output = output;
                 _made.AddRange(present);
-                Manager = native
-                    ? new GamepadManager(new GamepadBindingMap(), start: false, new SdlPadDevices(), true, _only)
-                    : new GamepadManager(new GamepadBindingMap(), start: false, new MineOnly(new SdlPadDevices()), false);
+                Manager = new GamepadManager(new GamepadBindingMap(), start: false, new SdlPadDevices(), _only);
                 Manager.PadChanged += change =>
                 {
                     Changes.Add(change);
                     Say($"{(change.Connected ? "connected" : "disconnected")}: {change.Pad.Name} player {change.Player} path {change.Pad.Path} guid {change.Pad.Guid}");
                 };
                 Manager.Start();
-                Say($"native {native}, started");
+                Say("started");
             }
 
             public void Say(string line) => _output.WriteLine($"{_clock.Elapsed.TotalSeconds,7:F3} {line}");
@@ -109,7 +83,7 @@ namespace EmuSen.WiseMan.Input
 
             public void Tick()
             {
-                // The library is told the ids the test may see, as the C# is told by MineOnly.
+                // The library is told the ids the test may see, so a pad on the desk takes no seat.
                 if (SDL.GetGamepads(out int count) is { } ids)
                     foreach (uint id in ids.Take(count).Where(Mine)) _only.Add(id);
                 Manager.Poll();
@@ -171,11 +145,11 @@ namespace EmuSen.WiseMan.Input
         }
 
         // Present at start, pulled, and plugged back as the same pad on the same node: player 1 again, and heard.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void A_pad_pulled_and_plugged_back_is_player_1_again(bool native)
+        [UinputFact]
+        public void A_pad_pulled_and_plugged_back_is_player_1_again()
         {
             UinputPad pad = Present(Pad);
-            using var rig = new Rig(Native(native), output, pad);
+            using var rig = new Rig(output, pad);
             rig.Expect(1, "present at start");
             rig.Heard(pad, 1);
             rig.Pull(pad);
@@ -187,10 +161,10 @@ namespace EmuSen.WiseMan.Input
         }
 
         // None at start, then one plugged in for the first time: seen, player 1, and heard.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void A_pad_plugged_in_after_start_is_seen(bool native)
+        [UinputFact]
+        public void A_pad_plugged_in_after_start_is_seen()
         {
-            using var rig = new Rig(Native(native), output);
+            using var rig = new Rig(output);
             rig.Expect(0, "started with none");
             UinputPad pad = rig.Make(Pad);
             rig.Expect(1, "plugged in");
@@ -199,10 +173,10 @@ namespace EmuSen.WiseMan.Input
         }
 
         // Plugged back while another device holds its old node, as a Bluetooth reconnect or a different port gives it: the same GUID on a new path finds the seat.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void A_pad_plugged_back_on_another_node_is_its_player_again(bool native)
+        [UinputFact]
+        public void A_pad_plugged_back_on_another_node_is_its_player_again()
         {
-            using var rig = new Rig(Native(native), output);
+            using var rig = new Rig(output);
             UinputPad pad = rig.Make(Pad);
             rig.Expect(1, "present");
             string? before = pad.EventPath;
@@ -217,10 +191,10 @@ namespace EmuSen.WiseMan.Input
         }
 
         // Two pads of one model; player 1's pulled and plugged back elsewhere takes player 1, and player 2's stays player 2's throughout.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void Of_two_pads_the_one_replugged_gets_its_player_back_and_the_other_keeps_its_own(bool native)
+        [UinputFact]
+        public void Of_two_pads_the_one_replugged_gets_its_player_back_and_the_other_keeps_its_own()
         {
-            using var rig = new Rig(Native(native), output);
+            using var rig = new Rig(output);
             UinputPad first = rig.Make(Pad);
             rig.Expect(1, "first");
             UinputPad second = rig.Make(Pad);
@@ -238,11 +212,11 @@ namespace EmuSen.WiseMan.Input
         }
 
         // Steam Input's virtual pads in Game Mode: a controller's reconnect removes them and makes them again on new nodes; each slot's pad finds its own seat, in whichever order they return.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void Steams_virtual_pads_made_again_after_a_reconnect_find_their_own_players(bool native)
+        [UinputFact]
+        public void Steams_virtual_pads_made_again_after_a_reconnect_find_their_own_players()
         {
             AllowSteamVirtualPads();
-            using var rig = new Rig(Native(native), output);
+            using var rig = new Rig(output);
             UinputPad builtIn = rig.Make("Microsoft X-Box 360 pad 0", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
             rig.Expect(1, "slot 0");
             UinputPad xbox = rig.Make("Microsoft X-Box 360 pad 1", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
@@ -264,11 +238,11 @@ namespace EmuSen.WiseMan.Input
         }
 
         // A reconnect Steam gives another slot is another GUID; beside a pad still connected it takes the lowest seat free, which is its own.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void A_steam_pad_back_in_another_slot_takes_the_seat_left_free(bool native)
+        [UinputFact]
+        public void A_steam_pad_back_in_another_slot_takes_the_seat_left_free()
         {
             AllowSteamVirtualPads();
-            using var rig = new Rig(Native(native), output);
+            using var rig = new Rig(output);
             UinputPad builtIn = rig.Make("Microsoft X-Box 360 pad 0", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
             rig.Expect(1, "slot 0");
             UinputPad xbox = rig.Make("Microsoft X-Box 360 pad 1", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
@@ -282,8 +256,8 @@ namespace EmuSen.WiseMan.Input
         }
 
         // Steam's file names the controller behind each virtual pad; SDL reports its vendor and product, so the built-in controls are known and the external pad is player 1 - see EmuSen_Input.md §8.13.2.
-        [UinputTheory, InlineData(false), InlineData(true)]
-        public void Steams_virtual_pads_report_the_controllers_behind_them_and_the_external_one_is_player_1(bool native)
+        [UinputFact]
+        public void Steams_virtual_pads_report_the_controllers_behind_them_and_the_external_one_is_player_1()
         {
             AllowSteamVirtualPads();
             // SDL reads the file at most every three seconds and skips one whose time it read last, neither forgotten when its joysticks stop.
@@ -295,7 +269,7 @@ namespace EmuSen.WiseMan.Input
             setenv("SteamVirtualGamepadInfo", info, 1);
             try
             {
-                using var rig = new Rig(Native(native), output);
+                using var rig = new Rig(output);
                 rig.Manager.ExternalControllerFirst = true;
                 UinputPad builtIn = rig.Make("Microsoft X-Box 360 pad 0", UinputPad.SteamVendor, UinputPad.SteamVirtualProduct);
                 rig.Expect(1, "slot 0");
@@ -357,11 +331,5 @@ namespace EmuSen.WiseMan.Input
 
         // SDL hides Steam's virtual pads unless told it runs under Steam, which Steam tells it through this variable; SDL reads the C environment.
         private static void AllowSteamVirtualPads() => setenv("SDL_GAMECONTROLLER_ALLOW_STEAM_VIRTUAL_GAMEPAD", "1", 1);
-
-        private static bool Native(bool native)
-        {
-            if (native) Assert.True(DeviceNative.Active, DeviceNative.Report);
-            return native;
-        }
     }
 }

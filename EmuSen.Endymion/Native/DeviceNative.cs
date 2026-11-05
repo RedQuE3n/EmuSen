@@ -173,30 +173,27 @@ namespace EmuSen.Endymion.Native
             UiSetDevice = (delegate* unmanaged[Cdecl]<nint, byte*, nuint, int>)found[next++];
         }
 
-        private static readonly Lazy<string?> Lent = new(Lend);
-        private static readonly Lazy<bool> Chosen = new(Choose);
+        private static readonly Lazy<string?> Lent = new(() => Lend("SDL3"));
 
-        // The library has the SDL this process loaded: what a parity test needs, whichever way the switch stands.
+        // The library has the SDL this process loaded: what a test asks before it calls.
         public static bool Ready => Lent.Value is null;
 
         public static string Report => Lent.Value ?? EndymionNative.Report;
 
-        // The device half follows Endymion's switch, and needs SDL lent too; a library that cannot take it leaves the devices on the C#, said once - see EmuSen_RustPlatform.md §19.
-        public static bool Active => Chosen.Value;
-
-        private static bool Choose()
+        // The library attached and SDL lent to it before any device is made; without them there are no pads or sound, and the refusal says why - see EmuSen_Backend.md §40.3.
+        internal static void Up()
         {
-            if (!EndymionNative.Active) return false;
-            if (Ready) return true;
-            PlatformSwitch.Announce($"{PlatformLibrary.FileName} is not in use for Endymion's devices ({Lent.Value}); they run on their C# implementation.");
-            return false;
+            EndymionNative.Up();
+            if (Lent.Value is { } why) throw new InvalidOperationException(Refusal(why));
         }
 
+        internal static string Refusal(string why) => $"{PlatformLibrary.FileName} could not take this process's SDL ({why}); Endymion's pads and sound have had no C# implementation since 2026-11-05.";
+
         // The handle is the one SDL3-CS's own calls resolve to, so the library and the C# share one SDL - see EmuSen_RustPlatform.md §14.2.
-        private static string? Lend()
+        internal static string? Lend(string name)
         {
             if (!EndymionNative.Ready) return EndymionNative.Report;
-            if (!NativeLibrary.TryLoad("SDL3", typeof(SDL).Assembly, null, out nint sdl)) return "SDL3 could not be loaded";
+            if (!NativeLibrary.TryLoad(name, typeof(SDL).Assembly, null, out nint sdl)) return $"{name} could not be loaded";
             return SdlLend(sdl) == 0 ? null : EndymionNative.Words();
         }
 

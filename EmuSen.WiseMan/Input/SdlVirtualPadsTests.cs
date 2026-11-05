@@ -13,29 +13,7 @@ namespace EmuSen.WiseMan.Input
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class SdlVirtualPadsTests : IDisposable
     {
-        // The real layer, showing only the pads this test attached, so a pad on the desk takes no seat.
-        private sealed class VirtualOnly(SdlPadDevices sdl, HashSet<uint> mine) : IPadDevices
-        {
-            public bool Init() => sdl.Init();
-            public void Quit() => sdl.Quit();
-            public uint[] Attached() => sdl.Attached().Where(mine.Contains).ToArray();
-            public IntPtr Open(uint id) => sdl.Open(id);
-            public void Close(IntPtr pad) => sdl.Close(pad);
-            public bool IsAttached(IntPtr pad) => sdl.IsAttached(pad);
-            public bool DevicesChanged() => sdl.DevicesChanged();
-            public void Update() => sdl.Update();
-            public bool Button(IntPtr pad, SDL.GamepadButton button) => sdl.Button(pad, button);
-            public short Axis(IntPtr pad, SDL.GamepadAxis axis) => sdl.Axis(pad, axis);
-            public string? Name(IntPtr pad) => sdl.Name(pad);
-            public SDL.GamepadType Type(IntPtr pad) => sdl.Type(pad);
-            public SDL.GamepadButtonLabel Label(IntPtr pad, SDL.GamepadButton button) => sdl.Label(pad, button);
-            public string Guid(IntPtr pad) => sdl.Guid(pad);
-            public string? Path(IntPtr pad) => sdl.Path(pad);
-            public uint VendorProduct(IntPtr pad) => sdl.VendorProduct(pad);
-            public void SetPlayerIndex(IntPtr pad, int index) => sdl.SetPlayerIndex(pad, index);
-            public void Rumble(IntPtr pad, ushort strong, ushort weak) => sdl.Rumble(pad, strong, weak);
-        }
-
+        // The pads this test attached, the only ones the manager is shown, so a pad on the desk takes no seat.
         private readonly HashSet<uint> _mine = new();
         private readonly List<IntPtr> _names = new();
         private readonly Dictionary<uint, IntPtr> _joysticks = new();
@@ -91,7 +69,7 @@ namespace EmuSen.WiseMan.Input
         {
             Assert.True(_sdl, SDL.GetError());
             uint a = Attach("EmuSen Test Pad", 0x0001), b = Attach("EmuSen Test Pad", 0x0001), c = Attach("EmuSen Other Pad", 0x0002);
-            using var manager = new GamepadManager(new GamepadBindingMap(), start: true, new VirtualOnly(new SdlPadDevices(), _mine));
+            using var manager = new GamepadManager(new GamepadBindingMap(), start: true, new SdlPadDevices(), _mine);
             var changes = new List<PadConnection>();
             manager.PadChanged += changes.Add;
             Poll(manager);

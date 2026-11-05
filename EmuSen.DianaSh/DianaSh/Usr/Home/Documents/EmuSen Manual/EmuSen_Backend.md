@@ -9809,6 +9809,90 @@ entry. The goldens' own check was seen to fail a test from its `Dispose` when th
 questions, skipped by design); `cargo test` of `emusen-galaxia`, `emusen-cheats`, `emusen-library-tool`,
 `emusen-core-tool` and `emusen-scrape`, every test passing.
 
+### 40.3 Endymion
+
+**What went** (2026-11-05). `EMUSEN_ENDYMION_NATIVE`, Endymion's `PlatformSwitch`, `EndymionNative.Active`,
+`SwitchFor` and `Crosses`, and `DeviceNative.Active` with its fallback line are gone, with the C# half of every class
+that had one: the resampler (`LinearResampler`), the rate control (`DynamicRateControl`), the game's audio player
+(`AudioPlayer`) and the interface's (`UiSoundPlayer`, its WAV decoding among it), the simulated pad and set
+(`SimulatedPad`, `SimulatedPads`), the seats' rules (`PlayerSlots`), the router to the ports (`PortRouter`), and the
+manager's own (`GamepadManager.Managed`, with its rescan clock, its copy of the settings into a C# manager and the swap
+to one), and `ConnectedPad`'s reading of a pad through an `IPadDevices`. Each class kept its public surface and lost the
+internal constructor that took `bool native`. Shipped C# lost 1,341 lines and gained 264. CI's step "Test Endymion on
+its C#" is gone; the step on the platform library stays.
+
+**The library, attached at the first object.** Nothing chooses any more. Each of the classes above first makes sure the
+library is attached (`EndymionNative.Up`) and, for the device half, that SDL is lent to it (`DeviceNative.Up`). A
+library that is absent, of another interface or without an export Endymion calls is refused in words, as a
+`DllNotFoundException`: `libemusen_platform.so is not in use for Endymion (<why>); Endymion has had no C#
+implementation since 2026-11-05.` A library that cannot take the process's SDL is refused as an
+`InvalidOperationException`: `libemusen_platform.so could not take this process's SDL (<why>); Endymion's pads and
+sound have had no C# implementation since 2026-11-05.` Where the C# fell back, a frontend now stops at its first pad
+manager or audio player, which is the intent: there is no second implementation to fall back to. A leftover
+`EMUSEN_ENDYMION_NATIVE=0` is ignored with `RetiredSwitch`'s one line, said when Endymion attaches, now with the
+component's own date (`RetiredSwitch.Note` takes it, 2026-11-04 by default).
+
+**Where the lend was checked.** Before the deletion, 2026-11-04: on the development desktop every Endymion test asserts
+`DeviceNative.Ready`, and passed; on the handheld, the logs of the installed build held no line of the fallback this
+section deletes, so the lend succeeded there. **On the Mac the lend is unconfirmed**: no run on the Mac mini has yet
+shown the lend succeed or fail. If it fails there, the Mac's frontend now refuses with the second message above where it
+fell back to the C# before; the first run on the Mac is to read it.
+
+**Device layers the library cannot read.** The library reads SDL's pads or its own simulated set and nothing else, and
+`GamepadManager` ran its C# manager for any other `IPadDevices`. It now refuses one, at construction and in
+`UseDevices`, with an `ArgumentException`: `<type> is not a device layer the platform library reads; GamepadManager
+takes SdlPadDevices or SimulatedPads.` A refused swap leaves the manager on its devices. No shipped code made another;
+the test classes that did (`SdlVirtualPadsTests`, `UinputHotplugTests`, and the device parity class's virtual pads)
+filtered SDL's pads to their own, and now give the library the same filter through `GamepadManager`'s internal `only`,
+decided 2026-11-01. `SdlPadDevices` is now only a marker that the library reads SDL's pads; its C# calls into SDL are
+reached by no shipped code. Narrowing `IPadDevices` to what the library reads is accepted for a later step.
+
+**Text that cannot cross** (as Galaxia's, §40.2). The seats' rules take each seated pad's GUID and path as UTF-8. The C#
+seated a pad whose GUID or path held half a surrogate pair by its own rules, the library's answer being undefined for
+it; such a pad is now seated by the library with the half as U+FFFD (.NET's replacing encoder), decided 2026-11-04.
+Two such GUIDs that differ only in the half now match, where the C# told them apart. SDL builds a GUID from hexadecimal
+digits and a path from the system's device node, so no pad SDL reports holds such text; only a simulated pad can.
+
+**How it is graded now.** `EndymionParityTests` and `EndymionDeviceParityTests` compared the halves side by side. Their
+answers were recorded on 2026-11-04 and 2026-11-05 into seventeen files,
+`EmuSen.WiseMan/Crystal/Goldens/EndymionParity.<case>.golden.gz` and `EndymionDeviceParity.<case>.golden.gz`, from the
+library, and before the deletion the C# was run against every one of them (the classes' then
+`EMUSEN_ENDYMION_GOLDEN_SIDE=csharp`) and matched all seventeen; the library matched them twice in a row. A sweep is
+held as digests of 64 answers (1,000 for the rescan's ticks). Temporary folders, device names, SDL's joystick ids and
+handles, and timings are written plainly or left out (the plan of `EmuSen_RustPlatform.md` §6.6).
+- *The floor of a golden.* Each class checks that it made at least a stated number of cases, so a sweep cut short is
+  not recorded as complete. The simulated set's sweep makes 120 runs of 50 steps, and every step adds one answer, so it
+  makes 6,000 answers, which in digests of 64 are 93 full and one of 48: 94 cases, whatever the seed. The floor first
+  written for it was 100, which no run could reach; it is now the expression `(120 * 50 + 63) / 64`, exactly the count.
+- *Kept live:* the pads' rules of Galaxia's `PadControls`, which stays in C# for the frontends.
+- *Changed with the deletion:* `RumbleRouteTests` and `PlayerClaimsTests`' vendor and product case ran on both halves
+  and run on the library; `UinputHotplugTests`' seven cases ran each manager and run the library's, behind
+  `UinputFact`. `EndymionSwitchTests` is folded into `RetiredSwitchTests`, which now holds a later component's own date
+  and both refusals' words, the SDL refusal through `DeviceNative.Lend` on a library name that does not exist
+  (`EmuSenNoSuchSdl3 could not be loaded`). `EndymionDeviceParityTests` gained the refusal of a device layer the
+  library cannot read, at construction and on a swap.
+
+**Seeded faults, 2026-11-05.** Each was seeded, the named class run, and the source restored. `GamepadManager`
+taking any device layer: the refusal's case in `EndymionDeviceParityTests`. `DeviceNative.Lend` answering a missing SDL
+as lent: `RetiredSwitchTests`. `PortRouter.Reset` dropping the first axis the game reads: the router's golden in
+`EndymionParityTests`. The audio player's rate control built with the default deviation in place of the one asked:
+the audio player's golden. A simulated pad's vendor written over its product: first survived, since every test set the
+vendor before the product; `PlayerClaimsTests` now sets them in the other order too, and caught it. The player's
+first latency target computed per 1,024 ms was not caught and cannot be, while a device opens: opening the device sets
+the target again from the latency in milliseconds, so the first value is never read.
+
+**How it was tested** (measured on 2026-11-05 on the development desktop, Debug build): `EndymionParityTests`,
+`EndymionDeviceParityTests`, `RetiredSwitchTests`, the classes of `EmuSen.WiseMan.Galaxia`, `RumbleRouteTests`,
+`PlayerClaimsTests`, `SdlVirtualPadsTests`, `UinputHotplugTests`, `UinputMistressTests`, `AudioOutputDeviceTests`,
+`AudioPlayerTests`, `AudioLatencyDriftTests`, `SilentAudioTests`, `LinearResamplerTests`, `DynamicRateControlTests`,
+`GamepadManagerPadsTests`, `GamepadRescanTests`, `PlayerSlotsTests`, `PortRouterTests`, `PadNavigationTests`,
+`BindingsPageTests`, `ControllersTests`, `PadSettingsWindowTests`, `SettingsWiringTests`, `ThemedLibraryHostTests`,
+`ThemedLibraryReferenceTests`, `LeafAssemblyTests` and the rest of the change's blast radius, 542 passed and 18 skipped
+(the uinput cases without `EMUSEN_UINPUT_PADS=1`, and the open questions skipped by design). `GamepadRescanTests` had
+reached the C#'s rescan rule by reflection, which the compiler could not see; it failed with the C# gone and now holds
+the library's rule (`emusen_endymion_pads_rescan_due`), the one the manager's poll follows. `cargo test` of
+`emusen-endymion` (29) and `emusen-galaxia` (98), every test passing.
+
 ### 40.8 The frontend API: the C# implementation deleted
 
 *Decided 2026-11-01 by the tester, done 2026-11-04 (B10).* State 3 is reached for the frontend API. Its C#

@@ -1974,7 +1974,7 @@ The themed view's choices are mirrored where both have the action (ES-DE's names
 going back, favouriting and launching). Where only the own look has one, the nearest cue was taken: Start leaving a
 screen is `back`, Start on Home is `scroll`, resuming from Continue is `launch`, stepping a setting's value is `scroll`.
 
-**When it is silent.** The own look sounds only on the big screen, with Navigation sounds on, no theme's view shown, no
+**When it is silent.** The own look sounds only on the big screen, with Navigation sounds on, no theme's view shown (since §23.1, no theme's view taking the press), no
 game on screen, no Pause Card open over a game, and no other window or sheet taking the pad. A volume of 0 plays nothing,
 as `PlayUiSound` already ruled. So the Pause Card and the in-game menus stay silent, the desktop form is silent, and the
 themed view keeps its own sounds unchanged. Sheets such as Game Options (through `PadWindowRouter`) and the pad keyboard
@@ -1982,12 +1982,38 @@ over a text box take the pad themselves and are silent; the grid's own search ke
 sounds as the grid does. A press that changes the switch is judged by the switch as it was when the
 press came.
 
-**Questions left open.** Whether the Pause Card and the in-game menus should sound over a paused game (§5.6 allows cues
-in menus and cards, never over running gameplay); whether Settings, cards and a game's page should sound under an ES-DE
-theme too, as §5.6's "cards and tools sound the same under every theme" reads; whether sheets should sound.
+**Questions left open.** Whether sheets should sound. Two were settled by the tester on 2026-11-04: the Pause Card and
+the in-game menus stay silent over a game, and Settings, the cards and a game's page sound under an ES-DE theme too
+(§23.1).
 
 **Tests.** `OwnLookSoundsTests`, through the window's `UiSoundSink` and the pad: each cue from a real pad path (Home,
 Settings, the grid, a game's page, the List card, a launch); none with the switch off or at volume 0; none over a running
 game or under its Pause Card; none on the desktop form. Measured on 2026-11-04 with four seeded faults, each caught: the
 cue never played (the state before this section) failed the walk; the switch ignored failed the switch-off case; `back`
 played as `select` failed the walk; the game-on-screen and Pause Card guards removed failed the over-a-game test.
+
+### 23.1 The same cues under an ES-DE theme (2026-11-05)
+
+Decided by the tester on 2026-11-04: Settings, the cards (the Home card, the List card and the others) and a game's page
+play the same cues for the same presses under an ES-DE theme as under the own look, as §5.6 says cards and tools sound the
+same under every look. The Pause Card and the in-game menus stay silent over a game, decided the same day.
+
+**The change.** §23's test for sounding asked for no theme's view shown, so every press under a theme was silent unless the
+themed view took it. It now asks instead that the themed view not be taking the press, which is the window's existing
+`ThemedTakesThePad`: nothing over the view, no game's page, Settings or card. A press the themed view takes still sounds
+only through `ThemedLibrary.Sound`, unchanged; one that goes to Settings, a card or a game's page names its cue by §23's
+`Heard` and `Cue` as before. The other silent cases are kept: the switch off, volume 0, a game on screen, the Pause Card,
+sheets and the desktop form.
+
+**One resolver.** A cue under a theme is the theme's own file for that name when it has one, else Mistress's built-in,
+exactly as the themed view resolves its own (Settings reference §4.66.2). `ThemedLibrary.SoundFor(name)` is that rule,
+read from the system the view stands on; `ThemedLibrary.Sound` and the cue played after a card's press both call it. With
+no theme shown the cue is `NavigationSounds.Key(name)`, as in §23.
+
+**Tests.** `OwnLookSoundsTests`: under a theme with all seven sounds, a walk by the pad through the Home card, Settings
+reached from it and a game's page plays the theme's files; under a theme with none it plays Mistress's own; under a theme
+lacking only `scroll` it plays Mistress's `scroll` and the theme's others; with the switch off, and over a game and its
+Pause Card, nothing. Each walk ends with a press on the themed view, which still plays one sound. Measured on 2026-11-05
+with three seeded faults: the theme's file ignored (the built-in always played) failed both walks; the old guard (silent
+whenever a theme is shown) failed both walks; the themed-view guard removed was not caught, because no route the themed
+view takes names a cue today, so the guard only keeps a later one from sounding twice.

@@ -113,11 +113,16 @@ namespace EmuSen.Mistress.Views
             string directory = ArtworkDirectory;
             Task.Run(() => ArtworkIndex.Scan(directory, EmuSen.Mistress.Library.RuntimeCatalog.Consoles)).ContinueWith(scan =>
             {
-                if (!scan.IsCompletedSuccessfully) return;
+                if (!scan.IsCompletedSuccessfully)
+                {
+                    _artworkReady.TrySetResult();
+                    return;
+                }
                 Dispatcher.UIThread.Post(() =>
                 {
                     _artwork = scan.Result;
                     LibraryGrid.Refresh(_shownEntries);
+                    _artworkReady.TrySetResult();
                 });
             });
         }

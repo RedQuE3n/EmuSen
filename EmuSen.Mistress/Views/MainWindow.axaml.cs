@@ -195,6 +195,7 @@ namespace EmuSen.Mistress.Views
             };
             Opened += (_, _) => RequestAnimationFrame(_ => Dispatcher.UIThread.Post(_gamepad.Start, DispatcherPriority.Background));
             // `--play <rom>` starts a game straight away, which the cadence measurement of §4.87.1 launches with.
+            Opened += (_, _) => OpenStartupSplash();
             Opened += (_, _) => { if (PlayArgument(Environment.GetCommandLineArgs()) is { } rom) Dispatcher.UIThread.Post(() => LoadRom(rom, Path.GetFileNameWithoutExtension(rom)), DispatcherPriority.Background); };
             // Endymion is a leaf and reads no globals, so audio.json's settings come from here, the cores' with them - see EmuSen_Audio_Sync.md §7.1.
             AudioConfig audio = AudioConfig.Load().Bounded();
@@ -250,7 +251,7 @@ namespace EmuSen.Mistress.Views
             AddHandler(KeyDownEvent, (_, e) => SetButtonFromKey(e.Key, pressed: true, e), RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(KeyUpEvent, (_, e) => SetButtonFromKey(e.Key, pressed: false, e), RoutingStrategies.Tunnel, handledEventsToo: true);
             AddHandler(PointerMovedEvent, (_, _) => ScreensaverPointer(pressed: false), RoutingStrategies.Tunnel, handledEventsToo: true);
-            AddHandler(PointerPressedEvent, (_, e) => { if (ScreensaverOpen) { ScreensaverPointer(pressed: true); e.Handled = true; } else ScreensaverPointer(pressed: false); }, RoutingStrategies.Tunnel, handledEventsToo: true);
+            AddHandler(PointerPressedEvent, (_, e) => { if (SplashOpen) { SkipSplash(); e.Handled = true; } else if (ScreensaverOpen) { ScreensaverPointer(pressed: true); e.Handled = true; } else ScreensaverPointer(pressed: false); }, RoutingStrategies.Tunnel, handledEventsToo: true);
         }
 
         // A focused text field owns the whole keyboard - see EmuSen_Settings_Reference.md §4.17.
@@ -259,6 +260,11 @@ namespace EmuSen.Mistress.Views
 
         private void SetButtonFromKey(Key key, bool pressed, KeyEventArgs e)
         {
+            if (SplashKey(key, pressed))
+            {
+                e.Handled = true;
+                return;
+            }
             if (ScreensaverKey(key, pressed))
             {
                 e.Handled = true;

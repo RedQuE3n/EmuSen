@@ -296,6 +296,7 @@ namespace EmuSen.Mistress.Views
             _themedClosed = true;
             _themedWake?.Stop();
             CloseLaunchScreen();
+            CloseSplash();
             CloseScreensaver();
             ThemedWakeAt = null;
             _uiSounds?.Dispose();

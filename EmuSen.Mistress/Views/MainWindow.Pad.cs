@@ -70,6 +70,12 @@ namespace EmuSen.Mistress.Views
                 return;
             }
             _gamepad.Poll();
+            // Moonrise takes the pad while it shows: any press skips it (EmuSen_Interface.md §22).
+            if (SplashOpen)
+            {
+                SplashPad();
+                return;
+            }
             _menuOpening.Advance(UiClock());
             _cardSlide.Advance(UiClock());
             // Before anything else reads the pad: the press that wakes the screensaver is its own (§4.75).

@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Fixtures
         private readonly FixedRunFolder _folder = new("EmuSenThemedSession");
 
         public ThemedSession(double width = 1280, double height = 800, Action<AppSettings>? settings = null, string? themeDirectory = null, string? extraGamelist = null,
-            EmuSen.LunaP.Controls.DeviceStatus? status = null, string? extraSystem = null, bool sounds = true, Action<string>? roms = null)
+            EmuSen.LunaP.Controls.DeviceStatus? status = null, string? extraSystem = null, bool sounds = true, Action<string>? roms = null, System.Threading.Tasks.Task? startupWork = null, bool? splashes = null)
         {
             Root = _folder.Root;
             RomDirectory = Path.Combine(Root, "Roms");
@@ -59,6 +59,8 @@ namespace EmuSen.WiseMan.Fixtures
             app.BigPictureInterface.MenuOpeningEffect = BigPictureInterface.OpeningNone;
             // Nor does the screensaver start by itself (§4.75), so a long run of the clock keeps the view in front.
             app.BigPictureInterface.ScreensaverTimer = 0;
+            // Nor the start-up splash (EmuSen_Interface.md §22), which a test about it turns on by the setting.
+            app.StartupSplash = false;
             settings?.Invoke(app);
             app.Save();
 
@@ -66,6 +68,8 @@ namespace EmuSen.WiseMan.Fixtures
             Set("UiClock", (Func<TimeSpan>)(() => Now));
             // A session that asks for the screen by its setting gets it; the suite's windows have it off (NoLaunchScreen).
             Set("LaunchScreens", app.BigPictureInterface.LaunchScreenDuration != BigPictureInterface.LaunchDisabled);
+            Set("StartupSplashes", splashes ?? app.StartupSplash);
+            if (startupWork is not null) Set("StartupWork", startupWork);
             // On a stepped clock a game is loaded after its launch screen, not under it on a worker, whose time is the wall's - see Diamond_Players.md §12.8.3.
             MistressGame.EarlyLoad(Window, null);
             Set("UiSoundSink", (Action<string>)(path => Sounds.Add(Path.GetFileNameWithoutExtension(path))));

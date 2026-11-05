@@ -33,10 +33,10 @@ tree
           18 CoverCard at=142,156,180,240 by=panel heard="Granite Choir (Synthetic)" limit=0,0,1280,800 name="GalleryTile.<run>/Roms/Granite Choir (Synthetic).nes" role=none
             19 Border at=148,156,169,240 by=panel limit=0,0,1280,800 name=CoverBox paints=#26262BFF role=none
               20 Image at=148,156,168.22,240 by=clip drawn limit=148,156,169,240 nohit role=image
-        21 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=GalleryHelpBar role=none
-          22 Panel at=0,702,1280,98 by=panel limit=0,0,1280,800 role=none
-            23 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
-            24 HintBar at=64,716,1152,30 by=panel heard="Type, Delete, Space, Done, Move to grid, Home" limit=0,0,1280,800 role=group
+        21 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 name=GalleryHelpBar role=none
+          22 Panel at=0,742,1280,58 by=panel limit=0,0,1280,800 role=none
+            23 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
+            24 HintBar at=64,756,1152,30 by=panel heard="Type, Delete, Space, Done, Move to grid, Home" limit=0,0,1280,800 role=group
         25 OnScreenKeyboard at=0,398,1280,304 by=panel focus heard="On-screen keyboard" limit=0,0,1280,800 name=GalleryKeyboard paints=#1B1B1EFF,#707070FF role=none
           26 StackPanel at=84,415,1112,271 by=panel limit=0,0,1280,800 role=none
             27 StackPanel at=244,415,792,48 by=panel limit=0,0,1280,800 role=none

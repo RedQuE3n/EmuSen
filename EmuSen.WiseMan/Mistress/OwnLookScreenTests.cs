@@ -2,6 +2,7 @@ using EmuSen.Galaxia.Native;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Pages;
 using Xunit;
 
@@ -138,6 +139,13 @@ namespace EmuSen.WiseMan.Mistress
                 new("GB", "Game Boy", "Game Boy", "Nintendo", 1989, 95), new("SNES", "Super Nintendo", "Super Nintendo", "Nintendo", 1991, 280),
             ];
             public void ChooseConsole(string section) => Said.Add("consoles " + section);
+            // The runtime's cores listing as it gives one, and the engine the player's settings choose for each console; Game Boy's chooses none.
+            public string Listing { get; set; } = """
+                [{"engine":"VenusRT (Rust)","name":"VenusRT","libretro":null},{"engine":"MoonRT (Rust)","name":"MoonRT","libretro":null},
+                 {"engine":"Nintendo - SNES / SFC (Snes9x)","name":"Snes9x","libretro":{"corename":"Snes9x"}}]
+                """;
+            public Dictionary<string, string> Chosen { get; } = new() { ["SNES"] = "VenusRT (Rust)", ["NES"] = "MoonRT (Rust)" };
+            public EngineShown? EngineOf(string shelf) => Chosen.TryGetValue(shelf, out string? chosen) ? RuntimeCatalog.Shown(chosen, RuntimeCatalog.EnginesIn(Listing)) : null;
         }
 
         [Fact]
@@ -247,12 +255,34 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(["NES", "GB", "SNES"], consoles.Consoles.Select(c => c.Key));
             Assert.Equal([8.0, 95.0, 280.0], consoles.Consoles.Select(c => c.Hue!.Value));
             ConsoleChoice snes = consoles.Consoles.Last();
-            Assert.Equal(("Super Nintendo", "2 games", "Nintendo · 1991 · 2 games"), (snes.Title, snes.Status, snes.Facts));
+            Assert.Equal(("Super Nintendo", "2 games", "Nintendo · 1991 · 2 games · runs on Venus, an EmuSen core"), (snes.Title, snes.Status, snes.Facts));
             Assert.Equal(["/g/granite.sfc", "/g/aurora.sfc"], snes.Covers.Select(g => g.Facts.Path));
             Assert.Equal("Nintendo Entertainment System", consoles.Consoles[0].Title);
             Assert.Equal("3 consoles · 4 games", consoles.CountLine);
             host.Table = [.. host.Table.Reverse()];
             Assert.Equal(["SNES", "GB", "NES"], consoles.Consoles.Select(c => c.Key));
+        }
+
+        // Each console's engine line and facts read the player's choice afresh: an EmuSen core, a libretro core, and none (EmuSen_Interface.md §24.6).
+        [Fact]
+        public void Each_console_says_the_engine_it_runs_on_and_follows_a_change()
+        {
+            var host = new FakeGames();
+            var consoles = new ConsolesScreen(host);
+            ConsoleChoice Of(string key) => consoles.Consoles.Single(c => c.Key == key);
+            Assert.Equal(("Venus", false), (Of("SNES").Engine!.Name, Of("SNES").Engine!.Libretro));
+            Assert.NotNull(Of("SNES").Engine!.Mark!.Stroke);
+            Assert.EndsWith(" · runs on Moon, an EmuSen core", Of("NES").Facts);
+            Assert.Null(Of("GB").Engine);
+            Assert.Equal("Nintendo · 1989 · 1 game", Of("GB").Facts);
+            host.Chosen["SNES"] = "Nintendo - SNES / SFC (Snes9x)";
+            Assert.Equal(("Snes9x", true), (Of("SNES").Engine!.Name, Of("SNES").Engine!.Libretro));
+            Assert.Same(EngineMarks.Libretro, Of("SNES").Engine!.Mark);
+            Assert.Equal("Nintendo · 1991 · 2 games · runs on Snes9x, a libretro core", Of("SNES").Facts);
+            host.Chosen["SNES"] = "VenusRT (Rust)";
+            Assert.EndsWith("runs on Venus, an EmuSen core", Of("SNES").Facts);
+            Assert.Equal("", ConsolesScreen.RunsOn(null));
+            Assert.Equal((ConsolesScreen.LibretroTag, ConsolesScreen.OwnTag), (ConsolesScreen.TagOf(new("Snes9x", true)), ConsolesScreen.TagOf(new("Venus", false))));
         }
 
         [Fact]

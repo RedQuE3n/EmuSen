@@ -184,6 +184,42 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(engines.Select(e => StartupSplash.HueOf(e.Id)), splash.Bodies.Select(b => b.Hue));
         }, default);
 
+        // Each console drawn by its maker: the five Nintendo planets in the scouts' colours, Sega's shards, Sony's gem, and the plain planet for the rest (EmuSen_Interface.md §24.6).
+        [Fact]
+        public void Each_console_is_drawn_by_its_maker_and_any_other_as_the_plain_planet()
+        {
+            Assert.Equal([330.0, 38, 352, 212, 190], new[] { "nes", "snes", "n64", "gb", "gbc" }.Select(StartupSplash.HueOf));
+            static (WorldShape, string?, double, double, double, WorldRing, int) Facts(WorldBody b) =>
+                (b.Shape, b.Palette is { } p ? string.Join(" ", p) : null, b.Craters, b.Bands, b.Cap, b.Ring, b.Moons);
+            Assert.Equal((WorldShape.Planet, "#fffff8fb #fff3cfe3 #ffa9789f", 0.28, 0, 0, WorldRing.None, 0), Facts(StartupSplash.BodyOf("nes", "Nintendo")));
+            Assert.Equal((WorldShape.Planet, "#fffff3cf #ffffbe5c #ffb8652a", 0, 0.5, 0, WorldRing.None, 0), Facts(StartupSplash.BodyOf("snes", "Nintendo")));
+            Assert.Equal((WorldShape.Planet, "#ffffd3d8 #ffee4e66 #ff7e1a38", 0, 0, 0.9, WorldRing.None, 2), Facts(StartupSplash.BodyOf("n64", "Nintendo")));
+            Assert.Equal((WorldShape.Planet, "#ffdcf1ff #ff4e9ceb #ff1f3a7a", 0, 0, 0, WorldRing.None, 0), Facts(StartupSplash.BodyOf("gb", "Nintendo")));
+            Assert.Equal((WorldShape.Planet, "#ffe0fcff #ff62d2e6 #ff226a88", 0, 0, 0, WorldRing.None, 0), Facts(StartupSplash.BodyOf("gbc", "Nintendo")));
+            foreach (string sega in new[] { "sms", "md", "mcd", "32x", "sg1000", "saturn", "dreamcast" }) Assert.Equal(new WorldBody(WorldShape.Shards), StartupSplash.BodyOf(sega, "Sega"));
+            foreach (string sony in new[] { "psx", "ps2" }) Assert.Equal(new WorldBody(WorldShape.Gem), StartupSplash.BodyOf(sony, "Sony"));
+            Assert.Same(WorldBody.Plain, StartupSplash.BodyOf("virtualboy", "Nintendo"));
+            Assert.Same(WorldBody.Plain, StartupSplash.BodyOf("zx81", "Sinclair"));
+            Assert.Same(WorldBody.Plain, StartupSplash.BodyOf("unknown", ""));
+            Assert.Same(WorldBody.Plain, StartupSplash.BodyOf(null, null));
+        }
+
+        // Moonrise draws every console of the table as the same body, palette and feature as its tile on Choose a console (EmuSen_Interface.md §24.6).
+        [Fact]
+        public void Moonrise_and_Choose_a_console_resolve_the_same_body_for_every_console()
+        {
+            var systems = RuntimeCatalog.Systems.Where(s => s.Engines.Count > 0).ToList();
+            var bodies = StartupSplash.Bodies(systems);
+            Assert.Equal(systems.Count, bodies.Count);
+            for (int i = 0; i < systems.Count; i++)
+            {
+                WorldBody picker = StartupSplash.BodyOf(systems[i].Id, systems[i].Manufacturer);
+                Assert.Same(picker, bodies[i].Body);
+                Assert.Equal(systems[i].Manufacturer switch { "Sega" => WorldShape.Shards, "Sony" => WorldShape.Gem, _ => WorldShape.Planet }, bodies[i].Body!.Shape);
+            }
+            Assert.Contains(bodies, b => b.Body!.Palette is not null);
+        }
+
         // The count follows the table: a made-up table of three systems, one without an engine, has two planets.
         [Fact]
         public void The_count_and_colours_come_from_the_table_given()
@@ -192,7 +228,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 new(id, id, id.ToUpperInvariant(), "", 0, "", null, null, false, engines, [], [], null, new PadFacts([], [], 1, []));
             var bodies = StartupSplash.Bodies([System("nes", "Moon"), System("psx"), System("zx81", "Spectre")]);
             Assert.Equal(["NES", "ZX81"], bodies.Select(b => b.Name));
-            Assert.Equal(8, bodies[0].Hue);
+            Assert.Equal(330, bodies[0].Hue);
             Assert.Equal(StartupSplash.HueOf("zx81"), bodies[1].Hue);
             Assert.InRange(bodies[1].Hue, 0, 359);
             Assert.Equal(["2 CONSOLES", "1 CONSOLE"], new[] { StartupSplash.Caption(2), StartupSplash.Caption(1) });

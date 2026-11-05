@@ -106,10 +106,10 @@ tree
               91 StackPanel at=1078,630,126,48 by=panel limit=0,0,1280,800 role=none
                 92 TextBlock at=1078,630,126,24 box=126,24 by=panel caps=13.999 drawn face=Barlow heard=Power layout=53.74,24 limit=0,0,1280,800 paints=#EEEEF0FF role=text size=20 text=Power
                 93 TextBlock allow="a place's live line is one line cut with an ellipsis, as the design draws it" at=1078,654,126,24 box=126,24 caps=13.999 drawn face=Barlow heard=Exit layout=32.62,24 name=HubPlaceStatus paints=#8D8D91FF role=text size=20 text=Exit
-        94 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 name=HubHelpBar role=none
-          95 Panel at=0,702,1280,98 by=panel limit=0,0,1280,800 role=none
-            96 Border at=0,702,1280,98 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
-            97 HintBar at=64,716,1152,30 by=panel heard="Resume, Game page, Favourite, Search, Home" limit=0,0,1280,800 role=group
+        94 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 name=HubHelpBar role=none
+          95 Panel at=0,742,1280,58 by=panel limit=0,0,1280,800 role=none
+            96 Border at=0,742,1280,58 by=panel limit=0,0,1280,800 nohit paints=#0E0E10FF,#707070FF role=none
+            97 HintBar at=64,756,1152,30 by=panel heard="Resume, Game page, Favourite, Search, Home" limit=0,0,1280,800 role=group
 focus none
 press down focus="HubLayout HomeScreen" home="Shelf <run>/Roms/Aurora Drift (Synthetic).sfc" top=none
 press up focus="HubLayout HomeScreen" home="Continue none" top=none

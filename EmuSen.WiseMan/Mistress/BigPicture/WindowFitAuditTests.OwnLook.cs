@@ -322,6 +322,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 Assert.Equal(new Avalonia.Size(width, height), root.Bounds.Size);
                 Assert.Contains(root.GetVisualDescendants(), c => c is LunaSky sky && sky.Bounds.Size == root.Bounds.Size);
                 PictureOwnLook(window, $"sky-{view}-{width}x{height}");
+                // The help bar sits flush on the window's foot, with no room under it (EmuSen_Interface.md §24.7).
+                Control band = root.GetVisualDescendants().OfType<Control>().Single(c => c.Name is "PlanetHelpBar" or "HubHelpBar" or "GalleryHelpBar" && c.IsEffectivelyVisible);
+                Assert.Equal(height, Avalonia.VisualExtensions.TranslatePoint(band, new Avalonia.Point(0, band.Bounds.Height), window)!.Value.Y, 1.0);
                 List<string> faults = FitAudit.Check(root, OwnLookCuts);
                 foreach (string f in faults) _out.WriteLine($"{view} {width}x{height}: {f}");
                 Assert.Empty(faults);

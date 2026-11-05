@@ -2098,3 +2098,98 @@ Three seeded faults, each reverted: B returning to Choose a console without its 
 (once that test moved the grid to another console before B; with the console it was opened on, the screen's own kept
 focus hid the fault); a hard-coded list of consoles in place of the table failed five tests; a console with no game
 listed failed the description's test and the window's.
+
+### 24.6 Each console drawn by its maker, and the engine it runs on (2026-11-05)
+
+Decided 2026-11-05 by the tester, from an approved mockup (the courts draft of Choose a console, 1280 × 800 design
+units): each console is drawn by its maker, and each tile says which engine runs the console now. The sky, the places,
+the focused words, the fan and the help bar are as above; `docs/LunaP.md` §222 is the drawing and records where the
+kit differs from the mockup.
+
+**Where it lives.** LunaP draws generic bodies from plain data (`WorldBody`: a planet with optional craters, bands, a
+cap, a ring and a moonlet, a cluster of shards, or a gem) and knows nothing of consoles. Mistress owns which console is
+which body, beside the hue table that already owns each console's colour: `StartupSplash.BodyOf(system, maker)`. Neither
+side gained the other's job, and the kit's bodies can draw any host's worlds.
+
+- **Nintendo: planets in the scouts' colours.** Each of five systems has a three-colour palette (light, middle, rim)
+  and its own feature: the NES pearl pink with craters (`#FFF8FB`, `#F3CFE3`, `#A9789F`, craters at 0.28), the Super
+  Nintendo orange-gold with bands (`#FFF3CF`, `#FFBE5C`, `#B8652A`, bands at 0.5), the Nintendo 64 rose red with a
+  polar cap and two moonlets (`#FFD3D8`, `#EE4E66`, `#7E1A38`, cap 0.9, two moons), and the Game Boy blue
+  (`#DCF1FF`, `#4E9CEB`, `#1F3A7A`) and the Game Boy Color aqua (`#E0FCFF`, `#62D2E6`, `#226A88`), both plain shaded
+  planets with no ring and no moonlet (decided the same day by the tester, replacing the mockup's rings). Another
+  Nintendo system is the plain planet in its hue. A ring is a size (none, subtle or big) and the moonlets a count, so
+  the consoles to come are data only: the Game Boy Advance (Jupiter) is meant to take a subtle ring and the Virtual
+  Boy (Saturn) a big one; no console has a ring in this change.
+- **Sega: a cluster of three shards. Sony: a cut gem.** Both take their facets from the console's hue.
+- **Every other maker**, and a system the table lists with no maker, is the plain planet in its hue.
+- **The hues.** Decided the same day: the five Nintendo hues in `StartupSplash.Hues` change to the scouts' (NES 330,
+  Super Nintendo 38, Nintendo 64 352, Game Boy 212, Game Boy Color 190), so Moonrise's planets, the tiles, the sky's
+  glow, the grid's heading and Home's Continue take them too. Every other hue is unchanged.
+- **Unfocused** bodies are translucent with a soft glow; the focused one grows and brightens, and three sparkles stand
+  beside it.
+- **Moonrise draws the same bodies** (decided the same day): `StartupSplash.Bodies` gives each planet of the splash
+  the body `BodyOf` gives its tile, and LunaP draws both with one drawing (`docs/LunaP.md` §222.6), so the splash's
+  NES has its craters, its Nintendo 64 its cap and moonlets, its Sega consoles shards and its Sony consoles gems. The
+  timeline, the ladder, the bells and the layout are unchanged.
+
+**The engine line**, under each tile's game count, reads the player's current choice for the console:
+
+- On one of EmuSen's own cores: the engine's short name in the console's hue (VENUS, MARS, SAPPHIRE…) with an EMUSEN
+  tag in the hue. On a libretro core: the core's name in neutral grey (PCSX2, SNES9X…) with a grey LIBRETRO tag.
+- The focused console's facts end "runs on Venus, an EmuSen core" or "runs on PCSX2, a libretro core".
+- **A mark before the name** (decided the same day), drawn as vectors since a handheld's fonts cannot be trusted to
+  hold the symbols: the cores named after the Moon and the planets carry their astronomical symbol (a crescent for
+  Moon; Mercury, Venus and Mars as the mockup draws them), every other EmuSen core its maker's body glyph (a shard for
+  Sega, a gem for Sony, a small planet otherwise), and a libretro core a square badge with a little pixel alien of the
+  project's own drawing (never libretro's logo). The mark is a property of the engine, given with its name:
+  `EngineMarks.Of(name, libretro, maker)`, the maker read from the systems the engine's listing row runs. The same
+  source is meant for the core pickers (Settings ▸ Consoles ▸ Engine, the game page's Engine, Game Options), which is
+  the next stage, "row marks", an optional icon on LunaP's rows.
+- **Where the choice comes from.** The runtime's `Setting(console, "Engine")`: the stored choice, else the console's
+  engine row's default, the frontend API's form of `CoreCatalog.EngineChosen` and `EngineFor`. A console with no
+  engine row takes the first engine the systems table lists for it.
+- **Where the name comes from.** The one owner of an engine's names is the engine's own info, which the runtime's cores
+  listing (`emusen_crystal_cores`) gives with every row: `engine` (the name the choice stores), `name` (the info's
+  short name) and `libretro` (an object for a hosted libretro core, null otherwise). A libretro core is named by its
+  `.info`'s `corename` (Cores names it the same way, `CoreRow.OfTool`), an EmuSen core by its info's `name`. No list of
+  engine names was added. The listing is read once and kept until `RuntimeCatalog.Forget`, as the systems are.
+- **One named exception.** The info names of the four Nintendo cores ported to Rust still carry the port's mark
+  (VenusRT, MarsRT, MoonRT, MercuryRT) from the months both cores ran side by side; their C# cores are retired, and a
+  stored "Venus (C#)" already reads as VenusRT. The tile drops a trailing "RT" from an EmuSen core's name, so the line
+  reads VENUS as the mockup has it. Renaming the four cores' info names would let the rule go.
+- **No restart.** The line is read each time Choose a console is filled, and Settings ▸ Consoles ▸ Engine (or Cores'
+  Make Default) leaves it before the player returns, so the tile and the facts show the new engine at once; a changed
+  engine also forgets the catalog, as before.
+
+**Fit.** The fit audit's smallest text for a big screen (§4.83.7 of the kit) is above the mockup's 15 and 11, so the
+name and the tag's word are 17 (`docs/LunaP.md` §222.5). The tag is always whole; a name that leaves no room is cut
+with an ellipsis, allowed because its full name is in the facts: of the hosted libretro cores, Beetle PSX HW, Beetle
+Saturn, Genesis Plus GX and Mupen64Plus-Next are cut, and every EmuSen core's name is whole.
+
+**Tests, measured on 2026-11-05.** `StartupSplashTests`: the body and palette per maker and console, a console or
+maker the table does not know gets the plain planet, and Moonrise resolves the same body as the picker for every
+console of the table. `OwnLookScreenTests`: on a fake host whose choices and cores listing are data, an EmuSen
+engine's line and tag, a libretro choice's name and LIBRETRO tag, the facts' last words, and a changed choice read on
+the next fill. `RuntimeCatalogEngineTests`: the runtime's own cores listing, with an installed libretro entry, names it
+by its corename and calls it libretro, and an EmuSen core by its info name less the port's mark; Dreamcast with a
+hosted Flycast as its only engine reads FLYCAST with the LIBRETRO tag and "runs on Flycast, a libretro core".
+`ChooseConsoleTests`: the window's tiles carry each console's body and the engine `RuntimeCatalog.EngineOf` reads for
+it, the same body as Moonrise's. The window cannot yet change an engine in a test, since the test build offers one
+engine per console; the change is held by the screen's test. `WindowFitAuditTests`: Choose a console fits at
+1280 × 800, 1920 × 1080, 1280 × 720 and 3840 × 2160 with the scale set late, and LunaP's `PlanetLayoutTests` hold
+the longest libretro name with its tag inside a tile at the same sizes. No test holds a table of engine names: every
+expected name comes from a choice and a listing.
+
+Seeded faults, each reverted: a hard-coded engine name in place of the host's answer failed the screen's test and the
+window's; a libretro core tagged EMUSEN failed the screen's test and the Flycast test; a listing that called every
+core EmuSen's failed four; the engine kept from the first fill (a stale label after a change) failed the screen's
+change test; Sony's consoles drawn as plain planets failed the body test.
+
+### 24.7 The help bar on the foot (2026-11-05)
+
+Decided 2026-11-05 by the tester: on Home, Choose a console and a console's games at night, the help bar with the
+controller glyphs sits flush on the bottom of the screen, 742 to 800 of 800 units, with no gap under it (the mockups
+drew it at 702 to 760). Choose a console's focused words and cover fan move down with it, to 612 to 716. The screens
+are 800 units high at every size, so the bar's foot is the window's foot at 1280 × 800, 1920 × 1080, 1280 × 720 and
+3840 × 2160; `WindowFitAuditTests` asserts it on all three screens at the four sizes, the window resized after the
+screen is shown. The light variant and the other screens keep the frame's band (`docs/LunaP.md` §222.7).

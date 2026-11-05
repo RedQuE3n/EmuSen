@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
@@ -56,6 +57,42 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             s.Pad.B();
             s.Settle();
             Assert.NotNull(s.Window.HomeLayout);
+        }, default);
+
+        // Each console drawn by its maker, and the engine the player's settings choose for it on its tile and in its facts (EmuSen_Interface.md §24.6).
+        [Fact]
+        public Task Each_console_is_drawn_by_its_maker_and_says_the_engine_it_runs_on() => Session.Dispatch(() =>
+        {
+            using var s = Own();
+            PlanetLayout consoles = Open(s);
+            Assert.Equal(3, consoles.Planets.Select(p => p.Engine?.Name).Distinct().Count());
+            foreach (string extension in new[] { ".sfc", ".nes", ".gb" })
+            {
+                string shelf = ShelfOf(s, extension);
+                PlanetItem item = consoles.Planets.Single(p => p.Key == shelf);
+                LibraryShelf table = RuntimeCatalog.ShelfByName(shelf)!;
+                Assert.Equal(StartupSplash.BodyOf(table.System, "Nintendo"), item.Body);
+                Assert.NotNull(item.Body!.Palette);
+                EngineShown shown = Assert.IsType<EngineShown>(RuntimeCatalog.EngineOf(table.Core.Console));
+                Assert.False(shown.Libretro);
+                string engine = shown.Name;
+                Assert.True(shown.Mark is { Stroke.Length: > 0 } && shown.Mark != EngineMarks.Planet, $"{engine} has its own symbol");
+                Assert.Equal(new PlanetEngine(engine, ConsolesScreen.OwnTag, true) { Mark = shown.Mark }, item.Engine);
+                Assert.EndsWith($" · runs on {engine}, an EmuSen core", item.Facts);
+                Control cell = s.Window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "PlanetCell." + shelf);
+                Assert.Contains(cell.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == engine.ToUpperInvariant());
+                Assert.Contains(cell.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "EMUSEN");
+            }
+            // The splash draws each of these consoles as its tile's body.
+            var splash = StartupSplash.Bodies(RuntimeCatalog.Systems);
+            foreach (PlanetItem item in consoles.Planets)
+            {
+                SystemFacts system = RuntimeCatalog.Systems.First(f => f.Id == RuntimeCatalog.ShelfByName(item.Key)!.System);
+                Assert.Equal(item.Body, splash.Single(b => b.Name == (system.DisplayName is { Length: > 0 } shown ? shown : system.Console)).Body);
+            }
+            consoles.FocusOn(ShelfOf(s, ".sfc"));
+            s.Settle();
+            Assert.EndsWith(ConsolesScreen.RunsOn(RuntimeCatalog.EngineOf(RuntimeCatalog.ShelfByName(ShelfOf(s, ".sfc"))!.Core.Console)), ((TextBlock)s.Window.GetVisualDescendants().OfType<Control>().First(c => c.Name == "PlanetFocusFacts")).Text);
         }, default);
 
         [Fact]

@@ -133,6 +133,13 @@ namespace EmuSen.Crystal.Client
 
         public string Route(string path) => WithText(path, (p, pl) => Text((o, n) => Contract.Crystal.Route(Handle, (byte*)p, pl, o, n)));
 
+        // The runtime's emusen_session_v1 table with no game, since 1.12, for a shell made before any game: alive as long as the runtime - see EmuSen_Backend.md §40.7.
+        public nint NoGameService(bool readOnly = false)
+        {
+            nint table = Contract.Crystal.SessionService(Handle, 0, CrystalAbi.ServiceNoGame | (readOnly ? CrystalAbi.ServiceReadOnly : 0));
+            return table == 0 ? throw Failure(CrystalSessionAbi.NoSession) : table;
+        }
+
         public string Sessions() => Text((o, n) => Contract.Crystal.Sessions(Handle, o, n));
 
         public CrystalSession Open(CrystalOpen open)

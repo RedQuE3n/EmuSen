@@ -6,7 +6,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 11;
+pub const MINOR: u32 = 12;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 pub mod status {
@@ -37,6 +37,8 @@ pub const SCOPE_CONSOLE: u32 = 0;
 pub const SCOPE_GAME: u32 = 2;
 
 pub const SERVICE_READ_ONLY: u32 = 1;
+/// Since 1.12: the runtime's table with no game, whatever session is open.
+pub const SERVICE_NO_GAME: u32 = 2;
 
 pub const EVENT_SESSION: u32 = 1;
 pub const EVENT_RUN: u32 = 2;

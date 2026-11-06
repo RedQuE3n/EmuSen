@@ -28,7 +28,7 @@ namespace EmuSen.Shell.Views
         private ILiveShell? _live;
 
         private DianaShInterpreter _shell;
-        private readonly Func<IReadOnlyCollection<string>>? _cheatSystems;
+        private readonly nint _noGameService;
 
         public DianaShShellWindow() : this(null, null, null) { }
 
@@ -36,11 +36,11 @@ namespace EmuSen.Shell.Views
             Func<HotaruLaunch, Window>? launchRom,
             Func<string, HotaruLaunch?>? resolveCoreCommand,
             IEnumerable<string>? supportedCores,
-            Func<IReadOnlyCollection<string>>? cheatSystems = null)
+            nint noGameService = 0)
         {
             _launchRom = launchRom;
             _resolveCoreCommand = resolveCoreCommand;
-            _cheatSystems = cheatSystems;
+            _noGameService = noGameService;
             _shell = BuildInterpreter();
 
             Title = "DianaSh";
@@ -62,8 +62,8 @@ namespace EmuSen.Shell.Views
 
         private DianaShInterpreter BuildInterpreter() =>
             DianaShInterpreter.CreateWithoutSession(
-                new IDianaShCommand[] { new ClearShellWindowCommand(() => _console.Clear()), new HotaruCommand(_launchRom is null ? null : OpenGame) },
-                _cheatSystems);
+                _noGameService,
+                new IDianaShCommand[] { new ClearShellWindowCommand(() => _console.Clear()), new HotaruCommand(_launchRom is null ? null : OpenGame) });
 
         // `hotaru`'s window, from this window's own prompt; a ROM that will not load comes back as the command's failure.
         private void OpenGame(string romPath, HotaruOutput output) => _launchRom!(HotaruLaunch.Rom(romPath)).Show();

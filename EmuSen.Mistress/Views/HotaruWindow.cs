@@ -166,7 +166,7 @@ namespace EmuSen.Mistress.Views
         private DianaShInterpreter BuildInterpreter()
         {
             if (_session is { Closed: false } session) return DianaShInterpreter.CreateForService(session.ServiceTable(), _extraCommands, _sessions);
-            DianaShInterpreter alone = DianaShInterpreter.CreateWithoutSession(_extraCommands, () => EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems);
+            DianaShInterpreter alone = DianaShInterpreter.CreateWithoutSession(CoreSettings.Runtime.NoGameService(), _extraCommands);
             alone.UseSettings(_settings);
             return alone;
         }

@@ -539,14 +539,14 @@ pub fn cheat_op(c: &Call, o: u32, raw: Raw, room: Option<usize>) -> Answer<(Opti
     Ok(answered(&c.s.provider, o, result, room))
 }
 
-/// Session 0's cheat op: the provider with no game, for the ops that need none.
-pub fn cheat_op_without_game(rt: &Runtime, o: u32, raw: Raw, room: Option<usize>) -> Answer<(Option<Vec<u8>>, i64)> {
+/// Session 0's cheat op: the provider with no game, for the ops that need none; a read-only context's changes refused.
+pub fn cheat_op_without_game(rt: &Runtime, o: u32, raw: Raw, room: Option<usize>, read_only: bool) -> Answer<(Option<Vec<u8>>, i64)> {
     if !game_free(o) {
         return Err(refused(status::NO_SESSION, format!("cheat op {o} is a game's: name its session")));
     }
     let bytes = raw.bytes()?;
     let mut fresh = CheatRegistry::new();
-    let mut cc = Cheats { rt, provider: &rt.no_game, registry: &mut fresh, auto: None, explicit: None, spaces: Vec::new(), read_only: false };
+    let mut cc = Cheats { rt, provider: &rt.no_game, registry: &mut fresh, auto: None, explicit: None, spaces: Vec::new(), read_only };
     let result = run(&mut cc, o, bytes)?;
     Ok(answered(&rt.no_game, o, result, room))
 }

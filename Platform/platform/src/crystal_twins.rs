@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use emusen_crystal::abi::{self, emusen_crystal_runtime};
 use emusen_crystal::runtime::Runtime;
-use emusen_crystal::service::{Answer, Call, Raw, cheats, machine, registries, views};
+use emusen_crystal::service::{Answer, Call, Raw, cheats, machine, no_game, registries, views};
 use emusen_session_service::abi::{emusen_session_v1, status as svc};
 
 use crate::crystal::{fail, put, runtime};
@@ -23,7 +23,8 @@ fn service_fail(status: i32, words: &str) -> i32 {
     status
 }
 
-/// What a table's ctx points at: the runtime, the session it serves, and whether it may change it.
+/// What a table's ctx points at: the runtime, the session it serves (0 for the runtime's table with no game), and
+/// whether it may change it.
 struct Binding {
     rt: *const Runtime,
     id: u32,
@@ -85,9 +86,30 @@ unsafe fn table<T>(ctx: *mut c_void, session: u32, call: impl FnOnce(&Call) -> A
     }
     let b = unsafe { &*(ctx as *const Binding) };
     let r = unsafe { &*b.rt };
+    if b.id == 0 {
+        let (st, w) = no_game::no_session();
+        return Err(service_fail(st, &w));
+    }
     let s = r.sessions.get(b.id).map_err(|(st, w)| service_fail(st, &w))?;
     let c = Call { rt: r, s: &s, asked: session, read_only: b.read_only };
     call(&c).map_err(|(st, w)| service_fail(st, &w))
+}
+
+/// The runtime's table with no game and whether it is read-only, for the calls it answers itself; None for a session's.
+///
+/// # Safety
+/// `ctx` a table's ctx this library made, or null.
+unsafe fn without_game<'a>(ctx: *mut c_void) -> Option<(&'a Runtime, bool)> {
+    if ctx.is_null() {
+        return None;
+    }
+    let b = unsafe { &*(ctx as *const Binding) };
+    (b.id == 0).then(|| (unsafe { &*b.rt }, b.read_only))
+}
+
+/// A no-game call's answer, its words in the table's `last_error`.
+fn answered<T>(result: Answer<T>) -> Result<T, i32> {
+    result.map_err(|(st, w)| service_fail(st, &w))
 }
 
 fn out(result: Result<Vec<u8>, i32>, o: *mut u8, len: usize) -> i64 {
@@ -115,10 +137,16 @@ unsafe extern "C" fn last_error(_ctx: *mut c_void, o: *mut u8, len: usize) -> i6
 }
 
 unsafe extern "C" fn sessions(ctx: *mut c_void, o: *mut u8, len: usize) -> i64 {
+    if unsafe { without_game(ctx) }.is_some() {
+        return out(Ok(no_game::sessions()), o, len);
+    }
     out(unsafe { table(ctx, 0, machine::sessions) }, o, len)
 }
 
 unsafe extern "C" fn games(ctx: *mut c_void, o: *mut u8, len: usize) -> i64 {
+    if unsafe { without_game(ctx) }.is_some() {
+        return out(answered(no_game::games()), o, len);
+    }
     out(unsafe { table(ctx, 0, machine::games) }, o, len)
 }
 
@@ -156,6 +184,9 @@ pub unsafe extern "C" fn emusen_crystal_run_control(rt: *mut emusen_crystal_runt
 }
 
 unsafe extern "C" fn run_control(ctx: *mut c_void, session: u32, op: u32, processor: u32, argument: i64) -> i64 {
+    if let Some((r, _)) = unsafe { without_game(ctx) } {
+        return number(answered(no_game::run_control(r, op)));
+    }
     number(unsafe { table(ctx, session, |c| machine::run_control(c, op, processor, argument)) })
 }
 
@@ -397,6 +428,15 @@ pub unsafe extern "C" fn emusen_crystal_events_drain(rt: *mut emusen_crystal_run
 }
 
 unsafe extern "C" fn events_drain(ctx: *mut c_void, session: u32, kinds: u32, o: *mut u8, len: usize) -> i64 {
+    if let Some((r, _)) = unsafe { without_game(ctx) } {
+        return number(answered(no_game::events_peek(r, kinds)).map(|(bytes, taken)| {
+            if !o.is_null() && len >= bytes.len() {
+                unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), o, bytes.len()) };
+                no_game::events_take(r, taken);
+            }
+            bytes.len() as i64
+        }));
+    }
     number(unsafe { table(ctx, session, |c| drain_into(c, kinds, o, len)) })
 }
 
@@ -1124,7 +1164,7 @@ pub unsafe extern "C" fn emusen_crystal_cheat_op(rt: *mut emusen_crystal_runtime
     let args = unsafe { Raw::new(args, args_len) };
     let result = if session == 0 {
         match unsafe { runtime(rt) } {
-            Ok(r) => cheats::cheat_op_without_game(r, op, args, room_of(o, len)).map_err(|(st, w)| {
+            Ok(r) => cheats::cheat_op_without_game(r, op, args, room_of(o, len), false).map_err(|(st, w)| {
                 service_fail(st, &w);
                 fail(st, w)
             }),
@@ -1138,6 +1178,9 @@ pub unsafe extern "C" fn emusen_crystal_cheat_op(rt: *mut emusen_crystal_runtime
 
 unsafe extern "C" fn cheat_op(ctx: *mut c_void, session: u32, op: u32, args: *const u8, args_len: usize, o: *mut u8, len: usize) -> i64 {
     let args = unsafe { Raw::new(args, args_len) };
+    if let Some((r, read_only)) = unsafe { without_game(ctx) } {
+        return cheat_answer(answered(no_game::cheat_op(r, op, args, room_of(o, len), read_only)), o, len);
+    }
     cheat_answer(unsafe { table(ctx, session, |c| cheats::cheat_op(c, op, args, room_of(o, len))) }, o, len)
 }
 
@@ -1245,30 +1288,39 @@ fn template() -> emusen_session_v1 {
     }
 }
 
-/// The session's `emusen.session@1` table, read-only where the flag asks; null with the words in `last_error`.
+/// The session's `emusen.session@1` table, read-only where the flag asks, or since 1.12 the runtime's table with no
+/// game; null with the words in `last_error`.
 ///
 /// # Safety
 /// `rt` a runtime this library made and has not freed, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_session_service(rt: *mut emusen_crystal_runtime, session: u32, flags: u32) -> *const emusen_session_v1 {
-    if flags & !abi::SERVICE_READ_ONLY != 0 {
+    if flags & !(abi::SERVICE_READ_ONLY | abi::SERVICE_NO_GAME) != 0 {
         fail(svc::NOT_SUPPORTED, format!("service flags 0x{flags:X} are not known to 1.{}", abi::MINOR));
         return std::ptr::null();
     }
     let Ok(r) = (unsafe { runtime(rt) }) else { return std::ptr::null() };
-    let s = match r.sessions.get(session) {
-        Ok(s) => s,
-        Err((st, w)) => {
-            fail(st, w);
+    let id = if flags & abi::SERVICE_NO_GAME != 0 {
+        if session != 0 {
+            fail(svc::BAD_ARGUMENT, format!("the table with no game names no session, and {session} was named"));
             return std::ptr::null();
+        }
+        0
+    } else {
+        match r.sessions.get(session) {
+            Ok(s) => s.id,
+            Err((st, w)) => {
+                fail(st, w);
+                return std::ptr::null();
+            }
         }
     };
     let mut all = TABLES.lock().unwrap_or_else(|p| p.into_inner());
-    let at = match all.iter().position(|t| t.rt == rt as usize && t.id == s.id) {
+    let at = match all.iter().position(|t| t.rt == rt as usize && t.id == id) {
         Some(at) => at,
         None => {
             let runtime = rt as *const Runtime;
-            all.push(Tables { rt: rt as usize, id: s.id, full: slot(runtime, s.id, false), read_only: slot(runtime, s.id, true) });
+            all.push(Tables { rt: rt as usize, id, full: slot(runtime, id, false), read_only: slot(runtime, id, true) });
             all.len() - 1
         }
     };

@@ -146,7 +146,7 @@ namespace EmuSen.Shell
                     LaunchGame,
                     line => TryResolveCoreCommand(line, m => shell!.AppendLine(m)),
                     cores.DisplayNames,
-                    () => cores.CheatSystems);
+                    runtime.NoGameService());
 
                 if (initialRomPath != null) StartInitialRom(shell, initialRomPath, LaunchGame);
                 return shell;
@@ -182,8 +182,8 @@ namespace EmuSen.Shell
             string? requested = null;
             HotaruCores cores = HotaruCores.Of(Runtime);
             DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession(
-                new IDianaShCommand[] { new HotaruCommand((rom, _) => requested = rom) },
-                () => cores.CheatSystems);
+                Runtime.NoGameService(),
+                new IDianaShCommand[] { new HotaruCommand((rom, _) => requested = rom) });
             Console.WriteLine(shell.GetWelcomeBanner(cores.DisplayNames));
             Console.WriteLine("--- DianaSh (type 'help', 'hotaru <rom>' or 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 

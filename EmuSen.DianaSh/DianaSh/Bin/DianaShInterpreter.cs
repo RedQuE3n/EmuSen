@@ -79,8 +79,15 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         // The host's runtime for the settings service, which the shell hands its command modules - see EmuSen_DianaSh.md §9.9.
         public void UseSettings(EmuSen.DianaSh.DianaSh.Bin.Native.IShellSettings settings) => _shell.SetSettings(settings);
 
-        public static DianaShInterpreter CreateWithoutSession(IEnumerable<IDianaShCommand>? extraCommands = null, Func<IReadOnlyCollection<string>>? supportedCheatSystems = null) =>
-            CreateDefault(null, extraCommands, supportedCheatSystems: supportedCheatSystems);
+        // The runtime's table with no game (frontend API 1.12's SERVICE_NO_GAME) answers the cheat database; zero hands the shell no session service - see EmuSen_Backend.md §40.7.
+        public static DianaShInterpreter CreateWithoutSession(nint noGameService = 0, IEnumerable<IDianaShCommand>? extraCommands = null, DianaShSessionManager? sessions = null)
+        {
+            DianaShSandbox.EnsureInitialWorkingDirectory();
+            ServiceTable? table = noGameService == 0 ? null : new ServiceTable(noGameService);
+            DianaShInterpreter shell = CreateNative(null, extraCommands, null, null, null, sessions, null, null, table, withoutService: table is null);
+            shell._service = table;
+            return shell;
+        }
 
         // Every command in the order `help` lists them, a host's in place of a default of its name - see §3.17.
         private static List<IDianaShCommand> DefaultCommands(
@@ -234,7 +241,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             DianaShSessionManager? sessions,
             Func<IReadOnlyCollection<string>>? supportedCheatSystems,
             SessionService? provider = null,
-            ServiceTable? foreign = null)
+            ServiceTable? foreign = null,
+            bool withoutService = false)
         {
             NativeShell shell = sessions is null ? new NativeShell(keepsSessions: false) : sessions.Native ??= new NativeShell(keepsSessions: true);
             uint session = sessions is null ? 0 : shell.NewSession();
@@ -244,7 +252,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             IReadOnlyList<IDianaShCommand> prototype = Build();
             // The session's own provider over its target, which the Rust command modules call - see EmuSen_DianaSh.md §13.11.
             if (foreign is not null) shell.SetSessionService(session, foreign);
-            else shell.SetSessionService(session, provider ?? new SessionService(target, new SessionServiceOptions
+            else if (!withoutService) shell.SetSessionService(session, provider ?? new SessionService(target, new SessionServiceOptions
             {
                 AutoDetectCodec = cheatAutoDetectCodec,
                 ExplicitCodec = cheatExplicitCodec,

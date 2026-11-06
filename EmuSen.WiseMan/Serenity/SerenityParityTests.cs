@@ -27,8 +27,8 @@ namespace EmuSen.WiseMan.Serenity
         private static byte[] Key(string identity, string text, SlangStage stage, string name) => SpirvCache.Key(identity, text, stage, name);
         private static SpirvCache Cache(string path, long limit, string identity) => new(path, limit, identity);
 
-        // The test's folder written plainly, so an answer holds no machine's path.
-        private string Plain(string text) => text.Replace(_root, "<root>", StringComparison.Ordinal);
+        // The test's folder and the working folder written plainly, so an answer holds no machine's or checkout's path.
+        private string Plain(string text) => text.Replace(_root, "<root>", StringComparison.Ordinal).Replace(Directory.GetCurrentDirectory(), "<cwd>", StringComparison.Ordinal);
 
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSerenityParity", Guid.NewGuid().ToString("N"));
         private readonly ITestOutputHelper _output;
@@ -232,7 +232,7 @@ namespace EmuSen.WiseMan.Serenity
             _output.WriteLine($"{read} presets read and {refused} refused");
             Assert.True(read > 300 && refused > 300, $"the corpus is lopsided: {read} read, {refused} refused");
             foreach (string path in new[] { "", "x\0y", " ", "relative/missing.slangp" })
-                golden.Add($"path [{path}]", Outcome(() => Dump(LoadPreset(path))));
+                golden.Add($"path [{path}]", Plain(Outcome(() => Dump(LoadPreset(path)))));
 
             // The rules a random preset seldom asks all at once, asked in one: a scale that is no number does not fall back to the pass's, a count's fraction is cut off, and words are taken in any case.
             string rules = Path.Combine(_root, "rules.slangp");

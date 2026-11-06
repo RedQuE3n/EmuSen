@@ -1,39 +1,32 @@
 using System;
-using System.Diagnostics;
-using System.IO;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using EmuSen.Serenity.Native;
-using Silk.NET.Shaderc;
 
 namespace EmuSen.Serenity.Slang
 {
     public enum SlangStage { Vertex, Fragment }
 
-    // A stage's Vulkan GLSL to SPIR-V through Shaderc, unoptimised so the names reflection reads survive - see EmuSen_Serenity.md §7.3.
+    // A stage's Vulkan GLSL to SPIR-V through the Shaderc the platform library finds beside the program, unoptimised so the names reflection reads survive - see EmuSen_Serenity.md §7.3 and EmuSen_RustPlatform.md §33.
     public static unsafe class SlangCompiler
     {
-        // Every option a compile is given; the cache's key carries them, so one changed here cannot serve an old entry - see EmuSen_Serenity.md §9.4.
-        private const OptimizationLevel Optimization = OptimizationLevel.Zero;
-        private const TargetEnv Target = TargetEnv.Vulkan;
-        private const EnvVersion TargetVersion = EnvVersion.Vulkan11;
-        private const SourceLanguage Language = SourceLanguage.Glsl;
-        private const string Entry = "main";
+        // Every option a compile is given, in the library's words; the cache's key carries them - see EmuSen_Serenity.md §9.4.
+        internal const string Options = "optimization=Zero target=Vulkan/Vulkan11 language=Glsl entry=main defines=none";
 
-        internal static readonly string Options = $"optimization={Optimization} target={Target}/{TargetVersion} language={Language} entry={Entry} defines=none";
+        // The compiler itself, as far as its output can depend on it: the Shaderc file's SHA-256, its SPIR-V version, the library's binding and the options.
+        internal static string Identity => LazyIdentity.Value;
 
-        // The compiler itself, as far as its output can depend on it: the library's, which names its own binding, or the C#'s.
-        internal static string Identity => SerenityNative.Active ? NativeIdentity.Value : Managed.Identity;
+        private static readonly Lazy<string> LazyIdentity = new(() =>
+        {
+            SerenityNative.Up();
+            return SerenityNative.Identity();
+        });
 
-        private static readonly Lazy<string> NativeIdentity = new(SerenityNative.Identity);
-
-        // The library's compile or the C#'s, both through the one Shaderc; text that is no text of its own is the C#'s to take - see EmuSen_RustPlatform.md §16.2.
-        public static byte[] Compile(string source, SlangStage stage, string name) =>
-            SerenityNative.Active && SerenityNative.Crosses(source) && SerenityNative.Crosses(name) ? CompileNative(source, stage, name) : Managed.Compile(source, stage, name);
+        // Half a surrogate pair in the text or the name crosses as U+FFFD - see EmuSen_Backend.md §40.6.
+        public static byte[] Compile(string source, SlangStage stage, string name) => CompileNative(source, stage, name);
 
         internal static byte[] CompileNative(string source, SlangStage stage, string name)
         {
+            SerenityNative.Up();
             byte[] text = Encoding.UTF8.GetBytes(source), file = Encoding.UTF8.GetBytes(name);
             byte[]? spirv = SerenityNative.Bytes((buffer, capacity) =>
             {
@@ -43,108 +36,6 @@ namespace EmuSen.Serenity.Slang
             if (spirv is not null) return spirv;
             if (status == SerenityNative.Parse) throw new SlangCompileException(SerenityNative.Words());
             throw new InvalidOperationException(SerenityNative.Words());
-        }
-
-        // The C# compiler: the default, and what the library's is held to - see EmuSen_RustPlatform.md §16.
-        internal static class Managed
-        {
-            internal static readonly Shaderc Api = ShadercLibrary.Load();
-
-            private static readonly Lazy<string> LazyIdentity = new(ReadIdentity);
-
-            // The compiler itself, as far as its output can depend on it: the native library's bytes, its SPIR-V version, the binding's and the options.
-            internal static string Identity => LazyIdentity.Value;
-
-            public static byte[] Compile(string source, SlangStage stage, string name)
-            {
-                Compiler* compiler = Api.CompilerInitialize();
-                CompileOptions* options = Api.CompileOptionsInitialize();
-                try
-                {
-                    Api.CompileOptionsSetOptimizationLevel(options, Optimization);
-                    Api.CompileOptionsSetTargetEnv(options, Target, (uint)TargetVersion);
-                    Api.CompileOptionsSetSourceLanguage(options, Language);
-                    byte[] text = Encoding.UTF8.GetBytes(source);
-                    ShaderKind kind = stage == SlangStage.Vertex ? ShaderKind.VertexShader : ShaderKind.FragmentShader;
-                    CompilationResult* result;
-                    fixed (byte* p = text) result = Api.CompileIntoSpv(compiler, p, (nuint)text.Length, kind, name, Entry, options);
-                    try
-                    {
-                        // Shaderc's words are UTF-8, which the binding's string would read as the system's code page on Windows.
-                        if (Api.ResultGetCompilationStatus(result) != CompilationStatus.Success)
-                            throw new SlangCompileException($"{name} ({stage}) does not compile:\n{Marshal.PtrToStringUTF8((nint)Api.ResultGetErrorMessage(result))}");
-                        return new ReadOnlySpan<byte>(Api.ResultGetBytes(result), (int)Api.ResultGetLength(result)).ToArray();
-                    }
-                    finally
-                    {
-                        Api.ResultRelease(result);
-                    }
-                }
-                finally
-                {
-                    Api.CompileOptionsRelease(options);
-                    Api.CompilerRelease(compiler);
-                }
-            }
-
-            private static string ReadIdentity()
-            {
-                uint version = 0, revision = 0;
-                Api.GetSpvVersion(&version, &revision);
-                return $"shaderc {NativeDigest()}; spv {version:X}.{revision}; binding {typeof(Shaderc).Assembly.GetName().Version}; {Options}";
-            }
-
-            // The file the loaded Shaderc library came from, which the library is told so that its identity carries the same digest; null when the process cannot name it.
-            internal static string? NativePath()
-            {
-                try
-                {
-                    foreach (ProcessModule module in Process.GetCurrentProcess().Modules)
-                        if (Path.GetFileName(module.FileName).Contains("shaderc", StringComparison.OrdinalIgnoreCase)) return module.FileName;
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
-                {
-                }
-                return OperatingSystem.IsWindows() ? null : FileOfFunction();
-            }
-
-            [StructLayout(LayoutKind.Sequential)]
-            private struct DlInfo
-            {
-                public nint FileName, FileBase, SymbolName, SymbolAddress;
-            }
-
-            [DllImport("libc", EntryPoint = "dladdr")]
-            private static extern int DlAddress(nint address, out DlInfo info);
-
-            // dladdr's file for one of Shaderc's functions: macOS lists none of a process's libraries to .NET - see EmuSen_RustPlatform.md §27.6.
-            private static string? FileOfFunction()
-            {
-                try
-                {
-                    nint function = Api.Context.GetProcAddress("shaderc_compiler_initialize");
-                    return function != 0 && DlAddress(function, out DlInfo info) != 0 && info.FileName != 0 ? Marshal.PtrToStringUTF8(info.FileName) : null;
-                }
-                catch (Exception e) when (e is DllNotFoundException or EntryPointNotFoundException or InvalidOperationException)
-                {
-                    return null;
-                }
-            }
-
-            // The loaded Shaderc library's SHA-256, or its absence said, when the process cannot name the file it came from.
-            private static string NativeDigest()
-            {
-                try
-                {
-                    if (NativePath() is not { } path) return "unfound";
-                    using FileStream file = File.OpenRead(path);
-                    return Convert.ToHexString(SHA256.HashData(file));
-                }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
-                {
-                    return $"unread ({e.GetType().Name})";
-                }
-            }
         }
     }
 

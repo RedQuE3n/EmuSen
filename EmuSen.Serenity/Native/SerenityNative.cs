@@ -6,11 +6,10 @@ using System.Text;
 using System.Text.Json;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Native;
-using Silk.NET.Core.Contexts;
 
 namespace EmuSen.Serenity.Native
 {
-    // Serenity's half of emusen_platform, the switch that chooses it over the C#, and the lending of Shaderc and SQLite - see EmuSen_RustPlatform.md §3.9, §16 and §17.
+    // Serenity's half of emusen_platform, attached at its first use, and the lending of SQLite - see EmuSen_RustPlatform.md §3.9, §16 and §17 and EmuSen_Backend.md §40.6.
     internal static unsafe class SerenityNative
     {
         public const string Variable = "EMUSEN_SERENITY_NATIVE";
@@ -21,18 +20,19 @@ namespace EmuSen.Serenity.Native
         internal const uint ClassSpace = 0, ClassWord = 1, NumberFloat = 0, NumberInteger = 1;
 
         private static readonly Lazy<string?> Attached = new(Attach);
-        private static readonly PlatformSwitch Chosen = SwitchFor(() => Environment.GetEnvironmentVariable(Variable), () => (Attached.Value is null, Attached.Value ?? ""));
 
-        // State 2: the library unless the variable is 0; one that is absent, refused or not lent Shaderc and SQLite leaves the C#, said once - see EmuSen_RustPlatform.md §19.
-        public static bool Active => Chosen.Active;
-
-        // Serenity's switch as the process makes it, for a test that makes one of its own over another load.
-        internal static PlatformSwitch SwitchFor(Func<string?> variable, Func<(bool Available, string Report)> load) => new(variable, load, PlatformSwitch.Announce, "Serenity's slang half");
-
-        // The library itself, whichever way the switch stands: what a parity test calls.
+        // The library itself, with every export this half calls and SQLite lent: what every call needs.
         public static bool Ready => Attached.Value is null;
 
         public static string Report => Attached.Value ?? PlatformLibrary.Report;
+
+        // Makes sure the library is in the process, or refuses in words; there is no C# to fall back to - see EmuSen_Backend.md §40.6.
+        internal static void Up()
+        {
+            if (Attached.Value is { } why) throw new DllNotFoundException(Refusal(why));
+        }
+
+        internal static string Refusal(string why) => $"{PlatformLibrary.FileName} is not in use for Serenity ({why}); Serenity's slang half has had no C# implementation since 2026-11-05.";
 
         internal static delegate* unmanaged[Cdecl]<nint, byte*, nuint, int> ShadercLend;
         internal static delegate* unmanaged[Cdecl]<nint, int> SqliteLend;
@@ -89,6 +89,13 @@ namespace EmuSen.Serenity.Native
         internal static delegate* unmanaged[Cdecl]<nint, uint, RingImageInfo*, int> RingImage;
         internal static delegate* unmanaged[Cdecl]<nint, int> RingFree;
         internal static delegate* unmanaged[Cdecl]<nint, nint, uint, ulong, int, int, int> ChainAdvanceRing;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, long> Filters;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, long> FilterValues;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long> FilterPasses;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int> FilterReadsRaw;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, int, int, int, int> FilterReduceBy;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int, float, float, byte*, nuint, long> FilterTranslate;
+        internal static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int, float, float, byte*, nuint, byte*, nuint, long> FilterWrite;
 
         // emusen_serenity_ring_info: the ring's count, its semaphores' descriptors and the UUIDs a core matches, since interface 28.
         [StructLayout(LayoutKind.Sequential)]
@@ -164,6 +171,8 @@ namespace EmuSen.Serenity.Native
             "emusen_serenity_parse_format", "emusen_platform_last_error", "emusen_serenity_device_identity", "emusen_serenity_shown_new", "emusen_serenity_shown_free",
             "emusen_serenity_chain_present", "emusen_serenity_lend_new", "emusen_serenity_lend_take", "emusen_serenity_lend_settle", "emusen_serenity_lend_free",
             "emusen_serenity_chain_advance_lent", "emusen_serenity_ring_new", "emusen_serenity_ring_image", "emusen_serenity_ring_free", "emusen_serenity_chain_advance_ring",
+            "emusen_serenity_filters", "emusen_serenity_filter_values", "emusen_serenity_filter_passes", "emusen_serenity_filter_reads_raw", "emusen_serenity_filter_reduce_by",
+            "emusen_serenity_filter_translate", "emusen_serenity_filter_write",
         };
 
         // Null when every export resolved and both libraries were lent; otherwise why the library is not in use.
@@ -230,27 +239,30 @@ namespace EmuSen.Serenity.Native
             RingImage = (delegate* unmanaged[Cdecl]<nint, uint, RingImageInfo*, int>)found[next++];
             RingFree = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
             ChainAdvanceRing = (delegate* unmanaged[Cdecl]<nint, nint, uint, ulong, int, int, int>)found[next++];
+            Filters = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
+            FilterValues = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
+            FilterPasses = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
+            FilterReadsRaw = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int>)found[next++];
+            FilterReduceBy = (delegate* unmanaged[Cdecl]<byte*, nuint, int, int, int, int>)found[next++];
+            FilterTranslate = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int, float, float, byte*, nuint, long>)found[next++];
+            FilterWrite = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int, float, float, byte*, nuint, byte*, nuint, long>)found[next++];
+            // Attached by now; a failure to say a leftover 0 never refuses the library.
+            try { RetiredSwitch.Note(Variable, "Serenity's slang half", "2026-11-05"); } catch (Exception) { }
             return Lend();
         }
 
-        // The two libraries the C# has loaded, by the handles its own bindings hold, so the SPIR-V is one compiler's and the process has one SQLite - see EmuSen_RustPlatform.md §16.2.
+        // SQLite as the C# has loaded it, so the process has one; Shaderc the library finds beside the program itself - see EmuSen_RustPlatform.md §16.2 and §33.
         private static string? Lend()
         {
             try
             {
-                nint shaderc = ((DefaultNativeContext)Slang.SlangCompiler.Managed.Api.Context).Library.Handle;
-                byte[]? file = Utf8(Slang.SlangCompiler.Managed.NativePath());
-                int lent;
-                fixed (byte* f = file) lent = ShadercLend(shaderc, file is null ? null : Pin(f), (nuint)(file?.Length ?? 0));
-                if (lent != 0) return Words();
-
                 SQLitePCL.Batteries_V2.Init();
                 if (!NativeLibrary.TryLoad(SQLitePCL.raw.GetNativeLibraryName(), typeof(SQLitePCL.SQLite3Provider_e_sqlite3).Assembly, null, out nint sqlite)) return "SQLite could not be found as the C# loads it";
                 return SqliteLend(sqlite) == 0 ? null : Words();
             }
-            catch (Exception e) when (e is InvalidCastException or DllNotFoundException or FileNotFoundException or TypeInitializationException or InvalidOperationException)
+            catch (Exception e) when (e is DllNotFoundException or FileNotFoundException or TypeInitializationException or InvalidOperationException)
             {
-                return $"Shaderc or SQLite could not be lent ({e.GetType().Name}: {e.Message.Split('\n')[0]})";
+                return $"SQLite could not be lent ({e.GetType().Name}: {e.Message.Split('\n')[0]})";
             }
         }
 
@@ -263,18 +275,6 @@ namespace EmuSen.Serenity.Native
             byte[] large = new byte[length];
             fixed (byte* p = large) LastError(p, (nuint)large.Length);
             return Encoding.UTF8.GetString(large);
-        }
-
-        // Whether a string has UTF-8 of its own: UTF-16 with half a surrogate pair has none, and null is not text.
-        internal static bool Crosses(string? text)
-        {
-            if (text is null) return false;
-            for (int i = 0; i < text.Length; i++)
-            {
-                if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) i++;
-                else if (char.IsSurrogate(text[i])) return false;
-            }
-            return true;
         }
 
         internal static byte[]? Utf8(string? text) => text is null ? null : Encoding.UTF8.GetBytes(text);
@@ -296,7 +296,7 @@ namespace EmuSen.Serenity.Native
             return whole;
         }
 
-        // A call's JSON document; a status below zero is the library's own failure, which no input of the C#'s should cause.
+        // A call's JSON document; a status below zero is the library's own failure, which no input of the program's should cause.
         internal static JsonDocument Document(Call call)
         {
             byte[]? bytes = Bytes(call, out long status);

@@ -426,9 +426,7 @@ namespace EmuSen.Serenity
                 DevicePresenter? presenter;
                 lock (_cacheLock) presenter = _presenter;
                 if (presenter is null || !DevicePictureAllowed || !DeviceLendAllowed) return null;
-                if (presenter.Device.IsNative) return presenter.Device;
-                DevicePictureReport?.Invoke("No device is lent to the core: the C#'s device lends nothing");
-                return null;
+                return presenter.Device;
             }
         }
 

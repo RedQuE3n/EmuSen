@@ -111,10 +111,10 @@ namespace EmuSen.WiseMan.Serenity
 
         // Mercury's four greys at one pixel each become SameBoy's four DMG shades; at this size there is no grid to draw.
         [Theory]
-        [InlineData(0xFF, HandheldFilters.DmgLightest)]
-        [InlineData(0xAA, HandheldFilters.DmgLight)]
-        [InlineData(0x55, HandheldFilters.DmgDark)]
-        [InlineData(0x00, HandheldFilters.DmgDarkest)]
+        [InlineData(0xFF, PanelReference.DmgLightest)]
+        [InlineData(0xAA, PanelReference.DmgLight)]
+        [InlineData(0x55, PanelReference.DmgDark)]
+        [InlineData(0x00, PanelReference.DmgDarkest)]
         public Task A_dmg_grey_becomes_the_panel_s_measured_shade(byte grey, int shade) => Session.Dispatch(() =>
         {
             if (ChainDevice.Missing) return;
@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.Serenity
             Picture settled = Show(HandheldFilters.DmgLcd, 8, 8, 8, 8, white, black, black, black, black);
 
             Assert.True(once.Luma(4, 4) > settled.Luma(4, 4) + 20, $"one frame after white {once.Luma(4, 4)}, settled {settled.Luma(4, 4)}");
-            NearRgb(HandheldFilters.DmgDarkest, settled.At(4, 4), 2, "settled");
+            NearRgb(PanelReference.DmgDarkest, settled.At(4, 4), 2, "settled");
         }, default);
 
         // Magnified, a dot's centre is its shade and the gap beside it the lighter reflector, and a dark dot's shadow falls below and to the right.
@@ -145,8 +145,8 @@ namespace EmuSen.WiseMan.Serenity
             (frame[i], frame[i + 1], frame[i + 2]) = (0, 0, 0);
             Picture picture = Show(HandheldFilters.DmgLcd, 4, 4, 64, 64, frame, frame, frame, frame);
 
-            NearRgb(HandheldFilters.DmgDarkest, picture.At(24, 24), 4, "the dark dot's centre");
-            NearRgb(HandheldFilters.DmgLightest, picture.At(40, 8), 4, "a light dot's centre");
+            NearRgb(PanelReference.DmgDarkest, picture.At(24, 24), 4, "the dark dot's centre");
+            NearRgb(PanelReference.DmgLightest, picture.At(40, 8), 4, "a light dot's centre");
             Assert.True(picture.Luma(32, 8) > picture.Luma(40, 8), "the gap between two light dots is the lighter reflector");
             Assert.True(picture.Luma(40, 38) < picture.Luma(8, 56) - 8, $"shadow {picture.Luma(40, 38)} against open reflector {picture.Luma(8, 56)}");
         }, default);

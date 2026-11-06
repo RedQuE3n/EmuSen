@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.Serenity
         // The tube's light for a drive voltage, the transfer the filter is built on.
         private static double Tube(double v)
         {
-            double lb = Math.Pow(CrtFilter.BlackLevel, 1 / 2.4), b = lb / (1 - lb);
+            double lb = Math.Pow(CrtReference.BlackLevel, 1 / 2.4), b = lb / (1 - lb);
             return Math.Pow((v + b) / (1 + b), 2.4);
         }
 
@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.Serenity
         {
             foreach (string? console in CrtFilter.Filter.Consoles!.Cast<string?>().Append(null))
                 for (int quality = 0; quality < 3; quality++) for (int signal = 0; signal < 3; signal++) for (int mask = 0; mask < 5; mask++) for (int decoder = 0; decoder < 3; decoder++)
-                    foreach (int screen in signal == 2 && mask == 0 ? Enumerable.Range(0, CrtFilter.Screens.Count) : new[] { CrtFilter.DefaultScreen })
+                    foreach (int screen in signal == 2 && mask == 0 ? Enumerable.Range(0, CrtReference.Screens.Count) : new[] { CrtReference.DefaultScreen })
                     {
                         var chosen = new Dictionary<string, float> { ["quality"] = quality, ["signal"] = signal, ["mask"] = mask, ["decoder"] = decoder, ["screen"] = screen };
                         Assert.True(Compiles(CrtFilter.Filter, console, chosen) >= new[] { 2, 6, 8 }[quality]);
@@ -148,7 +148,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_playstations_line_is_its_video_clocks_over_the_subcarrier()
         {
-            CrtFilter.LineTiming ntsc = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation"], pal: false), pal = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation"], pal: true);
+            CrtReference.LineTiming ntsc = CrtReference.LineOf(CrtFilter.ConsoleTiming["PlayStation"], pal: false), pal = CrtReference.LineOf(CrtFilter.ConsoleTiming["PlayStation"], pal: true);
             Assert.Equal((47.678, 170.667, 0.5, 0.5), (Math.Round(ntsc.ActiveMicroseconds, 3), Math.Round(ntsc.CyclesAcross, 3), ntsc.PhaseLine, ntsc.PhaseFrame));
             Assert.Equal(3412.5 / 15 % 1, ntsc.PhaseLine, 6);
             Assert.Equal(263 * 3412.5 / 15 % 1, ntsc.PhaseFrame, 6);
@@ -162,7 +162,7 @@ namespace EmuSen.WiseMan.Serenity
         [InlineData("SG-1000")]
         public void The_master_system_s_and_the_sg_1000_s_ntsc_line_stands_still(string console)
         {
-            CrtFilter.LineTiming ntsc = CrtFilter.LineOf(CrtFilter.ConsoleTiming[console], pal: false);
+            CrtReference.LineTiming ntsc = CrtReference.LineOf(CrtFilter.ConsoleTiming[console], pal: false);
             Assert.Equal((47.678, 170.667, 0.0, 0.0, 0.0, false), (Math.Round(ntsc.ActiveMicroseconds, 3), Math.Round(ntsc.CyclesAcross, 3), ntsc.PhaseLine, ntsc.PhaseFrame, ntsc.PhaseCrawl, ntsc.SwitchFrame));
             Assert.Equal(CrtFilter.ConsoleTiming["Genesis"].Where(p => !p.Key.StartsWith("pal.")), CrtFilter.ConsoleTiming[console].Where(p => !p.Key.StartsWith("pal.")));
         }
@@ -208,7 +208,7 @@ namespace EmuSen.WiseMan.Serenity
                         if (level < 1 && (screen != 1 || width != 1440)) continue;
                         if (Draw("SNES", 256, 224, width, height, Twice(Grey(256, 224, level)), With(Plain, ("signal", 0f), ("screen", screen))) is not { } picture) return;
                         double[] mean = picture.Mean(width / 4.0, height / 4.0, width / 2.0, height / 2.0);
-                        string what = $"{CrtFilter.Screens[screen].Label} at {width}x{height}, level {level}";
+                        string what = $"{CrtReference.Screens[screen].Label} at {width}x{height}, level {level}";
                         foreach (double channel in mean) Within(Tube(level) / 3, channel, 0.02, what);
                         Assert.True(mean.Max() - mean.Min() < 0.015 * mean.Average(), $"{what} is tinted: {string.Join(", ", mean.Select(m => m.ToString("F4")))}");
                     }
@@ -218,7 +218,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task A_scanline_is_as_wide_as_its_drive_makes_the_spot_and_carries_the_same_light_at_any_width() => Session.Dispatch(() =>
         {
-            CrtFilter.Screen screen = CrtFilter.Screens[CrtFilter.DefaultScreen];
+            CrtReference.Screen screen = CrtReference.Screens[CrtReference.DefaultScreen];
             double pixelsPerLine = 480 * 10 / 224.0;
             var widths = new List<double>();
             foreach (double level in new[] { 0.25, 0.5, 1.0 })
@@ -258,7 +258,7 @@ namespace EmuSen.WiseMan.Serenity
             }
 
             if (Draw("SNES", 256, 224, 2880, 2160, Twice(Grey(256, 224, 0.6)), With(Plain, ("signal", 0f), ("screen", 2f), ("maskPitch", 3f), ("subpixels", 0f), ("displayNits", 1000f))) is not { } coarse) return;
-            double period = 2880 / (CrtFilter.Screens[2].TriadsAcross / 3);
+            double period = 2880 / (CrtReference.Screens[2].TriadsAcross / 3);
             double[][] rows = Enumerable.Range(0, 3).Select(c => coarse.Across(c, 1060, 40, 1000, 1000 + (int)(period * 6))).ToArray();
             double[] peaks = rows.Select(row => Enumerable.Range(0, (int)period).OrderByDescending(i => row[i] + row[i + (int)Math.Round(period)]).First() / period).ToArray();
             double redToGreen = (peaks[1] - peaks[0] + 1) % 1, greenToBlue = (peaks[2] - peaks[1] + 1) % 1;
@@ -299,7 +299,7 @@ namespace EmuSen.WiseMan.Serenity
             if (Draw("SNES", 256, 224, 2880, 2160, Twice(Grey(256, 224, 0.6)), With(set, ("screen", 1f))) is not { } enlarged) return;
             double[] row = enlarged.Across(1, 1060, 40, 720, 2160);
             double level = row.Average();
-            Within(CrtFilter.Screens[1].TriadsAcross / 2, Enumerable.Range(1, row.Length - 1).Count(i => row[i - 1] < level && row[i] >= level), 0.02, "the 20-inch set's own triads across half of 2880 pixels");
+            Within(CrtReference.Screens[1].TriadsAcross / 2, Enumerable.Range(1, row.Length - 1).Count(i => row[i - 1] < level && row[i] >= level), 0.02, "the 20-inch set's own triads across half of 2880 pixels");
 
             Assert.Equal(1f, CrtFilter.Parameters.Single(p => p.Id == "maskLimit").Initial);
         }, default);
@@ -311,7 +311,7 @@ namespace EmuSen.WiseMan.Serenity
             // A woven 448-row picture has lines at half the pitch, so the beam is nearly even down the screen and what is measured is the mask.
             (string, float)[] set = With(Plain, ("signal", 0f), ("screen", 1f), ("maskPitch", 3f), ("subpixels", 0f), ("spotSize", 2f), ("displayNits", 1000f));
             if (Draw("SNES", 256, 448, 2880, 2160, Twice(Grey(256, 448, 0.6)), set) is not { } picture) return;
-            double triad = 2880 / (CrtFilter.Screens[1].TriadsAcross / 3), slot = triad * 0.81;
+            double triad = 2880 / (CrtReference.Screens[1].TriadsAcross / 3), slot = triad * 0.81;
 
             // Green's stripe in the triad nearest the centre, and in the one beside it.
             double[] across = picture.Across(1, 900, 360, 1400, 1400 + (int)(2 * triad) + 2);
@@ -462,7 +462,7 @@ namespace EmuSen.WiseMan.Serenity
             }
 
             Within(30 * width / 320, Period(wide.Across(2, top + height / 2 - 20, 40, x0, x1), 60, 220), 0.04, "the rainbow's length in output pixels");
-            double trap = CrtFilter.TrapGain(53.693175 / 16, CrtFilter.SubcarrierMegahertz);
+            double trap = CrtReference.TrapGain(53.693175 / 16, CrtReference.SubcarrierMegahertz);
             Assert.True(Math.Abs(Columns2(wide) / Columns2(rgb) - trap) < 0.05, $"the columns through composite: swing {Columns2(wide):F3} against {Columns2(rgb):F3} by RGB, where the trap keeps {trap:F3}");
 
             // The strength is compared on faint columns and a straight-line tube, where chroma stays inside the gamut, read as blue over green so that the luma the trap passes cancels.
@@ -537,7 +537,7 @@ namespace EmuSen.WiseMan.Serenity
             if (CrtDevice.Value is null) return;
             double[] first = After(1), third = After(3), tenth = After(10);
             Within(0.04, first[1], 0.15, "green in the first dark frame");
-            Within(0.04 * CrtFilter.BlueSlow / CrtFilter.GreenSlow, first[2], 0.2, "blue in the first dark frame");
+            Within(0.04 * CrtReference.BlueSlow / CrtReference.GreenSlow, first[2], 0.2, "blue in the first dark frame");
             Assert.True(first[0] < 0.004, $"red is gone: {first[0]:F4}");
             Assert.True(third[1] > 0.5 * first[1] && tenth[1] > 0.25 * first[1] && tenth[1] < third[1], $"green falls slowly: {first[1]:F4}, {third[1]:F4}, {tenth[1]:F4}");
         }, default);
@@ -553,8 +553,8 @@ namespace EmuSen.WiseMan.Serenity
             double Light(IEnumerable<byte[]> frames, params (string, float)[] set) => Draw("SNES", 256, 224, 640, 480, frames.ToArray(), set)!.Luminance(left, top, width, height);
             IEnumerable<byte[]> After(int held) => Enumerable.Repeat(white, 150).Concat(Enumerable.Repeat(black, 60)).Concat(Enumerable.Repeat(grey, held));
 
-            CrtFilter.Tails t = CrtFilter.Tails.For(false);
-            double share = 0.2 * CrtFilter.TailScale * (t.GreenFast * t.Fast / (1 - t.Fast) + t.GreenSlow * t.Slow / (1 - t.Slow));
+            CrtReference.Tails t = CrtReference.Tails.For(false);
+            double share = 0.2 * CrtReference.TailScale * (t.GreenFast * t.Fast / (1 - t.Fast) + t.GreenSlow * t.Slow / (1 - t.Slow));
             int gone = (int)Math.Ceiling(Math.Log(0.01) / Math.Log(t.Slow));
             double steady = Light(Enumerable.Repeat(grey, 300), tester);
             double first = 1 - Light(After(2), tester) / steady, later = 1 - Light(After(gone), tester) / steady, settled = 1 - Light(After(300), tester) / steady;
@@ -581,7 +581,7 @@ namespace EmuSen.WiseMan.Serenity
                 double[] row = picture.Across(channel, top + height / 2 - 20, 40, x0, x0 + 80);
                 return x0 + Enumerable.Range(0, 80).Sum(i => i * row[i]) / row.Sum();
             }
-            CrtFilter.Screen screen = CrtFilter.Screens[1];
+            CrtReference.Screen screen = CrtReference.Screens[1];
             double perMillimetre = 2880 / screen.WidthMillimetres;
             double centre = Centre(2, 128) - Centre(0, 128), edge = Centre(2, 240) - Centre(0, 240);
             Within(screen.ConvergenceCentre * perMillimetre, Math.Abs(centre), 0.15, "red to blue at the centre, in pixels");
@@ -611,7 +611,7 @@ namespace EmuSen.WiseMan.Serenity
             if (Draw("SNES", 256, 224, 640, 480, white, With(set, ("colour", 0f))) is not { } america) return;
             if (Draw("SNES", 256, 224, 640, 480, white, With(set, ("colour", 1f))) is not { } japan) return;
             double[] neutral = america.Mean(160, 120, 320, 240), blue = japan.Mean(160, 120, 320, 240);
-            double[][] matrix = CrtFilter.GunsToDisplay(CrtFilter.Colours[1], CrtFilter.Displays[0]);
+            double[][] matrix = CrtReference.GunsToDisplay(CrtReference.Colours[1], CrtReference.Displays[0]);
             Assert.True(neutral.Max() - neutral.Min() < 0.01 * neutral.Average(), "North America's white is the display's");
             Within(matrix[2].Sum() / matrix[0].Sum(), blue[2] / blue[0], 0.03, "Japan's blue over red");
             Assert.True(blue[2] / blue[0] > 1.3, $"and it is visibly blue: {blue[2] / blue[0]:F2}");

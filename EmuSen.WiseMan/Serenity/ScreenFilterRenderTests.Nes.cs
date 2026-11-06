@@ -14,21 +14,21 @@ namespace EmuSen.WiseMan.Serenity
         internal static double PpuAt(int colour, int emphasis, int p)
         {
             int hue = colour & 15, row = colour >> 4;
-            double lo = (CrtFilter.PpuLow[row] - CrtFilter.PpuBlack) / CrtFilter.PpuIre100, hi = (CrtFilter.PpuHigh[row] - CrtFilter.PpuBlack) / CrtFilter.PpuIre100;
+            double lo = (CrtReference.PpuLow[row] - CrtReference.PpuBlack) / CrtReference.PpuIre100, hi = (CrtReference.PpuHigh[row] - CrtReference.PpuBlack) / CrtReference.PpuIre100;
             if (hue >= 14) return 0;
             if (hue == 0) lo = hi;
             if (hue >= 13) hi = lo;
             bool In(int h) => ((h + p) % 12 + 12) % 12 < 6;
             double v = In(hue) ? hi : lo;
             bool dim = ((emphasis & 1) != 0 && In(0)) || ((emphasis & 2) != 0 && In(4)) || ((emphasis & 4) != 0 && In(8));
-            return dim ? (CrtFilter.PpuAttenuation * (v * CrtFilter.PpuIre100 + CrtFilter.PpuBlack) - CrtFilter.PpuBlack) / CrtFilter.PpuIre100 : v;
+            return dim ? (CrtReference.PpuAttenuation * (v * CrtReference.PpuIre100 + CrtReference.PpuBlack) - CrtReference.PpuBlack) / CrtReference.PpuIre100 : v;
         }
 
         // The colour a receiver locked to the burst decodes from the PPU's wave, found by demodulating the wave itself finely, with the row's skew as a delay of the wave.
         internal static (double Y, double U, double V) PpuDecoded(int colour, int emphasis)
         {
             const int fine = 1200;
-            double y = 0, u = 0, v = 0, delay = (colour >> 4) * CrtFilter.PpuRowSkewDegrees / 30;
+            double y = 0, u = 0, v = 0, delay = (colour >> 4) * CrtReference.PpuRowSkewDegrees / 30;
             for (int i = 0; i < fine; i++)
             {
                 double q = (i + 0.5) * 12.0 / fine;
@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Serenity
                 double angle = 2 * Math.PI * (q - 10) / 12;
                 y += level / fine; u += 2 * level * Math.Sin(angle) / fine; v += 2 * level * Math.Cos(angle) / fine;
             }
-            return (y, CrtFilter.PpuChromaGain * u, CrtFilter.PpuChromaGain * v);
+            return (y, CrtReference.PpuChromaGain * u, CrtReference.PpuChromaGain * v);
         }
 
         // A picture before the palette in the core ABI's nes.ppu: the colour number in bits 0-5 and the emphasis bits in 6-8 - see EmuSen_CoreAPI.md §6.30.
@@ -67,12 +67,12 @@ namespace EmuSen.WiseMan.Serenity
             for (int i = 0; i < 1200; i++)
             {
                 double q = (i + 0.5) / 100.0;
-                double level = ((8 + (int)q) % 12 < 6 ? CrtFilter.PpuBurstHigh : CrtFilter.PpuBurstLow) / CrtFilter.PpuIre100;
+                double level = ((8 + (int)q) % 12 < 6 ? CrtReference.PpuBurstHigh : CrtReference.PpuBurstLow) / CrtReference.PpuIre100;
                 double angle = 2 * Math.PI * (q - 10) / 12;
                 u += 2 * level * Math.Sin(angle) / 1200; v += 2 * level * Math.Cos(angle) / 1200;
             }
             Assert.True(u < 0 && Math.Abs(v) < 1e-3 * Math.Abs(u), $"burst at U {u:F4}, V {v:F4}");
-            Within(0.2, -u * CrtFilter.PpuChromaGain, 0.001, "the burst's size after the colour control");
+            Within(0.2, -u * CrtReference.PpuChromaGain, 0.001, "the burst's size after the colour control");
 
             // Hues 1 to 12 sit 30 degrees apart, hue 8 on the burst's own axis, and each row turns the next by the skew.
             double Angle(int colour) { var d = PpuDecoded(colour, 0); return Math.Atan2(d.V, d.U) * 180 / Math.PI; }
@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.Serenity
                 Assert.True(Math.Abs(Math.Abs(step) - 30) < 0.01, $"hue {hue} to {hue + 1}: {step:F3} degrees");
             }
             double skew = ((Angle(0x38) - Angle(0x08)) % 360 + 540) % 360 - 180;
-            Within(3 * CrtFilter.PpuRowSkewDegrees, skew, 0.01, "row 3 turned from row 0 by three rows' skew");
+            Within(3 * CrtReference.PpuRowSkewDegrees, skew, 0.01, "row 3 turned from row 0 by three rows' skew");
         }
 
         // The S-Video path takes each pixel's colour from the PPU's levels in closed form; the composite path generates the wave and the receiver decodes it. A flat field must come out the same both ways.

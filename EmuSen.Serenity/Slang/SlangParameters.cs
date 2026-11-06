@@ -10,7 +10,7 @@ namespace EmuSen.Serenity.Slang
     public static class SlangParameters
     {
         public static IReadOnlyList<SlangParameter> Merge(IEnumerable<SlangSource> sources, IReadOnlyDictionary<string, float> overrides) =>
-            SerenityNative.Active ? MergeNative(sources, overrides) : Managed.Merge(sources, overrides);
+            MergeNative(sources, overrides);
 
         // The library's merge: which parameters, in what order, with what value; each answer is the C# object first declared under its id, so what else it carries stays.
         internal static IReadOnlyList<SlangParameter> MergeNative(IEnumerable<SlangSource> sources, IReadOnlyDictionary<string, float> overrides) =>
@@ -19,9 +19,6 @@ namespace EmuSen.Serenity.Slang
         // The same over the lists themselves, each source read once before any is merged.
         internal static unsafe IReadOnlyList<SlangParameter> MergeNativeLists(IReadOnlyList<IReadOnlyList<SlangParameter>> declared, IReadOnlyDictionary<string, float> overrides)
         {
-            if (declared.Any(list => list.Any(p => !SerenityNative.Crosses(p.Id) || !SerenityNative.Crosses(p.Description))) || overrides.Keys.Any(key => !SerenityNative.Crosses(key)))
-                return Managed.Merge(declared, overrides);
-
             byte[] input = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 sources = declared.Select(list => list.Select(ToJson)),
@@ -69,22 +66,5 @@ namespace EmuSen.Serenity.Slang
 
         // A parameter whose range has no width can only be a heading, which is how many presets label their groups.
         public static bool IsHeading(SlangParameter parameter) => parameter.Maximum <= parameter.Minimum;
-
-        // The C# merge: the default, and what the library's is held to - see EmuSen_RustPlatform.md §16.
-        internal static class Managed
-        {
-            public static IReadOnlyList<SlangParameter> Merge(IEnumerable<SlangSource> sources, IReadOnlyDictionary<string, float> overrides) =>
-                Merge(sources.Select(source => source.Parameters), overrides);
-
-            public static IReadOnlyList<SlangParameter> Merge(IEnumerable<IReadOnlyList<SlangParameter>> sources, IReadOnlyDictionary<string, float> overrides)
-            {
-                var merged = new List<SlangParameter>();
-                var seen = new HashSet<string>(StringComparer.Ordinal);
-                foreach (IReadOnlyList<SlangParameter> source in sources)
-                    foreach (SlangParameter parameter in source)
-                        if (seen.Add(parameter.Id)) merged.Add(overrides.TryGetValue(parameter.Id, out float value) ? parameter with { Initial = value } : parameter);
-                return merged;
-            }
-        }
     }
 }

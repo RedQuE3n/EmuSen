@@ -644,6 +644,49 @@ Sega CD gets `CrtFilter.Filter` on the Genesis's line, and its frame, drawn on t
 frame on the standard line a console without a row would get. `ShaderSettingsWindowTests` compares each tab with its
 host's filters.
 
+### 3.13 The built-in filters, written by the platform library (2026-11-05)
+
+*Decided 2026-11-05 by the tester:* the presets of the built-in filters are written in Rust, in `emusen-serenity`'s
+`filters` module, behind the platform library's C interface (interface 35), so that any front end and DianaSh write
+the same preset from the same choices. Before, the C# wrote them (`BuiltInPreset`, `CrtFilter`, `CrtFilters`,
+`HandheldFilters`, `BuiltInShaders`), and a program without the C# could not draw the CRT at all.
+
+**What the library owns.** The catalog: every built-in filter (the CRT, crt-lottes, the six handheld LCDs, and the
+three simple effects, each nearest and linear), its settings with their ranges and choices, the consoles it suits, its
+console constants (the CRT's line timing of §3.2 of `EmuSen_CRT.md`), and its shape (aspect, cropping, rows drawn once,
+history). The CRT's passes are written from the values (`filters::crt`, the physics of `EmuSen_CRT.md` §5 to §31);
+the others' passes are fixed (`filters::panels`, `filters::glsl`). The console screens of §31 of `EmuSen_CRT.md`
+(`filters::screens`). The translation of a filter's passes into slang (`filters::write`: each pass's uniform block,
+samplers, stages and reducing pass), the preset's text, and the folder named by the SHA-256 of all of it, written once.
+
+**The interface.** `emusen_serenity_filters` answers the catalog as a document. Every other call takes a filter as a
+document: `{"key"}` for one of the catalog's, or a filter's own description, its passes, settings and constants, for a
+filter a caller made, as the tests make many (a filter whose passes a C# `Build` makes sends the passes made for the
+values). `_filter_values`, `_filter_passes`, `_filter_reads_raw`, `_filter_reduce_by`, `_filter_translate` and
+`_filter_write` answer what `ScreenFilter.ValuesFor`, a catalog filter's `Build`, `ReadsRaw`,
+`BuiltInPreset.ReduceBy`, `Translate` and `Write` asked of the C# before. The header holds each call's words.
+
+**What the C# keeps.** A binding: `FilterLibrary` (the calls), `FilterCatalog` (the catalog read once), and the same
+public surface as before, `ScreenFilter`, `ScreenFilters`, `CrtFilter`, `CrtFilters`, `HandheldFilters`,
+`BuiltInShaders`, `ConsoleScreens` and `BuiltInPreset`, each now reading the catalog. A catalog filter carries its
+`Key`; a filter a caller made has none. `StructuralOf` stays in C#, since it only picks the chosen values the catalog
+names; `TelevisionStandards.Apply` and `RawEncodings.ToImage` are the front end's own and stay.
+
+**Numbers as .NET wrote them.** The GLSL carries numbers as the C# wrote them, so that a preset is the same text and
+the same folder whichever program writes it: a double by the pattern `0.0#######` (`0.0#####` for the LCDs), which
+.NET takes to 15 significant digits first and then rounds half up at the last place kept; a float by `R`, the shortest
+digits that read back, switching to an exponent only past seven places or the digits' count out, or three places in
+(`filters::number`). `Math.Round` is half to even (`round_ties_even`), and `MathF.Round` too.
+
+**How it is held.** `FilterPresetParityTests` holds the library to three goldens recorded from the C# on 2026-11-05
+(`EmuSen.WiseMan/Crystal/Goldens/FilterPresetParity.*`): 2,816 presets written (every filter on sixteen consoles, by
+default, nudged, reduced by 2 and 4, every structural choice of the CRT alone, four chroma widths, and seeded random
+choices), each held by its folder's name, the files beside it and the black pixel's digest; the catalog's facts; and
+the values, raw reads and reductions over sweeps. The Rust matched all 2,816 on its first run. The CRT's physics that
+the render tests compute their expected pictures from is a fixture of the tests, `CrtReference` (and
+`PanelReference` for the Game Boy's shades), their own derivation, held against the GPU's output as before; the
+shipped code has one owner, the library.
+
 ## 4. `FramePresenter` — the bundle nothing consumes yet
 
 A `Window` + `GameFrameControl` pair for a consumer that needs nothing else from its window: construct it, call `Present(rgba, w, h)` from any thread, `IsOpen()` to test for a user close, `Shutdown()`/`Dispose()` to close it.

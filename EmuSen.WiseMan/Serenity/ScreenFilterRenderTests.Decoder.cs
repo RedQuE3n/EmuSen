@@ -22,38 +22,38 @@ namespace EmuSen.WiseMan.Serenity
         public void The_trap_s_taps_are_a_notch_at_the_subcarrier_with_the_datasheet_s_lower_edge()
         {
             double active = CrtFilter.ConsoleTiming["SNES"]["activeUs"];
-            foreach (var (rate, what) in new[] { (CrtFilter.SignalSamples / active, "Accurate"), (Math.Round(4 * CrtFilter.ConsoleTiming["SNES"]["cyclesAcross"]) / active, "Balanced") })
-                foreach (double centre in new[] { CrtFilter.SubcarrierMegahertz, CrtFilter.PalSubcarrierMegahertz })
+            foreach (var (rate, what) in new[] { (CrtReference.SignalSamples / active, "Accurate"), (Math.Round(4 * CrtFilter.ConsoleTiming["SNES"]["cyclesAcross"]) / active, "Balanced") })
+                foreach (double centre in new[] { CrtReference.SubcarrierMegahertz, CrtReference.PalSubcarrierMegahertz })
                 {
-                    double[] band = CrtFilter.TrapTaps(rate, centre);
-                    double edge = centre * CrtFilter.TrapLowerEdgeMegahertz / CrtFilter.SubcarrierMegahertz;
+                    double[] band = CrtReference.TrapTaps(rate, centre);
+                    double edge = centre * CrtReference.TrapLowerEdgeMegahertz / CrtReference.SubcarrierMegahertz;
                     Assert.True(TrapResponse(band, rate, centre) < 0.01, $"{what} at {centre} MHz: {TrapResponse(band, rate, centre):F4} left at the centre");
                     Assert.True(Math.Abs(TrapResponse(band, rate, edge) - Math.Sqrt(0.5)) < 0.005, $"{what} at {centre} MHz: {TrapResponse(band, rate, edge):F4} at the lower edge");
                     Assert.True(TrapResponse(band, rate, 0) > 0.999, $"{what} at {centre} MHz: {TrapResponse(band, rate, 0):F4} kept at 0 MHz");
                     foreach (double f in new[] { 1.0, 1.5 })
-                        Assert.True(Math.Abs(TrapResponse(band, rate, f * centre / CrtFilter.SubcarrierMegahertz) - CrtFilter.TrapGain(f * centre / CrtFilter.SubcarrierMegahertz, centre)) < 0.02,
-                            $"{what} at {centre} MHz: {TrapResponse(band, rate, f):F3} at {f} MHz where the analogue trap keeps {CrtFilter.TrapGain(f, centre):F3}");
+                        Assert.True(Math.Abs(TrapResponse(band, rate, f * centre / CrtReference.SubcarrierMegahertz) - CrtReference.TrapGain(f * centre / CrtReference.SubcarrierMegahertz, centre)) < 0.02,
+                            $"{what} at {centre} MHz: {TrapResponse(band, rate, f):F3} at {f} MHz where the analogue trap keeps {CrtReference.TrapGain(f, centre):F3}");
                 }
-            Assert.True(Math.Abs(CrtFilter.TrapGain(CrtFilter.TrapLowerEdgeMegahertz, CrtFilter.SubcarrierMegahertz) - Math.Sqrt(0.5)) < 1e-9, "the analogue trap's lower edge");
+            Assert.True(Math.Abs(CrtReference.TrapGain(CrtReference.TrapLowerEdgeMegahertz, CrtReference.SubcarrierMegahertz) - Math.Sqrt(0.5)) < 1e-9, "the analogue trap's lower edge");
         }
 
         // The demodulator's axes as the datasheet gives them: the standard's angles and gains rebuild the standard's matrix, and the CXA2025AS's give its rows.
         [Fact]
         public void The_standard_s_axes_rebuild_its_matrix_and_the_datasheet_s_axes_give_their_own_rows()
         {
-            double[][] standard = CrtFilter.AxesMatrix(CrtFilter.Demodulators[0]);
+            double[][] standard = CrtReference.AxesMatrix(CrtReference.Demodulators[0]);
             Assert.Equal(new[] { 0.0, 1.0 }, standard[0].Select(v => Math.Round(v, 9)));
             Assert.Equal(new[] { Math.Round(-0.114 / 0.587, 9), Math.Round(-0.299 / 0.587, 9) }, standard[1].Select(v => Math.Round(v, 9)));
             Assert.Equal(new[] { 1.0, 0.0 }, standard[2].Select(v => Math.Round(v, 9)));
             double k = 0.877 / 0.492;
             foreach (var (index, red, redGain, green, greenGain) in new[] { (1, 112.0, 0.83, 252.0, 0.30), (2, 95.0, 0.78, 240.0, 0.30) })
             {
-                double[][] m = CrtFilter.AxesMatrix(CrtFilter.Demodulators[index]);
+                double[][] m = CrtReference.AxesMatrix(CrtReference.Demodulators[index]);
                 double Rad(double d) => d * Math.PI / 180;
-                Within(redGain * Math.Cos(Rad(red)), m[0][0], 1e-9, $"{CrtFilter.Demodulators[index].Label}: R-Y from B-Y");
-                Within(redGain * k * Math.Sin(Rad(red)), m[0][1], 1e-9, $"{CrtFilter.Demodulators[index].Label}: R-Y from R-Y");
-                Within(greenGain * Math.Cos(Rad(green)), m[1][0], 1e-9, $"{CrtFilter.Demodulators[index].Label}: G-Y from B-Y");
-                Within(greenGain * k * Math.Sin(Rad(green)), m[1][1], 1e-9, $"{CrtFilter.Demodulators[index].Label}: G-Y from R-Y");
+                Within(redGain * Math.Cos(Rad(red)), m[0][0], 1e-9, $"{CrtReference.Demodulators[index].Label}: R-Y from B-Y");
+                Within(redGain * k * Math.Sin(Rad(red)), m[0][1], 1e-9, $"{CrtReference.Demodulators[index].Label}: R-Y from R-Y");
+                Within(greenGain * Math.Cos(Rad(green)), m[1][0], 1e-9, $"{CrtReference.Demodulators[index].Label}: G-Y from B-Y");
+                Within(greenGain * k * Math.Sin(Rad(green)), m[1][1], 1e-9, $"{CrtReference.Demodulators[index].Label}: G-Y from R-Y");
                 Assert.Equal(new[] { 1.0, 0.0 }, m[2]);
             }
         }
@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Serenity
             foreach (var (quality, pal) in new[] { (0, false), (1, false), (2, false), (2, true) })
                 foreach (double megahertz in new[] { 1.0, 2.0, 2.8 })
                 {
-                    double clock = pal ? 10.640685 : 10.738635, centre = pal ? CrtFilter.PalSubcarrierMegahertz : CrtFilter.SubcarrierMegahertz;
+                    double clock = pal ? 10.640685 : 10.738635, centre = pal ? CrtReference.PalSubcarrierMegahertz : CrtReference.SubcarrierMegahertz;
                     byte[] grating = Paint(512, 224, (x, _) => { double v = 0.45 + 0.25 * Math.Cos(2 * Math.PI * megahertz * x / clock); return (v, v, v); });
                     // The picture's swing at the grating's own frequency, fitted along a band of lines, so that the frame's pixel images are not counted.
                     double Swing(float signal)
@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Serenity
                         return Math.Sqrt(a * a + b * b);
                     }
                     if (CrtDevice.Value is null) return;
-                    double kept = Swing(2f) / Swing(1f), trap = CrtFilter.TrapGain(megahertz, centre);
+                    double kept = Swing(2f) / Swing(1f), trap = CrtReference.TrapGain(megahertz, centre);
                     Assert.True(Math.Abs(kept - trap) < 0.04, $"quality {quality}{(pal ? " on PAL" : "")} at {megahertz} MHz: composite keeps {kept:F3} of S-Video's swing, the trap {trap:F3}");
                 }
         }, default);
@@ -96,9 +96,9 @@ namespace EmuSen.WiseMan.Serenity
             var values = CrtFilter.Parameters.ToDictionary(p => p.Id, p => p.Initial);
             foreach (var (id, value) in CrtFilter.ConsoleTiming["SNES"]) values[id] = value;
             values["axes"] = 1;
-            Assert.Equal(CrtFilter.Demodulators[1], CrtFilter.Resolve(values).Demodulator);
+            Assert.Equal(CrtReference.Demodulators[1], CrtReference.Resolve(values).Demodulator);
             values["standard"] = 1;
-            Assert.Equal(CrtFilter.Demodulators[0], CrtFilter.Resolve(values).Demodulator);
+            Assert.Equal(CrtReference.Demodulators[0], CrtReference.Resolve(values).Demodulator);
         }
 
         // Grey has no colour difference, so every demodulator draws it alike; a colour through the CXA2025AS's axes is the colour its rows make, drawn through the standard's.
@@ -110,7 +110,7 @@ namespace EmuSen.WiseMan.Serenity
             foreach (int quality in new[] { 0, 2 })
                 foreach (int axes in new[] { 1, 2 })
                 {
-                    double[][] m = CrtFilter.AxesMatrix(CrtFilter.Demodulators[axes]);
+                    double[][] m = CrtReference.AxesMatrix(CrtReference.Demodulators[axes]);
                     byte[] source = Paint(256, 224, (x, _) => colours[x / 64]);
                     byte[] made = Paint(256, 224, (x, _) =>
                     {

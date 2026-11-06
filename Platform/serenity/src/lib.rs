@@ -1,13 +1,15 @@
 //! Serenity's slang half without a device: a `.slangp` preset and its `.slang` sources read as RetroArch writes them,
 //! each stage compiled by Shaderc, what the SPIR-V binds read back from it, and the compiled stages kept in SQLite.
 //!
-//! The C# `EmuSen.Serenity.Slang` forwards here behind `EMUSEN_SERENITY_NATIVE`. Every rule reproduces the C#'s, which
-//! is its oracle until its gate; EmuSen_RustPlatform.md §16 says how that was held. Shaderc and SQLite are the
-//! libraries the program already ships, lent by the host or opened by path, never a second copy.
+//! The C# `EmuSen.Serenity.Slang` forwards here; its own half was deleted on 2026-11-05 (EmuSen_Backend.md §40.6), and
+//! the parity classes hold this one to the answers recorded from it. The built-in filters and the presets they are
+//! written as are here too (`filters`). Shaderc and SQLite are the libraries the program already ships: Shaderc found
+//! beside the program, SQLite lent by the host, never a second copy.
 
 pub mod cache;
 pub mod chain;
 pub mod compiler;
+pub mod filters;
 pub mod format;
 pub mod lend;
 pub mod parameters;

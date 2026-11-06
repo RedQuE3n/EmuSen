@@ -11,40 +11,13 @@ using VkImage = Silk.NET.Vulkan.Image;
 
 namespace EmuSen.Serenity.Slang
 {
-    // A buffer and its memory; host buffers stay mapped for their whole life.
-    internal sealed unsafe class SlangBuffer(SlangVulkan.Managed owner, VkBuffer handle, DeviceMemory memory, ulong size, byte* mapped) : IDisposable
-    {
-        public VkBuffer Handle { get; } = handle;
-        public DeviceMemory Memory { get; } = memory;
-        public ulong Size { get; } = size;
-        public byte* Mapped { get; } = mapped;
-        public void Dispose() => owner.Destroy(this);
-    }
-
-    // A 2D image with its mip chain, a view of it all to sample and of level 0 to draw into, and the layout it was last left in.
-    internal sealed class SlangImage(SlangVulkan.Managed owner, VkImage handle, DeviceMemory memory, ImageView view, ImageView target, Format format, uint width, uint height, uint levels) : IDisposable
-    {
-        public VkImage Handle { get; } = handle;
-        public DeviceMemory Memory { get; } = memory;
-        public ImageView View { get; } = view;
-        public ImageView Target { get; } = target;
-        public Format Format { get; } = format;
-        public uint Width { get; } = width;
-        public uint Height { get; } = height;
-        public uint Levels { get; } = levels;
-        public ImageLayout Layout { get; set; } = ImageLayout.Undefined;
-        public void Dispose() => owner.Destroy(this);
-    }
-
-    // One Vulkan device with a graphics queue, and the few resources a slang chain needs, the library's or the C#'s - see EmuSen_Serenity.md §7.4.
+    // One Vulkan device of the platform library's with a graphics queue, for the slang chains drawn on it - see EmuSen_Serenity.md §7.4.
     public sealed unsafe class SlangVulkan : IDisposable
     {
         public const string DeviceVariable = "EMUSEN_SLANG_GPU_DEVICE";
 
-        private readonly Managed? _managed;
-
         // The library's device, the sink its layer's findings are handed to, and Silk's own entry for a test's call on it - see EmuSen_RustPlatform.md §17.2.
-        private readonly SerenityHandle? _native;
+        private readonly SerenityHandle _native;
         private readonly Action<string>? _heard;
         private Vk? _vk;
         private long _probeEpoch;
@@ -52,22 +25,14 @@ namespace EmuSen.Serenity.Slang
 
         public string Name { get; }
 
-        internal bool IsNative => _native is not null;
-        internal nint NativeValue => _native!.Value;
+        internal nint NativeValue => _native.Value;
 
-        // The library's emusen_serenity_device, for the frontend API's open to lend each machine; zero for the C#'s device, which lends nothing.
-        public nint DeviceHandle => _native?.Value ?? 0;
-        internal Managed ManagedValue => _managed!;
+        // The library's emusen_serenity_device, for the frontend API's open to lend each machine.
+        public nint DeviceHandle => _native.Value;
 
-        internal Vk Vk => _managed?.Vk ?? (_vk ??= Vk.GetApi());
-        internal Device Device => _managed?.Device ?? new Device((nint)Raw(SerenityNative.RawDevice));
-        internal Instance Instance => _managed?.Instance ?? new Instance((nint)Raw(SerenityNative.RawInstance));
-
-        private SlangVulkan(Managed managed)
-        {
-            _managed = managed;
-            Name = managed.Name;
-        }
+        internal Vk Vk => _vk ??= Vk.GetApi();
+        internal Device Device => new((nint)Raw(SerenityNative.RawDevice));
+        internal Instance Instance => new((nint)Raw(SerenityNative.RawInstance));
 
         private SlangVulkan(SerenityHandle native, Action<string>? heard)
         {
@@ -80,15 +45,9 @@ namespace EmuSen.Serenity.Slang
         public static SlangVulkan? TryCreate(out string report, string? nameContains = null) => TryCreate(out report, nameContains, null);
 
         // With a sink, the Khronos layer is loaded with synchronisation validation and every finding is handed to it, for a test - see EmuSen_Serenity.md §10.4.
-        internal static SlangVulkan? TryCreate(out string report, string? nameContains, Action<string>? validation) => TryCreate(out report, nameContains, validation, SerenityNative.Active);
-
-        // The library's device or the C#'s, chosen for the instance; a name that is no text of its own is the C#'s to look for.
-        internal static SlangVulkan? TryCreate(out string report, string? nameContains, Action<string>? validation, bool native)
+        internal static SlangVulkan? TryCreate(out string report, string? nameContains, Action<string>? validation)
         {
-            if (!native || (nameContains ?? Environment.GetEnvironmentVariable(DeviceVariable)) is { } wanted && !SerenityNative.Crosses(wanted))
-                return Managed.TryCreate(out report, nameContains, validation) is { } managed ? new SlangVulkan(managed) : null;
-
-            // The library attached before its first call, which an explicit choice of it would otherwise make first.
+            // The library attached before its first call; without it there is no device, said in words.
             if (!SerenityNative.Ready) { report = SerenityNative.Report; return null; }
             byte[]? name = SerenityNative.Utf8(nameContains ?? Environment.GetEnvironmentVariable(DeviceVariable));
             nint made;
@@ -103,12 +62,14 @@ namespace EmuSen.Serenity.Slang
             return device;
         }
 
-        internal static void Check(Result result, string call) => Managed.Check(result, call);
+        internal static void Check(Result result, string call)
+        {
+            if (result != Result.Success) throw new InvalidOperationException($"{call} returned {result}");
+        }
 
-        // The physical device's UUID, and whether its images and semaphores can be exported; the C#'s device exports nothing - see EmuSen_DevicePicture.md §4.4.
+        // The physical device's UUID, and whether its images and semaphores can be exported - see EmuSen_DevicePicture.md §4.4.
         public (byte[] Uuid, bool Exports) Identity()
         {
-            if (_native is null) return (new byte[16], false);
             var uuid = new byte[16];
             int exports;
             fixed (byte* u = uuid) exports = SerenityNative.DeviceIdentity(_native.Value, u);
@@ -118,15 +79,14 @@ namespace EmuSen.Serenity.Slang
 
         private ulong Raw(uint which)
         {
-            ulong raw = SerenityNative.DeviceRaw(_native!.Value, which);
+            ulong raw = SerenityNative.DeviceRaw(_native.Value, which);
             GC.KeepAlive(_native);
             return raw;
         }
 
-        // What the library's device has waiting is handed on: the layer's findings to the sink, a probe's marks to the bench; the C#'s device tells both as it goes.
+        // What the library's device has waiting is handed on: the layer's findings to the sink, a probe's marks to the bench.
         internal void Heard()
         {
-            if (_native is null) return;
             if (_heard is not null) HearFindings();
             if (_probing && SlangProbe.Current is { } probe) HearMarks(probe);
         }
@@ -135,11 +95,11 @@ namespace EmuSen.Serenity.Slang
         {
             byte[] buffer = new byte[4096];
             long length;
-            fixed (byte* b = buffer) length = SerenityNative.DeviceFindings(_native!.Value, b, (nuint)buffer.Length);
+            fixed (byte* b = buffer) length = SerenityNative.DeviceFindings(_native.Value, b, (nuint)buffer.Length);
             while (length > buffer.Length)
             {
                 buffer = new byte[length];
-                fixed (byte* b = buffer) length = SerenityNative.DeviceFindings(_native!.Value, b, (nuint)buffer.Length);
+                fixed (byte* b = buffer) length = SerenityNative.DeviceFindings(_native.Value, b, (nuint)buffer.Length);
             }
             GC.KeepAlive(_native);
             for (int at = 0; at < length;)
@@ -153,7 +113,6 @@ namespace EmuSen.Serenity.Slang
         // Turns the library's device's probe on or off; its phases are told on the stopwatch's clock from this moment - see EmuSen_Serenity.md §8.1.
         internal void SetProbe(bool on)
         {
-            if (_native is null) return;
             int status = SerenityNative.DeviceProbe(_native.Value, on ? 1 : 0);
             _probeEpoch = System.Diagnostics.Stopwatch.GetTimestamp();
             GC.KeepAlive(_native);
@@ -165,7 +124,7 @@ namespace EmuSen.Serenity.Slang
         {
             const int Room = 256;
             SerenityNative.Mark* marks = stackalloc SerenityNative.Mark[Room];
-            long count = SerenityNative.DeviceMarks(_native!.Value, marks, Room);
+            long count = SerenityNative.DeviceMarks(_native.Value, marks, Room);
             SerenityNative.Mark[]? more = null;
             while (count > (more?.Length ?? Room))
             {
@@ -183,449 +142,12 @@ namespace EmuSen.Serenity.Slang
 
         public void Dispose()
         {
-            if (_managed is not null)
-            {
-                _managed.Dispose();
-                return;
-            }
             if (_disposed) return;
             _disposed = true;
-            SerenityNative.DeviceClose(_native!.Value);
+            SerenityNative.DeviceClose(_native.Value);
             if (_heard is not null) HearFindings();
             _native.Dispose();
             _vk?.Dispose();
-        }
-
-        // The C# device: the default, and what the library's is held to - see EmuSen_RustPlatform.md §17.
-        internal sealed unsafe class Managed : IDisposable
-        {
-            internal Vk Vk { get; }
-            internal Device Device { get; }
-            private readonly Instance _instance;
-            internal Instance Instance => _instance;
-            private readonly Queue _queue;
-            private readonly CommandPool _pool;
-            private readonly CommandBuffer _commands;
-            private readonly Fence _fence;
-            private readonly PhysicalDeviceMemoryProperties _memory;
-            private readonly Dictionary<(bool Linear, SlangWrap Wrap, bool Mipmap), Sampler> _samplers = new();
-
-            // One command buffer, and a chain may be built on one thread while another draws.
-            private readonly object _submit = new();
-            private bool _disposed;
-            private PfnDebugUtilsMessengerCallbackEXT? _validation;
-            private DebugUtilsMessengerEXT _listener;
-
-            // Buffers and images made on the device and not yet given back to it; a device let go of ends when the last is given back - see EmuSen_RustPlatform.md §18.4.
-            private int _live;
-            private bool _closing;
-            private readonly object _life = new();
-            internal int Live => Volatile.Read(ref _live);
-
-            public string Name { get; }
-
-            private Managed(Vk vk, Instance instance, PhysicalDevice physical, uint family, string name)
-            {
-                Vk = vk;
-                _instance = instance;
-                Name = name;
-
-                float priority = 1f;
-                var queueInfo = new DeviceQueueCreateInfo { SType = StructureType.DeviceQueueCreateInfo, QueueFamilyIndex = family, QueueCount = 1, PQueuePriorities = &priority };
-                var deviceInfo = new DeviceCreateInfo { SType = StructureType.DeviceCreateInfo, QueueCreateInfoCount = 1, PQueueCreateInfos = &queueInfo };
-                Check(vk.CreateDevice(physical, &deviceInfo, null, out Device device), "vkCreateDevice");
-                Device = device;
-                vk.GetDeviceQueue(device, family, 0, out _queue);
-
-                var poolInfo = new CommandPoolCreateInfo { SType = StructureType.CommandPoolCreateInfo, QueueFamilyIndex = family, Flags = CommandPoolCreateFlags.ResetCommandBufferBit };
-                Check(vk.CreateCommandPool(device, &poolInfo, null, out _pool), "vkCreateCommandPool");
-                var allocate = new CommandBufferAllocateInfo { SType = StructureType.CommandBufferAllocateInfo, CommandPool = _pool, Level = CommandBufferLevel.Primary, CommandBufferCount = 1 };
-                Check(vk.AllocateCommandBuffers(device, &allocate, out _commands), "vkAllocateCommandBuffers");
-                var fenceInfo = new FenceCreateInfo { SType = StructureType.FenceCreateInfo };
-                Check(vk.CreateFence(device, &fenceInfo, null, out _fence), "vkCreateFence");
-                vk.GetPhysicalDeviceMemoryProperties(physical, out _memory);
-            }
-
-            // With a sink, the Khronos layer is loaded with synchronisation validation and every finding is handed to it, for a test - see EmuSen_Serenity.md §10.4.
-            internal static Managed? TryCreate(out string report, string? nameContains, Action<string>? validation)
-            {
-                nameContains ??= Environment.GetEnvironmentVariable(DeviceVariable);
-                Vk? vk = null;
-                Instance instance = default;
-                var strings = new List<nint>();
-                nint Text(string s) { nint p = SilkMarshal.StringToPtr(s); strings.Add(p); return p; }
-                try
-                {
-                    vk = Vk.GetApi();
-                    var application = new ApplicationInfo { SType = StructureType.ApplicationInfo, ApiVersion = Vk.Version11 };
-                    var create = new InstanceCreateInfo { SType = StructureType.InstanceCreateInfo, PApplicationInfo = &application };
-                    PfnDebugUtilsMessengerCallbackEXT callback = default;
-                    uint on = 1, off = 0;
-                    var settings = stackalloc LayerSettingEXT[3];
-                    var layerSettings = new LayerSettingsCreateInfoEXT { SType = StructureType.LayerSettingsCreateInfoExt, SettingCount = 3, PSettings = settings };
-                    var messenger = new DebugUtilsMessengerCreateInfoEXT { SType = StructureType.DebugUtilsMessengerCreateInfoExt };
-                    var layer = stackalloc byte*[1];
-                    var extensions = stackalloc byte*[2];
-                    if (validation is not null)
-                    {
-                        byte* khronos = (byte*)Text("VK_LAYER_KHRONOS_validation");
-                        settings[0] = new LayerSettingEXT { PLayerName = khronos, PSettingName = (byte*)Text("validate_sync"), Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
-                        settings[1] = new LayerSettingEXT { PLayerName = khronos, PSettingName = (byte*)Text("syncval_shader_accesses_heuristic"), Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &on };
-                        settings[2] = new LayerSettingEXT { PLayerName = khronos, PSettingName = (byte*)Text("enable_message_limit"), Type = LayerSettingTypeEXT.Bool32Ext, ValueCount = 1, PValues = &off };
-                        callback = new PfnDebugUtilsMessengerCallbackEXT((severity, types, data, user) =>
-                        {
-                            validation(Marshal.PtrToStringUTF8((nint)data->PMessage) ?? "");
-                            return Vk.False;
-                        });
-                        messenger.MessageSeverity = DebugUtilsMessageSeverityFlagsEXT.WarningBitExt | DebugUtilsMessageSeverityFlagsEXT.ErrorBitExt;
-                        messenger.MessageType = DebugUtilsMessageTypeFlagsEXT.ValidationBitExt | DebugUtilsMessageTypeFlagsEXT.PerformanceBitExt;
-                        messenger.PfnUserCallback = callback;
-                        layer[0] = khronos;
-                        extensions[0] = (byte*)Text("VK_EXT_debug_utils");
-                        extensions[1] = (byte*)Text("VK_EXT_layer_settings");
-                        create.PNext = &layerSettings;
-                        create.EnabledLayerCount = 1;
-                        create.PpEnabledLayerNames = layer;
-                        create.EnabledExtensionCount = 2;
-                        create.PpEnabledExtensionNames = extensions;
-                    }
-                    Check(vk.CreateInstance(&create, null, &instance), "vkCreateInstance");
-                    DebugUtilsMessengerEXT listener = default;
-                    if (validation is not null)
-                    {
-                        var make = (delegate* unmanaged<Instance, DebugUtilsMessengerCreateInfoEXT*, AllocationCallbacks*, DebugUtilsMessengerEXT*, Result>)(void*)vk.GetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT").Handle;
-                        Check(make(instance, &messenger, null, &listener), "vkCreateDebugUtilsMessengerEXT");
-                    }
-
-                    uint count = 0;
-                    vk.EnumeratePhysicalDevices(instance, &count, null);
-                    var devices = new PhysicalDevice[count];
-                    fixed (PhysicalDevice* p = devices) vk.EnumeratePhysicalDevices(instance, &count, p);
-
-                    var candidates = new List<(PhysicalDevice Physical, uint Family, string Name, int Rank)>();
-                    foreach (PhysicalDevice physical in devices)
-                    {
-                        vk.GetPhysicalDeviceProperties(physical, out PhysicalDeviceProperties properties);
-                        uint families = 0;
-                        vk.GetPhysicalDeviceQueueFamilyProperties(physical, &families, null);
-                        var queues = new QueueFamilyProperties[families];
-                        fixed (QueueFamilyProperties* q = queues) vk.GetPhysicalDeviceQueueFamilyProperties(physical, &families, q);
-                        int family = Array.FindIndex(queues, q => (q.QueueFlags & QueueFlags.GraphicsBit) != 0);
-                        if (family < 0) continue;
-                        string name = Marshal.PtrToStringAnsi((nint)properties.DeviceName) ?? "unnamed";
-                        int rank = properties.DeviceType switch { PhysicalDeviceType.DiscreteGpu => 0, PhysicalDeviceType.IntegratedGpu => 1, PhysicalDeviceType.VirtualGpu => 2, _ => 3 };
-                        candidates.Add((physical, (uint)family, name, rank));
-                    }
-
-                    var chosen = candidates.Where(c => string.IsNullOrEmpty(nameContains) || c.Name.Contains(nameContains, StringComparison.OrdinalIgnoreCase))
-                        .OrderBy(c => c.Rank).FirstOrDefault();
-                    if (chosen.Name is null)
-                    {
-                        report = candidates.Count == 0 ? "no Vulkan device offers a graphics queue" : $"no Vulkan device is named like \"{nameContains}\"";
-                        vk.DestroyInstance(instance, null);
-                        vk.Dispose();
-                        return null;
-                    }
-
-                    var device = new Managed(vk, instance, chosen.Physical, chosen.Family, chosen.Name) { _validation = validation is null ? null : (PfnDebugUtilsMessengerCallbackEXT?)callback, _listener = listener };
-                    report = chosen.Name;
-                    return device;
-                }
-                catch (Exception e)
-                {
-                    report = $"Vulkan is not available: {e.Message}";
-                    if (vk is not null)
-                    {
-                        if (instance.Handle != 0) vk.DestroyInstance(instance, null);
-                        vk.Dispose();
-                    }
-                    return null;
-                }
-                finally
-                {
-                    foreach (nint p in strings) SilkMarshal.Free(p);
-                }
-            }
-
-            internal static void Check(Result result, string call)
-            {
-                if (result != Result.Success) throw new InvalidOperationException($"{call} returned {result}");
-            }
-
-            private uint MemoryType(uint allowed, MemoryPropertyFlags need, MemoryPropertyFlags want)
-            {
-                foreach (MemoryPropertyFlags flags in new[] { need | want, need })
-                    for (int i = 0; i < _memory.MemoryTypeCount; i++)
-                        if ((allowed & (1u << i)) != 0 && (_memory.MemoryTypes[i].PropertyFlags & flags) == flags) return (uint)i;
-                throw new InvalidOperationException($"no memory type with {need}");
-            }
-
-            internal SlangBuffer CreateBuffer(ulong bytes, BufferUsageFlags usage)
-            {
-                var info = new BufferCreateInfo { SType = StructureType.BufferCreateInfo, Size = Math.Max(bytes, 16), Usage = usage, SharingMode = SharingMode.Exclusive };
-                Check(Vk.CreateBuffer(Device, &info, null, out VkBuffer buffer), "vkCreateBuffer");
-                Vk.GetBufferMemoryRequirements(Device, buffer, out MemoryRequirements needs);
-                var allocate = new MemoryAllocateInfo
-                {
-                    SType = StructureType.MemoryAllocateInfo, AllocationSize = needs.Size,
-                    MemoryTypeIndex = MemoryType(needs.MemoryTypeBits, MemoryPropertyFlags.HostVisibleBit | MemoryPropertyFlags.HostCoherentBit, MemoryPropertyFlags.HostCachedBit),
-                };
-                Check(Vk.AllocateMemory(Device, &allocate, null, out DeviceMemory memory), "vkAllocateMemory");
-                Check(Vk.BindBufferMemory(Device, buffer, memory, 0), "vkBindBufferMemory");
-                void* mapped = null;
-                Check(Vk.MapMemory(Device, memory, 0, Vk.WholeSize, 0, &mapped), "vkMapMemory");
-                Interlocked.Increment(ref _live);
-                return new SlangBuffer(this, buffer, memory, info.Size, (byte*)mapped);
-            }
-
-            internal void Destroy(SlangBuffer buffer)
-            {
-                lock (_life)
-                {
-                    if (_disposed) return;
-                    Vk.UnmapMemory(Device, buffer.Memory);
-                    Vk.DestroyBuffer(Device, buffer.Handle, null);
-                    Vk.FreeMemory(Device, buffer.Memory, null);
-                    if (Interlocked.Decrement(ref _live) == 0 && _closing) End();
-                }
-            }
-
-            internal static uint LevelsFor(uint width, uint height) => (uint)Math.Floor(Math.Log2(Math.Max(width, height))) + 1;
-
-            internal SlangImage CreateImage(uint width, uint height, Format format, bool mipmapped)
-            {
-                uint levels = mipmapped ? LevelsFor(width, height) : 1;
-                var info = new ImageCreateInfo
-                {
-                    SType = StructureType.ImageCreateInfo, ImageType = ImageType.Type2D, Format = format,
-                    Extent = new Extent3D(width, height, 1), MipLevels = levels, ArrayLayers = 1, Samples = SampleCountFlags.Count1Bit,
-                    Tiling = ImageTiling.Optimal, SharingMode = SharingMode.Exclusive, InitialLayout = ImageLayout.Undefined,
-                    Usage = ImageUsageFlags.ColorAttachmentBit | ImageUsageFlags.SampledBit | ImageUsageFlags.TransferSrcBit | ImageUsageFlags.TransferDstBit,
-                };
-                Check(Vk.CreateImage(Device, &info, null, out VkImage image), "vkCreateImage");
-                Vk.GetImageMemoryRequirements(Device, image, out MemoryRequirements needs);
-                var allocate = new MemoryAllocateInfo
-                {
-                    SType = StructureType.MemoryAllocateInfo, AllocationSize = needs.Size,
-                    MemoryTypeIndex = MemoryType(needs.MemoryTypeBits, MemoryPropertyFlags.DeviceLocalBit, 0),
-                };
-                Check(Vk.AllocateMemory(Device, &allocate, null, out DeviceMemory memory), "vkAllocateMemory");
-                Check(Vk.BindImageMemory(Device, image, memory, 0), "vkBindImageMemory");
-                var viewInfo = new ImageViewCreateInfo
-                {
-                    SType = StructureType.ImageViewCreateInfo, Image = image, ViewType = ImageViewType.Type2D, Format = format,
-                    SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, levels, 0, 1),
-                };
-                Check(Vk.CreateImageView(Device, &viewInfo, null, out ImageView view), "vkCreateImageView");
-                ImageView target = view;
-                if (levels > 1)
-                {
-                    viewInfo.SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, 0, 1, 0, 1);
-                    Check(Vk.CreateImageView(Device, &viewInfo, null, out target), "vkCreateImageView");
-                }
-                Interlocked.Increment(ref _live);
-                return new SlangImage(this, image, memory, view, target, format, width, height, levels);
-            }
-
-            internal void Destroy(SlangImage image)
-            {
-                lock (_life)
-                {
-                    if (_disposed) return;
-                    if (image.Target.Handle != image.View.Handle) Vk.DestroyImageView(Device, image.Target, null);
-                    Vk.DestroyImageView(Device, image.View, null);
-                    Vk.DestroyImage(Device, image.Handle, null);
-                    Vk.FreeMemory(Device, image.Memory, null);
-                    if (Interlocked.Decrement(ref _live) == 0 && _closing) End();
-                }
-            }
-
-            internal Sampler SamplerFor(bool linear, SlangWrap wrap, bool mipmap)
-            {
-                lock (_samplers) return CreateSampler(linear, wrap, mipmap);
-            }
-
-            private Sampler CreateSampler(bool linear, SlangWrap wrap, bool mipmap)
-            {
-                if (_samplers.TryGetValue((linear, wrap, mipmap), out Sampler existing)) return existing;
-                SamplerAddressMode mode = wrap switch
-                {
-                    SlangWrap.ClampToEdge => SamplerAddressMode.ClampToEdge,
-                    SlangWrap.Repeat => SamplerAddressMode.Repeat,
-                    SlangWrap.MirroredRepeat => SamplerAddressMode.MirroredRepeat,
-                    _ => SamplerAddressMode.ClampToBorder,
-                };
-                Filter filter = linear ? Filter.Linear : Filter.Nearest;
-                var info = new SamplerCreateInfo
-                {
-                    SType = StructureType.SamplerCreateInfo, MagFilter = filter, MinFilter = filter,
-                    MipmapMode = linear ? SamplerMipmapMode.Linear : SamplerMipmapMode.Nearest,
-                    AddressModeU = mode, AddressModeV = mode, AddressModeW = mode,
-                    MinLod = 0, MaxLod = mipmap ? 1000f : 0f, BorderColor = BorderColor.FloatTransparentBlack,
-                };
-                Check(Vk.CreateSampler(Device, &info, null, out Sampler sampler), "vkCreateSampler");
-                _samplers[(linear, wrap, mipmap)] = sampler;
-                return sampler;
-            }
-
-            // Waits for all the device was given, holding the queue as Vulkan asks, so no other thread submits meanwhile - see EmuSen_RustPlatform.md §18.2.
-            internal void WaitIdle()
-            {
-                lock (_submit) Vk.DeviceWaitIdle(Device);
-            }
-
-            // Records, submits and waits; nothing recorded here is still running when it returns.
-            internal void Run(Action<CommandBuffer> record)
-            {
-                lock (_submit) RunLocked(record);
-            }
-
-            private void RunLocked(Action<CommandBuffer> record)
-            {
-                Check(Vk.ResetCommandBuffer(_commands, 0), "vkResetCommandBuffer");
-                var begin = new CommandBufferBeginInfo { SType = StructureType.CommandBufferBeginInfo, Flags = CommandBufferUsageFlags.OneTimeSubmitBit };
-                Check(Vk.BeginCommandBuffer(_commands, &begin), "vkBeginCommandBuffer");
-                SlangProbe.Current?.Mark(_commands, SlangProbe.SubmissionBegin);
-                record(_commands);
-                SlangProbe.Current?.Mark(_commands, SlangProbe.SubmissionEnd);
-                Check(Vk.EndCommandBuffer(_commands), "vkEndCommandBuffer");
-                CommandBuffer commands = _commands;
-                var submit = new SubmitInfo { SType = StructureType.SubmitInfo, CommandBufferCount = 1, PCommandBuffers = &commands };
-                Fence fence = _fence;
-                Check(Vk.QueueSubmit(_queue, 1, &submit, fence), "vkQueueSubmit");
-                SlangProbe.Current?.Phase(SlangProbe.Submitted);
-                Check(Vk.WaitForFences(Device, 1, &fence, true, ulong.MaxValue), "vkWaitForFences");
-                Check(Vk.ResetFences(Device, 1, &fence), "vkResetFences");
-                SlangProbe.Current?.Phase(SlangProbe.Waited);
-            }
-
-            // Every level of an image moved to a layout, with the widest barrier, since a chain's passes run one after another anyway.
-            internal void Transition(CommandBuffer commands, SlangImage image, ImageLayout to, uint baseLevel = 0, uint levels = uint.MaxValue, ImageLayout? from = null)
-            {
-                uint count = levels == uint.MaxValue ? image.Levels - baseLevel : levels;
-                var barrier = new ImageMemoryBarrier
-                {
-                    SType = StructureType.ImageMemoryBarrier, OldLayout = from ?? image.Layout, NewLayout = to, Image = image.Handle,
-                    SrcAccessMask = AccessFlags.MemoryWriteBit, DstAccessMask = AccessFlags.MemoryReadBit | AccessFlags.MemoryWriteBit,
-                    SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored,
-                    SubresourceRange = new ImageSubresourceRange(ImageAspectFlags.ColorBit, baseLevel, count, 0, 1),
-                };
-                Vk.CmdPipelineBarrier(commands, PipelineStageFlags.AllCommandsBit, PipelineStageFlags.AllCommandsBit, 0, 0, null, 0, null, 1, &barrier);
-                if (baseLevel == 0 && count == image.Levels) image.Layout = to;
-            }
-
-            // Level 0 blitted down the chain, every level left ready to sample.
-            internal void GenerateMipmaps(CommandBuffer commands, SlangImage image)
-            {
-                if (image.Levels <= 1)
-                {
-                    Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal);
-                    return;
-                }
-                Transition(commands, image, ImageLayout.TransferDstOptimal);
-                int w = (int)image.Width, h = (int)image.Height;
-                for (uint level = 1; level < image.Levels; level++)
-                {
-                    Transition(commands, image, ImageLayout.TransferSrcOptimal, level - 1, 1, ImageLayout.TransferDstOptimal);
-                    int nw = Math.Max(1, w / 2), nh = Math.Max(1, h / 2);
-                    var blit = new ImageBlit
-                    {
-                        SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, level - 1, 0, 1),
-                        DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, level, 0, 1),
-                    };
-                    blit.SrcOffsets[1] = new Offset3D(w, h, 1);
-                    blit.DstOffsets[1] = new Offset3D(nw, nh, 1);
-                    Vk.CmdBlitImage(commands, image.Handle, ImageLayout.TransferSrcOptimal, image.Handle, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Linear);
-                    Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal, level - 1, 1, ImageLayout.TransferSrcOptimal);
-                    (w, h) = (nw, nh);
-                }
-                Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal, image.Levels - 1, 1, ImageLayout.TransferDstOptimal);
-                image.Layout = ImageLayout.ShaderReadOnlyOptimal;
-            }
-
-            // Pixels in RGBA8 from the host into level 0, and the chain built if the image has one.
-            internal void Upload(SlangImage image, ReadOnlySpan<byte> rgba, SlangBuffer staging)
-            {
-                fixed (byte* source = rgba) System.Buffer.MemoryCopy(source, staging.Mapped, (long)staging.Size, rgba.Length);
-                lock (_submit) RunLocked(commands =>
-                {
-                    Transition(commands, image, ImageLayout.TransferDstOptimal);
-                    var region = new BufferImageCopy
-                    {
-                        ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1), ImageExtent = new Extent3D(image.Width, image.Height, 1),
-                    };
-                    Vk.CmdCopyBufferToImage(commands, staging.Handle, image.Handle, ImageLayout.TransferDstOptimal, 1, &region);
-                    if (image.Levels > 1) GenerateMipmaps(commands, image);
-                    else Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal);
-                });
-            }
-
-            // Each row uploaded once into rows, then blitted to repeat times its height by nearest filtering, which repeats each row exactly - see EmuSen_Serenity.md §9.2.
-            internal void UploadRepeated(SlangImage image, ReadOnlySpan<byte> rgba, SlangImage rows, uint repeat, SlangBuffer staging)
-            {
-                fixed (byte* source = rgba) System.Buffer.MemoryCopy(source, staging.Mapped, (long)staging.Size, rgba.Length);
-                lock (_submit) RunLocked(commands =>
-                {
-                    Transition(commands, rows, ImageLayout.TransferDstOptimal, from: ImageLayout.Undefined);
-                    var region = new BufferImageCopy
-                    {
-                        ImageSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1), ImageExtent = new Extent3D(rows.Width, rows.Height, 1),
-                    };
-                    Vk.CmdCopyBufferToImage(commands, staging.Handle, rows.Handle, ImageLayout.TransferDstOptimal, 1, &region);
-                    Transition(commands, rows, ImageLayout.TransferSrcOptimal);
-                    Transition(commands, image, ImageLayout.TransferDstOptimal);
-                    var blit = new ImageBlit
-                    {
-                        SrcSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
-                        DstSubresource = new ImageSubresourceLayers(ImageAspectFlags.ColorBit, 0, 0, 1),
-                    };
-                    blit.SrcOffsets[1] = new Offset3D((int)rows.Width, (int)rows.Height, 1);
-                    blit.DstOffsets[1] = new Offset3D((int)rows.Width, (int)(rows.Height * repeat), 1);
-                    Vk.CmdBlitImage(commands, rows.Handle, ImageLayout.TransferSrcOptimal, image.Handle, ImageLayout.TransferDstOptimal, 1, &blit, Filter.Nearest);
-                    if (image.Levels > 1) GenerateMipmaps(commands, image);
-                    else Transition(commands, image, ImageLayout.ShaderReadOnlyOptimal);
-                });
-            }
-
-            // A transfer's writes to a buffer made visible to the host, which a fence alone does not do.
-            internal void HostReadBarrier(CommandBuffer commands, SlangBuffer buffer)
-            {
-                var barrier = new BufferMemoryBarrier
-                {
-                    SType = StructureType.BufferMemoryBarrier, SrcAccessMask = AccessFlags.TransferWriteBit, DstAccessMask = AccessFlags.HostReadBit,
-                    SrcQueueFamilyIndex = Vk.QueueFamilyIgnored, DstQueueFamilyIndex = Vk.QueueFamilyIgnored, Buffer = buffer.Handle, Offset = 0, Size = Vk.WholeSize,
-                };
-                Vk.CmdPipelineBarrier(commands, PipelineStageFlags.TransferBit, PipelineStageFlags.HostBit, 0, 0, null, 1, &barrier, 0, null);
-            }
-
-            // Let go of: the device ends now, or when a picture still holding a readback made on it lets go.
-            public void Dispose()
-            {
-                lock (_life)
-                {
-                    if (_closing) return;
-                    _closing = true;
-                    if (Live == 0) End();
-                }
-            }
-
-            private void End()
-            {
-                WaitIdle();
-                foreach (Sampler sampler in _samplers.Values) Vk.DestroySampler(Device, sampler, null);
-                _disposed = true;
-                Vk.DestroyFence(Device, _fence, null);
-                Vk.DestroyCommandPool(Device, _pool, null);
-                Vk.DestroyDevice(Device, null);
-                if (_listener.Handle != 0)
-                {
-                    var unmake = (delegate* unmanaged<Instance, DebugUtilsMessengerEXT, AllocationCallbacks*, void>)(void*)Vk.GetInstanceProcAddr(_instance, "vkDestroyDebugUtilsMessengerEXT").Handle;
-                    unmake(_instance, _listener, null);
-                }
-                Vk.DestroyInstance(_instance, null);
-                _validation?.Dispose();
-                Vk.Dispose();
-            }
         }
     }
 }

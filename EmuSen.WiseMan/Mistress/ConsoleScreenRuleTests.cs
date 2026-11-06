@@ -6,6 +6,7 @@ using EmuSen.Crystal.Systems;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;
 using EmuSen.Serenity.Shaders;
+using EmuSen.WiseMan.Serenity;
 using EmuSen.WiseMan.Fixtures;
 using Screen = EmuSen.Serenity.Shaders.ConsoleScreens.Screen;
 
@@ -151,12 +152,12 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void The_playstation_2s_line_is_its_pcrtc_clock_against_the_standards_subcarrier()
         {
-            CrtFilter.LineTiming ntsc = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation 2"], pal: false), pal = CrtFilter.LineOf(CrtFilter.ConsoleTiming["PlayStation 2"], pal: true);
+            CrtReference.LineTiming ntsc = CrtReference.LineOf(CrtFilter.ConsoleTiming["PlayStation 2"], pal: false), pal = CrtReference.LineOf(CrtFilter.ConsoleTiming["PlayStation 2"], pal: true);
             Assert.Equal((47.407, 169.697, 0.5, 0.5, 0.0, false), (Math.Round(ntsc.ActiveMicroseconds, 3), Math.Round(ntsc.CyclesAcross, 3), ntsc.PhaseLine, ntsc.PhaseFrame, ntsc.PhaseCrawl, ntsc.SwitchFrame));
-            Assert.Equal(2560 / 54.0 * CrtFilter.SubcarrierMegahertz, ntsc.CyclesAcross, 3);
+            Assert.Equal(2560 / 54.0 * CrtReference.SubcarrierMegahertz, ntsc.CyclesAcross, 3);
             Assert.Equal((47.407, 210.186, 0.0, false), (Math.Round(pal.ActiveMicroseconds, 3), Math.Round(pal.CyclesAcross, 3), pal.PhaseFrame, pal.SwitchFrame));
-            Assert.Equal(64 * CrtFilter.PalSubcarrierMegahertz % 1, pal.PhaseLine, 3);
-            Assert.Equal(314 * CrtFilter.PalCyclesPerLine % 1, pal.PhaseCrawl, 4);
+            Assert.Equal(64 * CrtReference.PalSubcarrierMegahertz % 1, pal.PhaseLine, 3);
+            Assert.Equal(314 * CrtReference.PalCyclesPerLine % 1, pal.PhaseCrawl, 4);
         }
     }
 }

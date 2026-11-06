@@ -25,11 +25,10 @@ namespace EmuSen.Serenity.Slang
             (Width, Height, MemoryBytes, MemoryFd, ReadyFd, FreeFd) = (info.Width, info.Height, info.MemoryBytes, info.MemoryFd, info.ReadyFd, info.FreeFd);
         }
 
-        // Null, with the words why, on a device that cannot export or the C#'s; linear lays the memory out row after row.
+        // Null, with the words why, on a device that cannot export; linear lays the memory out row after row.
         public static SlangShown? TryCreate(SlangVulkan device, int width, int height, bool linear, out string? problem)
         {
             problem = null;
-            if (!device.IsNative) { problem = "the C#'s device exports nothing"; return null; }
             var info = new SerenityNative.ShownInfo { Size = (uint)sizeof(SerenityNative.ShownInfo) };
             nint made = SerenityNative.ShownNew(device.NativeValue, width, height, linear ? 1u : 0u, &info);
             GC.KeepAlive(device);

@@ -138,7 +138,7 @@ namespace EmuSen.WiseMan.Serenity
                 foreach (string[] p in c[1].Split(',', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Split(':'))) chosen[p[0]] = float.Parse(p[1], CultureInfo.InvariantCulture);
                 bool native = c[2] == "1", present = c[3] == "1";
                 int renders = int.Parse(c[4]);
-                using EmuSen.Serenity.Slang.SlangVulkan gpu = EmuSen.Serenity.Slang.SlangVulkan.TryCreate(out string report, Environment.GetEnvironmentVariable(EmuSen.Serenity.Slang.SlangVulkan.DeviceVariable) ?? "6800", null, native) ?? throw new InvalidOperationException(report);
+                using EmuSen.Serenity.Slang.SlangVulkan gpu = EmuSen.Serenity.Slang.SlangVulkan.TryCreate(out string report, Environment.GetEnvironmentVariable(EmuSen.Serenity.Slang.SlangVulkan.DeviceVariable) ?? "6800", null) ?? throw new InvalidOperationException(report);
                 string preset = BuiltInPreset.Write(CrtFilter.Filter, ConsoleName, chosen);
                 var light = new double[frames.Count];
                 int[] references = (Environment.GetEnvironmentVariable(SettledVariable) ?? $"{frames.Count - 1}").Split(',').Select(int.Parse).ToArray();

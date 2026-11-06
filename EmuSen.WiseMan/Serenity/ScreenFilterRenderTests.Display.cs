@@ -167,7 +167,7 @@ namespace EmuSen.WiseMan.Serenity
                         var tube = TubeOn(W, H, 1);
                         if (OnDisplay("SNES", Grey(256, 224, 0.5), 256, 224, W, H, 1, ("level", 0f), ("maskLimit", 1f), ("quality", quality), ("screen", screen), ("curvature", 1f)) is not { } picture) return;
                         var (chroma, light) = Moire(picture, tube);
-                        string what = $"{W}x{H}, quality {quality}, {CrtFilter.Screens[screen].Label}";
+                        string what = $"{W}x{H}, quality {quality}, {CrtReference.Screens[screen].Label}";
                         Assert.True(chroma < 0.0012 && light < 0.0018, $"{what}: colour varies by {chroma:P3} and light by {light:P3} across the tube");
                     }
 

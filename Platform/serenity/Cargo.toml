@@ -20,3 +20,7 @@ libloading = "0.9"
 emusen-sqlite = { path = "../sqlite" }
 # The cache's keys and each row's digest.
 sha2 = "0.11"
+
+[target.'cfg(unix)'.dependencies]
+# The file the system's loader opened Shaderc from, by dladdr.
+libc = "0.2"

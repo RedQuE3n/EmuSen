@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public Task By_default_the_picture_is_bright_and_the_mask_eases_off_only_toward_white() => Session.Dispatch(() =>
         {
-            Assert.Equal((float)CrtFilter.Quality.Balanced, CrtFilter.Parameters.Single(p => p.Id == "quality").Initial);
+            Assert.Equal((float)CrtReference.Quality.Balanced, CrtFilter.Parameters.Single(p => p.Id == "quality").Initial);
             Assert.Equal(0f, CrtFilter.Parameters.Single(p => p.Id == "level").Initial);
             (string, float)[] set = With(Plain, ("signal", 0f), ("level", 0f), ("spotSize", 2f), ("spotGrowth", 0f));
             double Depth(Crt picture) { double[] row = picture.Across(1, 520, 40, 400, 1040); return (row.Max() - row.Min()) / row.Average(); }

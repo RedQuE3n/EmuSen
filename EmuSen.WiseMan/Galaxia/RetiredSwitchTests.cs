@@ -66,6 +66,13 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
+        public void Serenity_without_its_library_refuses_in_words()
+        {
+            Assert.Equal($"{PlatformLibrary.FileName} is not in use for Serenity (not found); Serenity's slang half has had no C# implementation since 2026-11-05.", EmuSen.Serenity.Native.SerenityNative.Refusal("not found"));
+            Assert.True(EmuSen.Serenity.Native.SerenityNative.Ready, EmuSen.Serenity.Native.SerenityNative.Report);
+        }
+
+        [Fact]
         public void The_library_without_its_platform_library_refuses_in_words()
         {
             Assert.Equal($"{PlatformLibrary.FileName} is not in use for the library (not found); the library has had no C# implementation since 2026-11-05.", EmuSen.Crystal.Client.Library.GameLibrary.Refusal("not found"));

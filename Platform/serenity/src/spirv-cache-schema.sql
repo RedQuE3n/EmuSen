@@ -6,13 +6,13 @@
 --
 -- A row cannot be stale. `key` is the SHA-256 of everything a compile reads: the stage's text after its includes,
 -- the stage, the file name the compiler is given, the compiler's identity (the native library's own SHA-256, its
--- SPIR-V version, the binding's version) and every option it is set (SlangCompiler.Options). A changed shader, a pack
+-- SPIR-V version, the binding's version) and every option it is set (compiler::OPTIONS). A changed shader, a pack
 -- update, or a new Shaderc is a new key, never a changed row.
 --
 -- `digest` is the SHA-256 of `spirv`: a row whose bytes no longer match is deleted and compiled again, never run.
 -- `last_used` (Unix seconds, refreshed at most hourly) orders eviction once `bytes` sum past the bound.
 --
--- Embedded in EmuSen.Serenity rather than copied beside it, so a cache that must never stop a preset has no file of
+-- Embedded in the platform library rather than copied beside it, so a cache that must never stop a preset has no file of
 -- its own to be missing.
 
 PRAGMA foreign_keys = ON;

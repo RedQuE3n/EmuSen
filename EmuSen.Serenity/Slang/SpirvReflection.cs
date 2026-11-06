@@ -32,8 +32,8 @@ namespace EmuSen.Serenity.Slang
             Samplers = samplers;
         }
 
-        // The library's reading or the C#'s - see EmuSen_RustPlatform.md §16.2.
-        public static SpirvReflection Read(byte[] spirv) => SerenityNative.Active && spirv is not null ? ReadNative(spirv) : Managed.Read(spirv!);
+        // The library's reading - see EmuSen_RustPlatform.md §16.2.
+        public static SpirvReflection Read(byte[] spirv) => ReadNative(spirv ?? throw new ArgumentNullException(nameof(spirv)));
 
         internal static unsafe SpirvReflection ReadNative(byte[] spirv)
         {
@@ -46,7 +46,7 @@ namespace EmuSen.Serenity.Slang
         }
 
         // The module with every Input variable no instruction reads left out of its entry points' interfaces, or the same array if there is none - see EmuSen_Serenity.md §10.3.
-        public static byte[] WithoutUnreadInputs(byte[] spirv) => SerenityNative.Active && spirv is not null ? WithoutUnreadInputsNative(spirv) : Managed.WithoutUnreadInputs(spirv!);
+        public static byte[] WithoutUnreadInputs(byte[] spirv) => WithoutUnreadInputsNative(spirv ?? throw new ArgumentNullException(nameof(spirv)));
 
         internal static unsafe byte[] WithoutUnreadInputsNative(byte[] spirv)
         {
@@ -62,7 +62,7 @@ namespace EmuSen.Serenity.Slang
 
         // The two stages as one pass: their blocks' members together, and every sampler either names.
         public static SpirvReflection Merge(SpirvReflection vertex, SpirvReflection fragment) =>
-            SerenityNative.Active && Crosses(vertex) && Crosses(fragment) ? MergeNative(vertex, fragment) : Managed.Merge(vertex, fragment);
+            MergeNative(vertex, fragment);
 
         internal static unsafe SpirvReflection MergeNative(SpirvReflection vertex, SpirvReflection fragment)
         {
@@ -73,10 +73,6 @@ namespace EmuSen.Serenity.Slang
             });
             return FromJson(document.RootElement);
         }
-
-        // Whether every name in a reflection is text of its own, as one read from SPIR-V always is.
-        private static bool Crosses(SpirvReflection? reflection) =>
-            reflection is not null && reflection.Samplers.All(s => SerenityNative.Crosses(s.Name)) && new[] { reflection.Uniforms, reflection.PushConstants }.All(b => b is null || b.Members.All(m => SerenityNative.Crosses(m.Name)));
 
         private static object ToJson(SpirvReflection reflection)
         {
@@ -90,188 +86,6 @@ namespace EmuSen.Serenity.Slang
                 block.GetProperty("members").EnumerateArray().Select(m => new SlangMember(m.GetProperty("name").GetString()!, m.GetProperty("offset").GetUInt32(), m.GetProperty("size").GetUInt32())).ToList());
             return new SpirvReflection(Block(root.GetProperty("uniforms")), Block(root.GetProperty("push")),
                 root.GetProperty("samplers").EnumerateArray().Select(s => new SlangSampler(s.GetProperty("name").GetString()!, s.GetProperty("binding").GetUInt32())).ToList());
-        }
-
-        // The C# reader: the default, and what the library's is held to - see EmuSen_RustPlatform.md §16.
-        internal static class Managed
-        {
-            private const uint Magic = 0x07230203;
-            private const int OpName = 5, OpMemberName = 6, OpTypeInt = 21, OpTypeFloat = 22, OpTypeVector = 23, OpTypeMatrix = 24,
-                OpTypeImage = 25, OpTypeSampledImage = 27, OpTypeArray = 28, OpTypeStruct = 30, OpTypePointer = 32, OpConstant = 43,
-                OpVariable = 59, OpDecorate = 71, OpMemberDecorate = 72;
-            private const uint DecorationBinding = 33, DecorationDescriptorSet = 34, DecorationOffset = 35, DecorationArrayStride = 6, DecorationMatrixStride = 7;
-            private const uint StorageUniformConstant = 0, StorageUniform = 2, StoragePushConstant = 9;
-
-
-            public static SpirvReflection Read(byte[] spirv)
-            {
-                if (spirv.Length < 20 || spirv.Length % 4 != 0) throw new ArgumentException("Not SPIR-V: too short or not whole words.");
-                uint[] words = new uint[spirv.Length / 4];
-                Buffer.BlockCopy(spirv, 0, words, 0, spirv.Length);
-                if (words[0] != Magic) throw new ArgumentException("Not SPIR-V: the magic number is wrong.");
-
-                var names = new Dictionary<uint, string>();
-                var memberNames = new Dictionary<(uint, uint), string>();
-                var bindings = new Dictionary<uint, uint>();
-                var memberOffsets = new Dictionary<(uint, uint), uint>();
-                var arrayStrides = new Dictionary<uint, uint>();
-                var matrixStrides = new Dictionary<(uint, uint), uint>();
-                var types = new Dictionary<uint, (int Op, uint[] Operands)>();
-                var constants = new Dictionary<uint, uint>();
-                var variables = new List<(uint Type, uint Id, uint Storage)>();
-
-                for (int at = 5; at < words.Length;)
-                {
-                    int count = (int)(words[at] >> 16), op = (int)(words[at] & 0xFFFF);
-                    if (count == 0 || at + count > words.Length) throw new ArgumentException($"Not SPIR-V: an instruction at word {at} runs past the end.");
-                    uint[] operands = words[(at + 1)..(at + count)];
-                    switch (op)
-                    {
-                        case OpName: names[operands[0]] = Text(operands, 1); break;
-                        case OpMemberName: memberNames[(operands[0], operands[1])] = Text(operands, 2); break;
-                        case OpDecorate when operands[1] == DecorationBinding: bindings[operands[0]] = operands[2]; break;
-                        case OpDecorate when operands[1] == DecorationArrayStride: arrayStrides[operands[0]] = operands[2]; break;
-                        case OpMemberDecorate when operands[2] == DecorationOffset: memberOffsets[(operands[0], operands[1])] = operands[3]; break;
-                        case OpMemberDecorate when operands[2] == DecorationMatrixStride: matrixStrides[(operands[0], operands[1])] = operands[3]; break;
-                        case OpTypeInt or OpTypeFloat or OpTypeVector or OpTypeMatrix or OpTypeImage or OpTypeSampledImage or OpTypeArray or OpTypeStruct or OpTypePointer:
-                            types[operands[0]] = (op, operands[1..]); break;
-                        case OpConstant when operands.Length >= 3: constants[operands[1]] = operands[2]; break;
-                        case OpVariable: variables.Add((operands[0], operands[1], operands[2])); break;
-                    }
-                    at += count;
-                }
-
-                uint Pointee(uint pointer) => types.TryGetValue(pointer, out var t) && t.Op == OpTypePointer ? t.Operands[1] : pointer;
-
-                uint SizeOf(uint type, uint matrixStride)
-                {
-                    if (!types.TryGetValue(type, out var t)) return 0;
-                    return t.Op switch
-                    {
-                        OpTypeInt or OpTypeFloat => t.Operands[0] / 8,
-                        OpTypeVector => SizeOf(t.Operands[0], 0) * t.Operands[1],
-                        OpTypeMatrix => t.Operands[1] * (matrixStride != 0 ? matrixStride : SizeOf(t.Operands[0], 0)),
-                        OpTypeArray => (arrayStrides.TryGetValue(type, out uint stride) ? stride : SizeOf(t.Operands[0], matrixStride)) * (constants.TryGetValue(t.Operands[1], out uint length) ? length : 1),
-                        OpTypeStruct => StructSize(type, t.Operands),
-                        _ => 0,
-                    };
-                }
-
-                uint StructSize(uint type, uint[] members)
-                {
-                    uint end = 0;
-                    for (uint m = 0; m < members.Length; m++)
-                    {
-                        uint offset = memberOffsets.TryGetValue((type, m), out uint o) ? o : 0;
-                        end = Math.Max(end, offset + SizeOf(members[m], matrixStrides.TryGetValue((type, m), out uint s) ? s : 0));
-                    }
-                    return end;
-                }
-
-                SlangBlock Block(uint variable, uint structType)
-                {
-                    uint[] members = types[structType].Operands;
-                    var list = new List<SlangMember>();
-                    for (uint m = 0; m < members.Length; m++)
-                    {
-                        string name = memberNames.TryGetValue((structType, m), out string? n) ? n : $"_m{m}";
-                        uint offset = memberOffsets.TryGetValue((structType, m), out uint o) ? o : 0;
-                        list.Add(new SlangMember(name, offset, SizeOf(members[m], matrixStrides.TryGetValue((structType, m), out uint s) ? s : 0)));
-                    }
-                    return new SlangBlock(bindings.TryGetValue(variable, out uint b) ? b : 0, StructSize(structType, members), list);
-                }
-
-                SlangBlock? uniforms = null, push = null;
-                var samplers = new List<SlangSampler>();
-                foreach (var (pointer, id, storage) in variables)
-                {
-                    uint pointee = Pointee(pointer);
-                    if (!types.TryGetValue(pointee, out var t)) continue;
-                    if (storage == StorageUniform && t.Op == OpTypeStruct) uniforms = Block(id, pointee);
-                    else if (storage == StoragePushConstant && t.Op == OpTypeStruct) push = Block(id, pointee);
-                    else if (storage == StorageUniformConstant && t.Op == OpTypeSampledImage && names.TryGetValue(id, out string? name))
-                        samplers.Add(new SlangSampler(name, bindings.TryGetValue(id, out uint binding) ? binding : 0));
-                }
-                return new SpirvReflection(uniforms, push, samplers);
-            }
-
-            // The module with every Input variable no instruction reads left out of its entry points' interfaces, or the same array if there is none - see EmuSen_Serenity.md §10.3.
-            public static byte[] WithoutUnreadInputs(byte[] spirv)
-            {
-                const int OpEntryPoint = 15, OpFunction = 54;
-                const uint StorageInput = 1;
-                uint[] words = new uint[spirv.Length / 4];
-                Buffer.BlockCopy(spirv, 0, words, 0, words.Length * 4);
-                if (words.Length < 5 || words[0] != Magic) return spirv;
-
-                // A variable is read only inside a function; any word there equal to its id counts, so a literal that happens to match keeps an input, never drops one.
-                var inputs = new HashSet<uint>();
-                var read = new HashSet<uint>();
-                var entries = new List<(int At, int Interface)>();
-                bool inFunctions = false;
-                for (int at = 5; at < words.Length;)
-                {
-                    int count = (int)(words[at] >> 16), op = (int)(words[at] & 0xFFFF);
-                    if (count == 0 || at + count > words.Length) return spirv;
-                    inFunctions |= op == OpFunction;
-                    if (inFunctions) for (int i = at + 1; i < at + count; i++) read.Add(words[i]);
-                    else if (op == OpVariable && count >= 4 && words[at + 3] == StorageInput) inputs.Add(words[at + 2]);
-                    else if (op == OpEntryPoint)
-                    {
-                        int name = at + 3;
-                        while (name < at + count && (words[name] & 0xFF000000) != 0 && (words[name] & 0xFF0000) != 0 && (words[name] & 0xFF00) != 0 && (words[name] & 0xFF) != 0) name++;
-                        entries.Add((at, name + 1));
-                    }
-                    at += count;
-                }
-
-                inputs.ExceptWith(read);
-                if (inputs.Count == 0) return spirv;
-                var kept = new List<uint>(words.Length);
-                int copied = 0;
-                foreach (var (at, first) in entries)
-                {
-                    int end = at + (int)(words[at] >> 16);
-                    kept.AddRange(words[copied..at]);
-                    var interfaceIds = words[first..end].Where(id => !inputs.Contains(id)).ToArray();
-                    kept.Add((uint)(first - at + interfaceIds.Length) << 16 | (uint)OpEntryPoint);
-                    kept.AddRange(words[(at + 1)..first]);
-                    kept.AddRange(interfaceIds);
-                    copied = end;
-                }
-                kept.AddRange(words[copied..]);
-                byte[] pruned = new byte[kept.Count * 4];
-                Buffer.BlockCopy(kept.ToArray(), 0, pruned, 0, pruned.Length);
-                return pruned;
-            }
-
-            // A SPIR-V literal string: UTF-8, zero-terminated, packed four bytes to a word.
-            private static string Text(uint[] operands, int from)
-            {
-                var bytes = new List<byte>();
-                for (int i = from; i < operands.Length; i++)
-                    for (int shift = 0; shift < 32; shift += 8)
-                    {
-                        byte b = (byte)(operands[i] >> shift);
-                        if (b == 0) return Encoding.UTF8.GetString(bytes.ToArray());
-                        bytes.Add(b);
-                    }
-                return Encoding.UTF8.GetString(bytes.ToArray());
-            }
-
-            // The two stages as one pass: their blocks' members together, and every sampler either names.
-            public static SpirvReflection Merge(SpirvReflection vertex, SpirvReflection fragment)
-            {
-                static SlangBlock? Join(SlangBlock? a, SlangBlock? b)
-                {
-                    if (a is null) return b;
-                    if (b is null) return a;
-                    var members = a.Members.Concat(b.Members.Where(m => a.Find(m.Name) is null)).ToList();
-                    return new SlangBlock(a.Binding, Math.Max(a.Size, b.Size), members);
-                }
-                var samplers = vertex.Samplers.Concat(fragment.Samplers).GroupBy(s => s.Name).Select(g => g.First()).ToList();
-                return new SpirvReflection(Join(vertex.Uniforms, fragment.Uniforms), Join(vertex.PushConstants, fragment.PushConstants), samplers);
-            }
         }
     }
 }

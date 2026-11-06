@@ -1,6 +1,7 @@
 //! Serenity's C layer: presets, sources, parameters, the compiler, reflection and the SPIR-V cache.
 //!
-//! Shaderc and SQLite are the host's, lent once by the handles its own bindings loaded. What a reader makes is
+//! SQLite is the host's, lent once by the handle its own binding loaded; Shaderc is found beside the program at its
+//! first use, unless a host lent it first. What a reader makes is
 //! structured, so it crosses as JSON (§3.8), with a float as its 32 bits so that a NaN or an infinity crosses whole;
 //! a reader's failure is a JSON document too, since it carries more than words. A result that does not fit the
 //! caller's buffer waits on the calling thread for `emusen_serenity_take`. A cache is a handle that locks itself, as
@@ -36,8 +37,18 @@ pub(crate) fn leave(document: Option<&Value>) {
     PENDING.with_borrow_mut(|pending| *pending = text.into_bytes());
 }
 
+/// Shaderc as lent, else as the library finds it beside the program, once; a search that fails is said and tried again at the next call.
 pub(crate) fn shaderc() -> Result<Arc<Shaderc>, i32> {
-    SHADERC.get().cloned().ok_or_else(|| fail(status::NOT_SUPPORTED, "Shaderc has not been lent to the library"))
+    static FINDING: Mutex<()> = Mutex::new(());
+    if let Some(shaderc) = SHADERC.get() {
+        return Ok(shaderc.clone());
+    }
+    let _one = FINDING.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(shaderc) = SHADERC.get() {
+        return Ok(shaderc.clone());
+    }
+    let found = Shaderc::find(&emusen_galaxia::tree::base_directory()).map_err(|words| fail(status::NOT_SUPPORTED, words))?;
+    Ok(SHADERC.get_or_init(|| Arc::new(found)).clone())
 }
 
 /// Bytes out by the pending idiom: their length, copied when they fit and kept for `emusen_serenity_take` when not.
@@ -59,7 +70,7 @@ fn optional(text: &Option<String>) -> Value {
     text.as_ref().map_or(Value::Null, Value::string)
 }
 
-fn bits(value: f32) -> Value {
+pub(crate) fn bits(value: f32) -> Value {
     Value::number(value.to_bits())
 }
 
@@ -265,7 +276,7 @@ pub(crate) fn number(value: Option<&Value>) -> Option<u32> {
     }
 }
 
-fn parameter_of(value: &Value) -> Option<Parameter> {
+pub(crate) fn parameter_of(value: &Value) -> Option<Parameter> {
     let float = |name: &str| number(value.get(name)).map(f32::from_bits);
     Some(Parameter {
         id: value.get("id")?.as_str()?.to_string(),
@@ -655,10 +666,9 @@ mod tests {
     }
 
     #[test]
-    fn nothing_is_compiled_or_cached_before_its_library_is_lent() {
-        if SHADERC.get().is_none() {
-            assert_eq!(unsafe { emusen_serenity_compile(b"x".as_ptr(), 1, 0, b"n".as_ptr(), 1, std::ptr::null_mut(), 0) }, status::NOT_SUPPORTED as i64);
-        }
+    fn nothing_is_cached_before_sqlite_is_lent_and_shaderc_is_found_unlent() {
+        let compiled = unsafe { emusen_serenity_compile(b"x".as_ptr(), 1, 0, b"n".as_ptr(), 1, std::ptr::null_mut(), 0) };
+        assert!(compiled == status::PARSE as i64 || (compiled == status::NOT_SUPPORTED as i64 && SHADERC.get().is_none()), "{compiled}");
         if SQLITE.get().is_none() {
             assert!(unsafe { emusen_serenity_cache_new(b"/tmp/x.db".as_ptr(), 9, 1, b"i".as_ptr(), 1) }.is_null());
         }

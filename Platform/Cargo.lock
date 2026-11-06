@@ -640,6 +640,7 @@ dependencies = [
  "ash",
  "emusen-galaxia",
  "emusen-sqlite",
+ "libc",
  "libloading",
  "sha2",
 ]

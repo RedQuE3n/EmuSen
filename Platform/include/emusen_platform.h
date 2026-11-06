@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 34u
+#define EMUSEN_PLATFORM_ABI_VERSION 35u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -1157,11 +1157,12 @@ int64_t emusen_endymion_ui_decode_take(uint8_t *out, size_t cap);
 /* ---- Serenity: presets, sources, the compiler, reflection and the cache (EmuSen_Serenity.md, sections 7 to 9) ---- */
 
 /*
- * Shaderc and SQLite are the host's: it lends the handles its own bindings loaded, once each, and the library calls
- * the same two libraries through them, so that the SPIR-V is the same compiler's and the process holds one SQLite.
- * `path` names the file Shaderc came from when the host can (null when it cannot); the compiler's identity carries
- * that file's SHA-256. Nothing is compiled or cached before its library is lent; such a call is NOT_SUPPORTED or
- * returns null. The library never closes either.
+ * SQLite is the host's: it lends the handle its own binding loaded, once, so that the process holds one SQLite, and
+ * nothing is cached before it is lent (such a call returns null). Shaderc, since 35, the library finds itself at its
+ * first compile: beside the program, then in its runtimes/<rid>/native folder, then by the system's loader; a host
+ * that has Shaderc loaded may lend it first instead. `path` names the file it came from when the host can (null when
+ * it cannot); the compiler's identity carries that file's SHA-256. A compile with no Shaderc found is NOT_SUPPORTED,
+ * with the places tried. The library never closes either.
  */
 int32_t emusen_serenity_shaderc_lend(void *handle, const uint8_t *path, size_t path_len);
 int32_t emusen_serenity_sqlite_lend(void *handle);
@@ -1466,6 +1467,36 @@ int64_t emusen_serenity_chain_get(const emusen_serenity_chain *chain, uint32_t w
 
 /* The Vulkan format a pass's `#pragma format` names, as the C# resolves the word through its binding's enumeration: `out` is its value, or `fallback` for a word that names none. */
 int32_t emusen_serenity_parse_format(const uint8_t *name, size_t name_len, int32_t fallback, int32_t *out);
+
+/* ---- Serenity: the built-in filters and the presets they are written as (EmuSen_Serenity.md, section 3.13), since 35 ---- */
+
+/*
+ * The catalog, a JSON document: {"filters": [{"key", "name", "passes" (a filter's fixed passes; none for one made
+ * from its values), "built", "consoles" (null for every one), "credit", "settings": [a parameter as the readers give
+ * one, with "choices" (null or the names of its values)], "structural", "raw", "defaults" ({console: values}, "" for
+ * any console, or null), "aspect" (the double's 64 bits, or null), "crops_itself", "rows_once", "history_depth"}],
+ * "screens": [{"console", "kind" ("Television" or "Lcd"), "profile", "hosts_picture", "gap"}], "owed": [{"console",
+ * "note"}], "televisions": the consoles drawn on a television row of their own, "reduce": the reducing pass's GLSL}. A key is a filter's own name, or a simple effect's as
+ * "effect.<None|Scanlines|Crt>.<nearest|linear>".
+ *
+ * Every other call takes a filter as a document: {"key"} for one of the catalog's (an unknown key is BAD_ARGUMENT), or
+ * a filter's own description: {"name", "passes", "settings", "defaults", "raw", "rows_once", "history_depth"}, the
+ * parts it lacks taken as empty. A pass is {"glsl", "scale" (0 the frame, 1 the rectangle), "linear_source",
+ * "history", "width", "height" (each a size or null), "float", "feedback", "name", "linear" (children sampled
+ * linearly)}; a size is {"axis": 0 source, 1 viewport, 2 fixed, "factor": bits}. Values cross as {id: bits}; a null
+ * `console` is none, and null values are none.
+ */
+int64_t emusen_serenity_filters(uint8_t *out, size_t cap);
+int64_t emusen_serenity_filter_values(const uint8_t *filter, size_t filter_len, const uint8_t *console, size_t console_len, const uint8_t *given, size_t given_len, uint8_t *out, size_t cap);
+int64_t emusen_serenity_filter_passes(const uint8_t *filter, size_t filter_len, const uint8_t *values, size_t values_len, uint8_t *out, size_t cap);
+int32_t emusen_serenity_filter_reads_raw(const uint8_t *filter, size_t filter_len, const uint8_t *console, size_t console_len, const uint8_t *given, size_t given_len);
+int32_t emusen_serenity_filter_reduce_by(const uint8_t *filter, size_t filter_len, int32_t width, int32_t height, int32_t lines);
+
+/* The passes a filter draws with these values, reducing pass first, translated: [{"file", "text", "alias", "width", "height", "float", "linear"}]. PARSE, with the words, for a pass that asks for what no pass provides. */
+int64_t emusen_serenity_filter_translate(const uint8_t *filter, size_t filter_len, const uint8_t *values, size_t values_len, int32_t reduce_by, float nudge_x, float nudge_y, uint8_t *out, size_t cap);
+
+/* Writes a filter's preset on a console into a folder of `root` named by its content, once, and gives the preset's path: PARSE as above, IO with the file system's words. */
+int64_t emusen_serenity_filter_write(const uint8_t *filter, size_t filter_len, const uint8_t *console, size_t console_len, const uint8_t *chosen, size_t chosen_len, int32_t reduce_by, float nudge_x, float nudge_y, const uint8_t *root, size_t root_len, uint8_t *out, size_t cap);
 
 #ifdef __cplusplus
 }

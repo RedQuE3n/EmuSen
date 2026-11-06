@@ -45,7 +45,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void A_ring_slot_drawn_through_the_consoles_filters_is_the_uploaded_picture_drawn_through_them()
         {
-            SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             using (device)
             {

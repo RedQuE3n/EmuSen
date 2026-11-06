@@ -6542,6 +6542,22 @@ builds from (`EmuSen_RustState.md`). Three findings belong here.
   it can wait for MarsRT's move to the common interface (`EmuSen_NativeCores.md` §7), which renames its exports and
   retrains in any case.
 
+##### 6.17.14 The C# driver deleted (2026-11-06)
+
+`pgo/driver`, the C# console program of §6.17.2 and §6.17.5, ran the training list through `EmulatorSession`,
+`CoreFactory` and `CoreEngine`, the C# core host, which is retired with B10 (`EmuSen_Backend.md` §40). The driver was
+deleted with it. The profile was not retrained in the meantime: it has been void since d84b3bc1 (§6.17.12), so the
+deletion loses no profile, only the means of making the next one.
+
+**A retrain needs a Rust driver.** `pgo/train.sh` is otherwise unchanged: it builds the instrumented flavours, merges
+the counters and writes the manifest as before, and takes the driver from `DRIVER`, a program that loads
+`libmarsrt.so` (or `.dylib`) from beside itself and accepts the list's lines,
+`<rom> <state|-> <frames> [Setting=value]... [rewind=1] [mistress=1] [warmup=n]`. Without one it stops before the
+first build and says so. The driver to write is a front end's frame loop over the frontend API, as the platform
+library's `Platform/crystal` crate exports it (`open` and `frame`, the picture taken when its serial changes, audio
+drained, rewind's moments when asked), so that the profile trains the code a player runs, as §6.17.5 found it must.
+Until it exists, MarsRT builds as §6.17.12 left it, in effect unguided.
+
 ## 7. On the core ABI v1 alone (2026-10-15)
 
 *Step 5 of `EmuSen_NativeCores.md` §7, approved in the order set on 2026-09-30 (MercuryRT, then MarsRT) and given its go

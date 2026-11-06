@@ -4,7 +4,7 @@
 #
 #   bash pgo/train.sh [training list, default pgo/training.txt]
 #
-# For each flavour below: an instrumented library, the training list run through the shim by pgo/driver, the counters merged;
+# For each flavour below: an instrumented library, the training list run through the driver, the counters merged;
 # then every flavour merged into one profile. A flavour is a compiler, a cargo profile and a target, because each names the
 # crates' symbols differently and a profile guides only the names it holds. The counters are updated atomically, because the
 # rasteriser's workers share them and lost updates leave a function's counts inconsistent. Runs on Linux and macOS (bash 3.2 too).
@@ -21,6 +21,7 @@
 #   WORK           scratch (default ~/.cache/emusen/pgo/work)
 #   FLAVOURS       a subset of "release dist ci" (default all)
 #   RUN            a command each build and each training run is wrapped in, such as "flock <lock>" to share a quiet machine
+#   DRIVER         the training driver, which loads the library from beside itself; none is committed since 2026-11-06
 set -euo pipefail
 
 CRATE="$(cd "$(dirname "$0")/.." && pwd)"
@@ -60,8 +61,8 @@ command -v "$PROFDATA" > /dev/null || die "no llvm-profdata ($PROFDATA); set LLV
 
 mkdir -p "$WORK"
 echo "== $HOST: the driver"
-dotnet build "$CRATE/pgo/driver/MarsRtPgo.csproj" -c Release -p:EmuSenNative=false -o "$WORK/driver" -v quiet -nologo | grep -E "error|rror\(s\)" || true
-[ -x "$WORK/driver/marsrt-pgo" ] || die "the driver did not build"
+[ -n "${DRIVER:-}" ] && [ -x "$DRIVER" ] || die "no driver: the C# driver went with the C# core host on 2026-11-06, and a retrain needs one in Rust (Mars_Native.md §6.17.14); set DRIVER to it"
+DRIVER_DIR="$(cd "$(dirname "$DRIVER")" && pwd)"
 
 lines() { grep -v -E '^[[:space:]]*(#|$)' "$LIST"; }
 manifest_runs=()
@@ -100,20 +101,20 @@ for f in $FLAVOURS; do
   grep -q "^state = instrumented" "$status" || die "flavour $f: the build script did not see an instrumented build ($status)"
   sources+=("$(sed -n 's/^source = //p' "$status")")
   flavours+=("$(sed -n 's/^flavour = //p' "$status")")
-  cp "$out/$LIBRARY" "$WORK/driver/$LIBRARY"
+  cp "$out/$LIBRARY" "$DRIVER_DIR/$LIBRARY"
 
   echo "== flavour $f: training"
   while read -r rom state frames rest; do
     if [ "$state" = - ]; then st=-; else st="$GAMES/$state"; fi
     # shellcheck disable=SC2086
-    LLVM_PROFILE_FILE="$raw/%p-%m.profraw" ${RUN[@]+"${RUN[@]}"} "$WORK/driver/marsrt-pgo" "$GAMES/$rom" "$st" "$frames" ${rest:-} < /dev/null || die "flavour $f: $rom failed"
+    LLVM_PROFILE_FILE="$raw/%p-%m.profraw" ${RUN[@]+"${RUN[@]}"} "$DRIVER" "$GAMES/$rom" "$st" "$frames" ${rest:-} < /dev/null || die "flavour $f: $rom failed"
   done < <(lines)
   n=$(find "$raw" -name '*.profraw' | wc -l | tr -d ' ')
   [ "$n" -gt 0 ] || die "flavour $f: no counters were written"
   "$profdata" merge -o "$WORK/flavour-$f.profdata" "$raw"/*.profraw
   echo "   $n runs merged: $("$profdata" show "$WORK/flavour-$f.profdata" | grep -E 'Total functions')"
   merged+=("$WORK/flavour-$f.profdata")
-  rm -f "$WORK/driver/$LIBRARY"
+  rm -f "$DRIVER_DIR/$LIBRARY"
 done
 
 for s in "${sources[@]}"; do [ "$s" = "${sources[0]}" ] || die "the flavours saw different sources: ${sources[*]}"; done

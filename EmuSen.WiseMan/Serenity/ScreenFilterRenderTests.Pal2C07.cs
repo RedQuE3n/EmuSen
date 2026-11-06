@@ -16,29 +16,29 @@ namespace EmuSen.WiseMan.Serenity
         internal static double PpuAtPal(int colour, int emphasis, int p, bool switched)
         {
             int hue = colour & 15, row = colour >> 4;
-            double lo = (CrtFilter.PpuLow[row] - CrtFilter.PpuBlack) / CrtFilter.PpuIre100, hi = (CrtFilter.PpuHigh[row] - CrtFilter.PpuBlack) / CrtFilter.PpuIre100;
+            double lo = (CrtReference.PpuLow[row] - CrtReference.PpuBlack) / CrtReference.PpuIre100, hi = (CrtReference.PpuHigh[row] - CrtReference.PpuBlack) / CrtReference.PpuIre100;
             if (hue >= 14) return 0;
             if (hue == 0) lo = hi;
             if (hue >= 13) hi = lo;
             bool In(int h) => ((h + p) % 12 + 12) % 12 < 6;
             double v = In(hue is >= 1 and <= 12 ? Osc(hue, switched) : hue) ? hi : lo;
             bool dim = ((emphasis & 2) != 0 && In(Osc(0, switched))) || ((emphasis & 1) != 0 && In(Osc(4, switched))) || ((emphasis & 4) != 0 && In(Osc(8, switched)));
-            return dim ? (CrtFilter.PpuAttenuation * (v * CrtFilter.PpuIre100 + CrtFilter.PpuBlack) - CrtFilter.PpuBlack) / CrtFilter.PpuIre100 : v;
+            return dim ? (CrtReference.PpuAttenuation * (v * CrtReference.PpuIre100 + CrtReference.PpuBlack) - CrtReference.PpuBlack) / CrtReference.PpuIre100 : v;
         }
 
         // What a PAL receiver locked to the burst's mean decodes from one line of the 2C07's wave, V turned back on a switched line, the row's skew a delay of the wave.
         internal static (double Y, double U, double V) PpuDecodedPal(int colour, int emphasis, bool switched)
         {
             const int fine = 1200;
-            double y = 0, u = 0, v = 0, delay = (colour >> 4) * CrtFilter.PpuRowSkewDegrees / 30;
+            double y = 0, u = 0, v = 0, delay = (colour >> 4) * CrtReference.PpuRowSkewDegrees / 30;
             for (int i = 0; i < fine; i++)
             {
                 double q = (i + 0.5) * 12.0 / fine;
                 double level = PpuAtPal(colour, emphasis, (int)Math.Floor(((q + delay) % 12 + 12) % 12), switched);
-                double angle = 2 * Math.PI * (q - CrtFilter.PpuPalAxisStep) / 12;
+                double angle = 2 * Math.PI * (q - CrtReference.PpuPalAxisStep) / 12;
                 y += level / fine; u += 2 * level * Math.Sin(angle) / fine; v += 2 * level * Math.Cos(angle) / fine;
             }
-            return (y, CrtFilter.PpuChromaGainPal * u, CrtFilter.PpuChromaGainPal * v * (switched ? -1 : 1));
+            return (y, CrtReference.PpuChromaGainPal * u, CrtReference.PpuChromaGainPal * v * (switched ? -1 : 1));
         }
 
         private static double Degrees(double u, double v) => (Math.Atan2(v, u) * 180 / Math.PI + 360) % 360;
@@ -55,8 +55,8 @@ namespace EmuSen.WiseMan.Serenity
                 for (int i = 0; i < 1200; i++)
                 {
                     double q = (i + 0.5) / 100.0;
-                    double level = ((Osc(7, switched) + (int)q) % 12 < 6 ? CrtFilter.PpuBurstHigh : CrtFilter.PpuBurstLow) / CrtFilter.PpuIre100;
-                    double angle = 2 * Math.PI * (q - CrtFilter.PpuPalAxisStep) / 12;
+                    double level = ((Osc(7, switched) + (int)q) % 12 < 6 ? CrtReference.PpuBurstHigh : CrtReference.PpuBurstLow) / CrtReference.PpuIre100;
+                    double angle = 2 * Math.PI * (q - CrtReference.PpuPalAxisStep) / 12;
                     u += 2 * level * Math.Sin(angle) / 1200; v += 2 * level * Math.Cos(angle) / 1200;
                 }
                 return (u, v);
@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.Serenity
             var (u1, v1) = Burst(true);
             Within(135, Degrees(u0, v0), 0.001, "the burst on a line");
             Within(225, Degrees(u1, v1), 0.001, "the burst on the next");
-            Within(3.0 / 14, Math.Sqrt(u0 * u0 + v0 * v0) * CrtFilter.PpuChromaGainPal, 0.001, "the burst's size after the colour control");
+            Within(3.0 / 14, Math.Sqrt(u0 * u0 + v0 * v0) * CrtReference.PpuChromaGainPal, 0.001, "the burst's size after the colour control");
 
             // Every hue of row 0, which has no skew, decodes the same on both lines once V is turned back, 15 degrees short of the 2C02's.
             for (int hue = 1; hue <= 12; hue++)
@@ -75,14 +75,14 @@ namespace EmuSen.WiseMan.Serenity
                 var ntsc = PpuDecoded(hue, 0);
                 Assert.True(Math.Abs(Turn(Degrees(a.U, a.V), Degrees(b.U, b.V))) < 0.01, $"hue {hue}: {Degrees(a.U, a.V):F2} and {Degrees(b.U, b.V):F2} on the two lines");
                 Within(-15, Turn(Degrees(a.U, a.V), Degrees(ntsc.U, ntsc.V)), 0.001, $"hue {hue} against the 2C02's");
-                Within(Math.Sqrt(ntsc.U * ntsc.U + ntsc.V * ntsc.V) * CrtFilter.PpuChromaGainPal / CrtFilter.PpuChromaGain, Math.Sqrt(a.U * a.U + a.V * a.V), 0.001, $"hue {hue}'s saturation");
+                Within(Math.Sqrt(ntsc.U * ntsc.U + ntsc.V * ntsc.V) * CrtReference.PpuChromaGainPal / CrtReference.PpuChromaGain, Math.Sqrt(a.U * a.U + a.V * a.V), 0.001, $"hue {hue}'s saturation");
             }
 
             // A row's skew turns the two lines opposite ways, Hanover's bars, whose mean is the hue.
             var even = PpuDecodedPal(0x36, 0, false);
             var odd = PpuDecodedPal(0x36, 0, true);
             var flat = PpuDecodedPal(0x06, 0, false);
-            Within(-6 * CrtFilter.PpuRowSkewDegrees, Turn(Degrees(odd.U, odd.V), Degrees(even.U, even.V)), 0.01, "row 3's two lines apart");
+            Within(-6 * CrtReference.PpuRowSkewDegrees, Turn(Degrees(odd.U, odd.V), Degrees(even.U, even.V)), 0.01, "row 3's two lines apart");
             Assert.True(Math.Abs(Turn((Degrees(odd.U, odd.V) + Degrees(even.U, even.V)) / 2, Degrees(flat.U, flat.V))) < 0.01, "their mean is the hue");
 
             // The red and green bits change places: the 2C07's second bit dims where the 2C02's first does.

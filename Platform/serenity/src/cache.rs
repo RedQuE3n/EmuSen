@@ -1,8 +1,8 @@
 //! Compiled SPIR-V kept in SQLite by a hash of everything a compile reads; a miss, a damaged row or an unusable
-//! database compiles instead: the C# `SpirvCache`. See EmuSen_Serenity.md §9.4.
+//! database compiles instead, behind the C# `SpirvCache`. See EmuSen_Serenity.md §9.4.
 //!
-//! The file is the C#'s: one schema, read from the one file both embed, and `user_version` 1, so either opens what
-//! the other wrote. The cache is not locked here; a host that shares one between threads holds it in a lock for
+//! One schema, `spirv-cache-schema.sql`, at `user_version` 1, the C#'s before its own cache was deleted (EmuSen_Backend.md
+//! §40.6), so a file the C# wrote is read as it was. The cache is not locked here; a host that shares one between threads holds it in a lock for
 //! `find` and `store` and compiles outside it, as the C# does.
 
 use crate::compiler::{Shaderc, Stage};
@@ -19,7 +19,7 @@ const SPIRV_MAGIC: u32 = 0x0723_0203;
 const BUSY_LIMIT: i32 = 3;
 
 /// The one schema, the file `EmuSen.Serenity` embeds.
-pub const SCHEMA: &str = include_str!("../../../EmuSen.Serenity/Slang/spirv-cache-schema.sql");
+pub const SCHEMA: &str = include_str!("spirv-cache-schema.sql");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Counters {

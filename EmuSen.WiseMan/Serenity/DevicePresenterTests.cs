@@ -33,25 +33,20 @@ namespace EmuSen.WiseMan.Serenity
 
         // The library's device says its UUID and that it exports on the RX 6800; the C#'s exports nothing, so a frontend switched to it reads back.
         [Fact]
-        public void The_library_s_device_names_its_card_and_exports_and_the_csharp_s_does_not()
+        public void The_library_s_device_names_its_card_and_exports()
         {
-            using SlangVulkan? native = SlangVulkan.TryCreate(out _, Environment.GetEnvironmentVariable(SlangVulkan.DeviceVariable) ?? "6800", null, native: true);
+            using SlangVulkan? native = SlangVulkan.TryCreate(out _, Environment.GetEnvironmentVariable(SlangVulkan.DeviceVariable) ?? "6800", null);
             if (native is null) return;
             var (uuid, exports) = native.Identity();
             Assert.True(exports, "RADV offers the two external extensions");
             Assert.Contains(uuid, b => b != 0);
-            using SlangVulkan? managed = SlangVulkan.TryCreate(out _, Environment.GetEnvironmentVariable(SlangVulkan.DeviceVariable) ?? "6800", null, native: false);
-            if (managed is null) return;
-            Assert.False(managed.Identity().Exports);
-            Assert.Null(SlangShown.TryCreate(managed, 4, 4, true, out string? problem));
-            Assert.NotNull(problem);
         }
 
         // An exported target is made on the library's device at either layout, with three descriptors, and freed.
         [Fact]
         public void A_target_is_made_with_its_memory_and_two_semaphores_as_descriptors()
         {
-            using SlangVulkan? device = SlangVulkan.TryCreate(out _, Environment.GetEnvironmentVariable(SlangVulkan.DeviceVariable) ?? "6800", null, native: true);
+            using SlangVulkan? device = SlangVulkan.TryCreate(out _, Environment.GetEnvironmentVariable(SlangVulkan.DeviceVariable) ?? "6800", null);
             if (device is null) return;
             foreach (bool linear in new[] { true, false })
             {

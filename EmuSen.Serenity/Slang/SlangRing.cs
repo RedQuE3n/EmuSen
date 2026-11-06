@@ -42,11 +42,10 @@ namespace EmuSen.Serenity.Slang
             DriverUuid = new ReadOnlySpan<byte>(info.DriverUuid, 16).ToArray();
         }
 
-        // Null, with the words why, on the C#'s device or one that cannot export images and timeline semaphores.
+        // Null, with the words why, on a device that cannot export images and timeline semaphores.
         public static SlangRing? TryCreate(SlangVulkan device, int width, int height, int count, out string? problem)
         {
             problem = null;
-            if (!device.IsNative) { problem = "the C#'s device makes no ring"; return null; }
             var info = new SerenityNative.RingInfo { Size = (uint)sizeof(SerenityNative.RingInfo) };
             nint made = SerenityNative.RingNew(device.NativeValue, (uint)width, (uint)height, (uint)count, &info);
             GC.KeepAlive(device);

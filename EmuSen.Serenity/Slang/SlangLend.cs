@@ -38,11 +38,10 @@ namespace EmuSen.Serenity.Slang
             (QueueFamily, QueueIndex, HostQueueFamily, Done) = (info.QueueFamily, info.QueueIndex, info.HostQueueFamily, info.Done);
         }
 
-        // Null, with the words why, on the C#'s device or one with no timeline semaphores or too few queues.
+        // Null, with the words why, on a device with no timeline semaphores or too few queues.
         public static SlangLend? TryCreate(SlangVulkan device, out string? problem)
         {
             problem = null;
-            if (!device.IsNative) { problem = "the C#'s device lends nothing"; return null; }
             var info = new SerenityNative.LendInfo { Size = (uint)sizeof(SerenityNative.LendInfo) };
             nint made = SerenityNative.LendNew(device.NativeValue, &info);
             GC.KeepAlive(device);

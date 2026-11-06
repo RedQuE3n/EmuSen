@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Serenity
         public void A_lent_machines_picture_reaches_the_chain_on_the_device_the_frame_it_is_drawn(bool validate)
         {
             var findings = new List<string>();
-            SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, validate ? f => { lock (findings) findings.Add(f); } : null, native: true);
+            SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, validate ? f => { lock (findings) findings.Add(f); } : null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             string path = Path.Combine(_root, "triangle.psexe");
             File.WriteAllBytes(path, DiamondEnhancementsTests.Triangle());

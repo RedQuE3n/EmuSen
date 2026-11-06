@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Every_console_s_pal_line_is_the_arithmetic_of_its_clocks()
         {
-            const double fsc = CrtFilter.PalSubcarrierMegahertz;
+            const double fsc = CrtReference.PalSubcarrierMegahertz;
             // Master clock in MHz, master clocks a pixel, a line and a subcarrier cycle, lines a frame, and any extra cycles a frame (the N64's leap lines, averaged).
             var clocks = new Dictionary<string, (double Master, double Pixel, double Line, double Cycle, int Lines, double Extra, int Width)>
             {
@@ -35,7 +35,7 @@ namespace EmuSen.WiseMan.Serenity
             {
                 var (master, pixel, line, cycle, lines, extra, width) = clocks[console];
                 Within(fsc, master / cycle, 1e-5, $"{console}'s subcarrier from its master clock");
-                CrtFilter.LineTiming pal = CrtFilter.LineOf(CrtFilter.ConsoleTiming[console], pal: true);
+                CrtReference.LineTiming pal = CrtReference.LineOf(CrtFilter.ConsoleTiming[console], pal: true);
                 double perLine = line / cycle, perFrame = lines * perLine + extra;
                 Within(width * pixel / master, pal.ActiveMicroseconds, 1e-4, $"{console}'s active picture, µs");
                 Within(width * pixel / cycle, pal.CyclesAcross, 1e-4, $"{console}'s cycles across");
@@ -49,8 +49,8 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void The_phosphor_tails_on_a_pal_field_are_the_ntsc_fit_s_exponentials()
         {
-            CrtFilter.Tails ntsc = CrtFilter.Tails.For(pal: false), pal = CrtFilter.Tails.For(pal: true);
-            double longer = (CrtFilter.PalFieldMilliseconds - CrtFilter.NtscFieldMilliseconds) / CrtFilter.NtscFieldMilliseconds;
+            CrtReference.Tails ntsc = CrtReference.Tails.For(pal: false), pal = CrtReference.Tails.For(pal: true);
+            double longer = (CrtReference.PalFieldMilliseconds - CrtReference.NtscFieldMilliseconds) / CrtReference.NtscFieldMilliseconds;
             foreach (var (name, c60, r60, c50, r50) in new[] { ("green fast", ntsc.GreenFast, ntsc.Fast, pal.GreenFast, pal.Fast), ("green slow", ntsc.GreenSlow, ntsc.Slow, pal.GreenSlow, pal.Slow), ("blue fast", ntsc.BlueFast, ntsc.Fast, pal.BlueFast, pal.Fast), ("blue slow", ntsc.BlueSlow, ntsc.Slow, pal.BlueSlow, pal.Slow) })
             {
                 double after60 = c60 * r60 / (1 - r60), after50 = c50 * r50 / (1 - r50);
@@ -70,12 +70,12 @@ namespace EmuSen.WiseMan.Serenity
                 foreach (var (id, value) in set) values[id] = value;
                 return values;
             }
-            Assert.Equal(CrtFilter.Decoder.Comb, CrtFilter.Resolve(Of(("decoder", 2f))).Decoder);
-            CrtFilter.Resolved pal = CrtFilter.Resolve(Of(("decoder", 2f), ("standard", 1f)));
-            Assert.Equal(CrtFilter.Decoder.Notch, pal.Decoder);
+            Assert.Equal(CrtReference.Decoder.Comb, CrtReference.Resolve(Of(("decoder", 2f))).Decoder);
+            CrtReference.Resolved pal = CrtReference.Resolve(Of(("decoder", 2f), ("standard", 1f)));
+            Assert.Equal(CrtReference.Decoder.Notch, pal.Decoder);
             Assert.True(pal.DelayLine && pal.Pal);
-            Assert.False(CrtFilter.Resolve(Of(("standard", 1f), ("palDecoder", 1f))).DelayLine);
-            Assert.Equal(CrtFilter.PalSubcarrierMegahertz, pal.Subcarrier);
+            Assert.False(CrtReference.Resolve(Of(("standard", 1f), ("palDecoder", 1f))).DelayLine);
+            Assert.Equal(CrtReference.PalSubcarrierMegahertz, pal.Subcarrier);
         }
 
         // The encoder turns V over each line and the decoder turns it back: a flat colour comes out of PAL as out of NTSC, at every tier.

@@ -44,6 +44,25 @@ namespace EmuSen.WiseMan.Fixtures
     // GLSL compute source to SPIR-V, for MarsRT's and Diamond's shaders; the product ships the result and never this - see Mars_Gpu.md §2.
     public static unsafe class ShaderCompiler
     {
+        // Silk's binding over the Shaderc the program ships, found by .NET's own native probing rather than Silk's list of distributions - see EmuSen_RustPlatform.md §33.
+        private static Shaderc LoadShaderc() =>
+            new(new Silk.NET.Core.Contexts.DefaultNativeContext(new Silk.NET.Core.Loader.UnmanagedLibrary(OperatingSystem.IsWindows() ? "shaderc_shared.dll" : OperatingSystem.IsMacOS() ? "libshaderc_shared.dylib" : "libshaderc_shared.so", new AssemblyProbing(), Silk.NET.Core.Loader.PathResolver.Default)));
+
+        // DllImport's order for this assembly: the host's native directories from the deps file, then the assembly's folder, then the system's.
+        private sealed class AssemblyProbing : Silk.NET.Core.Loader.LibraryLoader
+        {
+            protected override nint CoreLoadNativeLibrary(string name) =>
+                System.Runtime.InteropServices.NativeLibrary.TryLoad(name, typeof(ShaderCompiler).Assembly, null, out nint handle) ? handle : 0;
+
+            protected override void CoreFreeNativeLibrary(nint handle)
+            {
+                if (handle != 0) System.Runtime.InteropServices.NativeLibrary.Free(handle);
+            }
+
+            protected override nint CoreLoadFunctionPointer(nint handle, string functionName) =>
+                System.Runtime.InteropServices.NativeLibrary.TryGetExport(handle, functionName, out nint address) ? address : 0;
+        }
+
         public const string RecordVariable = "EMUSEN_GPU_SHADERS_RECORD";
 
         public static string RepositoryRoot
@@ -68,7 +87,7 @@ namespace EmuSen.WiseMan.Fixtures
 
         public static byte[] Compile(string source, string name)
         {
-            Shaderc api = ShadercLibrary.Load();
+            Shaderc api = LoadShaderc();
             Compiler* compiler = api.CompilerInitialize();
             CompileOptions* options = api.CompileOptionsInitialize();
 

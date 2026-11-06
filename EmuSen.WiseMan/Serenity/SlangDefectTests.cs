@@ -54,12 +54,12 @@ namespace EmuSen.WiseMan.Serenity
             return Write("id.slangp", "shaders = 1\nshader0 = id.slang\n");
         }
 
-        // A device of the switch's kind with the layer and a sink, or none where the layer or the card is not there.
+        // The library's device with the layer and a sink, or none where the layer or the card is not there.
         private (SlangVulkan? Gpu, ConcurrentQueue<string> Findings) Validated()
         {
             var findings = new ConcurrentQueue<string>();
             SlangVulkan? gpu = SlangVulkan.TryCreate(out string report, _wanted, findings.Enqueue);
-            _output.WriteLine($"{(gpu?.IsNative == true ? "library" : "C#")}: {report}");
+            _output.WriteLine(report);
             return (gpu, findings);
         }
 
@@ -80,16 +80,14 @@ namespace EmuSen.WiseMan.Serenity
             File.WriteAllText(Path.Combine(_root, "not.png"), "this is not a picture");
             string undecoded = Write("undecoded.slangp", "shaders = 2\nshader0 = id.slang\nshader1 = id.slang\ntextures = \"Lut\"\nLut = not.png\n");
             string deep = Write("deep.slangp", "shaders = 2\nshader0 = id.slang\nshader1 = deep.slang\n");
-            int live;
             using (gpu)
             {
                 Assert.Throws<InvalidDataException>(() => new SlangChain(gpu, SlangPreset.Load(undecoded)));
                 Assert.Throws<OverflowException>(() => new SlangChain(gpu, SlangPreset.Load(deep)));
-                live = gpu.IsNative ? 0 : gpu.ManagedValue.Live;
             }
             // What the device still held at its end: the buffers and images it counts, and every object the layer saw left.
             int left = findings.Count(f => f.Contains("VUID-vkDestroyDevice-device-05137", StringComparison.Ordinal));
-            Assert.True(live == 0 && left == 0, $"{live} buffers and images were never given back, and the layer found {left} objects left at the device's end");
+            Assert.True(left == 0, $"the layer found {left} objects left at the device's end");
             AssertSilent(findings);
         }
 
@@ -165,7 +163,6 @@ namespace EmuSen.WiseMan.Serenity
             Assert.True(findings.IsEmpty, $"the device ended under a held picture: {findings.FirstOrDefault()?.Split('\n')[0]}");
             using (SKPixmap pixmap = picture.PeekPixels()) Assert.True(copy.AsSpan().SequenceEqual(pixmap.GetPixelSpan()));
             picture.Dispose();
-            if (!gpu.IsNative) Assert.Equal(0, gpu.ManagedValue.Live);
             AssertSilent(findings);
         }
     }

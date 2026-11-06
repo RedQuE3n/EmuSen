@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Serenity
         public void A_hosted_cores_pictures_in_the_lent_ring_draw_as_the_frames_read_back_and_one_frame_advance_holds()
         {
             _output.WriteLine($"runtime: {CrystalRuntime.Implementation}");
-            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { _entry.Cores } });
             string disc = Disc();
@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Ring_frames_given_back_while_the_screen_is_not_on_the_device_never_stall_the_core()
         {
-            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { _entry.Cores } });
             string disc = Disc();
@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void A_ring_is_lent_again_at_machine_info_when_the_core_draws_past_its_maxima()
         {
-            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { _entry.Cores } });
             string disc = Disc();
@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void A_core_that_crashes_with_a_ring_lent_ends_in_words_and_the_device_runs_the_next_ringed_session()
         {
-            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             using var runtime = new CrystalRuntime(new CrystalRuntimeOptions { Cores = new[] { AppContext.BaseDirectory }, PlayerCores = new[] { _entry.Cores } });
             string disc = Disc();

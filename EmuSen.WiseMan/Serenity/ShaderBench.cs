@@ -546,75 +546,31 @@ namespace EmuSen.WiseMan.Serenity
         // Timestamps on the slang device and the CPU's phases, gathered per frame.
         private sealed class Probe : ISlangProbe, IDisposable
         {
-            private const int PerSubmission = 64, Submissions = 4;
-            private Vk? _vk;
-            private Device _device;
-            private QueryPool _pool;
-            private double _period;
+            private const int Submissions = 4;
             private int _submission;
-            private readonly List<(int Submission, int Slot, int Point)> _written = new();
             private readonly Dictionary<int, long> _phase = new();
             private readonly List<(int Submission, long Submitted, long Waited)> _waits = new();
             private readonly Dictionary<(int, int), double> _gpu = new();
             private long _pendingSubmitted;
             private SlangVulkan? _library;
 
-            // The library's device times itself and its marks are handed on; the C#'s is marked from here.
+            // The library's device times itself and its marks are handed on.
             public void Attach(SlangVulkan gpu)
             {
-                if (gpu.IsNative)
-                {
-                    _library = gpu;
-                    gpu.SetProbe(true);
-                    return;
-                }
-                _vk = gpu.Vk;
-                _device = gpu.Device;
-                var info = new QueryPoolCreateInfo { SType = StructureType.QueryPoolCreateInfo, QueryType = QueryType.Timestamp, QueryCount = PerSubmission * Submissions };
-                SlangVulkan.Check(_vk.CreateQueryPool(_device, &info, null, out _pool), "vkCreateQueryPool");
-                _period = TimestampPeriod(gpu);
-            }
-
-            private static double TimestampPeriod(SlangVulkan gpu)
-            {
-                Instance instance = gpu.Instance;
-                uint count = 0;
-                gpu.Vk.EnumeratePhysicalDevices(instance, &count, null);
-                var devices = new PhysicalDevice[count];
-                fixed (PhysicalDevice* p = devices) gpu.Vk.EnumeratePhysicalDevices(instance, &count, p);
-                foreach (PhysicalDevice physical in devices)
-                {
-                    gpu.Vk.GetPhysicalDeviceProperties(physical, out PhysicalDeviceProperties properties);
-                    if (Marshal.PtrToStringAnsi((nint)properties.DeviceName) == gpu.Name) return properties.Limits.TimestampPeriod;
-                }
-                throw new InvalidOperationException("the device's physical device was not found");
+                _library = gpu;
+                gpu.SetProbe(true);
             }
 
             public void Begin()
             {
                 _submission = 0;
-                _written.Clear();
                 _phase.Clear();
                 _waits.Clear();
                 _gpu.Clear();
             }
 
-            public void Mark(CommandBuffer commands, int point)
-            {
-                if (_vk is null || _submission >= Submissions) return;
-                int baseSlot = _submission * PerSubmission;
-                if (point == SlangProbe.SubmissionBegin)
-                {
-                    _vk.CmdResetQueryPool(commands, _pool, (uint)baseSlot, PerSubmission);
-                    _vk.CmdWriteTimestamp(commands, PipelineStageFlags.TopOfPipeBit, _pool, (uint)baseSlot);
-                    _written.Add((_submission, baseSlot, point));
-                    return;
-                }
-                int slot = baseSlot + (point == SlangProbe.SubmissionEnd ? PerSubmission - 1 : point + 1);
-                if (point >= PerSubmission - 2) return;
-                _vk.CmdWriteTimestamp(commands, PipelineStageFlags.BottomOfPipeBit, _pool, (uint)slot);
-                _written.Add((_submission, slot, point));
-            }
+            // The library's device marks its own passes and hands them on through Gpu.
+            public void Mark(CommandBuffer commands, int point) { }
 
             public void Phase(int point) => Phase(point, Stopwatch.GetTimestamp());
 
@@ -629,28 +585,10 @@ namespace EmuSen.WiseMan.Serenity
                 if (point == SlangProbe.Waited)
                 {
                     _waits.Add((_submission, _pendingSubmitted, now));
-                    Read(_submission);
                     _submission++;
                     return;
                 }
                 _phase[point] = now;
-            }
-
-            private void Read(int submission)
-            {
-                if (_vk is null) return;
-                var mine = _written.Where(w => w.Submission == submission).ToList();
-                if (mine.Count == 0) return;
-                ulong begin = 0;
-                var values = new Dictionary<int, ulong>();
-                foreach (var (_, slot, point) in mine)
-                {
-                    ulong value = 0;
-                    _vk.GetQueryPoolResults(_device, _pool, (uint)slot, 1, sizeof(ulong), &value, sizeof(ulong), QueryResultFlags.Result64Bit);
-                    values[point] = value;
-                    if (point == SlangProbe.SubmissionBegin) begin = value;
-                }
-                foreach (var (point, value) in values) _gpu[(submission, point)] = (value - begin) * _period / 1e6;
             }
 
             // Stages in milliseconds; a frame with no slang work has only its CPU phases.
@@ -728,8 +666,6 @@ namespace EmuSen.WiseMan.Serenity
 
             public void Dispose()
             {
-                if (_vk is not null && _pool.Handle != 0) _vk.DestroyQueryPool(_device, _pool, null);
-                _vk = null;
                 _library?.SetProbe(false);
                 _library = null;
             }

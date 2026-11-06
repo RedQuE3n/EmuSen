@@ -95,6 +95,34 @@ impl Shaderc {
         Ok(Shaderc::made(f, library, true, Some(path)))
     }
 
+    /// Shaderc as the program ships it, found as .NET's own probing finds a native library: beside the program, then in
+    /// its `runtimes/<rid>/native` folder, then by the system's loader under its name. See EmuSen_RustPlatform.md §33.
+    pub fn find(base_directory: &str) -> Result<Shaderc, String> {
+        let mut tried = Vec::new();
+        for folder in [base_directory.to_string(), format!("{base_directory}/runtimes/{RID}/native")] {
+            let path = std::path::Path::new(&folder).join(FILE_NAME);
+            if path.is_file() {
+                match Shaderc::open(&path.to_string_lossy()) {
+                    Ok(shaderc) => return Ok(shaderc),
+                    Err(words) => tried.push(words),
+                }
+            } else {
+                tried.push(format!("{} is not there", path.display()));
+            }
+        }
+        for &name in SYSTEM_NAMES {
+            match unsafe { libloading::Library::new(name) } {
+                Ok(library) => {
+                    let f = unsafe { Functions::load(&library) }?;
+                    let file = file_of(f.compiler_initialize as *const c_void);
+                    return Ok(Shaderc::made(f, library, true, file.as_deref()));
+                }
+                Err(e) => tried.push(format!("{name}: {e}")),
+            }
+        }
+        Err(format!("Shaderc could not be found ({})", tried.join("; ")))
+    }
+
     /// Shaderc as the host has it loaded, by its loader's handle, with the file it came from when the host can name it.
     ///
     /// # Safety
@@ -161,6 +189,50 @@ impl Drop for Shaderc {
     }
 }
 
+/// The file .NET ships Shaderc as on this system.
+pub const FILE_NAME: &str = if cfg!(windows) {
+    "shaderc_shared.dll"
+} else if cfg!(target_os = "macos") {
+    "libshaderc_shared.dylib"
+} else {
+    "libshaderc_shared.so"
+};
+
+/// The names the system's loader is asked for when the program ships no copy.
+const SYSTEM_NAMES: &[&str] = if cfg!(windows) {
+    &["shaderc_shared.dll"]
+} else if cfg!(target_os = "macos") {
+    &["libshaderc_shared.dylib", "libshaderc_shared.1.dylib"]
+} else {
+    &["libshaderc_shared.so", "libshaderc_shared.so.1"]
+};
+
+/// The runtime identifier whose native folder a framework-dependent build keeps Shaderc in.
+const RID: &str = match (cfg!(windows), cfg!(target_os = "macos"), cfg!(target_arch = "aarch64"), cfg!(target_arch = "arm")) {
+    (true, _, true, _) => "win-arm64",
+    (true, _, _, _) => "win-x64",
+    (_, true, true, _) => "osx-arm64",
+    (_, true, _, _) => "osx-x64",
+    (_, _, true, _) => "linux-arm64",
+    (_, _, _, true) => "linux-arm",
+    _ => "linux-x64",
+};
+
+/// The file a loaded function came from, which the system's loader opened by name.
+#[cfg(unix)]
+fn file_of(function: *const c_void) -> Option<String> {
+    let mut info: libc::Dl_info = unsafe { std::mem::zeroed() };
+    if unsafe { libc::dladdr(function, &mut info) } == 0 || info.dli_fname.is_null() {
+        return None;
+    }
+    Some(unsafe { CStr::from_ptr(info.dli_fname) }.to_string_lossy().into_owned())
+}
+
+#[cfg(not(unix))]
+fn file_of(_function: *const c_void) -> Option<String> {
+    None
+}
+
 /// The library file's SHA-256 in capitals, or its absence said, when no file is named or it cannot be read.
 fn digest(path: Option<&str>) -> String {
     match path {
@@ -182,6 +254,18 @@ mod tests {
         assert_eq!(VULKAN_1_1, 4_198_400);
         assert_eq!(OPTIONS, "optimization=Zero target=Vulkan/Vulkan11 language=Glsl entry=main defines=none");
         assert_eq!(NAMES.len(), 14);
+    }
+
+    #[test]
+    fn shaderc_missing_beside_the_program_is_the_systems_named_by_its_file_or_the_places_tried_are_said() {
+        match Shaderc::find("/nowhere/at/all") {
+            Ok(shaderc) => {
+                assert!(shaderc.identity().starts_with("shaderc "), "{}", shaderc.identity());
+                assert!(cfg!(not(unix)) || !shaderc.identity().contains("unfound"), "{}", shaderc.identity());
+                assert!(shaderc.compile("#version 450\nvoid main() {}\n", Stage::Fragment, "a.slang").is_ok());
+            }
+            Err(words) => assert!(words.contains(&format!("/nowhere/at/all/{FILE_NAME} is not there")), "{words}"),
+        }
     }
 
     #[test]

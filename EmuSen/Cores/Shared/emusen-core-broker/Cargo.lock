@@ -595,6 +595,7 @@ dependencies = [
  "ash",
  "emusen-galaxia",
  "emusen-sqlite",
+ "libc",
  "libloading 0.9.0",
  "sha2",
 ]

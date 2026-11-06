@@ -3,18 +3,33 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using EmuSen.Serenity.Native;
 using EmuSen.Serenity.Slang;
+using EmuSen.WiseMan.Crystal;
 using Microsoft.Data.Sqlite;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Serenity
 {
-    // Serenity's C# readers, compiler, reflection and cache and the platform library's, given the same files and bytes side by side and compared - see EmuSen_RustPlatform.md §16.5.
+    // Serenity's readers, compiler, reflection and cache in the platform library, held to the answers recorded from the C# before it was deleted - see EmuSen_Backend.md §40.6 and EmuSen_RustPlatform.md §16.5.
     public sealed unsafe class SerenityParityTests : IDisposable
     {
+        private static SlangPreset LoadPreset(string path) => SlangPreset.Load(path);
+        private static SlangSource LoadSource(string path) => SlangSource.Load(path);
+        private static IReadOnlyList<SlangParameter> Merge(IReadOnlyList<IReadOnlyList<SlangParameter>> sources, IReadOnlyDictionary<string, float> overrides) => SlangParameters.MergeNativeLists(sources, overrides);
+        private static byte[] Compile(string text, SlangStage stage, string name) => SlangCompiler.Compile(text, stage, name);
+        private static SpirvReflection Read(byte[] spirv) => SpirvReflection.Read(spirv);
+        private static byte[] Prune(byte[] spirv) => SpirvReflection.WithoutUnreadInputs(spirv);
+        private static SpirvReflection MergeReflections(SpirvReflection a, SpirvReflection b) => SpirvReflection.Merge(a, b);
+        private static byte[] Key(string identity, string text, SlangStage stage, string name) => SpirvCache.Key(identity, text, stage, name);
+        private static SpirvCache Cache(string path, long limit, string identity) => new(path, limit, identity);
+
+        // The test's folder written plainly, so an answer holds no machine's path.
+        private string Plain(string text) => text.Replace(_root, "<root>", StringComparison.Ordinal);
+
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenSerenityParity", Guid.NewGuid().ToString("N"));
         private readonly ITestOutputHelper _output;
 
@@ -46,12 +61,6 @@ namespace EmuSen.WiseMan.Serenity
             catch (IndexOutOfRangeException) { return "IndexOutOfRangeException"; }
             catch (UnauthorizedAccessException) { return "UnauthorizedAccessException"; }
             catch (Exception e) { return $"{e.GetType().Name}: {e.Message}"; }
-        }
-
-        [Fact]
-        public void The_switch_is_what_the_variable_says()
-        {
-            Assert.Equal(Environment.GetEnvironmentVariable(SerenityNative.Variable) != "0", SerenityNative.Active);
         }
 
         [Fact]
@@ -186,7 +195,7 @@ namespace EmuSen.WiseMan.Serenity
         public void A_preset_is_read_the_same_through_every_spacing_quoting_reference_and_mistake()
         {
             var random = new Random(42);
-            var different = new List<string>();
+            var golden = new ParityGolden("SerenityParity.Presets");
             string[] endings = { "\n", "\r\n", "\r" };
             int read = 0, refused = 0;
             for (int run = 0; run < 2500; run++)
@@ -214,34 +223,29 @@ namespace EmuSen.WiseMan.Serenity
                     foreach (string where in new[] { folder, Path.Combine(folder, "sub") }) File.WriteAllBytes(Path.Combine(where, $"p{file}.slangp"), text);
                 }
                 string path = random.Next(8) switch { 0 => Path.Combine(folder, "sub", "..", "p0.slangp"), 1 => Path.Combine(folder, "missing.slangp"), 2 => folder, _ => Path.Combine(folder, "p0.slangp") };
-                string managed = Outcome(() => Dump(SlangPreset.Managed.Load(path))), native = Outcome(() => Dump(SlangPreset.LoadNative(path)));
-                if (managed != native) different.Add($"run {run} {path}:\n{managed}\n--\n{native}");
-                if (managed.Contains("Exception")) refused++; else read++;
-                if (!managed.Contains("Exception"))
-                {
-                    string managedRead = Outcome(() => Dump(SlangParameters.Managed.Merge(SlangPreset.Managed.Load(path).Passes.Select(p => SlangSource.Managed.Load(p.ShaderPath)), SlangPreset.Managed.Load(path).Parameters)));
-                    string nativeRead = Outcome(() => Dump(SlangParameters.MergeNative(SlangPreset.LoadNative(path).Passes.Select(p => SlangSource.LoadNative(p.ShaderPath)), SlangPreset.LoadNative(path).Parameters)));
-                    if (managedRead != nativeRead) different.Add($"run {run} {path} parameters:\n{managedRead}\n--\n{nativeRead}");
-                }
+                string answer = Plain(Outcome(() => Dump(LoadPreset(path))));
+                golden.AddChunked("preset", $"run {run}: {answer}", 64);
+                if (answer.Contains("Exception")) refused++; else read++;
+                if (!answer.Contains("Exception"))
+                    golden.AddChunked("parameters", $"run {run}: " + Plain(Outcome(() => Dump(Merge(LoadPreset(path).Passes.Select(p => LoadSource(p.ShaderPath).Parameters).ToList(), LoadPreset(path).Parameters)))), 64);
             }
-            _output.WriteLine($"{read} presets read and {refused} refused, alike");
+            _output.WriteLine($"{read} presets read and {refused} refused");
             Assert.True(read > 300 && refused > 300, $"the corpus is lopsided: {read} read, {refused} refused");
-            AssertNone(different, "presets");
             foreach (string path in new[] { "", "x\0y", " ", "relative/missing.slangp" })
-                Assert.Equal(Outcome(() => Dump(SlangPreset.Managed.Load(path))), Outcome(() => Dump(SlangPreset.LoadNative(path))));
+                golden.Add($"path [{path}]", Outcome(() => Dump(LoadPreset(path))));
 
             // The rules a random preset seldom asks all at once, asked in one: a scale that is no number does not fall back to the pass's, a count's fraction is cut off, and words are taken in any case.
             string rules = Path.Combine(_root, "rules.slangp");
             File.WriteAllText(rules, string.Join("\n", "shaders = 2", "shader0 = shader.slang", "shader1 = shader.slang", "scale_x0 = x", "scale0 = 3", "scale_y0 = 2.5", "frame_count_mod0 = 2.5",
                 "frame_count_mod1 = 3.5", "wrap_mode0 = REPEAT", "wrap_mode1 = Mirrored_Repeat", "filter_linear0 = TRUE", "float_framebuffer1 = True", "scale_type0 = ABSOLUTE", "scale_type_x1 = Source",
                 "textures = \"LUT; Mask\"", "LUT = lut.png", "LUT_linear = TRUE", "LUT_wrap_mode = Clamp_To_Edge", "Mask = sub/mask.png", "Mask_mipmap = 1", "GAIN = 1.5", "odd = 2\u00A0# kept whole, so no number"));
-            SlangPreset ruled = SlangPreset.Managed.Load(rules);
+            SlangPreset ruled = LoadPreset(rules);
             Assert.Equal((1f, 2.5f, 2, 3), (ruled.Passes[0].ScaleX, ruled.Passes[0].ScaleY, ruled.Passes[0].FrameCountMod, ruled.Passes[1].FrameCountMod));
             Assert.Equal((SlangWrap.Repeat, SlangWrap.MirroredRepeat, true, true), (ruled.Passes[0].Wrap, ruled.Passes[1].Wrap, ruled.Passes[0].FilterLinear, ruled.Passes[1].FloatFramebuffer));
             Assert.Equal((SlangScaleType.Absolute, SlangScaleType.Source, SlangScaleType.Viewport), (ruled.Passes[0].ScaleTypeX, ruled.Passes[1].ScaleTypeX, ruled.Passes[1].ScaleTypeY));
             Assert.Equal((true, SlangWrap.ClampToEdge, true), (ruled.Textures[0].Linear, ruled.Textures[0].Wrap, ruled.Textures[1].Mipmap));
             Assert.Equal(new[] { "GAIN" }, ruled.Parameters.Keys);
-            Assert.Equal(Dump(ruled), Dump(SlangPreset.LoadNative(rules)));
+            golden.Add("rules", Plain(Dump(ruled)));
 
             // A chain of references sixteen deep is read and one of seventeen is taken to be a loop; of includes, thirty-two and thirty-three.
             string deep = Path.Combine(_root, "deep");
@@ -251,15 +255,15 @@ namespace EmuSen.WiseMan.Serenity
             for (int n = 0; n <= 33; n++) File.WriteAllText(Path.Combine(deep, $"i{n}.inc"), n == 33 ? "#pragma stage vertex\n" : $"#include \"i{n + 1}.inc\"\n");
             foreach ((string file, bool reads) in new[] { ("r1.slangp", true), ("r0.slangp", false) })
             {
-                string managed = Outcome(() => Dump(SlangPreset.Managed.Load(Path.Combine(deep, file))));
-                Assert.Equal(reads, !managed.Contains("taken to be a loop"));
-                Assert.Equal(managed, Outcome(() => Dump(SlangPreset.LoadNative(Path.Combine(deep, file)))));
+                string answer = Plain(Outcome(() => Dump(LoadPreset(Path.Combine(deep, file)))));
+                Assert.Equal(reads, !answer.Contains("taken to be a loop"));
+                golden.Add($"deep {file}", answer);
             }
             foreach ((string file, bool reads) in new[] { ("i1.inc", true), ("i0.inc", false) })
             {
-                string managed = Outcome(() => Dump(SlangSource.Managed.Load(Path.Combine(deep, file))));
-                Assert.Equal(reads, !managed.Contains("taken to be a loop"));
-                Assert.Equal(managed, Outcome(() => Dump(SlangSource.LoadNative(Path.Combine(deep, file)))));
+                string answer = Plain(Outcome(() => Dump(LoadSource(Path.Combine(deep, file)))));
+                Assert.Equal(reads, !answer.Contains("taken to be a loop"));
+                golden.Add($"deep {file}", answer);
             }
 
             // A file that is there and may not be read, as a preset and as a shader's source.
@@ -268,12 +272,11 @@ namespace EmuSen.WiseMan.Serenity
                 string closed = Path.Combine(_root, "closed.slangp");
                 File.WriteAllText(closed, "shaders = 1\nshader0 = shader.slang\n");
                 File.SetUnixFileMode(closed, UnixFileMode.None);
-                Assert.Equal("UnauthorizedAccessException", Outcome(() => Dump(SlangPreset.Managed.Load(closed))));
-                Assert.Equal("UnauthorizedAccessException", Outcome(() => Dump(SlangPreset.LoadNative(closed))));
-                Assert.Equal("UnauthorizedAccessException", Outcome(() => Dump(SlangSource.Managed.Load(closed))));
-                Assert.Equal("UnauthorizedAccessException", Outcome(() => Dump(SlangSource.LoadNative(closed))));
+                Assert.Equal("UnauthorizedAccessException", Outcome(() => Dump(LoadPreset(closed))));
+                Assert.Equal("UnauthorizedAccessException", Outcome(() => Dump(LoadSource(closed))));
                 File.SetUnixFileMode(closed, UnixFileMode.UserRead | UnixFileMode.UserWrite);
             }
+            golden.Check((2500 + 63) / 64 + 1 + 4 + 1 + 4);
         }
 
         private static string SourceLine(Random random, int depth)
@@ -314,7 +317,7 @@ namespace EmuSen.WiseMan.Serenity
         public void A_source_is_expanded_and_split_the_same_through_every_include_and_pragma()
         {
             var random = new Random(43);
-            var different = new List<string>();
+            var golden = new ParityGolden("SerenityParity.Sources");
             string[] endings = { "\n", "\r\n", "\r" };
             int read = 0, refused = 0;
             for (int run = 0; run < 2500; run++)
@@ -336,37 +339,35 @@ namespace EmuSen.WiseMan.Serenity
                         if (random.Next(5) != 0) Write($"inc{depth}_{n}.inc", depth);
                 if (random.Next(30) == 0) File.WriteAllText(Path.Combine(folder, "inc1_0.inc"), "#include \"inc1_0.inc\"\n");
                 string path = random.Next(10) switch { 0 => Path.Combine(folder, "missing.slang"), 1 => folder, _ => Path.Combine(folder, "top.slang") };
-                string managed = Outcome(() => Dump(SlangSource.Managed.Load(path))), native = Outcome(() => Dump(SlangSource.LoadNative(path)));
-                if (managed != native) different.Add($"run {run} {path}:\n{managed}\n--\n{native}");
-                if (managed.Contains("Exception")) refused++; else read++;
+                string answer = Plain(Outcome(() => Dump(LoadSource(path))));
+                golden.AddChunked("source", $"run {run}: {answer}", 64);
+                if (answer.Contains("Exception")) refused++; else read++;
             }
-            _output.WriteLine($"{read} sources read and {refused} refused, alike");
+            _output.WriteLine($"{read} sources read and {refused} refused");
             Assert.True(read > 300 && refused > 300, $"the corpus is lopsided: {read} read, {refused} refused");
-            AssertNone(different, "sources");
+            golden.Check((2500 + 63) / 64);
         }
 
         [Fact]
-        public void Parameters_merge_the_same_and_keep_what_the_csharp_objects_carry()
+        public void Parameters_merge_as_they_did_and_keep_what_the_objects_carry()
         {
             var random = new Random(44);
-            var different = new List<string>();
+            var golden = new ParityGolden("SerenityParity.Merges");
             float[] numbers = { 0, 1, -1, 0.5f, float.NaN, float.PositiveInfinity, float.NegativeInfinity, -0f, float.Epsilon, float.MaxValue };
             string folder = Path.Combine(_root, "merge");
             Directory.CreateDirectory(folder);
             File.WriteAllText(Path.Combine(folder, "plain.slang"), "#pragma stage vertex\n#pragma parameter A \"a\" 1 0 2 0.5\n#pragma parameter B \"b\" 0 0 0\n");
-            SlangSource plain = SlangSource.Managed.Load(Path.Combine(folder, "plain.slang"));
+            SlangSource plain = LoadSource(Path.Combine(folder, "plain.slang"));
             for (int run = 0; run < 3000; run++)
             {
                 var sources = Enumerable.Range(0, random.Next(0, 5)).Select(_ => (IReadOnlyList<SlangParameter>)Enumerable.Range(0, random.Next(0, 6)).Select(_ =>
                     new SlangParameter($"P{random.Next(7)}", new[] { "Label", "", "\u65E5\u672C \"q\"", "tab\there" }[random.Next(4)], numbers[random.Next(numbers.Length)], numbers[random.Next(numbers.Length)],
                         numbers[random.Next(numbers.Length)], numbers[random.Next(numbers.Length)]) { Choices = random.Next(4) == 0 ? new[] { "Off", "On" } : null }).ToList()).ToList();
                 var overrides = Enumerable.Range(0, random.Next(0, 5)).Select(_ => random.Next(9)).Distinct().ToDictionary(n => $"P{n}", _ => numbers[random.Next(numbers.Length)]);
-                string managed = Dump(SlangParameters.Managed.Merge(sources, overrides));
-                string native = Dump(SlangParameters.MergeNativeLists(sources, overrides));
-                if (managed != native) different.Add($"run {run}:\n{managed}\n--\n{native}");
+                golden.AddChunked("merge", $"run {run}: {Dump(Merge(sources, overrides))}", 64);
             }
-            AssertNone(different, "merges");
-            Assert.Equal(Dump(SlangParameters.Managed.Merge(new[] { plain, plain }, new Dictionary<string, float> { ["B"] = 3 })), Dump(SlangParameters.MergeNative(new[] { plain, plain }, new Dictionary<string, float> { ["B"] = 3 })));
+            golden.Add("plain twice", Dump(Merge(new[] { plain.Parameters, plain.Parameters }, new Dictionary<string, float> { ["B"] = 3 })));
+            golden.Check((3000 + 63) / 64 + 1);
         }
 
         private const string Head = "#version 450\nlayout(std140, set = 0, binding = 0) uniform UBO { mat4 MVP; vec4 OutputSize; float GAIN; } global;\nlayout(push_constant) uniform Push { vec4 SourceSize; uint FrameCount; mat3 Twist; float Table[4]; } params;\n";
@@ -395,21 +396,20 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         [Fact]
-        public void Each_stage_compiles_to_the_same_bytes_or_fails_with_the_same_words()
+        public void Each_stage_compiles_to_the_bytes_or_fails_with_the_words_it_did()
         {
-            var different = new List<string>();
-            int compiled = 0;
+            var golden = new ParityGolden("SerenityParity.Stages");
+            int compiled = 0, stages = 0;
             foreach ((string text, SlangStage stage, string name) in Stages())
             {
-                byte[]? managedBytes = null, nativeBytes = null;
-                string managed = Outcome(() => Convert.ToHexString(managedBytes = SlangCompiler.Managed.Compile(text, stage, name)));
-                string native = Outcome(() => Convert.ToHexString(nativeBytes = SlangCompiler.CompileNative(text, stage, name)));
-                if (managed != native) different.Add($"{name} {stage}:\n{managed[..Math.Min(300, managed.Length)]}\n--\n{native[..Math.Min(300, native.Length)]}");
-                if (managedBytes is not null) compiled++;
+                byte[]? bytes = null;
+                string answer = Outcome(() => Convert.ToHexString(SHA256.HashData(bytes = Compile(text, stage, name))));
+                golden.Add($"{stages++} {name} {stage}", bytes is null ? answer : $"{bytes.Length} bytes, {answer}");
+                if (bytes is not null) compiled++;
             }
             Assert.True(compiled >= 16, $"only {compiled} stages compiled");
-            AssertNone(different, "stages");
-            Assert.Contains("SlangCompileException: broken \u00E9.slang (Fragment) does not compile:\nbroken \u00E9.slang:", Outcome(() => Convert.ToHexString(SlangCompiler.CompileNative(Stages().ElementAt(4).Text, SlangStage.Fragment, "broken \u00E9.slang"))));
+            golden.Check(stages);
+            Assert.Contains("SlangCompileException: broken \u00E9.slang (Fragment) does not compile:\nbroken \u00E9.slang:", Outcome(() => Convert.ToHexString(Compile(Stages().ElementAt(4).Text, SlangStage.Fragment, "broken \u00E9.slang"))));
         }
 
         private static string Dump(SpirvReflection reflection)
@@ -430,11 +430,11 @@ namespace EmuSen.WiseMan.Serenity
         }
 
         [Fact]
-        public void A_module_is_reflected_pruned_and_merged_the_same_and_one_that_is_not_well_formed_fails_the_same()
+        public void A_module_is_reflected_pruned_and_merged_as_it_was_and_one_that_is_not_well_formed_fails_as_it_did()
         {
             var random = new Random(45);
-            var different = new List<string>();
-            var modules = Stages().Select(s => { try { return SlangCompiler.Managed.Compile(s.Text, s.Stage, s.Name); } catch (SlangCompileException) { return null; } }).Where(m => m is not null).Select(m => m!).ToList();
+            var golden = new ParityGolden("SerenityParity.Modules");
+            var modules = Stages().Select(s => { try { return Compile(s.Text, s.Stage, s.Name); } catch (SlangCompileException) { return null; } }).Where(m => m is not null).Select(m => m!).ToList();
             var cases = new List<byte[]>(modules)
             {
                 Array.Empty<byte>(), new byte[16], new byte[20], new byte[21], Module(), Module(new uint[] { 5 }), Module(new uint[] { 6, 1 }), Module(new uint[] { 71, 1 }), Module(new uint[] { 72, 1, 2 }),
@@ -469,24 +469,20 @@ namespace EmuSen.WiseMan.Serenity
             }
             foreach (byte[] spirv in cases)
             {
-                string managed = Outcome(() => Dump(SpirvReflection.Managed.Read(spirv))), native = Outcome(() => Dump(SpirvReflection.ReadNative(spirv)));
-                if (managed != native) different.Add($"read {spirv.Length} bytes:\n{managed}\n--\n{native}");
-                byte[]? keptManaged = null, keptNative = null;
-                managed = Outcome(() => Convert.ToHexString(keptManaged = SpirvReflection.Managed.WithoutUnreadInputs(spirv)));
-                native = Outcome(() => Convert.ToHexString(keptNative = SpirvReflection.WithoutUnreadInputsNative(spirv)));
-                if (managed != native) different.Add($"prune {spirv.Length} bytes: {managed[..Math.Min(120, managed.Length)]} and {native[..Math.Min(120, native.Length)]}");
-                if (keptManaged is not null && ReferenceEquals(keptManaged, spirv) != ReferenceEquals(keptNative, spirv)) different.Add($"prune {spirv.Length} bytes: one kept the caller's array and the other did not");
+                golden.AddChunked("read", $"{spirv.Length} bytes: " + Outcome(() => Dump(Read(spirv))), 64);
+                byte[]? kept = null;
+                string pruned = Outcome(() => Convert.ToHexString(SHA256.HashData(kept = Prune(spirv))));
+                golden.AddChunked("prune", $"{spirv.Length} bytes: {pruned} {(kept is null ? "" : ReferenceEquals(kept, spirv) ? "the caller's" : "its own")}", 64);
             }
-            var reflections = modules.Select(SpirvReflection.Managed.Read).ToList();
+            var reflections = modules.Select(Read).ToList();
             foreach (SpirvReflection a in reflections)
-                foreach (SpirvReflection b in reflections)
-                    if (Dump(SpirvReflection.Managed.Merge(a, b)) != Dump(SpirvReflection.MergeNative(a, b))) different.Add($"merge:\n{Dump(SpirvReflection.Managed.Merge(a, b))}\n--\n{Dump(SpirvReflection.MergeNative(a, b))}");
+                foreach (SpirvReflection b in reflections) golden.AddChunked("merge", Dump(MergeReflections(a, b)), 64);
             Assert.Contains(reflections, r => r.Uniforms is not null && r.PushConstants is not null && r.Samplers.Count == 2);
-            Assert.Contains(modules, m => !ReferenceEquals(SpirvReflection.Managed.WithoutUnreadInputs(m), m));
+            Assert.Contains(modules, m => !ReferenceEquals(Prune(m), m));
             Assert.Contains(reflections, a => reflections.Any(b => a.Uniforms is not null && b.Uniforms is not null && a.Uniforms.Binding != b.Uniforms.Binding && a.Uniforms.Size != b.Uniforms.Size));
-            AssertNone(different, "modules");
-            // A type that holds itself is the one module the C# does not return from; the library refuses it.
-            Assert.Equal("ArgumentException: Not SPIR-V: a type holds itself.", Outcome(() => Dump(SpirvReflection.ReadNative(Module(new uint[] { 23, 2, 2, 4 }, new uint[] { 30, 3, 2 }, new uint[] { 59, 3, 9, 2 })))));
+            golden.Check((cases.Count + 63) / 64 * 2 + (reflections.Count * reflections.Count + 63) / 64);
+            // A type that holds itself is the one module the C# did not return from; the library refuses it.
+            Assert.Equal("ArgumentException: Not SPIR-V: a type holds itself.", Outcome(() => Dump(Read(Module(new uint[] { 23, 2, 2, 4 }, new uint[] { 30, 3, 2 }, new uint[] { 59, 3, 9, 2 })))));
         }
 
         // Every row of a cache's file, read through a connection of its own once the cache has let go.
@@ -507,31 +503,32 @@ namespace EmuSen.WiseMan.Serenity
         private static string Shader(int n) => $"#version 450\nlayout(location = 0) out vec4 c;\nvoid main() {{ c = vec4({n}.0); }}\n";
 
         [Fact]
-        public void A_cache_keeps_serves_bounds_and_repairs_the_same_and_leaves_the_same_rows()
+        public void A_cache_keeps_serves_bounds_and_repairs_as_it_did_and_leaves_the_rows_it_did()
         {
             var random = new Random(46);
-            var different = new List<string>();
+            var golden = new ParityGolden("SerenityParity.Caches");
+            int steps = 0;
             for (int run = 0; run < 12; run++)
             {
-                string managedPath = Path.Combine(_root, $"managed{run}.db"), nativePath = Path.Combine(_root, $"native{run}.db");
-                int one = SlangCompiler.Managed.Compile(Shader(0), SlangStage.Fragment, "s.slang").Length;
+                string path = Path.Combine(_root, $"cache{run}.db");
+                int one = Compile(Shader(0), SlangStage.Fragment, "s.slang").Length;
                 long limit = random.Next(3) == 0 ? SpirvCache.DefaultLimit : one * random.Next(2, 6) + one / 2;
                 long now = 1000;
                 long touch = random.Next(2) == 0 ? 0 : 5;
-                SpirvCache managed = new(managedPath, limit, "one identity for both", native: false) { Clock = () => now, TouchAfter = touch }, native = new(nativePath, limit, "one identity for both", native: true) { Clock = () => now, TouchAfter = touch };
+                SpirvCache cache = Cache(path, limit, "one identity for both");
+                cache.Clock = () => now;
+                cache.TouchAfter = touch;
                 for (int step = 0; step < 40; step++)
                 {
                     string what;
                     switch (random.Next(10))
                     {
                         case 0:
-                            managed.Dispose(); native.Dispose();
-                            string rows = Rows(managedPath), nativeRows = Rows(nativePath);
-                            if (rows != nativeRows) different.Add($"run {run} step {step} rows:\n{rows}\n--\n{nativeRows}");
-                            // One row's bytes changed, or its digest, in both files alike.
-                            foreach (string path in new[] { managedPath, nativePath })
+                            cache.Dispose();
+                            golden.Add($"run {run} step {step} rows", Rows(path));
+                            // One row's bytes changed, or its digest.
+                            using (var raw = new SqliteConnection($"Data Source={path};Pooling=False"))
                             {
-                                using var raw = new SqliteConnection($"Data Source={path};Pooling=False");
                                 raw.Open();
                                 using SqliteCommand damage = raw.CreateCommand();
                                 damage.CommandText = step % 2 == 0
@@ -539,72 +536,66 @@ namespace EmuSen.WiseMan.Serenity
                                     : "UPDATE spirv SET spirv = zeroblob(length(spirv)) WHERE key = (SELECT max(key) FROM spirv)";
                                 damage.ExecuteNonQuery();
                             }
-                            managed = new(managedPath, limit, "one identity for both", native: false) { Clock = () => now, TouchAfter = touch };
-                            native = new(nativePath, limit, "one identity for both", native: true) { Clock = () => now, TouchAfter = touch };
+                            cache = Cache(path, limit, "one identity for both");
+                            cache.Clock = () => now;
+                            cache.TouchAfter = touch;
                             what = "reopened with a damaged row";
                             break;
                         case 1: now += random.Next(0, 20); what = $"clock {now}"; break;
                         case 2:
                             string broken = "#version 450\nvoid main() { nope }\n";
-                            string failedManaged = Outcome(() => Convert.ToHexString(managed.Compile(broken, SlangStage.Vertex, "b.slang"))), failedNative = Outcome(() => Convert.ToHexString(native.Compile(broken, SlangStage.Vertex, "b.slang")));
-                            what = "a stage that does not compile";
-                            if (failedManaged != failedNative) different.Add($"run {run} step {step} {what}: {failedManaged} and {failedNative}");
+                            what = "a stage that does not compile: " + Outcome(() => Convert.ToHexString(cache.Compile(broken, SlangStage.Vertex, "b.slang")));
                             break;
                         default:
                             int n = random.Next(0, 9);
                             SlangStage stage = random.Next(5) == 0 ? SlangStage.Vertex : SlangStage.Fragment;
                             string name = random.Next(6) == 0 ? "other \u00E9.slang" : "s.slang";
                             now++;
-                            byte[] a = managed.Compile(Shader(n), stage, name), b = native.Compile(Shader(n), stage, name);
-                            what = $"compile {n} {stage} {name}";
-                            if (!a.AsSpan().SequenceEqual(b)) different.Add($"run {run} step {step} {what}: the bytes differ");
+                            what = $"compile {n} {stage} {name} {Convert.ToHexString(SHA256.HashData(cache.Compile(Shader(n), stage, name)))[..16]}";
                             break;
                     }
-                    if (Counts(managed) != Counts(native)) different.Add($"run {run} step {step} {what}: {Counts(managed)} and {Counts(native)}");
+                    golden.AddChunked($"run {run}", $"step {step} {what}: {Counts(cache)}", 40);
+                    steps++;
                 }
-                managed.Dispose(); native.Dispose();
-                if (Rows(managedPath) != Rows(nativePath)) different.Add($"run {run} at the end:\n{Rows(managedPath)}\n--\n{Rows(nativePath)}");
-                Assert.Equal(Counts(managed), Counts(native));
+                cache.Dispose();
+                golden.Add($"run {run} at the end", Rows(path));
             }
-            AssertNone(different, "caches");
+            Assert.Equal(12 * 40, steps);
+            golden.Check(12 + 12);
         }
 
         [Fact]
         public void A_cache_one_wrote_is_read_by_the_other_and_a_file_neither_can_use_is_handled_alike()
         {
-            // The C# writes, the library reads every row as a hit and adds one, and the C# reads those back, on one file with one identity.
-            foreach (bool nativeFirst in new[] { false, true })
+            // One cache writes, another reads every row as a hit and adds one, and a third reads those back, on one file with one identity.
+            string path = Path.Combine(_root, "shared.db");
+            using (var first = Cache(path, SpirvCache.DefaultLimit, "shared"))
             {
-                string path = Path.Combine(_root, $"shared{nativeFirst}.db");
-                using (var first = new SpirvCache(path, SpirvCache.DefaultLimit, "shared", nativeFirst))
-                {
-                    for (int n = 0; n < 6; n++) first.Compile(Shader(n), SlangStage.Fragment, "s.slang");
-                    Assert.Equal((0, 6, 6), (first.Hits, first.Misses, first.Stored));
-                }
-                using (var second = new SpirvCache(path, SpirvCache.DefaultLimit, "shared", !nativeFirst))
-                {
-                    for (int n = 0; n < 7; n++) Assert.Equal(SlangCompiler.Managed.Compile(Shader(n), SlangStage.Fragment, "s.slang"), second.Compile(Shader(n), SlangStage.Fragment, "s.slang"));
-                    Assert.Equal((6, 1, 1, null), (second.Hits, second.Misses, second.Stored, second.Problem));
-                }
-                using var third = new SpirvCache(path, SpirvCache.DefaultLimit, "shared", nativeFirst);
+                for (int n = 0; n < 6; n++) first.Compile(Shader(n), SlangStage.Fragment, "s.slang");
+                Assert.Equal((0, 6, 6), (first.Hits, first.Misses, first.Stored));
+            }
+            using (var second = Cache(path, SpirvCache.DefaultLimit, "shared"))
+            {
+                for (int n = 0; n < 7; n++) Assert.Equal(Compile(Shader(n), SlangStage.Fragment, "s.slang"), second.Compile(Shader(n), SlangStage.Fragment, "s.slang"));
+                Assert.Equal((6, 1, 1, null), (second.Hits, second.Misses, second.Stored, second.Problem));
+            }
+            using (var third = Cache(path, SpirvCache.DefaultLimit, "shared"))
+            {
                 for (int n = 0; n < 7; n++) third.Compile(Shader(n), SlangStage.Fragment, "s.slang");
                 Assert.Equal((7, 0, 0), (third.Hits, third.Misses, third.Stored));
             }
 
-            // By default each names its own binding, so neither serves the other's rows; what else the two identities say is the same.
-            string managedIdentity = SlangCompiler.Managed.Identity, nativeIdentity = SerenityNative.Identity();
-            Assert.NotEqual(managedIdentity, nativeIdentity);
-            Regex binding = new("; binding [^;]+;");
-            Assert.Equal(binding.Replace(managedIdentity, "; binding X;"), binding.Replace(nativeIdentity, "; binding X;"));
-            Assert.DoesNotContain("unfound", nativeIdentity);
-            Assert.DoesNotContain("unread", nativeIdentity);
+            // The library's identity names the Shaderc file it found and its own binding.
+            string named = SerenityNative.Identity();
+            Assert.Contains("; binding emusen-serenity ", named);
+            Assert.DoesNotContain("unfound", named);
+            Assert.DoesNotContain("unread", named);
 
-            foreach (bool native in new[] { false, true })
             {
                 // Not a database: set aside, and a new one made.
-                string junk = Path.Combine(_root, $"junk{native}.db");
+                string junk = Path.Combine(_root, "junk.db");
                 File.WriteAllBytes(junk, Enumerable.Range(0, 8192).Select(i => (byte)(i * 31)).ToArray());
-                using (var cache = new SpirvCache(junk, SpirvCache.DefaultLimit, "x", native))
+                using (var cache = Cache(junk, SpirvCache.DefaultLimit, "x"))
                 {
                     Assert.True(cache.Working, cache.Problem);
                     Assert.True(File.Exists(junk + ".damaged"));
@@ -612,8 +603,8 @@ namespace EmuSen.WiseMan.Serenity
                     Assert.Equal(1, cache.Stored);
                 }
                 // Another schema version: emptied, not migrated.
-                string old = Path.Combine(_root, $"old{native}.db");
-                using (var cache = new SpirvCache(old, SpirvCache.DefaultLimit, "x", native)) cache.Compile(Shader(1), SlangStage.Fragment, "s.slang");
+                string old = Path.Combine(_root, "old.db");
+                using (var cache = Cache(old, SpirvCache.DefaultLimit, "x")) cache.Compile(Shader(1), SlangStage.Fragment, "s.slang");
                 using (var raw = new SqliteConnection($"Data Source={old};Pooling=False"))
                 {
                     raw.Open();
@@ -621,7 +612,7 @@ namespace EmuSen.WiseMan.Serenity
                     version.CommandText = "PRAGMA user_version = 7";
                     version.ExecuteNonQuery();
                 }
-                using (var cache = new SpirvCache(old, SpirvCache.DefaultLimit, "x", native))
+                using (var cache = Cache(old, SpirvCache.DefaultLimit, "x"))
                 {
                     cache.Compile(Shader(1), SlangStage.Fragment, "s.slang");
                     Assert.Equal((0, 1, 1), (cache.Hits, cache.Misses, cache.Stored));
@@ -634,28 +625,27 @@ namespace EmuSen.WiseMan.Serenity
                     text.CommandText = "PRAGMA ignore_check_constraints = 1; UPDATE spirv SET spirv = 'text', bytes = 4";
                     text.ExecuteNonQuery();
                 }
-                using (var cache = new SpirvCache(old, SpirvCache.DefaultLimit, "x", native))
+                using (var cache = Cache(old, SpirvCache.DefaultLimit, "x"))
                 {
-                    Assert.Equal(SlangCompiler.Managed.Compile(Shader(1), SlangStage.Fragment, "s.slang"), cache.Compile(Shader(1), SlangStage.Fragment, "s.slang"));
+                    Assert.Equal(Compile(Shader(1), SlangStage.Fragment, "s.slang"), cache.Compile(Shader(1), SlangStage.Fragment, "s.slang"));
                     Assert.Equal((false, 0, 0, 0), (cache.Working, cache.Hits, cache.Misses, cache.Stored));
                     Assert.StartsWith("spirv-cache.db: ", cache.Problem);
                 }
                 // A path that cannot hold a file, and one that is no path.
                 foreach (string bad in new[] { Path.Combine(junk, "under-a-file", "cache.db"), "" })
                 {
-                    using var cache = new SpirvCache(bad, SpirvCache.DefaultLimit, "x", native);
+                    using var cache = Cache(bad, SpirvCache.DefaultLimit, "x");
                     Assert.False(cache.Working);
                     Assert.StartsWith("spirv-cache.db: ", cache.Problem);
-                    Assert.Equal(SlangCompiler.Managed.Compile(Shader(2), SlangStage.Fragment, "s.slang"), cache.Compile(Shader(2), SlangStage.Fragment, "s.slang"));
+                    Assert.Equal(Compile(Shader(2), SlangStage.Fragment, "s.slang"), cache.Compile(Shader(2), SlangStage.Fragment, "s.slang"));
                 }
             }
             // A database another connection is writing: two stages are compiled around it, the third failure turns the cache off, and both say why in SQLite's words.
             var problems = new List<string?>();
-            foreach (bool native in new[] { false, true })
             {
-                string held = Path.Combine(_root, $"held{native}.db");
-                using (var fill = new SpirvCache(held, SpirvCache.DefaultLimit, "x", native)) fill.Compile(Shader(0), SlangStage.Fragment, "s.slang");
-                using var cache = new SpirvCache(held, SpirvCache.DefaultLimit, "x", native);
+                string held = Path.Combine(_root, "held.db");
+                using (var fill = Cache(held, SpirvCache.DefaultLimit, "x")) fill.Compile(Shader(0), SlangStage.Fragment, "s.slang");
+                using var cache = Cache(held, SpirvCache.DefaultLimit, "x");
                 using var writer = new SqliteConnection($"Data Source={held};Pooling=False");
                 writer.Open();
                 using (SqliteCommand hold = writer.CreateCommand())
@@ -673,62 +663,57 @@ namespace EmuSen.WiseMan.Serenity
                 problems.Add(cache.Problem);
             }
             Assert.Equal("spirv-cache.db: SQLite Error 5: 'database is locked'.", problems[0]);
-            Assert.Equal(problems[0], problems[1]);
 
-            using var emptyManaged = new SpirvCache("", SpirvCache.DefaultLimit, "x", native: false);
-            using var emptyNative = new SpirvCache("", SpirvCache.DefaultLimit, "x", native: true);
-            Assert.Equal(emptyManaged.Problem, emptyNative.Problem);
+            using var empty = Cache("", SpirvCache.DefaultLimit, "x");
+            Assert.False(empty.Working);
+            Assert.StartsWith("spirv-cache.db: ", empty.Problem);
         }
 
         [Fact]
-        public void A_key_is_the_same_hash_of_the_same_parts()
+        public void A_key_is_the_hash_of_its_parts_it_was()
         {
             var random = new Random(47);
+            var golden = new ParityGolden("SerenityParity.Keys");
             string[] parts = { "", "a", "shaderc x", "void main() {}", "\u65E5\u672C", "a\0b", "na\u00EFve.slang", new string('x', 5000), "\U0001F600" };
             for (int i = 0; i < 2000; i++)
             {
                 string identity = parts[random.Next(parts.Length)], text = parts[random.Next(parts.Length)], name = parts[random.Next(parts.Length)];
                 SlangStage stage = (SlangStage)random.Next(2);
-                Assert.Equal(Convert.ToHexString(SpirvCache.Managed.Key(identity, text, stage, name)), Convert.ToHexString(SpirvCache.KeyNative(identity, text, stage, name)));
+                golden.AddChunked("key", Convert.ToHexString(Key(identity, text, stage, name)), 64);
             }
+            golden.Check((2000 + 63) / 64);
         }
 
-        // Every preset of libretro's pack, when a run names where it is: read, split and compiled through both, which is P6 of EmuSen_RustPlatform.md §8.
+        // Every preset of libretro's pack, when a run names where it is: read, split, compiled and reflected through the library, or refused in words, which is P6 of EmuSen_RustPlatform.md §8.
         [Fact]
-        public void Every_preset_source_and_stage_of_the_pack_comes_out_the_same()
+        public void Every_preset_source_and_stage_of_the_pack_is_read_compiled_and_reflected()
         {
             string? pack = Environment.GetEnvironmentVariable(SlangPresetTests.PackVariable);
             if (string.IsNullOrEmpty(pack)) return;
-            var different = new List<string>();
             var sources = new HashSet<string>(StringComparer.Ordinal);
-            int presets = 0, stages = 0, failed = 0;
+            int presets = 0, stages = 0, failed = 0, refused = 0;
             foreach (string path in Directory.EnumerateFiles(pack, "*.slangp", SearchOption.AllDirectories).OrderBy(p => p, StringComparer.Ordinal))
             {
                 presets++;
-                string managed = Outcome(() => Dump(SlangPreset.Managed.Load(path))), native = Outcome(() => Dump(SlangPreset.LoadNative(path)));
-                if (managed != native) different.Add($"preset {path}:\n{managed}\n--\n{native}");
-                if (managed.Contains("Exception: ")) continue;
-                foreach (SlangPassSpec pass in SlangPreset.Managed.Load(path).Passes) sources.Add(pass.ShaderPath);
+                if (Outcome(() => Dump(LoadPreset(path))).Contains("Exception: ")) { refused++; continue; }
+                foreach (SlangPassSpec pass in LoadPreset(path).Passes) sources.Add(pass.ShaderPath);
             }
             foreach (string path in sources.OrderBy(p => p, StringComparer.Ordinal))
             {
-                string managed = Outcome(() => Dump(SlangSource.Managed.Load(path))), native = Outcome(() => Dump(SlangSource.LoadNative(path)));
-                if (managed != native) { different.Add($"source {path}"); continue; }
-                if (managed.Contains("Exception: ")) continue;
-                SlangSource source = SlangSource.Managed.Load(path);
+                if (Outcome(() => Dump(LoadSource(path))).Contains("Exception: ")) continue;
+                SlangSource source = LoadSource(path);
                 foreach ((string text, SlangStage stage) in new[] { (source.Vertex, SlangStage.Vertex), (source.Fragment, SlangStage.Fragment) })
                 {
                     stages++;
                     byte[]? spirv = null;
-                    string a = Outcome(() => Convert.ToHexString(spirv = SlangCompiler.Managed.Compile(text, stage, path))), b = Outcome(() => Convert.ToHexString(SlangCompiler.CompileNative(text, stage, path)));
-                    if (a != b) different.Add($"stage {path} {stage}");
-                    if (spirv is null) { failed++; continue; }
-                    if (Outcome(() => Dump(SpirvReflection.Managed.Read(spirv))) != Outcome(() => Dump(SpirvReflection.ReadNative(spirv)))) different.Add($"reflection {path} {stage}");
-                    if (!SpirvReflection.Managed.WithoutUnreadInputs(spirv).AsSpan().SequenceEqual(SpirvReflection.WithoutUnreadInputsNative(spirv))) different.Add($"pruning {path} {stage}");
+                    string compiled = Outcome(() => Convert.ToHexString(spirv = Compile(text, stage, path)));
+                    if (spirv is null) { Assert.StartsWith("SlangCompileException: ", compiled); failed++; continue; }
+                    Assert.DoesNotContain("Exception", Outcome(() => Dump(Read(spirv))));
+                    Assert.NotEmpty(Prune(spirv));
                 }
             }
-            _output.WriteLine($"{presets} presets, {sources.Count} sources, {stages} stages of which {failed} do not compile in either");
-            AssertNone(different, "of the pack's files");
+            _output.WriteLine($"{presets} presets of which {refused} refused, {sources.Count} sources, {stages} stages of which {failed} do not compile");
+            Assert.True(stages > failed);
         }
 
         [Fact]

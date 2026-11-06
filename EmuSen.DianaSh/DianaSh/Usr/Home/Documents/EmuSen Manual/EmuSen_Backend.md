@@ -10040,6 +10040,80 @@ by the lowest priority first: `store_queue.rs` and `ScraperTests`' resume after 
 passing. `OnlineCoverWindowTests` had read the window's deleted `_fetcher` by reflection, which the compiler could not
 see; it now reads the run's failover count.
 
+### 40.6 Serenity
+
+**What went** (2026-11-05). `EMUSEN_SERENITY_NATIVE`, Serenity's `PlatformSwitch`, `SerenityNative.Active`, `SwitchFor`
+and `Crosses`, and the C# half of every class that had one: the preset and source readers (`SlangPreset.Managed`,
+`SlangSource.Managed`), the parameters' merge, the compiler (`SlangCompiler.Managed`) with Silk.NET's Shaderc binding
+and `ShadercLibrary`, the SPIR-V reflection, the SPIR-V cache (`SpirvCache.Managed`), the Vulkan device
+(`SlangVulkan.Managed`, with `SlangBuffer` and `SlangImage`) and the chain (`SlangChain.Managed`, with its
+`ReadbackSlot`). Each class kept its public surface; the internal constructors that took `bool native` went.
+`SlangVulkan.IsNative` and `SlangChain.CanPresent`'s other answer went with them, and the C#-device refusals of
+`SlangLend`, `SlangRing`, `SlangShown` and `GameFrameControl`'s lend. The package `Silk.NET.Shaderc` became
+`Silk.NET.Shaderc.Native`: the program still ships Shaderc's library, and no C# binding of it is left. The cache's
+schema file moved to `Platform/serenity/src`, its one reader. CI's step "Test Serenity's slang half on its C#" is gone.
+
+**Two jobs moved into the library first,** both decided on 2026-11-05 by the tester.
+1. *The built-in filters' presets* are written by `emusen-serenity`'s `filters` module, the catalog with them, so that
+   any front end and DianaSh write the same preset (`EmuSen_Serenity.md` §3.13, interface 35). Tests first: the
+   goldens of every preset the C# wrote were recorded before a line of the Rust was written, and the Rust matched all
+   2,816 on its first run. `CrtFilter.cs` lost its 1,100 lines of GLSL writing; the CRT's physics that the render
+   tests derive their expected pictures from is now their fixture, `CrtReference`, the tests' own derivation and not a
+   second implementation in shipped code.
+2. *Shaderc is found by the library,* at its first compile: beside the program, then in its `runtimes/<rid>/native`
+   folder (a framework-dependent build's), then by the system's loader under its name, where `dladdr` names the file
+   for the identity's digest. `SerenityNative` lends SQLite alone and no longer reaches into the C# compiler for
+   Shaderc's handle. A host may still lend Shaderc first (`emusen_serenity_shaderc_lend`), as the broker's tests do.
+   `SlangShadercLoadTests` holds that the identity's digest is the shipped copy's, in a process started as Ubuntu's
+   runner too.
+
+**The library, attached at the first call.** A library that is absent, of another interface or without an export
+Serenity calls is refused in words, as a `DllNotFoundException`: `libemusen_platform.so is not in use for Serenity
+(<why>); Serenity's slang half has had no C# implementation since 2026-11-05.` A device asked for without the library
+is none, with the same words as its report, so a front end shows the picture unfiltered as it did when no device was
+there. A leftover `EMUSEN_SERENITY_NATIVE=0` is ignored with `RetiredSwitch`'s one line.
+
+**Text that cannot cross.** The C# took a path, a source, a name or an identity holding half a surrogate pair; such text
+now crosses with U+FFFD, .NET's replacing encoder, as §40.2 decided. A cache path beginning `file:`, which the C# cache
+opened as SQLite's URI, is now the library's, which opens it as a file's name. No program writes either.
+
+**How it is graded now.** `SerenityParityTests` and `SerenityChainParityTests` compared the halves side by side. On
+2026-11-05 their answers were recorded from the library into fourteen files,
+`EmuSen.WiseMan/Crystal/Goldens/SerenityParity.<case>.golden.gz` and `SerenityChainParity.<case>.golden.gz`, the C# was
+run against every one of them with a temporary side variable and matched all fourteen, and the library matched them
+twice more, once beside another test process. A sweep is held as digests of 64 answers; the test's folder is written as
+`<root>`; a picture is held as its length and the SHA-256 of its bytes.
+- *Pictures are a change detector on the RX 6800.* The chain's pictures were recorded on the RX 6800 (RADV NAVI21),
+  where the household's GPU tests run. Another card, or a driver that rounds otherwise, gives other bytes; a failing
+  picture golden there is read as a changed driver until shown to be a defect, and recorded again only after its
+  differences are read.
+- *Kept live, since the oracle is .NET:* white space and word characters, number parsing, and the format a pass's
+  pragma names, held to .NET's enumeration parse over the binding's names (`DotNetFormat`, the C#'s four lines, moved
+  into the test).
+- *Library-only by nature:* the allocation a frame costs (the C# chain's figure was the comparison; the library's bounds
+  stay), the probe's marks, the validation layer's findings, the device that outlives a held picture, and the pack's
+  presets when a run names the pack, now read, compiled and drawn rather than compared.
+- `SerenitySwitchTests` is folded into `RetiredSwitchTests`, which holds Serenity's refusal. No other class was deleted.
+
+**Seeded faults, 2026-11-05.** Each was seeded, the named class run, and the source restored. The custom number
+pattern rounding half down at its last place: `FilterPresetParityTests`' presets. The CRT's chroma channel clamped to
+five subcarrier cycles rather than six: the same. The Shaderc search skipping the program's folders for the system's
+copy: `SlangShadercLoadTests`, whose identity then named another file. A filter a caller made sent without its console
+constants: `ScreenFilterChainTests`' case of a console's values that are no parameters. Serenity's refusal with the
+wrong date: `RetiredSwitchTests`. The cache's touch interval never reaching the library: `SerenityParityTests`' cache
+golden.
+
+**How it was tested** (measured on 2026-11-05 on the development desktop, Debug build, RX 6800): the change's blast
+radius with every class of Serenity's slang half and built-in filters, `FilterPresetParityTests`,
+`SerenityParityTests`, `SerenityChainParityTests`, `SlangShadercLoadTests`, the `ScreenFilter*` classes with the render
+tests, `ConsoleScreenRuleTests`, `ShaderNamesTests`, the shader settings and browse classes, `DevicePresenterTests`,
+`DevicePictureLendTests`, the frontend API's lend and ring classes, `SlangDefectTests`, `SpirvCacheTests`,
+`GalaxiaParityTests`, `OffDispatcherTests`, `TestCollectionsTests`, `FrontendReferenceTests`, `RetiredSwitchTests` and
+`LeafAssemblyTests`, 605 passed; `cargo test` of `emusen-serenity` and `emusen-platform`, 85 passing.
+
+**Sizes.** Against `7accea440`: shipped C# lost 4,047 lines and gained 480; Rust gained 3,335 (the filters and their
+interface, 3,221 of them); WiseMan gained 924 lines and lost 531, the goldens aside.
+
 ### 40.8 The frontend API: the C# implementation deleted
 
 *Decided 2026-11-01 by the tester, done 2026-11-04 (B10).* State 3 is reached for the frontend API. Its C#

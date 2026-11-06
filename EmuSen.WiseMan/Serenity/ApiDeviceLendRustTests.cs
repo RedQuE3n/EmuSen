@@ -66,7 +66,7 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Each_machine_of_the_rust_runtime_is_lent_and_no_path_between_frames_stalls_the_core()
         {
-            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null, native: true);
+            using SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             using (SlangLend? probe = SlangLend.TryCreate(device, out string? why))
                 if (probe is null) { _output.WriteLine($"not run: {why}"); return; }

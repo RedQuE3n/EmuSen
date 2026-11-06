@@ -46,6 +46,9 @@ namespace EmuSen.Serenity.Shaders
     // A screen filter: its passes, the consoles it suits (null for every one), whose work it rests on, and the uniforms a player may set - see EmuSen_Serenity.md §3.3, §3.7 and §3.9.
     public sealed record ScreenFilter(string Name, IReadOnlyList<FilterPass> Passes, IReadOnlyList<string>? Consoles, string Credit, IReadOnlyList<SlangParameter>? Parameters = null)
     {
+        // The catalog's name for one of the platform library's filters, which makes its passes and presets; null for a filter a caller made.
+        public string? Key { get; internal init; }
+
         // Passes made from the parameters' values, in place of Passes; made again when one of Structural changes.
         public Func<IReadOnlyDictionary<string, float>, IReadOnlyList<FilterPass>>? Build { get; init; }
 
@@ -89,19 +92,11 @@ namespace EmuSen.Serenity.Shaders
             : console is not null && ConsoleDefaults.TryGetValue(console, out var own) ? own
             : ConsoleDefaults.TryGetValue(AnyConsole, out var any) ? any : null;
 
-        // Every value the passes read on a console: each parameter's given value or its default there, then the console's constants.
-        public Dictionary<string, float> ValuesFor(string? console, IReadOnlyDictionary<string, float>? given)
-        {
-            var values = new Dictionary<string, float>(StringComparer.Ordinal);
-            foreach (SlangParameter parameter in Parameters ?? Array.Empty<SlangParameter>())
-                values[parameter.Id] = given is not null && given.TryGetValue(parameter.Id, out float value) ? value : DefaultFor(parameter, console);
-            if (DefaultsFor(console) is { } constants) foreach (var (id, value) in constants) values.TryAdd(id, value);
-            return values;
-        }
+        // Every value the passes read on a console: each parameter's given value or its default there, then the console's constants; the platform library's rule.
+        public Dictionary<string, float> ValuesFor(string? console, IReadOnlyDictionary<string, float>? given) => Native.FilterLibrary.ValuesFor(this, console, given);
 
         // Whether a pass made for this console and these values reads RawEncoding, so a frontend asks its core for that encoding.
-        public bool ReadsRaw(string? console, IReadOnlyDictionary<string, float>? given) =>
-            RawEncoding is not null && (Build?.Invoke(ValuesFor(console, given)) ?? Passes).Any(pass => pass.Glsl.Contains("uniform sampler2D raw;", StringComparison.Ordinal));
+        public bool ReadsRaw(string? console, IReadOnlyDictionary<string, float>? given) => RawEncoding is not null && Native.FilterLibrary.ReadsRaw(this, console, given);
 
         // What a parameter starts at on a console: the console's value where it has one, the parameter's own otherwise.
         public float DefaultFor(SlangParameter parameter, string? console) =>

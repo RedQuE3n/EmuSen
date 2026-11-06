@@ -89,121 +89,41 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             return shell;
         }
 
-        // Every command in the order `help` lists them, a host's in place of a default of its name - see §3.17.
-        private static List<IDianaShCommand> DefaultCommands(
-            IDebugTarget? target,
-            IEnumerable<IDianaShCommand>? extraCommands,
-            ICheatCodeCodec? cheatAutoDetectCodec,
-            ICheatCodeCodec? cheatExplicitCodec,
-            ICpuTraceSwitch? cpuTraceSwitch,
-            DianaShSessionManager? sessions,
-            Func<IReadOnlyCollection<string>>? supportedCheatSystems,
-            Func<DianaShInterpreter> selfAccessor,
-            CommandHistory history,
-            Func<DianaShInterpreter>? newSession = null)
+        // Every command's name in the order `help` has always listed them; summary follows a host's own - see EmuSen_DianaSh.md §3.17 and §13.5.
+        private static readonly string[] HelpOrder =
         {
-            // snapshot/diff share one store, constructed here with every other command's state.
-            var snapshotStore = new SnapshotStore();
+            "spaces", "mem", "write", "regs", "cophist", "sprites", "pal", "channels", "mute", "watch", "bp", "runto", "bt", "eval", "label",
+            "counters", "freeze", "profile", "cpus", "copflow", "cov", "setreg", "vectors", "addr", "dma", "framelog", "cheat", "memcard",
+            "search", "memfind", "snapshot", "diff", "dump", "load", "tile", "tilemap", "disasm", "trace", "callers", "writers", "readers",
+            "log", "echo", "sed", "grep", "wc", "sort", "uniq", "awk", "ls", "cd", "mv", "cp", "rm", "pwd", "cat", "head", "tail", "touch",
+            "find", "xxd", "nano", "tmux", "ps", "kill", "whoami", "who", "su", "useradd", "userdel", "passwd", "coretop", "vstop", "clear",
+            "true", "false", "test", "[", "history", "resume", "shutdown", "step",
+        };
 
-            var commands = new List<IDianaShCommand>
+        // The order `help` lists them in, a host's command in place of a default of its name moved to the end, summary last.
+        private static List<string> ListingOrder(IEnumerable<IDianaShCommand> extras)
+        {
+            var names = HelpOrder.ToList();
+            var trailing = new List<string> { "summary" };
+            foreach (IDianaShCommand extra in extras)
             {
-                new SpacesCommand(),
-                new MemCommand(),
-                new WriteCommand(),
-                new RegsCommand(),
-                new CopHistCommand(),
-                new SpritesCommand(),
-                new PalCommand(),
-                new ChannelsCommand(),
-                new MuteCommand(),
-                new WatchCommand(),
-                new BreakCommand(),
-                new RunToCommand(),
-                new BtCommand(),
-                new EvalCommand(),
-                new LabelCommand(),
-                new CountersCommand(),
-                new FreezeCommand(),
-                new ProfileCommand(),
-                new CpusCommand(),
-                new CopFlowCommand(),
-                new CovCommand(),
-                new SetRegCommand(),
-                new VectorsCommand(),
-                new AddrCommand(),
-                new DmaCommand(),
-                new FrameLogCommand(),
-                new CheatCommand(cheatAutoDetectCodec, cheatExplicitCodec, supportedCheatSystems),
-                new MemcardCommand(),
-                new SearchCommand(),
-                new MemFindCommand(),
-                new SnapshotCommand(snapshotStore),
-                new DiffCommand(snapshotStore),
-                new DumpCommand(),
-                new LoadCommand(),
-                new TileCommand(),
-                new TilemapCommand(),
-                new DisasmCommand(),
-                new TraceCommand(cpuTraceSwitch),
-                new CallersCommand(),
-                new WritersCommand(),
-                new ReadersCommand(),
-                new LogCommand(() => DebugLogging.MasterEnabled, on => DebugLogging.MasterEnabled = on),
-                new EchoCommand(),
-                new SedCommand(),
-                new GrepCommand(),
-                new WcCommand(),
-                new SortCommand(),
-                new UniqCommand(),
-                new AwkCommand(),
-                new LsCommand(),
-                new CdCommand(selfAccessor),
-                new MvCommand(),
-                new CpCommand(),
-                new RmCommand(),
-                new PwdCommand(),
-                new CatCommand(),
-                new HeadCommand(),
-                new TailCommand(),
-                new TouchCommand(),
-                new Commands.Unix.FindCommand(),
-                new XxdCommand(),
-                new NanoCommand(),
-                new TmuxCommand(sessions, sessions is null ? null : newSession ?? (() => CreateDefault(target, extraCommands, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, sessions, supportedCheatSystems))),
-                new PsCommand(sessions),
-                new KillCommand(sessions),
-                new WhoamiCommand(selfAccessor),
-                new WhoCommand(selfAccessor, sessions),
-                new SuCommand(selfAccessor),
-                new UseraddCommand(selfAccessor),
-                new UserdelCommand(selfAccessor, sessions),
-                new PasswdCommand(selfAccessor),
-                new CoretopCommand(),
-                new VstopCommand(),
-                new ClearCommand(),
-                new TrueCommand(),
-                new FalseCommand(),
-                new TestCommand(),
-                new BracketCommand(),
-                new HistoryCommand(history),
-                new ResumeCommand(),
-                new ShutdownCommand(),
-                new StepCommand(),
-            };
-
-            // Listed after a host's commands, where `help` has always put it - see EmuSen_DianaSh.md §13.5.
-            var trailing = new List<IDianaShCommand> { new SummaryCommand() };
-
-            if (extraCommands is not null)
-            {
-                foreach (IDianaShCommand extra in extraCommands)
-                {
-                    commands.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));
-                    trailing.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));
-                    commands.Add(extra);
-                }
+                names.RemoveAll(n => string.Equals(n, extra.Name, StringComparison.OrdinalIgnoreCase));
+                trailing.RemoveAll(n => string.Equals(n, extra.Name, StringComparison.OrdinalIgnoreCase));
+                names.Add(extra.Name);
             }
-            commands.AddRange(trailing);
+            names.AddRange(trailing);
+            return names;
+        }
+
+        // The commands with no Rust twin, which the host answers, and a host's own in place of one of their names - see EmuSen_Backend.md §40.7.
+        private static List<IDianaShCommand> HostCommands(IEnumerable<IDianaShCommand> extras)
+        {
+            var commands = new List<IDianaShCommand> { new MemcardCommand(), new VstopCommand() };
+            foreach (IDianaShCommand extra in extras)
+            {
+                commands.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));
+                commands.Add(extra);
+            }
             return commands;
         }
 
@@ -248,7 +168,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
             uint session = sessions is null ? 0 : shell.NewSession();
             List<IDianaShCommand> extras = extraCommands?.ToList() ?? new List<IDianaShCommand>();
             // The commands that reach the shell's own state are the Rust shell's builtins, so none here is given the manager or the facade.
-            IReadOnlyList<IDianaShCommand> Build() => DefaultCommands(target, extras, cheatAutoDetectCodec, cheatExplicitCodec, cpuTraceSwitch, null, supportedCheatSystems, Unreachable, new CommandHistory());
+            IReadOnlyList<IDianaShCommand> Build() => HostCommands(extras);
             IReadOnlyList<IDianaShCommand> prototype = Build();
             // The session's own provider over its target, which the Rust command modules call - see EmuSen_DianaSh.md §13.11.
             if (foreign is not null) shell.SetSessionService(session, foreign);
@@ -260,19 +180,15 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 CheatSystems = supportedCheatSystems,
                 CheatDatabaseFolder = () => global::EmuSen.Galaxia.Library.SettingFolders.Cheats(global::EmuSen.Galaxia.Models.AppSettings.Load()),
             }), owned: provider is null);
-            shell.AddHost(session, HostManifest(shell, session, prototype, extras), new HostCommandFactory(target, Build, prototype));
+            shell.AddHost(session, HostManifest(prototype, extras), new HostCommandFactory(target, Build, prototype));
             var facade = new DianaShInterpreter(shell, session);
             shell.Remember(session, facade);
             return facade;
         }
 
-        private static DianaShInterpreter Unreachable() => throw new InvalidOperationException("a command the Rust shell answers itself was run from C#");
-
-        // The host's manifest: each C# command but those the shell answers itself or by a module, a host's own always, and the listing's order - see EmuSen_DianaSh.md §13.7.
-        private static string HostManifest(NativeShell shell, uint session, IReadOnlyList<IDianaShCommand> commands, IEnumerable<IDianaShCommand> extras)
+        // The host's manifest: its commands, the aliases, and the listing's order - see EmuSen_DianaSh.md §13.7.
+        private static string HostManifest(IReadOnlyList<IDianaShCommand> commands, IEnumerable<IDianaShCommand> extras)
         {
-            var builtins = new HashSet<string>(shell.Commands(session).Where(c => c.Kind is "builtin" or "module" or "program").Select(c => c.Name), StringComparer.OrdinalIgnoreCase);
-            var own = new HashSet<string>(extras.Select(e => e.Name), StringComparer.OrdinalIgnoreCase);
             using var buffer = new System.IO.MemoryStream();
             using (var json = new Utf8JsonWriter(buffer))
             {
@@ -283,7 +199,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 json.WriteString("abi", "1.0");
                 json.WriteString("kind", "host");
                 json.WriteStartArray("commands");
-                foreach (IDianaShCommand c in commands.Where(c => own.Contains(c.Name) || !builtins.Contains(c.Name)))
+                foreach (IDianaShCommand c in commands)
                 {
                     json.WriteStartObject();
                     json.WriteString("name", c.Name);
@@ -297,13 +213,11 @@ namespace EmuSen.DianaSh.DianaSh.Bin
                 json.WriteString("s", "step");
                 json.WriteString("hexdump", "xxd");
                 json.WriteEndObject();
-                // A prefix is claimed with the command that makes its jobs, so a module's bp and watch list their own.
+                // The breakpoints' and watches' jobs are the trace module's, which lists and kills its own.
                 json.WriteStartArray("jobs");
-                foreach (string prefix in new[] { "bp", "watch" })
-                    if (!builtins.Contains(prefix) || own.Contains(prefix)) json.WriteStringValue(prefix);
                 json.WriteEndArray();
                 json.WriteStartArray("order");
-                foreach (IDianaShCommand c in commands) json.WriteStringValue(c.Name);
+                foreach (string name in ListingOrder(extras)) json.WriteStringValue(name);
                 json.WriteEndArray();
                 json.WriteStartArray("notes");
                 json.WriteStringValue("Addresses/values are hex; an optional 0x or $ prefix is fine either way.");

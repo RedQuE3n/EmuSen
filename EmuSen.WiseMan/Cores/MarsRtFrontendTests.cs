@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Library;
@@ -17,6 +16,14 @@ namespace EmuSen.WiseMan.Cores
     [Collection("MarsStatics")]
     public class MarsRtFrontendTests(Xunit.Abstractions.ITestOutputHelper output) : IDisposable
     {
+        // A line run by a shell over the target, as the console's prompt runs it, with its exit status.
+        private static (string Output, int Exit) Sh(IDebugTarget target, string line)
+        {
+            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(target);
+            string output = shell.Execute(line);
+            return (output, int.Parse(shell.LastExitStatus));
+        }
+
         private readonly List<string> _temporary = new();
 
         // Status.IE set with nothing unmasked, then a spin, as CoreFactoryCheatWiringTests' cartridge.
@@ -391,9 +398,9 @@ namespace EmuSen.WiseMan.Cores
             bundle.Core.RunFrame();
             target.RefreshProviders();
 
-            Assert.Contains("lui", new DisasmCommand().Execute(target, new[] { "disasm", "cpu", "A4000040", "4" }, null).Output);
-            Assert.Contains("mtc0", new DisasmCommand().Execute(target, new[] { "disasm", "cpu", "A4000040", "4" }, null).Output);
-            Assert.Contains("PC", new RegsCommand().Execute(target, new[] { "regs" }, null).Output);
+            Assert.Contains("lui", Sh(target, "disasm cpu A4000040 4").Output);
+            Assert.Contains("mtc0", Sh(target, "disasm cpu A4000040 4").Output);
+            Assert.Contains("PC", Sh(target, "regs").Output);
             Assert.Equal(0x34000001UL, target.CpuRegisters.Current.Single(r => r.Name == "t0").Value);
 
             IDebugMemorySpace rdram = target.GetMemorySpaces().Single(s => s.Name == "RDRAM");
@@ -404,17 +411,17 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(romSpace.IsWritable);
             Assert.Equal(0x80, romSpace.Read(0));
 
-            Assert.Contains("5A", new MemCommand().Execute(target, new[] { "mem", "RDRAM", "300", "4" }, null).Output);
+            Assert.Contains("5A", Sh(target, "mem RDRAM 300 4").Output);
             // Since Mars_Native.md §6.5 the processor halts at a breakpoint and steps; the RSP still cannot, as on Mars.
-            Assert.Contains("added", new BreakCommand().Execute(target, new[] { "bp", "add", "A400004C" }, null).Output);
+            Assert.Contains("added", Sh(target, "bp add A400004C").Output);
             bundle.Core.RunFrame();
             Assert.True(bundle.Core.IsHaltedAtBreakpoint);
             Assert.Equal(unchecked((int)0xA400_004C), bundle.Core.HaltedAddress);
             target.Breakpoints.RemoveBreakpoint(target.Breakpoints.GetBreakpoints()[0].Id);
-            Assert.Equal(0, new StepCommand().Execute(target, new[] { "step", "cpu" }, null).ExitCode);
+            Assert.Equal(0, Sh(target, "step cpu").Exit);
             bundle.Core.RunFrame();
             Assert.Equal(unchecked((int)0xA400_0050), bundle.Core.HaltedAddress);
-            Assert.Contains("cannot be halted", new StepCommand().Execute(target, new[] { "step", "rsp" }, null).Output);
+            Assert.Contains("cannot be halted", Sh(target, "step rsp").Output);
             Assert.Contains("MarsRT", target.GetSummaryText());
         }
 

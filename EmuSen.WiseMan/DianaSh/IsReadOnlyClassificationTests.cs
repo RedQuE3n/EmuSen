@@ -1,94 +1,59 @@
 using System.Collections.Generic;
-using EmuSen.DianaSh;
+using System.Linq;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Systems;
-using EmuSen.DianaSh.DianaSh.Var.Shell;
-using EmuSen.DianaSh.DianaSh.Dev;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.Unix;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // IDianaShCommand.IsReadOnly - every implementing class states its own
-    // classification (see that interface member's own comment). This isn't
-    // a compile-safety check (the interface already forces every class to
-    // define it) - it's a correctness check on the trickier calls: mixed
-    // read/write sub-verb commands (watch/bp/framelog/cheat/snapshot/
-    // search/history/log/trace) must report false even though they have a
-    // read-only sub-verb, since IsReadOnly can't vary per invocation (see
-    // that property's own doc comment).
+    // Each command's read-only flag as the shell lists it: commands with a read and a write sub-verb list false, since the flag cannot vary per line - see EmuSen_DianaSh.md §6.5.
     public class IsReadOnlyClassificationTests
     {
-        [Fact]
-        public void Plain_read_commands_report_read_only()
+        private static Dictionary<string, bool> Listed()
         {
-            Assert.True(new MemCommand().IsReadOnly);
-            Assert.True(new RegsCommand().IsReadOnly);
-            Assert.True(new SpritesCommand().IsReadOnly);
-            Assert.True(new PalCommand().IsReadOnly);
-            Assert.True(new ChannelsCommand().IsReadOnly);
-            Assert.True(new SpacesCommand().IsReadOnly);
-            Assert.True(new DisasmCommand().IsReadOnly);
-            Assert.True(new TileCommand().IsReadOnly);
-            Assert.True(new TilemapCommand().IsReadOnly);
-            Assert.True(new CallersCommand().IsReadOnly);
-            Assert.True(new WritersCommand().IsReadOnly);
-            Assert.True(new ReadersCommand().IsReadOnly);
-            Assert.True(new DumpCommand().IsReadOnly);
-            Assert.True(new ClearCommand().IsReadOnly);
-            Assert.True(new EchoCommand().IsReadOnly);
-            Assert.True(new TestCommand().IsReadOnly);
-            Assert.True(new BracketCommand().IsReadOnly);
+            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            return shell.NativeShellOf.Commands(shell.NativeSessionId).ToDictionary(c => c.Name, c => c.ReadOnly);
+        }
+
+        [Theory]
+        [InlineData("mem", "regs", "sprites", "pal", "channels", "spaces", "disasm", "tile", "tilemap", "callers", "writers", "readers", "dump", "clear", "echo", "test", "[")]
+        public void Plain_read_commands_report_read_only(params string[] names)
+        {
+            var listed = Listed();
+            Assert.All(names, n => Assert.True(listed[n], n));
         }
 
         [Fact]
         public void Diff_is_read_only_but_its_sibling_snapshot_command_is_not()
         {
-            var store = new SnapshotStore();
-            Assert.True(new DiffCommand(store).IsReadOnly);
-            Assert.False(new SnapshotCommand(store).IsReadOnly);
+            var listed = Listed();
+            Assert.True(listed["diff"]);
+            Assert.False(listed["snapshot"]);
         }
 
-        [Fact]
-        public void Plain_mutating_commands_report_not_read_only()
+        [Theory]
+        [InlineData("write", "load", "mute", "cd", "mv", "nano", "step", "resume", "shutdown")]
+        public void Plain_mutating_commands_report_not_read_only(params string[] names)
         {
-            Assert.False(new WriteCommand().IsReadOnly);
-            Assert.False(new LoadCommand().IsReadOnly);
-            Assert.False(new MuteCommand().IsReadOnly);
-            Assert.False(new CdCommand(() => DianaShInterpreter.CreateDefault(null)).IsReadOnly);
-            Assert.False(new MvCommand().IsReadOnly);
-            Assert.False(new NanoCommand().IsReadOnly);
-            Assert.False(new StepCommand().IsReadOnly);
-            Assert.False(new ResumeCommand().IsReadOnly);
-            Assert.False(new ShutdownCommand().IsReadOnly);
+            var listed = Listed();
+            Assert.All(names, n => Assert.False(listed[n], n));
             Assert.False(new CoreCommand(new Dictionary<string, CoreChoice>()).IsReadOnly);
             Assert.False(new StateCommand(_ => { }, _ => { }, () => "").IsReadOnly);
         }
 
-        [Fact]
-        public void Mixed_readwrite_subverb_commands_conservatively_report_not_read_only()
+        [Theory]
+        [InlineData("watch", "bp", "framelog", "cheat", "log", "trace", "search", "history")]
+        public void Mixed_readwrite_subverb_commands_conservatively_report_not_read_only(params string[] names)
         {
-            Assert.False(new WatchCommand().IsReadOnly);
-            Assert.False(new BreakCommand().IsReadOnly);
-            Assert.False(new FrameLogCommand().IsReadOnly);
-            Assert.False(new CheatCommand().IsReadOnly);
-            Assert.False(new LogCommand(() => false, _ => { }).IsReadOnly);
-            Assert.False(new TraceCommand().IsReadOnly);
-            Assert.False(new SearchCommand().IsReadOnly);
-            Assert.False(new HistoryCommand(new CommandHistory()).IsReadOnly);
+            var listed = Listed();
+            Assert.All(names, n => Assert.False(listed[n], n));
         }
 
+        // A live coretop blocks its thread until Ctrl+C, so it is queued like nano, never run on the fast path.
         [Fact]
         public void Coretop_is_not_fast_path_eligible_despite_never_writing_core_state()
         {
-            // Raw-terminal coretop blocks the calling thread indefinitely
-            // (its own Console.ReadKey loop until Ctrl+C) - fast-pathing
-            // it would let it hold the live terminal's interpreter lock
-            // open-ended, which could stall a queued mutating command's
-            // turn on the emulation thread. Queued (false) instead, same
-            // blocking-while-open category as `nano`.
+            Assert.False(Listed()["coretop"]);
             Assert.False(new CoretopCommand().IsReadOnly);
         }
     }

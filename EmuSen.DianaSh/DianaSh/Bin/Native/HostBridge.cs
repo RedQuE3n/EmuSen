@@ -7,7 +7,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using EmuSen.Crystal.Debugger;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.Unix;
 using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Native
@@ -87,42 +86,12 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             }
         }
 
+        // The host claims no job prefix, its manifest's jobs being empty since the trace module lists breakpoints and watches - see EmuSen_Backend.md §40.7.
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        public static int Jobs(void* ctx, DianashCall* call)
-        {
-            try
-            {
-                foreach (string line in PsCommand.JobLines(Factory(ctx).Target)) Write(call, line + "\n", err: false);
-                return 0;
-            }
-            catch (Exception ex)
-            {
-                Write(call, ex.Message, err: true);
-                return Fault;
-            }
-        }
+        public static int Jobs(void* ctx, DianashCall* call) => 0;
 
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
-        public static int Kill(void* ctx, DianashCall* call, byte* id, nuint idLength, DianashHostResult* result)
-        {
-            try
-            {
-                string text = Encoding.UTF8.GetString(id, (int)idLength);
-                DianaShResult outcome;
-                try
-                {
-                    if (!KillCommand.TryJob(Factory(ctx).Target, text, out outcome)) return Absent;
-                }
-                catch (Exception ex) { outcome = DianaShResult.Fail($"Error: {ex.Message}"); }
-                Finish(call, result, outcome);
-                return 0;
-            }
-            catch (Exception ex)
-            {
-                Write(call, ex.Message, err: true);
-                return Fault;
-            }
-        }
+        public static int Kill(void* ctx, DianashCall* call, byte* id, nuint idLength, DianashHostResult* result) => Absent;
 
         // A session's set, released by the shell when the session ends.
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]

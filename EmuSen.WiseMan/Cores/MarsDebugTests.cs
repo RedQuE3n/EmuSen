@@ -12,6 +12,14 @@ namespace EmuSen.WiseMan.Cores
     // The debugger's claims on an N64 engine, each driven by a few instructions at the boot entry; MarsRtDebugTests runs them on MarsRT - see Mars_Debug.md and Mars_Native.md §6.5.
     public abstract class MarsDebugClaims : IDisposable
     {
+        // A line run by a shell over the target, as the console's prompt runs it, with its exit status.
+        private static (string Output, int Exit) Sh(IDebugTarget target, string line)
+        {
+            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(target);
+            string output = shell.Execute(line);
+            return (output, int.Parse(shell.LastExitStatus));
+        }
+
         protected const int Entry = unchecked((int)0xA400_0040);
 
         // The RSP's register block, whose eighth word is its semaphore - see Mars_Rsp.md §2.
@@ -355,7 +363,7 @@ namespace EmuSen.WiseMan.Cores
         {
             MarsDebugRig core = Load(CountForever);
 
-            string listing = new DisasmCommand().Execute(core.Target, new[] { "disasm", "cpu", "A4000040", "6" }, null).Output;
+            string listing = Sh(core.Target, "disasm cpu A4000040 6").Output;
 
             Assert.Contains("A4000040:", listing);
             Assert.Contains("lui", listing);
@@ -421,7 +429,7 @@ namespace EmuSen.WiseMan.Cores
             IDebugTarget target = CoreFactory.Bundle(hotaru).DebugTarget;
             var stateCommand = new StateCommand(hotaru.SaveState, hotaru.LoadState, () => state);
 
-            Assert.Contains("lui", new DisasmCommand().Execute(target, new[] { "disasm", "cpu" }, null).Output);
+            Assert.Contains("lui", Sh(target, "disasm cpu").Output);
             Assert.Equal(0, stateCommand.Execute(target, new[] { "state", "save" }, null).ExitCode);
             hotaru.RunFrame();
             Assert.Equal(0, stateCommand.Execute(target, new[] { "state", "load" }, null).ExitCode);
@@ -434,7 +442,7 @@ namespace EmuSen.WiseMan.Cores
             session.RunFrame();
 
             Assert.IsType(rig.CoreType, session.Core);
-            Assert.Contains("lui", new DisasmCommand().Execute(session.DebugTarget, new[] { "disasm", "cpu", "A4000040" }, null).Output);
+            Assert.Contains("lui", Sh(session.DebugTarget, "disasm cpu A4000040").Output);
             (session.Core as IDisposable)?.Dispose();
         }
 

@@ -218,7 +218,7 @@ namespace EmuSen.Mistress.Views
         }
     }
 
-    // Replaces DianaSh's own ClearCommand, whose Console.Clear() does nothing against a widget - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
+    // Takes the place of the shell's clear builtin, whose terminal escape does nothing against a widget - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
     public class ClearConsoleWindowCommand : HostCommand
     {
         private readonly System.Action _clearOutput;

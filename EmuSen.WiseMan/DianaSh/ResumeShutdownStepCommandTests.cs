@@ -6,8 +6,8 @@ using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // ResumeCommand/ShutdownCommand/StepCommand (EmuSen/DianaSh/Commands/)
-    // and their alias normalization in DianaShInterpreter.Dispatch
+    // `resume`, `shutdown` and `step`, the trace module's and the shell's,
+    // and their aliases
     // ('continue'/'c' -> 'resume', 'quit' -> 'shutdown', 's' -> 'step').
     // Dispatched against a null target the same way DianaShDispatchTests
     // does for every other command - the "does this reach the command and

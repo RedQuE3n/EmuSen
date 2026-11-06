@@ -187,7 +187,17 @@ namespace EmuSen.Mistress
             using JsonDocument claims = JsonDocument.Parse(Op(CrystalSessionAbi.CheatClaims, new { code }));
             bool Claims(string key) => claims.RootElement.GetProperty(key) is { ValueKind: JsonValueKind.True };
             bool explicitClaims = Claims("explicit"), autoClaims = Claims("auto");
-            return explicitClaims != autoClaims ? explicitClaims : EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.CheatCommand.LooksLikeGameGenieFormat(code);
+            return explicitClaims != autoClaims ? explicitClaims : LooksLikeGameGenieFormat(code);
+        }
+
+        // Both SNES formats share one character set, so the guess is a separator after four hex digits - see EmuSen_Cheats.md.
+        public static bool LooksLikeGameGenieFormat(string code)
+        {
+            for (int i = 0; i < code.Length; i++)
+            {
+                if (!Uri.IsHexDigit(code[i])) return i == 4;
+            }
+            return false;
         }
 
         // A write as the list's words show it, whichever form it came in.

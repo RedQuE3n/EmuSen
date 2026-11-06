@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Systems;
@@ -12,6 +11,10 @@ namespace EmuSen.WiseMan.DianaSh
     // The SNES's system pack: its entry, and its two cheat formats as fullsnes describes them - see EmuSen_CoreAPI.md §20.
     public class SnesSystemPackTests
     {
+
+        // `cheat add`'s rule, as the cheat module and Mistress's list apply it: the codec that alone claims the code, else the Game Genie's look - see EmuSen_Cheats.md.
+        private static bool PrefersExplicit(ICheatCodeCodec explicitCodec, ICheatCodeCodec autoCodec, string code) =>
+            explicitCodec.CanDecode(code) != autoCodec.CanDecode(code) ? explicitCodec.CanDecode(code) : EmuSen.Mistress.CheatList.LooksLikeGameGenieFormat(code);
         // Worked by hand from fullsnes's digit table and bit order: one address bit, then the value byte, each in isolation.
         [Theory]
         [InlineData("DDDD-DDDD", 0x000000, 0x00)]
@@ -86,8 +89,8 @@ namespace EmuSen.WiseMan.DianaSh
         public void The_cheat_command_routes_a_dashed_code_to_the_game_genie_and_a_bare_one_to_the_action_replay()
         {
             var (par, gg) = (SnesSystem.ProActionReplay(), SnesSystem.GameGenie());
-            Assert.True(CheatCommand.PrefersExplicitCodec(gg, par, "C2B5-ED0D"));
-            Assert.False(CheatCommand.PrefersExplicitCodec(gg, par, "7E0DBE09"));
+            Assert.True(PrefersExplicit(gg, par, "C2B5-ED0D"));
+            Assert.False(PrefersExplicit(gg, par, "7E0DBE09"));
             Assert.Throws<FormatException>(() => SnesSystem.GameGenie().Decode("12345"));
         }
 

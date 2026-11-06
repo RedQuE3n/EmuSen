@@ -151,7 +151,7 @@ namespace EmuSen.Shell.Views
         public void AppendLine(string text) => _console.AppendLine(text);
     }
 
-    // Replaces ClearCommand's Console.Clear(), which does nothing to a widget.
+    // Takes the place of the shell's clear builtin, whose terminal escape does nothing to a widget.
     public class ClearShellWindowCommand : HostCommand
     {
         private readonly Action _clearOutput;

@@ -1,7 +1,6 @@
 using EmuSen.Cores;
 using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.WiseMan.Fixtures;
 
@@ -54,16 +53,10 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.DoesNotContain("Did you mean", output);
         }
 
-        private static IDebugTarget Target()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return SyntheticRom.TargetOf(core);
-        }
-
         [Fact]
         public void A_mistyped_cheat_subcommand_is_suggested()
         {
-            string output = new CheatCommand().Execute(Target(), new[] { "cheat", "lst" }, null).Output;
+            string output = Shell().Execute("cheat lst");
 
             Assert.Contains("Unknown 'cheat' subcommand 'lst'", output);
             Assert.Contains("Did you mean 'list'?", output);
@@ -72,7 +65,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void A_mistyped_watch_subcommand_is_suggested()
         {
-            string output = new WatchCommand().Execute(Target(), new[] { "watch", "sumary" }, null).Output;
+            string output = Shell().Execute("watch sumary");
 
             Assert.Contains("Did you mean 'summary'?", output);
         }
@@ -80,7 +73,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void A_mistyped_breakpoint_subcommand_is_suggested()
         {
-            string output = new BreakCommand().Execute(Target(), new[] { "bp", "lst" }, null).Output;
+            string output = Shell().Execute("bp lst");
 
             Assert.Contains("Did you mean 'list'?", output);
         }
@@ -88,7 +81,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void A_mistyped_framelog_subcommand_is_suggested()
         {
-            string output = new FrameLogCommand().Execute(Target(), new[] { "framelog", "shwo" }, null).Output;
+            string output = Shell().Execute("framelog shwo");
 
             Assert.Contains("Did you mean 'show'?", output);
         }
@@ -98,7 +91,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void The_try_list_still_names_every_subcommand()
         {
-            string output = new CheatCommand().Execute(Target(), new[] { "cheat", "zzzzzzzz" }, null).Output;
+            string output = Shell().Execute("cheat zzzzzzzz");
 
             foreach (string sub in new[] { "add", "poke", "gg", "rompatch", "list", "enable", "disable", "remove", "clear", "save", "load", "files" })
             {

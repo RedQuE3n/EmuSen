@@ -145,7 +145,6 @@ namespace EmuSen.WiseMan.DianaSh
                 string source = File.ReadAllText(path);
                 string type = Path.GetFileNameWithoutExtension(path);
                 List<string>? files = bySource.TryGetValue(type, out var f) ? f : null;
-                if (type == "TestCommand") files = new List<string> { "test", "bracket" };
                 foreach (string fragment in FailFragments(source))
                 {
                     bool printed = files is null ? all.Contains(fragment) : files.Any(n => outputs.GetValueOrDefault(n, "").Contains(fragment));

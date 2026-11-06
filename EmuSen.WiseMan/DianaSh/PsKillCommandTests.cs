@@ -9,7 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // PsCommand/KillCommand (EmuSen.DianaSh/Commands/) - the unified
+    // `ps` and `kill`, the shell's builtins - the unified
     // "list every breakpoint/watch/session as one table" / "remove any of
     // them by that same id" pair. `ps`'s ids ("bp<N>"/"watch<N>"/a session
     // name) are exactly what `kill` parses, so most of these tests round-

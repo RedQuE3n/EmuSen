@@ -7,7 +7,6 @@ use emusen_session_service::abi::{run, status};
 
 use super::args::Raw;
 use super::{Answer, cheats, refused};
-use crate::json::Json;
 use crate::runtime::Runtime;
 use crate::session::Refused;
 
@@ -40,24 +39,12 @@ pub fn run_control(rt: &Runtime, op: u32) -> Answer<i64> {
 
 /// `events_drain`'s peek: the requests not yet drained, as a session's table lists them.
 pub fn events_peek(rt: &Runtime, kinds: u32) -> Answer<(Vec<u8>, usize)> {
-    if kinds & !emusen_session_service::abi::event::RUN != 0 {
-        return Err(refused(status::NOT_SUPPORTED, format!("unknown event kinds 0x{kinds:X}")));
-    }
-    let requests = rt.no_game.requests.lock().unwrap_or_else(|p| p.into_inner());
-    let mut j = Json::new();
-    j.begin_array();
-    for op in &requests.0 {
-        j.begin_object().str("kind", "run").str("op", op).end_object();
-    }
-    j.end_array();
-    Ok((j.finish().into_bytes(), requests.0.len()))
+    rt.no_game.peek_runs(kinds)
 }
 
 /// The first `count` requests taken, once a buffer has held them all.
 pub fn events_take(rt: &Runtime, count: usize) {
-    let mut requests = rt.no_game.requests.lock().unwrap_or_else(|p| p.into_inner());
-    let n = count.min(requests.0.len());
-    requests.0.drain(..n);
+    rt.no_game.take_runs(count);
 }
 
 /// `cheat_op`: the ops that need no game, a game's refused as having no session.

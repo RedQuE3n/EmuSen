@@ -10190,7 +10190,12 @@ session 0 dropped (so its calls reached "no session is open"): both caught by `N
 `vstop` swapped in `help`'s order: `GoldenCorpusTests`' `help` and `man` files. The leftover line dated a day early:
 `RetiredSwitchTests`.
 
-**How it was tested** (measured on 2026-11-06 on the development desktop, Debug build): @TESTED
+**How it was tested** (measured on 2026-11-06 on the development desktop, Debug build): the change's blast radius, the
+DianaSh, Crystal, Mistress, Shell and Galaxia namespaces with every golden class, the Serenity parity classes,
+`WindowFitAuditTests`, `GalaxiaParityTests`, `OffDispatcherTests`, `TestCollectionsTests`, `FrontendReferenceTests` and
+`RetiredSwitchTests`, 4,451 passed and 21 skipped; `cargo test` of `emusen-crystal`, `emusen-dianash` and
+`emusen-platform`, 95 passing. The frontend API's ABI test first failed on the new flag, which had no Rust constant in
+its list and no line in `Platform/crystal/abi/v1/baseline.txt`; both were added, the baseline's line tagged `@1.12`.
 
 **Sizes.** Against `e3531e6a0`: shipped C# lost 7,801 lines and gained 120; Rust gained 160; WiseMan lost 938 lines and
 gained 292, the goldens aside.

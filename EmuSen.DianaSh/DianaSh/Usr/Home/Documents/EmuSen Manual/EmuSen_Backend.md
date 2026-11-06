@@ -10082,8 +10082,8 @@ opened as SQLite's URI, is now the library's, which opens it as a file's name. N
 `EmuSen.WiseMan/Crystal/Goldens/SerenityParity.<case>.golden.gz` and `SerenityChainParity.<case>.golden.gz`, the C# was
 run against every one of them with a temporary side variable and matched all fourteen, and the library matched them
 twice more, once beside another test process. A sweep is held as digests of 64 answers; the test's folder is written as
-`<root>` and the working folder, which a relative path is read against, as `<cwd>` (first recorded with the worktree's
-path in two answers, which failed the land from the main checkout; recorded again the next day and run from a second
+`<root>` and the working folder, which a relative path is read against, as `<cwd>` (first recorded with one
+checkout's path in two answers, which failed from another checkout; recorded again the next day and run from a second
 checkout path); a picture is held as its length and the SHA-256 of its bytes.
 - *Pictures are a change detector on the RX 6800.* The chain's pictures were recorded on the RX 6800 (RADV NAVI21),
   where the household's GPU tests run. Another card, or a driver that rounds otherwise, gives other bytes; a failing

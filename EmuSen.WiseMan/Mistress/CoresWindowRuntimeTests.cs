@@ -41,9 +41,9 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             Directory.CreateDirectory(Entry);
-            File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_proxy"), Path.Combine(Entry, "emusen-core-broker.so"));
-            File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_host"), Path.Combine(Entry, "emusen-libretro-host.so"));
-            File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_testcore"), CoreFile);
+            File.Copy(CoreSidecars.LibraryPath("emusen_libretro_proxy"), Path.Combine(Entry, "emusen-core-broker.so"));
+            File.Copy(CoreSidecars.LibraryPath("emusen_libretro_host"), Path.Combine(Entry, "emusen-libretro-host.so"));
+            File.Copy(CoreSidecars.LibraryPath("emusen_libretro_testcore"), CoreFile);
             File.WriteAllText(Path.Combine(Entry, "testcore_libretro.info"), "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nsystemid = \"\"\n");
             LibretroEntryFixture.Environment("EMUSEN_CORE_RUNNER", Path.Combine(AppContext.BaseDirectory, "emusen-core-runner"));
             CoresPane.ToolAvailable = () => true;
@@ -276,7 +276,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(engine is not null, runtime.Cores());
             Assert.Equal(engine, route.RootElement.GetProperty("engine").GetString());
             Assert.Equal((System.Text.Json.JsonValueKind.Null, System.Text.Json.JsonValueKind.Null), (route.RootElement.GetProperty("waiting_default").ValueKind, route.RootElement.GetProperty("default_held").ValueKind));
-            Assert.Equal(Sha256(CoreAdapterTests.LibraryPath("emusen_libretro_proxy")), Sha256(Path.Combine(Path.GetDirectoryName(pcee2)!, "emusen-core-broker.so")));
+            Assert.Equal(Sha256(CoreSidecars.LibraryPath("emusen_libretro_proxy")), Sha256(Path.Combine(Path.GetDirectoryName(pcee2)!, "emusen-core-broker.so")));
             Assert.Null(Mistress("CoreAwaitingApproval", runtime, game));
         }
 

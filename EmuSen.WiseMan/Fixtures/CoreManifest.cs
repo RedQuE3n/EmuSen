@@ -1,6 +1,5 @@
 using System.IO;
 using System.Linq;
-using EmuSen.Cores.Native;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -9,8 +8,8 @@ namespace EmuSen.WiseMan.Fixtures
     {
         // Every library a sidecar in dir names and that is there, in sha256sum's format.
         public static void Write(string dir) =>
-            File.WriteAllText(Path.Combine(dir, CoreTrust.ManifestName), string.Concat(Directory.EnumerateFiles(dir, "*" + CoreSidecar.Suffix).Order()
-                .Select(CoreSidecar.Read).Where(s => s is not null && File.Exists(s.LibraryPath))
-                .Select(s => $"{CoreSidecar.HashOf(s!.LibraryPath)}  {Path.GetFileName(s.LibraryPath)}\n")));
+            File.WriteAllText(Path.Combine(dir, CoreSidecars.ManifestName), string.Concat(Directory.EnumerateFiles(dir, "*" + CoreSidecars.Suffix).Order()
+                .Select(CoreSidecars.LibraryOf).Where(l => l is not null && File.Exists(l))
+                .Select(library => $"{CoreSidecars.HashOf(library!)}  {Path.GetFileName(library)}\n")));
     }
 }

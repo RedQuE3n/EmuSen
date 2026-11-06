@@ -5,6 +5,7 @@ using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.Systems;
 using EmuSen.Crystal.Systems.Snes;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.WiseMan.DianaSh
 {
@@ -101,13 +102,13 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Same(SnesSystem.Entry, pack.Entry);
             Assert.Null(SystemPacks.For("test"));
             Assert.False(pack.Entry.SelfDelimitingImages, "a SNES image does not record its own length, so C4 may not require a truncated one refused");
-            var row = CoreCatalog.ByAnyName("SNES")!;
+            var row = RuntimeCatalog.ByAnyName("SNES")!;
+            var facts = RuntimeCatalog.SystemOf("SNES")!;
             Assert.Equal(pack.Entry.CheatSystems, row.CheatSystems);
             Assert.Equal(pack.Entry.Extensions, row.Extensions);
-            Assert.Equal((pack.Entry.Console, pack.Entry.Manufacturer, pack.Entry.ReleaseYear, pack.Entry.CoverAspect), (row.ConsoleName, row.Manufacturer, row.ReleaseYear, row.CoverAspect));
-            byte[] headed = new byte[1024 + 512];
-            Assert.Equal(1024, row.OpenVgdbBytes!(headed).Length);
-            Assert.Equal(("snes", "Super Nintendo"), (CoreCatalog.ShelfByName(row.DisplayName)!.EsdeSystem, CoreCatalog.ShelfByName(row.DisplayName)!.EsdeFullName));
+            Assert.Equal((pack.Entry.Console, pack.Entry.Manufacturer, pack.Entry.ReleaseYear, pack.Entry.CoverAspect), (row.Console, facts.Manufacturer, facts.ReleaseYear, row.CoverAspect));
+            LibraryShelf shelf = RuntimeCatalog.Shelves.First(s => s.Core.Console == "SNES");
+            Assert.Equal(("snes", "Super Nintendo"), (shelf.EsdeSystem, shelf.EsdeFullName));
         }
 
         // fullsnes's names for the B bus, the APU's four ports by their mirrors, and an address it leaves unnamed - see EmuSen_CoreAPI.md §31.2.

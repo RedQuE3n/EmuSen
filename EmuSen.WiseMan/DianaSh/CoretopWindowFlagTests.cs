@@ -56,8 +56,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Minus_w_without_a_rom_loaded_reports_no_rom_before_checking_the_flag()
         {
-            var shell = DianaShInterpreter.CreateDefault(null,
-                new IDianaShCommand[] { new CoretopCommand(() => { }) });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new CoretopCommand(() => { }) });
 
             var result = shell.Submit("coretop -w");
 

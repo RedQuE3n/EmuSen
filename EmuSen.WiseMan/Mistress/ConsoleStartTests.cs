@@ -14,6 +14,7 @@ using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Input;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -32,13 +33,11 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(Path.Combine(_root, "Roms"));
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
             new AppSettings { BigPictureInterface = { MenuOpeningEffect = BigPictureInterface.OpeningNone }, RomDirectory = Path.Combine(_root, "Roms"), StateDirectory = Path.Combine(_root, "States"), LogDirectory = Path.Combine(_root, "Logs"), CheatDatabaseDirectory = Path.Combine(_root, "Cheats") }.Save();
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -110,10 +109,10 @@ namespace EmuSen.WiseMan.Mistress
                 Assert.Contains("Start PlayStation", Rows(Call(window, "StartConsoleRows")));
                 Assert.Contains(MainWindow.StartConsoleMenu, Rows(Call(window, "HomeRows")));
                 var button = window.GetControl<Button>("StartConsoleButton");
-                Field<AppSettings>(window, "_appSettings").SelectedCore = CoreCatalog.ShelvesInReleaseOrder.First(s => s.Core.Console == "PlayStation").Name;
+                Field<AppSettings>(window, "_appSettings").SelectedCore = RuntimeCatalog.Shelves.First(s => s.Core.Console == "PlayStation").Name;
                 Call(window, "UpdateStartConsoleButton");
                 Assert.Equal((true, (object?)"Start PlayStation"), (button.IsVisible, button.Content));
-                Field<AppSettings>(window, "_appSettings").SelectedCore = CoreCatalog.ShelvesInReleaseOrder.First(s => s.Core.Console == "SNES").Name;
+                Field<AppSettings>(window, "_appSettings").SelectedCore = RuntimeCatalog.Shelves.First(s => s.Core.Console == "SNES").Name;
                 Call(window, "UpdateStartConsoleButton");
                 Assert.False(button.IsVisible);
             }

@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void EnsureInitialWorkingDirectory_creates_the_real_skeleton_directories()
         {
-            DianaShInterpreter.CreateDefault(null); // triggers EnsureInitialWorkingDirectory
+            DianaShInterpreter.CreateWithoutSession(); // triggers EnsureInitialWorkingDirectory
 
             string root = DianaShSandbox.RootDirectory;
             Assert.True(Directory.Exists(DianaShSandbox.LogsDirectory));
@@ -43,7 +43,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cd_with_no_argument_goes_to_the_one_home()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             shell.Submit("cd /tmp"); // move away from home first
 
             shell.Submit("cd");
@@ -55,7 +55,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cd_with_no_argument_still_goes_home_after_su()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = $"kid_{Guid.NewGuid():N}";
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Useradd_creates_no_directory_at_all()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = $"kid_{Guid.NewGuid():N}";
 
             shell.Submit($"useradd {name}");
@@ -81,7 +81,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Useradd_still_registers_the_account()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = $"kid_{Guid.NewGuid():N}";
 
             shell.Submit($"useradd {name}");
@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Leading_slash_resolves_against_this_shells_own_root_not_the_real_os_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string nested = DianaShSandbox.SavesDirectory;
             shell.Submit($"cd \"{nested}\""); // start somewhere nested, not the root
 
@@ -105,7 +105,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void An_already_real_absolute_path_inside_root_is_honored_as_is()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string real = DianaShSandbox.SavesDirectory;
 
             shell.Submit($"cd \"{real}\"");
@@ -117,7 +117,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Ls_of_root_shows_the_users_data_and_none_of_the_install()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             string listing = shell.Submit("ls /").Output;
 
@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Config_is_still_reachable_at_its_documented_path()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.Submit("cd /etc/EmuSen");
 
@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Man_hier_documents_the_filesystem_layout()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("man hier");
 

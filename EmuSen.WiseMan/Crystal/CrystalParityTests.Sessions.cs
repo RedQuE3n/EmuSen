@@ -60,14 +60,14 @@ namespace EmuSen.WiseMan.Crystal
             string G(string name, params byte[] payload)
             {
                 string path = Path.Combine(dir, name);
-                File.WriteAllBytes(path, CoreAdapterTests.Image(payload));
+                File.WriteAllBytes(path, TestCoreImage.Of(payload));
                 return path;
             }
             string plain = G("plain.tst", 1, 2, 3, 4), card = G("card.tst", 0xCD, 9), memory = G("memory.tst", 0xCE, 8), cart = G("cart.tst", 0xCA, 7);
             string boot = G("boot.tst", 0xB0, 6), other = G("other.tst", 5, 5);
             string zip = Path.Combine(dir, "zipped.zip");
             using (var archive = ZipFile.Open(zip, ZipArchiveMode.Create))
-            using (var entry = archive.CreateEntry("inside.tst").Open()) entry.Write(CoreAdapterTests.Image(3, 3));
+            using (var entry = archive.CreateEntry("inside.tst").Open()) entry.Write(TestCoreImage.Of(3, 3));
             void Plant()
             {
                 string saves = Path.Combine(DataStore.Saves, "TEST");

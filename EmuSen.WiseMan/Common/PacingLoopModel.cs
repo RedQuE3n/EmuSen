@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using EmuSen.Common;
 using EmuSen.Mistress;
 using EmuSen.Serenity;
 
@@ -53,7 +52,7 @@ namespace EmuSen.WiseMan.Common
             long now = (long)(o.StartSeconds * f), end = now + (long)(o.Seconds * f), presentCount = 0, lastPresent = 0;
             var clock = new DisplayClock();
             var scheduler = new FrameScheduler(_ => o.FixedReading ?? clock.Current(now), 0);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan nextTick = ToSpan(now);
             var starts = new List<double>();
             var decisions = new List<string>();

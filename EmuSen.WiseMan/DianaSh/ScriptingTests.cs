@@ -55,7 +55,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Runs_script_lines_and_shares_variable_scope_with_the_caller()
         {
             using var script = new TempScript("X=42\necho X is $X\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"source \"{script.Path}\"");
 
@@ -67,7 +67,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Dot_alias_behaves_identically_to_source()
         {
             using var script = new TempScript("echo hi\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal("hi", shell.Submit($". \"{script.Path}\"").Output.Trim());
         }
@@ -76,7 +76,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Skips_blank_lines_and_comments()
         {
             using var script = new TempScript("\n# a comment\necho one\n\n# another\necho two\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal("one\ntwo", shell.Submit($"source \"{script.Path}\"").Output.Trim());
         }
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Multiline_control_flow_inside_a_script_works()
         {
             using var script = new TempScript("if [ 1 -eq 1 ]; then\n  echo matched\nelse\n  echo nope\nfi\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal("matched", shell.Submit($"source \"{script.Path}\"").Output.Trim());
         }
@@ -94,7 +94,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Sourced_lines_are_excluded_from_history()
         {
             using var script = new TempScript("echo one\necho two\necho three\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.Submit($"source \"{script.Path}\"");
 
@@ -110,7 +110,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using var inner = new TempScript("Y=7\necho inner ran\n");
             using var outer = new TempScript($"echo outer start\nsource \"{inner.Path}\"\necho Y is $Y\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"source \"{outer.Path}\"");
 
@@ -121,7 +121,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Self_referential_source_is_rejected_instead_of_overflowing_the_stack()
         {
             using var script = new TempScript(path => $"source \"{path}\"\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"source \"{script.Path}\"");
 
@@ -132,7 +132,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Unterminated_block_reports_a_clean_error_and_resets_for_the_next_command()
         {
             using var script = new TempScript("if true; then\necho stuck\n");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"source \"{script.Path}\"");
             Assert.Contains("unexpected end of file", result.Output);
@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             // '..'-climbing, not a leading '/' one - see `man hier` on why a real OS absolute path no longer means "outside".
             string outsidePath = string.Concat(Enumerable.Repeat("../", 15)) + $"wiseman_outside_{Guid.NewGuid():N}.txt";
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"source {outsidePath}");
 
@@ -158,7 +158,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Source_of_a_missing_file_reports_a_clean_error()
         {
             string missingPath = Path.Combine(DianaShSandbox.ScratchDirectory, "WiseManScriptingTests", $"missing_{Guid.NewGuid():N}.txt");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"source \"{missingPath}\"");
 

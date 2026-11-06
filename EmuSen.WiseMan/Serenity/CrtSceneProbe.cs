@@ -5,7 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using Avalonia;
-using EmuSen.Cores;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.Serenity;
@@ -35,25 +36,24 @@ namespace EmuSen.WiseMan.Serenity
             DataStore.OverrideDirectory = Path.Combine(Path.GetDirectoryName(cache)!, "home");
             var held = presses.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(p => p.Split(':')).Select(p => (Button: Enum.Parse<PadButton>(p[0], true), Start: int.Parse(p[1]), Frames: int.Parse(p[2]))).ToArray();
             var frames = new List<Frame>();
-            ICore core = CoreFactory.Loaded(rom, options: EmuSen.WiseMan.Fixtures.TestCores.NoBattery);
-            try
+            using (var runtime = new CrystalRuntime())
+            using (CrystalSession session = runtime.Open(new CrystalOpen { Path = rom, NoBattery = true }))
             {
-                core.LoadState(state);
+                session.LoadState(state);
+                var info = new CrystalFrameInfo();
+                short[] sound = new short[1 << 16];
                 for (int i = 0; i < count; i++)
                 {
-                    foreach (var b in held.Select(h => h.Button).Distinct()) core.SetButton(0, b, held.Any(h => h.Button == b && i >= h.Start && i < h.Start + h.Frames));
-                    core.RunFrame();
-                    core.DequeueAudioSamples(int.MaxValue);
-                    byte[] rgba = core.GetFrameBufferRgba();
-                    int w = core.ScreenWidth, h = core.ScreenHeight;
-                    frames.Add(new Frame(rgba[..(w * h * 4)].ToArray(), w, h, (core as IRepeatedRows)?.RowRepeat ?? 1, core.DisplayLines));
+                    foreach (var b in held.Select(h => h.Button).Distinct()) session.Button(0, b, held.Any(h => h.Button == b && i >= h.Start && i < h.Start + h.Frames));
+                    session.Frame(ref info);
+                    while (session.DrainAudio(sound, out _) > 0) { }
+                    byte[] rgba = new byte[session.PictureBytes];
+                    session.CopyPicture(rgba);
+                    int w = info.width, h = info.height;
+                    frames.Add(new Frame(rgba[..(w * h * 4)].ToArray(), w, h, Math.Max(1, info.row_repeat), info.display_lines));
                 }
             }
-            finally
-            {
-                (core as IDisposable)?.Dispose();
-                DataStore.OverrideDirectory = null;
-            }
+            DataStore.OverrideDirectory = null;
             using var writer = new BinaryWriter(File.Create(cache));
             writer.Write(frames.Count);
             foreach (Frame f in frames) { writer.Write(f.Width); writer.Write(f.Height); writer.Write(f.RowRepeat); writer.Write(f.Lines); writer.Write(f.Rgba.Length); writer.Write(f.Rgba); }

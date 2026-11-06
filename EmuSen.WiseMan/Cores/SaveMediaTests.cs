@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Cores
         private string Rom(string name, params byte[] payload)
         {
             string path = Path.Combine(_root, name + ".tst");
-            File.WriteAllBytes(path, CoreAdapterTests.Image(payload));
+            File.WriteAllBytes(path, TestCoreImage.Of(payload));
             return path;
         }
 

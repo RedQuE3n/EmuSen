@@ -273,7 +273,7 @@ namespace EmuSen.WiseMan.Mistress
         public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
-            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.Equal(EngineNames.MarsRt, MistressGame.Engine(window));
             Poll(window);
             // Every port holds a controller at create; the ports no player holds are emptied as the next frame starts - see EmuSen_CoreAPI.md §6.36.
             Assert.Equal(new[] { true, false, false, false }, N64PortsAfterAFrame(window).Select(p => p.Present));
@@ -297,76 +297,58 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Four_pads_play_a_genesis_j_cart_game_and_the_bindings_window_offers_its_players() => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDirectories(null);
-            CoreDiscovery.UseDevelopment(false);
-            try
-            {
-                ConsolesConfig graphics = ConsolesConfig.Load();
-                graphics.SetValue("Genesis", "pad1", "md.pad6");
-                graphics.Save();
-                (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), ByConnection, bigScreen: true);
-                Assert.Equal(4, SessionOf(window).ControllerPorts);
-                PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
-                others[1].Pad.Press(SDL.GamepadButton.DPadUp);
-                others[2].Pad.Press(SDL.GamepadButton.DPadRight);
-                Poll(window);
-                MistressGame.RunFrames(window, 3);
-                int Word(int at) => MistressGame.Peek(window, "WRAM", at) << 8 | MistressGame.Peek(window, "WRAM", at + 1);
-                Assert.Equal((0x33B2, 0x37FE), (Word(0), Word(2)));
+            ConsolesConfig graphics = ConsolesConfig.Load();
+            graphics.SetValue("Genesis", "pad1", "md.pad6");
+            graphics.Save();
+            (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), ByConnection, bigScreen: true);
+            Assert.Equal(4, SessionOf(window).ControllerPorts);
+            PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
+            others[1].Pad.Press(SDL.GamepadButton.DPadUp);
+            others[2].Pad.Press(SDL.GamepadButton.DPadRight);
+            Poll(window);
+            MistressGame.RunFrames(window, 3);
+            int Word(int at) => MistressGame.Peek(window, "WRAM", at) << 8 | MistressGame.Peek(window, "WRAM", at + 1);
+            Assert.Equal((0x33B2, 0x37FE), (Word(0), Word(2)));
 
-                typeof(MainWindow).GetMethod("ShowControllerBindings", Hidden)!.Invoke(window, null);
-                EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests.Settle(window);
-                // The bindings page opens on the running game's console, and offers and draws each player its ports hold.
-                var settings = window.SettingsShown!;
-                Assert.Equal("Genesis", settings.Binding!.Console);
-                Assert.Equal(4, settings.PlayersOf("Genesis"));
-                var view = (SettingsView)typeof(MainWindow).GetField("_settings", Hidden)!.GetValue(window)!;
-                foreach (var (number, layout) in new[] { (1, ControllerLayout.GenesisSixButton), (3, ControllerLayout.Genesis), (4, ControllerLayout.Genesis) })
-                {
-                    while (settings.Binding!.Player != number) settings.StepBindingPlayer();
-                    view.Fill();
-                    Assert.Equal($"Player {number}", window.SettingsLayoutShown!.Content!.Tabs[0]);
-                    Assert.Equal(layout, view.Diagram!.Layout);
-                }
-                window.Close();
-            }
-            finally
+            typeof(MainWindow).GetMethod("ShowControllerBindings", Hidden)!.Invoke(window, null);
+            EmuSen.WiseMan.Mistress.BigPicture.WindowFitAuditTests.Settle(window);
+            // The bindings page opens on the running game's console, and offers and draws each player its ports hold.
+            var settings = window.SettingsShown!;
+            Assert.Equal("Genesis", settings.Binding!.Console);
+            Assert.Equal(4, settings.PlayersOf("Genesis"));
+            var view = (SettingsView)typeof(MainWindow).GetField("_settings", Hidden)!.GetValue(window)!;
+            foreach (var (number, layout) in new[] { (1, ControllerLayout.GenesisSixButton), (3, ControllerLayout.Genesis), (4, ControllerLayout.Genesis) })
             {
-                CoreDiscovery.UseDevelopment(null);
+                while (settings.Binding!.Player != number) settings.StepBindingPlayer();
+                view.Fill();
+                Assert.Equal($"Player {number}", window.SettingsLayoutShown!.Content!.Tabs[0]);
+                Assert.Equal(layout, view.Diagram!.Layout);
             }
+            window.Close();
         }, default);
 
         // A Team Player set on the Genesis's first port while the game runs: players 3 and 4 are heard from the next poll, and player 1's held button is kept - see EmuSen_Input.md §8.11.
         [Fact]
         public Task Four_pads_play_a_genesis_team_player_set_while_the_game_runs() => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDirectories(null);
-            CoreDiscovery.UseDevelopment(false);
-            try
-            {
-                (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader(), ByConnection);
-                PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
-                first.Pad.Press(SDL.GamepadButton.DPadUp);
-                others[1].Pad.Press(SDL.GamepadButton.DPadLeft);
-                others[2].Pad.Press(SDL.GamepadButton.Start);
-                Poll(window);
-                Assert.Equal(2, SessionOf(window).ControllerPorts);
+            (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader(), ByConnection);
+            PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
+            first.Pad.Press(SDL.GamepadButton.DPadUp);
+            others[1].Pad.Press(SDL.GamepadButton.DPadLeft);
+            others[2].Pad.Press(SDL.GamepadButton.Start);
+            Poll(window);
+            Assert.Equal(2, SessionOf(window).ControllerPorts);
 
-                // Through the runtime's settings, as Graphics Settings sets it; with the window's loop stopped here, the frame runs by hand and the window reads its ports again as its loop does after a setting's event.
-                MistressGame.Runtime.SetSetting(MistressGame.Of(window).Console, "pad1", "md.teamplayer3");
-                MistressGame.RunFrames(window, 1);
-                MistressGame.Of(window).RefreshPorts();
-                Assert.Equal(5, SessionOf(window).ControllerPorts);
-                Poll(window);
-                MistressGame.RunFrames(window, 4);
-                int[] nibbles = Enumerable.Range(6, 8).Select(n => MistressGame.Peek(window, "WRAM", n) & 0xF).ToArray();
-                Assert.Equal(new[] { 0xE, 0xF, 0xF, 0xF, 0xB, 0xF, 0xF, 0x7 }, nibbles);
-                window.Close();
-            }
-            finally
-            {
-                CoreDiscovery.UseDevelopment(null);
-            }
+            // Through the runtime's settings, as Graphics Settings sets it; with the window's loop stopped here, the frame runs by hand and the window reads its ports again as its loop does after a setting's event.
+            MistressGame.Runtime.SetSetting(MistressGame.Of(window).Console, "pad1", "md.teamplayer3");
+            MistressGame.RunFrames(window, 1);
+            MistressGame.Of(window).RefreshPorts();
+            Assert.Equal(5, SessionOf(window).ControllerPorts);
+            Poll(window);
+            MistressGame.RunFrames(window, 4);
+            int[] nibbles = Enumerable.Range(6, 8).Select(n => MistressGame.Peek(window, "WRAM", n) & 0xF).ToArray();
+            Assert.Equal(new[] { 0xE, 0xF, 0xF, 0xF, 0xB, 0xF, 0xF, 0x7 }, nibbles);
+            window.Close();
         }, default);
     }
 }

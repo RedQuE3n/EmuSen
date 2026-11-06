@@ -4,8 +4,8 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Endymion;
 using EmuSen.Mistress;
 using EmuSen.Serenity;
@@ -37,8 +37,11 @@ namespace EmuSen.WiseMan.Common
 
         public static Result Run(Options o)
         {
-            var session = new EmulatorSession { Options = TestCores.NoBattery, Engine = o.Engine };
-            session.LoadRom(o.Rom);
+            using var runtime = new CrystalRuntime();
+            using CrystalSession session = runtime.Open(new CrystalOpen { Path = o.Rom, Engine = o.Engine, NoBattery = true });
+            var info = new CrystalFrameInfo();
+            short[] samples = new short[1 << 16];
+            byte[] picture = new byte[1 << 22];
 
             AudioPlayer? player = null;
             if (o.Audio)
@@ -77,7 +80,6 @@ namespace EmuSen.WiseMan.Common
             presenter.Start();
             while (Stopwatch.GetTimestamp() < t0) Thread.SpinWait(50);
 
-            var speed = new SpeedController();
             Stopwatch clock = Stopwatch.StartNew();
             var scheduler = new FrameScheduler(display.Current, Stopwatch.GetTimestamp()) { SyncToDisplay = o.SyncToDisplay };
             TimeSpan nextTick = clock.Elapsed;
@@ -87,19 +89,22 @@ namespace EmuSen.WiseMan.Common
             int frame = 0;
             while (clock.Elapsed.TotalSeconds < o.Seconds && frame < o.Frames)
             {
-                double contentHz = o.ContentHzOverride > 0 ? o.ContentHzOverride : session.FrameRateHz;
-                nextTick = scheduler.Next(nextTick, contentHz, speed);
+                // The speed and interval as the window reads them from the last frame's info, the first frame paced at the console's rate.
+                double contentHz = o.ContentHzOverride > 0 ? o.ContentHzOverride : info.frame_rate_hz > 0 ? info.frame_rate_hz : 60.0;
+                bool known = info.size != 0;
+                TimeSpan interval = known && o.ContentHzOverride <= 0 ? TimeSpan.FromTicks((long)(info.frame_interval_ns / 100)) : TimeSpan.FromSeconds(1.0 / contentHz);
+                nextTick = scheduler.Next(nextTick, contentHz, !known || info.speed_percent == 100, interval);
                 long start = Stopwatch.GetTimestamp();
-                session.RunFrame();
+                session.Frame(ref info);
                 frame++;
-                short[] samples = session.DequeueAudioSamples(int.MaxValue);
+                int drained = session.DrainAudio(samples, out uint rate);
                 if (player is not null)
                 {
                     player.RateControl.NominalRatio = scheduler.Decision.AudioRatio;
                     int queued = player.QueuedFrames;
                     if (clock.Elapsed.TotalSeconds > o.AudioSettleSeconds) { minQueued = Math.Min(minQueued, queued); minRatio = Math.Min(minRatio, player.RateControl.LastRatio); maxRatio = Math.Max(maxRatio, player.RateControl.LastRatio); }
                     else shedAtStart = player.RateControl.SheddingEvents;
-                    player.Submit(samples, session.AudioSampleRate);
+                    player.Submit(samples.AsSpan(0, drained * 2).ToArray(), (int)rate);
                     lastQueueMs = queued * 1000.0 / Math.Max(1, player.SampleRate);
                 }
                 long held = 0;
@@ -109,11 +114,11 @@ namespace EmuSen.WiseMan.Common
                     while (clock.Elapsed < notBefore) Thread.SpinWait(100);
                     held = Stopwatch.GetTimestamp() - holdStart;
                 }
-                session.GetFrameBufferRgba();
-                Volatile.Write(ref newest, session.TotalFrames);
+                session.CopyPicture(picture);
+                Volatile.Write(ref newest, (long)info.total_frames);
                 long offered = Stopwatch.GetTimestamp();
                 scheduler.Completed(TimeSpan.FromTicks((offered - start - held) * TimeSpan.TicksPerSecond / frequency));
-                frames.Append(CultureInfo.InvariantCulture, $"F,{session.TotalFrames},{start},{offered},1\n");
+                frames.Append(CultureInfo.InvariantCulture, $"F,{info.total_frames},{start},{offered},1\n");
 
                 if (o.Log is not null && clock.Elapsed >= nextLog)
                 {
@@ -122,14 +127,15 @@ namespace EmuSen.WiseMan.Common
                 }
 
                 if (nextTick - clock.Elapsed > TimeSpan.Zero) { while (clock.Elapsed < nextTick) Thread.SpinWait(100); }
-                else nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(contentHz, speed));
+                else nextTick = FramePacer.Settle(nextTick, clock.Elapsed, scheduler.Interval(interval));
             }
             Volatile.Write(ref stop, true);
             presenter.Join();
 
-            using var state = new MemoryStream();
-            session.Core!.SaveState(state);
-            string sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(state.ToArray()));
+            string statePath = Path.Combine(Path.GetTempPath(), $"EmuSenCadence_{Guid.NewGuid():N}.state");
+            session.SaveState(statePath);
+            string sha = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(File.ReadAllBytes(statePath)));
+            File.Delete(statePath);
             int shed = (player?.RateControl.SheddingEvents ?? 0) - shedAtStart;
             player?.Dispose();
 

@@ -10,7 +10,7 @@ namespace EmuSen.WiseMan.DianaSh
 {
     // DianaShSandbox's layout (`man hier`) - the chroot-style leading-'/'
     // reinterpretation, the real-path-already-inside-root pass-through, and
-    // the skeleton it creates. Calls DianaShInterpreter.CreateDefault(null)
+    // the skeleton it creates. Calls DianaShInterpreter.CreateWithoutSession()
     // at least once per test purely to trigger
     // DianaShSandbox.EnsureInitialWorkingDirectory() the same way every
     // other test in this assembly already relies on - the skeleton
@@ -18,7 +18,7 @@ namespace EmuSen.WiseMan.DianaSh
     // the first time any shell exists in the process.
     public class DianaShSandboxTests
     {
-        public DianaShSandboxTests() => DianaShInterpreter.CreateDefault(null);
+        public DianaShSandboxTests() => DianaShInterpreter.CreateWithoutSession();
 
         [Fact]
         public void A_short_virtual_absolute_path_resolves_relative_to_the_sandbox_root()

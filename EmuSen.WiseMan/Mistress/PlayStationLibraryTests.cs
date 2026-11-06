@@ -37,12 +37,10 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_romDir);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
@@ -197,8 +195,8 @@ namespace EmuSen.WiseMan.Mistress
                 if (mine.Length == 0) _output.WriteLine($"{Path.GetFileName(item)} | not listed");
                 foreach (var e in mine)
                 {
-                    var (core, routed) = EmuSen.Cores.CoreCatalog.Route(e.FullPath);
-                    _output.WriteLine($"{Path.GetFileName(item)} | listed as {e.FileName} on {e.Shelf} | routed {core?.Console ?? "nowhere"} {routed?.Reason}");
+                    var routed = EmuSen.Mistress.Library.RuntimeCatalog.Route(e.FullPath);
+                    _output.WriteLine($"{Path.GetFileName(item)} | listed as {e.FileName} on {e.Shelf} | routed {routed.Console ?? "nowhere"} {routed.Reason}");
                 }
             }
             foreach (var e in entries.Where(e => e.Shelf == "PlayStation (Diamond)"))

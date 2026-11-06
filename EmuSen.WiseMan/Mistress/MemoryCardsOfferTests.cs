@@ -4,9 +4,9 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Headless;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
+using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Systems.Psx;
+using EmuSen.Mistress.Library;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -34,13 +34,11 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_root);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
             Confirm.SetValue(null, _realConfirm);
-            CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -70,13 +68,20 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void A_medium_with_an_import_is_shared_by_default()
         {
-            var card = MemoryCards.MediaFor("PlayStation").Single();
-            Assert.Equal(MemoryCards.Shared, MemoryCards.Read(_ => null, card).Mode);
-            Assert.Equal(MemoryCards.Shared, MemoryCards.SettingsFor("PlayStation")[0].Default);
-            Assert.Equal(MemoryCards.PerGame, MemoryCards.Read(key => key == MemoryCards.ModeKey ? MemoryCards.PerGame : null, card).Mode);
-            Assert.Equal(MemoryCards.PerGame, MemoryCards.Read(key => key == MemoryCards.ModeKey ? "nonsense" : null, card).Mode);
-            var segaCd = MemoryCards.MediaOf("Sega CD", CoreLibrary.Open(NephriteTests.LibraryPath).Info.Systems.Single(s => s.Id == "mcd"));
-            Assert.All(segaCd, m => Assert.Equal(MemoryCards.Shared, MemoryCards.DefaultMode(m)));
+            using var runtime = new CrystalRuntime();
+            string Mode(string? stored)
+            {
+                var consoles = ConsolesConfig.Load();
+                if (stored is null) consoles.Forget("PlayStation", CardModes.Key); else consoles.SetValue("PlayStation", CardModes.Key, stored);
+                consoles.Save();
+                return CardMedium.Of(runtime, "PlayStation").Single().Mode;
+            }
+            Assert.Equal(CardModes.Shared, Mode(null));
+            Assert.Equal(CardModes.Shared, RuntimeCatalog.SettingsFor("PlayStation").Single(r => r.Key == CardModes.Key).Default);
+            Assert.Equal(CardModes.PerGame, Mode(CardModes.PerGame));
+            Assert.Equal(CardModes.PerGame, Mode("nonsense"));
+            Mode(null);
+            Assert.All(CardMedium.Of(runtime, "Sega CD"), m => Assert.Equal(CardModes.Shared, m.Mode));
         }
 
         // Accepted once: every game's saves copied onto Card 1, the games' cards unchanged, the offer recorded and not made again.
@@ -108,11 +113,11 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(0, _asked);
             Own("Amber Saga", "BASLUS-00001A", 0);
             var consoles = ConsolesConfig.Load();
-            consoles.SetValue("PlayStation", MemoryCards.ModeKey, MemoryCards.PerGame);
+            consoles.SetValue("PlayStation", CardModes.Key, CardModes.PerGame);
             consoles.Save();
             Offer(window, Rom()).GetAwaiter().GetResult();
             Assert.Equal(0, _asked);
-            consoles.Forget("PlayStation", MemoryCards.ModeKey);
+            consoles.Forget("PlayStation", CardModes.Key);
             consoles.Save();
             Offer(window, Rom()).GetAwaiter().GetResult();
             Offer(window, Rom()).GetAwaiter().GetResult();

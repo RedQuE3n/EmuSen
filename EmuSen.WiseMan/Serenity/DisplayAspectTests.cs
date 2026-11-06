@@ -7,8 +7,8 @@ using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -75,7 +75,6 @@ namespace EmuSen.WiseMan.Serenity
             Directory.CreateDirectory(dir);
             ConfigStore.OverrideDirectory = dir;
             DataStore.OverrideDirectory = Path.Combine(dir, "Home");
-            CoreDiscovery.UseDevelopment(false);
             try
             {
                 var config = new ConsolesConfig();
@@ -83,15 +82,16 @@ namespace EmuSen.WiseMan.Serenity
                 config.Save();
                 string rom = Path.Combine(dir, "game.md");
                 File.WriteAllBytes(rom, SyntheticMdRom.Cartridge(region: "U"));
-                var core = Assert.IsType<CoreEngine>(CoreFactory.Load(rom).Core);
-                Assert.Equal(4.0 / 3.0, core.DisplayAspect, 9);
-                for (int i = 0; i < 3; i++) core.RunFrame();
-                Assert.Equal(4.0 / 3.0, core.DisplayAspect, 9);
-                core.Dispose();
+                using var runtime = new CrystalRuntime();
+                using CrystalSession session = runtime.Open(new CrystalOpen { Path = rom, NoBattery = true });
+                var info = new CrystalFrameInfo();
+                session.Frame(ref info);
+                Assert.Equal(4.0 / 3.0, info.display_aspect, 9);
+                for (int i = 0; i < 3; i++) session.Frame(ref info);
+                Assert.Equal(4.0 / 3.0, info.display_aspect, 9);
             }
             finally
             {
-                CoreDiscovery.UseDevelopment(null);
                 DataStore.OverrideDirectory = null;
                 ConfigStore.OverrideDirectory = null;
                 try { Directory.Delete(dir, recursive: true); } catch { }

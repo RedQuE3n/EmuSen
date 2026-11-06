@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia.Media;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
@@ -96,7 +95,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 return;
             }
             string only = Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_LAUNCHTIME_ONLY") ?? "";
-            foreach (string game in ImageSets.Shelved(Directory.EnumerateFiles(library, "*", SearchOption.AllDirectories).Where(f => EmuSen.Cores.CoreFactory.IsSupported(f)).Order().ToList()).Where(g => g.Contains(only, StringComparison.Ordinal)))
+            foreach (string game in ImageSets.Shelved(Directory.EnumerateFiles(library, "*", SearchOption.AllDirectories).Where(f => EmuSen.Mistress.Library.RuntimeCatalog.RomExtensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)).Order().ToList()).Where(g => g.Contains(only, StringComparison.Ordinal)))
                 foreach (bool cold in new[] { true, false })
                     foreach (string duration in new[] { BigPictureInterface.LaunchNormal, BigPictureInterface.LaunchDisabled })
                         _out.WriteLine($"{Path.GetFileName(game)} | {Launch(game, duration, cold)}");

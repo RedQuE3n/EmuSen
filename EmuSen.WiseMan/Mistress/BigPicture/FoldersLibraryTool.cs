@@ -46,7 +46,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             RomLibraryResult scan = RomLibrary.Scan(roms);
             using var theme = new SyntheticTheme();
             ThemedSession.Write(theme);
-            IReadOnlyList<ThemedShelf> Shelves(bool flat) => EmuSen.Cores.CoreCatalog.ShelvesInReleaseOrder
+            IReadOnlyList<ThemedShelf> Shelves(bool flat) => EmuSen.Mistress.Library.RuntimeCatalog.Shelves
                 .Select(s => new ThemedShelf(new ThemeSystem(s.EsdeSystem, s.EsdeFullName, s.EsdeSystem),
                     scan.Entries.Where(e => e.Shelf == s.Name).Select(e => new SceneGame(e.Title, e.FullPath) { FolderPath = GameFolders.Of(roms, e.FullPath) })
                         .OrderBy(g => g.Name, StringComparer.OrdinalIgnoreCase).ToList()) { Flatten = flat })

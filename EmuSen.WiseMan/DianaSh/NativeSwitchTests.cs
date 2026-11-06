@@ -17,7 +17,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void The_run_says_which_shell_it_uses_and_the_rust_shell_answers_with_its_modules()
         {
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession();
             string which = shell.NativeShellOf is null ? "C#" : "Rust";
             output.WriteLine($"DianaSh in this run: the {which} shell ({Environment.OSVersion.Platform}, {System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier})");
             if (Environment.GetEnvironmentVariable("EMUSEN_DIANASH_EXPECT") is { Length: > 0 } expected)
@@ -34,7 +34,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void The_shell_is_the_one_the_variable_chose()
         {
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession();
             Assert.Equal(Native, shell.NativeShellOf is not null);
             Assert.Equal("hello", shell.Submit("echo hello").Output);
         }

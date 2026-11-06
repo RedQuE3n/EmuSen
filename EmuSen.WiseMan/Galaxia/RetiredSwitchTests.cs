@@ -106,8 +106,8 @@ namespace EmuSen.WiseMan.Galaxia
         public void A_leftover_dianash_zero_still_makes_the_rust_shell_and_is_said_once()
         {
             Environment.SetEnvironmentVariable(DianaShNative.Variable, "0");
-            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(null);
-            EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(null);
+            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateWithoutSession();
+            EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateWithoutSession();
             Assert.Equal("hello", shell.Submit("echo hello").Output);
             Assert.Equal($"{DianaShNative.Variable}=0 is ignored: DianaSh has had no C# implementation since 2026-11-06 and runs on {PlatformLibrary.FileName}.", Assert.Single(_said));
         }

@@ -155,7 +155,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 File.WriteAllBytes(bin, SyntheticPsxDisc.Build().DataTrack);
                 File.WriteAllBytes(Path.ChangeExtension(bin, ".sbi"), [.. "SBI\0"u8, 0, 0, 0]);
             });
-            Assert.True(EmuSen.Cores.CoreFactory.RunsOnV1Engine(bin, null));
+            Assert.NotNull(EmuSen.Mistress.Library.RuntimeCatalog.Route(bin).Engine);
             using var loaded = LoadsUnderTheScreen(s);
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             s.Pad.A();

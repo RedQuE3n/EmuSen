@@ -35,7 +35,7 @@ namespace EmuSen.WiseMan.DianaSh
                 // The precondition the defect needs: Linux and macOS name the working directory by its resolved path; Windows keeps the link's.
                 if (!OperatingSystem.IsWindows()) Assert.NotEqual(root, Environment.CurrentDirectory);
 
-                var shell = DianaShInterpreter.CreateDefault(null);
+                var shell = DianaShInterpreter.CreateWithoutSession();
                 Assert.Equal("inside", shell.Submit("cat a.txt").Output);
                 Assert.Equal("0", shell.LastExitStatus);
                 shell.Submit("echo written > b.txt");

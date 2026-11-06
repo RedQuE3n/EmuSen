@@ -1,3 +1,4 @@
+using EmuSen.WiseMan.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -47,7 +48,7 @@ namespace EmuSen.WiseMan.Crystal
                 foreach (string d in new[] { library, DataStore.Packages })
                     if (Directory.Exists(d)) Directory.Delete(d, recursive: true);
                 Directory.CreateDirectory(Path.GetDirectoryName(game)!);
-                File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+                File.WriteAllBytes(game, TestCoreImage.Of(1, 2, 3, 4));
                 File.SetLastWriteTimeUtc(game, PlantedAt);
                 new AppSettings { RomDirectory = library }.Save();
                 PackageFor(package, library, "TEST/plain.tst", "test");
@@ -81,7 +82,7 @@ namespace EmuSen.WiseMan.Crystal
                 Assert.Equal(SlotPaths(plainSlots), SlotPaths(movedSlots));
                 Assert.Contains("TEST/Elsewhere/plain (moved).tst", File.ReadAllText(Path.Combine(package, GamePackage.FileName)));
                 // Another dump now: by its plain path it plays as a plain game with its plain saves, and its package refuses (§14.8 Q34).
-                File.WriteAllBytes(moved, CoreAdapterTests.Image(9, 9, 9, 9));
+                File.WriteAllBytes(moved, TestCoreImage.Of(9, 9, 9, 9));
                 File.SetLastWriteTimeUtc(moved, new DateTime(2031, 1, 1, 0, 0, 0, DateTimeKind.Utc));
                 byte[] packageSaved = File.ReadAllBytes(packageSave);
                 string o4 = i.Open(rt, moved);

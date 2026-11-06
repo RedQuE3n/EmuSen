@@ -15,8 +15,8 @@ namespace EmuSen.WiseMan.Crystal
             string dir = Path.Combine(_root, "Games");
             Directory.CreateDirectory(dir);
             string plain = Path.Combine(dir, "plain.tst"), other = Path.Combine(dir, "other.tst");
-            File.WriteAllBytes(plain, CoreAdapterTests.Image(1, 2, 3, 4));
-            File.WriteAllBytes(other, CoreAdapterTests.Image(5, 5));
+            File.WriteAllBytes(plain, TestCoreImage.Of(1, 2, 3, 4));
+            File.WriteAllBytes(other, TestCoreImage.Of(5, 5));
             SameWithFiles(new[] { tree }, () => { }, (i, rt) =>
             {
                 var a = new List<string>();

@@ -5,8 +5,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using EmuSen.Common;
-using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.DianaSh.DianaSh.Bin;
@@ -42,22 +40,6 @@ namespace EmuSen.WiseMan.Crystal
         public void C7_hotaru_s_console_state_load_runs_the_api_s_sequence_and_resets_the_rate_control()
         {
             string game = _f.Game("Seven.tst");
-            string kept = System.IO.Path.Combine(_f.Root, "Seven.state");
-            using (var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery })
-            {
-                engine.LoadRom(game);
-                var rewind = new RewindBuffer { Enabled = true };
-                var before = DianaShInterpreter.CreateDefault(engine.CreateDebugTarget(), new IDianaShCommand[] { new StateCommand(engine.SaveState, engine.LoadState, () => kept) });
-                Assert.Contains("[STATE] Saved", before.Execute("state save"));
-                for (int i = 0; i < 20; i++)
-                {
-                    engine.RunFrame();
-                    rewind.OnFrameCompleted(engine);
-                }
-                Assert.Contains("[STATE] Loaded", before.Execute("state load"));
-                Assert.True(rewind.Depth > 0, "the old wiring's load left the rewind history it should have cleared");
-            }
-
             using CrystalSession s = _f.Open(game);
             s.Rewind(true);
             var shell = DianaShInterpreter.CreateForService(s.ServiceTable(), HotaruCommands.For(new Host(_f.Runtime, s)));
@@ -188,16 +170,15 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Contains($"[ROM] Runtime: {CrystalRuntime.Implementation}", echoed.ToString().Split(Environment.NewLine));
         }
 
-        // `core <name>` on the API knows every name the catalog's registry knows, each with the same display name, console and extensions, so its words are unchanged.
+        // `core <name>` on the API knows every name the C# catalog's registry knew, each with the same display name, console and extensions, so its words are unchanged; recorded before the C# was deleted - see EmuSen_Backend.md §40.10.
         [Fact]
         public void The_core_vocabulary_read_from_the_API_is_the_registry_s()
         {
             var cores = HotaruCores.Of(_f.Runtime).Registry;
-            foreach (var (name, descriptor) in EmuSen.Cores.CoreCatalog.Registry)
-            {
-                Assert.True(cores.TryGetValue(name, out var choice), $"`core {name}` is not known on the API");
-                Assert.Equal((descriptor.DisplayName, descriptor.Console, string.Join(",", descriptor.Extensions)), (choice!.DisplayName, choice.Console, string.Join(",", choice.Extensions)));
-            }
+            var golden = new ParityGolden("HotaruCores.Registry");
+            foreach (string name in cores.Keys.Order(StringComparer.Ordinal))
+                golden.Add(name, $"{cores[name].DisplayName}\t{cores[name].Console}\t{string.Join(",", cores[name].Extensions)}");
+            golden.Check(least: 9);
         }
 
         // C3's other half: a copy waiting beside a frame loop that never pauses lands before the loop's next frame or so, never starved by it - see EmuSen_Backend.md §29.28.

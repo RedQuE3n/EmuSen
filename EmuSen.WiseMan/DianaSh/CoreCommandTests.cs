@@ -1,4 +1,3 @@
-using EmuSen.Cores;
 using EmuSen.Crystal.Debugger;
 using System.Collections.Generic;
 using EmuSen.DianaSh;
@@ -139,7 +138,7 @@ namespace EmuSen.WiseMan.DianaSh
             string path = TempRomPath(".sfc");
             try
             {
-                var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new CoreCommand(Registry()) });
+                var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new CoreCommand(Registry()) });
 
                 var result = shell.Submit($"core snes \"{path}\"");
 

@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using EmuSen.Mistress.Library;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -31,8 +32,8 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllBytes(full, Array.Empty<byte>());
         }
 
-        private static string Snes => EmuSen.Cores.CoreCatalog.ByExtension(".sfc")!.DisplayName;
-        private static string Nes => EmuSen.Cores.CoreCatalog.ByExtension(".nes")!.DisplayName;
+        private static string Snes => EmuSen.Mistress.Library.RuntimeCatalog.Consoles.First(c => c.SupportsExtension(".sfc")).DisplayName;
+        private static string Nes => EmuSen.Mistress.Library.RuntimeCatalog.Consoles.First(c => c.SupportsExtension(".nes")).DisplayName;
 
         // A real ROM tree is per-console folders, so a top-level-only scan finds nothing at all.
         [Fact]
@@ -59,8 +60,8 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void Game_Boy_Color_games_sit_on_their_own_shelf_by_extension_or_header()
         {
-            string gameBoy = EmuSen.Cores.CoreCatalog.ByExtension(".gb")!.DisplayName;
-            string color = EmuSen.Cores.CoreCatalog.GameBoyColorShelf;
+            string gameBoy = EmuSen.Mistress.Library.RuntimeCatalog.Consoles.First(c => c.SupportsExtension(".gb")).DisplayName;
+            string color = EngineNames.GameBoyColorShelf;
             GameBoyAt("Plain.gb", 0x00);
             GameBoyAt("Enhanced.gb", 0x80);
             GameBoyAt("ColorOnly.gb", 0xC0);
@@ -98,7 +99,7 @@ namespace EmuSen.WiseMan.Mistress
             Touch("Alpha.sfc");
             Touch("Beta.nes");
 
-            foreach (string? choice in new[] { null, EmuSen.Cores.CoreCatalog.AllConsoles, "Dreamcast (Kunzite)" })
+            foreach (string? choice in new[] { null, EmuSen.Mistress.Library.RuntimeCatalog.AllConsoles, "Dreamcast (Kunzite)" })
             {
                 RomLibraryResult result = RomLibrary.Scan(_dir, choice);
 
@@ -169,7 +170,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void Scanned_extensions_are_the_runtime_s_shelves_and_the_archives()
         {
-            Assert.Equal(EmuSen.Cores.CoreCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).Order(System.StringComparer.Ordinal), RomLibrary.Extensions.Order(System.StringComparer.Ordinal));
+            Assert.Equal(EmuSen.Mistress.Library.RuntimeCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).Order(System.StringComparer.Ordinal), RomLibrary.Extensions.Order(System.StringComparer.Ordinal));
         }
 
         [Fact]

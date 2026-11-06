@@ -1,3 +1,4 @@
+using EmuSen.WiseMan.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -53,7 +54,7 @@ namespace EmuSen.WiseMan.Crystal
             string library = Path.Combine(_root, "Library");
             string game = Path.Combine(library, "TEST", "hack.tst"), target = Path.Combine(library, "TEST", "target.tst");
             string package = Path.Combine(DataStore.Packages, "TEST", "hack.tst");
-            byte[] original = CoreAdapterTests.Image(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
+            byte[] original = TestCoreImage.Of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16);
             byte[] patched = original.ToArray();
             patched[6 + 2] = 0x42;
             patched[6 + 9] = 0x99;

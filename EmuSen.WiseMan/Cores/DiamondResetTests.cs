@@ -98,7 +98,7 @@ namespace EmuSen.WiseMan.Cores
         {
             using var engine = new CoreEngine(CoreAdapterTests.Plain);
             string rom = Path.Combine(Path.GetTempPath(), "EmuSenDiamondReset_" + Guid.NewGuid().ToString("N") + ".tst");
-            File.WriteAllBytes(rom, CoreAdapterTests.Image(1, 2, 3));
+            File.WriteAllBytes(rom, TestCoreImage.Of(1, 2, 3));
             try
             {
                 engine.LoadRom(rom);

@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.DianaSh
         [InlineData("echo $(echo nested)")]
         public void Dispatches_without_throwing(string commandLine)
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             Exception? ex = Record.Exception(() => shell.Submit(commandLine));
             Assert.Null(ex);
         }
@@ -69,7 +69,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Loop_body_break_exits_after_matching_iteration()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             var result = shell.Submit("for i in 1 2 3; do if [ $i -eq 2 ]; then break; fi; echo $i; done");
             Assert.Equal("1", result.Output.Trim());
         }
@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Loop_body_continue_skips_matching_iteration()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             var result = shell.Submit("for i in 1 2 3; do if [ $i -eq 2 ]; then continue; fi; echo $i; done");
             Assert.Equal("1\n3", result.Output.Trim());
         }
@@ -85,7 +85,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Command_substitution_and_pipes_work()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             Assert.Equal("bye", shell.Submit("echo hi | sed s/hi/bye/").Output.Trim());
             Assert.Equal("nested", shell.Submit("echo $(echo nested)").Output.Trim());
         }
@@ -93,7 +93,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Commands_without_a_target_report_a_clean_error_not_a_crash()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             var result = shell.Submit("regs");
             Assert.Contains("No ROM loaded", result.Output);
         }
@@ -114,17 +114,17 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void ExtraCommand_sharing_a_default_name_replaces_the_default_instead_of_throwing()
         {
-            var ex = Record.Exception(() => DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new FakeOverrideCommand() }));
+            var ex = Record.Exception(() => DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new FakeOverrideCommand() }));
             Assert.Null(ex);
 
-            var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new FakeOverrideCommand() });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new FakeOverrideCommand() });
             Assert.Equal("overridden", shell.Submit("echo hi").Output.Trim());
         }
 
         [Fact]
         public void Unrelated_extra_commands_still_add_normally_alongside_the_defaults()
         {
-            var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new FakeOverrideCommand() });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new FakeOverrideCommand() });
             // A non-colliding default command is untouched by an
             // unrelated override.
             Assert.Contains("No ROM loaded", shell.Submit("regs").Output);

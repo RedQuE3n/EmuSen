@@ -26,7 +26,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Ps_with_nothing_active_reports_an_empty_table()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("ps");
 
@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Jobs_is_a_plain_alias_for_ps()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal(shell.Submit("ps").Output, shell.Submit("jobs").Output);
         }
@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Kill_a_non_current_session_by_name_removes_it_without_switching()
         {
             var (shell, sessions) = DianaShellFixtures.NewShellWithSessions(null);
-            sessions.CreateSession(() => DianaShInterpreter.CreateDefault(null, sessions: sessions), "investigation");
+            sessions.CreateSession(() => DianaShInterpreter.CreateWithoutSession(sessions: sessions), "investigation");
             sessions.TrySwitch("main", out _);
 
             var result = shell.Submit("kill investigation");
@@ -137,7 +137,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Killing_the_current_session_switches_away_first()
         {
             var (shell, sessions) = DianaShellFixtures.NewShellWithSessions(null);
-            sessions.CreateSession(() => DianaShInterpreter.CreateDefault(null, sessions: sessions), "investigation");
+            sessions.CreateSession(() => DianaShInterpreter.CreateWithoutSession(sessions: sessions), "investigation");
 
             var result = shell.Submit("kill investigation");
 
@@ -158,7 +158,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Kill_with_no_session_manager_and_an_unrecognized_id_fails_cleanly()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("kill nosuchid");
 

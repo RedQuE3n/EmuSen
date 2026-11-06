@@ -1,3 +1,4 @@
+using EmuSen.WiseMan.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -31,7 +32,7 @@ namespace EmuSen.WiseMan.Crystal
                 foreach (string d in new[] { library, DataStore.Packages, DataStore.Library })
                     if (Directory.Exists(d)) Directory.Delete(d, recursive: true);
                 Directory.CreateDirectory(Path.GetDirectoryName(game)!);
-                File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+                File.WriteAllBytes(game, TestCoreImage.Of(1, 2, 3, 4));
                 File.SetLastWriteTimeUtc(game, PlantedAt);
                 new AppSettings { RomDirectory = library }.Save();
                 PackageFor(package, library, "TEST/plain.tst", "test");

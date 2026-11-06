@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
-using EmuSen.Common;
 using EmuSen.Mistress;
 using EmuSen.Serenity;
 
@@ -49,7 +48,7 @@ namespace EmuSen.WiseMan.Common
         {
             double period = Stopwatch.Frequency / 119.90;
             var scheduler = new FrameScheduler(_ => Panel, 0) { Margin = TimeSpan.Zero };
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = TimeSpan.FromSeconds(86_400);
             TimeSpan first = scheduler.Next(due, 59.96, speed);
             TimeSpan second = scheduler.Next(first, 59.96, speed);

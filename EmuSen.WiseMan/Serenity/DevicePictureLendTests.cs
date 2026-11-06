@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Serenity;
@@ -15,7 +15,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Serenity
 {
-    // The slang device lent to Diamond through the core ABI, as the runtime lends it: the picture taken on the device and read by a chain there, the frame it is drawn - see EmuSen_DevicePicture.md §17.
+    // The slang device lent to Diamond through the frontend API, as a window lends it: the picture taken on the device and read by a chain there, the frame it is drawn - see EmuSen_DevicePicture.md §17.
     [Collection(TestCollections.ProcessGlobals)]
     public sealed class DevicePictureLendTests : IDisposable
     {
@@ -30,18 +30,23 @@ namespace EmuSen.WiseMan.Serenity
             Directory.CreateDirectory(_root);
             ConfigStore.OverrideDirectory = _root;
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
         private static byte[] Digest(byte[] pixels) => System.Security.Cryptography.SHA256.HashData(pixels);
+
+        private static byte[] Copy(CrystalSession session)
+        {
+            byte[] picture = new byte[session.PictureBytes];
+            session.CopyPicture(picture);
+            return picture;
+        }
 
         // Lent the device, each picture the chain reads there is the machine's own frame_copy of that frame, and a machine lent nothing hands the same pictures a frame later; with the layer listening, nothing is said.
         [Theory]
@@ -58,30 +63,32 @@ namespace EmuSen.WiseMan.Serenity
             {
                 using (SlangLend? probe = SlangLend.TryCreate(device, out string? why))
                     if (probe is null) { _output.WriteLine($"not run: {why}"); return; }
-                int lends = 0;
-                using var plain = (CoreEngine)CoreFactory.Loaded(path);
-                using var lent = (CoreEngine)CoreFactory.Loaded(path, lender: () => { lends++; return PlatformLend.Make(device.DeviceHandle, _ => { }); });
-                Assert.Equal(1, lends);
-                Assert.NotNull(lent.Lend);
+                using var runtime = new CrystalRuntime();
+                using CrystalSession plain = runtime.Open(new CrystalOpen { Path = path, NoBattery = true });
+                using CrystalSession lent = runtime.Open(new CrystalOpen { Path = path, NoBattery = true, Device = device.DeviceHandle });
+                Assert.Equal(0, plain.PictureLend());
                 using var chain = new SlangChain(device, SlangPreset.Load(EmuSen.Serenity.Shaders.BuiltInPreset.Write(EmuSen.Serenity.Shaders.BuiltInShaders.AsFilter(ShaderEffect.None, false), null)));
                 var (lentCopies, plainCopies) = (new List<byte[]>(), new List<byte[]>());
                 const int On = 3, Frames = 14;
+                var (plainInfo, lentInfo) = (new CrystalFrameInfo(), new CrystalFrameInfo());
                 for (int f = 0; f < Frames; f++)
                 {
-                    if (f == On) { plain.Set("resolution", "2"); lent.Set("resolution", "2"); }
-                    plain.RunFrame();
-                    lent.RunFrame();
-                    Assert.Equal(f >= On, lent.PictureOnDevice);
-                    Assert.False(plain.PictureOnDevice);
-                    byte[] copy = lent.GetFrameBufferRgba();
+                    if (f == On) lent.SetSetting("resolution", "2", game: false);
+                    plain.Frame(ref plainInfo);
+                    lent.Frame(ref lentInfo);
+                    Assert.Equal(f >= On, lentInfo.picture_on_device != 0);
+                    Assert.Equal(0u, plainInfo.picture_on_device);
+                    byte[] copy = Copy(lent);
                     lentCopies.Add(Digest(copy));
-                    plainCopies.Add(Digest(plain.GetFrameBufferRgba()));
-                    if (!lent.PictureOnDevice) continue;
-                    SlangLend borrowed = SlangLend.Borrow(device, ((PlatformLend)lent.Lend!).Handle);
+                    plainCopies.Add(Digest(Copy(plain)));
+                    if (lentInfo.picture_on_device == 0) continue;
+                    nint lend = lent.PictureLend();
+                    Assert.NotEqual(0, lend);
+                    SlangLend borrowed = SlangLend.Borrow(device, lend);
                     Assert.True(chain.AdvanceLent(borrowed), $"frame {f}: no picture was taken");
                     Assert.False(chain.AdvanceLent(borrowed), $"frame {f}: a picture taken twice");
-                    byte[] read = chain.Render(lent.ScreenWidth, lent.ScreenHeight);
-                    Assert.Equal(lent.ScreenWidth * lent.ScreenHeight * 4, copy.Length);
+                    byte[] read = chain.Render(lentInfo.width, lentInfo.height);
+                    Assert.Equal(lentInfo.width * lentInfo.height * 4, copy.Length);
                     Assert.True(read.AsSpan().SequenceEqual(copy), $"frame {f}: the picture read on the device differs from frame_copy in {read.Zip(copy).Count(p => p.First != p.Second)} bytes");
                 }
                 for (int f = 0; f < On; f++) Assert.Equal(plainCopies[f], lentCopies[f]);

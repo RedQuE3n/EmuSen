@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -26,7 +25,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Sizes))]
         public Task The_library_with_packages_lists_each_game_once_and_nothing_is_cut_off(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(false);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), SyntheticRom.BuildBlank());
@@ -77,7 +75,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             finally
             {
                 window.Close();
-                CoreDiscovery.UseDevelopment(null);
             }
         }, default);
     }

@@ -20,6 +20,7 @@ using EmuSen.Mistress.Pages;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -196,7 +197,7 @@ namespace EmuSen.WiseMan.Mistress
             Rig rig = Open("bindings", "NES");
             IReadOnlyList<string> order = rig.Model.BindingTabs(rig.Model.Binding!);
             Assert.Equal("Player 1", order[0]);
-            List<string> consoles = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToList();
+            List<string> consoles = RuntimeCatalog.ConsoleNames.ToList();
             Assert.True(consoles.IndexOf("NES") < consoles.IndexOf("SNES"));
             Assert.True(order.ToList().IndexOf("Super Nintendo") > order.ToList().IndexOf("NES"), string.Join(", ", order));
             rig.Window.CloseSettings();
@@ -319,37 +320,29 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task An_adapters_players_are_offered_and_each_ones_pad_is_drawn() => Session.Dispatch(() =>
         {
-            EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
-            try
+            var config = ConsolesConfig.Load();
+            config.SetValue("Genesis", "pad1", "md.teamplayer6");
+            config.SetValue("Genesis", "pad2", "md.pad3");
+            config.Save();
+            Rig rig = Open("bindings", "Genesis");
+            Assert.Equal(5, rig.Model.PlayersOf("Genesis"));
+            foreach (var (player, layout, regions) in new[] { (3, ControllerLayout.GenesisSixButton, 12), (4, ControllerLayout.GenesisSixButton, 12), (5, ControllerLayout.Genesis, 8) })
             {
-                var config = ConsolesConfig.Load();
-                config.SetValue("Genesis", "pad1", "md.teamplayer6");
-                config.SetValue("Genesis", "pad2", "md.pad3");
-                config.Save();
-                Rig rig = Open("bindings", "Genesis");
-                Assert.Equal(5, rig.Model.PlayersOf("Genesis"));
-                foreach (var (player, layout, regions) in new[] { (3, ControllerLayout.GenesisSixButton, 12), (4, ControllerLayout.GenesisSixButton, 12), (5, ControllerLayout.Genesis, 8) })
-                {
-                    while (rig.Model.Binding!.Player != player) rig.Model.StepBindingPlayer();
-                    rig.View.Fill();
-                    Assert.Equal(layout, rig.Diagram.Layout);
-                    Assert.Equal(regions, rig.Diagram.Regions.Count);
-                }
-                rig.Window.Close();
+                while (rig.Model.Binding!.Player != player) rig.Model.StepBindingPlayer();
+                rig.View.Fill();
+                Assert.Equal(layout, rig.Diagram.Layout);
+                Assert.Equal(regions, rig.Diagram.Regions.Count);
             }
-            finally
-            {
-                EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(null);
-            }
+            rig.Window.Close();
         }, default);
 
         [Fact]
         public Task Every_control_each_console_uses_has_a_region_and_every_region_a_control() => UiTest.Run(() =>
         {
-            foreach (string console in CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console))
+            foreach (string console in RuntimeCatalog.ConsoleNames)
             {
                 var diagram = new ControllerDiagram { Layout = ControllerDiagrams.LayoutFor(console) };
-                IReadOnlyList<PadControl> controls = CoreCatalog.ControlsFor(console);
+                IReadOnlyList<PadControl> controls = RuntimeCatalog.ControlsFor(console);
                 var regions = diagram.Regions.Select(r => r.Id).ToHashSet();
                 bool knobs = diagram.Layout == ControllerLayout.DualShock;
                 foreach (PadControl control in controls.Where(c => !(knobs && c.ToString().Contains("Stick", StringComparison.Ordinal) && c is not (PadControl.L3 or PadControl.R3))))
@@ -395,7 +388,7 @@ namespace EmuSen.WiseMan.Mistress
             Rig rig = Open("bindings", "SNES");
             rig.Model.ToggleTesting();
             rig.View.Fill();
-            foreach (PadButton button in CoreCatalog.ButtonsFor("SNES"))
+            foreach (PadButton button in RuntimeCatalog.PadOf("SNES").Buttons)
             {
                 SDL.GamepadButton bound = rig.Pads.For("SNES").ButtonToPad[button];
                 rig.Pad.Pad.Press(bound);

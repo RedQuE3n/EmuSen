@@ -158,7 +158,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Vstop_is_registered_and_needs_no_rom_loaded()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Contains("vstop", shell.CommandNames);
 
@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Minus_w_without_a_window_opener_reports_not_supported()
         {
-            var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new VstopCommand() });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new VstopCommand() });
 
             var result = shell.Submit("vstop -w");
 
@@ -181,7 +181,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Minus_w_with_a_window_opener_calls_it_instead_of_the_console_dashboard()
         {
             int opened = 0;
-            var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new VstopCommand(() => opened++) });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new VstopCommand(() => opened++) });
 
             var result = shell.Submit("vstop -W");
 
@@ -194,7 +194,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Without_a_real_terminal_it_refuses_rather_than_drawing()
         {
-            var shell = DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new VstopCommand() });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new VstopCommand() });
 
             var result = shell.Submit("vstop");
 

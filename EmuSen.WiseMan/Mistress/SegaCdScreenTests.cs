@@ -5,8 +5,6 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -39,7 +37,6 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(roms);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
             _disc = Path.Combine(roms, "Game.iso");
             File.WriteAllBytes(_disc, SyntheticMdRom.Disc("U"));
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
@@ -47,7 +44,6 @@ namespace EmuSen.WiseMan.Mistress
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
@@ -56,7 +52,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void The_sega_cd_and_the_32x_take_the_genesiss_screen_and_pads_and_a_console_of_its_own_keeps_its()
         {
-            Assert.Equal(new[] { Genesis, Genesis, Genesis, "SNES", "GB" }, new[] { Genesis, SegaCd, "32X", "SNES", "GB" }.Select(CoreCatalog.HostOf));
+            Assert.Equal(new[] { Genesis, Genesis, Genesis, "SNES", "GB" }, new[] { Genesis, SegaCd, "32X", "SNES", "GB" }.Select(RuntimeCatalog.HostOf));
             Assert.True(EmuSen.Mistress.Library.ConsoleCrop.HasOverscan(SegaCd));
             Assert.Equal(ScreenFilters.NamesFor(Genesis), ShaderCatalog.BuiltIns(SegaCd).Select(e => e.Stored));
             Assert.True(ControllerDiagrams.IsGenesis(SegaCd) && ControllerDiagrams.IsGenesis("32X") && !ControllerDiagrams.IsGenesis("SNES"));
@@ -70,7 +66,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task The_sega_cds_shader_page_lists_the_crt_filter() => Session.Dispatch(() =>
         {
-            Assert.Contains(SegaCd, CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console));
+            Assert.Contains(SegaCd, RuntimeCatalog.ConsoleNames);
             MainWindow window = SettingsDesk.Open(SettingsScreen.Display, "shaders", "shader:" + SegaCd);
             var listed = SettingsDesk.Keys(window).Where(k => k.StartsWith("use:", StringComparison.Ordinal)).ToList();
             Assert.Contains("use:" + CrtFilter.Name, listed);
@@ -96,10 +92,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(Genesis, frame.FilterConsole);
             window.Close();
 
-            using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(_disc, options: TestCores.NoBattery).Core);
-            for (int f = 0; f < 120; f++) core.RunFrame();
-            byte[] picture = core.GetFrameBufferRgba().ToArray();
-            (int width, int height) = (core.ScreenWidth, core.ScreenHeight);
+            (byte[] picture, int width, int height) = ApiPicture.After(_disc, 120);
             Assert.Contains(picture, b => b != 0);
 
             byte[]? Draw(string console)

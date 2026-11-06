@@ -1,15 +1,14 @@
 using EmuSen.Crystal.Systems.N64;
-using EmuSen.Cores.Native;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Avalonia.Input;
 using SDL3;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 using EmuSen.Mistress.Input;
+using EmuSen.Mistress.Library;
 using EmuSen.Endymion.Input;
 using EmuSen.WiseMan.Fixtures;
 
@@ -167,42 +166,25 @@ namespace EmuSen.WiseMan.Input
 
         // --- The identifier the file is keyed on ---
 
-        // CoreCatalog names the tab and the config key; ICore.CoreName names the
-        // running core. MainWindow assigns one to the other, so they must agree.
+        // The catalog names the tab and the config key, and the runtime names the console a game runs as; MainWindow assigns one to the other, so they must agree.
         [Fact]
         public void Every_cores_console_name_matches_what_the_catalog_calls_it()
         {
-            var catalogNames = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToHashSet();
-
-            using var marsRt = new MarsRtTestCore();
-            marsRt.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build()));
-            Assert.Contains(marsRt.Console, catalogNames);
+            string rom = SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build());
+            try { Assert.Contains(RuntimeCatalog.ConsoleForRom(rom)!, RuntimeCatalog.ConsoleNames); }
+            finally { File.Delete(rom); }
         }
 
         [Fact]
         public void The_catalog_lists_consoles_by_manufacturer_then_release()
         {
-            string[] order = CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console).ToArray();
-
-            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, order);
-        }
-
-        // The rebind window lists a console's pad with no ROM loaded, so this must
-        // come off the core rather than being restated - see EmuSen_Input.md §5.1.
-        [Fact]
-        public void The_catalogs_button_list_is_the_cores_own()
-        {
-            using (var moonRt = Fixtures.MoonEngines.Create()) Assert.Equal(moonRt.SupportedButtons, CoreCatalog.ButtonsFor("NES"));
-            using (var venusRt = (IDisposable)Fixtures.SyntheticRom.LoadCore(Fixtures.SyntheticRom.BuildBlank())) Assert.Equal(((ICore)venusRt).SupportedButtons, CoreCatalog.ButtonsFor("SNES"));
-            using (var gameBoy = MercuryEngines.Create()) Assert.Equal(gameBoy.SupportedButtons.Order(), CoreCatalog.ButtonsFor("GB").Order());
-            using var marsRt = new MarsRtTestCore();
-            Assert.Equal(marsRt.SupportedButtons, CoreCatalog.ButtonsFor("N64"));
+            Assert.Equal(new[] { "NES", "GB", "SNES", "N64", "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, RuntimeCatalog.ConsoleNames);
         }
 
         [Fact]
         public void An_unknown_console_gets_the_whole_button_union()
         {
-            Assert.Equal(Enum.GetValues<PadButton>(), CoreCatalog.ButtonsFor("Dreamcast"));
+            Assert.Equal(Enum.GetValues<PadButton>(), RuntimeCatalog.PadOf("Dreamcast").Buttons);
         }
     
         // --- The generic pad's newer controls, against files written before them - see EmuSen_Input.md §7.4 ---

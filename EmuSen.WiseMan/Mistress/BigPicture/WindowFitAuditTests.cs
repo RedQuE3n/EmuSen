@@ -10,7 +10,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Common;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -99,10 +98,9 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             if (_hosted is { } library)
             {
                 File.Delete(library);
-                File.Delete(EmuSen.Cores.Native.CoreSidecar.PathFor(library));
+                File.Delete(CoreSidecars.PathFor(library));
                 MistressRuntime().Rescan();
             }
-            EmuSen.Cores.Native.CoreDiscovery.UseDirectories(null);
             Factory.SetValue(null, _realFactory);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
@@ -234,14 +232,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             // A library of the player's own /Cores, approved through the frontend API, so either implementation lists it.
             string dir = DataStore.Cores;
             Directory.CreateDirectory(dir);
-            string library = Path.Combine(dir, Path.GetFileName(EmuSen.WiseMan.Cores.CoreAdapterTests.LibraryPath("v1_test_core")));
-            File.Copy(EmuSen.WiseMan.Cores.CoreAdapterTests.LibraryPath("v1_test_core"), library, overwrite: true);
-            EmuSen.Cores.Native.CoreSidecar.Write(library);
-            var sidecar = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(EmuSen.Cores.Native.CoreSidecar.PathFor(library)))!;
+            string library = Path.Combine(dir, Path.GetFileName(EmuSen.WiseMan.Fixtures.CoreSidecars.LibraryPath("v1_test_core")));
+            File.Copy(EmuSen.WiseMan.Fixtures.CoreSidecars.LibraryPath("v1_test_core"), library, overwrite: true);
+            CoreSidecars.Write(library);
+            var sidecar = (System.Text.Json.Nodes.JsonObject)System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllText(CoreSidecars.PathFor(library)))!;
             sidecar["info"]!["id"] = $"hosted-{systemId}";
             sidecar["info"]!["display_name"] = $"Hosted {systemId}";
             ((System.Text.Json.Nodes.JsonObject)sidecar["info"]!["systems"]![0]!)["id"] = systemId;
-            File.WriteAllText(EmuSen.Cores.Native.CoreSidecar.PathFor(library), sidecar.ToJsonString());
+            File.WriteAllText(CoreSidecars.PathFor(library), sidecar.ToJsonString());
             var runtime = MistressRuntime();
             _hosted = library;
             runtime.Rescan();
@@ -485,7 +483,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 {
                     Stop(window);
                     window.Close();
-                    EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(null);
                 }
                 return;
             }

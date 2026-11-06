@@ -5,7 +5,7 @@ namespace EmuSen.WiseMan.DianaSh
     // The multi-line buffering the F4 prompt's secondary "> " depends on - see EmuSen_Debugging_Tools_Reference_v5.md §3.17.
     public class ContinuationTests
     {
-        private static DianaShInterpreter NewShell() => DianaShInterpreter.CreateDefault(null);
+        private static DianaShInterpreter NewShell() => DianaShInterpreter.CreateWithoutSession();
 
         // Feeds lines one at a time the way a real prompt does, returning the final output.
         private static (string Output, bool StillWaiting) Feed(DianaShInterpreter shell, params string[] lines)

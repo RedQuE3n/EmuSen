@@ -31,7 +31,7 @@ namespace EmuSen.WiseMan.Cores
         private CoreEngine Engine(params byte[] payload)
         {
             string path = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(path, CoreAdapterTests.Image(payload.Length == 0 ? new byte[] { 1, 2, 3 } : payload));
+            File.WriteAllBytes(path, TestCoreImage.Of(payload.Length == 0 ? new byte[] { 1, 2, 3 } : payload));
             var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
             engine.LoadRom(path);
             return engine;

@@ -4,7 +4,6 @@ using System.Text.Json.Nodes;
 using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Headless;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Mistress.Views;
@@ -32,15 +31,11 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_root);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
             Confirm.SetValue(null, _realConfirm);
-            CoreDiscovery.UseDirectories(null);
-            CoreDiscovery.UsePlayerDirectories(null);
-            CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
@@ -58,12 +53,12 @@ namespace EmuSen.WiseMan.Mistress
             string build = Path.Combine(_root, "build" + Guid.NewGuid().ToString("N")[..6]);
             Directory.CreateDirectory(build);
             Directory.CreateDirectory(dir);
-            string built = Path.Combine(build, Path.GetFileName(CoreAdapterTests.LibraryPath("v1_plain_core")));
-            File.Copy(CoreAdapterTests.LibraryPath("v1_plain_core"), built);
-            CoreSidecar.Write(built);
+            string built = Path.Combine(build, Path.GetFileName(CoreSidecars.LibraryPath("v1_plain_core")));
+            File.Copy(CoreSidecars.LibraryPath("v1_plain_core"), built);
+            CoreSidecars.Write(built);
             string copy = Path.Combine(dir, Path.GetFileName(built));
             File.Copy(built, copy);
-            File.Copy(CoreSidecar.PathFor(built), CoreSidecar.PathFor(copy));
+            File.Copy(CoreSidecars.PathFor(built), CoreSidecars.PathFor(copy));
             return copy;
         }
 
@@ -71,13 +66,13 @@ namespace EmuSen.WiseMan.Mistress
         private string PlayersCore()
         {
             string copy = Core(DataStore.Cores);
-            var sidecar = (JsonObject)JsonNode.Parse(File.ReadAllText(CoreSidecar.PathFor(copy)))!;
+            var sidecar = (JsonObject)JsonNode.Parse(File.ReadAllText(CoreSidecars.PathFor(copy)))!;
             sidecar["info"]!["id"] = "approval-core";
             sidecar["info"]!["display_name"] = "Approval Core";
             var system = (JsonObject)sidecar["info"]!["systems"]![0]!;
             system["id"] = "approval";
             system["extensions"] = new JsonArray(".apt");
-            File.WriteAllText(CoreSidecar.PathFor(copy), sidecar.ToJsonString());
+            File.WriteAllText(CoreSidecars.PathFor(copy), sidecar.ToJsonString());
             MistressGame.Runtime.Rescan();
             return copy;
         }
@@ -85,7 +80,7 @@ namespace EmuSen.WiseMan.Mistress
         private string PlayersGame()
         {
             string path = Path.Combine(_root, "game.apt");
-            File.WriteAllBytes(path, CoreAdapterTests.Image(1, 2, 3, 4));
+            File.WriteAllBytes(path, TestCoreImage.Of(1, 2, 3, 4));
             return path;
         }
 
@@ -98,10 +93,10 @@ namespace EmuSen.WiseMan.Mistress
             Ask(window, PlayersGame()).GetAwaiter().GetResult();
             Ask(window, PlayersGame()).GetAwaiter().GetResult();
             Assert.Equal(1, _asked);
-            Assert.Contains(CoreSidecar.HashOf(core), _message!.Replace(" ", "").Replace("\n", ""));
+            Assert.Contains(CoreSidecars.HashOf(core), _message!.Replace(" ", "").Replace("\n", ""));
             Assert.Contains("full permissions", _message);
             Assert.Contains(Path.GetFileName(core), _message);
-            Assert.Equal($"{CoreSidecar.HashOf(core)}  {Path.GetFileName(core)}\n", File.ReadAllText(CoreTrust.ApprovalsPath));
+            Assert.Equal($"{CoreSidecars.HashOf(core)}  {Path.GetFileName(core)}\n", File.ReadAllText(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName)));
             window.Close();
         }, default);
 
@@ -113,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress
             var window = new MainWindow();
             Ask(window, PlayersGame()).GetAwaiter().GetResult();
             Assert.Equal(1, _asked);
-            Assert.False(File.Exists(CoreTrust.ApprovalsPath));
+            Assert.False(File.Exists(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName)));
 
             // The build's own test core, vouched for by its manifest, runs the .tst game with no question.
             Ask(window, Game()).GetAwaiter().GetResult();
@@ -124,7 +119,7 @@ namespace EmuSen.WiseMan.Mistress
         private string Game()
         {
             string path = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(path, CoreAdapterTests.Image(1, 2, 3, 4));
+            File.WriteAllBytes(path, TestCoreImage.Of(1, 2, 3, 4));
             return path;
         }
 

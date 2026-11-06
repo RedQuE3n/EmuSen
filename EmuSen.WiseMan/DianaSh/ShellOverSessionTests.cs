@@ -39,17 +39,8 @@ namespace EmuSen.WiseMan.DianaSh
             return f;
         }
 
-        // The shell over the session's table; null where the C# shell meets the Rust runtime's table, whose refusal is held instead - see EmuSen_Backend.md §29.28.
-        private static DianaShInterpreter? Over(CrystalSession s, DianaShSessionManager? sessions = null)
-        {
-            if (!DianaShNative.Active)
-            {
-                var refused = Assert.Throws<DianaShTableRefusedException>(() => DianaShInterpreter.CreateForService(s.ServiceTable(), null, sessions));
-                Assert.Equal(DianaShInterpreter.ForeignTableRefusal, refused.Message);
-                return null;
-            }
-            return DianaShInterpreter.CreateForService(s.ServiceTable(), null, sessions);
-        }
+        // The shell over the session's table.
+        private static DianaShInterpreter? Over(CrystalSession s, DianaShSessionManager? sessions = null) => DianaShInterpreter.CreateForService(s.ServiceTable(), null, sessions);
 
         [Fact]
         public void Resume_typed_runs_the_halted_session_and_says_so()

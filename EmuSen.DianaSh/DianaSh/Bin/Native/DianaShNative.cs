@@ -84,7 +84,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         public uint BudgetMs;
     }
 
-    // DianaSh's host API in emusen_platform, and the switch that chooses the Rust shell - see EmuSen_DianaSh.md §13.3 and §13.7.
+    // DianaSh's host API in emusen_platform, attached at the first shell made - see EmuSen_DianaSh.md §13.7 and EmuSen_Backend.md §40.7.
     internal static unsafe class DianaShNative
     {
         public const string Variable = "EMUSEN_DIANASH_NATIVE";
@@ -97,16 +97,20 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         public const uint ConfigSessions = 1, ConfigInteractive = 2;
 
         private static readonly Lazy<string?> Attached = new(Attach);
-        private static readonly PlatformSwitch Chosen = SwitchFor(() => Environment.GetEnvironmentVariable(Variable), () => (Attached.Value is null, Attached.Value ?? ""));
 
-        // State 2: the Rust shell unless the variable is 0; a library that is absent or refused leaves the C#, said once - see EmuSen_DianaSh.md §13.10.
-        public static bool Active => Chosen.Active;
-
-        // DianaSh's switch as the process makes it, for a test that makes one over another load.
-        internal static PlatformSwitch SwitchFor(Func<string?> variable, Func<(bool Available, string Report)> load) => new(variable, load, PlatformSwitch.Announce, "DianaSh");
-
-        // The Rust shell usable, whichever the switch chose: what a parity test asks before making one.
+        // The library itself, with every export the facade calls: what every shell needs.
         public static bool Ready => Attached.Value is null;
+
+        public static string Report => Attached.Value ?? PlatformLibrary.Report;
+
+        // Makes sure the library is in the process, or refuses in words; there is no C# shell to fall back to - see EmuSen_Backend.md §40.7.
+        internal static void Up()
+        {
+            RetiredSwitch.Note(Variable, "DianaSh", "2026-11-06");
+            if (Attached.Value is { } why) throw new DllNotFoundException(Refusal(why));
+        }
+
+        internal static string Refusal(string why) => $"{PlatformLibrary.FileName} is not in use for DianaSh ({why}); DianaSh's shell has had no C# implementation since 2026-11-06.";
 
         internal static delegate* unmanaged[Cdecl]<uint> AbiVersion;
         internal static delegate* unmanaged[Cdecl]<byte*, nuint, long> LastErrorFn;

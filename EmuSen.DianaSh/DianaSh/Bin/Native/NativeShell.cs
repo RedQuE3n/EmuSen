@@ -42,6 +42,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
 
         public NativeShell(bool keepsSessions)
         {
+            Up();
             var config = new DianashConfig { Size = (uint)sizeof(DianashConfig), Flags = keepsSessions ? ConfigSessions : 0 };
             _handle = New(&config);
             if (_handle == 0) throw new InvalidOperationException($"DianaSh: {LastError()}");

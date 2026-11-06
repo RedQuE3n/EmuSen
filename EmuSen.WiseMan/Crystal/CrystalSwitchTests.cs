@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.WiseMan.Fixtures;
 using Xunit;
 using CrystalContract = EmuSen.Crystal.Client.Contract.Crystal;
@@ -49,13 +48,13 @@ namespace EmuSen.WiseMan.Crystal
         [InlineData("1")]
         public void An_unset_variable_or_1_is_said_nothing_of(string? value) => Assert.Null(CrystalContract.Ignored(value));
 
+        // Since 2026-11-06 the C# shell's variable stops nothing: the run is the run with it unset - see EmuSen_Backend.md §40.7.
         [Fact]
-        public void The_csharp_shell_s_variable_is_refused_in_words()
+        public void The_retired_csharp_shell_s_variable_no_longer_stops_a_run()
         {
             var (exit, output) = Pharaoh(null, "0");
-            Assert.Equal(1, exit);
-            Assert.Contains($"[ERROR] {DianaShInterpreter.ForeignTableRefusal}", Lines(output));
-            Assert.DoesNotContain("Unhandled exception", output);
+            Assert.True(exit == 0, $"Pharaoh exited {exit}: {output}");
+            Assert.DoesNotContain("[ERROR]", output);
         }
     }
 }

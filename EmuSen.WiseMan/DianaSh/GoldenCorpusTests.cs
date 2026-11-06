@@ -57,9 +57,6 @@ namespace EmuSen.WiseMan.DianaSh
 
         private static GoldenFile Load(string name) => GoldenFile.Parse(File.ReadAllBytes(Path.Combine(Corpus, name)));
 
-        // Whether this run's shell has the file's command: a file marked for the Rust shell is that shell's alone.
-        private static bool Runs(GoldenFile file) => file.Shell != "rust" || EmuSen.DianaSh.DianaSh.Bin.Native.DianaShNative.Active;
-
         // Every case of the file run again, its usage taken live, its patterns kept where they still hold.
         public static GoldenFile Record(GoldenFile file, GoldenRunner runner)
         {
@@ -79,7 +76,6 @@ namespace EmuSen.WiseMan.DianaSh
         public void A_command_prints_what_its_recording_holds(string name)
         {
             GoldenFile file = Load(name);
-            if (!Runs(file)) return;
             using var runner = new GoldenRunner();
             if (Recording)
             {
@@ -94,7 +90,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Every_command_and_builtin_has_a_file_of_its_own()
         {
-            var have = Files().Where(f => Runs(Load((string)f[0]))).Select(f => Path.GetFileNameWithoutExtension((string)f[0])).ToHashSet();
+            var have = Files().Select(f => Path.GetFileNameWithoutExtension((string)f[0])).ToHashSet();
             Assert.Empty(Expected().Where(e => !have.Contains(e)));
             Assert.Empty(have.Where(h => !Expected().Contains(h)));
             foreach (string name in have) Assert.Equal(name, FileName(Load(name + ".golden").Command));
@@ -107,7 +103,6 @@ namespace EmuSen.WiseMan.DianaSh
             foreach (object[] row in Files())
             {
                 GoldenFile file = Load((string)row[0]);
-                if (!Runs(file)) continue;
                 IReadOnlyList<string> live = LiveUsage(file.Command);
                 if (!live.SequenceEqual(file.Usage)) missing.Add($"{row[0]}: its recorded usage lines are not the live ones - record it again");
                 var covered = file.Cases.SelectMany(c => c.Covers).Concat(file.Uncovered.Select(u => u.Line)).ToHashSet();
@@ -167,7 +162,6 @@ namespace EmuSen.WiseMan.DianaSh
             foreach (object[] row in Files())
             {
                 GoldenFile file = Load((string)row[0]);
-                if (!Runs(file)) continue;
                 byte[] first, second;
                 using (var runner = new GoldenRunner()) first = Record(file, runner).Write();
                 using (var runner = new GoldenRunner()) second = Record(file, runner).Write();

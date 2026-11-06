@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.Endymion.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -12,7 +15,7 @@ namespace EmuSen.WiseMan.Galaxia
 {
     // A leftover EMUSEN_<NAME>_NATIVE=0 after a component's C# half was deleted: ignored, and said once in one line - see EmuSen_Backend.md §40.
     [Collection(TestCollections.ProcessGlobals)]
-    public class RetiredSwitchTests : IDisposable
+    public unsafe class RetiredSwitchTests : IDisposable
     {
         private readonly string _logs = Path.Combine(Path.GetTempPath(), "EmuSenRetiredSwitch_" + Guid.NewGuid().ToString("N"));
         private readonly string? _logOverride = ErrorLog.DirectoryOverride;
@@ -31,6 +34,7 @@ namespace EmuSen.WiseMan.Galaxia
             ErrorLog.DirectoryOverride = _logOverride;
             Environment.SetEnvironmentVariable("EMUSEN_RETIREDTEST_NATIVE", null);
             Environment.SetEnvironmentVariable("EMUSEN_RETIREDTEST2_NATIVE", null);
+            Environment.SetEnvironmentVariable(DianaShNative.Variable, null);
             try { Directory.Delete(_logs, recursive: true); } catch (IOException) { }
         }
 
@@ -77,6 +81,35 @@ namespace EmuSen.WiseMan.Galaxia
         {
             Assert.Equal($"{PlatformLibrary.FileName} is not in use for the library (not found); the library has had no C# implementation since 2026-11-05.", EmuSen.Crystal.Client.Library.GameLibrary.Refusal("not found"));
             Assert.True(EmuSen.Crystal.Client.Library.GameLibrary.Ready, EmuSen.Crystal.Client.Library.GameLibrary.Report);
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static uint MajorTwo() => 2u << 16;
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static nint NoShell(void* config) => 0;
+
+        [Fact]
+        public void DianaSh_without_its_library_refuses_in_words_naming_why()
+        {
+            Assert.Equal($"{PlatformLibrary.FileName} is not in use for DianaSh (not found); DianaSh's shell has had no C# implementation since 2026-11-06.", DianaShNative.Refusal("not found"));
+            Assert.True(DianaShNative.Ready, DianaShNative.Report);
+            nint major = (nint)(delegate* unmanaged[Cdecl]<uint>)&MajorTwo;
+            nint none = (nint)(delegate* unmanaged[Cdecl]<void*, nint>)&NoShell;
+            Assert.Equal($"{PlatformLibrary.FileName} speaks DianaSh host API 2.0, this build 1.x", DianaShNative.Check(n => n == "dianash_abi_version" ? major : PlatformLibrary.Export(n), out _));
+            Assert.Equal($"{PlatformLibrary.FileName} has no dianash_session_replace", DianaShNative.Check(n => n == "dianash_session_replace" ? 0 : PlatformLibrary.Export(n), out _));
+            Assert.Equal($"{PlatformLibrary.FileName} could not make a DianaSh shell", DianaShNative.Check(n => n == "dianash_new" ? none : PlatformLibrary.Export(n), out _));
+            Assert.Null(DianaShNative.Check(PlatformLibrary.Export, out _));
+        }
+
+        [Fact]
+        public void A_leftover_dianash_zero_still_makes_the_rust_shell_and_is_said_once()
+        {
+            Environment.SetEnvironmentVariable(DianaShNative.Variable, "0");
+            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(null);
+            EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(null);
+            Assert.Equal("hello", shell.Submit("echo hello").Output);
+            Assert.Equal($"{DianaShNative.Variable}=0 is ignored: DianaSh has had no C# implementation since 2026-11-06 and runs on {PlatformLibrary.FileName}.", Assert.Single(_said));
         }
     }
 }

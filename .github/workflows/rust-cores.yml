@@ -662,9 +662,9 @@ jobs:
         continue-on-error: true
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests|FullyQualifiedName~FilterPresetParityTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # DianaSh on the Rust shell, its default since S6's state 2, with the text tools and EmuSen's command modules linked
-      # into the platform library: the golden corpus, the shell's tests and the session service's, on each system. The
-      # switch test says in the log which shell ran and fails if it was not the Rust one (EmuSen_DianaSh.md §13.10, §13.11).
+      # DianaSh on the Rust shell, its only implementation since 2026-11-06 (EmuSen_Backend.md §40.7), with the text tools
+      # and EmuSen's command modules linked into the platform library: the golden corpus, the shell's tests and the
+      # session service's, on each system. The log says which shell ran (EmuSen_DianaSh.md §13.10, §13.11).
       - name: Test DianaSh on the Rust shell
         if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
@@ -672,16 +672,6 @@ jobs:
         env:
           EMUSEN_DIANASH_EXPECT: rust
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionServiceParityTests|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=detailed" --logger "trx;LogFileName=dianash-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
-
-      # The same on the C# shell, the failover EMUSEN_DIANASH_NATIVE=0 selects until S7; reported beside the Rust shell's.
-      - name: Test DianaSh on its C#
-        if: ${{ !cancelled() }}
-        working-directory: EmuSen-Project
-        continue-on-error: true
-        env:
-          EMUSEN_DIANASH_NATIVE: '0'
-          EMUSEN_DIANASH_EXPECT: 'c#'
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionServiceParityTests|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=dianash-csharp-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # The frontend API through the binding: the header against the binding, the contract layer's shape, the
       # divergence rows and the frontends' reference (EmuSen_Backend.md §14; its C# implementation deleted, §40.8).

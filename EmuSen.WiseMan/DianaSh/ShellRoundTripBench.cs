@@ -9,7 +9,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // A line's round trip through the facade, C# or Rust as EMUSEN_DIANASH_NATIVE chooses; only with EMUSEN_DIANASH_BENCH - see EmuSen_DianaSh.md §13.7.
+    // A line's round trip through the facade to the Rust shell; only with EMUSEN_DIANASH_BENCH - see EmuSen_DianaSh.md §13.7.
     [Collection(TestCollections.ProcessGlobals)]
     public class ShellRoundTripBench
     {

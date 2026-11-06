@@ -1,5 +1,4 @@
 using EmuSen.Cores.Native;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Crystal.Systems;
 using EmuSen.Crystal.Systems.Genesis;
@@ -9,6 +8,10 @@ namespace EmuSen.WiseMan.DianaSh
     // The Genesis pack's Game Genie and Action Replay codecs, held to their documents' worked examples - see EmuSen_Cheats.md §9.
     public class GenesisCheatFormatsTests
     {
+
+        // `cheat add`'s rule, as the cheat module and Mistress's list apply it: the codec that alone claims the code, else the Game Genie's look - see EmuSen_Cheats.md.
+        private static bool PrefersExplicit(ICheatCodeCodec explicitCodec, ICheatCodeCodec autoCodec, string code) =>
+            explicitCodec.CanDecode(code) != autoCodec.CanDecode(code) ? explicitCodec.CanDecode(code) : EmuSen.Mistress.CheatList.LooksLikeGameGenieFormat(code);
         private static ICheatCodeCodec Poke => SystemPacks.For("md")!.AutoDetectCodec!();
         private static ICheatCodeCodec Patch => SystemPacks.For("md")!.ExplicitCodec!();
 
@@ -68,7 +71,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void An_action_replay_code_pokes_the_main_ram(string code, int address, uint value, int width)
         {
             Assert.True(Poke.CanDecode(code), code);
-            Assert.False(CheatCommand.PrefersExplicitCodec(Patch, Poke, code), code);
+            Assert.False(PrefersExplicit(Patch, Poke, code), code);
             var w = Assert.Single(Poke.DecodeWrites(code)!);
             Assert.Equal((GenesisSystems.Wram, address, value, width, true), (w.Space, w.Address, w.Value, w.EffectiveWidth, w.BigEndian));
         }
@@ -78,7 +81,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             const string code = "002D50:6004";
             Assert.False(Poke.CanDecode(code));
-            Assert.True(CheatCommand.PrefersExplicitCodec(Patch, Poke, code));
+            Assert.True(PrefersExplicit(Patch, Poke, code));
             var w = Assert.Single(Patch.DecodeWrites(code)!);
             Assert.Equal((0x2D50, 0x6004u, 2), (w.Address, w.Value, w.EffectiveWidth));
             Assert.False(Poke.CanDecode("B00080:3200") || Patch.CanDecode("B00080:3200"));
@@ -89,7 +92,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Codes_joined_with_a_plus_are_one_cheat()
         {
             Assert.Equal(2, Poke.DecodeWrites("FFE4A2:0020+FFE4A4:10")!.Count);
-            Assert.True(CheatCommand.PrefersExplicitCodec(Patch, Poke, "SCRA-BJX0+ATGA-AA56"));
+            Assert.True(PrefersExplicit(Patch, Poke, "SCRA-BJX0+ATGA-AA56"));
             Assert.Equal(2, Patch.DecodeWrites("SCRA-BJX0+ATGA-AA56")!.Count);
             Assert.False(Patch.CanDecode("SCRA-BJX0+FFE4A2:0020"));
         }

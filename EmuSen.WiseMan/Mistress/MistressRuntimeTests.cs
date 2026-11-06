@@ -86,8 +86,6 @@ namespace EmuSen.WiseMan.Mistress
         private static void Type(HotaruWindow console, string line) =>
             typeof(HotaruWindow).GetMethod("Submit", Hidden)!.Invoke(console, new object[] { line });
 
-        private static string RefusalLine => $"[ERROR] {DianaShInterpreter.ForeignTableRefusal}";
-
         [Fact]
         public Task A_game_s_log_names_the_implementation_that_serves_it() => Session.Dispatch(() =>
         {
@@ -98,32 +96,16 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Contains($"[ROM] Runtime: {CrystalRuntime.Implementation}", File.ReadAllLines(log));
         }, default);
 
-        // Run at each EMUSEN_DIANASH_NATIVE: the C# shell is refused over the runtime's table.
         [Fact]
-        public Task The_console_over_a_running_game_refuses_only_the_csharp_shell_over_the_rust_runtime_in_words() => Session.Dispatch(() =>
+        public Task The_console_over_a_running_game_reaches_it_through_the_runtime_s_table() => Session.Dispatch(() =>
         {
             MainWindow window = Started();
             HotaruWindow console = Console(window);
-            bool refused = !DianaShNative.Active;
-
-            if (refused)
-            {
-                Assert.Contains(RefusalLine, Output(console).Split('\n'));
-                Type(console, "pause");
-                Pump(() => window.IsPaused);
-                Assert.True(window.IsPaused, "the window's own commands stopped working with the refusal");
-
-                Load(window);
-                Assert.Equal(2, Output(console).Split('\n').Count(l => l == RefusalLine));
-            }
-            else
-            {
-                Assert.DoesNotContain("[ERROR]", Output(console));
-                TextBlock status = window.GetControl<TextBlock>("StatusText");
-                Type(console, "bp add 008005");
-                Pump(() => status.Text?.Contains("BREAKPOINT", StringComparison.Ordinal) == true);
-                Assert.Contains("BREAKPOINT", status.Text);
-            }
+            Assert.DoesNotContain("[ERROR]", Output(console));
+            TextBlock status = window.GetControl<TextBlock>("StatusText");
+            Type(console, "bp add 008005");
+            Pump(() => status.Text?.Contains("BREAKPOINT", StringComparison.Ordinal) == true);
+            Assert.Contains("BREAKPOINT", status.Text);
             window.Close();
         }, default);
     }

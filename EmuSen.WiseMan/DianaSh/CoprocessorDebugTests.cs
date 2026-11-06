@@ -78,11 +78,10 @@ namespace EmuSen.WiseMan.DianaSh
         public void An_unknown_scope_word_is_not_swallowed_as_one()
         {
             var target = BuildTarget();
-            var (cpu, next) = EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers
-                .ResolveCpu(target, new[] { "bp", "add", "8000" }, 1);
 
-            Assert.Equal(DebugCpus.MainName, cpu!.Name);
-            Assert.Equal(1, next);
+            DianaShInterpreter.CreateDefault(target).Submit("bp add 8000");
+
+            Assert.Equal(0x8000, Assert.Single(target.Breakpoints.GetBreakpoints()).Address);
         }
 
         [Fact]
@@ -90,12 +89,11 @@ namespace EmuSen.WiseMan.DianaSh
         {
             var target = BuildTarget();
 
-            // A blank cartridge carries none, so `cop` resolves to nothing at all.
-            var (cpu, next) = EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers
-                .ResolveCpu(target, new[] { "bp", "cop", "add" }, 1);
+            // A blank cartridge carries none, so `cop` resolves to nothing at all and nothing is added.
+            string said = DianaShInterpreter.CreateDefault(target).Execute("bp cop add 8000");
 
-            Assert.Null(cpu);
-            Assert.Equal(2, next);
+            Assert.Equal("This cartridge has no coprocessor CPU to break on.", said);
+            Assert.Empty(target.Breakpoints.GetBreakpoints());
         }
 
         [Fact]

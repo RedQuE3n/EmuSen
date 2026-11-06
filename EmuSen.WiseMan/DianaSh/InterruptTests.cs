@@ -8,7 +8,7 @@ using Xunit;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // Interrupt() stops a running line on whichever shell the switch chose; EMUSEN_DIANASH_NATIVE=0 runs these on the C# fallback - see EmuSen_DianaSh.md §10.2.
+    // Interrupt() stops a running line on the Rust shell - see EmuSen_DianaSh.md §10.2.
     [Collection(TestCollections.ProcessGlobals)]
     public class InterruptTests
     {

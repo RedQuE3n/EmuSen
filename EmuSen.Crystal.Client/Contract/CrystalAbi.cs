@@ -4,7 +4,7 @@ namespace EmuSen.Crystal.Client.Contract
     public static class CrystalAbi
     {
         public const uint Major = 1u;
-        public const uint Minor = 11u;
+        public const uint Minor = 12u;
         public const uint Version = (Major << 16) | Minor;
         public const int NoEngine = -1109;
         public const int Firmware = -1110;
@@ -24,6 +24,7 @@ namespace EmuSen.Crystal.Client.Contract
         public const uint ScopeConsole = 0u;
         public const uint ScopeGame = 2u;
         public const uint ServiceReadOnly = 1u;
+        public const uint ServiceNoGame = 2u;
         public const uint EventSession = 1u;
         public const uint EventRun = 2u;
         public const uint EventState = 4u;

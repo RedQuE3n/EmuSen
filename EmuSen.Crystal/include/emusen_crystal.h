@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 11u
+#define EMUSEN_CRYSTAL_MINOR 12u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -93,6 +93,7 @@ extern "C" {
 
 /* session_service's flags. */
 #define EMUSEN_CRYSTAL_SERVICE_READ_ONLY 1u /* every change refused with EMUSEN_SVC_READ_ONLY (EmuSen_DianaSh.md 6.5) */
+#define EMUSEN_CRYSTAL_SERVICE_NO_GAME 2u   /* since 1.12: the runtime's table with no game, whatever is open (EmuSen_Backend.md 40.7) */
 
 /* Event kinds, as bits; subscribe's kinds of 0 asks for every kind. Each event is a JSON object with "kind",
  * "session" and the fields its kind names. */
@@ -549,7 +550,12 @@ int64_t emusen_crystal_record_stop(emusen_crystal_runtime *rt, uint32_t session,
 /* ---- The debugger: the session service ---------------------------------------------------------------------- */
 
 /* The session's emusen.session@1 table, for a host to hand to dianash_set_services: its functions are the twins
- * below, so a module and a frontend reach one implementation. It lives as long as the session. */
+ * below, so a module and a frontend reach one implementation. It lives as long as the session.
+ * Since 1.12, with EMUSEN_CRYSTAL_SERVICE_NO_GAME, session is 0 and the table is the runtime's with no game, living as
+ * long as the runtime: the cheat ops that need no game (the database, a .cht file's parse, the cheat files) are
+ * answered, run control's resume is raised as a run event for events_drain, sessions is an empty list, games is
+ * EMUSEN_SVC_NOT_SUPPORTED, and every other call is EMUSEN_SVC_NO_SESSION with the words "No ROM loaded - this
+ * command needs an active debug target." (EmuSen_Backend.md section 40.7). */
 const emusen_session_v1 *emusen_crystal_session_service(emusen_crystal_runtime *rt, uint32_t session, uint32_t flags);
 
 /* The twins of emusen_session.h, in its table's order, each with the same arguments after the runtime, the same

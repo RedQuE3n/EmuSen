@@ -28,8 +28,8 @@ namespace EmuSen.WiseMan.DianaSh
                 Assert.Equal("module", kinds[name]);
         }
 
-        // State 2: the Rust shell unless the variable is 0, where the library this run was built with is there to choose.
-        private static bool Native => Environment.GetEnvironmentVariable("EMUSEN_DIANASH_NATIVE") != "0" && DianaShNative.Ready;
+        // The Rust shell always, since the C# one was deleted on 2026-11-06.
+        private const bool Native = true;
 
         [Fact]
         public void The_shell_is_the_one_the_variable_chose()

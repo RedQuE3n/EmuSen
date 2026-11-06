@@ -8,7 +8,7 @@ namespace EmuSen.Crystal.Cheats
         RomPatch,
     }
 
-    // One format's decoder, injected so CheatCommand references no core - see §3.3b.
+    // One format's decoder, injected so the session service references no core - see §3.3b.
     public interface ICheatCodeCodec
     {
         // Human-readable name for `add`'s own "(detected X format)" message.

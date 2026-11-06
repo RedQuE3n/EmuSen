@@ -6,12 +6,7 @@ using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // ResumeCommand/ShutdownCommand/StepCommand (EmuSen/DianaSh/Commands/)
-    // and their alias normalization in DianaShInterpreter.Dispatch
-    // ('continue'/'c' -> 'resume', 'quit' -> 'shutdown', 's' -> 'step').
-    // Dispatched against a null target the same way DianaShDispatchTests
-    // does for every other command - the "does this reach the command and
-    // produce the right HostAction" smoke test.
+    // `resume`, `shutdown` and `step` and their aliases reach their command and raise the right HostAction against a null target, as DianaShDispatchTests does for the rest.
     public class ResumeShutdownStepCommandTests
     {
         [Theory]

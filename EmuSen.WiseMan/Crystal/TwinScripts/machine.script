@@ -4,7 +4,7 @@ log_switch 0
 subscribe
 open $GAME
 service 0
-service 2
+service 4
 service 1
 info
 summary

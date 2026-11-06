@@ -9,7 +9,7 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // XxdCommand (EmuSen.DianaSh/Commands/XxdCommand.cs) - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
+    // `xxd`, the text module's - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
     public class XxdCommandTests
     {
         private static DianaShellFixtures.ScratchDir TempDir() => new("WiseManXxdCommandTests");

@@ -13,7 +13,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         static void Main(string[] args)
         {
             var sessions = new DianaShSessionManager();
-            DianaShInterpreter first = DianaShInterpreter.CreateDefault(null, sessions: sessions);
+            DianaShInterpreter first = DianaShInterpreter.CreateWithoutSession(sessions: sessions);
             sessions.RegisterInitial(new DianaShSession("main", first));
 
             Console.WriteLine(first.GetWelcomeBanner(new[] { "(none - launched standalone, no core loaded)" }));

@@ -1,11 +1,8 @@
-using Silk.NET.Vulkan;
-
 namespace EmuSen.Serenity.Slang
 {
-    // What a bench hears from the shader path, GPU marks and CPU phases; null outside a bench - see EmuSen_Serenity.md §8.1.
+    // What a bench hears from the shader path, CPU phases and the library's device's own marks; null outside a bench - see EmuSen_Serenity.md §8.1.
     internal interface ISlangProbe
     {
-        void Mark(CommandBuffer commands, int point);
         void Phase(int point);
 
         // What the library's device timed itself: a phase at a moment on the stopwatch's clock, and a mark in milliseconds from its submission's beginning.

@@ -8,7 +8,6 @@ using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Dev;
-using static EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen.DebugCommandHelpers;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 {
@@ -34,7 +33,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
         public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
         {
             IDebugTarget resolved;
-            try { resolved = RequireTarget(target); }
+            try { resolved = target ?? throw new InvalidOperationException("No ROM loaded - this command needs an active debug target."); }
             catch (Exception ex) { return DianaShResult.Fail(ex.Message); }
 
             bool windowed = args.Any(a => a.Equals("-w", StringComparison.OrdinalIgnoreCase));

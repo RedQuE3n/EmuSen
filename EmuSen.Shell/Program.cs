@@ -109,12 +109,6 @@ namespace EmuSen.Shell
                 // Blocks until the window closes; GameWindow's own Closing handler does the teardown - see EmuSen_Frontend_Driver.md §1.
                 BuildAvaloniaApp(session.OpenWindow).StartWithClassicDesktopLifetime(args);
             }
-            catch (DianaShTableRefusedException refused)
-            {
-                // The shell's switch and the runtime's disagree, said before any window opens - see EmuSen_Backend.md §29.28.
-                Console.WriteLine($"[ERROR] {refused.Message}");
-                Environment.ExitCode = 1;
-            }
             catch (Exception ex)
             {
                 Console.WriteLine($"\n[CPU HALT] {ex.Message}");
@@ -152,7 +146,7 @@ namespace EmuSen.Shell
                     LaunchGame,
                     line => TryResolveCoreCommand(line, m => shell!.AppendLine(m)),
                     cores.DisplayNames,
-                    () => cores.CheatSystems);
+                    runtime.NoGameService());
 
                 if (initialRomPath != null) StartInitialRom(shell, initialRomPath, LaunchGame);
                 return shell;
@@ -188,8 +182,8 @@ namespace EmuSen.Shell
             string? requested = null;
             HotaruCores cores = HotaruCores.Of(Runtime);
             DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession(
-                new IDianaShCommand[] { new HotaruCommand((rom, _) => requested = rom) },
-                () => cores.CheatSystems);
+                Runtime.NoGameService(),
+                new IDianaShCommand[] { new HotaruCommand((rom, _) => requested = rom) });
             Console.WriteLine(shell.GetWelcomeBanner(cores.DisplayNames));
             Console.WriteLine("--- DianaSh (type 'help', 'hotaru <rom>' or 'core <name> <path>' to launch a game, 'shutdown' to quit) ---");
 

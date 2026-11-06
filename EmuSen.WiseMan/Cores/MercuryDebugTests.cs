@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using EmuSen.Cores;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Crystal.Debugger;
 using EmuSen.WiseMan.Fixtures;
 
@@ -13,6 +12,14 @@ namespace EmuSen.WiseMan.Cores
     // The debugger's claims on the Game Boy's engine, each driven by a few instructions at the entry point - see Mercury_Native.md §8.5, §15.
     public abstract class MercuryDebugClaims : IDisposable
     {
+        // A line run by a shell over the target, as the console's prompt runs it, with its exit status.
+        private static (string Output, int Exit) Sh(IDebugTarget target, string line)
+        {
+            var shell = EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter.CreateDefault(target);
+            string output = shell.Execute(line);
+            return (output, int.Parse(shell.LastExitStatus));
+        }
+
         protected const int Entry = SyntheticGbRom.EntryPoint;
 
         // ld hl,$C000 / inc (hl) / jr the inc
@@ -514,21 +521,21 @@ namespace EmuSen.WiseMan.Cores
             MercuryDebugRig core = Load(CallOnce);
             IDebugTarget target = core.Target;
 
-            Assert.Contains("added", new BreakCommand().Execute(target, new[] { "bp", "add", "162" }, null).Output);
+            Assert.Contains("added", Sh(target, "bp add 162").Output);
             core.RunFrame();
             Assert.Equal(0x162, core.HaltedAddress);
-            Assert.Contains("$000160", new BtCommand().Execute(target, new[] { "bt" }, null).Output);
+            Assert.Contains("$000160", Sh(target, "bt").Output);
 
             target.Breakpoints.RemoveBreakpoint(target.Breakpoints.GetBreakpoints()[0].Id);
-            Assert.Equal(0, new StepCommand().Execute(target, new[] { "step" }, null).ExitCode);
+            Assert.Equal(0, Sh(target, "step").Exit);
             core.RunFrame();
             Assert.Equal(0x163, core.HaltedAddress);
 
-            Assert.Equal(0, new StepCommand().Execute(target, new[] { "step", "out" }, null).ExitCode);
+            Assert.Equal(0, Sh(target, "step out").Exit);
             core.RunFrame();
             Assert.Equal(Entry + 3, core.HaltedAddress);
 
-            Assert.Equal(0, new StepCommand().Execute(target, new[] { "step", "over" }, null).ExitCode);
+            Assert.Equal(0, Sh(target, "step over").Exit);
             core.RunFrame();
             Assert.Equal(Entry + 3, core.HaltedAddress);
         }

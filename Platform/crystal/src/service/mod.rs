@@ -8,6 +8,7 @@ pub mod args;
 pub mod cheat_file;
 pub mod cheats;
 pub mod machine;
+pub mod no_game;
 pub mod registries;
 pub mod views;
 
@@ -44,6 +45,28 @@ impl Provider {
         let mut r = self.requests.lock().unwrap_or_else(|p| p.into_inner());
         r.0.push(op.to_string());
         r.1 = op.to_string();
+    }
+
+    /// `EventsPeek` of run events: the requests not yet drained, and how many the answer holds.
+    fn peek_runs(&self, kinds: u32) -> Answer<(Vec<u8>, usize)> {
+        if kinds & !emusen_session_service::abi::event::RUN != 0 {
+            return Err(not_supported(format!("unknown event kinds 0x{kinds:X}")));
+        }
+        let requests = self.requests.lock().unwrap_or_else(|p| p.into_inner());
+        let mut j = Json::new();
+        j.begin_array();
+        for op in &requests.0 {
+            j.begin_object().str("kind", "run").str("op", op).end_object();
+        }
+        j.end_array();
+        Ok((j.finish().into_bytes(), requests.0.len()))
+    }
+
+    /// `EventsTake`: the first `count` requests taken, once a buffer has held them all.
+    fn take_runs(&self, count: usize) {
+        let mut requests = self.requests.lock().unwrap_or_else(|p| p.into_inner());
+        let n = count.min(requests.0.len());
+        requests.0.drain(..n);
     }
 
     fn last_request(&self) -> String {

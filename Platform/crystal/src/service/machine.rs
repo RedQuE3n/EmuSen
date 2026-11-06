@@ -417,24 +417,12 @@ pub fn log_status() -> i64 {
 /// Run control's requests not yet drained, of the kinds asked, and how many the answer holds, `EventsPeek`.
 pub fn events_peek(c: &Call, kinds: u32) -> Answer<(Vec<u8>, usize)> {
     c.target()?;
-    if kinds & !emusen_session_service::abi::event::RUN != 0 {
-        return Err(not_supported(format!("unknown event kinds 0x{kinds:X}")));
-    }
-    let requests = c.s.provider.requests.lock().unwrap_or_else(|p| p.into_inner());
-    let mut j = Json::new();
-    j.begin_array();
-    for op in &requests.0 {
-        j.begin_object().str("kind", "run").str("op", op).end_object();
-    }
-    j.end_array();
-    Ok((j.finish().into_bytes(), requests.0.len()))
+    c.s.provider.peek_runs(kinds)
 }
 
 /// The first `count` requests taken, once a buffer has held them all, `EventsTake`.
 pub fn events_take(c: &Call, count: usize) {
-    let mut requests = c.s.provider.requests.lock().unwrap_or_else(|p| p.into_inner());
-    let n = count.min(requests.0.len());
-    requests.0.drain(..n);
+    c.s.provider.take_runs(count);
 }
 
 /// What the runtime can open: `systems`, `Games`.

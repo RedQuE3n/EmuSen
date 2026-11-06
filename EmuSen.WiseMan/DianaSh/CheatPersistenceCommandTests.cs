@@ -3,7 +3,7 @@ using EmuSen.Crystal.Debugger;
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
@@ -11,19 +11,19 @@ using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // `cheat save`/`load`/`files` against a real target - see
-    // EmuSen_Config_Reference.md §3.4 and `man cheat`.
+    // `cheat save`/`load`/`files` through the shell against a real target - see EmuSen_Config_Reference.md §3.4 and `man cheat`.
     [Collection(TestCollections.ProcessGlobals)]
     public class CheatPersistenceCommandTests : IDisposable
     {
         private readonly string _dir;
         private readonly IDebugTarget _target = BuildTarget();
-        private readonly CheatCommand _command = new();
+        private readonly DianaShInterpreter _shell;
 
         public CheatPersistenceCommandTests()
         {
             _dir = Path.Combine(Path.GetTempPath(), "EmuSenCheatCmd_" + Guid.NewGuid().ToString("N"));
             ConfigStore.OverrideDirectory = _dir;
+            _shell = DianaShInterpreter.CreateDefault(_target);
         }
 
         public void Dispose()
@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.DianaSh
             return SyntheticRom.TargetOf(core);
         }
 
-        private string Run(params string[] args) => _command.Execute(_target, args, null).Output;
+        private string Run(params string[] args) => _shell.Execute(string.Join(' ', args));
 
         [Fact]
         public void Save_then_clear_then_load_restores_the_cheat()
@@ -99,9 +99,10 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Save_and_load_appear_in_the_usage_text()
         {
-            Assert.Contains("cheat save", _command.Usage);
-            Assert.Contains("cheat load", _command.Usage);
-            Assert.Contains("cheat files", _command.Usage);
+            string usage = _shell.Execute("help");
+            Assert.Contains("cheat save", usage);
+            Assert.Contains("cheat load", usage);
+            Assert.Contains("cheat files", usage);
         }
     }
 }

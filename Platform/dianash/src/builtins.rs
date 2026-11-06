@@ -25,6 +25,7 @@ pub enum Builtin {
     Useradd,
     Userdel,
     Passwd,
+    Clear,
     True,
     False,
     Test,
@@ -35,7 +36,7 @@ pub enum Builtin {
 
 impl Builtin {
     /// In the order `help` has always listed them, relative to one another.
-    pub const ALL: [Builtin; 18] = [
+    pub const ALL: [Builtin; 19] = [
         Builtin::Echo,
         Builtin::Cd,
         Builtin::Pwd,
@@ -48,6 +49,7 @@ impl Builtin {
         Builtin::Useradd,
         Builtin::Userdel,
         Builtin::Passwd,
+        Builtin::Clear,
         Builtin::True,
         Builtin::False,
         Builtin::Test,
@@ -70,6 +72,7 @@ impl Builtin {
             Builtin::Useradd => "useradd",
             Builtin::Userdel => "userdel",
             Builtin::Passwd => "passwd",
+            Builtin::Clear => "clear",
             Builtin::True => "true",
             Builtin::False => "false",
             Builtin::Test => "test",
@@ -101,6 +104,7 @@ impl Builtin {
                 "  passwd <newpassword>          change your own password\n",
                 "  passwd <name> <newpassword>   change <name>'s password (root only)"
             ),
+            Builtin::Clear => "  clear                         clear the terminal screen",
             Builtin::True => "  true                          do nothing, succeed (exit code 0) - for while/if conditions",
             Builtin::False => "  false                         do nothing, fail (exit code 1) - for while/if conditions",
             Builtin::Test => concat!(
@@ -119,7 +123,7 @@ impl Builtin {
     }
 
     pub fn read_only(self) -> bool {
-        matches!(self, Builtin::Echo | Builtin::Pwd | Builtin::Ps | Builtin::Whoami | Builtin::Who | Builtin::True | Builtin::False | Builtin::Test | Builtin::Bracket)
+        matches!(self, Builtin::Echo | Builtin::Clear | Builtin::Pwd | Builtin::Ps | Builtin::Whoami | Builtin::Who | Builtin::True | Builtin::False | Builtin::Test | Builtin::Bracket)
     }
 }
 
@@ -187,6 +191,10 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
     Ok(match builtin {
         Builtin::Echo => Outcome::ok(if args.len() > 1 { joined(args, 1) } else { String::new() }),
         Builtin::True => Outcome::ok(""),
+        Builtin::Clear => {
+            clear_terminal();
+            Outcome::ok("")
+        }
         Builtin::False => Outcome::fail(""),
         Builtin::Pwd => Outcome::ok(dotnet::current_directory()),
         Builtin::Cd => cd(world, args),
@@ -271,6 +279,17 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
         Builtin::Ps => ps(interp, world)?,
         Builtin::Kill => kill(interp, world, args)?,
     })
+}
+
+/// `clear`: the screen of the process's own terminal cleared by its escape, as `Console.Clear` did; nothing where
+/// standard output is no terminal, and nothing in the line's output either way.
+fn clear_terminal() {
+    use std::io::{IsTerminal, Write};
+    let mut out = std::io::stdout();
+    if out.is_terminal() {
+        let _ = out.write_all(b"\x1b[H\x1b[2J\x1b[3J");
+        let _ = out.flush();
+    }
 }
 
 fn test_outcome(result: bool) -> Outcome {

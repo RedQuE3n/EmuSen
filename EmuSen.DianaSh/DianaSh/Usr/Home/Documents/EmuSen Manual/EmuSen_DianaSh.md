@@ -1216,12 +1216,17 @@ No step leaves a broken shell; each has its gate, and each is its own commit or 
 | **S4** *(done 2026-10-15, §13.8)* | `dianash.text` in Rust, command by command, each replacing its C# bridge entry when its golden file passes | that command's golden file and its WiseMan cases both ways; the same corpus run on Windows and macOS CI runners for the text module, since it must behave identically there |
 | **S5** *(done 2026-10-16, §13.11)* | The four EmuSen modules in Rust over the session service, module by module, each command replacing its bridge entry when its golden file passes; `nano` as a program | that command's golden file both ways, on the fake provider and on each core; seeded faults in the module, as each platform step had (`EmuSen_RustPlatform.md` §6.5) |
 | **S6** *(state 2 reached 2026-10-16 ahead of S5, by decision, §13.10; the shell as a library green on Windows and macOS CI the same day, §13.11; the standalone program there not yet run)* | The shell to state 2, as `EmuSen_RustPlatform.md` §3.9 defines it: the Rust shell by default, `EMUSEN_DIANASH_NATIVE=0` selecting the C#, a missing library falling back with one line in the error log | a full WiseMan run with the variable set; the tester's word |
-| **S7** | State 3: the C# interpreter and the C# commands deleted | below |
+| **S7** *(done 2026-11-06, `EmuSen_Backend.md` §40.7)* | State 3: the C# interpreter and the C# commands deleted | below |
 
 **When C# command code may be deleted.** Only at S7, and only when all of these hold: the golden corpus passes with
 every command in Rust; the corpus has been run on all three systems; the shell has been in state 2 through at least one
 release played; and the tester agrees. Until then every C# command class stays, reachable with `EMUSEN_DIANASH_NATIVE=0`.
 A C# command is not deleted when its Rust module passes, only marked as superseded.
+
+*Reached 2026-11-06* (`EmuSen_Backend.md` §40.7). The tester dropped the played release on 2026-11-01 (§40), and CI's
+Windows and macOS runs of the golden corpus count for the three systems, the Mac being unavailable for a long time
+from 2026-11-05. The switch, the C# interpreter and the 79 C# command classes with Rust twins are gone; `memcard`,
+`vstop` and the front ends' own commands (`core`, `state`, `hotaru`, `coretop -w`) remain the host's.
 
 **Crystal's steps run beside these and do not wait for them.** `EmuSen_CoreAPI.md` §10.2's D1 to D5 build the
 runtime; when Crystal provides `emusen.session`, S2's C# provider retires. Nothing in S0 to S7 depends on that

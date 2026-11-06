@@ -9040,6 +9040,14 @@ real-window proof of §13.3 there.
 
 ### 4.117 DianaSh's shell on the platform library: `EMUSEN_DIANASH_NATIVE` (2026-10-16)
 
+**Retired 2026-11-06** (`EmuSen_Backend.md` §40.7). The C# shell is deleted, and the variable chooses nothing. A
+leftover `EMUSEN_DIANASH_NATIVE=0` is ignored: the first shell a process makes writes one line to the host's
+diagnostics and the error log, `EMUSEN_DIANASH_NATIVE=0 is ignored: DianaSh has had no C# implementation since
+2026-11-06 and runs on libemusen_platform.so.`, and the program runs as with the variable unset. Nothing is refused
+any more, so the `[ERROR]` line below is no longer printed. A library that is absent or refused is refused in words,
+as a `DllNotFoundException`: `libemusen_platform.so is not in use for DianaSh (<why>); DianaSh's shell has had no C#
+implementation since 2026-11-06.` What follows is the variable's history.
+
 *Decided 2026-10-16 by the tester:* the shell every console window and terminal opens runs on its Rust implementation
 by default, and the C# shell is kept as the failover until the Rust one has been tested on Windows and macOS
 (`EmuSen_DianaSh.md` §13.10).

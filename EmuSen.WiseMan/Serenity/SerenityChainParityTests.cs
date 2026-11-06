@@ -816,7 +816,6 @@ namespace EmuSen.WiseMan.Serenity
         private sealed class Heard : ISlangProbe
         {
             public readonly List<(string Kind, int Point, double Value)> Marks = new();
-            public void Mark(CommandBuffer commands, int point) { }
             public void Phase(int point) { }
             public void Phase(int point, long at) { lock (Marks) Marks.Add(("phase", point, at)); }
             public void Gpu(int point, double milliseconds) { lock (Marks) Marks.Add(("gpu", point, milliseconds)); }

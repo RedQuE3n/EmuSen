@@ -9625,7 +9625,7 @@ the Rust one, a race in the C# Crystal's save).
 
 Each component is retired in its own landing, in this order: the systems table with the packs' code, and the file
 services (§40.1); Galaxia (§40.2); Endymion (§40.3); the library (§40.4); scraping (§40.5); Serenity (§40.6);
-DianaSh (§40.7); Crystal (§40.8), worked beside them and landed first; and last `PlatformSwitch` itself, once nothing chooses (§40.9). A component whose Rust
+DianaSh (§40.7, 2026-11-06); Crystal (§40.8), worked beside them and landed first; and last `PlatformSwitch` itself, once nothing chooses (§40.9). A component whose Rust
 half cannot yet do the C# half's job keeps its number here with the reason. The method is `EmuSen_RustPlatform.md`
 §6.6's [R]: before the C# is deleted, every parity class that compared the halves over generated inputs records the
 C#'s answers as goldens, and the class is then held to the goldens alone.
@@ -10115,6 +10115,90 @@ tests, `ConsoleScreenRuleTests`, `ShaderNamesTests`, the shader settings and bro
 
 **Sizes.** Against `7accea440`: shipped C# lost 4,047 lines and gained 480; Rust gained 3,335 (the filters and their
 interface, 3,221 of them); WiseMan gained 924 lines and lost 531, the goldens aside.
+
+### 40.7 DianaSh
+
+**What went** (2026-11-06). `EMUSEN_DIANASH_NATIVE` and the switch over it (`DianaShNative.Active`, `SwitchFor`), the
+C# interpreter (`DianaShInterpreter.Managed`, about 700 lines, with `CreateManaged`), its lexer, parser and syntax tree
+(`Lib/Lexer.cs`, `Parser.cs`, `Ast.cs`), `CommandTable`, and the 79 C# command classes that had Rust twins, with
+`DebugCommandHelpers` and `SnapshotStore`. With nothing left to refuse, `DianaShInterpreter.ForeignTableRefusal`,
+`CheckService` and `DianaShTableRefusedException` went too, and Pharaoh, emusen-shell, Hotaru and Mistress's console no
+longer check a table before building on it. CI's step "Test DianaSh on its C#" is gone. A leftover
+`EMUSEN_DIANASH_NATIVE=0` is ignored with `RetiredSwitch`'s line, dated 2026-11-06; a library that is absent or refused
+is refused in words as a `DllNotFoundException`: `libemusen_platform.so is not in use for DianaSh (<why>); DianaSh's
+shell has had no C# implementation since 2026-11-06.` `EmuSen_DianaSh.md` §13.2's S7 is reached: the tester dropped
+the played release on 2026-11-01, and CI's Windows and macOS runs of the golden corpus count for the three systems,
+the Mac being unavailable for a long time from 2026-11-05 (decided 2026-11-05).
+
+**What stays, and why.**
+- *Host commands with no Rust twin:* `memcard`, which works through `SaveMediaManager` and moves with the front end,
+  and `vstop`, the .NET runtime's dashboard. The front ends' own commands stay theirs: `core`, `state`, `hotaru`,
+  Hotaru's `coretop -w` and the console windows' `clear`, `pause`, `resume` and `feed`.
+- *`IDebugTarget`, the registries, telemetry, `FrameRecorder` and the C# session provider `SessionService`:* the C#
+  core host's `CoreDebugTarget` implements the first, and the tests that drive cores in-process reach them through a
+  shell over the C# provider. They go with that host in B10-C (§40.8's Q1).
+- *`DianaShInterpreterScheduler`*, which Mistress's console uses to run read-only lines off the emulation thread.
+
+**`help`'s order** was built from the C# command list. It is now a list of names in the facade, with the same rule: a
+host's command in place of a default of its name moves to the end, and `summary` comes last. The host claims no job
+prefix, since `bp` and `watch` are the trace module's, which lists and kills its own; `ps` and `kill` are the shell's
+builtins. The golden corpus's `help` file is unchanged.
+
+**`clear`** became the shell's builtin: it writes the terminal's clearing escape (`ESC[H ESC[2J ESC[3J`) to the
+process's standard output when that is a terminal, as `Console.Clear` did, and nothing to the line's output, so its
+golden file is unchanged. A console window still puts its own `clear` in its place.
+
+**The shell with no game.** A shell made before any game (Mistress's console, emusen-shell's prompt and its window) was
+handed the C# provider over no target. The frontend API's 1.12 adds `EMUSEN_CRYSTAL_SERVICE_NO_GAME` (2) to
+`emusen_crystal_session_service`: with session 0 it returns the runtime's table with no game, alive as long as the
+runtime. It answers the cheat ops that need no game, raises `resume` as a run event, lists no sessions, refuses
+`games` as the provider without an opener did, and answers every other call with `EMUSEN_SVC_NO_SESSION` in
+`RequireTarget`'s words. `CreateWithoutSession` takes that table (`CrystalRuntime.NoGameService`); zero hands the
+shell no service at all, which the standalone `EmuSen.DianaSh` program, holding no runtime, does. A caller without the
+flag is answered as before. *Decided 2026-11-06*, as an extension of the frontend API rather than a C# table, so that
+every front end, the coming one too, gets it from the library.
+- *Measured before deciding, 2026-11-06.* A shell with no table at all differs from one over the C# provider in 13
+  debugger commands and `resume`, of the commands run without arguments (the interactive ones aside): the 13 print
+  their usage over a provider and "No ROM loaded" without one, and `resume` carries the loop's Resume only over a
+  provider. Over the table with no game every command answers as over the provider. The `cheat` command needs a game whatever it asks, under both, so
+  the cheat database was never reachable from a shell with no game; the table's game-free cheat ops serve other
+  callers of the table.
+
+**How it is graded now.**
+- *The golden corpus* was recorded from the C# shell (S0) and has held the Rust shell since S6; it runs unchanged,
+  every file on the one shell, its "rust" mark now history.
+- *`TextModuleParityTests`* compared the text module with the C# text classes on 8,000 generated lines. On
+  2026-11-06 the C# classes' answers were recorded, from the C# classes restored for the purpose, into
+  `EmuSen.WiseMan/Crystal/Goldens/TextModuleParity.golden.gz` as 130 digests of at most 64 answers; the module matched
+  them, and the class now holds it to them alone.
+- *`NoGameServiceTests`* (new) holds every command's answer from a shell over the table with no game equal to one over
+  the C# provider over no target, while that provider exists, and also to recorded answers that outlast it; and the
+  flag's refusals.
+- *Moved onto the shell:* the classes that called C# command classes directly (`MarsDebugTests`, `MercuryDebugTests`,
+  `MarsRtFrontendTests`, `CheatPersistenceCommandTests`, `SuggestionMessageTests`, `CoprocessorDebugTests`) run the
+  same lines through a shell over the same target; `IsReadOnlyClassificationTests` reads the shell's listing.
+  `GenesisCheatFormatsTests` and `SnesSystemPackTests` hold `cheat add`'s codec rule through the codecs' claims and
+  Mistress's `CheatList.LooksLikeGameGenieFormat`, which took the guess from `CheatCommand`.
+- *Removed:* `LexerTests` and `ParserTests` (89 cases) characterised the deleted lexer and parser's own types; the
+  shell's language is held by the corpus. `DianaShSwitchTests` is folded into `RetiredSwitchTests`.
+  `ShellRuntimeAgreementTests` held only the refusal. `CrystalSwitchTests`' and `MistressRuntimeTests`' refusal cases
+  now hold that the variable stops nothing. The machine twin script's unknown service flag is 4 rather than 2, and its
+  case was recorded again, the one answer read.
+
+**Seeded faults, 2026-11-06,** each reverted. The table with no game not raising `resume`, and the table's guard for
+session 0 dropped (so its calls reached "no session is open"): both caught by `NoGameServiceTests`. `clear` and
+`vstop` swapped in `help`'s order: `GoldenCorpusTests`' `help` and `man` files. The leftover line dated a day early:
+`RetiredSwitchTests`.
+
+**How it was tested** (measured on 2026-11-06 on the development desktop, Debug build): the change's blast radius, the
+DianaSh, Crystal, Mistress, Shell and Galaxia namespaces with every golden class, the Serenity parity classes,
+`WindowFitAuditTests`, `GalaxiaParityTests`, `OffDispatcherTests`, `TestCollectionsTests`, `FrontendReferenceTests` and
+`RetiredSwitchTests`, 4,451 passed and 21 skipped; `cargo test` of `emusen-crystal`, `emusen-dianash` and
+`emusen-platform`, 95 passing. The frontend API's ABI test first failed on the new flag, which had no Rust constant in
+its list and no line in `Platform/crystal/abi/v1/baseline.txt`; both were added, the baseline's line tagged `@1.12`.
+
+**Sizes.** Against `e3531e6a0`: shipped C# lost 7,801 lines and gained 120; Rust gained 160; WiseMan lost 938 lines and
+gained 292, the goldens aside.
 
 ### 40.8 The frontend API: the C# implementation deleted
 

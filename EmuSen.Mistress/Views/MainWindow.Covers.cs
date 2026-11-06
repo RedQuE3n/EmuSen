@@ -81,7 +81,7 @@ namespace EmuSen.Mistress.Views
                 _appSettings.OpenEmuFallback = false;
                 _appSettings.Save();
                 _native?.Settings(NativeSettings());
-                _sources?.Settings(NativeSettings());
+                _sources?.Settings(NativeSettings(true));
                 StatusText.Text = "OpenVGDB removed";
                 ScrapeChanged?.Invoke();
                 return $"OpenVGDB was removed ({ScrapeSizes.Text(bytes)} freed). OpenEmu's fallback is off until it is downloaded again.";

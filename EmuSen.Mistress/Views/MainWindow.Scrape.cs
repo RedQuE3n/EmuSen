@@ -69,7 +69,7 @@ namespace EmuSen.Mistress.Views
             _storeRefused = false;
             if (_native is { } open) open.Settings(NativeSettings());
             else if (File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName))) OpenNative();
-            _sources?.Settings(NativeSettings());
+            _sources?.Settings(NativeSettings(true));
             ReadScrapeSnapshot();
             ScrapeChanged?.Invoke();
         }

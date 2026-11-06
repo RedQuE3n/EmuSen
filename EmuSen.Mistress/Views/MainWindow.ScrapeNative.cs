@@ -93,10 +93,20 @@ namespace EmuSen.Mistress.Views
         // The handle pictures are found through: media.db's when it is open or there, else one for the sources alone, so that browsing covers makes no media.db - see EmuSen_Backend.md §40.5.
         private NativeScraping SourcesHandle()
         {
-            if (_native is { } open) return open;
-            if (!_storeRefused && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName)) && OpenNative()) return _native!;
-            return _sources ??= NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(true), _records.Library, NativeEmbedded());
+            NativeScraping handle = _native
+                ?? (!_storeRefused && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName)) && OpenNative() ? _native! : null)
+                ?? (_sources ??= NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(true), _records.Library, NativeEmbedded()));
+            string key = $"{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(handle)}|{_appSettings.RomDirectory}|{ArtworkDirectory}|{_appSettings.EsdeMediaDirectory}|{_appSettings.OpenEmuFallback}";
+            if (key != _sourcesKey)
+            {
+                handle.Settings(NativeSettings(handle == _sources));
+                _sourcesKey = key;
+            }
+            return handle;
         }
+
+        // The folders a handle last found pictures with, so a folder changed anywhere reaches it before the next lookup.
+        private string? _sourcesKey;
 
         // The scraper told whether a game is on screen, so a big file's checksums are taken only while none is - see EmuSen_LibraryTools.md §9.12.
         private void ScrapePlaying(bool running)

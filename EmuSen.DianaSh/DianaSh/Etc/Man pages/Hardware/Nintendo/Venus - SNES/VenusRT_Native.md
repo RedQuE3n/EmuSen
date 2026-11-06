@@ -197,7 +197,7 @@ changed are counted as one each, and a tone delayed by five windows is found at 
 
 Run on 2026-09-30 by `The_corpus_reproduces_the_recorded_baseline` (opt-in through `EMUSEN_VENUSRT_CORPUS`), over the
 295 ROMs of the manifest, C# Venus and Mesen each, six at a time. The table it writes is committed as
-`EmuSen.WiseMan/Cores/VenusRtBaseline.tsv`, one row per ROM: its MD5 and path, its suite, each engine's verdict and
+`EmuSen.WiseMan/Cores/VenusRtBaseline.tsv` (since 2026-11-06 the crate's `tests/goldens/VenusRtBaseline.tsv`, §71), one row per ROM: its MD5 and path, its suite, each engine's verdict and
 detail, whether the two engines' VRAM agrees at the last frame, and whether Mesen's VRAM stood still between the two
 frames. The test fails when a later run's verdicts differ from it. **These are the old core's results for comparison,
 not expected values for VenusRT** (plan §3.5).
@@ -7156,7 +7156,7 @@ so a golden is a record of VenusRT's behaviour on the day it was taken, and what
 change to that behaviour has to be deliberate and stated.
 
 **The form** is the shared `GoldenTrace` of `EmuSen.WiseMan/Fixtures/` (MoonRT's format, one file per run under
-`EmuSen.WiseMan/Cores/VenusGoldens/`): a header naming the run, the image's full SHA-256, the input script with a
+`EmuSen.WiseMan/Cores/VenusGoldens/`; since 2026-11-06 the `emusen-goldens` crate's and the crate's `tests/goldens/`, §71): a header naming the run, the image's full SHA-256, the input script with a
 fingerprint of its masks, whether rendering is skipped, the engine it was recorded from and the reason it was recorded.
 A frame run has a line per frame, `frame state picture sound`, the first eight bytes of SHA-256 over the save state,
 the RGBA frame and the drained samples, with `=` for a value unchanged from the line before. A corpus run folds each
@@ -7684,3 +7684,38 @@ corpus's firmware folder and the Mesen probe it passes, all 36 anchors as record
   chip whose image the folder named by `EMUSEN_VENUSRT_FIRMWARE` lacks. They grade the chips, not a game, and a player
   may hold some chips' images and not others, so the rule's condition, a game the player owns, has no counterpart
   there.
+
+## 71. The goldens, the grader and the differential in Rust (2026-11-06)
+
+With the C# core host retired (`EmuSen_Backend.md` §40.10), VenusRT's tests that drove it through WiseMan are the
+crate's own cargo tests, reaching the library through the core ABI v1 as the runtime does (`emusen-core-host`'s
+`Library` and `Machine`), with the trace format, .NET's seeded `Random` and the frame loop from the dev-only crate
+`EmuSen/Cores/Shared/emusen-goldens`. Nothing was recorded again: the oracle for the move was the traces themselves.
+
+- `tests/goldens.rs` is `VenusGoldenTests`, case for case, over `tests/goldens/` (the traces moved with `git mv`, the
+  `.gitignore` exception for the corpus's `bin/` folders with them). `tests/common/programs.rs` is `VenusPrograms`; each
+  program's image hashes to the SHA-256 its trace records, and the random programs are .NET's `Random(seed)` bytes.
+  **Measured on 2026-11-06**, in the `test-checked` profile: the ten synthetic programs, each again from the recorded
+  state of frame 300 where this machine keeps one, and the 48 random programs reproduce their traces byte for byte, 8 of
+  8 cases in 32 s. Two faults of the first port were found by the traces and are recorded here because they say what the
+  frame loop must do: the sound hashed as samples, not frames, read from `audio_drain`'s count of samples; and the pad
+  mapped through the info's system for the image's extension, written with its dot (`.sfc`), which the first port missed,
+  so no button reached the core and frame 8 of the display program differed.
+- `tests/differential.rs` is `VenusRtTestRomRunnerTests`, and `tests/mesen_goldens.rs` is `VenusRtGoldenTests`: the
+  grader (`tests/common/grader.rs`, `SnesTestRoms`), the differential (`tests/common/differential.rs`,
+  `SnesDifferential`), VenusRT's bare machine as the runner and Mesen through the reference probe, still run as a black
+  box (`EMUSEN_MESEN_PROBE`, `EMUSEN_MESEN_CHECKOUT`). The probe's dump cache is keyed by SHA-256 where it was MD5, so
+  an older cache is not reused. `EMUSEN_VENUSRT_GOLDENS` names the library's folder; the word `library` for the player's
+  settings is gone, and the DSP images are looked for in the corpus's `firmware` folder alone, the player's firmware
+  folder being no test's to read.
+- `tests/abi.rs` holds what `VenusRtCoreAbiTests` held of the core itself: the images it claims and its capabilities,
+  and a state of C# Venus refused in its words with the machine unchanged. The rest was dropped, each held elsewhere: the
+  DSP on its replacement, the player's boot image and a DSP image whole or split by `v1.rs`'s
+  `a_dsp_game_runs_without_its_image_on_the_replacement_or_without_its_chip`, `the_players_boot_image_replaces_the_open_program`
+  and `a_dsp_firmware_comes_whole_or_in_two_parts`, the split pair found in a folder by `Platform/firmware`'s
+  `a_split_form_is_taken_whole_from_one_folder_and_only_at_the_size`; a library swapped under its sidecar by
+  `emusen-core-host`'s host tests; one SNES engine whatever is stored by Mistress's `VenusRtEngineTests`; the C#
+  adapter's equality with the bare machine went with the adapter.
+- `VenusRtDebugTests` and `VenusRtDebugViewTests` stay in WiseMan until part H3 of `EmuSen_Backend.md` §40.10, with the other cores'
+  debuggers.
+

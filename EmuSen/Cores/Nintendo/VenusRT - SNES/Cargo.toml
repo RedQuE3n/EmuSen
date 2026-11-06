@@ -14,6 +14,9 @@ emusen-native = { path = "../../Shared/emusen-native" }
 
 [dev-dependencies]
 emusen-singlestep = { path = "../../Shared/emusen-singlestep" }
+# The golden traces' format and the driver over the core ABI, for tests/goldens.rs - see EmuSen_Backend.md §40.10.
+emusen-goldens = { path = "../../Shared/emusen-goldens" }
+emusen-core-host = { path = "../../Shared/emusen-core-host" }
 
 [profile.release]
 panic = "abort"

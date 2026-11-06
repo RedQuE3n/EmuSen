@@ -1,0 +1,15 @@
+[package]
+name = "emusen-goldens"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# The cores' golden traces in their tests: the trace format, .NET's seeded Random for the programs the traces were
+# generated from, and a core driven through emusen-core-host as the runtime drives it. A dev-dependency only, never
+# linked into a shipped core. See README.md and EmuSen_Backend.md §40.10.
+[lib]
+name = "emusen_goldens"
+
+[dependencies]
+emusen-core-host = { path = "../emusen-core-host" }
+emusen-native = { path = "../emusen-native" }

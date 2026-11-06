@@ -12,7 +12,6 @@ using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia.Input;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
-using EmuSen.WiseMan.Fixtures.Snes;
 using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.Cores
@@ -487,7 +486,7 @@ namespace EmuSen.WiseMan.Cores
         // The corpus's split NEC DSP images, whole, in the test's firmware folder.
         private static void InstallCorpusFirmware()
         {
-            if (SnesTestRomCorpus.Root is not { } root || !Directory.Exists(Path.Combine(root, "firmware"))) return;
+            if (Environment.GetEnvironmentVariable("EMUSEN_VENUSRT_CORPUS") is not { Length: > 0 } root || !Directory.Exists(Path.Combine(root, "firmware"))) return;
             foreach (string program in Directory.GetFiles(Path.Combine(root, "firmware"), "*.program.rom"))
             {
                 string stem = program[..^".program.rom".Length], data = stem + ".data.rom";

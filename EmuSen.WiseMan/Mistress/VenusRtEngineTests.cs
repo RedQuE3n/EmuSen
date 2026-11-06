@@ -39,7 +39,7 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             Directory.CreateDirectory(DataStore.Firmware);
             _rom = Path.Combine(roms, "Adapter.sfc");
-            File.WriteAllBytes(_rom, VenusRtCoreAbiTests.PadToBackdropRom());
+            File.WriteAllBytes(_rom, PadToBackdropRom());
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
         }
 
@@ -49,6 +49,11 @@ namespace EmuSen.WiseMan.Mistress
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
+
+        // A LoROM image that brightens the screen, then copies pad 1's high byte into the backdrop's colour forever.
+        private static byte[] PadToBackdropRom() => SyntheticRom.Build(
+            (5, new byte[] { 0xA9, 0x0F, 0x8D, 0x00, 0x21, 0xAD, 0x19, 0x42, 0x8D, 0x22, 0x21, 0x8D, 0x22, 0x21, 0xEE, 0x10, 0x00, 0x80, 0xF2 }),
+            (0x7FC0, "VENUSRT ADAPTER TEST "u8.ToArray()), (0x7FD5, new byte[] { 0x20 }));
 
         private static bool Found => File.Exists(CoreSidecars.PathFor(CoreSidecars.LibraryPath("venusrt")));
 
@@ -123,7 +128,7 @@ namespace EmuSen.WiseMan.Mistress
         {
             if (!Found) return;
             Assert.Null(ConsolesConfig.Load().Value("SNES", EngineNames.EngineKey));
-            Assert.Equal(VenusRtCoreAbiTests.Engine, RoutedEngine());
+            Assert.Equal(EngineNames.VenusRt, RoutedEngine());
             foreach (bool stored in new[] { false, true })
             {
                 if (stored)
@@ -131,11 +136,11 @@ namespace EmuSen.WiseMan.Mistress
                     ConsolesConfig config = ConsolesConfig.Load();
                     config.SetValue("SNES", EngineNames.EngineKey, "Venus (C#)");
                     config.Save();
-                    Assert.Equal(VenusRtCoreAbiTests.Engine, RoutedEngine());
+                    Assert.Equal(EngineNames.VenusRt, RoutedEngine());
                 }
                 MainWindow window = Start();
                 WindowGame game = Game(window);
-                Assert.Equal(VenusRtCoreAbiTests.Engine, MistressGame.Engine(window));
+                Assert.Equal(EngineNames.VenusRt, MistressGame.Engine(window));
                 Assert.Null(game.EngineNotice);
                 WaitFor(() => game.TotalFrames > 60 && MistressGame.RewindDepth(window) > 0);
                 window.Close();

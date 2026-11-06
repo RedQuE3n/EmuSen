@@ -10424,3 +10424,22 @@ Each class keeps its name and asserts what it asserted, read where the front end
   `CheatFileTests`, `SettingPathsOpenTests`' shell, `PsKillCommandTests`' and `TraceCountTests`' shells over a target to
   H3; `CoretopWindowFlagTests`, `NoGameServiceTests`' live case, `SessionHeaderTests`, `LeafAssemblyTests`,
   `FrontendReferenceTests`' check of `IDebugTarget` and `TestCollectionsTests`' pattern for the host's statics to H5.
+
+#### 40.10.2 H2: the cores' behaviour into cargo, Venus (2026-11-06)
+
+*Decided 2026-11-06:* the test kit the cores share for their goldens is a crate of its own,
+`EmuSen/Cores/Shared/emusen-goldens` (the trace format, .NET's seeded `Random`, MD5 for the corpora's names, and a core
+driven through `emusen-core-host` as the runtime drives one), a dev-dependency only, never linked into a shipped core;
+and the SNES differential against Mesen moves to Rust with the grader, the probe still run as a black box. The debugger
+classes of every core move with H3.
+
+| WiseMan class (cases) | where it is now |
+|---|---|
+| `VenusGoldenTests` (8) | moved: VenusRT's `tests/goldens.rs`, its traces moved, reproduced byte for byte |
+| `VenusRtTestRomRunnerTests` (11) | moved: `tests/differential.rs`, the grader and the baseline with it |
+| `VenusRtGoldenTests` (3) | moved: `tests/mesen_goldens.rs` |
+| `VenusRtCoreAbiTests` (9) | 2 moved to `tests/abi.rs`; 5 dropped against named cargo tests and Mistress's `VenusRtEngineTests` (`VenusRT_Native.md` §71); 2 dropped with the C# adapter they compared |
+| `VenusRtDebugTests` (19), `VenusRtDebugViewTests` (12) | H3 |
+
+Deleted from WiseMan with them: `VenusGolden`, `VenusPrograms`, `VenusCorpusBaseline` and the `Snes` fixtures (the
+grader, the differential and the engines). The details and the measurements are `VenusRT_Native.md` §71.

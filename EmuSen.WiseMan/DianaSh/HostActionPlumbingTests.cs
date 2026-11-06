@@ -40,7 +40,7 @@ namespace EmuSen.WiseMan.DianaSh
         }
 
         private static DianaShInterpreter NewShell() =>
-            DianaShInterpreter.CreateDefault(null, new IDianaShCommand[] { new FakeShutdownCommand(), new FakeResumeCommand() });
+            DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new FakeShutdownCommand(), new FakeResumeCommand() });
 
         [Fact]
         public void Plain_submit_surfaces_the_action()

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -30,7 +29,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Sizes))]
         public Task The_sidebar_with_the_genesis_shelf_is_whole_and_nothing_on_it_overlaps(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(false);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), SyntheticRom.BuildBlank());
@@ -52,7 +50,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             finally
             {
                 window.Close();
-                CoreDiscovery.UseDevelopment(null);
             }
         }, default);
 
@@ -60,34 +57,26 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Sizes))]
         public Task The_system_carousel_with_the_genesis_shelf_is_whole_on_every_system(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(false);
-            try
+            // The session's own theme with a picture for the genesis system too, as a theme that knows the console has.
+            using var theme = new SyntheticTheme();
+            ThemedSession.Write(theme);
+            File.Copy(SceneAssets.Halves("session-genesis", 120, 240, Avalonia.Media.Colors.MidnightBlue, Avalonia.Media.Colors.DodgerBlue), theme.PathOf("art/genesis.png"), overwrite: true);
+            using var s = new ThemedSession(width, height, themeDirectory: theme.Root, roms: dir => File.WriteAllBytes(Path.Combine(dir, "Granite Harbor (Synthetic).md"), SyntheticMdRom.Cartridge()));
+            var seen = new List<string>();
+            var faults = new List<string>();
+            for (int i = 0; i < 6 && !seen.Contains(s.System ?? ""); i++)
             {
-                // The session's own theme with a picture for the genesis system too, as a theme that knows the console has.
-                using var theme = new SyntheticTheme();
-                ThemedSession.Write(theme);
-                File.Copy(SceneAssets.Halves("session-genesis", 120, 240, Avalonia.Media.Colors.MidnightBlue, Avalonia.Media.Colors.DodgerBlue), theme.PathOf("art/genesis.png"), overwrite: true);
-                using var s = new ThemedSession(width, height, themeDirectory: theme.Root, roms: dir => File.WriteAllBytes(Path.Combine(dir, "Granite Harbor (Synthetic).md"), SyntheticMdRom.Cartridge()));
-                var seen = new List<string>();
-                var faults = new List<string>();
-                for (int i = 0; i < 6 && !seen.Contains(s.System ?? ""); i++)
-                {
-                    seen.Add(s.System ?? "");
-                    Assert.Equal("system", s.View);
-                    foreach (string f in FitAudit.Check(s.Themed.Root, null, smallest: 0)) faults.Add($"{s.System}: {f}");
-                    SavePicture(s.Window, $"Carousel-{s.System}-{width}x{height}");
-                    s.Pad.Right();
-                    s.Run(600);
-                    s.Settle();
-                }
-                foreach (string f in faults) _out.WriteLine($"Carousel-Genesis-{width}x{height}: {f}");
-                Assert.Contains("genesis", seen);
-                Assert.Empty(faults);
+                seen.Add(s.System ?? "");
+                Assert.Equal("system", s.View);
+                foreach (string f in FitAudit.Check(s.Themed.Root, null, smallest: 0)) faults.Add($"{s.System}: {f}");
+                SavePicture(s.Window, $"Carousel-{s.System}-{width}x{height}");
+                s.Pad.Right();
+                s.Run(600);
+                s.Settle();
             }
-            finally
-            {
-                CoreDiscovery.UseDevelopment(null);
-            }
+            foreach (string f in faults) _out.WriteLine($"Carousel-Genesis-{width}x{height}: {f}");
+            Assert.Contains("genesis", seen);
+            Assert.Empty(faults);
         }, default);
     }
 }

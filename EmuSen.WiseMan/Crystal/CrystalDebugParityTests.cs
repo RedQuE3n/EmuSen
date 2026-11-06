@@ -36,9 +36,9 @@ namespace EmuSen.WiseMan.Crystal
             return path;
         }
 
-        private static string TestCore => EmuSen.WiseMan.Cores.CoreAdapterTests.LibraryPath("v1_test_core");
+        private static string TestCore => EmuSen.WiseMan.Fixtures.CoreSidecars.LibraryPath("v1_test_core");
 
-        private static byte[] TestImage(params byte[] payload) => EmuSen.WiseMan.Cores.CoreAdapterTests.Image(payload);
+        private static byte[] TestImage(params byte[] payload) => EmuSen.WiseMan.Fixtures.TestCoreImage.Of(payload);
 
         // A built engine's library copied under the test's folder, whose path has no space for a script to split.
         private string Engine(string id)

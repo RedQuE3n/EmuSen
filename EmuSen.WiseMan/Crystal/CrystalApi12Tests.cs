@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
-using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.WiseMan.Cores;
@@ -20,7 +19,6 @@ namespace EmuSen.WiseMan.Crystal
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             _f.Dispose();
         }
 
@@ -32,10 +30,10 @@ namespace EmuSen.WiseMan.Crystal
         {
             string dir = Path.Combine(_f.Root, name);
             Directory.CreateDirectory(dir);
-            string source = CoreAdapterTests.LibraryPath("v1_plain_core");
+            string source = CoreSidecars.LibraryPath("v1_plain_core");
             string copy = Path.Combine(dir, Path.GetFileName(source));
             File.Copy(source, copy);
-            CoreSidecar.Write(copy, development);
+            CoreSidecars.Write(copy, development);
             return dir;
         }
 

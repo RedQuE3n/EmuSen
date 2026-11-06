@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "sample.bin");
             File.WriteAllBytes(file, new byte[] { 0x41, 0x42, 0x43 }); // "ABC"
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"xxd \"{file}\"");
 
@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.DianaSh
             string file = Path.Combine(dir.Path, "binary.bin");
             byte[] raw = { 0x00, 0xFF, 0x80, 0xFE };
             File.WriteAllBytes(file, raw);
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"xxd \"{file}\"");
 
@@ -49,7 +49,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "empty.bin");
             File.WriteAllBytes(file, Array.Empty<byte>());
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"xxd \"{file}\"");
 
@@ -61,7 +61,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using var dir = TempDir();
             string missing = Path.Combine(dir.Path, "missing.bin");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"xxd \"{missing}\"");
 
@@ -72,7 +72,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Xxd_rejects_a_path_outside_the_sandbox()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             // '..'-climbing, not a leading '/' one - see `man hier` on why a real OS absolute path no longer means "outside".
             string outside = string.Concat(Enumerable.Repeat("../", 15)) + "outside.bin";
 
@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Xxd_with_no_path_hexdumps_piped_stdin_as_utf8_bytes()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("echo hi | xxd");
 
@@ -102,7 +102,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "sample.bin");
             File.WriteAllBytes(file, new byte[] { 0x41, 0x42, 0x43 });
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal(shell.Submit($"xxd \"{file}\"").Output, shell.Submit($"hexdump \"{file}\"").Output);
         }

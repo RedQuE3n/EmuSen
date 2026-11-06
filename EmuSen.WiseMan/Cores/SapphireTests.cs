@@ -40,7 +40,7 @@ namespace EmuSen.WiseMan.Cores
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        public static string LibraryPath => CoreAdapterTests.LibraryPath("sapphire");
+        public static string LibraryPath => CoreSidecars.LibraryPath("sapphire");
 
         private string Write(string name, byte[] image)
         {

@@ -11,6 +11,7 @@ using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Fixtures;
+using EmuSen.Mistress.Library;
 
 namespace EmuSen.WiseMan.Mistress
 {
@@ -109,13 +110,13 @@ namespace EmuSen.WiseMan.Mistress
         [InlineData("GAME.NES", "NES")]
         public void The_console_a_rom_resolves_to_matches_its_core(string fileName, string expected)
         {
-            Assert.Equal(expected, CoreCatalog.ConsoleForRom(fileName));
+            Assert.Equal(expected, RuntimeCatalog.ConsoleForRom(fileName));
         }
 
         [Fact]
         public void An_unhandled_extension_resolves_to_nothing()
         {
-            Assert.Null(CoreCatalog.ConsoleForRom("notes.txt"));
+            Assert.Null(RuntimeCatalog.ConsoleForRom("notes.txt"));
         }
     }
 }

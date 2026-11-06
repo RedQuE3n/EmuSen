@@ -11,7 +11,7 @@ namespace EmuSen.WiseMan.DianaSh
     {
         private static Dictionary<string, bool> Listed()
         {
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession();
             return shell.NativeShellOf.Commands(shell.NativeSessionId).ToDictionary(c => c.Name, c => c.ReadOnly);
         }
 

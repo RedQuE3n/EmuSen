@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_create_time_setting_before_the_first_frame_makes_the_machine_again()
         {
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            engine.LoadRom(File("game.tst", CoreAdapterTests.Image(1, 2, 3)));
+            engine.LoadRom(File("game.tst", TestCoreImage.Of(1, 2, 3)));
             Assert.Equal(7, engine.ReadSpace("RAM", 0));
             engine.Set("Ram", "42");
             Assert.Equal(42, engine.ReadSpace("RAM", 0));
@@ -118,7 +118,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_new_machine_starts_with_an_empty_call_stack()
         {
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            string game = File("game.tst", CoreAdapterTests.Image(1, 2, 3));
+            string game = File("game.tst", TestCoreImage.Of(1, 2, 3));
             engine.LoadRom(game);
             engine.Debug.CallStack.NotePush(0x10, 0x20, CallFrameKind.Call);
             engine.LoadRom(game);
@@ -130,7 +130,7 @@ namespace EmuSen.WiseMan.Cores
         public void An_interrupt_stopped_for_without_a_call_reaches_runto_irq()
         {
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            engine.LoadRom(File("game.tst", CoreAdapterTests.Image(0x16, 2, 3)));
+            engine.LoadRom(File("game.tst", TestCoreImage.Of(0x16, 2, 3)));
             engine.Breakpoints.ArmRunToInterrupt(CallFrameKind.Irq);
             for (int i = 0; i < 8 && !engine.IsHaltedAtBreakpoint; i++) engine.RunFrame();
             Assert.True(engine.IsHaltedAtBreakpoint);
@@ -142,7 +142,7 @@ namespace EmuSen.WiseMan.Cores
         public void A_processor_whose_breakpoints_are_refused_cannot_halt()
         {
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            engine.LoadRom(File("game.tst", CoreAdapterTests.Image(0xC2, 2, 3)));
+            engine.LoadRom(File("game.tst", TestCoreImage.Of(0xC2, 2, 3)));
             var cpus = engine.CreateDebugTarget().DebugCpus;
             Assert.Equal(new[] { ("counter", true), ("helper", false) }, cpus.Select(c => (c.Name, c.CanHalt)));
         }
@@ -152,7 +152,7 @@ namespace EmuSen.WiseMan.Cores
         public void Coverage_records_the_call_stack_s_entry_points()
         {
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            engine.LoadRom(File("game.tst", CoreAdapterTests.Image(1, 2, 3)));
+            engine.LoadRom(File("game.tst", TestCoreImage.Of(1, 2, 3)));
             CoverageRegistry coverage = engine.CreateDebugTarget().Coverage!;
             coverage.Arm();
             engine.Debug.CallStack.NotePush(0x10, 0x40, CallFrameKind.Call);
@@ -164,7 +164,7 @@ namespace EmuSen.WiseMan.Cores
         public void Labels_outlive_the_debug_target_they_were_made_through()
         {
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            engine.LoadRom(File("game.tst", CoreAdapterTests.Image(1, 2, 3)));
+            engine.LoadRom(File("game.tst", TestCoreImage.Of(1, 2, 3)));
             engine.CreateDebugTarget().Labels!.Add(0x40, "reset");
             Assert.True(engine.CreateDebugTarget().Labels!.TryGetName(0x40, out string name));
             Assert.Equal("reset", name);

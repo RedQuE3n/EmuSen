@@ -98,7 +98,7 @@ namespace EmuSen.WiseMan.LunaP
         [Fact]
         public void The_shell_prints_the_theme_page()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("man theme");
 

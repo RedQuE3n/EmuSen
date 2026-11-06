@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.WiseMan.Cores;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal
 {
@@ -32,16 +32,16 @@ namespace EmuSen.WiseMan.Crystal
             string build = Path.Combine(_root, "build" + Guid.NewGuid().ToString("N")[..6]);
             Directory.CreateDirectory(build);
             Directory.CreateDirectory(dir);
-            string built = Path.Combine(build, Path.GetFileName(CoreAdapterTests.LibraryPath(name)));
-            File.Copy(CoreAdapterTests.LibraryPath(name), built);
-            CoreSidecar.Write(built);
+            string built = Path.Combine(build, Path.GetFileName(CoreSidecars.LibraryPath(name)));
+            File.Copy(CoreSidecars.LibraryPath(name), built);
+            CoreSidecars.Write(built);
             string copy = Path.Combine(dir, Path.GetFileName(built));
             File.Copy(built, copy);
-            File.Copy(CoreSidecar.PathFor(built), CoreSidecar.PathFor(copy));
+            File.Copy(CoreSidecars.PathFor(built), CoreSidecars.PathFor(copy));
             return copy;
         }
 
-        private static string ApprovalsText() => File.Exists(CoreTrust.ApprovalsPath) ? File.ReadAllText(CoreTrust.ApprovalsPath) : "(none)";
+        private static string ApprovalsText() => File.Exists(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName)) ? File.ReadAllText(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName)) : "(none)";
 
         [Fact]
         public void Approving_and_revoking_a_players_core_answer_and_write_the_same()
@@ -49,13 +49,13 @@ namespace EmuSen.WiseMan.Crystal
             string tree = TestTree(plain: false);
             string player = Path.Combine(_root, "Cores");
             string plain = Installed("v1_plain_core", player);
-            string hash = CoreSidecar.HashOf(plain);
+            string hash = CoreSidecars.HashOf(plain);
             string game = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+            File.WriteAllBytes(game, TestCoreImage.Of(1, 2, 3, 4));
             const string engine = "V1PlainCore (test)";
             List<string> a0 = SameWithPlayer(new[] { tree }, new[] { player }, (impl, rt) =>
             {
-                if (File.Exists(CoreTrust.ApprovalsPath)) File.Delete(CoreTrust.ApprovalsPath);
+                if (File.Exists(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName))) File.Delete(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName));
                 impl.Rescan(rt);
                 var a = new List<string> { impl.Read("cores", rt), impl.Read("engines", rt) };
                 a.Add(impl.Open(rt, game, engine: engine, flags: CrystalAbi.OpenNoBattery));
@@ -77,7 +77,7 @@ namespace EmuSen.WiseMan.Crystal
                 a.Add(impl.Read("cores", rt));
                 return a;
             });
-            Assert.Equal("", File.ReadAllText(CoreTrust.ApprovalsPath));
+            Assert.Equal("", File.ReadAllText(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName)));
             string line = $"{hash}  {Path.GetFileName(plain)}\n";
             Assert.Equal(new[] { $"status {CrystalAbi.NotApproved}: {Path.GetFileName(plain)} is in no cores manifest and has not been approved; it was not loaded" }, a0.Skip(2).Take(1));
             Assert.StartsWith($"status {CrystalSessionAbi.BadArgument}:", a0[3]);
@@ -93,23 +93,23 @@ namespace EmuSen.WiseMan.Crystal
         {
             string player = Path.Combine(_root, "Bare");
             Directory.CreateDirectory(player);
-            string bare = Path.Combine(player, Path.GetFileName(CoreAdapterTests.LibraryPath("v1_plain_core")));
-            File.Copy(CoreAdapterTests.LibraryPath("v1_plain_core"), bare);
-            string hash = CoreSidecar.HashOf(bare);
+            string bare = Path.Combine(player, Path.GetFileName(CoreSidecars.LibraryPath("v1_plain_core")));
+            File.Copy(CoreSidecars.LibraryPath("v1_plain_core"), bare);
+            string hash = CoreSidecars.HashOf(bare);
             List<string> b0 = SameWithPlayer(Array.Empty<string>(), new[] { player }, (impl, rt) =>
             {
-                if (File.Exists(CoreTrust.ApprovalsPath)) File.Delete(CoreTrust.ApprovalsPath);
-                File.Delete(CoreSidecar.PathFor(bare));
+                if (File.Exists(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName))) File.Delete(EmuSen.Galaxia.ConfigStore.For(CoreSidecars.ApprovalsName));
+                File.Delete(CoreSidecars.PathFor(bare));
                 impl.Rescan(rt);
                 var a = new List<string> { impl.Read("cores", rt), impl.Read("engines", rt) };
                 a.Add(impl.TrustChange("core_approve", rt, hash));
-                a.Add(File.Exists(CoreSidecar.PathFor(bare)) ? "sidecar written" : "no sidecar");
+                a.Add(File.Exists(CoreSidecars.PathFor(bare)) ? "sidecar written" : "no sidecar");
                 a.Add(ApprovalsText());
                 a.Add(impl.Read("cores", rt));
                 a.Add(impl.Read("engines", rt));
                 return a;
             });
-            Assert.True(File.Exists(CoreSidecar.PathFor(bare)));
+            Assert.True(File.Exists(CoreSidecars.PathFor(bare)));
             Assert.Contains("\"trust\":\"not_read\"", b0[0]);
             Assert.Equal("[]", b0[1]);
             Assert.Equal(new[] { "0", "sidecar written" }, b0.Skip(2).Take(2));

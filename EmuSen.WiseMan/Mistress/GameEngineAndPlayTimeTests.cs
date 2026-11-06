@@ -38,13 +38,13 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.z64").Select(c => c.Value));
             Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.nes").Select(c => c.Value));
             Assert.Equal(new[] { "" }, GameMetadata.ChoicesFor(field, "/r/Game.gbc").Select(c => c.Value));
-            Assert.Equal(new[] { "" }.Concat(CoreCatalog.EngineFor("SNES")?.Choices ?? Array.Empty<string>()), GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
-            Assert.Null(GameMetadata.EngineFor("/r/Game.nes", CoreCatalog.MoonRtEngine));
+            Assert.Equal(new[] { "" }.Concat(EmuSen.Mistress.Library.RuntimeCatalog.EngineChoices("SNES")), GameMetadata.ChoicesFor(field, "/r/Game.sfc").Select(c => c.Value));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.nes", EngineNames.MoonRt));
             Assert.Null(GameMetadata.EngineFor("/r/Game.nes", "Moon (C#)"));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", "Mars (C#)"));
             Assert.Null(GameMetadata.EngineFor("/r/Game.gb", "Mercury (C#)"));
-            Assert.Null(GameMetadata.EngineFor("/r/Game.gb", CoreCatalog.MercuryRtEngine));
-            Assert.Null(GameMetadata.EngineFor("/r/Game.sfc", CoreCatalog.MarsRtEngine));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.gb", EngineNames.MercuryRt));
+            Assert.Null(GameMetadata.EngineFor("/r/Game.sfc", EngineNames.MarsRt));
             Assert.Null(GameMetadata.EngineFor("/r/Game.z64", ""));
         }
 
@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.Mistress
                 File.WriteAllBytes(rom, SyntheticN64System.Build(rsp: true));
                 new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(root, "States") }.Save();
                 ConsolesConfig config = ConsolesConfig.Load();
-                config.SetValue("N64", CoreCatalog.EngineKey, "Mars (C#)");
+                config.SetValue("N64", EngineNames.EngineKey, "Mars (C#)");
                 config.Save();
                 using (GameRecords records = GameRecords.Open(GameRecords.DefaultPath))
                     records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = "Mars (C#)" }, DateTime.Now);
@@ -80,13 +80,13 @@ namespace EmuSen.WiseMan.Mistress
                     return engine;
                 }
 
-                Assert.Equal(CoreCatalog.MarsRtEngine, Engine());
+                Assert.Equal(EngineNames.MarsRt, Engine());
                 using (GameRecords records = GameRecords.Open(GameRecords.DefaultPath))
                     records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = null }, DateTime.Now);
-                Assert.Equal(CoreCatalog.MarsRtEngine, Engine());
+                Assert.Equal(EngineNames.MarsRt, Engine());
                 using (GameRecords records = GameRecords.Open(GameRecords.DefaultPath))
-                    records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = CoreCatalog.MercuryRtEngine }, DateTime.Now);
-                Assert.Equal(CoreCatalog.MarsRtEngine, Engine());
+                    records.SaveEdits(rom, new Dictionary<string, string?> { [GameMetadata.AltEmulator] = EngineNames.MercuryRt }, DateTime.Now);
+                Assert.Equal(EngineNames.MarsRt, Engine());
             }
             finally
             {

@@ -161,9 +161,9 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal("2", rows[gbc + 1]);
             UiTest.Dump("library-gbc-sidebar", UiTest.Capture(window));
 
-            Choose(window, MainWindow.ConsoleKeyPrefix + EmuSen.Cores.CoreCatalog.GameBoyColorShelf);
+            Choose(window, MainWindow.ConsoleKeyPrefix + EngineNames.GameBoyColorShelf);
             Assert.Equal(new[] { "Crystal.gbc", "Tinted.gb" }, Shown(window));
-            Assert.Equal(EmuSen.Cores.CoreCatalog.GameBoyColorShelf, AppSettings.Load().SelectedCore);
+            Assert.Equal(EngineNames.GameBoyColorShelf, AppSettings.Load().SelectedCore);
 
             Choose(window, MainWindow.ConsoleKeyPrefix + "Game Boy (Mercury)");
             Assert.Equal(new[] { "Mono.gb" }, Shown(window));
@@ -178,32 +178,24 @@ namespace EmuSen.WiseMan.Mistress
             File.WriteAllBytes(Path.Combine(_romDir, "Harbor.md"), SyntheticMdRom.Cartridge());
             File.WriteAllBytes(Path.Combine(_romDir, "Disc.iso"), SyntheticMdRom.Disc());
             File.WriteAllBytes(Path.Combine(_romDir, "Wide.32x"), SyntheticMdRom.Cartridge("SEGA 32X"));
-            try
-            {
-                EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
-                MainWindow window = Open(AppSettings.LibraryList);
-                string[] rows = Sidebar(window).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
-                int genesis = Array.IndexOf(rows, "Genesis");
-                Assert.True(genesis >= 0, string.Join(" | ", rows));
-                Assert.Equal("1", rows[genesis + 1]);
-                int segaCd = Array.IndexOf(rows, "Sega CD");
-                Assert.True(segaCd >= 0, string.Join(" | ", rows));
-                Assert.Equal("1", rows[segaCd + 1]);
-                Assert.DoesNotContain("32X", rows);
-                UiTest.Dump("library-genesis-sidebar", UiTest.Capture(window));
-                Choose(window, MainWindow.ConsoleKeyPrefix + "Genesis (Nephrite)");
-                Assert.Equal(new[] { "Harbor.md" }, Shown(window));
-                var shelves = (System.Collections.IEnumerable)typeof(MainWindow).GetMethod("ThemedShelves", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null)!;
-                string[] systems = shelves.Cast<object>().Select(s => s.ToString()!).ToArray();
-                Assert.Contains(systems, s => s.Contains("genesis", StringComparison.Ordinal));
-                Assert.Contains(systems, s => s.Contains("segacd", StringComparison.Ordinal));
-                Assert.DoesNotContain(systems, s => s.Contains("sega32x", StringComparison.Ordinal));
-                window.Close();
-            }
-            finally
-            {
-                EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(null);
-            }
+            MainWindow window = Open(AppSettings.LibraryList);
+            string[] rows = Sidebar(window).GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text ?? "").ToArray();
+            int genesis = Array.IndexOf(rows, "Genesis");
+            Assert.True(genesis >= 0, string.Join(" | ", rows));
+            Assert.Equal("1", rows[genesis + 1]);
+            int segaCd = Array.IndexOf(rows, "Sega CD");
+            Assert.True(segaCd >= 0, string.Join(" | ", rows));
+            Assert.Equal("1", rows[segaCd + 1]);
+            Assert.DoesNotContain("32X", rows);
+            UiTest.Dump("library-genesis-sidebar", UiTest.Capture(window));
+            Choose(window, MainWindow.ConsoleKeyPrefix + "Genesis (Nephrite)");
+            Assert.Equal(new[] { "Harbor.md" }, Shown(window));
+            var shelves = (System.Collections.IEnumerable)typeof(MainWindow).GetMethod("ThemedShelves", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(window, null)!;
+            string[] systems = shelves.Cast<object>().Select(s => s.ToString()!).ToArray();
+            Assert.Contains(systems, s => s.Contains("genesis", StringComparison.Ordinal));
+            Assert.Contains(systems, s => s.Contains("segacd", StringComparison.Ordinal));
+            Assert.DoesNotContain(systems, s => s.Contains("sega32x", StringComparison.Ordinal));
+            window.Close();
         }, default);
 
         [Fact]

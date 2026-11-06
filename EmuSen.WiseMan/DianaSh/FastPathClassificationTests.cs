@@ -14,7 +14,7 @@ namespace EmuSen.WiseMan.DianaSh
     // hold even against a null IDebugTarget.
     public class FastPathClassificationTests
     {
-        private static DianaShInterpreter NewShell() => DianaShInterpreter.CreateDefault(null);
+        private static DianaShInterpreter NewShell() => DianaShInterpreter.CreateWithoutSession();
 
         [Theory]
         [InlineData("mem read WRAM 0")]

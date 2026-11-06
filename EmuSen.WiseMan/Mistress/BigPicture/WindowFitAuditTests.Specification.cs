@@ -69,7 +69,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                     InterfaceRecorder.Volatile = _ => null;
                     Stop(window);
                     window.Close();
-                    EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(null);
                 }
                 return;
             }

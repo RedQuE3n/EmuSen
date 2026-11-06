@@ -10,9 +10,6 @@ using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Common.Firmware;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -36,15 +33,11 @@ namespace EmuSen.WiseMan.Mistress
         {
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            FirmwareLibrary.ResetDirectory();
-            CoreDiscovery.UseDirectories(null);
-            CoreDiscovery.UseDevelopment(false);
             NoSteam.Launcher.Clear();
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
@@ -53,7 +46,18 @@ namespace EmuSen.WiseMan.Mistress
         // The Super Nintendo's firmware page, whose chips the runtime's overview names.
         private static MainWindow Open() => SettingsDesk.Open(SettingsScreen.Consoles, "console:SNES", "firmware");
 
-        private static IReadOnlyList<FirmwareItem> Snes => FirmwareOverview.Build(new ConsolesConfig()).Single(s => s.Name == "Super Nintendo").Items;
+        private sealed record FirmwareItem(string FileName, int Size);
+
+        private static IReadOnlyList<FirmwareItem> Snes
+        {
+            get
+            {
+                using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
+                using var overview = System.Text.Json.JsonDocument.Parse(runtime.FirmwareOverview());
+                return overview.RootElement.GetProperty("systems").EnumerateArray().Single(s => s.GetProperty("name").GetString() == "Super Nintendo").GetProperty("items").EnumerateArray()
+                    .Select(i => new FirmwareItem(i.GetProperty("file").GetString()!, i.GetProperty("size").GetInt32())).ToList();
+            }
+        }
 
         // The need's row that names the file.
         private static string RowFor(MainWindow window, string file) =>
@@ -85,11 +89,11 @@ namespace EmuSen.WiseMan.Mistress
         public Task Open_makes_and_opens_emusens_folder_and_nothing_else() => Session.Dispatch(() =>
         {
             MainWindow window = Open();
-            Assert.False(Directory.Exists(FirmwareLibrary.Directory));
+            Assert.False(Directory.Exists(DataStore.Firmware));
             SettingsDesk.Choose(window, "fwopen");
-            Assert.Equal([FirmwareLibrary.Directory], NoSteam.Launcher.Opened);
-            Assert.True(Directory.Exists(FirmwareLibrary.Directory));
-            Assert.Empty(Directory.GetFileSystemEntries(FirmwareLibrary.Directory));
+            Assert.Equal([DataStore.Firmware], NoSteam.Launcher.Opened);
+            Assert.True(Directory.Exists(DataStore.Firmware));
+            Assert.Empty(Directory.GetFileSystemEntries(DataStore.Firmware));
             Assert.Single(window.OwnedWindows);
             window.Close();
         }, default);
@@ -103,19 +107,19 @@ namespace EmuSen.WiseMan.Mistress
             Assert.DoesNotContain("Found", SettingsDesk.Value(window, row));
             Assert.Contains("The open version: Games may start a fraction of a second later.", Pane(window, row));
 
-            Directory.CreateDirectory(FirmwareLibrary.Directory);
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, first.FileName), new byte[first.Size]);
+            Directory.CreateDirectory(DataStore.Firmware);
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, first.FileName), new byte[first.Size]);
             SettingsDesk.Choose(window, "fwcheck");
             Assert.StartsWith("✓ Found", SettingsDesk.Value(window, row));
             Assert.Contains($"{first.FileName}: found in EmuSen's folder.", Pane(window, row));
 
             // One byte short is not the file: the open version runs.
-            File.WriteAllBytes(Path.Combine(FirmwareLibrary.Directory, first.FileName), new byte[first.Size - 1]);
+            File.WriteAllBytes(Path.Combine(DataStore.Firmware, first.FileName), new byte[first.Size - 1]);
             SettingsDesk.Choose(window, "fwcheck");
             Assert.DoesNotContain("Found", SettingsDesk.Value(window, row));
             Assert.Contains($"{first.FileName}: not used, the file in EmuSen's folder is not {first.Size:N0} bytes.", Pane(window, row));
 
-            File.Delete(Path.Combine(FirmwareLibrary.Directory, first.FileName));
+            File.Delete(Path.Combine(DataStore.Firmware, first.FileName));
             SettingsDesk.At(window, SettingsScreen.Consoles, "console:SNES", "firmware");
             Assert.DoesNotContain("Found", SettingsDesk.Value(window, row));
             window.Close();

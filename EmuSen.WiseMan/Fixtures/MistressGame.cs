@@ -1,7 +1,4 @@
 using System.Reflection;
-using EmuSen.Common;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Crystal.Debugger;
 using EmuSen.Mistress;
 using EmuSen.Mistress.Views;

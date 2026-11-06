@@ -194,7 +194,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void The_shipped_catalog_claims_the_snes_folders()
         {
-            IReadOnlyCollection<string> systems = EmuSen.Cores.CoreCatalog.SupportedCheatSystems;
+            IReadOnlyCollection<string> systems = EmuSen.Mistress.Library.RuntimeCatalog.SupportedCheatSystems;
 
             Assert.Contains("Nintendo - Super Nintendo Entertainment System", systems);
             Assert.Contains("Nintendo - Satellaview", systems);

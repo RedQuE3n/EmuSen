@@ -108,7 +108,7 @@ namespace EmuSen.WiseMan.Mistress
         // The synthetic core served as PCEE2's nightly build, its index line naming the CRC-32 its zip records.
         private byte[] Serve()
         {
-            byte[] core = File.ReadAllBytes(CoreAdapterTests.LibraryPath("emusen_libretro_testcore"));
+            byte[] core = File.ReadAllBytes(CoreSidecars.LibraryPath("emusen_libretro_testcore"));
             _buildbot.Files["/assets/frontend/info.zip"] = Zip("pcee2_libretro.info", Encoding.ASCII.GetBytes(Info));
             _buildbot.Files["/nightly/linux/x86_64/latest/.index-extended"] = Encoding.ASCII.GetBytes($"2026-11-02 {Crc32(core):x8} pcee2_libretro.so.zip\n");
             _buildbot.Files["/nightly/linux/x86_64/latest/pcee2_libretro.so.zip"] = Zip("pcee2_libretro.so", core);

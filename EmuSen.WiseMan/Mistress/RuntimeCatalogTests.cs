@@ -1,12 +1,12 @@
 using System.IO;
 using System.Linq;
-using EmuSen.Cores;
 using EmuSen.Mistress.Library;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // Mistress's catalog read from the frontend API holds the facts the catalog behind it answers - see EmuSen_Backend.md §14.13.
+    // Mistress's catalog read from the frontend API holds the facts the C# catalog answered, recorded before it was deleted - see EmuSen_Backend.md §14.13 and §40.10.
     [Collection(TestCollections.ProcessGlobals)]
     public class RuntimeCatalogTests
     {
@@ -15,24 +15,28 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void The_shelves_and_consoles_are_the_catalog_s()
         {
-            Assert.Equal(CoreCatalog.ShelvesInReleaseOrder.Select(s => s.Name), RuntimeCatalog.Shelves.Select(s => s.Name));
-            Assert.Equal(CoreCatalog.ConsolesInReleaseOrder.Select(c => c.Console), RuntimeCatalog.ConsoleNames);
-            Assert.Equal(CoreCatalog.ConsolesInReleaseOrder.Select(c => c.DisplayName), RuntimeCatalog.Consoles.Select(c => c.DisplayName));
-            Assert.Equal(new[] { RuntimeCatalog.AllConsoles }.Concat(CoreCatalog.ShelvesInReleaseOrder.Select(s => s.Name)), RuntimeCatalog.FilterChoices);
-            Assert.Equal(CoreCatalog.RomExtensions.Order(System.StringComparer.Ordinal), RuntimeCatalog.RomExtensions.Order(System.StringComparer.Ordinal));
-            Assert.Equal(CoreCatalog.SupportedCheatSystems.Order(System.StringComparer.Ordinal), RuntimeCatalog.SupportedCheatSystems.Order(System.StringComparer.Ordinal));
+            var golden = new ParityGolden("RuntimeCatalog.Shelves");
+            golden.Add("shelves", string.Join("|", RuntimeCatalog.Shelves.Select(s => s.Name)));
+            golden.Add("consoles", string.Join("|", RuntimeCatalog.ConsoleNames));
+            golden.Add("display names", string.Join("|", RuntimeCatalog.Consoles.Select(c => c.DisplayName)));
+            golden.Add("filter choices", string.Join("|", RuntimeCatalog.FilterChoices));
+            golden.Add("extensions", string.Join("|", RuntimeCatalog.RomExtensions.Order(System.StringComparer.Ordinal)));
+            golden.Add("cheat systems", string.Join("|", RuntimeCatalog.SupportedCheatSystems.Order(System.StringComparer.Ordinal)));
+            golden.Check(least: 6);
         }
 
         [Fact]
         public void Each_console_s_host_pad_and_empty_start_are_the_catalog_s()
         {
+            var golden = new ParityGolden("RuntimeCatalog.Consoles");
             foreach (string console in RuntimeCatalog.ConsoleNames)
             {
-                Assert.Equal(CoreCatalog.HostOf(console), RuntimeCatalog.HostOf(console));
-                Assert.Equal(CoreCatalog.ControlsFor(console), RuntimeCatalog.ControlsFor(console));
-                Assert.Equal(CoreCatalog.EmptyStartFor(console) is not null, RuntimeCatalog.StartsEmpty(console));
+                golden.Add($"{console} host", RuntimeCatalog.HostOf(console));
+                golden.Add($"{console} controls", string.Join("|", RuntimeCatalog.ControlsFor(console)));
+                golden.Add($"{console} starts empty", RuntimeCatalog.StartsEmpty(console).ToString());
             }
-            Assert.Equal(CoreCatalog.ConsolesThatStartEmpty.Select(e => e.Console), RuntimeCatalog.ConsolesThatStartEmpty);
+            golden.Add("consoles that start empty", string.Join("|", RuntimeCatalog.ConsolesThatStartEmpty));
+            golden.Check(least: 3 * RuntimeCatalog.ConsoleNames.Count() + 1);
         }
 
         // The N64's pad, read from MarsRT's sidecar since §18.10, keeps both sticks in Mistress's bindings.
@@ -55,12 +59,15 @@ namespace EmuSen.WiseMan.Mistress
                 File.WriteAllBytes(snes, SyntheticRom.BuildBlank());
                 File.WriteAllBytes(nes, SyntheticNesRom.Build());
                 File.WriteAllBytes(gbc, new byte[0x8000]);
+                var golden = new ParityGolden("RuntimeCatalog.Routes");
                 foreach (string file in new[] { snes, nes, gbc })
                 {
-                    Assert.Equal(CoreCatalog.ConsoleForRom(file), RuntimeCatalog.ConsoleForRom(file));
-                    Assert.Equal(CoreCatalog.ShelfFor(file), RuntimeCatalog.ShelfFor(file));
-                    Assert.Equal(CoreCatalog.CoreForRom(file)?.DisplayName, RuntimeCatalog.CoreForRom(file)?.DisplayName);
+                    string name = Path.GetFileName(file);
+                    golden.Add($"{name} console", RuntimeCatalog.ConsoleForRom(file) ?? "(none)");
+                    golden.Add($"{name} shelf", RuntimeCatalog.ShelfFor(file) ?? "(none)");
+                    golden.Add($"{name} core", RuntimeCatalog.CoreForRom(file)?.DisplayName ?? "(none)");
                 }
+                golden.Check(least: 9);
             }
             finally { Directory.Delete(dir, recursive: true); }
         }

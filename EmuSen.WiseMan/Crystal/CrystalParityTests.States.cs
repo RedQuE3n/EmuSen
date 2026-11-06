@@ -43,8 +43,8 @@ namespace EmuSen.WiseMan.Crystal
             string dir = Path.Combine(_root, "Games");
             Directory.CreateDirectory(dir);
             string plain = Path.Combine(dir, "plain.tst"), other = Path.Combine(dir, "other.tst");
-            File.WriteAllBytes(plain, CoreAdapterTests.Image(1, 2, 3, 4));
-            File.WriteAllBytes(other, CoreAdapterTests.Image(5, 5));
+            File.WriteAllBytes(plain, TestCoreImage.Of(1, 2, 3, 4));
+            File.WriteAllBytes(other, TestCoreImage.Of(5, 5));
             string elsewhere = Path.Combine(_root, "Elsewhere");
             string copied = Path.Combine(elsewhere, "copied.state"), stale = Path.Combine(elsewhere, "stale.state");
             string foreign = Path.Combine(elsewhere, "foreign.state"), newer = Path.Combine(elsewhere, "newer.state"), broken = Path.Combine(elsewhere, "broken.state");
@@ -104,7 +104,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             string tree = TestTree(plain: false);
             string game = Path.Combine(_root, "plain.tst");
-            File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+            File.WriteAllBytes(game, TestCoreImage.Of(1, 2, 3, 4));
             string copied = Path.Combine(_root, "copied.state");
             File.WriteAllBytes(copied, new byte[] { 9, 9 });
             PlantRecordsDb(DataStore.Library, copied);

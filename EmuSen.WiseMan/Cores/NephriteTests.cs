@@ -36,7 +36,7 @@ namespace EmuSen.WiseMan.Cores
             try { Directory.Delete(_root, recursive: true); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
         }
 
-        public static string LibraryPath => CoreAdapterTests.LibraryPath("nephrite");
+        public static string LibraryPath => CoreSidecars.LibraryPath("nephrite");
 
         private string Write(string name, byte[] image)
         {

@@ -1,3 +1,4 @@
+using EmuSen.WiseMan.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -65,7 +66,7 @@ namespace EmuSen.WiseMan.Crystal
         private static readonly Lazy<Dictionary<string, string>> LibraryHashes = new(() =>
         {
             var named = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var files = new[] { CoreAdapterTests.LibraryPath("v1_test_core"), CoreAdapterTests.LibraryPath("v1_plain_core") }
+            var files = new[] { CoreSidecars.LibraryPath("v1_test_core"), CoreSidecars.LibraryPath("v1_plain_core") }
                 .Concat(new[] { AppContext.BaseDirectory, Path.Combine(AppContext.BaseDirectory, "cores") }.Where(Directory.Exists)
                     .SelectMany(d => Directory.EnumerateFiles(d)).Where(f => f.EndsWith(".so") || f.EndsWith(".dll") || f.EndsWith(".dylib")));
             foreach (string f in files.Where(File.Exists))

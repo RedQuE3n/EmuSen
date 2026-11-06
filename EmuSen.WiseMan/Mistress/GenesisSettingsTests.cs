@@ -1,4 +1,8 @@
 using System;
+using System.Text.Json;
+using EmuSen.Crystal.Client;
+using EmuSen.Crystal.Client.Contract;
+using EmuSen.Mistress.Library;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -8,8 +12,6 @@ using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -34,12 +36,10 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(_dir);
             ConfigStore.OverrideDirectory = _dir;
             DataStore.OverrideDirectory = Path.Combine(_dir, "Home");
-            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_dir, recursive: true); } catch { }
@@ -51,18 +51,16 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void The_packs_name_the_consoles_only_the_discovered_engine_runs_and_its_systems_in_development_have_no_tab()
         {
-            Assert.Equal(new[] { "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, CoreCatalog.DiscoveredConsoles);
-            Assert.Equal(("Genesis", "Sega CD", "32X"), (CoreCatalog.DiscoveredConsoleForSystem("md"), CoreCatalog.DiscoveredConsoleForSystem("mcd"), CoreCatalog.DiscoveredConsoleForSystem("32x")));
-            Assert.Null(CoreCatalog.DiscoveredConsoleForSystem("snes"));
-            CoreDiscovery.UseDevelopment(true);
-            Assert.Equal(new[] { "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, CoreCatalog.DiscoveredConsoles);
+            Assert.Equal(new[] { "SG-1000", "Master System", "Genesis", "Sega CD", "PlayStation", "PlayStation 2" }, RuntimeCatalog.ConsoleNames.Where(c => c is not ("NES" or "GB" or "SNES" or "N64")));
+            Assert.Equal(("Genesis", "Sega CD", "32X"), (RuntimeCatalog.ConsoleOfSystem("md"), RuntimeCatalog.ConsoleOfSystem("mcd"), RuntimeCatalog.ConsoleOfSystem("32x")));
         }
 
         [Fact]
         public void The_genesis_offers_its_model_region_and_two_pads_in_words()
         {
-            var settings = CoreCatalog.SettingsFor("Genesis");
-            Assert.Equal(new[] { "model", "region", "pad1", "pad2" }, settings.Select(s => s.Key));
+            var settings = RuntimeCatalog.SettingsFor("Genesis");
+            // The console's page lists the engine's choice first and its save media after; the engine's own rows are between.
+            Assert.Equal(new[] { EngineNames.EngineKey, "model", "region", "pad1", "pad2" }, settings.Select(s => s.Key).Take(5));
             var region = settings.Single(s => s.Key == "region");
             Assert.Equal(new[] { "auto", "md.us", "md.eu", "md.jp", "md.asia" }, region.Choices);
             Assert.Equal(new[] { "From the cartridge", "Americas (NTSC)", "Europe (PAL)", "Japan (NTSC)", "Asia (PAL)" }, region.ChoiceLabels);
@@ -96,13 +94,15 @@ namespace EmuSen.WiseMan.Mistress
             config.Save();
             string rom = Path.Combine(_dir, "game.md");
             File.WriteAllBytes(rom, SyntheticMdRom.Cartridge(region: "U"));
-            var bundle = CoreFactory.Load(rom);
-            var core = Assert.IsType<CoreEngine>(bundle.Core);
-            Assert.Equal("pal", core.Machine.Info.Region);
-            Assert.InRange(core.FrameRateHz, 49.70, 49.71);
-            Assert.Equal("md.pad6", core.Machine.Info.Ports[0].Controller);
-            Assert.Equal(("md.eu", "md.pad3"), (core.Get("region"), core.Get("pad2")));
-            core.Dispose();
+            using var runtime = new CrystalRuntime();
+            using CrystalSession session = runtime.Open(new CrystalOpen { Path = rom, NoBattery = true });
+            var info = new CrystalFrameInfo();
+            session.Frame(ref info);
+            Assert.InRange(info.frame_rate_hz, 49.70, 49.71);
+            using var shown = JsonDocument.Parse(session.Info());
+            JsonElement ports = shown.RootElement.GetProperty("ports");
+            Assert.Equal(("md.pad6", "md.pad3"), (ports[0].GetProperty("controller").GetString(), ports[1].GetProperty("controller").GetString()));
+            Assert.Equal("md.eu", session.Setting("region"));
         }
     }
 }

@@ -13,7 +13,7 @@ namespace EmuSen.WiseMan.DianaSh
     {
         // Read from a live interpreter, not a hand list - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
         private static string[] RegisteredCommandNames =>
-            DianaShInterpreter.CreateDefault(null).CommandNames.ToArray();
+            DianaShInterpreter.CreateWithoutSession().CommandNames.ToArray();
 
         // Special builtins Dispatch handles directly - not IDianaShCommand instances, so CommandNames can't cover them.
         private static readonly string[] SpecialBuiltinNames =
@@ -26,7 +26,7 @@ namespace EmuSen.WiseMan.DianaSh
         [MemberData(nameof(AllNames))]
         public void Every_command_and_builtin_has_a_real_man_page(string name)
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             var result = shell.Submit($"man {name}");
 
             Assert.DoesNotContain("No detailed manual page yet", result.Output);
@@ -37,7 +37,7 @@ namespace EmuSen.WiseMan.DianaSh
         public static System.Collections.Generic.IEnumerable<object[]> AllNames() =>
             RegisteredCommandNames.Concat(SpecialBuiltinNames).Distinct().Select(n => new object[] { n });
 
-        // A frontend's own extraCommands never reach CreateDefault(null) above - see EmuSen_Settings_Reference.md §4.21.
+        // A frontend's own extraCommands never reach CreateWithoutSession() above - see EmuSen_Settings_Reference.md §4.21.
         [Theory]
         [InlineData("pause")]
         [InlineData("feed")]
@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Help_with_no_argument_still_lists_every_command()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             var result = shell.Submit("help");
 
             Assert.StartsWith("Available commands:", result.Output);
@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Man_with_no_argument_behaves_the_same_as_bare_help()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal(shell.Submit("help").Output, shell.Submit("man").Output);
         }
@@ -79,7 +79,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Help_ignores_arguments_and_always_lists_everything()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal(shell.Submit("help").Output, shell.Submit("help mem").Output);
             Assert.NotEqual(shell.Submit("man mem").Output, shell.Submit("help mem").Output);
@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Man_of_an_unknown_name_reports_a_clean_error_with_a_nonzero_exit_code()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             var result = shell.Submit("man totally_not_a_real_command");
             Assert.Contains("No manual entry", result.Output);
 

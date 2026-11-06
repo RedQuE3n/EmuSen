@@ -13,7 +13,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             string tree = TestTree(plain: false);
             string game = Path.Combine(_root, "plain.tst");
-            File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+            File.WriteAllBytes(game, TestCoreImage.Of(1, 2, 3, 4));
             string nes = Path.Combine(_root, "Plain.nes");
             File.WriteAllBytes(nes, SyntheticNesRom.Build());
             IEnumerable<string> Run(CrystalImpl i, nint rt, string path, string encoding)

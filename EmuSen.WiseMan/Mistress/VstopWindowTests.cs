@@ -116,8 +116,7 @@ namespace EmuSen.WiseMan.Mistress
         public void The_console_vstop_is_replaced_by_the_windowed_one()
         {
             int opened = 0;
-            var shell = DianaShInterpreter.CreateDefault(null,
-                new IDianaShCommand[] { new VstopWindowCommand(() => opened++) });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new VstopWindowCommand(() => opened++) });
 
             var result = shell.Submit("vstop");
 
@@ -130,8 +129,7 @@ namespace EmuSen.WiseMan.Mistress
         public void The_windowed_vstop_needs_no_rom_loaded()
         {
             int opened = 0;
-            var shell = DianaShInterpreter.CreateDefault(null,
-                new IDianaShCommand[] { new VstopWindowCommand(() => opened++) });
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new VstopWindowCommand(() => opened++) });
 
             shell.Submit("vstop");
 

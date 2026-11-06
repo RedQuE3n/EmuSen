@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Text.Json;
-using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia.Models;
@@ -77,27 +76,11 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Equal("V1TestCore (test)", JsonDocument.Parse(_f.Runtime.Route(game)).RootElement.GetProperty("engine").GetString());
         }
 
-        // C4: a picture taken as GetFrameBufferRgba lends it, and Hotaru never returns one, so every frame allocates a new array.
+        // C4: Hotaru's hand-over, a picture lent as GetFrameBufferRgba and never returned, allocated every frame; the API's copy into the window's buffer allocates nothing.
         [Fact]
-        public void C4_a_lent_picture_never_returned_allocates_every_frame_and_the_API_s_copy_does_not()
+        public void C4_the_API_s_picture_copy_allocates_nothing_a_frame()
         {
             string game = _f.Game();
-            using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
-            engine.LoadRom(game);
-            for (int i = 0; i < 20; i++)
-            {
-                engine.RunFrame();
-                engine.GetFrameBufferRgba();
-            }
-            long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 100; i++)
-            {
-                engine.RunFrame();
-                engine.GetFrameBufferRgba();
-            }
-            long hotaru = GC.GetAllocatedBytesForCurrentThread() - before;
-            Assert.True(hotaru >= 100L * engine.ScreenWidth * engine.ScreenHeight * 4, $"Hotaru's hand-over allocated {hotaru} bytes in 100 frames");
-
             using CrystalSession s = _f.Open(game);
             var picture = new byte[1 << 20];
             var info = new CrystalFrameInfo();
@@ -106,7 +89,7 @@ namespace EmuSen.WiseMan.Crystal
                 s.Frame(ref info);
                 s.CopyPicture(picture);
             }
-            before = GC.GetAllocatedBytesForCurrentThread();
+            long before = GC.GetAllocatedBytesForCurrentThread();
             for (int i = 0; i < 100; i++) s.CopyPicture(picture);
             Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         }

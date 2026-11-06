@@ -9,9 +9,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -44,18 +41,16 @@ namespace EmuSen.WiseMan.Mistress
             _rom = Path.Combine(roms, "Adapter.sfc");
             File.WriteAllBytes(_rom, VenusRtCoreAbiTests.PadToBackdropRom());
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
-            CoreDiscovery.UseDirectories(null);
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDirectories(null);
             ConfigStore.OverrideDirectory = null;
             DataStore.OverrideDirectory = null;
             try { if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true); } catch { }
         }
 
-        private static bool Found => CoreDiscovery.Found.Any(c => c.Info.Id == "venusrt");
+        private static bool Found => File.Exists(CoreSidecars.PathFor(CoreSidecars.LibraryPath("venusrt")));
 
         // The SNES page in Settings offers VenusRT alone since the C# core was retired.
         [Fact]
@@ -127,14 +122,14 @@ namespace EmuSen.WiseMan.Mistress
         public Task A_game_runs_on_venusrt_and_a_stored_venus_choice_runs_it_too() => Session.Dispatch(() =>
         {
             if (!Found) return;
-            Assert.Null(ConsolesConfig.Load().Value("SNES", CoreCatalog.EngineKey));
+            Assert.Null(ConsolesConfig.Load().Value("SNES", EngineNames.EngineKey));
             Assert.Equal(VenusRtCoreAbiTests.Engine, RoutedEngine());
             foreach (bool stored in new[] { false, true })
             {
                 if (stored)
                 {
                     ConsolesConfig config = ConsolesConfig.Load();
-                    config.SetValue("SNES", CoreCatalog.EngineKey, "Venus (C#)");
+                    config.SetValue("SNES", EngineNames.EngineKey, "Venus (C#)");
                     config.Save();
                     Assert.Equal(VenusRtCoreAbiTests.Engine, RoutedEngine());
                 }

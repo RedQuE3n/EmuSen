@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.Fixtures
         public static (DianaShInterpreter Shell, DianaShSessionManager Sessions) NewShellWithSessions(IDebugTarget? target = null)
         {
             var sessions = new DianaShSessionManager();
-            var shell = DianaShInterpreter.CreateDefault(target, sessions: sessions);
+            var shell = target is null ? DianaShInterpreter.CreateWithoutSession(sessions: sessions) : DianaShInterpreter.CreateDefault(target, sessions: sessions);
             sessions.RegisterInitial(new DianaShSession("main", shell));
             return (shell, sessions);
         }

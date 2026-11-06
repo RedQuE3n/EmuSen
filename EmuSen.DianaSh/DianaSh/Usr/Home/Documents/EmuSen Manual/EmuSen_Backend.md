@@ -10365,3 +10365,62 @@ forges a row of the runtime's states.db.
 `OffDispatcherTests`, `TestCollectionsTests` and `FrontendReferenceTests`: 191 of 191. Seeded faults, each reverted and
 each caught by its case: Mistress never approving (`CoreApprovalTests`), the reel row never saying "nothing to go back
 to yet" (`PadRewindReelTests`), and the status line dropping the runtime's words (`MoonRtEngineTests`).
+
+### 40.10 The C# core host (B10-C), in parts
+
+*Decided 2026-11-06 by the tester* (§40.8's Q1): the C# core host goes, with `CoreDebugTarget`, `IDebugTarget` and the
+debugger's registries, the telemetry's rings and providers, the frame recorder and the C# session-service provider
+`SessionService`. No shipped front end reaches any of it (checked with `grep` and the front ends' metadata on
+2026-11-06): Mistress, Hotaru, emusen-shell and Pharaoh open, run, rewind, record and read telemetry through the
+frontend API. What the front ends still name is a type, not the host: `IDianaShCommand.Execute`'s target parameter, and
+the coretop window's contracts (`ICoreTelemetry`, `IRealtimeProvider`, the `Debug*Info` records), which its
+`SessionTelemetry` fills from the session's telemetry JSON. `EmuSen.csproj` stays, with no C#, as the project that builds
+the Rust cores, their sidecars and `cores.manifest` beside every program (decided 2026-11-06).
+
+**The rule for the tests** (decided 2026-11-06). A test of a core's or the runtime's behaviour belongs in Rust: where a
+cargo test already holds the same fact the C# test is dropped and that cargo test is named; where none does, it is
+written again as a cargo test in the core's crate or in `crystal`, `crystal-debug` or `emusen-core-host`. Only tests of
+what a C# front end itself does stay in WiseMan, read through the frontend API. Goldens are recorded only where no Rust
+test holds the facts. The work is landed in parts, nothing shipped deleted before the last:
+
+| part | what | WiseMan files (cases) |
+|---|---|---:|
+| H0 | MarsRT's C# PGO driver (`Mars_Native.md` §6.17.14) | — |
+| H1 | the front ends' own tests, off the host | 91 (559) |
+| H2 | a core's behaviour, a core at a time, into cargo | 83 (675) |
+| H3 | the debugger and the cheats over a target, and DianaSh's golden corpus, into cargo | 39 (347) |
+| H4 | the host's own classes: each fact found in cargo and named, or moved | 23 (115) |
+| H5 | the deletion, the fixtures with it, Hotaru's `coretop`, `IDianaShCommand` without a target | 16 fixtures |
+
+#### 40.10.1 H1: the front ends' tests (2026-11-06)
+
+Each class keeps its name and asserts what it asserted, read where the front end reads it.
+
+- *Set-up that did nothing.* `CoreDiscovery.UseDevelopment`, `UseDirectories` and `UsePlayerDirectories` set statics
+  of the C# host, which no front end reads; 61 calls in 25 files are removed, and the `try`/`finally` blocks left empty.
+- *The catalog.* Expected values read from `CoreCatalog` are read from Mistress's `RuntimeCatalog`, which
+  `RuntimeCatalogTests` had held equal to it. That class's three comparisons, and Hotaru's core vocabulary in
+  `HotaruOnTheApiTests`, are now goldens (`RuntimeCatalog.Shelves`, `.Consoles`, `.Routes`, `HotaruCores.Registry`),
+  recorded from the API on 2026-11-06 in the same build as the C# comparisons they replace, which passed (scoped as the
+  originals were: the registry's nine catalog names over the test core's tree). Engine names, shelf names and the card
+  modes a test writes are the fixture `EngineNames` and `CardModes`.
+- *A shell with no game* is `CreateWithoutSession()`, as the standalone shell's, where `CreateDefault(null)` handed the
+  Rust shell the C# provider over no target. `resume` raises its run event only over a table, so
+  `ResumeShutdownStepCommandTests` makes its shells over a runtime's table with no game, as a front end's console does.
+- *Sidecars* are written by the conformance kit's runner, as the build writes them (`CoreSidecars`, over
+  `EmuSen/obj/emusen-core-conform`), where `CoreSidecar.Write` loaded the library through the C# binding.
+- *Pictures, sound and settings.* `CadenceBench` paces a session of the API as Mistress does, its speed and interval
+  read from the frame's info; the scheduler's unit cases take that pair from `RuntimeSpeed`, the rule of
+  `Platform/crystal/src/speed.rs`, whose cargo test holds what `SpeedControllerTests` held. The two screen tests, the CRT
+  scene probe, `DisplayAspectTests` and the Genesis settings case read the session's picture, frame info, session info
+  and settings. `DevicePictureLendTests` lends the device through `CrystalOpen.Device` and borrows `PictureLend`, so
+  WiseMan's copy of the C# lend (`Serenity/PlatformLend.cs`) is gone. The memory-card window's audit makes its cards
+  through `cards_op`, and the firmware page's test reads `firmware_overview`.
+- *Dropped, each a C# half beside an API half that stays:* `FrontendDefectTests`' C4 (Hotaru's old hand-over) and
+  `HotaruOnTheApiTests`' C7 (the old wiring's load). `ConsoleContextTests`' "All consoles falls back to the default
+  codecs" held a choice of `CoreFactory.CheatCodecsFor` that no front end makes, a session answering its own codecs.
+- *Moved to later parts:* the buttons each core reports (`ConsoleButtonsTests`, from `ConsoleBindingsTests`) and the
+  N64's stated lines (`DisplayLinesTests`, from `ScreenFilterRenderTests`) to H2, with `MultiplayerTests`' port reader;
+  `CheatFileTests`, `SettingPathsOpenTests`' shell, `PsKillCommandTests`' and `TraceCountTests`' shells over a target to
+  H3; `CoretopWindowFlagTests`, `NoGameServiceTests`' live case, `SessionHeaderTests`, `LeafAssemblyTests`,
+  `FrontendReferenceTests`' check of `IDebugTarget` and `TestCollectionsTests`' pattern for the host's statics to H5.

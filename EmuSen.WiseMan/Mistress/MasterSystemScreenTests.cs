@@ -5,8 +5,6 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -64,10 +62,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(console, frame.FilterConsole);
             window.Close();
 
-            using var core = Assert.IsType<CoreEngine>(CoreFactory.Load(rom, options: TestCores.NoBattery).Core);
-            for (int f = 0; f < 60; f++) core.RunFrame();
-            byte[] picture = core.GetFrameBufferRgba().ToArray();
-            (int width, int height) = (core.ScreenWidth, core.ScreenHeight);
+            (byte[] picture, int width, int height) = ApiPicture.After(rom, 60);
             Assert.Equal((256, 192), (width, height));
             Assert.Contains(picture, b => b != 0);
 

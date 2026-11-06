@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Cores
         private string Install(string name, string dir)
         {
             Directory.CreateDirectory(dir);
-            string source = CoreAdapterTests.LibraryPath(name);
+            string source = CoreSidecars.LibraryPath(name);
             string copy = Path.Combine(dir, Path.GetFileName(source));
             File.Copy(source, copy);
             CoreSidecar.Write(copy);
@@ -130,8 +130,8 @@ namespace EmuSen.WiseMan.Cores
         {
             string built = Path.Combine(_root, "build");
             Directory.CreateDirectory(built);
-            string copy = Path.Combine(built, Path.GetFileName(CoreAdapterTests.LibraryPath("v1_test_core")));
-            File.Copy(CoreAdapterTests.LibraryPath("v1_test_core"), copy);
+            string copy = Path.Combine(built, Path.GetFileName(CoreSidecars.LibraryPath("v1_test_core")));
+            File.Copy(CoreSidecars.LibraryPath("v1_test_core"), copy);
             Assert.True(CoreSidecar.Write(copy, development: true).Development);
             CoreDiscovery.UseDirectories(new[] { built });
 
@@ -155,7 +155,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string dir = Path.Combine(_root, "runner");
             Directory.CreateDirectory(dir);
-            string source = CoreAdapterTests.LibraryPath("v1_plain_core");
+            string source = CoreSidecars.LibraryPath("v1_plain_core");
             string library = Path.Combine(dir, Path.GetFileName(source));
             File.Copy(source, library);
             string runner = Path.Combine(AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
@@ -216,7 +216,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string built = Install("v1_test_core", Path.Combine(_root, "build"));
             string swapped = Place(built, Path.Combine(_root, "swapped"));
-            File.Copy(CoreAdapterTests.LibraryPath("v1_plain_core"), swapped, overwrite: true);
+            File.Copy(CoreSidecars.LibraryPath("v1_plain_core"), swapped, overwrite: true);
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "swapped") });
 
             var found = CoreDiscovery.Found.Single();
@@ -260,7 +260,7 @@ namespace EmuSen.WiseMan.Cores
             Install("v1_test_core", Path.Combine(_root, "cores"));
             CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "cores") });
             string rom = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(rom, CoreAdapterTests.Image(1, 2));
+            File.WriteAllBytes(rom, TestCoreImage.Of(1, 2));
 
             var bundle = CoreFactory.Load(rom);
             using var engine = Assert.IsType<CoreEngine>(bundle.Core);

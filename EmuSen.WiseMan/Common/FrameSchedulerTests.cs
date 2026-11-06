@@ -1,8 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using EmuSen.Common;
-using EmuSen.Cores;
 using EmuSen.Serenity;
 using EmuSen.WiseMan.Cores;
 using EmuSen.WiseMan.Fixtures;
@@ -104,7 +102,7 @@ namespace EmuSen.WiseMan.Common
             DisplayReading reading = null!;
             (FrameScheduler scheduler, origin) = Scheduler(() => reading);
             reading = new DisplayReading(period, origin + 12345, false, true, 240, 0);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = TimeSpan.FromMilliseconds(3.7);
             TimeSpan previous = due;
             for (int i = 0; i < 2000; i++)
@@ -126,7 +124,7 @@ namespace EmuSen.WiseMan.Common
             long origin = Stopwatch.GetTimestamp();
             var reading = new DisplayReading(period, origin, false, true, 240, 0);
             var scheduler = new FrameScheduler(_ => reading, origin) { Margin = TimeSpan.Zero };
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             Assert.Null(scheduler.HandOverNotBefore);
             TimeSpan first = scheduler.Next(TimeSpan.Zero, 60.0, speed);
             Assert.Null(scheduler.HandOverNotBefore); // the frame running now was not scheduled by the lock
@@ -137,8 +135,8 @@ namespace EmuSen.WiseMan.Common
             Assert.Null(scheduler.HandOverNotBefore);
 
             var single = new FrameScheduler(_ => new DisplayReading(Stopwatch.Frequency / 60.0, origin, false, true, 240, 0), origin);
-            TimeSpan due = single.Next(TimeSpan.Zero, 60.0, new SpeedController());
-            single.Next(due, 60.0, new SpeedController());
+            TimeSpan due = single.Next(TimeSpan.Zero, 60.0, new RuntimeSpeed());
+            single.Next(due, 60.0, new RuntimeSpeed());
             Assert.Null(single.HandOverNotBefore);
         }
 
@@ -146,7 +144,7 @@ namespace EmuSen.WiseMan.Common
         public void Content_paced_deadlines_are_the_speed_controllers_interval_exactly()
         {
             (FrameScheduler scheduler, _) = Scheduler(() => null);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = TimeSpan.FromSeconds(1);
             Assert.Equal(due + speed.FrameInterval(60.0988), scheduler.Next(due, 60.0988, speed));
             speed.SpeedPercent = 300;
@@ -159,7 +157,7 @@ namespace EmuSen.WiseMan.Common
         {
             DisplayReading reading = Display(60.0, vblank: Stopwatch.GetTimestamp());
             (FrameScheduler scheduler, _) = Scheduler(() => reading);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = scheduler.Next(TimeSpan.Zero, 60.0988, speed);
             Assert.True(scheduler.Decision.Locked);
             speed.SetTurbo(true);
@@ -179,7 +177,7 @@ namespace EmuSen.WiseMan.Common
         {
             DisplayReading reading = Display(60.0, vblank: Stopwatch.GetTimestamp());
             (FrameScheduler scheduler, _) = Scheduler(() => reading);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = TimeSpan.Zero;
             for (int i = 0; i < 10; i++) due = scheduler.Next(due, 60.0988, speed);
             Assert.True(scheduler.Decision.Locked);
@@ -195,7 +193,7 @@ namespace EmuSen.WiseMan.Common
         {
             DisplayReading reading = Display(60.0, vblank: Stopwatch.GetTimestamp());
             (FrameScheduler scheduler, _) = Scheduler(() => reading);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = TimeSpan.Zero;
             for (int i = 0; i < 500; i++)
             {
@@ -211,7 +209,7 @@ namespace EmuSen.WiseMan.Common
         {
             DisplayReading? reading = Display(60.0, vblank: Stopwatch.GetTimestamp());
             (FrameScheduler scheduler, _) = Scheduler(() => reading);
-            var speed = new SpeedController();
+            var speed = new RuntimeSpeed();
             TimeSpan due = scheduler.Next(TimeSpan.Zero, 60.0988, speed);
             Assert.Equal(1, scheduler.Decision.RefreshesPerFrame);
             reading = Display(120.0, vblank: Stopwatch.GetTimestamp());
@@ -231,7 +229,7 @@ namespace EmuSen.WiseMan.Common
             DisplayReading reading = Display(60.0, vblank: Stopwatch.GetTimestamp());
             long origin = Stopwatch.GetTimestamp();
             var scheduler = new FrameScheduler(_ => reading, origin) { Margin = TimeSpan.FromMilliseconds(3) };
-            scheduler.Next(TimeSpan.Zero, 60.0, new SpeedController());
+            scheduler.Next(TimeSpan.Zero, 60.0, new RuntimeSpeed());
             double ms = Stopwatch.Frequency / 1000.0;
             Assert.Equal(3.0, scheduler.Lead(reading.PeriodTicks) / ms, 3);
             for (int i = 0; i < 64; i++) scheduler.Completed(TimeSpan.FromMilliseconds(2));
@@ -243,8 +241,24 @@ namespace EmuSen.WiseMan.Common
 
     // Pacing changes when frames run, never what they compute - see EmuSen_Settings_Reference.md §4.87.8.
     [Collection(TestCollections.ProcessGlobals)]
-    public class PacingLeavesTheStateAloneTests
+    public class PacingLeavesTheStateAloneTests : IDisposable
     {
+        private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenPacing_" + Guid.NewGuid().ToString("N"));
+
+        public PacingLeavesTheStateAloneTests()
+        {
+            Directory.CreateDirectory(_root);
+            EmuSen.Galaxia.ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = Path.Combine(_root, "Home");
+        }
+
+        public void Dispose()
+        {
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = null;
+            EmuSen.Galaxia.ConfigStore.OverrideDirectory = null;
+            try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
+        }
+
         [Fact]
         public void The_state_after_n_frames_is_the_same_locked_and_content_paced()
         {

@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.Crystal
             string G(string name, params byte[] payload)
             {
                 string path = Path.Combine(dir, name);
-                File.WriteAllBytes(path, CoreAdapterTests.Image(payload));
+                File.WriteAllBytes(path, TestCoreImage.Of(payload));
                 return path;
             }
             return new Dictionary<string, string>

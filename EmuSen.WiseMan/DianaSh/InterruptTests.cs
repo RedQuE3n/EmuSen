@@ -28,7 +28,7 @@ namespace EmuSen.WiseMan.DianaSh
         [InlineData("for i in 1 2 3; do while true; do true; done; done")]
         public void A_loop_stops_within_100_ms_with_a_caret_c_and_status_130(string line)
         {
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession();
             var (output, late) = RunInterrupted(shell, line);
             Assert.True(late < 100, $"{late} ms");
             Assert.EndsWith("^C", output);
@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void The_next_command_runs_and_an_interrupt_with_nothing_running_does_nothing()
         {
-            DianaShInterpreter shell = DianaShInterpreter.CreateDefault(null);
+            DianaShInterpreter shell = DianaShInterpreter.CreateWithoutSession();
             RunInterrupted(shell, "while true; do true; done");
             Assert.Equal("ok", shell.Submit("echo ok").Output);
             shell.Interrupt();

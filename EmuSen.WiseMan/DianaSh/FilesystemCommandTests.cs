@@ -20,7 +20,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "notes.txt");
             File.WriteAllText(file, "hello\nworld");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"cat \"{file}\"");
 
@@ -30,7 +30,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cat_with_no_path_passes_piped_stdin_through_unchanged()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("echo hello there | cat");
 
@@ -42,7 +42,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using var dir = TempDir();
             string missing = Path.Combine(dir.Path, "missing.txt");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"cat \"{missing}\"");
 
@@ -56,7 +56,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "lines.txt");
             File.WriteAllLines(file, Enumerable.Range(1, 15).Select(n => n.ToString()));
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"head \"{file}\"");
 
@@ -70,7 +70,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "lines.txt");
             File.WriteAllText(file, "a\nb\nc");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"head -n 2 \"{file}\"");
 
@@ -83,7 +83,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "lines.txt");
             File.WriteAllText(file, "a\nb\nc");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"tail -n 2 \"{file}\"");
 
@@ -95,7 +95,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "fresh.txt");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.Submit($"touch \"{file}\"");
 
@@ -110,7 +110,7 @@ namespace EmuSen.WiseMan.DianaSh
             string file = Path.Combine(dir.Path, "existing.txt");
             File.WriteAllText(file, "keep me");
             File.SetLastWriteTime(file, DateTime.Now.AddDays(-1));
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.Submit($"touch \"{file}\"");
 
@@ -125,7 +125,7 @@ namespace EmuSen.WiseMan.DianaSh
             string src = Path.Combine(dir.Path, "src.txt");
             string dst = Path.Combine(dir.Path, "dst.txt");
             File.WriteAllText(src, "payload");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.Submit($"cp \"{src}\" \"{dst}\"");
 
@@ -140,7 +140,7 @@ namespace EmuSen.WiseMan.DianaSh
             string srcDir = Path.Combine(dir.Path, "srcdir");
             Directory.CreateDirectory(srcDir);
             string dstDir = Path.Combine(dir.Path, "dstdir");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"cp \"{srcDir}\" \"{dstDir}\"");
 
@@ -156,7 +156,7 @@ namespace EmuSen.WiseMan.DianaSh
             Directory.CreateDirectory(Path.Combine(srcDir, "nested"));
             File.WriteAllText(Path.Combine(srcDir, "nested", "leaf.txt"), "deep");
             string dstDir = Path.Combine(dir.Path, "dstdir");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.Submit($"cp -r \"{srcDir}\" \"{dstDir}\"");
 
@@ -171,7 +171,7 @@ namespace EmuSen.WiseMan.DianaSh
             Directory.CreateDirectory(Path.Combine(dir.Path, "sub"));
             File.WriteAllText(Path.Combine(dir.Path, "top.txt"), "");
             File.WriteAllText(Path.Combine(dir.Path, "sub", "leaf.txt"), "");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"find \"{dir.Path}\"");
 
@@ -188,7 +188,7 @@ namespace EmuSen.WiseMan.DianaSh
             File.WriteAllText(Path.Combine(dir.Path, "keep.cs"), "");
             File.WriteAllText(Path.Combine(dir.Path, "skip.txt"), "");
             File.WriteAllText(Path.Combine(dir.Path, "sub", "alsokeep.cs"), "");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"find \"{dir.Path}\" -name *.cs");
 
@@ -200,7 +200,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Filesystem_commands_reject_paths_outside_the_sandbox()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             // '..'-climbing, not a leading '/' one - see `man hier` on why a real OS absolute path no longer means "outside".
             string outside = string.Concat(Enumerable.Repeat("../", 15));
 
@@ -218,7 +218,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "keepme.txt");
             File.WriteAllText(file, "still here");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"{command} \"{file}\" \"{file}.moved\"");
 
@@ -234,7 +234,7 @@ namespace EmuSen.WiseMan.DianaSh
             using var dir = TempDir();
             string file = Path.Combine(dir.Path, "keepme.txt");
             File.WriteAllText(file, "still here");
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Contains("suspended", shell.Submit($"rm \"{file}\"").Output);
             Assert.Contains("suspended", shell.Submit($"rm -r \"{dir.Path}\"").Output);

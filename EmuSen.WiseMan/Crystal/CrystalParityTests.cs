@@ -4,7 +4,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text.Json.Nodes;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -85,11 +84,11 @@ namespace EmuSen.WiseMan.Crystal
             var lines = new List<string>();
             foreach (string name in plain ? new[] { "v1_test_core", "v1_plain_core" } : new[] { "v1_test_core" })
             {
-                string source = CoreAdapterTests.LibraryPath(name);
+                string source = CoreSidecars.LibraryPath(name);
                 string copy = Path.Combine(dir, Path.GetFileName(source));
                 File.Copy(source, copy);
-                CoreSidecar.Write(copy, development && name == "v1_plain_core");
-                lines.Add($"{CoreSidecar.HashOf(copy)}  {Path.GetFileName(copy)}");
+                CoreSidecars.Write(copy, development && name == "v1_plain_core");
+                lines.Add($"{CoreSidecars.HashOf(copy)}  {Path.GetFileName(copy)}");
             }
             if (manifest) File.WriteAllLines(Path.Combine(dir, "cores.manifest"), lines);
             return dir;
@@ -115,7 +114,7 @@ namespace EmuSen.WiseMan.Crystal
         public void A_rescan_lists_the_cores_directories_as_they_now_stand()
         {
             string tree = TestTree();
-            string sidecar = Directory.GetFiles(tree, "*v1_plain_core*" + CoreSidecar.Suffix).Single();
+            string sidecar = Directory.GetFiles(tree, "*v1_plain_core*" + CoreSidecars.Suffix).Single();
             byte[] kept = File.ReadAllBytes(sidecar);
             Same(new[] { tree }, (impl, rt) =>
             {
@@ -336,7 +335,7 @@ namespace EmuSen.WiseMan.Crystal
         {
             string tree = TestTree();
             string game = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(game, CoreAdapterTests.Image(new byte[] { 1, 2, 3, 4 }));
+            File.WriteAllBytes(game, TestCoreImage.Of(new byte[] { 1, 2, 3, 4 }));
             Same(new[] { tree }, (impl, rt) => new[] { impl.Route(rt, game), impl.Route(rt, Path.Combine(_root, "game.nes")) });
         }
     }

@@ -11,6 +11,7 @@ using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;
 using EmuSen.WiseMan.Crystal;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress.BigPicture
 {
@@ -20,7 +21,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static void ShowMemoryCards(MainWindow window, bool held)
         {
             var graphics = ConsolesConfig.Load();
-            graphics.SetValue("PlayStation", EmuSen.Cores.MemoryCards.ModeKey, EmuSen.Cores.MemoryCards.Shared);
+            graphics.SetValue("PlayStation", CardModes.Key, CardModes.Shared);
             graphics.Save();
             string card = SaveLibrary.CardPathFor("PlayStation", "Card 1", ".mcr");
             Directory.CreateDirectory(Path.GetDirectoryName(card)!);
@@ -40,14 +41,15 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         // Another console's tab, each of its media with a formatted card in the drawer under the name its first slot holds.
         internal static void ShowMemoryCardsTab(MainWindow window, string console)
         {
-            Assert.NotEmpty(EmuSen.Cores.MemoryCards.MediaFor(console));
-            foreach (EmuSen.Cores.SaveMedium medium in EmuSen.Cores.MemoryCards.MediaFor(console))
-                if (medium.Entry?.Format?.Format() is { } blank)
-                {
-                    string card = medium.PathOf(medium.DefaultName(0));
-                    Directory.CreateDirectory(Path.GetDirectoryName(card)!);
-                    File.WriteAllBytes(card, blank);
-                }
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
+            IReadOnlyList<CardMedium> media = CardMedium.Of(runtime, console);
+            Assert.NotEmpty(media);
+            foreach (CardMedium medium in media.Where(m => m.Readable && m.Slots.Count > 0))
+            {
+                string card = medium.PathOf(medium.Slots[0].Name);
+                Directory.CreateDirectory(Path.GetDirectoryName(card)!);
+                runtime.CardsOp(EmuSen.Crystal.Client.Contract.CrystalAbi.CardsNew, System.Text.Json.JsonSerializer.Serialize(new { path = card }));
+            }
             Call(window, "ShowMemoryCards");
             SelectTab(window, console);
             var shown = Sheets(window).SheetOf(Sheets(window).Current!)!.GetVisualDescendants().OfType<TextBlock>().ToList();
@@ -58,7 +60,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         internal static void ShowMemoryCardsPs2(MainWindow window, bool held)
         {
             var graphics = ConsolesConfig.Load();
-            graphics.SetValue("PlayStation 2", EmuSen.Cores.MemoryCards.ModeKey, EmuSen.Cores.MemoryCards.Shared);
+            graphics.SetValue("PlayStation 2", CardModes.Key, CardModes.Shared);
             graphics.Save();
             string card = SaveLibrary.CardPathFor("PlayStation 2", "Card 1", ".ps2");
             Directory.CreateDirectory(Path.GetDirectoryName(card)!);

@@ -87,7 +87,7 @@ namespace EmuSen.WiseMan.Cores
             File.WriteAllBytes(iso, disc.Iso);
             foreach (string path in new[] { sheet, track, iso }) LentRunsAsCopied(Diamond, path, 600);
             string tst = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(tst, CoreAdapterTests.Image(Enumerable.Range(0, 200).Select(i => (byte)i).ToArray()));
+            File.WriteAllBytes(tst, TestCoreImage.Of(Enumerable.Range(0, 200).Select(i => (byte)i).ToArray()));
             LentRunsAsCopied(CoreAdapterTests.Full, tst, 300);
         }
 
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Cores
             Assert.False(Mapped(track), "the mapping is let go with the machine");
 
             string tst = Path.Combine(_root, "plain.tst");
-            File.WriteAllBytes(tst, CoreAdapterTests.Image(1, 2, 3));
+            File.WriteAllBytes(tst, TestCoreImage.Of(1, 2, 3));
             using var plain = new CoreEngine(CoreAdapterTests.Plain) { Options = TestCores.NoBattery };
             plain.LoadRom(tst);
             Assert.False(Mapped(tst), "a core without BORROW has its copy, and the file is let go at once");
@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.Cores
         {
             const int MiB = 1 << 20;
             string tst = Path.Combine(_root, "long.tst");
-            File.WriteAllBytes(tst, CoreAdapterTests.Image(Enumerable.Range(0, 60_000).Select(i => (byte)i).ToArray()));
+            File.WriteAllBytes(tst, TestCoreImage.Of(Enumerable.Range(0, 60_000).Select(i => (byte)i).ToArray()));
             string big = Path.Combine(_root, "big.bin");
             File.WriteAllBytes(big, new byte[8 * MiB + 5]);
             static void Settled(DiscFiles files, long advised)

@@ -35,7 +35,7 @@ namespace EmuSen.WiseMan.Cores
         [Fact]
         public void A_system_named_beside_an_image_is_made_or_refused_when_unlisted()
         {
-            byte[] image = CoreAdapterTests.Image(1, 2, 3);
+            byte[] image = TestCoreImage.Of(1, 2, 3);
             using (var named = new CoreMachine(CoreAdapterTests.Full, image, "", Array.Empty<(uint, byte[])>(), system: "test"))
                 Assert.Equal("test", named.Info.System);
             var refused = Assert.Throws<CoreRefusedException>(() => new CoreMachine(CoreAdapterTests.Plain, image, "", Array.Empty<(uint, byte[])>(), system: "nes"));
@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Cores
         public void The_engine_names_the_routed_system_and_the_game_runs_as_before()
         {
             string path = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(path, CoreAdapterTests.Image(1, 2, 3));
+            File.WriteAllBytes(path, TestCoreImage.Of(1, 2, 3));
             using var engine = new CoreEngine(CoreAdapterTests.Full) { Options = TestCores.NoBattery };
             engine.LoadRom(path);
             engine.RunFrame();

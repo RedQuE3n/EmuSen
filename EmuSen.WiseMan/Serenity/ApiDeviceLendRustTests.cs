@@ -1,7 +1,6 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using EmuSen.Cores.Native;
 using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -30,12 +29,10 @@ namespace EmuSen.WiseMan.Serenity
             Directory.CreateDirectory(_root);
             ConfigStore.OverrideDirectory = _root;
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
-            CoreDiscovery.UseDevelopment(false);
         }
 
         public void Dispose()
         {
-            CoreDiscovery.UseDevelopment(null);
             DataStore.OverrideDirectory = null;
             ConfigStore.OverrideDirectory = null;
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }

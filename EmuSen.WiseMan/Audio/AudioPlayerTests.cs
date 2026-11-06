@@ -1,5 +1,4 @@
 using System.Linq;
-using EmuSen.Common;
 using EmuSen.Endymion;
 using EmuSen.WiseMan.Fixtures;
 using SDL3;
@@ -27,10 +26,7 @@ namespace EmuSen.WiseMan.Audio
         public void Submitting_nothing_does_not_throw()
         {
             using var player = new AudioPlayer();
-            var session = new EmulatorSession();
-
-            Exception? ex = Record.Exception(() =>
-                player.Submit(session.DequeueAudioSamples(int.MaxValue), session.AudioSampleRate));
+            Exception? ex = Record.Exception(() => player.Submit(Array.Empty<short>(), EmuSen.Galaxia.Models.AudioConfig.DefaultSampleRate));
 
             Assert.Null(ex);
         }

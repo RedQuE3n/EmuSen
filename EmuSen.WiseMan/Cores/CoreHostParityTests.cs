@@ -123,7 +123,7 @@ namespace EmuSen.WiseMan.Cores
             string build = Path.Combine(_root, "build", Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(build);
             Directory.CreateDirectory(dir);
-            string source = CoreAdapterTests.LibraryPath(name);
+            string source = CoreSidecars.LibraryPath(name);
             string built = Path.Combine(build, file ?? Path.GetFileName(source));
             File.Copy(source, built);
             CoreSidecar.Write(built);
@@ -230,7 +230,7 @@ namespace EmuSen.WiseMan.Cores
         {
             string player = Path.Combine(_root, "Cores");
             Directory.CreateDirectory(player);
-            File.Copy(CoreAdapterTests.LibraryPath("v1_plain_core"), Path.Combine(player, Lib("bare")));
+            File.Copy(CoreSidecars.LibraryPath("v1_plain_core"), Path.Combine(player, Lib("bare")));
             string stale = Install("v1_test_core", player, Lib("stale"));
             File.AppendAllText(stale, "\0");
             File.WriteAllText(Path.Combine(player, "notes.txt"), "not a library");

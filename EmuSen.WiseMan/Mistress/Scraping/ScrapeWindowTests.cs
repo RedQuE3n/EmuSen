@@ -422,12 +422,12 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             File.WriteAllBytes(Path.Combine(_romDir, "Colour (USA).gbc"), gbc);
             File.WriteAllBytes(Path.Combine(_romDir, "Mono (USA).gb"), new byte[0x8000]);
             MainWindow window = Open();
-            Assert.Equal(1, window.Plan(new ScrapeScope(Shelf: EmuSen.Cores.CoreCatalog.GameBoyColorShelf)).Games);
+            Assert.Equal(1, window.Plan(new ScrapeScope(Shelf: EngineNames.GameBoyColorShelf)).Games);
             Assert.Equal(1, window.Plan(new ScrapeScope(Shelf: "NES (Moon)")).Games);
             Assert.Equal(4, window.Plan(new ScrapeScope()).Games);
 
             _server.Gate = new SemaphoreSlim(0);
-            Scrape(window, new ScrapeScope(Shelf: EmuSen.Cores.CoreCatalog.GameBoyColorShelf));
+            Scrape(window, new ScrapeScope(Shelf: EngineNames.GameBoyColorShelf));
             Assert.Equal(["gbc"], window.ScrapeQueue().Select(q => q.System));
             _server.Gate.Release(100);
             RunEnds(window);

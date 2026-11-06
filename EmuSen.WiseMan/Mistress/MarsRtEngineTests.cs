@@ -1,5 +1,4 @@
 using EmuSen.Crystal.Systems.N64;
-using EmuSen.Cores.Native;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -11,8 +10,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
 using EmuSen.Crystal.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
@@ -71,7 +68,7 @@ namespace EmuSen.WiseMan.Mistress
         private static void Choose(string engine)
         {
             ConsolesConfig config = ConsolesConfig.Load();
-            config.SetValue("N64", CoreCatalog.EngineKey, engine);
+            config.SetValue("N64", EngineNames.EngineKey, engine);
             config.Save();
         }
 
@@ -90,7 +87,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.True(MarsRt.Available, MarsRt.Report);
             MainWindow window = Start(_ntscRom);
             WindowGame game = Game(window);
-            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.Equal(EngineNames.MarsRt, MistressGame.Engine(window));
             Assert.Null(game.EngineNotice);
             Assert.DoesNotContain("not available", Status(window).Text ?? "");
             WaitFor(() => game.TotalFrames > 60 && MistressGame.RewindDepth(window) > 0);
@@ -99,7 +96,7 @@ namespace EmuSen.WiseMan.Mistress
 
             Choose("Mars (C#)");
             window = Start(_ntscRom);
-            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.Equal(EngineNames.MarsRt, MistressGame.Engine(window));
             Assert.Null(Game(window).EngineNotice);
             WaitFor(() => Game(window).TotalFrames > 60 && MistressGame.RewindDepth(window) > 0);
             window.Close();
@@ -109,7 +106,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Holding_rewind_on_MarsRT_steps_the_game_back_and_letting_go_plays_it_on() => Session.Dispatch(() =>
         {
-            Choose(CoreCatalog.MarsRtEngine);
+            Choose(EngineNames.MarsRt);
             MainWindow window = Start(_ntscRom);
             WindowGame game = Game(window);
             WaitFor(() => game.TotalFrames > 150 && MistressGame.RewindDepth(window) > 4);
@@ -128,7 +125,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_state_saved_and_loaded_by_the_hotkeys_on_MarsRT_takes_the_game_back_to_it() => Session.Dispatch(() =>
         {
-            Choose(CoreCatalog.MarsRtEngine);
+            Choose(EngineNames.MarsRt);
             MainWindow window = Start();
             WindowGame game = Game(window);
 
@@ -147,7 +144,7 @@ namespace EmuSen.WiseMan.Mistress
             window.PauseEmulation();
             WaitUntilParked(window);
 
-            Assert.Equal(CoreCatalog.MarsRtEngine, MistressGame.Engine(window));
+            Assert.Equal(EngineNames.MarsRt, MistressGame.Engine(window));
             Assert.InRange(game.TotalFrames, saved, saved + 60);
             window.Close();
         }, default);
@@ -156,8 +153,8 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_battery_save_is_read_when_MarsRT_starts_a_game_and_written_when_it_stops() => Session.Dispatch(() =>
         {
-            Choose(CoreCatalog.MarsRtEngine);
-            string save = SaveLibrary.SramPathFor(_rom, EmuSen.Cores.BatterySave.N64);
+            Choose(EngineNames.MarsRt);
+            string save = SaveLibrary.SramPathFor(_rom, "N64");
             byte[] original = Enumerable.Repeat((byte)0xFF, EepromSize).ToArray();
             Marker.CopyTo(original, Marked);
             Directory.CreateDirectory(Path.GetDirectoryName(save)!);
@@ -177,7 +174,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_cheat_added_to_the_list_reaches_MarsRT_at_the_frame_s_end() => Session.Dispatch(() =>
         {
-            Choose(CoreCatalog.MarsRtEngine);
+            Choose(EngineNames.MarsRt);
             MainWindow window = Start();
 
             var (added, words) = MistressGame.Cheats(window).AddCode("80000300 0042", "Poke");
@@ -193,16 +190,9 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void With_no_marsrt_beside_the_program_an_n64_game_says_the_engine_is_missing()
         {
-            CoreDiscovery.UseDirectories(new[] { Path.Combine(_root, "no-cores") });
-            try
-            {
-                var refused = Assert.Throws<NotSupportedException>(() => CoreFactory.Create(_rom, engine: CoreCatalog.MarsRtEngine));
-                Assert.StartsWith("This build has no N64 core: MarsRT (Rust) is missing", refused.Message);
-            }
-            finally
-            {
-                CoreDiscovery.UseDirectories(null);
-            }
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime(new EmuSen.Crystal.Client.CrystalRuntimeOptions { Cores = new[] { Path.Combine(_root, "no-cores") } });
+            var refused = Assert.Throws<EmuSen.Crystal.Client.CrystalException>(() => runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _rom, NoBattery = true }));
+            Assert.StartsWith("This build has no N64 core: MarsRT (Rust) is missing", refused.Message);
         }
 
         private MainWindow Start(string? rom = null)

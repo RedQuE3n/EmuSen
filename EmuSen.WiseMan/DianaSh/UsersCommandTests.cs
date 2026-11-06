@@ -16,7 +16,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Every_shell_starts_as_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             Assert.Equal("root", shell.Submit("whoami").Output.Trim());
         }
@@ -24,7 +24,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Root_can_useradd_and_then_su_to_the_new_account()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("kid");
 
             var addResult = shell.Submit($"useradd {name}");
@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Useradd_rejects_a_duplicate_name()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("dup");
             shell.Submit($"useradd {name}");
 
@@ -51,7 +51,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Useradd_requires_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string nonRoot = UniqueName("nonroot");
             shell.Submit($"useradd {nonRoot}");
             shell.Submit($"su {nonRoot}");
@@ -64,7 +64,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Su_to_a_nonexistent_user_fails_cleanly()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit($"su {UniqueName("ghost")}");
 
@@ -75,7 +75,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Su_with_no_argument_returns_to_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("kid");
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
@@ -88,7 +88,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Userdel_requires_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string nonRoot = UniqueName("nonroot");
             string victim = UniqueName("victim");
             shell.Submit($"useradd {nonRoot}");
@@ -103,7 +103,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Userdel_refuses_to_remove_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("userdel root");
 
@@ -122,7 +122,7 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.Contains("Switched to", result.Output);
             // Re-become the target in a second session so it's active
             // somewhere while root (this session) tries to remove it.
-            sessions.CreateSession(() => DianaShInterpreter.CreateDefault(null, sessions: sessions), "other");
+            sessions.CreateSession(() => DianaShInterpreter.CreateWithoutSession(sessions: sessions), "other");
             sessions.Current!.Interpreter.CurrentUser = name;
             sessions.TrySwitch("main", out _);
 
@@ -134,7 +134,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Userdel_succeeds_for_an_unused_account()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("unused");
             shell.Submit($"useradd {name}");
 
@@ -147,7 +147,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Passwd_on_your_own_account_is_always_allowed()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("kid");
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
@@ -160,7 +160,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Passwd_on_another_account_requires_root()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string a = UniqueName("a");
             string b = UniqueName("b");
             shell.Submit($"useradd {a}");
@@ -192,7 +192,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Who_with_no_session_manager_falls_back_to_this_shells_own_user()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             var result = shell.Submit("who");
 
@@ -220,7 +220,7 @@ namespace EmuSen.WiseMan.DianaSh
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
 
-            sessions.RebuildAll(() => DianaShInterpreter.CreateDefault(null, sessions: sessions));
+            sessions.RebuildAll(() => DianaShInterpreter.CreateWithoutSession(sessions: sessions));
 
             Assert.Equal(name, sessions.Current!.Interpreter.Submit("whoami").Output.Trim());
         }
@@ -228,7 +228,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Command_substitution_inherits_the_current_user()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("kid");
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
@@ -241,7 +241,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Useradd_creates_a_real_home_directory()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("kid");
 
             shell.Submit($"useradd {name}");
@@ -252,7 +252,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cd_with_no_argument_goes_home_whoever_is_logged_in()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             string name = UniqueName("kid");
             shell.Submit($"useradd {name}");
             shell.Submit($"su {name}");
@@ -266,7 +266,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Cd_with_no_argument_goes_home_for_root_too()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
             shell.Submit("cd /tmp");
 
             shell.Submit("cd");

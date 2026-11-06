@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -21,7 +20,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Sizes))]
         public Task The_sidebar_with_the_playstation_2_shelf_is_whole_and_nothing_on_it_overlaps(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(false);
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             File.WriteAllBytes(Path.Combine(_romDir, "Cobalt Harbor (Synthetic).sfc"), SyntheticRom.BuildBlank());
@@ -45,7 +43,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             finally
             {
                 window.Close();
-                CoreDiscovery.UseDevelopment(null);
             }
         }, default);
 
@@ -53,33 +50,25 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         [MemberData(nameof(Sizes))]
         public Task The_system_carousel_with_the_playstation_2_shelf_is_whole_on_every_system(int width, int height) => Session.Dispatch(() =>
         {
-            CoreDiscovery.UseDevelopment(false);
-            try
+            using var theme = new SyntheticTheme();
+            ThemedSession.Write(theme);
+            File.Copy(SceneAssets.Halves("session-ps2", 120, 240, Avalonia.Media.Colors.MidnightBlue, Avalonia.Media.Colors.LightSteelBlue), theme.PathOf("art/ps2.png"), overwrite: true);
+            using var s = new ThemedSession(width, height, themeDirectory: theme.Root, roms: dir => File.WriteAllBytes(Path.Combine(dir, "Basalt Run (Synthetic).iso"), SyntheticPs2Disc.Dvd().Iso));
+            var seen = new List<string>();
+            var faults = new List<string>();
+            for (int i = 0; i < 6 && !seen.Contains(s.System ?? ""); i++)
             {
-                using var theme = new SyntheticTheme();
-                ThemedSession.Write(theme);
-                File.Copy(SceneAssets.Halves("session-ps2", 120, 240, Avalonia.Media.Colors.MidnightBlue, Avalonia.Media.Colors.LightSteelBlue), theme.PathOf("art/ps2.png"), overwrite: true);
-                using var s = new ThemedSession(width, height, themeDirectory: theme.Root, roms: dir => File.WriteAllBytes(Path.Combine(dir, "Basalt Run (Synthetic).iso"), SyntheticPs2Disc.Dvd().Iso));
-                var seen = new List<string>();
-                var faults = new List<string>();
-                for (int i = 0; i < 6 && !seen.Contains(s.System ?? ""); i++)
-                {
-                    seen.Add(s.System ?? "");
-                    Assert.Equal("system", s.View);
-                    foreach (string f in FitAudit.Check(s.Themed.Root, null, smallest: 0)) faults.Add($"{s.System}: {f}");
-                    SavePicture(s.Window, $"Carousel-{s.System}-{width}x{height}");
-                    s.Pad.Right();
-                    s.Run(600);
-                    s.Settle();
-                }
-                foreach (string f in faults) _out.WriteLine($"Carousel-PlayStation2-{width}x{height}: {f}");
-                Assert.Contains("ps2", seen);
-                Assert.Empty(faults);
+                seen.Add(s.System ?? "");
+                Assert.Equal("system", s.View);
+                foreach (string f in FitAudit.Check(s.Themed.Root, null, smallest: 0)) faults.Add($"{s.System}: {f}");
+                SavePicture(s.Window, $"Carousel-{s.System}-{width}x{height}");
+                s.Pad.Right();
+                s.Run(600);
+                s.Settle();
             }
-            finally
-            {
-                CoreDiscovery.UseDevelopment(null);
-            }
+            foreach (string f in faults) _out.WriteLine($"Carousel-PlayStation2-{width}x{height}: {f}");
+            Assert.Contains("ps2", seen);
+            Assert.Empty(faults);
         }, default);
     }
 }

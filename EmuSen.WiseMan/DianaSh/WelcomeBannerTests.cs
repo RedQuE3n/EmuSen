@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Includes_version_and_every_supplied_core()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             string banner = shell.GetWelcomeBanner(new[] { "SNES (Venus)", "Some Other Core" });
 
@@ -27,7 +27,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Points_at_help_and_man_instead_of_listing_every_command()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             string banner = shell.GetWelcomeBanner(new[] { "SNES (Venus)" });
 
@@ -39,7 +39,7 @@ namespace EmuSen.WiseMan.DianaSh
         [Fact]
         public void Does_not_pollute_command_history()
         {
-            var shell = DianaShInterpreter.CreateDefault(null);
+            var shell = DianaShInterpreter.CreateWithoutSession();
 
             shell.GetWelcomeBanner(new[] { "SNES (Venus)" });
 

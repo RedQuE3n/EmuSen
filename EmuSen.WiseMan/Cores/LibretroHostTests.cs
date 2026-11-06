@@ -52,9 +52,9 @@ namespace EmuSen.WiseMan.Cores
         public static void Lay(string folder, string systemId = "", string stem = "testcore", string extensions = "", string corename = "TestCore")
         {
             Directory.CreateDirectory(folder);
-            File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.ProxyLibrary), LibretroEntries.ProxyPath(folder), overwrite: true);
-            File.Copy(CoreAdapterTests.LibraryPath(LibretroEntries.HostLibrary), LibretroEntries.AdapterPath(folder), overwrite: true);
-            File.Copy(CoreAdapterTests.LibraryPath("emusen_libretro_testcore"), Path.Combine(folder, $"{stem}_libretro.so"), overwrite: true);
+            File.Copy(CoreSidecars.LibraryPath(LibretroEntries.ProxyLibrary), LibretroEntries.ProxyPath(folder), overwrite: true);
+            File.Copy(CoreSidecars.LibraryPath(LibretroEntries.HostLibrary), LibretroEntries.AdapterPath(folder), overwrite: true);
+            File.Copy(CoreSidecars.LibraryPath("emusen_libretro_testcore"), Path.Combine(folder, $"{stem}_libretro.so"), overwrite: true);
             File.WriteAllText(Path.Combine(folder, $"{stem}_libretro.info"), $"display_name = \"EmuSen - Test Core\"\ncorename = \"{corename}\"\nlicense = \"GPLv3\"\nauthors = \"EmuSen\"\nsystemid = \"{systemId}\"\ndatabase = \"\"\n" + (extensions.Length > 0 ? $"supported_extensions = \"{extensions}\"\n" : ""));
         }
 

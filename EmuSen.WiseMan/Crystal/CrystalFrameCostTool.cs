@@ -48,13 +48,13 @@ namespace EmuSen.WiseMan.Crystal
             global::EmuSen.Galaxia.ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             string cores = Path.Combine(_root, "cores");
             Directory.CreateDirectory(cores);
-            string library = Path.Combine(cores, Path.GetFileName(CoreAdapterTests.LibraryPath("v1_test_core")));
-            File.Copy(CoreAdapterTests.LibraryPath("v1_test_core"), library);
+            string library = Path.Combine(cores, Path.GetFileName(CoreSidecars.LibraryPath("v1_test_core")));
+            File.Copy(CoreSidecars.LibraryPath("v1_test_core"), library);
             CoreSidecar.Write(library, false);
             File.WriteAllText(Path.Combine(cores, "cores.manifest"), $"{CoreSidecar.HashOf(library)}  {Path.GetFileName(library)}\n");
             CoreDiscovery.UseDirectories(new[] { cores });
             string game = Path.Combine(_root, "game.tst");
-            File.WriteAllBytes(game, CoreAdapterTests.Image(1, 2, 3, 4));
+            File.WriteAllBytes(game, TestCoreImage.Of(1, 2, 3, 4));
             var sound = new short[8192];
 
             CoreBundle bundle = CoreFactory.Load(game, headless: true);

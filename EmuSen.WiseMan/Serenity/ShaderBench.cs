@@ -569,9 +569,6 @@ namespace EmuSen.WiseMan.Serenity
                 _gpu.Clear();
             }
 
-            // The library's device marks its own passes and hands them on through Gpu.
-            public void Mark(CommandBuffer commands, int point) { }
-
             public void Phase(int point) => Phase(point, Stopwatch.GetTimestamp());
 
             public void Gpu(int point, double milliseconds)

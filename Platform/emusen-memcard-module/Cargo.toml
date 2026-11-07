@@ -19,3 +19,8 @@ emusen-systems = { path = "../systems" }
 # The engines' declared media and the cards' folders, the runtime's own, read rather than copied (EmuSen_Backend.md §40.11.3).
 emusen-crystal = { path = "../crystal" }
 emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }
+
+[dev-dependencies]
+# The shell and the corpus's runner, for memcard's cases the corpus recorded from the C# command (EmuSen_Backend.md §40.11.3).
+emusen-dianash = { path = "../dianash" }
+regex = "1"

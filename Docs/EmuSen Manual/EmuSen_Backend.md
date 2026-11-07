@@ -10610,10 +10610,13 @@ read it. *A new cross-component dependency:* the module depends on `emusen-cryst
 platform library already links both, so no program grows. A medium no installed engine declares is not a card, where
 the C# took every pack's; in a build with every engine the two lists are the same five.
 
-**How it is graded.** The golden corpus recorded `memcard` from the C# command (`memcard.golden`, 4 cases), and
-until now the dianash crate passed those cases over as a host's. Its runner now adds the module over the five media
-the packs named when the corpus was recorded, and the 4 cases pass byte for byte, statuses included; 65 cases pass
-in all, where 61 did. The module's own tests hold the table's order and a medium no engine declares.
+**How it is graded.** The golden corpus recorded `memcard` from the C# command (`memcard.golden`, 4 cases), and the
+dianash crate passes those cases over as a host's. The corpus's reader and runner moved from the crate's
+`tests/golden.rs` into `tests/corpus/mod.rs`, which the module's `tests/corpus.rs` includes and runs over a shell
+with the module and the five media the packs named when the corpus was recorded: the 4 cases pass byte for byte,
+statuses included. The shell's crate takes no dependency on the module, which would break its rule of naming no
+emulator crate (`tests/surface.rs`, which caught a first version that did). The module's own tests hold the table's
+order and a medium no engine declares.
 
 **Where the rest of `EmuSen.Crystal` went.**
 
@@ -10673,8 +10676,8 @@ program (the binding's own cases stay), the `ProgramRun` fixture they used, and 
 blargg's protocol, whose runner went in §40.10.3. `FrameHash`, which the window and frame recordings compare by,
 moved to WiseMan's fixtures with its tests.
 
-**Seeded faults, 2026-11-07,** each reverted. `memcard`'s empty listing said in other words: the dianash crate's
-corpus (`memcard.golden`). The known media in the engines' order rather than the table's: the corpus (`memcard`'s
-refusal case). The module left out of the platform library's shell: `MemcardModuleTests`, both cases ("Unknown
+**Seeded faults, 2026-11-07,** each reverted. `memcard`'s empty listing said in other words: the corpus's `memcard.golden`, through
+the module's `tests/corpus.rs`. The known media in the engines' order rather than the table's: the corpus
+(`memcard`'s refusal case). The module left out of the platform library's shell: `MemcardModuleTests`, both cases ("Unknown
 command 'memcard'"). The backend driving every scheduled press on the first pad: its
 `a_press_reaches_the_pad_the_schedule_names`.

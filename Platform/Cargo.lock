@@ -429,7 +429,6 @@ dependencies = [
  "dianash-text",
  "emusen-dotnet",
  "emusen-galaxia",
- "emusen-memcard-module",
  "regex",
  "sha2",
 ]
@@ -526,10 +525,12 @@ dependencies = [
  "dianash-module",
  "emusen-core-host",
  "emusen-crystal",
+ "emusen-dianash",
  "emusen-dotnet",
  "emusen-galaxia",
  "emusen-savemedia",
  "emusen-systems",
+ "regex",
 ]
 
 [[package]]

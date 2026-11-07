@@ -9,7 +9,7 @@
 
 use crate::serenity::{CacheHandle, bytes, document, failure, fault_json, leave, list, number, object, out_json, parameter_json, shaderc};
 use crate::{fail, put, required, status, text};
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_serenity::cache;
 use emusen_serenity::chain::{self, Chain, Failure, Unfed};
 use emusen_serenity::compiler::Stage;
@@ -781,7 +781,7 @@ pub unsafe extern "C" fn emusen_serenity_parse_format(name: *const u8, len: usiz
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emusen_galaxia::json;
+    use emusen_dotnet::json;
 
     #[test]
     fn a_preset_crosses_back_from_the_document_its_reader_answers_with() {

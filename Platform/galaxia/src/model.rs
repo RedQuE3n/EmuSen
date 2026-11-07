@@ -6,7 +6,7 @@
 //! writer, the C# facade and a later reader all see the same shape. See EmuSen_RustPlatform.md §11.2.
 
 use crate::dotnet_path::equals_ignore_case;
-use crate::json::{self, Text, Value};
+use emusen_dotnet::json::{self, Text, Value};
 use std::fmt;
 
 /// What a field holds, by the C# type it mirrors. Everything C# can leave null is nullable here too.

@@ -4,12 +4,11 @@
 
 use crate::abi::{self, dianash_host_commands, status, HostJobsFn, HostKillFn, HostRunFn, ReleaseFn};
 use crate::accounts::Accounts;
-use crate::dotnet;
 use crate::interp::Interp;
 use crate::sandbox::Sandbox;
 use crate::table::{Entry, Kind, Table};
 use dianash_module::Module;
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -194,7 +193,7 @@ impl World {
     }
 
     pub fn find_listed(&self, name: &str) -> Option<u32> {
-        self.listed().find(|s| s.name.as_deref().is_some_and(|n| dotnet::same(n, name))).map(|s| s.id)
+        self.listed().find(|s| s.name.as_deref().is_some_and(|n| emusen_dotnet::text::equals_ignore_case(n, name))).map(|s| s.id)
     }
 
     pub fn current_listed(&self) -> Option<&Session> {
@@ -669,7 +668,7 @@ pub const DISPLAY_VERSION: &str = "0.1a";
 pub fn banner() -> String {
     const BORDER: &str = "+------------------------------------------------------------------------+";
     let centre = |text: &str| {
-        let pad = 72usize.saturating_sub(emusen_galaxia::dotnet_text::utf16_len(text));
+        let pad = 72usize.saturating_sub(emusen_dotnet::text::utf16_len(text));
         format!("|{}{text}{}|", " ".repeat(pad / 2), " ".repeat(pad - pad / 2))
     };
     [

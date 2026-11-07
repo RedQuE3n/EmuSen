@@ -9,7 +9,7 @@ use crate::Context;
 use emusen_galaxia::claims;
 use emusen_galaxia::dotnet_files;
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_galaxia::{archive, image_sets, package, rom_hash};
 use emusen_patch::package::{self as listing, Listed};
 use emusen_patch::{Format, Refusal};

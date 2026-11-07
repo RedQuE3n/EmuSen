@@ -4,7 +4,7 @@
 //! its owner's (EmuSen_Config_Reference.md §3); what is here is its name, its type and its value in a new instance.
 
 use crate::dotnet_path::equals_ignore_case;
-use crate::json::{Text, Value};
+use emusen_dotnet::json::{Text, Value};
 use crate::model::{Field, Initial, Schema, Type};
 
 const fn text(name: &'static str, initial: &'static str) -> Field {
@@ -353,7 +353,7 @@ const OLD_SCRAPE_KINDS: [(&str, bool); 9] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::json;
+    use emusen_dotnet::json;
     use crate::model::{format, transport};
 
     fn read(schema: &'static Schema, text: &str) -> Value {

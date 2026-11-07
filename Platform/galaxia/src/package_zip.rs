@@ -7,7 +7,7 @@
 use crate::archive::{self, ZipEntry, ZipWriter};
 use crate::dotnet_files;
 use crate::dotnet_path::{self as path, Style};
-use crate::json::Value;
+use emusen_dotnet::json::Value;
 use crate::package;
 
 const STYLE: Style = Style::HOST;
@@ -195,7 +195,7 @@ pub fn same_game(a: &Value, b: &Value) -> bool {
             let text = |v: Option<&Value>| {
                 let mut s = String::new();
                 if let Some(v) = v {
-                    crate::json::write_compact(&mut s, v);
+                    emusen_dotnet::json::write_compact(&mut s, v);
                 }
                 s
             };

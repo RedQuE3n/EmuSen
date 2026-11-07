@@ -10,7 +10,7 @@
 use crate::preset::Wrap;
 use ash::prelude::VkResult;
 use ash::vk::{self, Handle};
-use emusen_galaxia::dotnet_text::contains_ignore_case;
+use emusen_dotnet::text::contains_ignore_case;
 use std::cell::Cell;
 use std::ffi::{CStr, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};

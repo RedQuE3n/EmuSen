@@ -1,7 +1,6 @@
 //! The shell's accounts: identity only, with a hash nothing gates on. `root` always exists and cannot be removed.
 //! One registry per shell, shared by its sessions. See `man su`, `man useradd` and EmuSen_DianaSh.md §4.1.
 
-use crate::dotnet;
 use sha2::{Digest, Sha256};
 
 #[derive(Debug)]
@@ -18,7 +17,7 @@ impl Default for Accounts {
 
 impl Accounts {
     fn find(&self, name: &str) -> Option<usize> {
-        self.entries.iter().position(|(n, _)| dotnet::same(n, name))
+        self.entries.iter().position(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, name))
     }
 
     pub fn exists(&self, name: &str) -> bool {
@@ -38,7 +37,7 @@ impl Accounts {
     }
 
     pub fn remove(&mut self, name: &str) -> bool {
-        if dotnet::same(name, "root") {
+        if emusen_dotnet::text::equals_ignore_case(name, "root") {
             return false;
         }
         match self.find(name) {

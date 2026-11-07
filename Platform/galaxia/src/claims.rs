@@ -7,7 +7,7 @@
 
 use crate::dotnet_files::{self, Options};
 use crate::dotnet_path::{self as path, Style};
-use crate::json::{Text, Value};
+use emusen_dotnet::json::{Text, Value};
 use crate::package;
 use crate::rom_hash::{self, Hashes};
 

@@ -152,7 +152,7 @@ pub fn parse_int(text: &str) -> Option<i32> {
 
 /// A file's lines as `File.ReadLines` gives them: decoded as `File.ReadAllText` decodes, cut at `\r\n`, `\r` or `\n`, with no empty line for a final break.
 pub fn lines(bytes: &[u8]) -> Vec<String> {
-    let text = emusen_galaxia::json::decode(bytes);
+    let text = emusen_dotnet::json::decode(bytes);
     let mut lines = Vec::new();
     let mut rest = text.as_str();
     while !rest.is_empty() {

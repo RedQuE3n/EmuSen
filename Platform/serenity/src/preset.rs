@@ -4,7 +4,7 @@
 use crate::text::{self, is_space, parse_float, parse_int, skip_spaces};
 use crate::{Error, full, read_lines, resolve};
 use emusen_galaxia::dotnet_path::{Style, directory_name, equals_ignore_case};
-use emusen_galaxia::dotnet_text::lower_invariant;
+use emusen_dotnet::text::lower_invariant;
 use emusen_galaxia::tree::file_exists;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

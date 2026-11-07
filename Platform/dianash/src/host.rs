@@ -3,7 +3,6 @@
 //! io table's rules of §6.0: the pointers it is handed are good only until it returns.
 
 use crate::abi::*;
-use crate::dotnet;
 use crate::interp::{Interp, Outcome};
 use crate::sandbox::Sandbox;
 use crate::shell::{Request, Slot, World};
@@ -171,7 +170,7 @@ fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, ar
     let cwd = match &world.shown_cwd {
         Some(shown) => shown.clone(),
         None => {
-            let shown = world.sandbox.display(&dotnet::current_directory());
+            let shown = world.sandbox.display(&emusen_dotnet::file::current_directory());
             world.shown_cwd = Some(shown.clone());
             shown
         }

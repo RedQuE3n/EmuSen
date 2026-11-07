@@ -6,7 +6,7 @@
 
 use crate::atomic::{self, words};
 use crate::dotnet_path::{self as path, Style};
-use crate::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use crate::migration::copy_file;
 use crate::model;
 use crate::models::Model;

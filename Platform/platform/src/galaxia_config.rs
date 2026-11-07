@@ -4,7 +4,8 @@ use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report
 use emusen_galaxia::config::{self, Loaded};
 use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::models::{self, Model};
-use emusen_galaxia::{cheats, error_log, json, model, suggestion, tree};
+use emusen_dotnet::{json, suggestion};
+use emusen_galaxia::{cheats, error_log, model, tree};
 use std::time::{Duration, SystemTime};
 
 /// `EMUSEN_GALAXIA_MODEL_UPGRADE`: apply the model's own upgrade to what was read or made.

@@ -8,7 +8,6 @@
 pub mod accounts;
 pub mod ast;
 pub mod builtins;
-pub mod dotnet;
 mod host;
 mod interp;
 mod settings;

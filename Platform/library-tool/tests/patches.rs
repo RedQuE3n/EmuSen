@@ -6,7 +6,7 @@
 #[path = "../../patch/tests/encoders/mod.rs"]
 mod encoders;
 
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::Tree;

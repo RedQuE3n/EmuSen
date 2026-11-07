@@ -3,7 +3,7 @@
 //! EmuSen_Config_Reference.md §3.4 and §3.4b.
 
 use crate::dotnet_path::{self as path, Style, equals_ignore_case, is_blank};
-use crate::dotnet_text::compare_ignore_case;
+use emusen_dotnet::text::compare_ignore_case;
 use crate::models::CHEATS_CATEGORY;
 use crate::tree::Tree;
 

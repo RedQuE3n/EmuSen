@@ -6,7 +6,7 @@ use crate::catalogue::{self, Catalogue, Row, State};
 use crate::install::{self, Installed, Note, Verified};
 use crate::notes::{self, Match};
 use crate::{Context, Placement};
-use emusen_galaxia::json::{self, Text, Value};
+use emusen_dotnet::json::{self, Text, Value};
 use emusen_tool_job::Events as Queue;
 pub use emusen_tool_job::Job;
 use std::sync::Arc;

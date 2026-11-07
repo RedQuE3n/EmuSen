@@ -355,6 +355,7 @@ version = "0.1.0"
 dependencies = [
  "emusen-core-entry",
  "emusen-core-host",
+ "emusen-dotnet",
  "emusen-galaxia",
  "emusen-net",
  "emusen-tool-job",
@@ -560,6 +561,7 @@ dependencies = [
 name = "emusen-patch"
 version = "0.1.0"
 dependencies = [
+ "emusen-dotnet",
  "emusen-galaxia",
 ]
 
@@ -655,6 +657,7 @@ name = "emusen-serenity"
 version = "0.1.0"
 dependencies = [
  "ash",
+ "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "libc",

@@ -3,7 +3,7 @@
 //! `ConsolesConfig.Load` does (EmuSen_Backend.md §14.12, SR12).
 
 use crate::config::{self, Loaded};
-use crate::json::{Text, Value};
+use emusen_dotnet::json::{Text, Value};
 use crate::models::{CONSOLES_FILE, CONSOLES_MODEL, GRAPHICS_CONFIG, GRAPHICS_FILE, MODELS, GRAPHICS_CONFIG_ID};
 use crate::tree::Tree;
 
@@ -68,7 +68,7 @@ impl Consoles {
             members.push((Text::new(console.clone()), Value::Object(values.iter().map(|(k, v)| (Text::new(k.clone()), Value::string(v.clone()))).collect())));
         }
         let mut out = String::new();
-        crate::json::write_compact(&mut out, &Value::Object(vec![(Text::new("Consoles"), Value::Object(members))]));
+        emusen_dotnet::json::write_compact(&mut out, &Value::Object(vec![(Text::new("Consoles"), Value::Object(members))]));
         out
     }
 

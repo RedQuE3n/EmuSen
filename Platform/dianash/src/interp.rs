@@ -4,13 +4,12 @@
 
 use crate::ast::*;
 use crate::builtins;
-use crate::dotnet;
 use crate::host;
 use crate::lexer::{self, Lexed};
 use crate::parser::{self, ParseError};
 use crate::shell::{History, Request, World};
 use crate::table::{Kind, Table};
-use emusen_galaxia::suggestion;
+use emusen_dotnet::suggestion;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
@@ -129,7 +128,7 @@ impl Interp {
 
     /// `TryGetReadOnlyFastPath`: one simple command, no assignment or redirection, a literal name the table marks read-only.
     pub fn is_read_only(&self, table: &Table, raw: &str) -> bool {
-        let trimmed = dotnet::trim(raw);
+        let trimmed = emusen_dotnet::text::trim(raw);
         if trimmed.is_empty() || !self.pending_input.is_empty() || trimmed.starts_with('!') {
             return false;
         }
@@ -152,8 +151,8 @@ impl Interp {
     /// `SubmitCore`: a sourced line shares this scope but not history or `!` expansion.
     pub fn submit_core(&mut self, world: &mut World, raw: &str, interactive: bool) -> (bool, String, Option<Request>) {
         let mut line = raw.to_string();
-        if interactive && self.pending_input.is_empty() && dotnet::trim_start(&line).starts_with('!') {
-            match self.expand_history(world, dotnet::trim(&line)) {
+        if interactive && self.pending_input.is_empty() && emusen_dotnet::text::trim_start(&line).starts_with('!') {
+            match self.expand_history(world, emusen_dotnet::text::trim(&line)) {
                 Ok(expanded) => line = expanded,
                 Err(words) => return (false, format!("Error: {words}"), None),
             }
@@ -182,7 +181,7 @@ impl Interp {
             }
         };
         self.pending_input.clear();
-        let final_text = dotnet::trim(&combined).to_string();
+        let final_text = emusen_dotnet::text::trim(&combined).to_string();
         if final_text.is_empty() {
             return (false, String::new(), None);
         }
@@ -231,7 +230,7 @@ impl Interp {
             return entries.last().cloned().ok_or_else(|| "History is empty - nothing to repeat.".to_string());
         }
         if trimmed.chars().count() > 1 {
-            if let Some(index) = dotnet::parse_i32(&trimmed[1..]) {
+            if let Some(index) = emusen_dotnet::number::parse_i32(&trimmed[1..]) {
                 if index < 1 || index as usize > entries.len() {
                     return Err(format!("No history entry {index}."));
                 }
@@ -388,7 +387,7 @@ impl Interp {
                 return Err(Flow::Error(world.sandbox.outside(&target)));
             }
             match redirection.kind {
-                RedirectKind::Input => stdin = Some(dotnet::read_all_text(&resolved).map_err(Flow::Error)?),
+                RedirectKind::Input => stdin = Some(emusen_dotnet::file::read_all_text(&resolved).map_err(Flow::Error)?),
                 RedirectKind::Truncate => redirect = Some((resolved, false)),
                 RedirectKind::Append => redirect = Some((resolved, true)),
             }
@@ -401,7 +400,7 @@ impl Interp {
         let mut visible = outcome.output;
         if let Some((path, append)) = redirect {
             let content = if visible.is_empty() { String::new() } else { format!("{visible}\n") };
-            dotnet::write_all_text(&path, &content, append).map_err(Flow::Error)?;
+            emusen_dotnet::file::write_all_text(&path, &content, append).map_err(Flow::Error)?;
             visible.clear();
         }
         Ok((visible, outcome.errors, outcome.status))
@@ -414,7 +413,7 @@ impl Interp {
 
     /// The language's own run here, then the table, through the aliases unless the name is to run as itself.
     fn dispatch_as(&mut self, world: &mut World, name: &str, args: &[String], stdin: Option<String>, as_itself: bool) -> Exec<Outcome> {
-        let lower = dotnet::to_lower(name);
+        let lower = emusen_dotnet::text::to_lower(name);
         let table = self.table(world);
         match lower.as_str() {
             "help" => return Ok(Outcome::ok(builtins::help(&table))),
@@ -478,7 +477,7 @@ impl Interp {
         let mut lines = Vec::new();
         let mut status = 0;
         for name in &args[1..] {
-            let lower = dotnet::to_lower(name);
+            let lower = emusen_dotnet::text::to_lower(name);
             if Self::answered_by_shell(table, &lower) {
                 lines.push(format!("{name}: shell builtin"));
             } else if let Some(target) = table.alias_of(&lower) {
@@ -508,7 +507,7 @@ impl Interp {
         let found: Vec<&String> = args[2..]
             .iter()
             .filter(|n| {
-                let lower = dotnet::to_lower(n);
+                let lower = emusen_dotnet::text::to_lower(n);
                 Self::answered_by_shell(table, &lower) || table.alias_of(&lower).is_some() || table.find(&lower).is_some()
             })
             .collect();
@@ -538,14 +537,14 @@ impl Interp {
         }
         let bytes = match std::fs::read(&resolved) {
             Ok(bytes) => bytes,
-            Err(e) => return Outcome::fail(format!("Error: {}", dotnet::io_message(&e, &resolved))),
+            Err(e) => return Outcome::fail(format!("Error: {}", emusen_dotnet::file::io_message(&e, &resolved))),
         };
         use sha2::{Digest, Sha256};
         let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
         let store = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &emusen_galaxia::tree::tree().config(), "dianash");
         let _ = std::fs::create_dir_all(&store);
         let file = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &store, "trusted");
-        if let Err(words) = dotnet::write_all_text(&file, &format!("{hash}  {resolved}\n"), true) {
+        if let Err(words) = emusen_dotnet::file::write_all_text(&file, &format!("{hash}  {resolved}\n"), true) {
             return Outcome::fail(format!("Error: {words}"));
         }
         Outcome::ok(format!("trust: approved {} (sha256 {hash})", args[1]))
@@ -568,7 +567,7 @@ impl Interp {
         if !emusen_galaxia::tree::file_exists(&resolved) {
             return Outcome::fail(format!("{name}: no such file: {requested}"));
         }
-        let lines = match dotnet::read_all_lines(&resolved) {
+        let lines = match emusen_dotnet::file::read_all_lines(&resolved) {
             Ok(lines) => lines,
             Err(words) => return Outcome::fail(format!("{name}: {words}")),
         };
@@ -576,7 +575,7 @@ impl Interp {
         let mut request = None;
         self.source_depth += 1;
         for raw in &lines {
-            let trimmed = dotnet::trim_start(raw);
+            let trimmed = emusen_dotnet::text::trim_start(raw);
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }

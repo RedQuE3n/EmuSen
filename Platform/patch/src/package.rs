@@ -5,7 +5,7 @@
 
 use crate::{apply_list, Format, Step, MAX_IMAGE};
 use emusen_galaxia::claims;
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_galaxia::rom_hash::{self, Hasher};
 
 /// The largest patch file read: a BPS of a whole new 64 MiB image, with room for its numbers.
@@ -82,11 +82,11 @@ pub fn patched_json(list: &[Listed], image: &[u8]) -> Value {
     h.update(image);
     let h = h.finish();
     Value::Object(vec![
-        (emusen_galaxia::json::Text::new("patches_sha1"), Value::string(&key_of(list))),
-        (emusen_galaxia::json::Text::new("size"), Value::number(h.size)),
-        (emusen_galaxia::json::Text::new("crc32"), Value::string(&h.crc32)),
-        (emusen_galaxia::json::Text::new("md5"), Value::string(&h.md5)),
-        (emusen_galaxia::json::Text::new("sha1"), Value::string(h.sha1.as_deref().unwrap_or(""))),
+        (emusen_dotnet::json::Text::new("patches_sha1"), Value::string(&key_of(list))),
+        (emusen_dotnet::json::Text::new("size"), Value::number(h.size)),
+        (emusen_dotnet::json::Text::new("crc32"), Value::string(&h.crc32)),
+        (emusen_dotnet::json::Text::new("md5"), Value::string(&h.md5)),
+        (emusen_dotnet::json::Text::new("sha1"), Value::string(h.sha1.as_deref().unwrap_or(""))),
     ])
 }
 

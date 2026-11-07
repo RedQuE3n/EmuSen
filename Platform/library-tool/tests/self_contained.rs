@@ -6,7 +6,7 @@
 //! half (saves, states and their records, settings, art and patches read on the other machine) is WiseMan's.
 
 use emusen_galaxia::claims::{self, Places};
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::tree::Tree;
 use emusen_galaxia::{package, package_zip, rom_hash};
 use emusen_library_tool::job::{self, Job};

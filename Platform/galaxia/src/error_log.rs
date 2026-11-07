@@ -8,7 +8,7 @@
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
 use crate::dotnet_path::{self as path, Style, is_blank};
-use crate::dotnet_text::{replace_line_endings, utf16_len};
+use emusen_dotnet::text::{replace_line_endings, utf16_len};
 use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
 use crate::tree::{Directory, Tree, file_exists};
 use std::io::Write;
@@ -259,7 +259,7 @@ mod tests {
         assert_eq!(root(&tree, None), (temp.join("appdata/EmuSen/Logs"), None));
         std::fs::create_dir_all(temp.join("etc")).unwrap();
         let settings = |log: &str| std::fs::write(temp.join("etc/appsettings.json"), format!("{{\"LogDirectory\":{log}}}")).unwrap();
-        settings(&crate::json::quoted(&temp.join("made/Logs")).replace("\\u002B", "+"));
+        settings(&emusen_dotnet::json::quoted(&temp.join("made/Logs")).replace("\\u002B", "+"));
         assert_eq!(root(&tree, None), (temp.join("made/Logs"), None));
         assert!(crate::tree::directory_exists(&temp.join("made/Logs")));
         // A folder this machine cannot make, as a settings file copied from another names, falls back to the home's own Logs, said once in it.
@@ -268,7 +268,7 @@ mod tests {
         let home_logs = tree.directory(Directory::Logs).unwrap();
         std::fs::write(temp.join("blocker"), "x").unwrap();
         let blocked = temp.join("blocker/Logs");
-        settings(&crate::json::quoted(&blocked));
+        settings(&emusen_dotnet::json::quoted(&blocked));
         assert_eq!(root(&tree, None).0, home_logs);
         let now = SystemTime::now();
         let file = append(&root(&tree, None).0, "20261101", "T", now, "first\n").unwrap();
@@ -283,7 +283,7 @@ mod tests {
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
             if std::fs::write(path::combine(Style::HOST, &shut, "probe"), b"").is_err() {
                 assert!(!usable(Some(&shut)));
-                settings(&crate::json::quoted(&shut));
+                settings(&emusen_dotnet::json::quoted(&shut));
                 assert_eq!(root(&tree, None).0, home_logs);
             }
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();

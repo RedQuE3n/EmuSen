@@ -10,7 +10,7 @@ use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::claims::{self, Index, Roots};
 use emusen_galaxia::dotnet_files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_galaxia::{archive, cheats, image_sets, package};
 

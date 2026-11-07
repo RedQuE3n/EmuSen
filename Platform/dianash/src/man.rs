@@ -1,7 +1,6 @@
 //! `man`'s pages: one file each, `<name>.<section>`, in the shipped modules' `man/` beside the program, read without
 //! running anything of a module's. The C# `ManPages`. See EmuSen_DianaSh.md §5.5 and §13.5.
 
-use crate::dotnet;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree;
 use std::collections::HashMap;
@@ -24,7 +23,7 @@ fn index() -> &'static HashMap<String, String> {
             let name = path::file_name(Style::HOST, &file);
             let Some((stem, section)) = name.rsplit_once('.') else { continue };
             if section.len() == 1 && matches!(section.as_bytes()[0], b'1'..=b'9') {
-                pages.entry(dotnet::fold(stem)).or_insert(file.clone());
+                pages.entry(emusen_dotnet::text::fold(stem)).or_insert(file.clone());
             }
         }
         pages
@@ -33,8 +32,8 @@ fn index() -> &'static HashMap<String, String> {
 
 /// A page's text: the file's, less the newline a text file ends in.
 pub fn lookup(name: &str) -> Option<String> {
-    let file = index().get(&dotnet::fold(name))?;
-    let mut text = dotnet::read_all_text(file).ok()?;
+    let file = index().get(&emusen_dotnet::text::fold(name))?;
+    let mut text = emusen_dotnet::file::read_all_text(file).ok()?;
     if text.ends_with('\n') {
         text.pop();
     }

@@ -13,7 +13,7 @@ use emusen_disc::{Kind, Lone, Medium};
 use emusen_dotnet::text::{compare_ignore_case, ends_with_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{self, Hasher, Hashes};
 use emusen_galaxia::{archive, claims, image_sets};

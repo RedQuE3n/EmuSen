@@ -8,7 +8,7 @@ use crate::discs::{self, Item};
 use crate::{packages, Context};
 use emusen_galaxia::claims;
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_tool_job::Events as Queue;
 pub use emusen_tool_job::Job;
 use std::time::{Duration, Instant};

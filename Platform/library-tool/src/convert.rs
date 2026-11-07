@@ -7,7 +7,7 @@ use crate::checks::{self, DvdToc, Toc};
 use crate::discs::{self, Item};
 use crate::{Context, Destination};
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::{Text, Value};
+use emusen_dotnet::json::{Text, Value};
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_disc::Kind;

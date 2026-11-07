@@ -3,7 +3,7 @@
 //! conversion or a patch is their callers'; this owns the file. See EmuSen_GamePackages.md §3.3 and EmuSen_Galaxia.md
 //! §3.10.
 
-use crate::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use crate::model::NEW_LINE;
 
 /// The manifest's name inside a package's folder.

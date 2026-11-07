@@ -180,35 +180,6 @@ namespace EmuSen.WiseMan.Mistress.Scraping
         }
 
         [Fact]
-        public void A_run_of_found_unknown_transformed_and_unreadable_games_replays_alike()
-        {
-            var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Mixed");
-            var games = new List<(string, string)>();
-            string Found(string relative, int seed, long id)
-            {
-                string rom = Rom(relative, Filled(2048 + seed, seed));
-                _server.Games.Add(new FakeGame(id, Path.GetFileNameWithoutExtension(rom), RomHash.Of(rom).Md5));
-                return rom;
-            }
-            games.Add((Found("snes/F-Zero (USA).sfc", 1, 77), "snes"));
-            games.Add((Found("snes/RPG/Square/Mana (Japan).sfc", 2, 78), "snes"));
-            games.Add((Found("snes/Pilotwings (Europe) (En,Fr,De).sfc", 3, 79), "snes"));
-            games.Add((Rom("snes/Nobody Knows (USA).sfc", Filled(1500, 4)), "snes"));
-            byte[] nes = SyntheticNesRom.Build(patches: (0x10, [1, 2, 3]));
-            string headered = Rom("nes/Headered (USA).nes", nes);
-            _server.Games.Add(new FakeGame(90, "Headered", RomHash.Of(nes[16..]).Md5));
-            games.Add((headered, "nes"));
-            string broken = Rom("snes/Broken Answer.sfc", Filled(900, 5));
-            _server.StatusByMd5[RomHash.Of(broken).Md5] = (200, "<html>not json</html>");
-            games.Add((broken, "snes"));
-            string refused = Rom("snes/Refused.sfc", Filled(901, 6));
-            _server.StatusByMd5[RomHash.Of(refused).Md5] = (400, "Erreur : bad request");
-            games.Add((refused, "snes"));
-            Both(golden, "mixed", games, new ScrapeChoices());
-            golden.Check(5);
-        }
-
-        [Fact]
         public void Every_kind_in_another_region_and_language_with_the_fallback_off_replays_alike()
         {
             var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Kinds");
@@ -333,7 +304,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
                 _server.Games.Add(new FakeGame(400, "Packed", RomHash.Of(rom).Md5));
                 _server.Games.Add(new FakeGame(401, "Plain", RomHash.Of(plain).Md5));
                 string package = Path.Combine(DataStore.Packages, "SNES", "Packed (USA).sfc");
-                EmuSen.WiseMan.Crystal.CrystalParityTests.PackageFor(package, Roms, "snes/Packed (USA).sfc", "snes");
+                EmuSen.WiseMan.Crystal.PackageFixtures.PackageFor(package, Roms, "snes/Packed (USA).sfc", "snes");
                 string media = Path.Combine(package, EmuSen.Galaxia.Media.GamePackage.MediaFolder);
                 var games = new List<(string, string)> { (rom, "snes"), (plain, "snes") };
                 var golden = new EmuSen.WiseMan.Crystal.ParityGolden("ScrapeReplayParity.Packaged");

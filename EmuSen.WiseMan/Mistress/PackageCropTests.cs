@@ -47,7 +47,7 @@ namespace EmuSen.WiseMan.Mistress
             GameCrop? Row() { var opened = records.OpenedAs; records.OpenedAs = p => (p, null); try { return records.Crop(game); } finally { records.OpenedAs = opened; } }
 
             string package = Path.Combine(DataStore.Packages, "SNES", "Crop (Synthetic).sfc"), settings = Path.Combine(package, "settings.json");
-            EmuSen.WiseMan.Crystal.CrystalParityTests.PackageFor(package, library, "snes/Crop (Synthetic).sfc", "snes");
+            EmuSen.WiseMan.Crystal.PackageFixtures.PackageFor(package, library, "snes/Crop (Synthetic).sfc", "snes");
             Assert.Equal(new GameCrop(1, 2, 3, 4), records.Crop(game));
             Assert.Equal(new GameCrop(1, 2, 3, 4), records.Crop(package));
 

@@ -3859,3 +3859,14 @@ words (`missing field `console` at line 25 column 1`); what serde cannot know is
 blank words, a word twice in a list, the year, the cover's shape, the byte order, dotted lower-case extensions, a
 medium named twice and a look's ranges. A medium's three fields may now come in any order. `table.json`'s cover shape
 is a `TableFacts`. `System`'s fields are declared in the order the table writes them.
+
+### 47.12 The API's answers are written by serde_json
+
+The frontend API's JSON answers (`emusen_crystal.h`: the catalog, core info, a game's opening, a console's look, the
+session table's views and lists) are built by `crystal/src/json.rs` as a `serde_json::Value` and written by
+serde_json. The builder keeps its calls (`begin_object`, `str`, `int` and the rest), since 72 answers build in loops
+and helpers, but it writes no text itself: no escaping, no number layout, no commas. Members keep the order they are
+given in (serde_json's `preserve_order`). What changes in the bytes: text is written as UTF-8 rather than escaped
+(`<é>` where .NET wrote `<é>`), a whole double keeps its point (`2.0` where .NET wrote `2`), and a
+double JSON has no number for is `null`. The C# front end reads every answer with a JSON reader, which takes both
+spellings.

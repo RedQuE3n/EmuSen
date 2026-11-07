@@ -221,7 +221,7 @@ impl Module for Trace {
                 let id = format!("bp{}", b.int("id"));
                 lines += &format!(
                     "  {} breakpoint  ${} ({}, hit {}x)\n",
-                    format!("{:<width$}", &id, width = 10),
+                    format!("{:<10}", id),
                     hex(b.address("address"), 6),
                     if b.flag("enabled") { "enabled" } else { "disabled" },
                     b.int("hits")
@@ -234,7 +234,7 @@ impl Module for Trace {
                 let start = w.address("address");
                 lines += &format!(
                     "  {} watch       {} 0x{start:X}-0x{:X} ({})\n",
-                    format!("{:<width$}", &id, width = 10),
+                    format!("{:<10}", id),
                     w.text("space"),
                     start.wrapping_add(w.int("length") as i32).wrapping_sub(1),
                     control::watch_kind(w.int("kind"))

@@ -150,7 +150,7 @@ fn pad_or_truncate(text: &str, width: usize) -> String {
 impl Editor {
     fn open(path: &str, shown: &str) -> Editor {
         let mut lines: Vec<Vec<char>> = if std::path::Path::new(path).is_file() {
-            emusen_dotnet::file::read_all_lines(path).unwrap_or_default().into_iter().map(|l| l.chars().collect()).collect()
+            std::fs::read_to_string(&path).map(|t| t.lines().map(str::to_string).collect::<Vec<_>>()).map_err(|e| format!("{}: {e}", path)).unwrap_or_default().into_iter().map(|l| l.chars().collect()).collect()
         } else {
             Vec::new()
         };

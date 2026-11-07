@@ -254,7 +254,7 @@ impl Handle {
 }
 
 fn io(e: std::io::Error, at: &str) -> String {
-    emusen_dotnet::file::io_message(&e, at)
+    format!("{}: {}", at, e)
 }
 
 enum Turn {

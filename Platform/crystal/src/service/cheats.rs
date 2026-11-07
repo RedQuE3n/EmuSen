@@ -496,8 +496,8 @@ fn run(cc: &mut Cheats, o: u32, bytes: &[u8]) -> Answer<(Option<Vec<u8>>, i64)> 
             let game = args::string(&a, "game")?;
             let Some(&best) = db.find(&game, 1).first() else { return record(parsed_json(&cht::Parsed::default(), None)) };
             let entry = &db.entries[best];
-            let text = std::fs::read(&entry.path).map_err(|e| refused(status::FAULT, emusen_dotnet::file::io_message(&e, &entry.path)))?;
-            let parsed = read_cht(cc, &emusen_dotnet::file::decode(&text))?;
+            let text = std::fs::read(&entry.path).map_err(|e| refused(status::FAULT, format!("{}: {}", entry.path, e)))?;
+            let parsed = read_cht(cc, &emusen_galaxia::text_file::decode(&text))?;
             record(parsed_json(&parsed, Some(&entry.game)))
         }
         op::DB_PRUNE => {

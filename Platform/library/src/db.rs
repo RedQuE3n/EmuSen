@@ -108,7 +108,7 @@ pub fn scalar_text(db: &Connection, sql: &str, parameters: &[(&str, Bound)]) -> 
 /// Opens `games.db`, its folder made first, with foreign keys on, and migrates it.
 pub fn open(sqlite: Arc<Sqlite>, path: &str) -> Result<Connection, Error> {
     if let Some(folder) = emusen_galaxia::dotnet_path::directory_name(emusen_galaxia::dotnet_path::Style::HOST, path).filter(|f| !f.is_empty()) {
-        std::fs::create_dir_all(&folder).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &folder)))?;
+        std::fs::create_dir_all(&folder).map_err(|e| Error::Io(format!("{}: {}", folder, e)))?;
     }
     let mut db = Connection::open(sqlite, path)?;
     db.set_timeout(emusen_sqlite::COMMAND_TIMEOUT);

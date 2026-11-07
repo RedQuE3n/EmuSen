@@ -39,7 +39,7 @@ fn assert_same_model(file: &Path, got: &str, want: &str) {
 
 /// A config file's outcome: its model as JSON, `null`, or `refused`.
 fn config_outcome(model: &models::Model, bytes: &[u8]) -> String {
-    match config::bind_text(model, &emusen_dotnet::json::decode(bytes), true) {
+    match config::bind_text(model, &emusen_galaxia::text_file::decode(bytes), true) {
         Ok(Some(bound)) => model::transport(&bound),
         Ok(None) => "null".to_string(),
         Err(_) => "refused".to_string(),
@@ -47,7 +47,7 @@ fn config_outcome(model: &models::Model, bytes: &[u8]) -> String {
 }
 
 fn config_written(model: &models::Model, bytes: &[u8]) -> String {
-    let bound = config::bind_text(model, &emusen_dotnet::json::decode(bytes), true).unwrap().unwrap();
+    let bound = config::bind_text(model, &emusen_galaxia::text_file::decode(bytes), true).unwrap().unwrap();
     model::format(model.schema, &bound).unwrap()
 }
 
@@ -85,7 +85,7 @@ fn a_config_read_written_and_read_again_is_the_same_model() {
 
 /// A manifest's outcome: its document as compact JSON, or the kind of refusal.
 fn package_outcome(bytes: &[u8]) -> String {
-    match package::parse(&emusen_dotnet::json::decode(bytes)) {
+    match package::parse(&emusen_galaxia::text_file::decode(bytes)) {
         Ok(doc) => {
             let mut out = String::new();
             emusen_dotnet::json::write_compact(&mut out, &doc);
@@ -107,7 +107,7 @@ fn every_manifest_reads_to_its_recorded_document_and_is_written_back_the_same() 
             continue;
         }
         assert_same_model(&file, &got, &want);
-        let doc = package::parse(&emusen_dotnet::json::decode(&std::fs::read(&file).unwrap())).unwrap();
+        let doc = package::parse(&emusen_galaxia::text_file::decode(&std::fs::read(&file).unwrap())).unwrap();
         assert_same_model(&file, &package_outcome(package::format(&doc).as_bytes()), &want);
     }
 }

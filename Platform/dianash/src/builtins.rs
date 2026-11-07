@@ -194,7 +194,7 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
             Outcome::ok("")
         }
         Builtin::False => Outcome::fail(""),
-        Builtin::Pwd => Outcome::ok(emusen_dotnet::file::current_directory()),
+        Builtin::Pwd => Outcome::ok(std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default()),
         Builtin::Cd => cd(world, args),
         Builtin::Test => test_outcome(evaluate(world, &args[1..])?),
         Builtin::Bracket => {
@@ -215,7 +215,7 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
                 return Ok(Outcome::ok("No history yet."));
             }
             let width = entries.len().to_string().len();
-            Outcome::ok(entries.iter().enumerate().map(|(i, e)| format!("{}  {e}", format!("{:>width$}", &(i + 1).to_string(), width = width))).collect::<Vec<_>>().join("\n"))
+            Outcome::ok(entries.iter().enumerate().map(|(i, e)| format!("{}  {e}", format!("{:>width$}", (i + 1).to_string()))).collect::<Vec<_>>().join("\n"))
         }
         Builtin::Whoami => Outcome::ok(user(world, session)),
         Builtin::Su => {
@@ -262,13 +262,13 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
         },
         Builtin::Who => {
             if !world.config.sessions {
-                return Ok(Outcome::ok(format!("  {} (this shell)", format!("{:<width$}", &user(world, session), width = 10))));
+                return Ok(Outcome::ok(format!("  {} (this shell)", format!("{:<10}", user(world, session)))));
             }
             let current = world.current;
             Outcome::ok(
                 world
                     .listed()
-                    .map(|s| format!("  {} {}{}", format!("{:<width$}", &s.user, width = 10), s.name.as_deref().unwrap_or(""), if current == Some(s.id) { "  (current)" } else { "" }))
+                    .map(|s| format!("  {} {}{}", format!("{:<10}", s.user), s.name.as_deref().unwrap_or(""), if current == Some(s.id) { "  (current)" } else { "" }))
                     .collect::<Vec<_>>()
                     .join("\n"),
             )
@@ -306,7 +306,7 @@ fn cd(world: &mut World, args: &[String]) -> Outcome {
     world.shown_cwd = None;
     match std::env::set_current_dir(&resolved) {
         Ok(()) => Outcome::ok(""),
-        Err(e) => Outcome::fail(format!("cd: {}", emusen_dotnet::file::io_message(&e, &resolved))),
+        Err(e) => Outcome::fail(format!("cd: {}: {}", resolved, e)),
     }
 }
 
@@ -463,7 +463,7 @@ fn ps(interp: &mut Interp, world: &mut World) -> Result<Outcome, String> {
         let current = world.current;
         for s in world.listed() {
             let marker = if current == Some(s.id) { "(current)" } else { "" };
-            lines.push(format!("  {} session     {marker}", format!("{:<width$}", s.name.as_deref().unwrap_or(""), width = 10)));
+            lines.push(format!("  {} session     {marker}", format!("{:<10}", s.name.as_deref().unwrap_or(""))));
         }
     }
     if lines.is_empty() {

@@ -142,9 +142,9 @@ pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str
     let stem = path::file_name_without_extension(style, rom).to_string();
     let mut found = db.by_name(&stem, &core.openvgdb_systems);
     if found.is_none() {
-        let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(emusen_dotnet::file::io_message(&e, rom)))?;
+        let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(format!("{}: {}", rom, e)))?;
         if size <= HASH_LIMIT {
-            let bytes = std::fs::read(rom).map_err(|e| Some(emusen_dotnet::file::io_message(&e, rom)))?;
+            let bytes = std::fs::read(rom).map_err(|e| Some(format!("{}: {}", rom, e)))?;
             let hashed = core.systems.first().and_then(|s| emusen_systems::openvgdb::bytes(s, &bytes)).unwrap_or(bytes);
             found = db.by_md5(&emusen_galaxia::rom_hash::hashes_of(&hashed).md5, &core.openvgdb_systems);
         }

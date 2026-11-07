@@ -517,8 +517,6 @@ pub fn write_compact(out: &mut String, value: &Value) {
     }
 }
 
-/// A file's bytes as `File.ReadAllText` gives them, which the JSON readers decode first.
-pub use crate::file::decode;
 
 #[cfg(test)]
 mod tests {
@@ -694,19 +692,6 @@ mod tests {
             assert_eq!(format_f32(value).as_deref(), Some(text));
         }
         assert_eq!(format_f32(f32::NEG_INFINITY), None);
-    }
-
-    #[test]
-    fn a_files_bytes_are_decoded_by_their_mark() {
-        assert_eq!(decode(b"{}"), "{}");
-        assert_eq!(decode(b"\xEF\xBB\xBF{\"a\":\"\xFF\"}"), "{\"a\":\"\u{FFFD}\"}");
-        assert_eq!(decode(b"\xFF\xFE{\0}\0"), "{}");
-        assert_eq!(decode(b"\xFE\xFF\0{\0}"), "{}");
-        assert_eq!(decode(b"\xFF\xFE\0\0{\0\0\0}\0\0\0"), "{}");
-        assert_eq!(decode(b"\0\0\xFE\xFF\0\0\0{\0\0\0}"), "{}");
-        assert_eq!(decode(b"\xFF\xFE{\0}"), "{\u{FFFD}");
-        assert_eq!(decode(b"\xFF\xFE\x00\xD8x\0"), "\u{FFFD}x");
-        assert_eq!(decode(b""), "");
     }
 
     #[test]

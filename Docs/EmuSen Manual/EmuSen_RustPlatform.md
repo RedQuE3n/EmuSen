@@ -3815,3 +3815,17 @@ emusen-dotnet's `text.rs` (350 lines) is deleted; its callers use `str`'s own:
 The cheat codes' alphabets (Game Genie, Action Replay, Pro Action Replay) are ASCII and upper-case their input with
 `to_ascii_uppercase`, which gives the same codes. One Galaxia test was changed with the rules: a day's log is judged
 by bytes (`error_log.rs`).
+
+### 47.9 Files are read and written by `std::fs`, and a mark still chooses the encoding
+
+emusen-dotnet's `file.rs` (116 lines) is deleted. A file a person may have written (a config, a cheat list, a game's
+own settings, a manifest, a cue sheet or an `.m3u` list) is read by `emusen_galaxia::text_file`: its byte-order mark
+chooses UTF-8, UTF-16 or UTF-32 and is dropped, UTF-8 is read without one, and what is not valid becomes U+FFFD, as
+the tester's answer to the plan's Q7 keeps it. That module is ours, about 25 lines, because no crate the platform uses
+reads UTF-32's marks. Everything else is the standard library's: the shell reads a redirect, a man page or a script
+with `read_to_string`, writes with `fs::write` or an appending `OpenOptions`, and lines are `str::lines`.
+
+A refusal is the path and the system's words, `<path>: No such file or directory (os error 2)`, where it was .NET's
+sentence (`Could not find file '<path>'.`, `Access to the path '<path>' is denied.`). Six lines of the DianaSh goldens
+(`awk`, `wc`, `touch` and two cases of `shell` twice) were changed with their lengths to the new words; nothing else
+in them moved.

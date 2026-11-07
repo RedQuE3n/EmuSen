@@ -57,7 +57,7 @@ pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
             out.push_str(&format!("{{\"moved\":{moved},\"bytes\":{bytes},\"folder\":{}}}", quoted(&folder)));
         }
         "sign_out" => {
-            let had = credentials::Member::delete().map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &credentials::Member::path())))?;
+            let had = credentials::Member::delete().map_err(|e| Error::Io(format!("{}: {}", credentials::Member::path(), e)))?;
             s.set_run_member(None);
             out.push_str(&format!("{{\"had\":{had}}}"));
         }

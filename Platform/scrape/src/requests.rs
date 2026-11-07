@@ -224,7 +224,7 @@ impl Scraper {
         if result == "signed_in" {
             let mut kept = member.clone();
             kept.verified = Some(self.clock.now());
-            kept.save().map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &credentials::Member::path())))?;
+            kept.save().map_err(|e| Error::Io(format!("{}: {}", credentials::Member::path(), e)))?;
             self.set_run_member(Some(kept));
         }
         let mut out = format!("{{\"result\":\"{result}\",\"name\":");
@@ -324,7 +324,7 @@ impl Scraper {
         let at = openemu::default_path();
         let bytes = std::fs::metadata(&at).map(|m| m.len()).ok();
         if bytes.is_some() {
-            std::fs::remove_file(&at).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &at)))?;
+            std::fs::remove_file(&at).map_err(|e| Error::Io(format!("{}: {}", at, e)))?;
         }
         let _ = std::fs::remove_file(format!("{at}.part"));
         let mut out = String::from("{\"bytes\":");

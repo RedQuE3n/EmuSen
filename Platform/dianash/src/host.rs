@@ -170,7 +170,7 @@ fn call<R>(interp: &Interp, world: &mut World, callee: Callee, command: &str, ar
     let cwd = match &world.shown_cwd {
         Some(shown) => shown.clone(),
         None => {
-            let shown = world.sandbox.display(&emusen_dotnet::file::current_directory());
+            let shown = world.sandbox.display(&std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default());
             world.shown_cwd = Some(shown.clone());
             shown
         }

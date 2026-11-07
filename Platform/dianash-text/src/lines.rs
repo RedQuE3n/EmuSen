@@ -3,7 +3,6 @@
 use crate::pattern;
 use crate::{Answer, Run};
 use dianash_module::Call;
-use emusen_dotnet::file::read_all_text;
 use regex::Regex;
 use std::cmp::Ordering;
 
@@ -278,7 +277,7 @@ pub fn awk(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     let text = match (stdin, path) {
         (Some(text), _) => text,
         (None, Some(path)) => match call.resolve(path) {
-            Ok(real) => read_all_text(&real)?,
+            Ok(real) => std::fs::read_to_string(&real).map_err(|e| format!("{}: {e}", real))?,
             // The C# names the last argument, which is the path but for a program given after it.
             Err(refusal) => return Ok(Answer::fail(format!("awk: '{}'{}", args[args.len() - 1], refusal.strip_prefix(&format!("'{path}'")).unwrap_or(&refusal)))),
         },

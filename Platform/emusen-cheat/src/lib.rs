@@ -3,7 +3,6 @@
 //! formats (EmuSen_DianaSh.md §9.2); a .cht file is read and written through the call's resolve. See §8.1 and §13.11.
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::file::{read_all_text, write_all_text};
 use emusen_dotnet::json::{self, Value};
 use emusen_session_service::abi::{self, cheat, status};
 use emusen_session_service::space::find;
@@ -396,7 +395,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
             if !std::path::Path::new(&path).is_file() {
                 return Ok(Answer::ok(format!("cheat import: no file at {path}")));
             }
-            let imported = read_all_text(&path).map_err(|e| Refusal::new(status::FAULT, e)).and_then(|text| {
+            let imported = std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path)).map_err(|e| Refusal::new(status::FAULT, e)).and_then(|text| {
                 let parsed = op(&session, cheat::CHT_PARSE, &object(&[("text", quoted(&text))]))?;
                 Ok((add_parsed(&session, &parsed)?, parsed.int("skipped")))
             });
@@ -417,10 +416,10 @@ fn run(call: &Call, parts: &[String]) -> Run {
             let export = op(&session, cheat::CHT_EXPORT, "{}")?;
             if let Some(parent) = std::path::Path::new(&path).parent() {
                 if let Err(e) = std::fs::create_dir_all(parent) {
-                    return Ok(Answer::ok(format!("cheat export: {}", emusen_dotnet::file::io_message(&e, &parent.to_string_lossy()))));
+                    return Ok(Answer::ok(format!("cheat export: {}: {}", parent.to_string_lossy(), e)));
                 }
             }
-            if let Err(words) = write_all_text(&path, &export.text("text"), false) {
+            if let Err(words) = std::fs::write(&path, export.text("text")).map_err(|e| format!("{path}: {e}")) {
                 return Ok(Answer::ok(format!("cheat export: {words}")));
             }
             let mut note = String::new();

@@ -3,7 +3,6 @@
 
 use crate::{core_name, required, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::file::{read_all_lines, write_all_text};
 use emusen_dotnet::json::Value;
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::{describe, hex, label_at, parse_hex};
@@ -48,17 +47,17 @@ pub fn regs(call: &Call, parts: &[String]) -> Run {
         }
         let mut out = format!("{} registers:\n", only.description);
         for r in registers(&session.registers(only.index)?) {
-            out += &format!("  {} = 0x{}\n", format!("{:<width$}", &r.name, width = 9), register_hex(r.value, r.bits));
+            out += &format!("  {} = 0x{}\n", format!("{:<9}", r.name), register_hex(r.value, r.bits));
         }
         return Ok(Answer::ok(out.trim_end()));
     }
     let mut out = format!("{} CPU registers:\n", core_name(&session)?);
     for r in registers(&session.telemetry(abi::telemetry::CPU)?) {
-        out += &format!("  {} = 0x{}\n", format!("{:<width$}", &r.name, width = 4), register_hex(r.value, r.bits));
+        out += &format!("  {} = 0x{}\n", format!("{:<4}", r.name), register_hex(r.value, r.bits));
     }
     out += "Video registers:\n";
     for r in registers(&session.telemetry(abi::telemetry::VIDEO)?) {
-        out += &format!("  {} = 0x{:02X}\n", format!("{:<width$}", &r.name, width = 8), r.value);
+        out += &format!("  {} = 0x{:02X}\n", format!("{:<8}", r.name), r.value);
     }
     for (kind, title) in [(abi::telemetry::APU, "APU registers:"), (abi::telemetry::COPROCESSOR, "Coprocessor registers:")] {
         let more = registers(&session.telemetry(kind)?);
@@ -66,7 +65,7 @@ pub fn regs(call: &Call, parts: &[String]) -> Run {
             out += title;
             out.push('\n');
             for r in more {
-                out += &format!("  {} = 0x{}\n", format!("{:<width$}", &r.name, width = 9), register_hex(r.value, r.bits));
+                out += &format!("  {} = 0x{}\n", format!("{:<9}", r.name), register_hex(r.value, r.bits));
             }
         }
     }
@@ -142,7 +141,7 @@ pub fn cpus(call: &Call) -> Run {
         .into_iter()
         .flatten()
         .collect();
-        out += &format!("  {} PC={} {}\n", format!("{:<width$}", &cpu.name, width = 5), format!("{:<width$}", &pc, width = 8), cpu.description);
+        out += &format!("  {} PC={} {}\n", format!("{:<5}", cpu.name), format!("{:<8}", pc), cpu.description);
         out += &format!("        supports: {}{}\n", features.join(", "), cpu.code_space.as_ref().map_or(String::new(), |c| format!("   code space: {c}")));
     }
     out += "Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.";
@@ -280,7 +279,7 @@ pub fn label(call: &Call, parts: &[String]) -> Run {
             if !std::path::Path::new(&path).is_file() {
                 return Ok(Answer::fail(format!("No such file: {}", parts[2])));
             }
-            let lines = read_all_lines(&path)?;
+            let lines = std::fs::read_to_string(&path).map(|t| t.lines().map(str::to_string).collect::<Vec<_>>()).map_err(|e| format!("{}: {e}", path))?;
             let loaded = session.label_load(&lines.join("\n"))?;
             let report = format!("{} label(s) loaded from {}.", loaded.int("added"), parts[2]);
             let errors: Vec<String> = loaded.list("errors").iter().filter_map(|e| e.as_str().map(|e| format!("  {e}"))).collect();
@@ -292,7 +291,7 @@ pub fn label(call: &Call, parts: &[String]) -> Run {
             }
             let Ok(path) = call.resolve(&parts[2]) else { return Ok(Answer::fail(format!("Path outside this sandbox: {}", parts[2]))) };
             let text = session.label_save()?;
-            write_all_text(&path, &text, false)?;
+            std::fs::write(&path, &text).map_err(|e| format!("{path}: {e}"))?;
             Ok(Answer::ok(format!("{} label(s) written to {}.", labels(&session)?.len(), parts[2])))
         }
         _ => {
@@ -331,7 +330,7 @@ pub fn vectors(call: &Call) -> Run {
         let bytes = crate::memory::read(&session, bus, address, width)?;
         let destination = bytes.iter().enumerate().fold(0i32, |d, (i, &b)| d | (i32::from(b).wrapping_shl(8 * i as u32)));
         let ran = if coverage_armed && executed(&session, destination) { "  (ran)" } else { "" };
-        lines.push(format!("  {} ${} -> {}{ran}", format!("{:<width$}", &vector.text("name"), width = 12), hex(address, 6), describe(&session, destination)));
+        lines.push(format!("  {} ${} -> {}{ran}", format!("{:<12}", vector.text("name")), hex(address, 6), describe(&session, destination)));
     }
     Ok(Answer::ok(lines.join("\n")))
 }
@@ -438,7 +437,7 @@ pub fn disasm(call: &Call, parts: &[String]) -> Run {
         }
         let bytes = instruction.bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ");
         let target = instruction.reference.as_ref().and_then(|(_, t)| label_at(&session, *t)).map_or(String::new(), |(name, _)| format!("  ; <{name}>"));
-        let line = format!("  {}: {} {} {}{target}", hex(instruction.address, 6), format!("{:<width$}", &bytes, width = 9), instruction.mnemonic, instruction.operands);
+        let line = format!("  {}: {} {} {}{target}", hex(instruction.address, 6), format!("{:<9}", bytes), instruction.mnemonic, instruction.operands);
         out += line.trim_end();
         out.push('\n');
     }

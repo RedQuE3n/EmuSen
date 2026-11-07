@@ -56,14 +56,14 @@ pub fn companion_names(sheet: &str) -> Result<Vec<String>, String> {
 /// The files a sheet's FILE lines name, as paths beside it.
 pub fn companions(sheet_path: &str) -> Result<Vec<String>, String> {
     let dir = folder_of(sheet_path);
-    let text = emusen_dotnet::file::read_all_text(sheet_path)?;
+    let text = crate::text_file::read(sheet_path)?;
     companion_names(&text)?.iter().map(|n| beside(&dir, n)).collect()
 }
 
 /// The discs an `.m3u` lists, as paths beside it.
 pub fn discs(list_path: &str) -> Result<Vec<String>, String> {
     let dir = folder_of(list_path);
-    let text = emusen_dotnet::file::read_all_text(list_path)?;
+    let text = crate::text_file::read(list_path)?;
     emusen_disc::set::playlist(&text).iter().map(|n| beside(&dir, n)).collect()
 }
 

@@ -2,7 +2,6 @@
 
 use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_session_service::words::parse_hex;
 pub(crate) use emusen_session_service::space::{all, find, read, Space};
 
@@ -15,7 +14,7 @@ pub fn spaces(call: &Call) -> Run {
     let session = session(call)?;
     let mut out = format!("{} memory spaces:\n", core_name(&session)?);
     for s in all(&session)? {
-        out += &format!("  {} {} bytes  {}\n", format!("{:<width$}", &s.name, width = 10), format!("{:>width$}", &s.size.to_string(), width = 8), if s.writable { "R/W" } else { "R/O" });
+        out += &format!("  {} {} bytes  {}\n", format!("{:<10}", s.name), format!("{:>8}", s.size.to_string()), if s.writable { "R/W" } else { "R/O" });
     }
     Ok(Answer::ok(out.trim_end()))
 }
@@ -166,7 +165,7 @@ pub fn dump(call: &Call, parts: &[String]) -> Run {
     if let Some(parent) = std::path::Path::new(&path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    write_all_bytes(&path, &data)?;
+    std::fs::write(&path, &data).map_err(|e| format!("{}: {e}", path))?;
     Ok(Answer::ok(format!("Dumped {} 0x{addr:X}-0x{:X} ({len} bytes) to {path}", space.name, addr.wrapping_add(len).wrapping_sub(1))))
 }
 
@@ -188,7 +187,7 @@ pub fn load(call: &Call, parts: &[String]) -> Run {
     if !std::path::Path::new(&path).is_file() {
         return Ok(Answer::ok(format!("No file at {path}.")));
     }
-    let data = read_all_bytes(&path)?;
+    let data = std::fs::read(&path).map_err(|e| format!("{}: {e}", path))?;
     session.space_write(&space.name, addr as u32, &data)?;
     Ok(Answer::ok(format!("Loaded {} bytes from {path} into {} starting at 0x{addr:X}.", data.len(), space.name)))
 }

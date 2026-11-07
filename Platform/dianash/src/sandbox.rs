@@ -25,7 +25,7 @@ impl Sandbox {
                 return (true, as_is);
             }
         }
-        let base = if looks_rooted { root.clone() } else { emusen_dotnet::file::current_directory() };
+        let base = if looks_rooted { root.clone() } else { std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default() };
         let mut effective = if looks_rooted { requested.trim_start_matches(['/', '\\']) } else { requested };
         if effective.is_empty() {
             effective = ".";

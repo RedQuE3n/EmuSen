@@ -106,7 +106,7 @@ pub fn pal(call: &Call, parts: &[String]) -> Run {
                 format!("{:02X}{:02X}{:02X}", rgb.first().copied().unwrap_or(0), rgb.get(1).copied().unwrap_or(0), rgb.get(2).copied().unwrap_or(0))
             })
             .collect();
-        out += &format!("pal {}: {}\n", format!("{:>width$}", &p.int("index").to_string(), width = 2), colors.join(" "));
+        out += &format!("pal {}: {}\n", format!("{:>2}", p.int("index").to_string()), colors.join(" "));
     }
     Ok(Answer::ok(out.trim_end()))
 }
@@ -122,10 +122,10 @@ pub fn channels(call: &Call) -> Run {
         out += &format!(
             "[{}] {} active={} level={} muted={} {}\n",
             c.int("index"),
-            format!("{:<width$}", &c.text("name"), width = 8),
-            format!("{:<width$}", boolean(c.flag("active")), width = 5),
-            format!("{:>width$}", &c.int("level").to_string(), width = 3),
-            format!("{:<width$}", boolean(c.flag("muted")), width = 5),
+            format!("{:<8}", c.text("name")),
+            format!("{:<5}", boolean(c.flag("active"))),
+            format!("{:>3}", c.int("level").to_string()),
+            format!("{:<5}", boolean(c.flag("muted"))),
             c.text("info")
         );
     }

@@ -31,7 +31,7 @@ impl Library {
         let (md5, crc, sha, cached) = match known {
             Some(md5) if !crc32 && !sha1 => (md5, None, None, true),
             known => {
-                let hashes = rom_hash::hashes_with(path, None, sha1, &|| false).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, path)))?;
+                let hashes = rom_hash::hashes_with(path, None, sha1, &|| false).map_err(|e| Error::Io(format!("{}: {}", path, e)))?;
                 (hashes.md5, Some(hashes.crc32), hashes.sha1, known.is_some())
             }
         };

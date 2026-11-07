@@ -33,7 +33,7 @@ fn index() -> &'static HashMap<String, String> {
 /// A page's text: the file's, less the newline a text file ends in.
 pub fn lookup(name: &str) -> Option<String> {
     let file = index().get(&name.to_uppercase())?;
-    let mut text = emusen_dotnet::file::read_all_text(file).ok()?;
+    let mut text = std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file)).ok()?;
     if text.ends_with('\n') {
         text.pop();
     }

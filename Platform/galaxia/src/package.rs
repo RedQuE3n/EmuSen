@@ -59,7 +59,7 @@ pub fn parse(text: &str) -> Result<Value, Refusal> {
 /// Reads the manifest at `path`, decoded as `File.ReadAllText` decodes a file.
 pub fn read(path: &str) -> Result<Result<Value, Refusal>, std::io::Error> {
     let bytes = std::fs::read(path)?;
-    Ok(parse(&emusen_dotnet::file::decode(&bytes)))
+    Ok(parse(&crate::text_file::decode(&bytes)))
 }
 
 /// Writes the manifest at `path` atomically, as `AtomicFile` writes; a document the schema refuses is never written.

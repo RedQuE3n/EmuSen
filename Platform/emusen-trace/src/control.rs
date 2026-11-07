@@ -182,7 +182,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
                             None => "off".to_string(),
                             Some(a) => format!("{}, {}x", if a.flag("log_only") { "logging" } else { "halting" }, a.int("hits")),
                         };
-                        format!("  {} {}  [{state}]", format!("{:<width$}", &name, width = 12), c.text("description"))
+                        format!("  {} {}  [{state}]", format!("{:<12}", name), c.text("description"))
                     })
                     .collect();
                 return Ok(Answer::ok(format!("Conditions this core detects:\n{}", rows.join("\n"))));
@@ -415,7 +415,7 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
                 return Ok(Answer::ok(format!("No events recorded for watch #{id} (or it doesn't exist).")));
             };
             let sites = summary.list("sites");
-            let mut lines: Vec<String> = sites.iter().map(|s| format!("  {}x  {}", format!("{:>width$}", &s.int("count").to_string(), width = 6), s.text("context"))).collect();
+            let mut lines: Vec<String> = sites.iter().map(|s| format!("  {}x  {}", format!("{:>6}", s.int("count").to_string()), s.text("context"))).collect();
             let (total, retained) = (summary.int("total"), summary.int("retained"));
             let buffer = if total > retained { format!(" ({retained} still in the event buffer - `watch log` shows only those)") } else { String::new() };
             lines.push(format!("  {} site(s), {total} access(es) total{buffer}", sites.len()));
@@ -575,7 +575,7 @@ pub fn bt(call: &Call, parts: &[String]) -> Run {
         };
         lines.push(format!(
             "  #{} {}  <- {kind} from {}  (frame {})",
-            format!("{:<width$}", &(depth - 1).to_string(), width = 3),
+            format!("{:<3}", (depth - 1).to_string()),
             describe(&session, frame.address("target")),
             describe(&session, frame.address("source")),
             frame.int("frame")

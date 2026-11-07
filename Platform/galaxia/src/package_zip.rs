@@ -112,7 +112,7 @@ pub fn manifest_in(zip: &str) -> Result<Option<(String, Value)>, String> {
     let manifest = entries.iter().find(|e| e.full_name == format!("{top}/{}", package::FILE_NAME)).ok_or("no manifest")?;
     let mut bytes = Vec::new();
     archive::copy_entry(zip, manifest, &mut bytes).map_err(|e| format!("{zip}: {e}"))?;
-    let doc = package::parse(&emusen_dotnet::file::decode(&bytes)).map_err(|r| format!("{zip}: {}", r.words()))?;
+    let doc = package::parse(&crate::text_file::decode(&bytes)).map_err(|r| format!("{zip}: {}", r.words()))?;
     Ok(Some((top, doc)))
 }
 

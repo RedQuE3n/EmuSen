@@ -108,7 +108,7 @@ impl StateRecords {
     pub fn open(sqlite: Arc<Sqlite>, at: &str) -> Result<StateRecords, Refused> {
         let full = path::full_path(at);
         let folder = path::directory_name(Style::HOST, &full).unwrap_or_default();
-        std::fs::create_dir_all(&folder).map_err(|e| (crate::abi::status::IO, emusen_dotnet::file::io_message(&e, &folder)))?;
+        std::fs::create_dir_all(&folder).map_err(|e| (crate::abi::status::IO, format!("{}: {}", folder, e)))?;
         let mut db = Connection::open(sqlite, at).map_err(sqlite_failure)?;
         db.set_timeout(emusen_sqlite::COMMAND_TIMEOUT);
         let mut version = scalar(&db, "PRAGMA user_version", &[])?.unwrap_or(0);
@@ -263,7 +263,7 @@ pub fn forget(records: Option<&StateRecords>, state_path: &str) -> Result<(), Re
         match std::fs::remove_file(&at) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err((crate::abi::status::IO, emusen_dotnet::file::io_message(&e, &at))),
+            Err(e) => return Err((crate::abi::status::IO, format!("{}: {}", at, e))),
         }
     }
     records.map_or(Ok(()), |r| r.forget(state_path))

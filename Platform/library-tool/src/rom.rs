@@ -270,7 +270,7 @@ fn grouped(n: u64) -> String {
 /// disc opens through `emusen-disc`.
 fn check_sheet(f: &File, stop: &dyn Fn() -> bool, out: &mut Vec<Failed>) {
     let text = match std::fs::read(&f.path) {
-        Ok(b) => emusen_dotnet::file::decode(&b),
+        Ok(b) => emusen_galaxia::text_file::decode(&b),
         Err(e) => return out.push(failed("size", format!("{} is unreadable: {e}", path::file_name(Style::HOST, &f.path)))),
     };
     let sheet = match Sheet::parse(&text) {

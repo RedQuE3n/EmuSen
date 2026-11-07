@@ -4,7 +4,6 @@
 use crate::control::{has_call_stack, upper};
 use crate::{required, scoped, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_dotnet::json::{self, Value};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope;
@@ -76,9 +75,9 @@ pub fn counters(call: &Call, parts: &[String]) -> Run {
                     format!(
                         "  {}  r={} w={} x={} uninit={}",
                         describe(&session, r.address("address")),
-                        format!("{:<width$}", &r.int("reads").to_string(), width = 10),
-                        format!("{:<width$}", &r.int("writes").to_string(), width = 10),
-                        format!("{:<width$}", &r.int("executes").to_string(), width = 10),
+                        format!("{:<10}", r.int("reads").to_string()),
+                        format!("{:<10}", r.int("writes").to_string()),
+                        format!("{:<10}", r.int("executes").to_string()),
                         r.int("uninitialized_reads")
                     )
                 })
@@ -234,7 +233,7 @@ pub fn profile(call: &Call, parts: &[String]) -> Run {
                 .map(|r| {
                     let address = r.address("address");
                     let place = if address == 0 { "(outside any recorded call)".to_string() } else { describe(&session, address) };
-                    format!("  {:6.2}%  {} {} {place}", r.float("percent"), format!("{:<width$}", &r.int("instructions").to_string(), width = 12), format!("{:<width$}", &r.int("calls").to_string(), width = 8))
+                    format!("  {:6.2}%  {} {} {place}", r.float("percent"), format!("{:<12}", r.int("instructions").to_string()), format!("{:<8}", r.int("calls").to_string()))
                 })
                 .collect();
             Ok(Answer::ok(format!(
@@ -323,7 +322,7 @@ pub fn cov(call: &Call, parts: &[String]) -> Run {
             let rows: Vec<String> = funcs
                 .items()
                 .iter()
-                .map(|f| format!("  {}  {}  entered {}x", describe(&session, f.address("address")), format!("{:<width$}", frame_kind(f.int("kind")), width = 4), f.int("entries")))
+                .map(|f| format!("  {}  {}  entered {}x", describe(&session, f.address("address")), format!("{:<4}", frame_kind(f.int("kind"))), f.int("entries")))
                 .collect();
             return Ok(Answer::ok(format!("{} routine(s) discovered:\n{}", status.int("entry_points"), rows.join("\n"))));
         }
@@ -340,13 +339,13 @@ pub fn cov(call: &Call, parts: &[String]) -> Run {
             }
             if sub == "save" {
                 let map = op(abi::coverage::EXPORT, "{}")?;
-                write_all_bytes(&path, &map)?;
+                std::fs::write(&path, &map).map_err(|e| format!("{}: {e}", path))?;
                 return Ok(Answer::ok(format!("{scope_name} map saved to {path} ({} routine(s)).", status()?.int("entry_points"))));
             }
             if !std::path::Path::new(&path).is_file() {
                 return Ok(Answer::fail(format!("No coverage map at {path}.")));
             }
-            let map = read_all_bytes(&path)?;
+            let map = std::fs::read(&path).map_err(|e| format!("{}: {e}", path))?;
             return Ok(match session.coverage_op(processor, abi::coverage::IMPORT, &map) {
                 Ok(_) => Answer::ok(format!("{scope_name} map merged from {path} ({} routine(s) known now).", status()?.int("entry_points"))),
                 Err(refusal) if refusal.is(status::BAD_ARGUMENT) => Answer::fail(format!("{path} is not a coverage map this build can read.")),
@@ -512,9 +511,9 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
             for e in entries.items() {
                 out += &format!(
                     "  {}  {}  {}  ${:04X}     0x{:02X}   {}\n",
-                    format!("{:>width$}", &e.int("sequence").to_string(), width = 8),
-                    format!("{:>width$}", &e.int("frame").to_string(), width = 5),
-                    format!("{:>width$}", if e.flag("write") { "W " } else { " R" }, width = 3),
+                    format!("{:>8}", e.int("sequence").to_string()),
+                    format!("{:>5}", e.int("frame").to_string()),
+                    format!("{:>3}", if e.flag("write") { "W " } else { " R" }),
                     e.int("register") as i32,
                     e.int("value"),
                     e.text("actor")
@@ -533,9 +532,9 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
                 out += &format!(
                     "  ${:04X}  {}  {}  {}  0x{:02X}\n",
                     s.int("register") as i32,
-                    format!("{:>width$}", &s.int("reads").to_string(), width = 9),
-                    format!("{:>width$}", &s.int("writes").to_string(), width = 7),
-                    format!("{:>width$}", &s.int("distinct_values").to_string(), width = 8),
+                    format!("{:>9}", s.int("reads").to_string()),
+                    format!("{:>7}", s.int("writes").to_string()),
+                    format!("{:>8}", s.int("distinct_values").to_string()),
                     s.int("last_value")
                 );
             }
@@ -596,7 +595,7 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
     if names.is_empty() {
         return Ok(Answer::ok(format!("No coprocessor register named '{}'.", wanted.map(String::as_str).unwrap_or(""))));
     }
-    out += &format!("  refresh  {}\n", names.iter().map(|n| format!("{:>width$}", n, width = 6)).collect::<Vec<_>>().join("  "));
+    out += &format!("  refresh  {}\n", names.iter().map(|n| format!("{:>6}", n)).collect::<Vec<_>>().join("  "));
     for (i, frame) in shown.iter().enumerate() {
         let cells: Vec<String> = names
             .iter()
@@ -604,12 +603,12 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
                 Some(r) => {
                     let digits = (r.int("bits") / 4).max(1) as usize;
                     let value = r.field("value").and_then(|v| if let Value::Number(t) = v { t.parse::<u64>().ok() } else { None }).unwrap_or(0);
-                    format!("{:>width$}", &format!("{value:0digits$X}"), width = 6)
+                    format!("{:>6}", format!("{value:0digits$X}"))
                 }
-                None => format!("{:>width$}", "", width = 6),
+                None => format!("{:>6}", ""),
             })
             .collect();
-        out += &format!("  {}  {}\n", format!("{:>width$}", &(first_index + i as i64).to_string(), width = 7), cells.join("  "));
+        out += &format!("  {}  {}\n", format!("{:>7}", (first_index + i as i64).to_string()), cells.join("  "));
     }
     Ok(Answer::ok(out.trim_end()))
 }
@@ -649,10 +648,10 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                 "  {}   {hdma}   {}  {}  {}  ${}  {}  {table}\n",
                 c.int("index"),
                 if control & 0x80 != 0 { "B->A" } else { "A->B" },
-                format!("{:>width$}", &(control & 0x07).to_string(), width = 4),
-                format!("{:<width$}", &destination(c.optional_text("destination_name"), c.int("destination")), width = 16),
+                format!("{:>4}", (control & 0x07).to_string()),
+                format!("{:<16}", destination(c.optional_text("destination_name"), c.int("destination"))),
                 hex(c.address("source"), 6),
-                format!("{:>width$}", &c.int("size").to_string(), width = 7)
+                format!("{:>7}", c.int("size").to_string())
             );
         }
         out += "  (mode is the B-bus write pattern; dir B->A reads the register instead)";
@@ -691,14 +690,14 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
             for e in entries.items() {
                 out += &format!(
                     "  {}  {}  {}  {}   {}  {}  ${}  {}\n",
-                    format!("{:>width$}", &e.int("sequence").to_string(), width = 8),
-                    format!("{:>width$}", &e.int("frame").to_string(), width = 5),
-                    format!("{:>width$}", &e.int("scanline").to_string(), width = 4),
+                    format!("{:>8}", e.int("sequence").to_string()),
+                    format!("{:>5}", e.int("frame").to_string()),
+                    format!("{:>4}", e.int("scanline").to_string()),
                     e.int("channel"),
                     if e.text("kind") == "hdma" { "hdma" } else { "gen " },
-                    format!("{:<width$}", &destination(e.optional_text("destination_name"), e.int("destination")), width = 16),
+                    format!("{:<16}", destination(e.optional_text("destination_name"), e.int("destination"))),
                     hex(e.address("source"), 6),
-                    format!("{:>width$}", &e.int("length").to_string(), width = 6)
+                    format!("{:>6}", e.int("length").to_string())
                 );
             }
             Ok(Answer::ok(out.trim_end()))
@@ -725,10 +724,10 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                 out += &format!(
                     "  {}  {}  {}  {}  {}\n",
                     c.int("channel"),
-                    format!("{:>width$}", &c.int("general_transfers").to_string(), width = 8),
-                    format!("{:>width$}", &c.int("general_bytes").to_string(), width = 7),
-                    format!("{:>width$}", &c.int("hdma_transfers").to_string(), width = 9),
-                    format!("{:>width$}", &c.int("hdma_bytes").to_string(), width = 7)
+                    format!("{:>8}", c.int("general_transfers").to_string()),
+                    format!("{:>7}", c.int("general_bytes").to_string()),
+                    format!("{:>9}", c.int("hdma_transfers").to_string()),
+                    format!("{:>7}", c.int("hdma_bytes").to_string())
                 );
             }
             out += "  destination       transfers    bytes  channels\n";
@@ -737,9 +736,9 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                 let list: Vec<String> = (0..16).filter(|i| mask & (1 << i) != 0).map(|i| i.to_string()).collect();
                 out += &format!(
                     "  {}  {}  {}  {}\n",
-                    format!("{:<width$}", &destination(d.optional_text("destination_name"), d.int("destination")), width = 16),
-                    format!("{:>width$}", &d.int("transfers").to_string(), width = 9),
-                    format!("{:>width$}", &d.int("bytes").to_string(), width = 7),
+                    format!("{:<16}", destination(d.optional_text("destination_name"), d.int("destination"))),
+                    format!("{:>9}", d.int("transfers").to_string()),
+                    format!("{:>7}", d.int("bytes").to_string()),
                     if list.is_empty() { "-".to_string() } else { list.join(",") }
                 );
             }

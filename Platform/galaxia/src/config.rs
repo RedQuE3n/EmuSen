@@ -48,7 +48,7 @@ pub fn read_text(tree: &Tree, category: Option<&str>, file: &str) -> Result<Opti
     let Some(source) = source(tree, category, file) else {
         return Ok(None);
     };
-    std::fs::read(&source).map(|bytes| Some(json::decode(&bytes))).map_err(|error| words(&error))
+    std::fs::read(&source).map(|bytes| Some(crate::text_file::decode(&bytes))).map_err(|error| words(&error))
 }
 
 /// The folder a file goes in, made as C#'s save makes it before anything else can fail.
@@ -135,7 +135,7 @@ pub fn save(tree: &Tree, model: &Model, category: Option<&str>, file: &str, cano
 
 /// `CheatFile.LoadFrom`: a model read from any path; none for a file that is missing, unreadable or will not bind.
 pub fn load_from(model: &Model, file: &str) -> Option<Value> {
-    let text = json::decode(&std::fs::read(file).ok()?);
+    let text = crate::text_file::decode(&std::fs::read(file).ok()?);
     bind_text(model, &text, false).ok().flatten()
 }
 

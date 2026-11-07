@@ -30,6 +30,7 @@ pub mod rom_hash;
 pub mod saves;
 pub mod setting_folders;
 pub mod stores;
+pub mod text_file;
 pub mod tree;
 
 #[cfg(test)]

@@ -199,7 +199,7 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
     let image = image_of(tree, &item.path)?;
     let (form, sheet, original, names, files, medium) = if image_sets::is_sheet(&image) {
         let bytes = std::fs::read(&image).map_err(|e| format!("{image}: {e}"))?;
-        let text = emusen_dotnet::file::decode(&bytes);
+        let text = emusen_galaxia::text_file::decode(&bytes);
         let parsed = Sheet::parse(&text).map_err(|e| e.to_string())?;
         if parsed.kinds.contains(&FileKind::Wave) {
             return Err("the sheet names a WAVE file, whose header a CHD does not keep: not converted by this step".into());

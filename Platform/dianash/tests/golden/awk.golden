@@ -105,8 +105,8 @@ awk: '/../x' is outside the project sandbox (<ROOT>)
 status 1
 action none
 $ awk '{print $1}' nosuch
-out 43
-Error: Could not find file '<ROOT>/nosuch'.
+out 60
+Error: <ROOT>/nosuch: No such file or directory (os error 2)
 status 1
 action none
 $ cat a.txt | awk '{print "lit", $0; print $3}'

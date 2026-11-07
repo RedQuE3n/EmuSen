@@ -386,7 +386,7 @@ impl Interp {
                 return Err(Flow::Error(world.sandbox.outside(&target)));
             }
             match redirection.kind {
-                RedirectKind::Input => stdin = Some(emusen_dotnet::file::read_all_text(&resolved).map_err(Flow::Error)?),
+                RedirectKind::Input => stdin = Some(std::fs::read_to_string(&resolved).map_err(|e| format!("{}: {e}", resolved)).map_err(Flow::Error)?),
                 RedirectKind::Truncate => redirect = Some((resolved, false)),
                 RedirectKind::Append => redirect = Some((resolved, true)),
             }
@@ -399,7 +399,7 @@ impl Interp {
         let mut visible = outcome.output;
         if let Some((path, append)) = redirect {
             let content = if visible.is_empty() { String::new() } else { format!("{visible}\n") };
-            emusen_dotnet::file::write_all_text(&path, &content, append).map_err(Flow::Error)?;
+            write_text(&path, &content, append).map_err(Flow::Error)?;
             visible.clear();
         }
         Ok((visible, outcome.errors, outcome.status))
@@ -536,14 +536,14 @@ impl Interp {
         }
         let bytes = match std::fs::read(&resolved) {
             Ok(bytes) => bytes,
-            Err(e) => return Outcome::fail(format!("Error: {}", emusen_dotnet::file::io_message(&e, &resolved))),
+            Err(e) => return Outcome::fail(format!("Error: {}: {}", resolved, e)),
         };
         use sha2::{Digest, Sha256};
         let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
         let store = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &emusen_galaxia::tree::tree().config(), "dianash");
         let _ = std::fs::create_dir_all(&store);
         let file = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &store, "trusted");
-        if let Err(words) = emusen_dotnet::file::write_all_text(&file, &format!("{hash}  {resolved}\n"), true) {
+        if let Err(words) = write_text(&file, &format!("{hash}  {resolved}\n"), true) {
             return Outcome::fail(format!("Error: {words}"));
         }
         Outcome::ok(format!("trust: approved {} (sha256 {hash})", args[1]))
@@ -566,7 +566,7 @@ impl Interp {
         if !emusen_galaxia::tree::file_exists(&resolved) {
             return Outcome::fail(format!("{name}: no such file: {requested}"));
         }
-        let lines = match emusen_dotnet::file::read_all_lines(&resolved) {
+        let lines = match std::fs::read_to_string(&resolved).map(|t| t.lines().map(str::to_string).collect::<Vec<_>>()).map_err(|e| format!("{}: {e}", resolved)) {
             Ok(lines) => lines,
             Err(words) => return Outcome::fail(format!("{name}: {words}")),
         };
@@ -669,4 +669,13 @@ impl Interp {
         }
         Ok(output.trim_end_matches('\n').to_string())
     }
+}
+
+/// Text written to a file, made or emptied first unless appended to; the system's words after the path when it will not be.
+fn write_text(path: &str, text: &str, append: bool) -> Result<(), String> {
+    use std::io::Write;
+    let mut options = std::fs::OpenOptions::new();
+    options.create(true);
+    if append { options.append(true) } else { options.write(true).truncate(true) };
+    options.open(path).and_then(|mut file| file.write_all(text.as_bytes())).map_err(|e| format!("{path}: {e}"))
 }

@@ -3,7 +3,6 @@
 
 use crate::{clock, Answer, Run};
 use dianash_module::Call;
-use emusen_dotnet::file::{io_message, read_all_text};
 use std::path::Path;
 
 /// A path through the sandbox, or the refusal the command words as `<name>: <refusal>`.
@@ -55,7 +54,7 @@ pub fn cat(call: &Call, args: &[String], stdin: Option<String>) -> Run {
         if !file_exists(&resolved) {
             return Ok(Answer::fail(format!("cat: no such file: {path}")));
         }
-        text.push_str(&read_all_text(&resolved)?);
+        text.push_str(&std::fs::read_to_string(&resolved).map_err(|e| format!("{}: {e}", resolved))?);
     }
     Ok(Answer::ok(text.trim_end_matches('\n')))
 }
@@ -88,7 +87,7 @@ pub fn head(call: &Call, args: &[String], stdin: Option<String>, tail: bool) -> 
             if !file_exists(&resolved) {
                 return Ok(Answer::fail(format!("{name}: no such file: {path}")));
             }
-            read_all_text(&resolved)?
+            std::fs::read_to_string(&resolved).map_err(|e| format!("{}: {e}", resolved))?
         }
         (None, None) => return Ok(Answer::fail(format!("{name}: usage: {name} [-n N] [path]"))),
     };
@@ -123,7 +122,7 @@ pub fn wc(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     }
     let text = match (stdin, resolved) {
         (Some(text), _) => text,
-        (None, Some(file)) => read_all_text(&file)?,
+        (None, Some(file)) => std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file))?,
         (None, None) => String::new(),
     };
     // The file's count is one more than the same text piped (§13.4 finding 14): the C# split counts the newline a file ends in.
@@ -283,11 +282,11 @@ fn copy_file(src: &str, dst: &str) -> Result<(), String> {
     if same {
         return Err(format!("The process cannot access the file '{dst}' because it is being used by another process."));
     }
-    std::fs::copy(src, dst).map(|_| ()).map_err(|e| io_message(&e, dst))
+    std::fs::copy(src, dst).map(|_| ()).map_err(|e| format!("{}: {}", dst, e))
 }
 
 fn copy_directory(src: &str, dst: &str) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| io_message(&e, dst))?;
+    std::fs::create_dir_all(dst).map_err(|e| format!("{}: {}", dst, e))?;
     for name in names(src) {
         let (from, to) = (combine(src, &name), combine(dst, &name));
         if directory_exists(&from) {
@@ -324,7 +323,7 @@ pub fn touch(call: &Call, args: &[String]) -> Run {
     };
     Ok(match touched {
         Ok(()) => Answer::ok(""),
-        Err(e) => Answer::fail(format!("touch: {}", io_message(&e, &resolved))),
+        Err(e) => Answer::fail(format!("touch: {}: {}", resolved, e)),
     })
 }
 
@@ -342,7 +341,7 @@ pub fn xxd(call: &Call, args: &[String], stdin: Option<String>) -> Run {
             if !file_exists(&resolved) {
                 return Ok(Answer::fail(format!("xxd: no such file: {}", args[1])));
             }
-            std::fs::read(&resolved).map_err(|e| io_message(&e, &resolved))?
+            std::fs::read(&resolved).map_err(|e| format!("{}: {}", resolved, e))?
         }
     };
     if data.is_empty() {

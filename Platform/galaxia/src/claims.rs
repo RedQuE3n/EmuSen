@@ -367,7 +367,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
     let mut doc = match package::read(&manifest) {
         Ok(Ok(doc)) => doc,
         Ok(Err(refusal)) => return Err(format!("{manifest}: {}", refusal.words()).into()),
-        Err(e) => return Err(format!("{manifest}: {}", emusen_dotnet::file::io_message(&e, &manifest)).into()),
+        Err(e) => return Err(format!("{manifest}: {e}").into()),
     };
     let game = doc.get("game").and_then(|g| place(roots, folder, g)).ok_or_else(|| format!("{manifest}: its game's library is not set (AppSettings.RomDirectory)"))?;
     let resolution = |game: String, moved: bool| Resolution { game, package: Some(folder.to_string()), moved };

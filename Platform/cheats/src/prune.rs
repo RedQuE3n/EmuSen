@@ -66,7 +66,7 @@ pub fn apply(db: &Database, removing: &[Pruned]) -> (usize, Vec<String>) {
         }
         match remove_tree(&system.path) {
             Ok(()) => removed += 1,
-            Err(e) => failed.push(format!("{} ({})", system.system, emusen_dotnet::file::io_message(&e, &system.path))),
+            Err(e) => failed.push(format!("{} ({})", system.system, format!("{}: {}", system.path, e))),
         }
     }
     (removed, failed)

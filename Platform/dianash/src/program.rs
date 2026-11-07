@@ -73,7 +73,7 @@ pub(crate) fn run(interp: &mut Interp, world: &mut World, program: &Program, arg
     command.args(&args[1..]);
     #[cfg(unix)]
     std::os::unix::process::CommandExt::arg0(&mut command, &args[0]);
-    command.current_dir(emusen_dotnet::file::current_directory());
+    command.current_dir(std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default());
     command.envs(interp.exported_variables());
     command.env("DIANASH_ROOT", world.sandbox.root());
     command.env("DIANASH_USER", world.session(interp.session).map(|s| s.user.clone()).unwrap_or_default());

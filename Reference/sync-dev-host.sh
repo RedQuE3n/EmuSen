@@ -96,17 +96,17 @@ except Exception:
 }
 
 echo "== $REMOTE:$REMOTE_REPO -> $LOCAL_REPO"
-ssh "$REMOTE" "test -d '$REMOTE_REPO/EmuSen.WiseMan/Reference'" || {
+ssh "$REMOTE" "test -d '$REMOTE_REPO/Reference'" || {
     echo "No EmuSen checkout at '$REMOTE_REPO' on $REMOTE - pass --repo <path>" >&2
     exit 1
 }
 
 # -s so the remote shell never expands the space in "EmuSen Project".
 echo "== dumps"
-mkdir -p "$LOCAL_REPO/EmuSen.WiseMan/Reference/dumps"
+mkdir -p "$LOCAL_REPO/Reference/dumps"
 rsync -a -s $DRY --info=stats1 \
-    "$REMOTE:$REMOTE_REPO/EmuSen.WiseMan/Reference/dumps/" \
-    "$LOCAL_REPO/EmuSen.WiseMan/Reference/dumps/"
+    "$REMOTE:$REMOTE_REPO/Reference/dumps/" \
+    "$LOCAL_REPO/Reference/dumps/"
 
 if [ "$WANT_ROMS" -eq 1 ]; then
     LOCAL_SETTINGS="$(appsettings_path "$LOCAL_REPO" || true)"

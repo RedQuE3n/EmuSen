@@ -20,7 +20,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REFEREE = HERE / "psxreferee.py"
-RUN = HERE.parents[2] / "EmuSen/Cores/Sony/Diamond - PlayStation/target/release/examples/run"
+RUN = HERE.parents[1] / "EmuSen/Cores/Sony/Diamond - PlayStation/target/release/examples/run"
 BITS = {"Select": 0x1, "L3": 0x2, "R3": 0x4, "Start": 0x8, "Up": 0x10, "Right": 0x20, "Down": 0x40, "Left": 0x80, "L2": 0x100,
         "R2": 0x200, "L1": 0x400, "R1": 0x800, "Triangle": 0x1000, "Circle": 0x2000, "Cross": 0x4000, "Square": 0x8000}
 RETRO = {"Select": "Select", "Start": "Start", "Up": "Up", "Right": "Right", "Down": "Down", "Left": "Left", "L1": "L", "R1": "R",

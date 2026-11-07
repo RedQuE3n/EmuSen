@@ -12,7 +12,7 @@ using EmuSen.DianaSh.DianaSh.Bin;
 // prompt accepts and writes the results to a plain log file. Full
 // reference for every flag, both frame-loop modes (classic and
 // --commands), --diffshot, and the design reasoning behind each:
-// EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
+// Docs/EmuSen Manual/EmuSen_Debugging_Tools_Reference_v5.md §3.15.
 //
 // Usage:
 //   dotnet run -- <rom> <frames> [--watch space:addr:len[:kind]]... [--script path] [--out path] [--tap frame:button[:duration]]... [--tap2 frame:button[:duration]]... [--loadstate path] [--savestate path] [--screenshot frame:path]...
@@ -61,10 +61,10 @@ class Program
         // --compare and --verify-dictionary are Python now - see EmuSen_Stack.md §3.
         if (args.Length >= 1 && (args[0] == "--compare" || args[0] == "--verify-dictionary"))
         {
-            Console.WriteLine($"{args[0]} moved to EmuSen.WiseMan/Reference/analysis - it reads files,");
+            Console.WriteLine($"{args[0]} moved to Reference/analysis - it reads files,");
             Console.WriteLine("not machines, so it no longer needs the emulator to be built:");
             Console.WriteLine();
-            Console.WriteLine("  cd EmuSen.WiseMan/Reference/analysis");
+            Console.WriteLine("  cd Reference/analysis");
             Console.WriteLine("  ./compare.py <oursDir> <theirsDir> <frame> [phaseWindow] [--input F]...");
             Console.WriteLine("  ./verify_dictionary.py <oursDir> <theirsDir>");
             return 1;

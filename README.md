@@ -33,12 +33,12 @@ Windows build lacked the platform library. 0.9.1 replaces it with both fixed. Th
 | Sony PlayStation | **Diamond** (Rust) | New since the last release, offered to players since 2026-10-11. Boots discs on its own open BIOS. Crash Bandicoot, Spyro the Dragon, Ape Escape, Rayman, Tekken 3, Silent Hill, Castlevania: Symphony of the Night and Mega Man Legends have been played into their games; none has a verified playthrough. Optional enhancements: precise geometry, internal resolution up to 4×, true colour and texture filtering |
 
 Every other console is an empty, reserved folder. A per-game list for the C# SNES and NES cores (the SNES's kept as history since Venus (C#) was retired) is in
-[`EmuSen_Games_Tested.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Games_Tested.md).
+[`EmuSen_Games_Tested.md`](Docs/EmuSen%20Manual/EmuSen_Games_Tested.md).
 
 Where a console has two engines, the choice is the Engine row of its tab in Graphics Settings, and the C# engine also
 runs wherever the Rust library is missing. The plan for each port, and why the cores are moving to Rust while
 the rest stays in C# for now, is in
-[`EmuSen_Stack.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Stack.md).
+[`EmuSen_Stack.md`](Docs/EmuSen%20Manual/EmuSen_Stack.md).
 
 ### How the cores are written
 
@@ -72,7 +72,7 @@ the core uses it instead as the exact path; it is optional, and nothing prompts 
 shows, for each system, what is running and what the open replacement changes. Two gaps remain: SNES games on the
 DSP-3 and ST011 chips need the player's own copy of the chip's program, and the Sega CD's open BIOS does not yet save
 to a backup RAM cartridge. The policy is
-[`EmuSen_Firmware.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Firmware.md).
+[`EmuSen_Firmware.md`](Docs/EmuSen%20Manual/EmuSen_Firmware.md).
 
 ## What changed in 0.9.1
 
@@ -175,7 +175,7 @@ reached with the pad.
 **Big Picture** is the full-screen mode for a television or a handheld. It reads ES-DE's theme format, so ES-DE themes
 load as they are, and downloads the Art Book Next theme when the player asks. Game information and media come from
 ScreenScraper. Plan and record:
-[`EmuSen_BigPicture.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_BigPicture.md).
+[`EmuSen_BigPicture.md`](Docs/EmuSen%20Manual/EmuSen_BigPicture.md).
 
 Other things it does:
 
@@ -192,23 +192,23 @@ is no terminal. `emusen-shell game.sfc` starts it on a ROM.
 
 Both are built on **LunaP**, a small Avalonia toolkit that lives in its own repository,
 [RedQuE3n/EmuSen.LunaP](https://github.com/RedQuE3n/EmuSen.LunaP). Its move to a Rust toolkit of its own is planned in
-[`EmuSen_LunaP_Kit.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_LunaP_Kit.md).
+[`EmuSen_LunaP_Kit.md`](Docs/EmuSen%20Manual/EmuSen_LunaP_Kit.md).
 
 ## The framework
 
 - **The core ABI**, `emusen_core.h`, is the one way into a core: version 1 with minor versions that only add. A core
   describes itself (its systems, settings, controllers, memory spaces, save files and firmware), and a frontend builds
   its menus from that description. Reference:
-  [`EmuSen_CoreAPI.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_CoreAPI.md).
+  [`EmuSen_CoreAPI.md`](Docs/EmuSen%20Manual/EmuSen_CoreAPI.md).
 - **The conformance kit**, `emusen-core-conform`, runs a core library through every rule of the ABI on a game image or
   a whole corpus, and writes the sidecar a frontend discovers the core by.
 - **The shared crates** under `EmuSen/Cores/Shared/`: `emusen-native`, `emusen-disc`, `emusen-gpu` and `emusen-mips`
   ([disc](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Shared/EmuSen_Disc.md),
   [GPU](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Shared/EmuSen_Gpu.md),
   [MIPS](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Shared/EmuSen_Mips.md)).
-- **Save media**: [`EmuSen_SaveMedia.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_SaveMedia.md).
+- **Save media**: [`EmuSen_SaveMedia.md`](Docs/EmuSen%20Manual/EmuSen_SaveMedia.md).
 - **The platform library**, `emusen_platform`, under `Platform/`: the parts above the cores moving to Rust
-  ([`EmuSen_RustPlatform.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_RustPlatform.md)).
+  ([`EmuSen_RustPlatform.md`](Docs/EmuSen%20Manual/EmuSen_RustPlatform.md)).
 
 ## Debugging: DianaSh and Pharaoh
 
@@ -216,7 +216,7 @@ DianaSh is a Unix-style shell inside the emulator. It has pipes, variables, redi
 coreutils, and commands for the hardware (`mem`, `regs`, `watch`, `disasm`, `bp`, `cov`, `coretop`). They work the same
 way on every core, coprocessors included, because every core answers the same debug interface. Its commands' manual
 pages are real `man` entries. Where it is going:
-[`EmuSen_DianaSh.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_DianaSh.md).
+[`EmuSen_DianaSh.md`](Docs/EmuSen%20Manual/EmuSen_DianaSh.md).
 
 ```sh
 watch add VRAM 3B8 4 write
@@ -269,7 +269,7 @@ from the artefacts of the [Rust cores workflow](.github/workflows/rust-cores.yml
 `EmuSen/Cores/RustCores.props` with its `.core.json` sidecar. A missing library is a warning: the console falls back
 to its C# core, or is absent if it has none. The same folder takes `emusen_platform`, which is optional while every
 part of it still has its C# behind it. More in the
-[settings reference](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Settings_Reference.md).
+[settings reference](Docs/EmuSen%20Manual/EmuSen_Settings_Reference.md).
 
 macOS builds are unsigned. On Apple Silicon, sign one yourself before it will run:
 
@@ -297,7 +297,7 @@ the emulator with `man` and `cat`.
 - [CONTRIBUTING.md](CONTRIBUTING.md) is for anyone joining: the repositories and branches, a reading order through the
   manual, and the conventions every change is held to.
 - [The docs index](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/README.md) is the place to start.
-- [`EmuSen Manual/`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/) has the project-level docs: the
+- [`EmuSen Manual/`](Docs/EmuSen%20Manual/) has the project-level docs: the
   architecture, the core ABI, the debugging tools reference, the settings reference, the stack, saves, firmware, the
   picture and the games list.
 - [`Man pages/Hardware/`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/) has each console's pages, from the plan
@@ -309,7 +309,7 @@ EmuSen is **Emu**lator **Sen**shi, after *Sailor Moon*. Each core is named for a
 the Sailor Guardians (Venus for the SNES, Moon for the NES, Mercury for the Game Boy, Mars for the N64) and other
 manufacturers get the villains (Nephrite for the Genesis, Diamond for the PlayStation). A Rust port adds `RT` to the
 name. The full list is in
-[`EmuSen_Core_Naming_Scheme.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_Core_Naming_Scheme.md).
+[`EmuSen_Core_Naming_Scheme.md`](Docs/EmuSen%20Manual/EmuSen_Core_Naming_Scheme.md).
 
 ## ROMs
 
@@ -604,8 +604,8 @@ with [`VenusRT_DspHle.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Ninte
 [`Mercury_Referee.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Referee.md) and
 [`Mercury_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Mercury%20-%20GB-GBC/Mercury_Native.md) §13 for the Game Boy;
 [`Moon_Native.md`](EmuSen.DianaSh/DianaSh/Etc/Man%20pages/Hardware/Nintendo/Moon%20-%20NES/Moon_Native.md) §3.7 for the NES's audit against NES_MiSTer;
-[`EmuSen_CRT.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_CRT.md) §10 for the modelled CRT filter; and
-[`EmuSen_LunaP_Kit.md`](EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen%20Manual/EmuSen_LunaP_Kit.md) §12 for the toolkit survey behind the LunaP kit.
+[`EmuSen_CRT.md`](Docs/EmuSen%20Manual/EmuSen_CRT.md) §10 for the modelled CRT filter; and
+[`EmuSen_LunaP_Kit.md`](Docs/EmuSen%20Manual/EmuSen_LunaP_Kit.md) §12 for the toolkit survey behind the LunaP kit.
 
 ### Disc images: CHD and chdman
 

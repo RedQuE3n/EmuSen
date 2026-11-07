@@ -1093,7 +1093,7 @@ mod tests {
     // VenusRT_DspHle.md §5.2, rule 3: the tables equal an independent generator's, written from the record's formula.
     #[test]
     fn the_tables_equal_the_independent_generator() {
-        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../EmuSen.WiseMan/Reference/analysis/dsp1_tables.py");
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../Reference/analysis/dsp1_tables.py");
         let out = std::env::temp_dir().join(format!("venusrt-dsp1-tables-{}.bin", std::process::id()));
         match std::process::Command::new("python3").arg(script).arg(&out).output() {
             Ok(o) if o.status.success() => {

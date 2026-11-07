@@ -1,4 +1,4 @@
-//! The golden corpus (`EmuSen.WiseMan/DianaSh/Golden/`, EmuSen_DianaSh.md §13.4) run through this crate alone:
+//! The golden corpus (`Platform/dianash/tests/golden/`, EmuSen_DianaSh.md §13.4) run through this crate alone:
 //! every case recorded with no target whose lines need nothing but what the Rust shell has. A case is passed over
 //! when the shell answers one of its lines "Unknown command" where the recording does not, since it then needs a
 //! command a host provides, which nothing runs since the C# core host was retired (EmuSen_Backend.md §40.10.3). The
@@ -84,7 +84,7 @@ fn shell_with_modules(config: Config) -> Shell {
 }
 
 fn corpus() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../EmuSen.WiseMan/DianaSh/Golden")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/golden")
 }
 
 /// A host action as the C# record prints it.

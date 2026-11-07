@@ -282,9 +282,9 @@ but have not been executed; macOS builds are unsigned.
 
 Inside the emulator, `man <command>` documents every DianaSh verb. The project's own
 documentation set lives under
-`EmuSen.DianaSh/DianaSh/Usr/Home/Documents/EmuSen Manual/` (overview, debugging tools
+`Docs/EmuSen Manual/` (overview, debugging tools
 reference, save states, audio sync, settings, games tested, roadmap) and
-`EmuSen.DianaSh/DianaSh/Etc/Man pages/Hardware/` (per-console hardware notes, including
+`Docs/Man pages/Hardware/` (per-console hardware notes, including
 full root-cause writeups for real bugs found and fixed).
 
 ## LICENSE

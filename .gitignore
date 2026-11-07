@@ -56,11 +56,11 @@ EmuSen.DianaSh/DianaSh/Usr/Home/Roms/*
 # are named for that backend and are covered by the same rule.
 # These are VRAM/OAM/GSU-RAM snapshots of a commercial game - the same
 # redistribution rule as the ROMs above applies to state extracted from one.
-EmuSen.WiseMan/Reference/dumps/
+Reference/dumps/
 
 # Cargo's build output for the Rust probe. build-probe.sh directs it into the
 # work dir instead, so this only catches a bare `cargo build` in the crate.
-EmuSen.WiseMan/Reference/probe-rs/target/
+Reference/probe-rs/target/
 
 # Cargo's build output for the platform workspace. The build directs it under
 # EmuSen.Galaxia/obj/, so this only catches a bare `cargo build` or `cargo test`

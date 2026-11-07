@@ -50,7 +50,7 @@
        So this is a build failure rather than a code review item: nothing
        matching *.cht, and nothing under Usr/Home/Cheats, may enter a
        publish. Today no include even selects them (EmuSen.DianaSh.csproj
-       takes Documents and Man pages only); this exists so that stays
+       takes Docs/ only); this exists so that stays
        true. -->
   <Target Name="DianaShRefuseToPublishCheats"
           AfterTargets="ComputeResolvedFilesToPublishList">

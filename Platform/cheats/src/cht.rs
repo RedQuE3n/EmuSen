@@ -71,7 +71,7 @@ impl Fields {
 
     /// `Long`: `long.TryParse` with the invariant culture, or the fallback.
     fn long(&self, key: &str, fallback: i64) -> i64 {
-        self.get(key).and_then(emusen_dotnet::number::parse_i64).unwrap_or(fallback)
+        self.get(key).and_then(|t: &str| t.trim().parse::<i64>().ok()).unwrap_or(fallback)
     }
 
     fn int(&self, key: &str, fallback: i32) -> i32 {
@@ -120,7 +120,7 @@ fn checked<T>(result: Result<T, Error>) -> Result<Option<T>, OutOfRange> {
 /// `ChtFile.Parse`, with each codec named by its emusen-systems id.
 pub fn parse(text: &str, codec: Option<&str>, space: &str, patch: Option<&str>) -> Result<Parsed, OutOfRange> {
     let fields = Fields::read(text);
-    let Some(count) = fields.get("cheats").and_then(emusen_dotnet::number::parse_i32) else { return Ok(Parsed::default()) };
+    let Some(count) = fields.get("cheats").and_then(|t: &str| t.trim().parse::<i32>().ok()) else { return Ok(Parsed::default()) };
     let mut parsed = Parsed::default();
     if count <= 0 {
         return Ok(parsed);

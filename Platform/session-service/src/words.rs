@@ -2,8 +2,6 @@
 //! session, how an address is read, and how one is described with its label. See EmuSen_DianaSh.md §13.11.
 
 use crate::{abi::status, Record, Refusal, Session};
-use emusen_dotnet::number::convert_to_i32_hex;
-use emusen_dotnet::text::starts_with_ignore_case;
 
 /// `RequireTarget`'s words, which the service gives for no session and a module gives for no service.
 pub const NO_SESSION: &str = "No ROM loaded - this command needs an active debug target.";
@@ -13,15 +11,11 @@ pub fn no_session() -> Refusal {
     Refusal::new(status::NO_SESSION, NO_SESSION)
 }
 
-/// `ParseHex`: trimmed, an optional `0x` or `$`, then `Convert.ToInt32(text, 16)` with .NET's words for a refusal.
+/// `ParseHex`: trimmed, an optional `0x` or `$`, then hexadecimal digits read as 32 bits, so that `ffffffff` is −1.
 pub fn parse_hex(text: &str) -> Result<i32, String> {
-    let mut s = text.trim();
-    if starts_with_ignore_case(s, "0x") {
-        s = &s[2..];
-    } else if let Some(rest) = s.strip_prefix('$') {
-        s = rest;
-    }
-    convert_to_i32_hex(s)
+    let s = text.trim();
+    let digits = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")).or_else(|| s.strip_prefix('$')).unwrap_or(s);
+    u32::from_str_radix(digits, 16).map(|v| v as i32).map_err(|e| format!("'{text}' is not a hexadecimal number: {e}."))
 }
 
 /// `ParseRange`: `<start>-<end>`, or a lone address as a one-byte range; reversed ends are put in order.
@@ -72,10 +66,11 @@ mod tests {
     fn addresses_read_as_parse_hex_reads_them() {
         assert_eq!(parse_hex(" $8000 "), Ok(0x8000));
         assert_eq!(parse_hex("0X10"), Ok(16));
-        assert_eq!(parse_hex("zz"), Err("Could not find any recognizable digits.".to_string()));
+        assert_eq!(parse_hex("ffffffff"), Ok(-1));
+        assert_eq!(parse_hex("zz"), Err("'zz' is not a hexadecimal number: invalid digit found in string.".to_string()));
         assert_eq!(parse_range("8010-8000"), Ok((0x8000, 0x8010)));
         assert_eq!(parse_range("$10"), Ok((16, 16)));
-        assert_eq!(parse_range("-1"), Err("String cannot contain a minus sign if the base is not 10.".to_string()));
+        assert_eq!(parse_range("-1"), Err("'-1' is not a hexadecimal number: invalid digit found in string.".to_string()));
         assert_eq!(hex(-5, 6), "FFFFFFFB");
         assert_eq!(hex(0x8000, 6), "008000");
     }

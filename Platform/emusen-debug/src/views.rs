@@ -4,7 +4,6 @@
 use crate::memory::find;
 use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::number::parse_i32;
 use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right};
 use emusen_session_service::words::parse_hex;
 use emusen_session_service::Record;
@@ -140,7 +139,7 @@ pub fn mute(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 3 {
         return Ok(Answer::ok(usage));
     }
-    let Some(index) = parse_i32(&parts[1]) else { return Ok(Answer::ok(usage)) };
+    let Some(index) = parts[1].trim().parse::<i32>().ok() else { return Ok(Answer::ok(usage)) };
     let on = equals_ignore_case(&parts[2], "on");
     session.set_channel_muted(index as u32, on)?;
     Ok(Answer::ok(format!("Channel {index} {}.", if on { "muted" } else { "unmuted" })))

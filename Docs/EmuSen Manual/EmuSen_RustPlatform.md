@@ -3775,3 +3775,12 @@ goldens hold them. Letters change at the edges: a character outside the Basic Mu
 .NET and so no letter, is a letter when Unicode says so, and the 398 ranges of `letter_or_digit.rs` (.NET 10's own,
 generated 2026-10-17) are gone with them. A digit in the debugger's expressions is an ASCII digit; .NET's took any
 script's decimal digits, which no number in an expression could then be read from.
+
+### 47.6 Numbers are read by `str::parse`
+
+Every integer and floating-point reading of typed text, `.cht` fields, settings rows and scraper answers is the text
+trimmed and given to `str::parse`; the debugger's hexadecimal addresses are `u32::from_str_radix` after an optional
+`0x` or `$`, read as 32 bits so that `ffffffff` is −1 as before. What changes: trailing NULs and a thousands comma
+(`1,000`, which .NET's en-US reading took) are no longer read as part of a number, `inf` and `infinity` are read
+beside `NaN`, and a refusal is worded by the standard library (`'zz' is not a hexadecimal number: invalid digit found
+in string.`) rather than by .NET. `number.rs` (230 lines) is deleted. The goldens and the `.cht` tests did not change.

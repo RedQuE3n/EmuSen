@@ -4,7 +4,6 @@ use crate::pattern;
 use crate::{Answer, Run};
 use dianash_module::Call;
 use emusen_dotnet::file::read_all_text;
-use emusen_dotnet::number::{parse_f64, parse_i32};
 use emusen_dotnet::text::compare_ordinal;
 use regex::Regex;
 use std::cmp::Ordering;
@@ -29,7 +28,7 @@ pub fn sort(args: &[String], stdin: Option<String>) -> Answer {
     let mut lines: Vec<&str> = text.split('\n').collect();
     if numeric {
         // OrderBy is stable, and Comparer<double> puts NaN first and holds -0 equal to 0.
-        let key = |line: &str| parse_f64(line.trim()).unwrap_or(0.0);
+        let key = |line: &str| line.trim().parse::<f64>().unwrap_or(0.0);
         lines.sort_by(|a, b| {
             let (a, b) = (key(a), key(b));
             match (a.is_nan(), b.is_nan()) {
@@ -519,7 +518,7 @@ fn parse_pattern(text: &str) -> Result<Result<Pattern, String>, String> {
             if let Some(number) = rest.strip_prefix(op) {
                 let number = number.trim_start_matches(char::is_whitespace);
                 if !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()) {
-                    return match parse_i32(number) {
+                    return match number.trim().parse::<i32>().ok() {
                         Some(value) => Ok(Ok(Pattern::Record(op.to_string(), value))),
                         None => Err("Value was either too large or too small for an Int32.".to_string()),
                     };
@@ -541,14 +540,14 @@ fn parse_expression(text: &str) -> Result<Expression, String> {
     }
     if let Some(digits) = text.strip_prefix('$') {
         if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) {
-            return parse_i32(digits).map(|n| Expression::Field(n as usize)).ok_or_else(|| "Value was either too large or too small for an Int32.".to_string());
+            return digits.trim().parse::<i32>().ok().map(|n| Expression::Field(n as usize)).ok_or_else(|| "Value was either too large or too small for an Int32.".to_string());
         }
     }
     let chars: Vec<char> = text.chars().collect();
     if chars.len() >= 2 && chars[0] == '"' && chars[chars.len() - 1] == '"' {
         return Ok(Expression::Literal(unescape(&chars[1..chars.len() - 1].iter().collect::<String>())));
     }
-    if parse_f64(text).is_some() {
+    if text.trim().parse::<f64>().is_ok() {
         return Ok(Expression::Literal(text.to_string()));
     }
     Err(format!("unsupported awk expression: '{text}'"))

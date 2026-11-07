@@ -2,7 +2,6 @@
 
 use crate::{required, scoped, session, usage, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::number::{int_parse, long_parse};
 use emusen_dotnet::suggestion;
 use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, simple_upper, to_lower};
 use emusen_session_service::abi::{self, status};
@@ -513,12 +512,12 @@ pub fn runto(call: &Call, parts: &[String]) -> Run {
             if parts.len() < 3 {
                 return Ok(Answer::ok("Usage: runto scanline <n>"));
             }
-            let scanline = int_parse(&parts[2])?;
+            let scanline = parts[2].trim().parse::<i32>().map_err(|e| e.to_string())?;
             session.run_control(abi::run::TO_SCANLINE, processor, i64::from(scanline))?;
             Ok(Answer::ok(format!("Running to scanline {scanline}...")))
         }
         "frame" => {
-            let frame = if parts.len() > 2 { long_parse(&parts[2])? } else { session.info()?.int("frame") + 1 };
+            let frame = if parts.len() > 2 { parts[2].trim().parse::<i64>().map_err(|e| e.to_string())? } else { session.info()?.int("frame") + 1 };
             session.run_control(abi::run::TO_FRAME, processor, frame)?;
             Ok(Answer::ok(format!("Running to frame {frame}...")))
         }

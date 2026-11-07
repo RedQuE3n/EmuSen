@@ -388,7 +388,7 @@ pub fn parse_write_type(text: Option<&str>) -> Option<WriteType> {
     }
     // Enum.TryParse takes a number too, any int; one outside the members is kept by .NET as its value, which no
     // write type has, and the write then acts as a plain set of its value.
-    emusen_dotnet::number::parse_i32(t).map(|n| ALL.get(n as usize).copied().unwrap_or(WriteType::Set))
+    t.trim().parse::<i32>().ok().map(|n| ALL.get(n as usize).copied().unwrap_or(WriteType::Set))
 }
 
 /// `CheatFileWrite.TryHex`: hex text with an optional 0x or $, as an unsigned 32-bit number.

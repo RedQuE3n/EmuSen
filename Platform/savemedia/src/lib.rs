@@ -84,7 +84,7 @@ pub fn in_text(words: &str) -> String {
 /// `SaveMediaManager.Find`: a save by its id, or by its place in the card's list from 1.
 pub fn find<'a>(listing: &'a Listing, save: &str) -> Option<&'a Save> {
     listing.saves.iter().find(|s| s.id == save).or_else(|| {
-        let n = emusen_dotnet::number::parse_i32(save)?;
+        let n = save.trim().parse::<i32>().ok()?;
         (n >= 1 && n as usize <= listing.saves.len()).then(|| &listing.saves[n as usize - 1])
     })
 }

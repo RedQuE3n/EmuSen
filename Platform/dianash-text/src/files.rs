@@ -4,7 +4,6 @@
 use crate::{clock, Answer, Run};
 use dianash_module::Call;
 use emusen_dotnet::file::{io_message, read_all_text};
-use emusen_dotnet::number::parse_i32;
 use emusen_dotnet::text::{compare_ordinal, equals_ignore_case, simple_upper};
 use std::path::Path;
 
@@ -71,7 +70,7 @@ pub fn head(call: &Call, args: &[String], stdin: Option<String>, tail: bool) -> 
     while i < args.len() {
         if args[i] == "-n" && i + 1 < args.len() {
             i += 1;
-            match parse_i32(&args[i]) {
+            match args[i].trim().parse::<i32>().ok() {
                 Some(n) if n >= 0 => count = n,
                 _ => return Ok(Answer::fail(format!("{name}: -n expects a non-negative integer"))),
             }

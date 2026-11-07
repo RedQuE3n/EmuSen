@@ -281,7 +281,7 @@ pub fn schema_json(rows: &[Row], tree: &Tree, console: Option<&str>) -> String {
 fn refusal(row: &Row, value: &str) -> Option<String> {
     match row.kind {
         "switch" if !matches!(value.trim().to_ascii_lowercase().as_str(), "true" | "false") => Some(format!("{} is a switch, true or false, not \"{value}\"", row.key)),
-        "count" if emusen_dotnet::number::parse_i32(value).is_none_or(|n| (n as i64) < row.min || (n as i64) > row.max) => {
+        "count" if value.trim().parse::<i32>().ok().is_none_or(|n| (n as i64) < row.min || (n as i64) > row.max) => {
             Some(format!("{} is a count from {} to {}, not \"{value}\"", row.key, row.min, row.max))
         }
         "choice" if !row.choices.is_empty() && !row.choices.iter().any(|c| c == value) => Some(format!("{} is one of {}, not \"{value}\"", row.key, row.choices.join(", "))),

@@ -230,7 +230,7 @@ impl Interp {
             return entries.last().cloned().ok_or_else(|| "History is empty - nothing to repeat.".to_string());
         }
         if trimmed.chars().count() > 1 {
-            if let Some(index) = emusen_dotnet::number::parse_i32(&trimmed[1..]) {
+            if let Some(index) = trimmed[1..].trim().parse::<i32>().ok() {
                 if index < 1 || index as usize > entries.len() {
                     return Err(format!("No history entry {index}."));
                 }

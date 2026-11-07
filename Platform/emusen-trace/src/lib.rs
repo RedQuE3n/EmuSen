@@ -7,7 +7,6 @@ mod control;
 mod records;
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::number::parse_i32;
 use emusen_dotnet::text::{pad_right, starts_with_ignore_case};
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::hex;
@@ -251,9 +250,9 @@ impl Module for Trace {
     /// `KillCommand.TryJob`: `bp<N>` or `watch<N>` removed, any other id not this module's.
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
         let (number, breakpoint) = if starts_with_ignore_case(id, "watch") {
-            (parse_i32(&id[5..])?, false)
+            (id[5..].trim().parse::<i32>().ok()?, false)
         } else if starts_with_ignore_case(id, "bp") {
-            (parse_i32(&id[2..])?, true)
+            (id[2..].trim().parse::<i32>().ok()?, true)
         } else {
             return None;
         };

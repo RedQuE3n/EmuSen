@@ -333,7 +333,7 @@ fn evaluate(world: &World, expr: &[String]) -> Result<bool, String> {
             _ => Err(format!("Unknown unary test operator '{op}'.")),
         },
         [lhs, op, rhs] => {
-            let number = |s: &str| emusen_dotnet::number::parse_i64(s).ok_or_else(|| format!("'{s}' isn't a number (needed for a -eq/-ne/-lt/-le/-gt/-ge comparison)."));
+            let number = |s: &str| s.trim().parse::<i64>().map_err(|_| format!("'{s}' isn't a number (needed for a -eq/-ne/-lt/-le/-gt/-ge comparison)."));
             match op.as_str() {
                 "=" | "==" => Ok(lhs == rhs),
                 "!=" => Ok(lhs != rhs),

@@ -3,7 +3,6 @@
 use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
-use emusen_dotnet::number::parse_i32;
 use emusen_dotnet::text::{pad_left, pad_right};
 use emusen_session_service::words::parse_hex;
 pub(crate) use emusen_session_service::space::{all, find, read, Space};
@@ -103,7 +102,7 @@ pub fn memfind(call: &Call, parts: &[String]) -> Run {
     let mut max = 20;
     let mut words: Vec<String> = parts[2..].to_vec();
     if words.len() >= 2 {
-        if let Some(parsed) = parse_i32(words.last().unwrap()).filter(|&p| p > 0) {
+        if let Some(parsed) = words.last().unwrap().trim().parse::<i32>().ok().filter(|&p| p > 0) {
             max = parsed;
             words.pop();
         }

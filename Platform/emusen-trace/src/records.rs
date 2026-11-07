@@ -6,7 +6,6 @@ use crate::{required, scoped, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_dotnet::json::{self, Value};
-use emusen_dotnet::number::parse_i32;
 use emusen_dotnet::suggestion;
 use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, to_lower};
 use emusen_session_service::abi::{self, status};
@@ -583,8 +582,8 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
     if frames.last().is_none_or(|f| f.items().is_empty()) {
         return Ok(Answer::ok("No coprocessor present on this cartridge."));
     }
-    let wanted = parts.get(1).filter(|p| parse_i32(p).is_none());
-    let count = parts.iter().skip(1).find_map(|p| parse_i32(p)).map_or(16, |c| c.max(1));
+    let wanted = parts.get(1).filter(|p| p.trim().parse::<i32>().is_err());
+    let count = parts.iter().skip(1).find_map(|p| p.trim().parse::<i32>().ok()).map_or(16, |c| c.max(1));
     let shown = &frames[frames.len().saturating_sub(count as usize)..];
     let first_index = history.int("refreshes") - shown.len() as i64 + 1;
     let mut out = format!(

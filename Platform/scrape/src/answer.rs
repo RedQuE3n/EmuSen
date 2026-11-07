@@ -5,7 +5,6 @@
 
 use emusen_dotnet::json::Value;
 use emusen_dotnet::json_document;
-use emusen_dotnet::number::parse_i64;
 
 /// A text keyed by a region or a language, as ScreenScraper lists names, synopses, dates and genre names.
 #[derive(Clone, Debug, PartialEq)]
@@ -133,15 +132,15 @@ fn broken_words(t: &emusen_dotnet::json::Text) -> String {
 }
 
 fn long(v: Option<&Value>) -> Read<Option<i64>> {
-    Ok(text(v)?.as_deref().and_then(parse_i64))
+    Ok(text(v)?.as_deref().and_then(|t: &str| t.trim().parse::<i64>().ok()))
 }
 
 fn int(v: Option<&Value>) -> Read<Option<i32>> {
-    Ok(text(v)?.as_deref().and_then(emusen_dotnet::number::parse_i32))
+    Ok(text(v)?.as_deref().and_then(|t: &str| t.trim().parse::<i32>().ok()))
 }
 
 fn double(v: Option<&Value>) -> Read<Option<f64>> {
-    Ok(text(v)?.as_deref().and_then(emusen_dotnet::number::parse_f64_invariant_float))
+    Ok(text(v)?.as_deref().and_then(|t: &str| t.trim().parse::<f64>().ok()))
 }
 
 fn quota(user: &Value) -> Read<Quota> {

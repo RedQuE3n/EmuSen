@@ -3746,3 +3746,12 @@ the platform's (which the shell's `dianash_last_error` shares), the frontend API
 library's and the scraper's. They are now one module, `platform/src/last_error.rs`, with a slot for each, so a
 failure in one header still leaves another's words alone, as before. The scraper redacts its words before they are
 stored, as it did.
+
+### 47.3 The settings folder from `dirs`
+
+`tree::application_data`, the folder the tree's legacy settings and default log folder sit under when the host names
+none, is `dirs::config_dir` (dirs 7.0.0): `$XDG_CONFIG_HOME` where it is absolute, else `~/.config`; `~/Library/Application
+Support` on macOS; the roaming application data on Windows, which `dirs` asks the system for as the removed code did.
+These are the folders §5.5's second point reproduced by hand, about 50 lines and a Windows call written out. The
+firmware search reads the home folder through `tree::user_home` rather than `$HOME` itself. `tests/application_data.rs`
+holds the three Linux cases (absolute, relative, unset) in a process of its own.

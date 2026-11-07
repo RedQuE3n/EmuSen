@@ -481,7 +481,7 @@ int32_t emusen_galaxia_log_reset(void);
 #define EMUSEN_GALAXIA_SUGGEST_HINT 0u    /* the end of a sentence: " Did you mean 'x'?", or nothing */
 #define EMUSEN_GALAXIA_SUGGEST_NEAREST 1u /* the nearest names, each followed by a NUL */
 
-/* How far apart two names are: edits counted in UTF-16 code units, a swap of two neighbours counting once, case ignored. */
+/* How far apart two names are: edits counted in characters, a swap of two neighbours counting once, case ignored. */
 int32_t emusen_galaxia_suggest_distance(const uint8_t *a, size_t a_len, const uint8_t *b, size_t b_len);
 
 /* The candidates nearest a name that matched none of them. The candidates are given each followed by a NUL. */

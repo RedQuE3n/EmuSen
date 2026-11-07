@@ -2,7 +2,6 @@
 
 use crate::{required, scoped, session, usage, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::suggestion;
 use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, simple_upper, to_lower};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope::{self, Cpu};
@@ -192,7 +191,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
             let Some(chosen) = available.iter().find(|c| equals_ignore_case(&c.text("name"), arg)) else {
                 let names: Vec<String> = available.iter().map(|c| c.text("name")).collect();
                 let refs: Vec<&str> = names.iter().map(String::as_str).collect();
-                return Ok(Answer::fail(format!("'{arg}' is not a condition this core detects.{} Try {}.", suggestion::hint(arg, &refs, 2), names.join("/"))));
+                return Ok(Answer::fail(format!("'{arg}' is not a condition this core detects.{} Try {}.", emusen_suggest::hint(arg, &refs, 2), names.join("/"))));
             };
             let (name, description) = (chosen.text("name"), chosen.text("description"));
             let mode = parts.get(at + 2).map(|m| to_lower(m)).unwrap_or_default();
@@ -340,7 +339,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
         }
         _ => {
             let subcommands = ["add", "read", "write", "uninit", "when", "depth", "forbid", "log", "list", "on", "off", "remove"];
-            Ok(Answer::ok(format!("Unknown 'bp' subcommand '{sub}'.{} Try {}.", suggestion::hint(&sub, &subcommands, 2), subcommands.join("/"))))
+            Ok(Answer::ok(format!("Unknown 'bp' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/"))))
         }
     }
 }
@@ -446,7 +445,7 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
         }
         _ => {
             let subcommands = ["add", "list", "log", "summary", "clear", "remove"];
-            Ok(Answer::ok(format!("Unknown 'watch' subcommand '{sub}'.{} Try {}.", suggestion::hint(&sub, &subcommands, 2), subcommands.join("/"))))
+            Ok(Answer::ok(format!("Unknown 'watch' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/"))))
         }
     }
 }
@@ -524,7 +523,7 @@ pub fn runto(call: &Call, parts: &[String]) -> Run {
         _ => {
             let Ok(address) = parse_hex(&parts[1]) else {
                 let subcommands = ["nmi", "irq", "brk", "cop", "scanline", "frame"];
-                return Ok(Answer::ok(format!("Unknown 'runto' target '{}'.{} Try {} or an address.", parts[1], suggestion::hint(&parts[1], &subcommands, 2), subcommands.join("/"))));
+                return Ok(Answer::ok(format!("Unknown 'runto' target '{}'.{} Try {} or an address.", parts[1], emusen_suggest::hint(&parts[1], &subcommands, 2), subcommands.join("/"))));
             };
             let id = session.run_control(abi::run::TO_ADDRESS, processor, i64::from(address as u32))?;
             Ok(Answer::ok(format!("Running to ${} (breakpoint #{id} - `bp remove {id}` when done)...", hex(address, 6))))

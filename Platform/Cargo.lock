@@ -342,6 +342,7 @@ dependencies = [
  "dianash-module",
  "emusen-dotnet",
  "emusen-session-service",
+ "emusen-suggest",
 ]
 
 [[package]]
@@ -433,6 +434,7 @@ dependencies = [
  "dianash-module",
  "emusen-dotnet",
  "emusen-session-service",
+ "emusen-suggest",
 ]
 
 [[package]]
@@ -451,6 +453,7 @@ dependencies = [
  "dianash-text",
  "emusen-dotnet",
  "emusen-galaxia",
+ "emusen-suggest",
  "regex",
  "sha2",
 ]
@@ -620,6 +623,7 @@ dependencies = [
  "emusen-session",
  "emusen-session-service",
  "emusen-sqlite",
+ "emusen-suggest",
  "emusen-systems",
  "emusen-trace",
  "rcgen",
@@ -711,6 +715,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-suggest"
+version = "0.1.0"
+dependencies = [
+ "strsim",
+]
+
+[[package]]
 name = "emusen-systems"
 version = "0.1.0"
 dependencies = [
@@ -747,6 +758,7 @@ dependencies = [
  "dianash-module",
  "emusen-dotnet",
  "emusen-session-service",
+ "emusen-suggest",
 ]
 
 [[package]]
@@ -1389,6 +1401,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "strsim"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "subtle"

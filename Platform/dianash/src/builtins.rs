@@ -6,7 +6,6 @@ use crate::interp::{Interp, Outcome};
 use crate::man;
 use crate::shell::{Request, World};
 use crate::table::{Kind, Table};
-use emusen_dotnet::suggestion;
 use emusen_galaxia::tree;
 
 /// A command the shell answers itself; a host's command of the same name takes its place, as a frontend's always has.
@@ -431,7 +430,7 @@ fn tmux(world: &mut World, session: u32, args: &[String]) -> Outcome {
         }
         _ => {
             let subcommands = ["new", "list", "switch", "kill"];
-            Outcome::ok(format!("Unknown 'tmux' subcommand '{sub}'.{} Try {}.", suggestion::hint(&sub, &subcommands, 2), subcommands.join("/")))
+            Outcome::ok(format!("Unknown 'tmux' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/")))
         }
     }
 }

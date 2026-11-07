@@ -1,13 +1,14 @@
 # The platform above the cores: Galaxia, Endymion and Serenity's Vulkan half, linked into one library, emusen_platform. See EmuSen_RustPlatform.md §2.
 [workspace]
 resolver = "3"
-members = ["cheats", "patch", "core-entry", "core-tool", "tool-job", "library-tool", "emusen-library-module", "emusen-cores-module", "emusen-memcard-module", "emusen-scrape-module", "crystal-debug", "dianash", "dianash-module", "dianash-program", "dianash-text", "dotnet", "emusen-cheat", "emusen-debug", "emusen-dev-module", "emusen-testing-module", "emusen-session", "emusen-trace", "endymion", "firmware", "galaxia", "net", "platform", "savemedia", "serenity", "session-service", "sqlite", "systems", "crystal", "library", "scrape", "recorder"]
+members = ["cheats", "patch", "core-entry", "core-tool", "tool-job", "library-tool", "emusen-library-module", "emusen-cores-module", "emusen-memcard-module", "emusen-scrape-module", "crystal-debug", "dianash", "dianash-module", "dianash-program", "dianash-text", "dotnet", "emusen-cheat", "emusen-debug", "emusen-dev-module", "emusen-testing-module", "emusen-session", "emusen-trace", "endymion", "firmware", "galaxia", "net", "platform", "savemedia", "serenity", "session-service", "sqlite", "suggest", "systems", "crystal", "library", "scrape", "recorder"]
 
 # One owner for each outside crate the platform's crates share, so that each version is stated once (EmuSen_RustPlatform.md §47).
 [workspace.dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 dirs = "7.0.0"
+strsim = "0.11.1"
 
 [workspace.package]
 version = "0.1.0"

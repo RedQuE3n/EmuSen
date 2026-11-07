@@ -11,6 +11,8 @@ publish.workspace = true
 name = "emusen_dianash"
 
 [dependencies]
+# "Did you mean …?" for a name that matched nothing.
+emusen-suggest = { path = "../suggest" }
 # The module ABI's types, which the shell calls modules and a host's commands through.
 dianash-module = { path = "../dianash-module" }
 # .NET's rules, which the C# shell's words rest on.

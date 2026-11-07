@@ -6,7 +6,6 @@ use crate::{required, scoped, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_dotnet::json::{self, Value};
-use emusen_dotnet::suggestion;
 use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, to_lower};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope;
@@ -21,7 +20,7 @@ fn record(bytes: Result<Vec<u8>, Refusal>) -> Result<Value, String> {
 }
 
 fn hint_and_try(word: &str, subcommands: &[&str]) -> String {
-    format!("{} Try {}", suggestion::hint(word, subcommands, 2), subcommands.join("/"))
+    format!("{} Try {}", emusen_suggest::hint(word, subcommands, 2), subcommands.join("/"))
 }
 
 pub fn counters(call: &Call, parts: &[String]) -> Run {

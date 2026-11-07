@@ -3784,3 +3784,15 @@ trimmed and given to `str::parse`; the debugger's hexadecimal addresses are `u32
 (`1,000`, which .NET's en-US reading took) are no longer read as part of a number, `inf` and `infinity` are read
 beside `NaN`, and a refusal is worded by the standard library (`'zz' is not a hexadecimal number: invalid digit found
 in string.`) rather than by .NET. `number.rs` (230 lines) is deleted. The goldens and the `.cht` tests did not change.
+
+### 47.7 "Did you mean …?" is a crate of its own, on strsim
+
+The suggestion a refusal ends with (`emusen-suggest`, `Platform/suggest`) measures names by `strsim::osa_distance`
+(strsim 0.11.1), optimal string alignment as before, on the names lower-cased by the standard library, and counts
+characters rather than UTF-16 units: an emoji is one slip, not two, and a word's tolerance (one slip up to three
+characters, two up to six, three beyond) counts its characters. A tie still goes first to a name the typed text
+begins, then to names in order of their upper case. It is a crate of its own because the shell, its command modules
+and the platform library all use it and a module may not link Galaxia (EmuSen_DianaSh.md §16 Q11); emusen-dotnet's
+`suggestion.rs` is deleted, and the C# sweep that held it to the C#'s sentences
+(`GalaxiaParityTests.A_suggestion_is_the_sentence_the_csharp_gave` and its golden) with it. `SuggestionTests` keep
+holding the behaviour, and the DianaSh goldens did not change.

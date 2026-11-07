@@ -5,7 +5,6 @@
 use dianash_module::{Answer, Call, Manifest, Module};
 use emusen_dotnet::file::{read_all_text, write_all_text};
 use emusen_dotnet::json::{self, Value};
-use emusen_dotnet::suggestion;
 use emusen_dotnet::text::{equals_ignore_case, to_lower};
 use emusen_session_service::abi::{self, cheat, status};
 use emusen_session_service::space::find;
@@ -448,7 +447,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
         }
         _ => {
             let subcommands = ["add", "poke", "gg", "rompatch", "list", "master", "enable", "disable", "remove", "clear", "save", "load", "files", "import", "export", "db"];
-            Ok(Answer::ok(format!("Unknown 'cheat' subcommand '{sub}'.{} Try {}.", suggestion::hint(&sub, &subcommands, 2), subcommands.join("/"))))
+            Ok(Answer::ok(format!("Unknown 'cheat' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/"))))
         }
     }
 }
@@ -560,7 +559,7 @@ fn database(session: &Session, parts: &[String]) -> Run {
         }
         _ => {
             let subcommands = ["status", "find", "load", "update", "prune"];
-            Ok(Answer::ok(format!("Unknown 'cheat db' subcommand '{sub}'.{} Try {}.", suggestion::hint(&sub, &subcommands, 2), subcommands.join("/"))))
+            Ok(Answer::ok(format!("Unknown 'cheat db' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/"))))
         }
     }
 }

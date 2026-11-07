@@ -751,35 +751,6 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void A_suggestion_is_the_sentence_the_csharp_gave()
-        {
-            string[] alphabet = { "a", "b", "c", "A", "B", "e", "t", "h", "é", "É", "ß", "İ", "ı", "K", "\u212a", "σ", "ς", "Σ", "😀", "\ud801\udc00", "\ud801\udc28", "1", "_", "-", " ", "日", "ǅ", "ǆ" };
-            var random = new Random(77);
-            string Word(int most) => string.Concat(Enumerable.Range(0, random.Next(0, most)).Select(_ => alphabet[random.Next(random.Next(3) == 0 ? alphabet.Length : 8)]));
-            for (int i = 0; i < 6000; i++)
-            {
-                string typed = Word(9);
-                string[] candidates = Enumerable.Range(0, random.Next(0, 9)).Select(_ => random.Next(4) == 0 ? Damaged(typed.Length == 0 ? "x" : typed, random) : Word(9)).Where(c => GalaxiaNative.Crosses(c, listed: true)).ToArray();
-                int max = random.Next(-1, 5);
-                string a = Word(9), b = random.Next(3) == 0 ? a.ToUpperInvariant() : Word(9);
-                GSweep("random", $"distance '{a}' '{b}'", GalaxiaNative.SuggestDistance(a, b));
-                GSweep("random", $"hint '{typed}' among [{string.Join("|", candidates)}] max {max}", GalaxiaNative.SuggestHint(typed, candidates, max));
-                GSweep("random", $"nearest '{typed}' among [{string.Join("|", candidates)}] max {max}", GalaxiaNative.SuggestNearest(typed, candidates, max));
-            }
-            for (int c = 1; c < 0x10000; c++)
-            {
-                if (char.IsSurrogate((char)c)) continue;
-                string text = ((char)c).ToString();
-                foreach (string other in new[] { text.ToUpperInvariant(), text.ToLowerInvariant(), "a", "i", "I", "k", "K", "s", "S" })
-                    GSweep("every character", $"distance U+{c:X4} '{other}'", GalaxiaNative.SuggestDistance(text, other), size: 1000);
-            }
-
-            string[] commands = { "cheat", "cat", "clear", "cls" };
-            Assert.Equal(" Did you mean 'cheat'?", GalaxiaNative.SuggestHint("chaet", commands, 2));
-            G("cl", GalaxiaNative.SuggestHint("cl", commands, 2));
-        }
-
-        [Fact]
         public void Names_are_ordered_as_OrdinalIgnoreCase_orders_them()
         {
             // APFS refuses a name holding a noncharacter, so macOS is not asked to make one.

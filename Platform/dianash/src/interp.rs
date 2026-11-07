@@ -9,7 +9,6 @@ use crate::lexer::{self, Lexed};
 use crate::parser::{self, ParseError};
 use crate::shell::{History, Request, World};
 use crate::table::{Kind, Table};
-use emusen_dotnet::suggestion;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Instant;
@@ -449,7 +448,7 @@ impl Interp {
         let canonical = if as_itself { lower.clone() } else { table.canonical(&lower) };
         let Some(entry) = table.find(&canonical) else {
             let names: Vec<&str> = table.entries().iter().map(|e| e.name.as_str()).collect();
-            return Ok(Outcome::fail(format!("Unknown command '{canonical}'.{} Type 'help' for a list.", suggestion::hint(&canonical, &names, 2))));
+            return Ok(Outcome::fail(format!("Unknown command '{canonical}'.{} Type 'help' for a list.", emusen_suggest::hint(&canonical, &names, 2))));
         };
         let outcome = match entry.kind {
             Kind::Builtin(builtin) => builtins::run(builtin, self, world, args, stdin.as_deref()),

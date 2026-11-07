@@ -5,7 +5,6 @@ use crate::{core_name, required, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_lines, write_all_text};
 use emusen_dotnet::json::Value;
-use emusen_dotnet::suggestion;
 use emusen_dotnet::text::{contains_ignore_case, equals_ignore_case, pad_right, to_lower};
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::{describe, hex, label_at, parse_hex};
@@ -299,7 +298,7 @@ pub fn label(call: &Call, parts: &[String]) -> Run {
         }
         _ => {
             let subcommands = ["add", "list", "at", "remove", "clear", "load", "save"];
-            Ok(Answer::ok(format!("Unknown 'label' subcommand '{sub}'.{} Try {}.", suggestion::hint(&sub, &subcommands, 2), subcommands.join("/"))))
+            Ok(Answer::ok(format!("Unknown 'label' subcommand '{sub}'.{} Try {}.", emusen_suggest::hint(&sub, &subcommands, 2), subcommands.join("/"))))
         }
     }
 }

@@ -4,7 +4,6 @@ use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report
 use emusen_galaxia::config::{self, Loaded};
 use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::models::{self, Model};
-use emusen_dotnet::suggestion;
 use emusen_galaxia::{cheats, error_log, model, tree};
 use std::time::{Duration, SystemTime};
 
@@ -311,7 +310,7 @@ pub extern "C" fn emusen_galaxia_log_reset() -> i32 {
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_suggest_distance(a: *const u8, a_len: usize, b: *const u8, b_len: usize) -> i32 {
-    let result = || -> Result<i32, i32> { Ok(suggestion::distance(unsafe { required(a, a_len) }?, unsafe { required(b, b_len) }?) as i32) };
+    let result = || -> Result<i32, i32> { Ok(emusen_suggest::distance(unsafe { required(a, a_len) }?, unsafe { required(b, b_len) }?) as i32) };
     result().unwrap_or_else(|status| status)
 }
 
@@ -325,8 +324,8 @@ pub unsafe extern "C" fn emusen_galaxia_suggest(what: u32, typed: *const u8, typ
         let (typed, candidates) = (unsafe { required(typed, typed_len) }?, unsafe { text(candidates, candidates_len) }?.unwrap_or(""));
         let candidates: Vec<&str> = candidates.split_terminator('\0').collect();
         match what {
-            suggest::HINT => Ok(suggestion::hint(typed, &candidates, max)),
-            suggest::NEAREST => Ok(suggestion::nearest(typed, &candidates, max).iter().map(|name| format!("{name}\0")).collect()),
+            suggest::HINT => Ok(emusen_suggest::hint(typed, &candidates, max)),
+            suggest::NEAREST => Ok(emusen_suggest::nearest(typed, &candidates, max).iter().map(|name| format!("{name}\0")).collect()),
             _ => Err(fail(status::BAD_ARGUMENT, format!("no suggestion {what}"))),
         }
     };

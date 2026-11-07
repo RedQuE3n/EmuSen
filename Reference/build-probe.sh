@@ -18,6 +18,10 @@
 #             backends: rdp-validate-dump, unmodified, and rdp-reference from
 #             probe-rs, which links the angrylion library that build made. Linux
 #             only for now. See Mars_RdpDifferential.md.
+#   emusen    No checkout: EmuSen itself, through the frontend API of a built
+#             program's libemusen_platform, chosen at run time with --core <the
+#             program's folder>. The headers are this repository's own. Replaces
+#             Pharaoh's --probe - see EmuSen_Backend.md §40.11.4. Every host.
 #   libretro  No checkout: the core is chosen at *run* time with --core, and the
 #             only build input is libretro.h, taken from a real distribution
 #             rather than vendored so it cannot drift from the real ABI. Cores
@@ -281,6 +285,18 @@ libretro)
     echo "  '$WORK/probe$EXE' --core <core>_libretro.$CORE_EXT <rom> <outDir> <start> <end> [stride]"
     exit 0
     ;;
+emusen)
+    need cargo
+    mkdir -p "$WORK"
+    echo "== building the probe"
+    cargo build --release --manifest-path "$HERE/probe-rs/Cargo.toml" \
+        --no-default-features --features emusen --target-dir "$WORK/target"
+    cp "$WORK/target/release/probe$EXE" "$WORK/probe$EXE"
+    echo
+    echo "Built: $WORK/probe$EXE"
+    echo "  '$WORK/probe$EXE' --backend emusen --core <a built program's folder> <rom> <outDir> <start> <end> [stride] --sig"
+    exit 0
+    ;;
 rdp)
     [ "$RDP" = yes ] || {
         echo "The rdp backend cannot be built on $HOST yet - see Mars_RdpDifferential.md §3. rdp-reference" >&2
@@ -335,7 +351,7 @@ libretro-core)
     exit 0
     ;;
 *)
-    echo "Unknown backend '$BACKEND' (known: mesen, libretro, libretro-core, rdp)" >&2
+    echo "Unknown backend '$BACKEND' (known: mesen, libretro, libretro-core, emusen, rdp)" >&2
     exit 1
     ;;
 esac

@@ -80,6 +80,7 @@ pub enum ScreenFormat {
     Bgr555,
     Rgb565,
     Xrgb8888,
+    Rgba8888,
 }
 
 impl ScreenFormat {
@@ -89,6 +90,7 @@ impl ScreenFormat {
             ScreenFormat::Bgr555 => "Bgr555",
             ScreenFormat::Rgb565 => "Rgb565",
             ScreenFormat::Xrgb8888 => "Xrgb8888",
+            ScreenFormat::Rgba8888 => "Rgba8888",
             ScreenFormat::None => "None",
         }
     }

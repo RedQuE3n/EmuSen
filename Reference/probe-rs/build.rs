@@ -7,8 +7,9 @@
 // crate is not linked into this script at all, so a runtime check would still
 // have to name `bindgen::` and fail to compile. Build scripts do receive the
 // feature cfgs - verified, not assumed.
-#[cfg(feature = "libretro")]
+#[cfg(any(feature = "libretro", feature = "emusen"))]
 use std::path::PathBuf;
+#[cfg(any(feature = "mesen", feature = "angrylion", feature = "libretro"))]
 use std::path::Path;
 
 fn main() {
@@ -17,6 +18,8 @@ fn main() {
 
     #[cfg(feature = "libretro")]
     generate_libretro_bindings();
+    #[cfg(feature = "emusen")]
+    generate_emusen_bindings();
 
     #[cfg(feature = "angrylion")]
     link_angrylion();
@@ -156,4 +159,41 @@ fn find_include_dir() -> Option<PathBuf> {
     candidates.push(PathBuf::from("/usr/include"));
 
     candidates.into_iter().find(|dir| dir.join("libretro.h").is_file())
+}
+
+// The frontend API and the two facts of the platform library the backend needs, bound from the repository's own
+// headers and loaded at run time, so the probe stays a program of its own that only loads EmuSen. The folders are the
+// headers' homes in the repository, named once here. See EmuSen_Backend.md §40.11.4.
+#[cfg(feature = "emusen")]
+const EMUSEN_INCLUDE_DIRS: [&str; 3] = ["../../EmuSen.Crystal/include", "../../Platform/include", "../../EmuSen/Cores/Shared/emusen-native/include"];
+
+#[cfg(feature = "emusen")]
+fn generate_emusen_bindings() {
+    let root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    let mut builder = bindgen::Builder::default().header_contents(
+        "probe_emusen.h",
+        "#include \"emusen_crystal.h\"\n#include \"emusen_platform.h\"\n#include \"emusen_core.h\"\n",
+    );
+    for dir in EMUSEN_INCLUDE_DIRS {
+        let dir = root.join(dir);
+        println!("cargo:rerun-if-changed={}", dir.display());
+        builder = builder.clang_arg(format!("-I{}", dir.display()));
+    }
+    // Only what the backend calls, so a library that lacks an unrelated export still loads.
+    let bindings = builder
+        .allowlist_function("emusen_crystal_(abi_version|last_error|new|free|route|open|close|session_info|frame|picture_copy|input_button|spaces|space_read)")
+        .allowlist_function("emusen_galaxia_(init|set_override)")
+        .allowlist_var("EMUSEN_CRYSTAL_(MAJOR|OPEN_NO_BATTERY)|EMUSEN_GALAXIA_OVERRIDE_(CONFIG|DATA)")
+        .allowlist_type("emusen_crystal_(config|open_params|frame_info)|emusen_control")
+        .constified_enum_module("emusen_control")
+        .dynamic_library_name("Platform")
+        .dynamic_link_require_all(true)
+        .derive_default(true)
+        .layout_tests(false)
+        .generate()
+        .expect("bindgen could not parse the frontend API's headers");
+    // bindgen 0.72 writes libloading 0.8's Library::new(path); 0.9 takes the path as an &OsStr.
+    let code = bindings.to_string().replace("::libloading::Library::new(path)?", "::libloading::Library::new(path.as_ref())?");
+    let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("emusen_sys.rs");
+    std::fs::write(&out, code).expect("could not write emusen_sys.rs");
 }

@@ -4,11 +4,11 @@
     dumpdb.py ingest <dumpDir> [<dumpDir> ...] [--db <path>]
     dumpdb.py list [--db <path>]
 
-A dump directory is what `EmuSen.Pharaoh --probe ... --sig` and the Rust probe
-both write: one `<backend>_sig.csv` carrying a CRC32 per space per frame, one
-`<backend>_manifest_fNNNNN.json` per frame, and the raw `.bin` blobs those
-manifests name. Neither probe was changed to produce a database; this reads what
-they already write. See EmuSen_Stack.md §3 for why the ingest is a separate step
+A dump directory is what the Rust probe writes with --sig, for EmuSen through its
+emusen backend as for a reference emulator: one `<backend>_sig.csv` carrying a
+CRC32 per space per frame, one `<backend>_manifest_fNNNNN.json` per frame, and
+the raw `.bin` blobs those manifests name. The probe was not changed to produce
+a database; this reads what it already writes. See EmuSen_Stack.md §3 for why the ingest is a separate step
 and not something the probe does itself.
 
 The database is a cache. Deleting it loses nothing - re-run the ingest. It

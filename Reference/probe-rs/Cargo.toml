@@ -21,12 +21,15 @@ required-features = ["angrylion"]
 [features]
 default = ["libretro"]
 libretro = ["dep:libloading", "dep:bindgen"]
+# EmuSen itself, through the frontend API of the platform library it dlopens. See EmuSen_Backend.md §40.11.4.
+emusen = ["dep:libloading", "dep:bindgen", "dep:serde_json"]
 mesen = []
 angrylion = []
 
 [dependencies]
 crc32fast = "1.5"
 libloading = { version = "0.9", optional = true }
+serde_json = { version = "1", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.72", optional = true }

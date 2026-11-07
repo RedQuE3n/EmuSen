@@ -151,7 +151,7 @@ namespace EmuSen.WiseMan.Crystal
             }
         });
 
-        // A game's log says which implementation serves it, as Pharaoh's does - see EmuSen_Backend.md §29.28.
+        // A game's log says which implementation serves it - see EmuSen_Backend.md §29.28.
         [Fact]
         public void A_game_s_log_names_the_implementation_that_serves_it()
         {

@@ -3,12 +3,13 @@
 
     compare.py <oursDir> <theirsDir> <frame> [phaseWindow] [--input F]... [--db P]
 
-Both directories are dump sets - what `--probe ... --sig` writes. They are
-ingested into the signature database on first use (see dumpdb.py); nothing else
-has to be run first.
+Both directories are dump sets - what the reference probe writes with --sig,
+EmuSen's through its emusen backend and the reference emulator's through its
+own. They are ingested into the signature database on first use (see
+dumpdb.py); nothing else has to be run first.
 
-    dotnet run --project EmuSen.Pharaoh -c Release -- --probe <rom> ours 0 200 --sig
-    ./build-probe.sh mesen && ~/.cache/emusen/probe mesen <rom> theirs 0 200 --sig
+    ../build-probe.sh emusen && ~/.cache/emusen/probe/emusen/probe --backend emusen --core <a built program's folder> <rom> ours 0 200 --sig
+    ../build-probe.sh mesen <checkout> && (cd <checkout> && ~/.cache/emusen/probe/mesen/probe <rom> theirs 0 200 --sig)
     ./compare.py ours theirs 194
 
 The exit code is the verdict: 0 pass, 1 differs, 2 not comparable, 3 pass but

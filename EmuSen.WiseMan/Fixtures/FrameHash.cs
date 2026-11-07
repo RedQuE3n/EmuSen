@@ -1,6 +1,6 @@
-namespace EmuSen.Pharaoh.Imaging
+namespace EmuSen.WiseMan.Fixtures
 {
-    // 64-bit FNV-1a over raw RGBA bytes - used by --autoshot to decide whether the current frame differs.
+    // 64-bit FNV-1a over raw RGBA bytes, the hash the window and frame recordings compare by.
     public static class FrameHash
     {
         public static ulong Compute(byte[] data)

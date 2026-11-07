@@ -42,9 +42,6 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
-        public void Pharaoh_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Pharaoh.FrameRunner).Assembly);
-
-        [Fact]
         public void Hotaru_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Hotaru.HotaruSession).Assembly);
 
         [Fact]

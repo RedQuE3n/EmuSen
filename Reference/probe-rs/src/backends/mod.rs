@@ -7,6 +7,9 @@ use crate::backend::ProbeBackend;
 #[cfg(feature = "libretro")]
 mod libretro;
 
+#[cfg(feature = "emusen")]
+mod emusen;
+
 #[cfg(feature = "mesen")]
 mod mesen;
 #[cfg(feature = "mesen")]
@@ -19,6 +22,8 @@ mod mesen_sys;
 pub const DEFAULT: &str = "mesen";
 #[cfg(all(feature = "libretro", not(feature = "mesen")))]
 pub const DEFAULT: &str = "libretro";
+#[cfg(all(feature = "emusen", not(feature = "mesen"), not(feature = "libretro")))]
+pub const DEFAULT: &str = "emusen";
 
 // In roster order, so the "not compiled in" message can say what is.
 #[allow(clippy::vec_init_then_push)] // the pushes are cfg-gated; vec![] cannot be
@@ -29,6 +34,8 @@ pub fn names() -> Vec<&'static str> {
     names.push("mesen");
     #[cfg(feature = "libretro")]
     names.push("libretro");
+    #[cfg(feature = "emusen")]
+    names.push("emusen");
     names
 }
 
@@ -48,6 +55,8 @@ pub fn usage_lines() -> Vec<&'static str> {
     lines.push("  --memory-id N=ID libretro only: dump memory id ID as space N (an id the ABI does not name)");
     #[cfg(feature = "libretro")]
     lines.push("  --sram FILE      libretro only: the battery save loaded into the core's save RAM after the load (a PlayStation core's first memory card)");
+    #[cfg(feature = "emusen")]
+    lines.push("  --core DIR       emusen backend: a built program's folder, holding libemusen_platform and its cores");
     lines
 }
 
@@ -69,6 +78,15 @@ pub fn make(name: &str, core: &str) -> Option<Box<dyn ProbeBackend>> {
             return None;
         }
         return Some(Box::new(libretro::LibretroBackend::new(core)));
+    }
+
+    #[cfg(feature = "emusen")]
+    if name == "emusen" {
+        if core.is_empty() {
+            println!("[ERROR] --backend emusen needs --core <a built program's folder, holding libemusen_platform>");
+            return None;
+        }
+        return Some(Box::new(emusen::EmuSenBackend::new(core)));
     }
 
     println!(

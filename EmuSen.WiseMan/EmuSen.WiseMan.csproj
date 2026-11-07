@@ -52,12 +52,6 @@
          see Mistress/*Tests.cs. Pulls in Avalonia transitively, which is
          fine for a test project; nothing here opens an actual window. -->
     <ProjectReference Include="..\EmuSen.Mistress\EmuSen.Mistress.csproj" />
-    <!-- HeadlessDebugOptions.Parse and FrameRunner - see
-         HeadlessDebug/HeadlessDebugOptionsTests.cs and
-         HeadlessDebug/FrameRunnerTests.cs. Referencing an OutputType=Exe
-         project works the same as any other ProjectReference; its Main
-         just never runs from here. -->
-    <ProjectReference Include="..\EmuSen.Pharaoh\EmuSen.Pharaoh.csproj" />
     <!-- GameFrameControl.ComputeLetterboxRect, BuiltInShaders' SkSL source,
          ShaderEffect.CycleEffect() - see Serenity/*Tests.cs. Nothing here
          opens an actual Avalonia window either. -->
@@ -86,12 +80,6 @@
     <!-- Now through LunaP.props, which names where it comes from. -->
   </ItemGroup>
 
-
-  <!-- Galaxia's catalogue schema, so a test can build the real thing - see EmuSen_Galaxia.md §7. -->
-  <ItemGroup>
-    <None Include="..\EmuSen.Galaxia\Library\Catalogue\*.sql"
-          Link="Library\Catalogue\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
 
   <!-- A game package's manifest as a person writes one in an editor - see EmuSen_GamePackages.md §3.3. -->
   <ItemGroup>

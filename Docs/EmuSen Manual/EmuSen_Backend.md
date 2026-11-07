@@ -10631,3 +10631,50 @@ The kinds are constants, compiled into Serenity, so its assembly references Gala
 DianaSh references Galaxia alone, so Serenity reaches no core either way (`LeafAssemblyTests`). `FrontendReferenceTests`'
 rule names one runtime assembly now, `EmuSen`, and its check of itself sees DianaSh name Galaxia's types, where it saw
 it name Crystal's session table.
+
+#### 40.11.4 Pharaoh reduced to a backend of the reference probe
+
+**The backend.** `--probe`, the one verb of Pharaoh's that anything still used (`compare.py` and `dumpdb.py` named
+it), is the reference probe's `emusen` backend (`Reference/probe-rs/src/backends/emusen.rs`, feature `emusen`,
+`build-probe.sh emusen`), beside its `mesen` and `libretro` backends and held to the same policy layer, dump format
+and signature stream. It loads a built program's `libemusen_platform` from the folder `--core` names and drives it
+through the frontend API alone (`emusen_crystal_new`, `route`, `open`, `frame`, `input_button`, `spaces`,
+`space_read`, `picture_copy`, `session_info`, `close`, `free`), as a front end does, with the cores of that folder.
+Its bindings are bindgen's, from the repository's own headers (`emusen_crystal.h`, `emusen_platform.h` for
+`emusen_galaxia_init` and `set_override`, `emusen_core.h` for the canonical controls), loaded at run time; the three
+header folders are named once, in `build.rs`. The data and configuration folders are redirected to the probe's home
+beside the dumps (`<outDir>/emusenhome`) and the game is opened with `EMUSEN_CRYSTAL_OPEN_NO_BATTERY`, so a run
+reads and writes nothing of a player's, as the other backends' homes do. The NES's spaces keep the probe's names
+(`ram`, `work`, `nametable`, `oam`, `palette`, `chr`); the screen is `Rgba8888`, a format the probe's roster gained.
+`serde_json` reads the API's answers; it was in the local cache, and is an optional dependency of the one feature.
+The policy layer's guard against naming an emulator (`no_emulator_is_named_in_the_agnostic_layers`) does not list
+`emusen`: the probe's own signature format carries the project's name.
+
+**What changed from Pharaoh's verb.** Three things, each stated rather than kept. Presses use the probe's
+`--press F:BTN[:DUR]`, on the pad the schedule names, counted from 0 as `emusen_crystal_input_button` counts ports;
+Pharaoh's `--tap` called `Button(1, …)`, which the API reads as the second pad. The system is the route's id
+(`gb` for a Game Boy image), where Pharaoh named every system but the NES `snes`. And which frames are dumped follows
+the policy layer: a report at `startFrame` itself, where Pharaoh's first came one frame after.
+
+**The measurement** (2026-11-07, the development desktop, Debug build of the tree before the deletion). Pharaoh
+(`--probe synthetic.nes ours 0 12 3 --sig`) and the backend (`synthetic.nes theirs 1 13 3 --backend emusen --core
+<Pharaoh's folder> --sig`), over one of the suite's synthetic NES images: the 35 dumped blobs (6 spaces and the
+screen at frames 1, 4, 7, 10 and 13), the 5 manifests and the whole signature stream (14 rows) are byte for byte the
+same. Over a Game Boy image (`Tetris (World) (Rev 1).gb`, read in place), the screens at frames 1, 31 and 61 and
+every signature row are the same, the system's name apart.
+
+**What went.** `EmuSen.Pharaoh` (2,346 lines of C#) with its other verbs (`--commands`, `--diffshot`, `--testroms`,
+`--index-library`, the frame runner and its options), which nothing used, and with them Galaxia's catalogue contract
+and schema (`Library/Catalogue/ICatalogue.cs`, `catalogue-schema.sql`, EmuSen_Galaxia.md §7), whose only driver was
+`--index-library`. From WiseMan: `HeadlessDebug/` (`CpuThrottleTests`, `FrameRunnerTests`,
+`HeadlessDebugOptionsTests`, `PharaohDependencyTests`), `BmpFileTests`, `ContactSheetTests`, `WavFileTests`,
+`CatalogueTests`, `FrontendReferenceTests`' case for Pharaoh, `CrystalSwitchTests`' two cases that ran Pharaoh as a
+program (the binding's own cases stay), the `ProgramRun` fixture they used, and `SyntheticNesRom`'s two builders of
+blargg's protocol, whose runner went in §40.10.3. `FrameHash`, which the window and frame recordings compare by,
+moved to WiseMan's fixtures with its tests.
+
+**Seeded faults, 2026-11-07,** each reverted. `memcard`'s empty listing said in other words: the dianash crate's
+corpus (`memcard.golden`). The known media in the engines' order rather than the table's: the corpus (`memcard`'s
+refusal case). The module left out of the platform library's shell: `MemcardModuleTests`, both cases ("Unknown
+command 'memcard'"). The backend driving every scheduled press on the first pad: its
+`a_press_reaches_the_pad_the_schedule_names`.

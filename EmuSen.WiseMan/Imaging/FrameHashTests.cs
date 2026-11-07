@@ -1,4 +1,4 @@
-using EmuSen.Pharaoh.Imaging;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Imaging
 {

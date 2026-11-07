@@ -8,7 +8,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
-using EmuSen.Pharaoh.Imaging;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Fixtures
 {

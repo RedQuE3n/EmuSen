@@ -4,7 +4,6 @@
 //! Which medium a file is, by its extension, is core info's slots' (EmuSen_Backend.md F28).
 
 use emusen_core_host::Discovery;
-use emusen_dotnet::text::equals_ignore_case;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_savemedia::{Medium, Media};
@@ -162,10 +161,10 @@ pub fn medium_names(tree: &Tree, console: &str, console_kind: bool, extension: &
     let folder = medium_folder(tree, console, console_kind);
     let mut names: Vec<String> = files_in(&folder)
         .into_iter()
-        .filter(|(_, name)| name.ends_with(extension) && equals_ignore_case(path::extension(Style::HOST, name), extension))
+        .filter(|(_, name)| name.ends_with(extension) && (path::extension(Style::HOST, name).eq_ignore_ascii_case(&extension)))
         .map(|(at, _)| path::file_name_without_extension(Style::HOST, &at).to_string())
         .collect();
-    names.sort_by(|a, b| emusen_dotnet::text::compare_ignore_case(a, b));
+    names.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
     names
 }
 
@@ -236,13 +235,13 @@ fn games_own(tree: &Tree, m: &SaveMedium) -> Vec<(String, String, usize, bool)> 
     }
     let mut suffixes: Vec<(String, usize)> = m.slots.iter().enumerate().map(|(n, s)| (s.suffix.clone(), n)).collect();
     suffixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-    let mut files: Vec<String> = files_in(&own).into_iter().filter(|(_, name)| equals_ignore_case(path::extension(Style::HOST, name), &m.extension)).map(|(at, _)| at).collect();
-    files.sort_by(|a, b| emusen_dotnet::text::compare_ignore_case(a, b));
+    let mut files: Vec<String> = files_in(&own).into_iter().filter(|(_, name)| path::extension(Style::HOST, name).eq_ignore_ascii_case(&m.extension)).map(|(at, _)| at).collect();
+    files.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
     files
         .into_iter()
         .map(|file| {
             let name = path::file_name(Style::HOST, &file).to_string();
-            match suffixes.iter().find(|(s, _)| emusen_dotnet::text::ends_with_ignore_case(&name, s) && name.len() > s.len()) {
+            match suffixes.iter().find(|(s, _)| name.to_uppercase().ends_with(&s.to_uppercase()) && name.len() > s.len()) {
                 Some((s, slot)) => {
                     let game = name[..name.len() - s.len()].to_string();
                     (file, game, *slot, true)
@@ -270,7 +269,7 @@ pub fn newest_own(tree: &Tree, m: &SaveMedium, slot: usize) -> Option<String> {
 /// The first of the noun's names no file in the drawer has, `NextName`.
 pub fn next_name(tree: &Tree, m: &SaveMedium) -> String {
     let taken = medium_names(tree, &m.console, m.is_console(), &m.extension);
-    (0..).map(|n| m.default_name(n)).find(|d| !taken.iter().any(|t| equals_ignore_case(t, d))).unwrap_or_default()
+    (0..).map(|n| m.default_name(n)).find(|d| !taken.iter().any(|t| t.eq_ignore_ascii_case(&d))).unwrap_or_default()
 }
 
 /// The medium whose import a frontend offers before a game starts, `ImportToOffer`.
@@ -293,7 +292,7 @@ pub struct ByExtension<'d> {
 impl Media for ByExtension<'_> {
     fn medium_of(&self, file: &str) -> Option<Medium> {
         let extension = path::extension(Style::HOST, file);
-        declared(self.discovery).into_iter().filter(|(_, e)| equals_ignore_case(e, extension)).find_map(|(id, _)| Medium::by_id(&id))
+        declared(self.discovery).into_iter().filter(|(_, e)| e.eq_ignore_ascii_case(&extension)).find_map(|(id, _)| Medium::by_id(&id))
     }
 }
 
@@ -521,7 +520,7 @@ fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str
     let without_module = medium.entry.as_ref().is_none_or(|e| e.module.is_none());
     let adopted = if adopts && medium.is_console() && without_module && !emusen_galaxia::dotnet_files::file_exists(&key) { newest_own(tree, medium, slot) } else { None };
     let save = crate::battery::BatterySave::medium(tree, &medium.console, medium.is_console(), name, &medium.extension, disabled, adopted);
-    if taken.iter().any(|t| equals_ignore_case(t, &key)) {
+    if taken.iter().any(|t| t.eq_ignore_ascii_case(&key)) {
         placed.notices.push(format!("{name} is already in another slot; {} keeps the game's own {}.", medium.slot_label(slot), emusen_savemedia::in_text(&medium.noun)));
         return None;
     }

@@ -1,7 +1,6 @@
 //! Named addresses, the C# `LabelRegistry` (`man label`): one name for an address and one address for a name, names
 //! compared without regard to case.
 
-use emusen_dotnet::text::fold;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Default)]
@@ -18,21 +17,21 @@ impl LabelRegistry {
 
     pub fn add(&mut self, address: i32, name: &str, comment: Option<&str>) {
         if let Some(existing) = self.by_address.get(&address) {
-            self.by_name.remove(&fold(existing));
+            self.by_name.remove(&existing.to_uppercase());
         }
-        if let Some(previous) = self.by_name.get(&fold(name)).copied() {
+        if let Some(previous) = self.by_name.get(&name.to_uppercase()).copied() {
             self.by_address.remove(&previous);
             self.comments.remove(&previous);
         }
         self.by_address.insert(address, name.to_string());
-        self.by_name.insert(fold(name), address);
+        self.by_name.insert(name.to_uppercase(), address);
         if let Some(c) = comment.filter(|c| !c.is_empty()) {
             self.comments.insert(address, c.to_string());
         }
     }
 
     pub fn remove_by_name(&mut self, name: &str) -> bool {
-        let Some(address) = self.by_name.remove(&fold(name)) else { return false };
+        let Some(address) = self.by_name.remove(&name.to_uppercase()) else { return false };
         self.by_address.remove(&address);
         self.comments.remove(&address);
         true
@@ -59,7 +58,7 @@ impl LabelRegistry {
         if self.by_name.is_empty() {
             return None;
         }
-        self.by_name.get(&fold(name)).copied()
+        self.by_name.get(&name.to_uppercase()).copied()
     }
 
     pub fn comment_at(&self, address: i32) -> Option<&str> {

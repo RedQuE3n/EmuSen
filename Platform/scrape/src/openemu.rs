@@ -210,7 +210,7 @@ pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_
     let zip = match doc.get("assets") {
         Some(emusen_dotnet::json::Value::Array(assets)) => assets
             .iter()
-            .filter(|a| a.get("name").and_then(|n| n.as_str()).is_some_and(|n| emusen_dotnet::text::ends_with_ignore_case(n, ".zip")))
+            .filter(|a| a.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.to_uppercase().ends_with(".ZIP")))
             .find_map(|a| a.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string)),
         _ => None,
     };
@@ -223,7 +223,7 @@ pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_
     let zip_part = format!("{target}.zip.part");
     std::fs::write(&zip_part, &archive).map_err(|e| e.to_string())?;
     let named = emusen_galaxia::archive::entries_of(&zip_part).ok().and_then(|entries| {
-        entries.into_iter().map(|e| e.full_name).find(|n| emusen_dotnet::text::equals_ignore_case(n.rsplit('/').next().unwrap_or(n), FILE_NAME))
+        entries.into_iter().map(|e| e.full_name).find(|n| n.rsplit('/').next().unwrap_or(n).eq_ignore_ascii_case(&FILE_NAME))
     });
     let entry = named.and_then(|n| emusen_galaxia::archive::read_entry(&zip_part, &n, usize::MAX).ok());
     let _ = std::fs::remove_file(&zip_part);

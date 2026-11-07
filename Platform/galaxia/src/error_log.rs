@@ -8,7 +8,6 @@
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
 use crate::dotnet_path::{self as path, Style};
-use emusen_dotnet::text::{replace_line_endings, utf16_len};
 use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
 use crate::tree::{Directory, Tree, file_exists};
 use std::io::Write;
@@ -89,8 +88,13 @@ pub fn path_for(root: &str, day: &str) -> String {
     path::combine(Style::HOST, root, &format!("{PREFIX}{day}.log"))
 }
 
+/// A text's lines, a carriage return and line feed together ending one.
+fn lines(text: &str) -> Vec<String> {
+    text.replace("\r\n", "\n").split(['\n', '\r']).map(str::to_string).collect()
+}
+
 fn one_line(text: &str) -> String {
-    replace_line_endings(text, " \u{23CE} ")
+    lines(text).join(" \u{23CE} ")
 }
 
 /// One entry: its line, its context on a second, and a fault's text indented under them.
@@ -100,7 +104,7 @@ pub fn format_entry(stamp: &str, level: &str, area: &str, message: &str, context
         entry.push_str(&format!("    context: {}\n", one_line(context)));
     }
     if let Some(fault) = fault {
-        for line in replace_line_endings(fault, "\n").split('\n') {
+        for line in lines(fault) {
             entry.push_str(&format!("    {line}\n"));
         }
     }
@@ -159,8 +163,7 @@ fn append_entry(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) ->
     if let Some(notice) = FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() {
         text.insert_str(0, &format!("{stamp} WARN [log] {notice}\n"));
     }
-    // The length is counted as C# counts a string's, in UTF-16 code units, against a size in bytes.
-    if size + utf16_len(&text) as u64 >= MAX_BYTES {
+    if size + text.len() as u64 >= MAX_BYTES {
         text.push_str(&format!("{stamp} WARN [log] this file reached {} MB; nothing more is written to it today\n", MAX_BYTES >> 20));
     }
     log.write_all(text.as_bytes()).ok()
@@ -239,12 +242,11 @@ mod tests {
         assert_eq!(append(&root, "20261008", "T", now, "refused\n"), None);
         assert_eq!(std::fs::metadata(&file).unwrap().len(), text.len() as u64);
 
-        // The room left is judged by the entry's length as C# counts it, in UTF-16 code units, not by the bytes it takes.
+        // The room left is judged by the bytes an entry takes.
         let wide = "é😀\n";
-        assert_eq!((utf16_len(wide), wide.len()), (4, 7));
-        std::fs::write(&file, vec![b'x'; MAX_BYTES as usize - 5]).unwrap();
+        std::fs::write(&file, vec![b'x'; MAX_BYTES as usize - 8]).unwrap();
         assert!(append(&root, "20261008", "STAMP", now, wide).is_some());
-        assert_eq!(std::fs::metadata(&file).unwrap().len(), MAX_BYTES - 5 + 7);
+        assert_eq!(std::fs::metadata(&file).unwrap().len(), MAX_BYTES - 8 + 7);
 
         std::fs::write(temp.join("blocker"), "a file where the folder should be").unwrap();
         assert_eq!(append(&temp.join("blocker"), "20261008", "T", now, "nowhere\n"), None);

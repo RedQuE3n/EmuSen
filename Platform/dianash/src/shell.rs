@@ -193,7 +193,7 @@ impl World {
     }
 
     pub fn find_listed(&self, name: &str) -> Option<u32> {
-        self.listed().find(|s| s.name.as_deref().is_some_and(|n| emusen_dotnet::text::equals_ignore_case(n, name))).map(|s| s.id)
+        self.listed().find(|s| s.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(&name))).map(|s| s.id)
     }
 
     pub fn current_listed(&self) -> Option<&Session> {
@@ -668,7 +668,7 @@ pub const DISPLAY_VERSION: &str = "0.1a";
 pub fn banner() -> String {
     const BORDER: &str = "+------------------------------------------------------------------------+";
     let centre = |text: &str| {
-        let pad = 72usize.saturating_sub(emusen_dotnet::text::utf16_len(text));
+        let pad = 72usize.saturating_sub(text.chars().count());
         format!("|{}{text}{}|", " ".repeat(pad / 2), " ".repeat(pad - pad / 2))
     };
     [

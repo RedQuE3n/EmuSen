@@ -5,7 +5,6 @@
 
 use super::disasm::{decode, decode_rsp};
 use crate::debug::{Memory, Reference, find, register};
-use emusen_dotnet::text::equals_ignore_case;
 
 /// One listed instruction: its address, its four bytes, mnemonic, operands and the address it names.
 pub struct Listed {
@@ -20,7 +19,7 @@ pub struct Listed {
 /// processor for IMEM and DMEM, the VR4300 for RDRAM (through KSEG0), the ROM (through KSEG1's cartridge window), PIF RAM
 /// and its own view.
 pub fn decode_in(space: &str, word: u32, at: u32) -> (String, String, Option<(Reference, u32)>) {
-    let is = |name: &str| equals_ignore_case(space, name);
+    let is = |name: &str| space.eq_ignore_ascii_case(&name);
     if is("IMEM") || is("DMEM") {
         decode_rsp(word, at & 0xFFC)
     } else if is("RDRAM") {

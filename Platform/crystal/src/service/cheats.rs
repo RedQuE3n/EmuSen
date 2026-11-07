@@ -121,7 +121,7 @@ fn space_of(spaces: &[String], name: Option<&str>) -> Answer<String> {
     let Some(name) = name else { return Err(refused(status::BAD_ARGUMENT, "a memory space must be named")) };
     spaces
         .iter()
-        .find(|s| emusen_dotnet::text::equals_ignore_case(s, name))
+        .find(|s| s.eq_ignore_ascii_case(&name))
         .cloned()
         .ok_or_else(|| refused(status::NO_SUCH_SPACE, format!("No memory space named '{name}'. Available: {}", spaces.join(", "))))
 }

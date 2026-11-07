@@ -4,7 +4,6 @@
 use crate::{clock, Answer, Run};
 use dianash_module::Call;
 use emusen_dotnet::file::{io_message, read_all_text};
-use emusen_dotnet::text::{compare_ordinal, equals_ignore_case, simple_upper};
 use std::path::Path;
 
 /// A path through the sandbox, or the refusal the command words as `<name>: <refusal>`.
@@ -162,7 +161,7 @@ fn entry(dir: &str, name: &str, long: bool) -> String {
 /// The names in a directory, in .NET's ordinal order.
 fn names(dir: &str) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(dir).map(|r| r.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
-    names.sort_by(|a, b| compare_ordinal(a, b));
+    names.sort_by(|a, b| a.cmp(b));
     names
 }
 
@@ -201,8 +200,8 @@ fn matches(pattern: &[char], name: &[char]) -> bool {
         None => name.is_empty(),
         Some(('*', rest)) => (0..=name.len()).any(|skip| matches(rest, &name[skip..])),
         Some(('?', rest)) => !name.is_empty() && matches(rest, &name[1..]),
-        Some(('\\', rest)) if !rest.is_empty() => !name.is_empty() && simple_upper(rest[0]) == simple_upper(name[0]) && matches(&rest[1..], &name[1..]),
-        Some((c, rest)) => !name.is_empty() && simple_upper(*c) == simple_upper(name[0]) && matches(rest, &name[1..]),
+        Some(('\\', rest)) if !rest.is_empty() => !name.is_empty() && rest[0].to_uppercase().eq(name[0].to_uppercase()) && matches(&rest[1..], &name[1..]),
+        Some((c, rest)) => !name.is_empty() && c.to_uppercase().eq(name[0].to_uppercase()) && matches(rest, &name[1..]),
     }
 }
 
@@ -246,7 +245,7 @@ fn walk(call: &Call, resolved: &str, shown: &str, pattern: Option<&[char]>, resu
 }
 
 pub fn cp(call: &Call, args: &[String]) -> Run {
-    let recursive = args.len() >= 2 && (equals_ignore_case(&args[1], "-r") || equals_ignore_case(&args[1], "-rf"));
+    let recursive = args.len() >= 2 && (args[1].eq_ignore_ascii_case("-r") || args[1].eq_ignore_ascii_case("-rf"));
     let start = if recursive { 2 } else { 1 };
     if args.len() < start + 2 {
         return Ok(Answer::fail("cp: usage: cp [-r] <src> <dst>"));

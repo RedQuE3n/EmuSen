@@ -19,7 +19,7 @@ pub fn zip_beside(folder: &str) -> String {
 
 fn stored(name: &str) -> bool {
     let extension = path::extension(Style::Unix, name);
-    archive::STORED_EXTENSIONS.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, extension))
+    archive::STORED_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&extension))
 }
 
 /// Every file of a package's folder, as zip names relative to it with `/` between their parts, in ordinal order with

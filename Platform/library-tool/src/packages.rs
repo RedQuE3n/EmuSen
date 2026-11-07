@@ -6,7 +6,6 @@
 
 use crate::convert::{obj, Outcome};
 use crate::Context;
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::claims::{self, Index, Roots};
 use emusen_galaxia::dotnet_files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
@@ -30,7 +29,7 @@ pub(crate) fn every_system() -> emusen_library::scan::Systems {
 /// The system a manifest names, by its ES-DE name, else by its id.
 pub fn system_named(name: &str) -> Option<&'static emusen_systems::System> {
     let table = emusen_systems::table().ok()?;
-    table.iter().find(|s| equals_ignore_case(&s.esde_system, name)).or_else(|| table.iter().find(|s| equals_ignore_case(&s.id, name)))
+    table.iter().find(|s| s.esde_system.eq_ignore_ascii_case(&name)).or_else(|| table.iter().find(|s| s.id.eq_ignore_ascii_case(&name)))
 }
 
 /// Where the scan's routing names no system, the nearest folder above the game named as a system's ES-DE folder.
@@ -71,7 +70,7 @@ pub fn games(library: &str, given: &[String]) -> (Vec<Game>, Vec<String>) {
     let mut found = Vec::new();
     for at in image_sets::shelved(files) {
         let rel = crate::discs::rel_of(library, &at);
-        if !extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, &at))) {
+        if !extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, &at))) {
             if direct.contains(&at) {
                 refused.push(format!("{rel}: no system of this build takes its kind of file"));
             }
@@ -83,7 +82,7 @@ pub fn games(library: &str, given: &[String]) -> (Vec<Game>, Vec<String>) {
             None => refused.push(format!("{rel}: no system of this build takes it")),
         }
     }
-    found.sort_by(|a, b| compare_ignore_case(&a.rel, &b.rel).then_with(|| a.rel.cmp(&b.rel)));
+    found.sort_by(|a, b| a.rel.to_uppercase().cmp(&b.rel.to_uppercase()).then_with(|| a.rel.cmp(&b.rel)));
     (found, refused)
 }
 
@@ -177,7 +176,7 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
         ];
         companions = image_sets::files_for(&game.path).unwrap_or_default();
     } else if archive::is_archive(&game.path) {
-        let takes = |e: &str| game.system.extensions.iter().any(|x| equals_ignore_case(x, e));
+        let takes = |e: &str| game.system.extensions.iter().any(|x| x.eq_ignore_ascii_case(&e));
         let Ok(Some(name)) = archive::image_entry(&game.path, takes) else { return Outcome::said("failed", "the archive holds no image of its system") };
         let bytes = match archive::read_entry(&game.path, &name, usize::MAX) {
             Ok(b) => b,
@@ -389,7 +388,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     // The copy is named as the package's folder where their kinds agree, so that ES-DE, given the folder, finds the
     // file of its name, and RetroArch the patches named by the package's own name beside it (§6, §19).
     let folder_name = path::file_name(Style::HOST, folder).to_string();
-    let same_kind = equals_ignore_case(path::extension(Style::HOST, &folder_name), path::extension(Style::HOST, &game));
+    let same_kind = path::extension(Style::HOST, &folder_name).eq_ignore_ascii_case(&path::extension(Style::HOST, &game));
     let copy_name = if same_kind && companions.is_empty() { folder_name } else { path::file_name(Style::HOST, &game).to_string() };
     let mut plan: Vec<(Value, String, String)> = vec![(doc.get("game").cloned().unwrap_or(Value::Null), game.clone(), copy_name)];
     for c in &companions {
@@ -398,7 +397,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     }
     for (_, _, rel) in &plan {
         let first = rel.split('/').next().unwrap_or("");
-        if [package::FILE_NAME, package::SAVES_FOLDER, package::STATES_FOLDER, package::MEDIA_FOLDER, package::CHEATS_FILE, package::SETTINGS_FILE].iter().any(|r| equals_ignore_case(r, first)) {
+        if [package::FILE_NAME, package::SAVES_FOLDER, package::STATES_FOLDER, package::MEDIA_FOLDER, package::CHEATS_FILE, package::SETTINGS_FILE].iter().any(|r| r.eq_ignore_ascii_case(&first)) {
             return Err(format!("{rel} would take the place of the package's own {first}"));
         }
     }
@@ -537,7 +536,7 @@ pub fn of_console(ctx: &Context, console: &str) -> Vec<String> {
             let top = package_rel(ctx, f).split('/').next().unwrap_or("").to_string();
             let system = read(f).ok().and_then(|d| d.get("system").and_then(Value::as_str).map(str::to_string)).unwrap_or_default();
             let s = system_named(&system);
-            equals_ignore_case(&top, console) || equals_ignore_case(&system, console) || s.is_some_and(|s| equals_ignore_case(&s.id, console) || equals_ignore_case(&s.console, console))
+            top.eq_ignore_ascii_case(&console) || system.eq_ignore_ascii_case(&console) || s.is_some_and(|s| s.id.eq_ignore_ascii_case(&console) || s.console.eq_ignore_ascii_case(&console))
         })
         .collect()
 }
@@ -630,7 +629,7 @@ pub fn unpackaged(ctx: &Context, library: &str, console: Option<&str>, systems: 
     found
         .into_iter()
         .filter(|g| index.claimant(&g.path).is_none() && !index.inside_package(&g.path))
-        .filter(|g| console.is_none_or(|c| equals_ignore_case(&g.system.console, c) || equals_ignore_case(&g.system.id, c) || equals_ignore_case(&g.system.esde_system, c)))
+        .filter(|g| console.is_none_or(|c| g.system.console.eq_ignore_ascii_case(&c) || g.system.id.eq_ignore_ascii_case(&c) || g.system.esde_system.eq_ignore_ascii_case(&c)))
         .map(|g| {
             let size = crate::convert::game_bytes(&g.path);
             let convertible = crate::discs::convertible(library, &g.path, systems);

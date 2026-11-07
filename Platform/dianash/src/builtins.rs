@@ -165,7 +165,7 @@ pub(crate) fn man(table: &Table, args: &[String]) -> Outcome {
     if args.len() < 2 {
         return Outcome::ok(help(table));
     }
-    let target = emusen_dotnet::text::to_lower(&args[1]);
+    let target = args[1].to_lowercase();
     if let Some(page) = man::lookup(&target) {
         return Outcome::ok(page);
     }
@@ -206,7 +206,7 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
         Builtin::Shutdown => Outcome::with("Shutting down.", Request::Exit),
         Builtin::History => {
             let Some(s) = world.session_mut(session) else { return Ok(Outcome::ok("No history yet.")) };
-            if args.len() >= 2 && emusen_dotnet::text::equals_ignore_case(&args[1], "clear") {
+            if args.len() >= 2 && args[1].eq_ignore_ascii_case("clear") {
                 s.history.clear();
                 return Ok(Outcome::ok("History cleared."));
             }
@@ -215,7 +215,7 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
                 return Ok(Outcome::ok("No history yet."));
             }
             let width = entries.len().to_string().len();
-            Outcome::ok(entries.iter().enumerate().map(|(i, e)| format!("{}  {e}", emusen_dotnet::text::pad_left(&(i + 1).to_string(), width))).collect::<Vec<_>>().join("\n"))
+            Outcome::ok(entries.iter().enumerate().map(|(i, e)| format!("{}  {e}", format!("{:>width$}", &(i + 1).to_string(), width = width))).collect::<Vec<_>>().join("\n"))
         }
         Builtin::Whoami => Outcome::ok(user(world, session)),
         Builtin::Su => {
@@ -232,7 +232,7 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
             if args.len() < 2 {
                 return Ok(Outcome::fail("useradd: usage: useradd <name>"));
             }
-            if !emusen_dotnet::text::equals_ignore_case(&user(world, session), "root") {
+            if !user(world, session).eq_ignore_ascii_case("root") {
                 return Ok(Outcome::fail("useradd: only root can add users."));
             }
             let name = joined(args, 1);
@@ -249,7 +249,7 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
                 Outcome::ok(format!("Password updated for '{me}'."))
             }
             3 => {
-                if !emusen_dotnet::text::equals_ignore_case(&user(world, session), "root") {
+                if !user(world, session).eq_ignore_ascii_case("root") {
                     return Ok(Outcome::fail("passwd: only root can change another user's password."));
                 }
                 if !world.accounts.exists(&args[1]) {
@@ -262,13 +262,13 @@ pub(crate) fn run(builtin: Builtin, interp: &mut Interp, world: &mut World, args
         },
         Builtin::Who => {
             if !world.config.sessions {
-                return Ok(Outcome::ok(format!("  {} (this shell)", emusen_dotnet::text::pad_right(&user(world, session), 10))));
+                return Ok(Outcome::ok(format!("  {} (this shell)", format!("{:<width$}", &user(world, session), width = 10))));
             }
             let current = world.current;
             Outcome::ok(
                 world
                     .listed()
-                    .map(|s| format!("  {} {}{}", emusen_dotnet::text::pad_right(&s.user, 10), s.name.as_deref().unwrap_or(""), if current == Some(s.id) { "  (current)" } else { "" }))
+                    .map(|s| format!("  {} {}{}", format!("{:<width$}", &s.user, width = 10), s.name.as_deref().unwrap_or(""), if current == Some(s.id) { "  (current)" } else { "" }))
                     .collect::<Vec<_>>()
                     .join("\n"),
             )
@@ -353,24 +353,24 @@ fn userdel(world: &mut World, session: u32, args: &[String]) -> Outcome {
     if args.len() < 2 {
         return Outcome::fail("userdel: usage: userdel <name>");
     }
-    if !emusen_dotnet::text::equals_ignore_case(&user(world, session), "root") {
+    if !user(world, session).eq_ignore_ascii_case("root") {
         return Outcome::fail("userdel: only root can remove users.");
     }
     let name = joined(args, 1);
     if !world.accounts.exists(&name) {
         return Outcome::fail(format!("userdel: no such user '{name}'."));
     }
-    if emusen_dotnet::text::equals_ignore_case(&name, "root") {
+    if name.eq_ignore_ascii_case("root") {
         return Outcome::fail("userdel: refusing to remove 'root'.");
     }
     if world.config.sessions {
-        if let Some(active) = world.listed().find(|s| emusen_dotnet::text::equals_ignore_case(&s.user, &name)) {
+        if let Some(active) = world.listed().find(|s| s.user.eq_ignore_ascii_case(&name)) {
             return Outcome::fail(format!(
                 "userdel: '{name}' is currently in use by session '{}' - `su` that session to another account first.",
                 active.name.as_deref().unwrap_or("")
             ));
         }
-    } else if emusen_dotnet::text::equals_ignore_case(&user(world, session), &name) {
+    } else if user(world, session).eq_ignore_ascii_case(&name) {
         return Outcome::fail(format!("userdel: '{name}' is the account this shell is currently running as - `su` to another account first."));
     }
     world.accounts.remove(&name);
@@ -384,7 +384,7 @@ fn tmux(world: &mut World, session: u32, args: &[String]) -> Outcome {
     if args.len() < 2 {
         return Outcome::ok(Builtin::Tmux.usage());
     }
-    let sub = emusen_dotnet::text::to_lower(&args[1]);
+    let sub = args[1].to_lowercase();
     match sub.as_str() {
         "new" => {
             // A new session inherits its creator's account rather than starting as root.
@@ -437,7 +437,7 @@ fn tmux(world: &mut World, session: u32, args: &[String]) -> Outcome {
 
 /// `TryKill` by name; when the current session went, the one that is current now.
 fn kill_session(world: &mut World, name: &str) -> Result<Option<(u32, String)>, String> {
-    let was_current = world.current_listed().is_some_and(|s| s.name.as_deref().is_some_and(|n| emusen_dotnet::text::equals_ignore_case(n, name)));
+    let was_current = world.current_listed().is_some_and(|s| s.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(&name)));
     let Some(id) = world.find_listed(name) else { return Err(format!("no such session: {name}")) };
     world.kill(id).map_err(|(_, words)| words)?;
     if !was_current {
@@ -463,7 +463,7 @@ fn ps(interp: &mut Interp, world: &mut World) -> Result<Outcome, String> {
         let current = world.current;
         for s in world.listed() {
             let marker = if current == Some(s.id) { "(current)" } else { "" };
-            lines.push(format!("  {} session     {marker}", emusen_dotnet::text::pad_right(s.name.as_deref().unwrap_or(""), 10)));
+            lines.push(format!("  {} session     {marker}", format!("{:<width$}", s.name.as_deref().unwrap_or(""), width = 10)));
         }
     }
     if lines.is_empty() {
@@ -480,7 +480,7 @@ fn kill(interp: &mut Interp, world: &mut World, args: &[String]) -> Result<Outco
     let id = joined(args, 1);
     let table = world.session(interp.session).map(|s| s.table.clone()).unwrap_or_else(Table::builtins);
     for (prefix, claimant) in table.claims() {
-        if emusen_dotnet::text::starts_with_ignore_case(&id, prefix) {
+        if id.to_uppercase().starts_with(&prefix.to_uppercase()) {
             if let Some(outcome) = host::kill(interp, world, *claimant, &id)? {
                 return Ok(outcome);
             }

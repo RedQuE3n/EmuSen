@@ -4,7 +4,6 @@
 //! the pokes into those a core gates itself and those the host writes (EmuSen_Backend.md §29.4, §29.33).
 
 use emusen_dotnet::json::{Text, Value};
-use emusen_dotnet::text::equals_ignore_case;
 use emusen_systems::cheats::{Kind, Write, WriteType};
 
 /// One cheat as the registry holds it, `CheatInfo`.
@@ -383,7 +382,7 @@ pub fn parse_write_type(text: Option<&str>) -> Option<WriteType> {
     let Some(t) = text.filter(|t| !t.trim().is_empty()) else { return Some(WriteType::Set) };
     let t = t.trim();
     const ALL: [WriteType; 7] = [WriteType::Set, WriteType::Increase, WriteType::Decrease, WriteType::IfEqual, WriteType::IfNotEqual, WriteType::IfLess, WriteType::IfGreater];
-    if let Some(k) = ALL.iter().find(|k| equals_ignore_case(type_name(**k), t)) {
+    if let Some(k) = ALL.iter().find(|k| type_name(**k).eq_ignore_ascii_case(&t)) {
         return Some(*k);
     }
     // Enum.TryParse takes a number too, any int; one outside the members is kept by .NET as its value, which no
@@ -429,7 +428,7 @@ fn read_entry(e: &Value) -> Option<(Kind, Vec<Write>, Option<u8>)> {
             Some(hex_number(stripped, 2)? as u8)
         }
     };
-    let kind = if e.get("Kind").and_then(Value::as_str).is_some_and(|k| equals_ignore_case(k, "RomPatch")) { Kind::RomPatch } else { Kind::RamPoke };
+    let kind = if e.get("Kind").and_then(Value::as_str).is_some_and(|k| k.eq_ignore_ascii_case("RomPatch")) { Kind::RomPatch } else { Kind::RamPoke };
     let listed: Vec<Value> = match e.get("Writes") {
         Some(Value::Array(w)) if !w.is_empty() => w.clone(),
         _ => match e.get("Address").and_then(Value::as_str) {

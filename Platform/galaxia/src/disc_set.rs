@@ -58,7 +58,7 @@ fn renamed(entry: &str, chosen: &str, archive_path: &str) -> String {
     if entry == chosen {
         return path::combine(Style::HOST, &dir, &format!("{stem}{}", path::extension(Style::HOST, chosen)));
     }
-    let sbi = emusen_dotnet::text::equals_ignore_case(path::extension(Style::HOST, entry), ".sbi");
+    let sbi = path::extension(Style::HOST, entry).eq_ignore_ascii_case(".sbi");
     if sbi && without_extension(entry) == without_extension(chosen) {
         path::combine(Style::HOST, &dir, &format!("{stem}.sbi"))
     } else {

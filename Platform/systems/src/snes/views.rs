@@ -224,11 +224,10 @@ pub fn symbol_names() -> Vec<&'static str> {
 }
 
 pub fn symbol(name: &str, registers: &[(String, u64)]) -> Option<i64> {
-    use emusen_dotnet::text::equals_ignore_case;
-    if let Some(&(_, bit)) = FLAGS.iter().find(|(f, _)| equals_ignore_case(name, f)) {
+        if let Some(&(_, bit)) = FLAGS.iter().find(|(f, _)| name.eq_ignore_ascii_case(&f)) {
         return register(registers, "P").map(|p| ((p >> bit) & 1) as i64);
     }
-    if let Some(&(_, r)) = ALIASES.iter().find(|(a, _)| equals_ignore_case(name, a)) {
+    if let Some(&(_, r)) = ALIASES.iter().find(|(a, _)| name.eq_ignore_ascii_case(&a)) {
         return register(registers, r).map(|v| v as i64);
     }
     None

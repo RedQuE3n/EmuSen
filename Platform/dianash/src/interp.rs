@@ -412,7 +412,7 @@ impl Interp {
 
     /// The language's own run here, then the table, through the aliases unless the name is to run as itself.
     fn dispatch_as(&mut self, world: &mut World, name: &str, args: &[String], stdin: Option<String>, as_itself: bool) -> Exec<Outcome> {
-        let lower = emusen_dotnet::text::to_lower(name);
+        let lower = name.to_lowercase();
         let table = self.table(world);
         match lower.as_str() {
             "help" => return Ok(Outcome::ok(builtins::help(&table))),
@@ -476,7 +476,7 @@ impl Interp {
         let mut lines = Vec::new();
         let mut status = 0;
         for name in &args[1..] {
-            let lower = emusen_dotnet::text::to_lower(name);
+            let lower = name.to_lowercase();
             if Self::answered_by_shell(table, &lower) {
                 lines.push(format!("{name}: shell builtin"));
             } else if let Some(target) = table.alias_of(&lower) {
@@ -506,7 +506,7 @@ impl Interp {
         let found: Vec<&String> = args[2..]
             .iter()
             .filter(|n| {
-                let lower = emusen_dotnet::text::to_lower(n);
+                let lower = n.to_lowercase();
                 Self::answered_by_shell(table, &lower) || table.alias_of(&lower).is_some() || table.find(&lower).is_some()
             })
             .collect();

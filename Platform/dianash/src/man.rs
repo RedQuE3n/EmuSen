@@ -23,7 +23,7 @@ fn index() -> &'static HashMap<String, String> {
             let name = path::file_name(Style::HOST, &file);
             let Some((stem, section)) = name.rsplit_once('.') else { continue };
             if section.len() == 1 && matches!(section.as_bytes()[0], b'1'..=b'9') {
-                pages.entry(emusen_dotnet::text::fold(stem)).or_insert(file.clone());
+                pages.entry(stem.to_uppercase()).or_insert(file.clone());
             }
         }
         pages
@@ -32,7 +32,7 @@ fn index() -> &'static HashMap<String, String> {
 
 /// A page's text: the file's, less the newline a text file ends in.
 pub fn lookup(name: &str) -> Option<String> {
-    let file = index().get(&emusen_dotnet::text::fold(name))?;
+    let file = index().get(&name.to_uppercase())?;
     let mut text = emusen_dotnet::file::read_all_text(file).ok()?;
     if text.ends_with('\n') {
         text.pop();

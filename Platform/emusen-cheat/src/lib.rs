@@ -5,7 +5,6 @@
 use dianash_module::{Answer, Call, Manifest, Module};
 use emusen_dotnet::file::{read_all_text, write_all_text};
 use emusen_dotnet::json::{self, Value};
-use emusen_dotnet::text::{equals_ignore_case, to_lower};
 use emusen_session_service::abi::{self, cheat, status};
 use emusen_session_service::space::find;
 use emusen_session_service::words::parse_hex;
@@ -229,7 +228,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: cheat add|poke|gg|rompatch|list|master|enable|disable|remove|clear|save|load|files|import|export ..."));
     }
-    let sub = to_lower(&parts[1]);
+    let sub = parts[1].to_lowercase();
     let codecs = session.cheat_codecs()?;
     let (auto, explicit) = (codec(codecs.field("auto")), codec(codecs.field("explicit")));
     let rest = |from: usize| parts[from..].join(" ");
@@ -327,7 +326,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
             if parts.len() < 3 {
                 return Ok(Answer::ok(format!("Cheats are {} at the master switch.", state(op(&session, cheat::MASTER, "{}")?.flag("enabled")))));
             }
-            let want = to_lower(&parts[2]);
+            let want = parts[2].to_lowercase();
             if want != "on" && want != "off" {
                 return Ok(Answer::ok("Usage: cheat master [on|off]"));
             }
@@ -380,7 +379,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
             let path = read.text("path");
             let Some(file) = read.field("file") else { return Ok(Answer::ok(format!("cheat load: no readable cheat file at {path}"))) };
             let entries = match file {
-                Value::Object(members) => members.iter().find(|(k, _)| equals_ignore_case(&k.text, "cheats")).map_or(0, |(_, v)| v.items().len()),
+                Value::Object(members) => members.iter().find(|(k, _)| k.text.eq_ignore_ascii_case("cheats")).map_or(0, |(_, v)| v.items().len()),
                 _ => 0,
             } as i64;
             let added = session.cheat_op(cheat::IMPORT, compact(file).as_bytes())?.1;
@@ -471,7 +470,7 @@ fn prune_listing(plan: &Value) -> (String, Vec<String>, String) {
 }
 
 fn database(session: &Session, parts: &[String]) -> Run {
-    let sub = parts.get(2).map(|s| to_lower(s)).unwrap_or_else(|| "status".to_string());
+    let sub = parts.get(2).map(|s| s.to_lowercase()).unwrap_or_else(|| "status".to_string());
     let rest = |from: usize| parts[from..].join(" ");
     match sub.as_str() {
         "status" => {
@@ -544,7 +543,7 @@ fn database(session: &Session, parts: &[String]) -> Run {
                 return Ok(Answer::ok(format!("Nothing to prune - {}", plan.text("reason"))));
             }
             let (header, listing, kept) = prune_listing(&plan);
-            if !parts.iter().skip(3).any(|p| equals_ignore_case(p, "--apply")) {
+            if !parts.iter().skip(3).any(|p| p.eq_ignore_ascii_case("--apply")) {
                 let mut lines = vec![format!("Would delete {header}:")];
                 lines.extend(listing);
                 lines.push(kept);

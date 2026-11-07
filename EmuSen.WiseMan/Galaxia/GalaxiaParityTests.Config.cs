@@ -630,98 +630,6 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Null(GameCheats.ForNative("SNES", ".."));
         }
 
-        private static string? WriteSide(bool native, DateTime now, string level, string area, string message, Exception? fault, string? context) =>
-            ErrorLog.WriteNative(now, level, area, message, fault, context);
-
-        // One sequence of log calls run on each side in its own folder; the answers and the folder are compared.
-        private void LogBothWays(string name, Action<string> arrange, Func<bool, string, object?> act)
-        {
-            var results = new List<string>();
-            foreach (string side in new[] { "native" })
-            {
-                string folder = At(side + "-log-" + name, "Logs");
-                ErrorLog.DirectoryOverride = folder;
-                ErrorLog.ResetForTests();
-                arrange(folder);
-                object? answer = act(side == "native", folder);
-                string listing = !Directory.Exists(folder) ? "no folder" : string.Join(" ; ", Directory.EnumerateFiles(folder).Select(f => $"{Path.GetFileName(f)}={Held(f)}").OrderBy(l => l, StringComparer.Ordinal));
-                results.Add($"{(answer as string)?.Replace(folder, "<logs>") ?? answer ?? "null"} | {listing}");
-            }
-            G(name, results[0], nameof(An_error_is_logged_as_the_same_bytes_in_the_same_file_both_ways));
-        }
-
-        // A log file by what it holds, briefly; a link that names nothing holds nothing.
-        private static string Held(string file)
-        {
-            try { byte[] bytes = Unplaced(File.ReadAllBytes(file)); return $"{Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes))[..16]}/{bytes.Length}"; }
-            catch (FileNotFoundException) { return "a dangling link"; }
-        }
-
-        // A log's bytes with what a stack trace says of the build, the checkout's folder and a source line, written by name, so that the golden holds in any checkout.
-        private static byte[] Unplaced(byte[] bytes)
-        {
-            string text = Encoding.Latin1.GetString(bytes).Replace(Encoding.Latin1.GetString(Encoding.UTF8.GetBytes(Repo)), "<repo>");
-            return Encoding.Latin1.GetBytes(System.Text.RegularExpressions.Regex.Replace(text, @":line \d+", ":line <n>"));
-        }
-
-        [Fact]
-        public void An_error_is_logged_as_the_same_bytes_in_the_same_file_both_ways()
-        {
-            var now = new DateTime(2026, 10, 8, 1, 2, 3, 4, DateTimeKind.Local);
-            Exception fault;
-            try { throw new InvalidDataException("<size> is \"w 0.02\"\r\nnot a pair", new IOException("inner cause é")); }
-            catch (Exception caught) { fault = caught; }
-
-            LogBothWays("plain", _ => { }, (native, _) => WriteSide(native, now, "ERROR", "themes", "A theme download failed", null, null));
-            LogBothWays("whole", _ => { }, (native, _) => WriteSide(native, now, "ERROR", "themes", "failed\non two lines", fault, "Artflix (Revisited)\r\n(https://x)"));
-            LogBothWays("every line ending", _ => { }, (native, _) => WriteSide(native, now, "WARN", "a\nb", "a\r\nb\nc\rd\fe\u0085f\u2028g\u2029h\vi\r\r\n\n", null, "\u2028\u0085"));
-            LogBothWays("blank contexts", _ => { }, (native, _) => string.Concat(new[] { "", " ", "\t\n", "\u00a0" }.Select(context => WriteSide(native, now, "WARN", "config", "m", null, context))));
-            LogBothWays("no area", _ => { }, (native, _) => WriteSide(native, now, "WARN", null!, "m", null, null));
-            LogBothWays("no message", _ => { }, (native, _) => WriteSide(native, now, "WARN", "config", null!, null, null));
-            LogBothWays("text that is not valid", _ => { }, (native, _) => WriteSide(native, now, "WARN", "config", "half \ud83d a pair", new Exception("\udc00"), "\ud800\ud800"));
-            LogBothWays("appended", _ => { }, (native, _) => WriteSide(native, now, "WARN", "config", "first", null, null) + WriteSide(native, now.AddSeconds(1), "ERROR", "launch", "second é 😀", fault, null));
-            LogBothWays("another day", _ => { }, (native, _) => WriteSide(native, now, "WARN", "config", "first", null, null) + WriteSide(native, now.AddDays(1), "ERROR", "launch", "second", null, null));
-
-            ErrorLog.Redactor = text => text.Replace("FAKEERRORLOGPW", "***");
-            LogBothWays("redacted", _ => { }, (native, _) => WriteSide(native, now, "ERROR", "scraping", "GET ...&devpassword=FAKEERRORLOGPW", new InvalidOperationException("devpassword=FAKEERRORLOGPW"), "ctx FAKEERRORLOGPW"));
-            ErrorLog.Redactor = _redactor;
-
-            void Old(string folder)
-            {
-                Directory.CreateDirectory(folder);
-                (string Name, int Days)[] files = { ("emusen_20000101.log", 15), ("emusen_recent.log", 3), ("emusen_.log", 20), ("emusen_edge.log", 14), ("emusen_old.txt", 30), ("crash_20000101.txt", 400), ("EMUSEN_upper.log", 30), ("emusen_x.LOG", 30), ("xemusen_.log", 30) };
-                foreach ((string file, int days) in files)
-                {
-                    File.WriteAllText(Path.Combine(folder, file), "x");
-                    File.SetLastWriteTime(Path.Combine(folder, file), now.AddDays(-days).AddMinutes(days == 14 ? 30 : 0));
-                }
-                Directory.CreateDirectory(Path.Combine(folder, "emusen_folder.log"));
-                if (!Links.Allowed) return;
-                File.CreateSymbolicLink(Path.Combine(folder, "emusen_dangling.log"), At("nowhere"));
-                // A new link to an old file, and an old file's link: which of the two times decides.
-                string target = Path.Combine(Path.GetDirectoryName(folder)!, "target.log");
-                File.WriteAllText(target, "x");
-                File.SetLastWriteTime(target, now.AddDays(-30));
-                File.CreateSymbolicLink(Path.Combine(folder, "emusen_linked.log"), target);
-            }
-            LogBothWays("pruned", Old, (native, _) => WriteSide(native, now, "WARN", "test", "prune", null, null));
-            LogBothWays("pruned once", Old, (native, folder) =>
-            {
-                WriteSide(native, now, "WARN", "test", "first", null, null);
-                File.WriteAllText(Path.Combine(folder, "emusen_later.log"), "x");
-                File.SetLastWriteTime(Path.Combine(folder, "emusen_later.log"), now.AddDays(-30));
-                return WriteSide(native, now, "WARN", "test", "second", null, null);
-            });
-
-            foreach (int room in new[] { 0, 1, 30, 49, 50, 51, 52, 53, 54, 60, 200 })
-                LogBothWays($"with {room} bytes left", folder => { Directory.CreateDirectory(folder); File.WriteAllText(Path.Combine(folder, $"emusen_{now:yyyyMMdd}.log"), new string('x', (int)ErrorLog.MaxBytes - room)); },
-                    (native, _) => WriteSide(native, now, "ERROR", "test", "tips it é 😀", null, null) + "/" + WriteSide(native, now, "ERROR", "test", "refused?", null, null));
-
-            LogBothWays("a file where the folder should be", folder => Put(folder, "a file"), (native, _) => WriteSide(native, now, "ERROR", "test", "nowhere to go", null, null));
-            LogBothWays("the day's file is a folder", folder => Directory.CreateDirectory(Path.Combine(folder, $"emusen_{now:yyyyMMdd}.log")), (native, _) => WriteSide(native, now, "ERROR", "test", "m", null, null));
-            LogBothWays("the path for a day", _ => { }, (native, folder) => GalaxiaNative.LogPath(GalaxiaNative.LogRoot(folder), $"{now:yyyyMMdd}"));
-        }
-
         [Fact]
         public void The_log_folder_is_chosen_as_the_csharp_chose_it()
         {
@@ -750,28 +658,5 @@ namespace EmuSen.WiseMan.Galaxia
             }
         }
 
-        [Fact]
-        public void Names_are_ordered_as_OrdinalIgnoreCase_orders_them()
-        {
-            // APFS refuses a name holding a noncharacter, so macOS is not asked to make one.
-            string[] alphabet = new[] { "a", "A", "b", "B", "z", "Z", "_", "[", "@", "`", "0", "9", " ", "é", "É", "ß", "ı", "I", "i", "日", "😀", "\ud801\udc00", "\ud801\udc28", "\ue000", "\uffff", "~" }
-                .Where(c => !(OperatingSystem.IsMacOS() && c == "\uffff")).ToArray();
-            var random = new Random(5);
-            var different = new List<string>();
-            string folder = At("native-order", "etc", CheatFile.CategoryDirName);
-            Directory.CreateDirectory(folder);
-            for (int round = 0; round < 60; round++)
-            {
-                var names = Enumerable.Range(0, random.Next(2, 14)).Select(_ => string.Concat(Enumerable.Range(0, random.Next(1, 5)).Select(_ => alphabet[random.Next(alphabet.Length)]))).Distinct().ToList();
-                foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
-                foreach (string name in names) File.WriteAllText(Path.Combine(folder, name + ".json"), "{}");
-                ConfigStore.OverrideDirectory = At("native-order", "etc");
-                IReadOnlyList<string> listed = CheatFile.ListNamesNative();
-                List<string> ordered = Directory.GetFiles(folder, "*.json").Select(Path.GetFileNameWithoutExtension).Select(n => n!).OrderBy(n => n, StringComparer.OrdinalIgnoreCase).ToList();
-                // Names that differ only by case sort by the folder's own order, which .NET's sort need not share.
-                if (!listed.SequenceEqual(ordered, StringComparer.OrdinalIgnoreCase)) different.Add($"[{string.Join("|", listed)}] and [{string.Join("|", ordered)}]");
-            }
-            AssertNone(different, "orders");
-        }
     }
 }

@@ -4,7 +4,6 @@
 
 use crate::answer::{Genre, Localised, Media};
 use crate::kinds::{Kind, Payload};
-use emusen_dotnet::text::equals_ignore_case;
 
 pub const AUTOMATIC_REGION: &str = "auto";
 
@@ -19,7 +18,7 @@ const COUNTRIES: [(&str, &str); 18] = [
 ];
 
 fn country(name: &str) -> Option<&'static str> {
-    COUNTRIES.iter().find(|(n, _)| equals_ignore_case(n, name)).map(|(_, code)| *code)
+    COUNTRIES.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)).map(|(_, code)| *code)
 }
 
 /// The text inside each `(...)` holding no parenthesis, left to right, as the regex `\(([^()]*)\)` finds them.
@@ -156,7 +155,7 @@ pub fn extension(format: Option<&str>, payload: Payload) -> &'static str {
     match payload {
         Payload::Pdf => ".pdf",
         Payload::Video => ".mp4",
-        Payload::Image => match format.map(emusen_dotnet::text::to_lower).as_deref() {
+        Payload::Image => match format.map(str::to_lowercase).as_deref() {
             Some("jpg" | "jpeg") => ".jpg",
             _ => ".png",
         },

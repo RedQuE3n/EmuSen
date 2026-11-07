@@ -4,7 +4,6 @@ use crate::pattern;
 use crate::{Answer, Run};
 use dianash_module::Call;
 use emusen_dotnet::file::read_all_text;
-use emusen_dotnet::text::compare_ordinal;
 use regex::Regex;
 use std::cmp::Ordering;
 
@@ -39,7 +38,7 @@ pub fn sort(args: &[String], stdin: Option<String>) -> Answer {
             }
         });
     } else {
-        lines.sort_by(|a, b| compare_ordinal(a, b));
+        lines.sort_by(|a, b| a.cmp(b));
     }
     if reverse {
         lines.reverse();

@@ -309,9 +309,6 @@ pub fn full_path(path: &str) -> String {
     }
 }
 
-/// The ordinal comparisons ignoring case, owned by `emusen-dotnet`.
-pub use emusen_dotnet::text::{ends_with_ignore_case, equals_ignore_case, simple_upper};
-
 #[cfg(test)]
 mod tests {
     use super::Style::{Unix, Windows};
@@ -405,19 +402,5 @@ mod tests {
         assert_eq!(full_path_from(Windows, r"x\y", r"C:\w"), r"C:\w\x\y");
         assert_eq!(full_path_from(Windows, r"C:a\..", r"C:\w"), "C:");
         assert_eq!(full_path_from(Windows, r"C:a\..\..\b", r"C:\w"), r"C:\b");
-    }
-
-    #[test]
-    fn case() {
-        assert!(equals_ignore_case("MacOS", "macos"));
-        assert!(equals_ignore_case("/Home/É", "/home/é"));
-        assert!(!equals_ignore_case("straße", "STRASSE"));
-        assert!(!equals_ignore_case("ı", "I"));
-        assert!(!equals_ignore_case("ſ", "S"));
-        assert!(equals_ignore_case("\u{1F80}", "\u{1F88}"));
-        assert!(equals_ignore_case("\u{1FF3}", "\u{1FFC}"));
-        assert!(!equals_ignore_case("k", "\u{212A}"));
-        assert!(ends_with_ignore_case("/Applications/EmuSen.APP", ".app"));
-        assert!(!ends_with_ignore_case("app", ".app"));
     }
 }

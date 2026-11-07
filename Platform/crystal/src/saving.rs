@@ -81,7 +81,7 @@ impl Session {
 
     /// Why the record says the state is not this machine's to load, or none.
     fn refusal(&self, e: &Engine, r: &StateRecord) -> Option<String> {
-        if !emusen_dotnet::text::equals_ignore_case(&r.console, &self.console) {
+        if !r.console.eq_ignore_ascii_case(&self.console) {
             return Some(format!("That state was saved by the {} core, and {} runs on the {} core.", r.console, path::file_name(Style::HOST, &self.game_key()), self.console));
         }
         let loads = &e.mi.loads_from;

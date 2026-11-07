@@ -59,7 +59,7 @@ impl Sandbox {
     pub fn display(&self, real: &str) -> String {
         let root = self.root();
         let Some(root) = self.within(real, &root) else { return real.to_string() };
-        if emusen_dotnet::text::equals_ignore_case(real, &root) {
+        if real.eq_ignore_ascii_case(&root) {
             return "/".to_string();
         }
         let rest: String = real.chars().skip(root.chars().count() + 1).collect();
@@ -79,7 +79,7 @@ pub const IGNORES_CASE: bool = cfg!(any(windows, target_os = "macos"));
 pub fn inside(candidate: &str, root: &str) -> bool {
     let below = format!("{root}{}", Style::HOST.separator());
     if IGNORES_CASE {
-        emusen_dotnet::text::equals_ignore_case(candidate, root) || emusen_dotnet::text::starts_with_ignore_case(candidate, &below)
+        candidate.eq_ignore_ascii_case(&root) || candidate.to_uppercase().starts_with(&below.to_uppercase())
     } else {
         candidate == root || candidate.starts_with(&below)
     }

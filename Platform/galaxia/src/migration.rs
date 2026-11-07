@@ -90,7 +90,7 @@ pub fn copy_tree(source: &str, destination: &str) -> io::Result<Copied> {
 
 /// `DataMigration.Run(legacyRoot, destinationRoot)`: the four emulator-written directories, unless the two roots are one.
 pub fn run(legacy_root: &str, destination_root: &str) -> io::Result<Copied> {
-    if !directory_exists(legacy_root) || path::equals_ignore_case(&path::full_path(legacy_root), &path::full_path(destination_root)) {
+    if !directory_exists(legacy_root) || path::full_path(legacy_root).to_uppercase() == path::full_path(destination_root).to_uppercase() {
         return Ok(Copied::default());
     }
     let mut copied = Copied::default();

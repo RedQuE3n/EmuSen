@@ -2,7 +2,6 @@
 //! write or a code a console's codec decodes, and cheats written back the same way (`man cheat`, EmuSen_Cheats.md §8).
 //! The codecs are emusen-systems', named by id; a code no codec takes, type 0 or a malformed number is skipped.
 
-use emusen_dotnet::text::{equals_ignore_case, fold};
 use emusen_systems::cheats::{self, Answer, Error, Kind, Write, WriteType};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -56,17 +55,17 @@ impl Fields {
             if value.encode_utf16().count() >= 2 && value.starts_with('"') && value.ends_with('"') {
                 value = &value[1..value.len() - 1];
             }
-            fields.insert(fold(key), value.to_string());
+            fields.insert(key.to_uppercase(), value.to_string());
         }
         Fields(fields)
     }
 
     fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(&fold(key)).map(String::as_str)
+        self.0.get(&key.to_uppercase()).map(String::as_str)
     }
 
     fn has(&self, key: &str) -> bool {
-        self.0.contains_key(&fold(key))
+        self.0.contains_key(&key.to_uppercase())
     }
 
     /// `Long`: `long.TryParse` with the invariant culture, or the fallback.
@@ -79,7 +78,7 @@ impl Fields {
     }
 
     fn is_true(&self, key: &str) -> bool {
-        self.get(key).is_some_and(|v| equals_ignore_case(v, "true"))
+        self.get(key).is_some_and(|v| v.eq_ignore_ascii_case("true"))
     }
 
     /// The entries whose fields are there, by number: every other entry below the count reads nothing and is skipped.

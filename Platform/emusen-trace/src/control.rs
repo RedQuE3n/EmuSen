@@ -2,16 +2,15 @@
 
 use crate::{required, scoped, session, usage, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, simple_upper, to_lower};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::space::find;
 use emusen_session_service::words::{describe, hex, parse_hex, parse_range};
 use emusen_session_service::{object, quoted, Record, Session};
 
-/// `ToUpperInvariant`.
+/// Upper case.
 pub(crate) fn upper(text: &str) -> String {
-    text.chars().map(simple_upper).collect()
+    text.to_uppercase()
 }
 
 /// A watch kind's name as `WatchKind.ToString().ToLowerInvariant()` gives it.
@@ -42,7 +41,7 @@ fn data_range(start: i32, end: i32) -> String {
 }
 
 fn is_clause(word: &str) -> bool {
-    equals_ignore_case(word, "if") || equals_ignore_case(word, "log")
+    word.eq_ignore_ascii_case("if") || word.eq_ignore_ascii_case("log")
 }
 
 /// The trailing `if <cond>` and `log <expr>` clauses, in either order.
@@ -54,7 +53,7 @@ fn clauses(parts: &[String], from: usize) -> (Option<String>, Option<String>) {
             i += 1;
             continue;
         }
-        let is_if = equals_ignore_case(&parts[i], "if");
+        let is_if = parts[i].eq_ignore_ascii_case("if");
         let start = i + 1;
         let mut end = start;
         while end < parts.len() && !is_clause(&parts[end]) {
@@ -98,7 +97,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
         return Ok(Answer::ok(format!("{} cannot be halted by this core, so it takes no breakpoints.", cpu.name)));
     }
     let processor = scope::index(&session, cpu);
-    let sub = to_lower(&parts[at]);
+    let sub = parts[at].to_lowercase();
     let arg = parts.get(at + 1).map(String::as_str).unwrap_or("");
     let coprocessor = cpu.is_some() && !scope::is_main(&cpus, cpu);
     let scope_name = if coprocessor { format!("{} breakpoint", upper(&cpu.unwrap().name)) } else { "Breakpoint".to_string() };
@@ -124,7 +123,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
             let mut changed = false;
             let mut i = at + 3;
             while i < parts.len() && !is_clause(&parts[i]) {
-                if equals_ignore_case(&parts[i], "changed") {
+                if parts[i].eq_ignore_ascii_case("changed") {
                     changed = true;
                 } else {
                     value = parse_hex(&parts[i])?;
@@ -179,22 +178,22 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
                     .iter()
                     .map(|c| {
                         let name = c.text("name");
-                        let state = match armed.iter().find(|a| equals_ignore_case(&a.text("name"), &name)) {
+                        let state = match armed.iter().find(|a| a.text("name").eq_ignore_ascii_case(&name)) {
                             None => "off".to_string(),
                             Some(a) => format!("{}, {}x", if a.flag("log_only") { "logging" } else { "halting" }, a.int("hits")),
                         };
-                        format!("  {} {}  [{state}]", pad_right(&name, 12), c.text("description"))
+                        format!("  {} {}  [{state}]", format!("{:<width$}", &name, width = 12), c.text("description"))
                     })
                     .collect();
                 return Ok(Answer::ok(format!("Conditions this core detects:\n{}", rows.join("\n"))));
             }
-            let Some(chosen) = available.iter().find(|c| equals_ignore_case(&c.text("name"), arg)) else {
+            let Some(chosen) = available.iter().find(|c| c.text("name").eq_ignore_ascii_case(&arg)) else {
                 let names: Vec<String> = available.iter().map(|c| c.text("name")).collect();
                 let refs: Vec<&str> = names.iter().map(String::as_str).collect();
                 return Ok(Answer::fail(format!("'{arg}' is not a condition this core detects.{} Try {}.", emusen_suggest::hint(arg, &refs, 2), names.join("/"))));
             };
             let (name, description) = (chosen.text("name"), chosen.text("description"));
-            let mode = parts.get(at + 2).map(|m| to_lower(m)).unwrap_or_default();
+            let mode = parts.get(at + 2).map(|m| m.to_lowercase()).unwrap_or_default();
             if mode == "off" {
                 return Ok(Answer::ok(match session.bp_arm_condition(processor, &name, abi::condition::DISARM) {
                     Ok(()) => format!("No longer watching for {name}."),
@@ -217,7 +216,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
             if arg.is_empty() {
                 return Ok(Answer::ok("Usage: bp depth <n>"));
             }
-            if equals_ignore_case(arg, "off") {
+            if arg.eq_ignore_ascii_case("off") {
                 session.bp_depth_guard(processor, -1)?;
                 return Ok(Answer::ok("Call-depth guard removed."));
             }
@@ -237,7 +236,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
             Ok(Answer::ok(format!("Forbid range #{id} added: nothing halts while the PC is in {}.", range(start, end))))
         }
         "log" => {
-            if equals_ignore_case(arg, "clear") {
+            if arg.eq_ignore_ascii_case("clear") {
                 session.bp_log_clear(processor)?;
                 return Ok(Answer::ok("Logpoint log cleared."));
             }
@@ -349,7 +348,7 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: watch add|list|log|clear|remove ..."));
     }
-    let sub = to_lower(&parts[1]);
+    let sub = parts[1].to_lowercase();
     match sub.as_str() {
         "add" => {
             if parts.len() < 5 {
@@ -358,7 +357,7 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
             find(&session, &parts[2])?;
             let addr = parse_hex(&parts[3])?;
             let len = parse_hex(&parts[4])?;
-            let kind = match parts.get(5).map(|k| to_lower(k)).as_deref() {
+            let kind = match parts.get(5).map(|k| k.to_lowercase()).as_deref() {
                 None | Some("write") => abi::watch::WRITE,
                 Some("read") => abi::watch::READ,
                 Some("both") => abi::watch::BOTH,
@@ -416,7 +415,7 @@ pub fn watch(call: &Call, parts: &[String]) -> Run {
                 return Ok(Answer::ok(format!("No events recorded for watch #{id} (or it doesn't exist).")));
             };
             let sites = summary.list("sites");
-            let mut lines: Vec<String> = sites.iter().map(|s| format!("  {}x  {}", pad_left(&s.int("count").to_string(), 6), s.text("context"))).collect();
+            let mut lines: Vec<String> = sites.iter().map(|s| format!("  {}x  {}", format!("{:>width$}", &s.int("count").to_string(), width = 6), s.text("context"))).collect();
             let (total, retained) = (summary.int("total"), summary.int("retained"));
             let buffer = if total > retained { format!(" ({retained} still in the event buffer - `watch log` shows only those)") } else { String::new() };
             lines.push(format!("  {} site(s), {total} access(es) total{buffer}", sites.len()));
@@ -464,7 +463,7 @@ pub fn step(call: &Call, args: &[String]) -> Run {
         return Ok(Answer::fail(format!("{} cannot be halted by this core, so it cannot be stepped.", cpu.name)));
     }
     let processor = scope::index(&session, cpu);
-    let mode = args.get(at).map(|m| to_lower(m)).unwrap_or_default();
+    let mode = args.get(at).map(|m| m.to_lowercase()).unwrap_or_default();
     if mode == "over" || mode == "out" {
         if !has_call_stack(&session, cpu)? {
             return Ok(Answer::fail(format!("This core does not report a call stack, so `step {mode}` has no depth to measure against.")));
@@ -502,7 +501,7 @@ pub fn runto(call: &Call, parts: &[String]) -> Run {
         session.run_control(abi::run::TO_INTERRUPT, processor, i64::from(kind))?;
         Ok(Answer::ok(format!("Running to {description}...")))
     };
-    match to_lower(&parts[1]).as_str() {
+    match parts[1].to_lowercase().as_str() {
         "nmi" => interrupt(abi::frame::NMI, "the next NMI"),
         "irq" => interrupt(abi::frame::IRQ, "the next IRQ"),
         "brk" => interrupt(abi::frame::BRK, "the next BRK"),
@@ -548,7 +547,7 @@ pub fn bt(call: &Call, parts: &[String]) -> Run {
         }));
     }
     let processor = scope::index(&session, cpu);
-    if parts.get(at).is_some_and(|p| equals_ignore_case(p, "reset")) {
+    if parts.get(at).is_some_and(|p| p.eq_ignore_ascii_case("reset")) {
         session.profile_op(processor, abi::profile::RESET_STACK, "{}")?;
         return Ok(Answer::ok("Call stack cleared."));
     }
@@ -576,7 +575,7 @@ pub fn bt(call: &Call, parts: &[String]) -> Run {
         };
         lines.push(format!(
             "  #{} {}  <- {kind} from {}  (frame {})",
-            pad_right(&(depth - 1).to_string(), 3),
+            format!("{:<width$}", &(depth - 1).to_string(), width = 3),
             describe(&session, frame.address("target")),
             describe(&session, frame.address("source")),
             frame.int("frame")
@@ -606,7 +605,7 @@ pub fn trace(call: &Call, parts: &[String]) -> Run {
     }
     let traces = session(call).ok().and_then(|s| s.can("trace").ok().filter(|&can| can).map(|_| s));
     let Some(session) = traces else { return Ok(Answer::ok("No CPU trace switch is registered for this target.")) };
-    if equals_ignore_case(&parts[1], "off") {
+    if parts[1].eq_ignore_ascii_case("off") {
         session.trace_off(0)?;
         return Ok(Answer::ok("Trace disabled."));
     }
@@ -624,15 +623,15 @@ pub fn log(call: &Call, parts: &[String]) -> Run {
     }
     let session = session(call)?;
     let word = &parts[1];
-    if equals_ignore_case(word, "off") {
+    if word.eq_ignore_ascii_case("off") {
         session.log_switch(false)?;
         return Ok(Answer::ok("Logging disabled (individual flags unchanged)."));
     }
-    if equals_ignore_case(word, "on") {
+    if word.eq_ignore_ascii_case("on") {
         session.log_switch(true)?;
         return Ok(Answer::ok("Logging enabled."));
     }
-    if equals_ignore_case(word, "status") {
+    if word.eq_ignore_ascii_case("status") {
         return Ok(Answer::ok(format!("Logging is {}.", if session.log_status()? { "on" } else { "off" })));
     }
     Ok(Answer::ok(usage("log")))

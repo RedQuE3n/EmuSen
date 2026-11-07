@@ -3,7 +3,6 @@
 //! A field is listed in the order C# declares its property, which is the order of the file. What a setting means is
 //! its owner's (EmuSen_Config_Reference.md §3); what is here is its name, its type and its value in a new instance.
 
-use crate::dotnet_path::equals_ignore_case;
 use emusen_dotnet::json::{Text, Value};
 use crate::model::{Field, Initial, Schema, Type};
 
@@ -233,7 +232,7 @@ static CHEAT_FILE_WRITE_TYPE: Type = Type::Object(&CHEAT_FILE_WRITE);
 
 /// `CheatFileEntry.IsRomPatch`.
 fn is_rom_patch(entry: &Value) -> Result<Value, String> {
-    Ok(Value::Bool(entry.get("Kind").and_then(Value::as_str).is_some_and(|kind| equals_ignore_case(kind, "RomPatch"))))
+    Ok(Value::Bool(entry.get("Kind").and_then(Value::as_str).is_some_and(|kind| kind.eq_ignore_ascii_case("RomPatch"))))
 }
 
 /// `CheatFileEntry.EffectiveWrites`: the writes as written, or the one write a file from before several could be listed describes.

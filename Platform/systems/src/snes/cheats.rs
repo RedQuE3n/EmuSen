@@ -2,7 +2,6 @@
 //! (EmuSen_CoreAPI.md §20).
 
 use crate::cheats::{Decoded, Write, format_error, hex, is_hex, parts};
-use emusen_dotnet::text::upper_invariant;
 
 /// The space the work RAM's codes write into, beside the CPU bus the codec names.
 const WRAM: &str = "WRAM";
@@ -72,7 +71,7 @@ fn genie_position(label: char) -> u32 {
 }
 
 pub fn decode_game_genie(code: &str) -> Decoded<(i32, u8)> {
-    let d: Vec<char> = digits(code).chars().map(upper_invariant).collect();
+    let d: Vec<char> = digits(code).chars().map(|c: char| c.to_ascii_uppercase()).collect();
     if d.len() != 8 || !d.iter().all(|&c| GENIE_DIGITS.contains(c)) {
         return format_error(format!("'{code}' is not a Game Genie code (DDAA-AAAA in Genie digits)."));
     }

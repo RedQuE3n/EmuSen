@@ -268,7 +268,7 @@ impl Runtime {
             j.f64("cover_aspect", emusen_systems::default_cover_aspect());
             look(&mut j, &emusen_systems::Look::computed(&s.id));
             let mut names = vec![s.id.clone()];
-            for n in engines.iter().filter(|n| !n.chars().any(char::is_whitespace)).map(|n| emusen_dotnet::text::to_lower(n)) {
+            for n in engines.iter().filter(|n| !n.chars().any(char::is_whitespace)).map(|n| n.to_lowercase()) {
                 if !names.contains(&n) {
                     names.push(n);
                 }

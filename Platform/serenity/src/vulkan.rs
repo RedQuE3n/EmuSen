@@ -10,7 +10,6 @@
 use crate::preset::Wrap;
 use ash::prelude::VkResult;
 use ash::vk::{self, Handle};
-use emusen_dotnet::text::contains_ignore_case;
 use std::cell::Cell;
 use std::ffi::{CStr, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -380,7 +379,7 @@ impl Device {
 
         let wanted = name_contains.unwrap_or_default();
         // The first of the lowest rank, as the C#'s stable ordering takes it.
-        let Some(chosen) = candidates.iter().filter(|c| wanted.is_empty() || contains_ignore_case(&c.name, wanted)).min_by_key(|c| c.rank) else {
+        let Some(chosen) = candidates.iter().filter(|c| wanted.is_empty() || c.name.to_uppercase().contains(&wanted.to_uppercase())).min_by_key(|c| c.rank) else {
             return Err(if candidates.is_empty() { "no Vulkan device offers a graphics queue".to_string() } else { format!("no Vulkan device is named like \"{wanted}\"") });
         };
         let (physical, family, name, timestamp_period) = (chosen.physical, chosen.family, chosen.name.clone(), chosen.timestamp_period as f64);

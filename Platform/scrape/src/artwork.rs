@@ -18,7 +18,7 @@ pub struct Index {
 /// libretro-thumbnails' rule for a name that has to be a file name, trimmed and in lower case.
 pub fn key(name: &str) -> String {
     let replaced: String = name.chars().map(|c| if UNSAFE.contains(&c) { '_' } else { c }).collect();
-    emusen_dotnet::text::to_lower(replaced.trim_matches(char::is_whitespace))
+    replaced.trim_matches(char::is_whitespace).to_lowercase()
 }
 
 /// The name without its region and revision tags: `\s*[\(\[][^\)\]]*[\)\]]` taken out; the name itself if nothing is left.
@@ -49,7 +49,7 @@ impl Index {
         let mut index = Index::default();
         let Some(dir) = directory.filter(|d| !d.trim().is_empty() && dotnet_files::directory_exists(d)) else { return index };
         let mut console_by_folder: Vec<(String, String)> = Vec::new();
-        let mut set = |name: &str, console: &str| match console_by_folder.iter_mut().find(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, name)) {
+        let mut set = |name: &str, console: &str| match console_by_folder.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(&name)) {
             Some(entry) => entry.1 = console.to_string(),
             None => console_by_folder.push((name.to_string(), console.to_string())),
         };
@@ -62,7 +62,7 @@ impl Index {
         let style = Style::HOST;
         let _ = dotnet_files::visit_files_with(dir, Options { skip_hidden: true, ignore_inaccessible: true }, |file, _| {
             let ext = path::extension(style, file);
-            if !IMAGE_EXTENSIONS.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, ext)) {
+            if !IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&ext)) {
                 return;
             }
             let relative = file[dir.trim_end_matches(style.separator()).len()..].trim_start_matches(style.separator());
@@ -70,7 +70,7 @@ impl Index {
             let console = if folder.is_empty() {
                 None
             } else {
-                folder.split(style.separator()).find_map(|part| console_by_folder.iter().find(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, part)).map(|(_, c)| c.clone()))
+                folder.split(style.separator()).find_map(|part| console_by_folder.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part)).map(|(_, c)| c.clone()))
             };
             index.add(console, path::file_name_without_extension(style, file), file);
         });

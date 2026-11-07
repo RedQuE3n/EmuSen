@@ -7,7 +7,6 @@ mod control;
 mod records;
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::text::{pad_right, starts_with_ignore_case};
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::hex;
 use emusen_session_service::{abi, Record, Refusal, Session};
@@ -222,7 +221,7 @@ impl Module for Trace {
                 let id = format!("bp{}", b.int("id"));
                 lines += &format!(
                     "  {} breakpoint  ${} ({}, hit {}x)\n",
-                    pad_right(&id, 10),
+                    format!("{:<width$}", &id, width = 10),
                     hex(b.address("address"), 6),
                     if b.flag("enabled") { "enabled" } else { "disabled" },
                     b.int("hits")
@@ -235,7 +234,7 @@ impl Module for Trace {
                 let start = w.address("address");
                 lines += &format!(
                     "  {} watch       {} 0x{start:X}-0x{:X} ({})\n",
-                    pad_right(&id, 10),
+                    format!("{:<width$}", &id, width = 10),
                     w.text("space"),
                     start.wrapping_add(w.int("length") as i32).wrapping_sub(1),
                     control::watch_kind(w.int("kind"))
@@ -249,9 +248,9 @@ impl Module for Trace {
 
     /// `KillCommand.TryJob`: `bp<N>` or `watch<N>` removed, any other id not this module's.
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
-        let (number, breakpoint) = if starts_with_ignore_case(id, "watch") {
+        let (number, breakpoint) = if id.to_uppercase().starts_with("WATCH") {
             (id[5..].trim().parse::<i32>().ok()?, false)
-        } else if starts_with_ignore_case(id, "bp") {
+        } else if id.to_uppercase().starts_with("BP") {
             (id[2..].trim().parse::<i32>().ok()?, true)
         } else {
             return None;

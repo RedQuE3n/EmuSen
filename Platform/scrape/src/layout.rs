@@ -192,7 +192,7 @@ pub fn orphans(store: &Store, names_by_system: &BTreeMap<String, HashSet<String>
             });
         }
     }
-    found.sort_by(|a, b| emusen_dotnet::text::compare_ordinal(a, b));
+    found.sort_by(|a, b| a.cmp(b));
     found
 }
 

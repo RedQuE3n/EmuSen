@@ -199,7 +199,7 @@ fn game(jeu: &Value) -> Read<Option<Game>> {
         let region = text(prop(m, "region"))?;
         let url = text(prop(m, "url"))?.unwrap_or_default();
         let format = text(prop(m, "format"))?;
-        let sha1 = text(prop(m, "sha1"))?.map(|s| emusen_dotnet::text::to_lower(&s));
+        let sha1 = text(prop(m, "sha1"))?.map(|s| s.to_lowercase());
         let size = long(prop(m, "size"))?;
         media.push(Media { ty, region, url, format, sha1, size });
     }

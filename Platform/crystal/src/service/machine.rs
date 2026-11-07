@@ -337,7 +337,7 @@ pub fn set_register(c: &Call, processor: u32, name: Raw, value: u64) -> Answer<i
         };
         let cpu = &cpus[i];
         let known = d.registers(Set::Processor(i));
-        if !known.iter().any(|r| name.is_some_and(|n| emusen_dotnet::text::equals_ignore_case(&r.name, n))) {
+        if !known.iter().any(|r| name.is_some_and(|n| r.name.eq_ignore_ascii_case(&n))) {
             return Err(refused(status::NO_SUCH_ID, format!("{} has no register named '{}'.", cpu.name, name.unwrap_or(""))));
         }
         let _ = value;

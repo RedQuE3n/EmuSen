@@ -5,7 +5,6 @@ use crate::{core_name, required, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_lines, write_all_text};
 use emusen_dotnet::json::Value;
-use emusen_dotnet::text::{contains_ignore_case, equals_ignore_case, pad_right, to_lower};
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::{describe, hex, label_at, parse_hex};
 use emusen_session_service::{abi, Record, Session};
@@ -49,17 +48,17 @@ pub fn regs(call: &Call, parts: &[String]) -> Run {
         }
         let mut out = format!("{} registers:\n", only.description);
         for r in registers(&session.registers(only.index)?) {
-            out += &format!("  {} = 0x{}\n", pad_right(&r.name, 9), register_hex(r.value, r.bits));
+            out += &format!("  {} = 0x{}\n", format!("{:<width$}", &r.name, width = 9), register_hex(r.value, r.bits));
         }
         return Ok(Answer::ok(out.trim_end()));
     }
     let mut out = format!("{} CPU registers:\n", core_name(&session)?);
     for r in registers(&session.telemetry(abi::telemetry::CPU)?) {
-        out += &format!("  {} = 0x{}\n", pad_right(&r.name, 4), register_hex(r.value, r.bits));
+        out += &format!("  {} = 0x{}\n", format!("{:<width$}", &r.name, width = 4), register_hex(r.value, r.bits));
     }
     out += "Video registers:\n";
     for r in registers(&session.telemetry(abi::telemetry::VIDEO)?) {
-        out += &format!("  {} = 0x{:02X}\n", pad_right(&r.name, 8), r.value);
+        out += &format!("  {} = 0x{:02X}\n", format!("{:<width$}", &r.name, width = 8), r.value);
     }
     for (kind, title) in [(abi::telemetry::APU, "APU registers:"), (abi::telemetry::COPROCESSOR, "Coprocessor registers:")] {
         let more = registers(&session.telemetry(kind)?);
@@ -67,7 +66,7 @@ pub fn regs(call: &Call, parts: &[String]) -> Run {
             out += title;
             out.push('\n');
             for r in more {
-                out += &format!("  {} = 0x{}\n", pad_right(&r.name, 9), register_hex(r.value, r.bits));
+                out += &format!("  {} = 0x{}\n", format!("{:<width$}", &r.name, width = 9), register_hex(r.value, r.bits));
             }
         }
     }
@@ -103,7 +102,7 @@ pub fn setreg(call: &Call, parts: &[String]) -> Run {
     };
     let value = value as i64 as u64;
     let known = if cpu.registers { registers(&session.registers(cpu.index)?) } else { Vec::new() };
-    let Some(register) = known.iter().find(|r| equals_ignore_case(&r.name, name)) else {
+    let Some(register) = known.iter().find(|r| r.name.eq_ignore_ascii_case(&name)) else {
         let available = if known.is_empty() { "(none)".to_string() } else { known.iter().map(|r| r.name.as_str()).collect::<Vec<_>>().join(", ") };
         return Ok(Answer::fail(format!("{} has no register named '{name}'. Available: {available}.", cpu.name)));
     };
@@ -143,7 +142,7 @@ pub fn cpus(call: &Call) -> Run {
         .into_iter()
         .flatten()
         .collect();
-        out += &format!("  {} PC={} {}\n", pad_right(&cpu.name, 5), pad_right(&pc, 8), cpu.description);
+        out += &format!("  {} PC={} {}\n", format!("{:<width$}", &cpu.name, width = 5), format!("{:<width$}", &pc, width = 8), cpu.description);
         out += &format!("        supports: {}{}\n", features.join(", "), cpu.code_space.as_ref().map_or(String::new(), |c| format!("   code space: {c}")));
     }
     out += "Scope a command by putting the name first, e.g. `bp sa1 add 8000` or `cov gsu on`.";
@@ -183,7 +182,7 @@ pub fn eval(call: &Call, parts: &[String]) -> Run {
         }
     }
     let processor = scope::index(&session, cpu);
-    if equals_ignore_case(&parts[at], "symbols") {
+    if parts[at].eq_ignore_ascii_case("symbols") {
         let filter = parts.get(at + 1).map(String::as_str).unwrap_or("");
         let names = session.symbols(processor, (!filter.is_empty()).then_some(filter))?;
         let names: Vec<String> = names.items().iter().filter_map(|n| n.as_str().map(|s| format!("  {s}"))).collect();
@@ -216,7 +215,7 @@ pub fn label(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: label add|list|at|remove|clear|load|save ..."));
     }
-    let sub = to_lower(&parts[1]);
+    let sub = parts[1].to_lowercase();
     match sub.as_str() {
         "add" => {
             if parts.len() < 4 {
@@ -231,7 +230,7 @@ pub fn label(call: &Call, parts: &[String]) -> Run {
             let filter = parts.get(2).map(String::as_str).unwrap_or("");
             let rows: Vec<String> = labels(&session)?
                 .into_iter()
-                .filter(|(_, name, _)| filter.is_empty() || contains_ignore_case(name, filter))
+                .filter(|(_, name, _)| filter.is_empty() || name.to_uppercase().contains(&filter.to_uppercase()))
                 .map(|(address, name, comment)| format!("  ${}  {name}{}", hex(address, 6), comment.map_or(String::new(), |c| format!("  ; {c}"))))
                 .collect();
             if rows.is_empty() {
@@ -313,7 +312,7 @@ pub fn vectors(call: &Call) -> Run {
         return Ok(Answer::ok(format!("{} does not report an interrupt vector table.", core_name(&session)?)));
     }
     let spaces = crate::memory::all(&session)?;
-    let Some(bus) = spaces.iter().find(|s| equals_ignore_case(&s.name, "CpuBus")) else {
+    let Some(bus) = spaces.iter().find(|s| s.name.eq_ignore_ascii_case("CpuBus")) else {
         return Ok(Answer::fail("This core publishes no CpuBus space to read the vectors from."));
     };
     let coverage_armed = session.coverage_op(session.no_processor(), abi::coverage::STATUS, b"{}").ok().and_then(|b| emusen_dotnet::json::parse(&String::from_utf8_lossy(&b)).ok()).is_some_and(|s| s.flag("armed"));
@@ -332,7 +331,7 @@ pub fn vectors(call: &Call) -> Run {
         let bytes = crate::memory::read(&session, bus, address, width)?;
         let destination = bytes.iter().enumerate().fold(0i32, |d, (i, &b)| d | (i32::from(b).wrapping_shl(8 * i as u32)));
         let ran = if coverage_armed && executed(&session, destination) { "  (ran)" } else { "" };
-        lines.push(format!("  {} ${} -> {}{ran}", pad_right(&vector.text("name"), 12), hex(address, 6), describe(&session, destination)));
+        lines.push(format!("  {} ${} -> {}{ran}", format!("{:<width$}", &vector.text("name"), width = 12), hex(address, 6), describe(&session, destination)));
     }
     Ok(Answer::ok(lines.join("\n")))
 }
@@ -431,7 +430,7 @@ pub fn disasm(call: &Call, parts: &[String]) -> Run {
     }
     let mut out = String::new();
     if !hints.is_empty() {
-        out += &format!("  ; decoding with {}\n", to_lower(&hints.join(" ")));
+        out += &format!("  ; decoding with {}\n", hints.join(" ").to_lowercase());
     }
     for instruction in &listing {
         if let Some((name, comment)) = label_at(&session, instruction.address) {
@@ -439,7 +438,7 @@ pub fn disasm(call: &Call, parts: &[String]) -> Run {
         }
         let bytes = instruction.bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ");
         let target = instruction.reference.as_ref().and_then(|(_, t)| label_at(&session, *t)).map_or(String::new(), |(name, _)| format!("  ; <{name}>"));
-        let line = format!("  {}: {} {} {}{target}", hex(instruction.address, 6), pad_right(&bytes, 9), instruction.mnemonic, instruction.operands);
+        let line = format!("  {}: {} {} {}{target}", hex(instruction.address, 6), format!("{:<width$}", &bytes, width = 9), instruction.mnemonic, instruction.operands);
         out += line.trim_end();
         out.push('\n');
     }

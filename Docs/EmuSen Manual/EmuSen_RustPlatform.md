@@ -3796,3 +3796,22 @@ and the platform library all use it and a module may not link Galaxia (EmuSen_Di
 `suggestion.rs` is deleted, and the C# sweep that held it to the C#'s sentences
 (`GalaxiaParityTests.A_suggestion_is_the_sentence_the_csharp_gave` and its golden) with it. `SuggestionTests` keep
 holding the behaviour, and the DianaSh goldens did not change.
+
+### 47.8 Case and order are the standard library's
+
+emusen-dotnet's `text.rs` (350 lines) is deleted; its callers use `str`'s own:
+
+| What | Now | What changes |
+|---|---|---|
+| Names that are identifiers ignoring case: extensions, keywords, commands, memory spaces, processors, config members, console and system ids | `eq_ignore_ascii_case` | letters outside ASCII are compared exactly; none of these names has one, and the comparison allocates nothing, which the debugger's frame needs (`crystal-debug/tests/alloc.rs`) |
+| Text a person wrote, ignoring case: a game's name searched for, a file's name on a system whose files ignore case; contains, starts and ends with | both sides `to_uppercase()` | Unicode's full mapping: `ß` equals `SS`, and the long s (U+017F) and the dotless i (U+0131), which .NET kept apart, equal `S` and `I` |
+| Ordered ignoring case | by `to_uppercase()` | as before for what a player names: `_` still sorts after the letters |
+| Ordered ordinally | `str`'s `cmp`, UTF-8's order | a character outside the Basic Multilingual Plane sorts after U+E000–U+FFFF, where UTF-16's order put it before |
+| Lower and upper case, the keys names are found under | `to_lowercase()`, `to_uppercase()` | the full mapping, as above |
+| Widths of shell columns | `format!`'s `{:<w$}` and `chars().count()` | widths count characters, not UTF-16 units (an emoji is one, not two); the goldens did not change, so the routine question of §47's plan (Q10) is answered by them |
+| The error log's line breaks | CR LF, LF and CR | form feed, U+0085, U+2028 and U+2029 no longer break an entry's line |
+| The error log's room for a day | the entry's bytes against the 8 MB in bytes | it was the entry's UTF-16 length against bytes |
+
+The cheat codes' alphabets (Game Genie, Action Replay, Pro Action Replay) are ASCII and upper-case their input with
+`to_ascii_uppercase`, which gives the same codes. One Galaxia test was changed with the rules: a day's log is judged
+by bytes (`error_log.rs`).

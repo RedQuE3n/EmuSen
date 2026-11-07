@@ -8,7 +8,6 @@
 
 use crate::dotnet_zip::{self, u16_at, u32_at};
 use crate::image_sets;
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use std::io::{Read, Seek, SeekFrom};
 
 /// `ArchiveImages.Extensions`.
@@ -17,7 +16,7 @@ pub const EXTENSIONS: &[&str] = &[".zip"];
 /// `ArchiveImages.IsArchive`: by the extension, ignoring case.
 pub fn is_archive(at: &str) -> bool {
     let extension = crate::dotnet_path::extension(crate::dotnet_path::Style::HOST, at);
-    EXTENSIONS.iter().any(|e| equals_ignore_case(e, extension))
+    EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&extension))
 }
 
 /// One entry of a zip's central directory.
@@ -115,7 +114,7 @@ pub fn entries_of(at: &str) -> Result<Vec<ZipEntry>, String> {
 /// name ignoring case; none where there is none.
 pub fn image_entry(at: &str, is_image: impl Fn(&str) -> bool) -> Result<Option<String>, String> {
     let mut names: Vec<String> = entries_of(at)?.into_iter().map(|e| e.full_name).filter(|n| !n.ends_with('/')).collect();
-    names.sort_by(|a, b| a.matches('/').count().cmp(&b.matches('/').count()).then_with(|| compare_ignore_case(a, b)));
+    names.sort_by(|a, b| a.matches('/').count().cmp(&b.matches('/').count()).then_with(|| a.to_uppercase().cmp(&b.to_uppercase())));
     if let Some(sheet) = names.iter().find(|n| image_sets::is_sheet(n)) {
         return Ok(Some(sheet.clone()));
     }
@@ -126,7 +125,7 @@ pub fn image_entry(at: &str, is_image: impl Fn(&str) -> bool) -> Result<Option<S
 /// ignoring case.
 pub fn read_entry(at: &str, entry: &str, length: usize) -> Result<Vec<u8>, String> {
     let entries = entries_of(at)?;
-    let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| equals_ignore_case(&e.full_name, entry))).ok_or_else(|| format!("the archive holds no {entry}"))?;
+    let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| e.full_name.to_uppercase() == entry.to_uppercase())).ok_or_else(|| format!("the archive holds no {entry}"))?;
     let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| "a damaged local header".into()))?;
     let want = (length as u64).min(e.length) as usize;
     let raw = file.take(e.compressed as u64);

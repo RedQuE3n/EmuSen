@@ -20,7 +20,7 @@ pub struct Routed {
 
 /// An extension some console's engine opens: a catalog row's, or a discovered engine's, `IsImageExtension`.
 pub fn is_image_extension(catalog: &Catalog, discovery: &Discovery, extension: &str) -> bool {
-    catalog.rows.iter().any(|r| r.supports(extension)) || discovery.for_extension(&emusen_dotnet::text::to_lower(extension)).next().is_some()
+    catalog.rows.iter().any(|r| r.supports(extension)) || discovery.for_extension(&extension.to_lowercase()).next().is_some()
 }
 
 pub fn image_extension(catalog: &Catalog, discovery: &Discovery, at: &str) -> String {
@@ -33,11 +33,11 @@ pub fn route(catalog: &Catalog, discovery: &Discovery, at: &str) -> (Option<usiz
     let mut rows: Vec<(Option<usize>, Option<&'static System>)> =
         catalog.rows.iter().enumerate().filter(|(_, r)| r.supports(&extension)).map(|(i, r)| (Some(i), catalog::pack_of(r.console()))).collect();
     for c in discovery.for_extension(&extension) {
-        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension)) && takes(c, &s.id, at)) {
+        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension)) && takes(c, &s.id, at)) {
             let Some(entry) = emusen_systems::find(&s.id) else { continue };
             if catalog::hand_console_of(&entry.id).is_none()
                 && !rows.iter().any(|(r, e)| e.is_some_and(|e| std::ptr::eq(e, entry)) || r.is_some_and(|r| catalog.rows[r].console() == entry.console))
-                && entry.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension))
+                && entry.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension))
             {
                 rows.push((None, Some(entry)));
             }
@@ -109,7 +109,7 @@ pub fn system_of_file(catalog: &Catalog, discovery: &Discovery, at: &str) -> Opt
 fn is_game_boy_color(at: &str) -> bool {
     let byte = image_probe::head_of(at, 0x144).ok().filter(|h| h.len() > 0x143).map(|h| h[0x143]);
     let extension = path::extension(Style::HOST, at);
-    if emusen_systems::find("gbc").is_some_and(|s| s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, extension))) {
+    if emusen_systems::find("gbc").is_some_and(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension))) {
         return true;
     }
     matches!(byte, Some(0x80 | 0xC0))

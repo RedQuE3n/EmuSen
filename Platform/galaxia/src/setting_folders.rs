@@ -111,7 +111,7 @@ pub fn checked(value: Option<&str>, home: &str) -> FolderValue {
 pub fn same_folder(a: &str, b: &str) -> bool {
     let (a, b) = (path::full_path(a), path::full_path(b));
     let (a, b) = (path::trim_ending_separator(Style::HOST, &a), path::trim_ending_separator(Style::HOST, &b));
-    if cfg!(target_os = "linux") { a == b } else { path::equals_ignore_case(a, b) }
+    if cfg!(target_os = "linux") { a == b } else { a.to_uppercase() == b.to_uppercase() }
 }
 
 #[cfg(test)]

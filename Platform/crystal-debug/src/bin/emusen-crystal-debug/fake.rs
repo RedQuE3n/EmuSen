@@ -6,7 +6,6 @@ use emusen_crystal_debug::conditions;
 use emusen_crystal_debug::context::{CpuContext, Extra, Live, Register, Set, Source, TargetContext, UnitInfo, UnitSymbols};
 use emusen_crystal_debug::expr::{self, Context, Evaluator};
 use emusen_crystal_debug::labels::LabelRegistry;
-use emusen_dotnet::text::equals_ignore_case;
 
 fn set_named(word: &str) -> Option<Set> {
     Some(match word {
@@ -71,7 +70,7 @@ impl Source for Data {
     }
 
     fn register(&mut self, set: Set, name: &str) -> Option<u64> {
-        self.shown.get(index(set))?.iter().find(|r| equals_ignore_case(&r.name, name)).map(|r| r.value)
+        self.shown.get(index(set))?.iter().find(|r| r.name.eq_ignore_ascii_case(&name)).map(|r| r.value)
     }
 
     fn unit_registers(&mut self, _: u32, _: &mut [i64]) -> usize {
@@ -79,7 +78,7 @@ impl Source for Data {
     }
 
     fn pack_symbol(&mut self, name: &str) -> Option<i64> {
-        self.pack.iter().find(|(n, _)| equals_ignore_case(n, name)).map(|&(_, v)| v)
+        self.pack.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)).map(|&(_, v)| v)
     }
 
     fn stack_depth(&self) -> Option<i64> {
@@ -317,11 +316,11 @@ impl Data {
         if address < 0 {
             return 0;
         }
-        self.spaces.iter().find(|(n, _)| equals_ignore_case(n, space)).and_then(|(_, b)| b.get(address as usize).copied()).unwrap_or(0)
+        self.spaces.iter().find(|(n, _)| n.eq_ignore_ascii_case(&space)).and_then(|(_, b)| b.get(address as usize).copied()).unwrap_or(0)
     }
 
     pub fn put(&mut self, space: &str, address: i32, value: u8) {
-        if let Some((_, b)) = self.spaces.iter_mut().find(|(n, _)| equals_ignore_case(n, space)) {
+        if let Some((_, b)) = self.spaces.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(&space)) {
             if address >= 0 && (address as usize) < b.len() {
                 b[address as usize] = value;
             }

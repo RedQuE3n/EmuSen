@@ -17,7 +17,7 @@ impl Default for Accounts {
 
 impl Accounts {
     fn find(&self, name: &str) -> Option<usize> {
-        self.entries.iter().position(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, name))
+        self.entries.iter().position(|(n, _)| n.eq_ignore_ascii_case(&name))
     }
 
     pub fn exists(&self, name: &str) -> bool {
@@ -37,7 +37,7 @@ impl Accounts {
     }
 
     pub fn remove(&mut self, name: &str) -> bool {
-        if emusen_dotnet::text::equals_ignore_case(name, "root") {
+        if name.eq_ignore_ascii_case("root") {
             return false;
         }
         match self.find(name) {

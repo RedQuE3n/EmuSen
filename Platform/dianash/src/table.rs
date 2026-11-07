@@ -55,16 +55,16 @@ impl Table {
     }
 
     pub fn find(&self, name: &str) -> Option<&Entry> {
-        self.index.get(&emusen_dotnet::text::fold(name)).map(|&at| &self.entries[at])
+        self.index.get(&name.to_uppercase()).map(|&at| &self.entries[at])
     }
 
     fn reindex(&mut self) {
-        self.index = self.entries.iter().enumerate().map(|(at, e)| (emusen_dotnet::text::fold(&e.name), at)).collect();
+        self.index = self.entries.iter().enumerate().map(|(at, e)| (e.name.to_uppercase(), at)).collect();
     }
 
     /// A name lower-cased, then mapped through the aliases.
     pub fn canonical(&self, name: &str) -> String {
-        let lower = emusen_dotnet::text::to_lower(name);
+        let lower = name.to_lowercase();
         match self.aliases.iter().find(|(alias, _)| *alias == lower) {
             Some((_, command)) => command.clone(),
             None => lower,
@@ -94,26 +94,26 @@ impl Table {
 
     /// A host's command takes the place of any command of its name, a builtin included, as a frontend's always has.
     pub fn add(&mut self, entry: Entry) {
-        self.entries.retain(|e| !emusen_dotnet::text::equals_ignore_case(&e.name, &entry.name));
+        self.entries.retain(|e| !e.name.eq_ignore_ascii_case(&entry.name));
         self.entries.push(entry);
         self.reindex();
     }
 
     pub fn alias(&mut self, alias: &str, command: &str) {
-        let alias = emusen_dotnet::text::to_lower(alias);
+        let alias = alias.to_lowercase();
         self.aliases.retain(|(a, _)| *a != alias);
-        self.aliases.push((alias, emusen_dotnet::text::to_lower(command)));
+        self.aliases.push((alias, command.to_lowercase()));
     }
 
     /// A prefix claimed again is the later claimant's, as a host's command takes the place of a module's.
     pub fn claim(&mut self, prefix: &str, claimant: Kind) {
-        self.claims.retain(|(p, _)| !emusen_dotnet::text::equals_ignore_case(p, prefix));
+        self.claims.retain(|(p, _)| !p.eq_ignore_ascii_case(&prefix));
         self.claims.push((prefix.to_string(), claimant));
     }
 
     /// The listing's order as a host gives it; a name it does not give keeps its place after the ones it does.
     pub fn order(&mut self, names: &[String]) {
-        let rank = |e: &Entry| names.iter().position(|n| emusen_dotnet::text::equals_ignore_case(n, &e.name)).unwrap_or(usize::MAX);
+        let rank = |e: &Entry| names.iter().position(|n| n.eq_ignore_ascii_case(&e.name)).unwrap_or(usize::MAX);
         self.entries.sort_by_key(rank);
         self.reindex();
     }

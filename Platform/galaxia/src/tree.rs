@@ -79,9 +79,9 @@ pub fn bundle_contents_for(base_directory: &str) -> Option<String> {
     let dir = path::trim_ending_separator(style, &full);
     let contents = path::directory_name(style, dir)?;
     let bundle = path::directory_name(style, &contents)?;
-    let in_bundle = path::equals_ignore_case(path::file_name(style, dir), "MacOS")
-        && path::equals_ignore_case(path::file_name(style, &contents), "Contents")
-        && path::ends_with_ignore_case(&bundle, ".app");
+    let in_bundle = path::file_name(style, dir).eq_ignore_ascii_case("MacOS")
+        && path::file_name(style, &contents).eq_ignore_ascii_case("Contents")
+        && bundle.to_uppercase().ends_with(".APP");
     in_bundle.then_some(contents)
 }
 

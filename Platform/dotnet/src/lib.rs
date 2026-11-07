@@ -8,4 +8,3 @@ pub mod date;
 pub mod file;
 pub mod json;
 pub mod json_document;
-pub mod text;

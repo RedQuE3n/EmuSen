@@ -74,8 +74,8 @@ pub fn in_text(words: &str) -> String {
     words
         .split(' ')
         .map(|w| {
-            let acronym = emusen_dotnet::text::utf16_len(w) > 1 && w.chars().all(|c| !c.is_alphabetic() || c.is_uppercase());
-            if acronym { w.to_string() } else { emusen_dotnet::text::to_lower(w) }
+            let acronym = w.chars().count() > 1 && w.chars().all(|c| !c.is_alphabetic() || c.is_uppercase());
+            if acronym { w.to_string() } else { w.to_lowercase() }
         })
         .collect::<Vec<_>>()
         .join(" ")

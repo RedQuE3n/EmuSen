@@ -3850,3 +3850,12 @@ words, is deleted. Its three readers:
 
 The cores' workspaces that link Galaxia (`emusen-libretro-games`, `-host`, `emusen-core-broker`, `-conform` and
 Diamond's) carry the platform's new dependencies in their locks from this step on.
+
+### 47.11 The systems data is read by serde
+
+`System`, `Medium` and `Look` derive `Deserialize` with unknown fields refused, and every field must be written, `null`
+where a fact is unknown (`stated`). serde refuses a field missing, unknown, written twice or of the wrong kind, in its
+words (`missing field `console` at line 25 column 1`); what serde cannot know is checked after it, in the words it had:
+blank words, a word twice in a list, the year, the cover's shape, the byte order, dotted lower-case extensions, a
+medium named twice and a look's ranges. A medium's three fields may now come in any order. `table.json`'s cover shape
+is a `TableFacts`. `System`'s fields are declared in the order the table writes them.

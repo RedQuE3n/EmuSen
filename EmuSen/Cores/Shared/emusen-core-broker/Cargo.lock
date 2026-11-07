@@ -688,6 +688,8 @@ dependencies = [
  "emusen-n64-pak",
  "emusen-ps2-card",
  "emusen-psx-card",
+ "serde",
+ "serde_json",
  "silvermillennium-sm83",
 ]
 

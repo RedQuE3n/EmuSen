@@ -751,7 +751,8 @@ measurement scaffolding and not a design element. They are left in as the checke
   five `cargo:rustc-link-arg` lines in `build.rs` naming the Qt libraries again after `--no-as-needed`. A stage 0 item is
   to put `lld` (Fedora's `lld` package) in the toolchain, which also shortens the link. The kit found a second `ld.bfd`
   case on 2026-11-07, when a crate links a cxx-qt library as an rlib and is itself the final link: the whole-archive
-  initializer members come after the rlib and the init functions go undefined; `EmuSen_Kit.md` §7.6 has the cure.
+  initializer members come after the rlib and the init functions go undefined. `lld` was installed the same day and
+  both workarounds were removed; `EmuSen_Kit.md` §7.6 has the record and the build figures under `lld`.
 - **Build times** are dominated by cxx-qt's generated C++ and Qt's headers, not by Rust: the incremental figure in §10.2 is
   the one a stage lives with.
 

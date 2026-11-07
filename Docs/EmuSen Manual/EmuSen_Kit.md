@@ -434,15 +434,20 @@ read the outer model). No C++ was added: the count stays at 23 lines.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 
-A cold debug build is 73 s on the desktop (measured 2026-11-07, six compilers, CPU weight 20; cxx-qt's generated C++
-dominates, as `EmuSen_Qt.md` §10.2 found) and a Rust-only change about 10 s. GNU `ld.bfd` needs two workarounds in
-`build.rs`, both for it alone and both removed when `lld` is installed (cxx-qt then adds `-fuse-ld=lld` itself): the
-`--no-as-needed` naming of the Qt libraries from §10.4, and `--undefined=cxx_qt_init_*` for the four initializers. The
-second is new: when a crate that links the kit as an rlib is the final link (the kit's own integration tests), rustc
-places the extracted whole-archive `call-initializers` members after the rlib, and `ld.bfd`'s single pass has already
-left the rlib's archive, so the init functions go undefined; naming them undefined up front makes the first pass pull
-them. A binary that runs `CxxQtBuilder` itself (the gallery, the harness) references them from its own initializer
-first and needs only the first workaround.
+**The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
+proposed). cxx-qt's build utilities find it and pass `-fuse-ld=lld` themselves, so no crate names a linker, and the two
+GNU `ld.bfd` workarounds the kit carried for a day are gone from `build.rs`: the `--no-as-needed` naming of the Qt
+libraries from §10.4, and `--undefined=cxx_qt_init_*` for the four initializers. The second one is worth keeping on
+record: when a crate that links the kit as an rlib is the final link (the kit's own integration tests), rustc places
+the extracted whole-archive `call-initializers` members after the rlib, and `ld.bfd`'s single pass has already left the
+rlib's archive, so the init functions went undefined; `lld` resolves across the whole input and has no such order.
+
+Measured on 2026-11-07 on the desktop, six compilers, CPU weight 20, the compiler cache (`sccache`) switched off so the
+figures are the compilers' own: a cold debug build of the kit and its dependencies is **65 s** under `lld` (the first
+build, under `ld.bfd`, was 73 s; cxx-qt's generated C++ dominates both, as `EmuSen_Qt.md` §10.2 found); a change to a
+Rust file that holds no bridge rebuilds in **11.4 s** (5.1 s with the cache warm), a QML file in 5.0 s with the cache;
+the ten test binaries build and link in **2.3 s** together. With the cache warm a cold build is 19.7 s, which is the
+figure a day's work sees.
 
 **Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
 `qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`

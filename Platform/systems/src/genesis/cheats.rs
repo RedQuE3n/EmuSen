@@ -2,7 +2,7 @@
 //! EmuSen_Cheats.md §9.
 
 use crate::cheats::{Decoded, Error, Write, format_error, hex, parts};
-use emusen_dotnet::text::{trim, upper_invariant};
+use emusen_dotnet::text::upper_invariant;
 
 const WRAM: &str = "WRAM";
 
@@ -13,7 +13,7 @@ const GENIE_ORDER: &str = "ijklmnopIJKLMNOPABCDEFGHdefghabcQRSTUVWX";
 
 /// `code.Trim().ToUpperInvariant()`, where only what can become ASCII matters to the patterns that follow.
 fn upper_trimmed(code: &str) -> Vec<char> {
-    trim(code).chars().map(upper_invariant).collect()
+    code.trim().chars().map(upper_invariant).collect()
 }
 
 fn alnum(c: char) -> bool {

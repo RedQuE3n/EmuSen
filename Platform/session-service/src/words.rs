@@ -3,7 +3,7 @@
 
 use crate::{abi::status, Record, Refusal, Session};
 use emusen_dotnet::number::convert_to_i32_hex;
-use emusen_dotnet::text::{starts_with_ignore_case, trim};
+use emusen_dotnet::text::starts_with_ignore_case;
 
 /// `RequireTarget`'s words, which the service gives for no session and a module gives for no service.
 pub const NO_SESSION: &str = "No ROM loaded - this command needs an active debug target.";
@@ -15,7 +15,7 @@ pub fn no_session() -> Refusal {
 
 /// `ParseHex`: trimmed, an optional `0x` or `$`, then `Convert.ToInt32(text, 16)` with .NET's words for a refusal.
 pub fn parse_hex(text: &str) -> Result<i32, String> {
-    let mut s = trim(text);
+    let mut s = text.trim();
     if starts_with_ignore_case(s, "0x") {
         s = &s[2..];
     } else if let Some(rest) = s.strip_prefix('$') {
@@ -26,7 +26,7 @@ pub fn parse_hex(text: &str) -> Result<i32, String> {
 
 /// `ParseRange`: `<start>-<end>`, or a lone address as a one-byte range; reversed ends are put in order.
 pub fn parse_range(text: &str) -> Result<(i32, i32), String> {
-    let s = trim(text);
+    let s = text.trim();
     let split = s.char_indices().skip(1).find(|&(_, c)| c == '-').map(|(i, _)| i);
     let Some(split) = split else {
         let only = parse_hex(s)?;

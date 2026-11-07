@@ -8,7 +8,7 @@ use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_dotnet::json::{self, Value};
 use emusen_dotnet::number::parse_i32;
 use emusen_dotnet::suggestion;
-use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, to_lower, trim_end};
+use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, to_lower};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope;
 use emusen_session_service::space::{find, read};
@@ -523,7 +523,7 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
                     e.text("actor")
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         "stats" => {
             let stats = op(abi::flow::STATS, "{}")?;
@@ -542,7 +542,7 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
                     s.int("last_value")
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         "poll" => {
             let status = op(abi::flow::STATUS, "{}")?;
@@ -614,7 +614,7 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
             .collect();
         out += &format!("  {}  {}\n", pad_left(&(first_index + i as i64).to_string(), 7), cells.join("  "));
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 /// The core's own name for a B-bus register, or its number.
@@ -704,7 +704,7 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                     pad_left(&e.int("length").to_string(), 6)
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         "stats" => {
             if !session.can("dma_log")? {
@@ -746,7 +746,7 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                     if list.is_empty() { "-".to_string() } else { list.join(",") }
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         _ => Ok(Answer::ok(format!("Unknown dma subcommand '{}'. Try log|stats, or `dma` alone for the channel table.", parts[1]))),
     }

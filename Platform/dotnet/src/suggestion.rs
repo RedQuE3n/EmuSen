@@ -4,7 +4,7 @@
 //! Lengths and edits are counted in UTF-16 code units and case is .NET's, because the answer is a sentence the
 //! player reads and must be the sentence the C# gave.
 
-use crate::text::{compare_ignore_case, equals_ignore_case, is_blank, lower_unit, simple_upper, utf16_len};
+use crate::text::{compare_ignore_case, equals_ignore_case, lower_unit, simple_upper, utf16_len};
 
 /// Optimal string alignment: Levenshtein with a swap of two neighbours counted as one slip, case ignored.
 pub fn distance(a: &str, b: &str) -> usize {
@@ -51,7 +51,7 @@ fn starts_with_ignore_case(name: &str, prefix: &str) -> bool {
 
 /// The closest candidates, closest first; one the typed text begins wins a tie. None when the text matches a candidate exactly, since the caller then refused it for another reason.
 pub fn nearest<'a>(typed: &str, candidates: &[&'a str], max: i32) -> Vec<&'a str> {
-    if is_blank(Some(typed)) || max <= 0 || candidates.iter().any(|candidate| equals_ignore_case(candidate, typed)) {
+    if typed.trim().is_empty() || max <= 0 || candidates.iter().any(|candidate| equals_ignore_case(candidate, typed)) {
         return Vec::new();
     }
     let tolerance = tolerance(utf16_len(typed));

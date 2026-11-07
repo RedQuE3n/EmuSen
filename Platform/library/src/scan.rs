@@ -148,7 +148,7 @@ pub fn scan(roots: &[String], ids: &[String], progress: &Progress) -> Result<Sca
 pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &Progress) -> Result<Scan, Error> {
     let systems = Systems::named(ids);
     let extensions = systems.extensions();
-    let given: Vec<String> = roots.iter().filter(|r| !emusen_dotnet::text::is_blank(Some(r))).cloned().collect();
+    let given: Vec<String> = roots.iter().filter(|r| !r.trim().is_empty()).cloned().collect();
     let mut scan = Scan { outcome: Outcome::NoDirectory, roots: given.clone(), systems: ids.to_vec(), games: Vec::new() };
     if given.is_empty() {
         return Ok(scan);

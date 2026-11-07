@@ -8,7 +8,6 @@ pub mod date;
 pub mod file;
 pub mod json;
 pub mod json_document;
-mod letter_or_digit;
 pub mod number;
 pub mod suggestion;
 pub mod text;

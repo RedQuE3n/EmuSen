@@ -4,7 +4,7 @@ use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::text::{pad_left, pad_right, trim_end};
+use emusen_dotnet::text::{pad_left, pad_right};
 use emusen_session_service::words::parse_hex;
 pub(crate) use emusen_session_service::space::{all, find, read, Space};
 
@@ -19,7 +19,7 @@ pub fn spaces(call: &Call) -> Run {
     for s in all(&session)? {
         out += &format!("  {} {} bytes  {}\n", pad_right(&s.name, 10), pad_left(&s.size.to_string(), 8), if s.writable { "R/W" } else { "R/O" });
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn mem(call: &Call, parts: &[String]) -> Run {
@@ -50,7 +50,7 @@ pub fn mem(call: &Call, parts: &[String]) -> Run {
         out.push('\n');
         row += 16;
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn write(call: &Call, parts: &[String]) -> Run {

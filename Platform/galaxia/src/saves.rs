@@ -22,7 +22,7 @@ fn stem(rom_path: &str) -> &str {
 /// The states' directory: the caller's, unless it is absent or blank. A parameter and never a settings read; see §5.1.
 fn state_directory(tree: &Tree, directory_override: Option<&str>) -> String {
     match directory_override {
-        Some(directory) if !path::is_blank(Some(directory)) => directory.to_string(),
+        Some(directory) if !directory.trim().is_empty() => directory.to_string(),
         _ => tree.save_states(),
     }
 }

@@ -162,7 +162,7 @@ fn list(items: Option<&Value>, key: &str) -> Read<Vec<Localised>> {
     for item in array(items) {
         let key = text(prop(Some(item), key))?.unwrap_or_default();
         let text = text(prop(Some(item), "text"))?;
-        if let Some(text) = text.filter(|t| !emusen_dotnet::text::is_blank(Some(t))) {
+        if let Some(text) = text.filter(|t| !t.trim().is_empty()) {
             out.push(Localised { key, text });
         }
     }
@@ -258,7 +258,7 @@ pub fn member(json: &str) -> Read<Option<Member>> {
     let response = response(json)?;
     let Some(user @ Value::Object(_)) = try_get_property(&response, "ssuser")? else { return Ok(None) };
     let name = text(prop(Some(user), "id"))?;
-    let Some(name) = name.filter(|n| !emusen_dotnet::text::is_blank(Some(n))) else { return Ok(None) };
+    let Some(name) = name.filter(|n| !n.trim().is_empty()) else { return Ok(None) };
     let level = text(prop(Some(user), "niveau"))?;
     Ok(Some(Member { name, level, quota: quota(user)? }))
 }

@@ -2,7 +2,7 @@
 //! `CheatFile`, and `GameCheats`' naming of a game's own list; a list's own contents are the `CheatFile` model. See
 //! EmuSen_Config_Reference.md §3.4 and §3.4b.
 
-use crate::dotnet_path::{self as path, Style, equals_ignore_case, is_blank};
+use crate::dotnet_path::{self as path, Style, equals_ignore_case};
 use emusen_dotnet::text::compare_ignore_case;
 use crate::models::CHEATS_CATEGORY;
 use crate::tree::Tree;
@@ -66,7 +66,7 @@ fn invalid_in_a_file_name(style: Style, c: char) -> bool {
 /// `CheatFile.IsValidName`: a name the player typed is checked and never rewritten, since rewriting it would save to a file they did not name.
 pub fn is_valid_name(style: Style, name: Option<&str>) -> bool {
     match name {
-        Some(name) => !is_blank(Some(name)) && !name.chars().any(|c| invalid_in_a_file_name(style, c)) && name != "." && name != "..",
+        Some(name) => !name.trim().is_empty() && !name.chars().any(|c| invalid_in_a_file_name(style, c)) && name != "." && name != "..",
         None => false,
     }
 }
@@ -98,7 +98,7 @@ pub fn game_list(style: Style, console: Option<&str>, rom_path: Option<&str>) ->
     if !is_valid_name(style, Some(&name)) {
         return None;
     }
-    let folder = console.filter(|c| !is_blank(Some(c))).map(|c| sanitized(style, c)).filter(|f| is_valid_name(style, Some(f)));
+    let folder = console.filter(|c| !c.trim().is_empty()).map(|c| sanitized(style, c)).filter(|f| is_valid_name(style, Some(f)));
     let category = folder.map_or_else(|| CHEATS_CATEGORY.to_string(), |f| path::combine(style, CHEATS_CATEGORY, &f));
     Some(GameList { name, category })
 }

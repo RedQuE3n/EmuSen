@@ -6,7 +6,7 @@ use dianash_module::{Answer, Call};
 use emusen_dotnet::file::{read_all_lines, write_all_text};
 use emusen_dotnet::json::Value;
 use emusen_dotnet::suggestion;
-use emusen_dotnet::text::{contains_ignore_case, equals_ignore_case, pad_right, to_lower, trim_end};
+use emusen_dotnet::text::{contains_ignore_case, equals_ignore_case, pad_right, to_lower};
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::{describe, hex, label_at, parse_hex};
 use emusen_session_service::{abi, Record, Session};
@@ -52,7 +52,7 @@ pub fn regs(call: &Call, parts: &[String]) -> Run {
         for r in registers(&session.registers(only.index)?) {
             out += &format!("  {} = 0x{}\n", pad_right(&r.name, 9), register_hex(r.value, r.bits));
         }
-        return Ok(Answer::ok(trim_end(&out)));
+        return Ok(Answer::ok(out.trim_end()));
     }
     let mut out = format!("{} CPU registers:\n", core_name(&session)?);
     for r in registers(&session.telemetry(abi::telemetry::CPU)?) {
@@ -72,7 +72,7 @@ pub fn regs(call: &Call, parts: &[String]) -> Run {
             }
         }
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn setreg(call: &Call, parts: &[String]) -> Run {
@@ -441,10 +441,10 @@ pub fn disasm(call: &Call, parts: &[String]) -> Run {
         let bytes = instruction.bytes.iter().map(|b| format!("{b:02X}")).collect::<Vec<_>>().join(" ");
         let target = instruction.reference.as_ref().and_then(|(_, t)| label_at(&session, *t)).map_or(String::new(), |(name, _)| format!("  ; <{name}>"));
         let line = format!("  {}: {} {} {}{target}", hex(instruction.address, 6), pad_right(&bytes, 9), instruction.mnemonic, instruction.operands);
-        out += trim_end(&line);
+        out += line.trim_end();
         out.push('\n');
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 /// `callers`, `writers` and `readers`: the instructions of a scan whose static reference is of `kind` and lands on the address.

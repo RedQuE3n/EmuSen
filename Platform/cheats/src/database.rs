@@ -1,7 +1,7 @@
 //! The player's cheat database, the C# `CheatDatabase`: an index over a tree of `.cht` files, each in a folder named
 //! for its system as libretro lays them out, scanned once and searched by game (`man cheat`). Nothing EmuSen ships.
 
-use emusen_dotnet::text::{compare_ignore_case, contains_ignore_case, ends_with_ignore_case, equals_ignore_case, is_blank, starts_with_ignore_case, trim};
+use emusen_dotnet::text::{compare_ignore_case, contains_ignore_case, ends_with_ignore_case, equals_ignore_case, starts_with_ignore_case};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::cmp::Ordering;
 
@@ -70,7 +70,7 @@ impl Database {
 
     /// `CheatDatabase.Games`: a system's files, those whose game holds the filter where one is given, by their places.
     pub fn games(&self, system: &str, filter: Option<&str>) -> Vec<usize> {
-        let needle = filter.filter(|f| !is_blank(Some(f))).map(trim);
+        let needle = filter.filter(|f| !f.trim().is_empty()).map(str::trim);
         (0..self.entries.len()).filter(|&i| equals_ignore_case(&self.entries[i].system, system) && needle.is_none_or(|n| contains_ignore_case(&self.entries[i].game, n))).collect()
     }
 
@@ -101,7 +101,7 @@ fn score(game: &str, needle: &str) -> u8 {
 
 /// `Normalize`: trimmed, and the first of `.cht`, `.sfc`, `.smc` and `.zip` it ends with, without regard to case, dropped.
 fn normalize(text: &str) -> String {
-    let t = trim(text);
+    let t = text.trim();
     for extension in [".cht", ".sfc", ".smc", ".zip"] {
         if ends_with_ignore_case(t, extension) {
             let keep = t.chars().count() - extension.chars().count();

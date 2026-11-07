@@ -291,7 +291,7 @@ impl Scraper {
     /// The store's one layout step, taken once the settings name the ROM folder that names each game's folder.
     fn put_in_folders(&self) -> Result<usize, Error> {
         let settings = self.settings();
-        if settings.roms.as_deref().is_none_or(|r| emusen_dotnet::text::is_blank(Some(r))) {
+        if settings.roms.as_deref().is_none_or(|r| r.trim().is_empty()) {
             return Ok(0);
         }
         let store = self.store();

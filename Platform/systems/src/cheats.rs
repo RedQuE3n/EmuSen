@@ -300,7 +300,7 @@ pub(crate) fn hex(text: &str) -> u32 {
 
 /// `code.Split('+', RemoveEmptyEntries | TrimEntries)`.
 pub(crate) fn parts(code: &str) -> Vec<&str> {
-    code.split('+').map(emusen_dotnet::text::trim).filter(|p| !p.is_empty()).collect()
+    code.split('+').map(str::trim).filter(|p| !p.is_empty()).collect()
 }
 
 #[cfg(test)]

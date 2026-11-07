@@ -1,7 +1,7 @@
 //! Galaxia's C layer: the tree, the save library's names, atomic files, the migration and the ROM hash.
 
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, fail_io, join_nul, put, report, required, status, text};
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
 use emusen_galaxia::mapped::Mapped;
@@ -437,7 +437,7 @@ pub unsafe extern "C" fn emusen_galaxia_package_format(manifest: *const u8, mani
 }
 
 fn roots_from<'a>(packages: &'a str, library: Option<&'a str>, compressed: &'a str) -> claims::Roots<'a> {
-    claims::Roots { packages, library: library.filter(|l| !path::is_blank(Some(l))), compressed }
+    claims::Roots { packages, library: library.filter(|l| !l.trim().is_empty()), compressed }
 }
 
 fn strings(out: &mut String, items: &[String]) {

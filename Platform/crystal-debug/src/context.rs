@@ -3,7 +3,7 @@
 //! what it names through a [`Source`], which the debugger implements over its machine and a test over plain data.
 
 use crate::expr::Context;
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case, fold, is_letter, is_letter_or_digit, to_lower};
+use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case, fold, to_lower};
 use std::collections::{HashMap, HashSet};
 
 /// One register as a snapshot shows it, `DebugRegisterValue`.
@@ -54,7 +54,7 @@ pub trait Source {
 /// `IsIdentifier` of `UnitSymbols`, the evaluator's identifier: a letter, '_' or '.', then letters, digits, '_' and '.'.
 fn is_identifier(s: &str) -> bool {
     let mut chars = s.chars();
-    matches!(chars.next(), Some(c) if is_letter(c) || c == '_' || c == '.') && s.chars().all(|c| is_letter_or_digit(c) || c == '_' || c == '.')
+    matches!(chars.next(), Some(c) if c.is_alphabetic() || c == '_' || c == '.') && s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.')
 }
 
 /// Names distinct ignoring case, the first kept, then ordered ignoring case (a stable sort), as LINQ's `Distinct` and
@@ -100,7 +100,7 @@ impl UnitSymbols {
             }
         }
         for unit in units {
-            let prefix = to_lower(&unit.name.chars().filter(|&c| is_letter_or_digit(c) || c == '_').collect::<String>());
+            let prefix = to_lower(&unit.name.chars().filter(|&c| c.is_alphanumeric() || c == '_').collect::<String>());
             for (i, (register, _)) in unit.registers.iter().enumerate() {
                 let at = (unit.id, i, unit.registers.len());
                 if !prefix.is_empty() {

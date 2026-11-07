@@ -1,7 +1,7 @@
 //! Named addresses, the C# `LabelRegistry` (`man label`): one name for an address and one address for a name, names
 //! compared without regard to case.
 
-use emusen_dotnet::text::{fold, trim, trim_start};
+use emusen_dotnet::text::fold;
 use std::collections::{BTreeMap, HashMap};
 
 #[derive(Default)]
@@ -85,7 +85,7 @@ impl LabelRegistry {
         let mut errors = Vec::new();
         for (index, raw) in lines.into_iter().enumerate() {
             let number = index + 1;
-            let line = trim(raw);
+            let line = raw.trim();
             if line.is_empty() || line.starts_with('#') {
                 continue;
             }
@@ -123,15 +123,15 @@ impl LabelRegistry {
 /// line with its leading white space dropped.
 fn split3(line: &str) -> Vec<&str> {
     let mut parts = Vec::new();
-    let mut rest = trim_start(line);
+    let mut rest = line.trim_start();
     while !rest.is_empty() {
         if parts.len() == 2 {
             parts.push(rest);
             break;
         }
-        let end = rest.find(emusen_dotnet::text::is_white_space).unwrap_or(rest.len());
+        let end = rest.find(char::is_whitespace).unwrap_or(rest.len());
         parts.push(&rest[..end]);
-        rest = trim_start(&rest[end..]);
+        rest = rest[end..].trim_start();
     }
     parts
 }
@@ -139,7 +139,7 @@ fn split3(line: &str) -> Vec<&str> {
 /// `int.TryParse(text, NumberStyles.HexNumber)`: up to eight hex digits, white space around them allowed, the bits as
 /// given.
 fn hex_number(text: &str) -> Option<i32> {
-    let digits = trim(text);
+    let digits = text.trim();
     if digits.is_empty() || !digits.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }

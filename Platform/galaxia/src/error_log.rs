@@ -7,7 +7,7 @@
 
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
-use crate::dotnet_path::{self as path, Style, is_blank};
+use crate::dotnet_path::{self as path, Style};
 use emusen_dotnet::text::{replace_line_endings, utf16_len};
 use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
 use crate::tree::{Directory, Tree, file_exists};
@@ -42,7 +42,7 @@ pub const WRITE_CHECK: &str = ".emusen-write-check";
 /// `ErrorLog.Usable`: a folder that is named, can be made, and takes a file; made by the asking.
 pub fn usable(directory: Option<&str>) -> bool {
     match directory {
-        Some(directory) if !is_blank(Some(directory)) => {
+        Some(directory) if !directory.trim().is_empty() => {
             if std::fs::create_dir_all(directory).is_err() {
                 return false;
             }
@@ -59,7 +59,7 @@ pub fn usable(directory: Option<&str>) -> bool {
 /// the home's own `Logs` when it names one this machine cannot make or write (a settings file copied from another).
 pub fn fallback_root(tree: &Tree, configured: Option<&str>) -> String {
     match configured {
-        Some(named) if !is_blank(Some(named)) => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
+        Some(named) if !named.trim().is_empty() => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
         _ => default_root(tree),
     }
 }
@@ -76,7 +76,7 @@ pub fn root(tree: &Tree, directory_override: Option<&str>) -> (String, Option<St
         return (configured.unwrap_or_default().to_string(), said);
     }
     let root = fallback_root(tree, configured);
-    if let Some(named) = configured.filter(|named| !is_blank(Some(named))) {
+    if let Some(named) = configured.filter(|named| !named.trim().is_empty()) {
         if !FELL_BACK_SAID.swap(true, Ordering::SeqCst) {
             *FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(fallback_words(named, &root));
         }
@@ -96,7 +96,7 @@ fn one_line(text: &str) -> String {
 /// One entry: its line, its context on a second, and a fault's text indented under them.
 pub fn format_entry(stamp: &str, level: &str, area: &str, message: &str, context: Option<&str>, fault: Option<&str>) -> String {
     let mut entry = format!("{stamp} {level} [{area}] {}\n", one_line(message));
-    if let Some(context) = context.filter(|context| !is_blank(Some(context))) {
+    if let Some(context) = context.filter(|context| !context.trim().is_empty()) {
         entry.push_str(&format!("    context: {}\n", one_line(context)));
     }
     if let Some(fault) = fault {

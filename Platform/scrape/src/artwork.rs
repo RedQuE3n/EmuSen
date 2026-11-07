@@ -47,7 +47,7 @@ pub fn untagged(name: &str) -> String {
 impl Index {
     pub fn scan(directory: Option<&str>, cores: &[Core]) -> Index {
         let mut index = Index::default();
-        let Some(dir) = directory.filter(|d| !emusen_dotnet::text::is_blank(Some(d)) && dotnet_files::directory_exists(d)) else { return index };
+        let Some(dir) = directory.filter(|d| !d.trim().is_empty() && dotnet_files::directory_exists(d)) else { return index };
         let mut console_by_folder: Vec<(String, String)> = Vec::new();
         let mut set = |name: &str, console: &str| match console_by_folder.iter_mut().find(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, name)) {
             Some(entry) => entry.1 = console.to_string(),

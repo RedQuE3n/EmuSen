@@ -128,7 +128,7 @@ impl Interp {
 
     /// `TryGetReadOnlyFastPath`: one simple command, no assignment or redirection, a literal name the table marks read-only.
     pub fn is_read_only(&self, table: &Table, raw: &str) -> bool {
-        let trimmed = emusen_dotnet::text::trim(raw);
+        let trimmed = raw.trim();
         if trimmed.is_empty() || !self.pending_input.is_empty() || trimmed.starts_with('!') {
             return false;
         }
@@ -151,8 +151,8 @@ impl Interp {
     /// `SubmitCore`: a sourced line shares this scope but not history or `!` expansion.
     pub fn submit_core(&mut self, world: &mut World, raw: &str, interactive: bool) -> (bool, String, Option<Request>) {
         let mut line = raw.to_string();
-        if interactive && self.pending_input.is_empty() && emusen_dotnet::text::trim_start(&line).starts_with('!') {
-            match self.expand_history(world, emusen_dotnet::text::trim(&line)) {
+        if interactive && self.pending_input.is_empty() && line.trim_start().starts_with('!') {
+            match self.expand_history(world, line.trim()) {
                 Ok(expanded) => line = expanded,
                 Err(words) => return (false, format!("Error: {words}"), None),
             }
@@ -181,7 +181,7 @@ impl Interp {
             }
         };
         self.pending_input.clear();
-        let final_text = emusen_dotnet::text::trim(&combined).to_string();
+        let final_text = combined.trim().to_string();
         if final_text.is_empty() {
             return (false, String::new(), None);
         }
@@ -575,7 +575,7 @@ impl Interp {
         let mut request = None;
         self.source_depth += 1;
         for raw in &lines {
-            let trimmed = emusen_dotnet::text::trim_start(raw);
+            let trimmed = raw.trim_start();
             if trimmed.is_empty() || trimmed.starts_with('#') {
                 continue;
             }

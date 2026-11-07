@@ -152,7 +152,7 @@ fn database_folder(tree: &Tree) -> String {
     let model = &MODELS[emusen_galaxia::models::APP_SETTINGS_ID as usize];
     let (settings, _) = emusen_galaxia::config::load_or_new(tree, model, None, emusen_galaxia::models::APP_SETTINGS_FILE);
     match settings.get("CheatDatabaseDirectory").and_then(|v| v.as_str()) {
-        Some(named) if !emusen_dotnet::text::is_blank(Some(named)) => named.to_string(),
+        Some(named) if !named.trim().is_empty() => named.to_string(),
         _ => tree.directory(Directory::Cheats).unwrap_or_default(),
     }
 }

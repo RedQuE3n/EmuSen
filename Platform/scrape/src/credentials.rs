@@ -72,7 +72,7 @@ fn read_text(value: &Value, name: &str) -> Option<String> {
 fn parse_developer(json: &str, origin: Origin) -> Option<Developer> {
     let root = dj::parse(json).ok()?;
     let (id, password, soft) = (read_text(&root, "devid")?, read_text(&root, "devpassword")?, read_text(&root, "softname")?);
-    if [&id, &password, &soft].iter().any(|v| emusen_dotnet::text::is_blank(Some(v))) {
+    if [&id, &password, &soft].iter().any(|v| v.trim().is_empty()) {
         return None;
     }
     redact::register(&id);

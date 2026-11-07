@@ -12,7 +12,7 @@ pub fn of(rom_directory: Option<&str>, path: &str) -> String {
 
 /// As [`of`], with the style and the working directory given.
 pub fn of_from(style: Style, rom_directory: Option<&str>, path: &str, working_directory: &str) -> String {
-    let Some(roms) = rom_directory.filter(|r| !emusen_dotnet::text::is_blank(Some(r))) else { return String::new() };
+    let Some(roms) = rom_directory.filter(|r| !r.trim().is_empty()) else { return String::new() };
     let Some(directory) = dotnet_path::directory_name(style, path).filter(|d| !d.is_empty()) else { return String::new() };
     let root = dotnet_path::full_path_from(style, roms, working_directory);
     let dir = dotnet_path::full_path_from(style, &directory, working_directory);

@@ -617,7 +617,7 @@ pub fn freeze_clear(c: &Call) -> Answer<i64> {
 pub fn label_add(c: &Call, address: u32, name: Raw, comment: Raw) -> Answer<i64> {
     c.change(|e, _| {
         let (name, comment) = (name.text()?, comment.text()?);
-        if emusen_dotnet::text::is_blank(name) {
+        if name.is_none_or(|t| t.trim().is_empty()) {
             return Err(refused(status::BAD_ARGUMENT, "a label must be named"));
         }
         c.target()?;

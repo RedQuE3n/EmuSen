@@ -103,16 +103,6 @@ pub fn replace_line_endings(text: &str, with: &str) -> String {
     out
 }
 
-/// `char.IsWhiteSpace`, which is Unicode's White_Space and so Rust's own; U+001C to U+001F are not in it, whatever .NET's page says.
-pub fn is_white_space(c: char) -> bool {
-    c.is_whitespace()
-}
-
-/// `string.IsNullOrWhiteSpace`.
-pub fn is_blank(text: Option<&str>) -> bool {
-    text.is_none_or(|t| t.chars().all(is_white_space))
-}
-
 /// One character's upper case as .NET's ordinal comparison sees it: Unicode's simple mapping, one character to one, less the two that would turn a letter outside ASCII into one inside it.
 pub fn simple_upper(c: char) -> char {
     if c.is_ascii() {
@@ -160,60 +150,6 @@ pub fn ends_with_ignore_case(a: &str, suffix: &str) -> bool {
 /// Multilingual Plane before U+E000 to U+FFFF, where UTF-8's byte order puts it after.
 pub fn compare_ordinal(a: &str, b: &str) -> Ordering {
     a.encode_utf16().cmp(b.encode_utf16())
-}
-
-/// `char.IsLetter`. A character outside the Basic Multilingual Plane is two surrogates to .NET, and neither is a
-/// letter; inside it, Unicode's Alphabetic stands in for the letter categories, which it also counts the letter
-/// numbers and a few marks among.
-pub fn is_letter(c: char) -> bool {
-    if c.is_ascii() {
-        return c.is_ascii_alphabetic();
-    }
-    (c as u32) <= 0xFFFF && c.is_alphabetic()
-}
-
-/// `char.IsLetterOrDigit`, from .NET's own ranges: a character outside the Basic Multilingual Plane is two surrogates to
-/// .NET, and neither is a letter or a digit.
-pub fn is_letter_or_digit(c: char) -> bool {
-    if c.is_ascii() {
-        return c.is_ascii_alphanumeric();
-    }
-    let unit = c as u32;
-    unit <= 0xFFFF && crate::letter_or_digit::LETTER_OR_DIGIT.binary_search_by(|&(low, high)| {
-        if (high as u32) < unit { std::cmp::Ordering::Less } else if (low as u32) > unit { std::cmp::Ordering::Greater } else { std::cmp::Ordering::Equal }
-    }).is_ok()
-}
-
-/// The runs of Unicode's decimal digits above ASCII where .NET 10.0.12's `char.IsDigit` holds, generated from it on
-/// 2026-10-19; each is ten long.
-static DIGIT_ZEROS: [u16; 36] = [
-    0x0660, 0x06F0, 0x07C0, 0x0966, 0x09E6, 0x0A66, 0x0AE6, 0x0B66, 0x0BE6, 0x0C66, 0x0CE6, 0x0D66, 0x0DE6, 0x0E50, 0x0ED0, 0x0F20, 0x1040, 0x1090,
-    0x17E0, 0x1810, 0x1946, 0x19D0, 0x1A80, 0x1A90, 0x1B50, 0x1BB0, 0x1C40, 0x1C50, 0xA620, 0xA8D0, 0xA900, 0xA9D0, 0xA9F0, 0xAA50, 0xABF0, 0xFF10,
-];
-
-/// `char.IsDigit`: a decimal digit of any script; outside the Basic Multilingual Plane a character is two surrogates to
-/// .NET, and neither is a digit.
-pub fn is_digit(c: char) -> bool {
-    if c.is_ascii() {
-        return c.is_ascii_digit();
-    }
-    let unit = c as u32;
-    DIGIT_ZEROS.iter().any(|&zero| unit >= zero as u32 && unit < zero as u32 + 10)
-}
-
-/// `string.Trim()`.
-pub fn trim(text: &str) -> &str {
-    text.trim_matches(is_white_space)
-}
-
-/// `string.TrimEnd()`.
-pub fn trim_end(text: &str) -> &str {
-    text.trim_end_matches(is_white_space)
-}
-
-/// `string.TrimStart()`.
-pub fn trim_start(text: &str) -> &str {
-    text.trim_start_matches(is_white_space)
 }
 
 /// `string.ToLowerInvariant()`.
@@ -267,19 +203,6 @@ pub fn pad_left(text: &str, width: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-
-    #[test]
-    fn digits_are_dotnets() {
-        assert!(is_digit('7') && is_digit('\u{663}') && is_digit('\u{FF19}') && is_digit('\u{1C59}'));
-        assert!(!is_digit('a') && !is_digit('\u{B2}') && !is_digit('\u{2163}') && !is_digit('\u{FF1A}') && !is_digit('\u{1D7CE}'));
-    }
-
-    #[test]
-    fn letters_and_digits_and_upper_case_are_dotnets() {
-        assert!(is_letter_or_digit('\u{663}') && is_letter_or_digit('\u{FF11}') && is_letter_or_digit('\u{E9}'));
-        assert!(!is_letter_or_digit('\u{B2}') && !is_letter_or_digit('\u{2163}') && !is_letter_or_digit('\u{301}') && !is_letter_or_digit('\u{1F600}'));
-        assert_eq!([upper_invariant('a'), upper_invariant('\u{17F}'), upper_invariant('\u{131}'), upper_invariant('\u{DF}')], ['A', 'S', '\u{131}', '\u{DF}']);
-    }
     use super::*;
 
     #[test]

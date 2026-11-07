@@ -2,7 +2,7 @@
 //! (EmuSen_CoreAPI.md §20).
 
 use crate::cheats::{Decoded, Write, format_error, hex, is_hex, parts};
-use emusen_dotnet::text::{is_white_space, trim, upper_invariant};
+use emusen_dotnet::text::upper_invariant;
 
 /// The space the work RAM's codes write into, beside the CPU bus the codec names.
 const WRAM: &str = "WRAM";
@@ -10,7 +10,7 @@ const CPU_BUS: &str = "CpuBus";
 
 /// Spaces, dashes and colons between digits are how codes are printed, not part of them.
 fn digits(code: &str) -> String {
-    code.chars().filter(|&c| !is_white_space(c) && c != '-' && c != ':').collect()
+    code.chars().filter(|&c| !c.is_whitespace() && c != '-' && c != ':').collect()
 }
 
 fn all_hex(s: &str) -> bool {
@@ -22,7 +22,7 @@ const DO_NOTHING: u32 = 0x7E00_0000;
 
 /// Eight hex digits printed as one word, less the pre-boot codes and the device's own prefixes.
 pub fn is_pro_action_replay(code: &str) -> bool {
-    let d = trim(code);
+    let d = code.trim();
     if d.chars().count() != 8 || !all_hex(d) {
         return false;
     }
@@ -63,7 +63,7 @@ const ADDRESS_ORDER: &str = "abcdefghijklmnopqrstuvwx";
 
 /// The printed form, four digits, a dash, four digits, so that eight bare digits stay the Action Replay's.
 pub fn is_game_genie(code: &str) -> bool {
-    let t: Vec<char> = trim(code).chars().collect();
+    let t: Vec<char> = code.trim().chars().collect();
     t.len() == 9 && t[4] == '-' && t[..4].iter().all(|&c| is_hex(c)) && t[5..].iter().all(|&c| is_hex(c))
 }
 

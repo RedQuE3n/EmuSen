@@ -5,7 +5,7 @@ use crate::{clock, Answer, Run};
 use dianash_module::Call;
 use emusen_dotnet::file::{io_message, read_all_text};
 use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::text::{compare_ordinal, equals_ignore_case, is_white_space, simple_upper};
+use emusen_dotnet::text::{compare_ordinal, equals_ignore_case, simple_upper};
 use std::path::Path;
 
 /// A path through the sandbox, or the refusal the command words as `<name>: <refusal>`.
@@ -130,7 +130,7 @@ pub fn wc(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     };
     // The file's count is one more than the same text piped (§13.4 finding 14): the C# split counts the newline a file ends in.
     let line_count = if text.is_empty() { 0 } else { text.split('\n').count() };
-    let word_count = text.split(is_white_space).filter(|w| !w.is_empty()).count();
+    let word_count = text.split(char::is_whitespace).filter(|w| !w.is_empty()).count();
     let all = !lines && !words && !bytes;
     let mut fields = Vec::new();
     if all || lines {
@@ -367,5 +367,5 @@ pub fn xxd(call: &Call, args: &[String], stdin: Option<String>) -> Run {
         out.push_str(&ascii);
         out.push('\n');
     }
-    Ok(Answer::ok(out.trim_end_matches(is_white_space)))
+    Ok(Answer::ok(out.trim_end_matches(char::is_whitespace)))
 }

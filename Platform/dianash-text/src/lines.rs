@@ -5,7 +5,7 @@ use crate::{Answer, Run};
 use dianash_module::Call;
 use emusen_dotnet::file::read_all_text;
 use emusen_dotnet::number::{parse_f64, parse_i32};
-use emusen_dotnet::text::{compare_ordinal, is_white_space, trim};
+use emusen_dotnet::text::compare_ordinal;
 use regex::Regex;
 use std::cmp::Ordering;
 
@@ -29,7 +29,7 @@ pub fn sort(args: &[String], stdin: Option<String>) -> Answer {
     let mut lines: Vec<&str> = text.split('\n').collect();
     if numeric {
         // OrderBy is stable, and Comparer<double> puts NaN first and holds -0 equal to 0.
-        let key = |line: &str| parse_f64(trim(line)).unwrap_or(0.0);
+        let key = |line: &str| parse_f64(line.trim()).unwrap_or(0.0);
         lines.sort_by(|a, b| {
             let (a, b) = (key(a), key(b));
             match (a.is_nan(), b.is_nan()) {
@@ -293,8 +293,8 @@ pub fn awk(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     let split = |line: &str| -> Vec<String> {
         match &separator {
             None => {
-                let trimmed = trim(line);
-                if trimmed.is_empty() { Vec::new() } else { trimmed.split(is_white_space).filter(|f| !f.is_empty()).map(str::to_string).collect() }
+                let trimmed = line.trim();
+                if trimmed.is_empty() { Vec::new() } else { trimmed.split(char::is_whitespace).filter(|f| !f.is_empty()).map(str::to_string).collect() }
             }
             Some(separator) => line.split(separator.as_str()).map(str::to_string).collect(),
         }
@@ -353,7 +353,7 @@ fn parse_program(program: &str) -> Result<Result<Vec<Rule>, String>, String> {
     let mut rules = Vec::new();
     let mut pos = 0;
     loop {
-        while pos < len && (is_white_space(chars[pos]) || chars[pos] == ';') {
+        while pos < len && (chars[pos].is_whitespace() || chars[pos] == ';') {
             pos += 1;
         }
         if pos >= len {
@@ -392,18 +392,18 @@ fn parse_program(program: &str) -> Result<Result<Vec<Rule>, String>, String> {
         let pattern_text;
         let mut statements = None;
         if let Some(open) = brace {
-            pattern_text = trim(&text(pos, open)).to_string();
+            pattern_text = text(pos, open).trim().to_string();
             let Some(close) = matching_brace(&chars, open) else { return Ok(Err(format!("unterminated '{{' in: {}", text(pos, len)))) };
-            match parse_statements(trim(&text(open + 1, close))) {
+            match parse_statements(text(open + 1, close).trim()) {
                 Ok(parsed) => statements = Some(parsed),
                 Err(words) => return Ok(Err(words)),
             }
             pos = close + 1;
         } else if let Some(at) = separator {
-            pattern_text = trim(&text(pos, at)).to_string();
+            pattern_text = text(pos, at).trim().to_string();
             pos = at + 1;
         } else {
-            pattern_text = trim(&text(pos, len)).to_string();
+            pattern_text = text(pos, len).trim().to_string();
             pos = len;
         }
         if pattern_text.is_empty() && statements.is_none() {
@@ -491,16 +491,16 @@ fn split_top_level(text: &str, separator: char) -> Vec<String> {
 fn parse_statements(body: &str) -> Result<Vec<Vec<Expression>>, String> {
     let mut statements = Vec::new();
     for raw in split_top_level(body, ';') {
-        let statement = trim(&raw);
+        let statement = raw.trim();
         if statement.is_empty() {
             continue;
         }
-        let is_print = statement == "print" || (statement.starts_with("print") && statement[5..].chars().next().is_some_and(is_white_space));
+        let is_print = statement == "print" || (statement.starts_with("print") && statement[5..].chars().next().is_some_and(char::is_whitespace));
         if !is_print {
             return Err(format!("unsupported awk statement: '{statement}' (only 'print' is supported)"));
         }
-        let arguments = trim(&statement[5..]);
-        let expressions = if arguments.is_empty() { Vec::new() } else { split_top_level(arguments, ',').iter().map(|e| parse_expression(trim(e))).collect::<Result<_, _>>()? };
+        let arguments = statement[5..].trim();
+        let expressions = if arguments.is_empty() { Vec::new() } else { split_top_level(arguments, ',').iter().map(|e| parse_expression(e.trim())).collect::<Result<_, _>>()? };
         statements.push(expressions);
     }
     Ok(statements)
@@ -514,10 +514,10 @@ fn parse_pattern(text: &str) -> Result<Result<Pattern, String>, String> {
         return pattern::compile(&inner, false).map(|r| Ok(Pattern::Regex(r)));
     }
     if let Some(rest) = text.strip_prefix("NR") {
-        let rest = rest.trim_start_matches(is_white_space);
+        let rest = rest.trim_start_matches(char::is_whitespace);
         for op in ["==", "!=", ">=", "<=", ">", "<"] {
             if let Some(number) = rest.strip_prefix(op) {
-                let number = number.trim_start_matches(is_white_space);
+                let number = number.trim_start_matches(char::is_whitespace);
                 if !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()) {
                     return match parse_i32(number) {
                         Some(value) => Ok(Ok(Pattern::Record(op.to_string(), value))),

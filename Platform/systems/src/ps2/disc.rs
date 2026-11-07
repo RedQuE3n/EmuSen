@@ -4,7 +4,7 @@
 
 use crate::media::ascii;
 use crate::probe::{Head, Need, ROOT_FILE_LIMIT, Recognition, root_file_through};
-use emusen_dotnet::text::{equals_ignore_case, trim};
+use emusen_dotnet::text::equals_ignore_case;
 
 /// The bytes read first: sector 16, the primary volume descriptor, in an .iso's 2,048-byte sectors or a raw track's 2,352-byte ones.
 pub const FIRST: usize = 40 * 1024;
@@ -14,7 +14,7 @@ pub fn value(config: Option<&[u8]>, key: &str) -> Option<String> {
     let text = ascii(config?);
     text.split('\n').find_map(|line| {
         let eq = line.find('=')?;
-        equals_ignore_case(trim(&line[..eq]), key).then(|| trim(&line[eq + 1..]).to_string())
+        equals_ignore_case(line[..eq].trim(), key).then(|| line[eq + 1..].trim().to_string())
     })
 }
 

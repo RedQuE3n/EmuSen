@@ -2,11 +2,11 @@
 //! and how it reads a file's lines. Each is .NET's rule as measured, not Rust's nearest. See EmuSen_RustPlatform.md §16.3.
 
 use crate::word::is_word;
-use emusen_galaxia::dotnet_path::{equals_ignore_case, is_white_space};
+use emusen_galaxia::dotnet_path::equals_ignore_case;
 
 /// `\s`, and `char.IsWhiteSpace`, which measure the same in .NET 10 and are Unicode's White_Space.
 pub fn is_space(c: char) -> bool {
-    is_white_space(c)
+    c.is_whitespace()
 }
 
 /// What is left after a run of `\s`.
@@ -120,7 +120,7 @@ pub fn parse_float(text: &str) -> Option<f32> {
         return plain.parse::<f32>().ok();
     }
     // What is not a number may still be one of the three words, with any case and any white space around it.
-    let word = text.trim_matches(is_white_space);
+    let word = text.trim_matches(char::is_whitespace);
     if equals_ignore_case(word, "Infinity") {
         return Some(f32::INFINITY);
     }

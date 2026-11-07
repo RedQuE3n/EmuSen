@@ -3765,3 +3765,13 @@ layout and its file decoding to .NET's own answers (§10.5, §11.5). No program 
 five WiseMan tests that called them (in `GalaxiaParityTests`: every path rule, blank text and caseless equality, a
 file and a directory existing, every double and float written, a file's bytes decoded), and the interface is 36.
 What those rules do to stored keys and to files a person edits is now held by the disk corpus (§47.1).
+
+### 47.5 White space, letters and digits are the standard library's
+
+`trim`, `trim_start`, `trim_end`, white space, blank text, letters and letters-or-digits are `str` and `char`'s own
+(`trim`, `is_whitespace`, `is_alphabetic`, `is_alphanumeric`); blank text is `trim().is_empty()`. White space was
+already Unicode's White_Space and the same set (§10.3), so trimming and word splitting do not change, and the DianaSh
+goldens hold them. Letters change at the edges: a character outside the Basic Multilingual Plane, two surrogates to
+.NET and so no letter, is a letter when Unicode says so, and the 398 ranges of `letter_or_digit.rs` (.NET 10's own,
+generated 2026-10-17) are gone with them. A digit in the debugger's expressions is an ASCII digit; .NET's took any
+script's decimal digits, which no number in an expression could then be read from.

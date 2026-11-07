@@ -5,7 +5,7 @@ use crate::memory::find;
 use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
 use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, trim_end};
+use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right};
 use emusen_session_service::words::parse_hex;
 use emusen_session_service::Record;
 
@@ -42,7 +42,7 @@ pub fn tile(call: &Call, parts: &[String]) -> Run {
         }
         out.push('\n');
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn tilemap(call: &Call, parts: &[String]) -> Run {
@@ -91,7 +91,7 @@ pub fn sprites(call: &Call) -> Run {
             boolean(s.flag("flip_y"))
         );
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn pal(call: &Call, parts: &[String]) -> Run {
@@ -110,7 +110,7 @@ pub fn pal(call: &Call, parts: &[String]) -> Run {
             .collect();
         out += &format!("pal {}: {}\n", pad_left(&p.int("index").to_string(), 2), colors.join(" "));
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn channels(call: &Call) -> Run {

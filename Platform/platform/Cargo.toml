@@ -11,6 +11,8 @@ name = "emusen_platform"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# JSON text written by serde_json.
+serde_json.workspace = true
 # "Did you mean …?" for a name that matched nothing.
 emusen-suggest = { path = "../suggest" }
 # DianaSh's shell core, whose host API this library exports (EmuSen_DianaSh.md §10).

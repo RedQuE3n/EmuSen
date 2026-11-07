@@ -599,7 +599,7 @@ impl Shell {
 
 /// The JSON string of a text.
 pub(crate) fn json_string(text: &str) -> String {
-    json::quoted(text)
+    serde_json::Value::from(text).to_string()
 }
 
 /// What the shell reads of a manifest (§5.3); a field it does not know is ignored.

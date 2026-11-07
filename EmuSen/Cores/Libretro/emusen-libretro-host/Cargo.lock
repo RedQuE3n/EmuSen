@@ -379,6 +379,7 @@ name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]

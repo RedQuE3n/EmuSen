@@ -3881,3 +3881,13 @@ it. `emusen_scrape.h`'s requests are read the same way, and the requests the scr
 number, a list of texts) is written by serde_json through `scrape/src/json.rs`; turning those layouts into `json!` is
 left for a later change, since it moves no byte. What changes in the bytes is as §47.12 says: UTF-8 text, and a whole
 double with its point.
+
+### 47.14 The systems table, the session's arguments and the modules' texts are written by serde_json
+
+`System`, `Medium` and `Look` derive `Serialize` beside `Deserialize`, so the systems table (`emusen_systems_table`,
+the frontend API's `systems`) is the data files' own types written by serde_json, its members in `KEYS`' order since
+the fields are declared in it; a cover's shape of 1 is now `1.0`. The save media, cheat codec and libretro core lists
+of `emusen-systems` build `serde_json::Value`s. The session service's `quoted`, which the command modules build their
+arguments with, the shell's JSON strings, the platform's package answer and the library tool's crop text are serde_json's
+or the standard library's. What still reads or writes emusen-dotnet's `json::Value` is Galaxia's models and manifests
+and the files and session answers read through them, which §47's config step replaces.

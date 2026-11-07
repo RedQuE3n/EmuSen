@@ -62,19 +62,19 @@ fn a_tree_is_scanned_shelved_and_a_renamed_game_keeps_its_row() {
     assert!(!lib.games_request("{\"system\":\"gbc\"}").unwrap().contains("Plain.gb"));
 
     let b = t.at("roms/nes/b.nes");
-    let id = lib.identity_request(&format!("{{\"path\":{},\"record\":true}}", emusen_dotnet::json::quoted(&b))).unwrap();
+    let id = lib.identity_request(&format!("{{\"path\":{},\"record\":true}}", serde_json::json!(&b).to_string())).unwrap();
     assert!(id.contains("\"system\":\"nes\"") && id.contains("\"cached\":false"), "{id}");
     assert!(!id.contains("\"sha1\""), "a 1.0 request sees no sha1: {id}");
-    let with = lib.identity_request(&format!("{{\"path\":{},\"sha1\":true}}", emusen_dotnet::json::quoted(&b))).unwrap();
+    let with = lib.identity_request(&format!("{{\"path\":{},\"sha1\":true}}", serde_json::json!(&b).to_string())).unwrap();
     assert!(with.contains("\"crc32\":\"") && with.contains("\"sha1\":\"2fbb1a94481697640581db35542dabf3dee0a72b\""), "{with}");
-    lib.change_request(&format!("{{\"op\":\"toggle_favourite\",\"path\":{}}}", emusen_dotnet::json::quoted(&b))).unwrap();
+    lib.change_request(&format!("{{\"op\":\"toggle_favourite\",\"path\":{}}}", serde_json::json!(&b).to_string())).unwrap();
     let id = lib.change_request("{\"op\":\"create_collection\",\"name\":\"RPGs\",\"at\":\"2026-10-18T12:00:00.0000000+02:00\"}").unwrap();
-    lib.change_request(&format!("{{\"op\":\"add_to_collection\",\"id\":{id},\"path\":{}}}", emusen_dotnet::json::quoted(&b))).unwrap();
+    lib.change_request(&format!("{{\"op\":\"add_to_collection\",\"id\":{id},\"path\":{}}}", serde_json::json!(&b).to_string())).unwrap();
 
     std::fs::rename(&b, t.at("roms/nes/renamed.nes")).unwrap();
     lib.scan(&[t.at("roms")], &systems).unwrap();
     assert_eq!(lib.change_request("{\"op\":\"reclaim\"}").unwrap(), "{\"moved\":1}");
-    let moved = lib.get_request(&format!("{{\"what\":\"game\",\"path\":{}}}", emusen_dotnet::json::quoted(&t.at("roms/nes/renamed.nes")))).unwrap();
+    let moved = lib.get_request(&format!("{{\"what\":\"game\",\"path\":{}}}", serde_json::json!(&t.at("roms/nes/renamed.nes")).to_string())).unwrap();
     assert!(moved.contains("\"favourite\":true") && moved.contains(&format!("\"collections\":[{id}]")), "{moved}");
     drop(lib);
 
@@ -120,13 +120,13 @@ fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
     let systems: Vec<String> = ["nes", "psx"].iter().map(|s| s.to_string()).collect();
     let request = format!(
         "{{\"roots\":[{}],\"systems\":[\"nes\",\"psx\"],\"packages\":{},\"compressed\":{}}}",
-        emusen_dotnet::json::quoted(&t.at("roms")),
-        emusen_dotnet::json::quoted(&t.at("packages")),
-        emusen_dotnet::json::quoted(&t.at("compressed"))
+        serde_json::json!(&t.at("roms")).to_string(),
+        serde_json::json!(&t.at("packages")).to_string(),
+        serde_json::json!(&t.at("compressed")).to_string()
     );
     assert_eq!(lib.scan_request(&request).unwrap(), 4);
     let games = lib.games_request("").unwrap();
-    let q = |s: &str| emusen_dotnet::json::quoted(s);
+    let q = |s: &str| serde_json::json!(s).to_string();
     assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":{}}}", q(&t.at("roms/nes/Claimed.nes")), q(&t.at("packages/NES/Claimed.nes")))), "{games}");
     assert!(games.contains(&format!("{{\"path\":{},\"system\":\"psx\",\"package\":{}}}", q(&t.at("compressed/psx/Disc.chd")), q(&t.at("packages/PlayStation/Disc.chd")))), "{games}");
     assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":null}}", q(&t.at("roms/nes/Free.nes")))), "{games}");

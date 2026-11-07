@@ -933,7 +933,7 @@ fn records_into(ctx: &Context, states: &[(String, String)], failed: &mut Vec<Str
 fn settings_into(ctx: &Context, system: &str, folder: &str, game: &str) -> Result<Option<(String, String)>, Option<String>> {
     let plain = emusen_crystal::settings::game_settings_path(&ctx.tree, system, game);
     let target = emusen_crystal::settings::package_settings_path(folder);
-    let crop = crop_of(ctx, game).map(|c| [c.left, c.right, c.top, c.bottom].iter().map(|v| emusen_dotnet::json::format_f64(*v).unwrap_or_default()).collect::<Vec<_>>().join(" "));
+    let crop = crop_of(ctx, game).map(|c| [c.left, c.right, c.top, c.bottom].iter().map(|v| v.to_string()).collect::<Vec<_>>().join(" "));
     let has_plain = dotnet_files::file_exists(&plain);
     let has_crop = |values: &[(String, String)]| values.iter().any(|(k, _)| k == CROP_KEY);
     if dotnet_files::file_exists(&target) {

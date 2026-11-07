@@ -374,7 +374,7 @@ pub unsafe extern "C" fn emusen_galaxia_rom_tracks(sheet: *const u8, sheet_len: 
             .iter()
             .map(|t| {
                 let h = hashes_json(&t.hashes);
-                format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, emusen_dotnet::json::quoted(&t.file), t.offset, &h[1..])
+                format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, serde_json::json!(&t.file).to_string(), t.offset, &h[1..])
             })
             .collect();
         Ok(format!("[{}]", items.join(",")))
@@ -446,7 +446,7 @@ fn strings(out: &mut String, items: &[String]) {
         if i > 0 {
             out.push(',');
         }
-        out.push_str(&emusen_dotnet::json::quoted(item));
+        out.push_str(&serde_json::json!(item).to_string());
     }
     out.push(']');
 }
@@ -477,7 +477,7 @@ pub unsafe extern "C" fn emusen_galaxia_package_index(
             if i > 0 {
                 j.push(',');
             }
-            j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", emusen_dotnet::json::quoted(&pkg.folder), emusen_dotnet::json::quoted(&pkg.system), emusen_dotnet::json::quoted(&pkg.game)));
+            j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", serde_json::json!(&pkg.folder).to_string(), serde_json::json!(&pkg.system).to_string(), serde_json::json!(&pkg.game).to_string()));
             strings(&mut j, &pkg.claims);
             j.push('}');
         }
@@ -510,8 +510,8 @@ pub unsafe extern "C" fn emusen_galaxia_package_resolve(
         let at = unsafe { required(at, at_len) }?;
         let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
         let r = claims::resolve(&roots_from(p, l, c), at).map_err(|words| fail(status::IO, words))?;
-        let package = r.package.as_deref().map_or_else(|| "null".to_string(), emusen_dotnet::json::quoted);
-        Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", emusen_dotnet::json::quoted(&r.game), r.moved))
+        let package = serde_json::json!(r.package).to_string();
+        Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", serde_json::json!(&r.game).to_string(), r.moved))
     };
     answer(result(), out, len)
 }

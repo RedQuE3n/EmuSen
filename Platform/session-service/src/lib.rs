@@ -626,11 +626,11 @@ impl Record for Value {
 
 /// A JSON object written from members already rendered as JSON values.
 pub fn object(members: &[(&str, String)]) -> String {
-    let body: Vec<String> = members.iter().map(|(key, value)| format!("{}:{value}", json::quoted(key))).collect();
+    let body: Vec<String> = members.iter().map(|(key, value)| format!("{}:{value}", quoted(key))).collect();
     format!("{{{}}}", body.join(","))
 }
 
-/// A string as a JSON value.
+/// A string as a JSON value, written by serde_json.
 pub fn quoted(text: &str) -> String {
-    json::quoted(text)
+    serde_json::Value::from(text).to_string()
 }

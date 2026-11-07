@@ -3,7 +3,7 @@
 //! the systems it is the default engine of though a native core runs them (EmuSen_Cores.md §4.7 and §4.8, decided
 //! 2026-11-01).
 
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 
 /// How a hosted core draws, as the host provides for it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -96,22 +96,22 @@ pub fn default_for(system: &str) -> Option<&'static str> {
 
 /// A list as compact JSON, one object a core with the keys stem, systems, upstream, licence, renderer and default_for.
 pub fn to_json(cores: &[LibretroCore]) -> String {
-    let words = |list: &[String]| Value::Array(list.iter().map(|s| Value::string(s.clone())).collect());
+    let words = |list: &[String]| Value::Array(list.iter().map(|s| Value::from(s.clone())).collect());
     let rows = cores
         .iter()
         .map(|c| {
-            Value::Object(vec![
-                (json::Text::new("stem"), Value::string(c.stem.clone())),
-                (json::Text::new("systems"), words(&c.systems)),
-                (json::Text::new("upstream"), Value::string(c.upstream.clone())),
-                (json::Text::new("licence"), Value::string(c.licence.clone())),
-                (json::Text::new("renderer"), Value::string(c.renderer.word())),
-                (json::Text::new("default_for"), words(&c.default_for)),
-            ])
+            Value::Object(serde_json::Map::from_iter([
+                (String::from("stem"), Value::from(c.stem.clone())),
+                (String::from("systems"), words(&c.systems)),
+                (String::from("upstream"), Value::from(c.upstream.clone())),
+                (String::from("licence"), Value::from(c.licence.clone())),
+                (String::from("renderer"), Value::from(c.renderer.word())),
+                (String::from("default_for"), words(&c.default_for)),
+            ]))
         })
         .collect();
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Array(rows));
+    out.push_str(&Value::Array(rows).to_string());
     out
 }
 

@@ -456,6 +456,7 @@ dependencies = [
  "emusen-galaxia",
  "emusen-suggest",
  "regex",
+ "serde_json",
  "sha2",
 ]
 
@@ -630,6 +631,7 @@ dependencies = [
  "emusen-trace",
  "rcgen",
  "rustls",
+ "serde_json",
 ]
 
 [[package]]
@@ -708,6 +710,7 @@ name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -751,6 +754,7 @@ dependencies = [
  "emusen-sqlite",
  "libc",
  "regex",
+ "serde_json",
 ]
 
 [[package]]

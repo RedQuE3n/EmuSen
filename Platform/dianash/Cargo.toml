@@ -11,6 +11,8 @@ publish.workspace = true
 name = "emusen_dianash"
 
 [dependencies]
+# JSON text written by serde_json.
+serde_json.workspace = true
 # "Did you mean …?" for a name that matched nothing.
 emusen-suggest = { path = "../suggest" }
 # The module ABI's types, which the shell calls modules and a host's commands through.

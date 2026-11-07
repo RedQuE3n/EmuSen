@@ -365,6 +365,7 @@ dependencies = [
  "emusen-dotnet",
  "emusen-galaxia",
  "emusen-suggest",
+ "serde_json",
  "sha2",
 ]
 
@@ -582,6 +583,7 @@ dependencies = [
  "emusen-suggest",
  "emusen-systems",
  "emusen-trace",
+ "serde_json",
 ]
 
 [[package]]
@@ -660,6 +662,7 @@ name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]

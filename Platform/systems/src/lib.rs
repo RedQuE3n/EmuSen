@@ -24,8 +24,7 @@ pub mod sega_disc;
 pub mod sms;
 pub mod snes;
 
-use emusen_dotnet::json::{self, Value};
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::OnceLock;
 
 /// A fact that may be unknown but is always written: `null` or a value, and a file without it refused.
@@ -35,7 +34,7 @@ fn stated<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option
 
 /// One system's facts, as its data file states them: every field written, `null` where a fact is unknown, and in the
 /// order the table writes them.
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct System {
     pub id: String,
@@ -101,7 +100,7 @@ impl System {
 
 /// How the front ends draw a console: its hue and its body, a planet's palette and features as opacities from 0 to 1
 /// (EmuSen_Interface.md §22, §24.6).
-#[derive(Clone, Debug, PartialEq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Look {
     /// Degrees, 0 to 360.
@@ -147,7 +146,7 @@ pub fn default_cover_aspect() -> f64 {
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Medium {
     pub id: String,
@@ -322,62 +321,9 @@ pub fn build(files: &[(&str, &str)]) -> Result<Vec<System>, Error> {
     Ok(systems)
 }
 
-/// The table as JSON, one compact array of objects, each member in `KEYS`' order and each number as .NET writes it.
+/// The table as JSON, one compact array of objects, each member in `KEYS`' order, written by serde_json.
 pub fn to_json(systems: &[System]) -> String {
-    fn words(list: &[String]) -> Value {
-        Value::Array(list.iter().map(|w| Value::string(w.as_str())).collect())
-    }
-    fn or_null(value: Option<Value>) -> Value {
-        value.unwrap_or(Value::Null)
-    }
-    let rows = systems
-        .iter()
-        .map(|s| {
-            let values = [
-                Value::string(s.id.as_str()),
-                Value::string(s.name.as_str()),
-                Value::string(s.console.as_str()),
-                Value::string(s.manufacturer.as_str()),
-                Value::number(s.release_year),
-                words(&s.extensions),
-                words(&s.cheat_systems),
-                words(&s.openvgdb_systems),
-                // Finite by parse, so .NET has a number for it.
-                Value::Number(json::format_f64(s.cover_aspect).unwrap_or_else(|| "0".into())),
-                Value::string(s.esde_system.as_str()),
-                Value::string(s.esde_full_name.as_str()),
-                Value::Bool(s.self_delimiting_images),
-                or_null(s.attached_to.as_deref().map(Value::string)),
-                or_null(s.screenscraper_system.map(Value::number)),
-                Value::string(s.display_name.as_str()),
-                or_null(s.firmware_name.as_deref().map(Value::string)),
-                or_null(s.cheat_space.as_deref().map(Value::string)),
-                Value::Array(
-                    s.media
-                        .iter()
-                        .map(|m| {
-                            let values = [m.id.as_str(), m.title.as_str(), m.noun.as_str()].map(Value::string);
-                            Value::Object(MEDIUM_KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
-                        })
-                        .collect(),
-                ),
-                or_null(s.byte_order.as_deref().map(Value::string)),
-                words(&s.libretro_databases),
-                words(&s.libretro_systemids),
-                or_null(s.firmware_note.as_deref().map(Value::string)),
-                Value::Bool(s.rumble),
-                or_null(s.look.as_ref().map(|l| {
-                    let share = |v: f64| Value::Number(json::format_f64(v).unwrap_or_else(|| "0".into()));
-                    let values = [share(l.hue), Value::string(l.body.as_str()), words(&l.palette), share(l.craters), share(l.bands), share(l.cap), Value::number(l.moons)];
-                    Value::Object(LOOK_KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
-                })),
-            ];
-            Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
-        })
-        .collect();
-    let mut out = String::new();
-    json::write_compact(&mut out, &Value::Array(rows));
-    out
+    serde_json::to_string(systems).unwrap_or_default()
 }
 
 static TABLE: OnceLock<Result<(Vec<System>, String), Error>> = OnceLock::new();
@@ -465,7 +411,7 @@ mod tests {
         assert_eq!(refused("nes", &with_look(&nes(), r#"{"hue": 400, "body": "planet", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"#)), "the look's hue is not a number from 0 to 360");
         assert_eq!(refused("nes", &with_look(&nes(), r#"{"hue": 1, "body": "cube", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"#)), "the look's body cube is not one of planet, shards, gem");
         assert_eq!(refused("nes", &with_look(&nes(), r##"{"hue": 1, "body": "planet", "palette": ["#FFF"], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"##)), "the look's palette is not three #RRGGBB colours or none");
-        assert!(to_json(&build(&DATA).unwrap()).contains(r##""look":{"hue":352,"body":"planet","palette":["#FFD3D8","#EE4E66","#7E1A38"],"craters":0,"bands":0,"cap":0.9,"moons":2}"##));
+        assert!(to_json(&build(&DATA).unwrap()).contains(r##""look":{"hue":352.0,"body":"planet","palette":["#FFD3D8","#EE4E66","#7E1A38"],"craters":0.0,"bands":0.0,"cap":0.9,"moons":2}"##));
         assert_eq!(default_cover_aspect(), 1.365385);
     }
 
@@ -547,16 +493,14 @@ mod tests {
     }
 
     #[test]
-    fn the_json_has_every_key_in_order_and_numbers_as_dotnet_writes_them() {
+    fn the_json_has_every_key_in_order() {
         let text = table_json().unwrap();
-        let Value::Array(rows) = json::parse(text).unwrap() else { panic!("not an array") };
+        let rows: Vec<serde_json::Map<String, serde_json::Value>> = serde_json::from_str(text).unwrap();
         assert_eq!(rows.len(), DATA.len());
         for row in &rows {
-            let Value::Object(members) = row else { panic!("not an object") };
-            let keys: Vec<&str> = members.iter().map(|(k, _)| k.text.as_str()).collect();
-            assert_eq!(keys, KEYS);
+            assert_eq!(row.keys().map(String::as_str).collect::<Vec<_>>(), KEYS);
         }
-        assert!(text.contains(r#""cover_aspect":1,"#), "1.0 is written as .NET writes it");
+        assert!(text.contains(r#""cover_aspect":1.0,"#));
         assert!(text.contains(r#""cover_aspect":0.73,"#));
         assert!(text.contains(r#""attached_to":null,"#));
         assert!(text.starts_with(r#"[{"id":"nes","name":"Nintendo Entertainment System","console":"NES""#));
@@ -565,11 +509,9 @@ mod tests {
     #[test]
     fn the_json_reads_back_as_the_same_table() {
         let text = table_json().unwrap();
-        let Value::Array(rows) = json::parse(text).unwrap() else { panic!("not an array") };
+        let rows: Vec<serde_json::Value> = serde_json::from_str(text).unwrap();
         for (row, system) in rows.iter().zip(table().unwrap()) {
-            let mut one = String::new();
-            json::write_compact(&mut one, row);
-            assert_eq!(&parse(&system.id, &one).unwrap(), system);
+            assert_eq!(&parse(&system.id, &row.to_string()).unwrap(), system);
         }
     }
 

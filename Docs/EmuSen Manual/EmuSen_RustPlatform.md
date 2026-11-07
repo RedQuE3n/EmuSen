@@ -3032,7 +3032,7 @@ declares them, by the folder that reads them:
 | Diamond's tests | `Reference/analysis/psxplay` |
 | Diamond's kernel harness (in Diamond's folder) | `Diamond_OpenKernel.md` |
 | `Platform/serenity` (`include_str!`) | `EmuSen.Serenity/Slang/spirv-cache-schema.sql` |
-| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `EmuSen.Crystal/include/emusen_session.h` |
+| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `Platform/crystal/include/emusen_session.h` |
 
 **The check.** The list will go stale as code changes, so the plan checks it on every run:
 

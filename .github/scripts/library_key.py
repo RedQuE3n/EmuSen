@@ -30,7 +30,7 @@ EXTRA = {
         "Docs/Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_OpenKernel.md",
     ],
     "Platform/serenity": ["EmuSen.Serenity/Slang/spirv-cache-schema.sql"],
-    "Platform/dianash": ["EmuSen.Crystal/include/emusen_session.h"],
+    "Platform/dianash": ["Platform/crystal/include/emusen_session.h"],
 }
 # The sidecar's writer, which every library job runs, and the files that say how a library is built.
 TOOLS = ["EmuSen/Cores/Shared/emusen-core-conform"]

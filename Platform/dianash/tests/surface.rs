@@ -30,7 +30,7 @@ fn session_identifiers(header: &str) -> Vec<String> {
 #[test]
 fn the_crate_names_nothing_of_the_session_service() {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let header = std::fs::read_to_string(crate_dir.join("../../EmuSen.Crystal/include/emusen_session.h")).unwrap();
+    let header = std::fs::read_to_string(crate_dir.join("../crystal/include/emusen_session.h")).unwrap();
     let names = session_identifiers(&header);
     assert!(names.len() > 50, "the header's identifiers were not found: {names:?}");
     let mut files = Vec::new();

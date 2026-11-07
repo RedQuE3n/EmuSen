@@ -1,5 +1,5 @@
 //! `emusen_session.h` as Rust lays it out: the table `emusen_session_v1`, its statuses and its open enumerations. The
-//! header in `EmuSen.Crystal/include/` is normative; `tests/header.rs` holds every offset and number here to it. See
+//! header in `Platform/crystal/include/` is normative; `tests/header.rs` holds every offset and number here to it. See
 //! EmuSen_DianaSh.md §9 and §13.6.
 
 #![allow(non_camel_case_types)]

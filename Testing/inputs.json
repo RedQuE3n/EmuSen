@@ -79,7 +79,7 @@
     {"unit": "cargo:EmuSen/Cores/Sony/Diamond - PlayStation", "paths": ["Reference/analysis/psxplay"], "reason": "library_key.py EXTRA"},
     {"unit": "cargo:EmuSen/Cores/Sony/Diamond - PlayStation/kernel-harness", "paths": ["Docs/Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_OpenKernel.md"], "reason": "library_key.py EXTRA"},
     {"unit": "cargo:Platform/serenity", "paths": ["EmuSen.Serenity/Slang/spirv-cache-schema.sql"], "reason": "library_key.py EXTRA"},
-    {"unit": "cargo:Platform/dianash", "paths": ["EmuSen.Crystal/include/emusen_session.h"], "reason": "library_key.py EXTRA"},
+    {"unit": "cargo:Platform/dianash", "paths": ["Platform/crystal/include/emusen_session.h"], "reason": "library_key.py EXTRA"},
     {"unit": "cargo:Platform/emusen-testing-module", "paths": ["Testing"], "reason": "the module embeds Testing/schema and reads Testing/*.json"}
   ]
 }

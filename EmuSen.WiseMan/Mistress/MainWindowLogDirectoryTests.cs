@@ -6,7 +6,6 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Views;

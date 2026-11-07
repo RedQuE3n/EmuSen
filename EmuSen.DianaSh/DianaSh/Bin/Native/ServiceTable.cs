@@ -5,23 +5,15 @@ using EmuSen.Crystal.Session;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Native
 {
-    // A session service table a shell is handed: this process's C# provider, or one the platform library's Crystal made - see EmuSen_Backend.md §29.25.
+    // A session service table a shell is handed, one the platform library's Crystal made - see EmuSen_Backend.md §29.25.
     internal sealed unsafe class ServiceTable
     {
-        private readonly SessionService? _provider;
-
-        public ServiceTable(SessionService provider)
-        {
-            _provider = provider;
-            Table = provider.Table;
-        }
-
         public ServiceTable(nint table) => Table = (EmuSenSessionV1*)table;
 
         public EmuSenSessionV1* Table { get; }
 
-        // Run control's requests since the last drain, oldest first: the provider's own, or the table's events_drain.
-        public IReadOnlyList<string> DrainRunRequests() => _provider?.DrainRunRequests() ?? DrainEvents();
+        // Run control's requests since the last drain, oldest first, from the table's events_drain.
+        public IReadOnlyList<string> DrainRunRequests() => DrainEvents();
 
         private IReadOnlyList<string> DrainEvents()
         {

@@ -1,4 +1,4 @@
-# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte, and frozen since its recorder went with the C# core host on 2026-11-07 - see EmuSen_DianaSh.md §13.4.
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command ls

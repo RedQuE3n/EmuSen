@@ -10,8 +10,8 @@ DESCRIPTION
     per-voice audio channel meters, a live color-RAM palette swatch, and (if
     this core has a tilemap concept) a downsampled live preview of VRAM's
     tile sheet - all in one screen, refreshing on its own clock rather than
-    waiting for input. Every number comes from IDebugTarget, so a core with
-    nothing to report for a given section (no hardware-load breakdown wired
+    waiting for input. Every number comes from the running session's
+    telemetry, so a core with nothing to report for a given section (no hardware-load breakdown wired
     up, no fixed sprite capacity, no palettes) just makes that section
     shrink or disappear rather than showing something fake.
 
@@ -43,12 +43,13 @@ DESCRIPTION
         the terminal, so you can dismiss it and keep playing. In
         EmuSen.Mistress, coretop is already windowed by default, so -w is
         accepted and simply has no additional effect there. In EmuSen.Hotaru
-        (a Raylib console build with no window of its own to reuse), -w spins
-        up a small dedicated Avalonia UI thread the first time it's used and
-        opens a real second OS window from it, entirely separate from the
-        Raylib game window and its main loop - gameplay keeps running behind
-        it. Closing that window is -w's equivalent of Ctrl+C: it's the whole
-        'stop watching coretop' action, nothing else to press. If the current
+        (a Raylib console build with no window of its own to reuse), coretop,
+        with -w or without, spins up a small dedicated Avalonia UI thread the
+        first time it's used and opens a real second OS window from it,
+        entirely separate from the Raylib game window and its main loop -
+        gameplay keeps running behind it. Closing that window is the
+        equivalent of Ctrl+C: it's the whole 'stop watching coretop' action,
+        nothing else to press. If the current
         frontend has no window to open at all, -w fails cleanly with
         "not supported by this frontend" rather than falling back to the
         terminal dashboard.

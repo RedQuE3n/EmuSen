@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores;
 using EmuSen.Galaxia.Library;
 using EmuSen.Mistress.Library;
 using Microsoft.Data.Sqlite;

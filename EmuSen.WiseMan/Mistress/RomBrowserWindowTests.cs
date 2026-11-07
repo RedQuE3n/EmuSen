@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;

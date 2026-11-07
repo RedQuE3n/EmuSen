@@ -18,7 +18,7 @@ namespace EmuSen.Crystal.Systems.Sms
 
         public static ICheatCodeCodec GameGenie() => SystemCode.Codec("sms.gg");
 
-        public static readonly SystemPack MasterSystemPack = new(MasterSystem, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(MasterSystemId));
-        public static readonly SystemPack Sg1000Pack = new(Sg1000, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(Sg1000Id));
+        public static readonly SystemPack MasterSystemPack = new(MasterSystem, ProActionReplay, GameGenie);
+        public static readonly SystemPack Sg1000Pack = new(Sg1000, ProActionReplay, GameGenie);
     }
 }

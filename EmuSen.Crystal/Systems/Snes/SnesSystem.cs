@@ -21,6 +21,6 @@ namespace EmuSen.Crystal.Systems.Snes
         // A Game Genie code for a patch, the pack's encoder.
         public static string EncodeGameGenie(int address, byte value) => SystemCode.CheatEncode("snes.gg", address, value);
 
-        public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie, DebugViews: SystemCode.Views(Id));
+        public static readonly SystemPack Pack = new(Entry, ProActionReplay, GameGenie);
     }
 }

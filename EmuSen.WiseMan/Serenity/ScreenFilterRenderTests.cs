@@ -12,7 +12,8 @@ using System.Collections.Generic;
 
 namespace EmuSen.WiseMan.Serenity
 {
-    // The accurate filters drawn through GameFrameControl's real render pass, by their chain read back, and their pixels checked against the measured constants - see EmuSen_Serenity.md §3.4 and §3.5.
+    // The accurate filters drawn through GameFrameControl's real render pass, by their chain read back, and their pixels checked against the measured constants, serially since the NES case opens a runtime over a home of its own - see EmuSen_Serenity.md §3.4, §3.5 and EmuSen_Backend.md §40.10.3.
+    [Collection(Fixtures.TestCollections.ProcessGlobals)]
     public partial class ScreenFilterRenderTests
     {
         private static readonly HeadlessUnitTestSession Session =

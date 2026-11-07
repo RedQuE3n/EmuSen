@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
-using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Cores;
@@ -20,28 +19,30 @@ namespace EmuSen.WiseMan.Crystal
         private void SameTwins(string script, IReadOnlyList<string> cores, IReadOnlyDictionary<string, string> values, Action? plant = null, [CallerMemberName] string test = "") =>
             SameTwinText(File.ReadAllText(TwinScriptPath(script)), cores, values, plant, test);
 
+        // lui a0,0xA010 / lw t0,0(a0) / addiu t0,t0,1 / sw t0,0(a0) / b the lw / nop
+        private static readonly byte[] CountForever =
+        {
+            0x3C, 0x04, 0xA0, 0x10, 0x8C, 0x88, 0x00, 0x00, 0x25, 0x08, 0x00, 0x01,
+            0xAC, 0x88, 0x00, 0x00, 0x10, 0x00, 0xFF, 0xFC, 0x00, 0x00, 0x00, 0x00,
+        };
+
         private void SameTwinText(string text, IReadOnlyList<string> cores, IReadOnlyDictionary<string, string> values, Action? plant = null, [CallerMemberName] string test = "")
         {
-            bool logging = DebugLogging.MasterEnabled;
             var runs = new List<List<string>>();
-            try
+            foreach (CrystalImpl impl in Impls)
             {
-                foreach (CrystalImpl impl in Impls)
+                if (Directory.Exists(DataStore.Saves)) Directory.Delete(DataStore.Saves, recursive: true);
+                plant?.Invoke();
+                List<string> answers = Answers(impl, cores, (i, rt) =>
                 {
-                    if (Directory.Exists(DataStore.Saves)) Directory.Delete(DataStore.Saves, recursive: true);
-                    plant?.Invoke();
-                    List<string> answers = Answers(impl, cores, (i, rt) =>
-                    {
-                        using var run = new CrystalTwinScript(i, rt, values);
-                        return run.Run(text);
-                    });
-                    answers.Add(TreeOf(DataStore.Saves));
-                    answers.Add(TreeOf(DataStore.Cheats));
-                    answers.Add(TreeOf(Path.Combine(ConfigStore.Directory, "cheats")));
-                    runs.Add(answers);
-                }
+                    using var run = new CrystalTwinScript(i, rt, values);
+                    return run.Run(text);
+                });
+                answers.Add(TreeOf(DataStore.Saves));
+                answers.Add(TreeOf(DataStore.Cheats));
+                answers.Add(TreeOf(Path.Combine(ConfigStore.Directory, "cheats")));
+                runs.Add(answers);
             }
-            finally { DebugLogging.MasterEnabled = logging; }
             for (int k = 0; k < runs[0].Count; k++) _output.WriteLine($"{k}: {runs[0][k]}");
             Settle(runs, test);
         }
@@ -84,7 +85,7 @@ namespace EmuSen.WiseMan.Crystal
                 ["SFC"] = W("Game.sfc", SyntheticRom.Build((5, new byte[] { 0xA9, 0x12, 0x8D, 0x42, 0x00, 0x20, 0x0F, 0x80, 0x80, 0xF6, 0x60 }))),
                 ["GB"] = W("Game.gb", SyntheticGbRom.Build()),
                 ["GBC"] = W("Game.gbc", SyntheticGbRom.Build(cgbFlag: 0x80)),
-                ["N64"] = W("Game.z64", SyntheticN64Rom.Build(patches: (0, MarsDebugClaims.CountForever))),
+                ["N64"] = W("Game.z64", SyntheticN64Rom.Build(patches: (0, CountForever))),
                 ["MD"] = W("Game.md", SyntheticMdRom.Cartridge()),
                 ["PSX"] = W("Game.iso", SyntheticPsxDisc.Build().Iso),
             };

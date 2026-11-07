@@ -10,7 +10,7 @@ namespace EmuSen.WiseMan.Fixtures
     // A test class that sets a process static runs in the serial collection, or the classes beside it read its value - see EmuSen_Galaxia.md §3.14.
     public class TestCollectionsTests
     {
-        private static readonly Regex SetsAStatic = new(@"(ConfigStore|DataStore)\.Override(Legacy)?Directory\s*=[^=]|CoreDiscovery\.(Use[A-Za-z]+\(|Say\s*=[^=])|ErrorLog\.DirectoryOverride\s*=[^=]|FirmwareLibrary\.Directory\s*=[^=]|FetchOverride\s*=[^=]");
+        private static readonly Regex SetsAStatic = new(@"(ConfigStore|DataStore)\.Override(Legacy)?Directory\s*=[^=]|ErrorLog\.DirectoryOverride\s*=[^=]|FetchOverride\s*=[^=]");
         private static readonly Regex Declares = new(@"^\s*(?:(?:public|internal|private|protected|sealed|static|partial|abstract|unsafe)\s+)*class\s+([A-Za-z0-9_]+)", RegexOptions.Multiline);
         private static readonly Regex IsATest = new(@"\[(Fact|Theory|[A-Za-z0-9]+(Fact|Theory))\b");
 

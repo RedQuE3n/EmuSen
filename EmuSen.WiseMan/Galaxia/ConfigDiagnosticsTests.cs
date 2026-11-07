@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Endymion.Input;
 using SDL3;

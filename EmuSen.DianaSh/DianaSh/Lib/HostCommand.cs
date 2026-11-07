@@ -1,4 +1,3 @@
-using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.DianaSh.DianaSh.Lib
 {
@@ -9,7 +8,7 @@ namespace EmuSen.DianaSh.DianaSh.Lib
         public abstract bool IsReadOnly { get; }
         public abstract string Usage { get; }
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin) => Run(args, stdin);
+        public DianaShResult Execute(string[] args, string? stdin) => Run(args, stdin);
 
         protected abstract DianaShResult Run(string[] args, string? stdin);
     }

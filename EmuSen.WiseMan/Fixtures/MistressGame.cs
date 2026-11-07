@@ -1,5 +1,4 @@
 using System.Reflection;
-using EmuSen.Crystal.Debugger;
 using EmuSen.Mistress;
 using EmuSen.Mistress.Views;
 

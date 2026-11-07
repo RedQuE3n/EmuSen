@@ -8,7 +8,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Controls;

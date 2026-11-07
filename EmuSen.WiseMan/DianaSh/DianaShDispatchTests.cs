@@ -2,7 +2,6 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.WiseMan.DianaSh
@@ -108,7 +107,7 @@ namespace EmuSen.WiseMan.DianaSh
             public string Name => "echo";
             public bool IsReadOnly => true;
             public string Usage => "  echo (overridden for this test)";
-            public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin) => "overridden";
+            public DianaShResult Execute(string[] args, string? stdin) => "overridden";
         }
 
         [Fact]

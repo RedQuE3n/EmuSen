@@ -8,7 +8,7 @@ namespace EmuSen.Crystal.Systems.GameBoy
         // The systems table's rows - see EmuSen_Backend.md §12.
         public static readonly SystemEntry GameBoy = SystemTable.Entry(GameBoyId), GameBoyColor = SystemTable.Entry(GameBoyColorId);
 
-        public static readonly SystemPack GameBoyPack = new(GameBoy, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyId)),
-            GameBoyColorPack = new(GameBoyColor, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie, DebugViews: SystemCode.Views(GameBoyColorId));
+        public static readonly SystemPack GameBoyPack = new(GameBoy, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie),
+            GameBoyColorPack = new(GameBoyColor, GameBoyCheatCodecs.GameShark, GameBoyCheatCodecs.GameGenie);
     }
 }

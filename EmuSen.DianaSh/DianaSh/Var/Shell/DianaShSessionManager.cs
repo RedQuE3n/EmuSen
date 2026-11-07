@@ -78,7 +78,7 @@ namespace EmuSen.DianaSh.DianaSh.Var.Shell
             return session;
         }
 
-        // A facade made for this manager's Rust shell, as CreateDefault makes one with this manager.
+        // A facade made for this manager's Rust shell, as CreateWithoutSession and CreateForService make one with this manager.
         private static uint NativeIdOf(NativeShell native, DianaShInterpreter interpreter) =>
             interpreter.NativeShellOf == native ? interpreter.NativeSessionId : throw new InvalidOperationException("the interpreter was not made with this session manager");
 

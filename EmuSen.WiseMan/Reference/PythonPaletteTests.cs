@@ -32,12 +32,6 @@ namespace EmuSen.WiseMan.Reference
         }
 
         [Fact]
-        public void The_python_palette_is_the_cores_palette()
-        {
-            Assert.Equal(EmuSen.WiseMan.Fixtures.NesMasterPalette.Bytes, PythonPalette());
-        }
-
-        [Fact]
         public void It_is_still_sixty_four_colours()
         {
             Assert.Equal(64 * 3, PythonPalette().Length);

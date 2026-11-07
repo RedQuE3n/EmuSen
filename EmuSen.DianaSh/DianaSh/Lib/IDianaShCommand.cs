@@ -1,6 +1,5 @@
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Lib
@@ -17,7 +16,7 @@ namespace EmuSen.DianaSh.DianaSh.Lib
         // Formatted to match the rest of `help`'s output; may be several lines.
         string Usage { get; }
 
-        // A null target is a normal "no ROM loaded" condition; null stdin is not empty stdin - see §3.3b.
-        DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin);
+        // Null stdin is not empty stdin; a command that needs a game asks its front end through what it was made with - see §3.3b.
+        DianaShResult Execute(string[] args, string? stdin);
     }
 }

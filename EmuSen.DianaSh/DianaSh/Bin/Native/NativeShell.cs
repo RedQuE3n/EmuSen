@@ -27,8 +27,6 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         private readonly Dictionary<uint, DianaShSession> _sessions = new();
         private readonly List<ServiceTable> _services = new();
 
-        // The providers this shell made and ends with it; a runtime's own provider, handed in, is the runtime's to end.
-        private readonly List<SessionService> _owned = new();
         private DianashSettingsV1* _settings;
         private GCHandle _settingsHandle;
         private readonly object _gate = new();
@@ -55,7 +53,6 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             if (_handle != 0) Free(_handle);
             _handle = 0;
             foreach (GCHandle handle in _weak) handle.Free();
-            foreach (SessionService service in _owned) service.Dispose();
             if (_settings != null) SettingsBridge.Release(_settings, _settingsHandle);
         }
 
@@ -105,17 +102,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
             }
         }
 
-        // A session's own emusen.session@1, the provider over its target, kept as long as this shell - see EmuSen_DianaSh.md §13.11.
-        public void SetSessionService(uint session, SessionService service, bool owned = true)
-        {
-            lock (_gate)
-            {
-                if (owned) _owned.Add(service);
-            }
-            SetSessionService(session, new ServiceTable(service));
-        }
-
-        // A session's table, whichever implementation of the service made it.
+        // A session's own emusen.session@1, the runtime's table, kept as long as this shell - see EmuSen_DianaSh.md §13.11.
         public void SetSessionService(uint session, ServiceTable service)
         {
             lock (_gate)

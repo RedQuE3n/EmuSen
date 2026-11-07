@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Windowing;

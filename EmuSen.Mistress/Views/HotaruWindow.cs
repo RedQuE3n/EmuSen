@@ -42,7 +42,7 @@ namespace EmuSen.Mistress.Views
         // Display text for the welcome banner, from the runtime's shelves rather than a second copy.
         private static string[] SupportedCores => EmuSen.Mistress.Library.RuntimeCatalog.Consoles.Select(c => c.DisplayName).ToArray();
 
-        // Mistress-only builtins that DianaShInterpreter's CreateDefault does not know about - see EmulationControlCommands.cs.
+        // Mistress-only builtins that the shell does not know about - see EmulationControlCommands.cs.
         private readonly IEnumerable<IDianaShCommand> _extraCommands;
 
         // The running game's session, whose service table the shell is made over; null with no game - see EmuSen_Backend.md §14.13.

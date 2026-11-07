@@ -1,4 +1,4 @@
-# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte, and frozen since its recorder went with the C# core host on 2026-11-07 - see EmuSen_DianaSh.md §13.4.
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command shell
@@ -647,47 +647,3 @@ status 0
 action none
 end
 
-case the aliases resolve case-insensitively
-target fake
-covers 1-2
-$ C
-out 9
-Resuming.
-status 0
-action Resume { }
-$ QUIT
-out 14
-Shutting down.
-status 0
-action Shutdown { }
-$ S
-out 27
-Stepping one instruction...
-status 0
-action Step { }
-$ JOBS
-out 34
-  main       session     (current)
-status 0
-action none
-$ HEXDUMP
-out 22
-xxd: usage: xxd <path>
-status 1
-action none
-end
-
-case a command that throws
-target fake
-covers 1-2
-$ mem RAM zz
-out 46
-Error: Could not find any recognizable digits.
-status 1
-action none
-$ echo $?
-out 1
-1
-status 0
-action none
-end

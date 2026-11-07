@@ -4,7 +4,6 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.WiseMan.DianaSh
@@ -25,7 +24,7 @@ namespace EmuSen.WiseMan.DianaSh
             public bool IsReadOnly => false;
             public string Usage => "  fakeshutdown    test-only command that always signals HostAction.Shutdown";
 
-            public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+            public DianaShResult Execute(string[] args, string? stdin)
                 => DianaShResult.Ok("shutdown-triggered", new HostAction.Shutdown());
         }
 
@@ -35,7 +34,7 @@ namespace EmuSen.WiseMan.DianaSh
             public bool IsReadOnly => false;
             public string Usage => "  fakeresume    test-only command that always signals HostAction.Resume";
 
-            public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+            public DianaShResult Execute(string[] args, string? stdin)
                 => DianaShResult.Ok("resume-triggered", new HostAction.Resume());
         }
 

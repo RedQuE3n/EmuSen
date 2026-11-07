@@ -1,4 +1,3 @@
-using EmuSen.Crystal.Debugger;
 using System.Collections.Generic;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
@@ -40,7 +39,7 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 var command = new CoreCommand(Registry());
 
-                DianaShResult result = command.Execute(null, new[] { "core", "venus", path }, null);
+                DianaShResult result = command.Execute(new[] { "core", "venus", path }, null);
 
                 var loadCore = Assert.IsType<HostAction.LoadCore>(result.Action);
                 Assert.Equal("venus", loadCore.CoreName);
@@ -63,13 +62,13 @@ namespace EmuSen.WiseMan.DianaSh
             };
             var command = new CoreCommand(registry, console => console == "PlayStation");
 
-            var start = Assert.IsType<HostAction.StartConsole>(command.Execute(null, new[] { "core", "playstation", "--console" }, null).Action);
+            var start = Assert.IsType<HostAction.StartConsole>(command.Execute(new[] { "core", "playstation", "--console" }, null).Action);
             Assert.Equal(("playstation", "PlayStation"), (start.CoreName, start.Console));
 
-            DianaShResult refused = command.Execute(null, new[] { "core", "venus", "--console" }, null);
+            DianaShResult refused = command.Execute(new[] { "core", "venus", "--console" }, null);
             Assert.Null(refused.Action);
             Assert.Contains("no core in this build starts the SNES (Venus) with nothing in it", refused.Output);
-            Assert.Null(new CoreCommand(registry).Execute(null, new[] { "core", "playstation", "--console" }, null).Action);
+            Assert.Null(new CoreCommand(registry).Execute(new[] { "core", "playstation", "--console" }, null).Action);
         }
 
         [Fact]
@@ -77,7 +76,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             var command = new CoreCommand(Registry());
 
-            DianaShResult result = command.Execute(null, new[] { "core", "venus" }, null);
+            DianaShResult result = command.Execute(new[] { "core", "venus" }, null);
 
             Assert.Contains("Usage", result.Output);
             Assert.Null(result.Action);
@@ -91,7 +90,7 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 var command = new CoreCommand(Registry());
 
-                DianaShResult result = command.Execute(null, new[] { "core", "nes", path }, null);
+                DianaShResult result = command.Execute(new[] { "core", "nes", path }, null);
 
                 Assert.Contains("unknown core", result.Output);
                 Assert.Null(result.Action);
@@ -107,7 +106,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             var command = new CoreCommand(Registry());
 
-            DianaShResult result = command.Execute(null, new[] { "core", "venus", "/tmp/does_not_exist_wiseman.smc" }, null);
+            DianaShResult result = command.Execute(new[] { "core", "venus", "/tmp/does_not_exist_wiseman.smc" }, null);
 
             Assert.Contains("ROM not found", result.Output);
             Assert.Null(result.Action);
@@ -121,7 +120,7 @@ namespace EmuSen.WiseMan.DianaSh
             {
                 var command = new CoreCommand(Registry());
 
-                DianaShResult result = command.Execute(null, new[] { "core", "venus", path }, null);
+                DianaShResult result = command.Execute(new[] { "core", "venus", path }, null);
 
                 Assert.Contains("not a supported ROM type", result.Output);
                 Assert.Null(result.Action);

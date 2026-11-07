@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Crystal
                 foreach (var (auto, patch) in pairs)
                 {
                     string text = texts[t];
-                    string space = auto?.SpaceName ?? CheatImport.DefaultSpaceName;
+                    string space = auto?.SpaceName ?? "CpuBus";
                     golden.Add($"{t} {auto?.Id ?? "none"}/{patch?.Id ?? "none"}", Shown(() => ChtFile.Parse(text, auto, space, patch)));
                     read++;
                 }

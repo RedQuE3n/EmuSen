@@ -103,7 +103,6 @@
 
   <!-- Every answer the engine registration gives, which a later build must reproduce - see EmuSen_CoreAPI.md §25. -->
   <ItemGroup>
-    <None Include="Cores\CoreRegistrationGolden.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Every built-in filter's variants as the chain draws them on the RX 6800 - see EmuSen_DevicePicture.md §19. -->
@@ -113,7 +112,6 @@
 
   <!-- The SNES corpus's recorded verdicts, which the runner reproduces - see VenusRT_Native.md §3.5. -->
   <ItemGroup>
-    <None Include="Cores\MercuryCorpusBaseline.tsv" CopyToOutputDirectory="PreserveNewest" Condition="Exists('Cores\MercuryCorpusBaseline.tsv')" />
     <None Include="..\EmuSen\Cores\Shared\emusen-native\abi\v1\baseline.txt" Link="Cores\CoreAbiBaseline.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <!-- The core ABI's test cores and the conformance kit's runner and the core host's tool, built by cargo and copied beside the tests that drive the v1 adapter; CI copies the shared job's builds instead - see EmuSen_CoreAPI.md §19, §21. -->
@@ -157,7 +155,6 @@
     </ItemGroup>
   </Target>
   <ItemGroup>
-    <None Include="Crystal\DebugScripts\*.script" CopyToOutputDirectory="PreserveNewest" />
     <!-- The session service's scripts, run through each implementation's twins and tables - see EmuSen_Backend.md §29.21. -->
     <None Include="Crystal\TwinScripts\*.script" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

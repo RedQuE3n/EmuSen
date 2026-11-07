@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Text;
-using EmuSen.Cores;
 using EmuSen.Galaxia.Library;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Scraping;

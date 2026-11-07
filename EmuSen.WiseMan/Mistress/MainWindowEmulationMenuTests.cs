@@ -12,7 +12,6 @@ using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Commands;
@@ -154,7 +153,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Reset_starts_the_game_again_where_the_core_claims_no_reset() => Session.Dispatch(() =>
         {
-            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("mercuryrt").Built, Fixtures.CoreSidecars.Beside("mercuryrt").Report);
             string rom = Path.Combine(_romDir, "Mono.gb");
             File.WriteAllBytes(rom, SyntheticGbRom.Build());
             var window = new MainWindow();

@@ -10,7 +10,6 @@ using Avalonia.Headless;
 using Avalonia.Threading;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

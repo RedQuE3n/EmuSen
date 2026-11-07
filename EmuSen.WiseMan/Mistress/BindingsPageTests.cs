@@ -8,7 +8,6 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
-using EmuSen.Cores;
 using EmuSen.Endymion.Input;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;

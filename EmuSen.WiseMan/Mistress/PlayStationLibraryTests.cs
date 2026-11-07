@@ -8,7 +8,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -184,7 +183,6 @@ namespace EmuSen.WiseMan.Mistress
                 return;
             }
             if (Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_LAUNCH_HOME") is { Length: > 0 } home) DataStore.OverrideDirectory = home;
-            if (Environment.GetEnvironmentVariable("EMUSEN_DIAMOND_LAUNCH_DEVELOPMENT") == "1") CoreDiscovery.UseDevelopment(true);
             string[] Library() => Directory.EnumerateFiles(library, "*", SearchOption.AllDirectories).Order().Select(f => $"{f} {new FileInfo(f).Length} {File.GetLastWriteTimeUtc(f).Ticks}").ToArray();
             string[] before = Library();
             new AppSettings { RomDirectory = library, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
@@ -223,7 +221,6 @@ namespace EmuSen.WiseMan.Mistress
             foreach (string file in Directory.EnumerateFiles(Path.GetDirectoryName(disc)!).Where(f => Path.GetFileName(f).StartsWith(stem, StringComparison.Ordinal)))
                 File.CreateSymbolicLink(Path.Combine(_romDir, Path.GetFileName(file)), file);
             string logs = Path.Combine(_root, "Logs");
-            CoreDiscovery.UseDevelopment(true);
             new AppSettings { RomDirectory = _romDir, LogDirectory = logs, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever }.Save();
             var window = new MainWindow { Width = 1280, Height = 800 };
             window.Show();

@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Text.Json;
-using EmuSen.Cores;
 using EmuSen.Endymion.Input;
 using SDL3;
 using EmuSen.Galaxia.Input;

@@ -11,7 +11,6 @@ using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

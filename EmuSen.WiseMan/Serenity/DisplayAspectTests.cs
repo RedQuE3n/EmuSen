@@ -44,25 +44,33 @@ namespace EmuSen.WiseMan.Serenity
         [Fact]
         public void Each_console_reports_its_screen_s_shape()
         {
-            using (var moonRt = Fixtures.MoonEngines.Create())
-            {
-                string nes = Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build());
-                moonRt.LoadRom(nes);
-                File.Delete(nes);
-                Assert.Equal(DisplayShape.Television, moonRt.DisplayAspect, 9);
-            }
-            using var marsRt = new MarsRtTestCore { Options = TestCores.NoBattery };
-            marsRt.LoadRom(SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build()));
-            Assert.Equal(DisplayShape.Television, marsRt.DisplayAspect);
-            string gb = SyntheticGbRom.WriteTemp(SyntheticGbRom.Build());
+            Assert.Equal(DisplayShape.Television, AspectOf(Fixtures.SyntheticNesRom.WriteTemp(Fixtures.SyntheticNesRom.Build())), 9);
+            Assert.Equal(DisplayShape.Television, AspectOf(SyntheticN64Rom.WriteTemp(SyntheticN64Rom.Build())), 9);
+            Assert.Equal(10.0 / 9.0, AspectOf(SyntheticGbRom.WriteTemp(SyntheticGbRom.Build())), 9);
+            Assert.Equal(DisplayShape.Television, CrtFilter.Filter.Aspect);
+        }
+
+        // A game's shape as the session's first frame states it, read through the frontend API as a window reads it; the file is removed after.
+        private static double AspectOf(string rom)
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "EmuSenAspect_" + Guid.NewGuid().ToString("N"));
+            ConfigStore.OverrideDirectory = dir;
+            DataStore.OverrideDirectory = Path.Combine(dir, "Home");
             try
             {
-                using var gameBoy = MercuryEngines.Create(TestCores.NoBattery);
-                gameBoy.LoadRom(gb);
-                Assert.Equal(10.0 / 9.0, gameBoy.DisplayAspect);
+                using var runtime = new CrystalRuntime();
+                using CrystalSession session = runtime.Open(new CrystalOpen { Path = rom, NoBattery = true });
+                var info = new CrystalFrameInfo();
+                session.Frame(ref info);
+                return info.display_aspect;
             }
-            finally { File.Delete(gb); }
-            Assert.Equal(DisplayShape.Television, CrtFilter.Filter.Aspect);
+            finally
+            {
+                DataStore.OverrideDirectory = null;
+                ConfigStore.OverrideDirectory = null;
+                File.Delete(rom);
+                try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+            }
         }
 
         // The Genesis's engine gives its shape in its machine's information only, which the engine falls back to, in either region.

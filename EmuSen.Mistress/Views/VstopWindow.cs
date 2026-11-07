@@ -9,8 +9,7 @@ using EmuSen.LunaP.Windowing;
 
 namespace EmuSen.Mistress.Views
 {
-    // The GUI counterpart to DianaSh's `vstop` - see `man vstop`. Needs no
-    // IDebugTarget at all, so unlike CoretopWindow it has no no-ROM state.
+    // The GUI counterpart to DianaSh's `vstop` - see `man vstop`; it reads the .NET runtime, not a game, so it has no no-ROM state.
     public class VstopWindow : PollingWindow
     {
         private readonly RuntimeSampler _sampler = new();

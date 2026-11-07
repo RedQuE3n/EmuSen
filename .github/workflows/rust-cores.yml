@@ -42,16 +42,11 @@ on:
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
       - 'EmuSen.WiseMan/Cores/MarsRt*'
-      - 'EmuSen.WiseMan/Cores/MarsNative*'
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/Nephrite*'
       - 'EmuSen.WiseMan/Cores/Diamond*'
-      - 'EmuSen.WiseMan/Cores/CoreAbi*'
-      - 'EmuSen.WiseMan/Cores/CoreAdapter*'
-      - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
-      - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
       - '.github/scripts/library_key.py'
   # The core ABI's guard must see every pull request that could change version 1 (EmuSen_CoreAPI.md §5.4).
@@ -88,16 +83,11 @@ on:
       - 'EmuSen/Cores/RustCoresPublish.targets'
       - 'EmuSen/EmuSen.csproj'
       - 'EmuSen.WiseMan/Cores/MarsRt*'
-      - 'EmuSen.WiseMan/Cores/MarsNative*'
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
       - 'EmuSen.WiseMan/Cores/MoonRt*'
       - 'EmuSen.WiseMan/Cores/VenusRt*'
       - 'EmuSen.WiseMan/Cores/Nephrite*'
       - 'EmuSen.WiseMan/Cores/Diamond*'
-      - 'EmuSen.WiseMan/Cores/CoreAbi*'
-      - 'EmuSen.WiseMan/Cores/CoreAdapter*'
-      - 'EmuSen.WiseMan/Cores/CoreDiscovery*'
-      - 'EmuSen/Cores/Native/**'
       - '.github/workflows/rust-cores.yml'
       - '.github/scripts/library_key.py'
 
@@ -527,7 +517,7 @@ jobs:
           path: library/
           if-no-files-found: error
 
-  # WiseMan's tests of the Rust cores against the C# cores, run on each platform against the libraries the job above ships.
+  # WiseMan, the front ends' tests, run on each platform against the libraries the job above ships.
   wiseman:
     name: WiseMan ${{ matrix.rid }}
     needs: [plan, library, reuse, shared]
@@ -631,14 +621,10 @@ jobs:
           ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*endou* "$out"/*sapphire* "$out"/*v1_test_core* "$out"/*v1_plain_core*
           ls -la "$out"/*emusen_platform*
 
-      # Printed in full, so each platform's digests can be read off the log.
-      - name: Test the platform digests
+      # The front ends' tests over the Rust cores; the cores' own tests are the cargo jobs above, since the C# core host was retired (EmuSen_Backend.md §40.10).
+      - name: Test the front ends over the Rust cores
         working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MercuryRtPlatformTests" --logger "console;verbosity=detailed"
-
-      - name: Test the Rust cores against the C# cores
-        working-directory: EmuSen-Project
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MarsRT|FullyQualifiedName~MarsNative|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRtState|FullyQualifiedName~VenusRtTestRomRunner|FullyQualifiedName~CoreAbi|FullyQualifiedName~CoreAdapter|FullyQualifiedName~CoreDiscovery|FullyQualifiedName~CoreHostParity|FullyQualifiedName~MoonRtCoreAbi|FullyQualifiedName~MercuryRtCoreAbi|FullyQualifiedName~Nephrite|FullyQualifiedName~Diamond|FullyQualifiedName~Endou|FullyQualifiedName~Sapphire|FullyQualifiedName~TestRomRunner" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~MarsRt|FullyQualifiedName~MercuryRt|FullyQualifiedName~MoonRt|FullyQualifiedName~VenusRt|FullyQualifiedName~Diamond|FullyQualifiedName~Sapphire|FullyQualifiedName~HostedCore" --logger "console;verbosity=normal" --logger "trx;LogFileName=wiseman-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # The platform's steps run whatever the cores' comparison above found, since neither depends on the other (EmuSen_RustPlatform.md §27.3).
       # Galaxia's tests, on the platform library, its only half since 2026-11-04 (EmuSen_Backend.md §40.2); still reporting, as on Windows and macOS they began at step 2a.
@@ -663,23 +649,23 @@ jobs:
         run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.Serenity.Slang|FullyQualifiedName~EmuSen.WiseMan.Serenity.Spirv|FullyQualifiedName~SerenityParityTests|FullyQualifiedName~SerenityChainParityTests|FullyQualifiedName~FilterPresetParityTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=serenity-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       # DianaSh on the Rust shell, its only implementation since 2026-11-06 (EmuSen_Backend.md §40.7), with the text tools
-      # and EmuSen's command modules linked into the platform library: the golden corpus, the shell's tests and the
-      # session service's, on each system. The log says which shell ran (EmuSen_DianaSh.md §13.10, §13.11).
+      # and EmuSen's command modules linked into the platform library: the golden corpus and the shell's tests, on each
+      # system. The log says which shell ran (EmuSen_DianaSh.md §13.10, §13.11).
       - name: Test DianaSh on the Rust shell
         if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
         env:
           EMUSEN_DIANASH_EXPECT: rust
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionServiceParityTests|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=detailed" --logger "trx;LogFileName=dianash-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~EmuSen.WiseMan.DianaSh.|FullyQualifiedName~SessionHeaderTests" --logger "console;verbosity=detailed" --logger "trx;LogFileName=dianash-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
-      # The frontend API through the binding: the header against the binding, the contract layer's shape, the
-      # divergence rows and the frontends' reference (EmuSen_Backend.md §14; its C# implementation deleted, §40.8).
+      # The frontend API through the binding: the header against the binding, the contract layer's shape and the
+      # frontends' reference (EmuSen_Backend.md §14; its C# implementation deleted, §40.8).
       - name: Test the frontend API
         if: ${{ !cancelled() }}
         working-directory: EmuSen-Project
         continue-on-error: true
-        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~CrystalHeaderTests|FullyQualifiedName~ContractShapeTests|FullyQualifiedName~DivergenceRowTests|FullyQualifiedName~FrontendDefectTests|FullyQualifiedName~FrontendReferenceTests|FullyQualifiedName~HotaruOnTheApiTests|FullyQualifiedName~StateRefusalTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=crystal-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
+        run: dotnet test EmuSen.WiseMan/EmuSen.WiseMan.csproj -c Release --no-build --filter "FullyQualifiedName~CrystalHeaderTests|FullyQualifiedName~ContractShapeTests|FullyQualifiedName~FrontendDefectTests|FullyQualifiedName~FrontendReferenceTests|FullyQualifiedName~HotaruOnTheApiTests|FullyQualifiedName~StateRefusalTests" --logger "console;verbosity=normal" --logger "trx;LogFileName=crystal-${{ matrix.rid }}.trx" --results-directory "${{ github.workspace }}/results"
 
       - uses: actions/upload-artifact@v4
         if: always()

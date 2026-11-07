@@ -135,15 +135,34 @@ namespace EmuSen.WiseMan.Serenity
         public Task MoonRt_s_emphasis_written_in_the_middle_of_a_frame_reaches_the_screen_through_the_raw_picture() => Session.Dispatch(() =>
         {
             if (CrtDevice.Value is not { } device) return;
-            Assert.True(Fixtures.MoonEngines.Available, Fixtures.MoonEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("moonrt").Built, Fixtures.CoreSidecars.Beside("moonrt").Report);
             string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"emusen-raw-crt-{Environment.ProcessId}.nes");
             System.IO.File.WriteAllBytes(path, EmphasisMidFrame());
-            using var core = Fixtures.MoonEngines.Create();
-            try { core.LoadRom(path); } finally { System.IO.File.Delete(path); }
-            core.RawEncoding = RawEncodings.NesPpu;
-            for (int f = 0; f < 8; f++) core.RunFrame();
-            RawPicture raw = core.RawPicture is { } r ? new RawPicture(r.Encoding, r.Width, r.Height, r.Element, r.Stride, r.Values) : throw new Xunit.Sdk.XunitException("no raw picture");
-            byte[] rgb = core.GetFrameBufferRgba();
+            string home = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"emusen-raw-crt-{Environment.ProcessId}");
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = System.IO.Path.Combine(home, "Home");
+            EmuSen.Galaxia.ConfigStore.OverrideDirectory = System.IO.Path.Combine(home, "Config");
+            RawPicture raw;
+            byte[] rgb;
+            try
+            {
+                using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
+                using var session = runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = path, NoBattery = true });
+                session.RawSelect(RawEncodings.NesPpu);
+                var info = new EmuSen.Crystal.Client.Contract.CrystalFrameInfo();
+                for (int f = 0; f < 8; f++) session.Frame(ref info);
+                byte[] values = new byte[session.RawCopy(Span<byte>.Empty, out _)];
+                session.RawCopy(values, out var shape);
+                raw = new RawPicture(RawEncodings.NesPpu, shape.width, shape.height, (int)shape.element, shape.stride, values);
+                rgb = new byte[session.PictureBytes];
+                session.CopyPicture(rgb);
+            }
+            finally
+            {
+                System.IO.File.Delete(path);
+                EmuSen.Galaxia.Library.DataStore.OverrideDirectory = null;
+                EmuSen.Galaxia.ConfigStore.OverrideDirectory = null;
+                try { System.IO.Directory.Delete(home, recursive: true); } catch (System.IO.IOException) { }
+            }
             int first = Enumerable.Range(0, 240).First(y => (raw.Values[y * 512] | raw.Values[y * 512 + 1] << 8) >> 6 == 7);
             Assert.InRange(first, 60, 180);
             (string, float)[] set = With(Plain, ("mask", 1f), ("subpixels", 0f), ("signal", 2f));

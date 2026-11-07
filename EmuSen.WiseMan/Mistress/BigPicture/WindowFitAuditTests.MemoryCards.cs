@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string pak = SaveLibrary.CardPathFor("N64", "Pak 1", ".mpk");
             Directory.CreateDirectory(Path.GetDirectoryName(pak)!);
-            byte[] notes = N64PakFormatTests.WithNote(N64PakFormatTests.WithNote(N64PakFormat.Instance.Format(), 0, "NKTE", "01", new byte[] { 0x26, 0x1A, 0x2B, 0x22, 0x28, 0x01, 0x24, 0x1A, 0x2B, 0x2D }, new[] { 5, 6 }, 1),
+            byte[] notes = TestPrograms.WithNote(TestPrograms.WithNote(N64PakFormat.Instance.Format(), 0, "NKTE", "01", new byte[] { 0x26, 0x1A, 0x2B, 0x22, 0x28, 0x01, 0x24, 0x1A, 0x2B, 0x2D }, new[] { 5, 6 }, 1),
                 1, "NZLE", "01", Enumerable.Repeat((byte)0x2C, 16).ToArray(), new[] { 7, 8, 9 }, 2);
             File.WriteAllBytes(pak, notes);
             File.WriteAllBytes(Path.Combine(DataStore.Saves, "N64", "Mario Kart 64.mpk"), N64PakFormat.Instance.Format());

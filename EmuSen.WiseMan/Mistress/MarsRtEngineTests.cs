@@ -84,7 +84,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_game_runs_on_MarsRT_with_rewind_and_still_does_when_the_retired_Mars_is_stored() => Session.Dispatch(() =>
         {
-            Assert.True(MarsRt.Available, MarsRt.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("marsrt").Built, Fixtures.CoreSidecars.Beside("marsrt").Report);
             MainWindow window = Start(_ntscRom);
             WindowGame game = Game(window);
             Assert.Equal(EngineNames.MarsRt, MistressGame.Engine(window));

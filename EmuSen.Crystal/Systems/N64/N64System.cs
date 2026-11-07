@@ -20,6 +20,6 @@ namespace EmuSen.Crystal.Systems.N64
         public static ICheatCodeCodec GameShark() => SystemCode.Codec("n64.gs");
 
         // The GameShark pokes; no N64 format patches ROM, so the explicit slot stays empty - see Mars_Cheats.md §1.
-        public static readonly SystemPack Pack = new(Entry, GameShark, null, DebugViews: N64DebugViews.Instance, Media: new[] { Pak });
+        public static readonly SystemPack Pack = new(Entry, GameShark, null, Media: new[] { Pak });
     }
 }

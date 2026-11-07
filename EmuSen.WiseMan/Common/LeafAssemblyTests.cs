@@ -85,13 +85,12 @@ namespace EmuSen.WiseMan.Common
         [Fact]
         public void Crystal_holds_the_runtime_contracts_and_references_only_Galaxia()
         {
-            Assembly crystal = typeof(EmuSen.Crystal.Debugger.IDebugTarget).Assembly;
+            Assembly crystal = typeof(EmuSen.Crystal.Systems.SystemPacks).Assembly;
 
             Assert.Equal("EmuSen.Crystal", crystal.GetName().Name);
             Assert.Same(crystal, typeof(EmuSen.Crystal.Telemetry.ICoreTelemetry).Assembly);
-            Assert.Same(crystal, typeof(EmuSen.Crystal.Cheats.CheatRegistry).Assembly);
-            Assert.Same(crystal, typeof(EmuSen.Crystal.Systems.SystemPacks).Assembly);
-            Assert.Same(crystal, typeof(EmuSen.Crystal.Session.SessionService).Assembly);
+            Assert.Same(crystal, typeof(EmuSen.Crystal.Cheats.ICheatCodeCodec).Assembly);
+            Assert.Same(crystal, typeof(EmuSen.Crystal.Session.SessionAbi).Assembly);
             Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(crystal));
         }
 
@@ -104,15 +103,6 @@ namespace EmuSen.WiseMan.Common
             Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaSh));
         }
 
-        // The cores reach the runtime beneath the shell and not the shell, and no presentation layer since S1 - see EmuSen_DianaSh.md §13.6 and EmuSen_Surfaces.md §7.
-        [Fact]
-        public void The_core_assembly_references_Crystal_and_Galaxia_only()
-        {
-            Assembly cores = typeof(EmuSen.Cores.CoreCatalog).Assembly;
-
-            Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia" }, EmuSenReferencesOf(cores));
-        }
-
         // What the leaf enforced by construction is now this rule - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.
         [Fact]
         public void The_telemetry_contracts_name_nothing_of_the_debugger()
@@ -122,7 +112,7 @@ namespace EmuSen.WiseMan.Common
             Type[] contracts = typeof(EmuSen.Crystal.Telemetry.ICoreTelemetry).Assembly.GetTypes()
                 .Where(t => t.Namespace == telemetry)
                 .ToArray();
-            Assert.Contains(typeof(EmuSen.Crystal.Telemetry.HistoryProvider<>), contracts);
+            Assert.Contains(typeof(EmuSen.Crystal.Telemetry.PollingProvider<>), contracts);
 
             foreach (Type contract in contracts)
             {

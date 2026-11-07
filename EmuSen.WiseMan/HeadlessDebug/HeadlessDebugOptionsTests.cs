@@ -1,4 +1,3 @@
-using EmuSen.Cores;
 using EmuSen.Pharaoh.Cli;
 using EmuSen.Galaxia.Input;
 

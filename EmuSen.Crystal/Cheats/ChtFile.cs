@@ -4,7 +4,14 @@ using System.Linq;
 
 namespace EmuSen.Crystal.Cheats
 {
-    // One cheat read out of a .cht file, before it reaches the registry.
+    // Two mechanisms era devices used: a write to RAM each frame, or a byte of the cartridge answered otherwise - see EmuSen_Cheats.md.
+    public enum CheatKind
+    {
+        RamPoke,
+        RomPatch,
+    }
+
+    // One cheat read out of a .cht file.
     public readonly struct ChtCheat
     {
         public string Description { get; init; }

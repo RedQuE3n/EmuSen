@@ -154,3 +154,47 @@ form, and a layout with neither sections nor detail.
 Measured on 2026-11-07 with three seeded faults, each reverted: the fast tier's switch moving one item rather than
 four failed the list test; B on the desktop's content no longer climbing to the navigation failed the climb test; Tab
 walking backwards failed the pointer-and-keyboard test.
+
+## 3. The audit rules over an abstract item tree (stage 0, step 3; 2026-11-07)
+
+`emusen_kit_core::audit` is `EmuSen_InterfaceSpec.md` §4's rules and `EmuSen_Qt.md` §8.1's two additions, written
+once over a tree the kit defines and no toolkit: `Item` (an id, a name, a `Kind`, a rectangle in design pixels, whether
+it is visible, hit-testable, operable or kept out of view, what it clips and scrolls and which edges fade, its words as
+measured, the name a reader hears, the colours it paints, what a click and A each call, and whether the wheel moves
+it). The Qt harness of §8.1 will fill such a tree from `objectName`, `mapToScene`, `Accessible.name`, the words of
+`Text` and `grabImage`; here the rules are tested on hand-built trees. Every rule gives `Fault`s, one line each.
+
+| Rule | Function | Source |
+|---|---|---|
+| The fit audit: past its panel or its nearest clipping or scrolling ancestor (a scroller excuses only what it scrolls to, up and down), words past their button or row, overlap of two things read or pressed neither inside the other by more than the slack, a scroller under two rows of 42, a drawn item sliced by a scrolling edge that does not fade, words cut with an ellipsis, past their box or at the foot, capitals under Inter's at 16 (11.64 design pixels, slack 0.036; no floor on the desktop), a title or footer cut; popups and hidden subtrees skipped | `fit` | Settings Reference §4.83.2, §4.83.7 |
+| Pad reach: from the focus, the recorded edges reach every operable element not kept out of view | `pad_reach`, `reached` | InterfaceSpec §4.2 |
+| Pointer reach: a click at the centre of each element the walk reaches hits it or one of its own children and calls what A calls; the wheel moves every scroller | `pointer_reach` | EmuSen_Qt.md §8.1 |
+| No chrome: in the big-screen and card forms no menu bar or status bar is visible | `no_chrome` | §8.1 |
+| Names a reader hears: every operable element has a non-blank one | `named` | InterfaceSpec §4.3 |
+| Palette reach: every painted colour is declared; a theme's scene and everything under it exempt | `palette_reach` | InterfaceSpec §4.4 |
+
+`check(root, &State)` runs them all for one recorded state: its panel, form, focus, edges, declared colours, slack (a
+pixel, or a pixel and a half at a scale above one) and the capitals' floor.
+
+**Where it differs from the C#.** WiseMan's `FitAudit.Check` walked live Avalonia controls and read their templates;
+LunaP §204 moved it onto the kit's controls. This one reads only the tree it is given, as `InterfaceRules.cs` read a
+`SpecDocument`, so the same rules hold a recording from any front end. The slack and the floor are arguments rather than
+constants, and a words item carries its capitals' height already measured, since measuring a face's H is the harness's
+job. The pointer rules are new: the C# front end had none, which is why its big-screen Home took no mouse (§0.2 of
+`EmuSen_Qt.md`).
+
+### 3.1 What it is held to
+
+`tests/audit.rs`: a clean big-screen state passes every rule; then one fault planted per rule and found, with the
+boundary beside it: past the panel, past a scroller's side but excused past its foot, within the slack; words past
+their button; an overlap, a picture inside a control (not one), half a pixel (not one), a row's own words (not one); a
+scroller of 80 (too little) and 84; a row sliced by a scroller's foot with and without a fade, and a picture past a
+sideways scroller's side; an ellipsis, words past their box and at the foot, capitals of 11.0, 11.59 and 11.61 and the
+desktop's no floor; a title and a footer cut; a popup and a hidden subtree skipped; the pad not reaching a button, an
+unseen row excused, no focus; a scrim covering a row's centre, a row's own words over it (not covered), a click that
+calls something other than A, a scroller the wheel does not move; a status bar on the big screen and on a card, and on
+the desktop (allowed); a nameless and a blank-named control; a colour outside the palette, and the same under a scene.
+
+Measured on 2026-11-07 with three seeded faults, each reverted: an item past its limit on one axis only passing
+failed the past-its-panel test, the sideways scroller case and the title-and-footer test; the chrome rule checking the
+desktop form instead of the big screen failed the chrome test; a blank name counting as heard failed the names test.

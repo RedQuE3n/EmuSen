@@ -48,7 +48,7 @@ fn chdman() -> String {
 /// them, and the process's SQLite where it has one loaded or one ships beside it.
 fn context() -> Context {
     let tree = tree::tree().clone();
-    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
+    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
     let library = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
     let states = settings.get("StateDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
     let beside = path::combine(Style::HOST, &tree::base_directory(), emusen_sqlite::SHIPPED_NAME);

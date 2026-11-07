@@ -71,7 +71,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 string shelf = ShelfOf(s, extension);
                 PlanetItem item = consoles.Planets.Single(p => p.Key == shelf);
                 LibraryShelf table = RuntimeCatalog.ShelfByName(shelf)!;
-                Assert.Equal(StartupSplash.BodyOf(table.System, "Nintendo"), item.Body);
+                Assert.Equal(StartupSplash.BodyOf(table.System), item.Body);
                 Assert.NotNull(item.Body!.Palette);
                 EngineShown shown = Assert.IsType<EngineShown>(RuntimeCatalog.EngineOf(table.Core.Console));
                 Assert.False(shown.Libretro);

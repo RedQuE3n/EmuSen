@@ -941,7 +941,7 @@ fn settings_into(ctx: &Context, system: &str, folder: &str, game: &str) -> Resul
         let mut values = emusen_crystal::settings::values_at(&target);
         let Some(crop) = crop.filter(|_| !has_crop(&values)) else { return if has_plain { Err(None) } else { Ok(None) } };
         values.push((CROP_KEY.into(), crop));
-        return emusen_crystal::settings::write_values(&target, &values).map(|()| Some((target, "games.db".into()))).map_err(Some);
+        return emusen_crystal::settings::write_values(&target, &values).map(|()| Some((target, emusen_galaxia::stores::GAMES_DB.into()))).map_err(Some);
     }
     match crop {
         None if has_plain => std::fs::read(&plain).map_err(|e| Some(format!("{plain}: {e}"))).and_then(|b| emusen_galaxia::atomic::write(&target, &b).map_err(Some)).map(|()| Some((target, plain))),
@@ -951,7 +951,7 @@ fn settings_into(ctx: &Context, system: &str, folder: &str, game: &str) -> Resul
             if !has_crop(&values) {
                 values.push((CROP_KEY.into(), crop));
             }
-            emusen_crystal::settings::write_values(&target, &values).map(|()| Some((target, if has_plain { plain } else { "games.db".into() }))).map_err(Some)
+            emusen_crystal::settings::write_values(&target, &values).map(|()| Some((target, if has_plain { plain } else { emusen_galaxia::stores::GAMES_DB.into() }))).map_err(Some)
         }
     }
 }
@@ -963,7 +963,7 @@ const CROP_KEY: &str = "Crop";
 fn crop_of(ctx: &Context, game: &str) -> Option<emusen_library::records::Crop> {
     let sqlite = ctx.sqlite.clone()?;
     let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-    let at = path::combine(Style::HOST, &library, "games.db");
+    let at = path::combine(Style::HOST, &library, emusen_galaxia::stores::GAMES_DB);
     if !dotnet_files::file_exists(&at) {
         return None;
     }

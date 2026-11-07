@@ -131,7 +131,7 @@ ALTER TABLE scrape_file ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';"#,
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
 
-pub const FILE_NAME: &str = "media.db";
+pub const FILE_NAME: &str = emusen_galaxia::stores::MEDIA_DB;
 pub const FOLDERS_STEP: &str = "folders";
 pub const CLEANUP_FOLDER: &str = "CLEANUP";
 

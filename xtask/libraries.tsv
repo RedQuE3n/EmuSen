@@ -1,0 +1,15 @@
+# The native libraries and programs an installation carries, one line each, tab-separated, in build order. Read by the build (cargo xtask), CI's plan (.github/scripts/library_key.py) and the impact graph (emusen-testing-module); see EmuSen_RustPlatform.md §28.11.
+# Columns: the library's (or program's) name; its crate's folder from the repository root; its role (core, part: a library an installed entry copies, program: an executable beside the libraries, test: a library the tests alone use, platform: the platform library); 1 for a library on the core ABI v1, whose sidecar the build writes, else -; ships, or development to keep it out of a publish until its gate (EmuSen_CoreAPI.md §27); the platforms that build it (any, or linux while the broker confines a core only with Landlock, EmuSen_LibretroHost.md §10d); the prefix of the exports CI counts, - for none; and the core and console the build's messages name.
+diamond	EmuSen/Cores/Sony/Diamond - PlayStation/v1	core	1	ships	any	emusen_core_	Diamond	the PlayStation
+endou	EmuSen/Cores/Sega/Endou - Master System	core	1	ships	any	emusen_core_	Endou	the Master System and the SG-1000
+marsrt	EmuSen/Cores/Nintendo/MarsRT - N64	core	1	ships	any	emusen_core_	MarsRT	the N64
+mercuryrt	EmuSen/Cores/Nintendo/MercuryRT - GB	core	1	ships	any	emusen_core_	MercuryRT	the Game Boy
+moonrt	EmuSen/Cores/Nintendo/MoonRT - NES	core	1	ships	any	emusen_core_	MoonRT	the NES
+nephrite	EmuSen/Cores/Sega/Nephrite - Genesis	core	1	ships	any	emusen_core_	Nephrite	the Genesis, the Sega CD and the 32X
+sapphire	EmuSen/Cores/Sony/Sapphire - PlayStation 2	core	1	ships	any	emusen_core_	Sapphire	the PlayStation 2
+venusrt	EmuSen/Cores/Nintendo/VenusRT - SNES	core	1	ships	any	emusen_core_	VenusRT	the SNES
+emusen_libretro_proxy	EmuSen/Cores/Libretro/emusen-libretro-proxy	part	-	ships	linux	-	the libretro proxy	libretro cores
+emusen_libretro_host	EmuSen/Cores/Libretro/emusen-libretro-host	part	-	ships	linux	-	the libretro host	libretro cores
+emusen-core-runner	EmuSen/Cores/Shared/emusen-core-broker	program	-	ships	linux	-	the core runner	libretro cores
+emusen_libretro_testcore	EmuSen/Cores/Libretro/emusen-libretro-testcore	test	-	development	linux	-	the libretro test core	the libretro host's tests
+emusen_platform	Platform	platform	-	ships	any	emusen_galaxia_	the platform library	the platform components

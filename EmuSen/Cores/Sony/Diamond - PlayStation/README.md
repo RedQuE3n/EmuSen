@@ -14,4 +14,4 @@ named plainly, without the `RT` suffix of the Rust ports, because it has no C# p
 
 The crates (`Diamond_Enhancements.md` §24.1): `diamond` here, the machine and its `Core`; `precision/`, the precision
 layer of precise geometry; `renderer/`, the Vulkan renderer; and `v1/`, the published library, `libdiamond.so`, which
-holds the machine with its enhancements and the core ABI's exports. `RustCores.props` builds `v1/`.
+holds the machine with its enhancements and the core ABI's exports. `xtask/libraries.tsv` builds `v1/`.

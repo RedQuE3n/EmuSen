@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn include() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../EmuSen.Crystal/include")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../crystal/include")
 }
 
 fn header() -> String {

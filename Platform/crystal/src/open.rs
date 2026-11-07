@@ -49,12 +49,13 @@ fn library_for<'d>(catalog: &Catalog, discovery: &'d Discovery, trust: &Trust, a
         }
     }
     let extension = crate::route::image_extension(catalog, discovery, at);
-    Err(match extension.as_str() {
-        ".smc" | ".sfc" => missing(discovery, "SNES", "VenusRT (Rust)"),
-        ".nes" => missing(discovery, "NES", "MoonRT (Rust)"),
-        ".gb" | ".gbc" => missing(discovery, "Game Boy", "MercuryRT (Rust)"),
-        ".z64" | ".n64" | ".v64" => missing(discovery, "N64", "MarsRT (Rust)"),
-        other => (crate::abi::status::NO_ENGINE, format!("No core in this build handles '{other}' - see CoreCatalog for what is registered.")),
+    // A hand row's console taking the extension names its missing sole engine (the systems data's catalog rows).
+    let row = emusen_systems::catalog_rows::hand_rows().iter().find(|r| {
+        r.systems.iter().filter_map(|(id, _)| emusen_systems::find(id)).any(|s| s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension)))
+    });
+    Err(match row {
+        Some(r) => missing(discovery, &r.refusal, &r.sole_engine),
+        None => (crate::abi::status::NO_ENGINE, format!("No core in this build handles '{extension}' - see CoreCatalog for what is registered.")),
     })
 }
 

@@ -7,24 +7,12 @@ using Microsoft.Data.Sqlite;
 
 namespace EmuSen.WiseMan.Mistress
 {
-    // records.db: state records and the shader pack's build, the files it replaces read and left, and a crash that tears a write - see EmuSen_Settings_Reference.md §4.64.
+    // records.db: the shader pack's build, the stamp it replaces read and left, and a crash that tears a write - see EmuSen_Settings_Reference.md §4.64.
     public class FileRecordsTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenFileRecordsTests", Guid.NewGuid().ToString("N"));
         private string Db => Path.Combine(_root, "Library", FileRecords.FileName);
         private string States => Path.Combine(_root, "States");
-
-        private static readonly StateRecord Kirby = new()
-        {
-            Console = "N64",
-            Core = "N64",
-            StateVersion = 4,
-            Build = "1.0.0+abc",
-            SavedAt = new DateTime(2026, 9, 21, 23, 33, 0, DateTimeKind.Local),
-            RomFile = "Kirby 64 (USA).z64",
-            RomMd5 = "274647f63bcb6e7eb68ab732b3ff93c1",
-            RomBytes = 16_777_216,
-        };
 
         // A pre-database sidecar exactly as StateRecord.Write produced it, in the shape existing files on disk have.
         private const string Sidecar = """
@@ -87,134 +75,25 @@ namespace EmuSen.WiseMan.Mistress
 
             using (FileRecords records = FileRecords.Open(Db))
             {
-                string state = State("a.state");
-                Assert.True(records.WriteState(state, Kirby));
+                Assert.True(records.RecordPack(Path.Combine(_root, "Pack"), "2026-09-27 02:00 UTC"));
             }
             Assert.Equal(FileRecords.SchemaVersion, (int)(long)Pragma("user_version")!);
             Assert.Equal(7L, Pragma("keep", "SELECT x FROM keep"));
         }
 
         [Fact]
-        public void A_record_written_is_read_back_after_reopening_and_nothing_is_written_beside_the_state()
-        {
-            string state = State("Kirby 64 (USA).slot2.state");
-            using (FileRecords records = FileRecords.Open(Db)) Assert.True(records.WriteState(state, Kirby));
-
-            using FileRecords reopened = FileRecords.Open(Db);
-            Assert.Equal(Kirby, reopened.ReadState(state));
-            Assert.Equal("written", reopened.StateSource(state));
-            Assert.Equal(new[] { state }, Directory.GetFiles(States));
-        }
-
-        [Fact]
-        public void A_state_that_does_not_exist_is_given_no_record()
-        {
-            using FileRecords records = FileRecords.Open(Db);
-            Assert.False(records.WriteState(Path.Combine(States, "gone.state"), Kirby));
-            Assert.Null(records.ReadState(Path.Combine(States, "gone.state")));
-        }
-
-        [Fact]
-        public void An_old_sidecar_is_imported_on_first_sight_and_left_where_it_is()
-        {
-            string state = State("Dr Mario (VS).resume.state");
-            string sidecar = StateRecord.SidecarPathFor(state);
-            File.WriteAllText(sidecar, Sidecar);
-            byte[] stateBytes = File.ReadAllBytes(state);
-
-            StateRecord? first;
-            using (FileRecords records = FileRecords.Open(Db))
-            {
-                first = records.ReadState(state);
-                Assert.Equal("sidecar", records.StateSource(state));
-            }
-            Assert.NotNull(first);
-            Assert.Equal("NES", first!.Console);
-            Assert.Equal(3, first.StateVersion);
-            Assert.Equal("1.0.0+9b9717da46cd02b43d774fc8a025dcd841f22e46", first.Build);
-            Assert.Equal(98320, first.RomBytes);
-            Assert.Equal(DateTimeOffset.Parse("2026-09-21T23:41:45.3170817-04:00").UtcDateTime, first.SavedAt.ToUniversalTime());
-
-            Assert.Equal(Sidecar, File.ReadAllText(sidecar));
-            Assert.Equal(stateBytes, File.ReadAllBytes(state));
-
-            File.WriteAllText(sidecar, Sidecar.Replace("\"NES\"", "\"SNES\""));
-            using FileRecords reopened = FileRecords.Open(Db);
-            Assert.Equal(first, reopened.ReadState(state));
-        }
-
-        [Fact]
-        public void A_sidecar_that_will_not_parse_is_neither_imported_nor_removed()
-        {
-            string state = State("a.state");
-            File.WriteAllText(StateRecord.SidecarPathFor(state), "{ \"Console\": ");
-            using FileRecords records = FileRecords.Open(Db);
-            Assert.Null(records.ReadState(state));
-            Assert.Null(records.StateSource(state));
-            Assert.True(File.Exists(StateRecord.SidecarPathFor(state)));
-        }
-
-        [Fact]
-        public void A_written_record_takes_the_place_of_an_imported_sidecar()
-        {
-            string state = State("a.state");
-            File.WriteAllText(StateRecord.SidecarPathFor(state), Sidecar);
-            using FileRecords records = FileRecords.Open(Db);
-            Assert.Equal("NES", records.ReadState(state)!.Console);
-            Assert.True(records.WriteState(state, Kirby));
-            Assert.Equal(Kirby, records.ReadState(state));
-            Assert.Equal("written", records.StateSource(state));
-        }
-
-        [Theory]
-        [InlineData(false)]
-        [InlineData(true)]
-        public void A_state_rewritten_without_a_record_is_not_described_by_the_old_one(bool sameSize)
-        {
-            string state = State("a.state");
-            File.WriteAllText(StateRecord.SidecarPathFor(state), Sidecar);
-            using FileRecords records = FileRecords.Open(Db);
-            Assert.True(records.WriteState(state, Kirby));
-
-            if (sameSize) File.SetLastWriteTimeUtc(state, File.GetLastWriteTimeUtc(state).AddMinutes(1));
-            else File.WriteAllBytes(state, new byte[80]);
-
-            Assert.Null(records.ReadState(state));
-            Assert.Equal("written", records.StateSource(state));
-        }
-
-        [Fact]
-        public void A_forgotten_state_has_no_record()
-        {
-            string state = State("a.state");
-            using FileRecords records = FileRecords.Open(Db);
-            Assert.True(records.WriteState(state, Kirby));
-            records.ForgetState(state);
-            Assert.Null(records.ReadState(state));
-        }
-
-        [Fact]
-        public void A_closed_store_writes_nothing_and_throws_nothing()
-        {
-            string state = State("a.state");
-            FileRecords records = FileRecords.Open(Db);
-            records.Dispose();
-            Assert.False(records.WriteState(state, Kirby));
-            Assert.Null(records.ReadState(state));
-        }
-
-        // A kill leaves the files as they are on disk: the image here cuts the log part way through the second write's frames.
-        [Fact]
         public void A_crash_part_way_through_a_write_keeps_every_record_committed_before_it()
         {
-            string first = State("first.state"), second = State("second.state");
+            string first = Path.Combine(_root, "First"), second = Path.Combine(_root, "Second");
+            Directory.CreateDirectory(first);
+            Directory.CreateDirectory(second);
             string crashed = Path.Combine(_root, "Crashed", FileRecords.FileName);
             Directory.CreateDirectory(Path.GetDirectoryName(crashed)!);
             using (FileRecords records = FileRecords.Open(Db))
             {
-                Assert.True(records.WriteState(first, Kirby));
+                Assert.True(records.RecordPack(first, "first"));
                 long afterFirst = new FileInfo(Db + "-wal").Length;
-                Assert.True(records.WriteState(second, Kirby with { RomFile = "Second.z64" }));
+                Assert.True(records.RecordPack(second, "second"));
                 long afterSecond = new FileInfo(Db + "-wal").Length;
                 Assert.True(afterSecond > afterFirst);
 
@@ -226,8 +105,8 @@ namespace EmuSen.WiseMan.Mistress
 
             using (FileRecords recovered = FileRecords.Open(crashed))
             {
-                Assert.Equal(Kirby, recovered.ReadState(first));
-                Assert.Null(recovered.ReadState(second));
+                Assert.Equal("first", recovered.PackBuilt(first, "none"));
+                Assert.Null(recovered.PackBuilt(second, "none"));
             }
             using var check = new SqliteConnection($"Data Source={crashed};Pooling=False");
             check.Open();
@@ -237,7 +116,7 @@ namespace EmuSen.WiseMan.Mistress
         }
 
         [Fact]
-        public void The_save_states_view_reads_records_through_the_store_and_finds_a_renamed_game_by_hash()
+        public void The_save_states_view_reads_a_record_and_finds_a_renamed_game_by_hash()
         {
             string state = State("Old Name.state");
             File.WriteAllText(StateRecord.SidecarPathFor(state), Sidecar);
@@ -245,8 +124,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(Path.GetDirectoryName(rom)!);
             File.WriteAllBytes(rom, new byte[16]);
 
-            using FileRecords records = FileRecords.Open(Db);
-            MediaItem item = Assert.Single(MediaLibrary.SaveStates(States, new[] { new RomEntry(rom) }, records.ReadState,
+            MediaItem item = Assert.Single(MediaLibrary.SaveStates(States, new[] { new RomEntry(rom) }, StateRecord.ReadSidecar,
                 md5 => md5 == "274647f63bcb6e7eb68ab732b3ff93c1" ? rom : null));
             Assert.Equal("NES", item.Record!.Console);
             Assert.Equal(rom, item.Game!.FullPath);

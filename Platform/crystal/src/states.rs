@@ -8,8 +8,8 @@ use emusen_dotnet::json::Value;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_sqlite::{Bound, Connection, Sqlite};
 
-pub const FILE_NAME: &str = "states.db";
-pub const RECORDS_FILE_NAME: &str = "records.db";
+pub const FILE_NAME: &str = emusen_galaxia::stores::STATES_DB;
+pub const RECORDS_FILE_NAME: &str = emusen_galaxia::stores::RECORDS_DB;
 
 const MIGRATIONS: [&str; 1] = ["CREATE TABLE state_record (
     path            TEXT    PRIMARY KEY,

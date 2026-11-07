@@ -31,6 +31,7 @@ pub mod package_zip;
 pub mod rom_hash;
 pub mod saves;
 pub mod setting_folders;
+pub mod stores;
 pub mod suggestion;
 pub mod tree;
 

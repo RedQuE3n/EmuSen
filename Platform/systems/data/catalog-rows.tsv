@@ -1,0 +1,5 @@
+# The catalog's hand rows, one console row each in the catalog's order, tab-separated: the row's name; its systems, each id=shelf and comma-separated, the first the row's console; the words a player types for the row, comma-separated; the engine that is the row's console's sole engine; and the console as a refusal names it when that engine is missing. The rows and shelf names are those the C# CoreCatalog had, which players' libraries hold; a console discovery adds needs no line (EmuSen_Backend.md §29.2).
+SNES (Venus)	snes=SNES (Venus)	venus,snes	VenusRT (Rust)	SNES
+NES (Moon)	nes=NES (Moon)	moon,nes	MoonRT (Rust)	NES
+Game Boy (Mercury)	gb=Game Boy (Mercury),gbc=Game Boy Color (Mercury)	mercury,gb,gbc	MercuryRT (Rust)	Game Boy
+Nintendo 64 (Mars)	n64=Nintendo 64 (Mars)	mars,n64	MarsRT (Rust)	N64

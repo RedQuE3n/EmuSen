@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- No C# since the C# core host was retired on 2026-11-07: this project builds the Rust cores, their sidecars and
-       cores.manifest, and puts them beside every program that references it - see EmuSen_Backend.md §40.10. -->
+  <!-- No C# since the C# core host was retired on 2026-11-07: this project carries the Rust cores, which the build host
+       builds, to every program that references it - see EmuSen_Backend.md §40.10 and EmuSen_RustPlatform.md §28.11. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -17,161 +17,10 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
-  <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console does not run - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
-  <Import Project="Cores\RustCores.props" />
-
+  <!-- The Rust cores, their sidecars and cores.manifest: the build host builds this project's part of xtask/libraries.tsv and puts it beside every program that references this project - see EmuSen_RustPlatform.md §28.11. -->
   <PropertyGroup>
-    <EmuSenNativeForHost Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkPortableRuntimeIdentifier)'">true</EmuSenNativeForHost>
-    <EmuSenNativeProfile Condition="'$(_IsPublishing)' == 'true'">dist</EmuSenNativeProfile>
-    <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == ''">release</EmuSenNativeProfile>
-    <!-- Each crate builds into <root>/<library name>; overridable so a scratch build keeps cargo's output off the tree. -->
-    <EmuSenCargoTargetRoot Condition="'$(EmuSenCargoTargetRoot)' == ''">$(MSBuildProjectDirectory)/obj</EmuSenCargoTargetRoot>
-    <EmuSenHostLibraryPrefix Condition="!$([MSBuild]::IsOSPlatform('Windows'))">lib</EmuSenHostLibraryPrefix>
-    <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.dll</EmuSenHostLibrarySuffix>
-    <EmuSenHostLibrarySuffix Condition="$([MSBuild]::IsOSPlatform('OSX'))">.dylib</EmuSenHostLibrarySuffix>
-    <EmuSenHostLibrarySuffix Condition="'$(EmuSenHostLibrarySuffix)' == ''">.so</EmuSenHostLibrarySuffix>
-    <EmuSenHostProgramSuffix Condition="$([MSBuild]::IsOSPlatform('Windows'))">.exe</EmuSenHostProgramSuffix>
+    <EmuSenNativePart>cores</EmuSenNativePart>
     <DefaultItemExcludes>$(DefaultItemExcludes);Cores/*/*RT - */target/**;Cores/*/*RT - */pgo/**;Cores/Shared/*/target/**;Cores/Libretro/*/target/**;Cores/Sega/Nephrite - Genesis/target/**;Cores/Sega/Endou - Master System/target/**;Cores/Sega/Beryl-HW/*/target/**;Cores/Sony/Diamond - PlayStation/target/**;Cores/Sony/Sapphire - PlayStation 2/target/**;Cores/Sony/BlackMoon-HW/*/target/**;Cores/Nintendo/SilverMillennium-HW/*/target/**</DefaultItemExcludes>
-    <!-- A crate holding pgo/<name>.<this machine's Rust target>.profdata is built profile-guided unless this is false - see Mars_Native.md §6.17. -->
-    <EmuSenPgo Condition="'$(EmuSenPgo)' == ''">true</EmuSenPgo>
-    <!-- A library built on this machine from the same committed inputs is copied from here instead of rebuilt; false always builds - see EmuSen_RustPlatform.md §28.9. -->
-    <EmuSenCoreReuse Condition="'$(EmuSenCoreReuse)' == '' And ('$(CI)' == 'true' Or $([MSBuild]::IsOSPlatform('Windows')))">false</EmuSenCoreReuse>
-    <EmuSenCoreCache Condition="'$(EmuSenCoreCache)' == ''">$(HOME)/.cache/emusen/cores</EmuSenCoreCache>
-    <_EmuSenHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture)</_EmuSenHostArch>
-    <_EmuSenHostArch Condition="'$(_EmuSenHostArch)' == 'X64'">x86_64</_EmuSenHostArch>
-    <_EmuSenHostArch Condition="'$(_EmuSenHostArch)' == 'Arm64'">aarch64</_EmuSenHostArch>
-    <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == '' And $([MSBuild]::IsOSPlatform('Windows'))">$(_EmuSenHostArch)-pc-windows-msvc</EmuSenHostRustTarget>
-    <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == '' And $([MSBuild]::IsOSPlatform('OSX'))">$(_EmuSenHostArch)-apple-darwin</EmuSenHostRustTarget>
-    <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == ''">$(_EmuSenHostArch)-unknown-linux-gnu</EmuSenHostRustTarget>
   </PropertyGroup>
-
-  <!-- A machine without Rust builds no core; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
-  <Target Name="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <Exec Command="cargo --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
-      <Output TaskParameter="ExitCode" PropertyName="CargoExitCode" />
-    </Exec>
-    <PropertyGroup>
-      <CargoFound Condition="'$(CargoExitCode)' == '0'">true</CargoFound>
-    </PropertyGroup>
-    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: @(EmuSenRustCrate->'%(Core)', ' and ') are not built, and their consoles do not run." />
-  </Target>
-
-  <!-- One cargo build per crate of RustCores.props, in its order; the first to fail stops the build. -->
-  <Target Name="BuildRustCores" BeforeTargets="BeforeBuild" DependsOnTargets="FindCargo;BuildRustCore;WriteCoreSidecars" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
-    <ItemGroup>
-      <_EmuSenRustLibrary Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(Identity)$(EmuSenHostLibrarySuffix)')" Condition="'%(EmuSenRustCrate.Role)' != 'program'" />
-      <!-- A crate of Role program is an executable beside the assemblies, as the libretro proxy finds its runner - see EmuSen_LibretroHost.md §10d. -->
-      <_EmuSenRustProgram Include="@(EmuSenRustCrate->'$(EmuSenCargoTargetRoot)/%(Identity)/$(EmuSenNativeProfile)/%(Identity)$(EmuSenHostProgramSuffix)')" Condition="'%(EmuSenRustCrate.Role)' == 'program'" />
-      <None Include="@(_EmuSenRustProgram)" Condition="Exists('%(_EmuSenRustProgram.FullPath)')" Link="%(_EmuSenRustProgram.Filename)%(_EmuSenRustProgram.Extension)" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Always" />
-      <_EmuSenRustSidecar Include="@(_EmuSenRustLibrary->'%(Identity).core.json')" />
-      <!-- Copied IfDifferent and published Always, since a core copied from the reuse cache keeps the cache's older timestamp - see EmuSen_RustPlatform.md §28.10. -->
-      <!-- A crate InDevelopment reaches the build output, for the tests and the kit, but never a publish - see EmuSen_CoreAPI.md §27. -->
-      <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' != 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Always" />
-      <None Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.InDevelopment)' == 'true'" Link="%(_EmuSenRustLibrary.Filename)%(_EmuSenRustLibrary.Extension)" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Never" />
-      <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' != 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Always" />
-      <None Include="@(_EmuSenRustSidecar)" Condition="Exists('%(_EmuSenRustSidecar.FullPath)') And '%(_EmuSenRustSidecar.InDevelopment)' == 'true'" Link="%(_EmuSenRustSidecar.Filename)%(_EmuSenRustSidecar.Extension)" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Never" />
-      <!-- A test crate's library is no library of the installation, so the manifest never names it. -->
-      <_EmuSenRustLibraryBuilt Include="@(_EmuSenRustLibrary)" Condition="Exists('%(_EmuSenRustLibrary.FullPath)') And '%(_EmuSenRustLibrary.Role)' != 'test'" />
-    </ItemGroup>
-    <!-- The installation's cores.manifest beside the libraries, each built library's SHA-256 in sha256sum's format, which the Rust core host trusts and the C# host does not read - see EmuSen_Backend.md §27.5. -->
-    <GetFileHash Condition="'@(_EmuSenRustLibraryBuilt)' != ''" Files="@(_EmuSenRustLibraryBuilt)" Algorithm="SHA256" HashEncoding="hex">
-      <Output TaskParameter="Items" ItemName="_EmuSenRustLibraryHashed" />
-    </GetFileHash>
-    <ItemGroup>
-      <_EmuSenManifestLine Include="$([System.String]::Copy('%(_EmuSenRustLibraryHashed.FileHash)').ToLowerInvariant())  %(_EmuSenRustLibraryHashed.Filename)%(_EmuSenRustLibraryHashed.Extension)" Condition="'@(_EmuSenRustLibraryHashed)' != ''" />
-      <_EmuSenPublishManifestLine Include="$([System.String]::Copy('%(_EmuSenRustLibraryHashed.FileHash)').ToLowerInvariant())  %(_EmuSenRustLibraryHashed.Filename)%(_EmuSenRustLibraryHashed.Extension)" Condition="'@(_EmuSenRustLibraryHashed)' != '' And '%(_EmuSenRustLibraryHashed.InDevelopment)' != 'true'" />
-    </ItemGroup>
-    <!-- The build output lists every library it holds; a publish lists only those it carries, so sha256sum -c passes over it with a crate in development - see EmuSen_Backend.md §27.11. -->
-    <WriteLinesToFile File="$(IntermediateOutputPath)cores.manifest" Lines="@(_EmuSenManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
-    <WriteLinesToFile File="$(IntermediateOutputPath)publish-manifest/cores.manifest" Lines="@(_EmuSenPublishManifestLine)" Overwrite="true" WriteOnlyWhenDifferent="true" />
-    <ItemGroup>
-      <None Include="$(IntermediateOutputPath)cores.manifest" Link="cores.manifest" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Never" />
-      <None Include="$(IntermediateOutputPath)publish-manifest/cores.manifest" Link="cores.manifest" CopyToOutputDirectory="Never" CopyToPublishDirectory="Always" />
-    </ItemGroup>
-  </Target>
-
-  <!-- Each library on the core ABI v1 (CoreAbi 1) gets its sidecar from the conformance kit's runner, which loads it once, so a frontend lists it without loading it - see EmuSen_CoreAPI.md §7.1, §22. -->
-  <Target Name="WriteCoreSidecars" DependsOnTargets="BuildRustCore" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true' And '$(CargoFound)' == 'true' And '@(EmuSenRustCrate->WithMetadataValue('CoreAbi', '1'))' != ''">
-    <PropertyGroup>
-      <_EmuSenConformDir>$(MSBuildThisFileDirectory)Cores/Shared/emusen-core-conform/</_EmuSenConformDir>
-      <_EmuSenConformRunner>$(EmuSenCargoTargetRoot)/emusen-core-conform/release/emusen-core-conform</_EmuSenConformRunner>
-      <_EmuSenConformRunner Condition="$([MSBuild]::IsOSPlatform('Windows'))">$(_EmuSenConformRunner).exe</_EmuSenConformRunner>
-    </PropertyGroup>
-    <Exec WorkingDirectory="$(_EmuSenConformDir)" Command="cargo build --release --bin emusen-core-conform --manifest-path &quot;$(_EmuSenConformDir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/emusen-core-conform&quot;" StandardOutputImportance="low" />
-    <Exec Condition="'%(EmuSenRustCrate.CoreAbi)' == '1' And '%(EmuSenRustCrate.InDevelopment)' != 'true'" Command="&quot;$(_EmuSenConformRunner)&quot; --sidecar &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)&quot;" StandardOutputImportance="low" />
-    <Exec Condition="'%(EmuSenRustCrate.CoreAbi)' == '1' And '%(EmuSenRustCrate.InDevelopment)' == 'true'" Command="&quot;$(_EmuSenConformRunner)&quot; --sidecar &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)&quot; --development" StandardOutputImportance="low" />
-  </Target>
-
-  <!-- Batched: once per crate. Its profile for this target is used from a copy named by its hash, so a refreshed profile rebuilds every crate it guides; no profile, no flag and no warning - see Mars_Native.md §6.17. -->
-  <Target Name="BuildRustCore" Outputs="%(EmuSenRustCrate.Identity)" DependsOnTargets="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true' And '$(CargoFound)' == 'true'">
-    <PropertyGroup>
-      <_EmuSenPgoProfile>%(EmuSenRustCrate.Dir)pgo/%(EmuSenRustCrate.Identity).$(EmuSenHostRustTarget).profdata</_EmuSenPgoProfile>
-      <_EmuSenPgoUse>false</_EmuSenPgoUse>
-      <_EmuSenPgoUse Condition="'$(EmuSenPgo)' != 'false' And Exists('$(_EmuSenPgoProfile)')">true</_EmuSenPgoUse>
-      <_EmuSenPgoConfig></_EmuSenPgoConfig>
-    </PropertyGroup>
-    <ItemGroup>
-      <_EmuSenPgoManifest Remove="@(_EmuSenPgoManifest)" />
-      <_EmuSenPgoFlavour Remove="@(_EmuSenPgoFlavour)" />
-    </ItemGroup>
-    <!-- Only a flavour the manifest lists is given the profile: another compiler's names match nothing, and a newer LLVM's profile would fail the build - see Mars_Native.md §6.17.4. -->
-    <PropertyGroup>
-      <_EmuSenRustcCommand>rustc</_EmuSenRustcCommand>
-      <_EmuSenRustcCommand Condition="'$(RUSTC)' != ''">&quot;$(RUSTC)&quot;</_EmuSenRustcCommand>
-    </PropertyGroup>
-    <Exec Condition="'$(_EmuSenPgoUse)' == 'true'" Command="$(_EmuSenRustcCommand) -V" WorkingDirectory="%(EmuSenRustCrate.Dir)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low">
-      <Output TaskParameter="ConsoleOutput" PropertyName="_EmuSenRustc" />
-    </Exec>
-    <ReadLinesFromFile Condition="'$(_EmuSenPgoUse)' == 'true'" File="$([System.IO.Path]::ChangeExtension('$(_EmuSenPgoProfile)', '.pgo'))">
-      <Output TaskParameter="Lines" ItemName="_EmuSenPgoManifest" />
-    </ReadLinesFromFile>
-    <ItemGroup Condition="'$(_EmuSenPgoUse)' == 'true'">
-      <_EmuSenPgoFlavour Include="@(_EmuSenPgoManifest)" Condition="'%(_EmuSenPgoManifest.Identity)' == 'flavour = $(_EmuSenRustc) | $(EmuSenNativeProfile) | host'" />
-    </ItemGroup>
-    <Message Condition="'$(_EmuSenPgoUse)' == 'true' And '@(_EmuSenPgoFlavour)' == ''" Importance="normal" Text="%(EmuSenRustCrate.Core) builds without its PGO profile, which was not trained for $(_EmuSenRustc), $(EmuSenNativeProfile)." />
-    <PropertyGroup Condition="'$(_EmuSenPgoUse)' == 'true' And '@(_EmuSenPgoFlavour)' == ''">
-      <_EmuSenPgoUse>false</_EmuSenPgoUse>
-    </PropertyGroup>
-    <GetFileHash Condition="'$(_EmuSenPgoUse)' == 'true'" Files="$(_EmuSenPgoProfile)">
-      <Output TaskParameter="Hash" PropertyName="_EmuSenPgoHash" />
-    </GetFileHash>
-    <PropertyGroup Condition="'$(_EmuSenPgoUse)' == 'true'">
-      <_EmuSenPgoCopy>$([MSBuild]::NormalizePath('$(EmuSenCargoTargetRoot)', '%(EmuSenRustCrate.Identity)', 'pgo', '%(EmuSenRustCrate.Identity)-$(_EmuSenPgoHash.Substring(0, 16))'))</_EmuSenPgoCopy>
-      <_EmuSenPgoConfig> --config &quot;build.rustflags=['-Cprofile-use=$(_EmuSenPgoCopy).profdata', '-Cllvm-args=-no-pgo-warn-mismatch']&quot;</_EmuSenPgoConfig>
-    </PropertyGroup>
-    <Copy Condition="'$(_EmuSenPgoUse)' == 'true'" SourceFiles="$(_EmuSenPgoProfile);$([System.IO.Path]::ChangeExtension('$(_EmuSenPgoProfile)', '.pgo'))" DestinationFiles="$(_EmuSenPgoCopy).profdata;$(_EmuSenPgoCopy).pgo" SkipUnchangedFiles="true" />
-    <Warning Condition="'$(_EmuSenPgoUse)' == 'true' And ('$(RUSTFLAGS)' != '' Or '$(CARGO_ENCODED_RUSTFLAGS)' != '')" Text="RUSTFLAGS is set and overrides build.rustflags: %(EmuSenRustCrate.Core) builds without its PGO profile." />
-    <PropertyGroup>
-      <_EmuSenReuseFile>$(EmuSenHostLibraryPrefix)%(EmuSenRustCrate.Identity)$(EmuSenHostLibrarySuffix)</_EmuSenReuseFile>
-      <_EmuSenReuseFile Condition="'%(EmuSenRustCrate.Role)' == 'program'">%(EmuSenRustCrate.Identity)$(EmuSenHostProgramSuffix)</_EmuSenReuseFile>
-      <_EmuSenReuseBuilt>$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)/$(EmuSenNativeProfile)/$(_EmuSenReuseFile)</_EmuSenReuseBuilt>
-      <_EmuSenReusePgo>off</_EmuSenReusePgo>
-      <_EmuSenReusePgo Condition="'$(_EmuSenPgoUse)' == 'true'">$(_EmuSenPgoHash)</_EmuSenReusePgo>
-      <_EmuSenCoreKey></_EmuSenCoreKey>
-      <_EmuSenReuseEntry></_EmuSenReuseEntry>
-      <_EmuSenReuseHit>false</_EmuSenReuseHit>
-    </PropertyGroup>
-    <!-- The key is CI's input key with this machine's toolchain, cargo configuration, profile and PGO profile; "none" when an input is uncommitted - see EmuSen_RustPlatform.md §28.9. -->
-    <Exec Condition="'$(EmuSenCoreReuse)' != 'false'" WorkingDirectory="%(EmuSenRustCrate.Dir)" Command="python3 -I &quot;$(MSBuildThisFileDirectory)../.github/scripts/library_key.py&quot; local . %(EmuSenRustCrate.Identity) $(EmuSenHostRustTarget) $(EmuSenNativeProfile) $(_EmuSenReusePgo)" ConsoleToMSBuild="true" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
-      <Output TaskParameter="ConsoleOutput" PropertyName="_EmuSenCoreKey" />
-    </Exec>
-    <PropertyGroup Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('$(_EmuSenCoreKey)', '^[0-9a-f]{24}$'))">
-      <_EmuSenReuseEntry>$(EmuSenCoreCache)/%(EmuSenRustCrate.Identity)-$(EmuSenHostRustTarget)-$(EmuSenNativeProfile)-$(_EmuSenCoreKey)</_EmuSenReuseEntry>
-      <_EmuSenReuseHit Condition="Exists('$(_EmuSenReuseEntry)/$(_EmuSenReuseFile)')">true</_EmuSenReuseHit>
-    </PropertyGroup>
-    <Copy Condition="'$(_EmuSenReuseHit)' == 'true'" SourceFiles="$(_EmuSenReuseEntry)/$(_EmuSenReuseFile)" DestinationFiles="$(_EmuSenReuseBuilt)" SkipUnchangedFiles="true" />
-    <Message Condition="'$(_EmuSenReuseHit)' == 'true'" Importance="high" Text="%(EmuSenRustCrate.Core): copied from $(_EmuSenReuseEntry), built before from the same inputs." />
-    <!-- Run from the crate's directory, as CI runs it, so a crate's own .cargo/config.toml applies - see Mercury_Native.md §8.7. -->
-    <Exec Condition="'$(_EmuSenReuseHit)' != 'true'" WorkingDirectory="%(EmuSenRustCrate.Dir)" Command="cargo build --profile $(EmuSenNativeProfile) --manifest-path &quot;%(EmuSenRustCrate.Dir)Cargo.toml&quot; --target-dir &quot;$(EmuSenCargoTargetRoot)/%(EmuSenRustCrate.Identity)&quot;$(_EmuSenPgoConfig)" StandardOutputImportance="low" />
-    <!-- Stored under a unique name, then renamed, so a build in another checkout never copies half a file. -->
-    <Copy Condition="'$(_EmuSenReuseEntry)' != '' And '$(_EmuSenReuseHit)' != 'true' And Exists('$(_EmuSenReuseBuilt)')" SourceFiles="$(_EmuSenReuseBuilt)" DestinationFiles="$(_EmuSenReuseEntry)/$(_EmuSenReuseFile).$([System.Guid]::NewGuid().ToString('N'))">
-      <Output TaskParameter="CopiedFiles" ItemName="_EmuSenReuseStored" />
-    </Copy>
-    <Move Condition="'@(_EmuSenReuseStored)' != ''" SourceFiles="@(_EmuSenReuseStored)" DestinationFiles="$(_EmuSenReuseEntry)/$(_EmuSenReuseFile)" />
-    <Exec Condition="'@(_EmuSenReuseStored)' != ''" Command="python3 -I &quot;$(MSBuildThisFileDirectory)../.github/scripts/library_key.py&quot; prune &quot;$(EmuSenCoreCache)&quot; &quot;$([System.IO.Path]::GetFileName('$(_EmuSenReuseEntry)'))&quot; 4" IgnoreExitCode="true" StandardOutputImportance="low" />
-    <ItemGroup>
-      <_EmuSenReuseStored Remove="@(_EmuSenReuseStored)" />
-    </ItemGroup>
-  </Target>
 
 </Project>

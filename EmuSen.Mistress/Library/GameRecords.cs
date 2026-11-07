@@ -31,7 +31,10 @@ namespace EmuSen.Mistress.Library
 
         private GameRecords(GameLibrary lib) => _lib = lib;
 
-        public static string DefaultPath => Path.Combine(DataStore.Library, "games.db");
+        // Galaxia owns the name (Platform/galaxia/src/stores.rs); StoreNamesTests holds the two equal until the C# front end goes.
+        public const string FileName = "games.db";
+
+        public static string DefaultPath => Path.Combine(DataStore.Library, FileName);
 
         public static GameRecords Load() => Open(DefaultPath);
 

@@ -1401,7 +1401,7 @@ on it: SR2 to SR7, D1, D5, D10 and D12 (§11).*
 
 ### 14.1 The artefacts
 
-- **The header, `EmuSen.Crystal/include/emusen_crystal.h`**, beside `emusen_session.h`, which it includes, so that the
+- **The header, `Platform/crystal/include/emusen_crystal.h`** (in `EmuSen.Crystal/include/` until 2026-11-07), beside `emusen_session.h`, which it includes, so that the
   service's statuses and enumerations are the API's too and a twin passes its status through. 132 exports: 54 of the
   API's own and the 78 twins of the session service's 79 functions (the 79th, `last_error`, is the library's own, which
   takes the runtime as its first argument and may be given none). Three size-prefixed structs (`emusen_crystal_config`, 8

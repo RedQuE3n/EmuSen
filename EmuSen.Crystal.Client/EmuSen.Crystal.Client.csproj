@@ -25,7 +25,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\EmuSen.Crystal\include\emusen_crystal.h" Link="include\emusen_crystal.h" />
+    <None Include="..\Platform\crystal\include\emusen_crystal.h" Link="include\emusen_crystal.h" />
     <None Include="..\Platform\library\include\emusen_library.h" Link="include\emusen_library.h" />
     <None Include="..\Platform\scrape\include\emusen_scrape.h" Link="include\emusen_scrape.h" />
   </ItemGroup>

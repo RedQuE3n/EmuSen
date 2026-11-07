@@ -3032,7 +3032,7 @@ declares them, by the folder that reads them:
 | Diamond's tests | `Reference/analysis/psxplay` |
 | Diamond's kernel harness (in Diamond's folder) | `Diamond_OpenKernel.md` |
 | `Platform/serenity` (`include_str!`) | `EmuSen.Serenity/Slang/spirv-cache-schema.sql` |
-| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `EmuSen.Crystal/include/emusen_session.h` |
+| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `Platform/crystal/include/emusen_session.h` |
 
 **The check.** The list will go stale as code changes, so the plan checks it on every run:
 
@@ -3183,6 +3183,55 @@ Libraries rebuilt in another checkout differ in bytes from the first build, beca
 ### 28.10 A copied core keeps the cache's timestamp, so output folders copy by difference (2026-11-03)
 
 A hit copies the library with the timestamp it had when it was stored, which can be days old, while the sidecar is rewritten on every build. The cores and sidecars were copied into each output folder `PreserveNewest`, that is only when the source is newer, so a folder already holding another build of a core with a later timestamp kept it beside a sidecar describing the new one; the runtime then refuses the library ("is not the library its sidecar describes"). Seen on 2026-11-03 in a new checkout's WiseMan output: all eight cores mismatched, no game started, and 265 window-fit states failed. Reproduced the same day by putting an older Diamond build, touched to the present, in `EmuSen/bin` and building: the build succeeded and `libdiamond.so` still differed from its sidecar. The libraries, sidecars, programs and `cores.manifest` are now copied `IfDifferent`, MSBuild's copy whenever size or timestamp differ, and published `Always`. That was chosen over restamping the cache's copies on a hit, which would recopy every core on every build because the copy into `obj/` compares timestamps too, and over a copy by hash, which needs a task of its own while a copy keeps the source's timestamp and so leaves nothing to hash on the next build. After every copy into an output or publish folder, `Directory.Build.targets` runs `EmuSen/Cores/CheckCoreSidecars.proj`, which hashes each library a sidecar names and fails the build when one is missing or differs (it also runs by hand, `dotnet msbuild EmuSen/Cores/CheckCoreSidecars.proj -p:Folder=<dir>`), so a folder whose cores would be refused never comes out of a build silently. `EmuSen/Cores/stale-core-copy-test.sh [project]` plants a core of the same size, one byte changed and an hour newer, in a built project's output and requires the check to refuse it and a build to replace it. With the copy put back to `PreserveNewest` the build fails on the check, and with the check also removed the test finds the stale core left behind.
+
+### 28.11 The build host moves to Rust: `cargo xtask` and one list of the libraries (2026-11-07)
+
+*Decided 2026-11-07 by the tester*, from the house-rules audit of that day (rows 1 and 2: the Rust builds were imports of C# projects, and the list of native cores sat in `RustCores.props`, again in `rust-cores.yml`'s plan and again in its check job), and as `EmuSen_Qt.md` §1.9 places the build host: a cargo `xtask` crate, so one toolchain builds everything once the C# front end retires. Until then the C# projects keep one thin step that calls it. Everything §28.9 and §28.10 say of `EmuSen.csproj`, `RustCores.props` and `CheckCoreSidecars.proj` is now done by the crate below; earlier sections that name those files describe the build as it stood before this date.
+
+**The list.** `xtask/libraries.tsv` is the one owner of which native libraries and programs an installation carries: one tab-separated line each, with its crate's folder, its role (core, part, program, test, platform), whether it is on the core ABI v1 (and so gets a sidecar), whether it ships or is in development, whether it builds on Linux alone, the export prefix CI counts, and the names the build's messages use. It is plain text so that every reader needs no parser of its own: the build host, CI (`library_key.py plan`, and `library_key.py ci` for the check job and the WiseMan job's library listing), `publish.sh`, and the impact graph of `emusen-testing-module`, which gives a project that names `<EmuSenNativePart>` an edge to each crate of that part. CI's library jobs take the list's cores and platform library; the libretro rows stay local, as before. The list is one of the files a library's CI key reads (§28.3), as the workflow's `CRATES` was; a local key (§28.9) also reads `xtask/src`, so a change to how a library is built here retires the cached copies.
+
+**The crate.** `xtask/` (about 740 lines, its own workspace, depending on `serde_json` and `sha2`) is run as `cargo xtask` from the repository root, an alias in `.cargo/config.toml`. Its commands:
+
+| Command | Does what was | Replaces |
+|---|---|---|
+| `stage --part cores --out DIR [--profile P] [--target-root R]` | builds every non-platform row for this machine in the list's order, each into `R/<name>/` from its crate's folder, with its PGO profile when the manifest lists this compiler's flavour (Mars_Native.md §6.17) and from the reuse cache when §28.9's key hits; then the conformance runner and each v1 library's sidecar; then lays out `DIR/out/` (every library, development ones included, and a manifest of all but test libraries) and `DIR/publish/` (only what ships, with its own manifest) | `EmuSen.csproj`'s four targets and `RustCores.props` |
+| `stage --part platform ...` | builds `emusen-platform` and `dianash` with one cargo command into `R/emusen_platform/`, and lays out the library, `dianash/nano`, `dianash/nano.dianash.json` and chdman where the toolchain holds it | `Platform.targets`, `Platform.props` |
+| `check-sidecars FOLDER` | §28.10's check, the same three refusals in the same words | `CheckCoreSidecars.proj` |
+| `prebuilt --rid RID --from DIR --out DIR` | for a publish for another platform: the libraries CI built for it from `DIR/RID/`, their sidecars, a manifest of its own, and the list of the host's native file names the publish drops | `RustCoresPublish.targets` |
+
+The staged files are hard links to cargo's output, so staging costs no copy. Each command is a plain function over the list; nothing in the crate knows MSBuild.
+
+**The thin step.** `xtask/Native.targets`, imported once by `Directory.Build.targets`, holds the C# side: a project setting `EmuSenNativePart` to `cores` (`EmuSen.csproj`) or `platform` (`EmuSen.Galaxia.csproj`) runs `stage` before its build and adds the two staged folders as items copied `IfDifferent` to the output and `Always` to a publish (§28.10's rule kept); `Mistress` and `Shell` set `EmuSenNativeSwap`, which runs `prebuilt` for a foreign `RuntimeIdentifier`; and every project runs `check-sidecars` on its output and publish folders when they hold a sidecar. The properties keep their meanings: `EmuSenNative=false`, `EmuSenNativeProfile` (`dist` when publishing), `EmuSenCargoTargetRoot`, `EmuSenCoreReuse`, `EmuSenCoreCache`, `EmuSenPgo`, `EmuSenChdman`, `EmuSenNativePrebuilt`, `EmuSenCargo`. The step passes the same target folders as before (`EmuSen/obj/<name>`, `EmuSen.Galaxia/obj/emusen_platform`), so an existing checkout's cargo output stays fresh. The xtask clears the variables `cargo run` gives it (`CARGO_PKG_*`, `CARGO_MANIFEST_*` and the like) before running cargo, so a nested build sees the caller's environment.
+
+Two behaviours changed. A machine without cargo used to take the platform library from `EmuSenNativePrebuilt/<its own rid>/`; it now gets the warning that the cores were not built, since the xtask that would stage them needs cargo, and CI's WiseMan job, which builds with `EmuSenNative=false`, places its libraries itself. And a missing platform library is now an error wherever a build or publish would lack it (*decided 2026-11-07 by the tester*): `EmuSenPlatformRequired`, false since the library's first component and stale since B10 deleted the C# halves the programs could fall back to, is gone. A build without cargo stops on the platform part, a platform build that leaves no library stops, and a publish for another platform without its prebuilt library stops, each naming the file and how to build it.
+
+**Measured on 2026-11-07**, desktop, `dotnet publish EmuSen.Mistress -c Release -r linux-x64 --self-contained true -p:DebugType=none` into a scratch folder, first at `ae5649e2e` (the MSBuild host; every core built in `dist`, no cache hit) and then on this change in the same checkout:
+
+| Measure | Result |
+|---|---|
+| Files in the published tree | 699 and 699, the same paths |
+| Native files: the eight cores, their sidecars, `cores.manifest`, the libretro proxy and host, the core runner, the platform library, nano, chdman | byte-identical; every sidecar's SHA-256 unchanged |
+| cargo under the xtask | every crate `Fresh`: the same command, flags and target folders as the MSBuild host's |
+| The publish on this change | 46 s, against the baseline's full build |
+| Managed assemblies | identical once the SDK's stamped commit id is held to the baseline's (`-p:SourceRevisionId`); `EmuSen.LunaP.dll`, and `EmuSen.Mistress.dll` which carries LunaP's version string, differ only in LunaP's own commit id, which that property also overrode |
+| Documents | the four this change edits differ, as they should |
+
+**Open.** `CI` still builds each library with its own `cargo build` steps rather than the xtask; it reads the list but not the build. Moving CI's library job onto `cargo xtask stage` is the next step once a runner has been tried with it.
+
+### 28.12 One owner per fact (2026-11-07)
+
+*Decided 2026-11-07 by the tester*, from the same audit (rows 7, 8, 9, 13 and 14): each fact below had several owners, and each now has one, which every other reader reads or is checked against.
+
+| Fact | Owner now | Former owners, and what became of them |
+|---|---|---|
+| The 16 pad controls and 6 axes, names and order | `emusen-native`'s `Control::NAMES` and `Axis::NAMES` | `emusen_core.h`'s enums, held to them by the ABI check as before; the runtime's `info::BUTTONS`/`AXES` and the goldens' `PAD_BUTTONS` are now those constants; C#'s `PadButton` and `PadAxis` are held to the header by `PadButtonOwnerTests` until the C# goes |
+| The database file names (`games.db`, `records.db`, `states.db`, `media.db`, `themes.db`) and `appsettings.json` | Galaxia: `stores.rs`, and `models.rs` for the settings file | five Rust literals now read Galaxia's constants; the four C# constants are held to them by `StoreNamesTests` |
+| A console's hue, body, palette and planet features | the systems data: `look` in each `data/<id>.json`, null for none, in which case `Look::computed` gives a plain planet in a hue from the id, the rule the C# splash used | `StartupSplash`'s two tables and its maker rule are deleted; the runtime's `systems` answer carries every row's look, which the splash, Choose a console and the engines' marks read |
+| The catalog's four hand rows, their keys, the consoles' sole engines and the refusal naming a missing one | the systems data: `data/catalog-rows.tsv`, read by `emusen_systems::catalog_rows` | `HAND_ROWS`, `HAND_KEYS`, `SOLE_ENGINES` and `GAME_BOY_COLOR_SHELF` in `catalog.rs`, and the refusals by extension in `open.rs`, now derived from the rows and their systems' extensions |
+| `records.db`'s `state_record` | the runtime's `states.rs`, which copies the rows once into `states.db` (D8) | the C# reads and writes of it, which nothing but their own tests called, are deleted; the table stays in the file's version-1 migration, which is history and is not edited |
+| The cover shape of a console whose own is unknown, 1.365385 (OpenEmu's fallback) | the systems data: `data/table.json` | the runtime fills `cover_aspect` from it for every system only an engine names; the C# front end keeps one constant for a game with no known system, held to the data by a test, and the Qt front end is not to need that case |
+
+The look and the catalog rows are data, so a new console gets its look by stating it, or a computed one by stating nothing, and a change to either is a change to a data file the tests read.
 
 ## 29. The Mac mini as the Apple Silicon runner, 2026-10-16
 

@@ -2,7 +2,8 @@
 """The input key of a library rust-cores.yml builds, and the run's plan of which to build and which to reuse.
 
   library_key.py key  DIR NAME TARGET   print the key of crate DIR's library NAME for TARGET (the inputs to stderr)
-  library_key.py plan                   from CRATES, PLATFORMS and FULL in the environment, write the job outputs
+  library_key.py plan                   from xtask/libraries.tsv, and PLATFORMS and FULL in the environment, write the job outputs
+  library_key.py ci                     print the libraries CI builds (the cores and the platform library), name, folder and role
   library_key.py local DIR NAME TARGET PROFILE PGO
                                         print the key of a build on this machine, or "none" when its inputs are not all committed
   library_key.py prune CACHE ENTRY KEEP  keep the newest KEEP of CACHE's entries named like ENTRY up to its key
@@ -30,15 +31,31 @@ EXTRA = {
         "Docs/Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_OpenKernel.md",
     ],
     "Platform/serenity": ["EmuSen.Serenity/Slang/spirv-cache-schema.sql"],
-    "Platform/dianash": ["EmuSen.Crystal/include/emusen_session.h"],
+    "Platform/dianash": ["Platform/crystal/include/emusen_session.h"],
 }
 # The sidecar's writer, which every library job runs, and the files that say how a library is built.
 TOOLS = ["EmuSen/Cores/Shared/emusen-core-conform"]
-FILES = [".github/workflows/rust-cores.yml", ".github/scripts/library_key.py"]
+FILES = [".github/workflows/rust-cores.yml", ".github/scripts/library_key.py", "xtask/libraries.tsv"]
+# What says how a library is built here: the build host's source.
+LOCAL_FILES = ["xtask/src"]
+LIBRARIES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "xtask", "libraries.tsv")
 KEY_VERSION = "1"
 
 PATH_DEP = re.compile(r'\bpath\s*=\s*"([^"]+)"')
 UP_LITERAL = re.compile(r'"/?((?:\.\./)+[^"]*)"')
+
+
+def libraries():
+    """The rows of xtask/libraries.tsv that CI builds and ships: every core, and the platform library."""
+    rows = []
+    with open(LIBRARIES, encoding="utf-8") as f:
+        for line in f:
+            if line.startswith("#") or not line.strip():
+                continue
+            name, folder, role, abi, ships, _, symbol, _, _ = line.rstrip("\n").split("\t")
+            if role in ("core", "platform"):
+                rows.append({"name": name, "dir": folder, "role": role, "symbol": "" if symbol == "-" else symbol, "development": ships != "ships"})
+    return rows
 
 
 def git(*args):
@@ -131,6 +148,7 @@ def local_inputs(folder, name, target, profile, pgo):
     if any(k in os.environ for k in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")) or any(k.startswith(("CARGO_PROFILE_", "CARGO_BUILD_")) for k in os.environ):
         return None
     ids, missing = sources(folder)
+    ids += tuple(f"{git('rev-parse', 'HEAD:' + p).strip()} {p}" for p in LOCAL_FILES)
     if missing or git("status", "--porcelain", "--untracked-files=all", "--", *(i.split(" ", 1)[1] for i in ids)).strip():
         return None
     rustc = subprocess.run(["rustc", "-V"], cwd=folder, check=True, capture_output=True, text=True).stdout.strip()
@@ -194,7 +212,7 @@ def reusable(repo, name, library):
 
 
 def plan():
-    crates, platforms = json.loads(os.environ["CRATES"]), json.loads(os.environ["PLATFORMS"])
+    crates, platforms = libraries(), json.loads(os.environ["PLATFORMS"])
     full, repo = os.environ.get("FULL") == "true", os.environ["GITHUB_REPOSITORY"]
     build, reuse, rows = [], [], []
     for c in crates:
@@ -234,6 +252,8 @@ def main():
         print(key_of(lines) if not missing else "undeclared")
     elif sys.argv[1:2] == ["plan"]:
         plan()
+    elif sys.argv[1:2] == ["ci"]:
+        print("\n".join(f"{c['name']}\t{c['dir']}\t{c['role']}" for c in libraries()))
     elif sys.argv[1:2] == ["local"] and len(sys.argv) == 7:
         folder = os.path.abspath(sys.argv[2])
         os.chdir(git("-C", folder, "rev-parse", "--show-toplevel").strip())

@@ -6,10 +6,10 @@ using Microsoft.Data.Sqlite;
 
 namespace EmuSen.Mistress.Library
 {
-    // records.db: what Mistress knows about files it wrote or fetched, each save state's record and each shader pack's build - see EmuSen_Settings_Reference.md §4.64.
+    // records.db: what Mistress knows about files it fetched, each shader pack's build; its state_record rows are the runtime's to copy once (states.rs) - see EmuSen_Settings_Reference.md §4.64.
     public sealed class FileRecords : IDisposable
     {
-        // Each entry takes the file from the version before it; append, never edit.
+        // Each entry takes the file from the version before it; append, never edit. Version 1's state_record is read only by the runtime's one copy into states.db.
         private static readonly string[] Migrations =
         {
             """
@@ -38,6 +38,7 @@ namespace EmuSen.Mistress.Library
 
         public static int SchemaVersion => Migrations.Length;
 
+        // Galaxia owns the name (Platform/galaxia/src/stores.rs); StoreNamesTests holds the two equal until the C# front end goes.
         public const string FileName = "records.db";
 
         private readonly SqliteConnection _db;
@@ -80,115 +81,6 @@ namespace EmuSen.Mistress.Library
                 Execute(db, step, Migrations[version]);
                 Execute(db, step, $"PRAGMA user_version = {version + 1}");
                 step.Commit();
-            }
-        }
-
-        // --- save states ---
-
-        // The record while the state is the file it was written for; a sidecar is imported on first sight and left where it is - see §4.64.
-        public StateRecord? ReadState(string statePath)
-        {
-            string key = Path.GetFullPath(statePath);
-            if (Stat(key) is not { } stat) return null;
-            lock (_gate)
-            {
-                if (_closed) return StateRecord.ReadSidecar(key);
-                using (SqliteCommand command = _db.CreateCommand())
-                {
-                    command.CommandText = "SELECT state_bytes, state_modified, console, core, state_version, build, saved_at, rom_file, rom_md5, rom_bytes FROM state_record WHERE path = $path";
-                    command.Parameters.AddWithValue("$path", key);
-                    using SqliteDataReader row = command.ExecuteReader();
-                    if (row.Read())
-                        return row.GetInt64(0) == stat.Bytes && row.GetInt64(1) == stat.Modified ? StateFrom(row) : null;
-                }
-
-                if (StateRecord.ReadSidecar(key) is not StateRecord sidecar) return null;
-                try
-                {
-                    Upsert(key, stat, sidecar, "sidecar", replace: false);
-                }
-                catch (SqliteException)
-                {
-                }
-                return sidecar;
-            }
-        }
-
-        // Stamped with the state file's size and time, so a state rewritten without a record is not described by this one.
-        public bool WriteState(string statePath, StateRecord record)
-        {
-            string key = Path.GetFullPath(statePath);
-            if (Stat(key) is not { } stat) return false;
-            lock (_gate)
-            {
-                if (_closed) return false;
-                try
-                {
-                    Upsert(key, stat, record, "written", replace: true);
-                    return true;
-                }
-                catch (SqliteException)
-                {
-                    return false;
-                }
-            }
-        }
-
-        public void ForgetState(string statePath) => Write("DELETE FROM state_record WHERE path = $path", ("$path", Path.GetFullPath(statePath)));
-
-        // Where the record came from: "written" by this store, "sidecar" when imported from a pre-database file, or null.
-        public string? StateSource(string statePath) => ReadScalar("SELECT source FROM state_record WHERE path = $path", ("$path", Path.GetFullPath(statePath))) as string;
-
-        private void Upsert(string key, (long Bytes, long Modified) stat, StateRecord record, string source, bool replace)
-        {
-            using SqliteCommand command = _db.CreateCommand();
-            command.CommandText = """
-                INSERT INTO state_record (path, state_bytes, state_modified, console, core, state_version, build, saved_at, rom_file, rom_md5, rom_bytes, source)
-                VALUES ($path, $bytes, $modified, $console, $core, $version, $build, $saved, $rom, $md5, $romBytes, $source)
-                """ + (replace
-                    ? """
-                       ON CONFLICT(path) DO UPDATE SET state_bytes = excluded.state_bytes, state_modified = excluded.state_modified, console = excluded.console,
-                       core = excluded.core, state_version = excluded.state_version, build = excluded.build, saved_at = excluded.saved_at, rom_file = excluded.rom_file,
-                       rom_md5 = excluded.rom_md5, rom_bytes = excluded.rom_bytes, source = excluded.source
-                      """
-                    : " ON CONFLICT(path) DO NOTHING");
-            command.Parameters.AddWithValue("$path", key);
-            command.Parameters.AddWithValue("$bytes", stat.Bytes);
-            command.Parameters.AddWithValue("$modified", stat.Modified);
-            command.Parameters.AddWithValue("$console", record.Console);
-            command.Parameters.AddWithValue("$core", record.Core);
-            command.Parameters.AddWithValue("$version", record.StateVersion);
-            command.Parameters.AddWithValue("$build", record.Build);
-            command.Parameters.AddWithValue("$saved", record.SavedAt.ToString("o", CultureInfo.InvariantCulture));
-            command.Parameters.AddWithValue("$rom", record.RomFile);
-            command.Parameters.AddWithValue("$md5", (object?)record.RomMd5 ?? DBNull.Value);
-            command.Parameters.AddWithValue("$romBytes", record.RomBytes);
-            command.Parameters.AddWithValue("$source", source);
-            command.ExecuteNonQuery();
-        }
-
-        private static StateRecord StateFrom(SqliteDataReader row) => new()
-        {
-            Console = row.GetString(2),
-            Core = row.GetString(3),
-            StateVersion = row.GetInt32(4),
-            Build = row.GetString(5),
-            SavedAt = DateTime.Parse(row.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind),
-            RomFile = row.GetString(7),
-            RomMd5 = row.IsDBNull(8) ? null : row.GetString(8),
-            RomBytes = row.GetInt64(9),
-        };
-
-        private static (long Bytes, long Modified)? Stat(string path)
-        {
-            try
-            {
-                var file = new FileInfo(path);
-                return file.Exists ? (file.Length, file.LastWriteTimeUtc.Ticks) : null;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                return null;
             }
         }
 

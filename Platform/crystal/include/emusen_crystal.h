@@ -53,7 +53,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_CRYSTAL_MAJOR 1u
-#define EMUSEN_CRYSTAL_MINOR 12u
+#define EMUSEN_CRYSTAL_MINOR 13u
 #define EMUSEN_CRYSTAL_VERSION ((EMUSEN_CRYSTAL_MAJOR << 16) | EMUSEN_CRYSTAL_MINOR)
 
 /* ---- Statuses (EmuSen_Backend.md section 3.2). The session service's keep their numbers and names; these follow. -- */
@@ -215,7 +215,10 @@ int32_t emusen_crystal_free(emusen_crystal_runtime *rt);
  * "core". Since 1.1 "core" is {"names":[name],"display_name","console","extensions":[ext]} or null: the engine's facts
  * riding along, not a pack's, the names `core <name>` knows its core by (section 14.11). Since 1.1 "controllers" is
  * {"buttons":[control],"axes":[axis],"ports","players":[controller id|null]}, the engine's too: the console's pad, its
- * most ports, and each player's controller as the console's stored settings stand at the call (section 14.13). */
+ * most ports, and each player's controller as the console's stored settings stand at the call (section 14.13). Since
+ * 1.13 every row has "look" {"hue","body","palette":[colour],"craters","bands","cap","moons"}, the systems table's or
+ * the one computed from the id, and a row only an engine names has the table's default "cover_aspect"
+ * (EmuSen_RustPlatform.md section 28.12). */
 int64_t emusen_crystal_systems(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* reads, since 1.1. [{"name","label","system","esde_system","esde_full_name","core":{"display_name","console",

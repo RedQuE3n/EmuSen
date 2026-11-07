@@ -5,7 +5,7 @@
 # (rootless podman), so nothing is installed on the machine and no sudo is used. See EmuSen_GamePackages.md §4.9, §12.1.
 #
 # Usage: bash build-chdman.sh [<work-dir>]      default ~/.cache/emusen/toolchains/mame<release>
-# Output: ~/.cache/emusen/toolchains/chdman/linux-x64/chdman, where Platform.targets finds it, and its SHA-256 compared
+# Output: ~/.cache/emusen/toolchains/chdman/linux-x64/chdman, where the build host (cargo xtask stage --part platform) finds it, and its SHA-256 compared
 # with the pin.
 set -euo pipefail
 here=$(cd "$(dirname "$0")" && pwd)

@@ -8,6 +8,7 @@
 
 pub mod libretro_cores;
 pub mod libretro_extensions;
+pub mod catalog_rows;
 pub mod cheats;
 pub mod debug;
 pub mod gb;
@@ -72,6 +73,62 @@ pub struct System {
     /// Whether the console's games can drive a motor in the player's hands, a controller's, an accessory's or a
     /// cartridge's, so that the player's rumble switch is honoured (EmuSen_Input.md §9.2).
     pub rumble: bool,
+    /// How the front ends draw the console; none where its data gives none, which `look()` computes.
+    pub look: Option<Look>,
+}
+
+impl System {
+    /// The console's look as its data gives it, else the one computed from its id.
+    pub fn look(&self) -> Look {
+        self.look.clone().unwrap_or_else(|| Look::computed(&self.id))
+    }
+}
+
+/// How the front ends draw a console: its hue and its body, a planet's palette and features as opacities from 0 to 1
+/// (EmuSen_Interface.md §22, §24.6).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Look {
+    /// Degrees, 0 to 360.
+    pub hue: f64,
+    /// One of `BODIES`.
+    pub body: String,
+    /// A planet's light, middle and rim colours as `#RRGGBB`; empty derives them from the hue.
+    pub palette: Vec<String>,
+    pub craters: f64,
+    pub bands: f64,
+    pub cap: f64,
+    /// Moonlets, 0 to 2.
+    pub moons: u32,
+}
+
+impl Look {
+    /// A console's look when its data gives none: a plain planet in a hue taken from its id, the same on every start.
+    pub fn computed(id: &str) -> Look {
+        let hue = id.chars().flat_map(char::to_lowercase).fold(17u32, |h, c| h.wrapping_mul(31).wrapping_add(c as u32)) % 360;
+        Look { hue: f64::from(hue), body: "planet".into(), palette: Vec::new(), craters: 0.0, bands: 0.0, cap: 0.0, moons: 0 }
+    }
+}
+
+/// Every key a look's object holds, in the order the table writes them.
+pub const LOOK_KEYS: [&str; 7] = ["hue", "body", "palette", "craters", "bands", "cap", "moons"];
+
+/// The bodies a console is drawn as.
+pub const BODIES: [&str; 3] = ["planet", "shards", "gem"];
+
+/// The table-wide facts beside each console's own: today the cover shape of a console whose data gives none.
+pub const TABLE_FACTS: &str = include_str!("../data/table.json");
+
+/// Height over width of a box whose console's is unknown (OpenEmu's fallback), from `data/table.json`.
+pub fn default_cover_aspect() -> f64 {
+    static ASPECT: OnceLock<f64> = OnceLock::new();
+    *ASPECT.get_or_init(|| {
+        let document = json::parse(TABLE_FACTS).ok();
+        let aspect = document.as_ref().and_then(|d| d.get("cover_aspect")).and_then(|v| match v {
+            Value::Number(token) => token.parse::<f64>().ok(),
+            _ => None,
+        });
+        aspect.filter(|a| a.is_finite() && *a > 0.0).unwrap_or(1.0)
+    })
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
@@ -96,7 +153,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 23] = [
+pub const KEYS: [&str; 24] = [
     "id",
     "name",
     "console",
@@ -120,6 +177,7 @@ pub const KEYS: [&str; 23] = [
     "libretro_systemids",
     "firmware_note",
     "rumble",
+    "look",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
@@ -221,6 +279,37 @@ impl<'a> Fields<'a> {
         Ok(media)
     }
 
+    fn look(&self) -> Result<Option<Look>, Error> {
+        let value = self.value("look")?;
+        if value.is_null() {
+            return Ok(None);
+        }
+        let Value::Object(members) = value else { return self.fail("look is not an object") };
+        if members.len() != LOOK_KEYS.len() || members.iter().zip(LOOK_KEYS).any(|((name, _), key)| name.text != key) {
+            return self.fail(format!("a look's fields are not {}", LOOK_KEYS.join(", ")));
+        }
+        let l = Fields { file: self.file, members };
+        let share = |key: &str, max: f64| match l.token(key)?.parse::<f64>() {
+            Ok(v) if (0.0..=max).contains(&v) => Ok(v),
+            _ => l.fail(format!("the look's {key} is not a number from 0 to {max}")),
+        };
+        let hue = share("hue", 360.0)?;
+        let body = l.text("body")?;
+        if !BODIES.contains(&body.as_str()) {
+            return l.fail(format!("the look's body {body} is not one of {}", BODIES.join(", ")));
+        }
+        let palette = l.texts_or_none("palette")?;
+        let colour = |c: &String| c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|d| d.is_ascii_hexdigit());
+        if !(palette.is_empty() || palette.len() == 3 && palette.iter().all(colour)) {
+            return l.fail("the look's palette is not three #RRGGBB colours or none");
+        }
+        let moons = share("moons", 2.0)?;
+        if moons.fract() != 0.0 {
+            return l.fail("the look's moons is not 0, 1 or 2");
+        }
+        Ok(Some(Look { hue, body, palette, craters: share("craters", 1.0)?, bands: share("bands", 1.0)?, cap: share("cap", 1.0)?, moons: moons as u32 }))
+    }
+
     fn bool(&self, key: &str) -> Result<bool, Error> {
         match self.value(key)?.as_bool() {
             Some(value) => Ok(value),
@@ -275,6 +364,7 @@ pub fn parse(file: &str, text: &str) -> Result<System, Error> {
         libretro_systemids: f.texts_or_none("libretro_systemids")?,
         firmware_note: f.optional_text("firmware_note")?,
         rumble: f.bool("rumble")?,
+        look: f.look()?,
         screenscraper_system: if f.value("screenscraper_system")?.is_null() {
             None
         } else {
@@ -365,6 +455,11 @@ pub fn to_json(systems: &[System]) -> String {
                 words(&s.libretro_systemids),
                 or_null(s.firmware_note.as_deref().map(Value::string)),
                 Value::Bool(s.rumble),
+                or_null(s.look.as_ref().map(|l| {
+                    let share = |v: f64| Value::Number(json::format_f64(v).unwrap_or_else(|| "0".into()));
+                    let values = [share(l.hue), Value::string(l.body.as_str()), words(&l.palette), share(l.craters), share(l.bands), share(l.cap), Value::number(l.moons)];
+                    Value::Object(LOOK_KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
+                })),
             ];
             Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
         })
@@ -445,6 +540,28 @@ mod tests {
         assert_eq!((order("n64").as_deref(), order("nes").as_deref(), order("md").as_deref()), (Some("big"), Some("little"), Some("big")));
         assert_eq!(parse("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": null")).unwrap().byte_order, None);
         assert_eq!(refused("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": \"middle\"")), "byte_order middle is neither big nor little");
+    }
+
+    #[test]
+    fn a_look_is_the_datas_or_computed_from_the_id() {
+        let n64 = find("n64").unwrap().look();
+        assert_eq!((n64.hue, n64.body.as_str(), n64.palette.len(), n64.cap, n64.moons), (352.0, "planet", 3, 0.9, 2));
+        assert_eq!(find("ps2").unwrap().look().body, "gem");
+        assert_eq!(parse("nes", &nes().replace(r#""look": {"hue": 330"#, r#""look": null, "x": {"hue": 330"#)).map(|_| ()).unwrap_err().what, "x is not a field of a system");
+        let plain = parse("nes", &with_look(&nes(), "null")).unwrap();
+        assert_eq!(plain.look(), Look::computed("nes"));
+        assert_eq!(Look::computed("NES"), Look::computed("nes"), "the id is read without regard to case");
+        assert_eq!(refused("nes", &with_look(&nes(), r#"{"hue": 400, "body": "planet", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"#)), "the look's hue is not a number from 0 to 360");
+        assert_eq!(refused("nes", &with_look(&nes(), r#"{"hue": 1, "body": "cube", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"#)), "the look's body cube is not one of planet, shards, gem");
+        assert_eq!(refused("nes", &with_look(&nes(), r##"{"hue": 1, "body": "planet", "palette": ["#FFF"], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"##)), "the look's palette is not three #RRGGBB colours or none");
+        assert!(to_json(&build(&DATA).unwrap()).contains(r##""look":{"hue":352,"body":"planet","palette":["#FFD3D8","#EE4E66","#7E1A38"],"craters":0,"bands":0,"cap":0.9,"moons":2}"##));
+        assert_eq!(default_cover_aspect(), 1.365385);
+    }
+
+    fn with_look(text: &str, look: &str) -> String {
+        let at = text.find(r#""look": "#).unwrap();
+        let end = text[at..].find('}').unwrap() + at + 1;
+        format!("{}\"look\": {look}{}", &text[..at], &text[end..])
     }
 
     fn refused(file: &str, text: &str) -> String {

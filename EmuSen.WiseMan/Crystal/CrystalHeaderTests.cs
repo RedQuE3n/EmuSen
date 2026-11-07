@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.Crystal
     public class CrystalHeaderTests
     {
         private static string Repo => ConfigRoot.Directory;
-        private static string Include => Path.Combine(Repo, "EmuSen.Crystal", "include");
+        private static string Include => Path.Combine(Repo, "Platform", "crystal", "include");
         private static string Header => File.ReadAllText(Path.Combine(Include, "emusen_crystal.h"));
         private static string SessionHeader => File.ReadAllText(Path.Combine(Include, "emusen_session.h"));
 

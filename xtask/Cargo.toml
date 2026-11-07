@@ -1,0 +1,13 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "EmuSen's build host: builds the native libraries libraries.tsv lists, writes their sidecars and cores.manifest, stages them for a front end, and checks a folder's cores - see EmuSen_RustPlatform.md §28.11."
+
+# Its own workspace, so no tree above it claims it.
+[workspace]
+
+[dependencies]
+serde_json = "1"
+sha2 = "0.10"

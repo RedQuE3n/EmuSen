@@ -175,7 +175,10 @@ namespace EmuSen.Galaxia.Models
         // Big picture's clock, help, status, quick system select, startup, order, scroll overlay and sound volume - see EmuSen_Settings_Reference.md §4.66.
         public BigPictureInterface BigPictureInterface { get; set; } = new();
 
-        private static readonly ConfigFile<AppSettings> File = new("appsettings.json");
+        // Galaxia owns the name (Platform/galaxia/src/models.rs); StoreNamesTests holds the two equal until the C# front end goes.
+        public const string FileName = "appsettings.json";
+
+        private static readonly ConfigFile<AppSettings> File = new(FileName);
 
         public void Save() => File.Save(this);
 

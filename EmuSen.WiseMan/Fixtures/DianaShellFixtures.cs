@@ -3,7 +3,6 @@ using System.IO;
 using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
 using EmuSen.DianaSh.DianaSh.Dev;
 
@@ -12,10 +11,10 @@ namespace EmuSen.WiseMan.Fixtures
     // Shared DianaSh shell test setup - see EmuSen_Debugging_Tools_Reference_v5.md §3.18.
     public static class DianaShellFixtures
     {
-        public static (DianaShInterpreter Shell, DianaShSessionManager Sessions) NewShellWithSessions(IDebugTarget? target = null)
+        public static (DianaShInterpreter Shell, DianaShSessionManager Sessions) NewShellWithSessions()
         {
             var sessions = new DianaShSessionManager();
-            var shell = target is null ? DianaShInterpreter.CreateWithoutSession(sessions: sessions) : DianaShInterpreter.CreateDefault(target, sessions: sessions);
+            var shell = DianaShInterpreter.CreateWithoutSession(sessions: sessions);
             sessions.RegisterInitial(new DianaShSession("main", shell));
             return (shell, sessions);
         }

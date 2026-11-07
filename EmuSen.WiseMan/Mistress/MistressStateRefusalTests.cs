@@ -89,7 +89,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_pal_state_in_an_ntsc_game_is_refused_in_the_core_s_words() => Session.Dispatch(() =>
         {
-            Assert.True(Fixtures.MoonEngines.Available, Fixtures.MoonEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("moonrt").Built, Fixtures.CoreSidecars.Beside("moonrt").Report);
             MainWindow saving = Started(_pal);
             TextBlock status = saving.FindControl<TextBlock>("StatusText")!;
             Invoke(saving, "SaveState");

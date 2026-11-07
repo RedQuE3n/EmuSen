@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_cartridge_type_mercuryrt_does_not_build_is_a_fault_naming_the_type()
         {
-            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("mercuryrt").Built, Fixtures.CoreSidecars.Beside("mercuryrt").Report);
             string rom = Path.Combine(_root, "Mbc7.gb");
             File.WriteAllBytes(rom, SyntheticGbRom.Build(cartridgeType: 0x22));
             using var runtime = new CrystalRuntime();

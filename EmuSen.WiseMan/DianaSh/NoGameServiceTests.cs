@@ -62,8 +62,6 @@ namespace EmuSen.WiseMan.DianaSh
             ("disasm", "Usage: disasm <space>|<cpu> <addr> [<count>]"),
         };
 
-        private static readonly string[] Unrun = { "nano", "tmux", "shutdown", "coretop", "vstop", "clear", "su", "passwd", "useradd", "userdel", "kill", "history" };
-
         private string Line(string line) => line.Replace("<root>", _root, StringComparison.Ordinal);
 
         [Fact]
@@ -74,28 +72,6 @@ namespace EmuSen.WiseMan.DianaSh
             var (_, said, action) = shell.Submit("resume");
             Assert.Equal("Resuming.", said);
             Assert.IsType<HostAction.Resume>(action);
-        }
-
-        // Live while the C# provider remains for the C# core host's targets; with it, B10-C keeps only the case above.
-        [Fact]
-        public void Every_command_answers_as_over_the_csharp_provider_and_not_as_over_no_table()
-        {
-            DianaShInterpreter table = DianaShInterpreter.CreateWithoutSession(_runtime.NoGameService());
-            using var provider = new SessionService(null, new SessionServiceOptions { CheatDatabaseFolder = () => Path.Combine(_root, "Cheats") });
-            DianaShInterpreter csharp = DianaShInterpreter.CreateForService((nint)provider.Table);
-            DianaShInterpreter none = DianaShInterpreter.CreateWithoutSession();
-            var differ = new StringBuilder();
-            int unlike = 0;
-            foreach (string line in table.CommandNames.Where(n => !Unrun.Contains(n)).Append("resume"))
-            {
-                var (_, a, aa) = csharp.Submit(line);
-                var (_, b, ba) = table.Submit(line);
-                var (_, c, ca) = none.Submit(line);
-                if (a != b || aa?.GetType() != ba?.GetType()) differ.Append(line).Append(": ").Append(a).Append(" | ").Append(b).Append('\n');
-                if (b != c || ba?.GetType() != ca?.GetType()) unlike++;
-            }
-            Assert.True(differ.Length == 0, differ.ToString());
-            Assert.True(unlike >= 10, $"only {unlike} commands answer otherwise without a table");
         }
 
         private static string Words() => Encoding.UTF8.GetString(CrystalRuntime.Bytes((o, n) => CrystalContract.LastError(0, o, n)));

@@ -8,9 +8,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using EmuSen.Common;
-using EmuSen.Cores;
-using EmuSen.Cores.Native;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -95,34 +92,6 @@ namespace EmuSen.WiseMan.Mistress
         private static WindowGame SessionOf(MainWindow w) => new(w);
 
         private static void Poll(MainWindow w) => typeof(MainWindow).GetMethod("PollGamepad", Hidden)!.Invoke(w, null);
-
-        // Each N64 port as the session's machine holds it after one frame: its state saved through the API and read by a MarsRT of the test's own.
-        private (bool Present, ushort Buttons, sbyte StickX)[] N64PortsAfterAFrame(MainWindow window)
-        {
-            MistressGame.RunFrames(window, 1);
-            string state = Path.Combine(Path.GetTempPath(), "EmuSenMultiplayerN64_" + Guid.NewGuid().ToString("N") + ".state");
-            try
-            {
-                MistressGame.Of(window).Crystal.SaveState(state);
-                using var reader = new MarsRtTestCore() { Options = TestCores.NoBattery };
-                reader.LoadRom(MistressGame.Info(window).GetProperty("game").GetProperty("path").GetString()!);
-                reader.LoadState(state);
-                return N64Ports(reader);
-            }
-            finally { File.Delete(state); }
-        }
-
-        // Each N64 port as MarsRT's state holds it, found by the state layout's names - see Mars_Serial.md §3.
-        private static (bool Present, ushort Buttons, sbyte StickX)[] N64Ports(CoreEngine core)
-        {
-            byte[] state = core.Save(snapshot: false);
-            string[][] fields = core.Machine.Layout().Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' '))
-                .Where(f => f.Length >= 4 && f[3].Contains("Controllers")).ToArray();
-            int[] At(string name) => fields.Where(f => f[3].EndsWith(name, StringComparison.Ordinal)).Select(f => int.Parse(f[0])).ToArray();
-            int[] present = At("Present"), buttons = At("Buttons"), stick = At("StickX");
-            Assert.Equal(4, present.Length);
-            return Enumerable.Range(0, 4).Select(i => (state[present[i]] != 0, BitConverter.ToUInt16(state, buttons[i]), (sbyte)state[stick[i]])).ToArray();
-        }
 
         // The SNES auto-read's two words, as the game reads them at $4218 and $421A and copies them to WRAM.
         private static (ushort One, ushort Two) SnesPads(MainWindow w) => MistressGame.SnesPads(w);
@@ -268,31 +237,6 @@ namespace EmuSen.WiseMan.Mistress
             window.Close();
         }, default);
 
-        // Four pads on the N64, each port plugged in as its player's pad is, and a fifth pad, which no port hears.
-        [Fact]
-        public Task Four_pads_play_the_n64s_four_ports_in_a_big_screen_session() => Session.Dispatch(() =>
-        {
-            (MainWindow window, PadDriver first) = Playing("Four.z64", SyntheticN64Rom.Build(patches: (0, new byte[] { 0x10, 0x00, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00 })), ByConnection, bigScreen: true);
-            Assert.Equal(EngineNames.MarsRt, MistressGame.Engine(window));
-            Poll(window);
-            // Every port holds a controller at create; the ports no player holds are emptied as the next frame starts - see EmuSen_CoreAPI.md §6.36.
-            Assert.Equal(new[] { true, false, false, false }, N64PortsAfterAFrame(window).Select(p => p.Present));
-
-            PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4"), first.Plug("Pad 5") };
-            Poll(window);
-            // A controller plugged in reaches the machine as the next frame starts, the adapter's rule for every v1 core - see Mars_Native.md §7.5.
-            Assert.Equal(new[] { true, true, true, true }, N64PortsAfterAFrame(window).Select(p => p.Present));
-
-            for (int i = 0; i < others.Length; i++) others[i].Pad.Press(SDL.GamepadButton.East);
-            others[2].Pad.SetAxis(SDL.GamepadAxis.LeftX, 1);
-            Poll(window);
-            var ports = N64PortsAfterAFrame(window);
-            Assert.Equal(new ushort[] { 0, 0x8000, 0x8000, 0x8000 }, ports.Select(p => p.Buttons));
-            Assert.Equal(new sbyte[] { 0, 0, 0, 127 }, ports.Select(p => p.StickX));
-            Assert.Equal(5, first.Gamepad.Players.PlayerOf(first.Gamepad.Pads[4]));
-            window.Close();
-        }, default);
-
         // A J-Cart game in a big-screen session: four pads play, players 3 and 4 on the cartridge's ports, and the bindings window offers four players with three-button pads for 3 and 4 - see EmuSen_Settings_Reference.md §4.103.
         [Fact]
         public Task Four_pads_play_a_genesis_j_cart_game_and_the_bindings_window_offers_its_players() => Session.Dispatch(() =>
@@ -300,7 +244,7 @@ namespace EmuSen.WiseMan.Mistress
             ConsolesConfig graphics = ConsolesConfig.Load();
             graphics.SetValue("Genesis", "pad1", "md.pad6");
             graphics.Save();
-            (MainWindow window, PadDriver first) = Playing("JCart.md", NephritePlayersTests.JCartReader(), ByConnection, bigScreen: true);
+            (MainWindow window, PadDriver first) = Playing("JCart.md", TestPrograms.JCartReader(), ByConnection, bigScreen: true);
             Assert.Equal(4, SessionOf(window).ControllerPorts);
             PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
             others[1].Pad.Press(SDL.GamepadButton.DPadUp);
@@ -331,7 +275,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task Four_pads_play_a_genesis_team_player_set_while_the_game_runs() => Session.Dispatch(() =>
         {
-            (MainWindow window, PadDriver first) = Playing("Four.md", NephritePlayersTests.TeamPlayerReader(), ByConnection);
+            (MainWindow window, PadDriver first) = Playing("Four.md", TestPrograms.TeamPlayerReader(), ByConnection);
             PadDriver[] others = { first.Plug("Pad 2"), first.Plug("Pad 3"), first.Plug("Pad 4") };
             first.Pad.Press(SDL.GamepadButton.DPadUp);
             others[1].Pad.Press(SDL.GamepadButton.DPadLeft);

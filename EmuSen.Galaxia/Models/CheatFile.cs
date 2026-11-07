@@ -7,7 +7,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.Galaxia.Models
 {
-    // One write inside a saved cheat, its addresses and values hex text; a carrier only, mapped onto CheatWrite by CheatRegistry - see EmuSen_Config_Reference.md §3.4.
+    // One write inside a saved cheat, its addresses and values hex text; a carrier only, which the runtime maps onto its cheats - see EmuSen_Config_Reference.md §3.4.
     public class CheatFileWrite
     {
         // RamPoke only - which named memory space to write into.

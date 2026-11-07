@@ -1,6 +1,3 @@
-using EmuSen.Common;
-using EmuSen.Cores;
-using EmuSen.Crystal.Debugger;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -95,14 +92,6 @@ namespace EmuSen.WiseMan.Fixtures
             return name;
         }
 
-        // The image on the SNES's engine, VenusRT, from a temp file of its own, so concurrent tests never share one.
-        public static ICore LoadCore(byte[] rom, CoreOptions? options = null) => CoreFactory.Loaded(WriteTempFile(rom), options: options);
-
-        // The engine's debug target, as a frontend's bundle gives it.
-        public static IDebugTarget TargetOf(ICore core) => CoreFactory.Bundle(core).DebugTarget;
-
-        public static IDebugTarget LoadTarget(byte[] rom) => TargetOf(LoadCore(rom));
-
         // A program that copies the auto-read's pad 1 and pad 2 words to $0000-$0003, forever.
         public static byte[] BuildPadReader() => Build((5, new byte[]
         {
@@ -110,22 +99,6 @@ namespace EmuSen.WiseMan.Fixtures
             0xAD, 0x1A, 0x42, 0x8D, 0x02, 0x00, 0xAD, 0x1B, 0x42, 0x8D, 0x03, 0x00,
             0x4C, 0x05, 0x80,
         }));
-
-        // The two words BuildPadReader's program last copied, after two frames so an auto-read has latched what is held.
-        public static (ushort One, ushort Two) Pads(ICore core, int frames = 2)
-        {
-            for (int i = 0; i < frames; i++) core.RunFrame();
-            var engine = (EmuSen.Cores.Native.CoreEngine)core;
-            ushort Word(int at) => (ushort)(engine.ReadSpace("WRAM", at) | engine.ReadSpace("WRAM", at + 1) << 8);
-            return (Word(0), Word(2));
-        }
-
-        public static EmulatorSession LoadSession(byte[] rom, CoreOptions? options = null)
-        {
-            var session = new EmulatorSession { Options = options ?? CoreOptions.Default };
-            session.LoadRom(WriteTempFile(rom));
-            return session;
-        }
 
         public static string WriteTempFile(byte[] rom)
         {

@@ -16,7 +16,7 @@ namespace EmuSen.Hotaru
     {
         public static IDianaShCommand[] For(IHotaruHost host) => new IDianaShCommand[]
         {
-            new CoretopCommand(() => EmuSen.Hotaru.Views.DebugWindows.ShowCoretopWindow(host)),
+            new CoretopCommand(() => EmuSen.Hotaru.Views.DebugWindows.ShowCoretopWindow(host), () => !host.Session.Closed),
             new StateCommand(path => host.Session.SaveState(path), path => host.Session.LoadState(path), () => host.Session.DefaultStatePath()),
             new CoreCommand(HotaruCores.Of(host.Runtime).Registry, console => HotaruSession.StartsEmpty(host.Runtime, console)),
             new HotaruCommand(null, HotaruSession.GameAlreadyRunning),

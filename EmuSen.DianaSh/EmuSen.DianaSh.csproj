@@ -20,8 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Crystal, beneath the shell: IDebugTarget, the registries, the cheat engine, the telemetry contracts and the
-         system packs, which the debugger's commands read - see EmuSen_DianaSh.md §13.6. -->
+    <!-- Crystal, beneath the shell: the session table's binding, the cheat codecs and the system packs - see EmuSen_DianaSh.md §13.6. -->
     <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- ConfigRoot (this shell's own root discovery lives there now) and
          CheatFile, behind `cheat save`/`load` - see

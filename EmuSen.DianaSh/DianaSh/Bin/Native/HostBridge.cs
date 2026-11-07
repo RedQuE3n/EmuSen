@@ -6,12 +6,11 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Lib;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Native
 {
-    // What CreateDefault would give one session, built again for each session the Rust shell runs them in - see EmuSen_DianaSh.md §13.7.
+    // The host's commands for one session, built again for each session the Rust shell runs them in - see EmuSen_DianaSh.md §13.7.
     internal sealed class HostCommandFactory
     {
         private readonly Func<IReadOnlyList<IDianaShCommand>> _build;
@@ -20,11 +19,8 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
         // Every set handed out, kept alive here while the Rust side holds only weak handles to them.
         private readonly List<Dictionary<string, IDianaShCommand>> _sets = new();
 
-        public IDebugTarget? Target { get; }
-
-        public HostCommandFactory(IDebugTarget? target, Func<IReadOnlyList<IDianaShCommand>> build, IReadOnlyList<IDianaShCommand> prototype)
+        public HostCommandFactory(Func<IReadOnlyList<IDianaShCommand>> build, IReadOnlyList<IDianaShCommand> prototype)
         {
-            Target = target;
             _build = build;
             _first = prototype;
         }
@@ -74,7 +70,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Native
                 string? stdin = call->StdinPresent != 0 ? Text(call->StdinData) : null;
                 DianaShResult outcome;
                 // As the C# dispatcher catches it: a malformed command reads as failure, never takes the console down.
-                try { outcome = command.Execute(factory.Target, argv, stdin); }
+                try { outcome = command.Execute(argv, stdin); }
                 catch (Exception ex) { outcome = DianaShResult.Fail($"Error: {ex.Message}"); }
                 Finish(call, result, outcome);
                 return 0;

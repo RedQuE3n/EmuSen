@@ -4,7 +4,6 @@ using System.Threading;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.Unix
@@ -28,7 +27,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.Unix
         public string Usage => "  vstop [-w]                    live htop-style dashboard of the .NET runtime this process runs on (Ctrl+C to exit - interactive terminal only;\n" +
                                 "                                -w opens it in a separate window instead, if this frontend supports one)";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        public DianaShResult Execute(string[] args, string? stdin)
         {
             if (args.Any(a => a.Equals("-w", StringComparison.OrdinalIgnoreCase)))
             {

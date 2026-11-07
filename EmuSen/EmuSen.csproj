@@ -1,15 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Pure library now - no Main, no window ownership, and since 2026-08-05
-       no rendering framework either. The console frontend's Main/hotkey loop lives in EmuSen.Hotaru instead,
-       so this project and EmuSen.Mistress (Avalonia) are true sibling
-       consumers of the emulation core, neither depending on the other's
-       frontend-specific code. See EmuSen_Project_Overview_v2.md. -->
+  <!-- No C# since the C# core host was retired on 2026-11-07: this project builds the Rust cores, their sidecars and
+       cores.manifest, and puts them beside every program that references it - see EmuSen_Backend.md §40.10. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- The Rust cores' shims call their libraries through function pointers - see EmuSen_CoreAPI.md. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
@@ -21,23 +17,7 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- No presentation layer: the device lend and the raw picture cross in forms this project owns, pacing is Serenity's, and the display shapes are the systems table's - see EmuSen_Surfaces.md §4.2 and §7 S1. -->
-    <!-- Crystal: the debug targets implement its IDebugTarget and feed its registries, the bundles hand out its cheat
-         codecs and trace switch, and the catalog reads its system packs. The cores reference the runtime beneath the
-         shell, not the shell - see EmuSen_DianaSh.md §13.6. -->
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
-    <!-- AudioConfig, which AudioSettings maps to and from - see
-         EmuSen_Config_Reference.md §3.2. -->
-    <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
-  </ItemGroup>
-
-  <!-- The frontend API's tests attach an engine no factory makes, one that withholds rewind, through one internal member - see EmuSen_Backend.md §14. -->
-  <ItemGroup>
-    <InternalsVisibleTo Include="EmuSen.WiseMan" />
-  </ItemGroup>
-
-  <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console runs on its C# core where one remains, else not at all - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
+  <!-- The Rust cores, built by cargo for this machine when it is installed and copied beside the assemblies; without one its console does not run - see Mars_Native.md §1, Mercury_Native.md §8.6. A publish for another platform swaps the libraries in RustCoresPublish.targets. -->
   <Import Project="Cores\RustCores.props" />
 
   <PropertyGroup>
@@ -65,7 +45,7 @@
     <EmuSenHostRustTarget Condition="'$(EmuSenHostRustTarget)' == ''">$(_EmuSenHostArch)-unknown-linux-gnu</EmuSenHostRustTarget>
   </PropertyGroup>
 
-  <!-- A machine without Rust builds the C# cores alone; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
+  <!-- A machine without Rust builds no core; one with it must build the Rust ones, so a failed cargo step fails the build instead of leaving an old library in place - see Mars_Native.md §1. -->
   <Target Name="FindCargo" Condition="'$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
     <Exec Command="cargo --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
       <Output TaskParameter="ExitCode" PropertyName="CargoExitCode" />
@@ -73,7 +53,7 @@
     <PropertyGroup>
       <CargoFound Condition="'$(CargoExitCode)' == '0'">true</CargoFound>
     </PropertyGroup>
-    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: @(EmuSenRustCrate->'%(Core)', ' and ') are not built, and their consoles run on the C# cores alone where one exists." />
+    <Warning Condition="'$(CargoFound)' != 'true'" Text="cargo was not found: @(EmuSenRustCrate->'%(Core)', ' and ') are not built, and their consoles do not run." />
   </Target>
 
   <!-- One cargo build per crate of RustCores.props, in its order; the first to fail stops the build. -->

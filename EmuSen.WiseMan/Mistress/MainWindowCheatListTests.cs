@@ -8,7 +8,6 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
 using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Debugger;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress;

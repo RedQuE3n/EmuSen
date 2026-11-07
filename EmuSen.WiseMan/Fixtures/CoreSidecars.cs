@@ -29,6 +29,13 @@ namespace EmuSen.WiseMan.Fixtures
         public static string Runner => Path.Combine(ShaderCompiler.RepositoryRoot, "EmuSen", "obj", "emusen-core-conform", "release",
             OperatingSystem.IsWindows() ? "emusen-core-conform.exe" : "emusen-core-conform");
 
+        // Whether the build put a core beside the tests with its sidecar, in words when it did not.
+        public static (bool Built, string Report) Beside(string name)
+        {
+            string library = LibraryPath(name);
+            return File.Exists(library) && File.Exists(PathFor(library)) ? (true, "") : (false, $"{Path.GetFileName(library)} or its sidecar is not beside the tests");
+        }
+
         public static void Write(string library, bool development = false)
         {
             var start = new ProcessStartInfo(Runner) { RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false };

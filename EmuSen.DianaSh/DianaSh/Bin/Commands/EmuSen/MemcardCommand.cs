@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using EmuSen.Crystal.Debugger;
 using EmuSen.Crystal.SaveMedia;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
@@ -31,7 +30,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 
         private const string Use = "Usage: memcard ls|cp|mv|rm|import|new|dup|rename ... (see 'man memcard')";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        public DianaShResult Execute(string[] args, string? stdin)
         {
             if (args.Length < 2) return DianaShResult.Fail(Use);
             try

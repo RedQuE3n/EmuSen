@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

@@ -459,7 +459,6 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             string name = $"{which}-{width}x{height}";
             // A console only a discovered engine runs has its tabs and shelf with no core in development shown, as a player's build has them - see EmuSen_Settings_Reference.md §4.94.
-            if (which.Contains("Genesis", StringComparison.Ordinal) || which.Contains("PlayStation", StringComparison.Ordinal) || which.StartsWith("MemoryCards", StringComparison.Ordinal)) EmuSen.Cores.Native.CoreDiscovery.UseDevelopment(false);
             if (InGameWindows.Contains(which))
             {
                 (MainWindow window, PadDriver pad) = InGame(width, height, resumeAsk: which.StartsWith("Resume", StringComparison.Ordinal),

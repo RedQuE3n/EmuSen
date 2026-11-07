@@ -1,4 +1,4 @@
-# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte, and frozen since its recorder went with the C# core host on 2026-11-07 - see EmuSen_DianaSh.md §13.4.
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command help
@@ -19,19 +19,3 @@ status 0
 action none
 end
 
-case the listing on a core's shell
-target fake
-covers 1
-$ help | head -n 3
-out 226
-Available commands:
-  help                          this text - every command, one line each, with a brief explanation
-  man [command]                 with no argument, same as 'help'; with a command name, its full manual page
-status 0
-action none
-$ help | wc -l
-match 20
-^(300|310|337|347)\z
-status 0
-action none
-end

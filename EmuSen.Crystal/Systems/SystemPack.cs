@@ -37,10 +37,10 @@ namespace EmuSen.Crystal.Systems
         string? AttachedTo = null,
         int? ScreenScraperSystem = null);
 
-    // A console's system pack: its entry, its cheat codecs and its debugger views, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
+    // A console's system pack: its entry and its cheat codecs, which any engine of the console uses - see EmuSen_CoreAPI.md §8.2, §20, §31.
     // PlayerControllers answers each player's controller id from the console's settings (EmuSen_Settings_Reference.md §4.102); Media names its save media and their format modules (EmuSen_SaveMedia.md §6.2).
     public sealed record SystemPack(SystemEntry Entry, Func<ICheatCodeCodec>? AutoDetectCodec, Func<ICheatCodeCodec>? ExplicitCodec,
-        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, ISystemDebugViews? DebugViews = null, IReadOnlyList<SaveMedia.SaveMediumEntry>? Media = null);
+        Func<Func<string, string?>, IReadOnlyList<string>>? PlayerControllers = null, IReadOnlyList<SaveMedia.SaveMediumEntry>? Media = null);
 
     // The packs by system id, in the systems table's order; a system without one is shown by its engine's own name and has no codecs.
     public static class SystemPacks

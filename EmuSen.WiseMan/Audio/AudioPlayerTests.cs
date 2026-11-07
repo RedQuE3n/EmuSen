@@ -75,12 +75,25 @@ namespace EmuSen.WiseMan.Audio
         public void Submit_drains_queued_samples_through_to_sdl()
         {
             using var player = new AudioPlayer();
-            var session = SyntheticRom.LoadSession(SyntheticRom.BuildBlank());
-            for (int i = 0; i < 3; i++) session.RunFrame(); // about 1,600 frames of sound, under AudioPlayer's 4096-frame per-pump cap
+            string rom = SyntheticRom.WriteTempFile(SyntheticRom.BuildBlank()), home = Path.Combine(Path.GetTempPath(), "EmuSenAudioPlayer_" + Guid.NewGuid().ToString("N"));
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = Path.Combine(home, "Home");
+            EmuSen.Galaxia.ConfigStore.OverrideDirectory = Path.Combine(home, "Config");
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
+            using var session = runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = rom, NoBattery = true });
+            var info = new EmuSen.Crystal.Client.Contract.CrystalFrameInfo();
+            for (int i = 0; i < 3; i++) session.Frame(ref info); // about 1,600 frames of sound, under AudioPlayer's 4096-frame per-pump cap
+            short[] sound = new short[1 << 16];
+            int frames = session.DrainAudio(sound, out uint rate);
 
-            player.Submit(session.DequeueAudioSamples(int.MaxValue), session.AudioSampleRate);
+            player.Submit(sound[..(frames * 2)], (int)rate);
 
-            Assert.Empty(session.DequeueAudioSamples(int.MaxValue)); // fully drained in one call
+            Assert.Equal(0, session.DrainAudio(sound, out _)); // fully drained in one call
+            session.Dispose();
+            runtime.Dispose();
+            EmuSen.Galaxia.Library.DataStore.OverrideDirectory = null;
+            EmuSen.Galaxia.ConfigStore.OverrideDirectory = null;
+            File.Delete(rom);
+            if (Directory.Exists(home)) Directory.Delete(home, recursive: true);
         }
 
         [Fact]

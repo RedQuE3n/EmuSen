@@ -9,7 +9,6 @@ using System.Net.Http;
 using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
-using EmuSen.Cores;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Library;
 using Microsoft.Data.Sqlite;

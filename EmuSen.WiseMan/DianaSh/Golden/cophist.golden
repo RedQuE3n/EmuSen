@@ -1,23 +1,8 @@
-# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte, and frozen since its recorder went with the C# core host on 2026-11-07 - see EmuSen_DianaSh.md §13.4.
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command cophist
 usage 1   cophist [<reg>] [<count>]     Coprocessor register history (default: all regs, last 16)
-
-case a target that keeps none
-target fake
-covers 1
-$ cophist
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-$ cophist R15 4
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-end
 
 case with no target
 target none
@@ -34,33 +19,3 @@ status 0
 action none
 end
 
-case on venusrt
-target venusrt
-frames 3
-covers 1
-$ cophist
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-$ cophist 2
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-$ cophist R15
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-$ cophist NOPE
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-$ cophist 0
-out 53
-This core does not keep coprocessor register history.
-status 0
-action none
-end

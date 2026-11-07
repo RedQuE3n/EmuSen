@@ -2,7 +2,6 @@ using EmuSen.DianaSh;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 
@@ -23,7 +22,7 @@ namespace EmuSen.WiseMan.DianaSh
             string? savedPath = null;
             var command = new StateCommand(p => savedPath = p, _ => { }, () => "default.state");
 
-            DianaShResult result = command.Execute(null, Args("state", "save"), null);
+            DianaShResult result = command.Execute(Args("state", "save"), null);
 
             Assert.Equal("default.state", savedPath);
             Assert.Equal(0, result.ExitCode);
@@ -36,7 +35,7 @@ namespace EmuSen.WiseMan.DianaSh
             string? savedPath = null;
             var command = new StateCommand(p => savedPath = p, _ => { }, () => "default.state");
 
-            command.Execute(null, Args("state", "save", "/Saves/custom.state"), null);
+            command.Execute(Args("state", "save", "/Saves/custom.state"), null);
 
             Assert.Equal(System.IO.Path.Combine(DianaShSandbox.RootDirectory, "Saves", "custom.state"), savedPath);
         }
@@ -47,7 +46,7 @@ namespace EmuSen.WiseMan.DianaSh
             string? loadedPath = null;
             var command = new StateCommand(_ => { }, p => loadedPath = p, () => "default.state");
 
-            command.Execute(null, Args("state", "load"), null);
+            command.Execute(Args("state", "load"), null);
 
             Assert.Equal("default.state", loadedPath);
         }
@@ -60,7 +59,7 @@ namespace EmuSen.WiseMan.DianaSh
                 _ => { },
                 () => "default.state");
 
-            DianaShResult result = command.Execute(null, Args("state", "save"), null);
+            DianaShResult result = command.Execute(Args("state", "save"), null);
 
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("disk full", result.Output);
@@ -71,7 +70,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             var command = new StateCommand(_ => { }, _ => { }, () => "default.state");
 
-            DianaShResult result = command.Execute(null, Args("state"), null);
+            DianaShResult result = command.Execute(Args("state"), null);
 
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("Usage", result.Output);
@@ -82,7 +81,7 @@ namespace EmuSen.WiseMan.DianaSh
         {
             var command = new StateCommand(_ => { }, _ => { }, () => "default.state");
 
-            DianaShResult result = command.Execute(null, Args("state", "frobnicate"), null);
+            DianaShResult result = command.Execute(Args("state", "frobnicate"), null);
 
             Assert.NotEqual(0, result.ExitCode);
             Assert.Contains("Usage", result.Output);

@@ -54,7 +54,7 @@ namespace EmuSen.WiseMan.DianaSh
         public void Coretop_is_not_fast_path_eligible_despite_never_writing_core_state()
         {
             Assert.False(Listed()["coretop"]);
-            Assert.False(new CoretopCommand().IsReadOnly);
+            Assert.False(new CoretopCommand(() => true).IsReadOnly);
         }
     }
 }

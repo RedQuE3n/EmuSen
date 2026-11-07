@@ -58,7 +58,7 @@ namespace EmuSen.WiseMan.Serenity
             SlangVulkan? device = SlangVulkan.TryCreate(out string report, _wanted, validate ? f => { lock (findings) findings.Add(f); } : null);
             if (device is null) { _output.WriteLine($"not run: {report}"); return; }
             string path = Path.Combine(_root, "triangle.psexe");
-            File.WriteAllBytes(path, DiamondEnhancementsTests.Triangle());
+            File.WriteAllBytes(path, TestPrograms.Triangle());
             using (device)
             {
                 using (SlangLend? probe = SlangLend.TryCreate(device, out string? why))

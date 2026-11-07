@@ -98,59 +98,6 @@ namespace EmuSen.Galaxia.Native
         CheatFile,
     }
 
-    // State 2's choice for one component, made once: the variable 0 is the C#, anything else the library if it loads, else the C# with one message - see EmuSen_RustPlatform.md §13 and §19.
-    public sealed class PlatformSwitch
-    {
-        private readonly Func<string?> _variable;
-        private readonly Func<(bool Available, string Report)> _load;
-        private readonly Action<string> _announce;
-        private readonly string _component;
-        private readonly object _gate = new();
-        private volatile int _chosen;
-
-        public PlatformSwitch(Func<string?> variable, Func<(bool Available, string Report)> load, Action<string> announce, string component)
-        {
-            _variable = variable;
-            _load = load;
-            _announce = announce;
-            _component = component;
-        }
-
-        // The one line a fallback writes, to the host's sink and to the error log.
-        public static void Announce(string message)
-        {
-            ConfigDiagnostics.Report(message);
-            EmuSen.Galaxia.Library.ErrorLog.Warning("platform", message);
-        }
-
-        public bool Active => _chosen != 0 ? _chosen == 2 : Choose();
-
-        private bool Choose()
-        {
-            lock (_gate)
-            {
-                if (_chosen != 0) return _chosen == 2;
-                string? message = null;
-                if (_variable() == "0") _chosen = 1;
-                else
-                {
-                    (bool available, string report) = Load();
-                    _chosen = available ? 2 : 1;
-                    if (!available) message = $"{PlatformLibrary.FileName} is not in use ({report}); {_component} runs on its C# implementation.";
-                }
-                // Decided before it is said, so the log's own question of the switch has its answer.
-                if (message is not null) _announce(message);
-                return _chosen == 2;
-            }
-        }
-
-        private (bool, string) Load()
-        {
-            try { return _load(); }
-            catch (Exception fault) { return (false, $"{fault.GetType().Name}: {fault.Message}"); }
-        }
-    }
-
     // Whether a text crosses to the platform library as it is, for a facade outside Galaxia - see EmuSen_RustPlatform.md §21.
     public static class PlatformText
     {

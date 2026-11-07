@@ -1,4 +1,3 @@
-using EmuSen.WiseMan.Fixtures.RomRunner;
 
 namespace EmuSen.WiseMan.Fixtures
 {
@@ -30,8 +29,5 @@ namespace EmuSen.WiseMan.Fixtures
             for (int i = 0; i < code.Length; i++) Put32(Header + ProgramHeader + i * 4, code[i]);
             return image;
         }
-
-        // A bare program that leaves the words in Sapphire's RAM record and stops, the form every referee reads (Sapphire_Referees.md §4.1).
-        public static byte[] Recording(params uint[] words) => Build(RamRecordForm.Sapphire.Program(words));
     }
 }

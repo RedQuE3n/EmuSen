@@ -1,5 +1,4 @@
 using Avalonia.Input;
-using EmuSen.Cores;
 using EmuSen.Hotaru.Input;
 using EmuSen.Galaxia.Input;
 

@@ -1,4 +1,3 @@
-using EmuSen.Cores.Native;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -9,8 +8,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
-using EmuSen.Common;
-using EmuSen.Cores;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -50,24 +47,24 @@ namespace EmuSen.WiseMan.Mistress
         public Task The_gb_page_offers_auto_game_boy_and_game_boy_color_and_stores_the_choice() => UiTest.Run(() =>
         {
             MainWindow window = SettingsDesk.Open(SettingsScreen.Consoles, "console:GB");
-            Assert.Equal(new[] { MercuryEngines.ModelAuto, MercuryEngines.ModelGameBoy, MercuryEngines.ModelGameBoyColor }, SettingsDesk.Row(window, MercuryEngines.ModelKey).Choices);
-            Assert.Equal(MercuryEngines.ModelAuto, SettingsDesk.Value(window, MercuryEngines.ModelKey));
+            Assert.Equal(new[] { "Auto", "Game Boy", "Game Boy Color" }, SettingsDesk.Row(window, "Model").Choices);
+            Assert.Equal("Auto", SettingsDesk.Value(window, "Model"));
             UiTest.AssertLaidOut(SettingsDesk.Of(window), "settings-gb-model");
 
-            SettingsDesk.Pick(window, MercuryEngines.ModelKey, MercuryEngines.ModelGameBoyColor);
-            Assert.Equal(MercuryEngines.ModelGameBoyColor, ConsolesConfig.Load().Value("GB", MercuryEngines.ModelKey));
+            SettingsDesk.Pick(window, "Model", "Game Boy Color");
+            Assert.Equal("Game Boy Color", ConsolesConfig.Load().Value("GB", "Model"));
             UiTest.AssertLaidOut(SettingsDesk.Of(window), "settings-gb-model-color");
             window.Close();
         });
 
         // The stored choice reaches the core before the first frame, and a colour cartridge's GB tab is the same tab.
         [Theory]
-        [InlineData((byte)0x00, MercuryEngines.ModelGameBoyColor, "GBC")]
-        [InlineData((byte)0x80, MercuryEngines.ModelGameBoy, "GB")]
+        [InlineData((byte)0x00, "Game Boy Color", "GBC")]
+        [InlineData((byte)0x80, "Game Boy", "GB")]
         public Task A_game_runs_on_the_console_the_gb_tab_names(byte cgb, string model, string runsAs) => UiTest.Run(() =>
         {
             ConsolesConfig config = ConsolesConfig.Load();
-            config.SetValue("GB", MercuryEngines.ModelKey, model);
+            config.SetValue("GB", "Model", model);
             config.Save();
             File.WriteAllBytes(_rom, SyntheticGbRom.Build(cgbFlag: cgb, patches: (0, new byte[] { 0x18, 0xFE })));
 
@@ -78,7 +75,7 @@ namespace EmuSen.WiseMan.Mistress
 
             WindowGame game = Game(window);
             Assert.Equal(runsAs, MistressGame.Info(window).GetProperty("system").GetString()!.ToUpperInvariant());
-            Assert.Equal(model, MistressGame.Runtime.Setting("GB", MercuryEngines.ModelKey));
+            Assert.Equal(model, MistressGame.Runtime.Setting("GB", "Model"));
             Assert.Equal("GB", (string)typeof(MainWindow).GetField("_activeConsole", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!);
             window.Close();
         });

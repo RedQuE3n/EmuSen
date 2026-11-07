@@ -1,5 +1,4 @@
 using EmuSen.Crystal.Systems.N64;
-using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Linq;
@@ -11,7 +10,6 @@ using Avalonia.Headless;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -224,10 +222,11 @@ namespace EmuSen.WiseMan.Mistress
 
         private long SavedFrames()
         {
-            using var core = new MarsRtTestCore() { Options = TestCores.NoBattery };
-            core.LoadRom(_romPath);
-            core.LoadState(ResumeState);
-            return core.TotalFrames;
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
+            using var session = runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _romPath, NoBattery = true });
+            session.LoadState(ResumeState);
+            using var info = System.Text.Json.JsonDocument.Parse(session.Info());
+            return info.RootElement.GetProperty("total_frames").GetInt64();
         }
 
         private static ResumeWindow WaitForDialog(MainWindow window)

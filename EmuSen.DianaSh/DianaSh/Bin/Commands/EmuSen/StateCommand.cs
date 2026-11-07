@@ -2,7 +2,6 @@ using System;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
@@ -25,7 +24,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
         public bool IsReadOnly => false;
         public string Usage => "  state save|load [path]        save/load emulator state (defaults to this frontend's own save-state path if omitted)";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        public DianaShResult Execute(string[] args, string? stdin)
         {
             if (args.Length < 2)
             {

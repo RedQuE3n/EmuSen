@@ -38,7 +38,7 @@ namespace EmuSen.WiseMan.Mistress
             ConfigStore.OverrideDirectory = Path.Combine(_root, "Config");
             DataStore.OverrideDirectory = Path.Combine(_root, "Home");
             _rom = Path.Combine(roms, "Program.nes");
-            File.WriteAllBytes(_rom, BoardPrograms.Build(1, 8, cycleIrq: false));
+            File.WriteAllBytes(_rom, SyntheticNesRom.Build());
             new AppSettings { RomDirectory = roms, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
         }
 
@@ -92,7 +92,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public Task A_stored_csharp_choice_plays_on_MoonRT_with_rewind_and_its_states() => Session.Dispatch(() =>
         {
-            Assert.True(MoonEngines.Available, MoonEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("moonrt").Built, Fixtures.CoreSidecars.Beside("moonrt").Report);
             Choose("Moon (C#)");
             MainWindow window = Start();
             WindowGame game = Game(window);

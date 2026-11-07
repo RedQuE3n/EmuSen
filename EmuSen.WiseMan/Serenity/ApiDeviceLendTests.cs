@@ -65,7 +65,7 @@ namespace EmuSen.WiseMan.Serenity
             using (SlangLend? probe = SlangLend.TryCreate(device, out string? why))
                 if (probe is null) { _output.WriteLine($"not run: {why}"); return; }
             string path = Path.Combine(_root, "triangle.psexe");
-            File.WriteAllBytes(path, DiamondEnhancementsTests.Triangle());
+            File.WriteAllBytes(path, TestPrograms.Triangle());
             using var chain = new SlangChain(device, SlangPreset.Load(EmuSen.Serenity.Shaders.BuiltInPreset.Write(EmuSen.Serenity.Shaders.BuiltInShaders.AsFilter(ShaderEffect.None, false), null)));
             using var runtime = new CrystalRuntime();
             var open = new CrystalOpen { Path = path, NoBattery = true, Device = device.DeviceHandle };

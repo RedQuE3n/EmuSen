@@ -1,8 +1,9 @@
 //! The golden corpus (`EmuSen.WiseMan/DianaSh/Golden/`, EmuSen_DianaSh.md §13.4) run through this crate alone:
 //! every case recorded with no target whose lines need nothing but what the Rust shell has. A case is passed over
 //! when the shell answers one of its lines "Unknown command" where the recording does not, since it then needs a
-//! command a host provides; WiseMan runs those through the bridge. The rest must match byte for byte, with their
-//! statuses, their continuations and their requests as the C# host actions print them.
+//! command a host provides, which nothing runs since the C# core host was retired (EmuSen_Backend.md §40.10.3). The
+//! rest must match byte for byte, with their statuses, their continuations and their requests as the C# host actions
+//! print them.
 
 use emusen_dianash::shell::{Config, Request, Shell, Submitted};
 use std::path::{Path, PathBuf};
@@ -227,7 +228,7 @@ fn every_case_the_rust_shell_can_run_alone_prints_its_recording() {
     let (mut passed, mut needs_host, mut case_of_the_system, mut failures) = (0, 0, 0, Vec::new());
     for file in files {
         let name = file.file_name().unwrap().to_string_lossy().into_owned();
-        // help and man list and read what a host ships beside the program; WiseMan runs them.
+        // help and man list and read what a host ships beside the program, so they are passed over.
         if name == "help.golden" || name == "man.golden" {
             continue;
         }

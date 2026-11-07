@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.Cores;
 using EmuSen.Mistress.Library;
 
 namespace EmuSen.WiseMan.Mistress

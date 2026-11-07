@@ -90,22 +90,6 @@ namespace EmuSen.WiseMan.Crystal
             }
         }
 
-        [Fact]
-        public unsafe void The_provider_fills_every_function_and_states_its_size_and_version()
-        {
-            using var service = new SessionService(null);
-            foreach (EmuSenSessionV1* table in new[] { service.Table, service.ReadOnlyTable })
-            {
-                Assert.Equal((uint)sizeof(EmuSenSessionV1), table->size);
-                Assert.Equal(SessionAbi.Version, table->version);
-                Assert.True(table->ctx != null);
-                byte* raw = (byte*)table;
-                foreach (FieldInfo f in typeof(EmuSenSessionV1).GetFields().Skip(3))
-                    Assert.NotEqual(0, *(nint*)(raw + Marshal.OffsetOf<EmuSenSessionV1>(f.Name)));
-            }
-            Assert.True(service.Table->ctx != service.ReadOnlyTable->ctx);
-        }
-
         // A C compiler reads the header beside the other two, and lays the table out where the mirror does.
         [Fact]
         public void A_C_compiler_lays_the_table_out_as_the_mirror_does()

@@ -55,7 +55,7 @@ namespace EmuSen.WiseMan.Mistress
         private string Rom()
         {
             string path = Path.Combine(_root, "Amber Saga.psexe");
-            File.WriteAllBytes(path, DiamondPlayersTests.CardWriting(0x40, new byte[128]));
+            File.WriteAllBytes(path, TestPrograms.CardWriting(0x40, new byte[128]));
             return path;
         }
 

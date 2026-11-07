@@ -1,78 +1,55 @@
-using EmuSen.Cores;
-using EmuSen.DianaSh;
+using System;
+using EmuSen.Crystal.Client;
 using EmuSen.DianaSh.DianaSh.Bin;
-using EmuSen.DianaSh.DianaSh.Etc;
-using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
-using EmuSen.DianaSh.DianaSh.Dev;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
+using EmuSen.DianaSh.DianaSh.Lib;
+using EmuSen.WiseMan.Crystal;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // `coretop -w` (EmuSen.DianaSh.DianaSh.Bin.Commands.CoretopCommand's optional
-    // Action<IDebugTarget> openWindow constructor parameter) - covers
-    // the part of the feature that doesn't need a real console/GUI: the
-    // -w flag parsing and the "not supported by this frontend" fallback
-    // when no window opener is wired up (the EmuSen.WiseMan/headless
-    // case). The actual window (EmuSen.Hotaru's AvaloniaHost/CoretopWindow,
-    // EmuSen.Mistress's CoretopWindowCommand) can't be exercised
-    // headlessly - not tested here, same as `coretop`'s own console
-    // rendering isn't (both need a real display/terminal).
-    public class CoretopWindowFlagTests
+    // `coretop` as a front end adds it, over a session's table from the frontend API: the window opened over the session, the flag read in any case, refused in words without a window or a game - see `man coretop` and EmuSen_Backend.md §40.10.
+    [Collection(TestCollections.ProcessGlobals)]
+    public class CoretopWindowFlagTests : IDisposable
     {
-        private static IDebugTarget BuildTarget()
-        {
-            var core = SyntheticRom.LoadCore(SyntheticRom.BuildBlank());
-            return SyntheticRom.TargetOf(core);
-        }
+        private readonly CrystalFixture _f = new();
+
+        public void Dispose() => _f.Dispose();
+
+        private DianaShInterpreter Over(CrystalSession s, IDianaShCommand coretop) => DianaShInterpreter.CreateForService(s.ServiceTable(), new[] { coretop });
 
         [Fact]
-        public void Minus_w_without_a_window_opener_reports_not_supported()
+        public void Minus_w_with_a_window_opener_over_a_session_opens_it()
         {
-            var target = BuildTarget();
-            var shell = DianaShInterpreter.CreateDefault(target,
-                new IDianaShCommand[] { new CoretopCommand() }); // no openWindow wired up
-
-            var result = shell.Submit("coretop -w");
-
-            Assert.Contains("not supported by this frontend", result.Output);
-        }
-
-        [Fact]
-        public void Minus_w_with_a_window_opener_calls_it_instead_of_the_console_dashboard()
-        {
-            var target = BuildTarget();
+            using CrystalSession s = _f.Open();
             int opened = 0;
-            var shell = DianaShInterpreter.CreateDefault(target,
-                new IDianaShCommand[] { new CoretopCommand(() => opened++) });
-
-            var result = shell.Submit("coretop -w");
-
+            var result = Over(s, new CoretopCommand(() => opened++, () => true)).Submit("coretop -w");
             Assert.Equal(1, opened);
             Assert.Contains("opened in a separate window", result.Output);
         }
 
         [Fact]
-        public void Minus_w_without_a_rom_loaded_reports_no_rom_before_checking_the_flag()
+        public void Minus_w_without_a_window_opener_reports_not_supported()
         {
-            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new CoretopCommand(() => { }) });
+            using CrystalSession s = _f.Open();
+            Assert.Contains("not supported by this frontend", Over(s, new CoretopCommand(() => true)).Submit("coretop -w").Output);
+        }
 
-            var result = shell.Submit("coretop -w");
-
-            Assert.Contains("No ROM loaded", result.Output);
+        [Fact]
+        public void Without_a_game_it_reports_no_rom_and_opens_nothing()
+        {
+            int opened = 0;
+            var shell = DianaShInterpreter.CreateWithoutSession(extraCommands: new IDianaShCommand[] { new CoretopCommand(() => opened++, () => false) });
+            Assert.Contains("No ROM loaded", shell.Submit("coretop -w").Output);
+            Assert.Equal(0, opened);
         }
 
         [Fact]
         public void Minus_w_flag_is_recognized_case_insensitively_and_anywhere_in_the_args()
         {
-            var target = BuildTarget();
+            using CrystalSession s = _f.Open();
             int calls = 0;
-            var shell = DianaShInterpreter.CreateDefault(target,
-                new IDianaShCommand[] { new CoretopCommand(() => calls++) });
-
-            shell.Submit("coretop -W");
-
+            Over(s, new CoretopCommand(() => calls++, () => true)).Submit("coretop -W");
             Assert.Equal(1, calls);
         }
     }

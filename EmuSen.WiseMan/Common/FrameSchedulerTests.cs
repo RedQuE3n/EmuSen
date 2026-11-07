@@ -265,7 +265,7 @@ namespace EmuSen.WiseMan.Common
             string rom = Path.Combine(Path.GetTempPath(), $"EmuSenPacing_{Guid.NewGuid():N}.nes");
             try
             {
-                File.WriteAllBytes(rom, BoardPrograms.Build(1, 8, cycleIrq: false));
+                File.WriteAllBytes(rom, SyntheticNesRom.Build());
                 CadenceBench.Result Run(bool sync, int frames) => CadenceBench.Run(new CadenceBench.Options
                     { Rom = rom, DisplayHz = 240.0, Seconds = 60, Frames = frames, SyncToDisplay = sync, Audio = false, ContentHzOverride = 240.4 });
                 CadenceBench.Result content = Run(false, 300), locked = Run(true, 300), longer = Run(true, 301);

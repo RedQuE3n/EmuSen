@@ -48,7 +48,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_pal_state_in_an_ntsc_session_is_refused_in_the_core_s_words()
         {
-            Assert.True(Fixtures.MoonEngines.Available, Fixtures.MoonEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("moonrt").Built, Fixtures.CoreSidecars.Beside("moonrt").Report);
             using var runtime = new CrystalRuntime();
             string state = Path.Combine(_root, "Pal.state");
             using (CrystalSession pal = runtime.Open(new CrystalOpen { Path = Rom("Pal.nes", 1), NoBattery = true }))
@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void A_reset_the_core_does_not_claim_is_not_supported()
         {
-            Assert.True(MercuryEngines.Available, MercuryEngines.Report);
+            Assert.True(Fixtures.CoreSidecars.Beside("mercuryrt").Built, Fixtures.CoreSidecars.Beside("mercuryrt").Report);
             using var runtime = new CrystalRuntime();
             string rom = Path.Combine(_root, "Mono.gb");
             File.WriteAllBytes(rom, SyntheticGbRom.Build());

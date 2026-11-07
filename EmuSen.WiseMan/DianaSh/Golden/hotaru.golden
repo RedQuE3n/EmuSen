@@ -1,4 +1,4 @@
-# DianaSh golden corpus. Recorded from the C# shell, byte for byte; EMUSEN_DIANASH_GOLDEN=record rewrites it - see EmuSen_DianaSh.md §13.4.
+# DianaSh golden corpus. Recorded from the C# shell, byte for byte, and frozen since its recorder went with the C# core host on 2026-11-07 - see EmuSen_DianaSh.md §13.4.
 # Patterns: <ROOT> is the sandbox's real root, <TEMP> the corpus's real temporary folder, <INSTALL> the install's real directory;
 # a 'match' block is a regular expression the whole output must match, written where a line prints a time or a measured number.
 command hotaru
@@ -114,19 +114,3 @@ status 0
 action none
 end
 
-case in the listing and the manual
-target fake
-covers 1
-$ help | grep hotaru
-out 96
-  hotaru [--output window] <rom>  play <rom> in Hotaru's game window, with its hotkeys, feed and
-status 0
-action none
-$ man hotaru | head -n 3
-out 53
-NAME
-    hotaru - play a ROM in Hotaru's game window
-
-status 0
-action none
-end

@@ -1,5 +1,4 @@
 using EmuSen.Crystal.Systems.N64;
-using EmuSen.Cores.Native;
 using System;
 using System.IO;
 using System.Reflection;
@@ -8,7 +7,6 @@ using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Threading;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -68,7 +66,7 @@ namespace EmuSen.WiseMan.Mistress
             for (int i = 0; i < 12; i++)
             {
                 SaveThroughTheHotkey(window);
-                using (MarsRtTestCore saved = Load(StatePath(window))) AssertOneInstant(saved);
+                AssertOneInstant(Read(StatePath(window)));
                 Thread.Sleep(7);
             }
 
@@ -86,7 +84,7 @@ namespace EmuSen.WiseMan.Mistress
             SaveThroughTheHotkey(window);
 
             Assert.Equal(frames, Game(window).TotalFrames);
-            using (MarsRtTestCore saved = Load(StatePath(window))) AssertOneInstant(saved);
+            AssertOneInstant(Read(StatePath(window)));
 
             window.Close();
         }, default);
@@ -97,7 +95,7 @@ namespace EmuSen.WiseMan.Mistress
             MainWindow window = Start();
             SaveThroughTheHotkey(window);
             long saved;
-            using (MarsRtTestCore state = Load(StatePath(window))) saved = state.TotalFrames;
+            saved = Read(StatePath(window)).Frames;
 
             WaitFor(() => Game(window).TotalFrames > saved + 60);
 
@@ -108,10 +106,10 @@ namespace EmuSen.WiseMan.Mistress
             WaitUntilParked(window);
 
             Assert.InRange(Game(window).TotalFrames, saved, saved + 60);
-            // The parked machine saved through the session's own call and read back by a MarsRT of its own, outside the window's session.
+            // The parked machine saved through the session's own call and read back by a session of a runtime of the test's, outside the window's.
             string parked = Path.Combine(_root, "parked.state");
             MistressGame.Of(window).Crystal.SaveState(parked);
-            using (MarsRtTestCore loaded = Load(parked)) AssertOneInstant(loaded);
+            AssertOneInstant(Read(parked));
 
             window.Close();
         }, default);
@@ -132,20 +130,24 @@ namespace EmuSen.WiseMan.Mistress
             WaitFor(() => Status(window).Text?.StartsWith("State saved") == true);
         }
 
-        private MarsRtTestCore Load(string path)
+        // A state read back by a session of a runtime of the test's: the counter register, the copy the program stored, and the frames.
+        private (uint Counter, uint Stored, long Frames) Read(string path)
         {
-            var core = new MarsRtTestCore() { Options = TestCores.NoBattery };
-            core.LoadRom(_romPath);
-            core.LoadState(path);
-            return core;
+            using var runtime = new EmuSen.Crystal.Client.CrystalRuntime();
+            using var session = runtime.Open(new EmuSen.Crystal.Client.CrystalOpen { Path = _romPath, NoBattery = true });
+            session.LoadState(path);
+            using var registers = System.Text.Json.JsonDocument.Parse(session.Telemetry(EmuSen.Crystal.Client.Contract.CrystalSessionAbi.TelemetryCpu));
+            uint counter = (uint)registers.RootElement.EnumerateArray().First(r => r.GetProperty("name").GetString() == "t0").GetProperty("value").GetUInt64();
+            byte[] word = new byte[4];
+            session.ReadSpace("CPU", 0x80000000 | Counter, word);
+            using var info = System.Text.Json.JsonDocument.Parse(session.Info());
+            return (counter, System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(word), info.RootElement.GetProperty("total_frames").GetInt64());
         }
 
         // Between the add and the store the stored copy is one behind; any other difference is two instants in one state.
-        private static void AssertOneInstant(MarsRtTestCore core)
+        private static void AssertOneInstant((uint Counter, uint Stored, long Frames) state)
         {
-            uint counter = (uint)core.CpuRegisters()[1 + T0];
-            uint stored = core.ReadBus32(Counter);
-            Assert.True(stored == counter || stored + 1 == counter, $"the register holds {counter} and memory {stored}: the state is torn");
+            Assert.True(state.Stored == state.Counter || state.Stored + 1 == state.Counter, $"the register holds {state.Counter} and memory {state.Stored}: the state is torn");
         }
 
         private static long WaitUntilParked(MainWindow window)

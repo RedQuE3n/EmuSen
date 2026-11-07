@@ -17,7 +17,7 @@ namespace EmuSen.Crystal.Client.Contract
 
         private static CrystalExports* Choose()
         {
-            if (Ignored(Environment.GetEnvironmentVariable(Variable)) is { } line) PlatformSwitch.Announce(line);
+            if (Ignored(Environment.GetEnvironmentVariable(Variable)) is { } line) RetiredSwitch.Announce(line);
             var table = (CrystalExports*)NativeMemory.AllocZeroed((nuint)sizeof(CrystalExports));
             string? missing = Fill(table, PlatformLibrary.Export);
             if (missing is not null) throw new InvalidOperationException($"{PlatformLibrary.FileName} does not serve the frontend API: it has no {missing} ({PlatformLibrary.Report})");

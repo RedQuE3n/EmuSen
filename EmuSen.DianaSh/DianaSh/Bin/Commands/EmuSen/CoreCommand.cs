@@ -4,7 +4,6 @@ using System.IO;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
-using EmuSen.Crystal.Debugger;
 using EmuSen.DianaSh.DianaSh.Dev;
 
 namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
@@ -30,7 +29,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen
 
         public const string ConsoleFlag = "--console";
 
-        public DianaShResult Execute(IDebugTarget? target, string[] args, string? stdin)
+        public DianaShResult Execute(string[] args, string? stdin)
         {
             if (args.Length != 3)
             {

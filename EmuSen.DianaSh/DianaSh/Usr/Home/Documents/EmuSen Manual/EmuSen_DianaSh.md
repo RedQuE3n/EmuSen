@@ -1425,6 +1425,13 @@ The cores, outside the shell, shown by it:
 The cases findings 19 to 21 changed were re-recorded in a commit of their own, eleven files: `bp`, `bt`, `core`, `cov`,
 `disasm`, `eval`, `man` (the `cpus` and `tile` pages), `regs`, `setreg`, `summary` and `tile`. No other file moved.
 
+*Since 2026-11-07* (`EmuSen_Backend.md` §40.10.3) the corpus is frozen data. Its recorder, `GoldenCorpusTests`, and
+every case with a target went with the C# core host they ran on: 240 cases, `trace.golden` with its last one. The 255
+cases with no target stay, and the dianash crate's `tests/golden.rs` runs those that need nothing but the Rust shell
+(61 of them; 71 need a command only a front end adds, and `help` and `man` read what an installation ships). WiseMan
+keeps `GoldenRunner`, a case on a fresh shell with no game, for the sandbox and text-module classes, which build their
+cases in code.
+
 ### 13.5 S1 as built: the C# shell reorganised, and nothing it prints changed
 
 *Built 2026-10-11, in five commits of code, each of which passed the gate below on its own.*

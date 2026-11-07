@@ -13,7 +13,6 @@ using EmuSen.Galaxia.Models;
 using EmuSen.LunaP.Windowing;
 using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
-using EmuSen.Common;
 using EmuSen.Galaxia;
 using SDL3;
 using EmuSen.Crystal.Cheats;

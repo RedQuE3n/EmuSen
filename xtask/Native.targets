@@ -15,7 +15,8 @@
     <Exec Command="$(EmuSenCargo) --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
       <Output TaskParameter="ExitCode" PropertyName="_EmuSenCargoExit" />
     </Exec>
-    <Warning Condition="'$(_EmuSenCargoExit)' != '0'" Text="cargo was not found: the native $(EmuSenNativePart) are not built, and the programs that need them do not run." />
+    <Warning Condition="'$(_EmuSenCargoExit)' != '0' And '$(EmuSenNativePart)' != 'platform'" Text="cargo was not found: the native $(EmuSenNativePart) are not built, and the programs that need them do not run." />
+    <Error Condition="'$(_EmuSenCargoExit)' != '0' And '$(EmuSenNativePart)' == 'platform'" Text="cargo was not found, so the platform library is not built, and the programs cannot start without it: install Rust, then build it with `cargo xtask stage --part platform`." />
     <PropertyGroup>
       <_EmuSenStage>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native/$(EmuSenNativePart)/</_EmuSenStage>
       <_EmuSenStageFlags Condition="'$(EmuSenCoreReuse)' == 'false'">$(_EmuSenStageFlags) --no-reuse</_EmuSenStageFlags>

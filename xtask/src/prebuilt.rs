@@ -27,11 +27,11 @@ pub fn run(libs: &[Library], rid: &str, from: Option<&Path>, stage: &Path) -> Re
     for l in libs.iter().filter(|l| l.ships && l.builds_for(rid)) {
         let file = if l.role == Role::Program { host::program_file(&l.name, rid) } else { host::library_file(&l.name, rid) };
         let Some(path) = prebuilt(&file) else {
+            // The programs cannot start without the platform library, so a publish without it stops (decided 2026-11-07).
             if l.role == Role::Platform {
-                say::warn(&format!("No {file} for {rid}: this publish has no platform library, and its programs cannot start. {}", advice(&file)));
-            } else {
-                say::warn(&format!("No {} library for {rid}: this publish has no engine for {}. {}", l.core, l.console, advice(&file)));
+                return Err(format!("No {file} for {rid}: the programs cannot start without the platform library. {}", advice(&file)));
             }
+            say::warn(&format!("No {} library for {rid}: this publish has no engine for {}. {}", l.core, l.console, advice(&file)));
             continue;
         };
         files::stage(&path, &files_dir.join(&file))?;
@@ -46,4 +46,23 @@ pub fn run(libs: &[Library], rid: &str, from: Option<&Path>, stage: &Path) -> Re
     files::write_if_different(&stage.join(format!("{rid}.cores.manifest")), &manifest)?;
     files::stage(&stage.join(format!("{rid}.cores.manifest")), &files_dir.join("cores.manifest"))?;
     files::write_if_different(&stage.join("drop.txt"), &(drop.join("\n") + "\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_publish_without_the_platform_library_stops_and_names_it() {
+        let dir = std::env::temp_dir().join(format!("xtask-prebuilt-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("from/win-x64")).unwrap();
+        let libs = crate::libraries::parse("emusen_platform\tPlatform\tplatform\t-\tships\tany\t-\tthe platform library\tthe platform components\n").unwrap();
+        let said = run(&libs, "win-x64", Some(&dir.join("from")), &dir.join("stage")).unwrap_err();
+        assert!(said.contains("No emusen_platform.dll for win-x64") && said.contains("-p:EmuSenNativePrebuilt"), "{said}");
+        std::fs::write(dir.join("from/win-x64/emusen_platform.dll"), b"MZ").unwrap();
+        run(&libs, "win-x64", Some(&dir.join("from")), &dir.join("stage")).unwrap();
+        assert!(dir.join("stage/files/emusen_platform.dll").is_file());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

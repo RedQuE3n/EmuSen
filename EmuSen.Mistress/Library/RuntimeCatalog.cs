@@ -186,7 +186,7 @@ namespace EmuSen.Mistress.Library
         // The library's console filter: every console, then each shelf in release order.
         public static IReadOnlyList<string> FilterChoices => new[] { AllConsoles }.Concat(Shelves.Select(s => s.Name)).ToArray();
 
-        // Height over width of the console's North American box, OpenEmu's fallback for a console whose row gives none - see EmuSen_Settings_Reference.md §4.33.
+        // The systems data's default cover shape (table.json), for a game with no known system; CoverDefaultTests holds it to the data, and it dies with the C# front end.
         public const double DefaultCoverAspect = 1.365385;
 
         // Every extension a console's core takes, for the file picker and the scan.

@@ -95,9 +95,10 @@ fn platform(libs: &[&Library], o: &Options, chdman: Option<PathBuf>) -> Result<V
     let rid = host::portable_rid();
     let mut staged = Vec::new();
     let library = target.join(&o.profile).join(host::library_file(&lib.name, &rid));
-    if library.is_file() {
-        staged.push(Staged { from: library, at: host::library_file(&lib.name, &rid), published: true });
+    if !library.is_file() {
+        return Err(format!("{} is missing after its build, and the programs cannot start without it: build it with `cargo xtask stage --part platform`.", library.display()));
     }
+    staged.push(Staged { from: library, at: host::library_file(&lib.name, &rid), published: true });
     let nano = target.join(&o.profile).join(host::program_file("nano", &rid));
     if nano.is_file() {
         staged.push(Staged { from: nano, at: format!("dianash/{}", host::program_file("nano", &rid)), published: true });

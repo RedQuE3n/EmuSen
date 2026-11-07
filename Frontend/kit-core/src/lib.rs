@@ -5,5 +5,6 @@
 pub mod audit;
 pub mod input;
 pub mod motion;
+pub mod sound;
 pub mod tokens;
 pub mod world;

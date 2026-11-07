@@ -266,3 +266,16 @@ on, 12 dB under a game, only Saved and Loaded over gameplay); each cue's and the
 strike times, read by Goertzel over the ladder's thirteen pitches; two renders identical and an empty one silent; each
 cue's loudest sample within 0.05 and 0.6; one bell at its rung; thirteen bells at 1280 × 720 lasting between 1.7 and
 2.6 s from the first strike, each planet ringing its rung, at the cues' level.
+
+Measured on 2026-11-07 with three seeded faults, each reverted: the ladder climbing ten semitones an octave failed
+the ladder test; the chime's gain at 0.02 failed the chime's constants and the thirteen bells' level; every bell
+rendered a rung high failed the notes-present, one-bell and thirteen-bells tests, which is what the Goertzel reading
+is for.
+
+## 6. What stage 0 still owes
+
+This crate is the first of stage 0's items (`EmuSen_Qt.md` §7). Not here, by design: `emusen-kit-qt` (the cxx-qt
+items over these decisions), the `EmuSen` style, the two client crates, the first models, the pad bridge, the test
+harness that fills §3's tree from a Qt item tree, the spec writer and the AppImage. Not carried from LunaP, and said
+so above: the hub, gallery, planet and page layouts' own arrangement and `Move(dx, dy)`, which are Qt Quick's layouts
+and views in the design; the List card and the open cover, which are sheets; text layout, which is Qt's.

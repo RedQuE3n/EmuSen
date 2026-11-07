@@ -6,9 +6,10 @@ use cxx_qt::CxxQtType;
 
 use cxx_qt_lib::{QColor, QMarginsF};
 use emusen_kit_core::motion::MotionToken as M;
-use emusen_kit_core::tokens::{self as core_tokens, Colour, ColourToken as C};
+use emusen_kit_core::tokens::{self as core_tokens, ColourToken as C};
 
 use crate::column::Column;
+use crate::convert::{margins, qcolor};
 use crate::kinds::{self, Form, Variant};
 
 #[cxx_qt::bridge]
@@ -116,14 +117,6 @@ pub mod qobject {
     }
 
     impl cxx_qt::Initialize for Tokens {}
-}
-
-fn qcolor(c: Colour) -> QColor {
-    QColor::from_rgba_f(f32::from(c.r) / 255.0, f32::from(c.g) / 255.0, f32::from(c.b) / 255.0, f32::from(c.a) / 255.0)
-}
-
-fn margins(i: core_tokens::Insets) -> QMarginsF {
-    QMarginsF::new(i.left, i.top, i.right, i.bottom)
 }
 
 pub struct TokensRust {

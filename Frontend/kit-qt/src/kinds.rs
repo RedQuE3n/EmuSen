@@ -1,7 +1,9 @@
 //! The kit's enumerations for QML, each a mirror of a kit-core type, so QML says `Kit.Accept` or `Kit.BigScreen` (EmuSen_Kit.md §7.1).
 
 use emusen_kit_core::input::{RepeatTiers, Role as WalkRole, UiButton, WalkForm};
+use emusen_kit_core::sound::Cue as SoundCue;
 use emusen_kit_core::tokens::{Form as TokenForm, Variant as TokenVariant};
+use emusen_kit_core::world::{WorldRing, WorldShape};
 
 #[cxx_qt::bridge(namespace = "Kit")]
 pub mod ffi {
@@ -62,9 +64,79 @@ pub mod ffi {
         EsdeCarouselFast,
         EsdeCarousel,
     }
+
+    /// The kind of body a world is drawn as: kit-core's `WorldShape`.
+    #[qenum]
+    enum BodyShape {
+        Planet,
+        Shards,
+        Gem,
+    }
+
+    /// A planet's ring: kit-core's `WorldRing`.
+    #[qenum]
+    enum Ring {
+        NoRing,
+        Subtle,
+        Big,
+    }
+
+    /// The interface's nine cues: kit-core's `Cue`.
+    #[qenum]
+    enum Cue {
+        Move,
+        Section,
+        Choose,
+        Back,
+        Favourite,
+        Launch,
+        Saved,
+        Loaded,
+        Refused,
+    }
 }
 
-pub use ffi::{Form, PadButton, Role, Tiers, Variant};
+pub use ffi::{BodyShape, Cue, Form, PadButton, Ring, Role, Tiers, Variant};
+
+pub fn world_shape(shape: BodyShape) -> WorldShape {
+    match shape {
+        BodyShape::Shards => WorldShape::Shards,
+        BodyShape::Gem => WorldShape::Gem,
+        _ => WorldShape::Planet,
+    }
+}
+
+pub fn body_shape(shape: WorldShape) -> BodyShape {
+    match shape {
+        WorldShape::Planet => BodyShape::Planet,
+        WorldShape::Shards => BodyShape::Shards,
+        WorldShape::Gem => BodyShape::Gem,
+    }
+}
+
+pub fn world_ring(ring: Ring) -> WorldRing {
+    match ring {
+        Ring::Subtle => WorldRing::Subtle,
+        Ring::Big => WorldRing::Big,
+        _ => WorldRing::None,
+    }
+}
+
+pub fn ring_of(ring: WorldRing) -> Ring {
+    match ring {
+        WorldRing::None => Ring::NoRing,
+        WorldRing::Subtle => Ring::Subtle,
+        WorldRing::Big => Ring::Big,
+    }
+}
+
+pub fn sound_cue(cue: Cue) -> Option<SoundCue> {
+    usize::try_from(cue.repr).ok().and_then(|i| SoundCue::ALL.get(i).copied())
+}
+
+pub fn cue_of(cue: SoundCue) -> Cue {
+    Cue { repr: SoundCue::ALL.iter().position(|c| *c == cue).map_or(0, |i| i as i32) }
+}
 
 pub fn pad_button(button: UiButton) -> PadButton {
     PadButton { repr: button.index() as i32 }

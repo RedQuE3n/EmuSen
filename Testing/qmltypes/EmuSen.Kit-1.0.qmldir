@@ -3,5 +3,9 @@ optional plugin EmuSen_Kit
 classname EmuSen_Kit_plugin
 typeinfo plugin.qmltypes
 depends QtQuick
+depends QtQuick.Shapes
 prefer :/qt/qml/EmuSen/Kit/
 Walkable 1.0 qml/Walkable.qml
+Body 1.0 qml/Body.qml
+Sky 1.0 qml/Sky.qml
+Moonrise 1.0 qml/Moonrise.qml

@@ -363,9 +363,74 @@ presses, each swapped by `swapAcceptBack` and raised as `pressed(button, repeat,
 A `Frame` consumes presses through a `Connections` on the singleton, enabled while it holds the active focus, calling
 `controller.offer`; a `Timer` in `Frame` pumps while a frame is shown (step 8). Both arrive with `Frame.qml`.
 
-### 7.5 Reserved
+### 7.5 The drawn items: `Body`, `Sky`, `Moonrise` and `Bells` (stage 0, step 7; 2026-11-07)
 
-The drawn items (`Sky`, `Body`, `Moonrise`, `Bells`) are step 7's and have their section when built.
+**Drawn by Qt Quick Shapes, not by a geometry node of our own.** `EmuSen_Qt.md` §10.4 said the bodies and the sky
+should be the scene graph's, a `QSGGeometryNode` or a `ShaderEffect`. Both were weighed against §8.1's harness, which
+runs on the software backend: that backend draws no custom geometry node and no shader effect, so a gallery grabbed
+under it would show no bodies at all, and a geometry node also means hand-written C++ for the node, its material and its
+vertex layout against §1.4's budget. Qt Quick Shapes is the scene graph's own vector item: on a GPU its geometry
+renderer builds exactly those geometry nodes, and under the software backend its own renderer paints the same paths, so
+one `.qml` draws the same picture on both. kit-core's `Shape` (an outline, closed or open, a solid or radial fill, a
+stroke, an opacity) maps onto `ShapePath` with a `PathPolyline` one to one, which is the design's intent: the world as
+data, the framework drawing it. So the kit's own part is a model, not a renderer.
+
+- **`BodyShapes` and `Body.qml`.** `BodyShapes` is a list model over `world::rows`, one row per kit-core shape of
+  `geometry(body, hue, focused)` in the body's unit box (100 by 100, or 100 by 160), rebuilt (a model reset) when
+  `shape`, `hue`, `focused`, `craters`, `bands`, `cap`, `ring` or `moons` change; `unitWidth` and `unitHeight` are
+  read-only. A row's roles are `outline` (a `QPolygonF`, the closed outline with its first point repeated), `fillInk`,
+  `hasGradient` with `gradientX`, `gradientY`, `gradientRadius` and four stops `stop0At`/`stop0Ink` to `stop3At`/`stop3Ink`,
+  `strokeInk`, `strokeSize` and `inkOpacity`. `Body.qml` is an `Item` with one `Shape` per row from a `Repeater`, each
+  with one `ShapePath`, a `RadialGradient` bound to the four stops and switched in by `hasGradient`, round caps and
+  joins, and a `Scale` transform from the unit box to the item's size, so a resize (the focused tile growing from 58 to
+  84) costs no model work; its `implicitWidth` and `implicitHeight` are the unit box. Two limits, stated: a gradient
+  carries four stops at most and a shorter one repeats its last, because QML cannot repeat a `GradientStop` without
+  logic (kit-core's bodies use three, the glow four); and a linear paint, which no body uses, is drawn as its first
+  stop's colour.
+- **`StarField` and `Sky.qml`.** `StarField` is a list model of the stars placed once by kit-core from `seed` and
+  `count` (Moonrise's by default, so the splash and the screens share one sky), with `moonriseSky` choosing the
+  gradient's stops (`stop0At`/`stop0Ink` to `stop2…`), `width`, `height` and `starsOpacity`, and a glow driven by
+  `glowHue` (negative for none), `glowX` and `glowY` as shares, whose eased state (`SkyGlow`) is read as `glowVisible`,
+  `glowCenterX/Y`, `glowRadiusX/Y` and four stops. `tick(seconds)` is the host's clock: `star_points` fills one buffer
+  (no allocation per frame) and every row's roles are announced at once. `Sky.qml` is a `Rectangle` with the three-stop
+  gradient, a `Repeater` of rounded `Rectangle`s for the stars (a disc of a pixel or two needs no path), one `Shape`
+  for the glow (a circle with the radial gradient, scaled to the ellipse by a `Scale` transform, since QML's radial
+  gradient is circular) and a `FrameAnimation` calling `tick` while `animating`. *[own, because the per-tick update of
+  220 rows is a cost to measure: 220 opacity bindings a frame; if it shows on the handheld, the stars become one
+  `QSGGeometryNode` behind a GPU-only path with the software backend keeping the rectangles.]*
+- **`MoonriseModel` and `Moonrise.qml`.** The model holds the splash's bodies (`addBody(name, hue, shape, craters,
+  bands, cap, ring, moons)`, `clearBodies`), places `Splash` from `Timeline::MOONRISE` at the first tick after a change,
+  and on `tick(seconds)` reads `Splash::frame` into read-only properties (the moon's centre, radius, halo, outline
+  drawn, fill and shadow; the sweep's band; the line; the words' sizes, spacings and baselines; `starsOpacity`,
+  `unit`, `finished`) and the planets into rows (`planetX/Y`, `planetRadius`, `planetOpacity`, the glow and flare, the
+  body's box and its kind, hue and features), with a model reset only when a planet appears. The nine colours of the
+  draft are constant properties. `Moonrise.qml` lays the frame out: a `Sky` with the model's seed and star count, the
+  halo and crescent shadow as rounded rectangles, the lit disc as a `Shape` with a radial gradient, the outline as a
+  `PathAngleArc` whose sweep is `360 × outlineDrawn`, a `Repeater` of worlds each with its glow, `Body` and flare, the
+  sweep band as a horizontal `Gradient`, the line, and two `Text`s for `title` and `caption`, set by the host (the kit
+  owns no words), placed by their baselines. A `FrameAnimation` ticks until `finished`.
+- **`Bells`.** A QObject over `BellCache`: `prepare(cue)` renders a cue through kit-core the first time and keeps it,
+  `prepareAll`, `durationMs`, `peak`, `quickSelectFrames`; `renders` counts renders so a test sees the cache hold,
+  `rate` is 48 000. Playback through Endymion's interface player and the pairing of Moonrise's `strike_times` with the
+  chime come with the platform client (§7.7).
+
+**Two cxx-qt facts found here.** A `#[qenum]` named `Roles` in three bridges clashes: cxx-qt emits `using Roles =
+enum class X::Roles` at namespace scope in each header and the module's type registration includes them all, so each
+model's roles have their own name (`BodyRole`, `StarRole`, `PlanetRole`). And an `extern "C++Qt"` base type may be
+declared once per crate: cxx-qt generates an upcast shim named for the type (`rust::cxxqt1::…QAbstractListModel_upcastPtr`),
+so a second bridge declaring `QAbstractListModel` fails the link with a duplicate symbol; `src/base.rs` declares it and
+the models alias it (`type QAbstractListModel = crate::base::ffi::QAbstractListModel`).
+
+**Held to** (`tests/world.rs`, `stars.rs`, `bells.rs`, 10 tests): a planet with every feature gives twelve rows in
+kit-core's order with the opacities kept and closed outlines closed once; the disc's radial gradient at kit-core's
+centre, radius and stops, padded to four; solid, stroked and bare shapes; shards and a gem inside their tall box; the
+stars are Moonrise's draws, fill the screen and vanish at no opacity; the two skies; the glow comes in over Pan to the
+strength, at the radii, clear at its edge, and goes with no hue; a cue renders once, durations are stereo frames at
+48 kHz, the cues mirror kit-core's. Measured on 2026-11-07 with four seeded faults, each reverted: `pad_stops`
+repeating the first stop failed the disc test; a closed outline left open failed the rows test; the two skies swapped
+failed the skies test; a cache that rendered on every ask failed the render-once test. `qmllint` passes the four `.qml`
+files against the built module (`Body.qml` and `Sky.qml` carry `pragma ComponentBehavior: Bound`, as their delegates
+read the outer model). No C++ was added: the count stays at 23 lines.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 
@@ -386,8 +451,8 @@ with every edit; a difference fails until it is reviewed, the minor bumped for a
 and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
 step, not the test's.
 
-**Tests** (`Frontend/kit-qt/tests`, 20, no Qt application needed; the bridges themselves are exercised by the harness
-of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
+**Tests** (`Frontend/kit-qt/tests`, 30 with §7.5's, no Qt application needed; the bridges themselves are exercised by
+the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
 scale, motion in milliseconds and Qt's easing numbers, reduced motion zeroing movements and keeping fades at 120 ms),
 `qt_keys` (every declinable press has a Qt key both ways, Shift+Tab, Enter, the mouse's buttons), `route` (the sheet
 before the walk before the key), `router` (the queue applies at a pump only, the own tiers at 400 then 80 ms, the swap
@@ -404,3 +469,5 @@ it `send_key`. Budget: under 600 for the whole front end.
 - **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
   add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
   §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
+- Owed by §7.5 to a later step: the cues played through Endymion's interface player and Moonrise's strikes paired with
+  the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.

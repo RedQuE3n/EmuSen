@@ -8,8 +8,8 @@ use emusen_core_host::{Create, InputLatch, Library, Machine};
 use emusen_native::core::sys::caps;
 use emusen_native::json::{self, Value};
 
-/// The pad's controls in PadButton's order: bit n of a script's mask is control n.
-pub const PAD_BUTTONS: [&str; 16] = ["B", "Y", "Select", "Start", "Up", "Down", "Left", "Right", "A", "X", "L", "R", "L2", "R2", "L3", "R3"];
+/// The pad's controls in their canonical order, emusen-native's: bit n of a script's mask is control n.
+pub const PAD_BUTTONS: [&str; 16] = emusen_native::core::Control::NAMES;
 
 /// The audio queue's bound the runtime sets, `SampleQueue.DefaultLimit`.
 pub const AUDIO_LIMIT: u64 = 128_000;

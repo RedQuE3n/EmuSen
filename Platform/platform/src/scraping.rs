@@ -87,7 +87,7 @@ fn setting(settings: &emusen_galaxia::json::Value, name: &str) -> Option<String>
 /// The tree, the settings file and its ROM folder, as the library tool reads them.
 fn settings_file() -> (tree::Tree, emusen_galaxia::json::Value, Option<String>) {
     let tree = tree::tree().clone();
-    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
+    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
     let roms = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
     (tree, settings, roms)
 }
@@ -108,7 +108,7 @@ fn own_settings() -> (String, String, String) {
     let mut out = String::new();
     json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
     let media = tree.directory(Directory::Media).unwrap_or_default();
-    let games = path::combine(Style::HOST, &tree.directory(Directory::Library).unwrap_or_default(), "games.db");
+    let games = path::combine(Style::HOST, &tree.directory(Directory::Library).unwrap_or_default(), emusen_galaxia::stores::GAMES_DB);
     (media, games, out)
 }
 

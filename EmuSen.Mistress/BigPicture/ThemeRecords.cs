@@ -96,6 +96,7 @@ namespace EmuSen.Mistress.BigPicture
 
         public static int SchemaVersion => Migrations.Length;
 
+        // Galaxia owns the name (Platform/galaxia/src/stores.rs); StoreNamesTests holds the two equal until the C# front end goes.
         public const string FileName = "themes.db";
 
         private readonly SqliteConnection _db;

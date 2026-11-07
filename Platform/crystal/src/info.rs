@@ -2,13 +2,14 @@
 //! ports, as the C# host's `CoreDescriptorReader` reads them, a field it does not know ignored and one absent taken at
 //! its default (EmuSen_CoreAPI.md §6.3, EmuSen_Backend.md §29.2).
 
+use emusen_native::core::{Axis, Control};
 use emusen_native::json::Value;
 
-/// `PadButton`'s names in its order, the canonical controls' numbers (EmuSen_CoreAPI.md §6.4).
-pub const BUTTONS: [&str; 16] = ["B", "Y", "Select", "Start", "Up", "Down", "Left", "Right", "A", "X", "L", "R", "L2", "R2", "L3", "R3"];
+/// The canonical controls' names in their order, their numbers, as emusen-native owns them (EmuSen_CoreAPI.md §6.4).
+pub const BUTTONS: [&str; 16] = Control::NAMES;
 
-/// `PadAxis`'s names in its order.
-pub const AXES: [&str; 6] = ["LeftX", "LeftY", "RightX", "RightY", "LeftTrigger", "RightTrigger"];
+/// The canonical axes' names in their order.
+pub const AXES: [&str; 6] = Axis::NAMES;
 
 /// A name as .NET's `Enum.TryParse` without regard to case off reads it, with `Enum.IsDefined` after: a member's name,
 /// or a number that is a member's.

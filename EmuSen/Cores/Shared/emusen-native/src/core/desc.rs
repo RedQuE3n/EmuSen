@@ -5,7 +5,8 @@ use super::jsonw::Json;
 use super::sys::{self, caps};
 use crate::abi::Region;
 
-/// `PadButton`'s names, append-only; the value is `enum emusen_control`.
+/// The canonical pad controls, append-only, the one owner of their names and order: the value is `enum emusen_control`,
+/// which the ABI check holds to this enum, and every other reader (the runtime, the goldens, C#'s `PadButton`) reads `NAMES`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u32)]
 pub enum Control {
@@ -28,8 +29,11 @@ pub enum Control {
 }
 
 impl Control {
+    /// Every control's name, in the enum's order.
+    pub const NAMES: [&'static str; 16] = ["B", "Y", "Select", "Start", "Up", "Down", "Left", "Right", "A", "X", "L", "R", "L2", "R2", "L3", "R3"];
+
     pub const fn name(self) -> &'static str {
-        ["B", "Y", "Select", "Start", "Up", "Down", "Left", "Right", "A", "X", "L", "R", "L2", "R2", "L3", "R3"][self as usize]
+        Self::NAMES[self as usize]
     }
 }
 
@@ -46,8 +50,11 @@ pub enum Axis {
 }
 
 impl Axis {
+    /// Every axis's name, in the enum's order.
+    pub const NAMES: [&'static str; 6] = ["LeftX", "LeftY", "RightX", "RightY", "LeftTrigger", "RightTrigger"];
+
     pub const fn name(self) -> &'static str {
-        ["LeftX", "LeftY", "RightX", "RightY", "LeftTrigger", "RightTrigger"][self as usize]
+        Self::NAMES[self as usize]
     }
 
     pub const fn is_trigger(self) -> bool {
@@ -975,4 +982,27 @@ pub fn disassembly_json(list: &[Instruction]) -> String {
     }
     j.end_array();
     j.finish()
+}
+
+#[cfg(test)]
+mod names {
+    use super::{Axis, Control};
+
+    /// An enum's members in `emusen_core.h`, by value, their prefix dropped and their underscores removed.
+    fn header(name: &str, prefix: &str) -> Vec<String> {
+        let text = include_str!("../../include/emusen_core.h");
+        let body = text.split(&format!("enum {name} {{")).nth(1).and_then(|b| b.split("};").next()).expect("the enum");
+        let mut members: Vec<(u32, String)> = body
+            .split(',')
+            .filter_map(|m| m.trim().strip_prefix(prefix)?.split_once(" = ").map(|(n, v)| (v.trim().parse().unwrap(), n.replace('_', ""))))
+            .collect();
+        members.sort();
+        members.into_iter().map(|(_, n)| n).collect()
+    }
+
+    #[test]
+    fn the_names_are_the_headers_members_in_their_order() {
+        assert_eq!(header("emusen_control", "EMUSEN_CONTROL_"), Control::NAMES.map(str::to_uppercase));
+        assert_eq!(header("emusen_axis", "EMUSEN_AXIS_"), Axis::NAMES.map(str::to_uppercase));
+    }
 }

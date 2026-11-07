@@ -40,6 +40,7 @@ namespace EmuSen.Mistress.Scraping
     // Where the media store lives and how its files are named; media.db itself is emusen-scrape's, the C# store having been deleted on 2026-11-05 - see EmuSen_Backend.md §40.5.
     public static class MediaStore
     {
+        // Galaxia owns the name (Platform/galaxia/src/stores.rs); StoreNamesTests holds the two equal until the C# front end goes.
         public const string FileName = "media.db";
 
         public const string CleanupFolder = "CLEANUP";

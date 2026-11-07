@@ -70,7 +70,7 @@ namespace EmuSen.Mistress.Views
 
         // A console's body, by its shelf's system and maker; null for a wide place.
         private static WorldBody? BodyOfShelf(ConsoleChoice c) =>
-            c.Hue is null ? null : RuntimeCatalog.ShelfByName(c.Key) is { } shelf ? StartupSplash.BodyOf(shelf.System, RuntimeCatalog.Systems.FirstOrDefault(f => f.Id == shelf.System)?.Manufacturer) : WorldBody.Plain;
+            c.Hue is null ? null : RuntimeCatalog.ShelfByName(c.Key) is { } shelf ? StartupSplash.BodyOf(shelf.System) : WorldBody.Plain;
 
         private PlanetItem Choice(ConsoleChoice c) => new(c.Key, c.Name)
         {

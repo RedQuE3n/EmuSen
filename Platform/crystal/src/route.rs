@@ -151,7 +151,8 @@ pub fn route_json(
     cartridge(&mut j, system.as_deref(), at);
     let shelf = row.map(|r| {
         let row = &catalog.rows[r];
-        if row.display_name == "Game Boy (Mercury)" && !row.discovered && is_game_boy_color(at) { catalog::GAME_BOY_COLOR_SHELF.to_string() } else { row.display_name.clone() }
+        let colour = row.systems.iter().position(|s| s.id == "gbc").filter(|_| !row.discovered && is_game_boy_color(at));
+        colour.map_or_else(|| row.display_name.clone(), |i| row.shelves[i].clone())
     });
     j.str_or_null("shelf", shelf.as_deref());
     match waiting {

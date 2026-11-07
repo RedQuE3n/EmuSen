@@ -238,6 +238,7 @@ impl Runtime {
                 .bool("self_delimiting_images", e.self_delimiting_images)
                 .bool("rumble", e.rumble)
                 .str_or_null("attached_to", e.attached_to.as_deref());
+            look(&mut j, &e.look());
             match e.screenscraper_system {
                 Some(id) => j.int("screenscraper_system", id as i64),
                 None => j.null("screenscraper_system"),
@@ -263,6 +264,9 @@ impl Runtime {
         }
         for (s, engines, empty) in groups {
             j.begin_object().str("id", &s.id).str("name", &s.name).strs("extensions", &s.extensions).strs("engines", &engines).bool("starts_empty", empty);
+            // A system the table lacks takes the table's default cover shape and the look computed from its id.
+            j.f64("cover_aspect", emusen_systems::default_cover_aspect());
+            look(&mut j, &emusen_systems::Look::computed(&s.id));
             let mut names = vec![s.id.clone()];
             for n in engines.iter().filter(|n| !n.chars().any(char::is_whitespace)).map(|n| emusen_dotnet::text::to_lower(n)) {
                 if !names.contains(&n) {
@@ -617,4 +621,17 @@ fn listed_name(discovery: &Discovery, sha256: &str) -> Result<String, crate::ope
         .or_else(|| discovery.waiting().iter().find(|w| w.sha256.eq_ignore_ascii_case(sha256)).map(|w| name(&w.entry.core_path())))
         .or_else(|| discovery.found().iter().filter_map(|c| c.entry.as_ref()).find(|e| emusen_core_host::entry::core_hash(e).is_some_and(|h| h.eq_ignore_ascii_case(sha256))).map(|e| name(&e.core_path())))
         .ok_or_else(|| (emusen_session_service::abi::status::NO_SUCH_ID, format!("no core library listed has the SHA-256 {}", sha256.to_ascii_lowercase())))
+}
+
+/// A system's look as the systems data gives it: `{"hue","body","palette":[colour],"craters","bands","cap","moons"}`.
+fn look(j: &mut Json, l: &emusen_systems::Look) {
+    j.key_object("look")
+        .f64("hue", l.hue)
+        .str("body", &l.body)
+        .strs("palette", &l.palette)
+        .f64("craters", l.craters)
+        .f64("bands", l.bands)
+        .f64("cap", l.cap)
+        .int("moons", i64::from(l.moons))
+        .end_object();
 }

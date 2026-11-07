@@ -3218,6 +3218,21 @@ Two behaviours were not carried over. A machine without cargo used to take the p
 
 **Open.** `CI` still builds each library with its own `cargo build` steps rather than the xtask; it reads the list but not the build. Moving CI's library job onto `cargo xtask stage` is the next step once a runner has been tried with it.
 
+### 28.12 One owner per fact (2026-11-07)
+
+*Decided 2026-11-07 by the tester*, from the same audit (rows 7, 8, 9, 13 and 14): each fact below had several owners, and each now has one, which every other reader reads or is checked against.
+
+| Fact | Owner now | Former owners, and what became of them |
+|---|---|---|
+| The 16 pad controls and 6 axes, names and order | `emusen-native`'s `Control::NAMES` and `Axis::NAMES` | `emusen_core.h`'s enums, held to them by the ABI check as before; the runtime's `info::BUTTONS`/`AXES` and the goldens' `PAD_BUTTONS` are now those constants; C#'s `PadButton` and `PadAxis` are held to the header by `PadButtonOwnerTests` until the C# goes |
+| The database file names (`games.db`, `records.db`, `states.db`, `media.db`, `themes.db`) and `appsettings.json` | Galaxia: `stores.rs`, and `models.rs` for the settings file | five Rust literals now read Galaxia's constants; the four C# constants are held to them by `StoreNamesTests` |
+| A console's hue, body, palette and planet features | the systems data: `look` in each `data/<id>.json`, null for none, in which case `Look::computed` gives a plain planet in a hue from the id, the rule the C# splash used | `StartupSplash`'s two tables and its maker rule are deleted; the runtime's `systems` answer carries every row's look, which the splash, Choose a console and the engines' marks read |
+| The catalog's four hand rows, their keys, the consoles' sole engines and the refusal naming a missing one | the systems data: `data/catalog-rows.tsv`, read by `emusen_systems::catalog_rows` | `HAND_ROWS`, `HAND_KEYS`, `SOLE_ENGINES` and `GAME_BOY_COLOR_SHELF` in `catalog.rs`, and the refusals by extension in `open.rs`, now derived from the rows and their systems' extensions |
+| `records.db`'s `state_record` | the runtime's `states.rs`, which copies the rows once into `states.db` (D8) | the C# reads and writes of it, which nothing but their own tests called, are deleted; the table stays in the file's version-1 migration, which is history and is not edited |
+| The cover shape of a console whose own is unknown, 1.365385 (OpenEmu's fallback) | the systems data: `data/table.json` | the runtime fills `cover_aspect` from it for every system only an engine names; the C# front end keeps one constant for a game with no known system, held to the data by a test, and the Qt front end is not to need that case |
+
+The look and the catalog rows are data, so a new console gets its look by stating it, or a computed one by stating nothing, and a change to either is a change to a data file the tests read.
+
 ## 29. The Mac mini as the Apple Silicon runner, 2026-10-16
 
 The Apple Silicon jobs of `rust-cores.yml` (the shared crates, each library's `osx-arm64` job and WiseMan's) run

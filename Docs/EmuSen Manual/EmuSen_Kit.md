@@ -75,3 +75,82 @@ once the crate is consumed.
 ### 1.4 Open
 
 - Whether the seven desktop colours above join the crate now or when a Qt screen needs them. Recommended: when needed.
+
+## 2. Input (stage 0, step 2; 2026-11-07)
+
+`emusen_kit_core::input` is the kit's whole knowledge of input, in four parts with one job each, and no clock: every
+time is an argument, as `PadNavigator.Feed(held, now)` took its time, so a test states the numbers exactly.
+
+### 2.1 The one event type
+
+`InputEvent` is the pad, the pointer and the keyboard in one enumeration: `Pad(Press)`, `Hover(ElementId)`,
+`Click { target, button }`, `Wheel { notches }` and `Key { key, shift }`. `intent(event)` applies `EmuSen_Qt.md` §1.7's
+rules and gives an `Intent`: hovering is `Focus(element)` (the ring moves as the walk would); a primary click is
+`Activate(element)`, the same view-model call as A there; a right click and the mouse's back button are `Press(Back)`;
+the wheel is `Step(notches)`, one list row or carousel step per notch; Tab and Shift+Tab are `Walk(±1)`; the arrows,
+Return, Escape, Menu, Select, Page Up and Down, Home and End are the presses their pad buttons would be. So the Qt layer
+only translates `QMouseEvent`, `QWheelEvent`, `QKeyEvent` and the pad's queue into `InputEvent` and asks for the intent;
+no screen interprets a device.
+
+`ElementId` is the host's handle for an element the pointer rests on; the kit gives it no meaning.
+
+### 2.2 The pad's grammar and its repeat tiers
+
+`UiButton` is `PadNavigator`'s: what a pad asks of the interface, named by what it does (Up, Down, Left, Right, Accept,
+Back, Menu, Options, PageUp, PageDown, First, Last, Guide, Search, Random, Screensaver). The physical pad is not here:
+which bit is which button is Endymion's, and the pad family's map onto these roles is `PadRouter`'s in `emusen-kit-qt`.
+The grammar keeps the player's A/B swap (`UiButton::swapped`) and the key a declined press becomes for a stock control
+(`UiButton::key`: directions to arrows, Accept to Return, Back to Escape, Menu to Menu, Options to Select).
+
+`Grammar` is `PadNavigator` and `SceneRepeat` as one: `feed(held, now)` gives the presses of a tick, one as a button goes
+down and, for the four directions and the two shoulders only, repeats while held. The repeats follow `RepeatTiers`: a
+first delay, an interval, and an optional faster tier reached after a time held, whose switch may move several items at
+once. Repeats are scheduled from when they fell due, not from the tick that noticed them, so a slow frame gives every
+step the hold earned. The tiers are the measured ones:
+
+| Tiers | Delay | Interval | Faster tier | Source |
+|---|---|---|---|---|
+| `OWN` | 400 ms | 80 ms | none | `EmuSen_Settings_Reference.md` §4.29 |
+| `ESDE_LIST` | 500 ms | 114 ms | at 1.703 s a four-entry step, then every 15.9 ms | `EmuSen_BigPicture.md` §14.7 |
+| `ESDE_CAROUSEL_FAST` | 500 ms | 180 ms | 80 ms from 1.58 s | §14.7 |
+| `ESDE_CAROUSEL` | 500 ms | 200 ms | none | §14.7, also the grid's |
+
+`menu_chord(held)` is true once as the guide button, or Options and Menu together, go down; `forget(held)` makes nothing
+a press until it is let go, so the button that closed a menu does not reach what is under it (§4.29). `stick_direction`
+turns a stick axis into a direction past 0.55, the C# front end's threshold.
+
+### 2.3 The walk
+
+`Walk` is the frame's focus walk of LunaP §202.4, with no control behind it: roles (navigation, content, detail,
+actions, search), the frame's form (desktop, big screen, card), sections, a detail that is a page of its own on the big
+screen or stands beside the content, a row's page, and actions with their pad buttons. `move_focus(±1)` steps the shown
+roles in order and wraps; `press(button)` is ES-DE's grammar and says whether the walk used the press, so a host offers
+it a button first and keeps what it declines:
+
+1. the shoulders step the sections, wrapping, raising `SectionChosen` (a card has none to step);
+2. A on the content, on the big screen, opens the detail's page and focuses it;
+3. B climbs a level: a row's page closes, then the detail's page; the detail, actions or search give the focus to the
+   content; on the desktop the content gives it to the navigation; at the top B is declined, the host's signal to close;
+4. an action's own button invokes it, unless it is disabled, in which case the button is declined.
+
+A change of form keeps the chosen section and the focused role, and closes the detail's page where the detail stands
+beside. What the walk did comes back as `WalkEvent`s (`take_events`), so the host wires nothing into it.
+
+**Where it differs from the C#.** `AdaptiveLayout` also owns the List card and an open cover, which take A and B ahead
+of the walk; those are sheets in the Qt design (§1.7's "the active sheet or question" is offered a press before the
+walk), so they are the host's, not the walk's. `HubLayout`, `GalleryLayout`, `PlanetLayout` and `PageLayout` each had a
+`Move(dx, dy)` over their own rows and places; in Qt those are `ListView`, `GridView` and `PathView` answering the key
+events a declined direction becomes, so no layout's move is ported.
+
+### 2.4 What it is held to
+
+`tests/input.rs`: every button presses once on the way down and only the six repeat; the own tiers at 400 then 80 ms;
+the list's eleven steps at 114 ms, the four-entry step at 1.703 s and ten repeats of 15.9 ms in 159 ms; the carousel's
+six steps at 180 ms then 80 ms from 1.58 s; the plain carousel's 200 ms; the chord once, and not for Start alone; forget;
+the stick's 0.55; the swap and the declined press's key; every §1.7 rule for the pointer and the keyboard; and §202.4's
+four rules, the walk and its wrap in both forms, a detail beside, a row's page, the swap before the grammar, a change of
+form, and a layout with neither sections nor detail.
+
+Measured on 2026-11-07 with three seeded faults, each reverted: the fast tier's switch moving one item rather than
+four failed the list test; B on the desktop's content no longer climbing to the navigation failed the climb test; Tab
+walking backwards failed the pointer-and-keyboard test.

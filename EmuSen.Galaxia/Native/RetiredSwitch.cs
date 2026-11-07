@@ -11,7 +11,12 @@ namespace EmuSen.Galaxia.Native
         public static void Note(string variable, string component, string since = "2026-11-04")
         {
             if (Environment.GetEnvironmentVariable(variable) != "0" || !Said.TryAdd(variable, 0)) return;
-            string message = $"{variable}=0 is ignored: {component} has had no C# implementation since {since} and runs on {PlatformLibrary.FileName}.";
+            Announce($"{variable}=0 is ignored: {component} has had no C# implementation since {since} and runs on {PlatformLibrary.FileName}.");
+        }
+
+        // The one line a retired switch writes, to the host's sink and to the error log.
+        public static void Announce(string message)
+        {
             ConfigDiagnostics.Report(message);
             Library.ErrorLog.Warning("platform", message);
         }

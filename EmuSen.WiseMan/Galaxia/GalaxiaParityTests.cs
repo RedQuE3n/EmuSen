@@ -73,30 +73,20 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Contains($"interface {PlatformLibrary.InterfaceVersion}", PlatformLibrary.Report);
         }
 
-        // A folder without the library is said in words, and the switch the components with a C# half still use falls back once, said once - see EmuSen_RustPlatform.md §13.
+        // A folder without the library is said in words, and a retired switch's line reaches the host's sink and the error log - see EmuSen_RustPlatform.md §13 and EmuSen_Backend.md §40.9.
         [Fact]
-        public void A_missing_library_is_said_once_in_the_log()
+        public void A_missing_library_is_said_in_words_and_a_switch_s_line_once_in_the_log()
         {
             string logs = At("logs");
             ErrorLog.DirectoryOverride = logs;
             string empty = Directory.CreateDirectory(At("no library")).FullName;
             Assert.Equal(((nint)0, $"{PlatformLibrary.FileName} not found beside the assemblies"), PlatformLibrary.Open(empty));
-            int loads = 0;
-            foreach (string? variable in new[] { null, "1", "0" })
-            {
-                var chosen = new PlatformSwitch(() => variable, () => { loads++; var opened = PlatformLibrary.Open(empty); return (opened.Handle != 0, opened.Report); }, PlatformSwitch.Announce, "Serenity");
-                Assert.All(Enumerable.Range(0, 5), _ => Assert.False(chosen.Active));
-            }
-            Assert.Equal(2, loads);
-            string expected = $"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.FileName} not found beside the assemblies); Serenity runs on its C# implementation.";
-            Assert.Equal(new[] { expected, expected }, Reported());
+            string line = $"EMUSEN_SERENITY_NATIVE=0 is ignored: Serenity's slang half has had no C# implementation since 2026-11-05 and runs on {PlatformLibrary.FileName}.";
+            RetiredSwitch.Announce(line);
+            Assert.Equal(new[] { line }, Reported());
             string written = string.Concat(Directory.GetFiles(logs).Select(File.ReadAllText));
-            Assert.Equal(2, written.Split(expected).Length - 1);
+            Assert.Equal(1, written.Split(line).Length - 1);
             Assert.Contains("platform", written);
-
-            var thrown = new PlatformSwitch(() => null, () => throw new DllNotFoundException("refused"), PlatformSwitch.Announce, "Serenity");
-            Assert.False(thrown.Active);
-            Assert.Equal(new[] { $"{PlatformLibrary.FileName} is not in use (DllNotFoundException: refused); Serenity runs on its C# implementation." }, Reported());
         }
 
         // Seeded, so a failure names a case that fails again.

@@ -10366,6 +10366,16 @@ forges a row of the runtime's states.db.
 each caught by its case: Mistress never approving (`CoreApprovalTests`), the reel row never saying "nothing to go back
 to yet" (`PadRewindReelTests`), and the status line dropping the runtime's words (`MoonRtEngineTests`).
 
+### 40.9 `PlatformSwitch` deleted (2026-11-07)
+
+Nothing chooses any more: every component that had a C# half lost it in §40.1 to §40.8, and since then no code
+constructed a `PlatformSwitch`. What was still used of it was its static `Announce`, the one line a retired switch writes
+to the host's diagnostics and to the error log, which the frontend API's binding called for `EMUSEN_CRYSTAL_NATIVE=0`.
+That line is now `RetiredSwitch.Announce`, beside `RetiredSwitch.Note`, which calls it; the class, its choice and its
+load are deleted from `GalaxiaNative.cs`. `GalaxiaParityTests`' case of a missing library keeps its first half (the
+library's absence said in words) and holds the second to the retired switch's line, once in the sink and once in the log;
+the fallback it held, a choice made once and said once, has nothing left to choose.
+
 ### 40.10 The C# core host (B10-C), in parts
 
 *Decided 2026-11-06 by the tester* (§40.8's Q1): the C# core host goes, with `CoreDebugTarget`, `IDebugTarget` and the

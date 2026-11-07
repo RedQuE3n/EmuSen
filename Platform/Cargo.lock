@@ -413,6 +413,7 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
+ "serde_json",
 ]
 
 [[package]]
@@ -667,6 +668,8 @@ dependencies = [
  "emusen-systems",
  "flate2",
  "libc",
+ "serde",
+ "serde_json",
  "sha1",
 ]
 

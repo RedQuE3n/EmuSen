@@ -12,6 +12,9 @@ publish.workspace = true
 name = "emusen_scrape"
 
 [dependencies]
+# ScreenScraper's and GitHub's answers read into typed structures (answer.rs, openemu.rs).
+serde.workspace = true
+serde_json.workspace = true
 # The platform's one HTTP client (SR9, §16).
 emusen-net = { path = "../net" }
 # Where a file lives, a dump's hashes and a game's folder.

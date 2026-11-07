@@ -6,7 +6,7 @@ use emusen_crystal_debug::breakpoints::BreakpointRegistry;
 use emusen_crystal_debug::coverage::{CallStackRegistry, CoverageRegistry};
 use emusen_crystal_debug::labels::LabelRegistry;
 use emusen_crystal_debug::watches::WatchKind;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_session_service::abi::{coverage as cov, profile, status};
 
 use super::args::{self, Raw};

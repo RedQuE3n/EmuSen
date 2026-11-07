@@ -4,7 +4,7 @@
 
 use emusen_cheats::registry::CheatRegistry;
 use emusen_cheats::{cht, database::Database, prune};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_galaxia::models::{CHEAT_FILE_ID, CHEATS_CATEGORY, MODELS};
 use emusen_galaxia::tree::{self as galaxia_tree, Directory, Tree};
 use emusen_session_service::abi::{cheat as op, status};

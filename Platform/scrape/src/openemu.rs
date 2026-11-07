@@ -205,15 +205,20 @@ fn fetch(wire: &Wire, url: &str, target: &str, stop: &crate::clock::Stop) -> std
 pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_net::Progress) -> std::result::Result<String, String> {
     let release = emusen_net::fetch(&wire.request(LATEST_RELEASE, TIMEOUT), cancel).map_err(|f| f.message)?;
     let text = String::from_utf8_lossy(&release).into_owned();
-    let doc = emusen_dotnet::json_document::parse(&text)?;
-    let tag = doc.get("tag_name").and_then(|v| v.as_str()).unwrap_or("?").to_string();
-    let zip = match doc.get("assets") {
-        Some(emusen_dotnet::json::Value::Array(assets)) => assets
-            .iter()
-            .filter(|a| a.get("name").and_then(|n| n.as_str()).is_some_and(|n| n.to_uppercase().ends_with(".ZIP")))
-            .find_map(|a| a.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string)),
-        _ => None,
-    };
+    #[derive(serde::Deserialize)]
+    struct Asset {
+        name: Option<String>,
+        browser_download_url: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Release {
+        tag_name: Option<String>,
+        #[serde(default)]
+        assets: Vec<Asset>,
+    }
+    let release: Release = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let tag = release.tag_name.unwrap_or_else(|| "?".to_string());
+    let zip = release.assets.into_iter().filter(|a| a.name.as_deref().is_some_and(|n| n.to_uppercase().ends_with(".ZIP"))).find_map(|a| a.browser_download_url);
     let Some(zip) = zip else { return Err(format!("OpenVGDB {tag} has no zip to download.")) };
     let archive = emusen_net::fetch(&wire.request(&zip, TIMEOUT), cancel).map_err(|f| f.message)?;
     let part = format!("{target}.part");

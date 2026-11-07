@@ -5,7 +5,7 @@ use emusen_core_host::Machine;
 use emusen_crystal_debug::breakpoints::{BreakpointRegistry, CallKind};
 use emusen_crystal_debug::context::Set;
 use emusen_crystal_debug::Debugger;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_session_service::abi::{run, status};
 
 use super::args::{self, Raw};

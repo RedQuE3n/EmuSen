@@ -12,6 +12,8 @@ publish.workspace = true
 name = "emusen_crystal"
 
 [dependencies]
+# A session call's JSON arguments (service/args.rs).
+serde_json.workspace = true
 # The core host: discovery from sidecars, trust, the v1 calls (EmuSen_Backend.md §27).
 emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }
 # Core info's JSON as the host reads it.

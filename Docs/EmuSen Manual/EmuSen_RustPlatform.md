@@ -3829,3 +3829,24 @@ A refusal is the path and the system's words, `<path>: No such file or directory
 sentence (`Could not find file '<path>'.`, `Access to the path '<path>' is denied.`). Six lines of the DianaSh goldens
 (`awk`, `wc`, `touch` and two cases of `shell` twice) were changed with their lengths to the new words; nothing else
 in them moved.
+
+### 47.10 ScreenScraper's and GitHub's answers and the session's arguments are read by serde
+
+emusen-dotnet's `json_document` (531 lines with its tests), which reproduced `JsonDocument.Parse` and its exceptions'
+words, is deleted. Its three readers:
+
+- **ScreenScraper's answers** (`scrape/src/answer.rs`) are read into typed structures, one per reader, so that a reader
+  decodes only the members it uses, as the C# did: a member of the wrong kind is absent (`Object<T>`), a list that is not
+  one is empty and its non-objects are passed over (`Many<T>`; a genre that is not an object is an empty genre, as
+  before), and a leaf is a string's text or a number's digits (`Text`; a fraction is always shown, so that `77.0` is
+  no whole number). A sign-in's name is read before anything else its member holds. The 155 answers of
+  `scrape/tests/fixtures/answers.jsonl` read to the C#'s models; a refusal is held to being one, since its words are
+  now serde's (`missing field `response` at line 1 column 2`), and `media.db` keeps those words on the rows it writes
+  from now on. The reader's own refusal, "a game without an id", is held word for word.
+- **OpenVGDB's release** (`scrape/src/openemu.rs`) is a `Release` of a tag and its assets.
+- **A session call's arguments** (`crystal/src/service/args.rs`) are a `serde_json::Value` read by the accessors as
+  before. A string holding half a surrogate pair, which .NET read and refused only when the call asked for it, makes the
+  whole argument "not JSON"; an element of the wrong kind is refused as "an element is Number, not a string".
+
+The cores' workspaces that link Galaxia (`emusen-libretro-games`, `-host`, `emusen-core-broker`, `-conform` and
+Diamond's) carry the platform's new dependencies in their locks from this step on.

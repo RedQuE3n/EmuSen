@@ -1,8 +1,9 @@
 # EmuSen_Qt — the Qt 6 front end: layers, surfaces, themes and the way there
 
 Design, 2026-11-07, revising the Qt plan of 2026-11-01 (which named LunaP as a toolkit to port; §0.2 says what changed).
-Nothing of it is built in the tree; a toolchain spike outside the tree proved the binding, the drawn-control path and
-run-time themes, and its figures are in §10. **Marks:** **[D]** decided by the tester, with the date; **[M]** measured, with
+**Approved by the tester on 2026-11-07, with every recommendation of §11.** Nothing of it is built in the tree; a
+toolchain spike outside the tree proved the binding, the drawn-control path and run-time themes on the desktop and the
+handheld, and its figures are in §10. **Marks:** **[D]** decided by the tester, with the date; **[M]** measured, with
 the date and how; **[A]** argued; **[decision]** a question whose answer changes scope, an interface, cost or what the
 player sees; **[routine]** a question with a recommended answer that changes none of those.
 
@@ -750,7 +751,7 @@ scp -i ~/.ssh/emusen_handheld ~/.cache/emusen/qt-spike/emusen-qt-spike-AppDir.ta
 mkdir -p ~/.cache/emusen/qt-spike && cd ~/.cache/emusen/qt-spike && tar --zstd -xf ../emusen-qt-spike-AppDir.tar.zst
 QT_QPA_PLATFORM=offscreen ./AppDir/AppRun --quit-after-first-frame --grab offscreen.png     # no window: libraries, QML, the picture
 ./AppDir/AppRun --quit-after-first-frame                                                    # a window for one frame: prints the ms
-./AppDir/AppRun --grab handheld-night.png                                                   # a window; T swaps the theme, Q quits
+./AppDir/AppRun --theme night --grab handheld-night.png                                     # a window; T swaps the theme, Q quits
 # under gamescope (Game Mode), as a non-Steam shortcut or: QT_QPA_PLATFORM=wayland ./AppDir/AppRun
 ```
 
@@ -758,6 +759,22 @@ What the run should show: `first frame swapped N ms after process start` on each
 the eleven tiles with their planets, the focused one ringed, and the help bar on the foot; **T** turns the sky light. The
 three figures to record are the offscreen and windowed first-frame times and, under gamescope, whether the window is
 shown at the panel's size with the Wayland plugin (the log line `QT_QPA_PLATFORM`, or the `xcb` fallback taken).
+
+### 10.7 The handheld run **[M 2026-11-07]**
+
+The AppDir was run on the Legion Go S (SteamOS 3.9.5, under gamescope, `DISPLAY=:0`) on 2026-11-07, from the tarball,
+with nothing of EmuSen running: it starts from the bundle's own Qt and ICU, draws, and quits.
+
+| Measure | Handheld | Desktop (§10.2) |
+|---|---|---|
+| First frame, `offscreen` | **41 ms** after process start | 30 to 34 ms |
+| First frame, a window | **146 ms**, then **125 ms** (two rounds) | 105 to 110 ms |
+
+The grab saved, and showed the day theme although the picture was named for the night: the run passed no `--theme`,
+and without one the program takes the first file of the themes folder in name order, which is `day.qml` before
+`night.qml`; the desktop runs of §10.2 had named `--theme night` and did not show it. The command above now names the
+theme. The lesson is the design's own rule for the real program: a default is a stated choice (the reference theme by
+name, stored in Settings), never the order of a folder listing.
 
 ---
 
@@ -771,7 +788,9 @@ binding was the right call: over 600 lines of C++ says reconsider; (5) a QML-lay
 from day one; (6) Qt's open-source LTS access is short, so a security fix may mean the next minor mid-way; (7) the
 estimate carries two unknowns (the picture protocol, the ES-DE painter's effects stack).
 
-**Questions**, each with a recommendation:
+**Questions**, each with a recommendation. **Decided 2026-11-07 by the tester: every recommendation below stands as
+written, Q1 to Q12, and the design as a whole is approved.** For Q9, Pegasus is abandoned and retires with the C# front
+end. The questions are kept as asked, with their recommendations, as the record of what was decided.
 
 1. **[decision] The theme API's screens.** Three (Home, Consoles, Games) owned by a theme, as §3.2; or also the game's page's
    art header? Recommended: the three, with the art header reading the theme's tokens only, since the page is EmuSen's by

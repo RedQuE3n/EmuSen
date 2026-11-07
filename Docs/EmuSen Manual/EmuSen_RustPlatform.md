@@ -3755,3 +3755,13 @@ Support` on macOS; the roaming application data on Windows, which `dirs` asks th
 These are the folders §5.5's second point reproduced by hand, about 50 lines and a Windows call written out. The
 firmware search reads the home folder through `tree::user_home` rather than `$HOME` itself. `tests/application_data.rs`
 holds the three Linux cases (absolute, relative, unset) in a process of its own.
+
+### 47.4 Interface 36: the parity-test exports go
+
+`emusen_galaxia_dotnet_path`, `emusen_galaxia_dotnet_test`, `emusen_galaxia_number_format` and
+`emusen_galaxia_text_decode`, with their `EMUSEN_GALAXIA_PATH_*`, `EMUSEN_GALAXIA_TEST_*` and `EMUSEN_GALAXIA_NUMBER_*`
+numbers, existed only so that WiseMan could hold the library's path rules, its yes-or-no text rules, its number
+layout and its file decoding to .NET's own answers (§10.5, §11.5). No program called them. They are deleted, with the
+five WiseMan tests that called them (in `GalaxiaParityTests`: every path rule, blank text and caseless equality, a
+file and a directory existing, every double and float written, a file's bytes decoded), and the interface is 36.
+What those rules do to stored keys and to files a person edits is now held by the disk corpus (§47.1).

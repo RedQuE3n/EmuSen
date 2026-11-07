@@ -26,67 +26,6 @@ namespace EmuSen.WiseMan.Galaxia
 
         private static string Shown(string text) => text.Length <= 160 ? text : text[..160] + $"… ({text.Length})";
 
-        [Fact]
-        public void Every_double_and_float_is_written_as_System_Text_Json_writes_it()
-        {
-            var different = new List<string>();
-            void Double(double value)
-            {
-                string? native = GalaxiaNative.NumberFormat(single: false, BitConverter.DoubleToUInt64Bits(value));
-                string? managed = double.IsFinite(value) ? JsonSerializer.Serialize(value) : null;
-                if (native != managed) different.Add($"double {BitConverter.DoubleToUInt64Bits(value):X16}: {managed} and {native}");
-            }
-            void Single(float value)
-            {
-                string? native = GalaxiaNative.NumberFormat(single: true, BitConverter.SingleToUInt32Bits(value));
-                string? managed = float.IsFinite(value) ? JsonSerializer.Serialize(value) : null;
-                if (native != managed) different.Add($"float {BitConverter.SingleToUInt32Bits(value):X8}: {managed} and {native}");
-            }
-
-            var random = new Random(20261008);
-            for (int i = 0; i < 300_000; i++)
-            {
-                Double(BitConverter.Int64BitsToDouble(random.NextInt64(long.MinValue, long.MaxValue)));
-                Single(BitConverter.Int32BitsToSingle(random.Next(int.MinValue, int.MaxValue)));
-                // What a person types: a few digits, a point somewhere, a power of ten.
-                double typed = random.Next(1, 1_000_000) * Math.Pow(10, random.Next(-25, 25));
-                Double(typed);
-                Double(-typed);
-                Single((float)typed);
-                Double(random.Next(-1000, 1000) / 8.0);
-            }
-            foreach (double edge in new[] { 0.0, -0.0, 1, -1, 0.1, 0.5, 1e15, 1e16, 1e17, 1e-4, 1e-5, 9.999e16, 1.0000000000000002e17, double.Epsilon, double.MaxValue, double.MinValue, double.NaN, double.PositiveInfinity, double.NegativeInfinity, 0.005, 0.3, 123456789012345678 })
-                Double(edge);
-            foreach (float edge in new[] { 0f, -0f, 1f, 0.8f, 1e8f, 1e9f, 9.99e8f, 1e-4f, 1e-5f, float.Epsilon, float.MaxValue, float.MinValue, float.NaN, float.PositiveInfinity, 16777216f, 0.1f })
-                Single(edge);
-            for (int exponent = -330; exponent <= 310; exponent++)
-            {
-                Double(double.Parse($"1e{exponent}"));
-                Double(double.Parse($"9.5e{exponent}"));
-                if (exponent is > -50 and < 40) Single(float.Parse($"1e{exponent}"));
-            }
-            AssertNone(different, "numbers");
-        }
-
-        [Fact]
-        public void A_files_bytes_are_decoded_as_File_ReadAllText_decodes_them()
-        {
-            byte[][] marks = { Array.Empty<byte>(), new byte[] { 0xEF, 0xBB, 0xBF }, new byte[] { 0xFF, 0xFE }, new byte[] { 0xFE, 0xFF }, new byte[] { 0xFF, 0xFE, 0, 0 }, new byte[] { 0, 0, 0xFE, 0xFF }, new byte[] { 0xEF, 0xBB }, new byte[] { 0xFF } };
-            byte[] alphabet = { (byte)'{', (byte)'}', (byte)'"', (byte)'a', 0, 0, 0xC3, 0xA9, 0xE2, 0x82, 0xAC, 0xF0, 0x9F, 0x98, 0x80, 0xFF, 0xFE, 0xC0, 0x80, 0xED, 0xA0, 0xD8, 0xDC, 0x10, 0x0A, 0xEF, 0xBB, 0xBF, 0xF4, 0x90 };
-            var random = new Random(8);
-            var different = new List<string>();
-            string file = At("decode.bin");
-            Directory.CreateDirectory(_temp);
-            for (int i = 0; i < 4000; i++)
-            {
-                byte[] body = Enumerable.Range(0, random.Next(0, 24)).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray();
-                byte[] bytes = marks[random.Next(marks.Length)].Concat(body).ToArray();
-                File.WriteAllBytes(file, bytes);
-                if (File.ReadAllText(file) != GalaxiaNative.TextDecode(bytes)) different.Add(Convert.ToHexString(bytes));
-            }
-            AssertNone(different, "files");
-        }
-
         // The classes whose schemas the library owns, each with the type C# binds.
         private static readonly (GalaxiaModel Model, Type Type)[] Owned =
         {

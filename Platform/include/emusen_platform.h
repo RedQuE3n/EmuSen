@@ -36,7 +36,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 35u
+#define EMUSEN_PLATFORM_ABI_VERSION 36u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -353,7 +353,7 @@ int64_t emusen_galaxia_remaining_library(const uint8_t *legacy_root, size_t lega
 /*
  * A config file is named by its file name and, where a kind of config has many files, a category, which is a
  * subdirectory of the config directory; a null category is the config directory itself. Its path is
- * emusen_galaxia_config_path, and whether it exists EMUSEN_GALAXIA_TEST_FILE_EXISTS of that path.
+ * emusen_galaxia_config_path.
  */
 
 /* Deletes a config file. 1 when it is gone afterwards, whether or not it was there; 0 when its folder is not there or it would not go. */
@@ -363,8 +363,8 @@ int32_t emusen_galaxia_config_delete(const uint8_t *category, size_t category_le
  * A config file's text, for a host that binds the type itself (a file whose types belong to a frontend). A file
  * that is not there but sits where config was kept before Galaxia is copied in first, never moved, and read from
  * the old place when the copy cannot be made; only a file with no category ever sat there. The bytes are decoded
- * as .NET's File.ReadAllText decodes them (emusen_galaxia_text_decode). ABSENT for no file; IO, with the system's
- * words in emusen_platform_last_error, for one that will not read.
+ * by their byte-order mark, UTF-8 without one, and what is not valid becomes U+FFFD. ABSENT for no file; IO, with
+ * the system's words in emusen_platform_last_error, for one that will not read.
  */
 int64_t emusen_galaxia_config_read(const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
 
@@ -486,37 +486,6 @@ int32_t emusen_galaxia_suggest_distance(const uint8_t *a, size_t a_len, const ui
 
 /* The candidates nearest a name that matched none of them. The candidates are given each followed by a NUL. */
 int64_t emusen_galaxia_suggest(uint32_t what, const uint8_t *typed, size_t typed_len, const uint8_t *candidates, size_t candidates_len, int32_t max, uint8_t *out, size_t len);
-
-/* ---- Galaxia: the .NET rules the tree is built from, exported for the parity tests ---- */
-
-#define EMUSEN_GALAXIA_PATH_COMBINE 0u                     /* Path.Combine(a, b) */
-#define EMUSEN_GALAXIA_PATH_FILE_NAME 1u                   /* Path.GetFileName(a) */
-#define EMUSEN_GALAXIA_PATH_FILE_NAME_WITHOUT_EXTENSION 2u /* Path.GetFileNameWithoutExtension(a) */
-#define EMUSEN_GALAXIA_PATH_CHANGE_EXTENSION 3u            /* Path.ChangeExtension(a, b) */
-#define EMUSEN_GALAXIA_PATH_DIRECTORY_NAME 4u              /* Path.GetDirectoryName(a); ABSENT for null */
-#define EMUSEN_GALAXIA_PATH_TRIM_ENDING_SEPARATOR 5u       /* Path.TrimEndingDirectorySeparator(a) */
-#define EMUSEN_GALAXIA_PATH_FULL_PATH 6u                   /* Path.GetFullPath(a) */
-
-/* One path rule as the library applies it, so a test can hold it to .NET's own answer. */
-int64_t emusen_galaxia_dotnet_path(uint32_t op, const uint8_t *a, size_t a_len, const uint8_t *b, size_t b_len, uint8_t *out, size_t len);
-
-#define EMUSEN_GALAXIA_TEST_FILE_EXISTS 0u           /* File.Exists(a) */
-#define EMUSEN_GALAXIA_TEST_DIRECTORY_EXISTS 1u      /* Directory.Exists(a) */
-#define EMUSEN_GALAXIA_TEST_IS_BLANK 2u              /* string.IsNullOrWhiteSpace(a) */
-#define EMUSEN_GALAXIA_TEST_EQUALS_IGNORE_CASE 3u    /* string.Equals(a, b, OrdinalIgnoreCase) */
-#define EMUSEN_GALAXIA_TEST_ENDS_WITH_IGNORE_CASE 4u /* a.EndsWith(b, OrdinalIgnoreCase) */
-
-/* One yes-or-no rule as the library applies it: 1, 0 or a status. */
-int32_t emusen_galaxia_dotnet_test(uint32_t op, const uint8_t *a, size_t a_len, const uint8_t *b, size_t b_len);
-
-#define EMUSEN_GALAXIA_NUMBER_DOUBLE 0u /* bits is a double's 64 */
-#define EMUSEN_GALAXIA_NUMBER_SINGLE 1u /* the low 32 of bits are a float's */
-
-/* A number as System.Text.Json writes it. ABSENT for an infinity or a NaN, which it refuses to write. */
-int64_t emusen_galaxia_number_format(uint32_t kind, uint64_t bits, uint8_t *out, size_t len);
-
-/* A file's bytes as File.ReadAllText decodes them: a byte-order mark chooses UTF-8, UTF-16 or UTF-32 and is dropped; what is not valid becomes U+FFFD. */
-int64_t emusen_galaxia_text_decode(const uint8_t *bytes, size_t bytes_len, uint8_t *out, size_t len);
 
 /* ---- Disc sets: emusen-disc's set module (EmuSen_CoreAPI_Extensions.md, section 2.3) ---- */
 

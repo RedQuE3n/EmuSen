@@ -1,8 +1,8 @@
 // The audit rules held to EmuSen_InterfaceSpec.md §4, EmuSen_Settings_Reference.md §4.83.2 and §4.83.7, and EmuSen_Qt.md §8.1, on hand-built trees.
 
 use emusen_kit_core::audit::{
-    Axes, DESKTOP_CAPS, Edge, Edges, Fault, Item, Kind, Rect, Side, State, TWO_ROWS, Text, check, fit, named,
-    no_chrome, pad_reach, palette_reach, pointer_reach, reached, smallest_capitals,
+    Axes, DESKTOP_CAPS, Edge, Edges, Fault, Item, Kind, Rect, Side, State, TWO_ROWS, Text, check, fit, named, no_chrome, pad_reach,
+    palette_reach, pointer_reach, reached, smallest_capitals,
 };
 use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{Colour, ColourToken, Variant, colour};
@@ -117,7 +117,11 @@ fn settings_4_83_2_words_past_their_button() {
 #[test]
 fn settings_4_83_2_two_drawn_controls_overlap_unless_one_is_inside_the_other_or_the_overlap_is_within_the_slack() {
     let overlapping = clean().child(Item::new(42, Kind::Control, Rect::new(880.0, 150.0, 100.0, 44.0)));
-    assert_eq!(fit_faults(&overlapping), vec![Fault::Overlap { a: id(20), b: id(42) }, Fault::Overlap { a: id(21), b: id(42) }], "the button and its words both");
+    assert_eq!(
+        fit_faults(&overlapping),
+        vec![Fault::Overlap { a: id(20), b: id(42) }, Fault::Overlap { a: id(21), b: id(42) }],
+        "the button and its words both"
+    );
 
     let inside = clean().child(Item::new(43, Kind::Picture, Rect::new(720.0, 130.0, 40.0, 24.0)));
     let faults = fit_faults(&inside);
@@ -190,9 +194,17 @@ fn settings_4_83_2_a_title_or_footer_past_the_panel_is_cut() {
 
 #[test]
 fn settings_4_83_2_a_popup_and_a_hidden_subtree_are_skipped() {
-    let popup = clean().child(Item::new(60, Kind::Popup, Rect::new(1100.0, 600.0, 400.0, 300.0)).child(Item::new(61, Kind::Control, Rect::new(1100.0, 600.0, 400.0, 44.0))));
+    let popup = clean().child(Item::new(60, Kind::Popup, Rect::new(1100.0, 600.0, 400.0, 300.0)).child(Item::new(
+        61,
+        Kind::Control,
+        Rect::new(1100.0, 600.0, 400.0, 44.0),
+    )));
     assert_eq!(fit_faults(&popup), vec![]);
-    let hidden = clean().child(Item::new(62, Kind::Panel, Rect::new(0.0, 0.0, 10.0, 10.0)).hidden().child(Item::new(63, Kind::Control, Rect::new(1200.0, 300.0, 200.0, 44.0))));
+    let hidden = clean().child(Item::new(62, Kind::Panel, Rect::new(0.0, 0.0, 10.0, 10.0)).hidden().child(Item::new(
+        63,
+        Kind::Control,
+        Rect::new(1200.0, 300.0, 200.0, 44.0),
+    )));
     assert_eq!(fit_faults(&hidden), vec![]);
 }
 
@@ -259,7 +271,11 @@ fn interface_spec_4_4_every_painted_colour_is_declared_and_a_scene_is_exempt() {
     let mut painted = clean();
     painted.children[2].paints.push(stray);
     assert_eq!(palette_reach(&painted, &declared), vec![Fault::OutsidePalette { item: id(20), colour: stray }]);
-    let themed = clean().child(Item::new(90, Kind::Panel, Rect::new(0.0, 0.0, 1280.0, 800.0)).scene().child(Item::new(91, Kind::Picture, Rect::new(0.0, 0.0, 100.0, 100.0)).paints(&[stray])));
+    let themed = clean().child(
+        Item::new(90, Kind::Panel, Rect::new(0.0, 0.0, 1280.0, 800.0))
+            .scene()
+            .child(Item::new(91, Kind::Picture, Rect::new(0.0, 0.0, 100.0, 100.0)).paints(&[stray])),
+    );
     assert_eq!(palette_reach(&themed, &declared), vec![]);
 }
 
@@ -267,5 +283,8 @@ fn interface_spec_4_4_every_painted_colour_is_declared_and_a_scene_is_exempt() {
 fn a_fault_reads_as_one_line() {
     let line = Fault::CutAtEdge { item: id(14), area: id(3), side: Side::Bottom }.to_string();
     assert_eq!(line, "cut at the Bottom edge of 3 with no fade: 14");
-    assert_eq!(Fault::OutsidePalette { item: id(20), colour: Colour::hex("#007ACC") }.to_string(), "a colour outside the palette on 20: #007ACC");
+    assert_eq!(
+        Fault::OutsidePalette { item: id(20), colour: Colour::hex("#007ACC") }.to_string(),
+        "a colour outside the palette on 20: #007ACC"
+    );
 }

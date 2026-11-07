@@ -65,14 +65,8 @@ impl ColourToken {
     pub const SURFACES: [ColourToken; 3] = [ColourToken::Surface, ColourToken::SurfaceRaised, ColourToken::InputSurface];
 
     /// The tokens held to the words' floor against every surface.
-    pub const WORDS: [ColourToken; 6] = [
-        ColourToken::Text,
-        ColourToken::TextStrong,
-        ColourToken::Muted,
-        ColourToken::Attention,
-        ColourToken::Success,
-        ColourToken::Error,
-    ];
+    pub const WORDS: [ColourToken; 6] =
+        [ColourToken::Text, ColourToken::TextStrong, ColourToken::Muted, ColourToken::Attention, ColourToken::Success, ColourToken::Error];
 
     /// The tokens held to the graphics' floor against every surface.
     pub const GRAPHICS: [ColourToken; 2] = [ColourToken::Accent, ColourToken::Border];

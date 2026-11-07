@@ -137,7 +137,9 @@ impl Walk {
             Role::Content => true,
             Role::Actions => self.actions_shown,
             Role::Search => self.search_shown,
-            Role::Detail => self.has_detail && (self.form != WalkForm::BigScreen || self.detail_beside || self.detail_open || self.page_open),
+            Role::Detail => {
+                self.has_detail && (self.form != WalkForm::BigScreen || self.detail_beside || self.detail_open || self.page_open)
+            }
         }
     }
 

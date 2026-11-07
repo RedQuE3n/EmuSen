@@ -198,3 +198,71 @@ the desktop (allowed); a nameless and a blank-named control; a colour outside th
 Measured on 2026-11-07 with three seeded faults, each reverted: an item past its limit on one axis only passing
 failed the past-its-panel test, the sideways scroller case and the title-and-footer test; the chrome rule checking the
 desktop form instead of the big screen failed the chrome test; a blank name counting as heard failed the names test.
+
+## 4. The drawn world as data (stage 0, step 4; 2026-11-07)
+
+The spike found that the bodies and the sky are the scene graph's to draw (`EmuSen_Qt.md` §10.4), so
+`emusen_kit_core::world` gives geometry, colours and times and never a pixel: `Shape`s (vertices, closed or open, a
+`Paint` that is a colour or a gradient's stops, a stroke, an opacity), `Frame`s of a time, and the curves between them.
+Everything is a pure function of its inputs and the host's clock; nothing in the module keeps time or allocates per
+frame where a host can hand it a buffer (`star_points`). The random numbers are Mulberry32 (`SeededRandom`), as LunaP
+§219.3 chose, held to an independent run of the published generator.
+
+| Part | What it gives | Source |
+|---|---|---|
+| `WorldBody`, `geometry(body, hue, focused)` | a planet (a disc of radius 44 in a box of 100 lit by a three-stop radial gradient from 36%, 32%; craters, bands, a cap, a ring in two sizes whose back half is drawn before the disc and front half after, moonlets, a highlight) or six facets in four inks of the hue with an edge and two sparks (shards, a gem), back to front, with `size_of`, `colours`, `facet_inks` and `glow` | LunaP §222.1, §222.2 |
+| `place_stars`, `twinkle`, `star_points`, the two skies | 220 stars from the seed in the draft's order, a 0.55 to 1 twinkle, and the gradients' stops | LunaP §221.1 |
+| `SkyGlow`, `glow_stops`, `glow_bounds`, `wrap_hue` | one soft glow whose hue eases the shorter way round over Pan, fading in and out, on the host's clock | LunaP §221.2 |
+| `Timeline::MOONRISE`, `Splash`, `Frame` | the draft's spans at pace 1.55 for 8 s; a splash placed from its seed; the frame for any time and size (stars, the moon's outline, halo, fill and crescent shadow, each planet's place on its orbit and spring into the row, glow and flare, the sweep's band, the row's line, the words' spacing and rise); `strike_times` for the bells | LunaP §219.2, §219.3, §222.6; EmuSen_Interface.md §22 |
+| `motion::Glide`, `motion::spring`, `Curve` | a value moving over a span of the host's clock; the draft's damped spring; the easings the tokens name | LunaP §102.1, §219.5 |
+
+**Where it differs from the C#.** `LunaSplash` laid out the title and caption with Avalonia's text layout and reported
+their boxes to the fit audit; text is Qt's here, so a `Frame` gives the words' size, letter spacing and baseline and the
+Qt item measures them. The chime is not part of the `Timeline` (the C# record carried it): the sound is §5's, and a host
+pairs `strike_times` with it. `WorldPaint` drew the ring's back as a whole ellipse under the disc; the geometry does the
+same, so a scene graph may draw it as one closed stroke. The draft's `6.28` for a turn is kept as `DRAFT_TURN` rather
+than tau, so the frames stay comparable with the seeded copy of the draft page LunaP §219.5 measured against.
+
+### 4.1 What it is held to
+
+`tests/world.rs`: Mulberry32 against an independent run for three seeds; the Moonrise timeline's every span, the pace,
+the length, the star count, the seed and the fade; `draft_time`; thirteen bells at 1280 × 720 from 3.752 s to 5.548 s,
+about 1.8 s apart, left to right, one planet ringing at the row's middle, no size no times; the spring's end at 0.998
+and the cubic-out ease; the finished frame (every planet within 2 px of its slot on the row at 66%, the line the row's
+width, the title's spacing closed to 10 and its baseline at 85%, the frame held after 8 s); the first frame dark; the
+sweep at the row's middle half way with the middle planet flaring at 0.55 over 4.2 radii; a body's box; the sizes,
+colours and glow; a plain planet's two shapes and the disc's gradient; the craters', bands', cap's, moonlets' and rings'
+places, widths and opacities; shards and a gem inside their 100 × 160 box; the skies, the stars' ranges and their first
+draws; the glow's stops, bounds, the shorter way round from 30 to 350 and its fade; a glide on the host's clock.
+
+Measured on 2026-11-07 with three seeded faults, each reverted: the spring damping less (e^(-4v)) failed the spring
+test, the finished frame and the mid-sweep frame; the sweep starting at the row rather than 60 units before it failed
+the thirteen-bells test; the disc shrunk to radius 40 failed the planet geometry test. The crate was formatted with
+rustfmt in this step (`rustfmt.toml`, 140 columns), which touched the earlier files' layout and nothing else.
+
+## 5. The cues and the bells as sample synthesis (stage 0, step 5; 2026-11-07)
+
+`emusen_kit_core::sound` is LunaP's `LunaSounds` as data and one renderer: `Chime::MOONRISE` (the G major pentatonic
+from G4 as a root and a ladder of semitones, four inharmonic partials at 1, 2.76, 5.40 and 8.93 times the note with
+amplitudes 1, 0.18, 0.06 and 0.02 and falls to a ten-thousandth at 0.55, 0.22, 0.11 and 0.06 s, an 18 ms rise, a 50 ms
+tail, a seeded detune of up to ±0.2%, no echo, gain 0.2, a low-pass biquad at 2.4 kHz with a Q of 0.5 dB), `Bell` (a
+rung, a start, a decay scale, a gain and a corner), `render_bells` (the draft's Web Audio graph: dry partials summed per
+corner, a fed-back delay line when a chime asks for one, the biquad as Web Audio's specification gives it with its Q in
+decibels, trimmed where the mix falls 60 dB under its loudest sample, written as 48 kHz stereo `f32`), `render` for the
+splash (one bell per strike time in ladder order), and `Cue` with its nine designs of LunaP §220.2, `QUICK_SELECT` and
+`bell_samples` for one rung. Nothing is recorded; every sound is made from these numbers.
+
+**Where it differs from the C#.** `LunaSounds` cached each cue's bytes in a static dictionary; the crate keeps no
+static and renders on request, and the kit's `Bells` item renders each cue once and keeps it (the house rule on
+statics). Samples are `f32` frames rather than bytes, so no byte order is assumed. The chime is not part of the
+timeline (§4). The first sample's placement rounds halves to even, as .NET's `Math.Round` did, so a render matches the
+C#'s frame for frame given the same strikes.
+
+### 5.1 What it is held to
+
+`tests/sound.rs`: the ladder's thirteen pitches (392 to 1975.53 Hz) and D7 for a fourteenth; the chime's every number;
+each cue's strikes (rungs, starts, the last Launch bell's longer decay, Refused's 900 Hz corner); the defaults (60%,
+on, 12 dB under a game, only Saved and Loaded over gameplay); each cue's and the quick select's notes present at their
+strike times, read by Goertzel over the ladder's thirteen pitches; two renders identical and an empty one silent; each
+cue's loudest sample within 0.05 and 0.6; one bell at its rung; thirteen bells at 1280 × 720 lasting between 1.7 and
+2.6 s from the first strike, each planet ringing its rung, at the cues' level.

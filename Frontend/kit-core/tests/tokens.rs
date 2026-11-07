@@ -2,12 +2,10 @@
 
 use std::time::Duration;
 
-use emusen_kit_core::motion::{
-    BREATH_DELAY, BREATH_LOW, BREATH_PERIOD, Curve, MotionToken, REDUCED_FADE, breath_opacity, breathes,
-};
+use emusen_kit_core::motion::{BREATH_DELAY, BREATH_LOW, BREATH_PERIOD, Curve, MotionToken, REDUCED_FADE, breath_opacity, breathes};
 use emusen_kit_core::tokens::{
-    Colour, ColourToken, Form, GRAPHIC_FLOOR, Insets, MAX_TEXT_SCALE, TEXT_FLOOR, Variant, clamp_text_scale,
-    colour, contrast_pairs, focus_marks, header_size, on_art_over, safe_area_of, spacing, type_scale,
+    Colour, ColourToken, Form, GRAPHIC_FLOOR, Insets, MAX_TEXT_SCALE, TEXT_FLOOR, Variant, clamp_text_scale, colour, contrast_pairs,
+    focus_marks, header_size, on_art_over, safe_area_of, spacing, type_scale,
 };
 
 fn close(a: f64, b: f64, within: f64) -> bool {

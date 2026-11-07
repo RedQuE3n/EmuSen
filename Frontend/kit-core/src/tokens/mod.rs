@@ -6,12 +6,10 @@ mod palette;
 
 pub use colour::Colour;
 pub use metrics::{
-    FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Spacing, TypeScale, clamp_text_scale,
-    focus_marks, header_size, safe_area_of, spacing, type_scale,
+    FocusMarks, Insets, MAX_TEXT_SCALE, SAFE_AREA_FRACTION, Spacing, TypeScale, clamp_text_scale, focus_marks, header_size, safe_area_of,
+    spacing, type_scale,
 };
-pub use palette::{
-    ColourToken, ContrastPair, GRAPHIC_FLOOR, TEXT_FLOOR, colour, contrast_pairs, on_art_over,
-};
+pub use palette::{ColourToken, ContrastPair, GRAPHIC_FLOOR, TEXT_FLOOR, colour, contrast_pairs, on_art_over};
 
 /// Which rendering of the interface a set of metrics is for (LunaP's `LunaForm`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

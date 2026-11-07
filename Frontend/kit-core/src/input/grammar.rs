@@ -20,8 +20,7 @@ pub struct RepeatTiers {
 
 impl RepeatTiers {
     /// The interface's own: 400 ms, then every 80 ms, no faster tier (EmuSen_Settings_Reference.md §4.29).
-    pub const OWN: RepeatTiers =
-        RepeatTiers { delay: Duration::from_millis(400), interval: Duration::from_millis(80), fast: None };
+    pub const OWN: RepeatTiers = RepeatTiers { delay: Duration::from_millis(400), interval: Duration::from_millis(80), fast: None };
 
     /// A text list held, as ES-DE 3.4.1 measured: 500 ms, 114 ms, a four-entry step at 1.703 s, then every 15.9 ms.
     pub const ESDE_LIST: RepeatTiers = RepeatTiers {
@@ -145,10 +144,11 @@ impl Grammar {
                 return;
             }
             let due = self.next[i];
-            self.next[i] = due + match (self.fast[i], tiers.fast) {
-                (true, Some(fast)) => fast.interval,
-                _ => tiers.interval,
-            };
+            self.next[i] = due
+                + match (self.fast[i], tiers.fast) {
+                    (true, Some(fast)) => fast.interval,
+                    _ => tiers.interval,
+                };
             self.presses.push(Press { button, repeat: true, jump: 1 });
         }
     }

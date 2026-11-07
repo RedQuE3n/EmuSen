@@ -35,7 +35,9 @@ impl Colour {
             value = (value << 4) | digit as u32;
             i += 1;
         }
-        if bytes.len() == 7 { value |= 0xFF00_0000 }
+        if bytes.len() == 7 {
+            value |= 0xFF00_0000
+        }
         Colour { a: (value >> 24) as u8, r: (value >> 16) as u8, g: (value >> 8) as u8, b: value as u8 }
     }
 

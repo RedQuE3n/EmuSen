@@ -4,10 +4,7 @@ const LOCK: &str = include_str!("../Cargo.lock");
 const MANIFEST: &str = include_str!("../Cargo.toml");
 
 fn locked_names() -> Vec<&'static str> {
-    LOCK.lines()
-        .filter_map(|line| line.strip_prefix("name = \""))
-        .filter_map(|rest| rest.strip_suffix('"'))
-        .collect()
+    LOCK.lines().filter_map(|line| line.strip_prefix("name = \"")).filter_map(|rest| rest.strip_suffix('"')).collect()
 }
 
 #[test]

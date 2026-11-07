@@ -108,6 +108,54 @@ impl MotionToken {
     }
 }
 
+/// A value moving from one number to another over a span of a host's clock, read at any time and never from wall time (LunaP §102.1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Glide {
+    pub from: f64,
+    pub to: f64,
+    pub start: Duration,
+    pub duration: Duration,
+    pub curve: Curve,
+}
+
+impl Glide {
+    /// A value at rest.
+    pub const fn still(value: f64) -> Glide {
+        Glide { from: value, to: value, start: Duration::ZERO, duration: Duration::ZERO, curve: Curve::Linear }
+    }
+
+    pub fn end(&self) -> Duration {
+        self.start + self.duration
+    }
+
+    /// The value at a time: the destination once the span has passed or while motion is reduced.
+    pub fn value_at(&self, now: Duration, reduced: bool) -> f64 {
+        if self.duration.is_zero() || now >= self.end() || reduced {
+            return self.to;
+        }
+        if now <= self.start {
+            return self.from;
+        }
+        let t = (now - self.start).as_secs_f64() / self.duration.as_secs_f64();
+        self.from + (self.to - self.from) * self.curve.at(t)
+    }
+
+    pub fn is_settled(&self, now: Duration, reduced: bool) -> bool {
+        now >= self.end() || reduced
+    }
+
+    /// A fresh glide from wherever this one is now to a new destination.
+    pub fn toward(&self, to: f64, now: Duration, duration: Duration, curve: Curve) -> Glide {
+        Glide { from: self.value_at(now, false), to, start: now, duration, curve }
+    }
+}
+
+/// The splash's damped spring, 1 - cos(2.4 pi v) e^(-5 v): a planet settles 0.2% short of its place, as the draft drew it (LunaP §219.5).
+pub fn spring(v: f64) -> f64 {
+    let v = v.clamp(0.0, 1.0);
+    1.0 - (v * std::f64::consts::PI * 2.4).cos() * (-5.0 * v).exp()
+}
+
 /// Whether the idle focus ring breathes: not while motion is reduced (WCAG 2.3.3).
 pub const fn breathes(reduced: bool) -> bool {
     !reduced

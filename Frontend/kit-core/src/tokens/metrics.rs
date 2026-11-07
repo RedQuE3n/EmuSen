@@ -65,8 +65,7 @@ pub const SAFE_AREA_FRACTION: f64 = 0.05;
 const BIG_SCREEN_TYPE: TypeScale =
     TypeScale { display: 44.0, title: 32.0, strong: 26.0, row: 26.0, body: 22.0, caption: 20.0, glyph: 22.0 };
 
-const DESKTOP_TYPE: TypeScale =
-    TypeScale { display: 24.0, title: 16.0, strong: 14.0, row: 13.0, body: 13.0, caption: 11.0, glyph: 13.0 };
+const DESKTOP_TYPE: TypeScale = TypeScale { display: 24.0, title: 16.0, strong: 14.0, row: 13.0, body: 13.0, caption: 11.0, glyph: 13.0 };
 
 const BIG_SCREEN_SPACING: Spacing = Spacing {
     base: 4.0,
@@ -102,8 +101,7 @@ const DESKTOP_SPACING: Spacing = Spacing {
     tile_radius: 6.0,
 };
 
-const FOCUS_MARKS: FocusMarks =
-    FocusMarks { ring_thickness: 3.0, ring_offset: 4.0, bar_width: 4.0, tile_scale: 1.06, hover_border: 1.0 };
+const FOCUS_MARKS: FocusMarks = FocusMarks { ring_thickness: 3.0, ring_offset: 4.0, bar_width: 4.0, tile_scale: 1.06, hover_border: 1.0 };
 
 /// A text scale as the kit keeps it: 1 to 1.3, and 1 for anything that is not a number.
 pub fn clamp_text_scale(scale: f64) -> f64 {

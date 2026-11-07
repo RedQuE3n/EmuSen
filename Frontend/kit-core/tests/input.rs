@@ -4,8 +4,8 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 use emusen_kit_core::input::{
-    ElementId, Grammar, InputEvent, Intent, Key, PointerButton, Press, RepeatTiers, Role, STICK_THRESHOLD, UiButton,
-    Walk, WalkAction, WalkEvent, WalkForm, intent, stick_direction,
+    ElementId, Grammar, InputEvent, Intent, Key, PointerButton, Press, RepeatTiers, Role, STICK_THRESHOLD, UiButton, Walk, WalkAction,
+    WalkEvent, WalkForm, intent, stick_direction,
 };
 
 fn ms(v: u64) -> Duration {
@@ -228,11 +228,14 @@ fn lunap_202_4_the_shoulders_step_the_sections_wrapping_and_select_section_raise
     assert_eq!(walk.selected_section(), Some("games"), "wraps forward");
     assert!(walk.press(UiButton::PageUp));
     assert_eq!(walk.selected_section(), Some("settings"), "wraps back");
-    assert_eq!(walk.take_events(), vec![
-        WalkEvent::SectionChosen("settings".into()),
-        WalkEvent::SectionChosen("games".into()),
-        WalkEvent::SectionChosen("settings".into()),
-    ]);
+    assert_eq!(
+        walk.take_events(),
+        vec![
+            WalkEvent::SectionChosen("settings".into()),
+            WalkEvent::SectionChosen("games".into()),
+            WalkEvent::SectionChosen("settings".into()),
+        ]
+    );
     assert!(walk.select_section("tools"));
     assert!(!walk.select_section("nowhere"));
     assert!(walk.take_events().is_empty(), "the application's choice raises nothing");

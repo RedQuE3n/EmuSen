@@ -22,15 +22,15 @@ import zipfile
 # What a crate's build or tests read from outside its path dependencies, by the folder that reads it.
 EXTRA = {
     "EmuSen/Cores/Nintendo/VenusRT - SNES": [
-        "EmuSen.WiseMan/Reference/analysis/dsp1_tables.py",
-        "EmuSen.WiseMan/Reference/analysis/st010_tables.py",
+        "Reference/analysis/dsp1_tables.py",
+        "Reference/analysis/st010_tables.py",
     ],
-    "EmuSen/Cores/Sony/Diamond - PlayStation": ["EmuSen.WiseMan/Reference/analysis/psxplay"],
+    "EmuSen/Cores/Sony/Diamond - PlayStation": ["Reference/analysis/psxplay"],
     "EmuSen/Cores/Sony/Diamond - PlayStation/kernel-harness": [
-        "EmuSen.DianaSh/DianaSh/Etc/Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_OpenKernel.md",
+        "Docs/Man pages/Hardware/Sony/Diamond - PlayStation/Diamond_OpenKernel.md",
     ],
     "Platform/serenity": ["EmuSen.Serenity/Slang/spirv-cache-schema.sql"],
-    "Platform/dianash": ["EmuSen.WiseMan/DianaSh/Golden", "EmuSen.Crystal/include/emusen_session.h"],
+    "Platform/dianash": ["EmuSen.Crystal/include/emusen_session.h"],
 }
 # The sidecar's writer, which every library job runs, and the files that say how a library is built.
 TOOLS = ["EmuSen/Cores/Shared/emusen-core-conform"]

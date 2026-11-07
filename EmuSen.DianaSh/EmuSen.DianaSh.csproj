@@ -1,27 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The core-agnostic debug/scripting shell - see EmuSen_DianaSh.md for
-       the full design. OutputType=Exe so `dotnet run` here launches a
-       standalone shell with no core loaded at all (see Program.cs) -
-       every other project just references this like any other library;
-       its Main only runs when this project is the one actually launched. -->
+  <!-- The frontends' binding of the Rust shell - see EmuSen_DianaSh.md for the full design. The shell's own
+       program is the Rust dianash-program; this library has no Main. -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- OutputType=Exe above means a RID-specific publish of a frontend that
-         references this project also builds it for the HOST rid, so restore
-         has to produce assets for every publish target plus the build
-         machine's own - see `man hier`. -->
-    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <!-- The Rust shell's host API is called through function pointers - see EmuSen_DianaSh.md §13.7. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Crystal, beneath the shell: the session table's binding, the cheat codecs and the system packs - see EmuSen_DianaSh.md §13.6. -->
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- ConfigRoot (this shell's own root discovery lives there now) and
          CheatFile, behind `cheat save`/`load` - see
          EmuSen_Config_Reference.md §1.1 for why the dependency runs this
@@ -34,17 +23,17 @@
     <InternalsVisibleTo Include="EmuSen.WiseMan" />
   </ItemGroup>
 
-  <!-- The manual pages, one file each and grouped in the source by the command module that will own them, flattened
+  <!-- The manual pages, one file each in Docs/man and grouped there by the command module that owns them, flattened
        into dianash/man/ beside the program (ConfigRoot.ShellModulesDirName), which a published tree puts in
        /lib/EmuSen/dianash/man. Copied to the output too, since `man` reads them there from source as well.
        See EmuSen_DianaSh.md §12.4 and §13.5. -->
   <ItemGroup>
-    <None Update="DianaSh\Lib\dianash\*\man\*" Link="dianash\man\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\Docs\man\*\*" Link="dianash\man\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Ships the two read-only doc trees into a published build's own sandbox
-       root, so `man`/`cat`/`find` have the same reference material there that
-       they do running from source. Link= stages them under DianaShRoot/, which
+  <!-- Ships Docs/, the manual and the Man pages tree, into a published build's
+       own sandbox root as home/Documents, so `man`/`cat`/`find` have the same
+       reference material there that they do running from source. Link= stages them under DianaShRoot/, which
        DianaShPublishLayout.targets then hoists to the publish root - and which
        is also where a publish that does NOT import those targets leaves them,
        matching DianaShSandbox's fallback root. See `man hier`.
@@ -52,8 +41,7 @@
        source already reads these straight out of the repo, so copying them
        into every bin/ would be ~770KB of duplication nothing ever reads. -->
   <ItemGroup>
-    <None Include="DianaSh\Etc\Man pages\**\*" Link="DianaShRoot\home\Documents\Man pages\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="DianaSh\Usr\Home\Documents\**\*" Link="DianaShRoot\home\Documents\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="..\Docs\**\*" Exclude="..\Docs\man\**" Link="DianaShRoot\home\Documents\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
 

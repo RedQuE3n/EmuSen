@@ -1,4 +1,4 @@
-using EmuSen.Crystal.Systems.N64;
+using EmuSen.WiseMan.Bindings.Systems.N64;
 using System;
 using System.IO;
 using System.Linq;
@@ -12,7 +12,6 @@ using EmuSen.Crystal.Client.Contract;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
-using EmuSen.Crystal;
 using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.WiseMan.Fixtures;

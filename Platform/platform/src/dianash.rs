@@ -110,7 +110,7 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
         }
     }
     let mut shell = Shell::new(settings);
-    let modules: [&'static dyn dianash_module::Module; 8] = [&dianash_text::MODULE, &emusen_debug::MODULE, &emusen_trace::MODULE, &emusen_session::MODULE, &emusen_cheat::MODULE, &emusen_library_module::MODULE, &emusen_cores_module::MODULE, &emusen_scrape_module::MODULE];
+    let modules: [&'static dyn dianash_module::Module; 9] = [&dianash_text::MODULE, &emusen_debug::MODULE, &emusen_trace::MODULE, &emusen_session::MODULE, &emusen_cheat::MODULE, &emusen_library_module::MODULE, &emusen_cores_module::MODULE, &emusen_memcard_module::MODULE, &emusen_scrape_module::MODULE];
     for module in modules {
         if let Err(words) = shell.add_module(module) {
             fail(status::BAD_MANIFEST, words);

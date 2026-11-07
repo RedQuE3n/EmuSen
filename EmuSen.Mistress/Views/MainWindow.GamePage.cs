@@ -122,7 +122,7 @@ namespace EmuSen.Mistress.Views
             string console = RuntimeCatalog.ShelfByName(entry.Shelf)?.Label ?? entry.CoreDisplayName;
             return new GameFacts(path, DisplayTitle(entry), console, descriptor?.Console, m.Released?.Year.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 m.DeveloperText, m.PublisherText, TimeSpan.FromSeconds(record?.PlaySeconds ?? 0), record?.LastPlayed, m.DescriptionText, record?.Favourite == true,
-                descriptor?.CoverAspect ?? Crystal.Systems.CoreDescriptor.DefaultCoverAspect);
+                descriptor?.CoverAspect ?? EmuSen.Mistress.Library.RuntimeCatalog.DefaultCoverAspect);
         }
 
         GameArt IGamePageHost.Art(string path)

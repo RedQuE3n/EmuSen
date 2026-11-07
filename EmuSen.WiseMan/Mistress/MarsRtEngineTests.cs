@@ -1,4 +1,4 @@
-using EmuSen.Crystal.Systems.N64;
+using EmuSen.WiseMan.Bindings.Systems.N64;
 using System;
 using System.Diagnostics;
 using System.IO;
@@ -10,7 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
-using EmuSen.Crystal.Cheats;
+using EmuSen.WiseMan.Bindings.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

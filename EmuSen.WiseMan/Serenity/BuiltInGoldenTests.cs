@@ -7,6 +7,7 @@ using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.Serenity.Slang;
 using Xunit.Abstractions;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Serenity
 {

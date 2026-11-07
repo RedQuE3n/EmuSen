@@ -11,7 +11,7 @@ namespace EmuSen.WiseMan.Crystal
     // SR2: a frontend on the frontend API names no type of the runtime's own assemblies, read from its metadata, so a type reached through a transitive reference fails too - see EmuSen_Backend.md §11 and §14.
     public class FrontendReferenceTests
     {
-        private static readonly string[] Runtime = { "EmuSen", "EmuSen.Crystal" };
+        private static readonly string[] Runtime = { "EmuSen" };
 
         // Every type the assembly's metadata references, by the assembly it resolves to.
         public static IReadOnlyList<(string Assembly, string Type)> TypeReferences(Assembly assembly)
@@ -42,9 +42,6 @@ namespace EmuSen.WiseMan.Crystal
         }
 
         [Fact]
-        public void Pharaoh_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Pharaoh.FrameRunner).Assembly);
-
-        [Fact]
         public void Hotaru_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Hotaru.HotaruSession).Assembly);
 
         [Fact]
@@ -53,12 +50,12 @@ namespace EmuSen.WiseMan.Crystal
         [Fact]
         public void Mistress_names_no_runtime_type() => AssertNamesNoRuntimeType(typeof(EmuSen.Mistress.FrameHandOff).Assembly);
 
-        // The check sees an assembly that does name the runtime's types: DianaSh's C# shell, which is no frontend, names the session table.
+        // The check sees a type another assembly owns: DianaSh's C# shell names Galaxia's, as a frontend would name a runtime type.
         [Fact]
-        public void The_check_sees_an_assembly_that_names_the_runtime()
+        public void The_check_sees_an_assembly_that_names_another_s_type()
         {
             var reached = TypeReferences(typeof(EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter).Assembly);
-            Assert.Contains(reached, r => r == ("EmuSen.Crystal", "EmuSen.Crystal.Session.EmuSenSessionV1"));
+            Assert.Contains(reached, r => r.Assembly == "EmuSen.Galaxia");
         }
     }
 }

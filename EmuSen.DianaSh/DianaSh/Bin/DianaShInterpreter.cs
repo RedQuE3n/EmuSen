@@ -8,8 +8,7 @@ using System.Text;
 using EmuSen.DianaSh.DianaSh.Bin.Commands;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.Unix;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
-using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Session;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.DianaSh.DianaSh.Etc;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.DianaSh.DianaSh.Var.Shell;
@@ -103,7 +102,7 @@ namespace EmuSen.DianaSh.DianaSh.Bin
         // The commands with no Rust twin, which the host answers, and a host's own in place of one of their names - see EmuSen_Backend.md §40.7.
         private static List<IDianaShCommand> HostCommands(IEnumerable<IDianaShCommand> extras)
         {
-            var commands = new List<IDianaShCommand> { new MemcardCommand(), new VstopCommand() };
+            var commands = new List<IDianaShCommand> { new VstopCommand() };
             foreach (IDianaShCommand extra in extras)
             {
                 commands.RemoveAll(c => string.Equals(c.Name, extra.Name, StringComparison.OrdinalIgnoreCase));

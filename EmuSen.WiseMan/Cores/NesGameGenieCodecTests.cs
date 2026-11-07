@@ -1,6 +1,6 @@
 using System;
 using System.Globalization;
-using EmuSen.Crystal.Systems.Nes;
+using EmuSen.WiseMan.Bindings.Systems.Nes;
 
 namespace EmuSen.WiseMan.Cores
 {

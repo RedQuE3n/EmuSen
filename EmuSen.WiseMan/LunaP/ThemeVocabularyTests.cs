@@ -17,8 +17,8 @@ namespace EmuSen.WiseMan.LunaP
     // `man theme` is the definition of the theme format, and this is what stops it describing one that does not exist - see EmuSen_LunaP.md §12.2.
     public class ThemeVocabularyTests
     {
-        private static string Page => ManPages.Lookup("theme")
-            ?? throw new InvalidOperationException("there is no `man theme` page.");
+        private static string Page => DianaShInterpreter.CreateWithoutSession().Submit("man theme").Output is var page && !page.Contains("No manual entry", StringComparison.Ordinal)
+            ? page : throw new InvalidOperationException("there is no `man theme` page.");
 
         // Palette.axaml is the authority on what keys exist; the Color aliases are the brush keys' other half, not separate tokens.
         private static IReadOnlyList<string> PaletteKeys()

@@ -49,10 +49,10 @@
          EmuSen_Config_Reference.md §3.3. The only reference this
          presentation-layer project has. -->
     <ProjectReference Include="..\EmuSen.Galaxia\EmuSen.Galaxia.csproj" />
-    <!-- Dashboards/CoretopWindow.cs is a LunaP PollingWindow reading the read-only telemetry contracts, namespace
-         EmuSen.Crystal.Telemetry, which reference Galaxia alone and no core - see EmuSen_DianaSh.md §13.6. -->
+    <!-- The session table's numbers (SessionAbi), which the coretop window's SessionTelemetry asks the telemetry by;
+         the shell references Galaxia alone and no core - see EmuSen_Backend.md §40.11.3. -->
+    <ProjectReference Include="..\EmuSen.DianaSh\EmuSen.DianaSh.csproj" />
     <!-- LunaP comes through LunaP.props, which names where it comes from. -->
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
   </ItemGroup>
 
   <Import Project="..\LunaP.props" />

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using EmuSen.Crystal.Systems;
-using EmuSen.Crystal.Systems.GameBoy;
-using EmuSen.Crystal.Systems.Nes;
+using EmuSen.WiseMan.Bindings.Systems;
+using EmuSen.WiseMan.Bindings.Systems.GameBoy;
+using EmuSen.WiseMan.Bindings.Systems.Nes;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal

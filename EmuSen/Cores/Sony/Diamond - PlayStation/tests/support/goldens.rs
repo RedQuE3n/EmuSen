@@ -106,7 +106,7 @@ pub fn ps1_tests_machine(corpus: &std::path::Path, path: &str, market: Market) -
 }
 
 /// The eight bench discs of the goldens, by their files in the folder `EMUSEN_DIAMOND_DISCS` names, and the press
-/// scripts of `EmuSen.WiseMan/Reference/analysis/psxplay/` they are played by.
+/// scripts of `Reference/analysis/psxplay/` they are played by.
 pub const GOLDEN_DISCS: [(&str, &str); 8] = [
     ("Ape Escape (USA).cue", "ape-escape.txt"),
     ("Castlevania - Symphony of the Night (USA)/Castlevania - Symphony of the Night (USA).cue", "castlevania-sotn.txt"),
@@ -125,7 +125,7 @@ pub const GOLDEN_DISC_ANCHOR: i64 = 300;
 /// A press script as `psxplay.py` reads it, its anchor the frame its second line gives for Diamond's open kernel: the
 /// buttons as (first frame, the report's mask, frames) and the sticks as (first frame, axis, value, frames).
 pub fn press_script(name: &str) -> (i64, Vec<(i64, u32, i64)>, Vec<(i64, u32, f64, i64)>) {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../EmuSen.WiseMan/Reference/analysis/psxplay").join(name);
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../../Reference/analysis/psxplay").join(name);
     let text = std::fs::read_to_string(&path).unwrap_or_else(|_| panic!("{}", path.display()));
     let anchor: i64 = text.lines().find_map(|l| l.strip_prefix("# T: frame ")).and_then(|r| r.split_whitespace().next()).and_then(|n| n.parse().ok()).expect("the anchor on Diamond's open kernel");
     let bits = |b: &str| match b {

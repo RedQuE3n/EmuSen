@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using EmuSen.Crystal.Client.Contract;
-using EmuSen.Crystal.Session;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 
 namespace EmuSen.WiseMan.Crystal
 {

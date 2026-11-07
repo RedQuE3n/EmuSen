@@ -115,7 +115,7 @@ namespace EmuSen.WiseMan.Cores
             _output.WriteLine($"tc_scale: {note}");
             Assert.StartsWith("Held at 1 (label) while the CRT filter is on", note);
             Assert.False(EmuSen.Mistress.Library.ConsolePicture.Sync(s, EmuSen.Serenity.Shaders.CrtFilter.Filter), "already on");
-            Assert.True(EmuSen.Mistress.Library.ConsolePicture.Sync(s, EmuSen.Serenity.Shaders.CrtFilters.Lottes));
+            Assert.True(EmuSen.Mistress.Library.ConsolePicture.Sync(s, CrtFilters.Lottes));
             Assert.Equal((640, 480, true), Shape(s));
         }
 

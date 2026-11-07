@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using EmuSen.Crystal.Telemetry;
+using EmuSen.Serenity.Telemetry;
 
 namespace EmuSen.WiseMan.Fixtures
 {

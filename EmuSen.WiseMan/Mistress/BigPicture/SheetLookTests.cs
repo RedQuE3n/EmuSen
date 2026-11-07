@@ -11,7 +11,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Crystal.Cheats;
+using EmuSen.WiseMan.Bindings.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;
@@ -218,7 +218,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Assert.Equal(PanelWidth(window, 0.8), frame.PanelBounds.Width, 1.0);
             // The introduction and then the attribution (Q170).
             Assert.StartsWith("EmuSen ships no cheat data.", frame.Footer);
-            Assert.EndsWith(CheatDatabaseInstaller.Attribution.ReplaceLineEndings(" "), frame.Footer);
+            Assert.EndsWith(Named<TextBlock>(window, "AttributionText").Text!.ReplaceLineEndings(" "), frame.Footer);
+            Assert.Contains("libretro", frame.Footer);
             Assert.False(frame.IsFooterCut);
             Assert.False(Named<TextBlock>(window, "AttributionText").IsEffectivelyVisible);
             Assert.DoesNotContain(Sheet(window).GetVisualDescendants().OfType<Control>(), c => c.Name == "PART_Browse" && c.IsEffectivelyVisible);

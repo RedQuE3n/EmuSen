@@ -170,7 +170,7 @@ namespace EmuSen.WiseMan.Mistress
         [Fact]
         public void Scanned_extensions_are_the_runtime_s_shelves_and_the_archives()
         {
-            Assert.Equal(EmuSen.Mistress.Library.RuntimeCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).Order(System.StringComparer.Ordinal), RomLibrary.Extensions.Order(System.StringComparer.Ordinal));
+            Assert.Equal(EmuSen.Mistress.Library.RuntimeCatalog.RomExtensions.Concat(RomLibrary.ArchiveExtensions).Order(System.StringComparer.Ordinal), RomLibrary.Extensions.Order(System.StringComparer.Ordinal));
         }
 
         [Fact]

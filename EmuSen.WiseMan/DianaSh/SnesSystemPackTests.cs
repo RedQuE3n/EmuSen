@@ -1,8 +1,8 @@
 using System;
 using System.Linq;
-using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Systems;
-using EmuSen.Crystal.Systems.Snes;
+using EmuSen.WiseMan.Bindings.Cheats;
+using EmuSen.WiseMan.Bindings.Systems;
+using EmuSen.WiseMan.Bindings.Systems.Snes;
 using EmuSen.Mistress.Library;
 
 namespace EmuSen.WiseMan.DianaSh

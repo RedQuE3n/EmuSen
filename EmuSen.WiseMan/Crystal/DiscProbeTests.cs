@@ -1,8 +1,8 @@
 using System;
 using System.Buffers.Binary;
 using System.Threading.Tasks;
-using EmuSen.Crystal.Systems;
-using EmuSen.Crystal.Systems.Psx;
+using EmuSen.WiseMan.Bindings.Systems;
+using EmuSen.WiseMan.Bindings.Systems.Psx;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal

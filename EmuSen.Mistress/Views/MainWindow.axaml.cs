@@ -1775,7 +1775,7 @@ namespace EmuSen.Mistress.Views
             Close();
         }
 
-        // Which implementation of the frontend API serves the game, in its log as Pharaoh's and Hotaru's say it - see EmuSen_Backend.md §29.29.
+        // Which implementation of the frontend API serves the game, in its log as Hotaru's says it - see EmuSen_Backend.md §29.29.
         private static void SayRuntime() => Console.WriteLine($"[ROM] Runtime: {CrystalRuntime.Implementation}");
 
         // Redirected per ROM, and unconditionally - see EmuSen_Settings_Reference.md §4.22.

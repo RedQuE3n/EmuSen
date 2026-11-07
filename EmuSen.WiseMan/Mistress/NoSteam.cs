@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using EmuSen.Mistress.Input;
 
@@ -15,5 +17,17 @@ namespace EmuSen.WiseMan.Mistress
             DeviceKeyboard.SteamRunning = () => false;
             DeviceKeyboard.Launcher = Launcher;
         }
+    }
+
+    // Records what would have been opened and opens nothing, for a harness that must never launch a program.
+    public sealed class RecordingUrlLauncher : IUrlLauncher
+    {
+        private readonly List<string> _opened = new();
+
+        public IReadOnlyList<string> Opened { get { lock (_opened) return _opened.ToList(); } }
+
+        public void Open(string url) { lock (_opened) _opened.Add(url); }
+
+        public void Clear() { lock (_opened) _opened.Clear(); }
     }
 }

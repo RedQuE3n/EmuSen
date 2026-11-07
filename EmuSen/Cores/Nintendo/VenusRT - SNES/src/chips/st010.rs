@@ -300,7 +300,7 @@ mod tests {
     // VenusRT_DspHle.md §5.2, rule 3: the sine equals an independent generator's, written from the record's formula.
     #[test]
     fn the_st010_sine_equals_the_independent_generator() {
-        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../EmuSen.WiseMan/Reference/analysis/st010_tables.py");
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../Reference/analysis/st010_tables.py");
         let out = std::env::temp_dir().join(format!("venusrt-st010-sine-{}.bin", std::process::id()));
         match std::process::Command::new("python3").arg(script).arg(&out).output() {
             Ok(o) if o.status.success() => {
@@ -314,7 +314,7 @@ mod tests {
 
     #[test]
     fn the_st010_perspective_equals_the_independent_generator() {
-        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../EmuSen.WiseMan/Reference/analysis/st010_tables.py");
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../Reference/analysis/st010_tables.py");
         let out = std::env::temp_dir().join(format!("venusrt-st010-perspective-{}.bin", std::process::id()));
         match std::process::Command::new("python3").arg(script).arg("--perspective").arg(&out).output() {
             Ok(o) if o.status.success() => {
@@ -328,7 +328,7 @@ mod tests {
 
     #[test]
     fn the_st010_angle_equals_the_independent_generator() {
-        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../EmuSen.WiseMan/Reference/analysis/st010_tables.py");
+        let script = concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../Reference/analysis/st010_tables.py");
         let out = std::env::temp_dir().join(format!("venusrt-st010-atan-{}.bin", std::process::id()));
         match std::process::Command::new("python3").arg(script).arg("--atan").arg(&out).output() {
             Ok(o) if o.status.success() => {

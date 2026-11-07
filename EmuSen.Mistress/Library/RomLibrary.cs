@@ -48,7 +48,10 @@ namespace EmuSen.Mistress.Library
     public static class RomLibrary
     {
         // Whatever cores this build has, not a second copy of the list, and the archives a game may be packed in - see EmuSen_Multicore.md §3.
-        public static string[] Extensions => RuntimeCatalog.RomExtensions.Concat(EmuSen.Galaxia.Media.ArchiveImages.Extensions).ToArray();
+        public static string[] Extensions => RuntimeCatalog.RomExtensions.Concat(ArchiveExtensions).ToArray();
+
+        // The archives the runtime unpacks a game from, as galaxia's archive.rs names them - see EmuSen_Galaxia.md §3.7.
+        public static readonly IReadOnlyList<string> ArchiveExtensions = new[] { ".zip" };
 
         private static readonly IReadOnlyList<RomEntry> None = Array.Empty<RomEntry>();
 

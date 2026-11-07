@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using EmuSen.DianaSh.DianaSh.Bin.Commands.EmuSen;
 using EmuSen.Mistress.Library;
 using Microsoft.Data.Sqlite;
-using EmuSen.Crystal.Systems;
+using EmuSen.WiseMan.Bindings.Systems;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Mistress

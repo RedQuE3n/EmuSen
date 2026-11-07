@@ -17,7 +17,7 @@ conventions every change is held to. The README says what EmuSen is and how to b
 The manual lives inside the repository, as DianaSh's home folder:
 
 1. `README.md`, for what works and how to build.
-2. `EmuSen.DianaSh/DianaSh/Etc/Man pages/README.md`, the index of every page, one line each on what it holds.
+2. `Docs/Man pages/README.md`, the index of every page, one line each on what it holds.
 3. `EmuSen_Project_Overview_v2.md`, the architecture and the directory map.
 4. `EmuSen_Stack.md`, which language and store owns what, and why.
 5. `EmuSen_Surfaces.md`, the boundaries between components, measured, and the surfaces they are moving to.

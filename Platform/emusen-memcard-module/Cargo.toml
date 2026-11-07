@@ -1,0 +1,26 @@
+[package]
+name = "emusen-memcard-module"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# `emusen.memcard`: the `memcard` command, the shell's face of the card manager (EmuSen_SaveMedia.md §6). It needs no
+# game; which medium a card is comes from what the program's engines declare, read as the runtime reads it.
+[lib]
+name = "emusen_memcard_module"
+
+[dependencies]
+dianash-module = { path = "../dianash-module" }
+emusen-dotnet = { path = "../dotnet" }
+emusen-galaxia = { path = "../galaxia" }
+emusen-savemedia = { path = "../savemedia" }
+emusen-systems = { path = "../systems" }
+# The engines' declared media and the cards' folders, the runtime's own, read rather than copied (EmuSen_Backend.md §40.11.3).
+emusen-crystal = { path = "../crystal" }
+emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }
+
+[dev-dependencies]
+# The shell and the corpus's runner, for memcard's cases the corpus recorded from the C# command (EmuSen_Backend.md §40.11.3).
+emusen-dianash = { path = "../dianash" }
+regex = "1"

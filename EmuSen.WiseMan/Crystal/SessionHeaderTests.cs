@@ -6,7 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
-using EmuSen.Crystal.Session;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.Crystal

@@ -1,5 +1,5 @@
 //! The YM2413's synthetic voices for the referee (Endou_Opll.md §7): `voices` prints them for the bench that drives
-//! Nuked-OPLL through its header (`EmuSen.WiseMan/Reference/opll/build-opll.sh`); `compare <bench output>` runs Endou's
+//! Nuked-OPLL through its header (`Reference/opll/build-opll.sh`); `compare <bench output>` runs Endou's
 //! chip on the same writes and reports, a voice a line, the lag and scale that best fit the referee's samples and how many
 //! samples are then equal. `cargo run --release --example opllref -- voices|compare <file>`.
 

@@ -507,8 +507,8 @@ namespace EmuSen.WiseMan.Mistress
         public Task Down_from_a_shader_s_first_parameter_reaches_every_parameter_in_turn() => Session.Dispatch(() =>
         {
             (MainWindow window, PadDriver pad) = GameModeWithAGame();
-            ParametersOf(window, pad, EmuSen.Serenity.Shaders.CrtFilters.Lottes.Name);
-            string[] keys = EmuSen.Serenity.Shaders.CrtFilters.LottesParameters.Select(p => "p:" + p.Id).ToArray();
+            ParametersOf(window, pad, CrtFilters.Lottes.Name);
+            string[] keys = CrtFilters.LottesParameters.Select(p => "p:" + p.Id).ToArray();
             SettingsPad.To(window, pad, keys[0]);
             foreach (string key in keys.Skip(1))
             {
@@ -530,7 +530,7 @@ namespace EmuSen.WiseMan.Mistress
             Assert.Equal(EmuSen.Serenity.PictureCrop.None, frame.Crop);
             ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.Overscan, EmuSen.Mistress.Library.GraphicsKeys.TvOverscan);
             ((GraphicsConfig)typeof(MainWindow).GetField("_graphics", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(window)!).SetValue("SNES", EmuSen.Mistress.Library.GraphicsKeys.PictureShape, EmuSen.Mistress.Library.GraphicsKeys.SquarePixels);
-            ParametersOf(window, pad, EmuSen.Serenity.Shaders.CrtFilters.Lottes.Name);
+            ParametersOf(window, pad, CrtFilters.Lottes.Name);
             Assert.True(IsPaused(window));
 
             SettingsPad.To(window, pad, "p:maskDark");

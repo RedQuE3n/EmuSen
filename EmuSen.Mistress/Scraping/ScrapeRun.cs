@@ -23,28 +23,6 @@ namespace EmuSen.Mistress.Scraping
         public ScrapeCriteria Effective => MissingArtOnly ? ScrapeCriteria.NoCover : Criteria;
     }
 
-    // What each kind is expected to cost a found game: the share of §17.9's 39 found answers offering it, and the mean size of the file the region rule would take - see EmuSen_BigPicture.md §38.
-    public static class ScrapeCost
-    {
-        public static readonly IReadOnlyDictionary<string, (double Offered, double MeanKB)> Kinds = new Dictionary<string, (double, double)>(StringComparer.Ordinal)
-        {
-            ["cover"] = (33 / 39.0, 653), ["screenshot"] = (36 / 39.0, 5), ["marquee"] = (36 / 39.0, 90), ["titlescreen"] = (36 / 39.0, 6), ["miximage"] = (39 / 39.0, 565),
-            ["backcover"] = (33 / 39.0, 468), ["3dbox"] = (33 / 39.0, 351), ["physicalmedia"] = (33 / 39.0, 449), ["fanart"] = (25 / 39.0, 397),
-            ["manual"] = (27 / 39.0, 2254), ["video"] = (32 / 39.0, 1354),
-        };
-
-        // §17.9: a found game with the four default kinds took a median 13.3 s at 128 KB/s, of which about 9.4 s is their 1.2 MB; the rest is the requests' own time.
-        public static readonly TimeSpan RequestsPerGame = TimeSpan.FromSeconds(3.9);
-
-        public const int AssumedKBps = 128;
-
-        public static double Requests(IEnumerable<ScrapeMediaKind> kinds) => 1 + kinds.Sum(k => Kinds.TryGetValue(k.EsdeType, out var c) ? c.Offered : 1);
-
-        public static double KB(IEnumerable<ScrapeMediaKind> kinds) => kinds.Sum(k => Kinds.TryGetValue(k.EsdeType, out var c) ? c.Offered * c.MeanKB : 0);
-
-        public static TimeSpan Time(int games, double kb, int? kbps) => RequestsPerGame * games + TimeSpan.FromSeconds(kb / Math.Max(1, kbps ?? AssumedKBps));
-    }
-
     // What a scope comes to before it is started: the count, what ScreenScraper has not been asked, and the cost - shown in the confirm step.
     public sealed record ScrapePlan(int Games, int NotYetAsked, int MaxRequests, int? RequestsLeftToday, TimeSpan Time, bool ScreenScraperUsable, string? WhyNot, bool Failover)
     {

@@ -12,7 +12,7 @@ namespace EmuSen.WiseMan.Reference
     public class PythonPaletteTests
     {
         private static string ScreenPy => Path.Combine(
-            ConfigRoot.Directory, "EmuSen.WiseMan", "Reference", "analysis", "screen.py");
+            ConfigRoot.Directory, "Reference", "analysis", "screen.py");
 
         private static byte[] PythonPalette()
         {

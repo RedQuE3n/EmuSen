@@ -3,8 +3,8 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using EmuSen.Crystal.Session;
-using EmuSen.Crystal.Telemetry;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
+using EmuSen.Serenity.Telemetry;
 
 namespace EmuSen.Serenity.Dashboards
 {

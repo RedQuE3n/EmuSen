@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
-using EmuSen.Crystal.SaveMedia;
-using EmuSen.Crystal.Services;
-using EmuSen.Crystal.Systems.Genesis;
-using EmuSen.Crystal.Systems.N64;
-using EmuSen.Crystal.Systems.Psx;
+using EmuSen.WiseMan.Bindings.SaveMedia;
+using EmuSen.WiseMan.Bindings.Services;
+using EmuSen.WiseMan.Bindings.Systems.Genesis;
+using EmuSen.WiseMan.Bindings.Systems.N64;
+using EmuSen.WiseMan.Bindings.Systems.Psx;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Native;

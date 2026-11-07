@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Systems;
+using EmuSen.WiseMan.Bindings.Cheats;
+using EmuSen.WiseMan.Bindings.Systems;
 
 namespace EmuSen.WiseMan.Crystal
 {

@@ -1,0 +1,1 @@
+{"WindowWidth":1280,"WindowHeight":800,"TargetFps":60,"VSyncEnabled":true,"WindowResizable":true,"BilinearFiltering":true,"SyncToDisplay":true,"Consoles":{"SNES":{"Shader":"crt","Scale":"3"},"Nintendo 64":{"RenderScale":"2"}},"ShaderParameters":{"SNES":{"crt":{"mask":"0.5","glow":"0.25"}}},"RecentShaders":{"SNES":["crt","lcd"]}}

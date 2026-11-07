@@ -1,0 +1,1 @@
+{"Cheats":[{"Kind":"rompatch","Writes":[{"Space":"","Address":"10","Value":"01","Width":1,"Type":"Set","BitPosition":7,"BigEndian":false,"RepeatCount":1,"RepeatAddAddress":"0","RepeatAddValue":"0"}],"Compare":null,"Description":"x","Enabled":true,"Space":null,"Address":null,"Value":null}]}

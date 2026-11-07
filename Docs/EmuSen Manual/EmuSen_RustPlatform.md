@@ -3707,3 +3707,34 @@ system default, answering `ABSENT` with words where no device has the name. An o
 on the device. The C# side is `UiSoundPlayer.SetOutputDevice`. A new number, as §45's was (rule B). Design and tests:
 `EmuSen_Audio_Sync.md` §7.5.
 
+
+## 47. The platform stops imitating .NET, 2026-11-07
+
+*Decided 2026-11-07 by the tester*, with every answer of the cleanup's plan: once the C# front end reads only through
+the Rust library, the platform's code no longer reproduces .NET's rules byte for byte (§5.2–§5.5, §10.3, §11.3).
+serde and serde_json, the zip crate, the `time` crate and the standard library's paths take the place of the
+hand-written readers and writers, and each service keeps one surface. Four facts stay fixed, since they are stored:
+the path keys of `states.db` and `games.db`, the unpacked folder's name, the 100 ns tick, and the round-trip text of a
+time as it is written. Two changes on disk were approved: config files are written in serde's spelling, and new zips
+are written by the zip crate. A file a person edited by hand keeps reading: comments, trailing commas, names in any
+case, a member written twice (the last wins), and UTF-16 and UTF-32 text with a byte-order mark. The C# classes that
+held the Rust to .NET's bytes are deleted by the step that ends each imitation; the disk corpus below is the proof in
+their place. The crates the platform shares are named once, in `[workspace.dependencies]` of `Platform/Cargo.toml`.
+
+### 47.1 The disk corpus
+
+Files as the platform wrote them at `1d3cd893c`, variants edited by hand, and zips made by other programs, each beside
+what it reads to, recorded once and never re-recorded to make a change pass. Each owner keeps its own, in
+`tests/disk/` beside a `tests/disk.rs`:
+
+| Owner | Files | What each is held to |
+|---|---|---|
+| Galaxia | the four config models and `consoles.json` (written, comments and trailing commas, lower-case names, members twice, a stray byte, unknown members, every byte-order mark, `null`, five refusals); `package.json` (written, edited with a mark and comments, newer, a member twice, not JSON); zips: stored, deflated, Deflate64 (7-Zip), Zip64 and with members twice (Python's `zipfile`), a package's with NTFS times, the recorder's | the model as JSON, compared member by member in order with numbers equal as a double or a float; a read, written and read again gives the same model; each zip's entries, lengths and CRC-32 through the game reader and the cheat database's reader, and a package's files unpacked with their times to the 100 ns |
+| Galaxia | `keys.tsv`, `unpacked.tsv` | the key `games.db` and `states.db` store for a path; the unpacked folder's name for a path, length and tick |
+| Crystal | a game's own settings (written, comments, a mark, UTF-16, keys twice, values not strings, `null`, a list, not JSON); a package's state records; `times.tsv` | the values in order; the record's members with its time as the instant it names, so that the zone the test runs in does not matter |
+| The library | `last-played.tsv` | the instant in ticks since 1970; a time without a zone is local and stays with the owner's tests |
+| The scraper | the member file, made-up accounts only | user, password and the instant it was verified |
+| `emusen-core-host` | two sidecars as built, one marked in development, one naming a file outside its folder, one of version 2 | the listing: library, hash, version, capabilities, the info |
+
+The Deflate64 zip is refused by the game reader at this point; the cheat database's reader takes it. The test names
+that one refusal, so that a reader that starts taking it says so.

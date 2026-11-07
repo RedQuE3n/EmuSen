@@ -1,0 +1,11 @@
+{
+  "Consoles": {
+    "Nintendo 64": {
+      "engine": "mars",
+      "RenderScale": "2"
+    },
+    "PlayStation": {
+      "engine": "diamond"
+    }
+  }
+}

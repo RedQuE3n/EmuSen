@@ -28,9 +28,13 @@ fn unpacked(tree: &Tree) -> String {
 pub fn folder_for(tree: &Tree, archive_path: &str) -> Result<String, String> {
     let full = path::full_path(archive_path);
     let (length, ticks) = crate::dotnet_files::file_info(&full).ok_or_else(|| format!("Could not find file '{full}'."))?;
+    Ok(path::combine(Style::HOST, &unpacked(tree), &folder_name(&full, length, ticks)))
+}
+
+/// The unpacked folder's name: the first eight bytes of the SHA-256 of `full path|length|ticks`, in hex. A stored name, so its rule never changes.
+pub fn folder_name(full: &str, length: i64, ticks: i64) -> String {
     let key = Sha256::digest(format!("{full}|{length}|{ticks}").as_bytes());
-    let hex: String = key[..8].iter().map(|b| format!("{b:02x}")).collect();
-    Ok(path::combine(Style::HOST, &unpacked(tree), &hex))
+    key[..8].iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// `Path.ChangeExtension(path, null)`: the path without its last part's extension.

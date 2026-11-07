@@ -40,6 +40,13 @@ the handheld, §10 the spike, §11 risks and questions, §12 sources.
   Hand-rolled code that a framework covers is a defect; building our own needs a written reason, and every such reason
   on this page is marked *[own, because …]*.
 - **Adaptive.** A core declares and the front end derives (§6). Hand-written data is optional overrides only.
+- **Every input reaches every screen [D 2026-11-07].** A pointer (mouse, touchpad or touch), the keyboard and the pad
+  each reach every element of every screen in every form, big screen included; none is a second-class way in. A
+  big-screen view carries no desktop chrome: no menu bar and no status bar. §1.7 has the design and §8.1 the tests. The
+  reason was measured on the C# front end on 2026-11-07, in big picture with its own look on the desktop: Home has no
+  pointer handling at all and the grid and Choose a console very little, so a mouse did nothing, and the desktop's status
+  bar showed beneath the big-screen library reading "No ROM loaded". Neither is fixed in C#; the Qt front end is built
+  without them.
 - **Unix-style, modular, auditable.** Each component has one job behind a written, versioned surface; nothing reaches
   past one. §2 shows every boundary.
 - **No artwork from any company or show.** Console-style designs are inspired, never copied (§3.6).
@@ -174,7 +181,7 @@ Its own component, `emusen-esde`, §4: a Rust loader and scene over plain data, 
 It depends on the kit (for `NormalizedCanvas`, `Carousel`, the glyphs) and on the models' curated view, never on the
 runtime or the client crates directly; its input is a theme folder and the same models every theme sees.
 
-### 1.7 The pad
+### 1.7 Input: the pad, the pointer and the keyboard
 
 Qt 6 has no gamepad module [the 2026-11-01 plan, sources there]. The pad is Endymion's, in Rust already
 (`emusen_endymion_pads_*`, the router, the player slots, the pad family), read on a Rust thread and queued onto the GUI
@@ -183,6 +190,19 @@ in `EmuSen_BigPicture.md` §14 and the player's A/B swap, then offers each press
 the focused `Frame`'s walk, and, if declined, the window's focus item as a `QKeyEvent` (directions → arrows, A → Return,
 B → Escape, Start → Menu, Select → Select), so stock controls and `ListView` answer a pad with no code of their own. Tests
 push `PadEvent`s into the same queue a real pad uses.
+
+**The pointer and the keyboard are equals of the pad (§0.2), not a fallback.** Qt Quick delivers both already: stock
+controls, `ListView`, `GridView` and `PathView` take clicks, the wheel, flicks and keys with no code of ours. The kit adds
+them only where it draws its own items, and once: every element a `Frame` walks to carries a `TapHandler` and a
+`HoverHandler`, declared in the kit's `.qml` and never per screen, so a screen that is walkable is clickable.
+- Hovering moves the focus ring to the element, as the walk would; a click activates it, the same view-model call as A.
+- The wheel scrolls a list or turns a `Carousel` one step per notch; touch is the pointer's taps, and a swipe on a
+  `Carousel` is `PathView`'s own flick.
+- The mouse's back button and a right click are B; every glyph in the `HelpBar` is a button that sends its press, so a
+  pointer has every action the help bar names.
+- The keyboard is the map above (arrows, Return, Escape) plus Tab and Shift+Tab through the walk.
+- Desktop chrome belongs to the desktop form. The big-screen and card forms have no menu bar and no status bar; a status
+  message there is shown as a notice (§7, stage 2).
 
 ### 1.8 The game picture
 
@@ -340,8 +360,8 @@ regression tests.
 
 A DianaSh command in Rust (the 2026-10-26 rule): `theme-check <folder>` reads `theme.json`, holds it to the schema and the
 API version, lints the QML against the import allow-list and §1.3's rule, checks token overrides for type and contrast,
-loads each screen offscreen on the synthetic library and runs the fit and reach audits at the four sizes, and prints one
-line per finding (`file:line kind words`) and a last line `ok` or `N findings`. The Themes tab runs it before offering
+loads each screen offscreen on the synthetic library and runs the fit and reach audits (pad and pointer, §8.1) at the
+four sizes, and prints one line per finding (`file:line kind words`) and a last line `ok` or `N findings`. The Themes tab runs it before offering
 "Use", as the install gate; the compatibility corpus of §4.4 runs the ES-DE equivalent.
 
 ---
@@ -539,7 +559,7 @@ of the C# side. Estimates are weeks of work, one person each unless said.
 
 | # | Stage | Weeks | Gate | Retires |
 |---|---|---|---|---|
-| 0 | `emusen-kit-core`, `emusen-kit-qt`, the style, the two client crates, `emusen-qt-models`' first models, the pad bridge, the test harness and the spec writer, the AppImage of the program | 6 | the fit audit, pad reach and the style sweep green on the kit's gallery | nothing |
+| 0 | `emusen-kit-core`, `emusen-kit-qt`, the style, the two client crates, `emusen-qt-models`' first models, the pad bridge, the test harness and the spec writer, the AppImage of the program | 6 | the fit audit, pad reach, pointer reach and the style sweep green on the kit's gallery | nothing |
 | 1 | **The first vertical slice**: Moonrise, Home, Choose a console and the grid in the reference theme (the mockups), a game through the ring, the Pause Card's first page; the gates measured on both machines | 4 | §9.3's gates; the Home, Choose a console and grid recordings of the C# side matched | nothing yet (preview) |
 | 2 | The Pause Card's pages, the Home card, the List card, the question form, notices, the docked keyboard | 2 | recordings | `MainWindow.PauseCard`, `PadMenu`, `OptionListWindow`, the sheets |
 | 3 | `EmuSen.Theme` 1.0 and two or three console-style themes (§3.6), `theme-check`, the Themes tab for both kinds | 3 | the four fit sizes and reach on every theme | the C# theme list |
@@ -564,7 +584,10 @@ fourth is a property of the models from stage 0 on (§6), held by tests rather t
    The rules of `EmuSen_InterfaceSpec.md` §4 (fit, pad reach, names a reader hears, palette reach) re-implemented once in
    `emusen-qt-test` over the item tree: `objectName` for names, `mapToScene` rectangles, `Accessible.name` and `role`, the
    words from `Text`, colours by `grabImage` in the software backend. Effects (`MultiEffect`, `ShaderEffect`) need a GPU
-   adapter, so the audited states avoid them or they are stubbed under the software backend.
+   adapter, so the audited states avoid them or they are stubbed under the software backend. Two rules join them for
+   §1.7: **pointer reach**, on every recorded state a click at the centre of each element the walk reaches must hit that
+   element (nothing covers it) and make the same view-model call as the pad's A there, and the wheel must move every
+   list that scrolls; and **no chrome**, in the big-screen and card forms no menu bar or status bar item is visible.
 2. **The picture**: `QQuickRenderControl` on Vulkan on the RX 6800, the ring's cases drawn through `GamePicture` and read
    back; one GPU test at a time, the validation layer on.
 
@@ -579,7 +602,9 @@ fourth is a property of the models from stage 0 on (§6), held by tests rather t
   Rust harness writes the same format from the Qt tree; a Qt screen's acceptance is the comparison with the C# recording
   of the screen it replaces at 1280 × 800 and 1920 × 1200 within §7.3's tolerances there. **Recordings are change
   detectors only**: a difference is read and either the Qt side is fixed or the recording is re-made with its reason in
-  the stage's section, never tuned to pass.
+  the stage's section, never tuned to pass. Where a C# recording carries one of §0.2's measured defects (the status bar
+  beneath a big-screen view; a screen a pointer cannot use), the Qt side follows §0.2 and the stage's section names the
+  difference.
 - **Behaviour** (what a press does to a setting, what a scan finds) is tested in Rust view-model tests with a fake client,
   no Qt at all; that is where most of WiseMan's 43,000 lines of Avalonia UI tests belong, and they are not ported line by
   line.
@@ -596,7 +621,8 @@ pixel work with no logic. One `QGuiApplication` per process, so one process per 
 ### 8.4 Checkers that run on every commit
 
 `qml-rules` (§1.3) over every `.qml`; `qmllint` with the project's settings; the `.qmltypes` diff (§5.3); `cargo deny` on
-each crate's dependency tree against §2's table; the fit audit at the four sizes on every recorded state; `theme-check`
+each crate's dependency tree against §2's table; the fit audit, pad reach, pointer reach and no chrome (§8.1) at the four
+sizes on every recorded state; `theme-check`
 on the themes in the repository; the esde corpus TSV diff (§4.4).
 
 ---

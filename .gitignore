@@ -67,6 +67,9 @@ Reference/probe-rs/target/
 # in Platform/.
 Platform/target/
 
+# Cargo's build output for the Qt front end's pure-Rust kit crate, built with cargo alone.
+Frontend/kit-core/target/
+
 # The libretro cheat database, downloaded at runtime - ~28k files and
 # 250MB of CC BY-SA data that `cheat db update` fetches on demand. See
 # `man cheat`.

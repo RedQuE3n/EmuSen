@@ -1,0 +1,14 @@
+[package]
+name = "emusen-kit-core"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# The pure-Rust heart of the EmuSen.Kit QML module: tokens, the walk, the pad grammar, the audit rules, the drawn world as data and the bells. See EmuSen_Kit.md.
+[lib]
+name = "emusen_kit_core"
+
+[dependencies]
+# Colour conversions and WCAG 2.1 contrast, so the kit does not hand-roll either (EmuSen_Kit.md §1.2).
+palette = { version = "0.7", default-features = false, features = ["std"] }

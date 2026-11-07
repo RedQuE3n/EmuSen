@@ -115,8 +115,8 @@ impl Scraper {
     /// The game whose cover a ROM shows, the player's choice in the library's edits; none with no library lent.
     fn cover_from(&self, rom: &str) -> Option<String> {
         let library = self.library().ok()?;
-        let edits = library.get_request(&format!("{{\"what\":\"edits\",\"path\":{}}}", emusen_dotnet::json::quoted(rom))).ok()?;
-        emusen_dotnet::json::parse(&edits).ok()?.get("coverfrom").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
+        let edits = library.get_request(&serde_json::json!({ "what": "edits", "path": rom }).to_string()).ok()?;
+        serde_json::from_str::<serde_json::Value>(&edits).ok()?.get("coverfrom").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
     }
 
     /// The picture of a type for a game on the shelf ES-DE calls `esde_system`, and where it came from.

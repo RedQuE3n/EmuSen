@@ -3870,3 +3870,14 @@ given in (serde_json's `preserve_order`). What changes in the bytes: text is wri
 (`<é>` where .NET wrote `<é>`), a whole double keeps its point (`2.0` where .NET wrote `2`), and a
 double JSON has no number for is `null`. The C# front end reads every answer with a JSON reader, which takes both
 spellings.
+
+### 47.13 The library's and the scraper's requests and answers
+
+`emusen_library.h`'s requests are read as a `serde_json::Value` and its answers built with `json!` (`library/src/json.rs`,
+`library/src/lib.rs`): a record, the records by path, a game, edits, collections, orphans, the games list and an
+identity. A double JSON has no number for is still the name `NaN`, `Infinity` or `-Infinity`, as the C# reader takes
+it. `emusen_scrape.h`'s requests are read the same way, and the requests the scraper sends the library are built with
+`json!`. The scraper's answers are still laid out by its readers' `format!` calls, but every value in them (a text, a
+number, a list of texts) is written by serde_json through `scrape/src/json.rs`; turning those layouts into `json!` is
+left for a later change, since it moves no byte. What changes in the bytes is as §47.12 says: UTF-8 text, and a whole
+double with its point.

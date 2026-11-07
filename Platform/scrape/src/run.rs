@@ -319,7 +319,7 @@ impl Scraper {
                     if one {
                         store.forget_unfound(rom)?;
                         if let Ok(library) = self.library() {
-                            let _ = library.change_request(&format!("{{\"op\":\"forget_cover_lookup\",\"path\":{}}}", emusen_dotnet::json::quoted(rom)));
+                            let _ = library.change_request(&serde_json::json!({ "op": "forget_cover_lookup", "path": rom }).to_string());
                         }
                         self.runs.failover.lock().unwrap_or_else(|p| p.into_inner()).asked.remove(rom);
                     }
@@ -1049,7 +1049,7 @@ impl Scraper {
             return false;
         }
         if let Ok(library) = self.library() {
-            let known = library.get_request(&format!("{{\"what\":\"cover_lookup\",\"path\":{}}}", emusen_dotnet::json::quoted(rom))).unwrap_or_default();
+            let known = library.get_request(&serde_json::json!({ "what": "cover_lookup", "path": rom }).to_string()).unwrap_or_default();
             if known != "null" && !known.is_empty() {
                 return false;
             }
@@ -1137,10 +1137,8 @@ impl Scraper {
             };
             if result.outcome != openemu::Outcome::Failed {
                 if let Ok(library) = self.library() {
-                    let mut request = format!("{{\"op\":\"record_cover_lookup\",\"path\":{},\"outcome\":\"{}\",\"rom_name\":", emusen_dotnet::json::quoted(&rom), result.outcome.word());
-                    request.push_str(&result.rom_name.as_deref().map_or("null".to_string(), emusen_dotnet::json::quoted));
-                    request.push('}');
-                    let _ = library.change_request(&request);
+                    let request = serde_json::json!({ "op": "record_cover_lookup", "path": rom, "outcome": result.outcome.word(), "rom_name": result.rom_name });
+                    let _ = library.change_request(&request.to_string());
                 }
             }
             self.failover_arrived(result);

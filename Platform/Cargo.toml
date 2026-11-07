@@ -6,7 +6,7 @@ members = ["cheats", "patch", "core-entry", "core-tool", "tool-job", "library-to
 # One owner for each outside crate the platform's crates share, so that each version is stated once (EmuSen_RustPlatform.md §47).
 [workspace.dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = { version = "1.0.154", features = ["preserve_order"] }
+serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
 dirs = "7.0.0"
 strsim = "0.11.1"
 

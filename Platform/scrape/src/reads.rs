@@ -3,7 +3,7 @@
 use crate::json::{self, float_or_null, number_or_null, quoted, strings_into, text_or_null};
 use crate::store::{Key, Record, Stored};
 use crate::{Error, Scraper, kinds, layout};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 
 pub(crate) fn record_json(out: &mut String, r: &Record) {
     out.push_str("{\"md5\":");
@@ -191,8 +191,8 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
             let edits: Vec<(String, String)> = match s.library() {
                 Ok(library) => {
                     let text = library.get_request(&format!("{{\"what\":\"edits\",\"path\":{}}}", quoted(&rom))).map_err(|e| Error::Io(e.words()))?;
-                    match emusen_dotnet::json::parse(&text) {
-                        Ok(Value::Object(members)) => members.into_iter().filter_map(|(k, v)| v.as_str().map(|t| (k.text, t.to_string()))).collect(),
+                    match serde_json::from_str::<Value>(&text) {
+                        Ok(Value::Object(members)) => members.into_iter().filter_map(|(k, v)| v.as_str().map(|t| (k, t.to_string()))).collect(),
                         _ => Vec::new(),
                     }
                 }

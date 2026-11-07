@@ -514,6 +514,7 @@ dependencies = [
  "emusen-galaxia",
  "emusen-sqlite",
  "emusen-systems",
+ "serde_json",
 ]
 
 [[package]]

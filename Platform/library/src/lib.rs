@@ -201,23 +201,8 @@ impl Library {
     pub fn games_request(&self, filter: &str) -> Result<String, Error> {
         let system = if filter.trim().is_empty() { None } else { json::text_or_none(&json::parse(filter)?, "system")? };
         let (outcome, roots, games) = self.games(system.as_deref());
-        let mut out = format!("{{\"status\":\"{}\",\"roots\":", outcome.word());
-        json::write_strings(&mut out, roots.iter().map(String::as_str));
-        out.push_str(",\"games\":[");
-        for (i, g) in games.iter().enumerate() {
-            if i > 0 {
-                out.push(',');
-            }
-            out.push_str("{\"path\":");
-            out.push_str(&emusen_dotnet::json::quoted(&g.path));
-            out.push_str(",\"system\":");
-            json::write_text_or_null(&mut out, g.system.as_deref());
-            out.push_str(",\"package\":");
-            json::write_text_or_null(&mut out, g.package.as_deref());
-            out.push('}');
-        }
-        out.push_str("]}");
-        Ok(out)
+        let games: Vec<serde_json::Value> = games.iter().map(|g| serde_json::json!({ "path": g.path, "system": g.system, "package": g.package })).collect();
+        Ok(serde_json::json!({ "status": outcome.word(), "roots": roots, "games": games }).to_string())
     }
 
     /// `emusen_library_identity`'s request and answer.
@@ -225,25 +210,18 @@ impl Library {
         let r = json::parse(request)?;
         let path = json::text(&r, "path")?;
         let systems = match r.get("systems") {
-            None | Some(emusen_dotnet::json::Value::Null) => None,
+            None | Some(serde_json::Value::Null) => None,
             Some(_) => Some(json::strings(&r, "systems")?),
         };
         let sha1 = json::flag(&r, "sha1")?;
         let id = self.identity(&path, systems.as_deref(), json::flag(&r, "crc32")?, sha1, json::flag(&r, "record")?)?;
-        let mut out = String::from("{\"path\":");
-        out.push_str(&emusen_dotnet::json::quoted(&id.path));
-        out.push_str(&format!(",\"bytes\":{},\"modified\":{},\"md5\":", id.bytes, id.modified));
-        out.push_str(&emusen_dotnet::json::quoted(&id.md5));
-        out.push_str(",\"crc32\":");
-        json::write_text_or_null(&mut out, id.crc32.as_deref());
+        let mut answer = serde_json::json!({ "path": id.path, "bytes": id.bytes, "modified": id.modified, "md5": id.md5, "crc32": id.crc32 });
         if sha1 {
-            out.push_str(",\"sha1\":");
-            json::write_text_or_null(&mut out, id.sha1.as_deref());
+            answer["sha1"] = serde_json::json!(id.sha1);
         }
-        out.push_str(",\"system\":");
-        json::write_text_or_null(&mut out, id.system.as_deref());
-        out.push_str(&format!(",\"cached\":{}}}", id.cached));
-        Ok(out)
+        answer["system"] = serde_json::json!(id.system);
+        answer["cached"] = serde_json::json!(id.cached);
+        Ok(answer.to_string())
     }
 
     /// `emusen_library_get`'s request and answer.

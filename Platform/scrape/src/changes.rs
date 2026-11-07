@@ -3,7 +3,7 @@
 pub(crate) use emusen_dotnet::date::local_offset;
 use crate::json::{self, quoted, strings_into};
 use crate::{Error, Scraper, credentials, layout};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 
 /// The instant a request names in `at` (a round-trip text with its offset) with that offset, else now on the handle's
 /// clock with the machine's: the UTC ticks and the offset in seconds.

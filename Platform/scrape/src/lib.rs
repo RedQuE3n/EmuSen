@@ -27,7 +27,7 @@ pub mod store;
 pub mod zone;
 
 use clock::Clock;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_sqlite::{Failure, Sqlite};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
@@ -144,7 +144,7 @@ impl Settings {
             s.packages = match p {
                 Value::Object(members) => members
                     .iter()
-                    .map(|(k, v)| v.as_str().map(|f| (k.text.clone(), f.to_string())).ok_or_else(|| Error::BadRequest("The request's packages holds a folder that is not text.".into())))
+                    .map(|(k, v)| v.as_str().map(|f| (k.clone(), f.to_string())).ok_or_else(|| Error::BadRequest("The request's packages holds a folder that is not text.".into())))
                     .collect::<Result<Vec<_>, _>>()?,
                 Value::Null => Vec::new(),
                 _ => return Err(Error::BadRequest("The request's packages is not a map of game files to folders.".into())),

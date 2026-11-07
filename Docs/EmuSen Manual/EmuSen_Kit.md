@@ -2,8 +2,8 @@
 
 The design is `EmuSen_Qt.md` §1.4: two crates and one QML module carry what was LunaP's. This page is the record of the
 first crate, `emusen-kit-core`, at `Frontend/kit-core`: what it owns, where each value comes from, what it was held to,
-and where it differs from the C# it replaces. The second crate, `emusen-kit-qt`, and the module's `.qml` files are stage
-0's later work and will have sections here when they are built.
+and where it differs from the C# it replaces. The second crate, `emusen-kit-qt`, is §7, and the module's `.qml` files
+join it step by step.
 
 The crate names no Qt type, no runtime, no client crate and no console. It builds with cargo alone, outside the
 Platform workspace, and a test (`tests/fence.rs`) fails if its lock file ever names a Qt binding, a runtime, client or
@@ -279,3 +279,128 @@ items over these decisions), the `EmuSen` style, the two client crates, the firs
 harness that fills §3's tree from a Qt item tree, the spec writer and the AppImage. Not carried from LunaP, and said
 so above: the hub, gallery, planet and page layouts' own arrangement and `Move(dx, dy)`, which are Qt Quick's layouts
 and views in the design; the List card and the open cover, which are sheets; text layout, which is Qt's.
+
+## 7. The Qt half: `emusen-kit-qt` (stage 0, step 6; 2026-11-07)
+
+`Frontend/kit-qt` is the cxx-qt 0.10.0 binding that puts kit-core's decisions on Qt (`EmuSen_Qt.md` §1.4): a library
+crate with `links = "emusen-kit-qt"` that exports its cxx-qt interface, so the gallery and the harness, which link it,
+register its QML module by running `CxxQtBuilder` themselves. Its dependencies are `cxx`, `cxx-qt`, `cxx-qt-lib`
+(`qt_full`) and `emusen-kit-core` by path; nothing of the runtime or the client crates. It lives in a cargo workspace,
+`Frontend/Cargo.toml`, which excludes `kit-core` on purpose: the workspace would take over kit-core's lock file, and
+kit-core's fence test reads that file. Every decision stays kit-core's; the crate translates Qt's types, events and
+numbers to and from it, and a reader audits it by checking each translation against the kit-core function it calls.
+
+The QML module is `EmuSen.Kit` 1.0, registered by `build.rs`, its `.qml` files in the resource system under
+`qrc:/qt/qml/EmuSen/Kit/`. Its surface is the `.qmltypes` of §7.6 (rule Q).
+
+### 7.1 The enumerations (`kinds`)
+
+A `Kit` namespace element carries five `Q_ENUM_NS` mirrors, so QML writes `Kit.Accept`, `Kit.BigScreen`, `Kit.Content`,
+`Kit.Dark` and `Kit.EsdeList`: `PadButton` is `UiButton` in its order (the conversion goes through `UiButton::index`
+and `UiButton::ALL`, and `tests/kinds.rs` names every pair so a reordering on either side fails); `Form` is the frame's
+`WalkForm` with its three values, and the tokens read Card as the big screen's column; `Role` is the walk's `Role` plus
+`NoRole` for no focus; `Variant` and `Tiers` are the tokens' variant and the grammar's four measured repeat sets.
+
+### 7.2 `Tokens`
+
+A QML singleton with four inputs, `form`, `variant`, `textScale` and `reducedMotion`, and 71 read-only properties, one
+per token, recomputed by `column::Column::compute` from kit-core whenever an input changes: the 18 colours as `QColor`
+(`surface`, `surfaceRaised`, `inputSurface`, `voidFill`, `scrim`, `captionSurface`, `border`, `rule`, `text`,
+`textStrong`, `muted`, `accent`, `overAccent`, `success`, `attention`, `error`, `overArt`, `overArtScrim`); the type
+scale as pixel sizes (`fontDisplay` to `fontGlyph`) and `headerSize`; the spacing (`base`, `rowHeight`,
+`controlHeight`, `paneGutter`, `paneGap`, `cardWidth`, `titleRow`, `helpBar`, `tileWidth`, `tileHeight`, `tileGap`,
+`rowRadius`, `tileRadius`) and `safeArea` as `QMarginsF`, with `safeAreaOf(width, height)` for a screen's own; the
+focus marks (`ringThickness`, `ringOffset`, `barWidth`, `tileScale`, `hoverBorder`); the eight motion tokens as
+milliseconds with reduced motion applied (`instant`, `quick`, `enter`, `exit`, `pan`, `reel`, `fade`, `poster`), the
+fade of each (`quickFade` … `posterFade`; `fade` itself is the Fade token's fade, 120 ms under reduced motion) and each
+token's curve as `QEasingCurve::Type`'s number so QML binds `easing.type` to it (Linear 0, InQuad 1, OutQuad 2, OutCubic
+6); and the breath (`breathDelay`, `breathPeriod`, `breathLow`, `breathes`). The properties are read-only on purpose:
+a theme overrides token values through §3.4's mechanism, never by writing the singleton.
+
+Three tokens are renamed from the design's table: OnAccent, OnArt and OnArtScrim are `overAccent`, `overArt` and
+`overArtScrim`. In QML a property named `onX` reads as a signal handler, and cxx-qt's connector for `accent`'s change
+signal is `on_accent_changed`, the same name a property `on_accent` would give its own signal; the build failed on
+exactly that collision on 2026-11-07. Font families are not here: kit-core has no such token (§1.3), and the one owner
+rule says one joins kit-core first (§7.7).
+
+### 7.3 `FrameController`, and the three ways in
+
+One `FrameController` per `Frame`, over one kit-core `Walk`. Its writable properties feed the walk (`form`, `hasDetail`,
+`detailBeside`, `navigationShown`, `actionsShown`, `searchShown`, `sections` as a `QStringList`, `selectedSection`,
+`sheetOpen`); its read-only ones mirror it after every call (`focusedRole`, `detailOpen`, `pageOpen`); its signals are
+the walk's events (`sectionChosen`, `focusMoved`, `detailOpened`, `detailClosed`, `pageClosed`, `actionInvoked`) plus
+two of its own, `sheetPressed` and `backDeclined`. Its invokables are the walk's verbs (`moveFocus`, `focusRole`,
+`stepSection`, `openDetail`, `closeDetail`, `openPage`, `closePage`, `setAction`, `clearActions`, `press`) and the three
+ways in:
+
+- **The pad.** `offer(button)` is §1.7's order, as the pure function `frame::route` states it and `tests/route.rs`
+  holds it: an open sheet or question first (`sheetOpen`, and the press comes back as `sheetPressed` for the sheet's
+  own handler), then the walk, then, declined, the focused control as the key `UiButton::key` names (`send_key`, the one
+  C++ function of this step, 16 lines: a `QKeyEvent` press and release sent to `QGuiApplication::focusWindow()`, which
+  Qt Quick delivers to the active focus item). B declined at the top also raises `backDeclined`, the host's signal to
+  close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
+  so the fact has one owner.
+- **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
+  `HoverHandler` calling `controller.hover(item, hovered)` and one `TapHandler` for the left, right and back buttons
+  calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
+  `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
+  `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
+  click and A take one path and reach the same call, the `activated` signal `Walkable` raises on Return or Enter;
+  `Press(Back)` offers B. No screen interprets a device, and nothing is per screen.
+- **The keyboard.** `key(key, modifiers)` takes what the focused control declined and propagated up to the frame:
+  Backtab is Tab with Shift, Enter is Return, and the rest is `qt_keys`' table against kit-core's `Key`; `intent` then
+  gives `Walk(±1)` for Tab or the press a key means, which goes to the sheet or the walk and never back out as a key,
+  so a key cannot loop.
+
+### 7.4 `PadRouter`
+
+A QML singleton whose queue tests push `PadEvent`s into, as the real reader will from the platform client later: `push
+(button, down)` queues, `pump()` applies the queue on the router's own clock (an `Instant` from construction; no
+static) and `pumpAt(ms)` on a stated one, so a test writes the exact times kit-core's tests write. Each pump runs
+`router::Router`: the queue sets the held buttons, `Grammar::menu_chord` is checked (once, and then `forget`, so the
+button that opened a menu reaches nothing under it, raised as `menuChord`), and `Grammar::feed` gives the tick's
+presses, each swapped by `swapAcceptBack` and raised as `pressed(button, repeat, jump)`. `tiers` chooses the repeat set.
+A `Frame` consumes presses through a `Connections` on the singleton, enabled while it holds the active focus, calling
+`controller.offer`; a `Timer` in `Frame` pumps while a frame is shown (step 8). Both arrive with `Frame.qml`.
+
+### 7.5 Reserved
+
+The drawn items (`Sky`, `Body`, `Moonrise`, `Bells`) are step 7's and have their section when built.
+
+### 7.6 Building, linking, the registry, and what it is held to
+
+A cold debug build is 73 s on the desktop (measured 2026-11-07, six compilers, CPU weight 20; cxx-qt's generated C++
+dominates, as `EmuSen_Qt.md` §10.2 found) and a Rust-only change about 10 s. GNU `ld.bfd` needs two workarounds in
+`build.rs`, both for it alone and both removed when `lld` is installed (cxx-qt then adds `-fuse-ld=lld` itself): the
+`--no-as-needed` naming of the Qt libraries from §10.4, and `--undefined=cxx_qt_init_*` for the four initializers. The
+second is new: when a crate that links the kit as an rlib is the final link (the kit's own integration tests), rustc
+places the extracted whole-archive `call-initializers` members after the rlib, and `ld.bfd`'s single pass has already
+left the rlib's archive, so the init functions go undefined; naming them undefined up front makes the first pass pull
+them. A binary that runs `CxxQtBuilder` itself (the gallery, the harness) references them from its own initializer
+first and needs only the first workaround.
+
+**Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
+`qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
+compares the build's files to the committed ones with line numbers and header file names dropped, since those move
+with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,
+and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
+step, not the test's.
+
+**Tests** (`Frontend/kit-qt/tests`, 20, no Qt application needed; the bridges themselves are exercised by the harness
+of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
+scale, motion in milliseconds and Qt's easing numbers, reduced motion zeroing movements and keeping fades at 120 ms),
+`qt_keys` (every declinable press has a Qt key both ways, Shift+Tab, Enter, the mouse's buttons), `route` (the sheet
+before the walk before the key), `router` (the queue applies at a pump only, the own tiers at 400 then 80 ms, the swap
+once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on 2026-11-07 with four seeded faults,
+each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
+CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
+
+**Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count): 23 lines in `cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of
+it `send_key`. Budget: under 600 for the whole front end.
+
+### 7.7 Open
+
+- **[routine]** Install Fedora's `lld` for the toolchain, as §10.4 proposed; both linker workarounds then go.
+- **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
+  add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
+  §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.

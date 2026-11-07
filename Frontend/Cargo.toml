@@ -1,0 +1,23 @@
+# The Qt front end's cargo workspace (EmuSen_Qt.md §1.9): the kit's Qt half, its harness, the gallery and the checkers.
+# emusen-kit-core stays outside it on purpose, with its own lock file, so its fence test can read what its tree names.
+[workspace]
+resolver = "2"
+members = ["kit-qt"]
+exclude = ["kit-core"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-or-later"
+publish = false
+
+[workspace.dependencies]
+cxx = "1"
+cxx-qt = "0.10"
+cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
+cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
+emusen-kit-core = { path = "kit-core" }
+emusen-kit-qt = { path = "kit-qt" }
+
+[profile.release]
+opt-level = 2

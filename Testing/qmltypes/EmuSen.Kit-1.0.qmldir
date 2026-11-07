@@ -1,0 +1,7 @@
+module EmuSen.Kit
+optional plugin EmuSen_Kit
+classname EmuSen_Kit_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+prefer :/qt/qml/EmuSen/Kit/
+Walkable 1.0 qml/Walkable.qml

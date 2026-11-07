@@ -11,7 +11,7 @@ This widens `EmuSen_LibretroBridge.md` (a stopgap for the PlayStation 2, propose
 core, and is the inbound direction `EmuSen_CoreAPI.md` §14.1 names and §15 Q6 decided in principle. The outbound
 direction, a v1 core offered to RetroArch, keeps the name `emusen-libretro` (`EmuSen_Libretro.md` §7). The first target, decided by the
 tester on 2026-10-31, is PCEE2 (`pcee2_libretro`), the libretro build of upstream PCSX2, with memory maps and software
-pictures, the nightly pinned in `EmuSen.WiseMan/Reference/libretro-cores.sha256`; LRPS2 (`pcsx2_libretro`, a hard fork of
+pictures, the nightly pinned in `Reference/libretro-cores.sha256`; LRPS2 (`pcsx2_libretro`, a hard fork of
 an older PCSX2) is the second.
 
 The marks are those of `EmuSen_Gpu.md`: **[M]** measured, with the date and tool; **[R]** read from a source; **[A]**

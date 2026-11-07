@@ -1041,7 +1041,7 @@ forced to eke out a living on the small patches of land" through the quantum ref
 Lode" to "Seeking this Mother Lode, Diggers travel from one island to another in their flying machines". 5,700 and
 6,000: "Hope… Despair… Charity… Greed… Duty… Power…" with a stone tower at the left.
 
-[M, `psxplay.py diamond` by `EmuSen.WiseMan/Reference/analysis/psxplay/mega-man-legends.txt`, T 600, pictures every 120
+[M, `psxplay.py diamond` by `Reference/analysis/psxplay/mega-man-legends.txt`, T 600, pictures every 120
 frames to 7,200, the open kernel's formatted card in slot 1.] Start at T+1,400 skips the story; PRESS START BUTTON from
 about 2,280; Start at 2,600 gives the menu, NEW GAME, CONTINUE, OPTION; Start at 2,900 begins a new game. From 3,360
 Mega Man stands in a dark ruin and turns and moves with the script's presses; at 4,560 and 4,800 he lifts a shutter;
@@ -1266,7 +1266,7 @@ particles (300), the CAPCOM logo (600), "now loading…" on black (900, 1,200), 
 over sea and sky with the airship, "In a world covered by endless water…" to "Hope… Despair… Charity… Greed… Duty…
 Power…" at 6,000.
 
-`EmuSen.WiseMan/Reference/analysis/psxplay/mega-man-legends.txt` through `psxplay.py`'s Diamond side, T the CAPCOM logo
+`Reference/analysis/psxplay/mega-man-legends.txt` through `psxplay.py`'s Diamond side, T the CAPCOM logo
 at frame 440, to frame 12,600, pictures every 60: Start skips the story; the title with PRESS START BUTTON from T+1,540;
 Start, then Cross on NEW GAME; the opening scene left to play (the ruin, the refractor taken, the run from the closing
 door) to about T+8,380; then the first ruin in play, the life gauge and radar drawn. A step forward brings the scene's lines

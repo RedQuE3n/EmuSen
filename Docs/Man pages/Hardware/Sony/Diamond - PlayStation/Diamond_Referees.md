@@ -34,8 +34,8 @@ console logs and pictures remain the only measurements of hardware the project h
 | **PCSX-ReARMed** | r26 `c881679` | the same | GPLv2 | "based on the PCSX-Reloaded project"; on x86-64 its GPU is "NEON GPU by Exophase … x86 SSE2+" | §2.3 |
 | no$psx | — | not fetched | — | — | wine is not installed, so it was not considered further [M] |
 
-The two standalone releases are pinned by SHA-256 in `EmuSen.WiseMan/Reference/psx-referees.sha256` with their URLs,
-as the libretro cores are in `libretro-cores.sha256`, and `EmuSen.WiseMan/Reference/analysis/psxreferee.py fetch`
+The two standalone releases are pinned by SHA-256 in `Reference/psx-referees.sha256` with their URLs,
+as the libretro cores are in `libretro-cores.sha256`, and `Reference/analysis/psxreferee.py fetch`
 fetches, verifies, unpacks and prepares them in `~/.cache/emusen/probe/diamond/referees/` [M]. DuckStation's release
 is GitHub's tagged `v0.1-11894`, not the rolling `latest`, so that the pin names a fixed file. PCSX-Redux publishes
 no GitHub release: its README links its Linux build to `distrib.app`, whose public manifest

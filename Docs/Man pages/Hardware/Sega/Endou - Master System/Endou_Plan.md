@@ -192,7 +192,7 @@ for the Sega cores, but Diamond's decision of 2026-10-11 says "of each FPGA core
 ### 1.7 The black-box references
 
 Three libretro cores in the probe's cache already run the Master System, the Game Gear and the SG-1000, each pinned by
-hash in `EmuSen.WiseMan/Reference/libretro-cores.sha256` for the Genesis [R]:
+hash in `Reference/libretro-cores.sha256` for the Genesis [R]:
 
 | Core | Pinned | Licence [R its `.info`] | Extensions it declares [R] |
 |---|---|---|---|

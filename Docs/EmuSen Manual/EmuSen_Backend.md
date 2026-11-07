@@ -10565,3 +10565,28 @@ which nothing has read since the window downloads through the runtime (`CheatDbU
 emusen-net's, with no hook a test can replace (`Platform/platform/src/crystal.rs`), so the cases reached the network
 or failed. They are skipped, with that reason, until the runtime offers such a hook; adding one is an extension of
 the frontend API's configuration and is left to the tester.
+
+#### 40.11.2 The files that are not C#, out of the C# folders
+
+**Where each went.**
+
+| was | is | read by |
+|---|---|---|
+| `EmuSen.WiseMan/Reference/` (`probe-rs`, `analysis`, `rtl68k`, `opll`, `patches`, `build-probe.sh`, the three `*.sha256` pins) and `EmuSen.WiseMan/sync-dev-host.sh` | `Reference/` | VenusRT's DSP-1 and ST010 table tests, Diamond's play goldens, the kernel harness, `library_key.py`, the test map; `PythonPaletteTests` |
+| `EmuSen.WiseMan/DianaSh/Golden/` | `Platform/dianash/tests/golden/` | the dianash crate's `tests/golden.rs`, the crate that runs the corpus (§40.10.3) |
+| `EmuSen.DianaSh/DianaSh/Usr/Home/Documents/` (the manual) | `Docs/` (`Docs/EmuSen Manual/`) | `EmuSen.DianaSh.csproj` |
+| `EmuSen.DianaSh/DianaSh/Etc/Man pages/` (the docs index and the hardware pages) | `Docs/Man pages/` | the same |
+| `EmuSen.DianaSh/DianaSh/Lib/dianash/<module>/man/<page>` | `Docs/man/<module>/<page>` | the same |
+
+`Docs/` is laid out as a publish ships it: everything in it but `Docs/man` is `home/Documents` of the shell's tree,
+and `Docs/man` is flattened into `lib/EmuSen/dianash/man` beside the program, as before. The two C# files of
+`EmuSen.WiseMan/Reference` (`CatalogueTests`, `PythonPaletteTests`) stay with WiseMan. `EmuSen.DianaSh/DianaSh/Usr/Home/Roms`
+stays as it was (EmuSen_Galaxia.md §3.3a). `psxplay.py` finds the repository one folder nearer than before.
+
+**The published tree, proved unchanged** (measured on 2026-11-07 on the development desktop): a Debug publish of
+Mistress (`dotnet publish EmuSen.Mistress -c Debug -o <dir>`) on the tree before the move and after it lists the same
+591 files, and the 372 of the shell's tree, `home/` and `lib/EmuSen/dianash/`, have the same SHA-256 each. The 17
+files that differ are the core libraries with their sidecars and `cores.manifest`, which cargo rebuilt because Rust
+sources whose test paths changed sit in their workspace, and `EmuSen.Mistress.dll`; none is a moved file. The paths
+named inside the documents were brought up to date in a change of their own after the proof, so that the proof is of
+the move alone.

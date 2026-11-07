@@ -19,7 +19,7 @@ These are stated as ownership, not as preference. A new subsystem does not get t
 
 ### 2.1 Rust — the probe, and the reason it is not more than the probe
 
-`EmuSen.WiseMan/Reference/probe-rs/` is the whole of it: three backends over one policy layer, driving Mesen through the `probe-c-api.patch` ABI and any libretro core through `dlopen`. Which emulators exist is known only to `src/backends/`, and a test holds the layers above it to that — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.53, including the twenty places the separation had quietly leaked. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.50 for why Mesen's own C ABI could not close the gap and §3.52 for the shape that replaced it.
+`Reference/probe-rs/` is the whole of it: three backends over one policy layer, driving Mesen through the `probe-c-api.patch` ABI and any libretro core through `dlopen`. Which emulators exist is known only to `src/backends/`, and a test holds the layers above it to that — see `EmuSen_Debugging_Tools_Reference_v5.md` §3.53, including the twenty places the separation had quietly leaked. See `EmuSen_Debugging_Tools_Reference_v5.md` §3.50 for why Mesen's own C ABI could not close the gap and §3.52 for the shape that replaced it.
 
 **Since 2026-09-17 the crate also builds a second binary, `rdp-reference`**, which is not a backend: it replays a display processor command stream through the angrylion rasterizer rather than stepping a machine, and the N64 core's differential tests run it (`Mars_RdpDifferential.md`). It belongs here for the same reason the probe does — it links foreign C into its own address space and hands it raw pointers into memory it also reads — and it is behind its own feature, so the probe is built without it.
 
@@ -109,7 +109,7 @@ The migration is therefore one change, not two: the signature becomes a SQLite t
 
 Nothing was deleted on the strength of the port looking right. `PythonPortDifferentialTests` ran both implementations over the same argv and asserted byte-identical stdout and exit code across seventeen cases: each identity gate, both warnings, the column ratings, a located divergence, input blame, the stream-offset search, both screen formats, the vacuity gate, a vertical shift, a static reference, a missing screen, an empty signature, and the committed Mesen dump set. It passed, and it was then deleted along with the C# it verified — which is why the result is recorded here instead.
 
-Beyond the fixtures, one real pair: `--probe --sig` over SMB3 frames 120–194 against `EmuSen.WiseMan/Reference/dumps/SMB3`. Both implementations produced the same output down to the byte, including the one-sided board warning, the real `PaletteIndex16` decode through the NES palette (5 colours, dominant 92.7%), 1536 differing pixels at 2.50%, and phase +2 — the two-frame boot offset §3.48 predicts.
+Beyond the fixtures, one real pair: `--probe --sig` over SMB3 frames 120–194 against `Reference/dumps/SMB3`. Both implementations produced the same output down to the byte, including the one-sided board warning, the real `PaletteIndex16` decode through the NES palette (5 colours, dominant 92.7%), 1536 differing pixels at 2.50%, and phase +2 — the two-frame boot offset §3.48 predicts.
 
 **The differential earned its cost on one case.** The port was written believing that percentages needed special handling: .NET's `F` format was assumed to round half away from zero while Python rounds half to even, and the values are reachable — 384 differing pixels out of 256×240 is exactly 0.625%. `_fixed()` was accordingly implemented with a decimal round-half-away-from-zero. The test failed on precisely that case, **in the opposite direction to the prediction**. Measured against .NET 10 across eighteen values chosen to cover every dyadic midpoint at zero, one and two decimals: `F` rounds half to **even**, exactly as Python's `format()` does. The deliberate correction disagreed with .NET on seven of eighteen; doing nothing disagreed on none.
 
@@ -161,7 +161,7 @@ language (`Mars_Gpu.md` §4 on Metal) was declined for the reason the stack is f
 ## 5. Adding to the stack
 
 - A new **database**: schema as committed `.sql` next to its owner, `IF NOT EXISTS` throughout, `PRAGMA foreign_keys = ON`, a header comment carrying the argument for the table's existence, a `<None … CopyToOutputDirectory="PreserveNewest">` item in the owning `.csproj` (it propagates transitively through `ProjectReference`; no consumer needs its own), and a new `.gitignore` line for the `.db`.
-- A new **Python tool**: `EmuSen.WiseMan/Reference/analysis/`, stdlib only, `#!/usr/bin/env python3`, module docstring as the manual, exit code as the verdict, `unittest` beside it.
+- A new **Python tool**: `Reference/analysis/`, stdlib only, `#!/usr/bin/env python3`, module docstring as the manual, exit code as the verdict, `unittest` beside it.
 - A new **exception**: a section in §4, with the evidence, and a sentence on where it does not generalise.
 
 ## 6. A later stack: DianaSh in Rust, and C# retired (deferred, 2026-10-01)

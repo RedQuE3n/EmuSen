@@ -232,7 +232,7 @@ is grey and in a Super Game Boy is whatever palette the SNES side chose. Emittin
 greys keeps the frame buffer a faithful record of what the PPU produced and leaves
 tinting to a shader, where a user can turn it off. It also makes a frame buffer
 directly comparable against another emulator's without a colour transform in the
-way, which is what the reference probe under `EmuSen.WiseMan/Reference/` would
+way, which is what the reference probe under `Reference/` would
 need if Mercury ever grows a differential of its own.
 
 The choice is a presentation decision, and it does **not** generalise to Phase D:

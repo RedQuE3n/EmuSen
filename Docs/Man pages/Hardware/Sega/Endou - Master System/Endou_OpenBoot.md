@@ -290,7 +290,7 @@ dumped or compared.
 ZEXALL-SMS 0.20, GPL-2.0, SHA-256 `684cab8d…4375ef30`, in the probe's cache since stage 1, `Endou_References.md` §2),
 cut with `head -c 8192`: hand-written Z80 assembly the size of the replacement, an instruction exerciser with its text
 output, which has nothing to do with any BIOS. **The explained runs**:
-`EmuSen.WiseMan/Reference/analysis/firmware/endou-explained.txt`, three lines of the replacement's own words.
+`Reference/analysis/firmware/endou-explained.txt`, three lines of the replacement's own words.
 
 **Run** [M 2026-10-19]: `firmwarecheck.py open_boot.bin <image> --ignore-fill 16 --control <control> --explained
 endou-explained.txt`, with the default `--min-run 4` and `--max-equal 25`, first on the image of §10 (SHA-256

@@ -239,7 +239,7 @@ Recorded in full in the plan's §1.5, §1.6 and §3.1; in short, all outside the
 
 ## 8. Stage 2, the probe's work (2026-10-05)
 
-The plan's §1.6 asked five things of the reference probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs`,
+The plan's §1.6 asked five things of the reference probe's libretro backend (`Reference/probe-rs`,
 `src/backends/libretro.rs`). Each is built; the references are run as black boxes throughout, their outputs read and
 nothing else.
 
@@ -261,7 +261,7 @@ nothing else.
 - **The loader.** libm is opened into the global namespace before the core, on Linux; the loader's error is printed,
   as before; `--system NAME` names the machine where the extension cannot (`.bin`, `.cue`, `.iso`), and `.32x` is
   read as the 32X.
-- **The cores, pinned by hash.** `EmuSen.WiseMan/Reference/libretro-cores.sha256` pins each reference core by the
+- **The cores, pinned by hash.** `Reference/libretro-cores.sha256` pins each reference core by the
   SHA-256 of its unpacked binary, per buildbot directory. `build-probe.sh libretro-core <core>` uses a cached copy
   only when its hash matches. Otherwise it fetches the buildbot's nightly into `~/.cache/emusen/probe/libretro/cores`,
   unpacks only the core's binary, and refuses a nightly whose hash has moved on, keeping nothing of it; re-pinning is
@@ -486,7 +486,7 @@ Nephrite takes the means, 41 and 66 master clocks (`genesis.rs`), where it had t
 and three clocks, and keeps the grant at the next instruction boundary. The wait's dependence on where the Z80's access
 meets the 68000's bus cycle (the Z80's rounds fall on the 68000's clock, 2.5 to 3.5 T-states of wait) is not modelled.
 
-**The bench.** `EmuSen.WiseMan/Reference/rtl68k/`: `build-referees.sh board` builds `tb_md.cpp` against Nuked-MD's
+**The bench.** `Reference/rtl68k/`: `build-referees.sh board` builds `tb_md.cpp` against Nuked-MD's
 `md_board` (Verilator, the VRAM's FPGA memory block replaced by `vram_ip.v`) into `~/.cache/emusen/probe/nukedmd-board`;
 `python3 mdboard.py <program> [MCLK2 cycles]` writes a hand-assembled cartridge, runs it and reads the pins. Programs:
 `window` and `window-write` (the Z80 reading or writing the cartridge through the window beside the 68000 counting in

@@ -1151,7 +1151,7 @@ SwanStation (the player's American BIOS, by path), to about frame 18,000. The ma
 
 ### 13.1 How they were driven
 
-- **The scripts** are `EmuSen.WiseMan/Reference/analysis/psxplay/*.txt`, buttons and frames only, each counted from an
+- **The scripts** are `Reference/analysis/psxplay/*.txt`, buttons and frames only, each counted from an
   anchor T, the frame the game's title (or its first screen after the BIOS's part) shows on each emulator, since
   SwanStation boots through the BIOS's intro and every load after it runs on the referee's own clock. Each script's
   second line gives T on both. `psxplay.py` drives a disc by one of them on Diamond's run tool (`examples/run`, its new

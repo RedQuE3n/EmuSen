@@ -191,9 +191,9 @@ Every file opened for this work. No URL was opened.
 | 2 | `~/.cache/emusen/probe/nephrite/docs/yamaha/archive-yamaha-chip-jpn/YM2608-application-manual.pdf`, via `pdftotext` and pages 33-34 as images | [S1], Japanese original | No | The PMS and rate tables, Figure 2-5 |
 | 3 | `…/archive-yamaha-chip-jpn/YM2608-data-sheet.pdf`, via `pdftotext` and page 19 as an image | [S2] | No | The register map |
 | 4 | `…/archive-yamaha-chip-jpn/YM3438.pdf`, via `pdftotext` and pages 4-5 as images | [S3] | No | The block list and register map |
-| 5 | `EmuSen.DianaSh/DianaSh/Etc/Man pages/Hardware/Sega/Nephrite - Genesis/`: `Nephrite_Native.md` §19-21, `Nephrite_Disputes.md` (its rules, D-15 to D-19), `Nephrite_OperatorTables.md`, `README.md` | Project pages | No | How the bench is driven and read |
+| 5 | `Docs/Man pages/Hardware/Sega/Nephrite - Genesis/`: `Nephrite_Native.md` §19-21, `Nephrite_Disputes.md` (its rules, D-15 to D-19), `Nephrite_OperatorTables.md`, `README.md` | Project pages | No | How the bench is driven and read |
 | 6 | Nephrite's `src/fm.rs`, `src/fm_tables.rs`, `src/lib.rs`, `examples/fmtrace.rs`, `Cargo.toml` | Project source | Yes, the project's own | The phase path the offset enters |
-| 7 | `EmuSen.WiseMan/Reference/rtl68k/mdboard.py`, `tb_md.cpp`, `build-referees.sh` | Project tools | Yes, the project's own | The bench's programs and logs |
+| 7 | `Reference/rtl68k/mdboard.py`, `tb_md.cpp`, `build-referees.sh` | Project tools | Yes, the project's own | The bench's programs and logs |
 
 The directory `~/.cache/emusen/probe/nephrite/docs/` was listed to find the Yamaha documents; nothing else in it was
 opened. The bench's binary, built at stage 5's bench step, was copied into work directories of its own and run; no

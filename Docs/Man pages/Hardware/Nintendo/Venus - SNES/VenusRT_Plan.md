@@ -67,7 +67,7 @@ Three rules follow from the table:
 
 ### 1.3 How Mesen is used
 
-Mesen is a black-box differential. The reference probe (`EmuSen.WiseMan/Reference/build-probe.sh mesen`, §3.4) runs a
+Mesen is a black-box differential. The reference probe (`Reference/build-probe.sh mesen`, §3.4) runs a
 ROM in it headlessly, applies a scripted pad, and writes VRAM, CGRAM, OAM, WRAM, APU RAM and the screen at chosen
 frames, with CPU and GSU traces and the audio when asked.
 
@@ -248,7 +248,7 @@ Two runners are needed and neither exists in the repository yet (stage 0):
 
 ### 3.4 The Mesen probe: status (measured 2026-09-30)
 
-- **It builds.** `bash build-probe.sh mesen ~/Projects/mesen-reference` from `EmuSen.WiseMan/Reference/` found the
+- **It builds.** `bash build-probe.sh mesen ~/Projects/mesen-reference` from `Reference/` found the
   checkout already patched, built nothing in Mesen (`make: Nothing to be done for 'core'`) and relinked the Rust probe
   in 0.74 s, to `~/.cache/emusen/probe/mesen/probe`.
 - **It runs one SNES frame.** `cd ~/Projects/mesen-reference && ~/.cache/emusen/probe/mesen/probe cputest-full.sfc

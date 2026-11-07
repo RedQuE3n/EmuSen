@@ -676,7 +676,7 @@ once.
 
 - **The bindings.** A hand-written `#[repr(C)]` subset of `libretro.h` and `libretro_vulkan.h`: the calls this
   document names and no others. That keeps the build free of `bindgen` and a C header search. The probe does use
-  `bindgen` (`EmuSen.WiseMan/Reference/probe-rs/build.rs:52–78`), and its bindings are the cross-check in a test that
+  `bindgen` (`Reference/probe-rs/build.rs:52–78`), and its bindings are the cross-check in a test that
   compares struct sizes and constants.
 - **The trait** each core implements:
 

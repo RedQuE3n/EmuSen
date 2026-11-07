@@ -46,12 +46,12 @@ Two things were read of the running chip beyond its output pins:
 
 *As first written:* **the referee the plan named** — Nuked-OPLL built from its tarball and driven through its header,
 sample for sample (`Endou_Plan.md` §6.1, §10 Q4) — **was not run at that point.** Its bench is written and committed
-(`EmuSen.WiseMan/Reference/opll/tb_opll.c` and `build-opll.sh`, §7) and compiles against the header alone; building
+(`Reference/opll/tb_opll.c` and `build-opll.sh`, §7) and compiles against the header alone; building
 `opll.c` from the fetched tarball on the desktop waits on the tester's approval of that compile, which the stage did not
 have. The sample-for-sample gate therefore stands open (§7, `Endou_Native.md` §16.10).
 
 **The black box used instead** [C]: Genesis Plus GX v1.7.4 (`58c3414`, pinned in
-`EmuSen.WiseMan/Reference/libretro-cores.sha256`), whose core option `genesis_plus_gx_ym2413_core` offers `mame` and
+`Reference/libretro-cores.sha256`), whose core option `genesis_plus_gx_ym2413_core` offers `mame` and
 `nuked` [M `--list-options`]; with `nuked`, a Master System program's YM2413 is that build's Nuked-OPLL, run as a
 black box through the probe like every other reference. What reaches the probe is not the chip's samples: Genesis Plus
 GX resamples its 49,716 samples a second to 44,100 with a band-limited step synthesiser, then holds a DC-blocking
@@ -327,7 +327,7 @@ rerun it.
 
 ## 7. The referee bench
 
-`EmuSen.WiseMan/Reference/opll/build-opll.sh` does three things:
+`Reference/opll/build-opll.sh` does three things:
 
 1. checks the tarball's SHA-256;
 2. extracts `opll.c`, `opll.h` and `LICENSE` into the probe's cache without opening them;

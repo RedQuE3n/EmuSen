@@ -250,7 +250,7 @@ and `C0` and `C4` 9,999 in native mode, all as the plan recorded. State only; §
 
 ### 4.1 Method
 
-`EmuSen.WiseMan/Reference/analysis/clonecheck.py <audited> <reference>`. Three signals, reported apart:
+`Reference/analysis/clonecheck.py <audited> <reference>`. Three signals, reported apart:
 
 - **Structure.** Both trees are reduced to one token vocabulary. Identifiers become `ID`; types, casts, parentheses,
   statement ends, `self`/`this` and their member access disappear; a member chain `a.b.c` is one `ID`; the control
@@ -3616,7 +3616,7 @@ That is 4 bits.
 **Under R4**, a sine that no member reproduces on every angle is a stop: the DSP-1's sine is then the program's data,
 and Triangle, Rotate and Polar are named losses. So is a member that agrees on all but a few entries. **Tables and
 firmwarecheck**: the chosen table is generated in `dsphle.rs`, and an independent Python generator,
-`EmuSen.WiseMan/Reference/analysis/dsp1_tables.py`, writes the same table from this record's formula. A crate test
+`Reference/analysis/dsp1_tables.py`, writes the same table from this record's formula. A crate test
 asserts the two are equal word for word, and `firmwarecheck.py` is run plain and `--forced` against the data ROM.
 
 ### 40.2 The sine family rejected, and widened once, in writing (plan §5.2, rule 4)
@@ -5588,7 +5588,7 @@ requires. Every number below was **measured** on 2026-10-04 at WiseMan `f4ec8031
 
 - **The replacements**, `src/chips/`: `dsphle.rs` (1,130 lines; 1,218 fingerprints at §4.1's k and window), `dsp2.rs`
   (645; 722), `st010.rs` (206; 226), `dsp4.rs` (288; 238) and `dspengine.rs` (112; 40).
-- **The independent generators**, `EmuSen.WiseMan/Reference/analysis/dsp1_tables.py` and `st010_tables.py`.
+- **The independent generators**, `Reference/analysis/dsp1_tables.py` and `st010_tables.py`.
 - **The generated tables**, written by `dsp_oracle tables` (the DSP-1's sine S and derivative D, 256 words each; the
   ST010's sine, 256 words). Each image is byte-identical to its generator's output. The crate tests
   `no_replacement_source_holds_a_table_literal`, `the_tables_equal_the_independent_generator` and

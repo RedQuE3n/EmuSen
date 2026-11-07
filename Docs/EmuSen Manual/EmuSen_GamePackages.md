@@ -530,7 +530,7 @@ cost nobody asked for at scan time. A package is made:
 
 ### 3.7 The `pkg` command
 
-Added to `emusen.library` in stage 5 (§7), with its page at `Lib/dianash/emusen.library/man/pkg.1`. *Built
+Added to `emusen.library` in stage 5 (§7), with its page at `Docs/man/emusen.library/pkg.1`. *Built
 2026-10-25 (§14.4)*; `pkg patch` *built at step 6 (§15.2)*; `--self-contained`, `--zip`, `pkg zip` and `pkg identity`
 *built at step 7 (§19.4)*; `pkg wait` joins it as `chd wait` joined `chd`:
 
@@ -1598,7 +1598,7 @@ caller's to ask for (`-j`), since the tool does not know which device it runs on
   reads Galaxia's tree and settings, so it is lent; the platform library hands the table to every shell it makes, in
   `dianash_new` and again in `dianash_set_services` unless the host names its own.
 - **The module `emusen.library`** (`Platform/emusen-library-module`), linked into the platform library beside the
-  other four of EmuSen's modules, its command `chd` and its page `Lib/dianash/emusen.library/man/chd.1`.
+  other four of EmuSen's modules, its command `chd` and its page `Docs/man/emusen.library/chd.1`.
 - **The request**: `{"op": "convert" | "check" | "ls", "paths": [...], "fast": false, "threads": 0}`, paths relative
   to the library with `/` between parts and no `..`, none for the whole library.
 - **The events**, one JSON object a line:

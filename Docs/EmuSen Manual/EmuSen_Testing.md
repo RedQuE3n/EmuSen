@@ -4,7 +4,7 @@ How EmuSen is tested: which units a change can affect, how they run, and what th
 DianaSh command module, `emusen.testing` (crate `Platform/emusen-testing-module`), linked into the standalone `dianash`
 program beside `emusen.dev` and never into the platform library, with one SQLite store and three data files. Its
 commands are `units`, `impact`, `coverage`, `trial`, `results`, `ingest` and `queue`; each has a man page under
-`EmuSen.DianaSh/DianaSh/Lib/dianash/emusen.testing/man/`.
+`Docs/man/emusen.testing/`.
 
 Decided 2026-11-01 by the tester, with the six decisions of §8. Phase 1 (the store, the runner, impact v1) was built on
 2026-11-01; phases 2–4 are §9.

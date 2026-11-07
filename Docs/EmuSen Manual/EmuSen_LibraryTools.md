@@ -205,7 +205,7 @@ and each is a job of the library tool (`Platform/library-tool/src/rom.rs`), reac
 `emusen.library`, now 1.6 (1.5 being the core tool's `core-` ops, `EmuSen_Cores.md` §6.1), as `chd` and `pkg` are: a
 module never links Galaxia, and the tool already reads the settings' library, routes a file to its system and owns the
 disc reader's use. No new crate and no new surface beyond the service's minor were needed. The page is `man rom`
-(`Lib/dianash/emusen.library/man/rom.1`), which holds what the player needs; this section holds the rest.
+(`Docs/man/emusen.library/rom.1`), which holds what the player needs; this section holds the rest.
 
 ### 7.1 The requests and events
 

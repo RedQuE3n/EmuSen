@@ -441,7 +441,7 @@ The runtime's view (which card is in which slot of which running game) is the fr
 
 ### 6.4 The DianaSh command module: `memcard`
 
-The module `emusen.memcard`, one command, `memcard`, its page `Lib/dianash/emusen.memcard/man/memcard.1`:
+The module `emusen.memcard`, one command, `memcard`, its page `Docs/man/emusen.memcard/memcard.1`:
 
 ```
 memcard ls [<card>]                every card under Saves by console, or the saves on one card

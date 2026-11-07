@@ -297,7 +297,7 @@ ended with were implemented in the commit after it, which each entry's last line
 - **Nuked-MD's `m68kcpu`**, from the MegaDrive MiSTer checkout (`~/Projects/megadrive-mister-reference`, `4b11b2c`,
   2026-10-01): `68k.v` with `68k_ucode.txt` and `68k_ncode.txt`. A transcription of the NMOS 68000's die; its README
   calls it "Done, needs more testing & bugfixing".
-- **The bench**, `EmuSen.WiseMan/Reference/rtl68k/tb68k.cpp`, built for either core by `build-referees.sh` into
+- **The bench**, `Reference/rtl68k/tb68k.cpp`, built for either core by `build-referees.sh` into
   `~/.cache/emusen/probe/{fx68k,nuked68k}`. Memory answers at once (DTACK with AS), interrupts and the other inputs are
   held inactive. fx68k is given two of its clocks to each half of the 68000's clock, its phase enables alternating;
   Nuked-MD seven of its master clocks. After reset a boot program loads the case: the reset vectors point at code placed

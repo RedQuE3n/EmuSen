@@ -238,7 +238,7 @@ PlayStation/tests/goldens/`, by `tests/programs.rs`'s three golden tests [M]:
 |---|---|---|---|
 | `programs.txt` | every program of `programs/`, 49, each for 60 frames: on the open kernel for the kernel's own, bare for the rest, a card in slot 1 for the card programs, stage 7's synthetic disc for the CD's | 49 | routinely |
 | `ps1-tests.txt` | every program of ps1-tests' release build 158 but its tools, 48, on the open kernel, for the frames WiseMan's gates run them (900 for those graded by their TTY, 1,500 for `gpu/bandwidth`, 315 and 309 for the movies, 300 for the rest), `timers` on a PAL console as its log was | 48 | with `EMUSEN_DIAMOND_PS1TESTS` |
-| `discs.txt` | the eight bench discs, each played by its press script of `EmuSen.WiseMan/Reference/analysis/psxplay/` from the anchor its second line gives for the open kernel, a blank card in slot 1, to frame 3,000; at every 300th frame | 8 discs, 80 anchors | with `EMUSEN_DIAMOND_DISCS`, the folder of the tester's copies |
+| `discs.txt` | the eight bench discs, each played by its press script of `Reference/analysis/psxplay/` from the anchor its second line gives for the open kernel, a blank card in slot 1, to frame 3,000; at every 300th frame | 8 discs, 80 anchors | with `EMUSEN_DIAMOND_DISCS`, the folder of the tester's copies |
 
 A program's line holds FNV-1a digests of every frame's picture and of the sound, each folded from the start, and of the
 state, VRAM and the TTY at the end; an anchor's the pictures and the sound folded to it and the state then. Digests and

@@ -83,7 +83,7 @@ Pinned by `probe-rs`'s unit tests (`system_comes_from_the_rom_extension`,
 50 pass) and by runs of the three cores: Beetle PSX and SwanStation skipped with no `--sysdir` and with an empty one,
 PCSX-ReARMed run [M]; `NephriteTests`' two probe tests pass with this build (`EMUSEN_LIBRETRO_PROBE`) [M]. No other
 system's behaviour changes: the extensions were unclaimed, and the refusal names only
-PlayStation cores [A]. The three cores are pinned by hash in `EmuSen.WiseMan/Reference/libretro-cores.sha256`, and
+PlayStation cores [A]. The three cores are pinned by hash in `Reference/libretro-cores.sha256`, and
 `build-probe.sh libretro-core <core>` finds each pinned copy [M].
 
 ## 4. The reference cores
@@ -193,7 +193,7 @@ commits, releases and languages; the search results named in §1. Seen as a run'
 
 Decided 2026-10-11: no console is used for any dispute; reference emulators run as black boxes referee what the
 suites' console logs and pictures do not reach. DuckStation `v0.1-11894` and PCSX-Redux `9272f440` were fetched as
-release binaries into the cache, pinned by SHA-256 in `EmuSen.WiseMan/Reference/psx-referees.sha256`, and are driven
-headless with the three libretro cores of §4 by `EmuSen.WiseMan/Reference/analysis/psxreferee.py`; no$psx was not
+release binaries into the cache, pinned by SHA-256 in `Reference/psx-referees.sha256`, and are driven
+headless with the three libretro cores of §4 by `Reference/analysis/psxreferee.py`; no$psx was not
 run, wine not being installed. Beetle PSX and SwanStation ran on the player's own BIOS, as in §8. What each referee is,
 how it is driven, how their lineages are weighed and what each dispute's program showed on them: `Diamond_Referees.md`.

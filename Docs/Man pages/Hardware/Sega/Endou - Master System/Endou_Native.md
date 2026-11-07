@@ -147,7 +147,7 @@ Toolchains: rustc 1.99.0, .NET 10.0.112, on the desktop (Ryzen 7 7700X).
 ### 5.2 The references through the probe
 
 Five libretro cores run the Master System's and the SG-1000's cartridges with no BIOS; Gearsystem and SMS Plus GX were
-fetched and pinned this stage (`EmuSen.WiseMan/Reference/libretro-cores.sha256`). The probe gained one line: `.sg`
+fetched and pinned this stage (`Reference/libretro-cores.sha256`). The probe gained one line: `.sg`
 names the system `sg1000`, which only names its spaces' system in the log (`system_comes_from_the_rom_extension`; the
 probe's 50 tests pass).
 

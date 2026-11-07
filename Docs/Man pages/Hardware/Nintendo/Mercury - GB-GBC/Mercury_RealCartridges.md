@@ -78,7 +78,7 @@ also what disables `SaveSram`.
 
 ## 3. What the reference emulator says
 
-The libretro probe (`EmuSen.WiseMan/Reference/`) already had gambatte unpacked, so
+The libretro probe (`Reference/`) already had gambatte unpacked, so
 Super Mario Land was run in both and compared at frame 1500, deep into its attract
 demo:
 

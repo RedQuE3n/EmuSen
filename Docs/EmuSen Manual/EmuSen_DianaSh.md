@@ -1188,7 +1188,7 @@ standard output, exit status and host action each line gives, over fixed inputs.
   core and each v1 core on images the tests build (`SyntheticRom` for the SNES, and the other systems' builders), for
   the commands that read live state, run for a fixed number of frames so the state is deterministic. No commercial ROM
   is used, and the corpus contains no ROM data.
-- **The files** are committed, one per command (`EmuSen.WiseMan/DianaSh/Golden/<command>.golden`), as text: each case
+- **The files** are committed, one per command (`Platform/dianash/tests/golden/<command>.golden`), as text: each case
   its line, then its output, status and action. A difference fails with the first differing byte and the case.
 - **What is not golden**, named in the corpus with its reason: anything that prints a time, a process id or a path of
   the machine the test runs on (`vstop`'s numbers, `pwd` outside the sandbox's fixed root); these are matched by
@@ -1252,7 +1252,7 @@ having happened, because the provider is behind the table.
 
 *Built 2026-10-10; the counts below are of that commit.*
 
-**What is in it.** Ninety files in `EmuSen.WiseMan/DianaSh/Golden/`: one for each of the 83 commands (`[` is
+**What is in it.** Ninety files in `Platform/dianash/tests/golden/`: one for each of the 83 commands (`[` is
 `bracket.golden`, since the bracket cannot begin a portable file name), one for each of the six builtins (`help`,
 `man`, `summary`, `export`, `unset`, `source`), and `shell.golden` for the two lines of `help` that describe the
 language rather than a command (control flow, pipes, quoting, redirection, history expansion, substitution). An alias
@@ -1441,7 +1441,7 @@ there; the effect forbidden, a change to any recorded output, is §13.4's gate, 
 
 **The manual pages.** The dictionary in `ManPages.cs` held 99 pages, not the 98 counted in §1: `hotaru`'s page was
 added the same day as that count, when Hotaru became a command (`EmuSen_Frontend_Driver.md` §0). Each page is now a
-file of its own, `EmuSen.DianaSh/DianaSh/Lib/dianash/<module>/man/<name>.<section>`, 146,015 bytes in all, and
+file of its own, `Docs/man/<module>/<name>.<section>`, 146,015 bytes in all, and
 `ManPages.cs` went from 3,071 lines to 43, a reader that keeps the old `Lookup(name)` so that `man`, `ManPageTests`
 and `ThemeVocabularyTests` call it unchanged. The layout follows from three things this page has already fixed.
 §5.3's manifest names a command's page by a path relative to the manifest, `man/mem.1`; §12.4 puts every shipped

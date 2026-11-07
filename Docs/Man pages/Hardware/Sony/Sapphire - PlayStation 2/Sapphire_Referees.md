@@ -6,7 +6,7 @@ evidence is the outputs of emulators run as black boxes, weighed as `Diamond_Ref
 This page records which referees were installed and how each is driven headless (§2), how their agreement is weighed
 (§3), the project program every referee that runs one was graded on (§4), what this stage's writer was exposed to
 (§5), the evaluation of a hardware context for the probe (§6) and of DobieStation (§7), the plan's predictions this
-stage tested (§8), and what was read (§9). The driver is `EmuSen.WiseMan/Reference/analysis/ps2referee.py`.
+stage tested (§8), and what was read (§9). The driver is `Reference/analysis/ps2referee.py`.
 
 Marks as in the plan: **[M]** measured on 2026-10-24 on the desktop (Ryzen 7 7700X, RX 6800, Fedora 44) with the tool
 named; **[R]** read from the source named; **[A]** argued; **[C]** a choice.
@@ -32,7 +32,7 @@ the expected texts (from S4 on, P2) and against the project's own programs, whos
 | **`play_libretro`** | libretro core; reports **`play! 0.77-16-g505dac7`** | the same nightly, 7,592,664 bytes, SHA-256 `45fc9028…` | BSD-2-Clause | none | §2.3 | refused: asks for OpenGL core 3.2, runs nothing, and crashes on unload | `ram` 67,108,864 bytes, empty | Play! |
 | DobieStation | — | not installed | GPL-3.0 | the player's | — | — | — | its own, tied to ps2tek (§7) |
 
-The standalone releases are pinned in `EmuSen.WiseMan/Reference/ps2-referees.sha256` with their URLs (PCSX2's tagged
+The standalone releases are pinned in `Reference/ps2-referees.sha256` with their URLs (PCSX2's tagged
 GitHub release, not a rolling build; Play!'s from purei.org's `downloads/play/stable/0.72/`), and the cores in
 `libretro-cores.sha256` beside Diamond's. `ps2referee.py fetch` downloads, verifies and unpacks the standalone ones into
 `~/.cache/emusen/probe/sapphire/referees/`; `build-probe.sh libretro-core <core>` fetches each core; the probe is

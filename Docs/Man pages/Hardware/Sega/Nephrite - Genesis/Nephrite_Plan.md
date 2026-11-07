@@ -156,7 +156,7 @@ no licence, which matters only if a file were ever quoted, which the protocol fo
 
 ### 1.6 The black-box references
 
-The reference probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs`, `build-probe.sh libretro`) runs a
+The reference probe's libretro backend (`Reference/probe-rs`, `build-probe.sh libretro`) runs a
 libretro core headlessly. *Measured 2026-10-04,* unchanged:
 
 | Core | Version (buildbot, 2026-10-01 to 04) | Licence | Mega Drive | Sega CD without a BIOS | 32X | Spaces through the standard calls | 600 frames, wall |

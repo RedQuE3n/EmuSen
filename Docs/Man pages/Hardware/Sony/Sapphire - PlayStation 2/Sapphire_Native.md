@@ -411,7 +411,7 @@ SDK or loader source and no firmware was read; the BIOS images were linked, neve
   into one; `programs/record.s` (the gate) and `programs/frames.s` (a frame counter for the referees' cost);
   `tests/programs.rs`. **A new dependency, said here** [C]: `emusen-mips` as a dev-dependency only, the assembler of
   the referees' programs, the crate the plan's §9.1 assigns to Sapphire; the library and its cdylib are unchanged.
-- **The driver** `EmuSen.WiseMan/Reference/analysis/ps2referee.py` (`fetch`, `ram`, `boot`), modelled on Diamond's
+- **The driver** `Reference/analysis/ps2referee.py` (`fetch`, `ram`, `boot`), modelled on Diamond's
   `psxreferee.py`; its pins `ps2-referees.sha256`; three rows in `libretro-cores.sha256`; `tests/test_ps2referee.py`.
 - **The probe**: `SET_HW_RENDER` is answered false as before, and prints one line naming the context and version asked
   for (`hw_context_name`, `hw_refusal`); documented in `EmuSen_Debugging_Tools_Reference_v5.md` §3.50.

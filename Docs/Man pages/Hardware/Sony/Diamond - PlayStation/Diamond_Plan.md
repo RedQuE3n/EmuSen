@@ -126,7 +126,7 @@ PS-GPU and PS-GTE are cloned, GHDL 6.0.0 is unpacked user-local, and `Diamond_FP
 
 ### 1.6 The black-box references
 
-The probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs`) already passes a path to cores that need one
+The probe's libretro backend (`Reference/probe-rs`) already passes a path to cores that need one
 (`need_fullpath`) and takes a `--sysdir` of a person's own dumps [R `backends/libretro.rs`]. Every PlayStation core
 below needs the path.
 

@@ -3028,11 +3028,11 @@ declares them, by the folder that reads them:
 | Read by | Input |
 |---|---|
 | MarsRT (`include_bytes!` in its GPU module, and a test) | `EmuSen/Cores/Nintendo/Mars - N64/Rdp/Gpu/Shaders` |
-| VenusRT's tests | `EmuSen.WiseMan/Reference/analysis/dsp1_tables.py`, `st010_tables.py` |
-| Diamond's tests | `EmuSen.WiseMan/Reference/analysis/psxplay` |
+| VenusRT's tests | `Reference/analysis/dsp1_tables.py`, `st010_tables.py` |
+| Diamond's tests | `Reference/analysis/psxplay` |
 | Diamond's kernel harness (in Diamond's folder) | `Diamond_OpenKernel.md` |
 | `Platform/serenity` (`include_str!`) | `EmuSen.Serenity/Slang/spirv-cache-schema.sql` |
-| `Platform/dianash`'s tests | `EmuSen.WiseMan/DianaSh/Golden`, `EmuSen.Crystal/include/emusen_session.h` |
+| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `EmuSen.Crystal/include/emusen_session.h` |
 
 **The check.** The list will go stale as code changes, so the plan checks it on every run:
 

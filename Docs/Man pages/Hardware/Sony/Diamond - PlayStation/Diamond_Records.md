@@ -82,7 +82,7 @@ seen to keep on Diamond (§5.2) [M, fitted].
 ### 1.3 The checks
 
 **Equivalence.** Each record is compared with the numbers the release program prints on Diamond, its open kernel,
-the same market, by `EmuSen.WiseMan/Reference/analysis/psxrecords.py equal`, which renders the record as the release's
+the same market, by `Reference/analysis/psxrecords.py equal`, which renders the record as the release's
 text. A difference is a defect of the rewrite until a measurement shows its cause outside the measured instructions.
 Every difference below was traced to such a cause with Diamond's instruction trace of both runs; for `timers`' frame
 rows, `chopping` and `chain-looping` an experiment then gave the rewrite the same cause and met the release's numbers

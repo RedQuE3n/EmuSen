@@ -502,7 +502,7 @@ A derived table is generated, never written out. The rules:
 2. **The core generates the table from that formula** at start-up or in `build.rs`, by code. The source never holds the
    table as a literal array.
 3. **A second, independent generator** checks the first: a short Python script in
-   `EmuSen.WiseMan/Reference/analysis/`, written from the record's formula and not from the Rust, writes the same table
+   `Reference/analysis/`, written from the record's formula and not from the Rust, writes the same table
    to a file; a crate test asserts the two are equal word for word.
 4. **When the oracle rejects every member of the family**, the family may be widened once, in writing, with the reason.
    A table that no stated formula reproduces is R4's stop. A table that a formula reproduces except at a few entries is

@@ -44,7 +44,7 @@ CPUs' disputes in their own record pages.
 - Test program: none in the corpus measures them (searched 2026-10-05: the console test programs of the plan's §3.1,
   the r57shell and SpritesMind folders).
 - Referee: Nuked-MD's whole board, `md_board`, compiled with Verilator 5.046 and run as a black box by a bench of its
-  pins (`EmuSen.WiseMan/Reference/rtl68k/tb_md.cpp`; programs and readings by `mdboard.py`; the FPGA memory block its
+  pins (`Reference/rtl68k/tb_md.cpp`; programs and readings by `mdboard.py`; the FPGA memory block its
   VRAM names replaced by a behavioural one written from the instance's port list, `vram_ip.v`). The programs, written
   for the purpose and hand-assembled: the 68000 loads a Z80 loop that reads banked cartridge ROM (or, as the control,
   its own RAM) and then counts in a loop in its own RAM, so that the cartridge's pins show only the Z80's window reads

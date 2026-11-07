@@ -214,7 +214,7 @@ such; a majority alone rules nothing).
 | **Play!** (`play_libretro`) | libretro core and standalone; 2,432 KB, 2026-10-23 [R] | MIT [R `.info`] | runs: "a built-in high-level emulation BIOS. Using an external BIOS file is not necessary or possible" [R its README] | standalone `--disc`, `--elf`, `--state` [R ibid.]; expects CD and DVD images as CHD [R ibid.] |
 | **DobieStation** | Standalone; last pushed 2021-07-25 [R GitHub API] | GPL-3.0 | — | Evaluated at S3 for a headless form; written by ps2tek's author (§2.1), so not independent of that document |
 
-**Two findings that shape S3** [M]: the probe's libretro backend (`EmuSen.WiseMan/Reference/probe-rs/src/backends/
+**Two findings that shape S3** [M]: the probe's libretro backend (`Reference/probe-rs/src/backends/
 libretro.rs`) answers no `SET_HW_RENDER` request, so none of the three PlayStation 2 libretro cores can draw through it
 as it stands; and the probe has no README of its own, its documentation being
 `EmuSen_Debugging_Tools_Reference_v5.md` §3.50. A hardware context for the probe (headless EGL with OpenGL, or the

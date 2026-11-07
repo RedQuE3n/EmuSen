@@ -1,7 +1,7 @@
 # .NET Build Outputs
 bin/
 # VenusRT's corpus goldens keep the corpus's own folder names, bin/ among them - see VenusRT_Native.md §69.7.
-!EmuSen.WiseMan/Cores/VenusGoldens/corpus/**/bin/
+!EmuSen/Cores/Nintendo/VenusRT - SNES/tests/goldens/corpus/**/bin/
 # A Rust crate's src/bin/ holds its programs' source, not build output.
 !**/src/bin/
 obj/

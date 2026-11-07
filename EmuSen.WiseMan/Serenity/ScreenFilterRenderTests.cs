@@ -9,6 +9,7 @@ using EmuSen.Serenity;
 using EmuSen.Serenity.Shaders;
 using EmuSen.Serenity.Slang;
 using System.Collections.Generic;
+using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Serenity
 {

@@ -111,6 +111,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             Stop(s.Window);
         }, default);
 
+        // The folder the runtime unpacks an archive into, galaxia's disc_set.rs rule - see EmuSen_Galaxia.md §3.7.
+        private static string UnpackedFolder(string archive)
+        {
+            var info = new FileInfo(archive);
+            byte[] key = System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes($"{info.FullName}|{info.Length}|{info.LastWriteTimeUtc.Ticks}"));
+            return Path.Combine(DataStore.Unpacked, Convert.ToHexString(key, 0, 8).ToLowerInvariant());
+        }
+
         // A v1 engine's disc is loaded while the screen shows, a zip unpacked under it, and the game still starts at the screen's end - see Diamond_Players.md §12.8.3.
         [Fact]
         public Task A_disc_is_loaded_while_the_screen_shows_and_starts_at_its_end() => Session.Dispatch(() =>
@@ -124,7 +132,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
                 using var entry = archive.CreateEntry("Opal Reef/Opal Reef.bin").Open();
                 entry.Write(SyntheticPsxDisc.Build().DataTrack);
             });
-            string marker = Path.Combine(EmuSen.Galaxia.Media.ArchiveImages.FolderFor(zip), ".unpacked");
+            string marker = Path.Combine(UnpackedFolder(zip), ".unpacked");
             using var loaded = LoadsUnderTheScreen(s);
             for (int guard = 0; guard < 6 && s.System != "psx"; guard++) s.Pad.Right();
             s.Pad.A();

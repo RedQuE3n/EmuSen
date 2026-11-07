@@ -131,7 +131,6 @@ namespace EmuSen.WiseMan.DianaSh
                 Directory.CreateDirectory(Path.GetDirectoryName(full)!);
                 File.WriteAllBytes(full, bytes);
             }
-            foreach (string user in DianaShUserRegistry.Users.Where(u => !u.Equals("root", StringComparison.OrdinalIgnoreCase)).ToList()) DianaShUserRegistry.TryRemove(user);
             string statePath = Path.Combine(DataStore.SaveStates, "golden.state");
             IDianaShCommand[] extras = HostCommands(() => statePath, window: !c.NoWindow);
             DianaShSessionManager? sessions = c.NoSessions ? null : new DianaShSessionManager();

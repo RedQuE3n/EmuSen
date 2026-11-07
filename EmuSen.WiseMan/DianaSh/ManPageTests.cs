@@ -48,9 +48,9 @@ namespace EmuSen.WiseMan.DianaSh
         [InlineData("state")]
         public void Every_frontend_registered_command_has_a_real_man_page(string name)
         {
-            string? page = ManPages.Lookup(name);
+            string page = DianaShInterpreter.CreateWithoutSession().Submit($"man {name}").Output;
 
-            Assert.NotNull(page);
+            Assert.DoesNotContain("No manual entry", page);
             Assert.Contains("NAME", page);
             Assert.Contains("DESCRIPTION", page);
         }

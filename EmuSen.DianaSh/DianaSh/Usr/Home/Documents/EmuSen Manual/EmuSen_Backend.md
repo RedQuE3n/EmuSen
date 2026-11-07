@@ -10512,3 +10512,56 @@ their sidecars and `cores.manifest`. What the deleted files held that kept code 
   points the libretro crates, the broker and the corpus at the classes and crates that still read them; the WiseMan
   job of `rust-cores.yml` no longer runs the platform digests' class and runs the front ends' tests over the Rust
   cores.
+
+### 40.11 Before the Qt port, part A (2026-11-07)
+
+*Decided 2026-11-07 by the tester:* before the Qt front end is begun, the C# that no shipped program reaches is
+deleted, the files that are not C# leave the C# projects' folders, `memcard` moves to Rust and `EmuSen.Crystal` is
+emptied, and Pharaoh is reduced to a backend of the reference probe. The list is the survey of 2026-11-07's (c) column
+and its rows 2, 4 and 10. Each part is one change, below.
+
+#### 40.11.1 The dead C#
+
+**The proof.** Each type was searched for by name over every `.cs` and `.axaml` file of the solution
+(`git grep -w`) on the tree of `ae5649e2e`; a type was taken as dead when no file outside its own and WiseMan named
+it. Two needed a closer look: `CheatsNative` was the whole of the database chain's binding (its `ReadWrite` was
+called from its own file alone), and `ArchiveImages` had one shipped reader, `RomLibrary.Extensions`, of its list of
+archive extensions.
+
+**What went.**
+- *Galaxia:* `DiscFiles` with `DiscSet`, `MappedFile`, `SoftPatches`, `ArchiveImages` and `ConsolesConfig`. Their
+  Rust halves (`disc_set.rs`, `archive.rs`, the runtime's `consoles.json`) are what the programs use. The list of
+  archive extensions is now `RomLibrary.ArchiveExtensions`, beside its one reader; its owner is still galaxia's
+  `archive.rs` (`EXTENSIONS`), which no export hands to C#, and the C# copy goes with the C# front end.
+- *The cheat database's C# chain:* `CheatDatabase`, `CheatDatabaseInstaller` (with its `FetchOverride`),
+  `CheatDatabasePruner`, `ChtFile` with `CheatKind`, `ChtCheat` and `ChtParseResult`, `NativeDownload` and
+  `CheatsNative`. Mistress's database window has gone through the runtime's cheat ops since §40.1.
+- *Mistress:* `TabStripFit`, `ScrapeCost`, and `RecordingUrlLauncher`, which only the suite used and which moved
+  into WiseMan's `NoSteam`. *Crystal:* `MediumWords` and `DisplayShape`. *Serenity:* `CrtFilters` and
+  `HandheldFilters`, two accessors of the library's catalog that only tests read.
+- *DianaSh:* the standalone `Program.cs`, so `EmuSen.DianaSh` is a library and a publish no longer carries its
+  apphost, `.deps.json` and `.runtimeconfig.json` in `lib/EmuSen`; the shell's own program is the Rust
+  `dianash-program`. Also `DianaShUserRegistry` and `DianaShCommandSuspensions`, which the Rust shell's builtins
+  replaced, and `ManPages`, whose reader is the Rust shell's `man.rs`. `vstop` stays: it was not on the list.
+
+Shipped C# lost 1,297 lines and gained 6.
+
+**The tests.** Classes of deleted code were deleted with it: `CheatServicesParityTests` (4 cases, with its goldens
+`ChtTexts`, `ChtWrites` and `CheatTrees`), `CheatDownloadParityTests` (12), `CheatArchiveFormsTests` (1),
+`ChtFileTests` (14), `CheatDatabasePrunerTests` (11, two of them `CoreDescriptor.SupportedCheatSystems`'s, which no
+shipped code calls), the fixtures `DotNetCheatInstall` and `DotNetFetch`, and `SmsCheatFormatsTests`' opt-in case
+that read the database through `ChtFile`, and `GalaxiaParityTests`' three mapping cases (`GalaxiaParityTests.Media.cs`,
+with two goldens). The facts stay held where the Rust is: `emusen-cheats`' own tests (`cht.rs`, `database.rs`,
+`install.rs`, `prune.rs`), `dotnet_zip.rs`'s and galaxia's `mapped.rs`. The platform library's exports those bindings
+called (the mapping, the soft patches, the cheat files, database and installer, and `emusen-net`'s download) now have
+no caller outside Rust; narrowing the C interface is a change of its own. Helpers that tests used and no program
+did became WiseMan's fixtures, unchanged in what they answer: `ConsolesConfig`, `CrtFilters`, `HandheldFilters`
+(over `ScreenFilters.All`, since the catalog is internal to Serenity) and `DisplayShape.Television`. Tests that read
+a man page through `ManPages` read `man <name>` through the shell, and `LaunchScreenTests` computes the unpacked
+folder by `disc_set.rs`'s rule (`folder_for`).
+
+**A defect found on the way.** `CheatDatabaseWindowTests`' two download cases set `CheatDatabaseInstaller.FetchOverride`,
+which nothing has read since the window downloads through the runtime (`CheatDbUpdate`): the runtime's fetch is
+emusen-net's, with no hook a test can replace (`Platform/platform/src/crystal.rs`), so the cases reached the network
+or failed. They are skipped, with that reason, until the runtime offers such a hook; adding one is an extension of
+the frontend API's configuration and is left to the tester.

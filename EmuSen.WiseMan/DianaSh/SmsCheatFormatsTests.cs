@@ -5,7 +5,7 @@ using Xunit.Abstractions;
 
 namespace EmuSen.WiseMan.DianaSh
 {
-    // The Master System pack's Pro Action Replay and Game Genie codecs against SMS Power!'s two pages, and the libretro database's files through ChtFile - see EmuSen_Cheats.md §11.
+    // The Master System pack's Pro Action Replay and Game Genie codecs against SMS Power!'s two pages - see EmuSen_Cheats.md §11.
     public class SmsCheatFormatsTests
     {
         private readonly ITestOutputHelper _output;
@@ -39,46 +39,6 @@ namespace EmuSen.WiseMan.DianaSh
             Assert.False(Par.CanDecode("3A6-4AB-2A2"));
             Assert.False(Genie.CanDecode("00D5-BD??"));
             Assert.Equal(SystemPacks.For("sms")!.AutoDetectCodec, SystemPacks.For("sg1000")!.AutoDetectCodec);
-        }
-
-        private static string? Database => Environment.GetEnvironmentVariable("EMUSEN_SMS_CHEAT_DB") is { } d && Directory.Exists(d) ? d : null;
-
-        // The libretro database's Master System and SG-1000 folders imported with both codecs, as Mistress's database window does; opt-in by the Cheats folder, measured for EmuSen_Cheats.md §11.
-        [Fact]
-        public void The_databases_master_system_and_sg_1000_files_import()
-        {
-            if (Database is not { } folder)
-            {
-                _output.WriteLine("skipped: EMUSEN_SMS_CHEAT_DB names the cheat database's folder holding Sega - Master System - Mark III and Sega - SG-1000");
-                return;
-            }
-            foreach (string system in new[] { "Sega - Master System - Mark III", "Sega - SG-1000" })
-            {
-                int files = 0, entries = 0, pokes = 0, patches = 0, compared = 0;
-                var refused = new Dictionary<string, int>();
-                foreach (string file in Directory.EnumerateFiles(Path.Combine(folder, system), "*.cht"))
-                {
-                    string text = File.ReadAllText(file);
-                    var parsed = ChtFile.Parse(text, Par, SmsSystems.Ram, Genie);
-                    files++;
-                    entries += parsed.Cheats.Count + parsed.Skipped;
-                    pokes += parsed.Cheats.Count(c => c.Kind == CheatKind.RamPoke);
-                    patches += parsed.Cheats.Count(c => c.Kind == CheatKind.RomPatch);
-                    foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(text, "cheat[0-9]+_code = \"([^\"]*)\""))
-                    {
-                        string part = m.Groups[1].Value.Split('+')[0].Trim();
-                        if (Genie.CanDecode(part) && Genie.DecodeCompare(part) is not null) compared++;
-                        if (!Par.CanDecode(part) && !Genie.CanDecode(part))
-                        {
-                            string shape = System.Text.RegularExpressions.Regex.Replace(part, "[0-9A-Fa-f]", "x");
-                            refused[shape] = refused.GetValueOrDefault(shape) + 1;
-                        }
-                    }
-                }
-                _output.WriteLine($"{system}: {files} files, {pokes + patches} of {entries} entries load ({100.0 * (pokes + patches) / Math.Max(1, entries):F1}%), {pokes} pokes and {patches} patches; {compared} Game Genie codes carry a reference, which a .cht entry has nowhere to keep (EmuSen_Cheats.md §8)");
-                foreach (var (shape, n) in refused.OrderByDescending(r => r.Value).Take(10)) _output.WriteLine($"{n,6}  '{shape}'");
-                Assert.True(pokes > 0 && (patches > 0 || system == "Sega - SG-1000"), system);
-            }
         }
     }
 }

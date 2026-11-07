@@ -1,8 +1,10 @@
 using System.Collections.Generic;
+using EmuSen.Galaxia;
+using EmuSen.Galaxia.Models;
 
-namespace EmuSen.Galaxia.Models
+namespace EmuSen.WiseMan.Fixtures
 {
-    // /etc/EmuSen/consoles.json: each console's core settings by key, the runtime's own file, copied once from graphics.json's Consoles and never over a file that exists - see EmuSen_Backend.md §14.12 and SR12.
+    // /etc/EmuSen/consoles.json as the tests write and read it; the runtime owns the file and its first copy from graphics.json - see EmuSen_Backend.md §14.12 and SR12.
     public class ConsolesConfig
     {
         public Dictionary<string, Dictionary<string, string>> Consoles { get; set; } = new();
@@ -16,7 +18,6 @@ namespace EmuSen.Galaxia.Models
             settings[key] = value;
         }
 
-        // An empty console is removed with its last value, so a reset leaves nothing behind in the file.
         public void Forget(string console, string key)
         {
             if (!Consoles.TryGetValue(console, out var settings)) return;
@@ -32,7 +33,7 @@ namespace EmuSen.Galaxia.Models
 
         public static bool Exists => File.Exists;
 
-        // The file, or with none yet graphics.json's map copied into a new one: the whole map, since which keys are a core's depends on the engines installed then; with nothing to copy, nothing is written.
+        // The file, or with none yet graphics.json's map copied into a new one, as the runtime's first listing copies it.
         public static ConsolesConfig Load()
         {
             if (File.Load() is { } stored) return stored;

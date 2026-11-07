@@ -1,20 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The core-agnostic debug/scripting shell - see EmuSen_DianaSh.md for
-       the full design. OutputType=Exe so `dotnet run` here launches a
-       standalone shell with no core loaded at all (see Program.cs) -
-       every other project just references this like any other library;
-       its Main only runs when this project is the one actually launched. -->
+  <!-- The frontends' binding of the Rust shell - see EmuSen_DianaSh.md for the full design. The shell's own
+       program is the Rust dianash-program; this library has no Main. -->
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- OutputType=Exe above means a RID-specific publish of a frontend that
-         references this project also builds it for the HOST rid, so restore
-         has to produce assets for every publish target plus the build
-         machine's own - see `man hier`. -->
-    <RuntimeIdentifiers>win-x64;linux-x64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <!-- The Rust shell's host API is called through function pointers - see EmuSen_DianaSh.md §13.7. -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>

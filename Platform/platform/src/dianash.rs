@@ -5,7 +5,7 @@
 //! A shell is used by one thread at a time; another thread's call waits for it, and a call made from inside one of
 //! the shell's own commands, on the thread running it, is refused with `BUSY` rather than deadlocking.
 
-use crate::{fail, put, LAST_ERROR};
+use crate::{fail, last_error, put};
 use emusen_dianash::abi::{dianash_config, dianash_host_commands, dianash_service, status, CONFIG_INTERACTIVE, CONFIG_SESSIONS, DONE, EXIT, NEEDS_MORE};
 use emusen_dianash::shell::{self, Config, Shell, Submitted};
 use std::cell::RefCell;
@@ -79,7 +79,7 @@ pub unsafe extern "C" fn dianash_version_text(out: *mut u8, len: usize) -> i64 {
 /// `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dianash_last_error(out: *mut u8, len: usize) -> i64 {
-    LAST_ERROR.with_borrow(|last| unsafe { put(last.as_bytes(), out, len) })
+    unsafe { last_error::copy_out(last_error::Slot::Platform, out, len) }
 }
 
 /// A shell, or null with the words in `dianash_last_error`.

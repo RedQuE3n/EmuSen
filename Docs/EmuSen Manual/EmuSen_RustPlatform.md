@@ -3738,3 +3738,11 @@ what it reads to, recorded once and never re-recorded to make a change pass. Eac
 
 The Deflate64 zip is refused by the game reader at this point; the cheat database's reader takes it. The test names
 that one refusal, so that a reader that starts taking it says so.
+
+### 47.2 One store of a call's last words
+
+Five thread-local strings held the words of a thread's last failing call, one per header that has a last-error export:
+the platform's (which the shell's `dianash_last_error` shares), the frontend API's, the session table's, the
+library's and the scraper's. They are now one module, `platform/src/last_error.rs`, with a slot for each, so a
+failure in one header still leaves another's words alone, as before. The scraper redacts its words before they are
+stored, as it did.

@@ -2,18 +2,12 @@
 //! runtime, and copies the answer out by the length query. Exported as part B7 builds them; the binding reaches them
 //! only once every export of major 1 is here (EmuSen_Backend.md §29.3).
 
-use std::cell::RefCell;
 use emusen_crystal::abi::{self, emusen_crystal_config, emusen_crystal_frame_info, emusen_crystal_open_params, emusen_crystal_raw_info, emusen_crystal_runtime, emusen_crystal_subscription};
 use emusen_crystal::runtime::{Config, Runtime};
 use emusen_session_service::abi::status as svc;
 
-thread_local! {
-    static LAST_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
-}
-
 pub(crate) fn fail(status: i32, words: impl Into<String>) -> i32 {
-    LAST_ERROR.with_borrow_mut(|last| *last = words.into());
-    status
+    crate::last_error::fail(crate::last_error::Slot::Crystal, status, words.into())
 }
 
 /// The length-query idiom.
@@ -65,7 +59,7 @@ pub unsafe extern "C" fn emusen_crystal_version_text(out: *mut u8, len: usize) -
 /// `out` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_crystal_last_error(_rt: *mut emusen_crystal_runtime, out: *mut u8, len: usize) -> i64 {
-    LAST_ERROR.with_borrow(|words| unsafe { put(words.as_bytes(), out, len) })
+    unsafe { crate::last_error::copy_out(crate::last_error::Slot::Crystal, out, len) }
 }
 
 /// The config's directories, a JSON array of paths.

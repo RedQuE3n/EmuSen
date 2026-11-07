@@ -1,4 +1,4 @@
-using EmuSen.Crystal.Systems.Nes;
+using EmuSen.WiseMan.Bindings.Systems.Nes;
 using EmuSen.Pharaoh;
 
 namespace EmuSen.WiseMan.Fixtures

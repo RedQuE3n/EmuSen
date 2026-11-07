@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
-using EmuSen.Crystal.Session;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 
 namespace EmuSen.WiseMan.Crystal
 {

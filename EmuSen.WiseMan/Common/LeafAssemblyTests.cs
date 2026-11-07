@@ -41,13 +41,14 @@ namespace EmuSen.WiseMan.Common
             Assert.Same(audio, input);
         }
 
-        // The core-agnostic Avalonia layer; its telemetry contracts come from Crystal since DianaSh's S2 - see EmuSen_DianaSh.md §13.6.
+        // The core-agnostic Avalonia layer, holding the telemetry contracts since EmuSen.Crystal went; the session table's numbers it takes from the shell are constants, compiled in - see EmuSen_Backend.md §40.11.3.
         [Fact]
         public void Serenity_references_only_core_free_assemblies()
         {
             Assembly serenity = typeof(EmuSen.Serenity.GameFrameControl).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
+            Assert.Equal(new[] { "EmuSen.Galaxia", "EmuSen.LunaP" }, EmuSenReferencesOf(serenity));
+            Assert.Same(serenity, typeof(EmuSen.Serenity.Telemetry.ICoreTelemetry).Assembly);
         }
 
         // A tool is a library needing only LunaP, Galaxia and the platform library, never Mistress, so any thin host can show it - see EmuSen_LibraryTools.md §1b.
@@ -81,26 +82,14 @@ namespace EmuSen.WiseMan.Common
             Assert.Empty(EmuSenReferencesOf(lunaP));
         }
 
-        // Crystal is beneath the shell and beside the cores: it references Galaxia alone, so it can name nothing of the shell or a frontend - see EmuSen_DianaSh.md §13.6.
+        // The shell sits on Galaxia and on nothing of the emulator, and holds the session table's binding - see EmuSen_DianaSh.md §3 and EmuSen_Backend.md §40.11.3.
         [Fact]
-        public void Crystal_holds_the_runtime_contracts_and_references_only_Galaxia()
-        {
-            Assembly crystal = typeof(EmuSen.Crystal.Systems.SystemPacks).Assembly;
-
-            Assert.Equal("EmuSen.Crystal", crystal.GetName().Name);
-            Assert.Same(crystal, typeof(EmuSen.Crystal.Telemetry.ICoreTelemetry).Assembly);
-            Assert.Same(crystal, typeof(EmuSen.Crystal.Cheats.ICheatCodeCodec).Assembly);
-            Assert.Same(crystal, typeof(EmuSen.Crystal.Session.SessionAbi).Assembly);
-            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(crystal));
-        }
-
-        // The shell sits on Crystal and Galaxia and on nothing of the emulator - see EmuSen_DianaSh.md §3 and §13.6.
-        [Fact]
-        public void DianaSh_references_Crystal_and_Galaxia_only()
+        public void DianaSh_references_Galaxia_only()
         {
             Assembly dianaSh = typeof(EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter).Assembly;
 
-            Assert.Equal(new[] { "EmuSen.Crystal", "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaSh));
+            Assert.Equal(new[] { "EmuSen.Galaxia" }, EmuSenReferencesOf(dianaSh));
+            Assert.Same(dianaSh, typeof(EmuSen.DianaSh.DianaSh.Bin.Native.SessionAbi).Assembly);
         }
 
         // What the leaf enforced by construction is now this rule - see EmuSen_Debugging_Tools_Reference_v5.md §3.66.1.
@@ -108,11 +97,11 @@ namespace EmuSen.WiseMan.Common
         public void The_telemetry_contracts_name_nothing_of_the_debugger()
         {
             const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly;
-            const string telemetry = "EmuSen.Crystal.Telemetry";
-            Type[] contracts = typeof(EmuSen.Crystal.Telemetry.ICoreTelemetry).Assembly.GetTypes()
+            const string telemetry = "EmuSen.Serenity.Telemetry";
+            Type[] contracts = typeof(EmuSen.Serenity.Telemetry.ICoreTelemetry).Assembly.GetTypes()
                 .Where(t => t.Namespace == telemetry)
                 .ToArray();
-            Assert.Contains(typeof(EmuSen.Crystal.Telemetry.PollingProvider<>), contracts);
+            Assert.Contains(typeof(EmuSen.Serenity.Telemetry.PollingProvider<>), contracts);
 
             foreach (Type contract in contracts)
             {
@@ -175,7 +164,7 @@ namespace EmuSen.WiseMan.Common
         [InlineData(typeof(EmuSen.Serenity.GameFrameControl))]
         [InlineData(typeof(EmuSen.LunaP.Controls.MeterRow))]
         [InlineData(typeof(EmuSen.Galaxia.Input.PadButton))]
-        [InlineData(typeof(EmuSen.Crystal.Telemetry.ICoreTelemetry))]
+        [InlineData(typeof(EmuSen.Serenity.Telemetry.ICoreTelemetry))]
         [InlineData(typeof(EmuSen.DianaSh.DianaSh.Bin.DianaShInterpreter))]
         public void No_leaf_reaches_the_core_assembly(Type witness)
         {

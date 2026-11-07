@@ -10590,3 +10590,44 @@ files that differ are the core libraries with their sidecars and `cores.manifest
 sources whose test paths changed sit in their workspace, and `EmuSen.Mistress.dll`; none is a moved file. The paths
 named inside the documents were brought up to date in a change of their own after the proof, so that the proof is of
 the move alone.
+
+#### 40.11.3 `memcard` in Rust, and `EmuSen.Crystal` emptied
+
+**The module.** `memcard` is `emusen.memcard`, a command module of its own (`Platform/emusen-memcard-module`), over
+`emusen-savemedia`'s `Manager`, with the page it had (`Docs/man/emusen.memcard/memcard.1`). The platform library's
+shell takes it beside the other eight modules, so every front end's console has it as before; the standalone
+`dianash` program does not, since its cards are a front end's. It needs no game. The C# `MemcardCommand` is deleted,
+and with it the shell's last host command but `vstop`.
+
+**Which medium a card is.** EmuSen_Backend.md F28 leaves that to the host. The C# command answered from the system
+packs' own extensions; the module answers as the runtime's `cards_op` does, from what the program's engines declare:
+it scans the program's cores directories (`emusen_core_host::Discovery::scan`, which loads and hashes nothing) and
+takes each battery file's medium and extension (`emusen_crystal::media::declared`, which the runtime's `ByExtension`
+now reads too, one reading of the declarations rather than two). The known media are then listed in the systems
+table's order, which is the packs' order, so "the media known are …" reads as it did. The cores directories are
+`emusen_crystal::runtime::installation_directories`, the runtime's default, moved out of `Runtime::new` so that both
+read it. *A new cross-component dependency:* the module depends on `emusen-crystal` and `emusen-core-host`; the
+platform library already links both, so no program grows. A medium no installed engine declares is not a card, where
+the C# took every pack's; in a build with every engine the two lists are the same five.
+
+**How it is graded.** The golden corpus recorded `memcard` from the C# command (`memcard.golden`, 4 cases), and
+until now the dianash crate passed those cases over as a host's. Its runner now adds the module over the five media
+the packs named when the corpus was recorded, and the 4 cases pass byte for byte, statuses included; 65 cases pass
+in all, where 61 did. The module's own tests hold the table's order and a medium no engine declares.
+
+**Where the rest of `EmuSen.Crystal` went.**
+
+| what | to | why |
+|---|---|---|
+| `SessionAbi`, `EmuSenSessionV1` (the session table's mirror) | `EmuSen.DianaSh/DianaSh/Bin/Native` | the shell's binding of the table, its one shipped reader beside Serenity's telemetry |
+| `ICoreTelemetry`, `IRealtimeProvider`, `PollingProvider`, `CoreSnapshots` (the `Debug*Info` records) | `EmuSen.Serenity/Telemetry` | the coretop window's contracts |
+| `CoreDescriptor.DefaultCoverAspect` | `RuntimeCatalog.DefaultCoverAspect` (Mistress) | beside the reader of the systems data, until the systems data holds the default |
+| the system packs, codecs, card formats and save media manager, `CheatWrite`, `ICheatCodeCodec`, `ServiceLibrary` (`Systems/`, `SaveMedia/`, `Cheats/`, `Services/`) | `EmuSen.WiseMan/Bindings`, namespaces `EmuSen.WiseMan.Bindings.*` | no shipped program reads them; they are the binding the parity classes hold the platform library to their goldens through, which the survey's row 9 decides |
+
+The project file, its entry in the solution and the three references to it (DianaSh, Serenity, WiseMan) are gone;
+`EmuSen.Crystal/include/`, the frontend API's headers, stays for the change that moves it. *A new cross-component
+reference:* Serenity's project references DianaSh's, for `SessionAbi`'s telemetry kinds, where it referenced Crystal's.
+The kinds are constants, compiled into Serenity, so its assembly references Galaxia and LunaP alone at run time; and
+DianaSh references Galaxia alone, so Serenity reaches no core either way (`LeafAssemblyTests`). `FrontendReferenceTests`'
+rule names one runtime assembly now, `EmuSen`, and its check of itself sees DianaSh name Galaxia's types, where it saw
+it name Crystal's session table.

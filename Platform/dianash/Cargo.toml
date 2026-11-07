@@ -22,5 +22,7 @@ sha2 = "0.11"
 # The golden corpus is run with the text tools' module linked in, as the programs link it.
 [dev-dependencies]
 dianash-text = { path = "../dianash-text" }
+# memcard, whose cases the corpus recorded from the C# command it replaced (EmuSen_Backend.md §40.11.3).
+emusen-memcard-module = { path = "../emusen-memcard-module" }
 # The corpus's patterns, for the cases that print a time.
 regex = "1"

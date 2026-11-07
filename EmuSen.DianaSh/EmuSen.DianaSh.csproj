@@ -11,8 +11,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Crystal, beneath the shell: the session table's binding, the cheat codecs and the system packs - see EmuSen_DianaSh.md §13.6. -->
-    <ProjectReference Include="..\EmuSen.Crystal\EmuSen.Crystal.csproj" />
     <!-- ConfigRoot (this shell's own root discovery lives there now) and
          CheatFile, behind `cheat save`/`load` - see
          EmuSen_Config_Reference.md §1.1 for why the dependency runs this

@@ -11,7 +11,7 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using EmuSen.Crystal.Cheats;
+using EmuSen.WiseMan.Bindings.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

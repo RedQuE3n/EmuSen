@@ -15,7 +15,7 @@ using Avalonia.LogicalTree;
 using Avalonia.VisualTree;
 using EmuSen.Galaxia;
 using SDL3;
-using EmuSen.Crystal.Cheats;
+using EmuSen.WiseMan.Bindings.Cheats;
 using EmuSen.Mistress.BigPicture.Scene;
 using EmuSen.Mistress.Scraping;
 using EmuSen.Mistress.Views;

@@ -7,7 +7,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
 using Avalonia.VisualTree;
-using EmuSen.Crystal.Cheats;
+using EmuSen.WiseMan.Bindings.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.Galaxia.Models;

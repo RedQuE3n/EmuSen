@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
-using EmuSen.Crystal.Session;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal

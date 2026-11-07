@@ -10,7 +10,7 @@ namespace EmuSen.Mistress.Pages
         TimeSpan Played, DateTime? LastPlayed, string? Description, bool Favourite, double CoverAspect)
     {
         // The table's height over width as the width over height a generated card is drawn at (EmuSen_Interface.md §21).
-        public static double CardShape(double heightOverWidth) => heightOverWidth > 0 ? 1 / heightOverWidth : 1 / Crystal.Systems.CoreDescriptor.DefaultCoverAspect;
+        public static double CardShape(double heightOverWidth) => heightOverWidth > 0 ? 1 / heightOverWidth : 1 / EmuSen.Mistress.Library.RuntimeCatalog.DefaultCoverAspect;
     }
 
     // The game's pictures by kind: the cover, the hero's best art, a screenshot for the overview, a clip for the poster slot, the marquee for the launch screen.

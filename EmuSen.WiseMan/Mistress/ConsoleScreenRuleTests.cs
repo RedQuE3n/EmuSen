@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using EmuSen.Crystal.Systems;
+using EmuSen.WiseMan.Bindings.Systems;
 using EmuSen.Mistress.Library;
 using EmuSen.Mistress.Views;
 using EmuSen.Serenity.Shaders;

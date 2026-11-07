@@ -11,7 +11,7 @@ using EmuSen.LunaP.Controls;
 using EmuSen.WiseMan.LunaP;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
-using EmuSen.Crystal.Cheats;
+using EmuSen.WiseMan.Bindings.Cheats;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress;

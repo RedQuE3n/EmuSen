@@ -293,20 +293,26 @@ pub struct ByExtension<'d> {
 impl Media for ByExtension<'_> {
     fn medium_of(&self, file: &str) -> Option<Medium> {
         let extension = path::extension(Style::HOST, file);
-        for c in self.discovery.found() {
-            for s in info::systems(&c.sidecar.info_json) {
-                for b in s.battery.iter().flatten() {
-                    if let Some(id) = &b.medium
-                        && equals_ignore_case(&extension_of(&b.suffix), extension)
-                        && let Some(m) = Medium::by_id(id)
-                    {
-                        return Some(m);
+        declared(self.discovery).into_iter().filter(|(_, e)| equals_ignore_case(e, extension)).find_map(|(id, _)| Medium::by_id(&id))
+    }
+}
+
+/// Every medium a discovered engine's slots name, with the extension of its files, in discovery order and each pair once.
+pub fn declared(discovery: &Discovery) -> Vec<(String, String)> {
+    let mut pairs: Vec<(String, String)> = Vec::new();
+    for c in discovery.found() {
+        for s in info::systems(&c.sidecar.info_json) {
+            for b in s.battery.iter().flatten() {
+                if let Some(id) = &b.medium {
+                    let pair = (id.clone(), extension_of(&b.suffix));
+                    if !pairs.contains(&pair) {
+                        pairs.push(pair);
                     }
                 }
             }
         }
-        None
     }
+    pairs
 }
 
 /// One medium as `cards_op`'s LIST gives it.

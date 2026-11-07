@@ -1,4 +1,4 @@
-using EmuSen.Crystal.Systems.N64;
+using EmuSen.WiseMan.Bindings.Systems.N64;
 using EmuSen.WiseMan.Fixtures;
 using System;
 using System.Collections.Generic;

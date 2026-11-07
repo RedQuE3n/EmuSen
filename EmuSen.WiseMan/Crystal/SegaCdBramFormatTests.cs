@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using EmuSen.Crystal.SaveMedia;
-using EmuSen.Crystal.Systems.Genesis;
+using EmuSen.WiseMan.Bindings.SaveMedia;
+using EmuSen.WiseMan.Bindings.Systems.Genesis;
 using EmuSen.WiseMan.Fixtures;
 
 namespace EmuSen.WiseMan.Crystal

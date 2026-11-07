@@ -1,8 +1,8 @@
 using System;
 using System.IO;
 using System.Linq;
-using EmuSen.Crystal.Cheats;
-using EmuSen.Crystal.Systems;
+using EmuSen.WiseMan.Bindings.Cheats;
+using EmuSen.WiseMan.Bindings.Systems;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Models;
 using EmuSen.Mistress.Library;

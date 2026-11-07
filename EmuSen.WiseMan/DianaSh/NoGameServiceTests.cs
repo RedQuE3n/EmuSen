@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using EmuSen.Crystal.Client;
 using EmuSen.Crystal.Client.Contract;
-using EmuSen.Crystal.Session;
+using EmuSen.DianaSh.DianaSh.Bin.Native;
 using EmuSen.DianaSh.DianaSh.Bin;
 using EmuSen.DianaSh.DianaSh.Lib;
 using EmuSen.Galaxia;

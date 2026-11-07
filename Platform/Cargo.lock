@@ -429,6 +429,7 @@ dependencies = [
  "dianash-text",
  "emusen-dotnet",
  "emusen-galaxia",
+ "emusen-memcard-module",
  "regex",
  "sha2",
 ]
@@ -519,6 +520,19 @@ name = "emusen-mcd-bram"
 version = "0.1.0"
 
 [[package]]
+name = "emusen-memcard-module"
+version = "0.1.0"
+dependencies = [
+ "dianash-module",
+ "emusen-core-host",
+ "emusen-crystal",
+ "emusen-dotnet",
+ "emusen-galaxia",
+ "emusen-savemedia",
+ "emusen-systems",
+]
+
+[[package]]
 name = "emusen-mips"
 version = "0.1.0"
 
@@ -569,6 +583,7 @@ dependencies = [
  "emusen-library",
  "emusen-library-module",
  "emusen-library-tool",
+ "emusen-memcard-module",
  "emusen-native",
  "emusen-net",
  "emusen-patch",

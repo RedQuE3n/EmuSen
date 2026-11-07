@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
-using EmuSen.Crystal.SaveMedia;
-using EmuSen.Crystal.Systems;
-using EmuSen.Crystal.Systems.Ps2;
+using EmuSen.WiseMan.Bindings.SaveMedia;
+using EmuSen.WiseMan.Bindings.Systems;
+using EmuSen.WiseMan.Bindings.Systems.Ps2;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;

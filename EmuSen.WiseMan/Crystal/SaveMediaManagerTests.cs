@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text;
-using EmuSen.Crystal.SaveMedia;
-using EmuSen.Crystal.Systems.Psx;
+using EmuSen.WiseMan.Bindings.SaveMedia;
+using EmuSen.WiseMan.Bindings.Systems.Psx;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;
 using EmuSen.WiseMan.Fixtures;
@@ -185,7 +185,7 @@ namespace EmuSen.WiseMan.Crystal
             Assert.Null(SaveMediaManager.MediumOf("game.srm"));
             string cart = Path.Combine(DataStore.Saves, "Sega CD", "Cards", "Cartridge 1.crm");
             Assert.True(SaveMediaManager.New(cart).Done);
-            Assert.True(EmuSen.Crystal.Systems.Genesis.SegaCdBramFormat.RamCartridge.Read(File.ReadAllBytes(cart)).Formatted, "the Sega CD's module formats its cartridge");
+            Assert.True(EmuSen.WiseMan.Bindings.Systems.Genesis.SegaCdBramFormat.RamCartridge.Read(File.ReadAllBytes(cart)).Formatted, "the Sega CD's module formats its cartridge");
         }
     }
 }

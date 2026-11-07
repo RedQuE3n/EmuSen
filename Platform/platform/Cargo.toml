@@ -46,6 +46,8 @@ emusen-patch = { path = "../patch" }
 emusen-library-module = { path = "../emusen-library-module" }
 # emusen.cores, the cores command over the same service (EmuSen_Cores.md §8).
 emusen-cores-module = { path = "../emusen-cores-module" }
+# emusen.memcard, the card manager as `memcard` (EmuSen_Backend.md §40.11.3).
+emusen-memcard-module = { path = "../emusen-memcard-module" }
 # emusen.scrape, the scraper as `scrape` (EmuSen_LibraryTools.md §8).
 emusen-scrape-module = { path = "../emusen-scrape-module" }
 # Scraping, under its own stable header (EmuSen_Backend.md §30).

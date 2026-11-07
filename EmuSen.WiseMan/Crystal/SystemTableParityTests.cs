@@ -5,7 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using EmuSen.Crystal.Systems;
+using EmuSen.WiseMan.Bindings.Systems;
 using EmuSen.Galaxia;
 
 namespace EmuSen.WiseMan.Crystal

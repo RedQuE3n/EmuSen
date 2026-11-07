@@ -5,7 +5,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using Avalonia.Headless;
 using EmuSen.Crystal.Client;
-using EmuSen.Crystal.Systems.Psx;
+using EmuSen.WiseMan.Bindings.Systems.Psx;
 using EmuSen.Mistress.Library;
 using EmuSen.Galaxia;
 using EmuSen.Galaxia.Library;

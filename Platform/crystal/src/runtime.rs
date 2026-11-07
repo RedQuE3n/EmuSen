@@ -56,10 +56,7 @@ impl Runtime {
     pub fn new(config: &Config) -> Runtime {
         let directories: Vec<PathBuf> = match &config.cores {
             Some(dirs) => dirs.iter().map(PathBuf::from).collect(),
-            None => {
-                let base = emusen_galaxia::tree::base_directory();
-                vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
-            }
+            None => installation_directories(),
         };
         let player: Option<Vec<PathBuf>> = match (&config.player_cores, &config.cores) {
             (Some(dirs), _) => Some(dirs.iter().map(PathBuf::from).collect()),
@@ -568,6 +565,12 @@ fn player_directories(configured: Option<&[PathBuf]>) -> Vec<PathBuf> {
 }
 
 /// The engines the directories hold, ordered and held by the hosted list (EmuSen_LibretroHost.md §10k).
+/// The cores directories a runtime given none scans: the program's own and its cores folder.
+pub fn installation_directories() -> Vec<PathBuf> {
+    let base = emusen_galaxia::tree::base_directory();
+    vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
+}
+
 fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> Discovery {
     let hosted = emusen_systems::libretro_cores::hosted()
         .iter()

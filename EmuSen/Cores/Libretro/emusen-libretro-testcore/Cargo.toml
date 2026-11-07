@@ -19,7 +19,7 @@ ash = { version = "0.38", default-features = false, features = ["std"] }
 [profile.release]
 panic = "abort"
 
-# What a publish builds (EmuSen.csproj): release without its debug information.
+# What a publish builds (cargo xtask stage): release without its debug information.
 [profile.dist]
 inherits = "release"
 debug = false

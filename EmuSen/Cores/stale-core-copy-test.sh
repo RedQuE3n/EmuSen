@@ -24,7 +24,7 @@ touch -d '+1 hour' "$lib"
 [ "$(sha256sum "$lib" | cut -c1-64)" != "$want" ] || fail "could not plant a different core"
 echo "planted: $(basename "$lib"), same size, one byte changed, an hour newer"
 
-log=$(dotnet msbuild "$here/CheckCoreSidecars.proj" -t:Check -p:Folder="$out" -nologo -v:m 2>&1)
+log=$(cd "$here/../.." && cargo xtask check-sidecars "$out" 2>&1)
 [ $? -ne 0 ] && grep -q "is not the library its sidecar describes" <<<"$log" || fail "the check passed a folder with a stale core"
 echo "ok: the check refuses the folder"
 

@@ -105,7 +105,10 @@
   <!-- A published build's output directory is DianaSh's own root: the .NET
        app dir moves to /lib/EmuSen, /bin gets a launcher. See `man hier`. -->
   <Import Project="..\EmuSen.DianaSh\Publish\DianaShPublishLayout.targets" />
-  <Import Project="..\EmuSen\Cores\RustCoresPublish.targets" />
+  <!-- A publish for another platform carries that platform's native libraries, which CI built - see EmuSen_RustPlatform.md §28.11. -->
+  <PropertyGroup>
+    <EmuSenNativeSwap>true</EmuSenNativeSwap>
+  </PropertyGroup>
   <!-- Q40: EmuSen's ScreenScraper developer credentials, scrambled, embedded at publish only - see EmuSen_Settings_Reference.md §4.65. -->
   <Import Project="Scraping\ScreenScraperDeveloper.targets" />
 

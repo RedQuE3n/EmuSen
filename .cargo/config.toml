@@ -1,0 +1,3 @@
+# `cargo xtask <command>` from the repository root: the build host in xtask/ - see EmuSen_RustPlatform.md §28.11.
+[alias]
+xtask = "run --quiet --manifest-path xtask/Cargo.toml --"

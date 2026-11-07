@@ -1,11 +1,14 @@
 //! The build graph at a revision, read from its files: every Cargo crate with its workspace and path dependencies,
 //! every MSBuild project with its project references and imports, and the host's edges from a crate to the project
-//! that builds it in (RustCores.props, Platform.targets). One graph, so a reverse closure crosses the two languages.
+//! that builds it in (its part of xtask/libraries.tsv). One graph, so a reverse closure crosses the two languages.
 //! The cargo half agrees with `cargo metadata --no-deps` (held by a test); it is read from git objects so that a branch
 //! not checked out is read as it is. See EmuSen_Testing.md §3.2.
 
 use crate::repo::{join, parent, Repo};
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
+
+/// The build host's list of the native libraries, by the part each belongs to.
+const LIBRARIES: &str = "xtask/libraries.tsv";
 
 #[derive(Clone, Debug, Default)]
 pub struct Crate {
@@ -164,7 +167,7 @@ impl Graph {
     pub fn read(repo: &Repo, rev: &str, files: &[String]) -> Result<Graph, String> {
         let wanted: Vec<String> = files
             .iter()
-            .filter(|f| f.ends_with("Cargo.toml") && (f.as_str() == "Cargo.toml" || f.ends_with("/Cargo.toml")) || f.ends_with(".csproj") || f.ends_with(".props") || f.ends_with(".targets"))
+            .filter(|f| f.ends_with("Cargo.toml") && (f.as_str() == "Cargo.toml" || f.ends_with("/Cargo.toml")) || f.ends_with(".csproj") || f.ends_with(".props") || f.ends_with(".targets") || f.as_str() == LIBRARIES)
             .cloned()
             .collect();
         let texts = repo.read_many(rev, &wanted)?;
@@ -219,7 +222,7 @@ impl Graph {
         // MSBuild: references and imports, and the host's crate edges.
         let filenames: BTreeSet<&str> = files.iter().map(String::as_str).collect();
         let root_imports: Vec<String> = ["Directory.Build.props", "Directory.Build.targets"].iter().filter(|f| filenames.contains(**f)).map(|f| f.to_string()).collect();
-        let msbuild: Vec<(&String, &String)> = texts.iter().filter(|(p, _)| !p.ends_with("Cargo.toml")).collect();
+        let msbuild: Vec<(&String, &String)> = texts.iter().filter(|(p, _)| !p.ends_with("Cargo.toml") && p.as_str() != LIBRARIES).collect();
         for (p, t) in &msbuild {
             if p.ends_with(".csproj") {
                 let test = t.contains("xunit") || t.contains("Microsoft.NET.Test.Sdk") || t.contains("<IsTestProject>true");
@@ -241,13 +244,16 @@ impl Graph {
                 }
             }
         }
-        // Platform.targets builds the platform library, the workspace crate that names it.
-        for (p, _) in &msbuild {
-            if p.ends_with("Platform.targets") {
-                let ws = parent(p);
-                if let Some(c) = g.crates.values().find(|c| c.root == ws && c.name.as_deref() == Some("emusen-platform")) {
-                    let d = c.dir.clone();
-                    add_edge(&mut g, p, &d);
+        // The build host builds a project's part of the libraries list: the platform library, or every other row.
+        let rows: Vec<(String, bool)> = texts.get(LIBRARIES).map(|t| t.lines().filter(|l| !l.starts_with('#')).filter_map(|l| {
+            let f: Vec<&str> = l.split('\t').collect();
+            (f.len() > 2).then(|| (f[1].to_string(), f[2] == "platform"))
+        }).collect()).unwrap_or_default();
+        for (p, t) in &msbuild {
+            let Some(part) = t.split("<EmuSenNativePart>").nth(1).and_then(|s| s.split('<').next()) else { continue };
+            for (dir, platform) in &rows {
+                if *platform == (part.trim() == "platform") && dirs.contains(dir) {
+                    add_edge(&mut g, p, dir);
                 }
             }
         }

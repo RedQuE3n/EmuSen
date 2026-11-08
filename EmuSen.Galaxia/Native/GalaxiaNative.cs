@@ -35,6 +35,17 @@ namespace EmuSen.Galaxia.Native
         Compressed,
     }
 
+    // Galaxia's files a front end opens, as EMUSEN_GALAXIA_FILE_*.
+    internal enum GalaxiaFile : uint
+    {
+        Settings,
+        Games,
+        States,
+        Records,
+        Media,
+        Themes,
+    }
+
     // The redirects a test moves, as EMUSEN_GALAXIA_OVERRIDE_*.
     internal enum GalaxiaOverride : uint
     {
@@ -140,6 +151,7 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> _diagnostics;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int> _init;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, long> _directory;
+        private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, long> _file;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, int> _setOverride;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int> _threadScope;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long> _configPath;
@@ -193,7 +205,7 @@ namespace EmuSen.Galaxia.Native
         internal static readonly string[] Exports =
         {
             "emusen_platform_set_crash_log", "emusen_platform_last_error", "emusen_platform_diagnostics", "emusen_galaxia_init",
-            "emusen_galaxia_directory", "emusen_galaxia_set_override", "emusen_galaxia_thread_scope", "emusen_galaxia_config_path", "emusen_galaxia_legacy_config_path",
+            "emusen_galaxia_directory", "emusen_galaxia_file", "emusen_galaxia_set_override", "emusen_galaxia_thread_scope", "emusen_galaxia_config_path", "emusen_galaxia_legacy_config_path",
             "emusen_galaxia_root_for", "emusen_galaxia_bundle_contents_for", "emusen_galaxia_seed_directory_for",
             "emusen_galaxia_mac_data_directory_for", "emusen_galaxia_legacy_root_for", "emusen_galaxia_save_path", "emusen_galaxia_file_read",
             "emusen_galaxia_file_write", "emusen_galaxia_rom_md5", "emusen_galaxia_migrate", "emusen_galaxia_remaining_library",
@@ -229,6 +241,7 @@ namespace EmuSen.Galaxia.Native
             _diagnostics = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
             _init = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int>)found[next++];
             _directory = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, long>)found[next++];
+            _file = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, long>)found[next++];
             _setOverride = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, int>)found[next++];
             _threadScope = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int>)found[next++];
             _configPath = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
@@ -402,7 +415,7 @@ namespace EmuSen.Galaxia.Native
         }
 
         // What the library queued where the C# calls ConfigDiagnostics.Report, reported here in its order - see EmuSen_RustPlatform.md §3.5.
-        private static void Drain()
+        internal static void Drain()
         {
             foreach (string message in Items(Text((o, n) => _diagnostics(o, n)))) ConfigDiagnostics.Report(message);
         }
@@ -411,6 +424,8 @@ namespace EmuSen.Galaxia.Native
         private static string[] Items(string? joined) => string.IsNullOrEmpty(joined) ? Array.Empty<string>() : joined[..^1].Split('\0');
 
         public static string? Directory(GalaxiaDirectory which) => Text((o, n) => _directory((uint)which, o, n));
+
+        public static string? StorePath(GalaxiaFile which) => Text((o, n) => _file((uint)which, o, n));
 
         public static string ConfigPath(string? category, string fileName)
         {

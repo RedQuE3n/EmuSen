@@ -8,7 +8,7 @@ namespace EmuSen.Galaxia.Native
     public static unsafe class PlatformLibrary
     {
         // Matched exactly against emusen_platform_abi_version - see EmuSen_RustPlatform.md §3.2.
-        public const uint InterfaceVersion = 39;
+        public const uint InterfaceVersion = 40;
 
         public const string Name = "emusen_platform";
 
@@ -35,6 +35,9 @@ namespace EmuSen.Galaxia.Native
             fixed (byte* w = words) read(w, (nuint)words.Length);
             return System.Text.Encoding.UTF8.GetString(words);
         }
+
+        // The diagnostics the library queued on this thread, each reported through ConfigDiagnostics, for another component's half.
+        public static void ReportDiagnostics() => GalaxiaNative.Drain();
 
         public static string FileName =>
             OperatingSystem.IsWindows() ? $"{Name}.dll" : OperatingSystem.IsMacOS() ? $"lib{Name}.dylib" : $"lib{Name}.so";

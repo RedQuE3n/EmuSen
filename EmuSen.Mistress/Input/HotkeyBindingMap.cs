@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 using Avalonia.Input;
-using EmuSen.Galaxia;
+using EmuSen.Endymion.Input;
 
 namespace EmuSen.Mistress.Input
 {
@@ -31,20 +31,8 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        // Tab/Back match the old hardcoded pair - see EmuSen_Settings_Reference.md §4.3.
-        private static Dictionary<HotkeyAction, Key> DefaultBindings() => new()
-        {
-            [HotkeyAction.FastForward] = Key.Tab,
-            [HotkeyAction.Rewind] = Key.Back,
-            [HotkeyAction.SaveState] = Key.F5,
-            [HotkeyAction.LoadState] = Key.F8,
-            [HotkeyAction.TogglePause] = Key.P,
-            [HotkeyAction.ToggleFullscreen] = Key.F11,
-            [HotkeyAction.ExitToLibrary] = Key.Escape,
-            [HotkeyAction.Screenshot] = Key.F9,
-            [HotkeyAction.ToggleBigPicture] = Key.F10,
-            [HotkeyAction.FrameAdvance] = Key.OemPeriod,
-        };
+        // Endymion's defaults, from the platform library, which reads hotkeybindings.json by them - see EmuSen_Settings_Reference.md §4.3.
+        private static Dictionary<HotkeyAction, Key> DefaultBindings() => BindingFiles.Defaults<Dictionary<HotkeyAction, Key>>(BindingFile.Hotkeys);
 
         public static string DisplayName(HotkeyAction action) => action switch
         {
@@ -100,24 +88,14 @@ namespace EmuSen.Mistress.Input
             RebuildReverseLookup();
         }
 
-        private static readonly ConfigFile<Dictionary<HotkeyAction, Key>> File = new("hotkeybindings.json");
-
-        public void Save() => File.Save(ActionToKey);
+        // hotkeybindings.json is Endymion's in the platform library, its one reader and writer - see EmuSen_Input.md §5.2.
+        public void Save() => BindingFiles.Save(BindingFile.Hotkeys, ActionToKey);
 
         public static HotkeyBindingMap Load()
         {
             var bindings = new HotkeyBindingMap();
-            if (File.Load() is { Count: > 0 } loaded)
-            {
-                // An action added after this file was written has no entry - see EmuSen_Settings_Reference.md §4.18.
-                foreach (var kv in DefaultBindings())
-                {
-                    if (!loaded.ContainsKey(kv.Key) && !loaded.ContainsValue(kv.Value)) loaded[kv.Key] = kv.Value;
-                }
-
-                bindings.ActionToKey = loaded;
-                bindings.RebuildReverseLookup();
-            }
+            bindings.ActionToKey = BindingFiles.Load<Dictionary<HotkeyAction, Key>>(BindingFile.Hotkeys, []);
+            bindings.RebuildReverseLookup();
             return bindings;
         }
     }

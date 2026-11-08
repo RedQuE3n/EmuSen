@@ -50,7 +50,6 @@ pub mod qobject {
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(bool, loading, READ, NOTIFY)]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
-        #[qproperty(QString, games_database, cxx_name = "gamesDatabase")]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -101,7 +100,6 @@ pub struct LibraryModelRust {
     problem: QString,
     loading: bool,
     platform_library: QString,
-    games_database: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -114,7 +112,6 @@ impl Default for LibraryModelRust {
             problem: QString::default(),
             loading: false,
             platform_library: QString::default(),
-            games_database: QString::default(),
             view: LibraryView::empty(),
             source: None,
         }
@@ -125,7 +122,6 @@ impl cxx_qt::Initialize for qobject::LibraryModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().publish();
         self.as_mut().on_platform_library_changed(|model| model.connect()).release();
-        self.as_mut().on_games_database_changed(|model| model.connect()).release();
     }
 }
 
@@ -188,17 +184,17 @@ impl qobject::LibraryModel {
         taken
     }
 
-    /// Opens the clients once both the platform library and games.db are named, then refreshes, off the GUI thread.
+    /// Opens the clients once the platform library is named, then refreshes, off the GUI thread.
     fn connect(mut self: Pin<&mut Self>) {
-        let (library, games) = (self.platform_library.to_string(), self.games_database.to_string());
-        if library.is_empty() || games.is_empty() {
+        let library = self.platform_library.to_string();
+        if library.is_empty() {
             return;
         }
         self.as_mut().show_loading(true);
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let (source, refreshed): (Option<Arc<dyn LibrarySource>>, Refreshed) =
-                match ClientSource::open(&library, &emusen_crystal_client::Config::default(), &games) {
+                match ClientSource::open(&library, &emusen_crystal_client::Config::default()) {
                     Ok(source) => {
                         let source: Arc<dyn LibrarySource> = Arc::new(source);
                         let refreshed = refresh(source.as_ref());

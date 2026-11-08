@@ -11,3 +11,37 @@ pub const STATES_DB: &str = "states.db";
 pub const MEDIA_DB: &str = "media.db";
 /// The installed big-picture themes.
 pub const THEMES_DB: &str = "themes.db";
+
+/// The files Galaxia names a front end by number (`EMUSEN_GALAXIA_FILE_*`): the settings file and the stores.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum File {
+    Settings,
+    Games,
+    States,
+    Records,
+    Media,
+    Themes,
+}
+
+impl File {
+    pub const ALL: [File; 6] = [File::Settings, File::Games, File::States, File::Records, File::Media, File::Themes];
+
+    pub fn from_u32(which: u32) -> Option<File> {
+        File::ALL.get(which as usize).copied()
+    }
+
+    /// The file's path in `tree`: the settings in the config directory, games.db, states.db and records.db in the library
+    /// folder, media.db in the media folder and themes.db in the themes folder.
+    pub fn path(self, tree: &crate::tree::Tree) -> std::path::PathBuf {
+        use crate::tree::Directory;
+        let (folder, name) = match self {
+            File::Settings => return tree.config_path(None, crate::models::APP_SETTINGS_FILE),
+            File::Games => (Directory::Library, GAMES_DB),
+            File::States => (Directory::Library, STATES_DB),
+            File::Records => (Directory::Library, RECORDS_DB),
+            File::Media => (Directory::Media, MEDIA_DB),
+            File::Themes => (Directory::Themes, THEMES_DB),
+        };
+        tree.directory(folder).unwrap_or_default().join(name)
+    }
+}

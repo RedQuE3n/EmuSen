@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using SDL3;
-using EmuSen.Galaxia;
 using EmuSen.Galaxia.Input;
 
 namespace EmuSen.Endymion.Input
@@ -19,23 +18,8 @@ namespace EmuSen.Endymion.Input
             RebuildReverseLookup();
         }
 
-        private static Dictionary<PadButton, SDL.GamepadButton> DefaultBindings() => new()
-        {
-            [PadButton.Up] = SDL.GamepadButton.DPadUp,
-            [PadButton.Down] = SDL.GamepadButton.DPadDown,
-            [PadButton.Left] = SDL.GamepadButton.DPadLeft,
-            [PadButton.Right] = SDL.GamepadButton.DPadRight,
-            [PadButton.B] = SDL.GamepadButton.South,
-            [PadButton.A] = SDL.GamepadButton.East,
-            [PadButton.Y] = SDL.GamepadButton.West,
-            [PadButton.X] = SDL.GamepadButton.North,
-            [PadButton.L] = SDL.GamepadButton.LeftShoulder,
-            [PadButton.R] = SDL.GamepadButton.RightShoulder,
-            [PadButton.Start] = SDL.GamepadButton.Start,
-            [PadButton.Select] = SDL.GamepadButton.Back,
-            [PadButton.L3] = SDL.GamepadButton.LeftStick,
-            [PadButton.R3] = SDL.GamepadButton.RightStick,
-        };
+        // Endymion's defaults, from the platform library, which reads gamepadbindings.json by them - see EmuSen_Input.md §5.2.
+        private static Dictionary<PadButton, SDL.GamepadButton> DefaultBindings() => BindingFiles.Defaults<Dictionary<PadButton, SDL.GamepadButton>>(BindingFile.Gamepad);
 
         private void RebuildReverseLookup()
         {
@@ -86,18 +70,6 @@ namespace EmuSen.Endymion.Input
         {
             ButtonToPad = bindings;
             RebuildReverseLookup();
-        }
-
-        // A file written before a button existed cannot mention it, so it takes its default if that pad button is free - see EmuSen_Input.md §7.4.
-        public void AddDefaultsForNewButtons()
-        {
-            foreach (KeyValuePair<PadButton, SDL.GamepadButton> binding in DefaultBindings())
-            {
-                if (binding.Key < PadButton.L2 || ButtonToPad.ContainsKey(binding.Key) || _padToButton.ContainsKey(binding.Value)) continue;
-
-                ButtonToPad[binding.Key] = binding.Value;
-                RebuildReverseLookup();
-            }
         }
     }
 }

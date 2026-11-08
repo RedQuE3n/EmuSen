@@ -67,7 +67,7 @@ pub(crate) fn held() -> Result<Games, Error> {
         return Ok(games);
     }
     let sqlite = process_sqlite().map_err(Error::Io)?;
-    let path = tree::tree().directory(Directory::Library).unwrap_or_default().join(emusen_galaxia::stores::GAMES_DB).to_string_lossy().into_owned();
+    let path = emusen_galaxia::stores::File::Games.path(&tree::tree()).to_string_lossy().into_owned();
     let mut slot = GAMES.write().unwrap_or_else(|p| p.into_inner());
     if slot.is_none() {
         *slot = Some(Games { library: Arc::new(Library::open(sqlite.clone(), &path)?), path, sqlite, systems: every_system() });

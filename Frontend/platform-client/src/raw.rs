@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 39;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 40;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -57,6 +57,12 @@ pub const EMUSEN_GALAXIA_DIR_COMPRESSED: u32 = 23;
 pub const EMUSEN_GALAXIA_OVERRIDE_CONFIG: u32 = 0;
 pub const EMUSEN_GALAXIA_OVERRIDE_DATA: u32 = 1;
 pub const EMUSEN_GALAXIA_OVERRIDE_LEGACY: u32 = 2;
+pub const EMUSEN_GALAXIA_FILE_SETTINGS: u32 = 0;
+pub const EMUSEN_GALAXIA_FILE_GAMES: u32 = 1;
+pub const EMUSEN_GALAXIA_FILE_STATES: u32 = 2;
+pub const EMUSEN_GALAXIA_FILE_RECORDS: u32 = 3;
+pub const EMUSEN_GALAXIA_FILE_MEDIA: u32 = 4;
+pub const EMUSEN_GALAXIA_FILE_THEMES: u32 = 5;
 pub const EMUSEN_GALAXIA_SAVE_SRAM: u32 = 0;
 pub const EMUSEN_GALAXIA_SAVE_FLAT_SRAM: u32 = 1;
 pub const EMUSEN_GALAXIA_SAVE_STATE: u32 = 2;
@@ -98,6 +104,10 @@ pub const EMUSEN_ENDYMION_CHANGE_AXIS: u32 = 2;
 pub const EMUSEN_ENDYMION_SEAT_EMPTY: u32 = 0;
 pub const EMUSEN_ENDYMION_SEAT_OPEN: u32 = 1;
 pub const EMUSEN_ENDYMION_SEAT_CLOSED: u32 = 2;
+pub const EMUSEN_ENDYMION_BINDINGS_KEYS: u32 = 0;
+pub const EMUSEN_ENDYMION_BINDINGS_GAMEPAD: u32 = 1;
+pub const EMUSEN_ENDYMION_BINDINGS_PROFILES: u32 = 2;
+pub const EMUSEN_ENDYMION_BINDINGS_HOTKEYS: u32 = 3;
 pub const EMUSEN_ENDYMION_SIM_PAD_NAME: u32 = 0;
 pub const EMUSEN_ENDYMION_SIM_PAD_GUID: u32 = 1;
 pub const EMUSEN_ENDYMION_SIM_PAD_PATH: u32 = 2;
@@ -673,6 +683,7 @@ pub struct PlatformLibrary {
     pub emusen_galaxia_init:
         unsafe extern "C" fn(base: *const u8, base_len: usize, application_data: *const u8, application_data_len: usize) -> i32,
     pub emusen_galaxia_directory: unsafe extern "C" fn(which: u32, out: *mut u8, len: usize) -> i64,
+    pub emusen_galaxia_file: unsafe extern "C" fn(which: u32, out: *mut u8, len: usize) -> i64,
     pub emusen_galaxia_set_override: unsafe extern "C" fn(which: u32, directory: *const u8, directory_len: usize) -> i32,
     pub emusen_galaxia_thread_scope: unsafe extern "C" fn(
         config: *const u8,
@@ -1016,6 +1027,10 @@ pub struct PlatformLibrary {
     pub emusen_endymion_pad_combine: unsafe extern "C" fn(analog: f64, negative: u32, positive: u32, out: *mut f64) -> i32,
     pub emusen_endymion_pad_controls_for:
         unsafe extern "C" fn(buttons: *const u32, buttons_len: usize, axes: *const u32, axes_len: usize, out: *mut u32, cap: usize) -> i64,
+    pub emusen_endymion_bindings_load:
+        unsafe extern "C" fn(which: u32, consoles: *const u8, consoles_len: usize, out: *mut u8, len: usize) -> i64,
+    pub emusen_endymion_bindings_save: unsafe extern "C" fn(which: u32, document: *const u8, document_len: usize) -> i32,
+    pub emusen_endymion_bindings_defaults: unsafe extern "C" fn(which: u32, out: *mut u8, len: usize) -> i64,
     pub emusen_endymion_sdl_lend: unsafe extern "C" fn(handle: *mut ::std::os::raw::c_void) -> i32,
     pub emusen_endymion_sdl_hint: unsafe extern "C" fn(name: *const u8, name_len: usize, out: *mut u8, cap: usize) -> i64,
     pub emusen_endymion_sim_pad_new: unsafe extern "C" fn(path: *const u8, path_len: usize) -> *mut emusen_endymion_sim_pad,
@@ -1345,6 +1360,7 @@ impl PlatformLibrary {
         let emusen_platform_diagnostics = unsafe { __library.get(b"emusen_platform_diagnostics\0") }.map(|sym| *sym)?;
         let emusen_galaxia_init = unsafe { __library.get(b"emusen_galaxia_init\0") }.map(|sym| *sym)?;
         let emusen_galaxia_directory = unsafe { __library.get(b"emusen_galaxia_directory\0") }.map(|sym| *sym)?;
+        let emusen_galaxia_file = unsafe { __library.get(b"emusen_galaxia_file\0") }.map(|sym| *sym)?;
         let emusen_galaxia_set_override = unsafe { __library.get(b"emusen_galaxia_set_override\0") }.map(|sym| *sym)?;
         let emusen_galaxia_thread_scope = unsafe { __library.get(b"emusen_galaxia_thread_scope\0") }.map(|sym| *sym)?;
         let emusen_galaxia_config_path = unsafe { __library.get(b"emusen_galaxia_config_path\0") }.map(|sym| *sym)?;
@@ -1472,6 +1488,9 @@ impl PlatformLibrary {
         let emusen_endymion_pad_resolve = unsafe { __library.get(b"emusen_endymion_pad_resolve\0") }.map(|sym| *sym)?;
         let emusen_endymion_pad_combine = unsafe { __library.get(b"emusen_endymion_pad_combine\0") }.map(|sym| *sym)?;
         let emusen_endymion_pad_controls_for = unsafe { __library.get(b"emusen_endymion_pad_controls_for\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_load = unsafe { __library.get(b"emusen_endymion_bindings_load\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_save = unsafe { __library.get(b"emusen_endymion_bindings_save\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_defaults = unsafe { __library.get(b"emusen_endymion_bindings_defaults\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_lend = unsafe { __library.get(b"emusen_endymion_sdl_lend\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_hint = unsafe { __library.get(b"emusen_endymion_sdl_hint\0") }.map(|sym| *sym)?;
         let emusen_endymion_sim_pad_new = unsafe { __library.get(b"emusen_endymion_sim_pad_new\0") }.map(|sym| *sym)?;
@@ -1611,6 +1630,7 @@ impl PlatformLibrary {
             emusen_platform_diagnostics,
             emusen_galaxia_init,
             emusen_galaxia_directory,
+            emusen_galaxia_file,
             emusen_galaxia_set_override,
             emusen_galaxia_thread_scope,
             emusen_galaxia_config_path,
@@ -1738,6 +1758,9 @@ impl PlatformLibrary {
             emusen_endymion_pad_resolve,
             emusen_endymion_pad_combine,
             emusen_endymion_pad_controls_for,
+            emusen_endymion_bindings_load,
+            emusen_endymion_bindings_save,
+            emusen_endymion_bindings_defaults,
             emusen_endymion_sdl_lend,
             emusen_endymion_sdl_hint,
             emusen_endymion_sim_pad_new,
@@ -1894,6 +1917,9 @@ impl PlatformLibrary {
     }
     pub unsafe fn emusen_galaxia_directory(&self, which: u32, out: *mut u8, len: usize) -> i64 {
         unsafe { (self.emusen_galaxia_directory)(which, out, len) }
+    }
+    pub unsafe fn emusen_galaxia_file(&self, which: u32, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.emusen_galaxia_file)(which, out, len) }
     }
     pub unsafe fn emusen_galaxia_set_override(&self, which: u32, directory: *const u8, directory_len: usize) -> i32 {
         unsafe { (self.emusen_galaxia_set_override)(which, directory, directory_len) }
@@ -2668,6 +2694,22 @@ impl PlatformLibrary {
         cap: usize,
     ) -> i64 {
         unsafe { (self.emusen_endymion_pad_controls_for)(buttons, buttons_len, axes, axes_len, out, cap) }
+    }
+    pub unsafe fn emusen_endymion_bindings_load(
+        &self,
+        which: u32,
+        consoles: *const u8,
+        consoles_len: usize,
+        out: *mut u8,
+        len: usize,
+    ) -> i64 {
+        unsafe { (self.emusen_endymion_bindings_load)(which, consoles, consoles_len, out, len) }
+    }
+    pub unsafe fn emusen_endymion_bindings_save(&self, which: u32, document: *const u8, document_len: usize) -> i32 {
+        unsafe { (self.emusen_endymion_bindings_save)(which, document, document_len) }
+    }
+    pub unsafe fn emusen_endymion_bindings_defaults(&self, which: u32, out: *mut u8, len: usize) -> i64 {
+        unsafe { (self.emusen_endymion_bindings_defaults)(which, out, len) }
     }
     pub unsafe fn emusen_endymion_sdl_lend(&self, handle: *mut ::std::os::raw::c_void) -> i32 {
         unsafe { (self.emusen_endymion_sdl_lend)(handle) }

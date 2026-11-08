@@ -1544,9 +1544,8 @@ page has Every game and Favourites (not offered in the Favourites section); each
 Random game are steps through a few dozen letters or one number. The count reads "1 of 8 games" while narrowed. B
 clears a search, then the section's favourites, then goes back a screen (`passedBack`). Search docks the keyboard: the
 field at 64,100 1152 × 44 over one row of covers, the keyboard's place at 0,398 304 high, and the help bar's keyboard
-entries (Type, Delete, Space, Done, Move to grid, Home), as `GamesScreen.HintsFor` gives them. Until the kit's docked
-`Keyboard` lands, a plain rectangle stands in its place and the field takes the physical keyboard; Down from the field
-reaches the covers.
+entries (Type, Delete, Space, Done, Move to grid, Home), as `GamesScreen.HintsFor` gives them. The kit's docked
+`Keyboard` stands in its place (§7.5).
 
 **Compared with Mistress** (measured on 2026-11-08). Every Qt recording (`~/.cache/emusen/tmp/qt-s2/compare/qt/`) was read
 by WiseMan's `SpecDocument.Parse` and written back byte for byte, and `InterfaceRules.All` found 0 faults in each.
@@ -1564,8 +1563,6 @@ over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 - Most played, Year and Rating sort by name, since the library reads no play counts, years or ratings yet. Mistress
   falls back the same way for Rating.
 - The Filter page lists no collections of the player's own, since the library does not read them yet.
-- The docked keyboard is a stand-in. B clears the whole search where Mistress's keyboard deletes one letter, and the
-  shoulders do not yet move between the keys and the covers.
 - The words of the screen under a card read under 4.5:1 through the scrim. Mistress's recordings hold the card alone, so
   the test names this (`cards.rs`' `named`), as it names the grid's 18-unit neighbours at 1280 × 720 that stage 1 named.
 - The title stands one or two units higher than Mistress's, as the Pause Card's does (§7.1 step 7).
@@ -1748,10 +1745,85 @@ the **vertical walk** passing a field and a combo box (`KeyPass`); B offered to 
 side-by-sides, Mistress left and the kit right, are in `~/.cache/emusen/tmp/qt-s2/compare/`.
 
 **Named, for the tester:** the question's cover stops at the 58-unit help bar on the foot (742), where Mistress's Cores
-window, whose band is 98 high, stops it at 702, so the card is centred 20 units lower; the notice has no shadow on the
-software tier; with a combo box's list open, the pad does not reach the frame until it closes (owed to stage 5). The
-Resume question is built as words and form; asking it at a game's start needs the runtime's "where you left off" state
-through the clients, which they do not wrap yet.
+window, whose band is 98 high, stops it at 702, so the card is centred 20 units lower; the notice has no shadow on the software tier (it has on the GPU, §7.5); with a combo box's list open, the pad does not reach the frame until it closes (owed to stage 5). The Resume question is asked at a game's start since §7.5.
+
+
+### 7.5 Stage 2, the loose ends: the search's keyboard, the Resume question, notices (2026-11-08)
+
+**The merged tree on Vulkan.** WiseMan d4b23bf05 (stage 2's three branches merged) passed `acceptance.rs` in its own
+compositor on the RX 6800 before anything here was built on it: 1 test, 139 s, nothing logged.
+
+**The grid's search on the kit's keyboard** (`GameGrid.qml`; LunaP's `GalleryLayout` and Mistress's `GamesScreen` the
+oracle). The placeholder rectangle is gone: `Kit.KeyboardModel` and `Kit.Keyboard` dock at 0,398, wired as qt-test's
+`KeyboardScene` wires them. `GameModel.search` stays the words' one owner; the typist writes it and is set from it, so
+B on the covers, which clears the search there, empties the keys' text too.
+- **Two states of one screen.** `Screens` gains `SearchGrid`: the keyboard docked, the focus on the covers. `Search` is
+  the keys' (A types, B erases a letter and on an empty field closes the keyboard, Y Space, X Done keeping the words,
+  Start Home); LB or RB moves the focus to the covers while there are any (`Screens.found`, LunaP's `_items.Count`).
+  On the covers either shoulder takes it back, A plays, B is the grid's (the search cleared, then Choose a console, as
+  `GamesBack` goes) and the help bar is the grid's, B reading **Clear search** while words are searched (`HelpModel`'s
+  `GridSearched`, `GamesScreen.HintsFor`'s `searched`). The keyboard's close is the screen's Back (`Search` to `Grid`).
+  The shoulders reach these declared actions through kit-core's walk, which now leaves the shoulders to a screen that
+  has no sections (`EmuSen_Kit.md` §7.26); the grid's shoulders are declared as `previous` and `next`.
+- **The field is never focused**, as LunaP's `GallerySearch` (read-only, not focusable): its Border edge, never the
+  accent ring, the words in TextStrong 16 units in. The keys' ring shows only while they hold the focus.
+- **The pointer moves the focus too.** A cover the pointer rests on takes the focus, as every walkable's hover does, and
+  a click on the band gives it to the keys; the screen follows (`Screens.keysFocused`), so the help bar and B always
+  answer where the focus is. The focus is held to the state by a `Binding`, since a hover's `forceActiveFocus` undoes a
+  plain focus binding. Found by the gate on 2026-11-08: after a resize to 3840 × 2160 the pointer, left where a key had
+  been clicked, rested on the cover and took the focus while the help bar still said Type.
+- **Compared with Mistress** (`GamesSearch-{1280x800,1920x1200}-side.png`, the courts build's render left): the field,
+  the cover and its count, the band, every key at Mistress's box and `n` ringed stand where hers do. The erase key's
+  glyph is the font's `⌫` where Mistress's is drawn smaller; the help bar's shoulders are two glyphs where Mistress
+  draws one (§7.3). At 1920 × 1200 the ring stands on Done, where the gate's walk at 1280 × 800 left it: the harness
+  puts back a Qt Quick view's current index after its walk, not a model's (`KeyboardModel.current`).
+- **Named, for the tester:** the gate's walk presses the four directions, so the covers reached from the keys only by
+  the shoulders, and the keys from the covers, are named in the cards test (the test walks them by the shoulders and
+  holds the focus there); on the covers, the lit cover's lift (rise 6, scale 1.06) carries it 1.2 units over the field's
+  foot (142.8 against 144) and its ring past the grid's clip, since Mistress's own geometry (cells at 156, the field to
+  144, the keyboard from 398) leaves 242 units for a 240-unit cover and its ring. Select on the covers opens the List
+  card, which closes back to the grid without the keyboard, where Mistress's keeps it docked.
+
+**The Resume question at a game's start** (`EmuSen_Interface.md` §18.3; Mistress's `ChooseResumeAsync` and
+`WriteResumeState`). No new call: the runtime's resume state was already wrapped by `emusen-crystal-client`
+(`resume_save`, `resume_load`, and `state_slots`, whose slot 0 is the resume state with its time), and the setting is
+Galaxia's `ResumeOnLaunch` (`Ask`, `Resume`, `Restart`) read through the platform's settings model.
+- `resume.rs` (plain Rust) holds the rules: the setting read; a start is from the beginning with no resume state or
+  with Restart, where it was left off with Resume, and the question with Ask; the answers by index (Continue, Start
+  again, B). `QuestionModel` puts `question::resume` on Qt for the kit's `Question`.
+- `SessionModel.open` opens the game **held** (session.rs's `held`: the frame thread opens it and runs no frame) unless
+  the setting is Restart. When the runtime reports it open, slot 0 decides: run it, load the resume state off the GUI
+  thread then run it, or raise `resumeAsked`. `answerResume` loads, starts afresh, or on B closes the game unplayed.
+  A resume the screens ask meanwhile waits, as it waits for a save.
+- **Where it was left off is written as the game closes**, on the frame thread once it has stopped (Mistress writes it
+  with the emulation thread stopped), only for a game that ran a frame, so B on the question leaves the old state in
+  place. A failure to write it is reported as the session's problem.
+- `Main.qml` draws the question on a `Kit.Frame` of its own over the held game (`QuestionBack`'s bar, A Choose · B
+  Back), and the game gives up the pad while it is asked (`inFront`).
+
+**Notices in the program and their shadow.** The session's words (`State saved to slot 1`, `Rewound`, `Screenshot
+saved`, what failed) now reach `Kit.NoticeModel` and a `NoticeLayer` over everything, fit for gameplay; a job's words
+are `Ok` or `Err`, the latter shown for attention (`noticeAttention`). The notice draws §5.4's shadow
+(`EmuSen_Kit.md` §7.26). **Named, for the tester:** Mistress's notice, LunaP's pill, has no shadow; the design's
+(§18.6) is followed.
+
+**Home's Continue line and its count** (the Home side-by-side of stage 2). Qt read "Paused just now" where Mistress
+reads "● Super Nintendo · Paused just now", and Games 7 where Mistress says 8. Both are the fixture's: acceptance.rs
+replaces Cobalt Harbor's `.sfc` with the test core's `.tst` image to play it (the sandbox has no Super Nintendo core),
+so the library holds 7 games and none is the suspended game. The Continue line takes its console and its dot from the
+game's library row (`Clock.console` from `recent.consoleAt`), and finds none. With a library game suspended it reads
+"Super Nintendo · Paused …" (`words::paused_facts`, held by the models' tests). A game opened from outside the library
+shows no console, where Mistress names the session's.
+
+**Held to** (measured on 2026-11-08): kit-core 95 tests, qt-test 12, qt-models 37 (`cards`' routes for the search's two
+states, the pointer and B; `library`'s help bars and both shoulders declared; `question`'s resume rules), emusen-qt's
+software-backend tests (`cards`: keys typed on a keyboard and a key clicked narrow the grid to "1 of 8 games", no ring
+on the field, the shoulders to the covers and back, the pointer on a cover and a click on the band, B erasing four
+letters then closing, X keeping the words, B clearing them then going to Choose a console; GamesSearch and
+GamesSearchGrid at the gate's five sizes; `program`'s QML rules and `qmllint`; the rest unchanged), clippy clean.
+Seeded faults, each reverted: the shoulders kept for sections with none (kit-core's `input`); B on the covers back to
+the grid (the models' `cards`); Resume asking (the models' `question`); the covers' focus not held by the Binding (the
+program's `cards`).
 
 ---
 

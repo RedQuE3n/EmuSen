@@ -8,6 +8,7 @@ use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{DateFormat, QDateTime, QString};
 use crate::input::GameInput;
 use crate::pause::{self, SlotFact};
+use crate::resume::{self, Answer, Start};
 use crate::pictures::{self, PictureSource, Shown};
 use cxx_qt::casting::Upcast;
 use emusen_crystal_client::{Api, Config, Runtime};
@@ -49,6 +50,12 @@ pub mod qobject {
         #[qproperty(u32, speed, READ, NOTIFY)]
         /// What the last save, load or rewind came to, in the player's words.
         #[qproperty(QString, notice, READ, NOTIFY)]
+        /// Whether that notice says something was not done.
+        #[qproperty(bool, notice_attention, cxx_name = "noticeAttention", READ, NOTIFY)]
+        /// Whether the Resume question is waiting for an answer, the game held unplayed (EmuSen_Interface.md §18.3).
+        #[qproperty(bool, resume_asked, cxx_name = "resumeAsked", READ, NOTIFY)]
+        /// The game the Resume question names.
+        #[qproperty(QString, resume_subject, cxx_name = "resumeSubject", READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
 
         #[cxx_name = "setPlatformLibrary"]
@@ -111,6 +118,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "rewindTo"]
         fn rewind_to(self: Pin<&mut SessionModel>, frame: u64);
+
+        /// The Resume question answered, by the index the question gives: Continue, Start again, or -1 for B.
+        #[qinvokable]
+        #[cxx_name = "answerResume"]
+        fn answer_resume(self: Pin<&mut SessionModel>, index: i32);
     }
 
     impl cxx_qt::Threading for SessionModel {}
@@ -133,6 +145,11 @@ pub struct SessionModelRust {
     slot: u32,
     speed: u32,
     notice: QString,
+    notice_attention: bool,
+    resume_asked: bool,
+    resume_subject: QString,
+    /// The setting Resume while the opened game is held for it, until the runtime says whether it was left off.
+    holding: Option<resume::Setting>,
     /// The session the card's pictures are read from, shared with the picture provider.
     shown: Shown,
     /// Read again at each pause, so a picture's address names the pause it was read in.
@@ -168,6 +185,10 @@ impl Default for SessionModelRust {
             slot: 1,
             speed: 100,
             notice: QString::default(),
+            notice_attention: false,
+            resume_asked: false,
+            resume_subject: QString::default(),
+            holding: None,
             shown: Shown::default(),
             serial: 0,
             served: false,
@@ -263,12 +284,78 @@ impl qobject::SessionModel {
         };
         let engine = (!self.engine.is_empty()).then(|| self.engine.to_string());
         let device = std::ptr::NonNull::new(device.as_ptr().cast_mut());
-        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, report);
+        let setting = self.as_mut().resume_setting();
+        let holding = (setting != resume::Setting::Never).then_some(setting);
+        self.as_mut().rust_mut().holding = holding;
+        self.as_mut().set_resume_subject(QString::from(&resume::subject(&path.to_string())));
+        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, holding.is_some(), report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
         self.as_mut().set_problem(QString::from(unsounded.as_deref().unwrap_or_default()));
         self.as_mut().set_paused(false);
         self.as_mut().set_first_picture_ms(0.0);
+    }
+
+    /// The setting Resume from the player's settings, Galaxia's model; asking where they cannot be read.
+    fn resume_setting(self: Pin<&mut Self>) -> resume::Setting {
+        let settings = self.platform().ok().and_then(|p| p.model_load(galaxia::consts::MODEL_APP_SETTINGS, None, "appsettings.json").ok().flatten());
+        resume::Setting::read(settings.as_ref().and_then(|s| s.get(resume::KEY)).and_then(|v| v.as_str()).unwrap_or_default())
+    }
+
+    /// Where the opened game was left off decides its start: from the beginning, there without asking, or the question.
+    fn left_off(mut self: Pin<&mut Self>, session: u32) {
+        let Some(setting) = self.as_mut().rust_mut().holding else { return };
+        let exists = self.runtime.as_ref().and_then(|r| r.state_slots(session).ok()).is_some_and(|slots| slots.iter().any(|s| s.slot == 0 && s.exists));
+        match resume::start(setting, exists) {
+            Start::Fresh => self.as_mut().let_go(false),
+            Start::Load => self.as_mut().let_go(true),
+            Start::Ask => self.as_mut().set_resume_asked(true),
+        }
+    }
+
+    /// The held game let go, from where it was left off or the beginning, and run unless the player paused it meanwhile.
+    fn let_go(mut self: Pin<&mut Self>, load: bool) {
+        self.as_mut().rust_mut().holding = None;
+        self.as_mut().set_resume_asked(false);
+        if !self.paused {
+            self.as_mut().rust_mut().resume_waiting = true;
+        }
+        if load {
+            self.as_mut().job(|runtime, session| match runtime.resume_load(session) {
+                Ok(_) => Ok(String::new()),
+                Err(e) => Err(format!("Could not resume, started from the beginning: {e}")),
+            });
+        } else if std::mem::take(&mut self.as_mut().rust_mut().resume_waiting) {
+            self.resume();
+        }
+    }
+
+    fn answer_resume(mut self: Pin<&mut Self>, index: i32) {
+        if !self.resume_asked {
+            return;
+        }
+        match resume::answer(index) {
+            Answer::Load => self.let_go(true),
+            Answer::Fresh => self.let_go(false),
+            Answer::Back => {
+                self.as_mut().set_resume_asked(false);
+                self.close();
+            }
+        }
+    }
+
+    fn set_resume_asked(mut self: Pin<&mut Self>, value: bool) {
+        if self.resume_asked != value {
+            self.as_mut().rust_mut().resume_asked = value;
+            self.resume_asked_changed();
+        }
+    }
+
+    fn set_resume_subject(mut self: Pin<&mut Self>, value: QString) {
+        if self.resume_subject != value {
+            self.as_mut().rust_mut().resume_subject = value;
+            self.resume_subject_changed();
+        }
     }
 
     /// The cores folder a host names, else the runtime's own default (emusen_crystal.h, the config's `cores`); the
@@ -387,7 +474,7 @@ impl qobject::SessionModel {
     }
 
     fn resume(mut self: Pin<&mut Self>) {
-        if self.jobs > 0 {
+        if self.jobs > 0 || self.holding.is_some() {
             self.as_mut().rust_mut().resume_waiting = true;
             return;
         }
@@ -409,6 +496,8 @@ impl qobject::SessionModel {
         *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
+        self.as_mut().rust_mut().holding = None;
+        self.as_mut().set_resume_asked(false);
         self.as_mut().set_running(false);
         self.as_mut().set_paused(false);
         self.as_mut().set_sounding(false);
@@ -427,6 +516,7 @@ impl qobject::SessionModel {
                 }
                 self.as_mut().apply_speed();
                 self.as_mut().set_running(true);
+                self.as_mut().left_off(session);
             }
             Report::FirstPicture { after } => self.as_mut().set_first_picture_ms(after.as_secs_f64() * 1000.0),
             Report::Shape { aspect } => {
@@ -475,16 +565,16 @@ impl qobject::SessionModel {
 
     fn save_state(self: Pin<&mut Self>, slot: u32) {
         self.job(move |runtime, session| match runtime.state_slot_save(session, slot) {
-            Ok(()) => format!("State saved to slot {slot}"),
-            Err(e) => format!("Save State failed: {e}"),
+            Ok(()) => Ok(format!("State saved to slot {slot}")),
+            Err(e) => Err(format!("Save State failed: {e}")),
         });
     }
 
     fn load_state(self: Pin<&mut Self>, slot: u32) {
         self.job(move |runtime, session| match runtime.state_slot_load(session, slot) {
-            Ok(true) => format!("State loaded from slot {slot}"),
-            Ok(false) => format!("Load State: slot {slot} is empty"),
-            Err(e) => format!("Load State failed: {e}"),
+            Ok(true) => Ok(format!("State loaded from slot {slot}")),
+            Ok(false) => Err(format!("Load State: slot {slot} is empty")),
+            Err(e) => Err(format!("Load State failed: {e}")),
         });
     }
 
@@ -500,44 +590,53 @@ impl qobject::SessionModel {
         let path = folder.join(format!("{stem} {stamp}.png"));
         self.job(move |runtime, session| {
             let saved = std::fs::create_dir_all(path.parent().unwrap_or(&path)).is_ok() && pictures::save_now(runtime, session, &path.to_string_lossy());
-            if saved { "Screenshot saved".to_string() } else { format!("Screenshot failed: {}", path.display()) }
+            if saved { Ok("Screenshot saved".to_string()) } else { Err(format!("Screenshot failed: {}", path.display())) }
         });
     }
 
     fn restart(self: Pin<&mut Self>) {
         self.job(|runtime, session| match runtime.reset(session) {
-            Ok(()) => "Restarted".to_string(),
-            Err(e) => format!("Restart failed: {e}"),
+            Ok(()) => Ok("Restarted".to_string()),
+            Err(e) => Err(format!("Restart failed: {e}")),
         });
     }
 
     fn rewind_to(self: Pin<&mut Self>, frame: u64) {
         self.job(move |runtime, session| match runtime.rewind_to(session, frame) {
-            Ok(()) => "Rewound".to_string(),
-            Err(_) => "Rewind: that moment is no longer held".to_string(),
+            Ok(()) => Ok("Rewound".to_string()),
+            Err(_) => Err("Rewind: that moment is no longer held".to_string()),
         });
     }
 
     /// A change to the session made on a thread of its own, as Mistress makes it, its words brought back through the
-    /// queue; the runtime applies it between two frames, so a paused game takes it at once (emusen_crystal.h).
-    fn job(mut self: Pin<&mut Self>, work: impl FnOnce(&Runtime, u32) -> String + Send + 'static) {
+    /// queue; the runtime applies it between two frames, so a paused game takes it at once (emusen_crystal.h). Its words
+    /// are Ok for what was done, Err for what was not, which the notice marks for attention.
+    fn job(mut self: Pin<&mut Self>, work: impl FnOnce(&Runtime, u32) -> Result<String, String> + Send + 'static) {
         let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
         self.as_mut().rust_mut().jobs += 1;
         let queue = self.qt_thread();
         std::thread::spawn(move || {
-            let words = work(&runtime, session);
-            let _ = queue.queue(move |model| model.job_done(words));
+            let said = work(&runtime, session);
+            let _ = queue.queue(move |model| model.job_done(said));
         });
     }
 
-    fn job_done(mut self: Pin<&mut Self>, words: String) {
+    fn job_done(mut self: Pin<&mut Self>, said: Result<String, String>) {
         self.as_mut().rust_mut().jobs -= 1;
-        let words = QString::from(&words);
-        if self.notice != words {
-            self.as_mut().rust_mut().notice = words;
+        let attention = said.is_err();
+        let words = said.unwrap_or_else(|e| e);
+        if self.notice_attention != attention {
+            self.as_mut().rust_mut().notice_attention = attention;
+            self.as_mut().notice_attention_changed();
         }
-        // Said on every job, so the same words twice are two notices.
-        self.as_mut().notice_changed();
+        // Said on every job with words, so the same words twice are two notices; a resume that loaded says nothing.
+        if !words.is_empty() {
+            let words = QString::from(&words);
+            if self.notice != words {
+                self.as_mut().rust_mut().notice = words;
+            }
+            self.as_mut().notice_changed();
+        }
         if self.paused {
             self.as_mut().read_card_facts();
         }

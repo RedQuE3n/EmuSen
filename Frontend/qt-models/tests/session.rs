@@ -82,6 +82,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         handoff.clone(),
         GameIo { pads: None, sound: Some(sound) },
         DisplayClock::new(&platform),
+        false,
         move |r| {
             let _ = tell.send(r);
         },

@@ -2,7 +2,7 @@
 //! never by logic in QML (EmuSen_Qt.md §7.1). `step` is the whole rule; the bridge only puts it on Qt, after the event
 //! that asked, so one press is never answered by the screen it left and the screen it opened.
 
-use crate::help::HOME;
+use crate::help::{HOME, NEXT, PREVIOUS};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
@@ -21,8 +21,10 @@ pub enum Shown {
     HomeCard,
     /// The List card over the grid (EmuSen_Interface.md §18.1).
     List,
-    /// The grid's search, the keyboard docked.
+    /// The grid's search, the keyboard docked and holding the focus.
     Search,
+    /// The grid's search, the keyboard docked and the focus on the covers (LunaP's `GalleryLayout` out of the keyboard).
+    SearchGrid,
 }
 
 /// What asked for a change.
@@ -46,6 +48,8 @@ pub enum Ask {
     Closed,
     /// A card closed by B on its first page or by Start.
     Close,
+    /// The focus went to the search's keys (true) or its covers (false) by other means than the shoulders: the pointer.
+    Keys(bool),
 }
 
 /// Home's Power place, by its index in `words::HOME_PLACES`.
@@ -54,8 +58,8 @@ pub const POWER_PLACE: usize = 6;
 /// The grid's List card and the search, by the actions that open them.
 pub const LIST: &str = "list";
 pub const SEARCH: &str = "search";
-/// X on the search: the keyboard closes, the narrowed grid kept.
-pub const DONE: &str = "done";
+/// A shoulder on the keyboard: the focus to the covers, while there are any.
+pub const TO_GRID: &str = "toGrid";
 
 /// The screen shown after an ask, and the grid's row (the page a card opens at, for a card); `None` leaves both as they
 /// were.
@@ -66,7 +70,7 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Home, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, Some(crate::library::ALL.to_owned()))),
         // Start on Home stays on Home, which takes the focus back to where it starts.
         (Shown::Home, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
-        (Shown::Consoles | Shown::Grid | Shown::Search, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
+        (Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid, Ask::Act(key)) if key == HOME => Some((Shown::Home, None)),
         (Shown::HomeCard, Ask::Back | Ask::Close) => Some((Shown::Home, None)),
         // The card closes on its rows' actions; those of a later stage (Exit Big Picture, the tools) do nothing more yet.
         (Shown::HomeCard, Ask::Act(_)) => Some((Shown::Home, None)),
@@ -75,13 +79,21 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::List, Ask::Act(key)) if key == SEARCH => Some((Shown::Search, None)),
         // Every other action of the List card is the grid's, and the card closes on it.
         (Shown::List, Ask::Act(_)) => Some((Shown::Grid, None)),
+        // The keyboard closed, by X keeping the words or by B on an empty field: the grid.
         (Shown::Search, Ask::Back) => Some((Shown::Grid, None)),
-        (Shown::Search, Ask::Act(key)) if key == DONE => Some((Shown::Grid, None)),
+        // The shoulders move the focus between the keyboard and the covers, the keyboard staying docked.
+        (Shown::Search, Ask::Act(key)) if key == TO_GRID => Some((Shown::SearchGrid, None)),
+        (Shown::SearchGrid, Ask::Act(key)) if key == PREVIOUS || key == NEXT => Some((Shown::Search, None)),
+        (Shown::Search, Ask::Keys(false)) => Some((Shown::SearchGrid, None)),
+        (Shown::SearchGrid, Ask::Keys(true)) => Some((Shown::Search, None)),
+        // From the covers B is the grid's: the search cleared first (GameModel), then Choose a console.
+        (Shown::SearchGrid, Ask::Back) => Some((Shown::Consoles, None)),
+        (Shown::SearchGrid, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
         (Shown::Consoles, Ask::Open(key)) => Some((Shown::Grid, Some(key.clone()))),
         (Shown::Consoles, Ask::Act(key)) if key == crate::library::FAVOURITES => Some((Shown::Grid, Some(key.clone()))),
         (Shown::Consoles, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Grid, Ask::Back) => Some((Shown::Consoles, None)),
-        (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search, Ask::Play) => Some((Shown::Game, None)),
+        (Shown::Home | Shown::Grid | Shown::Pause | Shown::List | Shown::Search | Shown::SearchGrid, Ask::Play) => Some((Shown::Game, None)),
         (Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
         (Shown::Pause, Ask::Library) => Some((Shown::Home, None)),
         (Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Home, None)),
@@ -107,6 +119,7 @@ pub mod qobject {
         HomeCard,
         List,
         Search,
+        SearchGrid,
     }
 
     extern "RustQt" {
@@ -119,6 +132,8 @@ pub mod qobject {
         #[qproperty(i32, home_again, cxx_name = "homeAgain", READ, NOTIFY)]
         /// The page the Home card opens at, by its key.
         #[qproperty(QString, page, READ, NOTIFY)]
+        /// Whether the grid shows a game, so the keyboard's shoulders have covers to move to.
+        #[qproperty(bool, found)]
         type Screens = super::ScreensRust;
     }
 
@@ -147,6 +162,10 @@ pub mod qobject {
         /// A card closed by B on its first page or by Start.
         #[qinvokable]
         fn close(self: Pin<&mut Screens>);
+        /// The search's focus taken by its keys or its covers.
+        #[qinvokable]
+        #[cxx_name = "keysFocused"]
+        fn keys_focused(self: Pin<&mut Screens>, keys: bool);
         /// Quit EmuSen answered Yes: the program ends.
         #[qsignal]
         fn quit(self: Pin<&mut Screens>);
@@ -165,11 +184,12 @@ pub struct ScreensRust {
     game_running: bool,
     home_again: i32,
     page: QString,
+    found: bool,
 }
 
 impl Default for ScreensRust {
     fn default() -> Self {
-        ScreensRust { shown: Screen::Home, key: QString::default(), game_running: false, home_again: 0, page: QString::default() }
+        ScreensRust { shown: Screen::Home, key: QString::default(), game_running: false, home_again: 0, page: QString::default(), found: false }
     }
 }
 
@@ -192,6 +212,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::HomeCard => Shown::HomeCard,
         Screen::List => Shown::List,
         Screen::Search => Shown::Search,
+        Screen::SearchGrid => Shown::SearchGrid,
         _ => Shown::Home,
     }
 }
@@ -206,6 +227,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::HomeCard => Screen::HomeCard,
         Shown::List => Screen::List,
         Shown::Search => Screen::Search,
+        Shown::SearchGrid => Screen::SearchGrid,
     }
 }
 
@@ -227,6 +249,9 @@ impl qobject::Screens {
         if key == crate::home_card::QUIT_EMUSEN {
             self.as_mut().quit();
         }
+        if key == TO_GRID && !self.found {
+            return;
+        }
         self.ask(Ask::Act(key));
     }
 
@@ -244,6 +269,10 @@ impl qobject::Screens {
 
     pub fn close(self: Pin<&mut Self>) {
         self.ask(Ask::Close);
+    }
+
+    pub fn keys_focused(self: Pin<&mut Self>, keys: bool) {
+        self.ask(Ask::Keys(keys));
     }
 
     fn ask(self: Pin<&mut Self>, ask: Ask) {

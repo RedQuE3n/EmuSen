@@ -18,6 +18,7 @@ fn main() {
             "src/screens.rs",
             "src/clock.rs",
             "src/session_model.rs",
+            "src/question_model.rs",
             "src/pause_model.rs",
             "src/card_model.rs",
             "src/pane_model.rs",

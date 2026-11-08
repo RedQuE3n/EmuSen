@@ -196,12 +196,16 @@ fn each_screen_s_help_bar_names_its_presses() {
     assert_eq!(labels(Screen::HomeShelf)[0], "Accept Play", "a shelf game plays, as Mistress's Home has it");
     assert_eq!(labels(Screen::HomePlaces), ["Accept Open", "Options Search", "Menu Home"]);
     assert_eq!(labels(Screen::Grid)[0], "Accept Play");
+    // B clears a search first, as Mistress's bar says; both shoulders are declared though the bar draws them as one entry.
+    assert_eq!(labels(Screen::GridSearched).iter().find(|l| l.starts_with("Back")).map(String::as_str), Some("Back Clear search"));
+    assert!(action_lines(Screen::Grid).contains("previous PageUp\n") && action_lines(Screen::Grid).contains("next PageDown\n"));
+    assert!(action_lines(Screen::Search).contains("toGrid PageUp\n") && action_lines(Screen::Search).contains("toGrid PageDown\n"));
 }
 
 #[test]
 fn each_screen_declares_its_own_actions_and_the_walk_reads_them() {
     assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\nhome Menu\n", "Start goes Home, unnamed on the bar");
-    for screen in [Screen::Home, Screen::HomeShelf, Screen::HomePlaces, Screen::Consoles, Screen::Grid] {
+    for screen in [Screen::Home, Screen::HomeShelf, Screen::HomePlaces, Screen::Consoles, Screen::Grid, Screen::GridSearched, Screen::Search] {
         let read = emusen_kit_core::input::WalkAction::from_lines(&action_lines(screen));
         let named: Vec<_> = entries(screen).iter().chain(emusen_qt_models::help::unnamed(screen)).filter(|e| e.2.is_some()).map(|e| (e.2.unwrap().to_owned(), Some(e.0))).collect();
         assert_eq!(read.into_iter().map(|a| (a.key, a.button)).collect::<Vec<_>>(), named, "{screen:?}");

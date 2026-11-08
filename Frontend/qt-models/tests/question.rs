@@ -30,3 +30,20 @@ fn the_search_declares_y_as_the_keyboard_s_space_and_x_as_its_done() {
     let lines = action_lines(Screen::Search);
     assert!(lines.starts_with("space Search\ndone Screensaver\n"), "{lines}");
 }
+
+#[test]
+fn a_game_s_start_asks_only_where_it_was_left_off_and_the_setting_says_ask() {
+    use emusen_qt_models::resume::{answer, start, subject, Answer, Setting, Start};
+    assert_eq!(Setting::read("Ask"), Setting::Ask);
+    assert_eq!(Setting::read("Resume"), Setting::Always);
+    assert_eq!(Setting::read("Restart"), Setting::Never);
+    assert_eq!(Setting::read(""), Setting::Ask, "unread settings ask, as the default does");
+    assert_eq!(start(Setting::Ask, true), Start::Ask);
+    assert_eq!(start(Setting::Always, true), Start::Load);
+    assert_eq!(start(Setting::Never, true), Start::Fresh);
+    for setting in [Setting::Ask, Setting::Always, Setting::Never] {
+        assert_eq!(start(setting, false), Start::Fresh, "nothing left off, nothing to ask");
+    }
+    assert_eq!([answer(0), answer(1), answer(-1)], [Answer::Load, Answer::Fresh, Answer::Back], "Continue, Start again, B");
+    assert_eq!(subject("/games/Cobalt Harbor (Synthetic).sfc"), "Cobalt Harbor (Synthetic)");
+}

@@ -42,6 +42,7 @@ Window {
         id: screens
         objectName: "screens"
         gameRunning: player.session.running
+        found: grid.games.count > 0
         onQuit: Qt.quit()
     }
     Binding {
@@ -67,8 +68,8 @@ Window {
         objectName: "game"
         anchors.fill: parent
         visible: program.gameShown || program.pauseShown || (screens.shown === Screens.Home && player.session.running)
-        inFront: program.gameShown
-        focus: program.gameShown
+        inFront: program.gameShown && !player.session.resumeAsked
+        focus: program.gameShown && !player.session.resumeAsked
         feed: program.feed
         platformLibrary: program.platformLibrary
         cores: library.cores
@@ -123,10 +124,11 @@ Window {
             library: library
             padFamily: program.padFamily
             pixelScale: canvas.unit
-            visible: screens.shown === Screens.Grid || screens.shown === Screens.List || screens.shown === Screens.Search
+            visible: screens.shown === Screens.Grid || screens.shown === Screens.List || grid.searching
             focus: !program.splashShown && visible
             listOpen: screens.shown === Screens.List
-            searching: screens.shown === Screens.Search
+            searching: screens.shown === Screens.Search || screens.shown === Screens.SearchGrid
+            typing: screens.shown === Screens.Search
             key: screens.key
             row: consoles.tiles.count > 0 ? consoles.tiles.itemAt(library.indexOf(screens.key)) : null
             previousRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + consoles.tiles.count - 1) % consoles.tiles.count) : null
@@ -135,6 +137,8 @@ Window {
             onPlayed: (path) => program.play(path)
             onActed: (key) => screens.act(key)
             onCardClosed: screens.close()
+            onSearchClosed: screens.back()
+            onFocusMoved: (keys) => screens.keysFocused(keys)
         }
     }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
@@ -197,6 +201,73 @@ Window {
             onQuitGame: player.session.close()
             onQuitAll: screens.quit()
             onGone: if (program.gameShown) player.session.resume()
+        }
+    }
+    // The Resume question at a game's start, over the game held unplayed until it is answered (EmuSen_Interface.md §18.3).
+    Kit.NormalizedCanvas {
+        id: resumeCanvas
+        objectName: "resumeCanvas"
+        visible: player.session.resumeAsked
+        QuestionModel {
+            id: resumeWords
+            subject: player.session.resumeSubject
+        }
+        Kit.Frame {
+            id: resumeFrame
+            anchors.fill: parent
+            form: Kit.Forms.BigScreen
+            surfaceDrawn: false
+            helpShown: false
+            focus: player.session.resumeAsked
+            controller.navigationShown: false
+            Kit.Question {
+                id: resumeQuestion
+                objectName: "resumeQuestion"
+                controller: resumeFrame.controller
+                title: resumeWords.title
+                sentences: resumeWords.sentences
+                caption: resumeWords.caption
+                choices: resumeWords.choices
+                backIndex: resumeWords.backIndex
+                padFamily: program.padFamily
+                titleFont: Qt.font({ family: resumeFaces.condensedRegular, pixelSize: Kit.Tokens.fontTitle })
+                bodyFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
+                captionFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontCaption })
+                rowFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontRow })
+                helpFont: Qt.font({ family: resumeFaces.regular, pixelSize: 20 })
+                help: HelpModel {
+                    screen: HelpModel.QuestionBack
+                }
+                onChosen: (index) => player.session.answerResume(index)
+            }
+            // Opened each time it is asked; a Binding, since B closing the popup would undo a plain one.
+            Binding {
+                resumeQuestion.visible: player.session.resumeAsked
+            }
+        }
+        Faces {
+            id: resumeFaces
+        }
+    }
+    // The session's notices (saved, loaded, the screenshot, what failed), at the top right over everything; over running
+    // gameplay they are the game's own, so they show (EmuSen_Interface.md §18.6).
+    Kit.NoticeModel {
+        id: notices
+        objectName: "notices"
+        gameRunning: program.gameShown
+    }
+    Connections {
+        target: player.session
+        function onNoticeChanged() { notices.raise(player.session.notice, player.session.noticeAttention, true) }
+    }
+    Kit.NormalizedCanvas {
+        id: noticeCanvas
+        objectName: "noticeCanvas"
+        Kit.NoticeLayer {
+            model: notices
+            width: noticeCanvas.width
+            height: noticeCanvas.height
+            labelFont: Qt.font({ family: resumeFaces.regular, pixelSize: Kit.Tokens.fontBody })
         }
     }
     Kit.Moonrise {

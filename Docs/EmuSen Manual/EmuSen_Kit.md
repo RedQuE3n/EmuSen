@@ -1496,8 +1496,8 @@ logged). Measured on 2026-11-08.
   check) or Attention (a triangle) and the words in Body TextStrong. It fades and slides in over Enter and out over Exit
   (nothing moves under reduced motion; the fades keep their 120 ms), and a `Timer` of `holdMs`, restarted on each
   `raised`, ends it. The big-screen and card forms have no status bar (`EmuSen_Qt.md` §1.7), so a status line there is a
-  notice. *Not drawn yet*: the shadow of §5.4, which the software backend cannot draw (`MultiEffect` is an empty box
-  there, `EmuSen_Qt.md` §7.1 step 6), and the desktop's status-bar line, which is stage 6's.
+  notice. The shadow of §5.4 is drawn on the GPU (§7.26); the software backend cannot draw it (`MultiEffect` is an
+  empty box there, `EmuSen_Qt.md` §7.1 step 6). *Not drawn yet*: the desktop's status-bar line, which is stage 6's.
 
 **Held to**: kit-core's `tests/notice.rs` (2); qt-test's `notice.rs` (the card at the top right; a second replacing the
 first with its hold started again; gone after 2 s; over gameplay a notice of the game's own shown and another waiting
@@ -1564,6 +1564,25 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   Card met, `EmuSen_Qt.md` §7.1 step 7), and the translucent colour blends, the band reading (15, 17, 28) against
   Mistress's (15, 17, 27) at 1920 × 1200. kit-core's palette reach now takes a declared opaque token at any alpha, since
   a token through a colour's alpha is the token as it is through an item's opacity (`tests/audit.rs`).
+
+### 7.26 A shoulder a screen declares; the pointer resting; the notice's shadow (stage 2, the loose ends; 2026-11-08)
+
+- **The shoulders without sections.** The walk stepped its sections on LB and RB in every form but the card's, and
+  with no sections it declined them, so a screen could not declare a shoulder (`EmuSen_Qt.md` §7.5: the search's Move
+  to grid). Now a walk with no sections offers the shoulders to the declared actions like any other button; a walk
+  with sections keeps them. An extension under rule Q: no surface changes, and a screen that declares no shoulder sees
+  no difference. Held to kit-core's `tests/input.rs` (both shoulders reaching a declared `toGrid` with no sections; a
+  walk with sections still stepping them past a declared shoulder).
+- **The pointer resting.** `Scene::hover` (qt-test, `harness_hover`, Qt Test's `mouseMove`) moves the pointer to a point
+  and leaves it there, nothing pressed, so a test reaches what a hover does without a click's A. *C++ part*: one
+  function in `cpp/harness.cpp` [own, because the harness's pointer is Qt Test's, which has no Rust binding]. Found by
+  it on 2026-11-08: the pointer left where a click had been lands on a cover after a resize to 3840 × 2160, which took
+  the focus there (§7.5's search follows the focus).
+- **The notice's shadow** (§7.23 left it undrawn): §5.4's one shadow, offset 0,8, blur 24, black at 50%
+  (`shadowOpacity`, `shadowRadius`), cast by a copy of the card's shape through `MultiEffect`, as the cards cast theirs,
+  fading and sliding with the card. The software backend still draws none. Mistress's own notice (LunaP's
+  `NoticeLayer`, a pill on HudSurface) draws no shadow; the design's (`EmuSen_Interface.md` §18.6, "the shadow") is
+  followed here, a difference named for the tester in `EmuSen_Qt.md` §7.5. Held to `qt-app`'s `acceptance.rs` on Vulkan.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

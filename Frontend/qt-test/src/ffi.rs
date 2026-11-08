@@ -15,6 +15,7 @@ pub mod ffi {
         fn harness_resize(window: Pin<&mut QObject>, width: i32, height: i32);
         fn harness_tree(window: Pin<&mut QObject>) -> QString;
         fn harness_click(window: Pin<&mut QObject>, x: f64, y: f64, button: i32);
+        fn harness_hover(window: Pin<&mut QObject>, x: f64, y: f64);
         fn harness_key(window: Pin<&mut QObject>, key: i32, modifiers: i32);
         fn harness_wheel(window: Pin<&mut QObject>, x: f64, y: f64, delta: i32);
         fn harness_wait(ms: i32);

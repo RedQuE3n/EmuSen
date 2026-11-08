@@ -496,6 +496,9 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     scene.pad(UiButton::Accept);
     wait_for(&mut scene, "pause", "title", "Leave", 1000);
     assert_eq!(scene.property("cardCanvas", "slide"), "0", "a page turn moves nothing");
+    // The chord's "State saved" notice gone, so the page held is the card's alone.
+    wait_for(&mut scene, "notices", "shown", "false", 3000);
+    wait_for(&mut scene, "notice", "visible", "false", 1000);
     hold(&mut scene, "PauseCardLeave", &mockup::Mockup::default(), named_difference, &mut report);
     // Quit Game asks first, on the card form's question page, No first; B goes back to its row and Up to Back to Library.
     scene.pad(UiButton::Down);

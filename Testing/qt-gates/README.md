@@ -21,6 +21,8 @@ Nothing here is built or shipped; each script is plain text in and out, and none
   colour box, the PNG), the PNGs at 480 × 300, or at the compositor's full size with `FULL=1`.
 - `pad.py` — the pad, "gate pad" (vendor 1209, product 0001), pressed by steps: `wait:<s>`, `tap:<button>`,
   `hold:<button>:<s>`. Every program on the desk reads it, so no `guide`, and nothing else reading pads while it runs.
+  It refuses to start while Steam runs: on 2026-11-08 Steam read a gate pad's press and launched a game from the
+  library. In-process SDL virtual pads (the acceptance tests') are the first choice wherever the program is ours.
 - `first.py <run-dir>` — the program's exec to its window and to the game's first picture, from the grabs.
 - `shell.py <tree>/lib/EmuSen` — a terminal over a published tree's platform library: its shell with every EmuSen
   module and the runtime's settings service, as Mistress's shell has them, so `cores fetch`, `get`, `approve` and

@@ -18,6 +18,21 @@ BUTTONS = {"a": 0x130, "b": 0x131, "x": 0x133, "y": 0x134, "l": 0x136, "r": 0x13
 STICKS = (0, 1, 3, 4)  # ABS_X, ABS_Y, ABS_RX, ABS_RY
 UI_SET_EVBIT, UI_SET_KEYBIT, UI_SET_ABSBIT, UI_DEV_CREATE, UI_DEV_DESTROY = 0x40045564, 0x40045565, 0x40045567, 0x5501, 0x5502
 
+def steam_running():
+    for pid in filter(str.isdigit, os.listdir("/proc")):
+        try:
+            with open(f"/proc/{pid}/comm") as f:
+                if f.read().strip() == "steam":
+                    return True
+        except OSError:
+            pass
+    return False
+
+
+# A uinput pad is seen by every program on the desk: Steam acts on its presses (it launched a game, 2026-11-08).
+if steam_running():
+    sys.exit("pad.py: Steam is running and would read this pad; close Steam first (README.md)")
+
 fd = os.open("/dev/uinput", os.O_WRONLY | os.O_NONBLOCK)
 for ev in (EV_KEY, EV_ABS):
     fcntl.ioctl(fd, UI_SET_EVBIT, ev)

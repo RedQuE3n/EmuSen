@@ -1745,8 +1745,8 @@ cxx-qt-lib binds.
   WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
   same path without one.
 - Owed by §7.28 **[routine]**: a theme's button picture is drawn in its own colours, where ES-DE shifts it by
-  `iconColor`; and a key held in the ES-DE view repeats at the keyboard's rate, not ES-DE's tiers (a key release
-  through the queue would give the tiers, if wanted).
+  `iconColor` (a later piece of stage 4). Decided 2026-11-08: a key held in the ES-DE view repeats at the keyboard's
+  own rate, not ES-DE's tiers.
 - Owed by §7.8: `RatingPicker` and `DatePicker` (`Keyboard` is built, §7.22); the drawn
   glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
   pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.

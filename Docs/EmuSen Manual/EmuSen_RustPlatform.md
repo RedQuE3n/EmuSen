@@ -4190,8 +4190,10 @@ committed) and laid out as each `*_CORPUS` variable expects. Each file is
   `21.e`, `41.e`, `61.e`, `81.e`, `a1.e`, `c1.e`, `e1.e`, `7c.n`, `7c.e`, `fc.n`, `fc.e`, `42.n` and `42.e`, to
   `venusrt/src/SingleStepTests-65816/v1/` (`EMUSEN_VENUSRT_CORPUS=…/venusrt`).
 
-The `m68000` and `r3000` suites ship their cases as `.json.bin`, which only their own Python decoders turn into JSON;
-those were not run, so the 68000's primary suite and the R3000A's ran on their inline cases only.
+The `m68000` and `r3000` suites ship their cases as `.json.bin`, which only their own Python decoders turn into JSON.
+Those two samples were not decoded: a decoder is code fetched from the internet, and such code is not run here. The
+`.json.bin` files never pass through the reader this step changed, so the 68000's primary suite and the R3000A's
+ran on their inline cases, which do.
 
 **Proof, measured on 2026-11-07.**
 - The core host's tool lists the eight sidecars of the published `out/linux-x64/Mistress/lib/EmuSen` to the same bytes

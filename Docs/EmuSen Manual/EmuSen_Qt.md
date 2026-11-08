@@ -820,6 +820,92 @@ fails to load is reported in the Themes tab with the engine's warnings and the r
 Switching themes at run time destroys the engine and creates another; the spike shows the smaller case, one engine and
 a `Loader` whose `source` moves between theme files (§10.3).
 
+#### 3.5.1 The host as built **[M 2026-11-08]**
+
+**The crate.** `emusen-theme-host` (`Frontend/theme-host`), the QML module `EmuSen.ThemeHost 1.0` (the program's; a theme's engine
+never resolves it). Four parts, one job each: `policy.rs`, the sandbox's rules as plain data with no Qt; `package.rs`, `theme.json`
+read through `emusen-theme-manifest` (the schema's one owner, §3.7) into what the host loads, the name and the screens provided;
+`sandbox.rs`, the bridge to the C++ shells; `host.rs`, the `ThemeHost` type. Its dependencies are cxx, cxx-qt, cxx-qt-lib,
+`emusen-qml-rules` (for `THEME_IMPORTS` and its theme profile, the allow-list's one owner) and the manifest crate; no client, runtime
+or model crate (`tests/lint.rs` holds the list).
+
+**`ThemeHost`.** `folder` (a path, a `file:` URL or a `qrc:` folder; empty for none) and `coverStores` are written; `name`, `ready`,
+`failed`, `warnings` (one line per finding), `generation` and `liveEngines` are read. Writing `folder` destroys the engine before,
+drops `ready` (so every slot lets its screen go), reads `theme.json`, and makes the new engine; a manifest that breaks the schema or
+names a newer API is refused with the manifest's words (`theme.json:4 api written for EmuSen.Theme 2.0; this build has 1.0`) and
+no engine is made. `provides(role)` says whether the package lists the role (`ThemeHost.Home`, `Consoles`, `Games`, `Splash`, an
+enum, so no QML writes a role's name); `place(role, slot)` creates the role's screen in the theme's engine as a child of the slot,
+filling it, and returns false, setting `failed`, when it cannot.
+
+**The engine.** One `QQmlEngine` per theme, created and owned by the sandbox: its import paths are Qt's QML folder, `qrc:/qt/qml`
+and `qrc:/qt-project.org/imports` only (no application folder, no `QML_IMPORT_PATH`), no plugin path, the URL interceptor and the
+network factory installed, `offlineStoragePath` set empty, and its `warnings` signal gathered into the host's log. The sandbox
+deletes the screens it made, then the engine, then the shells the engine was handed, in that order; `liveEngines` counts the
+engines still alive through a `QPointer` each, so a leak is a number a test reads.
+
+**What a theme's engine may reach**, judged by `Policy::judge` for every URL the engine resolves (QML, script, qmldir, and every
+`url` property after resolution):
+
+1. A theme's own QML or script file has its imports held to `THEME_IMPORTS` (`QtQuick`, `QtQuick.Layouts`, `QtQuick.Effects`,
+   `QtQuick.Shapes`, `QtQuick.Controls`, `EmuSen.Theme`) and to relative folders, through qml-rules' theme profile; a script's
+   `.import` likewise. A file that names another module is refused before it compiles, with the file, the line and the list:
+   `screens/Home.qml:2 imports EmuSen.Models, which a theme may not import (allowed: …)`.
+2. Some modules never resolve, by any route: the program's own (`EmuSen.Models`, `.App`, `.Play`, `.Endymion`, `.Esde`,
+   `.ThemeHost`) and those that reach files, processes, media or the network (`QtMultimedia`, `QtNetwork`, `QtCore`,
+   `QtQml.XmlListModel`, `QtQuick.LocalStorage`, `QtQuick.Dialogs`, `QtWebEngine`, `Qt.labs`), refused at their `qmldir` under
+   every import root. This is what stops an inline component, `Qt.createQmlObject("import EmuSen.Models; …")`, which no file
+   check sees: measured on 2026-11-08 with the program's models registered in the process, the module's qmldir is looked for
+   under each of the three roots, each lookup is refused, and the object is not made. The allow-list of rule 1 is the narrower
+   rule; rule 2 exists because a module allowed by rule 1 (QtQuick, the kit through `EmuSen.Theme`) imports modules of its own,
+   which a theme must still be able to resolve transitively.
+3. `file:` URLs inside the theme's folder (symbolic links resolved, `..` taken out), pictures inside a cover store, and Qt's own
+   module files in its QML folder; nothing else on disk (`file:///etc/hostname is outside the theme's folder and the cover store`).
+4. `qrc:` URLs of Qt's own modules, `EmuSen.Theme`, the kit it re-exports, the EmuSen style's controls and the kit's fonts, and the
+   theme's folder when it is a resource (the reference package, R); never another resource of the program (`EmuSen.App`'s screens,
+   the ES-DE painter's shader).
+5. `data:` and `image:` (only the providers registered on the theme's engine, none yet); no other scheme, so no network:
+   `http://example.invalid/cover.png: a theme reaches no network …`.
+
+A refused URL is rewritten into `/emusen-refused/<scheme>/<host><path>`, a folder that never exists, so the engine reports the
+file missing synchronously (`QML Image: Cannot open: file:///emusen-refused/http/example.invalid/cover.png`) and the host's log has
+the reason. A first version rewrote to an unknown scheme left for the refusing network to decline; that sent qmldir lookups through
+the network asynchronously, and a synchronous `Qt.createQmlObject` waiting on them never returned (measured on 2026-11-08: the test
+hung past 180 s). The network factory stays as the second wall: every manager it makes refuses every request, logged, so a URL
+that reached it by a route the interceptor does not see still fails with a diagnostic.
+
+**The two C++ shells, and why.** `SandboxInterceptor` subclasses `QQmlAbstractUrlInterceptor` and `SandboxNetwork` subclasses
+`QQmlNetworkAccessManagerFactory` (its managers subclass `QNetworkAccessManager::createRequest`): cxx-qt declares no subclass of a Qt
+C++ interface with virtual functions, so these are the glue §1.4 allows. Each asks Rust: the interceptor calls `policy_reads` and
+`policy_judge` through the bridge and holds no rule of its own. Their log is guarded by a mutex, since the type loader and the
+picture readers call from their own threads; the policy is plain immutable data and is shared by reference, owned by the host and
+dropped after the sandbox. The sandbox (engine ownership and the screens' creation through `QQmlComponent`, which cxx-qt-lib does
+not bind) is the third piece of glue; `cpp/sandbox.h` and `cpp/sandbox.cpp` hold all three in 264 lines.
+
+**In the program.** `ThemeHost.qml` (`EmuSen.App`) holds the host and one `Loader` slot per role, each made while the theme provides
+the role and placing the screen when loaded; a slot's `themed` is true when its screen is in place and the theme has not failed.
+`Main.qml` draws it over the reference's screens, below every card, and hides the reference's Home, Choose a console or grid only
+where the theme's slot is `themed`; a role the theme omits, and every role once it fails, is the reference's, drawn as before. A
+theme's splash slot is made only while the splash is shown and is drawn in a layer over Moonrise, faded with it: Moonrise keeps the
+splash's clock, the skip and the fade (`EmuSen_Interface.md` §22), so a theme's splash cannot hold the start or take a press. Until
+`EmuSen.Theme`'s `Screen` gives a splash its `length`, Moonrise's length is the splash's, and Moonrise draws unseen under a theme's
+splash. The theme is chosen by `--theme DIR` or `EMUSEN_THEME`, empty for the reference; the cover stores are the media store and the
+settings' `ArtworkDirectory` and `EsdeMediaDirectory`. With no theme chosen the program is unchanged.
+
+**Proof.** `theme-host/tests/policy.rs` (5 tests, no Qt): the folder, the cover store and nothing else on disk; no network and no
+unknown scheme; Qt's modules resolve and the named ones never; a theme file held to the allow-list; a folder in the resources.
+`tests/sandbox.rs` (offscreen, the software backend, `EmuSen.Models` imported by the test scene so its types are registered as in
+the program): a stub theme's screen fills its slot and reads a picture from its folder, quietly; an `EmuSen.Models` import, a remote
+picture, a file outside, an inline component and a newer API each fail with the words above; switching stub → remote → stub leaves
+one engine, and no theme none. `tests/lint.rs`: the committed registry `Testing/qmltypes/EmuSen.ThemeHost-1.0.*` is the built one,
+the scene keeps the QML rules, the dependency list. `qt-app/tests/theme.rs`: a theme's splash over Moonrise and gone after it, its
+Home in place of the reference's and the omitted Choose a console the reference's, a failing theme reported and the reference
+shown, switching twice leaving one engine. The stub themes are plain QtQuick under `theme-host/tests/themes/` until `EmuSen.Theme`
+lands.
+
+**Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
+theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is
+§3.5's paragraph above, unchanged: a theme can still spin or allocate.
+
 ### 3.6 Console-style designs as themes: the test that the API is sufficient
 
 Four designs, each **inspired** by a console's shell (its arrangement and motion, never its logos, glyph sets, fonts or

@@ -4,7 +4,7 @@
 
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
-use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QUrl, QVariant};
+use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QQuickStyle, QString, QStringList, QUrl, QVariant};
 use emusen_platform_client::Platform;
 use emusen_qt::{start, MAIN_URL};
 use emusen_qt_play::host::Host;
@@ -41,6 +41,10 @@ fn main() {
         initial.insert(QString::from("reducedMotion"), QVariant::from(&start.reduced_motion));
         initial.insert(QString::from("gameMode"), QVariant::from(&start.game_mode));
         initial.insert(QString::from("guideChords"), QVariant::from(&start.guide_chords));
+        initial.insert(QString::from("theme"), QVariant::from(&QString::from(&start.theme)));
+        let mut stores = QStringList::default();
+        start.cover_stores.iter().for_each(|s| stores.append(QString::from(s)));
+        initial.insert(QString::from("coverStores"), QVariant::from(&stores));
         if let Some(host) = &host {
             initial.insert(QString::from("feed"), QVariant::from(&host.feed.address()));
         }

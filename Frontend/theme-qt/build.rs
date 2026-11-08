@@ -3,7 +3,7 @@ use cxx_qt_build::{CxxQtBuilder, QmlFile, QmlModule};
 // EmuSen.Theme 1.0, what a theme sees (EmuSen_Qt.md §3.2); its .qmltypes and qmldir are the module's surface.
 fn main() {
     let qml = [
-        QmlFile::from("qml/Screen.qml"),
+        QmlFile::from("qml/ThemeScreen.qml"),
         QmlFile::from("qml/Tokens.qml").singleton(true),
         QmlFile::from("qml/Frame.qml"),
         QmlFile::from("qml/HelpBar.qml"),

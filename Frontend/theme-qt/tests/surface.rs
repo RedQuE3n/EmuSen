@@ -131,7 +131,7 @@ fn qt_3_2_the_registry_holds_the_api_and_nothing_more() {
     files.sort_unstable();
     assert_eq!(
         files,
-        ["Body", "Carousel", "Frame", "HelpBar", "Moonrise", "NormalizedCanvas", "Scene", "Screen", "Sky", "Tokens", "Walkable"],
+        ["Body", "Carousel", "Frame", "HelpBar", "Moonrise", "NormalizedCanvas", "Scene", "Sky", "ThemeScreen", "Tokens", "Walkable"],
         "the kit's types by name, the screen and the tokens; never the whole kit"
     );
     assert!(COMMITTED_QMLDIR.contains("singleton Tokens 1.0"), "Tokens is a singleton");
@@ -159,7 +159,7 @@ fn qt_3_2_the_tokens_and_the_screen_s_enums_are_the_kit_s() {
         let at = registry.find(&format!("name: \"{name}\"")).unwrap_or_else(|| panic!("the kit's {name}"));
         registry[at..].split("values: [").nth(1).unwrap().split(']').next().unwrap().split_whitespace().collect::<String>().replace('"', "")
     };
-    let screen = std::fs::read_to_string(frontend().join("theme-qt/qml/Screen.qml")).unwrap();
+    let screen = std::fs::read_to_string(frontend().join("theme-qt/qml/ThemeScreen.qml")).unwrap();
     let declared = |text: &str, name: &str| -> String {
         text.split(&format!("enum {name} {{")).nth(1).unwrap().split('}').next().unwrap().split_whitespace().collect::<String>()
     };

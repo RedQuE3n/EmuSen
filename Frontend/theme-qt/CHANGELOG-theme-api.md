@@ -24,9 +24,10 @@ Decided 2026-11-08 by the tester: the additions found by writing four original t
 - **`Help`** (added): `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`, a list with
   `button`, `label`, `pair` and the `actionLines` the kit's `Frame` declares; `Frame.help` binds to it. The role is
   `label`, the name the kit's `HelpBar` reads.
-- **`Screen`** gains the role `Screen.Splash` and, for the splash, `length` (ms), `still` and the signal `finished`. Its
-  roles are `Screen.Home`, `Consoles`, `Games`, `Splash`; `focusRole` takes `Screen.Navigation`, `Content`, `Detail`,
-  `Actions`, `Search`, the kit's walk roles in the kit's order.
+- **`Screen` is renamed `ThemeScreen`**: QtQuick's attached `Screen` has the same name, and which one a theme got
+  depended on the order of its imports. It gains the role `ThemeScreen.Splash` and, for the splash, `length` (ms),
+  `still` and the signal `finished`. Its roles are `ThemeScreen.Home`, `Consoles`, `Games`, `Splash`; `focusRole` takes
+  `ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`, the kit's walk roles in the kit's order.
 - **`Device.family`** (added): the pads' glyph family, as `Frame.padFamily` takes it.
 - **`Tokens`** is a read-only face of the kit's tokens, every one of them, with `Tokens.Dark`/`Light` and
   `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with.

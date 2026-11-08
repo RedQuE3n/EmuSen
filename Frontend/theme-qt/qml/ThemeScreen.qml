@@ -4,9 +4,8 @@ import QtQuick
 FocusScope {
     enum Kind { Home, Consoles, Games, Splash }
     enum Walk { Navigation, Content, Detail, Actions, Search }
-    // Home and Content by number: inside this file QtQuick's attached Screen shadows the type's own name.
-    property int role: 0
-    property int focusRole: 1
+    property int role: ThemeScreen.Home
+    property int focusRole: ThemeScreen.Content
     property list<Item> focusItems
     property int length: 0
     property bool still: false

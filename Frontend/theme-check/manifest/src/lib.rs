@@ -50,7 +50,7 @@ pub enum Screen {
 impl Screen {
     pub const ALL: [Screen; 4] = [Screen::Home, Screen::Consoles, Screen::Games, Screen::Splash];
 
-    /// The name in `screens` and in `Screen.role`.
+    /// The name in `screens` and in `ThemeScreen.role`.
     pub fn name(self) -> &'static str {
         match self {
             Screen::Home => "home",

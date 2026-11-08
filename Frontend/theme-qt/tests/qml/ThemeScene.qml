@@ -113,12 +113,12 @@ Window {
             required property int count
         }
     }
-    Screen {
+    ThemeScreen {
         id: screen
         objectName: "screen"
         anchors.fill: parent
-        role: Screen.Games
-        focusRole: Screen.Navigation
+        role: ThemeScreen.Games
+        focusRole: ThemeScreen.Navigation
         focusItems: [walkable]
         Frame {
             id: frame

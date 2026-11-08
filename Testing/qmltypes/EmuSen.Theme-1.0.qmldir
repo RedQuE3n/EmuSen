@@ -5,7 +5,7 @@ typeinfo plugin.qmltypes
 depends QtQuick
 depends EmuSen.Kit
 prefer :/qt/qml/EmuSen/Theme/
-Screen 1.0 qml/Screen.qml
+ThemeScreen 1.0 qml/ThemeScreen.qml
 singleton Tokens 1.0 qml/Tokens.qml
 Frame 1.0 qml/Frame.qml
 HelpBar 1.0 qml/HelpBar.qml

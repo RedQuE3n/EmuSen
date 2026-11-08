@@ -776,12 +776,12 @@ with the fields a theme may read and nothing more. The table is the module as bu
 | `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; the curated face of `help.rs` |
 | `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
 | `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable` |
-| `Screen` | type | the root of a theme's screen: `role` (`Screen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`Screen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
+| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
-A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `Screen`, and may provide
+A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
 `screens/Splash.qml`; a theme that omits one gets the reference theme's (Moonrise for the splash). Everything on them is
 bound to the singletons above; the pad reaches them through the `Frame` they place or, where a theme arranges freely on
-a `NormalizedCanvas`, through `Screen.focusItems` and `KeyNavigation`. The views are read-only; every change goes through
+a `NormalizedCanvas`, through `ThemeScreen.focusItems` and `KeyNavigation`. The views are read-only; every change goes through
 `Actions`, every sound through `Cues`.
 
 **As built.** One job per part, each in its own file of `Frontend/theme-qt/src`:
@@ -795,10 +795,10 @@ a `NormalizedCanvas`, through `Screen.focusItems` and `KeyNavigation`. The views
   `LibraryModel` has, would let a theme load any library, so the host hands the views their data instead.
 - `actions.rs`, `cues.rs`: each invokable becomes a value (`Action`, `Cue`) handed to the host's sink or player, a
   Rust trait object; with none set, nothing is taken and nothing rings.
-- `qml/`: `Screen.qml`, `Tokens.qml` and one file a kit type, `Kit.Frame {}` and its kind. The qmldir names these and
+- `qml/`: `ThemeScreen.qml`, `Tokens.qml` and one file a kit type, `Kit.Frame {}` and its kind. The qmldir names these and
   imports nothing, so `import EmuSen.Theme` brings no other kit type: the kit's `Card`, `Question`, `PadRouter` and its
   writable `Tokens` stay out of a theme's reach. `Tokens.qml` reads each kit token into a read-only property, and
-  `Screen`'s walk roles and the tokens' `Variant` and `Form` repeat the kit's enumerations; the surface test reads the
+  `ThemeScreen`'s walk roles and the tokens' `Variant` and `Form` repeat the kit's enumerations; the surface test reads the
   kit's registry and fails when either side changes, so the kit stays their one owner.
 - `glue.rs` and `cpp/theme_glue.cpp` *[own, because cxx-qt makes no QObject from Rust and cxx-qt-lib has no
   `singletonInstance`]*: a list made as its singleton's child and held in C++ ownership, so no engine's collector takes a
@@ -825,7 +825,7 @@ key and name and its engine's kind; Home's seven in order with their kinds and t
 the shelves' counts; `gamesOf` for a console and a shelf, the cover's shape the console's; an unknown key and a search
 with no match empty. `tests/qml.rs`, one harness test: a scene importing `EmuSen.Theme` reads every list through
 `required property` delegates of every role (a missing role is a warning, and the scene must stay quiet), `gamesOf`,
-`Words`, `Device` and `Session` as fed, `Tokens.accent` equal to the kit's, `Screen`'s enums, and places each kit type
+`Words`, `Device` and `Session` as fed, `Tokens.accent` equal to the kit's, `ThemeScreen`'s enums, and places each kit type
 by its name; `Help.entries` is non-empty for every kind; `Actions` take nothing with no sink and then say which the host
 took; `Cues` are silent with no player. `tests/surface.rs`: the committed registry is the built one; each type's
 properties and methods equal a hand-written list and nothing else is exported; the qmldir lists the kit's types by name
@@ -835,10 +835,9 @@ only through `emusen-qt-models`, which it curates). Three faults were seeded and
 swapped (`view.rs`'s test and the harness test), a declined action reported as taken (the harness test), and a token
 left out of `Tokens.qml` (the surface test).
 
-**The name `Screen`.** QtQuick has an attached type of the same name (`Screen.width`, `Screen.pixelDensity`). In a
-theme's file the later import wins, so `import QtQuick` then `import EmuSen.Theme` gives the theme's `Screen`, as the
-test scene does; inside `Screen.qml` itself QtQuick's shadows it, so its defaults are written as numbers. Whether to
-rename the type before 1.0 is open.
+**The name `ThemeScreen`.** §3.2 named the type `Screen`, but QtQuick has an attached type of that name (`Screen.width`,
+`Screen.pixelDensity`), and which one a theme got depended on the order of its imports. Decided 2026-11-08: the type is
+`ThemeScreen`, and its enumerations are read as `ThemeScreen.Home` and the others.
 
 ### 3.3 Versioning
 
@@ -890,7 +889,7 @@ would be too narrow; none does. **[A]**
 | Design | Arrangement (general patterns only) | What it reads | What it places |
 |---|---|---|---|
 | **Deck-like** | a left column of places and consoles with the focused one expanded; the content a horizontal band of large art tiles with the focused tile's details beneath; a dark surface with a cool accent | `Library.places`, `Library.consoles`, `gamesOf`, `recent`; `Device.controllers`, `battery`, `clock`; `Session` for a Continue tile | `Frame` (navigation + content + detail), `CoverTile`, `HelpBar`; tokens: `accent`, `surfaceRaised` overridden |
-| **Xbox-like** | rows of blocks: a large Continue block, a row of recent covers, square tiles for places; blocks slide as the focus moves | `Session`, `recent`, `places`, `collections`; `Device` | `NormalizedCanvas` with `Screen.focusItems`; `CoverTile`; the walk through `Frame` roles `content` and `actions` |
+| **Xbox-like** | rows of blocks: a large Continue block, a row of recent covers, square tiles for places; blocks slide as the focus moves | `Session`, `recent`, `places`, `collections`; `Device` | `NormalizedCanvas` with `ThemeScreen.focusItems`; `CoverTile`; the walk through `Frame` roles `content` and `actions` |
 | **PlayStation-like** | one horizontal strip of console or game icons along the top third, the focused one larger with its name under it; the lower two thirds show the focused item's art and facts; a soft moving background | `consoles` or `gamesOf`, `hue` for the background's tint, `description`, `video` | `Carousel` (over `PathView`), `Sky` with the glow following `hue`, a `VideoTile` where a clip exists |
 | **Switch-like** | a horizontal strip of game tiles at mid-height, round places beneath (favourites, recent, search, settings), a light or dark variant; a cue on every move | `gamesOf(All)`, `places`, `Cues`, `Tokens.variant` | `Carousel` horizontal with equal tiles, `WholeRow` for the round places, `HelpBar`; `Cues.scroll` on move, `select` on A |
 

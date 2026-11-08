@@ -65,6 +65,18 @@ fn chrome(scene: &mut Scene<'_>) -> Vec<String> {
     tree.nodes.iter().filter(|n| n.parent == view && n.visible && !n.name.starts_with("element-") && n.cls != "QQuickRepeater").map(|n| format!("{} {}", n.cls, n.name)).collect()
 }
 
+/// Points of the window with any transparency: a grid over it and a line through each help bar, whose clear `Rectangle`
+/// once wrote alpha 0 over its strip on Vulkan (EmuSen_Qt.md §4.8.5). The view is opaque everywhere.
+fn clear_points(scene: &mut Scene<'_>, w: f64, h: f64) -> Vec<(i64, i64)> {
+    let mut points: Vec<(f64, f64)> = (0..32).flat_map(|i| (0..20).map(move |j| ((f64::from(i) + 0.5) * w / 32.0, (f64::from(j) + 0.5) * h / 20.0))).collect();
+    let tree = scene.tree();
+    for n in tree.nodes.iter().filter(|n| n.visible && n.name.starts_with("element-") && n.cls.contains("HelpElement") && n.w > 0.0) {
+        points.extend((0..48).map(|i| (n.x + (f64::from(i) + 0.5) * n.w / 48.0, n.y + n.h / 2.0)));
+    }
+    let colours = scene.colours_at(&points);
+    points.iter().zip(colours).filter(|(_, c)| c.is_some_and(|c| c.a < 255)).map(|(p, _)| (p.0 as i64, p.1 as i64)).take(4).collect()
+}
+
 /// The primary's items and the help's entries the pointer can reach: their centres inside the window.
 fn unreachable(scene: &mut Scene<'_>, w: f64, h: f64) -> (Vec<String>, Vec<(f64, f64)>) {
     let tree = scene.tree();
@@ -172,6 +184,10 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                         }
                     }
                 }
+                let see_through = clear_points(&mut scene, f64::from(w), f64::from(h));
+                if !see_through.is_empty() {
+                    failures.push(format!("{at}: the window see-through at {see_through:?}"));
+                }
                 let extra = chrome(&mut scene);
                 if !extra.is_empty() {
                     failures.push(format!("{at}: chrome {extra:?}"));
@@ -203,16 +219,18 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 let (w, h) = SIZES[SIZES.len() - 1];
                 let (_, items) = unreachable(&mut scene, f64::from(w), f64::from(h));
                 assert!(scene.grab(&shot));
-                // The item nearest the middle that is not the selected one, clear of the help and the edges.
+                // The two items nearest the middle: one at most is the selected one, so the pointer over the pair selects anew.
                 let mid = (f64::from(w) / 2.0, f64::from(h) / 2.0);
                 let mut near = items.clone();
                 near.sort_by(|a, b| ((a.0 - mid.0).hypot(a.1 - mid.1)).total_cmp(&(b.0 - mid.0).hypot(b.1 - mid.1)));
-                if let Some(&(x, y)) = near.get(1).or(near.first()) {
+                let mut selected = false;
+                for &(x, y) in near.iter().take(2) {
                     scene.hover(x, y);
                     common::settle_picture(&mut scene, &scratch.0);
-                    if scene.difference(&shot, 0, 0, &[], "") == Some(0) {
-                        failures.push(format!("{theme} {state}: the pointer over an item selected nothing"));
-                    }
+                    selected |= scene.difference(&shot, 0, 0, &[], "") != Some(0);
+                }
+                if !selected {
+                    failures.push(format!("{theme} {state}: the pointer over an item selected nothing"));
                 }
                 scene.pad(UiButton::Back);
                 until(&mut scene, "B went back", |s| s.property("esdeModel", "view") == "system" && s.property("esdeModel", "moving") == "false");

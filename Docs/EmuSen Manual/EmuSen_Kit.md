@@ -1666,10 +1666,22 @@ what was there; none changes what an existing screen draws, and the gallery's ga
   An entry whose model gives an `icon` role (a theme's `customButtonIcon`) draws that picture in the glyph's place.
 - **Added 2026-11-08 (stage 4, E3):** `HelpBar.glyphSize`, a glyph's side in pixels before `entryScale` (0, the default,
   is the glyph's own size), so the ES-DE painter sizes its icons from a theme's `fontSize` as ES-DE does
-  (EmuSen_Qt.md §4.8.5). `PadGlyph`'s letter now grows with its glyph: its pixel size is the token's times the glyph's
-  drawn side over its own (`grown`), where it had stayed at the token's size, so a glyph drawn larger (by `glyphSize` or
-  `entryScale`) kept a small letter in a large disc. At the own size `grown` is 1 and nothing drawn changes; the
-  `helpbar` and `menu` tests and qt-app's acceptance were re-run on the change.
+  (EmuSen_Qt.md §4.8.5). `PadGlyph`'s letter now grows with its glyph: its pixel size is the marks' `size` times
+  `letterScale` over `sideShare` (1.4, the glyph's own side over the glyph type's size), where it had stayed at the
+  token's size, so a glyph drawn larger (by `glyphSize` or `entryScale`) kept a small letter in a large disc. At the own
+  size nothing drawn changes.
+- **Corrected 2026-11-08 (E3):** the first form of that growth read the item's own `width` and `height` inside the
+  letter's binding, and `PadGlyphMarks` announced its letter and `letterScale` again on every change of `size`; Qt 6
+  evaluates a pending `width` binding when it is read, so the letter's binding was told of a change while it ran, and
+  Qt logged "Binding loop detected" on every glyph of qt-app's help (its `program` test, CPU tier, red on it: the
+  seeded fault). The letter now reads only the marks, and a change of `size` resets the marks' outlines alone, since the
+  letter does not depend on it.
+- **Changed 2026-11-08 (E3): `HelpBar` is an `Item` whose backing `Rectangle` is drawn only when `color` has any
+  alpha.** A clear `Rectangle` as the bar's root wrote alpha 0 over its strip on Vulkan (Qt 6.11.2, RX 6800), and the
+  view beneath it was not drawn there, as on the menu card (EmuSen_Qt.md §7.1, step 7): Art Book Next's help in the
+  ES-DE painter showed a see-through strip at every size after the first (EmuSen_Qt.md §4.8.5). `color` (with the glass
+  and Surface defaults) and `radius` are kept as properties of the bar; a Rectangle's `border` and `gradient` are no
+  longer the bar's, and no host set them.
 
 **The filled help bar beside Mistress's**, at 1280 × 800: `emusen-qt-test`'s `helpbar` writes
 `~/.cache/emusen/tmp/qt-test/helpbar-filled.png` (the ES-DE gamelist's ten entries in the four families, white on

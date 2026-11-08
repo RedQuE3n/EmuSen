@@ -216,6 +216,26 @@ fn a_picture_with_max_size_is_contained_once_its_own_size_is_known() {
 }
 
 #[test]
+fn a_pictures_own_size_holds_across_a_resize() {
+    let t = Synth::new();
+    t.asset("art.png");
+    let images = "<image name=\"i\"><pos>0 0</pos><maxSize>0.5 0.5</maxSize><path>./art.png</path></image>\
+                  <image name=\"j\"><pos>0 0.5</pos><size>0 0.25</size><path>./art.png</path></image>";
+    let mut s = stage(&t, images, "", "system", 0);
+    for name in ["i", "j"] {
+        let id = placed(&s.frame(), name).id;
+        s.measured(id, 400.0, 100.0);
+    }
+    let boxes = |s: &mut Stage| ["i", "j"].map(|n| placed(&s.frame(), n).clone()).map(|p| (p.w / s.current.data.width, p.h / s.current.data.height));
+    let before = boxes(&mut s);
+    assert_eq!(before[0], (0.5, 0.2));
+    let mut data = s.current.data.clone();
+    (data.width, data.height) = (W * 1.5, H * 1.5);
+    s.restart(data, "system", 0);
+    assert_eq!(boxes(&mut s), before, "no delegate need report again: the picture's aspect is its file's");
+}
+
+#[test]
 fn a_text_sized_by_its_words_is_placed_by_its_origin_once_measured() {
     let t = Synth::new();
     let text = "<text name=\"t\"><pos>1 0</pos><origin>1 0</origin><text>Hello</text><letterCase>uppercase</letterCase><fontSize>0.1</fontSize><backgroundColor>000000</backgroundColor><backgroundMargins>0.01 0.02</backgroundMargins></text>";

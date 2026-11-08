@@ -71,7 +71,8 @@ fn the_slide_holds_the_overlays_still_and_a_held_list_fades_its_metadata() {
     until(&mut scene, "the slide settled", |s| s.property("esdeModel", "view") == "gamelist" && s.property("esdeModel", "moving") == "false");
     let rested = box_of(&mut scene, "element-games").unwrap();
     assert!((rested.1 - 0.1 * f64::from(H)).abs() < 1.0, "the list rests at its place: {rested:?}");
-    assert_eq!(box_of(&mut scene, "element-help"), Some(help));
+    // The gamelist's entries are not the system view's (EmuSen_Qt.md §4.8.5), so the bar rests where it was at its own width.
+    assert_eq!(box_of(&mut scene, "element-help").map(|b| (b.0, b.1, b.3)), Some((help.0, help.1, help.3)));
 
     // scrollFadeIn: a new game's cover comes in from half over 326 ms; the view's opening did not fade it.
     let opened = opacity_of(&mut scene, "element-art");

@@ -1264,6 +1264,80 @@ sort, and the List card's Sort and Favourites changing the text's order and its 
 missing values sorted first, folders on top inverted, an uncounted game joining the collections, a grouped
 collection's sort kept by its shelf, the scan answer's folder emptied.
 
+### 4.8 The painter: `emusen-esde-qt` and the QML module `EmuSen.Esde` **[M 2026-11-08]**
+
+The second half of the engine, as the painter's design laid it out: a crate of its own in the Frontend workspace,
+`Frontend/esde-qt`, beside the plain-data `emusen-esde` the way `kit-qt` stands beside `kit-core`. It depends on cxx-qt,
+`emusen-esde` (the scene and its marks) and `emusen-kit-qt` (the body face, and from E2 the help bar and the pad
+router); `tests/lint.rs` holds its manifest to exactly those and the two EmuSen crates' manifests to no client, runtime
+or model crate. The registry is `Testing/qmltypes/EmuSen.Esde-1.0.*`, compared on every build as the kit's is (§5.3).
+
+#### 4.8.1 The primitives
+
+| Type | What it is | Holds |
+|---|---|---|
+| `Picture` | an `Image` as the texture source (never drawn itself) and one `ShaderEffect` over `shaders/picture.frag`, baked by Qt's `qsb` in `build.rs` into `qrc:/emusen/esde/picture.frag.qsb` | `source` (a URL), `fit` (`Fill`, `Contain`, `Cover`, `Tile`), `alignX/Y`, `cropX/Y`, `tileWidth/Height`, `tileRight/Bottom`, `tint`, `tintEnd`, `gradientVertical`, `saturation`, `dim`, `radius` px, `nearest`, `fadeFrom`, `fadeFalloff`, `sourceScale`; reads back `status`, `ownWidth/Height` |
+| `Mark` | `MarkShapes` (a list model in Rust: one row per part of a scene mark, its rings as one SVG path in pixels, filled even-odd or stroked) drawn by one `Shape` a row | `mark` (the `MarkId` name, `star`, `battery3`), `color` |
+| `TextBlock` | a `FontLoader` for the theme's file and one for the kit's body face, a `Text` at a fixed line height (`px × lineSpacing`, LunaP's `FontText.LineHeight`), a background `Rectangle` grown by its padding, and a second `Text` for the marquee's following copy | `text`, `fontSource`, `px`, `color`, `hAlign`, `vAlign`, `lineSpacing`, `wrap`, `ellipsis`, the background and its padding, `scrolling`, `scrollVertical`, `scrollX`, `repeatAt`, `scrollY`, `scrollOpacity`; signal `measured(width, height)` |
+
+**The shader, one pass.** The texture coordinate is cropped (`Cover`: the visible fraction of the decoded picture,
+placed by `cropX/Y` as LunaP's `FittedImage.Cover` places it) or tiled (`fract` over the box in tiles, the first whole
+tile from the left or, with `tileRight`, ending flush with the right edge, as `FittedImage` does). Then, in LunaP's
+order (`ImagePixels.Apply`): saturation mixes towards Rec. 601 luma on the stored values; the tint, or its gradient
+along the picture's own horizontal or vertical, multiplies every channel, alpha included; `dim` multiplies RGB; a
+rounded-rectangle mask of `radius` pixels with a pixel of antialiasing; the reflection's ramp, `fadeFrom` at the top
+falling linearly to nothing at `1 / fadeFalloff` of the height (`EmuSen_BigPicture.md` §36.3); and Qt's opacity.
+`Contain` draws the effect at the image's painted size, placed by `alignX/Y`, so the mask and the ramp follow the
+picture, not its box.
+
+- **Decoding at the drawn size.** `sourceSize` is the box (times `sourceScale` for a slot a transform grows), or the
+  tile; Qt keeps the picture's aspect when it decodes, so `Cover` and `Fill` read the decoded aspect. A `nearest`
+  picture is decoded at its own size: Qt scales a raster up only for `PreserveAspectFit` and `Crop`, and then smoothly
+  (`QImage::scaled` with `SmoothTransformation`), which would blur pixel art before the GPU's nearest filter saw it.
+- **Qt hands a `color` uniform over premultiplied.** Measured 2026-11-08: a white picture tinted `80FF8000` read
+  (64, 32, 0) over black when the shader multiplied RGB by the tint's alpha again, and reads (128, 64, 0) now. The
+  shader multiplies by the colour as given.
+- **A resource name in QML.** `qml-rules` counts `fragmentShader` and `vertexShader` with `source` as bindings that
+  take a name (decided 2026-11-08: a shader's path is a resource name, not words the player reads).
+- **Paths arrive as URLs** (`source`, `fontSource`): QML builds no strings (§1.3), so E2's model hands each file over
+  as a `file:` URL.
+- **One report per extent.** `TextBlock` raises `measured` from `Text`'s `contentSizeChanged`, which Qt emits once per
+  layout that changes either axis; the same words set again report nothing. A face file that does not load, or none
+  named, sets the kit's Barlow (decided 2026-11-08: the kit's face is the default). Qt's `FontLoader` keeps one font
+  per URL for the process, so a face is loaded once whatever the number of texts.
+
+#### 4.8.2 Proof (E1)
+
+`tests/primitives.rs`, one test on the GPU tier (§8.1: `kwin_wayland --virtual` at 3840 × 2160, so the 1280 × 800
+window is not cut by the compositor's own room, measured: at a 1280 × 800 screen the window came up 772 pixels tall;
+Vulkan on the RX 6800 with `QSG_RHI_DEBUG_LAYER=1`, which Qt reports as "Graphics API debug/validation layers: 1";
+Qt's log required quiet): each primitive drawn over black from pictures the test writes as PPM, and read back.
+
+| Held | Read |
+|---|---|
+| a white picture tinted `FF8000` | (255, 128, 0) within a level; `80FF8000` reads half of it |
+| red, green, blue and (200, 100, 50) at saturation 0 | each its Rec. 601 luma within a level |
+| a 192 × 128 picture at a 32 px radius | clear at the corners, opaque at the middles of the top and bottom edges |
+| the ramp at 0.5 and falloff 2 on 96 pixels | 0.494 at the top row, nothing at half height |
+| a 4 × 4 checker at 8× | hard edges with `nearest`; the same edge blended without it |
+| the star mark at 64 px | its colour in the middle, clear at the corner |
+| `TextBlock` | one report per new extent, none for the same words; one family for two texts of one file; Barlow when no face is named |
+
+`tests/qmltypes.rs` (rule Q, 3) and `tests/lint.rs` (`qml-rules`, `qmllint`, the fence; 3). Seeded faults, each
+applied alone and reverted: Rec. 709 weights for the luma failed the saturation columns; the mask measured on the
+box's width alone failed the bottom edge's middle (the first form of the test, on a square picture, could not see it,
+which is why the box is 192 × 128); `nearest` ignored failed the pixel-exact strip.
+
+**Beside the C# painter.** Art Book Next's system view in its dark scheme tints each slice of its carousel `ffffffdd`.
+The SNES slice (`_inc/systems/artwork-screenshots/snes.png`, 454 × 1080, contained at 336 × 800) drawn by `Picture`
+with that tint, against piece B's C# grab and ES-DE 3.4.1's capture of the same state, over the slice's opaque
+pixels clear of the logo and the help bar (117,347 pixels): **mean absolute error 0.10 levels against the C#, 0.69
+against ES-DE** (the C# painter's own figure against ES-DE over the whole state is 0.84, `Testing/esde-baseline/mae.tsv`).
+The sheet is `~/.cache/emusen/tmp/qt-s4/compare/e1-slice-esde-csharp-qt-diff4.png` (ES-DE, C#, Qt, the difference ×4).
+The watched states hold no desaturated and no rounded picture, since Art Book Next's dark scheme keeps saturation 1
+and its rounded cover is not in the variant measured, so those two are held to LunaP's arithmetic by the numbers
+above, not to a grab.
+
 ---
 
 ## 5. The stable developer surface

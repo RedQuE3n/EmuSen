@@ -582,7 +582,7 @@ command of the `emusen.dev` DianaSh module (`Platform/emusen-dev-module`, with i
 2026-10-26 rule that every tool is a DianaSh command. It reads `.qml` text with comments stripped and reports, one a line
 as `file:line rule words` with a last line `ok` or `N findings`: a `function` other than a `Connections` handler of one
 call; `Qt.callLater`; an array or object literal; words the player would read outside the bindings that take a name
-(`objectName`, `font.family`, `source`, `property`, `properties`, `sequence`, `Accessible.role`, `placeholderText`) and
+(`objectName`, `font.family`, `source`, `fragmentShader`, `vertexShader`, `property`, `properties`, `sequence`, `Accessible.role`, `placeholderText`) and
 colour literals; `Component.onCompleted` beyond taking the focus; a `ListModel` with rows; an import outside the allowed
 list, or `EmuSen.Kit` imported without `as Kit` (§7.8). `--fixture` reads test scenes and the gallery as fixtures,
 whose words, rows and literals stand in for models. `tests/rules.rs` holds every rule and the spike's three deliberate

@@ -22,6 +22,7 @@ pub mod qobject {
         #[qproperty(QStringList, home_places, cxx_name = "homePlaces", READ, CONSTANT)]
         #[qproperty(QString, emusen_tag, cxx_name = "emusenTag", READ, CONSTANT)]
         #[qproperty(QString, between, READ, CONSTANT)]
+        #[qproperty(QString, search, READ, CONSTANT)]
         #[qproperty(QString, libretro_tag, cxx_name = "libretroTag", READ, CONSTANT)]
         type Words = super::WordsRust;
     }
@@ -41,6 +42,7 @@ pub struct WordsRust {
     home_places: QStringList,
     emusen_tag: QString,
     between: QString,
+    search: QString,
     libretro_tag: QString,
 }
 
@@ -57,6 +59,7 @@ impl Default for WordsRust {
             home_places: QStringList::from(&places),
             emusen_tag: QString::from(words::EMUSEN_TAG),
             between: QString::from(words::BETWEEN),
+            search: QString::from(words::SEARCH),
             libretro_tag: QString::from(words::LIBRETRO_TAG),
         }
     }

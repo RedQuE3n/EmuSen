@@ -45,6 +45,8 @@ pub const HOME_TOOL_ABOUT: [&str; 4] = ["Art and facts", "Game packages", "Check
 pub const POWER_LINE: &str = "Exit";
 /// What stands between the grid's two neighbours (§24.2).
 pub const BETWEEN: &str = "·";
+/// The search field's name, as a screen reader says it.
+pub const SEARCH: &str = "Search";
 /// The engine line's tags (§24.6).
 pub const EMUSEN_TAG: &str = "EMUSEN";
 pub const LIBRETRO_TAG: &str = "LIBRETRO";

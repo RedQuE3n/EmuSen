@@ -34,6 +34,8 @@ pub mod qobject {
         HomePlaces,
         Pause,
         PausePage,
+        Card,
+        Search,
     }
 
     extern "RustQt" {
@@ -117,6 +119,8 @@ impl qobject::HelpModel {
             HelpScreen::HomePlaces => Screen::HomePlaces,
             HelpScreen::Pause => Screen::Pause,
             HelpScreen::PausePage => Screen::PausePage,
+            HelpScreen::Card => Screen::Card,
+            HelpScreen::Search => Screen::Search,
             _ => Screen::Home,
         }
     }

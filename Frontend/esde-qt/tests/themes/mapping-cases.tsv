@@ -1,0 +1,271 @@
+# One case per (element, property) pair mapping.tsv marks drawn, beyond the shared properties tests/mapping.rs makes itself (EmuSen_Qt.md §4.8.5).
+# Translated from the C# SceneMappingTests (EmuSen_BigPicture.md §13.5). Columns: kind, property, value a, value b, view, system, game, removed, context, at (ms), moves, hidden metadata, beside; - is none.
+# {A} {B} pictures, {X} a missing file, {G} {G2} GIFs, {S1}-{S3} SVG icons, {FT} {FB} two faces; context is key=value;... set on the element after its base.
+image	path	{A}	{B}	-	-	-	-	-	-	-	-	-
+image	default	{A}	{B}	-	-	-	path	path={X}	-	-	-	-
+image	imageType	cover	screenshot	-	-	-	path	-	-	-	-	-
+image	maxSize	0.5 0.6	0.2 0.2	-	-	-	size	-	-	-	-	-
+image	cropSize	0.5 0.6	0.2 0.6	-	-	-	size	-	-	-	-	-
+image	cropPos	0 0	1 1	-	-	-	size	cropSize=0.2 0.6	-	-	-	-
+image	tile	false	true	-	-	-	-	-	-	-	-	-
+image	tileSize	0.1 0.1	0.2 0	-	-	-	-	tile=true	-	-	-	-
+image	tileHorizontalAlignment	left	right	-	-	-	-	tile=true;tileSize=0.13 0.13	-	-	-	-
+image	tileVerticalAlignment	top	bottom	-	-	-	-	tile=true;tileSize=0.13 0.13	-	-	-	-
+image	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+image	colorEnd	FFFFFF	0000FF	-	-	-	-	color=FFFFFF	-	-	-	-
+image	gradientType	horizontal	vertical	-	-	-	-	color=FF0000;colorEnd=0000FF	-	-	-	-
+image	saturation	1	0	-	-	-	-	-	-	-	-	-
+image	cornerRadius	0	0.05	-	-	-	-	-	-	-	-	-
+image	interpolation	nearest	linear	-	-	-	-	-	-	-	-	-
+video	imageType	cover	screenshot	-	-	-	-	-	-	-	-	-
+video	defaultImage	{A}	{B}	-	-	-	-	imageType=none	-	-	-	-
+video	imageSize	0.5 0.6	0.2 0.3	-	-	-	-	-	-	-	-	-
+video	imageMaxSize	0.5 0.6	0.2 0.2	-	-	-	size	-	-	-	-	-
+video	imageCropSize	0.5 0.6	0.2 0.6	-	-	-	size	-	-	-	-	-
+video	imageCropPos	0 0	1 1	-	-	-	size	imageCropSize=0.2 0.6	-	-	-	-
+video	maxSize	0.5 0.6	0.2 0.2	-	-	-	size	-	-	-	-	-
+video	cropSize	0.5 0.6	0.2 0.6	-	-	-	size	-	-	-	-	-
+video	imageCornerRadius	0	0.05	-	-	-	-	-	-	-	-	-
+video	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+video	colorEnd	FFFFFF	0000FF	-	-	-	-	color=FFFFFF	-	-	-	-
+video	gradientType	horizontal	vertical	-	-	-	-	color=FF0000;colorEnd=0000FF	-	-	-	-
+video	saturation	1	0	-	-	-	-	-	-	-	-	-
+text	text	One thing	Another	-	-	-	-	-	-	-	-	-
+text	metadata	name	developer	-	-	-	text	-	-	-	-	-
+text	systemdata	name	fullname	system	-	-	text	-	-	-	-	-
+text	defaultValue	one	two	-	-	-	text	metadata=emulator	-	-	-	-
+text	systemNameSuffix	false	true	-	5	-	text	metadata=name	-	-	-	-
+text	letterCaseSystemNameSuffix	uppercase	lowercase	-	5	-	text	metadata=name;systemNameSuffix=true	-	-	-	-
+text	container	false	true	-	-	-	-	size=0.9 0.2;text=A long description that cannot fit in the small box it is given here	-	-	-	-
+text	containerType	vertical	horizontal	-	-	-	-	container=true;size=0.9 0.3;text=A long description that cannot fit in the small box it is given here	-	-	-	-
+text	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+text	fontSize	0.1	0.05	-	-	-	-	-	-	-	-	-
+text	horizontalAlignment	left	right	-	-	-	-	-	-	-	-	-
+text	verticalAlignment	top	bottom	-	-	-	-	-	-	-	-	-
+text	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+text	backgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+text	backgroundMargins	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000;pos=0.2 0.2;size=0.5 0.3	-	-	-	-
+text	backgroundCornerRadius	0	0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+text	letterCase	none	uppercase	-	-	-	-	-	-	-	-	-
+text	lineSpacing	1	2	-	-	-	-	verticalAlignment=top;text=A long description that wraps over several lines of the box	-	-	-	-
+datetime	metadata	releasedate	lastplayed	-	-	-	-	-	-	-	-	-
+datetime	defaultValue	one	two	-	-	0	-	metadata=lastplayed	-	-	-	-
+datetime	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+datetime	fontSize	0.1	0.05	-	-	-	-	-	-	-	-	-
+datetime	horizontalAlignment	left	right	-	-	-	-	-	-	-	-	-
+datetime	verticalAlignment	top	bottom	-	-	-	-	-	-	-	-	-
+datetime	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+datetime	backgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+datetime	backgroundMargins	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000;pos=0.2 0.2;size=0.5 0.3	-	-	-	-
+datetime	backgroundCornerRadius	0	0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+datetime	letterCase	none	uppercase	-	-	-	-	format=%b %Y	-	-	-	-
+datetime	lineSpacing	1	2	-	-	-	-	verticalAlignment=top	-	-	-	-
+datetime	format	%Y-%m-%d	%d/%m	-	-	-	-	-	-	-	-	-
+datetime	displayRelative	false	true	-	-	-	-	metadata=lastplayed	-	-	-	-
+carousel	type	horizontal	vertical	-	-	-	-	-	-	-	-	-
+carousel	staticImage	{A}	{B}	system	-	-	imageType	-	-	-	-	-
+carousel	defaultImage	{A}	{B}	system	-	-	imageType	staticImage={X}	-	-	-	-
+carousel	imageType	cover	screenshot	-	-	-	-	-	-	-	-	-
+carousel	maxItemCount	3	5	-	-	-	-	-	-	-	-	-
+carousel	itemSize	0.3 0.6	0.2 0.3	-	-	-	-	-	-	-	-	-
+carousel	itemScale	1	1.5	-	-	-	-	-	-	-	-	-
+carousel	imageFit	contain	fill	-	-	-	-	-	-	-	-	-
+carousel	imageColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+carousel	imageSelectedColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+carousel	imageSaturation	1	0	-	-	-	-	-	-	-	-	-
+carousel	itemHorizontalAlignment	left	right	-	-	-	-	type=vertical;itemSize=0.3 0.2	-	-	-	-
+carousel	itemVerticalAlignment	top	bottom	-	-	-	-	itemSize=0.3 0.3	-	-	-	-
+carousel	unfocusedItemOpacity	0.5	1	-	-	-	-	-	-	-	-	-
+carousel	unfocusedItemSaturation	1	0	-	-	-	-	-	-	-	-	-
+carousel	unfocusedItemDimming	1	0.3	-	-	-	-	-	-	-	-	-
+carousel	color	00000000	FF0000	-	-	-	-	-	-	-	-	-
+carousel	colorEnd	FF0000	0000FF	-	-	-	-	color=FF0000	-	-	-	-
+carousel	gradientType	horizontal	vertical	-	-	-	-	color=FF0000;colorEnd=0000FF	-	-	-	-
+carousel	text	One	Two	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.1	-	-	-	-
+carousel	textRelativeScale	1	0.5	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.1	-	-	-	-
+carousel	textColor	FFFFFF	FF0000	system	-	-	imageType	staticImage={X};fontSize=0.1	-	-	-	-
+carousel	textBackgroundColor	FFFFFF00	FF0000	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.1	-	-	-	-
+carousel	fontPath	{FT}	{FB}	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.1	-	-	-	-
+carousel	fontSize	0.1	0.05	system	-	-	imageType	staticImage={X};textColor=FFFFFF	-	-	-	-
+carousel	letterCase	none	uppercase	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.1	-	-	-	-
+textlist	selectorHeight	0.1	0.2	-	-	-	-	selectorColor=FF0000	-	-	-	-
+textlist	selectorVerticalOffset	0	0.1	-	-	-	-	selectorColor=FF0000	-	-	-	-
+textlist	selectorColor	333333	FF0000	-	-	-	-	-	-	-	-	-
+textlist	primaryColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+textlist	secondaryColor	FFFFFF	FF0000	-	6	-	-	-	-	-	-	-
+textlist	selectedColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+textlist	selectedSecondaryColor	FFFFFF	FF0000	-	6	5	-	-	-	-	-	-
+textlist	selectedBackgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+textlist	selectedBackgroundMargins	0 0	0.1 0.1	-	-	-	-	selectedBackgroundColor=FF0000;selectorColor=00000000;pos=0.2 0;size=0.5 1	-	-	-	-
+textlist	selectedBackgroundCornerRadius	0	0.05	-	-	-	-	selectedBackgroundColor=FF0000;selectorColor=00000000	-	-	-	-
+textlist	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+textlist	fontSize	0.1	0.05	-	-	-	-	-	-	-	-	-
+textlist	horizontalAlignment	left	right	-	-	-	-	-	-	-	-	-
+textlist	horizontalMargin	0	0.1	-	-	-	-	-	-	-	-	-
+textlist	letterCase	none	uppercase	-	-	-	-	-	-	-	-	-
+textlist	lineSpacing	1.5	2.5	-	-	-	-	-	-	-	-	-
+textlist	indicators	none	symbols	-	-	-	-	-	-	-	-	-
+textlist	collectionIndicators	symbols	ascii	-	7	-	-	-	-	-	-	-
+carousel	itemRotation	7.5	30	-	-	-	-	type=verticalWheel;itemSize=0.3 0.2	-	-	-	-
+carousel	itemRotationOrigin	-3 0.5	-1 0.5	-	-	-	-	type=verticalWheel;itemSize=0.3 0.2;itemRotation=20	-	-	-	-
+carousel	itemsBeforeCenter	8	0	-	-	-	-	type=verticalWheel;itemSize=0.3 0.2;itemRotation=20	-	-	-	-
+carousel	itemsAfterCenter	8	0	-	-	-	-	type=verticalWheel;itemSize=0.3 0.2;itemRotation=20	-	-	-	-
+carousel	itemAxisHorizontal	false	true	-	-	-	-	type=verticalWheel;itemSize=0.3 0.2;itemRotation=20	-	-	-	-
+carousel	wheelHorizontalAlignment	center	left	-	-	-	-	type=verticalWheel;itemSize=0.3 0.2	-	-	-	-
+carousel	wheelVerticalAlignment	center	top	-	-	-	-	type=horizontalWheel;itemSize=0.2 0.3	-	-	-	-
+carousel	horizontalOffset	0	0.2	-	-	-	-	-	-	-	-	-
+carousel	verticalOffset	0	0.2	-	-	-	-	itemSize=0.3 0.3	-	-	-	-
+carousel	reflections	false	true	-	-	-	-	itemSize=0.3 0.3	-	-	-	-
+carousel	reflectionsOpacity	0.5	1	-	-	-	-	itemSize=0.3 0.3;reflections=true	-	-	-	-
+carousel	reflectionsFalloff	1	3	-	-	-	-	itemSize=0.3 0.3;reflections=true	-	-	-	-
+carousel	selectedItemMargins	0 0	0.1 0.05	-	-	-	-	itemSize=0.2 0.3;itemScale=1	-	-	-	-
+carousel	lineSpacing	1	2.5	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.07;text=Several words that wrap	-	-	-	-
+carousel	itemTransitions	animate	instant	-	-	-	-	-	100	step	-	-
+carousel	fastScrolling	false	true	-	-	-	-	-	2000	hold	-	-
+textlist	textHorizontalScrolling	false	true	-	-	-	-	size=0.3 1	4000	-	-	-
+textlist	textHorizontalScrollSpeed	1	3	-	-	-	-	size=0.3 1;textHorizontalScrollDelay=0	500	-	-	-
+textlist	textHorizontalScrollDelay	0	5	-	-	-	-	size=0.3 1	1000	-	-	-
+textlist	textHorizontalScrollGap	0.5	3	-	-	-	-	size=0.3 1;textHorizontalScrollDelay=0	1500	-	-	-
+text	containerStartDelay	0	5	-	-	-	-	container=true;size=0.9 0.2;text=A long description that cannot fit in the small box it is given here	2000	-	-	-
+text	containerScrollSpeed	1	3	-	-	-	-	container=true;size=0.9 0.2;containerStartDelay=0;text=A long description that cannot fit in the small box it is given here	1000	-	-	-
+text	containerResetDelay	0.5	10	-	-	-	-	container=true;size=0.9 0.2;containerStartDelay=0;text=A long description that cannot fit in the small box it is given here	4000	-	-	-
+text	containerScrollGap	0.5	3	-	-	-	-	container=true;containerType=horizontal;size=0.9 0.2;containerStartDelay=0;text=A long description that cannot fit in the small box it is given here	7000	-	-	-
+text	containerVerticalSnap	true	false	-	-	-	-	container=true;size=0.9 0.2;text=A long description that cannot fit in the small box it is given here	-	-	-	-
+image	scrollFadeIn	false	true	-	-	-	path	imageType=cover	100	step	-	-
+video	scrollFadeIn	false	true	-	-	-	-	-	100	step	-	-
+textlist	systemNameSuffix	false	true	-	5	-	-	-	-	-	-	-
+textlist	letterCaseSystemNameSuffix	uppercase	lowercase	-	5	-	-	systemNameSuffix=true	-	-	-	-
+grid	staticImage	{A}	{B}	system	-	-	imageType	-	-	-	-	-
+grid	defaultImage	{A}	{B}	system	-	-	imageType	staticImage={X}	-	-	-	-
+grid	defaultFolderImage	{A}	{B}	-	6	5	imageType	imageType=none	-	-	-	-
+grid	imageType	cover	screenshot	-	-	-	-	-	-	-	-	-
+grid	itemSize	0.3 0.4	0.2 0.3	-	-	-	-	-	-	-	-	-
+grid	itemScale	1	1.5	-	-	-	-	-	-	-	-	-
+grid	itemSpacing	0.01 0.01	0.05 0.05	-	-	-	-	-	-	-	-	-
+grid	scaleInwards	false	true	-	-	-	-	-	-	-	-	-
+grid	fractionalRows	false	true	-	-	-	-	itemSize=0.3 0.35	-	-	-	-
+grid	itemTransitions	animate	instant	-	-	-	-	-	100	step	-	-
+grid	rowTransitions	animate	instant	-	-	-	-	-	100	down	-	-
+grid	unfocusedItemOpacity	0.5	1	-	-	-	-	-	-	-	-	-
+grid	unfocusedItemSaturation	1	0	-	-	-	-	-	-	-	-	-
+grid	unfocusedItemDimming	1	0.3	-	-	-	-	-	-	-	-	-
+grid	imageFit	contain	fill	-	-	-	-	-	-	-	-	-
+grid	imageCropPos	0 0	1 1	-	-	-	-	imageFit=cover	-	-	-	-
+grid	imageInterpolation	nearest	linear	-	-	-	-	-	-	-	-	-
+grid	imageRelativeScale	1	0.5	-	-	-	-	-	-	-	-	-
+grid	imageCornerRadius	0	0.05	-	-	-	-	imageFit=fill	-	-	-	-
+grid	imageColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+grid	imageColorEnd	FFFFFF	0000FF	-	-	-	-	imageColor=FFFFFF	-	-	-	-
+grid	imageGradientType	horizontal	vertical	-	-	-	-	imageColor=FF0000;imageColorEnd=0000FF	-	-	-	-
+grid	imageSelectedColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+grid	imageSaturation	1	0	-	-	-	-	-	-	-	-	-
+grid	backgroundImage	{A}	{B}	-	-	-	-	imageRelativeScale=0.5	-	-	-	-
+grid	backgroundRelativeScale	1	0.5	-	-	-	-	backgroundColor=FF0000;imageRelativeScale=0.3	-	-	-	-
+grid	backgroundCornerRadius	0	0.05	-	-	-	-	backgroundColor=FF0000;imageRelativeScale=0.3	-	-	-	-
+grid	backgroundColor	00000000	FF0000	-	-	-	-	imageRelativeScale=0.5	-	-	-	-
+grid	selectorImage	{A}	{B}	-	-	-	-	imageRelativeScale=0.5	-	-	-	-
+grid	selectorRelativeScale	1	0.5	-	-	-	-	selectorColor=FF0000;imageRelativeScale=0.3	-	-	-	-
+grid	selectorLayer	top	bottom	-	-	-	-	selectorColor=FF0000;backgroundColor=00FF00	-	-	-	-
+grid	selectorCornerRadius	0	0.05	-	-	-	-	selectorColor=FF0000;imageRelativeScale=0.3	-	-	-	-
+grid	selectorColor	00000000	FF0000	-	-	-	-	imageRelativeScale=0.5	-	-	-	-
+grid	text	One	Two	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	textRelativeScale	1	0.5	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	textBackgroundCornerRadius	0	0.05	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05;textBackgroundColor=FF0000	-	-	-	-
+grid	textColor	FFFFFF	FF0000	system	-	-	imageType	staticImage={X};fontSize=0.05	-	-	-	-
+grid	textBackgroundColor	FFFFFF00	FF0000	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	textSelectedColor	FFFFFF	FF0000	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	textSelectedBackgroundColor	00000000	FF0000	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	fontPath	{FT}	{FB}	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	fontSize	0.05	0.1	system	-	-	imageType	staticImage={X};textColor=FFFFFF	-	-	-	-
+grid	letterCase	none	uppercase	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	lineSpacing	1.5	3	system	-	-	imageType	staticImage={X};textColor=FFFFFF;fontSize=0.05;text=Several words that wrap onto lines	-	-	-	-
+grid	systemNameSuffix	false	true	-	5	-	imageType	imageType=none;textColor=FFFFFF;fontSize=0.05	-	-	-	-
+grid	letterCaseSystemNameSuffix	uppercase	lowercase	-	5	-	imageType	imageType=none;systemNameSuffix=true;textColor=FFFFFF;fontSize=0.05	-	-	-	-
+rating	hideIfZero	false	true	-	-	3	-	-	-	-	-	-
+rating	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+rating	filledPath	{S1}	{S3}	-	-	-	-	-	-	-	-	-
+rating	unfilledPath	{S2}	{S3}	-	-	-	-	-	-	-	-	-
+rating	overlay	true	false	-	-	-	-	-	-	-	-	-
+badges	horizontalAlignment	left	right	-	-	-	-	-	-	-	-	-
+badges	direction	row	column	-	-	-	-	lines=2;itemsPerLine=2	-	-	-	-
+badges	lines	1	2	-	-	-	-	-	-	-	-	-
+badges	itemsPerLine	4	2	-	-	-	-	-	-	-	-	-
+badges	itemMargin	0 0	0.05 0.05	-	-	-	-	-	-	-	-	-
+badges	slots	favorite,completed	favorite	-	-	-	-	-	-	-	-	-
+badges	customBadgeIcon	<customBadgeIcon badge="favorite">{S1}</customBadgeIcon>	<customBadgeIcon badge="favorite">{S3}</customBadgeIcon>	-	-	-	-	-	-	-	-	-
+badges	badgeIconColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+badges	controllerPos	0.5 0.5	0.2 0.2	-	8	-	-	slots=controller	-	-	-	-
+badges	controllerSize	0.5	1	-	8	-	-	slots=controller	-	-	-	-
+badges	customControllerIcon	<customControllerIcon controller="gamepad_nintendo_snes">{S1}</customControllerIcon>	<customControllerIcon controller="gamepad_nintendo_snes">{S3}</customControllerIcon>	-	8	-	-	slots=controller	-	-	-	-
+badges	controllerIconColor	FFFFFF	FF0000	-	8	-	-	slots=controller	-	-	-	-
+badges	folderLinkPos	0.5 0.5	0.2 0.2	-	8	3	-	slots=folder	-	-	-	-
+badges	folderLinkSize	0.5	1	-	8	3	-	slots=folder	-	-	-	-
+badges	customFolderLinkIcon	{S1}	{S3}	-	8	3	-	slots=folder	-	-	-	-
+badges	folderLinkIconColor	FFFFFF	FF0000	-	8	3	-	slots=folder	-	-	-	-
+helpsystem	textColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+helpsystem	iconColor	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+helpsystem	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+helpsystem	fontSize	0.1	0.05	-	-	-	-	-	-	-	-	-
+helpsystem	entries	all	a,b	-	-	-	-	-	-	-	-	-
+helpsystem	entryRelativeScale	1	0.5	-	-	-	-	-	-	-	-	-
+helpsystem	entrySpacing	0.01	0.04	-	-	-	-	-	-	-	-	-
+helpsystem	iconTextSpacing	0	0.04	-	-	-	-	-	-	-	-	-
+helpsystem	letterCase	uppercase	lowercase	-	-	-	-	-	-	-	-	-
+helpsystem	backgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+helpsystem	backgroundHorizontalPadding	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000;entries=a	-	-	-	-
+helpsystem	backgroundVerticalPadding	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+helpsystem	backgroundCornerRadius	0	0.05	-	-	-	-	backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03	-	-	-	-
+helpsystem	customButtonIcon	<customButtonIcon button="button_a_XBOX">{S1}</customButtonIcon>	<customButtonIcon button="button_a_XBOX">{S3}</customButtonIcon>	-	-	-	-	entries=a	-	-	-	-
+clock	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+clock	fontSize	0.1	0.05	-	-	-	-	-	-	-	-	-
+clock	horizontalAlignment	left	right	-	-	-	-	size=0.8 0.3	-	-	-	-
+clock	verticalAlignment	top	bottom	-	-	-	-	size=0.8 0.5	-	-	-	-
+clock	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+clock	backgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+clock	backgroundColorEnd	FF0000	0000FF	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+clock	backgroundGradientType	horizontal	vertical	-	-	-	-	backgroundColor=FF0000;backgroundColorEnd=0000FF	-	-	-	-
+clock	backgroundHorizontalPadding	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+clock	backgroundVerticalPadding	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+clock	backgroundCornerRadius	0	0.05	-	-	-	-	backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03	-	-	-	-
+clock	format	%H:%M	%Y	-	-	-	-	-	-	-	-	-
+systemstatus	height	0.1	0.2	-	-	-	-	-	-	-	-	-
+systemstatus	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+systemstatus	textRelativeScale	1	0.5	-	-	-	-	-	-	-	-	-
+systemstatus	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+systemstatus	backgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+systemstatus	backgroundHorizontalPadding	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+systemstatus	backgroundVerticalPadding	0 0	0.05 0.05	-	-	-	-	backgroundColor=FF0000	-	-	-	-
+systemstatus	backgroundCornerRadius	0	0.05	-	-	-	-	backgroundColor=FF0000;backgroundHorizontalPadding=0.03 0.03;backgroundVerticalPadding=0.03 0.03	-	-	-	-
+systemstatus	entries	all	wifi	-	-	-	-	-	-	-	-	-
+systemstatus	entrySpacing	0	0.04	-	-	-	-	-	-	-	-	-
+gameselector	selection	lastplayed	mostplayed	system	-	-	-	-	-	-	-	<text name="shown"><pos>0.05 0.05</pos><size>0.9 0.6</size><metadata>name</metadata><gameselectorEntry>0</gameselectorEntry><fontSize>0.1</fontSize><color>FFFFFF</color></text>
+gameselector	gameCount	1	3	system	-	-	-	-	-	-	-	<text name="shown"><pos>0.05 0.05</pos><size>0.9 0.6</size><metadata>name</metadata><gameselectorEntry>2</gameselectorEntry><fontSize>0.1</fontSize><color>FFFFFF</color></text>
+gameselector	allowDuplicates	false	true	system	-	-	-	selection=random;gameCount=20	-	-	-	<text name="shown"><pos>0.05 0.05</pos><size>0.9 0.6</size><metadata>name</metadata><gameselectorEntry>15</gameselectorEntry><fontSize>0.1</fontSize><color>FFFFFF</color></text>
+image	gameselector	a	b	system	-	-	path	imageType=cover;gameselectorEntry=9	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>10</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>10</gameCount></gameselector>
+image	gameselectorEntry	0	9	system	-	-	path	imageType=cover;gameselector=a	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>10</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>10</gameCount></gameselector>
+video	gameselector	a	b	system	-	-	-	gameselectorEntry=9	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>10</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>10</gameCount></gameselector>
+video	gameselectorEntry	0	9	system	-	-	-	gameselector=a	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>10</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>10</gameCount></gameselector>
+text	gameselector	a	b	system	-	-	text	metadata=name	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
+text	gameselectorEntry	0	1	system	-	-	text	metadata=name	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
+datetime	gameselector	a	b	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
+datetime	gameselectorEntry	0	1	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
+rating	gameselector	a	b	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
+rating	gameselectorEntry	0	2	system	-	-	-	-	-	-	-	<gameselector name="a"><selection>lastplayed</selection><gameCount>3</gameCount></gameselector><gameselector name="b"><selection>mostplayed</selection><gameCount>3</gameCount></gameselector>
+animation	path	{G}	{G2}	-	-	-	-	-	-	-	-	-
+animation	maxSize	0.5 0.6	0.2 0.2	-	-	-	size	-	-	-	-	-
+animation	speed	1	3	-	-	-	-	-	150	-	-	-
+animation	direction	normal	reverse	-	-	-	-	-	150	-	-	-
+animation	iterationCount	0	1	-	-	-	-	-	900	-	-	-
+animation	interpolation	nearest	linear	-	-	-	-	path={G2}	-	-	-	-
+animation	cornerRadius	0	0.05	-	-	-	-	-	-	-	-	-
+animation	color	FFFFFF	00FFFF	-	-	-	-	-	-	-	-	-
+animation	colorEnd	FFFFFF	0000FF	-	-	-	-	color=FFFFFF	-	-	-	-
+animation	gradientType	horizontal	vertical	-	-	-	-	color=FF0000;colorEnd=0000FF	-	-	-	-
+animation	saturation	1	0	-	-	-	-	-	-	-	-	-
+gamelistinfo	fontPath	{FT}	{FB}	-	-	-	-	-	-	-	-	-
+gamelistinfo	fontSize	0.1	0.05	-	-	-	-	-	-	-	-	-
+gamelistinfo	horizontalAlignment	left	right	-	-	-	-	-	-	-	-	-
+gamelistinfo	verticalAlignment	top	bottom	-	-	-	-	-	-	-	-	-
+gamelistinfo	color	FFFFFF	FF0000	-	-	-	-	-	-	-	-	-
+gamelistinfo	backgroundColor	00000000	FF0000	-	-	-	-	-	-	-	-	-
+systemstatus	customIcon	<customIcon icon="icon_wifi">{S1}</customIcon>	<customIcon icon="icon_wifi">{S3}</customIcon>	-	-	-	-	-	-	-	-	-

@@ -1202,7 +1202,9 @@ commit:
   (a DualShock 4's vendor and product) plugged in while the gallery runs is read and leaves the family on the pad last
   used until a click of its stick, when the PlayStation face shows; pulled out, the family returns to the Xbox pad, and
   with both gone, to the generic face. Nothing logged. The harness's walk takes its press as a parameter for this
-  (`walk_by`), and `pad_held` and `run_pad_clock` read and restart the router's clock. *[own, because SDL's virtual
+  (`walk_by`), and `pad_held` and `run_pad_clock` read and restart the router's clock. `pad_down` and `pad_up` (added 2026-11-08) press a
+  button and leave it held until let go, each edge pumped on the harness's clock, for a view whose own clock repeats a
+  held direction (the ES-DE painter, EmuSen_Qt.md §4.8.5). *[own, because SDL's virtual
   joysticks are SDL's test interface and no SDL binding crate is in the tree: the test declares
   `SDL_VirtualJoystickDesc` and five calls from SDL_joystick.h itself.]*
 

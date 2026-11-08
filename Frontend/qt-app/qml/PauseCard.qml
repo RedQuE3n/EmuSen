@@ -38,10 +38,12 @@ MenuCard {
         onResumed: root.resumed()
         onLibrary: root.backToLibrary()
         onSlotChosen: (slot) => root.session.chooseSlot(slot)
+        onSpeedChosen: (percent) => root.session.chooseSpeed(percent)
         onSaveAsked: (slot) => root.session.saveState(slot)
         onLoadAsked: (slot) => root.session.loadState(slot)
         onRewindAsked: (frame) => root.session.rewindTo(frame)
         onRestartAsked: root.session.restart()
+        onScreenshotAsked: root.session.screenshot()
         onQuitGameAsked: root.quitGame()
         onQuitAsked: root.quitAll()
     }

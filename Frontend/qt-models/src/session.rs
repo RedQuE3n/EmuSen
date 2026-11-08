@@ -189,7 +189,9 @@ fn run(
                 handoff.wait_taken(taken, SWAP_BOUND);
             }
         }
-        if let Err(words) = play_sound(runtime, session, &mut audio, sound.as_mut(), &control.sounded) {
+        // A speed whose sound is not played (turbo, unthrottled) drains it and drops it, as the runtime's frame says.
+        let playing = if info.play_audio != 0 { sound.as_mut() } else { None };
+        if let Err(words) = play_sound(runtime, session, &mut audio, playing, &control.sounded) {
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
             break;
         }

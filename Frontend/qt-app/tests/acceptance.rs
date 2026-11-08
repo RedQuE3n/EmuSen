@@ -244,6 +244,22 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     until(scene, "the rewind resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
     assert_eq!(scene.property("session", "notice"), "Rewound");
     chord(scene);
+
+    // Speed: Right gives the running game turbo through the runtime, read back into the card's row; Left restores it.
+    for _ in 0..4 {
+        scene.pad(UiButton::Down);
+    }
+    scene.pad(UiButton::Right);
+    until(scene, "turbo read back from the runtime", |s| s.property("pause", "facts").contains("\"speed\":300"));
+    let problem = scene.property("session", "problem");
+    assert!(problem.is_empty() || problem.starts_with("The game plays without sound"), "the runtime took the speed: {problem}");
+    scene.pad(UiButton::Left);
+    until(scene, "the game's own speed again", |s| s.property("pause", "facts").contains("\"speed\":100"));
+
+    // X saves the picture on show as a screenshot, and the card stays.
+    scene.pad(UiButton::Screensaver);
+    until(scene, "the screenshot saved", |s| s.property("session", "notice") == "Screenshot saved");
+    assert_eq!(scene.property("cardCanvas", "slide"), "0", "the card stays");
 }
 
 /// The card's shadow beside its panel over the help band, as Mistress's falls (her render at 1280 x 800, 2026-11-02: 15 of

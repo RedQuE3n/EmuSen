@@ -209,6 +209,7 @@ fn row(key: &'static str, label: &str, value: String) -> Row {
 }
 
 pub const RESUME: &str = "resume";
+pub const SCREENSHOT: &str = "screenshot";
 pub const REWIND: &str = "rewind";
 pub const SAVE: &str = "save";
 pub const LOAD: &str = "load";
@@ -268,6 +269,8 @@ pub enum Outcome {
     QuitGame,
     /// The game closed, then the program.
     QuitEmuSen,
+    /// The picture on show saved as a screenshot; the card stays.
+    Screenshot,
 }
 
 /// The context pane's kind.
@@ -442,6 +445,7 @@ impl Card {
     pub fn act(&mut self, key: &str) -> Outcome {
         match key {
             RESUME => Outcome::Resume,
+            SCREENSHOT => Outcome::Screenshot,
             REWIND => self.open_reel(),
             SAVE => Outcome::Save(self.facts.slot),
             LOAD if self.facts.saved() => Outcome::Load(self.facts.slot),

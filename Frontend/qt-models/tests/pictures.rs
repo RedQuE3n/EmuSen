@@ -1,7 +1,7 @@
 //! The card's runtime half over the platform library built from this commit, no window and no device (EmuSen_Qt.md
 //! §7.3): rewind kept as Mistress keeps it, the reel's moments read into the card's facts with their pictures as the
 //! provider serves them, a slot saved with its picture beside it where Galaxia names it, loaded, and the game returned
-//! to a moment of the reel.
+//! to a moment of the reel, and the speed the card chooses read back from the frame as the frame thread reads it.
 
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::{frame_info, Api, Config, Open, Runtime};
@@ -67,5 +67,15 @@ fn rewind_is_kept_its_pictures_served_and_a_slot_saved_loaded_and_rewound() {
     let Outcome::RewindTo(moment) = card.choose(0) else { panic!("A goes back to a moment") };
     runtime.rewind_to(session, moment).unwrap();
     assert_eq!(runtime.rewind_reel(session).unwrap().moments.last().map(|m| m.frame), Some(moment), "the history after it dropped");
+    // Speed as the card sets it: the frame's interval follows it, and its sound is not played at turbo, which the frame
+    // thread's pacing and its player read.
+    let normal = frame.frame_interval_ns;
+    runtime.speed_set(session, 300, 300, 25, 0).unwrap();
+    runtime.frame(session, &mut frame).unwrap();
+    assert_eq!((frame.speed_percent, frame.play_audio), (300, 0), "turbo plays no sound");
+    assert!((frame.frame_interval_ns as f64 - normal as f64 / 3.0).abs() < 100.0, "a third of {normal} ns: {}", frame.frame_interval_ns);
+    runtime.speed_set(session, 25, 300, 25, 0).unwrap();
+    runtime.frame(session, &mut frame).unwrap();
+    assert!((frame.frame_interval_ns as f64 - normal as f64 * 4.0).abs() < 1000.0, "slow motion a quarter: {}", frame.frame_interval_ns);
     runtime.close(session).unwrap();
 }

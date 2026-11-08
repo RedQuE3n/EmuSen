@@ -22,6 +22,10 @@ pub mod ffi {
         /// `source` served under `name` by the QML engine that holds `object`; false where it is held by none.
         #[cxx_name = "sessionPicturesServe"]
         fn serve(object: &QObject, name: &QString, source: Box<PictureSource>) -> bool;
+
+        /// A picture written as a PNG file, by Qt's image writer; false where it could not be.
+        #[cxx_name = "savePicture"]
+        fn save_png(image: &QImage, path: &QString) -> bool;
     }
 
     extern "Rust" {
@@ -90,6 +94,14 @@ fn now(runtime: &Runtime, session: SessionId) -> Option<(Vec<u8>, i32, i32)> {
     }
     let tall: Vec<u8> = rgba.chunks_exact(row).flat_map(|r| std::iter::repeat_n(r, repeat as usize).flatten().copied()).collect();
     Some((tall, width, height * repeat))
+}
+
+/// The picture on show written to `path` as a PNG (Mistress's `WritePicture`); false where none is read back or written.
+pub fn save_now(runtime: &Runtime, session: SessionId, path: &str) -> bool {
+    let Some((rgba, width, height)) = now(runtime, session) else { return false };
+    // SAFETY: the bytes are width × height RGBA rows, which QImage takes over and frees with them.
+    let image = unsafe { QImage::from_raw_bytes(rgba, width, height, QImageFormat::Format_RGBA8888) };
+    ffi::save_png(&image, &QString::from(path))
 }
 
 fn picture_of(source: &PictureSource, id: &QString) -> QImage {

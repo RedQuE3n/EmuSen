@@ -22,5 +22,7 @@ private:
     rust::Box<PictureSource> m_source;
 };
 
+bool savePicture(const QImage &image, const QString &path);
+
 bool sessionPicturesServe(const QObject &object, const QString &name, rust::Box<PictureSource> source);
 #endif

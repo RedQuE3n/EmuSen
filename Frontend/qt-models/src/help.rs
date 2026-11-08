@@ -74,13 +74,13 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::Pause => &[
             (UiButton::Accept, "Select", None),
             (UiButton::Back, "Resume", None),
-            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::PausePage => &[
             (UiButton::Accept, "Choose", None),
             (UiButton::Back, "Back", None),
-            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
@@ -96,14 +96,14 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Select", None),
             (UiButton::Back, "Resume", None),
             (UiButton::Left, "Change slot", None),
-            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::PauseReel => &[
             (UiButton::Accept, "Go back", None),
             (UiButton::Back, "Back", None),
             (UiButton::Left, "Moment", None),
-            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
         ],
     }
 }

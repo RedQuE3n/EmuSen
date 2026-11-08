@@ -45,6 +45,8 @@ pub mod qobject {
         #[qproperty(QString, card_facts, cxx_name = "cardFacts", READ, NOTIFY)]
         /// The state slot Save and Load act on, 1 to 8, kept while the program runs.
         #[qproperty(u32, slot, READ, NOTIFY)]
+        /// The game's speed in percent of its own, the player's choice kept while the program runs; 0 unthrottled.
+        #[qproperty(u32, speed, READ, NOTIFY)]
         /// What the last save, load or rewind came to, in the player's words.
         #[qproperty(QString, notice, READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
@@ -82,6 +84,11 @@ pub mod qobject {
         #[cxx_name = "chooseSlot"]
         fn choose_slot(self: Pin<&mut SessionModel>, slot: u32);
 
+        /// The game's speed chosen, applied to the running game at once and to each game opened after.
+        #[qinvokable]
+        #[cxx_name = "chooseSpeed"]
+        fn choose_speed(self: Pin<&mut SessionModel>, percent: u32);
+
         /// The game saved to a slot, off the GUI thread; a resume waits for it.
         #[qinvokable]
         #[cxx_name = "saveState"]
@@ -91,6 +98,10 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "loadState"]
         fn load_state(self: Pin<&mut SessionModel>, slot: u32);
+
+        /// The picture on show written to the screenshots folder, off the GUI thread.
+        #[qinvokable]
+        fn screenshot(self: Pin<&mut SessionModel>);
 
         /// The game started again from the beginning, off the GUI thread; a resume waits for it.
         #[qinvokable]
@@ -120,6 +131,7 @@ pub struct SessionModelRust {
     picture_aspect: f64,
     card_facts: QString,
     slot: u32,
+    speed: u32,
     notice: QString,
     /// The session the card's pictures are read from, shared with the picture provider.
     shown: Shown,
@@ -154,6 +166,7 @@ impl Default for SessionModelRust {
             picture_aspect: 0.0,
             card_facts: QString::default(),
             slot: 1,
+            speed: 100,
             notice: QString::default(),
             shown: Shown::default(),
             serial: 0,
@@ -348,6 +361,7 @@ impl qobject::SessionModel {
         let serial = self.serial + 1;
         self.as_mut().rust_mut().serial = serial;
         facts.slot = self.slot;
+        facts.speed = self.speed;
         facts.pictures = format!("image://{}/{serial}/", pictures::NAME);
         let platform = self.as_mut().platform().ok();
         let picture_of = |path: &str| {
@@ -411,6 +425,7 @@ impl qobject::SessionModel {
                     let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone()));
                     self.as_mut().rust_mut().served = served;
                 }
+                self.as_mut().apply_speed();
                 self.as_mut().set_running(true);
             }
             Report::FirstPicture { after } => self.as_mut().set_first_picture_ms(after.as_secs_f64() * 1000.0),
@@ -437,6 +452,27 @@ impl qobject::SessionModel {
         }
     }
 
+    fn choose_speed(mut self: Pin<&mut Self>, percent: u32) {
+        if self.speed != percent {
+            self.as_mut().rust_mut().speed = percent;
+            self.as_mut().speed_changed();
+            self.as_mut().apply_speed();
+            if self.paused {
+                self.read_card_facts();
+            }
+        }
+    }
+
+    /// The speed chosen given to the open game, with turbo and slow motion at the card's fastest and slowest
+    /// (Mistress's `ApplySpeed`); a change the runtime makes between two frames.
+    fn apply_speed(mut self: Pin<&mut Self>) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        let (slow, turbo) = (pause::SPEEDS[0], pause::SPEEDS[pause::SPEEDS.len() - 1]);
+        if let Err(e) = runtime.speed_set(session, self.speed, turbo, slow, 0) {
+            self.set_problem(QString::from(&e.to_string()));
+        }
+    }
+
     fn save_state(self: Pin<&mut Self>, slot: u32) {
         self.job(move |runtime, session| match runtime.state_slot_save(session, slot) {
             Ok(()) => format!("State saved to slot {slot}"),
@@ -449,6 +485,22 @@ impl qobject::SessionModel {
             Ok(true) => format!("State loaded from slot {slot}"),
             Ok(false) => format!("Load State: slot {slot} is empty"),
             Err(e) => format!("Load State failed: {e}"),
+        });
+    }
+
+    /// Named as Mistress names one: the game's file name, then the local time to the millisecond, in Galaxia's
+    /// screenshots folder.
+    fn screenshot(mut self: Pin<&mut Self>) {
+        let folder = self.as_mut().platform().ok().and_then(|p| p.directory(emusen_platform_client::galaxia::consts::DIR_SCREENSHOTS).ok().flatten());
+        let Some(folder) = folder else { return self.set_problem(QString::from("No screenshots folder.")) };
+        let game = self.game.to_string();
+        let stem = std::path::Path::new(&game).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+        let now = QDateTime::current_date_time();
+        let stamp = format!("{} {}", now.date().format(&QString::from("yyyy-MM-dd")), now.time().format(&QString::from("HH.mm.ss.zzz")));
+        let path = folder.join(format!("{stem} {stamp}.png"));
+        self.job(move |runtime, session| {
+            let saved = std::fs::create_dir_all(&path.parent().unwrap_or(&path)).is_ok() && pictures::save_now(runtime, session, &path.to_string_lossy());
+            if saved { "Screenshot saved".to_string() } else { format!("Screenshot failed: {}", path.display()) }
         });
     }
 

@@ -144,6 +144,11 @@ pub mod qobject {
         #[cxx_name = "quitGameAsked"]
         fn quit_game_asked(self: Pin<&mut PauseModel>);
 
+        /// X: the picture on show saved as a screenshot; the card stays.
+        #[qsignal]
+        #[cxx_name = "screenshotAsked"]
+        fn screenshot_asked(self: Pin<&mut PauseModel>);
+
         /// Quit EmuSen answered Yes: the game closes, then the program.
         #[qsignal]
         #[cxx_name = "quitAsked"]
@@ -333,6 +338,7 @@ impl qobject::PauseModel {
             }
             Outcome::QuitGame => self.as_mut().quit_game_asked(),
             Outcome::QuitEmuSen => self.as_mut().quit_asked(),
+            Outcome::Screenshot => self.as_mut().screenshot_asked(),
         }
     }
 

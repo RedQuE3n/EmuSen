@@ -23,6 +23,11 @@ QImage SessionPictures::requestImage(const QString &id, QSize *size, const QSize
     return image;
 }
 
+bool savePicture(const QImage &image, const QString &path)
+{
+    return !image.isNull() && image.save(path, "PNG");
+}
+
 bool sessionPicturesServe(const QObject &object, const QString &name, rust::Box<PictureSource> source)
 {
     QQmlEngine *engine = qmlEngine(&object);

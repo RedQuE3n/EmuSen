@@ -122,6 +122,13 @@ fn the_pane_follows_the_row_and_the_reel_turns_in_place() {
     scene.pad(UiButton::Down);
     scene.wait(20);
     assert_eq!(scene.property("AdaptiveCardPane", "visible"), "false", "Speed shows no pane");
+    scene.pad(UiButton::Right);
+    scene.wait(20);
+    assert_eq!(scene.property("session", "speed"), "300", "Right on Speed chooses turbo through the session");
+    scene.pad(UiButton::Left);
+    scene.pad(UiButton::Left);
+    scene.wait(20);
+    assert_eq!(scene.property("session", "speed"), "25", "Left twice slow motion");
 
     // Rewind's reel: a page turned in place, on the stop nearest 1.5 s back, the strip of six with it ringed.
     scene.pad(UiButton::Up);

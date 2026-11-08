@@ -1698,6 +1698,30 @@ are those of Mistress's `PauseCardQuitGame-1280x800.spec` (no accepted render of
 Seeded faults, each reverted: Quit Game's Yes quitting EmuSen (`pause`), B on a question going to the first page
 (`qt-app`'s `pause`), the card not carrying Quit Game's Yes to the window (`qt-app`'s `pause`).
 
+**Speed** (2026-11-08). The row steps 25%, 100% and 300% (Mistress's `StepSpeed` over `SlowMotionPercent`,
+`NormalPercent` and `TurboPercent`), Left and Right or A, and stays on the card. The choice is `SessionModel.speed`, the
+player's for as long as the program runs, as Mistress keeps `_baseSpeedPercent`: given to the running game at once and to
+each game opened after (`chooseSpeed`, `emusen_crystal_speed_set` with turbo and slow motion at the row's fastest and
+slowest, as `ApplySpeed` gives them), and read back into the card's row. Nothing else is new for it: the runtime's frame
+says the interval at that speed and whether its sound is played, so the frame thread's own clock already runs a game off
+the display's rate at that interval (§1.8.3), and since this step a frame whose sound is not to be played (turbo,
+unthrottled) is drained and dropped rather than handed to the player, as Mistress does.
+
+**Held to:** `pause_pages` (Right on Speed choosing 300 through the session, Left twice 25); `pictures` (the frame's
+interval a third at 300% and four times at 25%, within a microsecond of the runtime's rounding, and no sound played at
+turbo); `acceptance.rs` on Vulkan (Right giving the running game turbo, read back from the runtime into the card's facts,
+and Left the game's own speed again). Seeded faults, each reverted: the card not carrying the choice to the session
+(`pause_pages`); the speed's change not announced, which no test catches, since the harness reads a property's value
+and not its signal; the card's row reads the speed from the facts, which are read again either way.
+
+**The screenshot** (2026-11-08). X on any page of the card is its declared action `screenshot` (help.rs, every Pause
+screen): the card stays and `SessionModel.screenshot` writes the picture on show, its repeated rows written out, as a PNG
+in Galaxia's screenshots folder (`EMUSEN_GALAXIA_DIR_SCREENSHOTS`), named as Mistress's `TakeScreenshot` names one (the
+game's file name, then the local time to the millisecond, `2026-11-08 21.42.07.115`), off the GUI thread, its notice
+"Screenshot saved". *C++ part*: `savePicture` in `cpp/session_pictures.cpp`, Qt's image writer [own, because cxx-qt-lib
+wraps no `QImage::save`, and Qt already holds a PNG writer]. **Held to:** `acceptance.rs` on Vulkan (X on the card saves
+the screenshot and the card stays in place).
+
 ---
 
 ## 8. Testing

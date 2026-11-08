@@ -4,6 +4,7 @@
 
 use crate::keyed::{Keyed, KeyedRows};
 use std::collections::{HashMap, HashSet};
+use crate::esde_shelves::{Esde, EsdeSettings, MediaIndex, Plays};
 use crate::words;
 use emusen_crystal_client::shapes::SystemRow;
 use emusen_kit_core::world::{hex, shape_of, world_line, WorldBody, WorldRing};
@@ -44,6 +45,20 @@ pub trait LibrarySource: Send + Sync {
     /// The player's settings as Galaxia's model reads them; null where there are none.
     fn settings(&self) -> Result<serde_json::Value, String> {
         Ok(serde_json::Value::Null)
+    }
+    /// Each game's metadata as the scraper resolves it (EmuSen_Backend.md §30.3, `metadata`), by path; a source with no
+    /// scraper has none, and the file names the game.
+    fn metadata(&self, _games: &[GameFile]) -> Result<Vec<(String, serde_json::Value)>, String> {
+        Ok(Vec::new())
+    }
+    /// How often and how long each played game was played, by path, as games.db records it.
+    fn plays(&self, _games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
+        Ok(Vec::new())
+    }
+    /// The media found for the shelves named by their ES-DE systems: the media store's and the ES-DE folder's files, the
+    /// store's first (esde_shelves::MediaIndex); a source with neither has none.
+    fn media_index(&self, _systems: &[String]) -> Result<MediaIndex, String> {
+        Ok(MediaIndex::default())
     }
 }
 
@@ -388,6 +403,9 @@ pub struct Read {
     pub rows: Vec<LibraryRow>,
     /// Each row's games as GameModel reads them, by the row's key (`lists_of`).
     pub lists: HashMap<String, String>,
+    /// The ES-DE view's settings, and its texts while a theme is the library's look (esde_shelves).
+    pub esde_settings: EsdeSettings,
+    pub esde: Esde,
 }
 
 /// One refresh's answer, or the words for why it could not.
@@ -411,7 +429,14 @@ pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));
     let mut rows = rows(&shelved, &catalog, &engines);
     let lists = lists_of(&mut rows, &systems, &catalog, words::now());
-    Ok(Read { systems, catalog, rows, lists })
+    let esde_settings = crate::esde_shelves::settings_of(&catalog.settings);
+    let esde = if esde_settings.themed {
+        let on_shelves: Vec<SystemRow> = shelved.iter().filter(|s| shelves.is_empty() || shelves.contains(&s.id)).cloned().collect();
+        crate::esde_shelves::read(source, &on_shelves, &catalog)?
+    } else {
+        Esde::default()
+    };
+    Ok(Read { systems, catalog, rows, lists, esde_settings, esde })
 }
 
 /// The view's state: the rows with the selection kept across refreshes, and the last refresh's problem.
@@ -421,6 +446,8 @@ pub struct LibraryView {
     pub systems: Vec<SystemRow>,
     pub catalog: Catalog,
     pub lists: HashMap<String, String>,
+    pub esde_settings: EsdeSettings,
+    pub esde: Esde,
     pub problem: String,
 }
 
@@ -457,6 +484,8 @@ impl LibraryView {
                 self.systems = read.systems;
                 self.catalog = read.catalog;
                 self.lists = read.lists;
+                self.esde_settings = read.esde_settings;
+                self.esde = read.esde;
                 self.problem.clear();
             }
             Err(words) => self.problem = words,

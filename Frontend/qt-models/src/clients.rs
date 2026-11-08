@@ -3,6 +3,7 @@
 //! shelves' (emusen_library.h), the records from games.db, where Galaxia names it, and each game's cover and hero art from the media
 //! store through the scraper's sources-alone handle (emusen.scrape `media`, EmuSen_Backend.md §40.5).
 
+use crate::esde_shelves::{MediaIndex, Plays};
 use crate::library::{without_port_mark, Engine, LibrarySource};
 use emusen_crystal_client::shapes::{CoreRow, SystemRow};
 use emusen_crystal_client::{Runtime, Scope};
@@ -11,7 +12,7 @@ use emusen_platform_client::library::{GameFile, Library, ScanRequest};
 use emusen_platform_client::scrape::{ScrapeService, ScraperConfig};
 use emusen_platform_client::{Lent, Platform};
 use serde_json::{json, Value};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// The back end as the library view reads it.
 pub struct ClientSource {
@@ -22,6 +23,8 @@ pub struct ClientSource {
     _sqlite: Lent,
     /// The sources-alone scraper's serial and its table, for the covers; none where it could not open.
     scraper: Option<(u64, ScrapeService)>,
+    /// The last media index and the scraper's stamps it was walked at, so an unchanged tree is not walked again.
+    walked: Mutex<Option<(String, MediaIndex)>>,
 }
 
 impl Drop for ClientSource {
@@ -118,6 +121,52 @@ impl LibrarySource for ClientSource {
         app_settings(&self.platform)
     }
 
+    fn metadata(&self, games: &[GameFile]) -> Result<Vec<(String, Value)>, String> {
+        let Some((_, scraper)) = &self.scraper else { return Ok(Vec::new()) };
+        let names = app_settings(&self.platform)?.get("ScrapeGameNames").and_then(Value::as_bool).unwrap_or(false);
+        let one = |g: &GameFile| scraper.get(&json!({ "what": "metadata", "path": g.path, "scraped_names": names })).map(|m| (g.path.clone(), m));
+        games.iter().map(one).collect::<Result<_, _>>().map_err(words)
+    }
+
+    fn plays(&self, games: &[GameFile]) -> Result<Vec<(String, Plays)>, String> {
+        let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
+        let number = |r: &Value, key: &str| r.get(key).and_then(Value::as_i64).unwrap_or(0);
+        let of = |g: &GameFile| records.get(&g.path).map(|r| (g.path.clone(), Plays { count: number(r, "play_count"), seconds: number(r, "play_seconds") }));
+        Ok(games.iter().filter_map(of).collect())
+    }
+
+    fn media_index(&self, systems: &[String]) -> Result<MediaIndex, String> {
+        let Some((_, scraper)) = &self.scraper else { return Ok(MediaIndex::default()) };
+        let settings = app_settings(&self.platform)?;
+        let store = self.platform.directory(DIR_MEDIA).map_err(words)?;
+        let esde = settings.get("EsdeMediaDirectory").and_then(Value::as_str).filter(|d| !d.trim().is_empty()).map(std::path::PathBuf::from);
+        let roots: Vec<std::path::PathBuf> = store.into_iter().chain(esde).collect();
+        let mut stamps = roots.iter().map(|r| r.to_string_lossy().into_owned()).collect::<Vec<_>>().join("\n");
+        for system in systems {
+            let stamp = scraper.get(&json!({ "what": "stamp", "system": system })).map_err(words)?;
+            stamps.push_str(&format!("\n{system}={stamp}"));
+        }
+        let mut walked = self.walked.lock().map_err(words)?;
+        if let Some((_, index)) = walked.as_ref().filter(|(at, _)| *at == stamps) {
+            return Ok(index.clone());
+        }
+        let kinds = scraper.get(&json!({ "what": "kinds" })).map_err(words)?;
+        let kinds: Vec<(&str, &str)> = kinds
+            .as_array()
+            .map(|all| all.iter().filter_map(|k| Some((k.get("type")?.as_str()?, k.get("folder")?.as_str()?))).collect())
+            .unwrap_or_default();
+        let mut index = MediaIndex::default();
+        for root in &roots {
+            for system in systems {
+                for (kind, folder) in &kinds {
+                    index.walk(root, system, kind, folder);
+                }
+            }
+        }
+        *walked = Some((stamps, index.clone()));
+        Ok(index)
+    }
+
     fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         let cores = self.runtime.cores().map_err(words)?;
         let mut out = Vec::new();
@@ -155,7 +204,7 @@ impl ClientSource {
         let games_db = platform.file(FILE_GAMES).map_err(words)?;
         let library = Library::open(&platform, &games_db, &sqlite).map_err(words)?;
         let scraper = open_scraper(&platform, &runtime, &games_db.to_string_lossy(), &sqlite);
-        Ok(ClientSource { runtime, platform, library, _sqlite: sqlite, scraper })
+        Ok(ClientSource { runtime, platform, library, _sqlite: sqlite, scraper, walked: Mutex::new(None) })
     }
 }
 

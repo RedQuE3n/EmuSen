@@ -214,6 +214,15 @@ namespace EmuSen.Crystal.Client
                 ? Once((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n))
                 : Text((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n)));
 
+        // The cheat codecs' catalogue, a code as one codec reads it, and a Game Genie code made, since frontend API 2.0.
+        public string CheatCodecList() => Text((o, n) => Contract.Crystal.CheatCodecList(Handle, o, n));
+
+        public string CheatDecode(string codec, string code) =>
+            WithText(codec, (c, cl) => WithText(code, (t, tl) => Text((o, n) => Contract.Crystal.CheatDecode(Handle, (byte*)c, cl, (byte*)t, tl, o, n))));
+
+        public string CheatEncode(string codec, int address, uint value) =>
+            WithText(codec, (c, cl) => Text((o, n) => Contract.Crystal.CheatEncode(Handle, (byte*)c, cl, address, value, o, n)));
+
         public string SettingsSchema(string console, string? engine = null) =>
             WithText(console, (c, cl) => WithText(engine, (e, el) => Text((o, n) => Contract.Crystal.SettingsSchema(Handle, 0, (byte*)c, cl, (byte*)e, el, o, n))));
 

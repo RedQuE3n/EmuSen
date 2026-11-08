@@ -7,7 +7,7 @@ using EmuSen.Galaxia.Native;
 
 namespace EmuSen.WiseMan.Bindings.Systems
 {
-    // The systems table, emusen-systems' data read through the platform library, each pack's entry with the library's code; there is no C# table since 2026-11-04 - see EmuSen_Backend.md §12, §40.1.
+    // The systems table, emusen-systems' data read through the frontend API since 2.0, each pack's entry with the library's code; there is no C# table since 2026-11-04 - see EmuSen_Backend.md §12, §40.1.
     public static unsafe class SystemTable
     {
         // Each data property of SystemEntry and the key the table gives it, which the schema test holds to both.
@@ -75,22 +75,25 @@ namespace EmuSen.WiseMan.Bindings.Systems
             try
             {
                 if (!PlatformLibrary.Available) return new(null, PlatformLibrary.Report, null);
-                nint export = PlatformLibrary.Export("emusen_systems_table");
-                if (export == 0) return new(null, $"{PlatformLibrary.FileName} has no emusen_systems_table", null);
                 if (SystemCode.Exports.FirstOrDefault(e => PlatformLibrary.Export(e) == 0) is { } missing) return new(null, $"{PlatformLibrary.FileName} has no {missing}", null);
-                var call = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)export;
-                long length = call(null, 0);
-                if (length < 0) return new(null, $"{PlatformLibrary.FileName} gave no table: {SystemCode.LastError()}", null);
-                byte[] bytes = new byte[length];
-                fixed (byte* b = bytes) length = call(b, (nuint)bytes.Length);
-                string json = Encoding.UTF8.GetString(bytes);
-                return new(Parse(json), $"{PlatformLibrary.FileName}, the systems table", json, ParseMedia(json), ParseColumn(json, "cheat_space"), ParseColumn(json, "byte_order"), ParseColumn(json, "firmware_note"));
+                string json = TableRows(FrontendRuntime.Table.Systems());
+                return new(Parse(json), $"{PlatformLibrary.FileName}, the systems table through the frontend API", json, ParseMedia(json), ParseColumn(json, "cheat_space"), ParseColumn(json, "byte_order"), ParseColumn(json, "firmware_note"));
             }
             catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException)
             {
                 return new(null, $"{PlatformLibrary.FileName} gave a table this build cannot read: {e.Message}", null);
             }
         }
+
+        // The frontend API's systems with the runtime's own keys taken out, which leaves the table's rows as emusen-systems writes them.
+        private static string TableRows(string systems)
+        {
+            var rows = System.Text.Json.Nodes.JsonNode.Parse(systems)!.AsArray();
+            foreach (var row in rows) foreach (string key in RuntimeKeys) row!.AsObject().Remove(key);
+            return rows.ToJsonString();
+        }
+
+        private static readonly string[] RuntimeKeys = ["engines", "starts_empty", "core", "controllers"];
 
         // The rows as entries; a code part stands in as the identity until Entry gives the library's.
         private static IReadOnlyList<SystemEntry> Parse(string json)

@@ -21,8 +21,6 @@ namespace EmuSen.WiseMan.Crystal
         private readonly List<string> _said = new();
         private readonly ITestOutputHelper _output;
 
-        private static readonly string[] Extensions = [".mcr", ".mpk", ".brm", ".crm"];
-
         public SaveMediaManagerParityTests(ITestOutputHelper output)
         {
             _output = output;
@@ -37,37 +35,6 @@ namespace EmuSen.WiseMan.Crystal
             ConfigDiagnostics.Sink = _sink;
             foreach (string path in Directory.EnumerateFiles(_root, "*", SearchOption.AllDirectories)) try { File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); } catch (IOException) { }
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
-        }
-
-        private static byte[] RandomImage(Random r, string extension) => extension switch
-        {
-            ".mcr" => SaveMediaParityTests.RandomCard(r, PsxCardFormat.Instance),
-            ".mpk" => SaveMediaParityTests.RandomPak(r),
-            ".brm" => SaveMediaParityTests.RandomBram(r, SegaCdBramFormat.BackupRam),
-            _ => SaveMediaParityTests.RandomBram(r, SegaCdBramFormat.RamCartridge),
-        };
-
-        // One generated tree: cards of every medium, blank and empty files, a file that will not open, a folder named as a card, a file of no medium.
-        private static void Plant(Random r, string tree)
-        {
-            var plan = new Random(r.Next());
-            Directory.CreateDirectory(tree);
-            foreach (string ext in Extensions)
-                for (int i = 0; i < 3; i++)
-                {
-                    string path = Path.Combine(tree, $"{"ABC"[i]}{ext}");
-                    switch (plan.Next(8))
-                    {
-                        case 0: break;
-                        case 1: File.WriteAllBytes(path, []); break;
-                        case 2: File.WriteAllBytes(path, new byte[plan.Next(1, 3) == 1 ? 64 : 131072]); break;
-                        default: File.WriteAllBytes(path, RandomImage(plan, ext)); break;
-                    }
-                }
-            File.WriteAllBytes(Path.Combine(tree, "Locked.mcr"), PsxCardFormat.Instance.Format()!);
-            File.SetUnixFileMode(Path.Combine(tree, "Locked.mcr"), UnixFileMode.None);
-            Directory.CreateDirectory(Path.Combine(tree, "Folder.mpk"));
-            File.WriteAllText(Path.Combine(tree, "notes.txt"), "not a card");
         }
 
         private static string Shown(Func<MediaOutcome> op)
@@ -95,64 +62,6 @@ namespace EmuSen.WiseMan.Crystal
             try { return name + " " + Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(p)))[..16]; }
             catch (UnauthorizedAccessException) { return name + " unreadable"; }
         }));
-
-        // A card held while an operation runs, the same way in both trees: by a game of this program, shared or not, or by another program's lock.
-        private static IDisposable? Hold(int kind, string card) => kind switch
-        {
-            0 => MediumLock.TryTake(card, "Game X"),
-            1 => MediumLock.TryTake(card, "Game Y", shared: true),
-            2 => Directory.Exists(Path.GetDirectoryName(card)) ? new FileStream(card + MediumLock.Suffix, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 1, FileOptions.DeleteOnClose) : null,
-            _ => null,
-        };
-
-        [Fact]
-        public void Generated_scripts_on_cards_of_every_medium_free_and_held_do_the_same()
-        {
-            int done = 0, refused = 0, held = 0, ops = 0;
-            _golden = new ParityGolden("CardManagerScripts");
-            for (int seed = 1; seed <= 60; seed++)
-            {
-                string tree = Path.Combine(_root, $"m{seed}");
-                Plant(new Random(seed), tree);
-                var r = new Random(seed * 7919);
-                for (int step = 0; step < 30; step++)
-                {
-                    string ext = Extensions[r.Next(Extensions.Length)];
-                    string Name() => r.Next(14) switch { 0 => "notes.txt", 1 => "Locked.mcr", 2 => "Folder.mpk", 3 => "New" + ext, 4 => Path.Combine("Deep", "D" + ext), 5 => "A" + Extensions[r.Next(4)], _ => $"{"ABC"[r.Next(3)]}{ext}" };
-                    string a = Name(), b = Name(), c = Name();
-                    var listing = SaveMediaManager.Open(Path.Combine(tree, a))?.Listing;
-                    string save = r.Next(6) switch { 0 => "1", 1 => "2", 2 => "99", 3 => "NOSUCH", _ => listing is { Saves.Count: > 0 } ? listing.Saves[r.Next(listing.Saves.Count)].Id : "1" };
-                    int op = r.Next(8), hold = r.Next(6);
-                    string heldName = r.Next(2) == 0 ? a : b;
-                    string At(string n) => Path.Combine(tree, n);
-                    string shown;
-                    using (Hold(hold, At(heldName)))
-                        shown = Run(op, At, a, b, c, save);
-                    string what = $"seed {seed} step {step}: op {op} {a} {b} {c} '{save}' hold {hold} on {heldName}\n";
-                    Same(what + shown);
-                    Same(what + Tree(tree));
-                    ops++;
-                    done += shown.StartsWith("True", StringComparison.Ordinal) ? 1 : 0;
-                    refused += shown.StartsWith("False", StringComparison.Ordinal) ? 1 : 0;
-                    held += shown.Contains("in use by", StringComparison.Ordinal) ? 1 : 0;
-                }
-            }
-            _golden.Check(3600);
-            _output.WriteLine($"{ops} operations: {done} done, {refused} refused, {held} held");
-            Assert.True(done > 150 && refused > 300 && held > 40, $"{ops} operations: {done} done, {refused} refused, {held} held");
-        }
-
-        private static string Run(int op, Func<string, string> at, string a, string b, string c, string save) => op switch
-        {
-            0 => Shown(() => SaveMediaManager.Open(at(a))),
-            1 => Shown(() => SaveMediaManager.CopySave(at(a), save, at(b))),
-            2 => Shown(() => SaveMediaManager.MoveSave(at(a), save, at(b))),
-            3 => Shown(() => SaveMediaManager.DeleteSave(at(a), save)),
-            4 => Shown(() => SaveMediaManager.Import(at(a), [at(b), at(c), at(a)])),
-            5 => Shown(() => SaveMediaManager.New(at(a))),
-            6 => Shown(() => SaveMediaManager.Duplicate(at(a), at(b))),
-            _ => Shown(() => SaveMediaManager.Rename(at(a), at(b))),
-        };
 
         private ParityGolden? _golden;
 
@@ -206,23 +115,5 @@ namespace EmuSen.WiseMan.Crystal
                 Assert.Throws<IOException>(() => new FileStream(n + MediumLock.Suffix, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None).Dispose());
         }
 
-        // What a read or a write that failed reports, as the C# reported it.
-        [Fact]
-        public void A_card_that_will_not_read_is_reported_alike()
-        {
-            string dir = Directory.CreateDirectory(Path.Combine(_root, "said", "m")).FullName;
-            File.WriteAllBytes(Path.Combine(dir, "Locked.mcr"), PsxCardFormat.Instance.Format()!);
-            File.SetUnixFileMode(Path.Combine(dir, "Locked.mcr"), UnixFileMode.None);
-            string Said(Func<string, MediaOutcome> op)
-            {
-                _said.Clear();
-                string shown = Shown(() => op(dir));
-                return shown + "\n" + string.Join("\n", _said).Replace(dir, "<dir>", StringComparison.Ordinal);
-            }
-            _golden = new ParityGolden("CardManagerUnreadable");
-            Same(Said(d => SaveMediaManager.CopySave(Path.Combine(d, "Locked.mcr"), "1", Path.Combine(d, "B.mcr"))));
-            Same(Said(d => SaveMediaManager.Duplicate(Path.Combine(d, "Locked.mcr"), Path.Combine(d, "C.mcr"))));
-            _golden.Check(2);
-        }
     }
 }

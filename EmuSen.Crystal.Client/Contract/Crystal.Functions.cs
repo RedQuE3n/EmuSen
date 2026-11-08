@@ -127,6 +127,12 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static long CardsOp(nint rt, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->cards_op(rt, op, args, args_len, out_, len);
 
+        public static long CheatCodecList(nint rt, byte* out_, nuint len) => Table->cheat_codec_list(rt, out_, len);
+
+        public static long CheatDecode(nint rt, byte* codec, nuint codec_len, byte* code, nuint code_len, byte* out_, nuint len) => Table->cheat_decode(rt, codec, codec_len, code, code_len, out_, len);
+
+        public static long CheatEncode(nint rt, byte* codec, nuint codec_len, int address, uint value, byte* out_, nuint len) => Table->cheat_encode(rt, codec, codec_len, address, value, out_, len);
+
         public static nint Subscribe(nint rt, uint session, uint kinds) => Table->subscribe(rt, session, kinds);
 
         public static long SubscriptionDrain(nint sub, byte* out_, nuint len) => Table->subscription_drain(sub, out_, len);

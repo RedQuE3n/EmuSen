@@ -23,10 +23,9 @@ namespace EmuSen.WiseMan.Bindings.Services
         // Every export the services take; a library without one gives no service, and Report says why.
         public static readonly IReadOnlyList<string> Exports = new[]
         {
-            "emusen_firmware_folders", "emusen_firmware_find", "emusen_firmware_locate", "emusen_firmware_install",
-            "emusen_savemedia_op",
+            "emusen_firmware_folders", "emusen_firmware_find", "emusen_firmware_locate",
             "emusen_cheats_parse", "emusen_cheats_write", "emusen_cheats_database_open", "emusen_cheats_database_free", "emusen_cheats_database_entries",
-            "emusen_cheats_database_query", "emusen_cheats_prune_plan", "emusen_cheats_prune_apply", "emusen_cheats_install",
+            "emusen_cheats_database_query", "emusen_cheats_prune_plan", "emusen_cheats_prune_apply",
             "emusen_net_download_start", "emusen_net_download_free", "emusen_net_download_progress", "emusen_net_download_wait",
             "emusen_net_download_cancel", "emusen_net_download_body", "emusen_net_download_failure",
         };

@@ -1,23 +1,11 @@
-//! The C layer over emusen-systems: the table as JSON, and the save media's format modules, for the C# runtime's
-//! `SystemTable` and `SystemCode` facades (EmuSen_Backend.md §5.4, §12, §13). Nothing is decided here.
+//! The C layer over emusen-systems: the libretro cores, each system's code and the save media's format modules, for the
+//! C# runtime's `SystemCode` facade (EmuSen_Backend.md §5.4, §12, §13). The table and the cheat codecs are the frontend
+//! API's since 2.0 (EmuSen_RustPlatform.md §47.24). Nothing is decided here.
 
 use crate::{bytes, fail, given, put, required, status};
 use serde_json::Value;
-use emusen_systems::cheats;
 use emusen_systems::probe::{self, Candidate, Head, Recognition};
 use emusen_systems::media::{self, Fault};
-
-/// The table as `emusen_systems::to_json` writes it, by the length-query idiom.
-///
-/// # Safety
-/// `out` must be valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_systems_table(out: *mut u8, len: usize) -> i64 {
-    match emusen_systems::table_json() {
-        Ok(text) => unsafe { put(text.as_bytes(), out, len) },
-        Err(e) => fail(status::PARSE, e.to_string()) as i64,
-    }
-}
 
 /// The libretro cores EmuSen hosts as `emusen_systems::libretro_cores::to_json` writes them, by the length-query idiom
 /// (EmuSen_Cores.md §4.7, EmuSen_LibretroHost.md §0.3).
@@ -129,50 +117,6 @@ pub unsafe extern "C" fn emusen_systems_media_format(id: *const u8, id_len: usiz
         Err(s) => return s as i64,
     };
     edited(media::format(id).map(Ok), out, len)
-}
-
-/// Every cheat codec and each system's pair as JSON, by the length-query idiom.
-///
-/// # Safety
-/// `out` must be valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_systems_cheat_codecs(out: *mut u8, len: usize) -> i64 {
-    unsafe { put(cheats::codecs_json().as_bytes(), out, len) }
-}
-
-/// A code's every answer from the codec `codec` as JSON, by the length-query idiom; ABSENT for a codec there is not.
-///
-/// # Safety
-/// Each pointer must be valid for its length; `out` for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_systems_cheat_decode(codec: *const u8, codec_len: usize, code: *const u8, code_len: usize, out: *mut u8, len: usize) -> i64 {
-    let (codec, code) = match unsafe { (required(codec, codec_len), given(code, code_len)) } {
-        (Ok(codec), Ok(code)) => (codec, code),
-        (Err(s), _) | (_, Err(s)) => return s as i64,
-    };
-    match cheats::decode(codec, code) {
-        Some(answer) => unsafe { put(cheats::answer_json(&answer).as_bytes(), out, len) },
-        None => fail(status::ABSENT, format!("no codec is named {codec}")) as i64,
-    }
-}
-
-/// The Game Genie code of the SNES's or the Genesis's that patches `value` at `address`, by the length-query idiom;
-/// ABSENT for a codec with no encoder.
-///
-/// # Safety
-/// `codec` must be valid for `codec_len` bytes; `out` for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_systems_cheat_encode(codec: *const u8, codec_len: usize, address: i32, value: u32, out: *mut u8, len: usize) -> i64 {
-    let codec = match unsafe { required(codec, codec_len) } {
-        Ok(codec) => codec,
-        Err(s) => return s as i64,
-    };
-    let code = match codec {
-        "snes.gg" => emusen_systems::snes::cheats::encode_game_genie(address, value as u8),
-        "md.gg" => emusen_systems::genesis::cheats::encode_game_genie(address, value as u16),
-        _ => return fail(status::ABSENT, format!("the codec {codec} has no encoder")) as i64,
-    };
-    unsafe { put(code.as_bytes(), out, len) }
 }
 
 /// Each system's code as JSON: whether it has a recogniser, an OpenVGDB rule and a header reader, by id in the table's order.
@@ -347,17 +291,6 @@ pub unsafe extern "C" fn emusen_systems_header(system: *const u8, system_len: us
 mod tests {
     use super::*;
 
-    #[test]
-    fn the_table_comes_through_the_c_layer_whole() {
-        let n = unsafe { emusen_systems_table(std::ptr::null_mut(), 0) };
-        assert!(n > 0);
-        let mut small = vec![0u8; n as usize - 1];
-        assert_eq!(unsafe { emusen_systems_table(small.as_mut_ptr(), small.len()) }, n);
-        assert!(small.iter().all(|&b| b == 0), "a buffer too small is not written");
-        let mut out = vec![0u8; n as usize];
-        assert_eq!(unsafe { emusen_systems_table(out.as_mut_ptr(), out.len()) }, n);
-        assert_eq!(std::str::from_utf8(&out).unwrap(), emusen_systems::table_json().unwrap());
-    }
 
     fn call(f: impl Fn(*mut u8, usize) -> i64) -> Result<Vec<u8>, (i64, String)> {
         let n = f(std::ptr::null_mut(), 0);

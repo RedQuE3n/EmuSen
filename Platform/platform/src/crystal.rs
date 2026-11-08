@@ -294,6 +294,52 @@ pub unsafe extern "C" fn emusen_crystal_cards_op(rt: *mut emusen_crystal_runtime
     }
 }
 
+/// A codec's id as text, which must be given.
+unsafe fn codec_named<'a>(codec: *const u8, codec_len: usize) -> Result<&'a str, i32> {
+    unsafe { text(codec, codec_len) }?.filter(|c| !c.is_empty()).ok_or_else(|| fail(svc::BAD_ARGUMENT, "the codec must be given"))
+}
+
+/// # Safety
+/// `rt` a live runtime; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_cheat_codec_list(rt: *mut emusen_crystal_runtime, out: *mut u8, len: usize) -> i64 {
+    match unsafe { runtime(rt) } {
+        Ok(_) => unsafe { put(emusen_systems::cheats::codecs_json().as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; each text valid for its length; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_cheat_decode(rt: *mut emusen_crystal_runtime, codec: *const u8, codec_len: usize, code: *const u8, code_len: usize, out: *mut u8, len: usize) -> i64 {
+    let answer = || -> Result<String, i32> {
+        unsafe { runtime(rt) }?;
+        let codec = unsafe { codec_named(codec, codec_len) }?;
+        let code = unsafe { text(code, code_len) }?.unwrap_or("");
+        emusen_systems::cheats::decode(codec, code).map(|a| emusen_systems::cheats::answer_json(&a)).ok_or_else(|| fail(svc::ABSENT, format!("no codec is named {codec}")))
+    };
+    match answer() {
+        Ok(json) => unsafe { put(json.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
+/// # Safety
+/// `rt` a live runtime; `codec` valid for `codec_len` bytes; `out` valid for `len` bytes, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_crystal_cheat_encode(rt: *mut emusen_crystal_runtime, codec: *const u8, codec_len: usize, address: i32, value: u32, out: *mut u8, len: usize) -> i64 {
+    let answer = || -> Result<String, i32> {
+        unsafe { runtime(rt) }?;
+        let codec = unsafe { codec_named(codec, codec_len) }?;
+        emusen_systems::cheats::encode(codec, address, value).ok_or_else(|| fail(svc::ABSENT, format!("the codec {codec} has no encoder")))
+    };
+    match answer() {
+        Ok(code) => unsafe { put(code.as_bytes(), out, len) },
+        Err(status) => status as i64,
+    }
+}
+
 fn status_of(result: Result<(), (i32, String)>) -> i32 {
     match result {
         Ok(()) => 0,

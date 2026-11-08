@@ -97,7 +97,7 @@ versioned theme package, both defined in §5).
 ### 1.1 The back end, through the frontend API
 
 The front end is a client in the sense of `EmuSen_Surfaces.md` §6.2 rule E: it holds the runtime through
-`emusen_crystal.h` (version 2.0 today; rule A) and the platform library through `emusen_platform.h` (interface 37; rule
+`emusen_crystal.h` (version 2.0 today; rule A) and the platform library through `emusen_platform.h` (interface 38; rule
 B), and never a runtime type. 2.0 removed the session service's twins (`EmuSen_RustPlatform.md` §47.23): the debugger,
 states by path, the log switch and the cheat ops are called through the `emusen_session_v1` table that
 `emusen_crystal_session_service` hands out, the one the shell is handed too. That the implementation behind both

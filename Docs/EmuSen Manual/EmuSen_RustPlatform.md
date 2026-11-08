@@ -4261,3 +4261,55 @@ skipped. The probe's EmuSen backend builds against the 2.0 header. Three faults 
 again (the converse check, the export check and the baseline), the table with no game setting the switch where
 read-only (`session_table.rs`), and the C# session calling through its read-only table (eight tests of
 `MainWindowCheatListTests` and `MainWindowSaveStateThreadTests`).
+
+### 47.24 Firmware, cards, the systems table and the cheat codecs: one surface each, the frontend API's
+
+*Decided 2026-11-07 by the tester* (the cleanup's question 6): firmware, the cards, the systems table and the cheat
+codecs stay in `emusen_crystal.h`, which front ends call, and `emusen_platform.h`'s copies go; the details were
+confirmed with evidence and decided 2026-11-08. The frontend API's 2.0 had not been published (§47.23 had not
+landed, and no Qt client exists), so what follows is folded into 2.0 and its baseline rather than made a 2.1.
+
+**The callers, before the deletion.** Every caller of the seven exports was found by name in C#, Rust, scripts and
+the workflow. No program, crate or script called them; their only callers were the test facades kept in
+`EmuSen.WiseMan/Bindings/` since the C# implementations were deleted (2026-11-04), and one unit test of the C layer:
+
+| Deleted from `emusen_platform.h` | Its callers | The surface that stays, and how they reach it now |
+|---|---|---|
+| `emusen_systems_table` | `Bindings/Systems/SystemTable.cs`; `systems.rs`'s own test | `emusen_crystal_systems`, read from a runtime with no cores directories, the runtime's four keys taken out; `platform/tests/crystal_reads.rs` holds the rows whole |
+| `emusen_systems_cheat_codecs`, `_decode`, `_encode` | `Bindings/Systems/SystemCode.cs` (and through it `NativeCheatCodec` and the SNES's and Genesis's Game Genie) | `emusen_crystal_cheat_codec_list`, `emusen_crystal_cheat_decode`, `emusen_crystal_cheat_encode`, new in 2.0 |
+| `emusen_firmware_install` | `Bindings/Services/ServiceLibrary.cs`'s list of exports, never called | `emusen_crystal_firmware_install`, over the same install of emusen-firmware |
+| `emusen_savemedia_op` | `Bindings/SaveMedia/SaveMediaNative.cs` | `emusen_crystal_cards_op`, over the same `emusen_savemedia::Manager`, read from a runtime with the build's cores |
+| `emusen_cheats_install` | `ServiceLibrary.cs`'s list, never called | the session table's cheat op `DB_UPDATE`, over the same install of emusen-cheats |
+
+`emusen_firmware_folders`, `_find` and `_locate`, and the save media's format modules (`emusen_systems_media*`) have
+no counterpart in the frontend API and stay. The platform interface is 38.
+
+**The systems table.** `emusen_crystal_systems` was not a copy of the table: its rows were written by hand, a second
+writer of the table's spelling, and lacked six of its 24 keys (`cheat_space`, `media`, `byte_order`,
+`libretro_databases`, `libretro_systemids`, `firmware_note`), though the header promised the table's keys. Each row is
+now emusen-systems' own, serialised by serde in `KEYS`' order, its `look` replaced in place by the one the row stands
+for (the table's or the one computed from the id), and then the runtime's `engines`, `starts_empty`, `core` and
+`controllers`. A front end reads one array for both.
+
+**The cheat codecs.** With the twins gone (§47.23) the frontend API had none: a session table's `cheat_codecs`
+answers that session's pair, not the catalogue, and the decoder and encoder had no counterpart. The three reads take
+the runtime and answer what emusen-systems answers, word for word. The catalogue is named `cheat_codec_list`, not
+`cheat_codecs`, so that no export bears a table entry's name for another answer (the converse check of §47.23). The
+encoder's choice of a codec, the SNES's and the Genesis's Game Genie, moved from the C layer into
+`emusen_systems::cheats::encode`, its one owner.
+
+**What changed for a caller of the card manager.** `cards_op` reports a refused rename as `EMUSEN_CRYSTAL_IO` with the
+system's words, where `emusen_savemedia_op` told `NOT_FOUND` and `ACCESS` apart, and an unreadable card's line is not
+queued for `emusen_platform_diagnostics`. Two methods of `SaveMediaManagerParityTests` pinned those to the C# card
+manager's goldens (a `DirectoryNotFoundException`, and the diagnostic line `ConfigDiagnostics` received); measured on
+2026-11-08 through `cards_op`, the generated scripts matched the golden in every step but that rename, and the
+unreadable card's outcome in everything but the diagnostic line. Under the tester's answer 0 the two methods and their
+goldens (`CardManagerScripts`, `CardManagerUnreadable`) are deleted; the class's import and lock methods pass.
+
+**Proof, measured on 2026-11-08.** The Platform workspace passes 595 tests (1 ignored), with
+`platform/tests/crystal_reads.rs`: every row holds the table's 24 keys in their order with emusen-systems' values,
+then the runtime's four; the catalogue, a decoded code and an encoded one are emusen-systems' answers; an unknown
+codec is `ABSENT`. The C# classes over the facades (the systems table's and code's parity classes, the packs', the
+cheat formats', the save media's, the memory cards' offer, `CrystalHeaderTests`) pass 143 and the save media and cheat
+window classes 32 (2 skipped). Three faults were seeded and caught: a row missing `media` and a decoder answering from
+the wrong codec (`crystal_reads.rs`), and the C# table facade keeping a runtime key (`SystemTableParityTests`).

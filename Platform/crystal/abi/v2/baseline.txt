@@ -91,6 +91,9 @@ field emusen_crystal_raw_info.width offset 8 @2.0
 fn emusen_crystal_abi_version uint32_t (void) @2.0
 fn emusen_crystal_audio_drain int64_t (emusen_crystal_runtime *, uint32_t, int16_t *, size_t, uint32_t *) @2.0
 fn emusen_crystal_cards_op int64_t (emusen_crystal_runtime *, uint32_t, const uint8_t *, size_t, uint8_t *, size_t) @2.0
+fn emusen_crystal_cheat_codec_list int64_t (emusen_crystal_runtime *, uint8_t *, size_t) @2.0
+fn emusen_crystal_cheat_decode int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, const uint8_t *, size_t, uint8_t *, size_t) @2.0
+fn emusen_crystal_cheat_encode int64_t (emusen_crystal_runtime *, const uint8_t *, size_t, int32_t, uint32_t, uint8_t *, size_t) @2.0
 fn emusen_crystal_close int32_t (emusen_crystal_runtime *, uint32_t) @2.0
 fn emusen_crystal_core_approve int32_t (emusen_crystal_runtime *, const uint8_t *, size_t) @2.0
 fn emusen_crystal_core_revoke int32_t (emusen_crystal_runtime *, const uint8_t *, size_t) @2.0

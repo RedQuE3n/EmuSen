@@ -212,15 +212,18 @@ int32_t emusen_crystal_free(emusen_crystal_runtime *rt);
 
 /* ---- The systems and the engines (reads) ------------------------------------------------------------------- */
 
-/* [{the systems table's keys (EmuSen_Backend.md 12.1), "engines":[name],"starts_empty","core"}], the table's systems
- * first in its order, then those only an engine's info names, with "id","name","extensions","engines","starts_empty",
- * "core". Since 1.1 "core" is {"names":[name],"display_name","console","extensions":[ext]} or null: the engine's facts
- * riding along, not a pack's, the names `core <name>` knows its core by (section 14.11). Since 1.1 "controllers" is
- * {"buttons":[control],"axes":[axis],"ports","players":[controller id|null]}, the engine's too: the console's pad, its
- * most ports, and each player's controller as the console's stored settings stand at the call (section 14.13). Since
- * 1.13 every row has "look" {"hue","body","palette":[colour],"craters","bands","cap","moons"}, the systems table's or
- * the one computed from the id, and a row only an engine names has the table's default "cover_aspect"
- * (EmuSen_RustPlatform.md section 28.12). */
+/* [{every key of the systems table as emusen-systems writes it, in its order (EmuSen_Backend.md 12.1), then
+ * "engines":[name],"starts_empty","core","controllers"}], the table's systems first in its order, then those only an
+ * engine's info names, with "id","name","extensions","engines","starts_empty","cover_aspect","look","core",
+ * "controllers". Since 2.0 a row holds all 24 of the table's keys, "cheat_space", "media", "byte_order",
+ * "libretro_databases", "libretro_systemids" and "firmware_note" among them, which emusen_platform.h's
+ * emusen_systems_table answered before. Since 1.1 "core" is {"names":[name],"display_name","console",
+ * "extensions":[ext]} or null: the engine's facts riding along, not a pack's, the names `core <name>` knows its core by
+ * (section 14.11). Since 1.1 "controllers" is {"buttons":[control],"axes":[axis],"ports","players":[controller
+ * id|null]}, the engine's too: the console's pad, its most ports, and each player's controller as the console's stored
+ * settings stand at the call (section 14.13). Since 1.13 every row has "look" {"hue","body","palette":[colour],
+ * "craters","bands","cap","moons"}, the systems table's or the one computed from the id, and a row only an engine names
+ * has the table's default "cover_aspect" (EmuSen_RustPlatform.md section 28.12). */
 int64_t emusen_crystal_systems(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
 
 /* reads. [{"id","engine","current"}]: every session the runtime has open, "current" true for the one session 0 names.
@@ -529,6 +532,24 @@ int64_t emusen_crystal_cards_op(emusen_crystal_runtime *rt, uint32_t op, const u
 #define EMUSEN_CRYSTAL_CARDS_NEW       6u /* changes. {"path"}: a formatted card where the medium's module can make one */
 #define EMUSEN_CRYSTAL_CARDS_DUPLICATE 7u /* changes. {"from","to"}: a whole card to a new name */
 #define EMUSEN_CRYSTAL_CARDS_RENAME    8u /* changes. {"from","to"} */
+
+/* ---- Cheat codes (reads, since 2.0) ----------------------------------------------------------------------- */
+
+/* reads. {"codecs":[{"id","name","kind","space"}],"systems":[{"id","auto","explicit"}]}: every cheat codec, "kind"
+ * "RamPoke" or "RomPatch", "space" a memory space or null, and each system's pair, a codec's id or null; the
+ * catalogue, where a session table's cheat_codecs answers that session's pair. */
+int64_t emusen_crystal_cheat_codec_list(emusen_crystal_runtime *rt, uint8_t *out, size_t len);
+
+/* reads. A code's answers from one codec: {"can","decode":{"address","value"},"compare","writes"}, "compare" a byte or
+ * null, "writes" a list of {"space","address","value","width","type","bit","big_endian","repeat","repeat_address",
+ * "repeat_value"} or null, and each of decode, compare and writes {"format"} or {"range"} with the codec's words where
+ * it refused. ABSENT for a codec there is not. */
+int64_t emusen_crystal_cheat_decode(emusen_crystal_runtime *rt, const uint8_t *codec, size_t codec_len, const uint8_t *code,
+                                    size_t code_len, uint8_t *out, size_t len);
+
+/* reads. The Game Genie code that patches value at address, for snes.gg and md.gg; ABSENT for a codec with no encoder. */
+int64_t emusen_crystal_cheat_encode(emusen_crystal_runtime *rt, const uint8_t *codec, size_t codec_len, int32_t address,
+                                    uint32_t value, uint8_t *out, size_t len);
 
 /* ---- Events --------------------------------------------------------------------------------------------- */
 

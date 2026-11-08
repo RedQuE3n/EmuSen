@@ -36,6 +36,8 @@ pub mod qobject {
         PausePage,
         Card,
         Search,
+        PauseSlots,
+        PauseReel,
     }
 
     extern "RustQt" {
@@ -121,6 +123,8 @@ impl qobject::HelpModel {
             HelpScreen::PausePage => Screen::PausePage,
             HelpScreen::Card => Screen::Card,
             HelpScreen::Search => Screen::Search,
+            HelpScreen::PauseSlots => Screen::PauseSlots,
+            HelpScreen::PauseReel => Screen::PauseReel,
             _ => Screen::Home,
         }
     }
@@ -148,4 +152,22 @@ impl qobject::HelpModel {
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {
         entries(self.listed()).len() as i32
     }
+}
+
+/// A screen's number as QML names it (`HelpModel.Pause`), for a model that says which bar its page shows.
+pub fn shown_screen(screen: Screen) -> i32 {
+    let shown = match screen {
+        Screen::Home => HelpScreen::Home,
+        Screen::Consoles => HelpScreen::Consoles,
+        Screen::Grid => HelpScreen::Grid,
+        Screen::HomeShelf => HelpScreen::HomeShelf,
+        Screen::HomePlaces => HelpScreen::HomePlaces,
+        Screen::Pause => HelpScreen::Pause,
+        Screen::PausePage => HelpScreen::PausePage,
+        Screen::PauseSlots => HelpScreen::PauseSlots,
+        Screen::PauseReel => HelpScreen::PauseReel,
+        Screen::Card => HelpScreen::Card,
+        Screen::Search => HelpScreen::Search,
+    };
+    shown.repr
 }

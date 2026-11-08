@@ -18,6 +18,7 @@ Window {
     property int resumed: 0
     property int gone: 0
     property int library: 0
+    property int quitGame: 0
     Binding { target: Kit.Tokens; property: "reducedMotion"; value: window.reduced }
     Kit.NormalizedCanvas {
         PauseCard {
@@ -30,6 +31,7 @@ Window {
             onResumed: { window.resumed += 1; card.open = false }
             onGone: window.gone += 1
             onBackToLibrary: window.library += 1
+            onQuitGame: window.quitGame += 1
         }
     }
 }
@@ -80,7 +82,7 @@ fn the_card_slides_in_shows_mistresss_first_page_and_resumes() {
     assert!(part > 0.0 && part < 1.0, "part of the way in at 60 ms: {part}");
     scene.wait(340);
     assert_eq!(slide(&mut scene), 0.0);
-    assert_eq!(scene.property("pauseTitle", "text"), "Cobalt Harbor (Synthetic)");
+    assert_eq!(scene.property("cardTitle", "text"), "Cobalt Harbor (Synthetic)");
     assert_eq!(
         rows(&mut scene),
         [
@@ -104,9 +106,36 @@ fn the_card_slides_in_shows_mistresss_first_page_and_resumes() {
     scene.pad(UiButton::Accept);
     scene.wait(20);
     assert_eq!(slide(&mut scene), 0.0, "a page turn moves nothing");
-    assert_eq!(rows(&mut scene), ["Back to Library | "]);
-    assert_eq!((scene.property("pauseTitle", "text"), scene.property("pauseBreadcrumb", "text")), ("Leave".into(), "Cobalt Harbor (Synthetic)".into()));
+    assert_eq!(rows(&mut scene), ["Back to Library | ", "Restart Game... | ", "Quit Game... | ", "Quit EmuSen... | "], "Mistress's LeaveRows");
+    assert_eq!((scene.property("cardTitle", "text"), scene.property("cardBreadcrumb", "text")), ("Leave".into(), "Cobalt Harbor (Synthetic)".into()));
     assert_eq!(help(&mut scene), ["Choose", "Back", "Screenshot", "Resume"]);
+
+    // Each end is asked first on the card form's question page, No first; B goes back to the row that asked.
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    scene.wait(20);
+    assert_eq!((scene.property("cardTitle", "text"), scene.property("cardBreadcrumb", "text")), ("Restart Game?".into(), "The game starts again from the beginning. Progress since your last save is lost.".into()));
+    assert_eq!(rows(&mut scene), ["No | ", "Yes | "]);
+    assert_eq!(scene.property("PadMenuList", "currentIndex"), "0", "No first, so A straight through changes nothing");
+    scene.pad(UiButton::Accept);
+    scene.wait(20);
+    assert_eq!((rows(&mut scene).len(), scene.property("PadMenuList", "currentIndex")), (4, "1".into()), "No goes back to Restart Game's row");
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    scene.wait(20);
+    assert_eq!((scene.property("cardTitle", "text"), scene.property("cardBreadcrumb", "text")), ("Quit Game?".into(), "The game closes and the library comes back.".into()));
+    scene.pad(UiButton::Back);
+    scene.wait(20);
+    assert_eq!(scene.property("PadMenuList", "currentIndex"), "2", "B goes back to Quit Game's row");
+    scene.pad(UiButton::Accept);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    assert_eq!(scene.property("window", "quitGame"), "1", "Yes quits the game");
+    scene.pad(UiButton::Back);
+    scene.wait(20);
+    for _ in 0..2 {
+        scene.pad(UiButton::Up);
+    }
     scene.pad(UiButton::Back);
     scene.wait(20);
     assert_eq!(rows(&mut scene).len(), 7);

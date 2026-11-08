@@ -5,7 +5,7 @@
 use emusen_client_fixture::{World, library, test_core};
 use emusen_platform_client::firmware::FoldersRequest;
 use emusen_platform_client::bindings::consts as bind;
-use emusen_platform_client::galaxia::consts::{DIR_CONFIG, DIR_LIBRARY, DIR_MEDIA, FILE_GAMES, FILE_MEDIA, FILE_SETTINGS, MODEL_APP_SETTINGS};
+use emusen_platform_client::galaxia::consts::{DIR_CONFIG, DIR_LIBRARY, DIR_MEDIA, DIR_SAVE_STATES, FILE_GAMES, FILE_MEDIA, FILE_SETTINGS, MODEL_APP_SETTINGS, SAVE_PICTURE, SAVE_STATE};
 use emusen_platform_client::library::{Library, ScanRequest};
 use emusen_platform_client::pads::{Pads, SimPad, SimSet, consts as pad};
 use emusen_platform_client::scrape::ScraperConfig;
@@ -38,6 +38,10 @@ fn galaxia_s_tree_and_models_are_the_scratch_tree_s() {
     let back = p.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     assert_eq!(back["RomDirectory"], settings["RomDirectory"]);
     assert!(p.config_path(None, "appsettings.json").unwrap().is_file());
+    let states = p.directory(DIR_SAVE_STATES).unwrap().unwrap();
+    let state = p.save_path(SAVE_STATE, "/games/Cobalt Harbor.sfc", None, 3).unwrap();
+    assert_eq!(state, states.join("Cobalt Harbor.slot3.state"), "a slot's state in the tree's Save States");
+    assert_eq!(p.save_path(SAVE_PICTURE, state.to_str().unwrap(), None, 0).unwrap(), states.join("Cobalt Harbor.slot3.png"));
 }
 
 #[test]

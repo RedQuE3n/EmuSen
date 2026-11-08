@@ -1599,6 +1599,131 @@ Mistress names it. The first run, with the Pause Card's shadow (radius 24, black
 
 The C# side is unchanged. No C++ was added.
 
+### 7.3 Stage 2: the Pause Card's pages (2026-11-08)
+
+The pages players use most come first: Rewind with its reel, and Save State and Load State with their slots
+(`EmuSen_Interface.md` §2.8, §18.5, §20.1). The oracle is Mistress's: `GameMenuRows`, `MainWindow.Rewind`,
+`PauseCardPane` and the recordings `PauseCardRewind-*` and `PauseCardSave-*`. Piece B of stage 2 builds the one card
+form (`MenuCard`) every card is drawn on; the pages below are models and actions first, and `PauseCard.qml` moves onto
+that form (below), its shadow and band the form's.
+
+**The parts, each with one job** (all in `emusen-qt-models` unless named):
+- `reel.rs`, **the reel as plain Rust**: rewind kept for every game as Mistress's `WireSession` keeps it (`keep`: a
+  snapshot every half second of console time, `interval_for`, the history's budget the runtime's own, a picture 160 wide
+  with each snapshot), called by the frame thread right after a game opens; an engine that withholds rewind says why in
+  `session_info`, which the card shows, and the game plays on. The marks (the present, then the held moments with a
+  picture, newest first), the strip's stops (the present, the moments nearest 1.5, 4, 8 and 12 s back, the oldest), a
+  press of Left or Right going stop to stop, held moment by moment, the shoulders striding 5 s and the triggers to either
+  end, a scrubbed moment standing in the strip for the nearer stop, and every word ("1.7 s ago", "Stay at Now", the
+  sentences). The constants restate Mistress's (`RewindSnapshotsPerSecond`, `ReelPictureWidth`, `StopSeconds`), which
+  have no Rust owner while the C# front end ships; when it retires these are their owner.
+- `pause.rs`, **the card as plain Rust** (`Card`): the page (First, Leave, Reel), the row focused, the reel while its
+  page is open, and the session's facts; its rows, title, breadcrumb, help bar and **context pane** (`Pane`: the reel's
+  three newest pictures and what it holds on Rewind, the focused moment over the strip of six on the reel's page, three
+  slots around the current one on Save and Load with what A does to it); and what a choice, a step, a shoulder or B
+  comes to (`Outcome`: a slot or a speed chosen, a slot saved or loaded, a moment to return to, resume, the library).
+  Save closes the card as Mistress's does; Load on an empty slot does nothing; the slots wrap from 1 to 8 and 8 to 1.
+- `PauseModel` puts the card on Qt (rows, `pane` as plain data, `helpScreen`) and says what the session must do as
+  signals (`slotChosen`, `saveAsked`, `loadAsked`, `rewindAsked`); a step changes the rows' values as a data change and
+  a page turn resets them. `PaneModel` reads a pane's plain data into tiles (picture, name, when, ringed) and properties,
+  as `GameModel` reads `games`; `CardPane.qml` draws it in canvas units as `PauseCardPane` does (184 × 138 tiles 20
+  apart, the moment at 592 × 300 over 88 × 66 tiles, the ring 3 in Accent, an empty slot a dashed Border outline).
+- `SessionModel` gains the slot (`slot`, `chooseSlot`), `saveState`, `loadState` and `rewindTo`, each made on a thread
+  of its own as Mistress makes them, their words (`notice`, Mistress's "State saved to slot 3", "Rewound") brought back
+  through `qt_thread().queue`; a resume asked while one runs waits for it, so the card's B or A never lets a frame run
+  before the game holds the state or the moment. The card's facts now carry the reel's held frames, the present, the
+  slots with their times worded in the player's time (`QDateTime`, "Sun 8 Nov, 21:42") and the address of each picture.
+- `pictures.rs`, **the session's pictures by address** for QML's `Image`: `image://session/<pause>/reel/<frame>` (the
+  runtime's `rewind_picture`), `.../now` (the picture on show, its repeated rows written out, Mistress's
+  `CurrentPicture`) and `.../file/<path>` (a slot's picture, which the runtime writes beside the state, at the path
+  Galaxia names: `emusen_galaxia_save_path` with `SAVE_PICTURE`, now wrapped by `emusen-platform-client`). The pause's
+  number in the address keeps a picture of an earlier pause out of the image cache. *C++ part*:
+  `cpp/session_pictures.cpp`, a `QQuickImageProvider` registered on the engine that holds the `SessionModel` as its game
+  opens [own, because QML takes an image only by address, an image provider is Qt's mechanism for pictures held in
+  memory, and cxx-qt subclasses no Qt class but a QObject's].
+- `help.rs` gains the first page's bar on Save and Load (Change slot on Left and Right) and the reel's (Go back, Back,
+  Moment, Screenshot, no Start entry, as Mistress's reel sets `StartResumes = false`); `pair_of` pairs Left with Right.
+
+**Differences from Mistress, named:** the help bar draws Left and Right as two d-pad glyphs where Mistress draws one
+glyph of both; an empty slot's outline is Qt Quick's dash (4, 2) where Mistress's is (4, 3) (QML may build no array,
+§1.3); the reel's Hold row is drawn as a plain row, not greyed, until the kit's row has a dimmed form; Load does not
+yet ask before loading a state its record ties to another copy of the game (Mistress's `SameGameOrConfirmed`, which
+needs the question form of piece C); §2.8's "Load first drops one undo snapshot into rewind" is not done by Mistress
+either, and the runtime clears the history on a load; the shoulders and triggers on the reel are the model's and are
+not yet delivered by the card's QML; the words of `notice` wait for piece C's notices.
+
+**Held to** (measured 2026-11-08): `qt-models`' `pause` 8 (the rows and words, the facts from a reel and a session, a
+choice, a step and B, the slots' pane and sentences, the Rewind row's pictures, the reel's page from its first stop to
+28 s back in four presses, a scrubbed moment, a stride, Stay at Now, A's frame, B back to Rewind's row, Mistress's
+stops) and `pictures` 1 over the platform library built from the same commit, no window and no device (rewind kept with
+the interval for the game's rate, the reel's moments read into the facts, a moment's picture and the picture on show
+served, a slot saved with its picture where Galaxia names it, loaded, an empty slot refused, and the game returned to
+the moment the card's A names, the history after it dropped); `qt-app`'s `pause_pages` on the software backend (the pane
+following the row, the reel's three newest, the three slots and their sentences, Change slot on the bar, Right choosing
+slot 2 through the session, the reel's page turned in place with its strip, Right to the next stop, B back to Rewind's
+row, nothing logged); `pause`, `program` (the QML rules and `qmllint`) and `screens` as before; `platform-client`'s
+Galaxia test (a slot's state and picture named in the scratch tree's Save States). Clippy clean. Seeded faults, each
+reverted: the slots not wrapping (`pause`, Left from slot 1), a snapshot a second in place of two
+(`pictures`), the pane not following the row (`pause_pages`).
+
+**On Vulkan, over a real session** (measured 2026-11-08; `acceptance.rs`, the RX 6800 in a compositor of the test's own):
+the Rewind row half a second into the game, where the reel holds no picture yet and the pane says "Under a second
+available", as Mistress's render of the row does; Save State on Slot 1 (Empty); A saving and the game resuming once the
+state is written ("State saved to slot 1"); after 2.5 s of play the reel's three newest pictures drawn through the
+provider, and the slot's own picture from beside its state; A on Load State ("State loaded from slot 1"); the reel's
+page with its moment drawn large, and A returning the game ("Rewound"). Each page is held at the gate's five sizes with
+nothing logged (`PauseCardRewind`, `PauseCardSave`, `PauseCardRewindHeld`, `PauseCardSaved`, `PauseCardReel`). The
+side-by-sides with Mistress's renders, nothing drawn over either, are `~/.cache/emusen/tmp/qt-s2/compare/
+PauseCard{Rewind,Save,Leave}-{1280x800,1920x1080}-side.png` with `-diff.png` beside: the rows, the title, the pane's box,
+the three slots, their words and the sentence stand where Mistress's do. **Differences that remain, for the tester:**
+the paused frame is the test core's red picture where the render's is black; at 1920 × 1080 the Rewind pane's sentence
+wraps to a second line where Mistress's fits one.
+
+**Leave's rows and the card form** (2026-11-08). Piece B's card form (`MenuCard.qml`, `card.rs`) landed beside this piece,
+and the Pause Card is now drawn on it: `PauseCard.qml` is a `MenuCard` whose rows, title, breadcrumb, cover, current row
+and help screen are `PauseModel`'s, whose signals each call one of its invokables, and whose pane box holds `CardPane`
+(the form's `paneDrawn`, added for this, shows the box while the host's own drawing has something to show; counting the
+box's children showed it on every row, and counting its visible children never showed it, the children being inside the
+hidden box). Leave holds Mistress's four rows (`LeaveRows`): Back to Library, Restart Game..., Quit Game..., Quit
+EmuSen.... Each end is asked first on the card form's question page (`card::question`: the question as the title, the
+sentence above it, No then Yes, so A straight through changes nothing), in Mistress's words; No and B go back to the row
+that asked. Yes on Restart resets the game through the session (`SessionModel.restart`, `emusen_crystal_reset`, made off
+the GUI thread as a save is, the resume waiting for it) and closes the card; on Quit Game the session closes and the
+screens' rule shows Home; on Quit EmuSen the program's `Screens.quit` ends it, as the Home card's Quit EmuSen does.
+
+**Held to:** `qt-models`' `pause` 9 (Leave's rows, each question's title, sentence and No first, No and B back to the row
+that asked, each Yes's outcome); `qt-app`'s `pause` (the four rows, Restart Game's question, No back to its row, Quit
+Game's question, B back, Yes quitting the game), `pause_pages` and `cards` (piece B's, unchanged by the form's addition);
+`acceptance.rs` on Vulkan, which now also holds Quit Game's question at the gate's five sizes (`PauseCardQuitGame`): its
+rows at 64,156 and 64,210, the sentence at 58 and the title at 82, and the help bar's Choose, Back, Screenshot and Resume
+are those of Mistress's `PauseCardQuitGame-1280x800.spec` (no accepted render of that page exists to set beside it).
+Seeded faults, each reverted: Quit Game's Yes quitting EmuSen (`pause`), B on a question going to the first page
+(`qt-app`'s `pause`), the card not carrying Quit Game's Yes to the window (`qt-app`'s `pause`).
+
+**Speed** (2026-11-08). The row steps 25%, 100% and 300% (Mistress's `StepSpeed` over `SlowMotionPercent`,
+`NormalPercent` and `TurboPercent`), Left and Right or A, and stays on the card. The choice is `SessionModel.speed`, the
+player's for as long as the program runs, as Mistress keeps `_baseSpeedPercent`: given to the running game at once and to
+each game opened after (`chooseSpeed`, `emusen_crystal_speed_set` with turbo and slow motion at the row's fastest and
+slowest, as `ApplySpeed` gives them), and read back into the card's row. Nothing else is new for it: the runtime's frame
+says the interval at that speed and whether its sound is played, so the frame thread's own clock already runs a game off
+the display's rate at that interval (§1.8.3), and since this step a frame whose sound is not to be played (turbo,
+unthrottled) is drained and dropped rather than handed to the player, as Mistress does.
+
+**Held to:** `pause_pages` (Right on Speed choosing 300 through the session, Left twice 25); `pictures` (the frame's
+interval a third at 300% and four times at 25%, within a microsecond of the runtime's rounding, and no sound played at
+turbo); `acceptance.rs` on Vulkan (Right giving the running game turbo, read back from the runtime into the card's facts,
+and Left the game's own speed again). Seeded faults, each reverted: the card not carrying the choice to the session
+(`pause_pages`); the speed's change not announced, which no test catches, since the harness reads a property's value
+and not its signal; the card's row reads the speed from the facts, which are read again either way.
+
+**The screenshot** (2026-11-08). X on any page of the card is its declared action `screenshot` (help.rs, every Pause
+screen): the card stays and `SessionModel.screenshot` writes the picture on show, its repeated rows written out, as a PNG
+in Galaxia's screenshots folder (`EMUSEN_GALAXIA_DIR_SCREENSHOTS`), named as Mistress's `TakeScreenshot` names one (the
+game's file name, then the local time to the millisecond, `2026-11-08 21.42.07.115`), off the GUI thread, its notice
+"Screenshot saved". *C++ part*: `savePicture` in `cpp/session_pictures.cpp`, Qt's image writer [own, because cxx-qt-lib
+wraps no `QImage::save`, and Qt already holds a PNG writer]. **Held to:** `acceptance.rs` on Vulkan (X on the card saves
+the screenshot and the card stays in place).
+
 ---
 
 ## 8. Testing

@@ -194,6 +194,8 @@ Window {
             focus: program.pauseShown
             onResumed: screens.play()
             onBackToLibrary: screens.library()
+            onQuitGame: player.session.close()
+            onQuitAll: screens.quit()
             onGone: if (program.gameShown) player.session.resume()
         }
     }

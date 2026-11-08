@@ -20,7 +20,12 @@ fn main() {
             "src/session_model.rs",
             "src/pause_model.rs",
             "src/card_model.rs",
+            "src/pane_model.rs",
+            "src/pictures.rs",
         ])
+        .include_dir("cpp")
+        .cpp_files(["cpp/session_pictures.cpp"])
+        .qt_module("Quick")
         .qt_module("Qml")
         .build()
         .export();

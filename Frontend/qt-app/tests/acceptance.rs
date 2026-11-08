@@ -148,7 +148,7 @@ fn named(scene: &mut Scene<'_>, name: &str) -> Option<u32> {
 /// The Pause Card's first page as Mistress's shows it over Cobalt Harbor: the title, the seven rows in her words, the help
 /// bar, Resume focused; then held at the gate's sizes and recorded for the C# reader (PauseCard-*.spec).
 fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
-    assert_eq!(scene.property("pauseTitle", "text"), "Cobalt Harbor (Synthetic)");
+    assert_eq!(scene.property("pause", "title"), "Cobalt Harbor (Synthetic)");
     let tree = scene.tree();
     let words = |parent: &str, name: &str| tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default();
     let mut rows: Vec<(f64, String, String)> =
@@ -162,6 +162,77 @@ fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
     assert_eq!(focus.as_deref(), Some("Resume"), "the card opens on Resume");
     assert!(tree.nodes.iter().any(|n| n.visible && n.name == "help-Screenshot"), "the help bar names X");
     hold(scene, "PauseCard", &mockup::Mockup::default(), named_difference, report);
+}
+
+/// Whether the first shown picture of that name is drawn: its centre in another colour than the pane's own surface,
+/// sampled at the pane's foot (a Repeater's items are found in the tree, not by name).
+fn drawn(scene: &mut Scene<'_>, name: &str) -> bool {
+    let tree = scene.tree();
+    let Some(n) = tree.nodes.iter().find(|n| n.visible && n.name == name) else { return false };
+    let c = scene.colours_at(&[(n.x + n.w / 2.0, n.y + n.h / 2.0), (590.0, 670.0)]);
+    c[0].is_some() && c[0] != c[1]
+}
+
+/// Rewind, Save State and Load State over the real session (EmuSen_Qt.md §7.3): the reel's newest pictures served by
+/// address, a slot saved from the card with its picture beside it and loaded, and the reel's page going back to a moment;
+/// each page held at the gate's sizes and recorded (PauseCardRewind, PauseCardSave, PauseCardReel).
+fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Scene<'_>)) {
+    // Half a second into the game the reel holds no picture yet, as in Mistress's render of the row.
+    scene.pad(UiButton::Down);
+    wait_for(scene, "PaneSentence", "text", "Under a second available. A opens the reel; Left and Right step through it.", 1000);
+    hold(scene, "PauseCardRewind", &mockup::Mockup::default(), named_difference, report);
+    scene.pad(UiButton::Down);
+    wait_for(scene, "PaneSentence", "text", "A saves to Slot 1.", 1000);
+    hold(scene, "PauseCardSave", &mockup::Mockup::default(), named_difference, report);
+
+    // A saves to slot 1 and closes the card; the game resumes once the state is written, and plays on for the reel.
+    scene.pad(UiButton::Accept);
+    until(scene, "the save resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    assert_eq!(scene.property("session", "notice"), "State saved to slot 1");
+    scene.wait(2500);
+    chord(scene);
+    scene.pad(UiButton::Down);
+    until(scene, "the reel's pictures served", |s| drawn(s, "PanePicture"));
+    hold(scene, "PauseCardRewindHeld", &mockup::Mockup::default(), named_difference, report);
+    scene.pad(UiButton::Down);
+    wait_for(scene, "PaneSentence", "text", "A saves to Slot 1, replacing it.", 1000);
+    until(scene, "the slot's picture beside its state", |s| drawn(s, "PanePicture"));
+    hold(scene, "PauseCardSaved", &mockup::Mockup::default(), named_difference, report);
+    scene.pad(UiButton::Down);
+    wait_for(scene, "PaneSentence", "text", "A loads Slot 1.", 1000);
+    scene.pad(UiButton::Accept);
+    until(scene, "the load resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    assert_eq!(scene.property("session", "notice"), "State loaded from slot 1");
+    scene.wait(2500);
+
+    // The reel's page on its first stop, its moment drawn large; A goes back there and the game plays on from it.
+    chord(scene);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(scene, "pause", "title", "Rewind", 1000);
+    assert_eq!(scene.property("cardCanvas", "slide"), "0", "a page turn moves nothing");
+    until(scene, "the moment's picture", |s| drawn(s, "PaneMomentPicture"));
+    hold(scene, "PauseCardReel", &mockup::Mockup::default(), named_difference, report);
+    scene.pad(UiButton::Accept);
+    until(scene, "the rewind resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    assert_eq!(scene.property("session", "notice"), "Rewound");
+    chord(scene);
+
+    // Speed: Right gives the running game turbo through the runtime, read back into the card's row; Left restores it.
+    for _ in 0..4 {
+        scene.pad(UiButton::Down);
+    }
+    scene.pad(UiButton::Right);
+    until(scene, "turbo read back from the runtime", |s| s.property("pause", "facts").contains("\"speed\":300"));
+    let problem = scene.property("session", "problem");
+    assert!(problem.is_empty() || problem.starts_with("The game plays without sound"), "the runtime took the speed: {problem}");
+    scene.pad(UiButton::Left);
+    until(scene, "the game's own speed again", |s| s.property("pause", "facts").contains("\"speed\":100"));
+
+    // X saves the picture on show as a screenshot, and the card stays.
+    scene.pad(UiButton::Screensaver);
+    until(scene, "the screenshot saved", |s| s.property("session", "notice") == "Screenshot saved");
+    assert_eq!(scene.property("cardCanvas", "slide"), "0", "the card stays");
 }
 
 /// The card's shadow beside its panel over the help band, as Mistress's falls (her render at 1280 x 800, 2026-11-02: 15 of
@@ -354,6 +425,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     chord(&mut scene);
     pause_card(&mut scene, &mut report);
     scene.assert_still("the Pause Card over the paused game");
+    pages(&mut scene, &mut report, &chord);
 
     // B resumes the game once the card has slid away; the chord opens it again, and Leave ▸ Back to Library is Home over
     // the paused game, as the render's.
@@ -365,9 +437,19 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
         scene.pad(UiButton::Down);
     }
     scene.pad(UiButton::Accept);
-    wait_for(&mut scene, "pauseTitle", "text", "Leave", 1000);
+    wait_for(&mut scene, "pause", "title", "Leave", 1000);
     assert_eq!(scene.property("cardCanvas", "slide"), "0", "a page turn moves nothing");
     hold(&mut scene, "PauseCardLeave", &mockup::Mockup::default(), named_difference, &mut report);
+    // Quit Game asks first, on the card form's question page, No first; B goes back to its row and Up to Back to Library.
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pause", "title", "Quit Game?", 1000);
+    hold(&mut scene, "PauseCardQuitGame", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "pause", "title", "Leave", 1000);
+    scene.pad(UiButton::Up);
+    scene.pad(UiButton::Up);
     scene.pad(UiButton::Accept);
     until(&mut scene, "Back to Library showing Home over the paused game", |s| s.property("screens", "shown") == "Home");
     assert_eq!(scene.property("session", "paused"), "true", "the game kept suspended");

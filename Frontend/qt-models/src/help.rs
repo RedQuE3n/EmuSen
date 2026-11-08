@@ -24,6 +24,10 @@ pub enum Screen {
     Card,
     /// The grid's search with the keyboard docked (`GamesScreen.HintsFor` in the keyboard).
     Search,
+    /// The Pause Card's first page on Save State or Load State: Left and Right change the slot.
+    PauseSlots,
+    /// The Pause Card's reel (EmuSen_Interface.md §20.1): A goes back, Left and Right step the moment, Start is not offered.
+    PauseReel,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -70,13 +74,13 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         Screen::Pause => &[
             (UiButton::Accept, "Select", None),
             (UiButton::Back, "Resume", None),
-            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::PausePage => &[
             (UiButton::Accept, "Choose", None),
             (UiButton::Back, "Back", None),
-            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
         Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
@@ -88,6 +92,19 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::PageUp, "Move to grid", Some("toGrid")),
             (UiButton::Menu, "Home", Some("home")),
         ],
+        Screen::PauseSlots => &[
+            (UiButton::Accept, "Select", None),
+            (UiButton::Back, "Resume", None),
+            (UiButton::Left, "Change slot", None),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
+            (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
+        ],
+        Screen::PauseReel => &[
+            (UiButton::Accept, "Go back", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Left, "Moment", None),
+            (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
+        ],
     }
 }
 
@@ -97,9 +114,14 @@ pub const HOME: &str = "home";
 /// A card's declared action that closes it, as Start closes a card away from a game.
 pub const CLOSE: &str = "close";
 
-/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them.
+/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, and
+/// the d-pad's Left and Right one entry.
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
-    (button == UiButton::PageUp).then_some(UiButton::PageDown)
+    match button {
+        UiButton::PageUp => Some(UiButton::PageDown),
+        UiButton::Left => Some(UiButton::Right),
+        _ => None,
+    }
 }
 
 /// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.19).

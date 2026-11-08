@@ -125,6 +125,8 @@ fn run(
         let _ = runtime.close(session);
         return report(Report::Failed(words));
     }
+    // An engine that withholds rewind says why in session_info, which the card shows; the game plays on without it.
+    let _ = crate::reel::keep(runtime, session);
     report(Report::Opened { session });
     let mut info = frame_info();
     let mut frame = Frame::default();
@@ -187,7 +189,9 @@ fn run(
                 handoff.wait_taken(taken, SWAP_BOUND);
             }
         }
-        if let Err(words) = play_sound(runtime, session, &mut audio, sound.as_mut(), &control.sounded) {
+        // A speed whose sound is not played (turbo, unthrottled) drains it and drops it, as the runtime's frame says.
+        let playing = if info.play_audio != 0 { sound.as_mut() } else { None };
+        if let Err(words) = play_sound(runtime, session, &mut audio, playing, &control.sounded) {
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
             break;
         }

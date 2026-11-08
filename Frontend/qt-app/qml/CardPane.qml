@@ -37,6 +37,7 @@ Rectangle {
             color: Kit.Tokens.voidFill
             clip: true
             Image {
+                objectName: "PaneMomentPicture"
                 anchors.fill: parent
                 source: paneModel.big
                 fillMode: Image.PreserveAspectFit
@@ -65,6 +66,7 @@ Rectangle {
                         color: paneModel.moment ? Kit.Tokens.voidFill : tile.picture.length > 0 ? Kit.Tokens.inputSurface : "transparent"
                         clip: true
                         Image {
+                            objectName: "PanePicture"
                             anchors.fill: parent
                             visible: tile.picture.length > 0
                             source: tile.picture

@@ -1024,7 +1024,11 @@ What was ruled out on the desktop, 2026-11-08:
 - *The layout.* `tests/fill.rs` shows the gallery at its own 1280 × 800, then gives it 1920 × 1200 through the platform
   (on the offscreen platform `QWindow::resize` reaches Qt through `QWindowSystemInterface::handleGeometryChange`, the
   call a platform makes for a window manager's resize) and samples six points near the edges and corners: none shows
-  the void. Seeded: the canvas's scale read once (`unit: 1`) failed it, at the bottom-right corner.
+  the void. Seeded: the canvas's scale read once (`unit: 1`) failed it, at the bottom-right corner. The test also found
+  the same gap in the harness: about one run in four saw the void, since the offscreen platform delivers the new
+  geometry as a queued event and `Scene::resize` waited for polish before the size had arrived. `harness_resize` now
+  waits (`QTest::qWaitFor`, two seconds at most) until the content item has the size, then for polish; eight runs in
+  eight then filled. The gate, at its five sizes, visits 91 states and passes (53 s).
 - *The ratio, the Vulkan path and a resize before the first frame.* The program on this desktop's Xwayland under KWin,
   with Vulkan: at the session's ratio of 1.25 (a 1600 × 1000 frame) and at 1.875 (`QT_SCALE_FACTOR=1.5`, a window
   KWin clamped to 2400 × 1348 before its first frame), each grab filled to within four pixels of its edges; the

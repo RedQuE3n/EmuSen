@@ -1,4 +1,4 @@
-// EmuSen_Qt.md §7's stage 0 gate: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and the style sweep, green on the gallery at the four sizes, in every form and variant; the grabs saved for a human look, each with its state recorded in the spec format beside it.
+// EmuSen_Qt.md §7's stage 0 gate: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and the style sweep, green on the gallery at the five sizes, in every form and variant; the grabs saved for a human look, each with its state recorded in the spec format beside it.
 
 use std::path::PathBuf;
 
@@ -315,5 +315,5 @@ fn qt_7_stage_0_gate_on_the_gallery() {
 
     scene.assert_quiet();
     assert!(report.is_empty(), "{} states; faults:\n{}", states, report.join("\n"));
-    assert_eq!(states, 2 * 3 * 3 * 4 + 1);
+    assert_eq!(states, 2 * 3 * 3 * SIZES.len() + 1);
 }

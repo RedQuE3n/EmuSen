@@ -320,6 +320,7 @@ void harness_resize(QObject& window, int width, int height)
 {
     if (QQuickWindow* w = quick(window)) {
         w->resize(width, height);
+        QTest::qWaitFor([w, width, height] { return w->contentItem()->width() == width && w->contentItem()->height() == height; }, 2000); // the platform's geometry event delivered, as a window manager's arrives
         QQuickTest::qWaitForPolish(w); // what Qt declares: no item still to lay out
     }
 }

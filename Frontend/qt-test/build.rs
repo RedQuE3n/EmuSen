@@ -12,10 +12,12 @@ fn main() {
                 "qml/KeyboardScene.qml",
                 "qml/NoticeScene.qml",
                 "qml/WalkScene.qml",
+                "qml/HelpBarScene.qml",
             ])
             .depend("QtQuick")
             .depend("EmuSen.Kit"),
     )
+    .qrc("qml/Pictures.qrc")
     .files(["src/ffi.rs"])
     .include_dir("cpp")
     .cpp_files(["cpp/harness.cpp"])

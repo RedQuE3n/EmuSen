@@ -66,6 +66,14 @@ pub mod qobject {
         /// Guide was held and `button` went down (Up, Down or the right shoulder) while a game owned the pad; what it means is the host's.
         #[qsignal]
         fn guide_chord(self: Pin<&mut PadRouter>, button: PadButton);
+
+        /// A button whose press was raised was let go, with the swap applied as it was to the press (EmuSen_Kit.md §7.28).
+        #[qsignal]
+        fn released(self: Pin<&mut PadRouter>, button: PadButton);
+
+        /// A key's press by the kit's key map, through the queue: raised as a press and its release at the next pump; false for a key the map does not know.
+        #[qinvokable]
+        fn push_key(self: Pin<&mut PadRouter>, key: i32, modifiers: i32) -> bool;
     }
 
     impl cxx_qt::Initialize for PadRouter {}
@@ -131,6 +139,12 @@ impl cxx_qt::Initialize for qobject::PadRouter {
 }
 
 impl qobject::PadRouter {
+    pub fn push_key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        let known = self.as_mut().rust_mut().router.push_key(key, modifiers);
+        self.update_pending();
+        known
+    }
+
     pub fn push(mut self: Pin<&mut Self>, button: PadButton, down: bool) {
         if let Some(button) = kinds::ui_button(button) {
             self.as_mut().rust_mut().router.push(PadEvent { button, down });
@@ -175,9 +189,16 @@ impl qobject::PadRouter {
         if let Some(button) = pumped.guide_chord {
             self.as_mut().guide_chord(kinds::pad_button(button));
         }
+        for button in pumped.released {
+            self.as_mut().released(kinds::pad_button(button));
+        }
         for press in pumped.presses {
             let jump = i32::try_from(press.jump).unwrap_or(i32::MAX);
             self.as_mut().pressed(kinds::pad_button(press.button), press.repeat, jump);
+        }
+        for button in pumped.keyed {
+            self.as_mut().pressed(kinds::pad_button(button), false, 1);
+            self.as_mut().released(kinds::pad_button(button));
         }
     }
 

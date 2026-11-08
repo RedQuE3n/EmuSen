@@ -16,3 +16,7 @@ Scene 1.0 qml/Scene.qml
 Carousel 1.0 qml/Carousel.qml
 NormalizedCanvas 1.0 qml/NormalizedCanvas.qml
 Moonrise 1.0 qml/Moonrise.qml
+CoverTile 1.0 qml/CoverTile.qml
+RoundPicture 1.0 qml/RoundPicture.qml
+PadGlyph 1.0 qml/PadGlyph.qml
+PlanetLayout 1.0 qml/PlanetLayout.qml

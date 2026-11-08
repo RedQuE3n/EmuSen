@@ -171,7 +171,7 @@ FocusScope {
                     radius: Kit.Tokens.tileRadius
                     color: Kit.Tokens.surface
                     visible: root.hasTop
-                    RoundPicture {
+                    Kit.RoundPicture {
                         objectName: "continueArt"
                         anchors.fill: parent
                         visible: !root.suspended

@@ -23,3 +23,5 @@ PadGlyph 1.0 qml/PadGlyph.qml
 Scene 1.0 qml/Scene.qml
 Keyboard 1.0 qml/Keyboard.qml
 NoticeLayer 1.0 qml/NoticeLayer.qml
+RoundPicture 1.0 qml/RoundPicture.qml
+CoverTile 1.0 qml/CoverTile.qml

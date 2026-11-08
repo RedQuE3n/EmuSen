@@ -185,9 +185,12 @@ Window {
         id: feed
         objectName: "themeFeed"
         host: themeHost.host
-        onPlayed: (game) => {
-            if (game !== player.session.game || !player.session.running)
-                return program.play(game)
+        controllers: pads.connected
+        family: program.padFamily
+        clock: clock.time
+        reducedMotion: program.reducedMotion
+        onPlayed: (game) => program.play(game)
+        onResumed: {
             player.session.resume()
             screens.play()
         }
@@ -196,22 +199,11 @@ Window {
         onBacked: screens.back()
         onActed: (key) => screens.act(key)
     }
-    // A new engine is fed everything; each feed after is the one model that changed.
+    // A new engine is fed everything the feed holds; each feed after is the one model that changed.
     Connections {
         target: themeHost.host
-        function onGenerationChanged() {
-            feed.showMotion(program.reducedMotion)
-            feed.showLibrary(library)
-            feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture)
-            feed.showDevice(pads.connected, program.padFamily, clock.time)
-            feed.attach()
-        }
+        function onGenerationChanged() { feed.attach() }
     }
-    Connections {
-        target: pads
-        function onConnectedChanged() { feed.showDevice(pads.connected, program.padFamily, clock.time) }
-    }
-    onReducedMotionChanged: feed.showMotion(program.reducedMotion)
     Connections {
         target: library
         function onLoadingChanged() { feed.showLibrary(library) }
@@ -225,7 +217,6 @@ Window {
     Connections {
         target: clock
         function onPausedChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
-        function onLineChanged() { feed.showDevice(pads.connected, program.padFamily, clock.time) }
     }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
     Kit.NormalizedCanvas {

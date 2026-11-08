@@ -31,6 +31,7 @@ pub mod qobject {
         #[qproperty(*mut ThemeRows, recent, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, favourites, READ, CONSTANT)]
         #[qproperty(*mut ThemeRows, collections, READ, CONSTANT)]
+        #[qproperty(*mut ThemeRows, shelf, READ, CONSTANT)]
         type ThemeLibrary = super::ThemeLibraryRust;
     }
 
@@ -54,6 +55,9 @@ pub struct ThemeLibraryRust {
     places: *mut ThemeRows,
     shelves: *mut ThemeRows,
     recent: *mut ThemeRows,
+    /// `recent` less the suspended game, which Continue holds.
+    shelf: *mut ThemeRows,
+    suspended: String,
     favourites: *mut ThemeRows,
     collections: *mut ThemeRows,
     games: HashMap<String, *mut ThemeRows>,
@@ -70,6 +74,8 @@ impl Default for ThemeLibraryRust {
             places: none,
             shelves: none,
             recent: none,
+            shelf: none,
+            suspended: String::new(),
             favourites: none,
             collections: none,
             games: HashMap::new(),
@@ -94,6 +100,7 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         let places = self.as_mut().made(&view::PLACE_ROLES);
         let shelves = self.as_mut().made(&view::SHELF_ROLES);
         let recent = self.as_mut().made(&view::GAME_ROLES);
+        let shelf = self.as_mut().made(&view::GAME_ROLES);
         let favourites = self.as_mut().made(&view::GAME_ROLES);
         let collections = self.as_mut().made(&view::COLLECTION_ROLES);
         let found = self.as_mut().made(&view::GAME_ROLES);
@@ -102,6 +109,7 @@ impl cxx_qt::Initialize for qobject::ThemeLibrary {
         me.places = places;
         me.shelves = shelves;
         me.recent = recent;
+        me.shelf = shelf;
         me.favourites = favourites;
         me.collections = collections;
         me.found = found;
@@ -128,6 +136,7 @@ impl qobject::ThemeLibrary {
         fill(self.places, view::places(view, &view::lines_of(home_lines)));
         fill(self.shelves, view::shelves(view));
         fill(self.recent, view::games_of(view, RECENT, now));
+        fill(self.shelf, view::shelf(view, &self.suspended, now));
         fill(self.favourites, view::games_of(view, FAVOURITES, now));
         // The own look's view reads no collections yet (§3.2 as built), so the list stays empty.
         fill(self.collections, Vec::new());
@@ -136,6 +145,14 @@ impl qobject::ThemeLibrary {
         }
         fill(self.found, view::search(view, &self.words, now));
         self.as_mut().rust_mut().view = view.clone();
+    }
+
+    /// The host's feed of the suspended game's file, which the shelf leaves out; empty for none.
+    pub fn show_suspended(mut self: Pin<&mut Self>, key: &str) {
+        if self.suspended != key {
+            self.as_mut().rust_mut().suspended = key.to_owned();
+            fill(self.shelf, view::shelf(&self.view, key, words::now()));
+        }
     }
 
     pub fn games_of(mut self: Pin<&mut Self>, id: &QString) -> *mut ThemeRows {
@@ -163,6 +180,7 @@ impl qobject::ThemeLibrary {
             "places" => self.places,
             "shelves" => self.shelves,
             "recent" => self.recent,
+            "shelf" => self.shelf,
             "favourites" => self.favourites,
             "collections" => self.collections,
             _ => return None,

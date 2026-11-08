@@ -1,18 +1,22 @@
 //! `ThemeFeed`: the program's side of an EmuSen theme (EmuSen_Qt.md §3.5.2). It hands the theme's engine the views of
-//! `EmuSen.Theme` from the program's models, carries the theme's `Actions` back to the window as a signal, and keeps the
+//! `EmuSen.Theme` from the program's models, carries the theme's `Actions` back to the window as signals, and keeps the
 //! kit's per-engine singletons in step: reduced motion, and the pad's presses while a theme's screen holds the focus.
+//! What it last showed is kept, so a new engine is fed it all at once.
 
 use core::pin::Pin;
+use cxx_qt::casting::Upcast;
 use cxx_qt::CxxQtType;
 use cxx_qt_lib::QString;
-use cxx_qt::casting::Upcast;
-use emusen_qt_models::library_model::qobject::LibraryModel;
-use emusen_qt_models::{help, screens};
-use emusen_theme_qt::view;
+use emusen_qt_models::game_model::qobject::GameModel;
+use emusen_qt_models::library::{self, GameRow, LibraryView};
+use emusen_qt_models::library_model::qobject::{LibraryModel, QAbstractListModel};
+use emusen_qt_models::{help, screens, words};
 use emusen_theme_qt::actions::{Action, ActionSink};
+use emusen_theme_qt::browse::BrowseFacts;
 use emusen_theme_qt::device::DeviceFacts;
 use emusen_theme_qt::host;
 use emusen_theme_qt::session::SessionFacts;
+use emusen_theme_qt::view;
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -32,6 +36,12 @@ pub mod qobject {
         #[qml_element]
         /// The host whose engine is fed; the window's `ThemeHost`.
         #[qproperty(*mut ThemeHost, host)]
+        /// The pads connected, their glyphs' family, and the time as Home's status line says it: `Device`.
+        #[qproperty(i32, controllers)]
+        #[qproperty(i32, family)]
+        #[qproperty(QString, clock)]
+        /// Reduced motion, as the window binds the kit's tokens.
+        #[qproperty(bool, reduced_motion, cxx_name = "reducedMotion")]
         type ThemeFeed = super::ThemeFeedRust;
     }
 
@@ -46,17 +56,13 @@ pub mod qobject {
         #[cxx_name = "showSession"]
         unsafe fn show_session(self: Pin<&mut ThemeFeed>, game: &QString, running: bool, paused_at: f64, frame: *mut QQuickItem);
 
-        /// The pads connected, their glyphs' family, and the time as Home's status line says it.
+        /// The section the Games screen shows as the window's grid model holds it (the window's `GameModel`), its key,
+        /// and whether the search, its keyboard and the List card are open.
         #[qinvokable]
-        #[cxx_name = "showDevice"]
-        fn show_device(self: Pin<&mut ThemeFeed>, controllers: i32, family: i32, clock: &QString);
+        #[cxx_name = "showBrowse"]
+        unsafe fn show_browse(self: Pin<&mut ThemeFeed>, games: *mut QObject, section: &QString, searching: bool, typing: bool, list_open: bool);
 
-        /// Reduced motion, as the window binds the kit's tokens.
-        #[qinvokable]
-        #[cxx_name = "showMotion"]
-        fn show_motion(self: Pin<&mut ThemeFeed>, reduced: bool);
-
-        /// The theme's `Actions` carried by this feed, in the host's engine as it is now.
+        /// The host's engine as it is now: its `Actions` carried by this feed, and everything shown so far shown again.
         #[qinvokable]
         fn attach(self: Pin<&mut ThemeFeed>);
 
@@ -64,13 +70,12 @@ pub mod qobject {
         #[qinvokable]
         fn push(self: Pin<&mut ThemeFeed>, button: i32, down: bool);
 
-        /// The window declines the action being carried; it is taken otherwise.
-        #[qinvokable]
-        fn decline(self: Pin<&mut ThemeFeed>);
-
-        /// The theme's `Actions`, each as the window carries it out: a game played or resumed by its file.
+        /// The theme's `Actions`, each as the window carries it out: a game played by its file.
         #[qsignal]
         fn played(self: Pin<&mut ThemeFeed>, game: QString);
+        /// The suspended game chosen: it resumes.
+        #[qsignal]
+        fn resumed(self: Pin<&mut ThemeFeed>);
         /// One of Home's places, by its index in Home's order.
         #[qsignal]
         #[cxx_name = "placeChosen"]
@@ -84,16 +89,43 @@ pub mod qobject {
         /// A screen's declared action, by the help bar's key (`emusen_qt_models::help`).
         #[qsignal]
         fn acted(self: Pin<&mut ThemeFeed>, key: QString);
+        /// The game the theme's focus is on, by its file.
+        #[qsignal]
+        fn focused(self: Pin<&mut ThemeFeed>, game: QString);
     }
 
     impl cxx_qt::Initialize for ThemeFeed {}
 }
 
-/// The feed's state: the window's host and library, and whether the window declined the action it is carrying.
+/// The suspended game as the window last showed it.
+#[derive(Clone)]
+struct Shown {
+    game: String,
+    running: bool,
+    paused_at: f64,
+    frame: *mut qobject::QQuickItem,
+}
+
+/// The section as the window last showed it.
+#[derive(Clone)]
+struct Section {
+    games: *const GameModel,
+    key: String,
+    searching: bool,
+    typing: bool,
+    list_open: bool,
+}
+
+/// The feed's state: the window's host and models, and what it last showed.
 pub struct ThemeFeedRust {
     host: *mut qobject::ThemeHost,
-    library: *mut LibraryModel,
-    declined: bool,
+    library: *const LibraryModel,
+    session: Option<Shown>,
+    section: Option<Section>,
+    controllers: i32,
+    family: i32,
+    clock: QString,
+    reduced_motion: bool,
     /// The feed as the sink sees it, emptied when the feed goes, so a sink that outlives it takes nothing.
     me: Rc<Cell<*mut qobject::ThemeFeed>>,
 }
@@ -102,8 +134,13 @@ impl Default for ThemeFeedRust {
     fn default() -> Self {
         ThemeFeedRust {
             host: std::ptr::null_mut(),
-            library: std::ptr::null_mut(),
-            declined: false,
+            library: std::ptr::null(),
+            session: None,
+            section: None,
+            controllers: 0,
+            family: 0,
+            clock: QString::default(),
+            reduced_motion: false,
             me: Rc::new(Cell::new(std::ptr::null_mut())),
         }
     }
@@ -115,63 +152,111 @@ impl Drop for ThemeFeedRust {
     }
 }
 
-/// The theme's `Actions` as the window's signal.
-struct Sink(Rc<Cell<*mut qobject::ThemeFeed>>);
+/// A model the window hands as a QObject, as its own type: a list model's QObject base sits at its address.
+///
+/// # Safety
+/// `object` is a `T` or null.
+unsafe fn model<T: Upcast<QAbstractListModel>>(object: *mut cxx_qt::QObject) -> *const T {
+    unsafe { T::from_base_ptr(object as *const QAbstractListModel) }
+}
+
+/// A game as the library's lists show it, by its file; none for a game the library does not hold.
+fn game_row(view: &LibraryView, path: &str) -> Option<GameRow> {
+    library::games_of_at(library::ALL, &view.systems, &view.catalog, words::now()).into_iter().find(|g| g.path == path)
+}
+
+/// The section's facts as Choose a console's row for its key holds them; the shoulders' neighbours are the rows either
+/// side, and the count is the search's while one narrows the section.
+pub fn browse_facts(view: &LibraryView, section: &str, count_line: &str, focus_row: i32, open: (bool, bool, bool)) -> BrowseFacts {
+    let rows = view.rows.rows();
+    let at = rows.iter().position(|r| r.key == section);
+    let row = at.map(|i| &rows[i]);
+    let beside = |by: usize| at.filter(|_| rows.len() > 1).map(|i| rows[(i + by) % rows.len()].name.clone()).unwrap_or_default();
+    BrowseFacts {
+        section: section.to_owned(),
+        heading: row.map(|r| r.heading.clone()).unwrap_or_default(),
+        world: row.map(|r| r.world.clone()).unwrap_or_default(),
+        hue: row.map_or(0.0, |r| r.hue),
+        count_line: if count_line.is_empty() { row.map(|r| words::games(r.count)).unwrap_or_default() } else { count_line.to_owned() },
+        previous: beside(rows.len().saturating_sub(1)),
+        next: beside(1),
+        focus_row,
+        searching: open.0,
+        typing: open.1,
+        list_open: open.2,
+    }
+}
 
 /// What the window does for an action: each of the theme's `Actions` as one of the feed's signals.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Carried {
     Played(String),
+    Resumed,
     Place(i32),
     Opened(String),
     Backed,
-    Acted(&'static str),
+    Acted(String),
+    Focused(String),
 }
 
-/// The signal an action becomes; none for one the program has no answer to yet (the Home card opened by a theme).
-pub fn carried(action: &Action) -> Option<Carried> {
+/// The signal an action becomes, `suspended` being the game a session holds; none for one the program has no answer
+/// to yet (the Home card opened by a theme), which is declined.
+pub fn carried(action: &Action, suspended: Option<&str>) -> Option<Carried> {
     Some(match action {
+        Action::Play(key) if suspended == Some(key.as_str()) => Carried::Resumed,
         Action::Play(key) => Carried::Played(key.clone()),
-        Action::OpenPage(_) => Carried::Acted(help::GAME_PAGE),
-        Action::Favourite(_) => Carried::Acted(help::FAVOURITE),
-        Action::Random(_) => Carried::Acted(help::RANDOM),
+        Action::OpenPage(_) => Carried::Acted(help::GAME_PAGE.into()),
+        Action::Favourite(_) => Carried::Acted(help::FAVOURITE.into()),
+        Action::Random(_) => Carried::Acted(help::RANDOM.into()),
         Action::OpenConsole(key) => Carried::Opened(key.clone()),
         Action::OpenPlace(key) => match view::PLACE_IDS.iter().position(|id| id == key) {
             Some(i) => Carried::Place(i as i32),
             None => Carried::Opened(key.clone()),
         },
-        Action::Home => Carried::Acted(help::HOME),
+        Action::Home => Carried::Acted(help::HOME.into()),
         Action::Back => Carried::Backed,
-        Action::StepSection(by) => Carried::Acted(if *by < 0 { help::PREVIOUS } else { help::NEXT }),
+        Action::StepSection(by) => Carried::Acted(if *by < 0 { help::PREVIOUS } else { help::NEXT }.into()),
         Action::OpenHomeCard => return None,
-        Action::OpenListCard => Carried::Acted(screens::LIST),
-        Action::Search => Carried::Acted(screens::SEARCH),
+        Action::OpenListCard => Carried::Acted(screens::LIST.into()),
+        Action::Search => Carried::Acted(screens::SEARCH.into()),
+        Action::Act(key) => Carried::Acted(key.clone()),
+        Action::Focus(game) => Carried::Focused(game.clone()),
     })
 }
+
+/// The theme's `Actions` as the window's signals.
+struct Sink(Rc<Cell<*mut qobject::ThemeFeed>>);
 
 impl ActionSink for Sink {
     fn act(&mut self, action: &Action) -> bool {
         // Safety: the cell holds the feed while it lives and null after; the theme's engine runs on the feed's thread.
         let Some(feed) = (unsafe { self.0.get().as_mut() }) else { return false };
         let mut feed = unsafe { Pin::new_unchecked(feed) };
-        let Some(carried) = carried(action) else { return false };
-        feed.as_mut().rust_mut().declined = false;
+        let suspended = feed.session.as_ref().filter(|s| s.running).map(|s| s.game.clone());
+        let Some(carried) = carried(action, suspended.as_deref()) else { return false };
         match carried {
             Carried::Played(game) => feed.as_mut().played(QString::from(game.as_str())),
+            Carried::Resumed => feed.as_mut().resumed(),
             Carried::Place(index) => feed.as_mut().place_chosen(index),
             Carried::Opened(key) => feed.as_mut().opened(QString::from(key.as_str())),
             Carried::Backed => feed.as_mut().backed(),
-            Carried::Acted(key) => feed.as_mut().acted(QString::from(key)),
+            Carried::Acted(key) => feed.as_mut().acted(QString::from(key.as_str())),
+            Carried::Focused(game) => feed.as_mut().focused(QString::from(game.as_str())),
         }
-        !feed.declined
+        true
     }
 }
 
 impl cxx_qt::Initialize for qobject::ThemeFeed {
     fn initialize(mut self: Pin<&mut Self>) {
+        // Safety: the address is only read back through the sink's cell, which the feed empties as it goes.
         let me = unsafe { self.as_mut().get_unchecked_mut() } as *mut qobject::ThemeFeed;
         self.rust().me.set(me);
         self.as_mut().on_host_changed(|feed| feed.attach()).release();
+        self.as_mut().on_controllers_changed(|feed| feed.feed_device()).release();
+        self.as_mut().on_family_changed(|feed| feed.feed_device()).release();
+        self.as_mut().on_clock_changed(|feed| feed.feed_device()).release();
+        self.as_mut().on_reduced_motion_changed(|feed| feed.feed_motion()).release();
     }
 }
 
@@ -183,14 +268,23 @@ impl qobject::ThemeFeed {
         unsafe { host.engine().as_mut() }.map(|e| unsafe { Pin::new_unchecked(e) })
     }
 
+    fn library(&self) -> Option<&LibraryModel> {
+        // Safety: the library model is the window's, alive as long as the feed.
+        unsafe { self.library.as_ref() }
+    }
+
     /// # Safety
     /// `library` is the window's `LibraryModel`, alive as long as the feed.
     pub unsafe fn show_library(mut self: Pin<&mut Self>, library: *mut cxx_qt::QObject) {
-        // Safety: the window hands its LibraryModel; a list model's QObject base sits at its address (single inheritance).
-        let list = library as *const emusen_qt_models::library_model::qobject::QAbstractListModel;
-        self.as_mut().rust_mut().library = unsafe { LibraryModel::from_base_ptr(list) } as *mut LibraryModel;
-        // Safety: as above.
-        let (Some(library), Some(engine)) = (unsafe { self.library.as_ref() }, self.engine()) else { return };
+        self.as_mut().rust_mut().library = unsafe { model::<LibraryModel>(library) };
+        self.feed_library();
+        // The session's console and the section's words are read from the library too.
+        self.feed_session();
+        self.feed_browse();
+    }
+
+    fn feed_library(&self) {
+        let (Some(library), Some(engine)) = (self.library(), self.engine()) else { return };
         if let Some(view) = host::library(engine) {
             view.show(library.view(), &library.home_lines().to_string());
         }
@@ -198,56 +292,86 @@ impl qobject::ThemeFeed {
 
     /// # Safety
     /// `frame` is the game's picture item, alive while the session runs.
-    pub unsafe fn show_session(self: Pin<&mut Self>, game: &QString, running: bool, paused_at: f64, frame: *mut qobject::QQuickItem) {
-        // Safety: the library model is the window's, alive as long as the feed.
-        let library = unsafe { self.library.as_ref() };
-        let found = library.and_then(|l| l.view().catalog.games.iter().find(|g| g.path == game.to_string())).filter(|_| running);
+    pub unsafe fn show_session(mut self: Pin<&mut Self>, game: &QString, running: bool, paused_at: f64, frame: *mut qobject::QQuickItem) {
+        self.as_mut().rust_mut().session = Some(Shown { game: game.to_string(), running, paused_at, frame });
+        self.feed_session();
+    }
+
+    fn feed_session(&self) {
+        let Some(shown) = self.session.clone() else { return };
+        let running = shown.running;
+        let library = self.library().filter(|_| running);
+        let found = library.and_then(|l| game_row(l.view(), &shown.game));
         let facts = SessionFacts {
             has_game: running,
-            title: library.filter(|_| running).map(|l| l.title_of(game).to_string()).unwrap_or_default(),
-            console_id: found.and_then(|g| g.system.clone()).unwrap_or_default(),
-            paused_since: if running { paused_at as i64 } else { 0 },
+            key: if running { shown.game.clone() } else { String::new() },
+            title: library.map(|l| l.title_of(&QString::from(shown.game.as_str())).to_string()).unwrap_or_default(),
+            console_id: found.as_ref().map(|g| g.system.clone()).unwrap_or_default(),
+            console: found.as_ref().map(|g| g.console.clone()).unwrap_or_default(),
+            hue: found.as_ref().map_or(-1.0, |g| g.hue),
+            paused_since: if running { shown.paused_at as i64 } else { 0 },
             played: 0,
         };
-        let Some(engine) = self.engine() else { return };
+        let Some(mut engine) = self.engine() else { return };
+        if let Some(library) = host::library(engine.as_mut()) {
+            library.show_suspended(&facts.key);
+        }
         if let Some(mut session) = host::session(engine) {
             session.as_mut().show(&facts);
-            session.show_frame(if running { frame } else { std::ptr::null_mut() });
+            session.show_frame(if running { shown.frame } else { std::ptr::null_mut() });
         }
     }
 
-    pub fn show_device(self: Pin<&mut Self>, controllers: i32, family: i32, clock: &QString) {
-        let facts = DeviceFacts { controllers, family, clock: clock.to_string(), ..DeviceFacts::default() };
+    /// # Safety
+    /// `games` is the window's grid `GameModel`, alive as long as the feed.
+    pub unsafe fn show_browse(mut self: Pin<&mut Self>, games: *mut cxx_qt::QObject, section: &QString, searching: bool, typing: bool, list_open: bool) {
+        let games = unsafe { model::<GameModel>(games) };
+        self.as_mut().rust_mut().section = Some(Section { games, key: section.to_string(), searching, typing, list_open });
+        self.feed_browse();
+    }
+
+    fn feed_browse(&self) {
+        let Some(section) = self.section.clone() else { return };
+        // Safety: the grid's model is the window's, alive as long as the feed.
+        let (Some(games), Some(library)) = (unsafe { section.games.as_ref() }, self.library()) else { return };
+        let open = (section.searching, section.typing, section.list_open);
+        let facts = browse_facts(library.view(), &section.key, &games.count_line().to_string(), *games.focused(), open);
+        let rows = view::games(library.view(), games.rows(), words::now());
         let Some(engine) = self.engine() else { return };
-        if let Some(device) = host::device(engine) {
+        if let Some(mut browse) = host::browse(engine) {
+            browse.as_mut().show_games(rows);
+            browse.show(&facts);
+        }
+    }
+
+    fn feed_device(&self) {
+        let facts = DeviceFacts { controllers: self.controllers, family: self.family, clock: self.clock.to_string(), ..DeviceFacts::default() };
+        if let Some(device) = self.engine().and_then(host::device) {
             device.show(&facts);
         }
     }
 
-    pub fn show_motion(self: Pin<&mut Self>, reduced: bool) {
-        let Some(engine) = self.engine() else { return };
-        if let Some(tokens) = host::kit_tokens(engine) {
-            tokens.set_reduced_motion(reduced);
+    fn feed_motion(&self) {
+        if let Some(tokens) = self.engine().and_then(host::kit_tokens) {
+            tokens.set_reduced_motion(self.reduced_motion);
         }
     }
 
     pub fn attach(self: Pin<&mut Self>) {
         let sink = Sink(self.me.clone());
-        let Some(engine) = self.engine() else { return };
-        if let Some(actions) = host::actions(engine) {
+        if let Some(actions) = self.engine().and_then(host::actions) {
             actions.set_sink(Some(Box::new(sink)));
         }
+        self.feed_motion();
+        self.feed_device();
+        self.feed_library();
+        self.feed_session();
+        self.feed_browse();
     }
 
     pub fn push(self: Pin<&mut Self>, button: i32, down: bool) {
-        let Some(engine) = self.engine() else { return };
-        if let Some(router) = host::pad_router(engine) {
+        if let Some(router) = self.engine().and_then(host::pad_router) {
             router.push(emusen_kit_qt::kinds::PadButton { repr: button }, down);
         }
     }
-
-    pub fn decline(mut self: Pin<&mut Self>) {
-        self.as_mut().rust_mut().declined = true;
-    }
 }
-

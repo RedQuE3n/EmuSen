@@ -3,6 +3,7 @@
 
 use emusen_qt_models::library::{self, GameRow, Kind, LibraryView};
 use emusen_qt_models::listing::{self, Listing};
+use emusen_qt_models::game_model::cover_url;
 use emusen_qt_models::words;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -27,7 +28,7 @@ pub const PLACE_ROLES: [&str; 6] = ["key", "name", "kind", "line", "attention", 
 /// `Library.shelves`: the library's three places, All, Favourites and Recent, which `gamesOf` also takes.
 pub const SHELF_ROLES: [&str; 4] = ["key", "name", "line", "count"];
 /// `Library.gamesOf`, `recent`, `favourites` and `search`: one game a row.
-pub const GAME_ROLES: [&str; 17] = [
+pub const GAME_ROLES: [&str; 18] = [
     "key",
     "title",
     "cover",
@@ -45,6 +46,7 @@ pub const GAME_ROLES: [&str; 17] = [
     "video",
     "hero",
     "lastPlayedWords",
+    "facts",
 ];
 /// `Library.collections`: the player's collections.
 pub const COLLECTION_ROLES: [&str; 3] = ["key", "name", "count"];
@@ -146,7 +148,7 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
     vec![
         text(&g.path),
         text(&g.title),
-        text(&g.cover),
+        Cell::Text(cover_url(&g.cover)),
         Cell::Number(shapes.get(g.system.as_str()).copied().unwrap_or(0.0)),
         Cell::Flag(g.favourite),
         Cell::Number(g.played_at as f64),
@@ -160,12 +162,14 @@ fn game(g: &GameRow, shapes: &HashMap<&str, f64>, now: i64) -> Row {
         Cell::Number(0.0),
         text(""),
         text(""),
-        text(if g.hero.is_empty() { &g.cover } else { &g.hero }),
+        Cell::Text(cover_url(if g.hero.is_empty() { &g.cover } else { &g.hero })),
         Cell::Text(if played { words::ago(g.played_at, now) } else { String::new() }),
+        text(&g.facts),
     ]
 }
 
-fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
+/// Rows of games as a list shows them, each console's cover shape from the view (`Browse.games`, Home's shelf).
+pub fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
     let shapes: HashMap<&str, f64> = view.systems.iter().map(|s| (s.id.as_str(), s.cover_aspect)).collect();
     list.iter().map(|g| game(g, &shapes, now)).collect()
 }
@@ -173,6 +177,12 @@ fn games(view: &LibraryView, list: &[GameRow], now: i64) -> Vec<Row> {
 /// The games a console or a place leads to (`all`, `favourites`, `recent`); none for an id that is neither.
 pub fn games_of(view: &LibraryView, id: &str, now: i64) -> Vec<Row> {
     games(view, &library::games_of_at(id, &view.systems, &view.catalog, now), now)
+}
+
+/// Home's shelf: the games played, latest first, less the suspended game, which Continue holds.
+pub fn shelf(view: &LibraryView, suspended: &str, now: i64) -> Vec<Row> {
+    let recent = library::games_of_at(library::RECENT, &view.systems, &view.catalog, now);
+    games(view, &emusen_qt_models::games::without(recent, suspended), now)
 }
 
 /// Every game whose title holds the words, in any case, by title; none for no words.

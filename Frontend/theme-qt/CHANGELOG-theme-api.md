@@ -34,6 +34,31 @@ Decided 2026-11-08 by the tester: the additions found by writing four original t
 - **The kit's types by name**: `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`,
   `Moonrise`. `Walkable` (every item the pad and the pointer reach) and `Scene` (a theme's own colours, §7.20 of
   EmuSen_Kit.md) are added: the design's rule that every item is a `Walkable` needs them.
-- **Not yet in the module**: `CoverTile` (it moves into the kit with the reference theme's package), `VideoTile` (stage 4),
-  and `Bells` with `ladder(count)` and `strike(i)` (the kit's `Bells` renders cues and has neither yet). Each is added by
-  name when the kit has it.
+- **Not yet in the module**: `VideoTile` (stage 4), and `Bells` with `ladder(count)` and `strike(i)` (the kit's `Bells`
+  renders cues and has neither yet). Each is added by name when the kit has it.
+
+## 1.0, amended for the reference theme as a package (2026-11-08)
+
+Decided 2026-11-08: writing the reference theme "EmuSen" against the module found what follows missing; each is an
+addition, appended after the members it joins so that no index in the registry moves.
+
+- **`Session.key`, `console`, `hue`**: the suspended game's file (so a shelf can leave it out and Continue can play it),
+  its console's name as its facts begin (`Words.pausedFacts` takes it), and its console's hue, -1 where the library does
+  not hold the game.
+- **`Library.shelf`**: `recent` less the suspended game, which Continue holds: Home's shelf.
+- **Game rows gain `facts`**: the console's name and when the game was last played, "Super Nintendo · 3 h ago". `cover`
+  and `hero` are now file URLs, as an `Image` reads them; they were bare paths, which QML resolved against the theme's
+  own folder.
+- **`Words.summary(consoles, games)`**: Choose a console's "11 consoles · 1,566 games".
+- **`Help.SectionSearched`**: the grid's help while a search narrows it (B clears the search).
+- **`Actions.act(key)`**: a help bar's declared action by the key `Frame.actionInvoked` gives, since a theme writes no
+  literal to tell one from another. **`Actions.focus(key)`**: the game the focus is on, which the cards and Y act on.
+- **`Browse`** (added): the section a Games screen shows as the program holds it, because the List card and the search
+  are EmuSen's and sort, narrow and move it: `section`, `heading`, `world`, `hue`, `countLine`, `previous` and `next`
+  (the shoulders' neighbours), `focusRow` (where the program holds the focus; the List card's jumps move it),
+  `searching`, `typing`, `listOpen`, and `games`, the rows in the order shown.
+- **`Marks`** (added): the drawn marks, `heart`, `sparkle`, `crescent`, `attention`, `badge`, `alien` and `path(name)`
+  for a shelf's icon or an engine's mark, each an SVG path.
+- **The kit's types by name**: `CoverTile` (a cover whole at its own shape on its box's foot, the generated card
+  otherwise, the favourite's mark), `RoundPicture`, `PadGlyph` (with `PadGlyph.Button`, the pad's buttons in the kit's
+  order) and `PlanetLayout` (Choose a console's rows of bodies and their walk).

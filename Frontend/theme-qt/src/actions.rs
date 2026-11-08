@@ -53,6 +53,12 @@ pub mod qobject {
         fn open_list_card(self: Pin<&mut ThemeActions>) -> bool;
         #[qinvokable]
         fn search(self: Pin<&mut ThemeActions>) -> bool;
+        /// A help bar's declared action, by the key `Frame`'s `actionInvoked` gives (EmuSen_Kit.md §7.19).
+        #[qinvokable]
+        fn act(self: Pin<&mut ThemeActions>, key: &QString) -> bool;
+        /// The game the focus is on, by its row's `key`, so the cards and the shoulders act on it.
+        #[qinvokable]
+        fn focus(self: Pin<&mut ThemeActions>, game: &QString) -> bool;
     }
 }
 
@@ -71,6 +77,8 @@ pub enum Action {
     OpenHomeCard,
     OpenListCard,
     Search,
+    Act(String),
+    Focus(String),
 }
 
 /// The host's side: takes an action, or declines it, and says which.
@@ -139,5 +147,13 @@ impl qobject::ThemeActions {
 
     pub fn search(self: Pin<&mut Self>) -> bool {
         self.take(Action::Search)
+    }
+
+    pub fn act(self: Pin<&mut Self>, key: &QString) -> bool {
+        self.take(Action::Act(key.to_string()))
+    }
+
+    pub fn focus(self: Pin<&mut Self>, game: &QString) -> bool {
+        self.take(Action::Focus(game.to_string()))
     }
 }

@@ -24,6 +24,9 @@ pub mod qobject {
         #[qproperty(f64, paused_since, cxx_name = "pausedSince", READ, NOTIFY)]
         #[qproperty(f64, played, READ, NOTIFY)]
         #[qproperty(*mut QQuickItem, frame, READ, NOTIFY)]
+        #[qproperty(QString, key, READ, NOTIFY)]
+        #[qproperty(QString, console, READ, NOTIFY)]
+        #[qproperty(f64, hue, READ, NOTIFY)]
         type ThemeSession = super::ThemeSessionRust;
     }
 }
@@ -32,16 +35,24 @@ pub mod qobject {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct SessionFacts {
     pub has_game: bool,
+    /// The game's file, as a game row's `key`.
+    pub key: String,
     pub title: String,
     pub console_id: String,
+    /// The console's name as the game's facts begin, and its hue; -1 where the library does not hold the game.
+    pub console: String,
+    pub hue: f64,
     pub paused_since: i64,
     pub played: i64,
 }
 
 pub struct ThemeSessionRust {
     has_game: bool,
+    key: QString,
     title: QString,
     console_id: QString,
+    console: QString,
+    hue: f64,
     paused_since: f64,
     played: f64,
     frame: *mut qobject::QQuickItem,
@@ -51,8 +62,11 @@ impl Default for ThemeSessionRust {
     fn default() -> Self {
         ThemeSessionRust {
             has_game: false,
+            key: QString::default(),
             title: QString::default(),
             console_id: QString::default(),
+            console: QString::default(),
+            hue: -1.0,
             paused_since: 0.0,
             played: 0.0,
             frame: std::ptr::null_mut(),
@@ -67,6 +81,11 @@ impl qobject::ThemeSession {
             self.as_mut().rust_mut().has_game = facts.has_game;
             self.as_mut().has_game_changed();
         }
+        let key = QString::from(facts.key.as_str());
+        if self.key != key {
+            self.as_mut().rust_mut().key = key;
+            self.as_mut().key_changed();
+        }
         let title = QString::from(facts.title.as_str());
         if self.title != title {
             self.as_mut().rust_mut().title = title;
@@ -76,6 +95,15 @@ impl qobject::ThemeSession {
         if self.console_id != console {
             self.as_mut().rust_mut().console_id = console;
             self.as_mut().console_id_changed();
+        }
+        let name = QString::from(facts.console.as_str());
+        if self.console != name {
+            self.as_mut().rust_mut().console = name;
+            self.as_mut().console_changed();
+        }
+        if self.hue != facts.hue {
+            self.as_mut().rust_mut().hue = facts.hue;
+            self.as_mut().hue_changed();
         }
         if self.paused_since != facts.paused_since as f64 {
             self.as_mut().rust_mut().paused_since = facts.paused_since as f64;

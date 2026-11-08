@@ -2,7 +2,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
 
-// A picture with rounded corners, fitted whole or filling its box, drawn as a Shape filled with the Image's own texture; plain corners on the software backend, which has no texture fills (EmuSen_Qt.md §7.1, step 6).
+// A picture with rounded corners, fitted whole or filling its box, drawn as a Shape filled with the Image's own texture; plain corners on the software backend, which has no texture fills (EmuSen_Qt.md §7.1, step 6; EmuSen_Kit.md §7.20).
 Item {
     id: root
     property alias source: picture.source

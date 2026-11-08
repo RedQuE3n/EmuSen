@@ -14,6 +14,10 @@ fn main() {
         QmlFile::from("qml/Carousel.qml"),
         QmlFile::from("qml/NormalizedCanvas.qml"),
         QmlFile::from("qml/Moonrise.qml"),
+        QmlFile::from("qml/CoverTile.qml"),
+        QmlFile::from("qml/RoundPicture.qml"),
+        QmlFile::from("qml/PadGlyph.qml"),
+        QmlFile::from("qml/PlanetLayout.qml"),
     ];
     CxxQtBuilder::new_qml_module(QmlModule::new("EmuSen.Theme").version(1, 0).qml_files(qml).depend("QtQuick").depend("EmuSen.Kit"))
         .files([
@@ -25,6 +29,8 @@ fn main() {
             "src/cues.rs",
             "src/words.rs",
             "src/help.rs",
+            "src/browse.rs",
+            "src/marks.rs",
             "src/glue.rs",
         ])
         .include_dir("cpp")

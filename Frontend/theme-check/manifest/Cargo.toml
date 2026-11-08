@@ -1,0 +1,15 @@
+[package]
+name = "emusen-theme-manifest"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# theme.json, schema 1, read and held to its rules (EmuSen_Qt.md §3.4, §5.2): the one owner of the schema, read by theme-check and by the
+# theme host. Outside the Frontend workspace with its own lock file; tests/fence.rs holds its tree to no Qt and no other EmuSen crate.
+[lib]
+name = "emusen_theme_manifest"
+
+[dependencies]
+# MIT or Apache-2.0. The JSON reader, with the line of a syntax error.
+serde_json = "1"

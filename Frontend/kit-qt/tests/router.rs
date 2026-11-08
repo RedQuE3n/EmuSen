@@ -70,3 +70,21 @@ fn kit_7_4_the_tiers_can_be_changed() {
     assert_eq!(buttons(&mut router, 450), vec![], "the carousel waits 500 ms");
     assert_eq!(buttons(&mut router, 500), vec![(UiButton::Right, true, 1)]);
 }
+
+#[test]
+fn kit_7_17_while_a_game_owns_the_pad_only_the_chord_leaves_and_nothing_held_then_presses_after() {
+    let mut router = Router::new(RepeatTiers::OWN);
+    router.set_chord_only(true);
+    router.push(PadEvent { button: UiButton::Down, down: true });
+    assert_eq!(buttons(&mut router, 0), vec![], "the walk sees no game input");
+    assert_eq!(buttons(&mut router, 1000), vec![], "nor a repeat of it");
+    router.push(PadEvent { button: UiButton::Guide, down: true });
+    assert!(router.pump(ms(1016)).menu_chord, "the chord reaches the program");
+    router.set_chord_only(false);
+    assert_eq!(buttons(&mut router, 1032), vec![], "what was held over the game is not pressed when the interface has the pad");
+    router.push(PadEvent { button: UiButton::Down, down: false });
+    router.push(PadEvent { button: UiButton::Guide, down: false });
+    assert_eq!(buttons(&mut router, 1048), vec![]);
+    router.push(PadEvent { button: UiButton::Down, down: true });
+    assert_eq!(buttons(&mut router, 1064), vec![(UiButton::Down, false, 1)]);
+}

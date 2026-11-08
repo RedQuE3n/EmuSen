@@ -107,6 +107,12 @@ impl SessionService {
         string("summary", self.read(|o, l| unsafe { f(self.ctx, session, o, l) })?)
     }
 
+    /// `out.len()` bytes of a space by its name from `address`, as the space reads any address.
+    pub fn space_read(&self, session: SessionId, space: &str, address: u32, out: &mut [u8]) -> Result<()> {
+        let f = entry!(self, space_read);
+        self.status(unsafe { f(self.ctx, session, space.as_ptr(), space.len(), address, out.as_mut_ptr(), out.len()) }).map(drop)
+    }
+
     /// Run control, EMUSEN_SESSION_RUN_*; 0, or RUN_TO_ADDRESS's breakpoint id.
     pub fn run_control(&self, session: SessionId, op: u32, processor: u32, argument: i64) -> Result<i64> {
         let f = entry!(self, run_control);

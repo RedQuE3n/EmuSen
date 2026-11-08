@@ -1,4 +1,4 @@
-//! `PlanetLayout`: kit-core's rows of bodies on Qt, as lists a screen's tiles bind to by index (EmuSen_Kit.md §7.18).
+//! `PlanetLayout`: kit-core's rows of bodies on Qt, as lists a screen's tiles bind to by index (EmuSen_Kit.md §7.19).
 
 use core::pin::Pin;
 

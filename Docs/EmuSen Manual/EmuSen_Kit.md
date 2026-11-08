@@ -523,6 +523,12 @@ loads a scene whose root is a `Window`, taking the root from the engine's `objec
 at the size, and gives a `Scene` with the verbs: `tree`, `click`, `right_click`, `key`, `wheel`, `focus`, `focus_item`,
 `grab`, `property` and `pad`, plus `record_edges` and `audit`.
 
+Added 2026-11-08 for scenes drawn with Vulkan (`EmuSen_Qt.md` §1.8.5): `load_prepared` hands the made window to the test
+before it is shown, as a host that adopts a device prepares it (§7.16); `compositor::Compositor` starts `kwin_wayland
+--virtual` on a socket of the test's own and points Qt's Wayland platform at it, so such a window is real and drawn yet
+nothing appears on the desk; `virtual_pad` holds SDL's virtual joysticks, moved from the gallery's `pads` test so the
+gallery and the program's window share one copy; `pad_chord_only` reads whether the router gives the chord alone.
+
 - **The item tree becomes kit-core's.** `harness_tree` (C++) walks the window's items once and writes one JSON object
   per item: its type (Qt names a QML component's meta-object after it, `MenuRow_QMLTYPE_3`, so the type is the class
   name before `_QMLTYPE_`), its scene rectangle, visibility with the effective opacity, clip, whether it is hit-testable
@@ -1210,7 +1216,46 @@ graph's own device, and says when each frame was swapped.
 added to `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes`), and `EmuSen_Qt.md` §1.8.1's runs in a real window. 197 lines of
 C++ were added (`game_picture.h` 64, `game_picture.cpp` 133, blank lines and includes counted), the reasons above.
 
-### 7.17 Worlds as lines: Moonrise's and the tiles' bodies from the host's data (2026-11-08)
+### 7.17 The pad drives the game: one reader, two sides (stage 1, the play; 2026-11-08)
+
+`EmuSen_Qt.md` §1.8.5 as built in `emusen-qt-endymion` and the kit. Pads have one owner (Endymion) and one reader (§7.15's
+thread): each tick reads the pads for the interface, as before, and for a running game, through each player's bindings.
+
+- **`game.rs`**, plain Rust, two parts. `GamePads` is the hand-over between the reader's thread and a game's frame thread:
+  what the game wants (its console and game, for the bindings; its ports; the axes it reads, by PadAxis), whether it owns
+  the pad, and the newest read (a mask by PadButton and the read axes for each player, and the players seated), taken by
+  the frame thread with `clone_from` into a read it keeps, so no tick or frame allocates. `GameReading` is the reader's
+  half: when the wants change it asks Endymion for every player's bound buttons (`bindings_bound`, platform interface 43,
+  `EmuSen_RustPlatform.md` §50) and sets the left stick to be a stick where the game reads LeftX; each tick it seats the
+  open pads in the order they were opened (player 1 alone where the first controller only is read) and lights their
+  numbers, then reads each seated player's buttons with Endymion's `pads_pressed` (the stick for the d-pad, a trigger
+  past half, else the bound button) and the wanted axes. *[own, because Endymion has no seat table outside the C#
+  `PlayerSlots`; the seats the player arranges and keeps (`emusen_endymion_slots_*`) come with the Pause Card's players
+  page.]*
+- **Who hears the pad.** Nothing is handed over while the game does not own the pad (paused, or a menu over it). Given
+  back, the game hears nothing until every button is let go, so the press that closed a menu is not the game's (Mistress's
+  `PadBelongsToTheInterface`).
+- **`PadReader.gamePads`**, a constant number naming the reader's `GamePads`, which a `SessionModel` is named by
+  (`pads`), as `GamePicture` is named its feed: a QML element is handed no Rust value. The model takes a reference of its
+  own (`GamePads::at`), so the hand-over outlives a reader dropped first.
+- **`PadRouter.chordOnly`** (kit-qt): while on, a pump gives the menu chord alone, and a button held then is the grammar's
+  only once let go and pressed again, so neither the walk nor a repeat sees game input and nothing held over the game
+  presses when the interface has the pad back. The kit knows no game: a host binds it (`Play.qml`: the game running and
+  not paused), and answers the chord (`SessionModel.togglePause` until the Pause Card exists).
+
+**Held to** (measured on 2026-11-08, the platform library from the same commit): kit-qt's `router` test
+`kit_7_17_…` (Down held over the game gives no press or repeat; the chord reaches the program; Down still held when the
+interface has the pad presses nothing until let go and pressed again); `emusen-qt-models`' `input` test (Endymion's
+simulated pad, the reader's game half and `GameInput` on the test core, whose RAM byte 3 counts up each frame port 0's
+first button is held: nothing heard while the game does not own the pad; a press held as it takes the pad not heard; A,
+bound by the console's map, heard on port 0 for 10 frames; another button not heard as A); Endymion's unit test of the
+binding rule (§50 of the platform page); the platform client's binding test (player 2's own, player 3 with player 1's,
+a player out of range refused). Four seeded faults, each reverted: the quiet rule dropped (caught by `input`: the held
+press was heard), a player's own map ignored (Endymion's test: player 2 read player 1's A), the router letting a press
+held over the game through (`router`: the walk saw it), a button told to port 1 (`input`: A never counted). No C++ was
+added.
+
+### 7.18 Worlds as lines: Moonrise's and the tiles' bodies from the host's data (2026-11-08)
 
 Decided 2026-11-08 by the tester, from `EmuSen_Interface.md` §24.6: each console is drawn by its maker in Choose a console
 and in Moonrise, so the program's splash draws the bodies, the approved draft remaining the oracle for everything else
@@ -1262,7 +1307,7 @@ caption's box is loose enough to let a digit through, so the test also holds its
 reverted: the palette dropped by `world_of` failed it at 407 pixels; the moonlets dropped at 30; the caption counting one
 too many passed the pictures and failed the words, which is why the words are held.
 
-### 7.18 Rows of bodies and a screen's declared actions (stage 1; 2026-11-08)
+### 7.19 Rows of bodies and a screen's declared actions (stage 1; 2026-11-08)
 
 **Decided 2026-11-08: two additive extensions of the kit, for stage 1's screens.** Both were weighed as `EmuSen_Qt.md`
 §1.3 asks (an extension, a module, or a component of its own): each is an extension, a new type and a new property on
@@ -1314,7 +1359,7 @@ bodies dividing four and three; the lines read with their buttons by name, a lin
 `tests/screens.rs` holds the rest through the harness (`EmuSen_Qt.md` §7.1). Seeded faults, each reverted: a tie going to
 the last failed the walk test; the passed key's mark dropped failed the program's screens test at B from the grid.
 
-### 7.19 A theme's own colours, the help bar's face, and paired glyphs (stage 1; 2026-11-08)
+### 7.20 A theme's own colours, the help bar's face, and paired glyphs (stage 1; 2026-11-08)
 
 Three extensions, each optional, found while the program's screens were brought to the accepted render (EmuSen_Qt.md
 §7.1, step 5). None changes what an existing screen draws.

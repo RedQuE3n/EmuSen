@@ -1,4 +1,4 @@
-// The picker's rows held to the courts canvas (EmuSen_Interface.md §24.1, EmuSen_Kit.md §7.18).
+// The picker's rows held to the courts canvas (EmuSen_Interface.md §24.1, EmuSen_Kit.md §7.19).
 
 use emusen_kit_core::layout::{PlanetGeometry, capacity, planet_layout};
 

@@ -7,6 +7,7 @@ pub mod game_model;
 pub mod games;
 pub mod help;
 pub mod help_model;
+pub mod input;
 pub mod keyed;
 pub mod library;
 pub mod library_model;

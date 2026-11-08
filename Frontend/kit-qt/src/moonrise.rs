@@ -425,7 +425,7 @@ impl cxx_qt::Initialize for qobject::MoonriseModel {
                 rust.splash = None;
             })
             .release();
-        // `worlds` is the declarative way to a row of drawn worlds, one line each (EmuSen_Kit.md §7.17).
+        // `worlds` is the declarative way to a row of drawn worlds, one line each (EmuSen_Kit.md §7.18).
         self.as_mut()
             .on_worlds_changed(|mut this| {
                 let bodies: Vec<SplashBody> = emusen_kit_core::world::parse_worlds(&this.worlds.to_string())

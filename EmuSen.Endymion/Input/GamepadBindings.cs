@@ -24,6 +24,7 @@ namespace EmuSen.Endymion.Input
             if (!_byConsole.TryGetValue(console, out GamepadBindingMap? map))
             {
                 _byConsole[console] = map = new GamepadBindingMap();
+                Changed();
             }
             return map;
         }
@@ -37,24 +38,23 @@ namespace EmuSen.Endymion.Input
             return players;
         }
 
-        public GamepadBindingMap For(string console, int player) =>
-            player > 1 && _byPlayer.TryGetValue(console, out var players) && players.TryGetValue(player, out GamepadBindingMap? own) ? own : For(console);
+        public GamepadBindingMap For(string console, int player) => For(console, player, DefaultProfile);
 
-        public bool HasOwn(string console, int player) => player > 1 && _byPlayer.TryGetValue(console, out var players) && players.ContainsKey(player);
+        public bool HasOwn(string console, int player) => HasOwn(console, player, DefaultProfile);
 
         // The player's own map, begun as a copy of player 1's the first time it is changed.
         public GamepadBindingMap Own(string console, int player)
         {
             if (player <= 1) return For(console);
             Dictionary<int, GamepadBindingMap> players = PlayersOf(console);
-            if (!players.TryGetValue(player, out GamepadBindingMap? own)) players[player] = own = Copy(For(console));
+            if (!players.TryGetValue(player, out GamepadBindingMap? own)) { players[player] = own = Copy(For(console)); Changed(); }
             return own;
         }
 
         // Back to player 1's map.
         public void Forget(string console, int player)
         {
-            if (_byPlayer.TryGetValue(console, out var players)) players.Remove(player);
+            if (_byPlayer.TryGetValue(console, out var players) && players.Remove(player)) Changed();
         }
 
         // Default's maps back to the defaults; the named profiles are the player's and stay.
@@ -62,6 +62,7 @@ namespace EmuSen.Endymion.Input
         {
             foreach (GamepadBindingMap map in _byConsole.Values) map.ResetToDefaults();
             _byPlayer.Clear();
+            Changed();
         }
 
         // --- Profiles, store 1.1: named sets beside Default, which is the console's maps above - see EmuSen_Input.md §10. ---
@@ -117,6 +118,7 @@ namespace EmuSen.Endymion.Input
             for (int player = 1; player <= PlayerSlots.MaxPlayers; player++)
                 if (player == 1 || HasOwn(console, player, from)) made.Maps[player] = Copy(For(console, player, from));
             ProfilesOf(console).Named.Add(made);
+            Changed();
             return true;
         }
 
@@ -130,6 +132,7 @@ namespace EmuSen.Endymion.Input
             if (all.Chosen is not null && string.Equals(all.Chosen, profile.Name, StringComparison.OrdinalIgnoreCase)) all.Chosen = newName;
             foreach (string game in all.Games.Where(g => string.Equals(g.Value, profile.Name, StringComparison.OrdinalIgnoreCase)).Select(g => g.Key).ToList()) all.Games[game] = newName;
             profile.Name = newName;
+            Changed();
             return true;
         }
 
@@ -141,6 +144,7 @@ namespace EmuSen.Endymion.Input
             all.Named.Remove(profile);
             if (all.Chosen is not null && string.Equals(all.Chosen, profile.Name, StringComparison.OrdinalIgnoreCase)) all.Chosen = null;
             foreach (string game in all.Games.Where(g => string.Equals(g.Value, profile.Name, StringComparison.OrdinalIgnoreCase)).Select(g => g.Key).ToList()) all.Games.Remove(game);
+            Changed();
             return true;
         }
 
@@ -155,11 +159,13 @@ namespace EmuSen.Endymion.Input
             if (profile is null)
             {
                 if (_profiles.TryGetValue(console, out ConsoleProfiles? had)) had.Games.Remove(game);
+                Changed();
                 return true;
             }
             string? name = IsDefault(profile) ? DefaultProfile : Named(console, profile)?.Name;
             if (name is null) return false;
             ProfilesOf(console).Games[game] = name;
+            Changed();
             return true;
         }
 
@@ -169,42 +175,60 @@ namespace EmuSen.Endymion.Input
             Profile? profile = IsDefault(name) ? null : Named(console, name);
             if (profile is null && !IsDefault(name)) return false;
             ProfilesOf(console).Chosen = profile?.Name;
+            Changed();
             return true;
         }
 
-        public string ConsoleDefault(string console) =>
-            _profiles.TryGetValue(console, out ConsoleProfiles? all) && all.Chosen is { } chosen && Named(console, chosen) is { } profile ? profile.Name : DefaultProfile;
+        // Endymion's answers by what was asked, kept until the model's profiles, games or players change - see EmuSen_Input.md §5.2.
+        private readonly Dictionary<(string Console, int Player, string? Game, string? Profile), BindingChoice> _chosen = new();
 
-        // The profile a game starts with: its own where it names one that exists, else the console's default.
-        public string Resolve(string console, string? gameProfile = null)
+        private void Changed()
         {
-            if (gameProfile is not null && IsDefault(gameProfile)) return DefaultProfile;
-            if (gameProfile is not null && Named(console, gameProfile) is { } own) return own.Name;
-            return ConsoleDefault(console);
+            lock (_chosen) _chosen.Clear();
         }
 
-        // A player's map in a profile; a player with none of their own plays with player 1's, and an unknown profile is Default.
+        // Which map a player plays with, by Endymion's rule over this model: in the profile named, else the one that applies to the game's path.
+        private BindingChoice Choose(string console, int player, string? game, string? profile)
+        {
+            lock (_chosen)
+            {
+                if (_chosen.TryGetValue((console, player, game, profile), out BindingChoice? known)) return known;
+                BindingChoice choice = BindingFiles.Choose(PadModel(), ProfileModel(), console, player, game, profile);
+                _chosen[(console, player, game, profile)] = choice;
+                return choice;
+            }
+        }
+
+        // The named profile a choice names, null for Default.
+        private Profile? ProfileOf(BindingChoice choice, string console) => IsDefault(choice.Profile) ? null : Named(console, choice.Profile);
+
+        public string ConsoleDefault(string console) => Resolve(console);
+
+        // The profile a game starts with, by its path: its own where it names one that exists, else the console's default.
+        public string Resolve(string console, string? game = null) => Choose(console, 1, game, null).Profile;
+
+        // A player's map in a profile: the map Endymion chooses, this model's own object, so a page that rebinds it changes what is played.
         public GamepadBindingMap For(string console, int player, string profile)
         {
-            if (IsDefault(profile) || Named(console, profile) is not { } named) return For(console, player);
-            return player > 1 && named.Maps.TryGetValue(player, out GamepadBindingMap? own) ? own : named.Maps[1];
+            BindingChoice choice = Choose(console, player, null, profile);
+            if (ProfileOf(choice, console) is { } named) return named.Maps[choice.MapPlayer];
+            return choice.MapPlayer > 1 ? _byPlayer[console][choice.MapPlayer] : For(console);
         }
 
-        public bool HasOwn(string console, int player, string profile) =>
-            IsDefault(profile) || Named(console, profile) is not { } named ? HasOwn(console, player) : player > 1 && named.Maps.ContainsKey(player);
+        public bool HasOwn(string console, int player, string profile) => player > 1 && Choose(console, player, null, profile).MapPlayer == player;
 
         // The player's own map in a profile, begun as a copy of player 1's there the first time it is changed.
         public GamepadBindingMap Own(string console, int player, string profile)
         {
-            if (IsDefault(profile) || Named(console, profile) is not { } named) return Own(console, player);
-            if (!named.Maps.TryGetValue(player, out GamepadBindingMap? own)) named.Maps[player] = own = Copy(named.Maps[1]);
+            if (ProfileOf(Choose(console, 1, null, profile), console) is not { } named) return Own(console, player);
+            if (!named.Maps.TryGetValue(player, out GamepadBindingMap? own)) { named.Maps[player] = own = Copy(named.Maps[1]); Changed(); }
             return own;
         }
 
         public void Forget(string console, int player, string profile)
         {
-            if (IsDefault(profile) || Named(console, profile) is not { } named) Forget(console, player);
-            else if (player > 1) named.Maps.Remove(player);
+            if (ProfileOf(Choose(console, 1, null, profile), console) is not { } named) Forget(console, player);
+            else if (player > 1 && named.Maps.Remove(player)) Changed();
         }
 
         // gamepadbindings.json as the platform library hands it over: each console's map, then each player's who has one.
@@ -230,21 +254,20 @@ namespace EmuSen.Endymion.Input
         }
 
         // Both files are Endymion's in the platform library, their one reader and writer - see EmuSen_Input.md §5.2.
-        public bool Save()
+        private PadFile PadModel() => new()
         {
-            var pads = new PadFile
-            {
-                Consoles = _byConsole.ToDictionary(kv => kv.Key, kv => kv.Value.ButtonToPad),
-                Players = _byPlayer.ToDictionary(kv => kv.Key, kv => kv.Value.ToDictionary(p => p.Key, p => p.Value.ButtonToPad)),
-            };
-            var profiles = _profiles.ToDictionary(kv => kv.Key, kv => new ProfileFile
-            {
-                Default = kv.Value.Chosen,
-                Profiles = kv.Value.Named.ToDictionary(p => p.Name, p => p.Maps.ToDictionary(m => m.Key, m => m.Value.ButtonToPad)),
-                Games = kv.Value.Games.Count > 0 ? new Dictionary<string, string>(kv.Value.Games) : null,
-            });
-            return BindingFiles.Save(BindingFile.Gamepad, pads) & BindingFiles.Save(BindingFile.Profiles, profiles);
-        }
+            Consoles = _byConsole.ToDictionary(kv => kv.Key, kv => kv.Value.ButtonToPad),
+            Players = _byPlayer.ToDictionary(kv => kv.Key, kv => kv.Value.ToDictionary(p => p.Key, p => p.Value.ButtonToPad)),
+        };
+
+        private Dictionary<string, ProfileFile> ProfileModel() => _profiles.ToDictionary(kv => kv.Key, kv => new ProfileFile
+        {
+            Default = kv.Value.Chosen,
+            Profiles = kv.Value.Named.ToDictionary(p => p.Name, p => p.Maps.ToDictionary(m => m.Key, m => m.Value.ButtonToPad)),
+            Games = kv.Value.Games.Count > 0 ? new Dictionary<string, string>(kv.Value.Games) : null,
+        });
+
+        public bool Save() => BindingFiles.Save(BindingFile.Gamepad, PadModel()) & BindingFiles.Save(BindingFile.Profiles, ProfileModel());
 
         public static GamepadBindings Load(IEnumerable<string> consoles)
         {

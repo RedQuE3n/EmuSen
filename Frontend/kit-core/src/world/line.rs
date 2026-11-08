@@ -1,4 +1,4 @@
-//! A world as one line of plain text, the declarative way a host hands the kit its worlds (EmuSen_Kit.md §7.17):
+//! A world as one line of plain text, the declarative way a host hands the kit its worlds (EmuSen_Kit.md §7.18):
 //! `HUE SHAPE CRATERS BANDS CAP RING MOONS [#LIGHT #MIDDLE #RIM]`, shapes `planet`, `shards`, `gem`, rings `none`,
 //! `subtle`, `big`; a world without the three colours is drawn from its hue.
 

@@ -25,11 +25,14 @@ pub struct Router {
     held: [bool; 16],
     queue: VecDeque<PadEvent>,
     swap_accept_back: bool,
+    chord_only: bool,
+    /// Buttons held while only the chord left, kept from the grammar until let go.
+    muted: [bool; 16],
 }
 
 impl Router {
     pub fn new(tiers: RepeatTiers) -> Router {
-        Router { grammar: Grammar::new(tiers), held: [false; 16], queue: VecDeque::new(), swap_accept_back: false }
+        Router { grammar: Grammar::new(tiers), held: [false; 16], queue: VecDeque::new(), swap_accept_back: false, chord_only: false, muted: [false; 16] }
     }
 
     pub fn set_tiers(&mut self, tiers: RepeatTiers) {
@@ -38,6 +41,12 @@ impl Router {
 
     pub fn set_swap_accept_back(&mut self, swap: bool) {
         self.swap_accept_back = swap;
+    }
+
+    /// While on, a pump gives the menu chord alone, and a button held then is the grammar's only once let go and pressed
+    /// again: a game on screen owns the pad (EmuSen_Kit.md §7.17).
+    pub fn set_chord_only(&mut self, on: bool) {
+        self.chord_only = on;
     }
 
     pub fn is_held(&self, button: UiButton) -> bool {
@@ -54,9 +63,13 @@ impl Router {
         while let Some(event) = self.queue.pop_front() {
             self.held[event.button.index()] = event.down;
         }
-        let held = self.held;
-        let is_held = |button: UiButton| held[button.index()];
-        let menu_chord = self.grammar.menu_chord(is_held);
+        let raw = self.held;
+        let menu_chord = self.grammar.menu_chord(|button: UiButton| raw[button.index()]);
+        for (muted, &down) in self.muted.iter_mut().zip(&raw) {
+            *muted = down && (*muted || self.chord_only);
+        }
+        let muted = self.muted;
+        let is_held = |button: UiButton| raw[button.index()] && !muted[button.index()];
         if menu_chord {
             self.grammar.forget(is_held);
         }

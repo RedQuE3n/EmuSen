@@ -1603,7 +1603,7 @@ Module {
     }
     Component {
         file: "pad.cxxqt.h"
-        lineNumber: 59
+        lineNumber: 68
         name: "PadRouter"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1618,7 +1618,7 @@ Module {
             write: "setTiers"
             notify: "tiersChanged"
             index: 0
-            lineNumber: 65
+            lineNumber: 74
         }
         Property {
             name: "swapAcceptBack"
@@ -1627,7 +1627,7 @@ Module {
             write: "setSwapAcceptBack"
             notify: "swapAcceptBackChanged"
             index: 1
-            lineNumber: 66
+            lineNumber: 75
         }
         Property {
             name: "clockRunning"
@@ -1636,51 +1636,66 @@ Module {
             write: "setClockRunning"
             notify: "clockRunningChanged"
             index: 2
-            lineNumber: 67
+            lineNumber: 76
         }
-        Signal { name: "tiersChanged"; lineNumber: 78 }
-        Signal { name: "swapAcceptBackChanged"; lineNumber: 79 }
-        Signal { name: "clockRunningChanged"; lineNumber: 80 }
+        Property {
+            name: "chordOnly"
+            type: "bool"
+            read: "getChordOnly"
+            write: "setChordOnly"
+            notify: "chordOnlyChanged"
+            index: 3
+            lineNumber: 77
+        }
+        Signal { name: "tiersChanged"; lineNumber: 90 }
+        Signal { name: "swapAcceptBackChanged"; lineNumber: 91 }
+        Signal { name: "clockRunningChanged"; lineNumber: 92 }
+        Signal { name: "chordOnlyChanged"; lineNumber: 93 }
         Signal {
             name: "pressed"
-            lineNumber: 85
+            lineNumber: 98
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
-        Signal { name: "menuChord"; lineNumber: 86 }
+        Signal { name: "menuChord"; lineNumber: 99 }
         Method {
             name: "setTiers"
-            lineNumber: 73
+            lineNumber: 83
             Parameter { name: "value"; type: "Repeat::Tiers" }
         }
         Method {
             name: "setSwapAcceptBack"
-            lineNumber: 75
+            lineNumber: 85
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setClockRunning"
-            lineNumber: 77
+            lineNumber: 87
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "setChordOnly"
+            lineNumber: 89
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "push"
-            lineNumber: 81
+            lineNumber: 94
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "down"; type: "bool" }
         }
-        Method { name: "pump"; lineNumber: 82 }
+        Method { name: "pump"; lineNumber: 95 }
         Method {
             name: "pumpAt"
-            lineNumber: 83
+            lineNumber: 96
             Parameter { name: "now_ms"; type: "int" }
         }
         Method {
             name: "isHeld"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 84
+            lineNumber: 97
             Parameter { name: "button"; type: "Pad::PadButton" }
         }
     }

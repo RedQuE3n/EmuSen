@@ -48,7 +48,7 @@ pub fn pair_of(button: UiButton) -> Option<UiButton> {
     (button == UiButton::PageUp).then_some(UiButton::PageDown)
 }
 
-/// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.18).
+/// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.19).
 pub fn action_lines(screen: Screen) -> String {
     entries(screen).iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
 }

@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 42;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 43;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -1064,6 +1064,30 @@ pub struct PlatformLibrary {
         unsafe extern "C" fn(which: u32, consoles: *const u8, consoles_len: usize, out: *mut u8, len: usize) -> i64,
     pub emusen_endymion_bindings_save: unsafe extern "C" fn(which: u32, document: *const u8, document_len: usize) -> i32,
     pub emusen_endymion_bindings_defaults: unsafe extern "C" fn(which: u32, out: *mut u8, len: usize) -> i64,
+    pub emusen_endymion_bindings_bound: unsafe extern "C" fn(
+        console: *const u8,
+        console_len: usize,
+        player: i32,
+        game: *const u8,
+        game_len: usize,
+        out: *mut i32,
+        cap: usize,
+    ) -> i64,
+    pub emusen_endymion_bindings_choose: unsafe extern "C" fn(
+        gamepad: *const u8,
+        gamepad_len: usize,
+        profiles: *const u8,
+        profiles_len: usize,
+        console: *const u8,
+        console_len: usize,
+        player: i32,
+        game: *const u8,
+        game_len: usize,
+        profile: *const u8,
+        profile_len: usize,
+        out: *mut u8,
+        len: usize,
+    ) -> i64,
     pub emusen_endymion_sdl_lend: unsafe extern "C" fn(handle: *mut ::std::os::raw::c_void) -> i32,
     pub emusen_endymion_sdl_hint: unsafe extern "C" fn(name: *const u8, name_len: usize, out: *mut u8, cap: usize) -> i64,
     pub emusen_endymion_sim_pad_new: unsafe extern "C" fn(path: *const u8, path_len: usize) -> *mut emusen_endymion_sim_pad,
@@ -1535,6 +1559,8 @@ impl PlatformLibrary {
         let emusen_endymion_bindings_load = unsafe { __library.get(b"emusen_endymion_bindings_load\0") }.map(|sym| *sym)?;
         let emusen_endymion_bindings_save = unsafe { __library.get(b"emusen_endymion_bindings_save\0") }.map(|sym| *sym)?;
         let emusen_endymion_bindings_defaults = unsafe { __library.get(b"emusen_endymion_bindings_defaults\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_bound = unsafe { __library.get(b"emusen_endymion_bindings_bound\0") }.map(|sym| *sym)?;
+        let emusen_endymion_bindings_choose = unsafe { __library.get(b"emusen_endymion_bindings_choose\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_lend = unsafe { __library.get(b"emusen_endymion_sdl_lend\0") }.map(|sym| *sym)?;
         let emusen_endymion_sdl_hint = unsafe { __library.get(b"emusen_endymion_sdl_hint\0") }.map(|sym| *sym)?;
         let emusen_endymion_sim_pad_new = unsafe { __library.get(b"emusen_endymion_sim_pad_new\0") }.map(|sym| *sym)?;
@@ -1807,6 +1833,8 @@ impl PlatformLibrary {
             emusen_endymion_bindings_load,
             emusen_endymion_bindings_save,
             emusen_endymion_bindings_defaults,
+            emusen_endymion_bindings_bound,
+            emusen_endymion_bindings_choose,
             emusen_endymion_sdl_lend,
             emusen_endymion_sdl_hint,
             emusen_endymion_sim_pad_new,
@@ -2758,6 +2786,52 @@ impl PlatformLibrary {
     }
     pub unsafe fn emusen_endymion_bindings_defaults(&self, which: u32, out: *mut u8, len: usize) -> i64 {
         unsafe { (self.emusen_endymion_bindings_defaults)(which, out, len) }
+    }
+    pub unsafe fn emusen_endymion_bindings_bound(
+        &self,
+        console: *const u8,
+        console_len: usize,
+        player: i32,
+        game: *const u8,
+        game_len: usize,
+        out: *mut i32,
+        cap: usize,
+    ) -> i64 {
+        unsafe { (self.emusen_endymion_bindings_bound)(console, console_len, player, game, game_len, out, cap) }
+    }
+    pub unsafe fn emusen_endymion_bindings_choose(
+        &self,
+        gamepad: *const u8,
+        gamepad_len: usize,
+        profiles: *const u8,
+        profiles_len: usize,
+        console: *const u8,
+        console_len: usize,
+        player: i32,
+        game: *const u8,
+        game_len: usize,
+        profile: *const u8,
+        profile_len: usize,
+        out: *mut u8,
+        len: usize,
+    ) -> i64 {
+        unsafe {
+            (self.emusen_endymion_bindings_choose)(
+                gamepad,
+                gamepad_len,
+                profiles,
+                profiles_len,
+                console,
+                console_len,
+                player,
+                game,
+                game_len,
+                profile,
+                profile_len,
+                out,
+                len,
+            )
+        }
     }
     pub unsafe fn emusen_endymion_sdl_lend(&self, handle: *mut ::std::os::raw::c_void) -> i32 {
         unsafe { (self.emusen_endymion_sdl_lend)(handle) }

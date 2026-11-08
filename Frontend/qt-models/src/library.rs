@@ -101,7 +101,7 @@ pub struct LibraryRow {
     pub libretro: bool,
     /// The mark before the engine's name: its astronomical symbol, its maker's glyph, or libretro's badge (§24.6).
     pub engine_mark: String,
-    /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.17).
+    /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.18).
     pub world: String,
 }
 

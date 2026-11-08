@@ -122,7 +122,7 @@ namespace EmuSen.Mistress.Pages
             if (console is not null)
             {
                 IReadOnlyList<string> profiles = _host.PadBindings.Profiles(console);
-                string chosen = _host.PadBindings.Resolve(console, _host.GameProfile);
+                string chosen = _host.PadBindings.Resolve(console, _host.RunningGame);
                 rows.Add(Choice("gprofile", "Profile", $"The {NameOf(console)} bindings this game plays with; the console's own unless one is chosen here.", profiles, profiles.ToList().IndexOf(chosen),
                     i => _host.GameProfile = profiles[i] == _host.PadBindings.ConsoleDefault(console) ? null : profiles[i],
                     () => Said($"This game plays with the {chosen} profile.", "Left and Right choose another; Settings ▸ Controllers ▸ Profiles makes them.")));
@@ -138,7 +138,7 @@ namespace EmuSen.Mistress.Pages
         private ScreenPane SeatPane(int player)
         {
             string? pad = _host.Players.FirstOrDefault(s => s.Player == player)?.Pad;
-            string profile = _host.RunningConsole is { } console ? $", with the {_host.PadBindings.Resolve(console, _host.GameProfile)} profile" : "";
+            string profile = _host.RunningConsole is { } console ? $", with the {_host.PadBindings.Resolve(console, _host.RunningGame)} profile" : "";
             return Said(pad is null ? $"No one plays as Player {player}." : $"Player {player} plays on the {pad}{profile}.",
                 "Left and Right pick another connected controller; Bindings opens the drawing for this console.");
         }

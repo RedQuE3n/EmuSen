@@ -1,4 +1,4 @@
-//! The program's splash against Mistress's own (EmuSen_Kit.md §7.17), in a process of its own, as each harness wants.
+//! The program's splash against Mistress's own (EmuSen_Kit.md §7.18), in a process of its own, as each harness wants.
 
 mod common;
 
@@ -9,7 +9,7 @@ use emusen_qt_models::words::splash_caption;
 use emusen_qt_test::Harness;
 
 
-/// The program's finished splash against Mistress's own with the canvas's eleven consoles (EmuSen_Kit.md §7.17): each
+/// The program's finished splash against Mistress's own with the canvas's eleven consoles (EmuSen_Kit.md §7.18): each
 /// console's world from this commit's systems table, in its order, whatever engines the build has. The test holds the
 /// splash up, as the C# picture holds it with start-up work never done.
 #[test]

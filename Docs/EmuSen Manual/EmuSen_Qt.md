@@ -551,14 +551,72 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
   settled when its figures are taken, and they are written next to these.
 - *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
   Cores window's job, in the player's tree.
-- *The pad driving the game.* `PadReader` puts presses on the interface; the game's buttons (`emusen_crystal_input_button`
-  from Endymion's PadButton) are a frame-thread poll of the same pads, which must not open them twice. Recommended: the
-  reader hands the game's buttons to the session as well as the interface's presses, one owner of the pads.
+- *The pad driving the game.* Done 2026-11-08, §1.8.5.
 - *A device core's picture.* The device is lent, but the chain still advances from `picture_copy`; the lend's and the
   ring's pictures (`emusen_serenity_chain_advance_lent`, `_advance_ring`) go through the feed's draw on the render thread.
 - *The sound*, drained and dropped until Endymion's game player is wrapped; *the picture's content* read back under
   `QQuickRenderControl` (§8.1, tier 2); and the chain dropped on the render thread when a session closes (it is now
   dropped with the feed, after the window).
+
+#### 1.8.5 The pad drives the game **[M 2026-11-08]**
+
+One owner of the pads (Endymion) and one reader (`PadReader`'s thread, `EmuSen_Kit.md` §7.15): each tick reads the pads
+for the interface and for the running game, the second through each player's bindings (`EmuSen_Kit.md` §7.17). The
+game's read crosses to the frame thread by a hand-over (`GamePads`) and is routed there:
+- `input.rs`, **`GameInput`** (`emusen-qt-models`): owned by the session's frame thread. At open it reads the session's
+  console, ports (one where a core declares none, as Mistress reads them) and axes, asks them of the pads and resets
+  Endymion's router (`emusen_endymion_router_*`, now wrapped by the platform client); before each frame it takes a newer
+  read, polls the router and tells the core each change in the router's order (`input_connected`, `input_button`,
+  `input_axis`), applied at once since the frame thread calls them between frames. The router is the C# front end's
+  (`PortRouter`), so both front ends route by one rule.
+- `SessionModel.pads` names the reader's hand-over (`PadReader.gamePads`); a session with none named hears no pad.
+- While the game runs and is not paused, `PadRouter.chordOnly` keeps the walk from game input and the menu chord reaches
+  the program; `Play.qml` pauses on it until the Pause Card opens there.
+
+The new dependency, `emusen-qt-models` on `emusen-qt-endymion`, is stated: the session must reach the one reader's
+hand-over, and a third crate for one struct would add a boundary with nothing behind it. Owed: the seats the player
+arranges and keeps, rumble to the players' pads, the keyboard as a player, a core's ports changing while it runs
+(Mistress's `Resize`). The C# front end now asks interface 43's `_choose` (decided 2026-11-08,
+`EmuSen_RustPlatform.md` §50), so the binding rule has one owner.
+
+**Proof in the window, measured 2026-11-08** (`qt-play/tests/pads.rs`): `Play.qml` loaded by the harness in a compositor
+of the test's own (`emusen_qt_test::compositor`, `kwin_wayland --virtual`), Qt adopting Serenity's device on the RX 6800
+before the window is shown (`Harness::load_prepared`), the test core installed in the player's cores folder and approved
+as a player would, and an SDL virtual pad named to the reader alone. Before a game the router gives everything; while the
+game runs it gives the chord alone; A (East, Endymion's default) held half a second is heard on port 0, read afterwards
+from the battery file the test core counts it in; the guide button pauses the game and gives the walk the pad, and again
+resumes it; the reader and session say no failure and the validation layer's findings are none. 1.5 s. Seeded and
+caught: the window not naming the reader's hand-over (no battery file: the game heard nothing), `chordOnly` never set
+(the router gave everything during the game), and the chord not reaching the session (no pause in 10 s).
+
+#### 1.8.6 The game's sound **[M 2026-11-08]**
+
+The sound takes the C# front end's path through the platform library, so it has one owner: Endymion's game player
+(`emusen_endymion_audio_*`, `AudioPlayer`'s, `EmuSen_Audio_Sync.md` §7) on SDL's playback device, steered by a rate
+control of its own (`emusen_endymion_rate_*`) that absorbs the drift between the game's clock and the device's by
+resampling. The parts, each with one job:
+- `audio.rs`, **`GameSound`** (`emusen-platform-client`): the player and its rate control, made together and freed
+  together; `submit` (interleaved stereo at the game's rate, a new rate reopening the device), `reset`, the queued and
+  taken frames, the device's rate and the volume. `SoundSettings` carries audio.json's three values and the buffer.
+- The session's frame thread (`session.rs`) drains each frame's sound and submits it, where it was drained and dropped
+  (§1.8.3); a game that pauses starts its rate control over, as Mistress's `DrainSound` does. `Session::sounded` reports
+  the frames the player took in, by the rate control's own count. `GameIo` carries the pads and the player into the
+  session together.
+- `SessionModel` lends SDL to the library and makes the player at open; where it cannot be made the game plays without
+  sound and `problem` says so. `sounding` says whether the open game's sound reaches a player.
+
+**Owed, stated:** audio.json is not yet read, so the player uses `AudioPlayer`'s own defaults, which are audio.json's
+(32 kHz, 256 ms, a deviation of 0.005, 4,096 frames); the output device, the volume and mute of `appsettings.json` and
+audio.json's `MasterVolume`, `Muted` and `AudioEnabled` wait for the settings screens. The C# clamps audio.json's values
+in `AudioConfig.Bounded`, which has no Rust owner yet; reading the file in Qt needs that rule moved into Galaxia's model
+first, so that the bounds are not copied.
+
+**Proof, measured 2026-11-08** (SDL's dummy driver, nothing reaches the speakers): `platform-client`'s `sound` (the
+player opens at 32 kHz, reopens at a game's 48 kHz and again at 32 kHz, holds a tone's 800 frames, and its rate control
+took exactly those); `qt-models`' `session` on the RX 6800 (every handed frame's sound, a sixtieth of the test core's
+32 kHz, reached the player, and a paused game played none); `qt-play`'s `pads` (the window's game is `sounding`).
+Seeded and caught: the submit skipped (no frames taken, `session`), the device opened at a fixed rate (`sound`), and the
+window's player made and dropped (`pads`).
 
 ### 1.9 Homes for the front-end logic still in C#
 
@@ -946,14 +1004,14 @@ words, so a QML file names a word and never writes one (§1.3); `words::counted`
 **The bodies** (decided 2026-11-08 by the tester, `EmuSen_Interface.md` §24.6): the splash draws each console's body,
 as its tile does. `library::world_of` reads a console's body from the systems table's look, the one owner (its shape,
 its three colours where the table gives three, its craters, bands, cap and moons), and writes it as the kit's world line
-(`EmuSen_Kit.md` §7.17); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
+(`EmuSen_Kit.md` §7.18); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
 hands them to `Moonrise.worlds`, and every console's row carries its line as the role `world`. The draft stays the
 splash's oracle for everything else.
 
 **Reduced motion and the skip's keys** (measured 2026-11-08). `start.rs` reads `AppSettings.ReducedMotion` beside
 `StartupSplash` and hands it to the window as `reducedMotion`, which sets `Kit.Tokens.reducedMotion`; the kit's
 `Moonrise` then draws its last frame from the start and holds it for the splash's length, as Mistress's
-`Reduced_motion_shows_the_still_frame_for_the_splashs_length` does (`EmuSen_Kit.md` §7.18). A key skips the splash only
+`Reduced_motion_shows_the_still_frame_for_the_splashs_length` does (`EmuSen_Kit.md` §7.19). A key skips the splash only
 when the kit's map makes it a press (§1.7: the arrows, Return and Enter, Escape, and the map's other keys), through
 `MoonriseModel.takeKey`; any other key (Tab, Shift, a letter) is kept from the screens behind and skips nothing. A pad
 press and a click still skip it. One difference from Mistress is named: the player's "system" choice reads the desktop's
@@ -1053,7 +1111,7 @@ corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`,
 
 - **What a screen shows is a model's.** Choose a console is one `Repeater` over `LibraryModel`: the places first
   (`LibraryModel.places` counts them), then each console with games as its body; the tiles' boxes and the walk between
-  rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.18), the body's size `Body.tileWidth`/`tileHeight`, the focused
+  rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.19), the body's size `Body.tileWidth`/`tileHeight`, the focused
   console's words its row's `fullName` and `facts`, the fan `GameModel` over `gamesOf` of the selected row. The grid's
   cells are a `GridView` over `GameModel`, its heading the row it opened. Home's Continue and shelf are
   `LibraryModel.recent` (the recently played as plain data, kept current by the model), its places `Words.homePlaces`,
@@ -1069,7 +1127,7 @@ corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`,
   other actions (X's random game, the game page, Home's card, Home's other six places) change nothing until their stage.
   `Main.qml` shows the screen `Screens.shown` names and hands each screen's signal to it in one call. A change is
   applied after the event that asked (`qt_thread().queue`): applied at once, the screen it opened took the same B press
-  and went back a second screen, which the seeded fault below shows. The actions are declared as data (§7.18 of
+  and went back a second screen, which the seeded fault below shows. The actions are declared as data (§7.19 of
   `EmuSen_Kit.md`): `HelpModel.actionLines` from `help.rs`, whose entries now carry their action keys.
 
 **Held to** (`qt-app/tests/screens.rs`, measured 2026-11-08, beside `program.rs` whose `sandbox` and `wait_for` moved to
@@ -1080,7 +1138,7 @@ console on the same console; Y opens the favourites; B twice goes Home, and noth
 window's children, finds a `Repeater`'s items. `qt-models/tests/library.rs` holds `screens::step` and each screen's
 declared actions read back by the walk's parser. Seeded faults, each reverted: the switch applied at once failed the
 screens test at B from the grid; the favourites' action key misspelt failed it at Y. The kit's two are in `EmuSen_Kit.md`
-§7.18.
+§7.19.
 
 **Step 4, acceptance** (measured 2026-11-08; `qt-app/tests/acceptance.rs`). The program over a sandbox of the canvas's
 eleven consoles, one synthetic image each under its own folder with its first extension and ten on the Super Nintendo,
@@ -1092,7 +1150,7 @@ sizes: its `.mockup.spec` at 1280 × 800 and 1920 × 1200 (two units, token colo
 and pointer reach, no chrome, contrast, the palette, the floor) at every size, and nothing logged. Each state is recorded
 as a spec and grabbed; `EMUSEN_QT_COMPARE` names the folder. Choose a console's boxes that follow from eleven consoles
 (the console tiles, bodies, names, counts, ring and the second orbit) are held by kit-core's layout test against the
-canvas's own numbers (`EmuSen_Kit.md` §7.18), not by this state of five.
+canvas's own numbers (`EmuSen_Kit.md` §7.19), not by this state of five.
 
 Fixed on the way, each found by the comparison or the gate: Home's Continue read its game through an invokable, so the
 binding never saw the games arrive (it now reads the count first); the grid opened with no current cover; the help bar's
@@ -1147,7 +1205,7 @@ named in title case; the grid's focused words on two lines at 628 and 670).
 - **The rest of the picture.** The faces' weights are named (Barlow Condensed Medium, the wordmark Light), since both
   files share a family and Qt chose the Light; the places' icons, the heart, the engine symbols, the sparkles, the
   crescent and the warning mark are the canvases' own paths, kept as data in `marks.rs` and read through the `Marks`
-  singleton, since a QML file writes no words (`Glyph.qml`, `EngineMark.qml` with the project's pixel alien); an engine's name and tag are in its console's hue inside a `Kit.Scene` (`EmuSen_Kit.md` §7.19), its mark
+  singleton, since a QML file writes no words (`Glyph.qml`, `EngineMark.qml` with the project's pixel alien); an engine's name and tag are in its console's hue inside a `Kit.Scene` (`EmuSen_Kit.md` §7.20), its mark
   `engine_mark` (a sky-named core's symbol, else its maker's glyph, libretro's badge); the consoles follow the
   runtime's shelves; the grid's heading is a place's short name ("ALL") and its shoulders wrap; Home's places carry
   their lines (`words::home_lines`: the games, each tool's brief or what it does, the look and the sound from the

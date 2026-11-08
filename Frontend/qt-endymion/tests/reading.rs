@@ -157,7 +157,7 @@ fn the_thread_hands_on_each_tick_and_stops_when_the_sink_refuses_or_the_reader_d
     let (sent, got) = mpsc::channel();
     let opener = (Arc::clone(&p), Arc::clone(&set));
     let reader =
-        Reader::spawn(move || Pads::simulated(&opener.0, &opener.1).map_err(|e| e.to_string()), None, move |d| sent.send(d).is_ok());
+        Reader::spawn(move || Pads::simulated(&opener.0, &opener.1).map_err(|e| e.to_string()), None, None, move |d| sent.send(d).is_ok());
     let wait = Duration::from_secs(2);
     let first = got.recv_timeout(wait).unwrap().unwrap();
     assert_eq!((first.family, first.connected), (Some(PadFamily::PlayStation), Some(1)));
@@ -169,7 +169,7 @@ fn the_thread_hands_on_each_tick_and_stops_when_the_sink_refuses_or_the_reader_d
     assert!(got.recv_timeout(Duration::from_millis(100)).is_err(), "nothing after the reader dropped");
 
     let (sent, got) = mpsc::channel();
-    let refused = Reader::spawn(|| Err("no pads here".to_string()), None, move |d| sent.send(d).is_ok() && false);
+    let refused = Reader::spawn(|| Err("no pads here".to_string()), None, None, move |d| sent.send(d).is_ok() && false);
     assert_eq!(got.recv_timeout(wait).unwrap(), Err("no pads here".to_string()), "a failed opening is said once");
     drop(refused);
 }

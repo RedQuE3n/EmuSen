@@ -172,6 +172,8 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PauseReel => HelpScreen::PauseReel,
         Screen::Card => HelpScreen::Card,
         Screen::Search => HelpScreen::Search,
+        Screen::Question => HelpScreen::Question,
+        Screen::QuestionBack => HelpScreen::QuestionBack,
     };
     shown.repr
 }

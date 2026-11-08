@@ -39,30 +39,12 @@ const KEY_G: i32 = 0x47;
 const KEY_R: i32 = 0x52;
 const KEY_A: i32 = 0x41;
 
-/// The search's differences named in EmuSen_Qt.md §7.5: the keys and the covers are reached from each other by the
-/// shoulders, which the gate's walk (the four directions) does not press, and the test walks them below; and the lifted
-/// cover reaches over the field's foot, as Mistress's geometry has it.
+/// The search's difference named in EmuSen_Qt.md §7.5: the keys and the covers are reached from each other by the
+/// shoulders, which the gate's walk (the four directions) does not press; the test walks them below.
 fn named_in_search(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let node = |r: &str| r.trim().split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
     let unreached = fault.split("the pad does not reach: ").nth(1).and_then(node).is_some_and(|n| n.name.starts_with("gridCell.") || n.name == "GalleryKeyboard");
-    let over = fault.split("overlap: ").nth(1).is_some_and(|r| {
-        let mut pair = r.split(" and ").map(node);
-        let (a, b) = (pair.next().flatten(), pair.next().flatten());
-        a.is_some_and(|a| a.name == "GallerySearch") && b.is_some_and(|b| in_cell(tree, b))
-    });
-    named(fault, tree, size) || unreached || over
-}
-
-/// Whether a node is a grid cell's or inside one.
-fn in_cell(tree: &emusen_qt_test::tree::Tree, node: &emusen_qt_test::tree::Node) -> bool {
-    let mut at = Some(node);
-    while let Some(n) = at {
-        if n.name.starts_with("gridCell.") {
-            return true;
-        }
-        at = tree.nodes.iter().find(|p| p.id == n.parent);
-    }
-    false
+    named(fault, tree, size) || unreached
 }
 
 /// The fixture's games, as Mistress's own-look library names them.
@@ -297,6 +279,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     hold(&mut scene, "GamesSearch", &mockup::Mockup::default(), named_in_search, &mut report);
     // The shoulders move the focus to the covers, the keyboard staying docked without its ring, and back to the keys.
     scene.resize(1280, 800);
+    scene.wait(150);
     scene.pad(UiButton::PageDown);
     wait_for(&mut scene, "screens", "shown", "SearchGrid", 1000);
     assert_eq!(focused(&mut scene), "gridCell.0", "the found game focused");

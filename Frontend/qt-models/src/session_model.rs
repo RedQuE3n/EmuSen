@@ -337,9 +337,10 @@ impl qobject::SessionModel {
         match resume::answer(index) {
             Answer::Load => self.let_go(true),
             Answer::Fresh => self.let_go(false),
+            // The game let go unplayed: no longer named, so choosing it again opens it again.
             Answer::Back => {
                 self.as_mut().set_resume_asked(false);
-                self.close();
+                self.set_game(QString::default());
             }
         }
     }

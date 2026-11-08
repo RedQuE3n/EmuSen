@@ -275,6 +275,7 @@ FocusScope {
                         hue: cell.hue
                         favourite: cell.favourite
                         lit: cell.lit
+                        lifts: !root.searching
                         pixelScale: root.pixelScale
                     }
                 }

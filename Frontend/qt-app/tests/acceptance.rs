@@ -188,7 +188,20 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     scene.pad(UiButton::Accept);
     until(scene, "the save resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
     assert_eq!(scene.property("session", "notice"), "State saved to slot 1");
+    // The notice over the gameplay, at the top right, with its shadow beneath it (EmuSen_Interface.md §5.4, §18.6): the
+    // game's picture 8 pixels under the card darker while the notice shows than once it has gone.
+    wait_for(scene, "notices", "shown", "true", 1000);
+    scene.wait(400);
+    let tree = scene.tree();
+    let card = &tree.nodes[tree.find_named("notice").expect("the notice") as usize];
+    let under = (card.x + card.w / 2.0, card.y + card.h + 8.0);
+    assert!(card.x + card.w > 1100.0 && card.y < 120.0, "at the top right: {:?}", (card.x, card.y, card.w, card.h));
+    let shaded = scene.colours_at(&[under])[0].expect("under the notice");
     scene.wait(2500);
+    assert_eq!(scene.property("notices", "shown"), "false");
+    let bare = scene.colours_at(&[under])[0].expect("under the notice");
+    let sum = |c: emusen_kit_core::tokens::Colour| u32::from(c.r) + u32::from(c.g) + u32::from(c.b);
+    assert!(sum(shaded) + 30 < sum(bare), "the notice's shadow: {shaded:?} under it, {bare:?} once gone");
     chord(scene);
     scene.pad(UiButton::Down);
     until(scene, "the reel's pictures served", |s| drawn(s, "PanePicture"));
@@ -231,6 +244,10 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     // X saves the picture on show as a screenshot, and the card stays.
     scene.pad(UiButton::Screensaver);
     until(scene, "the screenshot saved", |s| s.property("session", "notice") == "Screenshot saved");
+    // Its notice shown over the card, then gone (2 s, then Exit), so the pages held next are the card's alone.
+    wait_for(scene, "notices", "shown", "true", 1000);
+    wait_for(scene, "notices", "shown", "false", 3000);
+    scene.wait(400);
     assert_eq!(scene.property("cardCanvas", "slide"), "0", "the card stays");
 }
 
@@ -457,6 +474,9 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(text_of(&mut scene, "continueFacts").is_some_and(|t| t == "Paused just now"), "Continue says when it was paused");
     assert!(shown(&mut scene, "continueFrame") && !shown(&mut scene, "continueArt"), "Continue shows the paused frame");
     assert!(shown(&mut scene, "continueHeading"));
+    // The screenshot's notice from the card gone, so Home is still (it holds 2 s, then fades over Exit).
+    wait_for(&mut scene, "notices", "shown", "false", 3000);
+    scene.wait(400);
     hold(&mut scene, "Home", &mockup_of("Home"), named_difference, &mut report);
     scene.assert_still("Home over the suspended game");
 
@@ -468,6 +488,35 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(scene.frames() - before > 10, "the resumed game drawn at the display's rate: {} frames in 0.5 s", scene.frames() - before);
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, "the game closed and Home shown", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
+
+    // Closed, the game was left off: the runtime holds its resume state, and its next start asks the Resume question
+    // over the game held unplayed (EmuSen_Interface.md §18.3), Continue focused; B goes back to Home with the game closed.
+    assert!(scene.set_property("game", "game", cobalt.to_str().unwrap()));
+    wait_for(&mut scene, "session", "resumeAsked", "true", 5000);
+    scene.wait(450);
+    assert_eq!(text_of(&mut scene, "questionTitle").as_deref(), Some("Continue where you left off?"));
+    assert!(text_of(&mut scene, "questionCaption").is_some_and(|t| t.contains("Resume ◂ Ask each time ▸")));
+    assert_eq!(scene.property("session", "firstPictureMs"), "0", "the game held unplayed behind the question");
+    until(&mut scene, "Continue focused", |s| {
+        let tree = s.tree();
+        s.focus(&tree).is_some_and(|i| tree.nodes[i as usize].name == "answer.0")
+    });
+    hold(&mut scene, "ResumeQuestion", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.pad(UiButton::Back);
+    until(&mut scene, "B closing the held game", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
+    // B let the game go unplayed, so choosing it again opens it again and asks again; Continue loads where it was left
+    // off and the game plays.
+    assert!(scene.set_property("game", "game", cobalt.to_str().unwrap()));
+    wait_for(&mut scene, "session", "resumeAsked", "true", 5000);
+    scene.wait(450);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "Continue playing the game", |s| s.property("session", "resumeAsked") == "false" && s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    let before = scene.frames();
+    scene.wait(500);
+    assert!(scene.frames() - before > 10, "the resumed game drawn: {} frames in 0.5 s", scene.frames() - before);
+    assert!(!scene.property("session", "notice").starts_with("Could not"), "{}", scene.property("session", "notice"));
+    assert!(scene.set_property("game", "game", ""));
+    until(&mut scene, "the game closed again", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
     until(&mut scene, "Continue gone", |s| !shown(s, "continueHeading"));
 
     // Power: the Home card at its Power page, then Quit EmuSen...'s question, each held as Mistress's HomeCardPower and

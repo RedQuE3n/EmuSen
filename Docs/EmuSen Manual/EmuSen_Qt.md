@@ -1765,6 +1765,11 @@ B on the covers, which clears the search there, empties the keys' text too.
   `GridSearched`, `GamesScreen.HintsFor`'s `searched`). The keyboard's close is the screen's Back (`Search` to `Grid`).
   The shoulders reach these declared actions through kit-core's walk, which now leaves the shoulders to a screen that
   has no sections (`EmuSen_Kit.md` §7.26); the grid's shoulders are declared as `previous` and `next`.
+- **No lift under the docked keyboard** (decided 2026-11-08 by the tester). Mistress's geometry (cells at 156, the field
+  to 144, the keyboard from 398) leaves 242 units for a 240-unit cover, so the lit cover's lift (rise 6, scale 1.06)
+  reached 1.2 units over the field's foot and its ring past the grid's clip (the gate's overlap, 2026-11-08). While the
+  keyboard is docked a lit cover keeps its ring and stays in place (`Cover.lifts`); the gate holds `GamesSearchGrid`
+  at its five sizes with no overlap.
 - **The field is never focused**, as LunaP's `GallerySearch` (read-only, not focusable): its Border edge, never the
   accent ring, the words in TextStrong 16 units in. The keys' ring shows only while they hold the focus.
 - **The pointer moves the focus too.** A cover the pointer rests on takes the focus, as every walkable's hover does, and
@@ -1779,9 +1784,7 @@ B on the covers, which clears the search there, empties the keys' text too.
   puts back a Qt Quick view's current index after its walk, not a model's (`KeyboardModel.current`).
 - **Named, for the tester:** the gate's walk presses the four directions, so the covers reached from the keys only by
   the shoulders, and the keys from the covers, are named in the cards test (the test walks them by the shoulders and
-  holds the focus there); on the covers, the lit cover's lift (rise 6, scale 1.06) carries it 1.2 units over the field's
-  foot (142.8 against 144) and its ring past the grid's clip, since Mistress's own geometry (cells at 156, the field to
-  144, the keyboard from 398) leaves 242 units for a 240-unit cover and its ring. Select on the covers opens the List
+  holds the focus there). Select on the covers opens the List
   card, which closes back to the grid without the keyboard, where Mistress's keeps it docked.
 
 **The Resume question at a game's start** (`EmuSen_Interface.md` §18.3; Mistress's `ChooseResumeAsync` and
@@ -1793,7 +1796,9 @@ Galaxia's `ResumeOnLaunch` (`Ask`, `Resume`, `Restart`) read through the platfor
   again, B). `QuestionModel` puts `question::resume` on Qt for the kit's `Question`.
 - `SessionModel.open` opens the game **held** (session.rs's `held`: the frame thread opens it and runs no frame) unless
   the setting is Restart. When the runtime reports it open, slot 0 decides: run it, load the resume state off the GUI
-  thread then run it, or raise `resumeAsked`. `answerResume` loads, starts afresh, or on B closes the game unplayed.
+  thread then run it, or raise `resumeAsked`. `answerResume` loads, starts afresh, or on B lets the game go unplayed:
+  it is no longer named (`Play.Game.game` is now the session's own `game`), so choosing it again opens it and asks
+  again. Before that, B closed the session but left the game named, and the same game chosen again changed nothing.
   A resume the screens ask meanwhile waits, as it waits for a save.
 - **Where it was left off is written as the game closes**, on the frame thread once it has stopped (Mistress writes it
   with the emulation thread stopped), only for a game that ran a frame, so B on the question leaves the old state in
@@ -1804,8 +1809,8 @@ Galaxia's `ResumeOnLaunch` (`Ask`, `Resume`, `Restart`) read through the platfor
 **Notices in the program and their shadow.** The session's words (`State saved to slot 1`, `Rewound`, `Screenshot
 saved`, what failed) now reach `Kit.NoticeModel` and a `NoticeLayer` over everything, fit for gameplay; a job's words
 are `Ok` or `Err`, the latter shown for attention (`noticeAttention`). The notice draws §5.4's shadow
-(`EmuSen_Kit.md` §7.26). **Named, for the tester:** Mistress's notice, LunaP's pill, has no shadow; the design's
-(§18.6) is followed.
+(`EmuSen_Kit.md` §7.26). **A named difference from Mistress** (decided 2026-11-08 by the tester: the design's shadow is
+kept): Mistress's notice, LunaP's pill, has no shadow.
 
 **Home's Continue line and its count** (the Home side-by-side of stage 2). Qt read "Paused just now" where Mistress
 reads "● Super Nintendo · Paused just now", and Games 7 where Mistress says 8. Both are the fixture's: acceptance.rs
@@ -1815,6 +1820,15 @@ game's library row (`Clock.console` from `recent.consoleAt`), and finds none. Wi
 "Super Nintendo · Paused …" (`words::paused_facts`, held by the models' tests). A game opened from outside the library
 shows no console, where Mistress names the session's.
 
+**On Vulkan** (`acceptance.rs`, 2026-11-08, its own compositor on the RX 6800): the saved state's notice at the top
+right over the gameplay, the game's picture 8 pixels under it darker while it shows than once it has gone; the game
+closed and opened again asks the Resume question over the game held with no picture (`firstPictureMs` 0), Continue
+focused, held at the gate's five sizes (`ResumeQuestion`); B closes it to Home; opened again it asks again, and
+Continue loads where it was left off and the game draws more than 10 frames in 0.5 s, with no "Could not" notice. The
+last run passed every step and failed one gate fault: the screenshot's notice, still fading over the Pause Card while
+`PauseCardLeave` was held, read 3.96:1 at 1920 × 1080. The test now lets that notice go before the next page is held;
+that change has not yet run on Vulkan.
+
 **Held to** (measured on 2026-11-08): kit-core 95 tests, qt-test 12, qt-models 37 (`cards`' routes for the search's two
 states, the pointer and B; `library`'s help bars and both shoulders declared; `question`'s resume rules), emusen-qt's
 software-backend tests (`cards`: keys typed on a keyboard and a key clicked narrow the grid to "1 of 8 games", no ring
@@ -1823,7 +1837,8 @@ letters then closing, X keeping the words, B clearing them then going to Choose 
 GamesSearchGrid at the gate's five sizes; `program`'s QML rules and `qmllint`; the rest unchanged), clippy clean.
 Seeded faults, each reverted: the shoulders kept for sections with none (kit-core's `input`); B on the covers back to
 the grid (the models' `cards`); Resume asking (the models' `question`); the covers' focus not held by the Binding (the
-program's `cards`).
+program's `cards`: the found game not focused). A restored seeded file keeps the copy's older time, so cargo kept the
+faulted build until the file was touched again; the runner now touches each file it puts back.
 
 ---
 

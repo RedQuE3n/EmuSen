@@ -1582,7 +1582,7 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   (`shadowOpacity`, `shadowRadius`), cast by a copy of the card's shape through `MultiEffect`, as the cards cast theirs,
   fading and sliding with the card. The software backend still draws none. Mistress's own notice (LunaP's
   `NoticeLayer`, a pill on HudSurface) draws no shadow; the design's (`EmuSen_Interface.md` §18.6, "the shadow") is
-  followed here, a difference named for the tester in `EmuSen_Qt.md` §7.5. Held to `qt-app`'s `acceptance.rs` on Vulkan.
+  kept (decided 2026-11-08 by the tester), a difference from Mistress named in `EmuSen_Qt.md` §7.5. Held to `qt-app`'s `acceptance.rs` on Vulkan.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

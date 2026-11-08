@@ -1,6 +1,6 @@
 //! kit-core's plain values as Qt's types, in one place.
 
-use cxx_qt_lib::{QColor, QPointF, QPolygonF, QVariant, QVector};
+use cxx_qt_lib::{QByteArray, QColor, QHash, QHashPair_i32_QByteArray, QPointF, QPolygonF, QVariant, QVector};
 use emusen_kit_core::tokens::Colour;
 use emusen_kit_core::world::Point;
 
@@ -16,4 +16,13 @@ pub fn polygon(points: &[Point]) -> QVariant {
         vector.append(QPointF::new(p[0], p[1]));
     }
     QVariant::from(&QPolygonF::from(&vector))
+}
+
+/// A list model's roles by number and name, as its `roleNames` returns them.
+pub fn role_names(roles: impl IntoIterator<Item = (i32, &'static str)>) -> QHash<QHashPair_i32_QByteArray> {
+    let mut hash = QHash::default();
+    for (role, name) in roles {
+        hash.insert(role, QByteArray::from(name));
+    }
+    hash
 }

@@ -3,7 +3,7 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QVariant};
+use cxx_qt_lib::{QHash, QHashPair_i32_QByteArray, QModelIndex, QVariant};
 use emusen_kit_core::world;
 
 use crate::convert::{polygon, qcolor};
@@ -216,11 +216,7 @@ impl qobject::BodyShapes {
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        let mut roles = QHash::default();
-        for (role, name) in ROLE_NAMES {
-            roles.insert(role.repr, QByteArray::from(name));
-        }
-        roles
+        crate::convert::role_names(ROLE_NAMES.map(|(role, name)| (role.repr, name)))
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {

@@ -465,7 +465,7 @@ impl qobject::SessionModel {
 
     /// The speed chosen given to the open game, with turbo and slow motion at the card's fastest and slowest
     /// (Mistress's `ApplySpeed`); a change the runtime makes between two frames.
-    fn apply_speed(mut self: Pin<&mut Self>) {
+    fn apply_speed(self: Pin<&mut Self>) {
         let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
         let (slow, turbo) = (pause::SPEEDS[0], pause::SPEEDS[pause::SPEEDS.len() - 1]);
         if let Err(e) = runtime.speed_set(session, self.speed, turbo, slow, 0) {
@@ -499,7 +499,7 @@ impl qobject::SessionModel {
         let stamp = format!("{} {}", now.date().format(&QString::from("yyyy-MM-dd")), now.time().format(&QString::from("HH.mm.ss.zzz")));
         let path = folder.join(format!("{stem} {stamp}.png"));
         self.job(move |runtime, session| {
-            let saved = std::fs::create_dir_all(&path.parent().unwrap_or(&path)).is_ok() && pictures::save_now(runtime, session, &path.to_string_lossy());
+            let saved = std::fs::create_dir_all(path.parent().unwrap_or(&path)).is_ok() && pictures::save_now(runtime, session, &path.to_string_lossy());
             if saved { "Screenshot saved".to_string() } else { format!("Screenshot failed: {}", path.display()) }
         });
     }

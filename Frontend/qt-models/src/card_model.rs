@@ -3,9 +3,10 @@
 //! pane, and a row chosen, stepped or B answered by the card's own rule, so QML writes no words and no logic.
 
 use crate::card::{pages_of, Choice, Deck, Page, Pages};
+use crate::row_roles;
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant, QVector};
+use cxx_qt_lib::{QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QStringList, QVariant, QVector};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -190,12 +191,6 @@ impl cxx_qt::Initialize for qobject::CardModel {
     }
 }
 
-const LABEL: i32 = 0;
-const VALUE: i32 = 1;
-const STEPS: i32 = 2;
-const OPENS: i32 = 3;
-const SECTION_END: i32 = 4;
-const KEY: i32 = 5;
 
 fn list(words: impl Iterator<Item = String>) -> QStringList {
     let mut out = QList::<QString>::default();
@@ -207,24 +202,20 @@ fn list(words: impl Iterator<Item = String>) -> QStringList {
 
 impl qobject::CardModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some(row) = self.page_shown.rows.get(index.row() as usize) else { return QVariant::default() };
-        match role {
-            LABEL => QVariant::from(&QString::from(row.label.as_str())),
-            VALUE => QVariant::from(&QString::from(row.value.as_str())),
-            STEPS => QVariant::from(&row.steps),
-            OPENS => QVariant::from(&row.opens),
-            SECTION_END => QVariant::from(&row.section_end),
-            KEY => QVariant::from(&QString::from(row.key.as_str())),
-            _ => QVariant::default(),
-        }
+        let shown = self.page_shown.rows.get(index.row() as usize).map(|r| row_roles::Shown {
+            key: &r.key,
+            label: &r.label,
+            value: &r.value,
+            steps: r.steps,
+            opens: r.opens,
+            section_end: r.section_end,
+            dimmed: false,
+        });
+        row_roles::data(shown, role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
-        for (role, name) in [(LABEL, "label"), (VALUE, "value"), (STEPS, "steps"), (OPENS, "opens"), (SECTION_END, "sectionEnd"), (KEY, "key")] {
-            roles.insert(role, QByteArray::from(name));
-        }
-        roles
+        row_roles::role_names()
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {

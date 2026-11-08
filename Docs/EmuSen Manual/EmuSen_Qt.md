@@ -1724,6 +1724,10 @@ game's file name, then the local time to the millisecond, `2026-11-08 21.42.07.1
 wraps no `QImage::save`, and Qt already holds a PNG writer]. **Held to:** `acceptance.rs` on Vulkan (X on the card saves
 the screenshot and the card stays in place).
 
+**One owner for a card's rows on Qt.** `row_roles.rs` holds the roles `MenuCard.qml`'s rows read (label, value, steps,
+opens, sectionEnd, key, dimmed) and each row's value for them; `CardModel` and `PauseModel` both answer `data` and
+`roleNames` through it, where each had held its own copy.
+
 ---
 
 ## 8. Testing

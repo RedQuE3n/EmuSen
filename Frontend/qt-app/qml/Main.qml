@@ -14,10 +14,16 @@ Window {
     color: Kit.Tokens.voidFill
     property string platformLibrary
     property bool splash: true
+    property bool reducedMotion: false
     readonly property bool splashShown: program.splash && !moonrise.done
     Screens {
         id: screens
         objectName: "screens"
+    }
+    Binding {
+        target: Kit.Tokens
+        property: "reducedMotion"
+        value: program.reducedMotion
     }
     LibraryModel {
         id: library
@@ -82,7 +88,7 @@ Window {
                 duration: Kit.Tokens.fade
             }
         }
-        Keys.onPressed: (event) => moonrise.model.tick(moonrise.model.length)
+        Keys.onPressed: (event) => event.accepted = moonrise.model.takeKey(event.key, event.modifiers)
         TapHandler {
             enabled: program.splashShown
             acceptedButtons: Qt.AllButtons

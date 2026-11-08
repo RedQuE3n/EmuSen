@@ -1296,8 +1296,16 @@ declines goes to the focused control as its key (§7.3); when the control declin
 for one press. `offer` now marks the key it sends, and `key` declines a key while it is being passed on. The C# frame
 had no second path, since its keys and the pad met in one handler.
 
-**The registry** (rule Q, §7.6) gained `PlanetLayout`, `BodyShapes.tileWidth` and `tileHeight`, and
-`FrameController.actionLines` (placed last, so the other properties keep their indexes); nothing was removed.
+**Moonrise under reduced motion, and the keys that skip it.** `MoonriseModel.still`, which the kit's `Moonrise` binds
+to `Tokens.reducedMotion`, draws the splash's last frame from the start while its clock runs on, and `finished` waits
+for the clock to reach the length, as `EmuSen_Interface.md` §22 and Mistress hold it. `qt_keys::press_of` is the
+press a Qt key means in the kit's map (kit-core's `intent` over `kit_key`), none for Tab or any other key;
+`MoonriseModel.takeKey` skips on such a key and keeps every key from the screens behind, since a Tab left unaccepted
+walked Qt's focus chain to the screen under the splash.
+
+**The registry** (rule Q, §7.6) gained `PlanetLayout`, `BodyShapes.tileWidth` and `tileHeight`,
+`FrameController.actionLines`, and `MoonriseModel.still` and `takeKey` (each placed last, so the other properties keep
+their indexes); nothing was removed.
 
 **Held to** (`kit-core/tests/layout.rs`, 3, and `input.rs`'s action lines, measured 2026-11-08): the courts canvas's
 eleven bodies under three places (the places at 64, 454 and 844, 372 wide; six tiles from 67, five from 164; the orbits

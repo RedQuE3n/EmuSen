@@ -25,6 +25,7 @@ Item {
         id: splash
         width: root.width
         height: root.height
+        still: Kit.Tokens.reducedMotion
     }
     Binding {
         target: splash

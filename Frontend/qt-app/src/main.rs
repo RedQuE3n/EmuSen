@@ -23,6 +23,7 @@ fn main() {
         let mut initial = QMap::<QMapPair_QString_QVariant>::default();
         initial.insert(QString::from("platformLibrary"), QVariant::from(&QString::from(&start.platform_library)));
         initial.insert(QString::from("splash"), QVariant::from(&start.splash));
+        initial.insert(QString::from("reducedMotion"), QVariant::from(&start.reduced_motion));
         engine.as_mut().set_initial_properties(&initial);
         engine.load(&QUrl::from(MAIN_URL));
     }

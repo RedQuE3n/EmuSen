@@ -134,6 +134,7 @@ pub mod qobject {
         #[qproperty(QColor, line_ink, READ, CONSTANT)]
         #[qproperty(QColor, title_ink, READ, CONSTANT)]
         #[qproperty(QColor, caption_ink, READ, CONSTANT)]
+        #[qproperty(bool, still)]
         type MoonriseModel = super::MoonriseModelRust;
     }
 
@@ -157,6 +158,10 @@ pub mod qobject {
         /// The frame for the host's clock, in seconds from the splash's start.
         #[qinvokable]
         fn tick(self: Pin<&mut MoonriseModel>, seconds: f64);
+        /// A key while the splash shows: one the kit's map makes a press skips to the end, and every key is kept from the
+        /// screens behind, Tab's walk included, so it answers true.
+        #[qinvokable]
+        fn take_key(self: Pin<&mut MoonriseModel>, key: i32, modifiers: i32) -> bool;
     }
 
     extern "RustQt" {
@@ -230,6 +235,8 @@ pub struct MoonriseModelRust {
     caption: QString,
     worlds: QString,
     hues: QList<f64>,
+    /// Reduced motion: the last frame is drawn from the start and held for the splash's length (EmuSen_Interface.md §22).
+    still: bool,
     seed: i32,
     star_count: i32,
     length: f64,
@@ -298,6 +305,7 @@ impl Default for MoonriseModelRust {
             caption: QString::default(),
             worlds: QString::default(),
             hues: QList::default(),
+            still: false,
             seed: timeline.seed as i32,
             star_count: timeline.star_count as i32,
             length: timeline.length,
@@ -479,10 +487,14 @@ impl qobject::MoonriseModel {
                 rust.splash = Some(Splash::new(Timeline::MOONRISE, rust.bodies.clone()));
             }
             let (width, height) = (rust.width, rust.height);
-            let frame = rust.splash.as_ref().map(|s| s.frame(seconds, width, height));
+            let drawn = if rust.still { rust.length } else { seconds };
+            let frame = rust.splash.as_ref().map(|s| s.frame(drawn, width, height));
             rust.time = seconds;
             if let Some(frame) = &frame {
                 rust.read(frame);
+            }
+            if rust.still {
+                rust.finished = seconds >= rust.length;
             }
             rust.frame = frame;
         }
@@ -495,6 +507,14 @@ impl qobject::MoonriseModel {
             self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
         }
         self.announce();
+    }
+
+    pub fn take_key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        if crate::qt_keys::press_of(key, modifiers).is_some() {
+            let length = self.length;
+            self.tick(length);
+        }
+        true
     }
 
     fn announce(mut self: Pin<&mut Self>) {

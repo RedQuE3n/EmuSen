@@ -1,6 +1,6 @@
 //! Qt's key, modifier and mouse-button numbers against kit-core's names, the one place the kit knows them (EmuSen_Kit.md §7.3).
 
-use emusen_kit_core::input::{Key, PointerButton};
+use emusen_kit_core::input::{intent, InputEvent, Intent, Key, PointerButton, UiButton};
 
 /// Qt::Key values from qnamespace.h, in kit-core's `Key` order.
 const KEYS: [(Key, i32); 13] = [
@@ -38,6 +38,16 @@ pub fn kit_key(qt: i32, modifiers: i32) -> (Key, bool) {
         KEY_BACKTAB => (Key::Tab, true),
         KEY_ENTER => (Key::Return, shift),
         _ => (KEYS.iter().find(|(_, code)| *code == qt).map(|(k, _)| *k).unwrap_or(Key::Other), shift),
+    }
+}
+
+/// The press a Qt key means in the kit's map (arrows, Return and Enter, Escape, Menu, Select, the page keys, Home and End),
+/// or none for Tab and any other key (EmuSen_Qt.md §1.7).
+pub fn press_of(qt: i32, modifiers: i32) -> Option<UiButton> {
+    let (key, shift) = kit_key(qt, modifiers);
+    match intent(InputEvent::Key { key, shift }) {
+        Some(Intent::Press(button)) => Some(button),
+        _ => None,
     }
 }
 

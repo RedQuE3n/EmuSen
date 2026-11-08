@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{platform_library, splash_from, LIBRARY_FILE};
+use emusen_qt::start::{platform_library, reduced_motion_from, splash_from, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -19,4 +19,12 @@ fn moonrise_is_on_unless_the_player_turned_it_off() {
     assert!(splash_from(&json!({ "RomDirectory": "/r" })), "the key missing");
     assert!(!splash_from(&json!({ "StartupSplash": false })));
     assert!(splash_from(&json!({ "StartupSplash": true })));
+}
+
+#[test]
+fn motion_is_reduced_only_when_the_player_chose_it() {
+    assert!(!reduced_motion_from(&serde_json::Value::Null));
+    assert!(reduced_motion_from(&json!({ "ReducedMotion": "on" })));
+    assert!(!reduced_motion_from(&json!({ "ReducedMotion": "off" })));
+    assert!(!reduced_motion_from(&json!({ "ReducedMotion": "system" })), "the desktop's preference is not read yet");
 }

@@ -948,8 +948,21 @@ as its tile does. `library::world_of` reads a console's body from the systems ta
 its three colours where the table gives three, its craters, bands, cap and moons), and writes it as the kit's world line
 (`EmuSen_Kit.md` §7.17); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
 hands them to `Moonrise.worlds`, and every console's row carries its line as the role `world`. The draft stays the
-splash's oracle for everything else. Differences from the C# splash, named: reduced motion (the finished frame held still) is not yet read from the settings,
-and the skip takes every key, Tab and Shift included.
+splash's oracle for everything else.
+
+**Reduced motion and the skip's keys** (measured 2026-11-08). `start.rs` reads `AppSettings.ReducedMotion` beside
+`StartupSplash` and hands it to the window as `reducedMotion`, which sets `Kit.Tokens.reducedMotion`; the kit's
+`Moonrise` then draws its last frame from the start and holds it for the splash's length, as Mistress's
+`Reduced_motion_shows_the_still_frame_for_the_splashs_length` does (`EmuSen_Kit.md` §7.18). A key skips the splash only
+when the kit's map makes it a press (§1.7: the arrows, Return and Enter, Escape, and the map's other keys), through
+`MoonriseModel.takeKey`; any other key (Tab, Shift, a letter) is kept from the screens behind and skips nothing. A pad
+press and a click still skip it. One difference from Mistress is named: the player's "system" choice reads the desktop's
+own preference in Mistress (KDE's `AnimationDurationFactor` of 0, or GNOME's `enable-animations` off, read by
+`MainWindow.SystemReducesMotion`), which has no Rust owner yet, so here "system" leaves motion on. **Held to**:
+`tests/still.rs` (the program under reduced motion, compared with Mistress's finished splash while not yet finished,
+then Tab, Shift and A leaving it and Return skipping it) and `tests/start.rs` (the setting's three values). Seeded
+faults, each reverted: the frame drawn at the clock's time failed the picture at 126,229 pixels; the hold dropped failed
+"held"; every key made a press failed at Tab; "system" read as on failed the settings test.
 
 **Held to** (measured 2026-11-08): `tests/start.rs` (2: the library's path in its order; the splash on unless turned off),
 `tests/program.rs` (the window over the real clients on a scratch tree with a synthetic NES image: Moonrise covers the

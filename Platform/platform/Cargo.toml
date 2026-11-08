@@ -61,8 +61,6 @@ emusen-sqlite = { path = "../sqlite" }
 emusen-crystal = { path = "../crystal" }
 # The session service's numbers, which the frontend API's statuses share.
 emusen-session-service = { path = "../session-service" }
-# .NET's JSON, for the requests the systems' C layer reads.
-emusen-dotnet = { path = "../dotnet" }
 
 # An installed core's NOTICE, written by the cores test (tests/library_tool.rs).
 [dev-dependencies]

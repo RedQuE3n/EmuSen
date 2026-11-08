@@ -246,7 +246,6 @@ dependencies = [
  "emusen-cheats",
  "emusen-core-host",
  "emusen-crystal-debug",
- "emusen-dotnet",
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
@@ -267,7 +266,6 @@ version = "0.1.0"
 dependencies = [
  "emusen-cheats",
  "emusen-core-host",
- "emusen-dotnet",
  "emusen-native",
  "emusen-systems",
  "serde_json",
@@ -281,15 +279,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "emusen-dotnet"
-version = "0.1.0"
-
-[[package]]
 name = "emusen-firmware"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
@@ -298,7 +292,6 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "emusen-disc",
- "emusen-dotnet",
  "indexmap",
  "jsonc-parser",
  "md-5",
@@ -400,7 +393,6 @@ dependencies = [
 name = "emusen-savemedia"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
 ]
@@ -410,7 +402,6 @@ name = "emusen-serenity"
 version = "0.1.0"
 dependencies = [
  "ash",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "libc",
@@ -422,7 +413,6 @@ dependencies = [
 name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "serde_json",
 ]
 
@@ -440,7 +430,6 @@ version = "0.1.0"
 dependencies = [
  "beryl-sms-colours",
  "emusen-6502",
- "emusen-dotnet",
  "emusen-mcd-bram",
  "emusen-mips",
  "emusen-n64-pak",

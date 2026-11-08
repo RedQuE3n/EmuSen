@@ -232,16 +232,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "emusen-dotnet"
-version = "0.1.0"
-
-[[package]]
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
  "dirs",
  "emusen-disc",
- "emusen-dotnet",
  "indexmap",
  "jsonc-parser",
  "md-5",

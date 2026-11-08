@@ -2,7 +2,7 @@
 
 use std::path::Path;
 use crate::scrape::{answer, fail, failed, text};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::models::AppSettings;
 use emusen_galaxia::tree::{self, Directory};
 use emusen_galaxia::{config, setting_folders};
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn emusen_scraping_lend(lend: *const Lend) -> i32 {
         } else {
             let systems = match unsafe { text(lend.systems, lend.systems_len) } {
                 Ok("") => every_system(),
-                Ok(t) => match json::parse(t) {
+                Ok(t) => match serde_json::from_str::<Value>(t) {
                     Ok(Value::Array(ids)) => ids.iter().filter_map(Value::as_str).map(str::to_string).collect(),
                     _ => return fail(abi::BAD_REQUEST, "the lend's systems are not a list of system ids"),
                 },
@@ -257,31 +257,31 @@ fn games(h: &Held<'_>, filter: &str) -> Result<String, Error> {
     let roms = roms.unwrap_or_default();
     let scan = Library::open(h.scraper.sqlite(), ":memory:").map_err(library_error)?;
     let members = vec![
-        ("roots", Value::Array(vec![Value::string(roms)])),
-        ("systems", Value::Array(h.systems.iter().map(Value::string).collect())),
-        ("packages", tree.directory(Directory::Packages).map_or(Value::Null, |d| Value::string(d.to_string_lossy()))),
-        ("compressed", tree.directory(Directory::Compressed).map_or(Value::Null, |d| Value::string(d.to_string_lossy()))),
+        ("roots", Value::Array(vec![Value::String(String::from(roms))])),
+        ("systems", Value::Array(h.systems.iter().map(|s| Value::String(String::from(s))).collect())),
+        ("packages", tree.directory(Directory::Packages).map_or(Value::Null, |d| Value::String(String::from(d.to_string_lossy())))),
+        ("compressed", tree.directory(Directory::Compressed).map_or(Value::Null, |d| Value::String(String::from(d.to_string_lossy())))),
     ];
     let mut request = String::new();
-    json::write_compact(&mut request, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    request.push_str(&serde_json::to_string(&Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())).expect("a value is JSON"));
     scan.scan_request(&request).map_err(library_error)?;
-    let found = json::parse(&scan.games_request(filter).map_err(library_error)?).map_err(|e| Error::BadRequest(format!("{e:?}")))?;
+    let found = serde_json::from_str::<Value>(&scan.games_request(filter).map_err(library_error)?).map_err(|e| Error::BadRequest(format!("{e:?}")))?;
     let Value::Object(mut top) = found else { return Err(Error::BadRequest("The library's games are not an object.".into())) };
     for (k, v) in top.iter_mut() {
-        if k.text != "games" {
+        if k != "games" {
             continue;
         }
         if let Value::Array(list) = v {
             for g in list.iter_mut() {
                 let esde = g.get("system").and_then(Value::as_str).and_then(emusen_systems::find).map(|s| s.esde_system.clone()).filter(|e| !e.is_empty());
                 if let Value::Object(fields) = g {
-                    fields.push((json::Text::new("esde"), esde.map_or(Value::Null, Value::string)));
+                    fields.insert(String::from("esde"), esde.map_or(Value::Null, |s| Value::String(String::from(s))));
                 }
             }
         }
     }
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(top));
+    out.push_str(&serde_json::to_string(&Value::Object(top)).expect("a value is JSON"));
     Ok(out)
 }
 

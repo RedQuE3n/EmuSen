@@ -2,12 +2,12 @@
 //! implementation since 2026-11-04 (EmuSen_Backend.md §15, §40.1). Each call takes one JSON request; nothing is decided here.
 
 use crate::{fail, given, put, report, status};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_firmware as firmware;
 
 fn request(data: *const u8, len: usize) -> Result<Value, i32> {
     let text = unsafe { given(data, len) }?;
-    json::parse(text).map_err(|e| fail(status::PARSE, e.to_string()))
+    serde_json::from_str::<Value>(text).map_err(|e| fail(status::PARSE, e.to_string()))
 }
 
 fn field<'a>(value: &'a Value, name: &str) -> Result<&'a str, i32> {

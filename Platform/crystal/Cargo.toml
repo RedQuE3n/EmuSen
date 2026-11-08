@@ -32,8 +32,6 @@ emusen-firmware = { path = "../firmware" }
 emusen-savemedia = { path = "../savemedia" }
 # The session service's numbers, which the API's statuses share.
 emusen-session-service = { path = "../session-service" }
-# .NET's text rules and JSON writer, so each answer is the C# implementation's to the byte.
-emusen-dotnet = { path = "../dotnet" }
 # The debugger at the frame's (b) points and the session service's answers over it (EmuSen_Backend.md §29.30).
 emusen-crystal-debug = { path = "../crystal-debug" }
 # The session's cheat registry, its files and the player's database, for the service's cheat calls.

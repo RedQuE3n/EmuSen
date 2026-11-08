@@ -70,7 +70,7 @@ fn core_context() -> emusen_core_tool::Context {
 
 /// The op a request names, read only far enough to route it.
 fn op_of(text: &str) -> Option<String> {
-    emusen_dotnet::json::parse(text).ok()?.get("op")?.as_str().map(str::to_string)
+    serde_json::from_str::<serde_json::Value>(text).ok()?.get("op")?.as_str().map(str::to_string)
 }
 
 /// Starts a job from a request (EmuSen_GamePackages.md §12.3, EmuSen_Cores.md §6); PARSE with words for one that is not a request.

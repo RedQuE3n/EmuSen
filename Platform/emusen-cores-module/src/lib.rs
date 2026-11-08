@@ -5,7 +5,7 @@
 
 use dianash_module::abi::{SETTINGS_CONSOLE, SETTINGS_GAME, SETTINGS_MAJOR, SETTINGS_SERVICE};
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::json::{self, Text, Value};
+use serde_json::Value;
 use emusen_library_module::{detached, Next, ServiceJob, MAJOR, SERVICE};
 
 /// The service's minor that runs the core tool's requests.
@@ -25,7 +25,7 @@ pub static MODULE: CoresCommands = CoresCommands;
 
 fn compact(members: Vec<(&str, Value)>) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (Text::new(k), v)).collect()));
+    out.push_str(&serde_json::to_string(&Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())).expect("a value is JSON"));
     out
 }
 
@@ -43,11 +43,11 @@ pub fn request(args: &[String]) -> Result<String, String> {
                     _ => return Err(format!("cores ls: one console at most\n{USAGE}")),
                 }
             }
-            Ok(compact(vec![("op", Value::string("core-ls")), ("show", Value::string(show)), ("console", console.map_or(Value::Null, Value::string))]))
+            Ok(compact(vec![("op", Value::String(String::from("core-ls"))), ("show", Value::String(String::from(show))), ("console", console.map_or(Value::Null, |s| Value::String(String::from(s))))]))
         }
-        ["info", core] => Ok(compact(vec![("op", Value::string("core-info")), ("core", Value::string(*core))])),
+        ["info", core] => Ok(compact(vec![("op", Value::String(String::from("core-info"))), ("core", Value::String(String::from(*core)))])),
         ["info", ..] => Err(format!("cores info: name one core\n{USAGE}")),
-        ["fetch"] => Ok(compact(vec![("op", Value::string("core-fetch"))])),
+        ["fetch"] => Ok(compact(vec![("op", Value::String(String::from("core-fetch")))])),
         [verb @ ("get" | "update" | "rollback" | "rm" | "verify"), names @ ..] => {
             if let Some(o) = names.iter().find(|n| n.starts_with('-')) {
                 return Err(format!("cores {verb}: {o} is not an option of cores {verb}\n{USAGE}"));
@@ -61,7 +61,7 @@ pub fn request(args: &[String]) -> Result<String, String> {
                 "rm" => "core-rm".to_string(),
                 v => format!("core-{v}"),
             };
-            Ok(compact(vec![("op", Value::string(op)), ("cores", Value::Array(names.iter().map(|n| Value::string(*n)).collect()))]))
+            Ok(compact(vec![("op", Value::String(String::from(op))), ("cores", Value::Array(names.iter().map(|n| Value::String(String::from(*n))).collect()))]))
         }
         _ => Err(USAGE.into()),
     }
@@ -86,7 +86,7 @@ fn strings(e: &Value, k: &str) -> Vec<String> {
 
 fn size(e: &Value) -> String {
     match e.get("size") {
-        Some(Value::Number(n)) => n.parse::<f64>().map_or_else(|_| n.clone(), |b| format!("{:.1}MB", b / 1_048_576.0)),
+        Some(Value::Number(n)) => n.as_f64().map_or_else(|| n.to_string(), |b| format!("{:.1}MB", b / 1_048_576.0)),
         _ => "-".into(),
     }
 }
@@ -102,13 +102,13 @@ pub fn listing_line(e: &Value) -> String {
 pub fn info_lines(e: &Value) -> String {
     let mut out = String::new();
     if let Value::Object(members) = e {
-        for (k, v) in members.iter().filter(|(k, _)| k.text != "event") {
+        for (k, v) in members.iter().filter(|(k, _)| *k != "event") {
             let value = match v {
                 Value::Null => continue,
-                Value::String(s) => s.text.clone(),
+                Value::String(s) => s.clone(),
                 Value::Bool(b) => b.to_string(),
-                Value::Number(n) => n.clone(),
-                Value::Array(a) if k.text == "firmware" => a
+                Value::Number(n) => n.to_string(),
+                Value::Array(a) if k == "firmware" => a
                     .iter()
                     .map(|f| format!("{} ({}{})", text(f, "desc"), text(f, "path"), if f.get("optional") == Some(&Value::Bool(true)) { ", optional" } else { ", required" }))
                     .collect::<Vec<_>>()
@@ -117,7 +117,7 @@ pub fn info_lines(e: &Value) -> String {
                 Value::Object(_) => continue,
             };
             if !value.is_empty() {
-                out.push_str(&format!("{}: {value}\n", k.text));
+                out.push_str(&format!("{}: {value}\n", k));
             }
         }
     }
@@ -224,7 +224,7 @@ fn approve(call: &Call) -> Answer {
         return Answer::fail("cores approve: a core is approved at the prompt, not by a script, a substitution or a pipe");
     }
     let Some(settings) = call.settings() else { return Answer::fail("cores approve: needs emusen.settings, which this program does not provide") };
-    let request = compact(vec![("op", Value::string("core-info")), ("core", Value::string(core.as_str()))]);
+    let request = compact(vec![("op", Value::String(String::from("core-info"))), ("core", Value::String(String::from(core.as_str())))]);
     let job = match ServiceJob::start(call, "cores", &request) {
         Ok(j) => j,
         Err(refused) => return refused,
@@ -236,7 +236,7 @@ fn approve(call: &Call) -> Answer {
             Next::Absent => continue,
             Next::Failed(words) => return Answer::fail(format!("cores approve: {words}")),
             Next::Event(line) => {
-                let Ok(e) = json::parse(&line) else { continue };
+                let Ok(e) = serde_json::from_str::<Value>(&line) else { continue };
                 match text(&e, "event") {
                     "core" => found = Some((text(&e, "sha256").to_string(), text(&e, "name").to_string())),
                     "refused" => refusal = Some(text(&e, "reason").to_string()),
@@ -267,7 +267,7 @@ pub fn verified_line(e: &Value) -> String {
 
 fn number(e: &Value, k: &str) -> u64 {
     match e.get(k) {
-        Some(Value::Number(n)) => n.parse().unwrap_or(0),
+        Some(Value::Number(n)) => n.as_u64().unwrap_or(0),
         _ => 0,
     }
 }
@@ -302,7 +302,7 @@ fn follow(call: &Call, r: &Running) -> Option<i32> {
             }
             Next::Event(line) => line,
         };
-        let Ok(event) = json::parse(&line) else { continue };
+        let Ok(event) = serde_json::from_str::<Value>(&line) else { continue };
         if text(&event, "event") == "refused" {
             status = 1;
         }
@@ -432,7 +432,7 @@ mod tests {
 
     #[test]
     fn each_event_prints_as_lines_that_pipe() {
-        let e = |t: &str| json::parse(t).unwrap();
+        let e = |t: &str| serde_json::from_str::<Value>(t).unwrap();
         let row = e(r#"{"event":"core","stem":"pcsx2","name":"Sony - PlayStation 2 (LRPS2)","corename":"LRPS2","systems":["ps2"],"source":"libretro","version":"2.3 beta","build":"2026-10-31","state":"available","license":"GPLv3","authors":["PCSX2 Team"],"size":null}"#);
         let line = listing_line(&row);
         let fields: Vec<&str> = line.split_whitespace().collect();

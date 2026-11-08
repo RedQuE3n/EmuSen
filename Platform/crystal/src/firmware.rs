@@ -432,16 +432,16 @@ pub type Refused = (i32, String);
 pub fn install(tree: &Tree, request: &str, source: &str, say: &dyn Fn(String)) -> Result<(), Refused> {
     use emusen_session_service::abi::status as svc;
     let bad = |w: String| (svc::BAD_ARGUMENT, w);
-    let doc = if request.is_empty() { emusen_dotnet::json::parse("{}") } else { emusen_dotnet::json::parse(request) }.map_err(|e| bad(format!("the argument is not JSON: {e}")))?;
+    let doc = if request.is_empty() { serde_json::from_str::<serde_json::Value>("{}") } else { serde_json::from_str::<serde_json::Value>(request) }.map_err(|e| bad(format!("the argument is not JSON: {e}")))?;
     let size = match doc.get("size") {
-        Some(emusen_dotnet::json::Value::Number(n)) => n.parse::<i32>().ok(),
+        Some(serde_json::Value::Number(n)) => n.as_i64().and_then(|n| i32::try_from(n).ok()),
         _ => None,
     }
     .ok_or_else(|| bad("the request's \"size\" must be given".to_string()))?;
     let text = |k: &str| doc.get(k).and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| bad(format!("\"{k}\" must be given as a string")));
     let (_core, _chip, file) = (text("core")?, text("chip")?, text("file")?);
     let alternates = match doc.get("alternate_names") {
-        Some(emusen_dotnet::json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect(),
+        Some(serde_json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect(),
         _ => Vec::new(),
     };
     if !emusen_galaxia::files::file_exists(source) {

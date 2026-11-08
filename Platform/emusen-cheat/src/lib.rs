@@ -3,7 +3,7 @@
 //! formats (EmuSen_DianaSh.md §9.2); a .cht file is read and written through the call's resolve. See §8.1 and §13.11.
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_session_service::abi::{self, cheat, status};
 use emusen_session_service::space::find;
 use emusen_session_service::words::parse_hex;
@@ -77,7 +77,7 @@ fn codec(value: Option<&Value>) -> Option<Codec> {
 /// A cheat op's record.
 fn op(session: &Session, op: u32, args: &str) -> Result<Value, Refusal> {
     let (bytes, _) = session.cheat_op(op, args.as_bytes())?;
-    json::parse(&String::from_utf8_lossy(&bytes)).map_err(|e| Refusal::new(status::FAULT, e.to_string()))
+    serde_json::from_str::<Value>(&String::from_utf8_lossy(&bytes)).map_err(|e| Refusal::new(status::FAULT, e.to_string()))
 }
 
 /// A change's value: an id, a count or 0.
@@ -87,7 +87,7 @@ fn change(session: &Session, op: u32, args: &str) -> Result<i64, Refusal> {
 
 fn compact(value: &Value) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, value);
+    out.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     out
 }
 
@@ -378,7 +378,7 @@ fn run(call: &Call, parts: &[String]) -> Run {
             let path = read.text("path");
             let Some(file) = read.field("file") else { return Ok(Answer::ok(format!("cheat load: no readable cheat file at {path}"))) };
             let entries = match file {
-                Value::Object(members) => members.iter().find(|(k, _)| k.text.eq_ignore_ascii_case("cheats")).map_or(0, |(_, v)| v.items().len()),
+                Value::Object(members) => members.iter().find(|(k, _)| k.eq_ignore_ascii_case("cheats")).map_or(0, |(_, v)| v.items().len()),
                 _ => 0,
             } as i64;
             let added = session.cheat_op(cheat::IMPORT, compact(file).as_bytes())?.1;

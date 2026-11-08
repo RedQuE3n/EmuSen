@@ -281,9 +281,9 @@ name = "emusen-cheat"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
  "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
@@ -334,10 +334,10 @@ version = "0.1.0"
 dependencies = [
  "emusen-core-entry",
  "emusen-core-host",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-net",
  "emusen-tool-job",
+ "serde_json",
 ]
 
 [[package]]
@@ -345,8 +345,8 @@ name = "emusen-cores-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-library-module",
+ "serde_json",
 ]
 
 [[package]]
@@ -356,7 +356,6 @@ dependencies = [
  "emusen-cheats",
  "emusen-core-host",
  "emusen-crystal-debug",
- "emusen-dotnet",
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
@@ -377,7 +376,6 @@ version = "0.1.0"
 dependencies = [
  "emusen-cheats",
  "emusen-core-host",
- "emusen-dotnet",
  "emusen-native",
  "emusen-systems",
  "serde_json",
@@ -388,9 +386,9 @@ name = "emusen-debug"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
  "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
@@ -398,7 +396,6 @@ name = "emusen-dianash"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-suggest",
  "serde_json",
@@ -413,10 +410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "emusen-dotnet"
-version = "0.1.0"
-
-[[package]]
 name = "emusen-endymion"
 version = "0.1.0"
 dependencies = [
@@ -428,8 +421,8 @@ dependencies = [
 name = "emusen-firmware"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
@@ -438,7 +431,6 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "emusen-disc",
- "emusen-dotnet",
  "indexmap",
  "jsonc-parser",
  "md-5",
@@ -463,7 +455,6 @@ dependencies = [
 name = "emusen-library"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "emusen-systems",
@@ -475,7 +466,7 @@ name = "emusen-library-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -551,7 +542,6 @@ dependencies = [
  "dianash-module",
  "emusen-core-host",
  "emusen-crystal",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-savemedia",
  "emusen-systems",
@@ -600,7 +590,6 @@ dependencies = [
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
- "emusen-dotnet",
  "emusen-endymion",
  "emusen-firmware",
  "emusen-galaxia",
@@ -644,7 +633,6 @@ dependencies = [
 name = "emusen-savemedia"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
 ]
@@ -653,7 +641,6 @@ dependencies = [
 name = "emusen-scrape"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
  "emusen-net",
@@ -671,7 +658,7 @@ name = "emusen-scrape-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -679,7 +666,6 @@ name = "emusen-serenity"
 version = "0.1.0"
 dependencies = [
  "ash",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "libc",
@@ -699,7 +685,6 @@ dependencies = [
 name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "serde_json",
 ]
 
@@ -724,7 +709,6 @@ version = "0.1.0"
 dependencies = [
  "beryl-sms-colours",
  "emusen-6502",
- "emusen-dotnet",
  "emusen-mcd-bram",
  "emusen-mips",
  "emusen-n64-pak",
@@ -744,9 +728,9 @@ name = "emusen-trace"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
  "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]

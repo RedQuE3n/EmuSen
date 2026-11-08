@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(root(&tree, None), (temp.join("appdata/EmuSen/Logs"), None));
         std::fs::create_dir_all(temp.join("etc")).unwrap();
         let settings = |log: &str| std::fs::write(temp.join("etc/appsettings.json"), format!("{{\"LogDirectory\":{log}}}")).unwrap();
-        settings(&emusen_dotnet::json::quoted(&temp.text("made/Logs")).replace("\\u002B", "+"));
+        settings(&serde_json::to_string(&&temp.text("made/Logs")).unwrap_or_default().replace("\\u002B", "+"));
         assert_eq!(root(&tree, None), (temp.join("made/Logs"), None));
         assert!(crate::files::directory_exists(&temp.join("made/Logs")));
         // A folder this machine cannot make, as a settings file copied from another names, falls back to the home's own Logs, said once in it.
@@ -271,7 +271,7 @@ mod tests {
         let home_logs = tree.directory(Directory::Logs).unwrap();
         std::fs::write(temp.join("blocker"), "x").unwrap();
         let blocked = temp.text("blocker/Logs");
-        settings(&emusen_dotnet::json::quoted(&blocked));
+        settings(&serde_json::to_string(&&blocked).unwrap_or_default());
         assert_eq!(root(&tree, None).0, home_logs);
         let now = SystemTime::now();
         let file = append(&root(&tree, None).0, "20261101", "T", now, "first\n").unwrap();
@@ -286,7 +286,7 @@ mod tests {
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
             if std::fs::write(shut.join("probe"), b"").is_err() {
                 assert!(!usable(Some(&shut.to_string_lossy())));
-                settings(&emusen_dotnet::json::quoted(&shut.to_string_lossy()));
+                settings(&serde_json::to_string(&&shut.to_string_lossy()).unwrap_or_default());
                 assert_eq!(root(&tree, None).0, home_logs);
             }
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();

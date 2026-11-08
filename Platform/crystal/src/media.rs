@@ -379,7 +379,7 @@ pub fn media_for(catalog: &crate::catalog::Catalog, console: &str) -> Vec<SaveMe
 
 /// The card manager over a console's cards, `ManagedRuntime.CardsOp`.
 pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &str) -> Result<String, Refused> {
-    let doc = emusen_dotnet::json::parse(if args.is_empty() { "{}" } else { args }).map_err(|e| bad(format!("the argument is not JSON: {e}")))?;
+    let doc = serde_json::from_str::<serde_json::Value>(if args.is_empty() { "{}" } else { args }).map_err(|e| bad(format!("the argument is not JSON: {e}")))?;
     let text = |k: &str| doc.get(k).and_then(|v| v.as_str()).map(str::to_string).ok_or_else(|| bad(format!("\"{k}\" must be given as a string")));
     let media = ByExtension { discovery: catalog.discovery };
     let manager = emusen_savemedia::Manager::new(&media);
@@ -427,7 +427,7 @@ pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &
         a::CARDS_IMPORT => {
             let to = text("to")?;
             let from: Vec<String> = match doc.get("from") {
-                Some(emusen_dotnet::json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect(),
+                Some(serde_json::Value::Array(items)) => items.iter().map(|v| v.as_str().unwrap_or("").to_string()).collect(),
                 _ => return Err(bad("\"from\" must be given as a list of paths".to_string())),
             };
             done(manager.import(&to, &from))

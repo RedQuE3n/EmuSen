@@ -12,7 +12,6 @@ name = "emusen_memcard_module"
 
 [dependencies]
 dianash-module = { path = "../dianash-module" }
-emusen-dotnet = { path = "../dotnet" }
 emusen-galaxia = { path = "../galaxia" }
 emusen-savemedia = { path = "../savemedia" }
 emusen-systems = { path = "../systems" }

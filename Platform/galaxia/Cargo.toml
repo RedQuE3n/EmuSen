@@ -10,8 +10,6 @@ publish.workspace = true
 name = "emusen_galaxia"
 
 [dependencies]
-# .NET's text rules and File.ReadAllText's decoding, which the shell's command modules share without linking Galaxia.
-emusen-dotnet = { path = "../dotnet" }
 md-5 = "0.11"
 # The unpacked folder's name, a hash of the archive's path, length and time (disc_set.rs); the workspace's, from DianaSh and Serenity.
 sha2 = "0.11"

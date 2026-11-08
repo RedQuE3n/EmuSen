@@ -65,8 +65,8 @@ pub unsafe extern "C" fn emusen_crystal_last_error(_rt: *mut emusen_crystal_runt
 /// The config's directories, a JSON array of paths.
 fn cores_of(text: &str) -> Result<Vec<String>, i32> {
     let refused = || fail(svc::BAD_ARGUMENT, "config's cores must be a JSON array of directories");
-    match emusen_dotnet::json::parse(text) {
-        Ok(emusen_dotnet::json::Value::Array(items)) => items.iter().map(|v| v.as_str().map(str::to_string).ok_or_else(refused)).collect(),
+    match serde_json::from_str::<serde_json::Value>(text) {
+        Ok(serde_json::Value::Array(items)) => items.iter().map(|v| v.as_str().map(str::to_string).ok_or_else(refused)).collect(),
         _ => Err(refused()),
     }
 }

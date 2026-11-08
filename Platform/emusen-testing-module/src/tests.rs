@@ -423,14 +423,14 @@ fn the_graph_agrees_with_cargo_metadata_on_the_platform_workspace() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
     let out = Command::new("cargo").args(["metadata", "--no-deps", "--format-version", "1", "--offline", "--manifest-path"]).arg(root.join("Platform/Cargo.toml")).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let doc = emusen_dotnet::json::parse(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    let doc = serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&out.stdout)).unwrap();
     let prefix = format!("{}/", root.display());
     let rel = |p: &str| p.strip_prefix(&prefix).unwrap_or(p).trim_end_matches("/Cargo.toml").to_string();
     let mut theirs = std::collections::BTreeSet::new();
-    let Some(emusen_dotnet::json::Value::Array(packages)) = doc.get("packages") else { panic!("no packages") };
+    let Some(serde_json::Value::Array(packages)) = doc.get("packages") else { panic!("no packages") };
     for p in packages {
         let me = rel(p.get("manifest_path").and_then(|v| v.as_str()).unwrap());
-        if let Some(emusen_dotnet::json::Value::Array(deps)) = p.get("dependencies") {
+        if let Some(serde_json::Value::Array(deps)) = p.get("dependencies") {
             for d in deps {
                 if let Some(path) = d.get("path").and_then(|v| v.as_str()) {
                     theirs.insert((me.clone(), rel(path)));

@@ -502,6 +502,8 @@ absent. Existing files read identically, including files a person has edited by 
 
 ### 5.2 What System.Text.Json actually does (measured 2026-10-07)
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 Measured in a scratch program on .NET 10 on Linux, with `ConfigJson.Options`' settings (indented, comments skipped,
 trailing commas, case-insensitive names) and `Enum.TryParse` as `SuggestingEnumConverter` calls it. Each row is a
 place where a Rust writer or reader with ordinary defaults would differ:
@@ -535,12 +537,16 @@ refuses.
 
 ### 5.3 Quirks are reproduced
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 A file that loads today must load identically (§5.1), and nothing distinguishes a quirk a person has relied on from
 one nobody has met. So the enumeration rows of §5.2, the U+FFFD replacement and the case-insensitive last-match rule
 are reproduced, each with a corpus case, rather than tidied (§9, Q6). Tidying any of them later is a behaviour
 change with its own record.
 
 ### 5.4 Words are not
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 Galaxia's own messages are reproduced exactly: "'DPadUpp' is not a valid GamepadButton. Did you mean 'DPadUp'?",
 the file path first and "Falling back to defaults." last (`ConfigDiagnosticsTests`). System.Text.Json's exception
@@ -550,6 +556,8 @@ the wording (they assert that a message exists, or Galaxia's own phrases), so th
 reading a log (§9, Q5).
 
 ### 5.5 Three assumptions that do not carry over
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 - **A dictionary's order** on disk is the order C# enumerates it, and Rust preserves the order of the canonical JSON
   it is given, so they agree. They would not agree if Rust edited a model itself: .NET's `Dictionary` reuses a
@@ -850,6 +858,8 @@ variable unset or `0`, and opens it with `1`; its output is the same bytes in al
 
 ### 10.3 .NET's rules, reproduced and measured
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 The tree is built from strings, and a path one character different names a different file. So `dotnet_path` does not
 use `std::path`, whose rules are Rust's: it reproduces `Path.Combine`, `GetFileName`,
 `GetFileNameWithoutExtension`, `ChangeExtension`, `GetDirectoryName`, `TrimEndingDirectorySeparator` and
@@ -1041,6 +1051,8 @@ decodes and writes the file, and System.Text.Json binds the type, since its voca
   that belongs to that step. *Found 2026-10-10: the other facades did not ask, and threw; all now do (§21).*
 
 ### 11.3 System.Text.Json and .NET, measured for this step
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 §5.2's table was the start. These were measured before or while the reader, the binder and the writer were written,
 each in a scratch program on .NET 10, and each is a case of the parity class:
@@ -4120,3 +4132,14 @@ directly; the shell's own Windows offset code went with it.
 Proof: the corpus's `crystal/tests/disk/times.tsv`, `library/tests/disk/last-played.tsv` and the scraper's member files
 read to the same instants and texts, and `clock`'s tests hold the old module's cases (the year 9999's last tick, a tick
 before 1970, leap days, milliseconds cut and not rounded).
+
+### 47.21 emusen-dotnet is deleted
+
+The crate that reproduced .NET's rules is gone from the workspace, with every manifest line that named it. After steps
+6-21 only its JSON reader and writer remained; their last callers (the platform library's C layer, the session service,
+the shell and its command modules, the scraper and library crates, the firmware, cheat, debug and trace crates, the core
+tool) now hold `serde_json::Value`. Text the host or another crate wrote is read by `serde_json` strictly; the files
+people edit were already read through `config_json` (§47.19). What `quoted` wrote by hand is `serde_json::to_string`,
+so an answer holds text outside ASCII as itself rather than as a `\u` escape. Numbers are read by value
+(`as_i64`, `as_u64`, `as_f64`) where a token was parsed before, so `1.0` is still no whole number. The shell's test of
+its dependencies names Galaxia and the suggestion crate alone. Sections 5.2-5.5, 10.3 and 11.3 are kept as history.

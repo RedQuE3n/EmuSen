@@ -3,22 +3,22 @@
 //! so far, the view asks for what it lacks, and the host reads that and asks again. Nothing is decided here.
 
 use crate::{bytes, fail, given, put, required, status};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_systems::debug::{Memory, Reference, Space, Tape, Unit};
 use emusen_systems::{gb, n64, nes, sms, snes};
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn compact(value: &Value) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, value);
+    out.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     out
 }
 
 fn reference(r: Option<(Reference, i64)>) -> Value {
-    r.map_or(Value::Null, |(kind, target)| object(vec![("kind", Value::string(kind.name())), ("target", Value::number(target))]))
+    r.map_or(Value::Null, |(kind, target)| object(vec![("kind", Value::String(String::from(kind.name()))), ("target", Value::from(target))]))
 }
 
 /// One instruction of `processor` (`6502`, `sm83`, `vr4300` or, since interface 19, `rsp`) from its bytes (a MIPS
@@ -56,9 +56,9 @@ pub unsafe extern "C" fn emusen_systems_disassemble(processor: *const u8, proces
         _ => return fail(status::ABSENT, format!("no disassembler is named {processor}")) as i64,
     };
     let answer = object(vec![
-        ("length", Value::number(length)),
-        ("mnemonic", Value::string(mnemonic)),
-        ("operands", Value::string(operands)),
+        ("length", Value::from(length)),
+        ("mnemonic", Value::String(String::from(mnemonic))),
+        ("operands", Value::String(String::from(operands))),
         ("reference", reference(r)),
     ]);
     unsafe { put(compact(&answer).as_bytes(), out, len) }
@@ -82,7 +82,7 @@ fn text(v: Option<&Value>) -> Option<&str> {
 
 fn int(v: Option<&Value>) -> Option<i64> {
     match v {
-        Some(Value::Number(n)) => n.parse().ok(),
+        Some(Value::Number(n)) => n.as_i64(),
         _ => None,
     }
 }
@@ -101,8 +101,8 @@ fn palettes_json(p: Vec<(i32, Vec<(u8, u8, u8)>)>) -> Value {
     let rows = p
         .into_iter()
         .map(|(index, colours)| {
-            let colours = colours.into_iter().map(|(r, g, b)| Value::Array(vec![Value::number(r), Value::number(g), Value::number(b)])).collect();
-            object(vec![("index", Value::number(index)), ("colors", Value::Array(colours))])
+            let colours = colours.into_iter().map(|(r, g, b)| Value::Array(vec![Value::from(r), Value::from(g), Value::from(b)])).collect();
+            object(vec![("index", Value::from(index)), ("colors", Value::Array(colours))])
         })
         .collect();
     object(vec![("palettes", Value::Array(rows))])
@@ -112,7 +112,7 @@ fn vectors_json(v: &[(&str, i32, i32, &str)]) -> Value {
     let rows = v
         .iter()
         .map(|&(name, address, width, mode)| {
-            object(vec![("name", Value::string(name)), ("address", Value::number(address)), ("width", Value::number(width)), ("mode", Value::string(mode))])
+            object(vec![("name", Value::String(String::from(name))), ("address", Value::from(address)), ("width", Value::from(width)), ("mode", Value::String(String::from(mode)))])
         })
         .collect();
     object(vec![("vectors", Value::Array(rows))])
@@ -125,14 +125,14 @@ fn sprites_json(sprites: Vec<Sprite>) -> Value {
         .into_iter()
         .map(|(index, x, y, width, height, tile, palette, priority, flip_x, flip_y)| {
             object(vec![
-                ("index", Value::number(index)),
-                ("x", Value::number(x)),
-                ("y", Value::number(y)),
-                ("width", Value::number(width)),
-                ("height", Value::number(height)),
-                ("tile", Value::number(tile)),
-                ("palette", Value::number(palette)),
-                ("priority", Value::number(priority)),
+                ("index", Value::from(index)),
+                ("x", Value::from(x)),
+                ("y", Value::from(y)),
+                ("width", Value::from(width)),
+                ("height", Value::from(height)),
+                ("tile", Value::from(tile)),
+                ("palette", Value::from(palette)),
+                ("priority", Value::from(priority)),
                 ("flip_x", Value::Bool(flip_x)),
                 ("flip_y", Value::Bool(flip_y)),
             ])
@@ -146,12 +146,12 @@ fn channels_json(channels: Vec<(i32, &str, bool, i32, bool, String)>) -> Value {
         .into_iter()
         .map(|(index, name, active, level, muted, info)| {
             object(vec![
-                ("index", Value::number(index)),
-                ("name", Value::string(name)),
+                ("index", Value::from(index)),
+                ("name", Value::String(String::from(name))),
                 ("active", Value::Bool(active)),
-                ("level", Value::number(level)),
+                ("level", Value::from(level)),
                 ("muted", Value::Bool(muted)),
-                ("info", Value::string(info)),
+                ("info", Value::String(String::from(info))),
             ])
         })
         .collect();
@@ -160,7 +160,7 @@ fn channels_json(channels: Vec<(i32, &str, bool, i32, bool, String)>) -> Value {
 
 fn physical_json(place: Option<(&str, i32, bool)>) -> Value {
     match place {
-        Some((name, offset, addressable)) => object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]),
+        Some((name, offset, addressable)) => object(vec![("space", Value::String(String::from(name))), ("offset", Value::from(offset)), ("addressable", Value::Bool(addressable))]),
         None => object(vec![("space", Value::Null)]),
     }
 }
@@ -170,7 +170,7 @@ fn registers_of(v: Option<&Value>) -> Vec<(String, u64)> {
     match v {
         Some(Value::Array(items)) => items
             .iter()
-            .map(|x| (text(x.get("name")).unwrap_or_default().to_string(), match x.get("value") { Some(Value::Number(n)) => n.parse().unwrap_or(0), _ => 0 }))
+            .map(|x| (text(x.get("name")).unwrap_or_default().to_string(), match x.get("value") { Some(Value::Number(n)) => n.as_u64().unwrap_or(0), _ => 0 }))
             .collect(),
         _ => Vec::new(),
     }
@@ -193,7 +193,7 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         (Ok(r), Ok(t)) => (r, t),
         (Err(s), _) | (_, Err(s)) => return s as i64,
     };
-    let Ok(r) = json::parse(request) else { return fail(status::PARSE, "the request is not JSON") as i64 };
+    let Ok(r) = serde_json::from_str::<Value>(request) else { return fail(status::PARSE, "the request is not JSON") as i64 };
     let (Some(system), Some(view)) = (text(r.get("system")), text(r.get("view"))) else { return fail(status::PARSE, "the request names no system or view") as i64 };
     let spaces: Vec<Space> = match r.get("spaces") {
         Some(Value::Array(items)) => items
@@ -218,21 +218,21 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
     let bpp = int(r.get("bpp")).unwrap_or(0) as i32;
     let mut memory = Tape::new(spaces, tape);
     let m: &mut dyn Memory = &mut memory;
-    let picture = |(rgba, w, h): (Vec<u8>, i32, i32)| (object(vec![("width", Value::number(w)), ("height", Value::number(h))]), rgba);
+    let picture = |(rgba, w, h): (Vec<u8>, i32, i32)| (object(vec![("width", Value::from(w)), ("height", Value::from(h))]), rgba);
     let pixels = |p: Result<Vec<u8>, (String, Option<&'static str>)>| match p {
         Ok(p) => (object(vec![("pixels", Value::Bool(true))]), p),
-        Err((words, param)) => (object(vec![("refused", Value::string(words)), ("param", param.map_or(Value::Null, Value::string))]), Vec::new()),
+        Err((words, param)) => (object(vec![("refused", Value::String(String::from(words))), ("param", param.map_or(Value::Null, |s| Value::String(String::from(s))))]), Vec::new()),
     };
-    let textual = |t: Option<String>| (object(vec![("text", t.map_or(Value::Null, Value::string))]), Vec::new());
+    let textual = |t: Option<String>| (object(vec![("text", t.map_or(Value::Null, |s| Value::String(String::from(s))))]), Vec::new());
     let (answer, payload) = match (system, view) {
         ("nes", "palettes") => (palettes_json(nes::views::palettes(m)), Vec::new()),
         ("nes", "palette_swatch") => picture(nes::views::palette_swatch(m)),
         ("nes", "tile_sheet") => picture(nes::views::tile_sheet(m)),
-        ("nes", "stride") => (object(vec![("stride", Value::number(nes::views::TILEMAP_ENTRY_STRIDE))]), Vec::new()),
+        ("nes", "stride") => (object(vec![("stride", Value::from(nes::views::TILEMAP_ENTRY_STRIDE))]), Vec::new()),
         ("nes", "tilemap_entry") => textual(Some(nes::views::decode_tilemap_entry(m, &space, address))),
         ("nes", "tile_pixels") => pixels(nes::views::decode_tile_pixels(m, &space, address, bpp)),
         ("nes", "vectors") => (vectors_json(&nes::views::VECTORS), Vec::new()),
-        ("nes", "max_sprites") => (object(vec![("max_sprites", Value::number(nes::views::MAX_SPRITES))]), Vec::new()),
+        ("nes", "max_sprites") => (object(vec![("max_sprites", Value::from(nes::views::MAX_SPRITES))]), Vec::new()),
         ("nes", "sprites") => (sprites_json(nes::views::sprites(m, &units)), Vec::new()),
         ("nes", "audio_channels") => (channels_json(nes::views::audio_channels(&units, int(r.get("mutes")).unwrap_or(0) as u32)), Vec::new()),
         ("nes", "physical") => (physical_json(nes::views::resolve_physical(address)), Vec::new()),
@@ -241,7 +241,7 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("snes", "palettes") => (palettes_json(snes::views::palettes(m)), Vec::new()),
         ("snes", "palette_swatch") => picture(snes::views::palette_swatch(m)),
         ("snes", "tile_sheet") => picture(snes::views::tile_sheet(m)),
-        ("snes", "stride") => (object(vec![("stride", Value::number(snes::views::TILEMAP_ENTRY_STRIDE))]), Vec::new()),
+        ("snes", "stride") => (object(vec![("stride", Value::from(snes::views::TILEMAP_ENTRY_STRIDE))]), Vec::new()),
         ("snes", "tilemap_entry") => textual(Some(snes::views::decode_tilemap_entry(m, &space, address))),
         ("snes", "tile_pixels") => pixels(snes::views::decode_tile_pixels(m, &space, address, bpp)),
         ("snes", "dma_channels") => {
@@ -249,17 +249,17 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
                 .into_iter()
                 .map(|c| {
                     object(vec![
-                        ("index", Value::number(c.index)),
+                        ("index", Value::from(c.index)),
                         ("general", Value::Bool(c.general)),
                         ("hdma", Value::Bool(c.hdma)),
-                        ("control", Value::number(c.control)),
-                        ("destination", Value::number(c.destination)),
-                        ("source", Value::number(c.source)),
-                        ("size", Value::number(c.size)),
+                        ("control", Value::from(c.control)),
+                        ("destination", Value::from(c.destination)),
+                        ("source", Value::from(c.source)),
+                        ("size", Value::from(c.size)),
                         ("hdma_active", Value::Bool(c.hdma_active)),
-                        ("table", Value::number(c.table)),
-                        ("line_counter", Value::number(c.line_counter)),
-                        ("indirect", Value::number(c.indirect)),
+                        ("table", Value::from(c.table)),
+                        ("line_counter", Value::from(c.line_counter)),
+                        ("indirect", Value::from(c.indirect)),
                     ])
                 })
                 .collect();
@@ -267,18 +267,18 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         }
         ("snes", "dma_destination") => textual(Some(snes::views::name_dma_destination(int(r.get("register")).unwrap_or(0) as u8))),
         ("snes", "vectors") => (vectors_json(&snes::views::VECTORS), Vec::new()),
-        ("snes", "symbol_names") => (object(vec![("names", Value::Array(snes::views::symbol_names().into_iter().map(Value::string).collect()))]), Vec::new()),
-        ("snes", "symbol") => (object(vec![("value", snes::views::symbol(text(r.get("name")).unwrap_or_default(), &registers).map_or(Value::Null, Value::number))]), Vec::new()),
+        ("snes", "symbol_names") => (object(vec![("names", Value::Array(snes::views::symbol_names().into_iter().map(|s| Value::String(String::from(s))).collect()))]), Vec::new()),
+        ("snes", "symbol") => (object(vec![("value", snes::views::symbol(text(r.get("name")).unwrap_or_default(), &registers).map_or(Value::Null, Value::from))]), Vec::new()),
         ("snes", "summary") => textual(snes::views::summary(&registers)),
         ("n64", "disassemble") => {
             let rows = n64::views::disassemble(m, &space, address, int(r.get("count")).unwrap_or(0) as i32)
                 .into_iter()
                 .map(|l| {
                     object(vec![
-                        ("address", Value::number(l.address)),
-                        ("bytes", Value::Array(l.bytes.iter().map(|&b| Value::number(b)).collect())),
-                        ("mnemonic", Value::string(l.mnemonic)),
-                        ("operands", Value::string(l.operands)),
+                        ("address", Value::from(l.address)),
+                        ("bytes", Value::Array(l.bytes.iter().map(|&b| Value::from(b)).collect())),
+                        ("mnemonic", Value::String(String::from(l.mnemonic))),
+                        ("operands", Value::String(String::from(l.operands))),
                         ("reference", reference(l.reference.map(|(k, t)| (k, t as i64)))),
                     ])
                 })
@@ -287,16 +287,16 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         }
         ("n64", "instruction") => {
             let (mnemonic, operands, r) = n64::views::decode_in(&space, int(r.get("word")).unwrap_or(0) as u32, address as u32);
-            (object(vec![("mnemonic", Value::string(mnemonic)), ("operands", Value::string(operands)), ("reference", reference(r.map(|(k, t)| (k, t as i64))))]), Vec::new())
+            (object(vec![("mnemonic", Value::String(String::from(mnemonic))), ("operands", Value::String(String::from(operands))), ("reference", reference(r.map(|(k, t)| (k, t as i64))))]), Vec::new())
         }
         ("n64", "physical") => {
             let (name, offset, addressable) = n64::views::physical_in(m, address as u32);
-            (object(vec![("space", Value::string(name)), ("offset", Value::number(offset)), ("addressable", Value::Bool(addressable))]), Vec::new())
+            (object(vec![("space", Value::String(String::from(name))), ("offset", Value::from(offset)), ("addressable", Value::Bool(addressable))]), Vec::new())
         }
         ("n64", "summary") => {
             let vi: Option<Vec<(String, u64)>> = match r.get("vi") {
                 Some(Value::Array(items)) => Some(
-                    items.iter().map(|x| (text(x.get("name")).unwrap_or_default().to_string(), match x.get("value") { Some(Value::Number(n)) => n.parse().unwrap_or(0), _ => 0 })).collect(),
+                    items.iter().map(|x| (text(x.get("name")).unwrap_or_default().to_string(), match x.get("value") { Some(Value::Number(n)) => n.as_u64().unwrap_or(0), _ => 0 })).collect(),
                 ),
                 _ => None,
             };
@@ -305,8 +305,8 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("gb" | "gbc", "palettes") => (palettes_json(gb::views::palettes(m, &units)), Vec::new()),
         ("gb" | "gbc", "palette_swatch") => picture(gb::views::palette_swatch(m, &units)),
         ("gb" | "gbc", "tile_sheet") => picture(gb::views::tile_sheet(m)),
-        ("gb" | "gbc", "stride") => (object(vec![("stride", Value::number(gb::views::TILEMAP_ENTRY_STRIDE))]), Vec::new()),
-        ("gb" | "gbc", "max_sprites") => (object(vec![("max_sprites", Value::number(gb::views::SPRITE_COUNT))]), Vec::new()),
+        ("gb" | "gbc", "stride") => (object(vec![("stride", Value::from(gb::views::TILEMAP_ENTRY_STRIDE))]), Vec::new()),
+        ("gb" | "gbc", "max_sprites") => (object(vec![("max_sprites", Value::from(gb::views::SPRITE_COUNT))]), Vec::new()),
         ("gb" | "gbc", "tilemap_entry") => textual(Some(gb::views::decode_tilemap_entry(m, &space, address, &units))),
         ("gb" | "gbc", "tile_pixels") => pixels(gb::views::decode_tile_pixels(m, &space, address, bpp)),
         ("gb" | "gbc", "vectors") => (vectors_json(&gb::views::VECTORS), Vec::new()),
@@ -318,17 +318,17 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
                 .into_iter()
                 .map(|(general, hdma, control, destination, source, size, hdma_active, table, line_counter, indirect)| {
                     object(vec![
-                        ("index", Value::number(0)),
+                        ("index", Value::from(0)),
                         ("general", Value::Bool(general)),
                         ("hdma", Value::Bool(hdma)),
-                        ("control", Value::number(control)),
-                        ("destination", Value::number(destination)),
-                        ("source", Value::number(source)),
-                        ("size", Value::number(size)),
+                        ("control", Value::from(control)),
+                        ("destination", Value::from(destination)),
+                        ("source", Value::from(source)),
+                        ("size", Value::from(size)),
                         ("hdma_active", Value::Bool(hdma_active)),
-                        ("table", Value::number(table)),
-                        ("line_counter", Value::number(line_counter)),
-                        ("indirect", Value::number(indirect)),
+                        ("table", Value::from(table)),
+                        ("line_counter", Value::from(line_counter)),
+                        ("indirect", Value::from(indirect)),
                     ])
                 })
                 .collect();
@@ -339,8 +339,8 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         ("sms" | "sg1000", "palettes") => (palettes_json(sms::views::palettes(m, &units)), Vec::new()),
         ("sms" | "sg1000", "palette_swatch") => picture(sms::views::palette_swatch(m, &units)),
         ("sms" | "sg1000", "tile_sheet") => picture(sms::views::tile_sheet(m, system)),
-        ("sms" | "sg1000", "stride") => (object(vec![("stride", Value::number(sms::views::tilemap_entry_stride(system)))]), Vec::new()),
-        ("sms" | "sg1000", "max_sprites") => (object(vec![("max_sprites", Value::number(sms::views::max_sprites(system)))]), Vec::new()),
+        ("sms" | "sg1000", "stride") => (object(vec![("stride", Value::from(sms::views::tilemap_entry_stride(system)))]), Vec::new()),
+        ("sms" | "sg1000", "max_sprites") => (object(vec![("max_sprites", Value::from(sms::views::max_sprites(system)))]), Vec::new()),
         ("sms" | "sg1000", "tilemap_entry") => textual(Some(sms::views::decode_tilemap_entry(m, &space, address, system))),
         ("sms" | "sg1000", "tile_pixels") => pixels(sms::views::decode_tile_pixels(m, &space, address, bpp, system)),
         ("sms" | "sg1000", "sprites") => (sprites_json(sms::views::sprites(m, &units, system)), Vec::new()),
@@ -356,7 +356,7 @@ pub unsafe extern "C" fn emusen_systems_view(request: *const u8, request_len: us
         let wants = memory
             .wants
             .iter()
-            .map(|w| object(vec![("space", Value::string(w.space.as_str())), ("address", Value::number(w.address)), ("length", Value::number(w.length))]))
+            .map(|w| object(vec![("space", Value::String(String::from(w.space.as_str()))), ("address", Value::from(w.address)), ("length", Value::from(w.length))]))
             .collect();
         envelope(object(vec![("need", Value::Array(wants))]), &[])
     };

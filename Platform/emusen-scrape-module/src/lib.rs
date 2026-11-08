@@ -1,7 +1,7 @@
 //! `emusen.scrape`: the `scrape` command over the scraper lent as the `emusen.scrape` service - see EmuSen_LibraryTools.md §8 and `man scrape`.
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub const SERVICE: &str = "emusen.scrape";
@@ -129,7 +129,7 @@ unsafe impl Send for Service {}
 
 fn compact(members: Vec<(&str, Value)>) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    out.push_str(&serde_json::to_string(&Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())).expect("a value is JSON"));
     out
 }
 
@@ -139,8 +139,8 @@ fn text<'a>(e: &'a Value, name: &str) -> &'a str {
 
 fn token(e: &Value, name: &str) -> String {
     match e.get(name) {
-        Some(Value::Number(t)) => t.clone(),
-        Some(Value::String(s)) => s.text.clone(),
+        Some(Value::Number(t)) => t.to_string(),
+        Some(Value::String(s)) => s.clone(),
         Some(Value::Bool(b)) => b.to_string(),
         _ => String::new(),
     }
@@ -148,13 +148,13 @@ fn token(e: &Value, name: &str) -> String {
 
 fn number(e: &Value, name: &str) -> f64 {
     match e.get(name) {
-        Some(Value::Number(t)) => t.parse().unwrap_or(0.0),
+        Some(Value::Number(t)) => t.as_f64().unwrap_or(0.0),
         _ => 0.0,
     }
 }
 
 fn parse(answer: &str) -> Result<Value, String> {
-    json::parse(answer).map_err(|_| "the scraper's answer is not JSON".to_string())
+    serde_json::from_str::<Value>(answer).map_err(|_| "the scraper's answer is not JSON".to_string())
 }
 
 /// What the command line asks for, before anything is read.
@@ -316,7 +316,7 @@ pub fn facts(backend: &dyn Backend, line: &Line, by_hand: bool) -> Result<Facts,
     let mut favorites = HashSet::new();
     if line.favorites {
         if let Value::Object(rows) = parse(&backend.library_get(r#"{"what":"records"}"#)?)? {
-            favorites = rows.into_iter().filter(|(_, r)| r.get("favourite") == Some(&Value::Bool(true))).map(|(k, _)| k.text).collect();
+            favorites = rows.into_iter().filter(|(_, r)| r.get("favourite") == Some(&Value::Bool(true))).map(|(k, _)| k).collect();
         }
     }
     let mut members = None;
@@ -332,7 +332,7 @@ pub fn facts(backend: &dyn Backend, line: &Line, by_hand: bool) -> Result<Facts,
     let mut excluded = HashSet::new();
     if !by_hand {
         if let Value::Object(rows) = parse(&backend.library_get(r#"{"what":"all_edits"}"#)?)? {
-            excluded = rows.into_iter().filter(|(_, e)| text(e, "nomultiscrape") == "1").map(|(k, _)| k.text).collect();
+            excluded = rows.into_iter().filter(|(_, e)| text(e, "nomultiscrape") == "1").map(|(k, _)| k).collect();
         }
     }
     Ok(Facts { favorites, members, excluded })
@@ -377,7 +377,7 @@ pub fn union(per: &HashMap<String, Vec<String>>, systems: &BTreeSet<String>) -> 
 
 /// Where a game's picture of one kind comes from: the scraper's source word, or none.
 pub fn source(backend: &dyn Backend, game: &Game, kind: &str) -> Result<Option<String>, String> {
-    let request = compact(vec![("what", Value::string("media")), ("path", Value::string(&game.path)), ("system", Value::string(&game.system)), ("type", Value::string(kind)), ("folder", Value::Bool(false))]);
+    let request = compact(vec![("what", Value::String(String::from("media"))), ("path", Value::String(String::from(&game.path))), ("system", Value::String(String::from(&game.system))), ("type", Value::String(String::from(kind))), ("folder", Value::Bool(false))]);
     let v = parse(&backend.get(&request)?)?;
     Ok(if v.is_null() { None } else { Some(text(&v, "source").to_string()) })
 }
@@ -391,11 +391,11 @@ pub fn ls_line(game: &Game, sources: &[(String, Option<String>)]) -> String {
 /// The plan request for the chosen games.
 pub fn plan_request(chosen: &[Game], kinds: &[String], overwrite: bool) -> String {
     compact(vec![
-        ("what", Value::string("plan")),
-        ("games", Value::Array(chosen.iter().map(|g| Value::string(&g.path)).collect())),
+        ("what", Value::String(String::from("plan"))),
+        ("games", Value::Array(chosen.iter().map(|g| Value::String(String::from(&g.path))).collect())),
         ("one", Value::Bool(false)),
         ("refresh", Value::Bool(overwrite)),
-        ("kinds", Value::Array(kinds.iter().map(Value::string).collect())),
+        ("kinds", Value::Array(kinds.iter().map(|s| Value::String(String::from(s))).collect())),
         ("enabled", Value::Bool(true)),
     ])
 }
@@ -439,25 +439,25 @@ pub fn start_request(chosen: &[Game], line: &Line, kinds: &[String]) -> String {
     if line.resume {
         return compact(vec![("games", Value::Array(Vec::new())), ("resume", Value::Bool(true)), ("enabled", Value::Bool(true))]);
     }
-    let mut choices = vec![("kinds", Value::Array(kinds.iter().map(Value::string).collect()))];
+    let mut choices = vec![("kinds", Value::Array(kinds.iter().map(|s| Value::String(String::from(s))).collect()))];
     if let Some(r) = &line.region {
-        choices.push(("region", Value::string(r)));
+        choices.push(("region", Value::String(String::from(r))));
     }
     if let Some(l) = &line.language {
-        choices.push(("language", Value::string(l)));
+        choices.push(("language", Value::String(String::from(l))));
     }
     if let Some(t) = line.threads {
-        choices.push(("threads", Value::number(t as u64)));
+        choices.push(("threads", Value::from(t as u64)));
     }
     let priority = if line.systems.len() == 1 { "console" } else { "library" };
     compact(vec![
-        ("games", Value::Array(chosen.iter().map(|g| Value::Object(vec![(json::Text::new("path"), Value::string(&g.path)), (json::Text::new("system"), Value::string(&g.system))])).collect())),
-        ("priority", Value::string(priority)),
+        ("games", Value::Array(chosen.iter().map(|g| Value::Object(vec![(String::from("path"), Value::String(String::from(&g.path))), (String::from("system"), Value::String(String::from(&g.system)))].into_iter().collect())).collect())),
+        ("priority", Value::String(String::from(priority))),
         ("one", Value::Bool(false)),
         ("resume", Value::Bool(false)),
         ("refresh", Value::Bool(line.overwrite)),
         ("enabled", Value::Bool(true)),
-        ("choices", Value::Object(choices.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())),
+        ("choices", Value::Object(choices.into_iter().map(|(k, v)| (String::from(k), v)).collect())),
     ])
 }
 
@@ -502,7 +502,7 @@ pub fn status_lines(quota: &Value, account: &Value, developer: &Value, progress:
     if let Value::Object(members) = quota {
         for (k, v) in members {
             if !matches!(v, Value::Object(_) | Value::Array(_)) {
-                out.push_str(&format!("quota.{}\t{}\n", k.text, if v.is_null() { "-".to_string() } else { token(quota, &k.text) }));
+                out.push_str(&format!("quota.{}\t{}\n", k, if v.is_null() { "-".to_string() } else { token(quota, k) }));
             }
         }
     }
@@ -621,7 +621,7 @@ pub fn choice(backend: &dyn Backend, line: &Line, by_hand: &[String], resolve: &
 /// Whether a game lacks what `--missing` names: one of the run's kinds for `any`, a description for `metadata`, otherwise every kind listed.
 fn lacks(backend: &dyn Backend, g: &Game, missing: &str, per: &HashMap<String, Vec<String>>) -> Result<bool, String> {
     if missing == METADATA {
-        let request = compact(vec![("what", Value::string("metadata")), ("path", Value::string(&g.path)), ("scraped_names", Value::Bool(false))]);
+        let request = compact(vec![("what", Value::String(String::from("metadata"))), ("path", Value::String(String::from(&g.path))), ("scraped_names", Value::Bool(false))]);
         let m = parse(&backend.get(&request)?)?;
         return Ok(m.get("description").map_or(true, |d| text(d, "value").trim().is_empty()));
     }
@@ -717,15 +717,15 @@ fn whole(r: &Value, name: &str) -> u64 {
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn strings(list: &[String]) -> Value {
-    Value::Array(list.iter().map(Value::string).collect())
+    Value::Array(list.iter().map(|s| Value::String(String::from(s))).collect())
 }
 
 fn notes_said(notes: Vec<String>) -> Value {
-    Value::Array(notes.iter().map(|n| Value::string(n.strip_prefix("scrape: ").unwrap_or(n))).collect())
+    Value::Array(notes.iter().map(|n| Value::String(String::from(n.strip_prefix("scrape: ").unwrap_or(n)))).collect())
 }
 
 /// The command as data, for a window that fronts it: `{"args": [...], "paths": [...], "sources": bool}` with the words
@@ -733,7 +733,7 @@ fn notes_said(notes: Vec<String>) -> Value {
 /// See EmuSen_LibraryTools.md §9.
 pub fn ask(backend: &dyn Backend, request: &str) -> Result<String, (i64, String)> {
     const BAD: i64 = -1163;
-    let r = json::parse(request).map_err(|e| (BAD, format!("the request is not JSON: {e:?}")))?;
+    let r = serde_json::from_str::<Value>(request).map_err(|e| (BAD, format!("the request is not JSON: {e:?}")))?;
     let words: Vec<String> = match r.get("args") {
         Some(Value::Array(a)) => a.iter().filter_map(Value::as_str).map(str::to_string).collect(),
         _ => return Err((BAD, "the request names no args".into())),
@@ -746,11 +746,11 @@ pub fn ask(backend: &dyn Backend, request: &str) -> Result<String, (i64, String)
     let answer = match words.first().map(String::as_str).unwrap_or("") {
         "progress" => {
             let p = parse(&backend.progress(whole(&r, "since").min(ALL_SEEN)).map_err(bad)?).map_err(bad)?;
-            let said = if text(&p, "state") == "running" { Value::Null } else { let e = end_line(&p); Value::string(e.trim_end().strip_prefix("scrape: ").unwrap_or(e.trim_end())) };
+            let said = if text(&p, "state") == "running" { Value::Null } else { let e = end_line(&p); Value::String(String::from(e.trim_end().strip_prefix("scrape: ").unwrap_or(e.trim_end()))) };
             object(vec![("progress", p), ("said", said)])
         }
         "collections" => parse(&backend.library_get(r#"{"what":"collections"}"#).map_err(bad)?).map_err(bad)?,
-        "wait" => object(vec![("serial", Value::number(backend.wait(whole(&r, "serial"), whole(&r, "timeout_ms").min(250) as u32)))]),
+        "wait" => object(vec![("serial", Value::from(backend.wait(whole(&r, "serial"), whole(&r, "timeout_ms").min(250) as u32)))]),
         "cancel" => object(vec![("cancelled", Value::Bool(backend.cancel()))]),
         "status" => object(vec![
             ("quota", parse(&backend.get(r#"{"what":"quota"}"#).map_err(bad)?).map_err(bad)?),
@@ -774,23 +774,23 @@ pub fn ask(backend: &dyn Backend, request: &str) -> Result<String, (i64, String)
                     let with_sources = r.get("sources") != Some(&Value::Bool(false));
                     let mut games = Vec::new();
                     for g in &picked {
-                        let mut fields = vec![("path", Value::string(&g.path)), ("system", Value::string(&g.system)), ("package", g.package.as_deref().map_or(Value::Null, Value::string))];
+                        let mut fields = vec![("path", Value::String(String::from(&g.path))), ("system", Value::String(String::from(&g.system))), ("package", g.package.as_deref().map_or(Value::Null, |s| Value::String(String::from(s))))];
                         if with_sources {
                             let mut media = Vec::new();
                             for k in per.get(&g.system).into_iter().flatten() {
-                                media.push((json::Text::new(k), source(backend, g, k).map_err(bad)?.map_or(Value::Null, |s| Value::string(&s))));
+                                media.push((String::from(k), source(backend, g, k).map_err(bad)?.map_or(Value::Null, |s| Value::String(String::from(&s)))));
                             }
-                            fields.push(("media", Value::Object(media)));
+                            fields.push(("media", Value::Object(media.into_iter().collect())));
                         }
                         games.push(object(fields));
                     }
-                    let per_value = Value::Object(systems.iter().map(|s| (json::Text::new(s), strings(per.get(s).map(Vec::as_slice).unwrap_or(&[])))).collect());
+                    let per_value = Value::Object(systems.iter().map(|s| (String::from(s), strings(per.get(s).map(Vec::as_slice).unwrap_or(&[])))).collect());
                     object(vec![("games", Value::Array(games)), ("kinds", per_value), ("notes", notes_said(notes))])
                 }
                 "plan" => {
                     let plan = parse(&backend.get(&plan_request(&picked, &kinds, line.overwrite)).map_err(bad)?).map_err(bad)?;
                     let said = plan_lines(&plan, &kinds).1;
-                    object(vec![("plan", plan), ("kinds", strings(&kinds)), ("said", Value::string(said.trim_end().strip_prefix("scrape: ").unwrap_or(said.trim_end()))), ("notes", notes_said(notes))])
+                    object(vec![("plan", plan), ("kinds", strings(&kinds)), ("said", Value::String(String::from(said.trim_end().strip_prefix("scrape: ").unwrap_or(said.trim_end())))), ("notes", notes_said(notes))])
                 }
                 _ => {
                     if picked.is_empty() && !line.resume {
@@ -802,13 +802,13 @@ pub fn ask(backend: &dyn Backend, request: &str) -> Result<String, (i64, String)
                         Err((BUSY, _)) => return Err((BUSY, "a run is already going, started in EmuSen, a shell or another window; it is shown here as it goes".into())),
                         Err(e) => return Err(e),
                     };
-                    object(vec![("queued", Value::number(queued.max(0) as u64)), ("since", Value::number(since)), ("kinds", strings(&kinds)), ("notes", notes_said(notes))])
+                    object(vec![("queued", Value::from(queued.max(0) as u64)), ("since", Value::from(since)), ("kinds", strings(&kinds)), ("notes", notes_said(notes))])
                 }
             }
         }
     };
     let mut out = String::new();
-    json::write_compact(&mut out, &answer);
+    out.push_str(&serde_json::to_string(&answer).expect("a value is JSON"));
     Ok(out)
 }
 

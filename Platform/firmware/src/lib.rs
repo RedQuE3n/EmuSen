@@ -5,7 +5,7 @@
 //! checksums (EmuSen_Firmware.md §7); size is the only test of a named file. An install writes into home/Firmware alone.
 
 use std::path::Path;
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::setting_folders::{self, FolderValue};
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::files::file_exists;
@@ -228,7 +228,7 @@ fn words(value: Option<&Value>) -> Result<Vec<String>, String> {
 pub fn request_from(value: &Value) -> Result<Request, String> {
     let file = value.get("file").and_then(Value::as_str).ok_or("a request has no file")?.to_string();
     let size = match value.get("size") {
-        Some(Value::Number(n)) => n.parse::<i32>().map_err(|_| format!("a request's size {n} is not a whole number"))?,
+        Some(Value::Number(n)) => n.as_i64().and_then(|n| i32::try_from(n).ok()).ok_or_else(|| format!("a request's size {n} is not a whole number"))?,
         _ => return Err("a request has no size".to_string()),
     };
     let parts = match value.get("parts") {
@@ -244,27 +244,27 @@ pub fn folders_from(value: Option<&Value>) -> Result<Vec<String>, String> {
 }
 
 fn text_list(items: &[String]) -> Value {
-    Value::Array(items.iter().map(|s| Value::string(s.as_str())).collect())
+    Value::Array(items.iter().map(|s| Value::String(String::from(s.as_str()))).collect())
 }
 
 fn compact(value: &Value) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, value);
+    out.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     out
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 /// The folders and the setting's value as JSON: `folders`, `state`, `path`, `written`, `problem`.
 pub fn folders_json(list: &[String], value: &FolderValue) -> String {
     compact(&object(vec![
         ("folders", text_list(list)),
-        ("state", Value::string(value.state.name())),
-        ("path", value.path.as_deref().map_or(Value::Null, Value::string)),
-        ("written", Value::string(value.written.as_str())),
-        ("problem", value.problem().map_or(Value::Null, Value::string)),
+        ("state", Value::String(String::from(value.state.name()))),
+        ("path", value.path.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
+        ("written", Value::String(String::from(value.written.as_str()))),
+        ("problem", value.problem().map_or(Value::Null, |s| Value::String(String::from(s)))),
     ]))
 }
 
@@ -272,9 +272,9 @@ pub fn folders_json(list: &[String], value: &FolderValue) -> String {
 /// `lengths`, `content`), then every part's bytes in order.
 pub fn found_envelope(found: &Found) -> Vec<u8> {
     let head = compact(&object(vec![
-        ("folder", Value::string(found.folder.as_str())),
+        ("folder", Value::String(String::from(found.folder.as_str()))),
         ("names", text_list(&found.names)),
-        ("lengths", Value::Array(found.parts.iter().map(|p| Value::number(p.len())).collect())),
+        ("lengths", Value::Array(found.parts.iter().map(|p| Value::from(p.len())).collect())),
         ("content", Value::Bool(found.content)),
     ]));
     let mut out = Vec::with_capacity(4 + head.len() + found.parts.iter().map(Vec::len).sum::<usize>());
@@ -289,8 +289,8 @@ pub fn found_envelope(found: &Found) -> Vec<u8> {
 /// Where the image is and where a wrong-sized file of its name is, as JSON: `found` (`folder`, `names`, `whole`,
 /// `content`, or null) and `wrong` (a folder, or null; looked for only when nothing is found).
 pub fn located_json(located: Option<&Located>, wrong: Option<&str>) -> String {
-    let found = located.map_or(Value::Null, |l| object(vec![("folder", Value::string(l.folder.as_str())), ("names", text_list(&l.names)), ("whole", Value::Bool(l.whole)), ("content", Value::Bool(l.content))]));
-    compact(&object(vec![("found", found), ("wrong", wrong.map_or(Value::Null, Value::string))]))
+    let found = located.map_or(Value::Null, |l| object(vec![("folder", Value::String(String::from(l.folder.as_str()))), ("names", text_list(&l.names)), ("whole", Value::Bool(l.whole)), ("content", Value::Bool(l.content))]));
+    compact(&object(vec![("found", found), ("wrong", wrong.map_or(Value::Null, |s| Value::String(String::from(s))))]))
 }
 
 #[cfg(test)]
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn a_request_reads_from_its_json() {
-        let v = json::parse(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]],"md5":["e"]}"#).unwrap();
+        let v = serde_json::from_str::<Value>(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]],"md5":["e"]}"#).unwrap();
         assert_eq!(request_from(&v).unwrap(), Request { file: "a.rom".into(), size: 8, alternates: vec!["b".into()], parts: vec![vec!["c".into(), "d".into()]], md5: vec!["e".into()] });
     }
 }

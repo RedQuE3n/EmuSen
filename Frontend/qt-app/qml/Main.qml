@@ -3,6 +3,7 @@ import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.Endymion
+import QtQuick.Controls
 import EmuSen.Play as Play
 import EmuSen.App
 
@@ -33,7 +34,6 @@ Window {
     readonly property bool splashShown: program.splash && (!moonrise.done || moonrise.opacity > 0)
     // The own look's screens draw a generic pad's glyphs as the Xbox pad's lettered ones, as Mistress does.
     readonly property int padFamily: pads.family === Kit.Families.Generic ? Kit.Families.Xbox : pads.family
-    readonly property int shownIndex: library.indexOf(screens.key)
     readonly property bool gameShown: screens.shown === Screens.Game
     readonly property bool pauseShown: screens.shown === Screens.Pause
     // A game chosen: recorded as started, opened (resumed where it is the one suspended) and shown.
@@ -48,7 +48,7 @@ Window {
         id: screens
         objectName: "screens"
         gameRunning: player.session.running
-        found: grid.games.count > 0
+        found: games.count > 0
         onQuit: Qt.quit()
     }
     Binding {
@@ -69,7 +69,7 @@ Window {
         // While Guide is held for its chords the game hears nothing, as Mistress keeps the pad from it.
         gameMuted: Kit.PadRouter.guideHeld
         // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2).
-        onButton: (button, down) => themeHost.holdsFocus ? feed.push(button, down) : Kit.PadRouter.push(button, down)
+        onButton: (button, down) => themeHost.holdsFocus ? themeHost.feed.push(button, down) : referenceHost.holdsFocus ? referenceHost.feed.push(button, down) : Kit.PadRouter.push(button, down)
     }
     // Home's lines that change with the time: the status line and the paused game's facts.
     Clock {
@@ -103,69 +103,49 @@ Window {
             screens.menu()
         }
     }
-    Kit.NormalizedCanvas {
-        id: canvas
-        objectName: "canvas"
-        visible: !program.gameShown
-        Home {
-            id: home
-            anchors.fill: parent
-            library: library
-            padFamily: program.padFamily
-            controllers: pads.connected
-            session: player.session
-            gamePicture: player.picture
-            pixelScale: canvas.unit
-            visible: (screens.shown === Screens.Home || screens.shown === Screens.HomeCard) && !themeHost.home
-            focus: !program.splashShown && screens.shown === Screens.Home && !themeHost.home
-            startAgain: screens.homeAgain
-            // Under the Home card Home is drawn dimmed and nothing on it is reached: a backdrop to the gate.
-            property bool backdrop: screens.shown === Screens.HomeCard
-            enabled: !backdrop
-            onPlaceChosen: (index) => screens.place(index)
-            onActed: (key) => screens.act(key)
-            onPlayed: (path) => program.play(path)
-            onResumed: {
-                player.session.resume()
-                screens.play()
-            }
-        }
-        Consoles {
-            id: consoles
-            anchors.fill: parent
-            library: library
-            padFamily: program.padFamily
-            pixelScale: canvas.unit
-            visible: screens.shown === Screens.Consoles && !themeHost.consoles
-            focus: !program.splashShown && visible
-            onClosed: screens.back()
-            onOpened: (key) => screens.open(key)
-            onActed: (key) => screens.act(key)
-        }
-        GameGrid {
-            id: grid
-            anchors.fill: parent
-            library: library
-            padFamily: program.padFamily
-            pixelScale: canvas.unit
-            visible: (screens.shown === Screens.Grid || screens.shown === Screens.List || grid.searching) && !themeHost.games
-            focus: !program.splashShown && visible
-            listOpen: screens.shown === Screens.List
-            searching: screens.shown === Screens.Search || screens.shown === Screens.SearchGrid
-            typing: screens.shown === Screens.Search
-            key: screens.key
-            row: consoles.tiles.count > 0 ? consoles.tiles.itemAt(library.indexOf(screens.key)) : null
-            previousRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + consoles.tiles.count - 1) % consoles.tiles.count) : null
-            nextRow: consoles.tiles.count > 1 && program.shownIndex >= 0 ? consoles.tiles.itemAt((program.shownIndex + 1) % consoles.tiles.count) : null
-            onClosed: screens.back()
-            onPlayed: (path) => program.play(path)
-            onActed: (key) => screens.act(key)
-            onCardClosed: screens.close()
-            onSearchClosed: screens.back()
-            onFocusMoved: (keys) => screens.keysFocused(keys)
-        }
+    // The grid's games: the section shown, sorted, narrowed and searched as the List card and the search ask; a theme's
+    // Games screen draws them (EmuSen_Qt.md §3.2, Browse).
+    GameModel {
+        id: games
+        objectName: "gridGames"
+        games: library.loading ? "" : library.gamesOf(screens.key)
+        section: screens.key
+        sectionName: library.headingOf(screens.key)
+        startConsole: library.startsEmpty
+        onPassedBack: screens.back()
+        // A section read anew starts at its first game, as the grid's own did.
+        onCountChanged: games.focused = games.count > 0 ? 0 : -1
     }
-    // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed (EmuSen_Qt.md §3.5).
+    // The reference theme, EmuSen's own look, drawing every role the chosen theme does not (EmuSen_Qt.md §3.5).
+    ThemeHost {
+        id: referenceHost
+        objectName: "reference"
+        anchors.fill: parent
+        visible: !program.gameShown
+        folder: ReferenceTheme.folder
+        coverStores: program.coverStores
+        screens: screens
+        library: library
+        session: player.session
+        clock: clock
+        grid: games
+        picture: player.picture
+        controllers: pads.connected
+        family: program.padFamily
+        reducedMotion: program.reducedMotion
+        inputs: !program.splashShown
+        homeWanted: !themeHost.home
+        consolesWanted: !themeHost.consoles
+        gamesWanted: !themeHost.games
+        onPlayed: (path) => program.play(path)
+        onResumed: {
+            player.session.resume()
+            screens.play()
+        }
+        onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
+        onFocused: (game) => games.focused = games.rowOf(game)
+    }
+    // The chosen EmuSen theme's screens over the reference's, each where the theme provides it and has not failed.
     ThemeHost {
         id: themeHost
         objectName: "theme"
@@ -173,50 +153,155 @@ Window {
         visible: !program.gameShown
         folder: program.theme
         coverStores: program.coverStores
-        inputs: !program.splashShown
-        homeShown: screens.shown === Screens.Home || screens.shown === Screens.HomeCard
-        consolesShown: screens.shown === Screens.Consoles
-        gamesShown: screens.shown === Screens.Grid || screens.shown === Screens.List || screens.shown === Screens.Search || screens.shown === Screens.SearchGrid
-        splashShown: program.splashShown
-        splashLayer: splashLayer
-    }
-    // The theme's engine fed from the program's models, and its Actions carried out (EmuSen_Qt.md §3.5.2).
-    ThemeFeed {
-        id: feed
-        objectName: "themeFeed"
-        host: themeHost.host
+        screens: screens
+        library: library
+        session: player.session
+        clock: clock
+        grid: games
+        picture: player.picture
         controllers: pads.connected
         family: program.padFamily
-        clock: clock.time
         reducedMotion: program.reducedMotion
-        onPlayed: (game) => program.play(game)
+        inputs: !program.splashShown
+        splashShown: program.splashShown
+        splashLayer: splashLayer
+        onPlayed: (path) => program.play(path)
         onResumed: {
             player.session.resume()
             screens.play()
         }
-        onPlaceChosen: (index) => screens.place(index)
-        onOpened: (key) => screens.open(key)
-        onBacked: screens.back()
-        onActed: (key) => screens.act(key)
+        onBacked: screens.shown === Screens.Consoles ? screens.back() : games.back()
+        onFocused: (game) => games.focused = games.rowOf(game)
     }
-    // A new engine is fed everything the feed holds; each feed after is the one model that changed.
-    Connections {
-        target: themeHost.host
-        function onGenerationChanged() { feed.attach() }
-    }
-    Connections {
-        target: library
-        function onLoadingChanged() { feed.showLibrary(library) }
-        function onHomeLinesChanged() { feed.showLibrary(library) }
+    // The grid's search: its words, which the keyboard types and the grid's model narrows by, the field over the one row of
+    // covers and the keyboard docked beneath, over the theme's Games screen (EmuSen_Interface.md §18.1; EmuSen_Qt.md §7.6).
+    Kit.KeyboardModel {
+        id: typist
+        objectName: "typist"
+        onTextChanged: games.search = typist.text
+        onClosed: screens.back()
     }
     Connections {
-        target: player.session
-        function onRunningChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
-        function onGameChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
+        target: games
+        function onSearchChanged() { typist.setText(games.search, games.search.length) }
     }
     Connections {
-        target: clock
-        function onPausedChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
+        target: referenceHost
+        function onSearchingChanged() { typist.setText(games.search, games.search.length) }
+    }
+    Kit.NormalizedCanvas {
+        id: searchCanvas
+        objectName: "searchCanvas"
+        visible: !program.gameShown && referenceHost.searching
+        Kit.Frame {
+            id: searchFrame
+            anchors.fill: parent
+            surfaceDrawn: false
+            padFamily: program.padFamily
+            helpFont: Qt.font({ family: searchFaces.regular, pixelSize: 20 })
+            helpSpacing: 40
+            helpGlyphGap: 10
+            // Its help stands while the keyboard holds the focus; on the covers the theme's own does.
+            helpShown: screens.shown === Screens.Search
+            focus: !program.splashShown && screens.shown === Screens.Search
+            controller.navigationShown: false
+            help: HelpModel {
+                screen: HelpModel.Search
+            }
+            // The keyboard's own actions, Y Space and X Done, and the screen's, the shoulders to the covers; its close is the screen's way out.
+            Connections {
+                target: searchFrame.controller
+                function onActionInvoked(key) { typist.act(key) }
+            }
+            Connections {
+                target: searchFrame.controller
+                function onActionInvoked(key) { screens.act(key) }
+            }
+            Item {
+                x: -searchFrame.safeX
+                y: -searchFrame.safeY
+                width: searchCanvas.width
+                height: searchCanvas.height
+                // The search's field over the one row of covers, never focused: the keyboard types into it (LunaP's GallerySearch).
+                TextField {
+                    objectName: "GallerySearch"
+                    x: 64
+                    y: 100
+                    width: 1152
+                    height: 44
+                    focusPolicy: Qt.NoFocus
+                    activeFocusOnTab: false
+                    readOnly: true
+                    leftPadding: 16
+                    rightPadding: 16
+                    text: typist.text
+                    cursorPosition: typist.caret
+                    color: Kit.Tokens.textStrong
+                    font.family: searchFaces.regular
+                    font.pixelSize: 22
+                    Accessible.name: Words.search
+                }
+                Kit.Keyboard {
+                    id: keyboard
+                    objectName: "GalleryKeyboard"
+                    model: typist
+                    y: 398
+                    width: searchCanvas.width
+                    focus: true
+                    labelFont: Qt.font({ family: searchFaces.regular, pixelSize: Kit.Tokens.fontBody })
+                    onActiveFocusChanged: if (referenceHost.searching && keyboard.activeFocus !== referenceHost.typing) screens.keysFocused(keyboard.activeFocus)
+                }
+            }
+        }
+        Faces {
+            id: searchFaces
+        }
+    }
+    // The List card over the grid (EmuSen_Interface.md §18.1): its actions are the grid's model's, and its jumps move the
+    // focus the theme's Games screen follows.
+    Kit.NormalizedCanvas {
+        id: listCardCanvas
+        objectName: "listCardCanvas"
+        readonly property alias slide: listCard.slide
+        visible: listCard.open || listCard.leaving
+        CardModel {
+            id: listCardModel
+            objectName: "listCardModel"
+            card: CardModel.List
+            shown: screens.shown === Screens.List
+            facts: games.listFacts
+            onActed: (key) => games.focused = games.listAct(key)
+            onStayed: (key) => games.focused = games.listAct(key)
+            onClosed: screens.close()
+        }
+        Connections {
+            target: listCardModel
+            function onActed(key) { screens.act(key) }
+        }
+        MenuCard {
+            id: listCard
+            anchors.fill: parent
+            open: screens.shown === Screens.List
+            focus: open
+            padFamily: program.padFamily
+            rows: listCardModel
+            title: listCardModel.title
+            breadcrumb: listCardModel.breadcrumb
+            footer: listCardModel.footer
+            current: listCardModel.current
+            paneLines: listCardModel.paneLines
+            paneMuted: listCardModel.paneMuted
+            panePicture: listCardModel.panePicture
+            paneCaption: listCardModel.paneCaption
+            help: HelpModel {
+                screen: HelpModel.Card
+            }
+            onChosen: (index) => listCardModel.choose(index)
+            onStepped: (index, by, held) => listCardModel.step(index, by)
+            onFocused: (index) => listCardModel.select(index)
+            onBacked: listCardModel.back()
+            onActed: (key) => screens.act(key)
+        }
     }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
     Kit.NormalizedCanvas {
@@ -230,7 +315,7 @@ Window {
             card: CardModel.Home
             start: screens.page
             shown: screens.shown === Screens.HomeCard
-            facts: library.homeCardFacts(player.session.running ? player.session.game : "", home.pausedWords, program.gameMode)
+            facts: library.homeCardFacts(player.session.running ? player.session.game : "", clock.paused, program.gameMode)
             onActed: (key) => screens.act(key)
             onClosed: screens.close()
         }

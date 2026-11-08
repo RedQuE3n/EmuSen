@@ -37,6 +37,8 @@ emusen-crystal-client = { path = "../crystal-client" }
 emusen-client-fixture = { path = "../client-fixture" }
 emusen-kit-core.workspace = true
 emusen-qt-test.workspace = true
+# The theme profile the reference package is held to, as theme-check holds every theme.
+emusen-qml-rules.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true

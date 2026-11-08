@@ -3,7 +3,7 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
-// A game's cover drawn whole at its own shape in a box, on the box's foot, with the favourite's mark; a game with no art shows the generated card in its console's hue (EmuSen_Interface.md §21, §24.2; EmuSen_Kit.md §7.20).
+// A game's cover drawn whole at its own shape in a box, on the box's foot, with the favourite's mark; a game with no art shows the generated card in its console's hue (EmuSen_Interface.md §21, §24.2; EmuSen_Kit.md §7.29).
 Item {
     id: root
     property string source

@@ -111,6 +111,11 @@ pub mod qobject {
         #[cxx_name = "titleOf"]
         fn title_of(self: &LibraryModel, path: &QString) -> QString;
 
+        /// A row's heading on the grid, by its key: a shelf's short name, a console's name; empty for no row.
+        #[qinvokable]
+        #[cxx_name = "headingOf"]
+        fn heading_of(self: &LibraryModel, key: &QString) -> QString;
+
         /// A game's console's name from its path, as its facts begin; empty for a game the library does not hold.
         #[qinvokable]
         #[cxx_name = "consoleOf"]
@@ -344,6 +349,11 @@ impl qobject::LibraryModel {
             let refreshed = refresh_with(source.as_ref(), &gamelists);
             let _ = qt.queue(move |model| model.apply(None, refreshed));
         });
+    }
+
+    pub fn heading_of(&self, key: &QString) -> QString {
+        let key = key.to_string();
+        self.view.rows.rows().iter().find(|r| r.key == key).map_or_else(QString::default, |r| QString::from(r.heading.as_str()))
     }
 
     pub fn console_of(&self, path: &QString) -> QString {

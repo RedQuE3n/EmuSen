@@ -26,11 +26,29 @@ FocusScope {
     // The List card over the grid, and the search with the keyboard docked (EmuSen_Interface.md §18.1).
     property bool listOpen: false
     property bool searching: false
+    // While searching, whether the docked keyboard holds the focus rather than the covers.
+    property bool typing: false
     readonly property alias games: games
     signal closed()
     signal played(string path)
     signal acted(string key)
     signal cardClosed()
+    signal searchClosed()
+    // The focus taken by the keys or the covers otherwise than by the shoulders (the pointer).
+    signal focusMoved(bool keys)
+
+    // The search's words: the keyboard types them, the grid's model narrows by them and is their one owner.
+    Kit.KeyboardModel {
+        id: typist
+        objectName: "typist"
+        onTextChanged: games.search = typist.text
+        onClosed: root.searchClosed()
+    }
+    Connections {
+        target: games
+        function onSearchChanged() { typist.setText(games.search, games.search.length) }
+    }
+    onSearchingChanged: typist.setText(games.search, games.search.length)
 
     Kit.Sky {
         objectName: "gridSky"
@@ -53,12 +71,18 @@ FocusScope {
         enabled: !root.listOpen
         controller.navigationShown: false
         help: HelpModel {
-            screen: root.searching ? HelpModel.Search : HelpModel.Grid
+            screen: root.typing ? HelpModel.Search : games.search.length > 0 ? HelpModel.GridSearched : HelpModel.Grid
         }
         Connections {
             target: frame.controller
             function onBackDeclined() { games.back() }
             function onActionInvoked(key) { root.acted(key) }
+        }
+        // The keyboard's own actions, Y Space and X Done, while it holds the focus; its close is the screen's way out.
+        Connections {
+            target: frame.controller
+            enabled: root.typing
+            function onActionInvoked(key) { typist.act(key) }
         }
         Item {
             x: -frame.safeX
@@ -158,7 +182,7 @@ FocusScope {
                     button: Kit.Pad.PageDown
                 }
             }
-            // The search's field over the one row of covers; the docked keyboard beneath is piece of the kit to come, stood in for here by its place on the foot (EmuSen_Qt.md §7.1, stage 2).
+            // The search's field over the one row of covers, never focused: the keyboard types into it (LunaP's GallerySearch).
             TextField {
                 id: field
                 objectName: "GallerySearch"
@@ -167,24 +191,32 @@ FocusScope {
                 width: 1152
                 height: 44
                 visible: root.searching
-                focus: root.searching
-                text: games.search
+                focusPolicy: Qt.NoFocus
+                activeFocusOnTab: false
+                readOnly: true
+                leftPadding: 16
+                rightPadding: 16
+                text: typist.text
+                cursorPosition: typist.caret
+                color: Kit.Tokens.textStrong
                 font.family: faces.regular
                 font.pixelSize: 22
                 Accessible.name: Words.search
-                onTextEdited: games.search = field.text
-            // The covers below are reached from the field by Down until the docked keyboard's shoulders move between them.
-            KeyNavigation.down: cells
             }
-            Rectangle {
+            // Held by the screen's state even after the pointer moved the focus, which breaks a plain focus binding.
+            Binding {
+                keyboard.focus: root.typing
+                cells.focus: !root.typing
+            }
+            Kit.Keyboard {
+                id: keyboard
                 objectName: "GalleryKeyboard"
+                model: typist
                 y: 398
                 width: root.width
-                height: 304
                 visible: root.searching
-                color: Kit.Tokens.surface
-                border.width: Kit.Tokens.hoverBorder
-                border.color: Kit.Tokens.border
+                labelFont: Qt.font({ family: faces.regular, pixelSize: Kit.Tokens.fontBody })
+                onActiveFocusChanged: if (root.searching && keyboard.activeFocus !== root.typing) root.focusMoved(keyboard.activeFocus)
             }
             GridView {
                 id: cells
@@ -199,9 +231,7 @@ FocusScope {
                 cellWidth: 204
                 cellHeight: 264
                 clip: true
-                focus: !root.searching
                 keyNavigationWraps: false
-                KeyNavigation.up: root.searching ? field : null
                 currentIndex: games.count > 0 ? 0 : -1
                 highlightFollowsCurrentItem: false
                 // The two rows shown move only when the focus leaves them, a whole row at a time and at once, as Mistress's gallery moves.
@@ -245,6 +275,7 @@ FocusScope {
                         hue: cell.hue
                         favourite: cell.favourite
                         lit: cell.lit
+                        lifts: !root.searching
                         pixelScale: root.pixelScale
                     }
                 }

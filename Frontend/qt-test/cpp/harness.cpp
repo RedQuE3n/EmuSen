@@ -342,6 +342,13 @@ void harness_click(QObject& window, double x, double y, int button)
     }
 }
 
+void harness_hover(QObject& window, double x, double y)
+{
+    if (QQuickWindow* w = quick(window)) {
+        QTest::mouseMove(w, QPoint(static_cast<int>(x), static_cast<int>(y)));
+    }
+}
+
 void harness_key(QObject& window, int key, int modifiers)
 {
     if (QQuickWindow* w = quick(window)) {

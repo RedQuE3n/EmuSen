@@ -126,7 +126,18 @@ fn start_and_the_cards_follow_mistress_routes() {
     assert_eq!(step(Shown::List, &act("search")), Some((Shown::Search, None)));
     assert_eq!(step(Shown::Home, &act("search")), Some((Shown::Search, Some("all".into()))), "Home's Select searches every game");
     assert_eq!(step(Shown::Search, &act("space")), None, "the keyboard's own keys change no screen");
-    assert_eq!(step(Shown::Search, &act("done")), Some((Shown::Grid, None)));
+    assert_eq!(step(Shown::Search, &act("done")), None, "X is the keyboard's, whose close is the screen's Back");
     assert_eq!(step(Shown::Search, &Ask::Play), Some((Shown::Game, None)), "a result plays without closing the keyboard first");
+    // The shoulders move the focus between the keys and the covers, the keyboard staying docked (LunaP's GalleryLayout).
+    assert_eq!(step(Shown::Search, &act("toGrid")), Some((Shown::SearchGrid, None)));
+    assert_eq!(step(Shown::SearchGrid, &act("previous")), Some((Shown::Search, None)));
+    assert_eq!(step(Shown::SearchGrid, &act("next")), Some((Shown::Search, None)));
+    assert_eq!(step(Shown::Search, &Ask::Back), Some((Shown::Grid, None)), "B on the empty field closes the keyboard");
+    assert_eq!(step(Shown::SearchGrid, &Ask::Back), Some((Shown::Consoles, None)), "B the grid passed on goes to Choose a console");
+    assert_eq!(step(Shown::SearchGrid, &act("home")), Some((Shown::Home, None)));
+    assert_eq!(step(Shown::SearchGrid, &Ask::Play), Some((Shown::Game, None)));
+    assert_eq!(step(Shown::Search, &Ask::Keys(false)), Some((Shown::SearchGrid, None)), "the pointer on a cover");
+    assert_eq!(step(Shown::SearchGrid, &Ask::Keys(true)), Some((Shown::Search, None)), "a click on the band");
+    assert_eq!(step(Shown::Grid, &Ask::Keys(false)), None);
     assert_eq!(step(Shown::Game, &act("home")), None, "inside a game Start is the Pause Card's chord, not Home");
 }

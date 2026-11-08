@@ -16,6 +16,8 @@ Item {
     // How far a lit cover grows, about its centre, and rises, as the gallery lifts it.
     property real litScale: 1.06
     property real litRise: 6
+    // Whether a lit cover lifts at all; not under the docked keyboard, whose room holds the cover and no more (EmuSen_Qt.md §7.6).
+    property bool lifts: true
     // Whether the picture stands at the box's right rather than its middle.
     property bool alignRight: false
     // Whether the picture was read and drawn, not the generated card.
@@ -28,8 +30,8 @@ Item {
         id: drawn
         width: root.width
         height: root.height
-        y: root.lit ? -root.litRise : 0
-        scale: root.lit ? root.litScale : 1
+        y: root.lit && root.lifts ? -root.litRise : 0
+        scale: root.lit && root.lifts ? root.litScale : 1
         transformOrigin: Item.Center
         RoundPicture {
             id: picture

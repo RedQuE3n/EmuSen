@@ -16,6 +16,8 @@ pub enum Screen {
     HomePlaces,
     Consoles,
     Grid,
+    /// The grid with words searched for: B clears them (`GamesScreen.HintsFor` with `searched`).
+    GridSearched,
     /// The Pause Card's first page.
     Pause,
     /// A page of the Pause Card past the first.
@@ -71,9 +73,18 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Play", None),
             (UiButton::Screensaver, "Game page", Some("gamePage")),
             (UiButton::Search, "Favourite", Some("favourite")),
-            (UiButton::PageUp, "Console", Some("previous")),
+            (UiButton::PageUp, "Console", Some(PREVIOUS)),
             (UiButton::Options, "List", Some("list")),
             (UiButton::Back, "Consoles", None),
+            (UiButton::Menu, "Home", Some(HOME)),
+        ],
+        Screen::GridSearched => &[
+            (UiButton::Accept, "Play", None),
+            (UiButton::Screensaver, "Game page", Some("gamePage")),
+            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::PageUp, "Console", Some(PREVIOUS)),
+            (UiButton::Options, "List", Some("list")),
+            (UiButton::Back, "Clear search", None),
             (UiButton::Menu, "Home", Some(HOME)),
         ],
         // Mistress's ShowCard and SetCardActions: B resumes on the first page and goes back on the others; Start resumes.
@@ -97,7 +108,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Back, "Delete", None),
             (UiButton::Search, "Space", Some("space")),
             (UiButton::Screensaver, "Done", Some("done")),
-            (UiButton::PageUp, "Move to grid", Some("toGrid")),
+            (UiButton::PageUp, "Move to grid", Some(crate::screens::TO_GRID)),
             (UiButton::Menu, "Home", Some("home")),
         ],
         Screen::PauseSlots => &[
@@ -124,6 +135,10 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
 /// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
 pub const HOME: &str = "home";
 
+/// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).
+pub const PREVIOUS: &str = "previous";
+pub const NEXT: &str = "next";
+
 /// A card's declared action that closes it, as Start closes a card away from a game.
 pub const CLOSE: &str = "close";
 
@@ -143,10 +158,13 @@ pub fn action_lines(screen: Screen) -> String {
 }
 
 /// A screen's actions its help bar does not name: Start on Choose a console goes Home, as Mistress's
-/// `ConsolesPadCommand` has it, though the mockup's bar shows four entries.
+/// `ConsolesPadCommand` has it, though the mockup's bar shows four entries; the right shoulder of a pair the bar draws
+/// as one entry (the grid's Console, the search's Move to grid).
 pub fn unnamed(screen: Screen) -> &'static [Entry] {
     match screen {
         Screen::Consoles => &[(UiButton::Menu, "Home", Some(HOME))],
+        Screen::Grid | Screen::GridSearched => &[(UiButton::PageDown, "Console", Some(NEXT))],
+        Screen::Search => &[(UiButton::PageDown, "Move to grid", Some(crate::screens::TO_GRID))],
         _ => &[],
     }
 }

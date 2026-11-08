@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
+import QtQuick.Effects
 import EmuSen.Kit as Kit
 
 // The notice at the top right inside the safe area: a raised card with a status glyph and the words, entering over Enter, held, leaving over Exit; one at a time (EmuSen_Interface.md §18.6, EmuSen_Kit.md §7.23).
@@ -9,6 +10,9 @@ Item {
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
     // The glyph's box in design units.
     property real glyphSize: Kit.Tokens.base * 5
+    // The shadow's darkness and blur, §5.4's.
+    property real shadowOpacity: 0.5
+    property real shadowRadius: 24
     Connections {
         target: root.model
         function onRaised() { hold.restart() }
@@ -17,6 +21,31 @@ Item {
         id: hold
         interval: root.model.holdMs
         onTriggered: root.model.expire()
+    }
+    // The raised card's one shadow, offset 0,8, blur 24, black at 50% (EmuSen_Interface.md §5.4, §18.6), cast by a copy
+    // of its shape as the cards cast theirs; the software backend draws no MultiEffect (EmuSen_Kit.md §7.23).
+    Rectangle {
+        id: caster
+        x: card.x
+        y: card.y
+        width: card.width
+        height: card.height
+        radius: card.radius
+        color: card.color
+        visible: false
+    }
+    MultiEffect {
+        objectName: "noticeShadow"
+        source: caster
+        anchors.fill: caster
+        visible: card.visible
+        opacity: card.opacity
+        shadowEnabled: true
+        shadowColor: "#000000"
+        shadowOpacity: root.shadowOpacity
+        shadowVerticalOffset: 8
+        blurMax: root.shadowRadius
+        shadowBlur: 1
     }
     Rectangle {
         id: card

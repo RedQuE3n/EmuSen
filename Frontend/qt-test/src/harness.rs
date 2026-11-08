@@ -208,6 +208,12 @@ impl Scene<'_> {
         self.wait(20);
     }
 
+    /// The pointer moved to a point and left resting there, nothing pressed.
+    pub fn hover(&mut self, x: f64, y: f64) {
+        ffi::harness_hover(self.window(), x, y);
+        self.wait(20);
+    }
+
     pub fn right_click(&mut self, x: f64, y: f64) {
         ffi::harness_click(self.window(), x, y, 2);
         self.wait(20);

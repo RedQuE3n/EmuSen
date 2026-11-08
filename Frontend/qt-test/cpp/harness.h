@@ -9,6 +9,7 @@ bool harness_show(QObject& window, int width, int height);
 void harness_resize(QObject& window, int width, int height);
 QString harness_tree(QObject& window);
 void harness_click(QObject& window, double x, double y, int button);
+void harness_hover(QObject& window, double x, double y);
 void harness_key(QObject& window, int key, int modifiers);
 void harness_wheel(QObject& window, double x, double y, int delta);
 void harness_wait(int ms);

@@ -54,7 +54,7 @@ pub struct Session {
 impl Session {
     /// Opens `path` with `engine` (none for the settings' choice) and runs it until closed; `device` is the presenter's
     /// Serenity device, lent to the machine; `io` the pads and the sound player the window has; `clock` Serenity's
-    /// display clock, fed the window's swaps (EmuSen_Qt.md §1.8.3).
+    /// display clock, fed the window's swaps (EmuSen_Qt.md §1.8.3); `held` opens it paused, for a question asked first.
     #[allow(clippy::too_many_arguments)]
     pub fn start(
         runtime: Runtime,
@@ -64,9 +64,11 @@ impl Session {
         handoff: Handoff,
         io: GameIo,
         clock: DisplayClock,
+        held: bool,
         report: impl Fn(Report) + Send + 'static,
     ) -> Session {
         let control = Arc::new(Control::default());
+        control.paused.store(held, Ordering::Relaxed);
         // The device's handle crosses to the frame thread as a number; the handle locks itself (emusen_platform.h).
         let device = device.map_or(0, |d| d.as_ptr() as usize);
         let thread = std::thread::spawn({
@@ -139,6 +141,8 @@ fn run(
     handoff.set_running(true);
     let failed = Mutex::new(None);
     let mut was_held = false;
+    // Whether the game ran a frame: a game closed before it played leaves where it was left off as it was.
+    let mut played = false;
     while !stop.load(Ordering::Relaxed) {
         let held = paused.load(Ordering::Relaxed);
         if let Some(input) = input.as_mut() {
@@ -169,6 +173,7 @@ fn run(
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
             break;
         }
+        played = true;
         let mut handed = false;
         if info.rendered != 0 && info.width > 0 && info.height > 0 && take_picture(runtime, session, &info, &mut frame) {
             taken = handoff.taken();
@@ -225,8 +230,14 @@ fn run(
     handoff.set_running(false);
     handoff.withdraw();
     drop(input);
+    // Where the game was left off, written as it closes with its thread stopped, as Mistress's `WriteResumeState` does.
+    let left_off = if played { runtime.resume_save(session).err().map(|e| format!("Could not save where you left off: {e}")) } else { None };
     let _ = runtime.close(session);
-    match failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
+    let mut failed = failed.into_inner().unwrap_or_else(PoisonError::into_inner);
+    if failed.is_none() {
+        failed = left_off;
+    }
+    match failed {
         Some(words) => report(Report::Failed(words)),
         None => report(Report::Closed),
     }

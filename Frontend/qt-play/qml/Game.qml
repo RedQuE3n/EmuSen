@@ -7,7 +7,8 @@ Item {
     id: root
     property double feed: 0
     property string platformLibrary
-    property string game
+    // The game named, the session's own, so a game the session lets go (B on the Resume question) is named again afresh.
+    property alias game: session.game
     property string cores
     property string engine
     // The pad reader's hand-over to the game (PadReader.gamePads).
@@ -54,7 +55,6 @@ Item {
         cores: root.cores
         engine: root.engine
         pads: root.pads
-        game: root.game
     }
 
     // The bars are the game's and always black, whatever the theme: nothing white or themed ever shows beside the picture.

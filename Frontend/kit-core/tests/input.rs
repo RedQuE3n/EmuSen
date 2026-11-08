@@ -249,6 +249,14 @@ fn lunap_202_4_the_shoulders_step_the_sections_wrapping_and_select_section_raise
     assert_eq!(card.selected_section(), Some("tools"));
     let mut none = Walk::new(WalkForm::BigScreen);
     assert!(!none.press(UiButton::PageUp), "no sections: declined");
+    // With no sections the shoulders are a screen's to declare, as the docked keyboard's Move to grid is.
+    none.set_actions(WalkAction::from_lines("toGrid PageUp\ntoGrid PageDown\n"));
+    assert!(none.press(UiButton::PageDown) && none.press(UiButton::PageUp));
+    assert_eq!(none.take_events(), vec![WalkEvent::ActionInvoked("toGrid".into()), WalkEvent::ActionInvoked("toGrid".into())]);
+    let mut walk = frame(WalkForm::BigScreen);
+    walk.set_actions(WalkAction::from_lines("toGrid PageDown\n"));
+    assert!(walk.press(UiButton::PageDown));
+    assert_eq!(walk.take_events(), vec![WalkEvent::SectionChosen("settings".into())], "sections keep the shoulders");
 }
 
 #[test]

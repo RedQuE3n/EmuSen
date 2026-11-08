@@ -34,6 +34,19 @@ fn under_backdrop(tree: &emusen_qt_test::tree::Tree, index: usize) -> bool {
     false
 }
 
+/// Qt's key codes for the letters typed on a keyboard.
+const KEY_G: i32 = 0x47;
+const KEY_R: i32 = 0x52;
+const KEY_A: i32 = 0x41;
+
+/// The search's difference named in EmuSen_Qt.md §7.6: the keys and the covers are reached from each other by the
+/// shoulders, which the gate's walk (the four directions) does not press; the test walks them below.
+fn named_in_search(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
+    let node = |r: &str| r.trim().split(|c: char| !c.is_ascii_digit()).next().and_then(|n| n.parse::<usize>().ok()).and_then(|i| tree.nodes.get(i));
+    let unreached = fault.split("the pad does not reach: ").nth(1).and_then(node).is_some_and(|n| n.name.starts_with("gridCell.") || n.name == "GalleryKeyboard");
+    named(fault, tree, size) || unreached
+}
+
 /// The fixture's games, as Mistress's own-look library names them.
 const GAMES: [(&str, &str); 8] = [
     ("SNES", "Aurora Drift (Synthetic).sfc"),
@@ -237,26 +250,78 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     wait_for(&mut scene, "gridGames", "countLine", "8 games", 2000);
     assert_eq!(scene.property("screens", "shown"), "Grid");
 
-    // Search ▸ docks the keyboard; the words narrow the grid and the count says so (GamesSearch).
+    // Search ▸ docks the keyboard with the focus on its keys; letters typed on a keyboard and a key clicked narrow the
+    // grid, and the count says so (GamesSearch).
     scene.pad(UiButton::Options);
     settle(&mut scene);
     scene.pad(UiButton::Accept);
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "Search");
-    assert!(scene.set_property("gridGames", "search", "gran"));
+    assert_eq!(scene.property("GalleryKeyboard", "activeFocus"), "true", "the keys hold the focus");
+    for key in [KEY_G, KEY_R, KEY_A] {
+        scene.key(key, 0);
+    }
+    let tree = scene.tree();
+    let n = &tree.nodes[tree.find_named("key.36").expect("the n key") as usize];
+    let (x, y) = (n.x + n.w / 2.0, n.y + n.h / 2.0);
+    scene.click(x, y);
+    assert_eq!(scene.property("GallerySearch", "text"), "gran", "the field shows the words");
     wait_for(&mut scene, "gridGames", "countLine", "1 of 8 games", 2000);
     assert_eq!(scene.property("gridCells", "count"), "1");
+    // Mistress's field is never focused, so it draws its Border edge and no ring while the keys hold the focus.
+    assert_eq!(scene.property("GallerySearch", "activeFocus"), "false");
+    assert_eq!(scene.property("GalleryKeyboard", "showsCurrent"), "true", "the current key ringed");
     // The narrowed grid draws the tile the full grid draws: the same picture, drawn, at the same size.
     scene.wait(300);
     assert_eq!(cover_of(&mut scene, 0), granite, "Granite Choir's tile in the search: its picture, box and colours as in the full grid");
-    hold(&mut scene, "GamesSearch", &mockup::Mockup::default(), named, &mut report);
-    assert_eq!(scene.property("GallerySearch", "text"), "gran", "the field shows the words");
-    // B clears the search, B on the empty field closes the keyboard, and B again goes back to Choose a console.
-    scene.pad(UiButton::Back);
+    // The pointer set aside on the sky, so that at no size does it rest on a cover, which would take the focus there.
+    scene.hover(2.0, 2.0);
+    hold(&mut scene, "GamesSearch", &mockup::Mockup::default(), named_in_search, &mut report);
+    // The shoulders move the focus to the covers, the keyboard staying docked without its ring, and back to the keys.
+    scene.resize(1280, 800);
+    scene.wait(150);
+    scene.pad(UiButton::PageDown);
+    wait_for(&mut scene, "screens", "shown", "SearchGrid", 1000);
+    assert_eq!(focused(&mut scene), "gridCell.0", "the found game focused");
+    assert_eq!(scene.property("GalleryKeyboard", "showsCurrent"), "false", "no ring on the keys once the focus has left them");
+    assert_eq!(scene.property("GalleryKeyboard", "visible"), "true");
+    hold(&mut scene, "GamesSearchGrid", &mockup::Mockup::default(), named_in_search, &mut report);
+    scene.resize(1280, 800);
+    scene.pad(UiButton::PageUp);
+    wait_for(&mut scene, "screens", "shown", "Search", 1000);
+    assert_eq!(scene.property("GalleryKeyboard", "activeFocus"), "true");
+    // The pointer resting on a cover takes the focus there, as the shoulders do; a click on the band takes it back.
+    let tree = scene.tree();
+    let cell = &tree.nodes[tree.find_named("gridCell.0").expect("the cover") as usize];
+    let (cx, cy) = (cell.x + cell.w / 2.0, cell.y + cell.h / 2.0);
+    scene.hover(cx, cy);
+    wait_for(&mut scene, "screens", "shown", "SearchGrid", 1000);
+    scene.click(x, y + 80.0);
+    wait_for(&mut scene, "screens", "shown", "Search", 1000);
+    assert_eq!(scene.property("GalleryKeyboard", "activeFocus"), "true");
+    // B erases a letter at a time; on the empty field it closes the keyboard, and the screen does not go back with it.
+    for _ in 0..4 {
+        scene.pad(UiButton::Back);
+    }
+    assert_eq!(scene.property("GallerySearch", "text"), "");
     wait_for(&mut scene, "gridGames", "countLine", "8 games", 2000);
     assert_eq!(scene.property("screens", "shown"), "Search");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+    wait_for(&mut scene, "gridCells", "activeFocus", "true", 1000);
+    // X is Done: the keyboard closes and the narrowed grid stays; B clears the search, then goes to Choose a console.
+    scene.pad(UiButton::Options);
+    settle(&mut scene);
+    scene.pad(UiButton::Accept);
+    settle(&mut scene);
+    scene.key(KEY_G, 0);
+    wait_for(&mut scene, "gridGames", "countLine", "1 of 8 games", 2000);
+    scene.pad(UiButton::Screensaver);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+    assert_eq!(scene.property("gridGames", "countLine"), "1 of 8 games", "Done keeps the search");
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "gridGames", "countLine", "8 games", 2000);
+    assert_eq!(scene.property("screens", "shown"), "Grid");
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Consoles", 1000);
     assert!(report.is_empty(), "{} faults:\n{}", report.len(), report.join("\n"));

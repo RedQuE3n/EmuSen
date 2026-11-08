@@ -5,3 +5,5 @@ pub mod clients;
 pub mod keyed;
 pub mod library;
 pub mod library_model;
+pub mod words;
+pub mod words_object;

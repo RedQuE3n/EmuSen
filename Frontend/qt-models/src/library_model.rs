@@ -2,10 +2,10 @@
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
 use crate::clients::ClientSource;
-use crate::library::{refresh, LibrarySource, LibraryView, Refreshed};
+use crate::library::{refresh, splash_hues, LibrarySource, LibraryView, Refreshed};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant};
 use std::sync::Arc;
 
 #[cxx_qt::bridge]
@@ -50,6 +50,9 @@ pub mod qobject {
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(bool, loading, READ, NOTIFY)]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
+        #[qproperty(QVariant, splash_hues, cxx_name = "splashHues", READ, NOTIFY)]
+        #[qproperty(i32, splash_planets, cxx_name = "splashPlanets", READ, NOTIFY)]
+        #[qproperty(QString, splash_caption, cxx_name = "splashCaption", READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -100,6 +103,9 @@ pub struct LibraryModelRust {
     problem: QString,
     loading: bool,
     platform_library: QString,
+    splash_hues: QVariant,
+    splash_planets: i32,
+    splash_caption: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -112,6 +118,9 @@ impl Default for LibraryModelRust {
             problem: QString::default(),
             loading: false,
             platform_library: QString::default(),
+            splash_hues: QVariant::from(&QList::<f64>::default()),
+            splash_planets: 0,
+            splash_caption: QString::default(),
             view: LibraryView::empty(),
             source: None,
         }
@@ -197,6 +206,11 @@ impl qobject::LibraryModel {
                 match ClientSource::open(&library, &emusen_crystal_client::Config::default()) {
                     Ok(source) => {
                         let source: Arc<dyn LibrarySource> = Arc::new(source);
+                        // The systems come before the scan, so Moonrise's planets do not wait for the games.
+                        if let Ok(systems) = source.systems() {
+                            let hues = splash_hues(&systems);
+                            let _ = qt.queue(move |model| model.show_splash(hues));
+                        }
                         let refreshed = refresh(source.as_ref());
                         (Some(source), refreshed)
                     }
@@ -221,6 +235,23 @@ impl qobject::LibraryModel {
         }
         self.as_mut().show_loading(false);
         self.publish();
+    }
+
+    /// Moonrise's planets and its caption, from the systems.
+    fn show_splash(mut self: Pin<&mut Self>, hues: Vec<f64>) {
+        let caption = QString::from(crate::words::splash_caption(hues.len()));
+        let planets = hues.len() as i32;
+        let mut list = QList::<f64>::default();
+        for hue in hues {
+            list.append(hue);
+        }
+        // A variant holding the list, which QML reads as a list of numbers.
+        self.as_mut().rust_mut().splash_hues = QVariant::from(&list);
+        self.as_mut().splash_hues_changed();
+        self.as_mut().rust_mut().splash_planets = planets;
+        self.as_mut().splash_planets_changed();
+        self.as_mut().rust_mut().splash_caption = caption;
+        self.splash_caption_changed();
     }
 
     /// Whether a refresh is running, as a read-only property.

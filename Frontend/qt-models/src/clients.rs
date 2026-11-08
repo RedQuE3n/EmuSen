@@ -25,10 +25,7 @@ fn words(e: impl std::fmt::Display) -> String {
 impl ClientSource {
     /// The scan's request: the player's ROM folder, the shelves' systems, and the packages and compressed folders.
     pub fn scan_request(&self) -> Result<ScanRequest, String> {
-        // The settings file sits in the config directory itself, so its name is all the model's load asks.
-        let file = self.platform.file(FILE_SETTINGS).map_err(words)?;
-        let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} names no settings file", file.display()))?;
-        let settings = self.platform.model_load(MODEL_APP_SETTINGS, None, name).map_err(words)?.unwrap_or(Value::Null);
+        let settings = app_settings(&self.platform)?;
         let roots =
             settings.get("RomDirectory").and_then(Value::as_str).filter(|r| !r.is_empty()).map(|r| vec![r.to_owned()]).unwrap_or_default();
         let mut systems: Vec<String> = self.runtime.shelves().map_err(words)?.into_iter().map(|s| s.system).collect();
@@ -41,6 +38,14 @@ impl ClientSource {
             compressed: folder(DIR_COMPRESSED).map_err(words)?,
         })
     }
+}
+
+/// The player's settings as Galaxia's model reads them, the file Mistress reads; null where there is none yet.
+pub fn app_settings(platform: &Platform) -> Result<Value, String> {
+    // The settings file sits in the config directory itself, so its name is all the model's load asks.
+    let file = platform.file(FILE_SETTINGS).map_err(words)?;
+    let name = file.file_name().and_then(|n| n.to_str()).ok_or_else(|| format!("{} names no settings file", file.display()))?;
+    Ok(platform.model_load(MODEL_APP_SETTINGS, None, name).map_err(words)?.unwrap_or(Value::Null))
 }
 
 impl LibrarySource for ClientSource {

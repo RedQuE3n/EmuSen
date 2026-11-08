@@ -808,6 +808,43 @@ calendar weeks. The order puts the tester's first requirement first (the referen
 the third next (the theme API proven by console-style themes, stage 3), the second after it (ES-DE, stage 4), and the
 fourth is a property of the models from stage 0 on (§6), held by tests rather than a stage.
 
+### 7.1 Stage 1 as built: the program and its screens (2026-11-08)
+
+**The program, step 1.** `Frontend/qt-app`, the crate `emusen-qt`, its binary `emusen-qt` and the QML module
+`EmuSen.App` 1.0 (`Main.qml`, the window; one file a screen). Before the window opens, `start.rs` reads two facts and
+hands them to the window's root as its initial properties (`QQmlApplicationEngine::setInitialProperties`), so no static
+carries them: the platform library's path (`--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else
+`libemusen_platform.so` beside the program), and `AppSettings.StartupSplash`, read through Galaxia's model by
+`emusen_qt_models::clients::app_settings`, the one function the library view's scan also reads the settings through. So
+the program reads the player's own settings file, as Mistress does, and switching costs nothing. Its dependencies are
+the kit, the models, `emusen-qt-endymion` and the platform client, all by path in the Qt workspace.
+
+The window holds `LibraryModel` and `PadReader` once, the screens on the big screen's `NormalizedCanvas`, and Moonrise
+over them. It has no menu bar and no status bar: the big-screen and card forms have none (§1.7). The Frame gained
+`surfaceDrawn` (on by default), off on the night screens, whose sky is behind the frame.
+
+**Moonrise at the start** (`EmuSen_Interface.md` §22, as the C# front end does it): its planets are one per system the
+systems table lists with an engine, in the table's order (`library::splash_hues`), read by `LibraryModel` from the
+systems before the scan of the games and published as `splashHues` and `splashCaption` ("N CONSOLES", `words.rs`); the
+splash runs once they arrive, so the scan runs beneath it. It ends at the later of its own end and the library read
+(`!loading`), then fades over the Fade token. A pad press, a key or a click skips it to its finished frame, and the
+press is the splash's alone: while it shows it holds the focus, so the frame's `Connections` on the router are off.
+With the setting off it is never shown. **Words**: `Words`, a QML singleton over `words.rs`, holds the screens' fixed
+words, so a QML file names a word and never writes one (§1.3); `words::counted` writes "1,566 games" as the mockups do.
+
+Differences from the C# splash, named: the planets are the draft's plain discs in their hues, not each console's body
+(§24.6 there), since the kit's `addBody` is an invokable a view cannot call in a loop under §1.3; a `bodies` list model
+the splash reads is the change, owed. Reduced motion (the finished frame held still) is not yet read from the settings,
+and the skip takes every key, Tab and Shift included.
+
+**Held to** (measured 2026-11-08): `tests/start.rs` (2: the library's path in its order; the splash on unless turned off),
+`tests/program.rs` (the window over the real clients on a scratch tree with a synthetic NES image: Moonrise covers the
+window, runs once the systems arrive with a caption counting them, a pad press finishes it, it goes once the library is
+read, Home holds the focus and the library's selection is unmoved; nothing logged; the scenes keep `qml-rules` and
+`qmllint`), and the library view's test of the planets (a system with no engine has none, in the table's order) and the
+counted words. Three seeded faults, each reverted: every system given a planet failed the library test; the splash
+deaf to the pad failed the program test (the splash never finished); the setting read inverted failed `start.rs`.
+
 ---
 
 ## 8. Testing

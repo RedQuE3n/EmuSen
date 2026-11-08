@@ -132,3 +132,14 @@ fn a_failed_refresh_keeps_the_rows_and_shows_the_source_s_words() {
     view.apply(refresh(&source));
     assert!(view.problem.is_empty(), "the next good refresh clears it");
 }
+
+#[test]
+fn moonrise_has_a_planet_for_each_system_with_an_engine_games_or_not() {
+    let mut systems = fake().systems;
+    systems.push(SystemRow { engines: Vec::new(), ..system("pico", "Pico", 99.0, "") });
+    assert_eq!(emusen_qt_models::library::splash_hues(&systems), vec![330.0, 38.0, 212.0], "in the table's order, none without an engine");
+    assert_eq!(emusen_qt_models::words::splash_caption(3), "3 CONSOLES");
+    assert_eq!(emusen_qt_models::words::splash_caption(1), "1 CONSOLE");
+    assert_eq!(emusen_qt_models::words::counted(1566, "game", "games"), "1,566 games");
+    assert_eq!(emusen_qt_models::words::grouped(1_234_567), "1,234,567");
+}

@@ -91,6 +91,11 @@ pub fn rows(systems: &[SystemRow], games: &[GameFile], favourites: usize, recent
     out
 }
 
+/// Moonrise's planets: one hue for each system the table lists with an engine, in the table's order (EmuSen_Interface.md §22).
+pub fn splash_hues(systems: &[SystemRow]) -> Vec<f64> {
+    systems.iter().filter(|s| !s.engines.is_empty()).map(|s| s.look.hue).collect()
+}
+
 /// What one refresh read: the rows, or the words for why it could not.
 pub type Refreshed = Result<Vec<LibraryRow>, String>;
 

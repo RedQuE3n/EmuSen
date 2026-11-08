@@ -14,6 +14,7 @@ FocusScope {
     property alias help: helpBar.model
     property alias padFamily: helpBar.family
     property real navigationWidth: Kit.Tokens.tileWidth + Kit.Tokens.tileGap * 2
+    property bool surfaceDrawn: true
     readonly property bool desktop: frameController.form === Kit.Forms.Desktop
     readonly property bool card: frameController.form === Kit.Forms.Card
     readonly property bool bigScreen: !desktop && !card
@@ -26,6 +27,7 @@ FocusScope {
     }
     Rectangle {
         anchors.fill: parent
+        visible: root.surfaceDrawn || root.card
         color: root.card ? Kit.Tokens.scrim : Kit.Tokens.surface
     }
     Item {

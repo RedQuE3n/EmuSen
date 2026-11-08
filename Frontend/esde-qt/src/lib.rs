@@ -2,4 +2,9 @@
 //! every place and time; this crate puts its records on Qt Quick items and decides nothing of its own.
 
 pub mod base;
+pub mod lists;
 pub mod marks;
+pub mod model;
+pub mod painter;
+pub mod shelves;
+pub mod values;

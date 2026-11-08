@@ -55,16 +55,18 @@ impl fmt::Display for Finding {
 pub const ALLOWED_IMPORTS: [&str; 7] =
     ["QtQuick", "QtQuick.Controls", "QtQuick.Templates", "QtQuick.Layouts", "QtQuick.Shapes", "QtQml", "EmuSen."];
 
-/// Imports never allowed, even under an allowed prefix.
-pub const FORBIDDEN_IMPORTS: [&str; 2] = ["QtQml.Models", "QtQuick.LocalStorage"];
+/// Imports never allowed, even under an allowed prefix. QtQml.Models is allowed for its DelegateChooser (decided
+/// 2026-11-08); its ListModel stays a finding by the rows rule.
+pub const FORBIDDEN_IMPORTS: [&str; 1] = ["QtQuick.LocalStorage"];
 
 /// The modules a theme may import, matched whole (EmuSen_Qt.md §3.5): the sandboxed engine's allow-list, read by its host too.
 pub const THEME_IMPORTS: [&str; 6] =
     ["QtQuick", "QtQuick.Layouts", "QtQuick.Effects", "QtQuick.Shapes", "QtQuick.Controls", "EmuSen.Theme"];
 
 /// Bindings whose string is a name, a path or a colour rather than words: never findings.
-const NAMED_BINDINGS: [&str; 11] = [
+const NAMED_BINDINGS: [&str; 12] = [
     "objectName",
+    "role",
     "font.family",
     "source",
     "fragmentShader",

@@ -1366,6 +1366,131 @@ The watched states hold no desaturated and no rounded picture, since Art Book Ne
 and its rounded cover is not in the variant measured, so those two are held to LunaP's arithmetic by the numbers
 above, not to a grab.
 
+#### 4.8.3 The painter without Qt: `shelves.rs` and `painter.rs` (E2, first part)
+
+What the bridge will put on Qt, written and tested as plain Rust first, so the behaviours below are held without a
+Qt application.
+
+- **`shelves.rs`** reads §4.6's texts. `settings` takes `esdeSettings`: the theme folder, the choices under Mistress's
+  keys (`Variant`, `ColorScheme`, `FontSize`, `AspectRatio`, `Language`, `Transitions`, as `BigPictureChoices` stores
+  them) and the interface's switches (`DisplayClock`, `DisplayHelp`, `ListScrollOverlay`, `QuickSystemSelect`,
+  `StartupView`); a text that does not read gives the defaults. `shelves` takes `esdeShelves` and `esdeMedia` into the
+  scene's `ThemeSystem` and `Game`s: a collection's entry, carried by its file alone, takes the row its console's shelf
+  carries, and its `source` is that console's system; a game's media is looked up by its folder and stem, then its
+  stem, under its own console (§4.6); `last_played` (seconds since 1970) becomes a civil date in UTC by Howard
+  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`.
+- **`painter.rs`**: `ThemeCache` keeps a resolved theme per (folder, system, choices, media presence), as
+  `ThemedLibrary._themes` did, behind a mutex so the data thread fills it, with `forget` for a folder updated on disk;
+  `systems` is the data thread's work, shelves and their themes. `Painter` holds the `Stage`, its clock in
+  microseconds (`tick(ms)` adds), the latest `Frame`, and the pad's grammar on the view, the C# `ThemedLibrary.Command`'s:
+  a direction along the primary element's axis (a list's and a vertical carousel's vertical, a grid's both) presses
+  the scene; Left and Right across it change the system in a gamelist when the quick system select names them, as do
+  the shoulders or the triggers it names; otherwise the shoulders jump ten and the triggers to the first and last; A
+  opens the gamelist or plays the game; B goes back from a gamelist and does nothing at the system view (decided
+  2026-11-08); Y is the favourite; Start and Select are the host's menu and options. `install` keeps the view and the
+  selection across a refresh.
+- **The hold is the scene's.** The router's repeats are not passed on: the scene repeats a held direction on its own
+  clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
+  the list's fast tier jumping four entries). The router gives the first press and the release.
+- **The pointer makes the pad's calls.** `hover(row)` steps to the row as the pad's step does, `tap(row)` is that and A,
+  and a wheel notch is one step, back for a notch up.
+
+**Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
+Mistress's keys and a text that does not read; a collection's entry and the media by folder then stem, the two dates;
+the cache read on the second refresh while the file changed, and read again after `forget`; a carousel step moving at
+200 ms, settled after 401, and its frame equal to the static frame of the new state; the router's repeat not a second
+step, the scene's hold reaching the fourth game in 960 ms, and nothing moving after the release; hover, tap and the
+wheel making the same selection and the same `Played` as the pad, and B at the system view doing nothing. Seeded
+faults, each applied alone and reverted: the router's repeats passed on failed the hold test; hover one row off failed
+the pointer test; nothing cached failed the cache test.
+
+**Owed to the rest of E2** (the bridge, `View.qml`, the delegates, the GPU-tier proofs and the side-by-sides of the
+directions), recorded where the work stands: the description is not read yet (`LibraryModel.esdeDescription(file)`
+is a call the bridge makes for the selected game); the system view's random gameselector picks; the cue's sound files.
+
+#### 4.8.4 The bridge and `View.qml` (E2)
+
+**Five objects, one painter.** `EsdeModel` (`src/model.rs`) holds the `Painter` of §4.8.3 behind an `Rc<RefCell<…>>`
+on the GUI thread. The four list models (`src/lists.rs`) are given it in QML as a property, `scene: esde`, a
+`*mut EsdeModel` property of cxx-qt 0.10 (it compiles across bridges by naming the other bridge's type in an
+`extern "C++Qt"` block, without `#[qobject]`); on assignment a list takes its own share of the painter and keeps no
+pointer. Each list binds `revision: esde.revision` and refreshes on its change, so no `Connections` is needed.
+
+| Object | Holds | Changes |
+|---|---|---|
+| `EsdeModel` | writable `settings`, `shelves`, `media`, `presence` (the texts of §4.6), `width`, `height`, `swap`; read-only `themed`, `problem`, `view`, `moving`, `nextChangeMs`, `revision`, the quick-scroll `letters`, `lettersMark`, `lettersPx`, `lettersOpacity`; invokables `tick(ms)`, `pressed(button, repeat, jump)`, `released`, `hover(row)`, `tap(row)`, `wheel(notches)`, `measured(id, w, h)`, `reload()`; signals `played(path)`, `favourite(path)`, `menu`, `options`, `cued(name)` | a text or the size changing starts a load on a thread of its own (the texts read, `painter::systems` through the `ThemeCache`), handed back by `qt_thread().queue`; a load older than the last asked for is dropped |
+| `ElementModel` | one row per `Frame.elements`, roles flattened by `src/values.rs`, the `paint` role a `PaintKind` enum (`ElementModel.Picture` … `Grid`) the chooser reads, the primary's layout flattened onto its own row | a reset when the ids, paints or layouts change (a view switch, a system change); otherwise `dataChanged` for each row that differs |
+| `SlotsModel` | a carousel's slots (current or `leaving`) with their row's text and picture | a reset when the count or the rows change; `dataChanged` per moved slot |
+| `RowsModel` | a list's or grid's rows | replaced under a reset only when the `Rows` or the install changes; a step changes none |
+| `PartsModel` | one element's badges, help entries (`button`, `pair`, `label`, `icon`, as `Kit.HelpBar` reads them), info or status items | a reset when the count changes, else `dataChanged` over them |
+
+- **Ids are text.** An element's id is a 64-bit FNV value; QML numbers are doubles, so the `elementId` role and
+  `measured`'s first argument carry it as decimal text.
+- **Paths become URLs in Rust** (`QUrl::fromLocalFile`), since QML builds no strings (§1.3).
+- **A role never shadows an item's own property.** The box is `boxX`, `boxY`, `boxWidth`, `boxHeight`, `turn`,
+  `alpha` (qmllint refuses `left` and `top`, final members of `QQuickItem` in Qt 6.11); the help's scale is
+  `entryScale`.
+- **The help's buttons.** The scene names a help entry by its place (§4.5.5); the kit's `PadGlyph` draws
+  `UiButton::control(swap)`, so the bridge hands it the press of that place swapped, `help_buttons` in `painter.rs`,
+  from kit-core's own `PadControl::press` table. The crate now depends on `emusen-kit-core` (as the design's §1 lists),
+  and the painter's own copy of the button order is gone: it takes `UiButton::ALL`.
+- **The router's tiers are not bound** (decided 2026-11-08). The scene repeats a held direction on its own clock
+  (§4.8.3), so the router's repeat tiers would only produce repeats the painter ignores.
+- **The cue is a signal**, `cued(name)` with the scene's name (`navigate`, `select`, `back`, `quicksysselect`), since
+  two equal cues in a row must both sound; mapping a name to the theme's sound file is the host's (owed with H).
+
+**`View.qml`** is a plain `Item` filling its parent: an `EsdeModel` sized by it, an `ElementModel`, and a `Repeater`
+whose delegate is a `DelegateChooser` on `paint`. `DelegateChooser` is in `QtQml.Models` since Qt 6.9 (measured on the
+desktop's 6.11.2: `QtQml/Models/plugins.qmltypes` exports `QtQml.Models/DelegateChooser 6.9`), so `qml-rules` no longer
+refuses `import QtQml.Models` (decided 2026-11-08); a `ListModel` with rows is still a finding by the rows rule, and
+`role` joins the bindings that take a name. The delegates, one file each: `PictureElement`, `TextElement`,
+`RatingElement`, `BadgesElement`, `InfoElement`, `StatusElement`, `HelpElement` (the kit's `HelpBar`, fitted, unruled,
+in the theme's face and colours, filled glyphs; a press of an entry is `pressed(button)`), `CarouselElement`,
+`TextListView` and `GridElement`, over `ElementBox` (the box and its turn) and `Icon` (a theme file or a mark). The
+text list's file is not `TextListElement`: `qml-rules` reads any line containing `ListElement` as rows.
+
+- **The clock.** A `FrameAnimation` runs while `moving` and calls `tick(frameTime × 1000)`; a repeating `Timer` of
+  `nextChangeMs` runs while nothing moves and something will. At rest neither runs and the window swaps no frame.
+- **The pad and the keyboard.** `Connections` on `Kit.PadRouter` while the view has focus (`pressed`, `released`);
+  `Keys.onPressed` is `PadRouter.pushKey`.
+- **The pointer.** Each carousel slot, list row and grid cell carries a `HoverHandler` (`hover(row)` on entering) and a
+  `TapHandler` (`tap(row)`); a `WheelHandler` steps one item a notch; a right or back click is B.
+- **A carousel slot** is an item filling the element's box, scaled about the growth point and turned about the wheel's
+  centre (the scene's origins are in the element's box, so neither needs translating), its `Picture` at the slot's box.
+  A reflection is a second `Picture` drawn `flipped` (a new `Picture` property: the crop rectangle read upside down, so
+  the ramp of §4.8.1 still starts at the drawn top, the picture's bottom row) and placed under the painted picture.
+- **A grid cell's level** is the scene's `focus_of`, evaluated in a binding from `focusFrom`, `fromLevel`, `toLevel`
+  and `progress`; scale, opacity, dim and saturation follow from it.
+- **Measurement.** A picture reports its own size when it changes, a text each new extent, a list its selected name's.
+
+**Proof.** `tests/view.rs`, one test on the GPU tier (Vulkan on the RX 6800 in `kwin_wayland --virtual` at 3840 × 2160,
+the validation layer on, Qt's log required quiet), over a synthetic theme (a text carousel of three systems, a text
+list and the selected game's name) with 4,000 games on one shelf, measured on 2026-11-08: the theme loads with no
+problem; the system view at rest swaps no frame in 2 s and asks for no wake; a carousel step is moving at 150 ms,
+swaps frames while it glides, rests, and its last frame equals, pixel for pixel, the static frame a reload of the
+same state draws; A opens the gamelist; the list makes delegates for the rows that fit its box (within one), not for 4,000; a step selects
+the next game and its name in the same frame with nothing gliding; a hover selects row 3, a wheel notch down steps to
+row 4, a click selects row 3 again and a right click goes back to the system view. Repeater's delegates have no QObject
+parent, so the test reads them through the item tree (`Harness::tree`), never by `findChild`. In `tests/painter.rs`
+(8): the help's places under the swap, and 4,000 games: install and rows 3.7 ms, a step and a tick 0.11 ms (debug
+build). A first run found a defect the plain-Rust tests could not: a list held the painter borrowed while it signalled
+its rows, a text delegate measured itself in that signal, and the second borrow aborted; every list now copies what it
+needs and releases the painter before any signal, and `measured` publishes from the event loop.
+
+| Seeded fault, applied alone and reverted | Caught by |
+|---|---|
+| the `FrameAnimation` running always | `assert_still`: 119 frames in 2 s at rest |
+| `ElementModel` emitting no `dataChanged` | the metadata still "Game 0000" after the step |
+| a list row's hover one row off | the hover selecting row 4 |
+| the help's place not swapped | `a_help_entry_s_place_is_the_kit_button_that_draws_there_under_the_swap` |
+
+**Owed, named:** at the GPU tier, the held list's metadata fade and the quick-scroll letters (the harness presses and
+releases at once; holding needs a down-only press in `qt-test`), `scrollFadeIn`, the slide with the overlays held
+still, a wheel's logo centres (§36.3) and the `(default)` help and status places (§39.6): each is held in the scene's
+own tests (`Frontend/esde/tests/scene.rs`, `frame.rs`), and in the painter they are bindings of the same roles. The
+side-by-sides of Art Book Next beside piece B's grabs need the oracle's synthetic library and are left for piece C's
+rig. The scene allocates its `Frame` each tick and the lists copy what changed; the cost of both is measured with H.
+
 ---
 
 ## 5. The stable developer surface

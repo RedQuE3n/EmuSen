@@ -1664,6 +1664,12 @@ what was there; none changes what an existing screen draws, and the gallery's ga
   high as its content, by a `Binding` that leaves the style's height on the band) in place of the band on the foot.
   The background's colour and corner radius are the bar's own `color` and `radius`, so no property was added for them.
   An entry whose model gives an `icon` role (a theme's `customButtonIcon`) draws that picture in the glyph's place.
+- **Added 2026-11-08 (stage 4, E3):** `HelpBar.glyphSize`, a glyph's side in pixels before `entryScale` (0, the default,
+  is the glyph's own size), so the ES-DE painter sizes its icons from a theme's `fontSize` as ES-DE does
+  (EmuSen_Qt.md §4.8.5). `PadGlyph`'s letter now grows with its glyph: its pixel size is the token's times the glyph's
+  drawn side over its own (`grown`), where it had stayed at the token's size, so a glyph drawn larger (by `glyphSize` or
+  `entryScale`) kept a small letter in a large disc. At the own size `grown` is 1 and nothing drawn changes; the
+  `helpbar` and `menu` tests and qt-app's acceptance were re-run on the change.
 
 **The filled help bar beside Mistress's**, at 1280 × 800: `emusen-qt-test`'s `helpbar` writes
 `~/.cache/emusen/tmp/qt-test/helpbar-filled.png` (the ES-DE gamelist's ten entries in the four families, white on

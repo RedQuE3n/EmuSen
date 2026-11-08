@@ -29,6 +29,7 @@ ElementBox {
     required property real scrollY
     required property real scrollOpacity
     TextBlock {
+        id: block
         anchors.fill: parent
         text: root.text
         fontSource: root.fontSource
@@ -56,4 +57,8 @@ ElementBox {
         scrollOpacity: root.scrollOpacity
         onMeasured: (width, height) => root.esde.measured(root.elementId, width, height)
     }
+    // New words or a new face are reported even at the same extent, since the scene keys a measurement by what it shows.
+    onTextChanged: root.esde.measured(root.elementId, block.contentWidth, block.contentHeight)
+    onPxChanged: root.esde.measured(root.elementId, block.contentWidth, block.contentHeight)
+    onFontSourceChanged: root.esde.measured(root.elementId, block.contentWidth, block.contentHeight)
 }

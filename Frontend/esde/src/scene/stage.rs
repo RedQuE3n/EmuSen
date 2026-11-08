@@ -34,6 +34,12 @@ impl Stage {
         Stage { current: SceneView::new(data, view, now), leaving: None, slide: Glide::at(0.0), direction: 0.0, measures: Measures::new() }
     }
 
+    /// A new view over new data that keeps the painter's measurements, as a reload, a resize or another system asks (EmuSen_Qt.md §4.8.5).
+    pub fn restart(&mut self, data: Data, view: &str, now: Time) {
+        let measures = std::mem::take(&mut self.measures);
+        *self = Stage { measures, ..Stage::new(data, view, now) };
+    }
+
     pub fn is_moving(&self) -> bool {
         self.leaving.is_some() || self.current.is_moving()
     }

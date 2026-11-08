@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 use emusen_esde::loader::{self, Choices, MediaPresence, Theme, ThemeSystem};
-use emusen_esde::scene::{Data, DateTime, Frame, Layout, PadButton, Row, Rows, Stage, System, Time};
+use emusen_esde::scene::{Data, DateTime, DeviceStatus, Frame, HelpContext, Layout, PadButton, Row, Rows, Stage, System, Time};
 
 use emusen_kit_core::input::{PadControl, UiButton};
 
@@ -68,6 +68,8 @@ pub struct Painter {
     pub generation: u64,
     /// The player's face-button swap, which the help's buttons follow.
     pub swap: bool,
+    /// What the host reports of the device for systemstatus; none until it reports.
+    pub device: DeviceStatus,
 }
 
 impl Default for Painter {
@@ -78,7 +80,7 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new(settings: Settings) -> Self {
-        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false }
+        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false, device: DeviceStatus::default() }
     }
 
     /// Installs a refresh's systems, keeping the view and the selection where they still exist.
@@ -101,8 +103,19 @@ impl Painter {
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;
         data.swap = self.swap;
+        data.status = self.device;
+        data.help = HelpContext {
+            random_games: self.settings.random != "disabled",
+            random_systems: self.settings.random == "gamessystems",
+            quick_select: self.settings.quick_select.clone(),
+            screensaver: self.settings.screensaver_controls,
+            ..HelpContext::default()
+        };
         let view = if view == "gamelist" { "gamelist" } else { "system" };
-        self.stage = Some(Stage::new(data, view, self.now));
+        match &mut self.stage {
+            Some(stage) => stage.restart(data, view, self.now),
+            None => self.stage = Some(Stage::new(data, view, self.now)),
+        }
         self.held = None;
         self.refresh();
     }
@@ -112,6 +125,15 @@ impl Painter {
         self.swap = swap;
         if let Some(stage) = &mut self.stage {
             stage.current.data.swap = swap;
+        }
+        self.refresh();
+    }
+
+    /// The device's radios and battery as the host reports them.
+    pub fn set_device(&mut self, device: DeviceStatus) {
+        self.device = device;
+        if let Some(stage) = &mut self.stage {
+            stage.current.data.status = device;
         }
         self.refresh();
     }
@@ -172,7 +194,7 @@ impl Painter {
         let n = data.systems.len() as i64;
         data.system_index = (data.system_index as i64 + delta).rem_euclid(n) as usize;
         data.game_index = 0;
-        *stage = Stage::new(data, "gamelist", self.now);
+        stage.restart(data, "gamelist", self.now);
     }
 
     /// A press from the router; the scene repeats a held direction itself, so the router's repeats are not passed on.
@@ -248,8 +270,17 @@ impl Painter {
         }
     }
 
-    /// The pointer over a row selects it, as hovering a walkable focuses it.
+    /// The pointer over a row selects it, as hovering a walkable focuses it; not while the items glide, since an item
+    /// moving under a still pointer is no choice of the player's and would chase the selection (EmuSen_Qt.md §4.8.5).
     pub fn hover(&mut self, row: i32) {
+        if self.stage.as_ref().is_some_and(|s| !s.current.is_animating()) {
+            self.select(row);
+        }
+        self.refresh();
+    }
+
+    // A row made the selection, as a step to it.
+    fn select(&mut self, row: i32) {
         let now = self.now;
         if let Some(stage) = &mut self.stage {
             let current = &mut stage.current;
@@ -258,12 +289,12 @@ impl Painter {
                 current.step(delta, now);
             }
         }
-        self.refresh();
     }
 
-    /// A tap selects its row and takes A there, the same call as the pad's.
+    /// A tap selects its row and takes A there, the same call as the pad's, glide or not.
     pub fn tap(&mut self, row: i32) -> Option<Action> {
-        self.hover(row);
+        self.select(row);
+        self.refresh();
         self.pressed(UiButton::Accept, false)
     }
 

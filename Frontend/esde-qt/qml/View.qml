@@ -12,6 +12,7 @@ Item {
     property alias media: esde.media
     property alias presence: esde.presence
     property alias swap: esde.swap
+    property alias device: esde.device
     property int family: Kit.Families.Generic
     readonly property alias scene: esde
     focus: true

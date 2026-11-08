@@ -64,7 +64,9 @@ fn the_slide_holds_the_overlays_still_and_a_held_list_fades_its_metadata() {
     assert_eq!(scene.property("esdeModel", "moving"), "true", "the slide is under way");
     let list = box_of(&mut scene, "element-games").expect("the coming list drawn during the slide");
     assert!(list.1 > 0.1 * f64::from(H) + 20.0, "the list is still below its place: {list:?}");
-    assert_eq!(box_of(&mut scene, "element-help"), Some(help), "the help held still through the slide");
+    // Held at its place; its entries are the coming view's at once, so only its width may change.
+    let held = box_of(&mut scene, "element-help").map(|b| (b.0, b.1, b.3));
+    assert_eq!(held, Some((help.0, help.1, help.3)), "the help held still through the slide");
     assert_eq!(box_of(&mut scene, "element-clock"), Some(clock), "the clock held still through the slide");
     until(&mut scene, "the slide settled", |s| s.property("esdeModel", "view") == "gamelist" && s.property("esdeModel", "moving") == "false");
     let rested = box_of(&mut scene, "element-games").unwrap();

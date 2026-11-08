@@ -1651,7 +1651,8 @@ Three GPU-tier tests, each in a `kwin_wayland --virtual` of its own on the RX 68
 log required quiet; what they share is `tests/common/mod.rs` (the compositor, a written theme, BMP and GIF writers so
 no image crate is needed, the oracle library read as the three texts of §4.6).
 
-- **`tests/motion.rs`** (green): the slide pans the coming list while the help and the clock keep their boxes exactly;
+- **`tests/motion.rs`** (green): the slide pans the coming list while the clock keeps its box exactly and the help its
+  place (its entries are the coming view's at once, so only its width may change);
   a step fades a `scrollFadeIn` cover in from half (0.45–0.95 at 60 ms, 1 when the motion ends) and the view's opening
   does not; a held Down (the harness's `pad_down`, EmuSen_Kit.md §7.28's router left holding) keeps the developer text
   at 1 at 300 ms, 0 at 800 ms (the first repeat at 500, the fade 149), frames swapping, and 1 again after `pad_up`.
@@ -1671,28 +1672,51 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
 | `textlist.indicators`, `collectionIndicators`, `grid.imageCropPos`, `image.tileVerticalAlignment` | the fixtures: the shelves now carry `stars`, a custom collection's games `in_collection` (which `shelves.rs` now reads; qt-models writes none yet, so the tick waits for collection editing), and picture A is four quadrants, so a vertical crop or tile shows |
 | the gameselector (13), a GIF's timing (3), `fractionalRows`, `containerVerticalSnap`, `containerScrollSpeed`, datetime `lineSpacing` | not drawn: marked `later:` in `mapping.tsv` with their families (§4.5.5), 367 → 347 drawn |
 
-- **`tests/sizes.rs`** (red, measured 2026-11-08): the three watched themes (`Testing/esde-baseline/states.tsv`), both
+- **`tests/sizes.rs`** (green, measured 2026-11-08): the three watched themes (`Testing/esde-baseline/states.tsv`), both
   views (the SNES; its first game, the folder being entry 0), at the five `SIZES`, on the oracle's library with the
-  systems in the order ES-DE showed them. Held: nothing drawn but the elements, the help's entries and the primary's
-  items inside the window and taking the pointer, a step and A and B answered, the pointer selecting, and every
-  element's box ÷ (W, H) equal within 0.001 across the sizes of one aspect ratio. It found two defects, named here and
-  owed before E3 is done:
-  1. **A measurement does not survive a new install.** A resize reinstalls the stage, and a picture, text or bar whose
-     own extent did not change never reports it again, so elements sized by their content (Art Book Next's art, its
-     metadata icons and texts, Artflix's overlay) stand at width 0 at the second size. The same chicken-and-egg keeps
-     Art Book Next's cover and its date, players and play time undrawn at the first size: the box is 0 until measured,
-     and nothing is measured in a 0 box.
-  2. **The help bar does not scale in proportion**: its width over W is 0.3246 at 1280 × 800 and 0.3046 at
-     1920 × 1200; the kit's glyph and gap sizes are pixels, not fractions of the height.
+  systems in the order ES-DE showed them and its counts (every game of a system, those inside folders too: 14 games and
+  7 favourites on the SNES, as ES-DE's captures read). Held: nothing drawn but the elements, the help's entries and the
+  primary's items inside the window and taking the pointer, a step and A and B answered, the pointer selecting, and
+  every element's box ÷ (W, H) equal within 0.001 across the sizes of one aspect ratio. A box sized by its laid-out
+  words (a help bar, a status row, an auto-sized text) may differ by a further 4 % of its extent: each run's advance is
+  rounded to whole pixels and hinted at its own size, so a 14 px bar is not two thirds of a 21 px one (CarAlt's help
+  measured 3.3 % apart at 1280 × 720 and 1920 × 1080), and ES-DE's own is not proportional either (Art Book Next's
+  gamelist help 0.2883 W at 1280 × 800, 0.2906 W at 1920 × 1200, 0.8 % apart, on its captures). A size is read only
+  after its install has published, since the old frame stands until the new size's load comes back. The defects it
+  found, each fixed and proved:
 
-**The side-by-sides** (`~/.cache/emusen/tmp/qt-s4/compare/side-*.png`: ES-DE 3.4.1 | C# | Qt; `sizes-*.png`: the
-five sizes). Art Book Next at 1280 × 800, looked at 2026-11-08. The system view: the artwork, the logo and the clock
-agree; the Qt view draws the status (Wi-Fi, a battery, 80%) where ES-DE drew none, since the scene's default device
-is a handheld's and the bridge binds no device yet; the help bar is smaller, 9 px higher, names the D-pad SYSTEM where
-ES-DE says CHOOSE (Mistress's words, §36.3) and has no SCREENSAVER entry, which the C# had. The gamelist: the list's
-rows, stars, folder and selection agree within a few pixels, though Qt's stars are larger and ES-DE draws Tower Set
-with its folder-link arrow where both EmuSen painters draw a folder; the cover and the three metadata texts are missing
-(defect 1); the status is drawn (as above). Every difference is a defect until the tester accepts it.
+| Found | Fixed |
+|---|---|
+| A reload or resize installed a new `Stage` with no measurements, and a picture, text or bar whose extent had not changed never reported again, so Art Book Next's date, players and play time, its icons and Artflix's overlay stood at width 0 | `Stage::restart` keeps the measurements while a new view and data are installed (the painter's reload, resize and quick system select use it); a text reports again on new words, size or face, and a picture once it is ready, since the scene keys a measurement by what it shows |
+| An auto-sized text was elided in its 0 box, so it measured nothing and was never given a box (the chicken-and-egg of §4.8.5's first run) | an auto-sized text has no ellipsis (`paint.rs`) |
+| A vector picture contained or covered was decoded at both of the box's sides, so Qt stretched it to them and the scene measured the box's aspect, not the picture's (Art Book Next's system logo 0.2167 H high at 1280 × 800, 0.35 H at 1920 × 1200; CarAlt's controllers and screenshot) | a contained or covered picture asks only a width (a cover twice its height), so the decoded picture keeps its own aspect |
+| The help bar's glyphs were the kit's pixel size and its paddings moved the entries in | the glyph's side is 0.9 of `fontSize` × H (ES-DE's icon measured 30–32 px at a 36.7 px font on 1280 × 800, 45 px at 55 px on 1920 × 1200); `entryRelativeScale` shrinks the icons above 1 and the text below 1, as THEMES.md has it; the background grows outward by its paddings and leaves `pos` and `origin` alone; the kit's `HelpBar.glyphSize` and the glyph's letter growing with its glyph (EmuSen_Kit.md §7.28) |
+| A carousel item drawn as text (no picture) had no `slot-` name, so neither the test nor a pointer test could find it | the text item carries the slot's name |
+| An item gliding under a still pointer took the selection, and the carousel chased the pointer for ever | hover selects only while the items are at rest; a tap selects at once, glide or not (`painter.rs`) |
+
+  Two were the fixtures': the oracle's media index listed a folder's own media subfolder as Tower Set's picture, and
+  its shelves carried no counts.
+
+**The side-by-sides, re-made 2026-11-08** (`~/.cache/emusen/tmp/qt-s4/compare/side-*.png`: ES-DE 3.4.1 | C# | Qt;
+`sizes-*.png`: the five sizes of each view). Every difference found, against ES-DE's captures and its published
+THEMES.md and USERGUIDE.md, settled or named:
+
+| Seen | Settled |
+|---|---|
+| The help's words: LAUNCH, SYSTEM on the system view, JUMP, FIRST, LAST and CHOOSE in a gamelist, FAVORITE | ES-DE 3.4.1's entries in its order and words (`help.rs`): the system view MENU, SELECT, SCREENSAVER, CHOOSE; a gamelist OPTIONS, MENU, SELECT, BACK, FAVORITES, SYSTEM, RANDOM. A reads Select on every entry, as the user guide's "A button" and the captures have it. The project's words of `EmuSen_BigPicture.md` §15 stay the C# painter's |
+| No SCREENSAVER or RANDOM entry | the help reads the player's *Enable screensaver controls* (`ScreensaverControls`, on by default) and *Random entry button* (`RandomEntryButton`, games by default), and resolves *Quick system select*'s two "or" settings by the gamelist's primary (UG "Quick system select") |
+| Wi-Fi, a battery and 80 % drawn where ES-DE drew none | the view shows no indicator until the host reports the device on `EsdeModel.device` (a JSON text, `{"wifi":true,"battery":80}`; an addition to EmuSen.Esde 1.0's registry, copied to `Testing/qmltypes`) |
+| CarAlt's title screen, screenshots and marquee tiled into strips | THEMES.md: `tile` "can only be used when `path` has been set", so a game's media is never tiled (`paint.rs`) |
+| Art Book Next's Tower Set drawn with a folder where ES-DE draws its folder-link mark | a folder with a link has the `FolderLink` marker (`primary.rs`); the mark is the scene's link, where ES-DE's symbol is an arrow into a bracket: **named, open** |
+| The list's names indented on a row with no marker (Brass Lantern), the selection bar beginning at the name, the star larger | ES-DE prefixes the marker to the name: a row with none starts at the margin, the bar covers marker and name, the marker is one `fontSize` square |
+| The list's rows 6–8 px lower than ES-DE's | a row's name takes the face's own line height, not the list's `lineSpacing`, which is the rows' pitch |
+| Artflix's clock missing | ES-DE draws a clock "in the upper left corner" where a theme has none (UG "Display clock"); the loader adds one with THEMES.md's defaults, as it adds the help and the status |
+| Artflix's game count read "12 games available, 6 favorites" | THEMES.md's `gamecount`: "Number of favorites is printed inside brackets", from the shelf's counts: "14 games (7 favorites)" |
+| Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | the systems table's `esde_full_name` is the project's short name, not ES-DE 3.4.1's full name: **named, open** (a data change in `Platform/systems/data`, not the painter's) |
+| The D-pad pair drawn as two glyphs (left lit, right lit) where ES-DE draws one cross | the kit has no glyph for an axis: **named, open** |
+| No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
+| The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |
+| The clock's time | the wall clock at the grab |
 
 ---
 

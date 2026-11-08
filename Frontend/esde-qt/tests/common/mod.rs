@@ -210,6 +210,9 @@ pub fn oracle_texts(order: &[(&str, &str)]) -> (String, String, String) {
     for (system, full) in order {
         let xml = std::fs::read_to_string(root.join("gamelists").join(system).join("gamelist.xml")).unwrap();
         let mut rows: Vec<(u8, String, String)> = vec![];
+        // ES-DE counts every game of the system, those inside folders too (its captures: 14 games, 7 favourites).
+        let every: Vec<&str> = xml.split("<game>").skip(1).filter_map(|b| b.split("</game>").next()).collect();
+        let favourites = every.iter().filter(|b| tag(b, "favorite") == Some("true")).count();
         for (open, close, folder) in [("<folder>", "</folder>", true), ("<game>", "</game>", false)] {
             for block in xml.split(open).skip(1).filter_map(|b| b.split(close).next()) {
                 let path = unescape(tag(block, "path").unwrap().trim_start_matches("./"));
@@ -256,15 +259,17 @@ pub fn oracle_texts(order: &[(&str, &str)]) -> (String, String, String) {
         rows.sort();
         let games: Vec<String> = rows.into_iter().map(|(_, _, r)| r).collect();
         shelves.push(format!(
-            "{{\"name\":\"{system}\",\"full_name\":{},\"theme\":\"{system}\",\"kind\":\"regular\",\"stars\":true,\"favourites_on_top\":true,\"games\":[{}]}}",
+            "{{\"name\":\"{system}\",\"full_name\":{},\"theme\":\"{system}\",\"kind\":\"regular\",\"stars\":true,\"favourites_on_top\":true,\"counts\":{{\"games\":{n},\"favorites\":{favourites},\"shown\":{n}}},\"games\":[{}]}}",
             json_text(full),
-            games.join(",")
+            games.join(","),
+            n = every.len()
         ));
         let (mut kinds, mut present) = (vec![], vec![]);
         for (folder, kind) in ORACLE_TYPES {
             let dir = root.join("downloaded_media").join(system).join(folder);
             let Ok(entries) = std::fs::read_dir(&dir) else { continue };
-            let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+            // Files only: a folder's own media sit in a subfolder of the same name, which is not a picture.
+            let mut files: Vec<PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.is_file()).collect();
             files.sort();
             let named: Vec<String> = files
                 .iter()

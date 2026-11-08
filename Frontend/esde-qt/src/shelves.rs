@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use emusen_esde::loader::{Choices, MediaPresence, SystemKind, ThemeSystem};
-use emusen_esde::scene::{Counts, DateTime, Game};
+use emusen_esde::scene::{Counts, DateTime, DeviceStatus, Game};
 use serde_json::Value;
 
 /// One shelf of the shelves' text, without its theme: the system it is, its games and its list's facts.
@@ -27,6 +27,10 @@ pub struct Settings {
     pub scroll_overlay: bool,
     pub quick_select: String,
     pub startup_view: String,
+    /// The random entry's button: games, gamessystems or disabled (ES-DE's Random entry button).
+    pub random: String,
+    /// X starts the screensaver from the system view (ES-DE's Enable screensaver controls).
+    pub screensaver_controls: bool,
 }
 
 impl Default for Settings {
@@ -39,6 +43,8 @@ impl Default for Settings {
             scroll_overlay: false,
             quick_select: "leftrightshoulders".into(),
             startup_view: "system".into(),
+            random: "games".into(),
+            screensaver_controls: true,
         }
     }
 }
@@ -80,6 +86,22 @@ pub fn settings(text_in: &str) -> Settings {
         scroll_overlay: on("ListScrollOverlay", d.scroll_overlay),
         quick_select: text(&i, "QuickSystemSelect").unwrap_or(d.quick_select),
         startup_view: text(&i, "StartupView").unwrap_or(d.startup_view),
+        random: v.get("collections").and_then(|c| text(c, "RandomEntryButton")).unwrap_or(d.random),
+        screensaver_controls: on("ScreensaverControls", d.screensaver_controls),
+    }
+}
+
+/// The device's status as the host writes it, `{"wifi":true,"battery":80,"charging":false}`: a key left out is a radio
+/// or battery the device lacks, and an empty text shows no indicator at all.
+pub fn device(text_in: &str) -> DeviceStatus {
+    let v: Value = serde_json::from_str(text_in).unwrap_or(Value::Null);
+    let radio = |key: &str| v.get(key).and_then(Value::as_bool);
+    DeviceStatus {
+        bluetooth: radio("bluetooth"),
+        wifi: radio("wifi"),
+        cellular: radio("cellular"),
+        battery_percent: v.get("battery").and_then(Value::as_u64).map(|b| b.min(100) as u8),
+        charging: radio("charging").unwrap_or(false),
     }
 }
 

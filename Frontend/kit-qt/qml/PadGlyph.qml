@@ -14,6 +14,8 @@ Item {
     readonly property alias name: marks.name
     implicitWidth: Kit.Tokens.fontGlyph * 1.4
     implicitHeight: root.implicitWidth
+    // The glyph's size over its own, which its letter follows (1 at the own size).
+    readonly property real grown: Math.max(0.01, marks.size) / Math.max(1, root.implicitWidth)
     Accessible.role: Accessible.Graphic
     Accessible.name: marks.name
     Kit.PadGlyphMarks {
@@ -22,7 +24,8 @@ Item {
     }
     TextMetrics {
         id: inked
-        font.pixelSize: Kit.Tokens.fontGlyph * marks.letterScale
+        // The letter grows with the glyph, so a glyph drawn larger than its own size keeps its proportions.
+        font.pixelSize: Kit.Tokens.fontGlyph * marks.letterScale * root.grown
         font.bold: marks.letterBold
         text: marks.letter
     }

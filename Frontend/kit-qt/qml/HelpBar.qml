@@ -20,6 +20,8 @@ Rectangle {
     property color iconColor: Kit.Tokens.text
     // Each entry's glyph, gap and label at this share of their own size.
     property real entryScale: 1
+    // A glyph's side in pixels before entryScale; 0 is the glyph's own size.
+    property real glyphSize: 0
     // The bar's own colour and radius are the Rectangle's; the paddings are its box's around the entries.
     property real horizontalPadding: 0
     property real verticalPadding: 0
@@ -98,8 +100,8 @@ Rectangle {
                         objectName: "glyph-" + entry.label
                         anchors.verticalCenter: parent.verticalCenter
                         visible: entry.picture.length === 0
-                        width: implicitWidth * root.entryScale
-                        height: implicitHeight * root.entryScale
+                        width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
+                        height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
                         style: root.glyphStyle
                         ink: root.iconColor
@@ -110,8 +112,8 @@ Rectangle {
                         objectName: "glyph2-" + entry.label
                         anchors.verticalCenter: parent.verticalCenter
                         visible: entry.pair >= 0
-                        width: implicitWidth * root.entryScale
-                        height: implicitHeight * root.entryScale
+                        width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
+                        height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
                         style: root.glyphStyle
                         ink: root.iconColor

@@ -347,6 +347,8 @@ fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &A
         until(scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
     }
     let (shelves, files) = library(c.system, c.game, c.hide);
+    // A handheld's status, so systemstatus has indicators to draw.
+    assert!(scene.set_property("view", "device", "{\"wifi\":true,\"battery\":80}"));
     assert!(scene.set_property("view", "media", &assets.media(&files)));
     let interface = format!("\"DisplayClock\":true,\"StartupView\":\"{}\"", view_of(c));
     assert!(scene.set_property("view", "settings", &settings(theme, &interface)));

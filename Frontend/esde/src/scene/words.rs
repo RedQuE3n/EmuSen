@@ -3,7 +3,7 @@
 
 use crate::loader::Element;
 
-use super::data::{DateTime, Game, System};
+use super::data::{Counts, DateTime, Game, System};
 
 pub const UNKNOWN: &str = "unknown";
 pub const NEVER: &str = "never";
@@ -210,14 +210,15 @@ fn one_decimal(value: f32) -> String {
 
 fn system_data(e: &Element, system: &System) -> Option<String> {
     let field = e.string("systemdata")?;
-    let games = system.games.iter().filter(|g| !g.folder && !g.not_counted).count();
-    let favorites = system.games.iter().filter(|g| g.favorite && !g.not_counted).count();
+    let c = system.counts.unwrap_or_else(|| Counts::of(&system.games));
+    let (games, favorites) = (c.games, c.favorites);
     Some(match field {
         "name" => system.system.name.clone(),
         "fullname" => system.system.full_name.clone(),
+        // THEMES.md: "Number of favorites is printed inside brackets if applicable".
         "gamecount" => {
-            let favs = if favorites > 0 { format!(", {}", count(favorites, "favorite", "favorites")) } else { String::new() };
-            format!("{} available{favs}", count(games, "game", "games"))
+            let favs = if favorites > 0 { format!(" ({})", count(favorites, "favorite", "favorites")) } else { String::new() };
+            format!("{}{favs}", count(games, "game", "games"))
         }
         "gamecountGames" => count(games, "game", "games"),
         "gamecountGamesNoText" => games.to_string(),

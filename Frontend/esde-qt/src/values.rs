@@ -341,6 +341,7 @@ pub fn row(r: &Row, role: &str) -> V {
             emusen_esde::scene::Marker::None => String::new(),
             emusen_esde::scene::Marker::Star => "star".into(),
             emusen_esde::scene::Marker::Folder => "folder".into(),
+            emusen_esde::scene::Marker::FolderLink => "folder-link".into(),
             emusen_esde::scene::Marker::Tick => "tick".into(),
         }),
         "folder" => V::B(r.folder),

@@ -18,7 +18,12 @@ use emusen_qt_test::{Harness, Scene};
 const ORDER: [(&str, &str); 5] =
     [("snes", "Super Nintendo"), ("n64", "Nintendo 64"), ("nes", "Nintendo Entertainment System"), ("gb", "Game Boy"), ("gbc", "Game Boy Color")];
 
-type Boxes = BTreeMap<String, (f64, f64, f64, f64)>;
+// A box and whether the painter sized it by its laid-out words (a help bar, a status row, an auto-sized text).
+type Boxes = BTreeMap<String, ((f64, f64, f64, f64), bool)>;
+
+// The share of a measured extent that text layout may differ by between sizes: each run's advance is rounded to whole
+// pixels and hinted at its own size, so a 14 px help bar is not exactly two thirds of a 21 px one (EmuSen_Qt.md §4.8.5).
+const WORDS: f64 = 0.04;
 
 // Every drawn element's box as a fraction of the window, keyed by its name and its place among elements of that name.
 fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
@@ -26,7 +31,8 @@ fn fractions(scene: &mut Scene<'_>, w: f64, h: f64) -> Boxes {
     let mut out = Boxes::new();
     for n in scene.tree().nodes.iter().filter(|n| n.visible && n.name.starts_with("element-")) {
         let k = seen.entry(n.name.clone()).or_default();
-        out.insert(format!("{}#{k}", n.name), (n.x / w, n.y / h, n.w / w, n.h / h));
+        let worded = ["HelpElement", "StatusElement", "TextElement"].iter().any(|c| n.cls.contains(c));
+        out.insert(format!("{}#{k}", n.name), ((n.x / w, n.y / h, n.w / w, n.h / h), worded));
         *k += 1;
     }
     out
@@ -123,7 +129,14 @@ fn the_watched_themes_hold_at_the_five_sizes() {
             let state = if view == "system" { "system".to_owned() } else { "gamelist-1".to_owned() };
             let mut by_ratio: BTreeMap<(i32, i32), (String, Boxes)> = BTreeMap::new();
             for (w, h) in SIZES {
+                let before = scene.property("esdeModel", "revision");
+                let at = |s: &mut Scene<'_>, p: &str| s.property("view", p).parse::<f64>().unwrap_or(-1.0);
+                let fresh = at(&mut scene, "width") != f64::from(w) || at(&mut scene, "height") != f64::from(h);
                 scene.resize(w, h);
+                // A new size is installed when its load comes back and publishes; until then the old frame stands.
+                if fresh {
+                    until(&mut scene, "the size's install", |s| s.property("esdeModel", "revision") != before);
+                }
                 until(&mut scene, "the size's install", |s| s.property("esdeModel", "themed") == "true");
                 if !common::settle_picture(&mut scene, &scratch.0) {
                     failures.push(format!("{theme} {state} {w}x{h}: the picture did not settle in 10 s"));
@@ -142,8 +155,12 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                         for (name, b) in &boxes {
                             match held.get(name) {
                                 None => failures.push(format!("{at}: {name} drawn here but not at {first}")),
-                                Some(a) => {
-                                    let off = [b.0 - a.0, b.1 - a.1, b.2 - a.2, b.3 - a.3].iter().fold(0.0f64, |m, d| m.max(d.abs()));
+                                Some((a, worded)) => {
+                                    let (b, _) = b;
+                                    let words = |extent: f64| if *worded { WORDS * extent } else { 0.0 };
+                                    let off = [(b.0 - a.0, a.2), (b.1 - a.1, a.3), (b.2 - a.2, a.2), (b.3 - a.3, a.3)]
+                                        .iter()
+                                        .fold(0.0f64, |m, (d, extent)| m.max(d.abs() - words(*extent)));
                                     if off > 0.001 {
                                         failures.push(format!("{at}: {name} {b:.4?} against {a:.4?} at {first}, {off:.4} off"));
                                     }
@@ -186,7 +203,11 @@ fn the_watched_themes_hold_at_the_five_sizes() {
                 let (w, h) = SIZES[SIZES.len() - 1];
                 let (_, items) = unreachable(&mut scene, f64::from(w), f64::from(h));
                 assert!(scene.grab(&shot));
-                if let Some(&(x, y)) = items.last() {
+                // The item nearest the middle that is not the selected one, clear of the help and the edges.
+                let mid = (f64::from(w) / 2.0, f64::from(h) / 2.0);
+                let mut near = items.clone();
+                near.sort_by(|a, b| ((a.0 - mid.0).hypot(a.1 - mid.1)).total_cmp(&(b.0 - mid.0).hypot(b.1 - mid.1)));
+                if let Some(&(x, y)) = near.get(1).or(near.first()) {
                     scene.hover(x, y);
                     common::settle_picture(&mut scene, &scratch.0);
                     if scene.difference(&shot, 0, 0, &[], "") == Some(0) {

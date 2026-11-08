@@ -234,6 +234,10 @@ same role and words, each rectangle within two design pixels, no named control e
 names. Ids, template parts, unnamed panels and pixel colours are not compared: two toolkits build different trees for the
 same screen, and the rules (§4) hold what matters of them.
 
+The Qt front end writes this format from its item tree with `emusen-qt-test`'s `spec` module (`EmuSen_Kit.md` §7.11,
+2026-11-08), which says where each key comes from in Qt, which keys it does not write, and how its recordings were read
+back whole and held to these rules by `SpecDocument` and `InterfaceRules` themselves.
+
 ## 6. The gate, and what the recording found
 
 ### 6.1 The gate

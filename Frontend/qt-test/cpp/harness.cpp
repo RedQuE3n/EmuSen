@@ -8,6 +8,7 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtGui/QAccessible>
 #include <QtGui/QColor>
 #include <QtGui/QFontMetricsF>
 #include <QtGui/QImage>
@@ -102,6 +103,8 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["w"] = rect.width();
     node["h"] = rect.height();
     node["visible"] = item->isVisible() && opacity > 0;
+    node["enabled"] = item->isEnabled();
+    node["scale"] = unit.height();
     node["opacity"] = opacity;
     node["clip"] = item->clip();
     node["hit"] = item->isVisible() && item->isEnabled() && (item->acceptedMouseButtons() != Qt::NoButton || handlers);
@@ -127,6 +130,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["ink"] = item->isEnabled() ? ink.name(QColor::HexArgb) : QString(); // words of a disabled control are exempt (WCAG 2.1, 1.4.3)
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
+        node["face"] = font.family();
         const QRectF glyphs = glyphBox(item);
         node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
     }
@@ -135,6 +139,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["sv"] = direction != 1 && item->property("contentHeight").toDouble() > item->height() + 0.5;
         node["sh"] = direction != 2 && item->property("contentWidth").toDouble() > item->width() + 0.5;
         node["wheel"] = item->property("interactive").toBool();
+        node["ch"] = item->property("contentHeight").toDouble() * unit.height();
     }
     if (item->inherits("QQuickPathView")) {
         node["sh"] = item->property("count").toInt() > item->property("pathItemCount").toInt();
@@ -151,7 +156,8 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         heard = item->property("placeholderText").toString();
     }
     node["heard"] = heard;
-    node["role"] = QQmlProperty(item, QStringLiteral("Accessible.role"), qmlContext(item)).read().toInt();
+    const QAccessibleInterface* reader = QAccessible::queryAccessibleInterface(item); // the role a screen reader is given
+    node["role"] = reader != nullptr ? static_cast<int>(reader->role()) : 0;
     node["colors"] = coloursOf(item);
     out.append(node);
     for (QQuickItem* child : item->childItems()) {

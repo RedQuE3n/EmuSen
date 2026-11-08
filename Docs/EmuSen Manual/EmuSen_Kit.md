@@ -768,6 +768,89 @@ composited over what is behind it, the spare tenth, and no ink nothing to judge.
 failed the gate with a list cut short in every form, variant and size. The first star moved 12.8 pixels to the right
 failed the gate's comparison with the reference at 7 pixels, against 4 spare and 0 when clean.
 
+### 7.11 The spec writer (stage 0, the rest, step 1; 2026-11-08)
+
+`emusen-qt-test`'s `spec` module writes a shown state in `EmuSen_InterfaceSpec.md` §2's `spec 1` format, so that a Qt
+screen is held to the C# recording of the screen it replaces by the C# side's own reader, comparator and rules
+(`EmuSen_Qt.md` §8.2) *[own, because the format is EmuSen's own and Qt has no writer for it]*. Its one job is
+translation: it takes kit-core's audit `Item` tree as `tree.rs` built it, the raw dump beside it and the walk, and
+writes text. It decides none of the facts the rules read; each is the decision kit-core's audit already made, so a
+recording and the audit cannot disagree about the state they describe.
+
+**The header.** `state`, `size`, `kind` (the caller's: the gallery writes `menu` on the big screen and the card, `sheet`
+on the desktop), `root` (the root item's QML type and `objectName`), `unit`, `slack` and `floor`, `frame` (the window),
+`case` and `palette` (the variant's token colours, each once, as `#RRGGBBAA`). `unit`, `slack` and `floor` come from
+`harness::Measures::of(form, height)`, the same value the audit's `State` is now built from. The banner, a comment every
+reader skips, names the Qt front end.
+
+**The tree.** Every shown item under the root, depth first, numbered from 0. An item kit-core does not show (Qt's
+`visible` false, at no opacity, or wholly outside a clip that scrolls, §7.10) is left out with what is under it, and a
+backdrop is one line, as the rules read it. Each key, from where:
+
+| Key | From |
+|---|---|
+| `role` | the role Qt's accessibility gives the item (`QAccessible::queryAccessibleInterface`, what a screen reader is told), in the format's words, which are Avalonia's control types (`text`, `button`, `listitem`, `scrollbar`, …); a Qt role with no counterpart is `none` |
+| `name`, `text`, `heard` | `objectName`; a text's words; the spoken name kit-core's item carries (§7.9) |
+| `at`, `seen` | the scene rectangle; the part no clipping ancestor hides, where that differs |
+| `op`, `unseen`, `off` | kit-core's operable and unseen; a disabled item |
+| `drawn`, `nohit` | kit-core's `is_drawn`; not hit-testable |
+| `limit`, `by` | on drawn items, kit-core's limit: the nearest ancestor that clips or scrolls (`scroll` when it scrolls down, else `clip`), or the window (`panel`) |
+| `owner`, `in` | words whose parent is a control or a row, as kit-core's rule reads them; the scrollers above |
+| `overflow`, `viewport`, `fades`, `vfixed` | a scroller's content height past its own, its rectangle, the edges it declares it fades, and no vertical scrolling |
+| `layout`, `box`, `ellipsis`, `size`, `caps`, `face` | a text's laid-out size and its item's, in scene pixels; truncation; the font's size and capitals in design pixels; the family |
+| `paints` | the colours kit-core reads, except under a scene (`Body`, `Sky`, `Moonrise`, a backdrop), which kit-core exempts from palette reach while the format exempts only whole scenes |
+| `allow` | the reason of `SMALL_TEXT_EXCEPTIONS` for the item it names |
+
+**The focus and the walk.** `Scene::walk` keeps every press's outcome (`Landing::At`, `Same`, `Lost`), and
+`record_edges` is now the moves among them, so the audit and the recording read one walk. A press from or onto an item
+not written (a row built out of view) names it by its `path:` of child indices, the format's reference for a control it
+did not record.
+
+**Not written, and why.** `focus` (focusable): the dump has one fact, `operable`, and writing it twice would be an
+invention. `sideways`, `live`, `element`, `volatile`, `part`, `title`, `footer`, `walk` and `entered`: nothing in the
+kit has them yet, and the walk starts from every operable item, so it is never truncated. The grammar's presses after
+the walk are owed to stage 1, where each screen's test says what its presses observe.
+
+**Two toolkits' facts, read side by side.** A Qt `Text` is not hit-testable where Avalonia's `TextBlock` is, so C#'s
+overlap rule, which reads drawn items without `nohit`, passes over words that kit-core's overlap rule still judges;
+the Qt slack is kit-core's 1.5 above a unit of 1, where the C# recordings at 1920 × 1200 write 2; and `layout` and `box`
+are scene pixels, where the C# writes the control's own. None changes a comparison (`InterfaceSpec.Compare` reads names,
+roles, words, rectangles and the focus graph), and each is the toolkit's fact rather than one bent to match.
+
+**The C++** grows by six lines (`harness.cpp`): four facts in the dump (enabled, the item's scale in the scene, the
+face, a flickable's content height) and the role read from Qt's accessibility instead of the attached `Accessible.role`,
+which only items that declare one carry (every `Text` read `none` through it). Switching accessibility on
+(`QAccessible::setActive`) was tried first and changed no recorded byte, so it is not done.
+
+**Proved with the C# side's own code**, measured on 2026-11-08. The gate writes each of its 73 states as `<state>.spec`
+beside its grab in `~/.cache/emusen/tmp/kit-gallery/`. A program outside the tree
+(`~/.cache/emusen/tmp/qt-stage0/spec-proof/`) compiled WiseMan's `Fixtures/InterfaceSpec.cs` and
+`Fixtures/InterfaceRules.cs` unchanged, with `FitAudit.DesktopCaps` (0.7273, the one value the rules read from the
+Avalonia-bound `FitAudit.cs`, and kit-core's `DESKTOP_CAPS`) stated beside them. For every recording it read the file
+with `SpecDocument.Parse`, wrote it back with `SpecDocument.Write` and compared the bytes after the banner, ran
+`InterfaceRules.All`, and ran `InterfaceSpec.Compare` against `big-Dark-menu-1280x800`. Its output (`all.txt` there):
+
+- 73 of 73 written back byte for byte;
+- the C# rules (fit, pad reach, names, palette reach) found **0 faults in all 73**, as kit-core's audit had;
+- the comparator found **0 differences** between the dark and the light menu at 1280 × 800 (it reads no colours), and
+  named 19 at 1920 × 1080, rectangles measured in the expected state's design pixels, for example `navigation: at
+  86.4,54,1747.2,135, recorded 64,40,1152,100, 617.6 design px apart`, and 95 against the Controls section, beginning
+  `missing: MenuPanel panel`.
+
+Recordings are change detectors only (`EmuSen_Qt.md` §8.2). The gallery's are written for the comparison and a reader's
+look, not committed and not held byte for byte: the gallery has no C# screen to be compared with, and its own pictures
+are held by the gate.
+
+**Held to**: `qt-test/tests/spec.rs`, one test: numbers and quoting as C#'s `Num` and `Quote` write them; the menu scene
+recorded, its header in the format's order, the ids in order with no level jumped, each line's facts in key order, the
+panel by name, the rows operable and named, a row's words owned by the row with their capitals, face and limit, the
+focus on the first row, Down reaching the second, Up staying (`same`), every press an edge line. The harness's scenes
+(`menu`, `sheet`, `style`, `lint`) and the gate pass unchanged over the walk. Measured on 2026-11-08 with three seeded
+faults, each reverted: words owned by their outermost ancestor rather than their parent failed `spec.rs` (no owner on the
+first row's words); a press that kept the focus recorded as lost failed it (`edge 8 up same` missing); the facts written
+in reverse order failed its key order, and, before that check existed, the C# round trip (`written back DIFFERENTLY`,
+the first difference at line 14).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -804,7 +887,8 @@ CubicOut curve numbered as InCubic failed the easing test; the swap applied inve
 **Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
 kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
 `cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
-harness 254), not the 264 first written here. Budget: under 600 for the whole front end.
+harness 254), not the 264 first written here. Budget: under 600 for the whole front end. With §7.11's six lines,
+`cpp/harness.cpp` is 371 and the front end **418**.
 
 ### 7.7 Open
 

@@ -251,23 +251,29 @@ impl Scene<'_> {
         self.wait(5);
     }
 
-    /// Where a press of each direction from each operable element lands: the edges pad reach is judged by.
-    pub fn record_edges(&mut self, tree: &Tree) -> Vec<Edge> {
-        let mut edges = Vec::new();
+    /// Where a press of each direction from each operable element lands, kept whatever the outcome, as a recording keeps it.
+    pub fn walk(&mut self, tree: &Tree) -> Vec<Step> {
+        let mut steps = Vec::new();
         for from in tree.operable() {
             for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
                 if !self.focus_item(tree, from) {
                     continue;
                 }
                 self.pad(button);
-                if let Some(to) = self.focus(tree) {
-                    if to != from {
-                        edges.push(Edge { from: ElementId(from), button, to: ElementId(to) });
-                    }
-                }
+                let to = match self.focus(tree) {
+                    Some(to) if to == from => Landing::Same,
+                    Some(to) => Landing::At(to),
+                    None => Landing::Lost,
+                };
+                steps.push(Step { from, button, to });
             }
         }
-        edges
+        steps
+    }
+
+    /// The edges pad reach is judged by: the presses that moved the focus.
+    pub fn record_edges(&mut self, tree: &Tree) -> Vec<Edge> {
+        edges(&self.walk(tree))
     }
 
     /// kit-core's rules over the tree at this window size, for a form, with the focus and the edges given.
@@ -296,17 +302,64 @@ impl Scene<'_> {
         height: f64,
     ) -> Vec<Fault> {
         let declared = palette(variant);
-        let scale = (height / 800.0).max(1.0);
+        let measures = Measures::of(form, height);
         let state = State {
             panel: audit::Rect::new(0.0, 0.0, width, height),
             form,
             focus: focus.map(ElementId),
             edges,
             declared: &declared,
-            slack: if scale > 1.0 { 1.5 } else { 1.0 },
-            smallest: if form == WalkForm::Desktop { 0.0 } else { audit::smallest_capitals() * scale },
+            slack: measures.slack,
+            smallest: measures.floor * audit::DESKTOP_CAPS * measures.unit,
         };
         audit::check(root, &state)
+    }
+}
+
+/// Where one press from an element landed: another element, the same one, or no element of the tree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Landing {
+    At(u32),
+    Same,
+    Lost,
+}
+
+/// One press of the walk: from an element, a direction, and where the focus landed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Step {
+    pub from: u32,
+    pub button: UiButton,
+    pub to: Landing,
+}
+
+/// The presses of a walk that moved the focus, as kit-core's pad reach reads them.
+pub fn edges(steps: &[Step]) -> Vec<Edge> {
+    steps
+        .iter()
+        .filter_map(|s| match s.to {
+            Landing::At(to) => Some(Edge { from: ElementId(s.from), button: s.button, to: ElementId(to) }),
+            Landing::Same | Landing::Lost => None,
+        })
+        .collect()
+}
+
+/// The audit's measures of a state: screen pixels to a design pixel, the slack, and the smallest words as a size of the desktop face (0 where none is held).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Measures {
+    pub unit: f64,
+    pub slack: f64,
+    pub floor: f64,
+}
+
+impl Measures {
+    pub fn of(form: WalkForm, height: f64) -> Measures {
+        let unit = (height / 800.0).max(1.0);
+        let slack = if unit > 1.0 { 1.5 } else { 1.0 };
+        if form == WalkForm::Desktop {
+            Measures { unit: 1.0, slack, floor: 0.0 }
+        } else {
+            Measures { unit, slack, floor: audit::SMALLEST_TEXT }
+        }
     }
 }
 

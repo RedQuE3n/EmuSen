@@ -1235,6 +1235,21 @@ the acceptance test: the covers' lookup answering none (every cover read and dra
 in place of `revision` (Continue follows the games read again); a sky-named core given its maker's glyph (the engine's
 symbol).
 
+**Step 6, the last differences closed** (2026-11-08).
+
+- **Rounded covers** (measured 2026-11-08). The mask through `MultiEffect` drew nothing because the harness's first tier
+  renders with Qt Quick's software backend (§8.1), which has no shader effects: on the software backend a `MultiEffect`
+  is an empty box, and so is a `ShapePath.fillItem` (both tried in `qml` under `offscreen`; the second filled white). On
+  Vulkan both round. The two ways were compared at 1.5 times in a compositor of the test's own: a layer with a mask
+  renders the picture into a texture at the item's size in canvas units and is then scaled, so its covers came out
+  soft; a `Shape` whose path is a `PathRectangle` with the radius, filled by `fillItem` with the `Image`'s own texture
+  (`fillTransform` scaling the texture into the drawn box), draws its edges as curves at the window's resolution and
+  samples the picture where it lies, with no texture of its own. `RoundPicture.qml` is the second: a picture whole in
+  its box (the covers, on their box's foot) or filling it cut at the centre (Home's top, as Mistress's poster slot
+  fills its box), radius `tileRadius` (8, Mistress's `CoverCard` for a big cover). On the software backend it draws the
+  plain `Image`, square-cornered: that tier holds layout, focus and words, and the pictures are judged on Vulkan, where
+  the acceptance test runs.
+
 ---
 
 ## 8. Testing

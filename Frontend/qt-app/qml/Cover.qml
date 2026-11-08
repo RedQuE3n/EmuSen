@@ -16,7 +16,6 @@ Item {
     property real litRise: 6
     // Whether the picture stands at the box's right rather than its middle.
     property bool alignRight: false
-    // The drawn picture's box inside this item, for the ring.
     // Whether the picture was read and drawn, not the generated card.
     readonly property bool drawn: picture.status === Image.Ready
     readonly property real paintedWidth: picture.status === Image.Ready ? picture.paintedWidth : card.width
@@ -30,7 +29,7 @@ Item {
         y: root.lit ? -root.litRise : 0
         scale: root.lit ? root.litScale : 1
         transformOrigin: Item.Center
-        Image {
+        RoundPicture {
             id: picture
             objectName: "coverPicture"
             Accessible.role: Accessible.Graphic
@@ -38,12 +37,9 @@ Item {
             anchors.fill: parent
             visible: root.source.length > 0
             source: root.source
-            fillMode: Image.PreserveAspectFit
+            radius: Kit.Tokens.tileRadius
             verticalAlignment: Image.AlignBottom
             horizontalAlignment: root.alignRight ? Image.AlignRight : Image.AlignHCenter
-            asynchronous: false
-            smooth: true
-            mipmap: true
         }
         GameCard {
             id: card

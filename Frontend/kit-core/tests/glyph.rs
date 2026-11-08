@@ -69,7 +69,7 @@ fn face_buttons_are_lettered_and_named_by_position() {
 }
 
 #[test]
-fn each_press_has_its_control_and_the_swap_trades_accept_and_back() {
+fn each_press_has_its_control_and_the_swap_trades_south_and_east_and_north_and_west() {
     assert_eq!(UiButton::Accept.control(false), PadControl::South);
     assert_eq!(UiButton::Back.control(false), PadControl::East);
     assert_eq!(UiButton::Accept.control(true), PadControl::East);
@@ -77,7 +77,9 @@ fn each_press_has_its_control_and_the_swap_trades_accept_and_back() {
     assert_eq!(UiButton::Menu.control(true), PadControl::Start);
     assert_eq!(UiButton::Options.control(false), PadControl::Select);
     assert_eq!(UiButton::Up.control(false), PadControl::Up);
-    assert_eq!(UiButton::Search.control(true), PadControl::North, "only Accept and Back trade (EmuSen_Kit.md §2.2)");
+    assert_eq!(UiButton::Search.control(false), PadControl::North);
+    assert_eq!(UiButton::Search.control(true), PadControl::West, "North and West trade too (EmuSen_Kit.md §2.2)");
+    assert_eq!(UiButton::Screensaver.control(true), PadControl::North);
     for swap in [false, true] {
         let mut controls: Vec<PadControl> = UiButton::ALL.iter().map(|b| b.control(swap)).collect();
         controls.sort_by_key(|c| c.index());

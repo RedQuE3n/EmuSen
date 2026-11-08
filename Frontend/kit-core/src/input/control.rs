@@ -56,8 +56,8 @@ impl PadControl {
 }
 
 impl UiButton {
-    /// The control that gives this press, with the player's A/B swap applied as `swapped` applies it: Accept on South
-    /// and Back on East, traded by the swap; the table is the C# front end's (`MainWindow.Controllers.cs`).
+    /// The control that gives this press, with the player's swap applied as `swapped` applies it: Accept on South and
+    /// Back on East, Search on North and Screensaver on West, each pair traded by the swap; the C# front end's table.
     pub const fn control(self, swap: bool) -> PadControl {
         match self.swapped(swap) {
             UiButton::Up => PadControl::Up,

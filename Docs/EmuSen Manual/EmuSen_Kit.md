@@ -99,7 +99,8 @@ no screen interprets a device.
 `UiButton` is `PadNavigator`'s: what a pad asks of the interface, named by what it does (Up, Down, Left, Right, Accept,
 Back, Menu, Options, PageUp, PageDown, First, Last, Guide, Search, Random, Screensaver). The physical pad is not here:
 which bit is which button is Endymion's, and the pad family's map onto these roles is `PadRouter`'s in `emusen-kit-qt`.
-The grammar keeps the player's A/B swap (`UiButton::swapped`) and the key a declined press becomes for a stock control
+The grammar keeps the player's swap (`UiButton::swapped`: Accept and Back trade places, and since 2026-11-08 Search and
+Screensaver, the North and West buttons, as the C# front end and ES-DE trade them) and the key a declined press becomes for a stock control
 (`UiButton::key`: directions to arrows, Accept to Return, Back to Escape, Menu to Menu, Options to Select).
 
 `Grammar` is `PadNavigator` and `SceneRepeat` as one: `feed(held, now)` gives the presses of a tick, one as a button goes
@@ -959,11 +960,14 @@ registry gained `Families` and `PadGlyphMarks` and the qmldir `PadGlyph`; review
 Measured on 2026-11-08 with three seeded faults, each reverted: the model giving no marks failed the gate
 (`help-bar glyph glyph-Choose draws nothing inside its ring (0 points)`); the cut letter never given failed `glyphs`
 (Nintendo's B, A, X and Y, 0 points each: a disc with nothing cut shows one colour); the swap not applied failed
-kit-core's `each_press_has_its_control_and_the_swap_trades_accept_and_back` (Accept on South with the swap on).
+kit-core's `each_press_has_its_control_and_the_swap_…` (Accept on South with the swap on).
 
-**A difference from the C# front end, kept for the tester.** The C# table trades North and West with the swap as well
-as South and East, as ES-DE's does; kit-core's `UiButton::swapped` trades Accept and Back only, "nothing else moves"
-(§2.2), so with the swap on, Search stays on North here. The glyph follows kit-core, the one owner.
+**The swap trades North and West too** (decided 2026-11-08 by the tester). The C# table traded North and West with the
+swap as well as South and East, as ES-DE's does, while kit-core's `UiButton::swapped` traded Accept and Back only, so
+with the swap on Search stayed on North. `swapped` now trades Search and Screensaver as well, so the player's existing
+setting means the same on both front ends; the router and the glyphs read the one rule. Held by kit-core's `input`
+test (Search and Screensaver trade, Menu stays) and `glyph` test (Search on West with the swap on). Seeded on
+2026-11-08: the new pair left out of `swapped` failed both.
 
 ### 7.14 A test fails on any warning Qt logs; the sheet's key loop (2026-11-08)
 

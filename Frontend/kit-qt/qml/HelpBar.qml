@@ -10,9 +10,10 @@ Rectangle {
     property alias model: entries.model
     property real leftInset: 0
     property int family: Kit.Families.Generic
-    // The labels' face and the gap between entries; a theme may set its own.
+    // The labels' face, the gap between entries and the gap from a glyph to its label; a theme may set its own.
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
     property real entrySpacing: Kit.Tokens.paneGap
+    property real glyphGap: Kit.Tokens.base * 2
     implicitHeight: Kit.Tokens.helpBar
     color: Kit.Tokens.surface
     Rectangle {
@@ -42,7 +43,7 @@ Rectangle {
                 text: entry.label
                 onClicked: root.controller.offer(entry.button)
                 contentItem: Row {
-                    spacing: Kit.Tokens.base * 2
+                    spacing: root.glyphGap
                     Kit.PadGlyph {
                         objectName: "glyph-" + entry.label
                         anchors.verticalCenter: parent.verticalCenter

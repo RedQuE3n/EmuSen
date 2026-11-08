@@ -15,6 +15,7 @@ FocusScope {
     property alias padFamily: helpBar.family
     property alias helpFont: helpBar.labelFont
     property alias helpSpacing: helpBar.entrySpacing
+    property alias helpGlyphGap: helpBar.glyphGap
     property real navigationWidth: Kit.Tokens.tileWidth + Kit.Tokens.tileGap * 2
     property bool surfaceDrawn: true
     readonly property bool desktop: frameController.form === Kit.Forms.Desktop

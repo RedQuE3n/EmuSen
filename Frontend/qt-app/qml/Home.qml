@@ -46,6 +46,7 @@ FocusScope {
         padFamily: root.padFamily
         helpFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         helpSpacing: 40
+        helpGlyphGap: 10
         focus: true
         controller.navigationShown: false
         help: HelpModel {

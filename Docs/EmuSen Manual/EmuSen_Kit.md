@@ -1325,7 +1325,8 @@ Three extensions, each optional, found while the program's screens were brought 
   4.5:1. A theme that paints a hue outside `Scene` fails the palette, as before.
 - **`HelpBar.labelFont` and `entrySpacing`**, aliased by `Frame` as `helpFont` and `helpSpacing`, so a theme sets its
   labels' face and the gap between entries (the reference theme: Barlow at 20, entries 40 apart, as the accepted render
-  has them). An entry's width is its content's: the style's button no longer pads a short entry ("Play") to its own
+  has them). **`HelpBar.glyphGap`**, aliased as `helpGlyphGap`, is the gap from an entry's glyph to its label: the kit's
+  default stays 8 (`base` × 2), and the reference theme sets 10, the `IconTextSpacing` Mistress's help bands use. An entry's width is its content's: the style's button no longer pads a short entry ("Play") to its own
   minimum, which pushed every later entry right.
 - **A paired entry.** An entry whose model gives a `pair` role draws a second glyph after its first: the shoulders, LB
   and RB, as one entry ("Console"), as the accepted render draws them. A model without the role draws one glyph.

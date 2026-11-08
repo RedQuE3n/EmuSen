@@ -1,6 +1,6 @@
 //! The library view's source over the two client crates: the systems and the shelves from the frontend API, the games
 //! from a scan of the library handle, whose roots are the player's ROM folder (AppSettings) and whose systems are the
-//! shelves' (emusen_library.h), the records from games.db, where Galaxia names it, and each game's cover from the media
+//! shelves' (emusen_library.h), the records from games.db, where Galaxia names it, and each game's cover and hero art from the media
 //! store through the scraper's sources-alone handle (emusen.scrape `media`, EmuSen_Backend.md §40.5).
 
 use crate::library::{without_port_mark, Engine, LibrarySource};
@@ -83,14 +83,17 @@ impl LibrarySource for ClientSource {
         self.library.recent(u32::MAX, &paths).map_err(words)
     }
 
-    fn covers(&self, systems: &[SystemRow], games: &[GameFile]) -> Result<Vec<(String, String)>, String> {
+    fn media(&self, systems: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
         let Some((_, scraper)) = &self.scraper else { return Ok(Vec::new()) };
         let mut out = Vec::new();
         for g in games {
             let Some(system) = systems.iter().find(|s| Some(&s.id) == g.system.as_ref()) else { continue };
-            let found = scraper.get(&json!({ "what": "media", "path": g.path, "system": system.esde_system, "type": "cover" })).map_err(words)?;
-            if let Some(path) = found.get("path").and_then(Value::as_str) {
-                out.push((g.path.clone(), path.to_owned()));
+            for kind in types {
+                let found = scraper.get(&json!({ "what": "media", "path": g.path, "system": system.esde_system, "type": kind })).map_err(words)?;
+                if let Some(path) = found.get("path").and_then(Value::as_str) {
+                    out.push((g.path.clone(), path.to_owned()));
+                    break;
+                }
             }
         }
         Ok(out)
@@ -100,6 +103,11 @@ impl LibrarySource for ClientSource {
         let records = self.library.get(&json!({ "what": "records" })).map_err(words)?;
         let at = |g: &GameFile| records.get(&g.path)?.get("last_played")?.as_str().and_then(crate::words::parse_utc);
         Ok(games.iter().filter_map(|g| at(g).map(|t| (g.path.clone(), t))).collect())
+    }
+
+    fn started(&self, path: &str) -> Result<(), String> {
+        let at = crate::words::utc(crate::words::now());
+        self.library.change(&json!({ "op": "started", "path": path, "at": at })).map(|_| ()).map_err(words)
     }
 
     fn shelves(&self) -> Result<Vec<String>, String> {

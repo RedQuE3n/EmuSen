@@ -92,6 +92,15 @@ pub mod qobject {
         #[qinvokable]
         fn refresh(self: Pin<&mut LibraryModel>);
 
+        /// A game's title from its path, for a game the library does not hold (one opened by its file).
+        #[qinvokable]
+        #[cxx_name = "titleOf"]
+        fn title_of(self: &LibraryModel, path: &QString) -> QString;
+
+        /// Records the game at `path` as started now, then reads the games again, so Recent and Continue lead with it.
+        #[qinvokable]
+        fn started(self: Pin<&mut LibraryModel>, path: &QString);
+
         /// The games a row leads to, as GameModel reads them: a JSON array, one object a game.
         #[qinvokable]
         #[cxx_name = "gamesOf"]
@@ -250,6 +259,20 @@ impl qobject::LibraryModel {
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let refreshed = refresh(source.as_ref());
+            let _ = qt.queue(move |model| model.apply(None, refreshed));
+        });
+    }
+
+    pub fn title_of(&self, path: &QString) -> QString {
+        QString::from(crate::library::title_of(&path.to_string()).as_str())
+    }
+
+    pub fn started(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(source) = self.source.clone() else { return };
+        self.as_mut().show_loading(true);
+        let (qt, path) = (self.qt_thread(), path.to_string());
+        std::thread::spawn(move || {
+            let refreshed = source.started(&path).and_then(|()| refresh(source.as_ref()));
             let _ = qt.queue(move |model| model.apply(None, refreshed));
         });
     }

@@ -4,6 +4,7 @@
 // The modules the window imports register through their crates' initializers.
 extern crate emusen_qt_endymion;
 
+pub mod host;
 pub mod window;
 
 /// The program's window, in the resource system.

@@ -1,4 +1,5 @@
-//! `Clock`: the time of day and Home's status line, "1 controller · 21:42", read again on each `tick` (EmuSen_Qt.md §7.1).
+//! `Clock`: Home's lines that change with the time, read again on each `tick` (EmuSen_Qt.md §7.1): the status line,
+//! "1 controller · 21:42", and a paused game's facts, "Super Nintendo · Paused 3 minutes ago".
 
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
@@ -17,6 +18,9 @@ pub mod qobject {
         #[qproperty(QString, time, READ, NOTIFY)]
         #[qproperty(i32, controllers)]
         #[qproperty(QString, line, READ, NOTIFY)]
+        #[qproperty(QString, console)]
+        #[qproperty(bool, game_paused, cxx_name = "gamePaused")]
+        #[qproperty(QString, paused, READ, NOTIFY)]
         type Clock = super::ClockRust;
     }
 
@@ -35,11 +39,22 @@ pub struct ClockRust {
     /// The pads connected, as Endymion counts them.
     controllers: i32,
     line: QString,
+    /// The paused game's console, whether a game is paused, and when it was paused in seconds since 1970.
+    console: QString,
+    game_paused: bool,
+    paused_at: i64,
+    paused: QString,
 }
 
 impl cxx_qt::Initialize for qobject::Clock {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_controllers_changed(|clock| clock.say()).release();
+        self.as_mut().on_console_changed(|clock| clock.say()).release();
+        self.as_mut().on_game_paused_changed(|mut clock| {
+            clock.as_mut().rust_mut().paused_at = crate::words::now();
+            clock.say();
+        })
+        .release();
         self.tick();
     }
 }
@@ -59,6 +74,13 @@ impl qobject::Clock {
         if self.line != line {
             self.as_mut().rust_mut().line = line;
             self.as_mut().line_changed();
+        }
+        let paused =
+            if self.game_paused { crate::words::paused_facts(&self.console.to_string(), self.paused_at, crate::words::now()) } else { String::new() };
+        let paused = QString::from(paused.as_str());
+        if self.paused != paused {
+            self.as_mut().rust_mut().paused = paused;
+            self.as_mut().paused_changed();
         }
     }
 }

@@ -17,6 +17,8 @@ struct Fake {
     favourites: Vec<String>,
     recent: Vec<String>,
     engines: Vec<(String, Engine)>,
+    /// The media store's files, by path and type.
+    media: Vec<(String, String, String)>,
     fail: Mutex<Option<String>>,
 }
 
@@ -38,6 +40,10 @@ impl LibrarySource for Fake {
     }
     fn engines(&self, _: &[SystemRow]) -> Result<Vec<(String, Engine)>, String> {
         Ok(self.engines.clone())
+    }
+    fn media(&self, _: &[SystemRow], games: &[GameFile], types: &[&str]) -> Result<Vec<(String, String)>, String> {
+        let first = |g: &GameFile| types.iter().find_map(|t| self.media.iter().find(|(p, k, _)| p == &g.path && k == t).map(|(_, _, f)| f.clone()));
+        Ok(games.iter().filter_map(|g| first(g).map(|f| (g.path.clone(), f))).collect())
     }
 }
 
@@ -124,6 +130,49 @@ fn a_row_leads_to_its_games_by_title_and_recent_by_when() {
 }
 
 #[test]
+fn a_played_game_s_hero_art_is_its_fan_art_else_its_screenshot_else_its_title_screen_and_none_is_read_for_the_rest() {
+    let mut source = fake();
+    let file = |p: &str, k: &str| (p.to_owned(), k.to_owned(), format!("{p}.{k}.png"));
+    source.media = vec![
+        file("/roms/nes/2", "screenshot"),
+        file("/roms/nes/2", "fanart"),
+        file("/roms/gb/0", "titlescreen"),
+        file("/roms/gb/0", "screenshot"),
+        file("/roms/nes/0", "cover"),
+        file("/roms/gb/1", "fanart"),
+    ];
+    let read = refresh(&source).unwrap();
+    let heroes: Vec<(String, String)> = games_of("recent", &read.systems, &read.catalog).into_iter().map(|g| (g.hero, g.cover)).collect();
+    assert_eq!(heroes[0].0, "/roms/nes/2.fanart.png", "fan art before a screenshot");
+    assert_eq!(heroes[1].0, "/roms/gb/0.screenshot.png", "a screenshot before the title screen");
+    assert_eq!(heroes[2], (String::new(), "/roms/nes/0.cover.png".into()), "a cover is no hero art");
+    let unplayed = games_of("favourites", &read.systems, &read.catalog);
+    assert_eq!(unplayed[0].hero, "", "a game never played has none read");
+    assert_eq!(games_of("recent", &read.systems, &read.catalog)[0].console, "NES");
+    let shelf = emusen_qt_models::games::without(games_of("recent", &read.systems, &read.catalog), "/roms/gb/0");
+    assert_eq!(shelf.iter().map(|g| g.path.as_str()).collect::<Vec<_>>(), ["/roms/nes/2", "/roms/nes/0", "/roms/nes/1"], "the suspended game left off the shelf");
+}
+
+#[test]
+fn a_paused_game_is_said_as_mistress_s_home_says_it() {
+    use emusen_qt_models::words::{paused_ago, paused_facts};
+    let at = 1_000_000;
+    let said: Vec<String> = [0, 59, 60, 179, 3599, 3600, 7200, 86_399, 86_400, 172_799, 172_800].iter().map(|s| paused_ago(at, at + s)).collect();
+    assert_eq!(
+        said,
+        [
+            "Paused just now", "Paused just now", "Paused 1 minute ago", "Paused 2 minutes ago", "Paused 59 minutes ago",
+            "Paused 1 hour ago", "Paused 2 hours ago", "Paused 23 hours ago", "Paused yesterday", "Paused yesterday",
+            "Paused 2 days ago",
+        ]
+    );
+    assert_eq!(paused_facts("Super Nintendo", at, at + 5), "Super Nintendo · Paused just now");
+    assert_eq!(paused_facts("", at, at + 120), "Paused 2 minutes ago", "a game the library does not hold has no console");
+    let stamp = emusen_qt_models::words::utc(1_762_638_120);
+    assert_eq!((stamp.as_str(), emusen_qt_models::words::parse_utc(&stamp)), ("2025-11-08T21:42:00Z", Some(1_762_638_120)));
+}
+
+#[test]
 fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
     assert_eq!((without_port_mark("VenusRT"), without_port_mark("PCSX2"), without_port_mark("RT")), ("Venus", "PCSX2", "RT"));
     let own = CoreRow { engine: Some("Venus".into()), name: Some("VenusRT".into()), ..CoreRow::default() };
@@ -144,13 +193,15 @@ fn each_screen_s_help_bar_names_its_presses() {
     let labels = |s| entries(s).iter().map(|(b, l, _)| format!("{b:?} {l}")).collect::<Vec<_>>();
     assert_eq!(labels(Screen::Consoles), ["Accept Open", "Back Back", "Search Favourites", "Screensaver Random game"]);
     assert_eq!(labels(Screen::Home)[0], "Accept Resume");
+    assert_eq!(labels(Screen::HomeShelf)[0], "Accept Play", "a shelf game plays, as Mistress's Home has it");
+    assert_eq!(labels(Screen::HomePlaces), ["Accept Open", "Options Search", "Menu Home"]);
     assert_eq!(labels(Screen::Grid)[0], "Accept Play");
 }
 
 #[test]
 fn each_screen_declares_its_own_actions_and_the_walk_reads_them() {
     assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\n");
-    for screen in [Screen::Home, Screen::Consoles, Screen::Grid] {
+    for screen in [Screen::Home, Screen::HomeShelf, Screen::HomePlaces, Screen::Consoles, Screen::Grid] {
         let read = emusen_kit_core::input::WalkAction::from_lines(&action_lines(screen));
         let named: Vec<_> = entries(screen).iter().filter(|e| e.2.is_some()).map(|e| (e.2.unwrap().to_owned(), Some(e.0))).collect();
         assert_eq!(read.into_iter().map(|a| (a.key, a.button)).collect::<Vec<_>>(), named, "{screen:?}");
@@ -234,4 +285,10 @@ fn the_screens_switch_by_what_was_asked() {
     assert_eq!(step(Shown::Grid, &Ask::Back), Some((Shown::Consoles, None)));
     assert_eq!(step(Shown::Consoles, &Ask::Back), Some((Shown::Home, None)));
     assert_eq!(step(Shown::Home, &Ask::Back), None, "B on Home stays");
+    assert_eq!(step(Shown::Home, &Ask::Play), Some((Shown::Game, None)), "a shelf game or Continue shows the game");
+    assert_eq!(step(Shown::Grid, &Ask::Play), Some((Shown::Game, None)));
+    assert_eq!(step(Shown::Consoles, &Ask::Play), None, "Choose a console plays nothing");
+    assert_eq!(step(Shown::Game, &Ask::Menu), Some((Shown::Home, None)), "the chord over the game is Home, the game suspended");
+    assert_eq!(step(Shown::Game, &Ask::Back), None, "B is the game's");
+    assert_eq!(step(Shown::Game, &Ask::Closed), Some((Shown::Home, None)));
 }

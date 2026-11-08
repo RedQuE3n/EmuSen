@@ -23,6 +23,8 @@ serde_json.workspace = true
 emusen-kit-qt.workspace = true
 emusen-qt-models = { path = "../qt-models" }
 emusen-qt-endymion = { path = "../qt-endymion" }
+# The game on its screen and under Home (Game.qml), and the adopted device its picture needs (EmuSen_Qt.md §1.8, §7.1).
+emusen-qt-play = { path = "../qt-play" }
 # The settings read before the window opens (Moonrise on or off), through the platform library.
 emusen-platform-client = { path = "../platform-client" }
 

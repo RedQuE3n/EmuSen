@@ -1,13 +1,16 @@
-//! Stage 1's acceptance over the canvas's library (EmuSen_Qt.md §7.1 step 4, §8.2): each screen in the canvas's own focus,
-//! held to its `.mockup.spec` at 1280 x 800 and 1920 x 1200, and to the kit's gate at its five sizes; each state is
-//! recorded as a spec and grabbed into `EMUSEN_QT_COMPARE` (else the temporary folder) for the side-by-side pictures.
+//! Stage 1's acceptance over the canvas's library (EmuSen_Qt.md §7.1 steps 4 and 6, §8.2): each screen in the canvas's own
+//! focus, held to its `.mockup.spec` at 1280 x 800 and 1920 x 1200, and to the kit's gate at its five sizes; each state is
+//! recorded as a spec and grabbed into `EMUSEN_QT_COMPARE` (else the temporary folder) for the side-by-side pictures. The
+//! program runs as a player's does: on Vulkan, its window adopting Serenity's device, in a compositor of the test's own on
+//! the RX 6800 (EMUSEN_GPU_DEVICE names another), its pads an SDL virtual pad alone, and Home's paused game a real
+//! session on the test core.
 
 mod common;
 
 use common::{sandbox, wait_for};
 
-use emusen_client_fixture::library;
-use emusen_crystal_client::Config;
+use emusen_client_fixture::{image, library};
+use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::input::{UiButton, WalkForm};
 use emusen_kit_core::tokens::Variant;
 use emusen_qt::MAIN_URL;
@@ -15,6 +18,9 @@ use emusen_platform_client::galaxia::consts::{FILE_GAMES, MODEL_APP_SETTINGS};
 use emusen_platform_client::library::Library;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::clients::ClientSource;
+use emusen_qt_play::host::{Adoption, Host};
+use emusen_qt_test::compositor::Compositor;
+use emusen_qt_test::virtual_pad::Sdl;
 use serde_json::json;
 use emusen_qt_test::harness::{edges, palette, Measures, SIZES};
 use emusen_qt_test::spec::{self, Header};
@@ -28,7 +34,8 @@ const COUNTED: [&str; 6] = ["consoleTile.", "consoleBody.", "consoleName.", "con
 /// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4: the help bar's opaque Surface, the orbit line in the
 /// canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused console's name in
 /// the canvas's line box of 1, an engine's name too long for its tile or a place's line for its tile (cut as the accepted
-/// render cuts it), and the fan's covers laid over each other.
+/// render cuts it), the fan's covers laid over each other, and the focused shelf cover's name, whose glyph box the focus
+/// ring's foot reaches at 1280 x 720 alone, where Mistress's render puts both (2 units under the shelf's covers).
 fn named_difference(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let item = |n: &str| n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i)).map_or("", |n| n.name.as_str());
     let after = |key: &str| fault.split(key).nth(1).map(|r| r.split_whitespace().next().unwrap_or(""));
@@ -37,7 +44,20 @@ fn named_difference(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, 
         || (size == (1280, 720) && fault.contains("too small to read"))
         || after("cut at the foot: ").is_some_and(|i| item(i) == "consoleDetailName")
         || after("ellipsis: ").is_some_and(|i| item(i).starts_with("consoleEngineName.") || item(i).starts_with("placeStatus."))
-        || fault.contains("overlap: ") && fault.split("overlap: ").nth(1).is_some_and(|r| r.split(" and ").all(|i| item(i).starts_with("fanCover.") || item(i) == "coverPicture"))
+        || fault.contains("overlap: ") && fault.split("overlap: ").nth(1).is_some_and(|r| r.split(" and ").all(|i| in_fan(tree, i)))
+        || (size == (1280, 720) && after("low contrast: ").is_some_and(|i| item(i) == "shelfTitle"))
+}
+
+/// Whether the item numbered `n` is one of the fan's covers or inside one.
+fn in_fan(tree: &emusen_qt_test::tree::Tree, n: &str) -> bool {
+    let mut at = n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i));
+    while let Some(node) = at {
+        if node.name.starts_with("fanCover.") {
+            return true;
+        }
+        at = tree.nodes.iter().find(|p| p.id == node.parent);
+    }
+    false
 }
 
 fn out() -> PathBuf {
@@ -76,17 +96,18 @@ fn rom(world: &emusen_client_fixture::World, title: &str, ext: &str) -> PathBuf 
 }
 
 /// The covers as the fixture draws them, each a flat colour with a white rim and its words, grabbed from one Qt Quick
-/// window resized to each box's shape (SyntheticLibrary.Label's drawing).
-fn draw_covers(harness: &mut Harness, scratch: &Path, covers: &[(PathBuf, (u32, u32), usize, String)]) {
+/// window resized to each box's shape (SyntheticLibrary.Label's drawing). The window adopts the program's device, and
+/// is hidden once drawn: a second window's swapchain released only when the engine was dropped faulted in Qt's release.
+fn draw_covers(harness: &mut Harness, adoption: &Adoption, scratch: &Path, covers: &[(PathBuf, (u32, u32), usize, String)]) {
     let qml = scratch.join("cover.qml");
     std::fs::write(
         &qml,
-        "import QtQuick\nWindow {\n  Rectangle { objectName: \"fill\"; anchors.fill: parent\n\
+        "import QtQuick\nWindow {\n  objectName: \"covers\"\n  Rectangle { objectName: \"fill\"; anchors.fill: parent\n\
          Rectangle { x: 3; y: 3; width: parent.width - 6; height: parent.height - 6; color: \"transparent\"; border.color: \"white\"; border.width: 6 }\n\
          Text { objectName: \"words\"; anchors.centerIn: parent; width: parent.width - 20; horizontalAlignment: Text.AlignHCenter; color: \"white\"; font.pixelSize: Math.max(12, Math.floor(parent.height / 12)) } } }\n",
     )
     .unwrap();
-    let mut scene = harness.load(&format!("file://{}", qml.display()), 64, 64);
+    let mut scene = harness.load_prepared(&format!("file://{}", qml.display()), 64, 64, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
     for (path, (w, h), index, words) in covers {
         // Green is the covers folder's: 60 + 6 * 23 % 160, the name's length in SyntheticLibrary.Colour.
         let (r, g, b) = (40 + 17 * index % 180, 198, 90 + 31 * index % 150);
@@ -97,11 +118,14 @@ fn draw_covers(harness: &mut Harness, scratch: &Path, covers: &[(PathBuf, (u32, 
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         assert!(scene.grab(&path.display().to_string()), "cover {}", path.display());
     }
+    // Hidden while its scene graph still holds its instance, so its swapchain is released before the window goes.
+    assert!(scene.set_property("covers", "visible", "false"));
+    scene.wait(50);
 }
 
 /// The library: the eight games in one folder, their covers in an ES-DE media folder at their boxes' shapes, the engines'
 /// sidecars, each game played three hours apart with Aurora Drift the latest, and Brass Lantern and Fable of Tiles hearted.
-fn canvas_library(harness: &mut Harness) -> (emusen_client_fixture::World, PathBuf) {
+fn canvas_library(harness: &mut Harness, adoption: &Adoption) -> (emusen_client_fixture::World, PathBuf) {
     let world = sandbox("qt-app-acceptance", &[]);
     let media = world.dir("Media");
     let mut covers = Vec::new();
@@ -111,7 +135,10 @@ fn canvas_library(harness: &mut Harness) -> (emusen_client_fixture::World, PathB
         let cover = media.join(system).join("covers").join(format!("{title} (Synthetic).png"));
         covers.push((cover, (w, h), index, format!("{system} covers\n{title}\n{w}x{h}")));
     }
-    draw_covers(harness, &world.root, &covers);
+    // Aurora Drift's screenshot, the hero art Home's top shows for it with no game suspended (HomeNothingLeft).
+    let shot = media.join("snes").join("screenshots").join("Aurora Drift (Synthetic).png");
+    covers.push((shot, (512, 448), 0, "snes screenshots\nAurora Drift\n512x448".into()));
+    draw_covers(harness, adoption, &world.root, &covers);
     let platform = Platform::load(library()).unwrap();
     let mut settings = platform.model_load(MODEL_APP_SETTINGS, None, "appsettings.json").unwrap().unwrap();
     settings["EsdeMediaDirectory"] = json!(media.to_str().unwrap());
@@ -146,19 +173,7 @@ fn records() -> Library {
 
 /// A game started at `at`, in seconds since 1970, through the library's own change.
 fn play(world: &emusen_client_fixture::World, title: &str, ext: &str, at: i64) {
-    let days = at.div_euclid(86_400);
-    let secs = at.rem_euclid(86_400);
-    // The civil date of a day count, Howard Hinnant's algorithm, as words::parse_utc reads it back.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
-    let stamp = format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", secs / 3600, secs % 3600 / 60, secs % 60);
+    let stamp = emusen_qt_models::words::utc(at);
     records().change(&json!({ "op": "started", "path": rom(world, title, ext).to_str().unwrap(), "at": stamp })).unwrap();
 }
 
@@ -221,21 +236,85 @@ fn mockup_of(name: &str) -> mockup::Mockup {
     mockup::parse(&std::fs::read_to_string(path).unwrap()).unwrap()
 }
 
+/// Waits up to ten seconds for a condition the scene answers, letting Qt run between looks.
+fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
+    let start = std::time::Instant::now();
+    while !done(scene) {
+        assert!(start.elapsed() < std::time::Duration::from_secs(10), "{what}: not within ten seconds");
+        scene.wait(8);
+    }
+}
+
+/// The text an item shows, from the tree, since a Repeater's items are not the window's QObject children.
+fn text_of(scene: &mut Scene<'_>, name: &str) -> Option<String> {
+    let tree = scene.tree();
+    tree.find_named(name).and_then(|i| tree.nodes[i as usize].text.clone())
+}
+
+/// Whether a named item is shown.
+fn shown(scene: &mut Scene<'_>, name: &str) -> bool {
+    let tree = scene.tree();
+    tree.find_named(name).is_some_and(|i| tree.nodes[i as usize].visible)
+}
+
+/// The test core in the player's cores folder, approved by its hash beside the installation's folder `cores`, as the
+/// Cores window approves one.
+fn approved_test_core(world: &emusen_client_fixture::World, cores: &Path) {
+    let player = world.dir("Home/Cores");
+    let core = world.player_core(&player);
+    let config = Config { cores: Some(vec![cores.to_str().unwrap().into()]), player_cores: Some(vec![player.to_str().unwrap().into()]), ..Config::default() };
+    let rt = Runtime::new(&Api::load(library()).unwrap(), &config).unwrap();
+    rt.core_approve(&emusen_client_fixture::cores::sha256(&core)).unwrap_or_else(|e| panic!("{e}; the runtime lists {:?}", rt.cores()));
+}
+
 #[test]
 fn each_screen_matches_its_mockup_and_passes_the_gate() {
+    let _kwin = Compositor::start(3840, 2160);
+    std::env::set_var("QT_QUICK_BACKEND", "rhi");
+    std::env::set_var("QSG_RHI_BACKEND", "vulkan");
+    std::env::set_var("QSG_RENDER_LOOP", "threaded");
     let mut harness = Harness::new();
-    let (world, cores) = canvas_library(&mut harness);
-    let mut scene = harness.load(MAIN_URL, 1280, 800);
+    let platform = Platform::load(library()).unwrap();
+    let gpu = std::env::var("EMUSEN_GPU_DEVICE").ok();
+    let presets = std::env::temp_dir().join("qt-app-acceptance-presets");
+    let host = Host::new(&platform, "wayland", gpu.as_deref(), false, &presets).expect("a Vulkan device");
+    let adoption = host.adoption();
+    let (world, cores) = canvas_library(&mut harness, &adoption);
+    approved_test_core(&world, &cores);
+    let sdl = Sdl::open();
+    let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
+    let mut scene = harness.load_prepared(MAIN_URL, 1280, 800, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"));
     assert!(scene.set_property("program", "splash", "false"));
+    assert!(scene.set_property("program", "onlyPads", &pad.id.to_string()));
+    assert!(scene.set_property("program", "feed", &host.feed.address().to_string()));
     assert!(scene.set_property("library", "cores", cores.to_str().unwrap()));
     assert!(scene.set_property("library", "toolSummaries", TOOLS));
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 20000);
     assert_eq!(scene.property("library", "places"), "3");
+    until(&mut scene, "the virtual pad read", |s| s.property("pads", "connected") == "1");
     let mut report = Vec::new();
 
+    // Home with no game suspended, as Mistress's Home has it: no Continue, the shelf's first game at the top with its
+    // hero art (Aurora Drift's screenshot), the focus on its cover.
+    until(&mut scene, "the shelf's first cover focused", |s| {
+        let tree = s.tree();
+        s.focus(&tree).is_some_and(|i| tree.nodes[i as usize].name == "shelfCover.0")
+    });
+    assert!(text_of(&mut scene, "homeStatus").is_some_and(|t| t.starts_with("1 controller · ")), "the status line counts the virtual pad");
+    assert!(!shown(&mut scene, "continueHeading") && !shown(&mut scene, "continuePanel"), "no Continue with no game suspended");
+    assert_eq!(text_of(&mut scene, "continueTitle").as_deref(), Some("Aurora Drift (Synthetic)"));
+    let hero = scene.property("continueArt", "source");
+    assert!(hero.ends_with("screenshots/Aurora Drift (Synthetic).png"), "the top shows the hero art: {hero}");
+    assert_eq!(text_of(&mut scene, "shelfTitle").as_deref(), Some("Aurora Drift (Synthetic)"), "the focused cover's name under the shelf");
+    // Its corners rounded as a cover's: the top's picture fills its box at (64, 84), 373 by 280, so at 1280 x 800 the
+    // box's very corner shows what is behind while a point within the radius shows the picture.
+    let colours = scene.colours_at(&[(65.0, 85.0), (73.0, 93.0)]);
+    let (corner, inside) = (colours[0].expect("the corner"), colours[1].expect("inside"));
+    assert!(corner.g < 120 && inside.g > 150, "the top's picture rounded at its corner: corner {corner:?}, inside {inside:?}");
+    hold(&mut scene, "HomeNothingLeft", &mockup::Mockup::default(), &mut report);
+
     // Choose a console as the accepted render shows it: the first console focused.
-    wait_for(&mut scene, "continue", "activeFocus", "true", 1000);
     let tree = scene.tree();
     let games = tree.find_named("place.0").expect("Home's Games place");
     scene.focus_item(&tree, games);
@@ -274,25 +353,57 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert_eq!(drawn, titles, "every cover read and drawn");
     hold(&mut scene, "Grid", &mockup_of("Grid"), &mut report);
 
-    // Home with Cobalt Harbor played just now, read again as a new start reads it.
+    // Cobalt Harbor played on the test core (the sandbox has no Super Nintendo core, so its file becomes the test core's
+    // image, which no shelf of the library holds), then the menu chord: Home over the paused game, as the render's.
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Consoles", 1000);
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Home", 1000);
-    play(&world, "Cobalt Harbor", "sfc", emusen_qt_models::words::now());
+    std::fs::remove_file(rom(&world, "Cobalt Harbor", "sfc")).unwrap();
+    let cobalt = rom(&world, "Cobalt Harbor", "tst");
+    std::fs::write(&cobalt, image(&[1, 2, 3, 4])).unwrap();
+    // The installation's own cores and the player's from here on, as a player's program reads them, so the session
+    // finds the test core; the games are read again without Cobalt Harbor's old file.
+    assert!(scene.set_property("library", "cores", ""));
     assert!(scene.set_property("library", "platformLibrary", ""));
     assert!(scene.set_property("library", "platformLibrary", library().to_str().unwrap()));
     scene.wait(100);
     wait_for(&mut scene, "library", "loading", "false", 20000);
-    let tree = scene.tree();
-    let continue_playing = tree.find_named("continue").expect("Continue");
-    scene.focus_item(&tree, continue_playing);
+    assert!(scene.set_property("game", "game", cobalt.to_str().unwrap()));
+    wait_for(&mut scene, "screens", "shown", "Game", 1000);
+    until(&mut scene, "the game running", |s| {
+        let problem = s.property("session", "problem");
+        assert!(problem.is_empty() || problem.starts_with("The game plays without sound"), "the session: {problem}");
+        s.property("session", "running") == "true"
+    });
+    until(&mut scene, "the first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
+    assert!(scene.pad_chord_only(), "the game owns the pad");
+    // The router's clock back on the wall clock, as a real pad needs it, since the harness's presses stopped it.
+    scene.run_pad_clock();
+    let guide = emusen_qt_endymion::reading::sdl_button(emusen_kit_core::input::PadControl::Guide).unwrap();
+    sdl.press(&pad, guide, true);
+    until(&mut scene, "the chord pausing the game and showing Home", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Home");
+    sdl.press(&pad, guide, false);
     wait_for(&mut scene, "continue", "activeFocus", "true", 1000);
-    let tree = scene.tree();
-    let title = tree.find_named("continueTitle").and_then(|i| tree.nodes[i as usize].text.clone());
-    assert_eq!(title.as_deref(), Some("Cobalt Harbor (Synthetic)"), "Continue follows the games read again");
+    assert_eq!(text_of(&mut scene, "continueTitle").as_deref(), Some("Cobalt Harbor (Synthetic)"), "Continue holds the suspended game");
+    assert!(text_of(&mut scene, "continueFacts").is_some_and(|t| t == "Paused just now"), "Continue says when it was paused");
+    assert!(shown(&mut scene, "continueFrame") && !shown(&mut scene, "continueArt"), "Continue shows the paused frame");
+    assert!(shown(&mut scene, "continueHeading"));
     hold(&mut scene, "Home", &mockup_of("Home"), &mut report);
 
+    // Continue resumes the game; closed, Home has no Continue again and the shelf leads with it.
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "Continue resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    assert!(scene.set_property("game", "game", ""));
+    until(&mut scene, "the game closed and Home shown", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
+    until(&mut scene, "Continue gone", |s| !shown(s, "continueHeading"));
+
     scene.assert_quiet();
+    sdl.detach(pad);
+    // Hidden while its scene graph still holds its instance, as the covers' window is.
+    assert!(scene.set_property("program", "visible", "false"));
+    scene.wait(50);
+    drop(harness);
+    drop(host);
     assert!(report.is_empty(), "{}", report.join("\n"));
 }

@@ -93,6 +93,28 @@ pub fn ago(at: i64, now: i64) -> String {
     }
 }
 
+/// How long ago a game was paused, as Mistress's Home says it (HomeScreen.PausedAgo): "Paused just now", "Paused 1 minute
+/// ago", "Paused 12 minutes ago", "Paused 3 hours ago", "Paused yesterday", "Paused 4 days ago".
+pub fn paused_ago(at: i64, now: i64) -> String {
+    let minutes = (now - at).max(0) / 60;
+    match minutes {
+        0 => "Paused just now".into(),
+        1..=59 => format!("Paused {}", counted(minutes as usize, "minute ago", "minutes ago")),
+        60..=1439 => format!("Paused {}", counted((minutes / 60) as usize, "hour ago", "hours ago")),
+        1440..=2879 => "Paused yesterday".into(),
+        _ => format!("Paused {} days ago", minutes / 1440),
+    }
+}
+
+/// Continue's facts for a paused game: its console, where the library knows it, and how long ago it was paused.
+pub fn paused_facts(console: &str, at: i64, now: i64) -> String {
+    if console.is_empty() {
+        paused_ago(at, now)
+    } else {
+        format!("{console} · {}", paused_ago(at, now))
+    }
+}
+
 /// An ISO 8601 time in UTC, "2026-11-08T21:42:00Z" or with its fraction, as seconds since 1970; none for other text.
 pub fn parse_utc(text: &str) -> Option<i64> {
     let b = text.as_bytes();
@@ -109,6 +131,22 @@ pub fn parse_utc(text: &str) -> Option<i64> {
     let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
     let days = era * 146_097 + yoe * 365 + yoe / 4 - yoe / 100 + doy - 719_468;
     Some(days * 86_400 + hh * 3_600 + mm * 60 + ss)
+}
+
+/// Seconds since 1970 as an ISO 8601 time in UTC, "2026-11-08T21:42:00Z", which `parse_utc` reads back.
+pub fn utc(at: i64) -> String {
+    let (days, secs) = (at.div_euclid(86_400), at.rem_euclid(86_400));
+    // The civil date of a day count, Howard Hinnant's algorithm, the inverse of parse_utc's.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", secs / 3600, secs % 3600 / 60, secs % 60)
 }
 
 /// The Settings place's line: the look and the navigation sound, "Dark · 60% sound" (the C#'s SettingsLine).

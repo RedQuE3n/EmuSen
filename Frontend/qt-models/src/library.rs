@@ -21,13 +21,19 @@ pub trait LibrarySource: Send + Sync {
     /// The engine each system runs now, by system id: the player's stored choice, else the console's default
     /// (EmuSen_Interface.md §24.6). A system left out shows no engine.
     fn engines(&self, systems: &[SystemRow]) -> Result<Vec<(String, Engine)>, String>;
-    /// Each game's cover file, by path, as the media store finds it (EmuSen_Interface.md §21); a source with no store has none.
-    fn covers(&self, _systems: &[SystemRow], _games: &[GameFile]) -> Result<Vec<(String, String)>, String> {
+    /// Each game's file of the first of `types` the media store has, by path (EmuSen_Interface.md §21); a source with no
+    /// store has none.
+    fn media(&self, _systems: &[SystemRow], _games: &[GameFile], _types: &[&str]) -> Result<Vec<(String, String)>, String> {
         Ok(Vec::new())
     }
     /// When each played game was last played, by path, in seconds since 1970.
     fn played(&self, _games: &[GameFile]) -> Result<Vec<(String, i64)>, String> {
         Ok(Vec::new())
+    }
+    /// Records the game at `path` as started now, as a game the player opens is (games.db's `started`); a source with no
+    /// records keeps none.
+    fn started(&self, _path: &str) -> Result<(), String> {
+        Ok(())
     }
     /// The shelves' systems in the runtime's order, which Choose a console follows (EmuSen_Interface.md §24.1); none
     /// leaves the systems' own order.
@@ -131,6 +137,8 @@ pub struct Catalog {
     pub recent: Vec<String>,
     /// Each game's cover file, by path.
     pub covers: Vec<(String, String)>,
+    /// Each played game's hero art, by path: the first of `HERO` the media store has.
+    pub heroes: Vec<(String, String)>,
     /// When each played game was last played, by path, in seconds since 1970.
     pub played: Vec<(String, i64)>,
     /// The player's settings.
@@ -147,9 +155,20 @@ pub struct GameRow {
     pub favourite: bool,
     /// The cover's file; empty for a game with no art, which shows the generated card.
     pub cover: String,
+    /// The hero art's file, read for played games alone; empty for none.
+    pub hero: String,
+    /// The console's name, as the facts begin.
+    pub console: String,
     /// The console's name and when it was last played: "Super Nintendo · 3 h ago".
     pub facts: String,
 }
+
+/// The media store's type for a cover.
+pub const COVER: &str = "cover";
+
+/// A game's hero art, the picture Home's top shows for a game with no session: fan art, else a screenshot, else the
+/// title screen, as Mistress's game art chooses it (EmuSen_Qt.md §7.1, step 6).
+pub const HERO: [&str; 3] = ["fanart", "screenshot", "titlescreen"];
 
 /// A game's title: its file name without the extension.
 pub fn title_of(path: &str) -> String {
@@ -175,9 +194,11 @@ pub fn games_of_at(key: &str, systems: &[SystemRow], catalog: &Catalog, now: i64
             hue: of(&system).map_or(0.0, |s| s.look.hue),
             favourite: catalog.favourites.contains(&g.path),
             cover: catalog.covers.iter().find(|(p, _)| p == &g.path).map(|(_, c)| c.clone()).unwrap_or_default(),
-            facts: [Some(console), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
+            hero: catalog.heroes.iter().find(|(p, _)| p == &g.path).map(|(_, c)| c.clone()).unwrap_or_default(),
+            facts: [Some(console.clone()), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
             path: g.path.clone(),
             system,
+            console,
         }
     };
     if key == RECENT {
@@ -318,10 +339,12 @@ pub fn refresh(source: &dyn LibrarySource) -> Refreshed {
     let favourites = source.favourites(&games)?;
     let recent = source.recent(&games)?;
     let engines = source.engines(&systems)?;
-    let covers = source.covers(&systems, &games)?;
+    let covers = source.media(&systems, &games, &[COVER])?;
+    let played_games: Vec<GameFile> = games.iter().filter(|g| recent.contains(&g.path)).cloned().collect();
+    let heroes = source.media(&systems, &played_games, &HERO)?;
     let played = source.played(&games)?;
     let settings = source.settings()?;
-    let catalog = Catalog { games, favourites, recent, covers, played, settings };
+    let catalog = Catalog { games, favourites, recent, covers, heroes, played, settings };
     let shelves = source.shelves()?;
     let mut shelved: Vec<SystemRow> = systems.clone();
     shelved.sort_by_key(|s| shelves.iter().position(|id| id == &s.id).unwrap_or(usize::MAX));

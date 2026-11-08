@@ -10,7 +10,8 @@ fn main() {
             .depend("QtQuick.Shapes")
             .depend("EmuSen.Kit")
             .depend("EmuSen.Models")
-            .depend("EmuSen.Endymion"),
+            .depend("EmuSen.Endymion")
+            .depend("EmuSen.Play"),
     )
     .qt_module("Quick")
     .qt_module("QuickControls2")

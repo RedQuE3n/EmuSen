@@ -40,9 +40,9 @@ fn a_lent_ring_s_pictures_are_drawn_in_the_window_as_the_core_made_them() {
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
 
-    let (device, feed) = device_and_feed(&world.dir("presets"));
+    let (device, feed, adoption) = device_and_feed(&world.dir("presets"));
     let mut harness = Harness::new();
-    let mut scene = play_window(&mut harness, &device);
+    let mut scene = play_window(&mut harness, &adoption);
     assert!(scene.set_property("play", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("play", "cores", cores.to_str().unwrap()));
     play(&mut scene, &feed, &game);

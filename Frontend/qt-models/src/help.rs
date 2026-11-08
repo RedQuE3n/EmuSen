@@ -1,4 +1,5 @@
-//! The help bar's entries for each screen, as the C# screens and the mockups name them (EmuSen_Interface.md §24.1-§24.3):
+//! The help bar's entries for each screen, as the C# screens and the mockups name them (EmuSen_Interface.md §24.1-§24.3;
+//! Home's by the row focused, as `HomeScreen.HintsFor` gives them):
 //! the button by what it asks of the interface, its label, and the action it invokes where the walk does not answer it
 //! itself. The A/B swap is the router's job, not this list's.
 
@@ -7,7 +8,12 @@ use emusen_kit_core::input::UiButton;
 /// A screen with a help bar.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
+    /// Home with Continue focused.
     Home,
+    /// Home with a game of the shelf focused.
+    HomeShelf,
+    /// Home with a place focused.
+    HomePlaces,
     Consoles,
     Grid,
 }
@@ -22,6 +28,18 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Resume", None),
             (UiButton::Screensaver, "Game page", Some("gamePage")),
             (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Options, "Search", Some("search")),
+            (UiButton::Menu, "Home", Some("homeCard")),
+        ],
+        Screen::HomeShelf => &[
+            (UiButton::Accept, "Play", None),
+            (UiButton::Screensaver, "Game page", Some("gamePage")),
+            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Options, "Search", Some("search")),
+            (UiButton::Menu, "Home", Some("homeCard")),
+        ],
+        Screen::HomePlaces => &[
+            (UiButton::Accept, "Open", None),
             (UiButton::Options, "Search", Some("search")),
             (UiButton::Menu, "Home", Some("homeCard")),
         ],

@@ -1326,6 +1326,62 @@ symbol).
   fills its box), radius `tileRadius` (8, Mistress's `CoverCard` for a big cover). On the software backend it draws the
   plain `Image`, square-cornered: that tier holds layout, focus and words, and the pictures are judged on Vulkan, where
   the acceptance test runs.
+- **The help bar's glyph 10 units from its word**, the `IconTextSpacing` Mistress's help bands set (`HelpBar.glyphGap`,
+  `EmuSen_Kit.md` §7.20).
+- **A game in the program.** `emusen-qt` now plays: a game chosen on Home's shelf or the grid is recorded as started
+  (`LibraryModel.started`, games.db's `started`, then the games read again), opened and shown; the menu chord pauses it
+  and shows Home over it, Continue resumes it, and its screen gives way to Home when it stops (`Screens`: `Game`, `play`,
+  `menu`, `gameRunning`; the rule is `screens::step`). Nothing of the play is copied: the game is `Game.qml` of
+  `EmuSen.Play`, the session, the picture, the router's clock and the pad given to the game while it is in front, which
+  emusen-qt-play's window now holds too, answering the chord with a pause there; and the device is
+  `emusen_qt_play::host` (the device for Qt's platform, the plain preset's feed, the window's adoption as plain
+  handles), which both programs start through and the tests use. A new dependency, stated here: `emusen-qt` on
+  `emusen-qt-play`, the program on its game. `Main.qml` is shown by the program once its scene graph has adopted the
+  device, as emusen-qt-play's window is; without a device the window still opens and plays nothing. The splash keeps the
+  focus until it has faded: on the frame the skipping press finished it, Home took the focus while that press was still
+  being delivered, which Continue had ignored and the first place did not (`program.rs`, "the press was the splash's
+  alone").
+- **Continue as Mistress's Home has it** (`HomeScreen.Continue`, `HubLayout.AddTop`, `MainWindow.GamePage`'s `Art`).
+  Continue stands only while a game is suspended: its caption, its glass and ring, the planet, the title, and the facts
+  "Super Nintendo · Paused 3 minutes ago" (`words::paused_ago`, Mistress's `PausedAgo`; `Clock.paused`, said again on each
+  tick, counting from when `gamePaused` turned on), and the paused frame. The frame is the game's own `GamePicture`
+  drawn into a `ShaderEffectSource` at the window's resolution, cut at its centre to the box's shape as Mistress's
+  poster slot cuts the still, and filled into the same rounded `Shape`; one picture item names the feed, so the frame
+  thread sees one item's swaps. The shelf leaves the suspended game out (`GameModel.leaveOut`). With no game suspended
+  there is no Continue: the top shows the shelf's focused game (else its first) with no caption, glass or planet, its
+  picture the game's hero art, its fan art, else its screenshot, else its title screen, else its cover
+  (`library::HERO`, read from the media store for the played games alone), and the focus starts on the shelf, its name
+  under it; with no game played, on the first place. The help bar follows the row focused, as `HomeScreen.HintsFor`
+  gives it: Resume on Continue, Play on the shelf, Open on a place (`help::Screen::HomeShelf`, `HomePlaces`). A game
+  the library does not hold (opened by its file) is named from its file (`LibraryModel.titleOf`), with no console in its
+  facts and no planet. A game that starts is shown (`Screens.gameRunning`), so a start from outside the screens shows it
+  too; the screens' rule stays in `screens::step`, QML holding no logic (§1.3: no function, no `Qt.callLater`).
+- **One controller.** The acceptance test attaches an SDL virtual pad and names it to the reader alone
+  (`program.onlyPads`), so the status line reads "1 controller · 21:42" as the render's.
+
+**Acceptance on Vulkan** (measured on 2026-11-08; `qt-app/tests/acceptance.rs`, §8.1's second tier). The program runs as
+a player's: in a compositor of the test's own (`kwin_wayland --virtual`, 3840 × 2160), its window adopting Serenity's
+device on the RX 6800 through `host`, Qt on Vulkan with the threaded loop, the pads an SDL virtual pad alone. Four
+states, each at the five sizes with the mockup at 1280 × 800 and 1920 × 1200: Home with no game suspended (held to the
+gate; the render's `HomeNothingLeft`), Choose a console, the grid, and Home over a paused game. That game is a real
+session on the test core, Cobalt Harbor's file replaced by the test core's image (the sandbox has no Super Nintendo
+core), paused by the guide button on the virtual pad; Continue resumes it, and closed, Home has no Continue again. The
+covers' window adopts the same device: a second Vulkan instance in the process faulted in Qt's swapchain release when
+the engine was dropped, and each window is hidden before the harness goes, which releases its swapchain while its
+adopted instance still lives. *Open:* on a failed assertion the unwinding drops the windows unhidden and the process
+faults the same way, leaving its compositor running (its socket names the test's process); a watchdog such as
+qt-play's `within` would stop it. **Differences that remain, each for the tester:** the paused game's console and planet
+("Super Nintendo ·" and the gold planet in the render), its frame (the test core's dark picture, the render's orange)
+and Home's game count (7, Cobalt Harbor's file being the test core's now), all from the test core standing in for a
+Super Nintendo core; the clock's own time; the focused shelf cover's name meets the focus ring's foot, as the render
+places both, and the gate's contrast sampling at 1280 × 720 reads the ring there (named in `named_difference`).
+
+**Held to** (measured on 2026-11-08): `acceptance.rs` (as above, and the top's picture rounded at its corner, sampled
+from the window); `program.rs`, `screens.rs`, `splash.rs`, `still.rs`, `start.rs`; qt-play's `device`, `pads`, `ring`
+and `qml`; qt-models' `library` 12 (the hero art's order, the shelf less the suspended game, the paused words, the
+screens' rule for the game); clippy clean. Seeded faults, each reverted: the shelf keeping the suspended game (the
+models' test), the hero art's order with the screenshot first (the models' test), `RoundPicture` drawing square corners
+(the acceptance test's corner sample, at 66,205,110 where the box's corner must show what is behind).
 
 ---
 
@@ -1342,7 +1398,8 @@ symbol).
    element (nothing covers it) and make the same view-model call as the pad's A there, and the wheel must move every
    list that scrolls; and **no chrome**, in the big-screen and card forms no menu bar or status bar item is visible.
 2. **The picture**: `QQuickRenderControl` on Vulkan on the RX 6800, the ring's cases drawn through `GamePicture` and read
-   back; one GPU test at a time, the validation layer on.
+   back; one GPU test at a time, the validation layer on. Since 2026-11-08 the program's acceptance runs here too, in a compositor of the
+   test's own, so the screens' pictures (rounded corners, the paused frame) are judged as a player sees them (§7.1, step 6).
 
 ### 8.2 The mockups and the recordings as oracles
 

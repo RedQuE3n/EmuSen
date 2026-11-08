@@ -10,11 +10,11 @@ use std::time::{Duration, Instant};
 use emusen_client_fixture::cores::{painted_pixel, PAINTED_SIZE};
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::{Api, Config, Runtime};
-use emusen_kit_qt::picture::{adopt, Adopted};
-use emusen_platform_client::serenity::{builtin_preset, Device};
+use emusen_platform_client::serenity::Device;
 use emusen_platform_client::Platform;
 use emusen_qt_models::picture::PictureFeed;
-use emusen_qt_play::{surface_extensions, PLAY_URL};
+use emusen_qt_play::host::{Adoption, Host};
+use emusen_qt_play::PLAY_URL;
 use emusen_qt_test::{Harness, Scene};
 use std::sync::atomic::Ordering;
 
@@ -49,31 +49,20 @@ pub fn runtime_config(cores: Option<&Path>, world: &World) -> Config {
     Config { cores: cores.map(|c| vec![c.to_str().unwrap().into()]), player_cores: cores.and(player), ..Config::default() }
 }
 
-/// Serenity's device for the window, validated, and the feed drawing through the plain preset: both made before the
-/// window so that they outlive it, on a failure too.
-pub fn device_and_feed(presets: &Path) -> (Arc<Device>, PictureFeed) {
+/// Serenity's device for the window, validated, the feed drawing through the plain preset, and the window's adoption,
+/// as the programs make them (`emusen_qt_play::host`): made before the window so that they outlive it, on a failure too.
+pub fn device_and_feed(presets: &Path) -> (Arc<Device>, PictureFeed, Adoption) {
     let platform = Platform::load(library()).unwrap();
-    let surface = surface_extensions("wayland");
     let gpu = std::env::var("EMUSEN_GPU_DEVICE").ok();
-    let device = Arc::new(Device::new_for(&platform, gpu.as_deref(), true, &surface, &["VK_KHR_swapchain"]).expect("a Vulkan device"));
-    let preset = builtin_preset(&platform, "effect.None.nearest", None, presets.to_str().unwrap()).unwrap();
-    let feed = PictureFeed::new(device.clone(), preset);
-    (device, feed)
+    let host = Host::new(&platform, "wayland", gpu.as_deref(), true, presets).expect("a Vulkan device");
+    let adoption = host.adoption();
+    let Host { device, feed, .. } = host;
+    (device, feed, adoption)
 }
 
-/// Play.qml at 1280 by 800, its window adopting `device`.
-pub fn play_window<'h>(harness: &'h mut Harness, device: &Device) -> Scene<'h> {
-    let surface = surface_extensions("wayland");
-    let raw = device.raw();
-    let adopted = Adopted {
-        instance: raw.instance,
-        physical: raw.physical,
-        device: raw.device,
-        queue_family: raw.queue_family,
-        queue_index: 0,
-        extensions: &surface,
-    };
-    harness.load_prepared(PLAY_URL, 1280, 800, |window| unsafe { adopt(window.cast(), &adopted) }.expect("Qt adopts the device"))
+/// Play.qml at 1280 by 800, its window adopting the device.
+pub fn play_window<'h>(harness: &'h mut Harness, adoption: &Adoption) -> Scene<'h> {
+    harness.load_prepared(PLAY_URL, 1280, 800, |window| unsafe { adoption.adopt(window.cast()) }.expect("Qt adopts the device"))
 }
 
 /// The game at `game` running in the window and its first picture drawn.

@@ -1,8 +1,8 @@
 import QtQuick
 import EmuSen.Kit as Kit
-import EmuSen.Models
 import EmuSen.Endymion
 
+// emusen-qt-play's window: one game through Game, the pads' one reader, and the chord pausing and resuming the game until the Pause Card exists (EmuSen_Qt.md §1.8).
 Window {
     id: root
     objectName: "play"
@@ -15,7 +15,6 @@ Window {
     property string cores
     property string engine
     property string onlyPads
-    readonly property bool gameOwnsPad: session.running && !session.paused
 
     // The pads' one reader: the interface's presses into the router, and the game's side handed to the session (EmuSen_Kit.md §7.17).
     PadReader {
@@ -25,39 +24,15 @@ Window {
         onlyPads: root.onlyPads
         onButton: (button, down) => Kit.PadRouter.push(button, down)
     }
-
-    // While the game owns the pad only the chord leaves the router; it reaches the program, where the Pause Card will open.
-    Binding {
-        target: Kit.PadRouter
-        property: "chordOnly"
-        value: root.gameOwnsPad
-    }
-    Connections {
-        target: Kit.PadRouter
-        function onMenuChord() { session.togglePause() }
-    }
-    Timer {
-        interval: 8
-        repeat: true
-        running: Kit.PadRouter.clockRunning
-        onTriggered: Kit.PadRouter.pump()
-    }
-
-    SessionModel {
-        id: session
-        objectName: "session"
-        platformLibrary: root.platformLibrary
+    Game {
+        id: player
+        anchors.fill: parent
         feed: root.feed
+        platformLibrary: root.platformLibrary
         cores: root.cores
         engine: root.engine
         pads: pads.gamePads
         game: root.game
-    }
-
-    Kit.GamePicture {
-        objectName: "picture"
-        anchors.fill: parent
-        feed: root.feed
-        live: root.feed !== 0
+        onMenu: player.session.togglePause()
     }
 }

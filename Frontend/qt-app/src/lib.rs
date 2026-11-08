@@ -5,6 +5,7 @@
 extern crate emusen_kit_qt;
 extern crate emusen_qt_endymion;
 extern crate emusen_qt_models;
+extern crate emusen_qt_play;
 
 pub mod start;
 

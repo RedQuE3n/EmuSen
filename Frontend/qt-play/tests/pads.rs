@@ -41,10 +41,10 @@ fn a_virtual_pad_plays_the_game_in_the_window_and_its_chord_pauses_and_resumes_i
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
 
-    let (device, feed) = device_and_feed(&world.dir("presets"));
+    let (device, feed, adoption) = device_and_feed(&world.dir("presets"));
     let mut harness = Harness::new();
     assert_eq!(App::platform_name().to_string(), "wayland", "Qt on the test's compositor");
-    let mut scene = play_window(&mut harness, &device);
+    let mut scene = play_window(&mut harness, &adoption);
     assert!(scene.set_property("play", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("play", "platformLibrary", library().to_str().unwrap()));
     until(&mut scene, "the virtual pad read", |s| s.property("pads", "connected") == "1");

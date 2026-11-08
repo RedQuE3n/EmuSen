@@ -354,6 +354,7 @@ dependencies = [
  "emusen-platform-client",
  "emusen-qt-endymion",
  "emusen-qt-models",
+ "emusen-qt-play",
  "emusen-qt-test",
  "serde_json",
 ]

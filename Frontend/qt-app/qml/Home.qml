@@ -1,9 +1,10 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Shapes
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// Home under the night sky in canvas units, as the accepted render draws it: Continue, the Recent shelf of whole covers and the seven places with their lines (EmuSen_Interface.md §24.3; EmuSen_Qt.md §7.1).
+// Home under the night sky in canvas units, as the accepted render draws it: Continue while a game is suspended, else the shelf's game at the top, the Recent shelf of whole covers and the seven places with their lines (EmuSen_Interface.md §24.3; EmuSen_Qt.md §7.1).
 FocusScope {
     id: root
     objectName: "home"
@@ -12,30 +13,49 @@ FocusScope {
     property int controllers: 0
     readonly property real placeWidth: 150
     readonly property real placePitch: 167
-    // The game played last, read again whenever the games are, which an invokable alone would not see.
-    readonly property bool hasLast: recent.revision >= 0 && recent.count > 0
-    readonly property string lastTitle: root.hasLast && recent.revision >= 0 ? recent.titleAt(0) : ""
-    readonly property string lastCover: root.hasLast && recent.revision >= 0 ? recent.coverAt(0) : ""
-    readonly property string lastFacts: root.hasLast && recent.revision >= 0 ? recent.factsAt(0) : ""
-    readonly property string lastPath: root.hasLast && recent.revision >= 0 ? recent.pathAt(0) : ""
-    readonly property real lastHue: root.hasLast && recent.revision >= 0 ? recent.hueAt(0) : 0
+    // The program's game, suspended while Home shows, and the item its picture is drawn in; none before a game.
+    property SessionModel session: null
+    property Item gamePicture: null
+    // Canvas units to pixels, so the paused frame's texture is drawn at the window's own resolution.
+    property real pixelScale: 1
+    // Continue stands only while a game is suspended, as Mistress's Home has it; its row is found again on each read of the games.
+    readonly property bool suspended: root.session !== null && root.session.running
+    readonly property int suspendedRow: root.suspended && recent.revision >= 0 ? recent.rowOf(root.session.game) : -1
+    // The shelf's last focused game, which the top shows when nothing is suspended (the shelf is then the games played).
+    property int shelfRow: 0
+    readonly property int topRow: root.suspended ? root.suspendedRow : (recent.count > 0 ? Math.min(root.shelfRow, recent.count - 1) : -1)
+    readonly property bool hasTop: root.suspended || root.topRow >= 0
+    readonly property string topTitle: recent.revision >= 0 && root.topRow >= 0 ? recent.titleAt(root.topRow) : (root.suspended ? root.library.titleOf(root.session.game) : "")
+    readonly property string topPicture: recent.revision >= 0 && root.topRow >= 0 ? recent.heroAt(root.topRow) : ""
+    readonly property string topFacts: root.suspended && clock.paused.length > 0 ? clock.paused : (recent.revision >= 0 && root.topRow >= 0 ? recent.factsAt(root.topRow) : "")
+    readonly property real topHue: recent.revision >= 0 && root.topRow >= 0 ? recent.hueAt(root.topRow) : -1
     readonly property var lines: JSON.parse(root.library.homeLines)
-    // The shelf's first cover, found again after each read of the games, whose count alone may not change.
-    readonly property Item firstShelf: recent.revision >= 0 && shelf.count > 1 ? shelf.itemAt(1) : null
+    // The shelf's first cover shown, found again after each read of the games, whose count alone may not change.
+    readonly property bool shelfFocused: shelf.count > 0 && root.shelfRow >= 0 && root.shelfRow < shelf.count && shelf.itemAt(root.shelfRow)?.activeFocus === true
+    readonly property Item firstShelf: shelved.revision >= 0 && shelf.count > 0 ? shelf.itemAt(0) : null
     signal placeChosen(int index)
     signal played(string path)
+    signal resumed()
     GameModel {
         id: recent
         games: root.library.recent
     }
+    // The shelf: the games played, the suspended one left out since Continue holds it.
+    GameModel {
+        id: shelved
+        games: root.library.recent
+        leaveOut: root.suspended ? root.session.game : ""
+    }
     Clock {
         id: clock
         controllers: root.controllers
+        console: root.suspended && recent.revision >= 0 ? recent.consoleAt(root.suspendedRow) : ""
+        gamePaused: root.suspended && root.session.paused
     }
     Kit.Sky {
         objectName: "homeSky"
         anchors.fill: parent
-        glowHue: root.hasLast ? root.lastHue : -1
+        glowHue: root.topHue
         glowX: 0.2
         glowY: 0.42
     }
@@ -50,7 +70,7 @@ FocusScope {
         focus: true
         controller.navigationShown: false
         help: HelpModel {
-            screen: HelpModel.Home
+            screen: continuePlaying.activeFocus ? HelpModel.Home : (root.shelfFocused ? HelpModel.HomeShelf : HelpModel.HomePlaces)
         }
         Item {
             x: -frame.safeX
@@ -109,13 +129,16 @@ FocusScope {
                 y: 72
                 width: root.width - 104
                 height: 296
-                focus: true
+                // Continue holds the focus while a game is suspended; otherwise the shelf's first game does, else the first place.
+                focus: root.suspended
+                activeFocusOnTab: root.suspended
                 Accessible.name: Words.continuePlaying
-                onActivated: if (root.hasLast) root.played(root.lastPath)
+                onActivated: if (root.suspended) root.resumed()
                 KeyNavigation.down: root.firstShelf ?? (places.count > 0 ? places.itemAt(0) : null)
                 Rectangle {
                     objectName: "continuePanel"
                     anchors.fill: parent
+                    visible: root.suspended
                     radius: Kit.Tokens.tileRadius + 4
                     color: Kit.Tokens.surfaceRaised
                     opacity: 0.55
@@ -137,18 +160,49 @@ FocusScope {
                     height: 280
                     radius: Kit.Tokens.tileRadius
                     color: Kit.Tokens.surface
-                    visible: root.hasLast
-                    Image {
+                    visible: root.hasTop
+                    RoundPicture {
+                        objectName: "continueArt"
                         anchors.fill: parent
-                        source: root.lastCover
-                        fillMode: Image.PreserveAspectFit
-                        asynchronous: false
-                        smooth: true
-                        mipmap: true
+                        visible: !root.suspended
+                        source: root.topPicture
+                        radius: Kit.Tokens.tileRadius
+                        crop: true
+                    }
+                    // The game's own picture drawn into a texture at the window's resolution, cut to the box's shape at its centre as Mistress's poster slot cuts the paused frame, so its corners round as a cover's.
+                    ShaderEffectSource {
+                        id: pausedTexture
+                        readonly property Item frame: root.gamePicture
+                        readonly property real cutWidth: pausedTexture.frame ? Math.min(pausedTexture.frame.width, pausedTexture.frame.height * 373 / 280) : 0
+                        readonly property real cutHeight: pausedTexture.cutWidth * 280 / 373
+                        sourceItem: root.suspended && root.visible ? pausedTexture.frame : null
+                        hideSource: true
+                        visible: false
+                        sourceRect: pausedTexture.frame ? Qt.rect((pausedTexture.frame.width - pausedTexture.cutWidth) / 2, (pausedTexture.frame.height - pausedTexture.cutHeight) / 2, pausedTexture.cutWidth, pausedTexture.cutHeight) : Qt.rect(0, 0, 0, 0)
+                        textureSize: Qt.size(Math.ceil(373 * root.pixelScale), Math.ceil(280 * root.pixelScale))
+                    }
+                    Shape {
+                        id: pausedRounded
+                        objectName: "continueFrame"
+                        anchors.fill: parent
+                        visible: root.suspended && root.gamePicture !== null
+                        preferredRendererType: Shape.CurveRenderer
+                        ShapePath {
+                            strokeColor: "transparent"
+                            fillColor: "transparent"
+                            fillItem: pausedTexture
+                            fillTransform: PlanarTransform.fromScale(1 / root.pixelScale, 1 / root.pixelScale)
+                            PathRectangle {
+                                width: 373
+                                height: 280
+                                radius: Kit.Tokens.tileRadius
+                            }
+                        }
                     }
                 }
                 Text {
                     objectName: "continueHeading"
+                    visible: root.suspended
                     x: 409
                     y: 40
                     text: Words.continuePlaying
@@ -163,7 +217,7 @@ FocusScope {
                     x: 409
                     y: 64
                     width: parent.width - 421
-                    text: root.lastTitle
+                    text: root.topTitle
                     elide: Text.ElideRight
                     color: Kit.Tokens.textStrong
                     font.family: faces.condensed
@@ -178,15 +232,15 @@ FocusScope {
                     y: 187
                     width: 14
                     height: 14
-                    visible: root.hasLast
-                    hue: root.lastHue
+                    visible: root.suspended && root.topHue >= 0
+                    hue: root.topHue
                 }
                 Text {
                     objectName: "continueFacts"
-                    x: 433
+                    x: root.suspended && root.topHue >= 0 ? 433 : 409
                     y: 180
-                    width: parent.width - 445
-                    text: root.lastFacts
+                    width: parent.width - x - 12
+                    text: root.topFacts
                     elide: Text.ElideRight
                     color: Kit.Tokens.muted
                     font.family: faces.regular
@@ -207,6 +261,7 @@ FocusScope {
                 lineHeightMode: Text.FixedHeight
             }
             Item {
+                id: shelfBox
                 objectName: "shelf"
                 x: 64
                 y: 424
@@ -214,7 +269,7 @@ FocusScope {
                 height: 160
                 Repeater {
                     id: shelf
-                    model: recent
+                    model: shelved
                     Kit.Walkable {
                         id: cover
                         required property int index
@@ -224,17 +279,19 @@ FocusScope {
                         required property real hue
                         required property bool favourite
                         controller: frame.controller
-                        objectName: "shelfCover." + (cover.index - 1)
-                        visible: cover.index > 0 && cover.x + width <= parent.width
+                        objectName: "shelfCover." + cover.index
+                        visible: cover.x + width <= shelfBox.width
+                        focus: !root.suspended && cover.index === 0
                         Accessible.name: cover.title
-                        x: (cover.index - 1) * 144
+                        x: cover.index * 144
                         width: 120
                         height: 160
                         onActivated: root.played(cover.path)
-                        KeyNavigation.left: cover.index > 1 ? shelf.itemAt(cover.index - 1) : null
+                        onActiveFocusChanged: if (cover.activeFocus) root.shelfRow = cover.index
+                        KeyNavigation.left: cover.index > 0 ? shelf.itemAt(cover.index - 1) : null
                         KeyNavigation.right: shelf.count > cover.index + 1 ? shelf.itemAt(cover.index + 1) : null
-                        KeyNavigation.up: continuePlaying
-                        KeyNavigation.down: places.count === 0 ? null : places.itemAt(Math.min(places.count - 1, Math.round((cover.index - 1) * 144 / root.placePitch)))
+                        KeyNavigation.up: root.suspended ? continuePlaying : null
+                        KeyNavigation.down: places.count === 0 ? null : places.itemAt(Math.min(places.count - 1, Math.round(cover.index * 144 / root.placePitch)))
                         Cover {
                             anchors.fill: parent
                             source: cover.cover
@@ -245,6 +302,20 @@ FocusScope {
                         }
                     }
                 }
+            }
+            Text {
+                objectName: "shelfTitle"
+                x: 64
+                y: 586
+                width: root.width - 128
+                visible: root.shelfFocused
+                text: shelved.revision >= 0 ? shelved.titleAt(root.shelfRow) : ""
+                elide: Text.ElideRight
+                color: Kit.Tokens.text
+                font.family: faces.regular
+                font.pixelSize: 22
+                lineHeight: 26.4
+                lineHeightMode: Text.FixedHeight
             }
             Repeater {
                 id: places
@@ -257,6 +328,7 @@ FocusScope {
                     readonly property bool attention: root.lines[place.index]?.attention ?? false
                     controller: frame.controller
                     objectName: "place." + place.index
+                    focus: !root.suspended && shelf.count === 0 && place.index === 0
                     Accessible.name: place.modelData
                     Accessible.description: place.status
                     x: 64 + place.index * root.placePitch

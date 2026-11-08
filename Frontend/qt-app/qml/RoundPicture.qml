@@ -33,7 +33,6 @@ Item {
         mipmap: true
     }
     Shape {
-        objectName: "roundedFill"
         visible: root.rounded && picture.status === Image.Ready
         x: root.paintedX
         y: root.paintedY

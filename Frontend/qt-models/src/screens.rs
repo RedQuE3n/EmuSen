@@ -12,6 +12,8 @@ pub enum Shown {
     Home,
     Consoles,
     Grid,
+    /// The game, its picture filling the window.
+    Game,
 }
 
 /// What asked for a change.
@@ -25,6 +27,12 @@ pub enum Ask {
     Back,
     /// A screen's declared action (crate::help); the favourites' action opens their grid, the others are a later stage's.
     Act(String),
+    /// A game chosen on Home's shelf or the grid, or Continue chosen: the game is shown.
+    Play,
+    /// The menu chord over the game: Home, the game suspended behind it (Mistress's library over the game).
+    Menu,
+    /// The game closed: Home.
+    Closed,
 }
 
 /// The screen shown after an ask, and the grid's row; `None` leaves both as they were.
@@ -35,6 +43,8 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
         (Shown::Consoles, Ask::Act(key)) if key == crate::library::FAVOURITES => Some((Shown::Grid, Some(key.clone()))),
         (Shown::Consoles, Ask::Back) => Some((Shown::Home, None)),
         (Shown::Grid, Ask::Back) => Some((Shown::Consoles, None)),
+        (Shown::Home | Shown::Grid, Ask::Play) => Some((Shown::Game, None)),
+        (Shown::Game, Ask::Menu | Ask::Closed) => Some((Shown::Home, None)),
         _ => None,
     }
 }
@@ -52,6 +62,7 @@ pub mod qobject {
         Home,
         Consoles,
         Grid,
+        Game,
     }
 
     extern "RustQt" {
@@ -59,6 +70,7 @@ pub mod qobject {
         #[qml_element]
         #[qproperty(Screen, shown, READ, NOTIFY)]
         #[qproperty(QString, key, READ, NOTIFY)]
+        #[qproperty(bool, game_running, cxx_name = "gameRunning")]
         type Screens = super::ScreensRust;
     }
 
@@ -75,9 +87,16 @@ pub mod qobject {
         /// A screen's declared action, by its key.
         #[qinvokable]
         fn act(self: Pin<&mut Screens>, key: &QString);
+        /// A game chosen, or Continue: the game's screen.
+        #[qinvokable]
+        fn play(self: Pin<&mut Screens>);
+        /// The menu chord over the game: Home.
+        #[qinvokable]
+        fn menu(self: Pin<&mut Screens>);
     }
 
     impl cxx_qt::Threading for Screens {}
+    impl cxx_qt::Initialize for Screens {}
 }
 
 use qobject::Screen;
@@ -85,11 +104,23 @@ use qobject::Screen;
 pub struct ScreensRust {
     shown: Screen,
     key: QString,
+    /// Whether the program's game runs: a game that starts is shown, and when it stops its screen gives way to Home.
+    game_running: bool,
 }
 
 impl Default for ScreensRust {
     fn default() -> Self {
-        ScreensRust { shown: Screen::Home, key: QString::default() }
+        ScreensRust { shown: Screen::Home, key: QString::default(), game_running: false }
+    }
+}
+
+impl cxx_qt::Initialize for qobject::Screens {
+    fn initialize(self: Pin<&mut Self>) {
+        self.on_game_running_changed(|screens| {
+            let ask = if screens.game_running { Ask::Play } else { Ask::Closed };
+            screens.ask(ask);
+        })
+        .release();
     }
 }
 
@@ -97,6 +128,7 @@ fn shown_of(screen: Screen) -> Shown {
     match screen {
         Screen::Consoles => Shown::Consoles,
         Screen::Grid => Shown::Grid,
+        Screen::Game => Shown::Game,
         _ => Shown::Home,
     }
 }
@@ -106,6 +138,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::Home => Screen::Home,
         Shown::Consoles => Screen::Consoles,
         Shown::Grid => Screen::Grid,
+        Shown::Game => Screen::Game,
     }
 }
 
@@ -124,6 +157,14 @@ impl qobject::Screens {
 
     pub fn act(self: Pin<&mut Self>, key: &QString) {
         self.ask(Ask::Act(key.to_string()));
+    }
+
+    pub fn play(self: Pin<&mut Self>) {
+        self.ask(Ask::Play);
+    }
+
+    pub fn menu(self: Pin<&mut Self>) {
+        self.ask(Ask::Menu);
     }
 
     fn ask(self: Pin<&mut Self>, ask: Ask) {

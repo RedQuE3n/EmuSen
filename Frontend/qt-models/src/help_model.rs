@@ -30,6 +30,8 @@ pub mod qobject {
         Home,
         Consoles,
         Grid,
+        HomeShelf,
+        HomePlaces,
     }
 
     extern "RustQt" {
@@ -109,6 +111,8 @@ impl qobject::HelpModel {
         match self.screen {
             HelpScreen::Consoles => Screen::Consoles,
             HelpScreen::Grid => Screen::Grid,
+            HelpScreen::HomeShelf => Screen::HomeShelf,
+            HelpScreen::HomePlaces => Screen::HomePlaces,
             _ => Screen::Home,
         }
     }

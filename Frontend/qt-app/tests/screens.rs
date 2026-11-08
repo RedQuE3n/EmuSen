@@ -27,10 +27,13 @@ fn the_screens_switch_by_the_pad_and_the_walk_follows_the_rows() {
     assert!(scene.set_property("program", "platformLibrary", library().to_str().unwrap()));
     wait_for(&mut scene, "library", "loading", "false", 10000);
     assert_eq!(scene.property("screens", "shown"), HOME);
-    wait_for(&mut scene, "continue", "activeFocus", "true", 1000);
-
-    scene.pad(UiButton::Down);
-    assert_eq!(focused(&mut scene), "place.0", "no recent games: Down goes to the places");
+    for _ in 0..20 {
+        if focused(&mut scene) == "place.0" {
+            break;
+        }
+        scene.wait(50);
+    }
+    assert_eq!(focused(&mut scene), "place.0", "no game suspended and none played: the places have the focus");
     scene.pad(UiButton::Accept);
     assert_eq!(scene.property("screens", "shown"), CONSOLES, "the Games place opens Choose a console");
     let places: usize = scene.property("library", "places").parse().unwrap();

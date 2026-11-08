@@ -41,6 +41,7 @@ pub mod qobject {
         #[base = QAbstractListModel]
         #[qml_element]
         #[qproperty(QString, games)]
+        #[qproperty(QString, leave_out, cxx_name = "leaveOut")]
         #[qproperty(i32, count, READ, NOTIFY)]
         #[qproperty(i32, revision, READ, NOTIFY)]
         type GameModel = super::GameModelRust;
@@ -75,6 +76,21 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "coverAt"]
         fn cover_at(self: &GameModel, row: i32) -> QString;
+
+        /// A game's hero art as a URL by its row, else its cover's; empty where it has neither (EmuSen_Qt.md §7.1, step 6).
+        #[qinvokable]
+        #[cxx_name = "heroAt"]
+        fn hero_at(self: &GameModel, row: i32) -> QString;
+
+        /// A game's console's name by its row; empty where there is none.
+        #[qinvokable]
+        #[cxx_name = "consoleAt"]
+        fn console_at(self: &GameModel, row: i32) -> QString;
+
+        /// The row of the game at `path`; -1 where it is not in the list.
+        #[qinvokable]
+        #[cxx_name = "rowOf"]
+        fn row_of(self: &GameModel, path: &QString) -> i32;
 
         /// A game's facts by its row: its console and when it was last played.
         #[qinvokable]
@@ -115,6 +131,8 @@ pub fn cover_url(file: &str) -> String {
 #[derive(Default)]
 pub struct GameModelRust {
     games: QString,
+    /// A game's path the list leaves out: the suspended game, which Continue holds, on Home's shelf.
+    leave_out: QString,
     count: i32,
     /// Counts the reads, announced after each, so a binding on a row's words sees the new rows.
     revision: i32,
@@ -122,8 +140,9 @@ pub struct GameModelRust {
 }
 
 impl cxx_qt::Initialize for qobject::GameModel {
-    fn initialize(self: Pin<&mut Self>) {
-        self.on_games_changed(|model| model.read()).release();
+    fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut().on_games_changed(|model| model.read()).release();
+        self.on_leave_out_changed(|model| model.read()).release();
     }
 }
 
@@ -182,6 +201,20 @@ impl qobject::GameModel {
         self.at(row).map_or_else(QString::default, |g| QString::from(cover_url(&g.cover).as_str()))
     }
 
+    pub fn hero_at(&self, row: i32) -> QString {
+        let art = |g: &GameRow| cover_url(if g.hero.is_empty() { &g.cover } else { &g.hero });
+        self.at(row).map_or_else(QString::default, |g| QString::from(art(g).as_str()))
+    }
+
+    pub fn console_at(&self, row: i32) -> QString {
+        self.at(row).map_or_else(QString::default, |g| QString::from(g.console.as_str()))
+    }
+
+    pub fn row_of(&self, path: &QString) -> i32 {
+        let path = path.to_string();
+        self.rows.iter().position(|g| g.path == path).map_or(-1, |i| i as i32)
+    }
+
     pub fn facts_at(&self, row: i32) -> QString {
         self.at(row).map_or_else(QString::default, |g| QString::from(g.facts.as_str()))
     }
@@ -192,7 +225,8 @@ impl qobject::GameModel {
 
     /// The games text read into rows, the model reset once.
     fn read(mut self: Pin<&mut Self>) {
-        let rows = crate::games::from_json(&self.games.to_string());
+        let leave_out = self.leave_out.to_string();
+        let rows = crate::games::without(crate::games::from_json(&self.games.to_string()), &leave_out);
         let count = rows.len() as i32;
         self.as_mut().begin_reset_model();
         self.as_mut().rust_mut().rows = rows;

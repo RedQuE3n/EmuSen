@@ -125,6 +125,8 @@ fn run(
         let _ = runtime.close(session);
         return report(Report::Failed(words));
     }
+    // An engine that withholds rewind says why in session_info, which the card shows; the game plays on without it.
+    let _ = crate::reel::keep(runtime, session);
     report(Report::Opened { session });
     let mut info = frame_info();
     let mut frame = Frame::default();

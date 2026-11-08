@@ -5,9 +5,11 @@ use crate::picture::PictureFeed;
 use crate::session::{GameIo, Report, Session};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{DateFormat, QDateTime, QString};
 use crate::input::GameInput;
-use crate::pause::{self, Facts};
+use crate::pause::{self, SlotFact};
+use crate::pictures::{self, PictureSource, Shown};
+use cxx_qt::casting::Upcast;
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_platform_client::audio::{GameSound, SoundSettings};
 use emusen_platform_client::pace::DisplayClock;
@@ -41,6 +43,10 @@ pub mod qobject {
         #[qproperty(f64, picture_aspect, cxx_name = "pictureAspect", READ, NOTIFY)]
         /// What the Pause Card's words are made from, read as the game pauses (pause.rs's facts as plain data).
         #[qproperty(QString, card_facts, cxx_name = "cardFacts", READ, NOTIFY)]
+        /// The state slot Save and Load act on, 1 to 8, kept while the program runs.
+        #[qproperty(u32, slot, READ, NOTIFY)]
+        /// What the last save, load or rewind came to, in the player's words.
+        #[qproperty(QString, notice, READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
 
         #[cxx_name = "setPlatformLibrary"]
@@ -70,12 +76,31 @@ pub mod qobject {
 
         #[qinvokable]
         fn close(self: Pin<&mut SessionModel>);
+
+        /// The slot Save and Load act on.
+        #[qinvokable]
+        #[cxx_name = "chooseSlot"]
+        fn choose_slot(self: Pin<&mut SessionModel>, slot: u32);
+
+        /// The game saved to a slot, off the GUI thread; a resume waits for it.
+        #[qinvokable]
+        #[cxx_name = "saveState"]
+        fn save_state(self: Pin<&mut SessionModel>, slot: u32);
+
+        /// A slot loaded into the game, off the GUI thread; a resume waits for it.
+        #[qinvokable]
+        #[cxx_name = "loadState"]
+        fn load_state(self: Pin<&mut SessionModel>, slot: u32);
+
+        /// The game returned to the reel's moment at `frame`, off the GUI thread; a resume waits for it.
+        #[qinvokable]
+        #[cxx_name = "rewindTo"]
+        fn rewind_to(self: Pin<&mut SessionModel>, frame: u64);
     }
 
     impl cxx_qt::Threading for SessionModel {}
 }
 
-#[derive(Default)]
 pub struct SessionModelRust {
     platform_library: QString,
     feed: u64,
@@ -90,11 +115,62 @@ pub struct SessionModelRust {
     first_picture_ms: f64,
     picture_aspect: f64,
     card_facts: QString,
+    slot: u32,
+    notice: QString,
+    /// The session the card's pictures are read from, shared with the picture provider.
+    shown: Shown,
+    /// Read again at each pause, so a picture's address names the pause it was read in.
+    serial: u64,
+    /// Whether the picture provider is served in this model's engine.
+    served: bool,
+    /// Saves, loads and rewinds under way off the GUI thread, and a resume asked while they run.
+    jobs: u32,
+    resume_waiting: bool,
     /// The open session's number, once the frame thread has opened it.
     opened: Option<u32>,
     runtime: Option<Runtime>,
     platform: Option<Arc<Platform>>,
     session: Option<Session>,
+}
+
+impl Default for SessionModelRust {
+    fn default() -> Self {
+        SessionModelRust {
+            platform_library: QString::default(),
+            feed: 0,
+            cores: QString::default(),
+            engine: QString::default(),
+            pads: 0,
+            game: QString::default(),
+            running: false,
+            paused: false,
+            sounding: false,
+            problem: QString::default(),
+            first_picture_ms: 0.0,
+            picture_aspect: 0.0,
+            card_facts: QString::default(),
+            slot: 1,
+            notice: QString::default(),
+            shown: Shown::default(),
+            serial: 0,
+            served: false,
+            jobs: 0,
+            resume_waiting: false,
+            opened: None,
+            runtime: None,
+            platform: None,
+            session: None,
+        }
+    }
+}
+
+/// A state's time as ISO 8601, worded in the player's time as Mistress words a slot's ("Sun 8 Nov, 21:42").
+fn when_words(saved_at: Option<&str>) -> String {
+    let Some(at) = saved_at.and_then(|at| QDateTime::from_string(&QString::from(at), DateFormat::ISODateWithMs)) else {
+        return String::new();
+    };
+    let local = at.to_local_time();
+    format!("{}, {}", local.date().format(&QString::from("ddd d MMM")), local.time().format(&QString::from("HH:mm")))
 }
 
 impl qobject::SessionModel {
@@ -251,6 +327,7 @@ impl qobject::SessionModel {
     }
 
     fn pause(mut self: Pin<&mut Self>) {
+        self.as_mut().rust_mut().resume_waiting = false;
         if let Some(session) = &self.session {
             session.set_paused(true);
             self.as_mut().set_paused(true);
@@ -258,18 +335,32 @@ impl qobject::SessionModel {
         }
     }
 
-    /// The Pause Card's facts read from the runtime, whose reads answer on any thread (emusen_crystal.h). The slot and
-    /// the speed are the defaults until the card steps them (owed, EmuSen_Qt.md §7.1 step 7).
+    /// The Pause Card's facts read from the runtime, whose reads answer on any thread (emusen_crystal.h): the reel, the
+    /// slots with their pictures beside them (Galaxia's names), the slot chosen, and where the pictures are served.
     fn read_card_facts(mut self: Pin<&mut Self>) {
         let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
-        let facts = Facts::default();
-        let facts = match runtime.session_info(session) {
-            Ok(info) => {
-                let slots = runtime.state_slots(session).unwrap_or_default();
-                pause::facts_of(&info, runtime.rewind_reel(session).ok().as_ref(), &slots, facts.slot, facts.speed)
-            }
-            Err(_) => facts,
+        let Ok(info) = runtime.session_info(session) else { return };
+        let mut facts = pause::facts_of(&info, runtime.rewind_reel(session).ok().as_ref());
+        let serial = self.serial + 1;
+        self.as_mut().rust_mut().serial = serial;
+        facts.slot = self.slot;
+        facts.pictures = format!("image://{}/{serial}/", pictures::NAME);
+        let platform = self.as_mut().platform().ok();
+        let picture_of = |path: &str| {
+            let picture = platform.as_ref()?.save_path(emusen_platform_client::galaxia::consts::SAVE_PICTURE, path, None, 0).ok()?;
+            picture.is_file().then(|| format!("{}file/{}", facts.pictures, picture.display()))
         };
+        let slots = runtime.state_slots(session).unwrap_or_default();
+        facts.slots = slots
+            .iter()
+            .filter(|s| (1..=pause::SLOTS).contains(&s.slot))
+            .map(|s| SlotFact {
+                slot: s.slot,
+                exists: s.exists,
+                when: when_words(s.saved_at.as_deref()),
+                picture: if s.exists { picture_of(&s.path).unwrap_or_default() } else { String::new() },
+            })
+            .collect();
         let text = QString::from(facts.to_json().as_str());
         if self.card_facts != text {
             self.as_mut().rust_mut().card_facts = text;
@@ -278,6 +369,10 @@ impl qobject::SessionModel {
     }
 
     fn resume(mut self: Pin<&mut Self>) {
+        if self.jobs > 0 {
+            self.as_mut().rust_mut().resume_waiting = true;
+            return;
+        }
         if let Some(session) = &self.session {
             session.set_paused(false);
             self.as_mut().set_paused(false);
@@ -293,6 +388,7 @@ impl qobject::SessionModel {
     }
 
     fn close(mut self: Pin<&mut Self>) {
+        *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = None;
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().rust_mut().opened = None;
         self.as_mut().set_running(false);
@@ -304,6 +400,13 @@ impl qobject::SessionModel {
         match report {
             Report::Opened { session } => {
                 self.as_mut().rust_mut().opened = Some(session);
+                if let Some(runtime) = self.runtime.clone() {
+                    *self.shown.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some((runtime, session));
+                }
+                if !self.served {
+                    let served = pictures::ffi::serve(self.as_ref().get_ref().upcast(), &QString::from(pictures::NAME), PictureSource::new(self.shown.clone()));
+                    self.as_mut().rust_mut().served = served;
+                }
                 self.as_mut().set_running(true);
             }
             Report::FirstPicture { after } => self.as_mut().set_first_picture_ms(after.as_secs_f64() * 1000.0),
@@ -316,6 +419,67 @@ impl qobject::SessionModel {
                 self.as_mut().set_running(false);
             }
             Report::Closed => self.as_mut().set_running(false),
+        }
+    }
+
+    fn choose_slot(mut self: Pin<&mut Self>, slot: u32) {
+        let slot = slot.clamp(1, pause::SLOTS);
+        if self.slot != slot {
+            self.as_mut().rust_mut().slot = slot;
+            self.as_mut().slot_changed();
+            if self.paused {
+                self.read_card_facts();
+            }
+        }
+    }
+
+    fn save_state(self: Pin<&mut Self>, slot: u32) {
+        self.job(move |runtime, session| match runtime.state_slot_save(session, slot) {
+            Ok(()) => format!("State saved to slot {slot}"),
+            Err(e) => format!("Save State failed: {e}"),
+        });
+    }
+
+    fn load_state(self: Pin<&mut Self>, slot: u32) {
+        self.job(move |runtime, session| match runtime.state_slot_load(session, slot) {
+            Ok(true) => format!("State loaded from slot {slot}"),
+            Ok(false) => format!("Load State: slot {slot} is empty"),
+            Err(e) => format!("Load State failed: {e}"),
+        });
+    }
+
+    fn rewind_to(self: Pin<&mut Self>, frame: u64) {
+        self.job(move |runtime, session| match runtime.rewind_to(session, frame) {
+            Ok(()) => "Rewound".to_string(),
+            Err(_) => "Rewind: that moment is no longer held".to_string(),
+        });
+    }
+
+    /// A change to the session made on a thread of its own, as Mistress makes it, its words brought back through the
+    /// queue; the runtime applies it between two frames, so a paused game takes it at once (emusen_crystal.h).
+    fn job(mut self: Pin<&mut Self>, work: impl FnOnce(&Runtime, u32) -> String + Send + 'static) {
+        let (Some(runtime), Some(session)) = (self.runtime.clone(), self.opened) else { return };
+        self.as_mut().rust_mut().jobs += 1;
+        let queue = self.qt_thread();
+        std::thread::spawn(move || {
+            let words = work(&runtime, session);
+            let _ = queue.queue(move |model| model.job_done(words));
+        });
+    }
+
+    fn job_done(mut self: Pin<&mut Self>, words: String) {
+        self.as_mut().rust_mut().jobs -= 1;
+        let words = QString::from(&words);
+        if self.notice != words {
+            self.as_mut().rust_mut().notice = words;
+        }
+        // Said on every job, so the same words twice are two notices.
+        self.as_mut().notice_changed();
+        if self.paused {
+            self.as_mut().read_card_facts();
+        }
+        if self.jobs == 0 && std::mem::take(&mut self.as_mut().rust_mut().resume_waiting) {
+            self.resume();
         }
     }
 }

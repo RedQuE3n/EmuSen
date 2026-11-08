@@ -20,6 +20,10 @@ pub enum Screen {
     Pause,
     /// A page of the Pause Card past the first.
     PausePage,
+    /// The Pause Card's first page on Save State or Load State: Left and Right change the slot.
+    PauseSlots,
+    /// The Pause Card's reel (EmuSen_Interface.md §20.1): A goes back, Left and Right step the moment, Start is not offered.
+    PauseReel,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -75,12 +79,30 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Screensaver, "Screenshot", Some("screenshot")),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
+        Screen::PauseSlots => &[
+            (UiButton::Accept, "Select", None),
+            (UiButton::Back, "Resume", None),
+            (UiButton::Left, "Change slot", None),
+            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+            (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
+        ],
+        Screen::PauseReel => &[
+            (UiButton::Accept, "Go back", None),
+            (UiButton::Back, "Back", None),
+            (UiButton::Left, "Moment", None),
+            (UiButton::Screensaver, "Screenshot", Some("screenshot")),
+        ],
     }
 }
 
-/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them.
+/// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them, and
+/// the d-pad's Left and Right one entry.
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
-    (button == UiButton::PageUp).then_some(UiButton::PageDown)
+    match button {
+        UiButton::PageUp => Some(UiButton::PageDown),
+        UiButton::Left => Some(UiButton::Right),
+        _ => None,
+    }
 }
 
 /// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.19).

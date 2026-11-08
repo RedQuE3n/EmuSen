@@ -22,6 +22,8 @@ pub mod consts {
         EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG as MODEL_GRAPHICS_CONFIG, EMUSEN_GALAXIA_FILE_GAMES as FILE_GAMES,
         EMUSEN_GALAXIA_FILE_MEDIA as FILE_MEDIA, EMUSEN_GALAXIA_FILE_RECORDS as FILE_RECORDS, EMUSEN_GALAXIA_FILE_SETTINGS as FILE_SETTINGS,
         EMUSEN_GALAXIA_FILE_STATES as FILE_STATES, EMUSEN_GALAXIA_FILE_THEMES as FILE_THEMES,
+        EMUSEN_GALAXIA_SAVE_PICTURE as SAVE_PICTURE, EMUSEN_GALAXIA_SAVE_RESUME_STATE as SAVE_RESUME_STATE,
+        EMUSEN_GALAXIA_SAVE_SRAM as SAVE_SRAM, EMUSEN_GALAXIA_SAVE_STATE as SAVE_STATE,
     };
 }
 
@@ -36,6 +38,16 @@ impl Platform {
     pub fn file(&self, which: u32) -> Result<PathBuf> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_file(which, o, l) })?.unwrap_or_default();
         string("file", bytes).map(PathBuf::from)
+    }
+
+    /// A save file's path by its EMUSEN_GALAXIA_SAVE_* kind: `rom` the game's path (a state's, for `SAVE_PICTURE`),
+    /// `extra` what the kind names (a console, a directory override), `slot` a state's slot.
+    pub fn save_path(&self, kind: u32, rom: &str, extra: Option<&str>, slot: i32) -> Result<PathBuf> {
+        let (e, el) = text(extra);
+        let bytes = self
+            .read(|o, l| unsafe { self.lib.emusen_galaxia_save_path(kind, rom.as_ptr(), rom.len(), e, el, slot, o, l) })?
+            .unwrap_or_default();
+        string("save_path", bytes).map(PathBuf::from)
     }
 
     /// A config file's path: a category is a subdirectory of the config directory, none the directory itself.

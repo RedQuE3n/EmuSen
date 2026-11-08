@@ -63,6 +63,10 @@ FocusScope {
         onResumed: root.resumed()
         onLibrary: root.backToLibrary()
         onCurrentChanged: rows.currentIndex = pause.current
+        onSlotChosen: slot => root.session.chooseSlot(slot)
+        onSaveAsked: slot => root.session.saveState(slot)
+        onLoadAsked: slot => root.session.loadState(slot)
+        onRewindAsked: frame => root.session.rewindTo(frame)
     }
     GameModel {
         id: games
@@ -73,12 +77,10 @@ FocusScope {
         anchors.fill: parent
         color: Kit.Tokens.scrim
     }
-    Item {
-        objectName: "pane"
+    CardPane {
         x: 576
         y: 156
-        width: 640
-        height: 530
+        pane: pause.pane
         opacity: 1 - root.slide
     }
     Rectangle {
@@ -106,7 +108,7 @@ FocusScope {
         focus: true
         controller.navigationShown: false
         help: HelpModel {
-            screen: pause.page === PauseModel.First ? HelpModel.Pause : HelpModel.PausePage
+            screen: pause.helpScreen
         }
         Connections {
             target: frame.controller
@@ -199,6 +201,7 @@ FocusScope {
                     keyNavigationWraps: false
                     highlightMoveDuration: Kit.Tokens.instant
                     highlightResizeDuration: Kit.Tokens.instant
+                    onCurrentIndexChanged: pause.focusRow(rows.currentIndex)
                     Accessible.role: Accessible.List
                     delegate: Kit.MenuRow {
                         id: row
@@ -217,6 +220,8 @@ FocusScope {
                         current: ListView.isCurrentItem
                         focus: ListView.isCurrentItem
                         onActivated: pause.choose(row.index)
+                        Keys.onLeftPressed: event => pause.step(row.index, -1, event.isAutoRepeat)
+                        Keys.onRightPressed: event => pause.step(row.index, 1, event.isAutoRepeat)
                         onActiveFocusChanged: rows.currentIndex = row.activeFocus ? row.index : rows.currentIndex
                     }
                 }

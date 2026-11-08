@@ -450,6 +450,37 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-theme-audit"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-client-fixture",
+ "emusen-crystal-client",
+ "emusen-kit-core",
+ "emusen-kit-qt",
+ "emusen-platform-client",
+ "emusen-qt-models",
+ "emusen-qt-test",
+ "emusen-theme-check",
+ "emusen-theme-host",
+ "emusen-theme-manifest",
+ "emusen-theme-qt",
+ "serde_json",
+]
+
+[[package]]
+name = "emusen-theme-check"
+version = "0.1.0"
+dependencies = [
+ "emusen-kit-core",
+ "emusen-qml-rules",
+ "emusen-theme-manifest",
+]
+
+[[package]]
 name = "emusen-theme-host"
 version = "0.1.0"
 dependencies = [

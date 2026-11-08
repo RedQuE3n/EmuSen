@@ -74,6 +74,11 @@ Platform/target/
 Frontend/kit-core/target/
 Frontend/target/
 Frontend/qml-rules/target/
+# The front end's client crates, their shared idioms and their test fixture, each built with cargo alone (EmuSen_Qt.md §1.1.1).
+Frontend/crystal-client/target/
+Frontend/platform-client/target/
+Frontend/client-fixture/target/
+Frontend/c-calls/target/
 # cxx-qt-build writes a qmlls settings file beside each QML crate on every build, naming this checkout's build folder.
 Frontend/**/.qmlls.ini
 

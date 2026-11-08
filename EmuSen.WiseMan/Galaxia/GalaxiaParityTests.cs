@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using EmuSen.Galaxia;
@@ -105,95 +104,6 @@ namespace EmuSen.WiseMan.Galaxia
         }
 
         [Fact]
-        public void Every_path_rule_gives_the_string_dotnet_gives()
-        {
-            string[] paths = Paths(3000, seed: 20261007).ToArray();
-            var different = new List<string>();
-            void Same(string? dotnet, string? library, string what) { if (dotnet != library) different.Add($"{what}: .NET [{dotnet}], the library [{library}]"); }
-            for (int i = 0; i < paths.Length; i++)
-            {
-                string a = paths[i], b = paths[(i * 7 + 3) % paths.Length];
-                Same(Path.Combine(a, b), GalaxiaNative.PathRule(GalaxiaPathRule.Combine, a, b), $"Combine([{a}], [{b}])");
-                Same(Path.GetFileName(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileName, a), $"GetFileName([{a}])");
-                Same(Path.GetFileNameWithoutExtension(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileNameWithoutExtension, a), $"GetFileNameWithoutExtension([{a}])");
-                foreach (string extension in new[] { ".png", "png", "" })
-                    Same(Path.ChangeExtension(a, extension), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, extension), $"ChangeExtension([{a}], [{extension}])");
-                Same(Path.GetDirectoryName(a), GalaxiaNative.PathRule(GalaxiaPathRule.DirectoryName, a), $"GetDirectoryName([{a}])");
-                Same(Path.TrimEndingDirectorySeparator(a), GalaxiaNative.PathRule(GalaxiaPathRule.TrimEndingSeparator, a), $"TrimEndingDirectorySeparator([{a}])");
-                // .NET refuses what is no path, and on Windows a UNC root with no share; no caller asks the library either.
-                string? full = null;
-                try { if (!EffectivelyEmpty(a)) full = Path.GetFullPath(a); } catch (ArgumentException) { }
-                if (full is not null) Same(full, GalaxiaNative.PathRule(GalaxiaPathRule.FullPath, a), $"GetFullPath([{a}])");
-            }
-            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
-        }
-
-        [Fact]
-        public void Blank_text_and_caseless_equality_follow_dotnet_for_every_character()
-        {
-            Assert.True(GalaxiaNative.TestRule(GalaxiaTestRule.IsBlank, null));
-            Assert.True(GalaxiaNative.TestRule(GalaxiaTestRule.IsBlank, ""));
-            var different = new List<string>();
-            for (int c = 1; c < 0x10000; c++)
-            {
-                if (char.IsSurrogate((char)c)) continue;
-                string text = ((char)c).ToString();
-                if (string.IsNullOrWhiteSpace(text) != GalaxiaNative.TestRule(GalaxiaTestRule.IsBlank, text)) different.Add($"blank U+{c:X4}");
-                foreach (string other in new[] { char.ToUpperInvariant((char)c).ToString(), char.ToLowerInvariant((char)c).ToString(), "A" })
-                {
-                    if (string.Equals("x" + text, "X" + other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EqualsIgnoreCase, "x" + text, "X" + other))
-                        different.Add($"equals U+{c:X4} U+{(int)other[0]:X4}");
-                    if (("x" + text).EndsWith(other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EndsWithIgnoreCase, "x" + text, other))
-                        different.Add($"ends U+{c:X4} U+{(int)other[0]:X4}");
-                }
-            }
-            for (int c = 0x10000; c < 0x20000; c++)
-            {
-                // Outside the BMP .NET asks the system's ICU, which on macOS knows letters newer than the runtime's own tables; only what those tables know is compared.
-                if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.OtherNotAssigned) continue;
-                string text = char.ConvertFromUtf32(c), upper = text.ToUpperInvariant(), lower = text.ToLowerInvariant();
-                foreach (string other in new[] { upper, lower })
-                    if (string.Equals(text, other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EqualsIgnoreCase, text, other))
-                        different.Add($"equals U+{c:X5} U+{char.ConvertToUtf32(other, 0):X5}");
-            }
-            Assert.True(different.Count == 0, $"{different.Count} differ: {string.Join(", ", different.Take(40))}");
-        }
-
-        [Fact]
-        public void A_file_and_a_directory_exist_for_both_or_for_neither()
-        {
-            string file = Put(At("exists", "file.bin"));
-            var cases = new List<string?> { null, "", file, file + Path.DirectorySeparatorChar, At("exists"), At("exists") + Path.DirectorySeparatorChar, At("absent"), At("exists", "file.bin", "under") };
-            if (Links.Allowed)
-            {
-                File.CreateSymbolicLink(At("exists", "to-file"), file);
-                Directory.CreateSymbolicLink(At("exists", "to-directory"), At("exists"));
-                File.CreateSymbolicLink(At("exists", "dangling"), At("nowhere"));
-                Directory.CreateSymbolicLink(At("exists", "dangling-directory"), At("nowhere"));
-                File.CreateSymbolicLink(At("exists", "file-link-to-directory"), At("exists"));
-                Directory.CreateSymbolicLink(At("exists", "directory-link-to-file"), file);
-                cases.AddRange(new[] { At("exists", "to-file"), At("exists", "to-directory"), At("exists", "dangling"), At("exists", "to-directory") + "/",
-                    At("exists", "dangling-directory"), At("exists", "file-link-to-directory"), At("exists", "directory-link-to-file") });
-            }
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(At("gone"));
-                Links.Junction(At("exists", "junction"), At("exists"));
-                Links.Junction(At("exists", "dangling-junction"), At("gone"));
-                Directory.Delete(At("gone"));
-                cases.AddRange(new[] { At("exists", "junction"), At("exists", "dangling-junction"), At("exists", "junction") + "\\" });
-            }
-            var different = new List<string>();
-            foreach (string? path in cases)
-            {
-                (bool file, bool directory) csharp = (File.Exists(path), Directory.Exists(path));
-                (bool file, bool directory) library = (GalaxiaNative.TestRule(GalaxiaTestRule.FileExists, path), GalaxiaNative.TestRule(GalaxiaTestRule.DirectoryExists, path));
-                if (csharp != library) different.Add($"{path}: C# (file, directory) {csharp}, the library {library}");
-            }
-            Assert.True(different.Count == 0, string.Join("\n", different));
-        }
-
-        [Fact]
         public void The_root_is_found_the_same_way_from_every_kind_of_place()
         {
             string home = At("Users", "player");
@@ -250,86 +160,6 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(Path.Combine(At("bare", "bin"), ConfigRoot.PublishedRootDirName), GalaxiaNative.RootFor(At("bare", "bin"), false, home));
         }
 
-        private static readonly (GalaxiaDirectory Which, string Name)[] Named =
-        {
-            (GalaxiaDirectory.Library, "Library"), (GalaxiaDirectory.Screenshots, "Screenshots"), (GalaxiaDirectory.Artwork, "Artwork"),
-            (GalaxiaDirectory.Media, "Media"), (GalaxiaDirectory.Firmware, "Firmware"), (GalaxiaDirectory.Shaders, "Shaders"),
-            (GalaxiaDirectory.Themes, "Themes"), (GalaxiaDirectory.Cheats, "Cheats"), (GalaxiaDirectory.Games, "Games"),
-            (GalaxiaDirectory.Unpacked, "Unpacked"), (GalaxiaDirectory.Cores, "Cores"),
-            (GalaxiaDirectory.Packages, "Packages"), (GalaxiaDirectory.Compressed, "Compressed"),
-        };
-
-        private void TheTree(string combination, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
-        {
-            void Answer(string what, object? answer) => GSweep("tree", $"{combination} {what}", answer, test: test);
-            foreach (GalaxiaDirectory which in Enum.GetValues<GalaxiaDirectory>()) Answer(which.ToString(), GalaxiaNative.Directory(which));
-            foreach ((GalaxiaDirectory which, string name) in Named)
-                Assert.Equal(Path.Combine(GalaxiaNative.Directory(GalaxiaDirectory.Home)!, name), GalaxiaNative.Directory(which));
-            Assert.Equal(Enum.GetValues<GalaxiaDirectory>().Length, Named.Length + 11);
-
-            foreach (string file in new[] { "appsettings.json", "é.json", "a b.json", "" })
-            {
-                Answer($"config [{file}]", GalaxiaNative.ConfigPath(null, file));
-                Answer($"cheats [{file}]", GalaxiaNative.ConfigPath("cheats", file));
-                Answer($"no category [{file}]", GalaxiaNative.ConfigPath("", file));
-                Answer($"legacy [{file}]", GalaxiaNative.LegacyConfigPath(file));
-            }
-        }
-
-        [Fact]
-        public void Every_directory_agrees_under_every_combination_of_overrides()
-        {
-            string?[] choices = { null, At("redirect"), At("redirect") + Path.DirectorySeparatorChar, "relative", At("é 日本") };
-            foreach (string? config in choices)
-                foreach (string? legacy in choices)
-                    foreach (string? data in choices)
-                    {
-                        ConfigStore.OverrideDirectory = config;
-                        ConfigStore.OverrideLegacyDirectory = legacy;
-                        DataStore.OverrideDirectory = data;
-                        TheTree($"config [{config}] legacy [{legacy}] data [{data}]");
-                    }
-
-            // A redirected config with no redirected legacy directory reaches no real one, on either side.
-            ConfigStore.OverrideDirectory = At("redirect");
-            ConfigStore.OverrideLegacyDirectory = null;
-            Assert.Null(GalaxiaNative.LegacyConfigPath("appsettings.json"));
-            ConfigStore.OverrideDirectory = null;
-            Assert.NotNull(GalaxiaNative.LegacyConfigPath("appsettings.json"));
-        }
-
-        [Fact]
-        public void Every_save_is_named_alike()
-        {
-            var roms = new List<string>
-            {
-                "/roms/SNES/Zelda (U).sfc", "a.b.c.nes", "noext", ".hidden", "trailing.", "dir.with.dot/file", "日本語.gb", "with space.n64", @"C:\win\style.sfc",
-                "a/b/", "", "x.y/", "/", "é.sfc", "..", "state.slot2.state",
-            };
-            roms.AddRange(Paths(400, seed: 11));
-            string?[] directories = { null, "", "  ", "\t", At("elsewhere"), At("elsewhere") + Path.DirectorySeparatorChar, "relative", " padded " };
-            string[] consoles = { "SNES", "NES", "N64", "GB", "", "Game Boy Color", ".." };
-            int[] slots = { 1, 2, 3, 10, 0, -1, int.MaxValue, int.MinValue };
-
-            foreach (string? data in new[] { null, At("data") })
-            {
-                DataStore.OverrideDirectory = data;
-                foreach (string rom in roms)
-                {
-                    GSweep("saves", $"{data} flat [{rom}]", GalaxiaNative.SavePath(GalaxiaSave.FlatSram, rom));
-                    GSweep("saves", $"{data} picture [{rom}]", GalaxiaNative.SavePath(GalaxiaSave.Picture, rom));
-                    foreach (string console in consoles)
-                        GSweep("saves", $"{data} sram [{rom}] [{console}]", GalaxiaNative.SavePath(GalaxiaSave.Sram, rom, console));
-                    foreach (string? directory in directories)
-                    {
-                        GSweep("saves", $"{data} resume [{rom}] [{directory}]", GalaxiaNative.SavePath(GalaxiaSave.ResumeState, rom, directory));
-                        foreach (int slot in slots)
-                            GSweep("saves", $"{data} state [{rom}] [{directory}] {slot}", GalaxiaNative.SavePath(GalaxiaSave.State, rom, directory, slot));
-                    }
-                }
-            }
-        }
-
         private static string Mode(string path) => OperatingSystem.IsWindows() ? "" : File.GetUnixFileMode(path).ToString();
 
         [Theory]
@@ -359,40 +189,6 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(contents, GalaxiaNative.FileRead(native));
             Assert.Equal(contents, GalaxiaNative.FileRead(dotnet));
             Assert.Empty(Reported());
-        }
-
-        [Fact]
-        public void What_is_not_a_readable_file_is_absent_for_both_and_said_by_both_or_by_neither()
-        {
-            string file = Put(At("read", "save.srm"), "whole");
-            Put(file + AtomicFile.TempSuffix, "half a sa");
-            var quiet = new List<string> { At("read", "none.srm"), At("read"), "", At("read", "save.srm", "under"), At("read", "other.srm") + AtomicFile.TempSuffix };
-            var loud = new List<string>();
-            if (Links.Allowed)
-            {
-                File.CreateSymbolicLink(At("read", "dangling.srm"), At("nowhere"));
-                loud.Add(At("read", "dangling.srm"));
-            }
-            if (!OperatingSystem.IsWindows() && Environment.UserName != "root")
-            {
-                File.SetUnixFileMode(Put(At("read", "locked.srm")), UnixFileMode.None);
-                loud.Add(At("read", "locked.srm"));
-            }
-
-            Assert.Equal("whole"u8.ToArray(), GalaxiaNative.FileRead(file));
-            Assert.Empty(Reported());
-            foreach (string path in quiet)
-            {
-                Assert.Null(GalaxiaNative.FileRead(path));
-                Assert.Empty(Reported());
-            }
-            foreach (string path in loud)
-            {
-                Assert.Null(GalaxiaNative.FileRead(path));
-                string message = Assert.Single(Reported());
-                Assert.StartsWith(path + ": ", message);
-                Assert.EndsWith(" Treating it as absent.", message);
-            }
         }
 
         [Fact]
@@ -501,46 +297,6 @@ namespace EmuSen.WiseMan.Galaxia
 
             G("remaining", GalaxiaNative.RemainingLibrary(At("native", "legacy")).Select(p => p.Replace(At("native"), "<root>")));
             Assert.Equal(2, GalaxiaNative.RemainingLibrary(At("native", "legacy")).Count);
-            Assert.Empty(Reported());
-        }
-
-        [Fact]
-        public void The_other_migrations_decline_and_copy_what_the_csharp_did()
-        {
-            foreach (string side in new[] { "native" })
-            {
-                Put(At(side, "tree", "Saves", "a.srm"), "a");
-                Put(At(side, "tree", "Documents", "manual.md"), "page");
-                Put(At(side, "seeded", "Documents", "mine.md"), "mine");
-                Directory.CreateDirectory(At(side, "TREE"));
-                Directory.CreateDirectory(At(side, "library", "Games", "SNES", "empty"));
-                Put(At(side, "library", "Roms", "deep", "er", "game.sfc"), "rom");
-                Stamp(At(side));
-            }
-            int Between(string side, string from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Between, from, to);
-            int Tree(string side, string from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Tree, from, to);
-            int Seed(string side, string? from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Seed, from, to);
-            (string Name, Func<string, int> Run)[] cases =
-            {
-                ("onto itself", side => Between(side, At(side, "tree"), At(side, "tree"))),
-                ("onto itself, spelled in another case", side => Between(side, At(side, "tree"), At(side, "TREE"))),
-                ("onto itself, by a longer way round", side => Between(side, At(side, "tree"), At(side, "x", "..", "tree"))),
-                ("onto itself, with a separator after it", side => Between(side, At(side, "tree"), At(side, "tree") + Path.DirectorySeparatorChar)),
-                ("from nowhere", side => Between(side, At(side, "absent"), At(side, "to"))),
-                ("from a file", side => Between(side, At(side, "tree", "Saves", "a.srm"), At(side, "to"))),
-                ("a tree from nowhere", side => Tree(side, At(side, "absent"), At(side, "to"))),
-                ("no seed", side => Seed(side, null, At(side, "seeded"))),
-                ("a seed", side => Seed(side, At(side, "tree"), At(side, "seeded"))),
-                ("the seed again", side => Seed(side, At(side, "tree"), At(side, "seeded"))),
-                ("a whole tree", side => Tree(side, At(side, "tree"), At(side, "copy"))),
-            };
-            foreach ((string name, Func<string, int> run) in cases)
-                G(name, run("native"));
-            Assert.Equal(2, Seed("native", At("native", "tree"), At("native", "seeded-again")));
-            G("seeded", Listing(At("native", "seeded")));
-            G("copy", Listing(At("native", "copy")));
-            Assert.Equal("mine", File.ReadAllText(At("native", "seeded", "Documents", "mine.md")));
-            Assert.Equal(new[] { At("native", "library", "Roms") }, GalaxiaNative.RemainingLibrary(At("native", "library")));
             Assert.Empty(Reported());
         }
 

@@ -3,9 +3,10 @@
 //! brought to this build's schema by the C#'s three migrations to the byte. See EmuSen_BigPicture.md §5.6, §17.5, §30,
 //! §38 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::Error;
 use crate::kinds;
-use emusen_dotnet::date::{instant, utc_millis};
+use emusen_galaxia::clock::{instant, utc_millis};
 use emusen_sqlite::{Bound, Connection, Row, Sqlite};
 use std::sync::Arc;
 
@@ -131,7 +132,7 @@ ALTER TABLE scrape_file ADD COLUMN fingerprint TEXT NOT NULL DEFAULT '';"#,
 
 pub const SCHEMA_VERSION: i64 = MIGRATIONS.len() as i64;
 
-pub const FILE_NAME: &str = "media.db";
+pub const FILE_NAME: &str = emusen_galaxia::stores::MEDIA_DB;
 pub const FOLDERS_STEP: &str = "folders";
 pub const CLEANUP_FOLDER: &str = "CLEANUP";
 
@@ -470,8 +471,8 @@ fn scalar_text(db: &Connection, sql: &str, parameters: &[(&str, Bound)]) -> Resu
 impl Store {
     /// Opens `<root>/media.db`, the folder made first, migrating it; a newer file is refused unwritten.
     pub fn open(sqlite: Arc<Sqlite>, root: &str) -> Result<Store, Error> {
-        std::fs::create_dir_all(root).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, root)))?;
-        let path = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, FILE_NAME);
+        std::fs::create_dir_all(root).map_err(|e| Error::Io(format!("{}: {}", root, e)))?;
+        let path = Path::new(root).join(FILE_NAME).to_string_lossy().into_owned();
         Store::open_at(sqlite, root, &path)
     }
 

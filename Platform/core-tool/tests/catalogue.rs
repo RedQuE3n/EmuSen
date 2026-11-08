@@ -8,7 +8,7 @@ use emusen_core_entry::{library_suffix, sha256_file, Entry, Notice};
 use emusen_core_tool::catalogue::{self, State};
 use emusen_core_tool::info::CoreInfo;
 use emusen_core_tool::{index, job, Context, Source};
-use emusen_galaxia::json::{Text, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -84,8 +84,8 @@ fn fetch_caches_the_catalogue_and_the_listing_joins_it_with_what_is_installed() 
     assert_eq!(text(last, "event"), "done");
     assert!(last.get("error").is_none(), "{last:?}");
     let f = fetched.iter().find(|e| text(e, "event") == "fetched").unwrap();
-    assert_eq!(f.get("cores"), Some(&Value::number(5)));
-    assert_eq!(f.get("skipped"), Some(&Value::number(3)));
+    assert_eq!(f.get("cores"), Some(&Value::from(5)));
+    assert_eq!(f.get("skipped"), Some(&Value::from(3)));
     assert!(catalogue::folder(&cores).join("info.zip").exists());
     assert!(catalogue::folder(&cores).join("index-linux-x86_64").exists());
 
@@ -96,7 +96,7 @@ fn fetch_caches_the_catalogue_and_the_listing_joins_it_with_what_is_installed() 
     assert_eq!(state, HashMap::from([("pcsx2", "available"), ("mednafen_psx", "installed"), ("glonly", "unsupported"), ("stranger", "unsupported"), ("mine", "added")]));
     let lrps2 = rows.iter().find(|e| text(e, "stem") == "pcsx2").unwrap();
     assert_eq!((text(lrps2, "corename"), text(lrps2, "license"), text(lrps2, "version")), ("LRPS2", "GPLv3", "2.3.1"));
-    assert_eq!(lrps2.get("systems"), Some(&Value::Array(vec![Value::string("ps2")])));
+    assert_eq!(lrps2.get("systems"), Some(&Value::Array(vec![Value::String(String::from("ps2"))])));
     let stranger = rows.iter().find(|e| text(e, "stem") == "stranger").unwrap();
     assert_eq!(text(stranger, "reason"), "no EmuSen console runs this system");
     assert!(text(rows.iter().find(|e| text(e, "stem") == "glonly").unwrap(), "reason").contains("Vulkan only"));
@@ -123,7 +123,7 @@ fn info_gives_the_detail_and_names_where_the_build_comes_from() {
     assert_eq!(d.get("needs_fullpath"), Some(&Value::Bool(true)));
     let Some(Value::Array(fw)) = d.get("firmware") else { panic!("{d:?}") };
     assert_eq!(fw.len(), 2);
-    assert_eq!(d.get("notes"), Some(&Value::Array(vec![Value::string("(!) needs a BIOS"), Value::string("disc images by path")])));
+    assert_eq!(d.get("notes"), Some(&Value::Array(vec![Value::String(String::from("(!) needs a BIOS")), Value::String(String::from("disc images by path"))])));
 
     let detailed = events(&ctx, r#"{"op":"core-ls","detail":true}"#);
     let row = detailed.iter().find(|e| text(e, "stem") == "pcsx2").unwrap();
@@ -146,7 +146,7 @@ fn a_placement_in_the_request_replaces_none_and_without_one_nothing_is_called_un
     assert_eq!(text(plain.iter().find(|e| text(e, "stem") == "stranger").unwrap(), "state"), "available");
     let placed = events(&ctx, r#"{"op":"core-ls","systems":{"Sony - PlayStation 2":"ps2","playstation":["psx"]}}"#);
     let row = |s: &str| placed.iter().find(|e| text(e, "stem") == s).unwrap().clone();
-    assert_eq!(row("pcsx2").get("systems"), Some(&Value::Array(vec![Value::string("ps2")])));
+    assert_eq!(row("pcsx2").get("systems"), Some(&Value::Array(vec![Value::String(String::from("ps2"))])));
     assert_eq!(text(&row("mednafen_psx"), "state"), "unsupported");
     assert_eq!(text(&row("stranger"), "state"), "unsupported");
     std::fs::remove_dir_all(&dir).unwrap();
@@ -207,7 +207,7 @@ fn only_the_hosted_cores_are_offered_and_an_installed_one_off_the_list_is_not_su
     let beetle = rows.iter().find(|e| text(e, "stem") == "mednafen_psx").unwrap();
     assert_eq!(text(beetle, "reason"), "mednafen_psx is not one of the libretro cores EmuSen hosts (pcsx2)");
     let lrps2 = rows.iter().find(|e| text(e, "stem") == "pcsx2").unwrap();
-    assert_eq!(lrps2.get("systems"), Some(&Value::Array(vec![Value::string("ps2")])));
+    assert_eq!(lrps2.get("systems"), Some(&Value::Array(vec![Value::String(String::from("ps2"))])));
     let refused = events(&ctx, r#"{"op":"core-get","core":"glonly"}"#);
     assert!(text(&refused[0], "reason").contains("not one of the libretro cores EmuSen hosts"), "{:?}", refused[0]);
     let refused = events(&ctx, r#"{"op":"core-update","core":"mednafen_psx"}"#);
@@ -237,7 +237,7 @@ fn a_requests_test_server_stands_in_for_the_buildbot_on_loopback_only() {
     let ctx = Context { cores: dir.join("Cores"), source: Source::buildbot(), placement: Some(placement()), installation: None, notes: Vec::new(), hosted: None };
     let request = |connect: &str| {
         let mut out = String::new();
-        emusen_galaxia::json::write_compact(&mut out, &Value::Object(vec![(Text::new("op"), Value::string("core-fetch")), (Text::new("test"), Value::Object(vec![(Text::new("connect"), Value::string(connect)), (Text::new("roots"), Value::string(pem.as_str()))]))]));
+        out.push_str(&serde_json::json!({ "op": "core-fetch", "test": { "connect": connect, "roots": pem } }).to_string());
         out
     };
     let fetched = events(&ctx, &request(&format!("127.0.0.1:{}", server.port)));

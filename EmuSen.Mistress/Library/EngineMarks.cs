@@ -28,6 +28,6 @@ namespace EmuSen.Mistress.Library
         public static PlanetMark Of(string name, bool libretro, string? maker) =>
             libretro ? Libretro
             : Astronomical.TryGetValue(name, out PlanetMark? symbol) ? symbol
-            : BigPicture.StartupSplash.BodyOf(null, maker).Shape switch { WorldShape.Shards => Shard, WorldShape.Gem => Gem, _ => Planet };
+            : BigPicture.StartupSplash.ShapeOfMaker(maker) switch { WorldShape.Shards => Shard, WorldShape.Gem => Gem, _ => Planet };
     }
 }

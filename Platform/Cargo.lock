@@ -112,6 +112,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "bumpalo"
+version = "3.20.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649"
+
+[[package]]
 name = "byteorder"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -138,6 +144,12 @@ name = "cfg-if"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
+
+[[package]]
+name = "cfg_aliases"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f079e83a288787bcd14a6aea84cee5c87a67c5a3e660c30f557a3d24761b3527"
 
 [[package]]
 name = "chd"
@@ -181,6 +193,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6ef517f0926dd24a1582492c791b6a4818a4d94e789a334894aa15b0d12f55c"
 
 [[package]]
+name = "constant_time_eq"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9eb6feb175df65d0a3ccd3e73484e940d0ac664e8034f0519fd49a93db3071d9"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -219,6 +240,15 @@ name = "crc-catalog"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "217698eaf96b4a3f0bc4f3662aaa55bdf913cd54d7204591faa790070c6d0853"
+
+[[package]]
+name = "crc32fast"
+version = "1.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f97d3416d5337d15c4b0d78c8c91df922ca143f57ec20e2d1c188333047ef04"
+dependencies = [
+ "cfg-if",
+]
 
 [[package]]
 name = "crypto-common"
@@ -268,7 +298,6 @@ dependencies = [
  "dianash-text",
  "emusen-dev-module",
  "emusen-dianash",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-testing-module",
  "libc",
@@ -283,9 +312,9 @@ name = "dianash-text"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "regex",
  "regex-syntax",
+ "time",
 ]
 
 [[package]]
@@ -297,6 +326,27 @@ dependencies = [
  "block-buffer",
  "const-oid",
  "crypto-common",
+]
+
+[[package]]
+name = "dirs"
+version = "7.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8d57d423b3c82e89b9a24ca3091fee61f456a26edbd28d26c65906f4bc1dcd8f"
+dependencies = [
+ "dirs-sys",
+]
+
+[[package]]
+name = "dirs-sys"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab"
+dependencies = [
+ "libc",
+ "option-ext",
+ "redox_users",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -319,18 +369,17 @@ name = "emusen-cheat"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
+ "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
 name = "emusen-cheats"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
- "libc",
 ]
 
 [[package]]
@@ -345,8 +394,17 @@ name = "emusen-core-host"
 version = "0.1.0"
 dependencies = [
  "emusen-core-entry",
+ "emusen-core-schema",
  "emusen-native",
  "libloading",
+ "serde_json",
+]
+
+[[package]]
+name = "emusen-core-schema"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
@@ -360,6 +418,7 @@ dependencies = [
  "emusen-tool-job",
  "rcgen",
  "rustls",
+ "serde_json",
 ]
 
 [[package]]
@@ -367,8 +426,8 @@ name = "emusen-cores-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-library-module",
+ "serde_json",
 ]
 
 [[package]]
@@ -378,7 +437,6 @@ dependencies = [
  "emusen-cheats",
  "emusen-core-host",
  "emusen-crystal-debug",
- "emusen-dotnet",
  "emusen-endymion",
  "emusen-firmware",
  "emusen-galaxia",
@@ -390,6 +448,8 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -398,10 +458,10 @@ version = "0.1.0"
 dependencies = [
  "emusen-cheats",
  "emusen-core-host",
- "emusen-dotnet",
  "emusen-native",
  "emusen-recorder",
  "emusen-systems",
+ "serde_json",
 ]
 
 [[package]]
@@ -409,8 +469,9 @@ name = "emusen-debug"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
+ "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
@@ -428,9 +489,10 @@ version = "0.1.0"
 dependencies = [
  "dianash-module",
  "dianash-text",
- "emusen-dotnet",
  "emusen-galaxia",
+ "emusen-suggest",
  "regex",
+ "serde_json",
  "sha2",
 ]
 
@@ -439,13 +501,6 @@ name = "emusen-disc"
 version = "0.1.0"
 dependencies = [
  "chd",
-]
-
-[[package]]
-name = "emusen-dotnet"
-version = "0.1.0"
-dependencies = [
- "libc",
 ]
 
 [[package]]
@@ -460,33 +515,38 @@ dependencies = [
 name = "emusen-firmware"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
 name = "emusen-galaxia"
 version = "0.1.0"
 dependencies = [
- "deflate64",
+ "dirs",
  "emusen-disc",
- "emusen-dotnet",
- "flate2",
+ "indexmap",
+ "jsonc-parser",
  "libc",
  "md-5",
  "memmap2",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
+ "time",
+ "walkdir",
+ "zip",
 ]
 
 [[package]]
 name = "emusen-library"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "emusen-systems",
+ "serde_json",
 ]
 
 [[package]]
@@ -494,7 +554,7 @@ name = "emusen-library-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -503,7 +563,6 @@ version = "0.1.0"
 dependencies = [
  "emusen-crystal",
  "emusen-disc",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
  "emusen-patch",
@@ -512,6 +571,7 @@ dependencies = [
  "emusen-systems",
  "emusen-tool-job",
  "libc",
+ "serde_json",
  "sha2",
 ]
 
@@ -527,7 +587,6 @@ dependencies = [
  "emusen-core-host",
  "emusen-crystal",
  "emusen-dianash",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-savemedia",
  "emusen-systems",
@@ -561,6 +620,7 @@ name = "emusen-patch"
 version = "0.1.0"
 dependencies = [
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
@@ -578,7 +638,6 @@ dependencies = [
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
- "emusen-dotnet",
  "emusen-endymion",
  "emusen-firmware",
  "emusen-galaxia",
@@ -596,10 +655,12 @@ dependencies = [
  "emusen-session",
  "emusen-session-service",
  "emusen-sqlite",
+ "emusen-suggest",
  "emusen-systems",
  "emusen-trace",
  "rcgen",
  "rustls",
+ "serde_json",
 ]
 
 [[package]]
@@ -618,15 +679,14 @@ version = "0.1.0"
 name = "emusen-recorder"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
- "flate2",
+ "time",
+ "zip",
 ]
 
 [[package]]
 name = "emusen-savemedia"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
 ]
@@ -635,7 +695,6 @@ dependencies = [
 name = "emusen-scrape"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
  "emusen-net",
@@ -643,6 +702,8 @@ dependencies = [
  "emusen-systems",
  "flate2",
  "libc",
+ "serde",
+ "serde_json",
  "sha1",
 ]
 
@@ -651,7 +712,7 @@ name = "emusen-scrape-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -678,7 +739,7 @@ dependencies = [
 name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -690,17 +751,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-suggest"
+version = "0.1.0"
+dependencies = [
+ "strsim",
+]
+
+[[package]]
 name = "emusen-systems"
 version = "0.1.0"
 dependencies = [
  "beryl-sms-colours",
  "emusen-6502",
- "emusen-dotnet",
  "emusen-mcd-bram",
  "emusen-mips",
  "emusen-n64-pak",
  "emusen-ps2-card",
  "emusen-psx-card",
+ "serde",
+ "serde_json",
  "silvermillennium-sm83",
 ]
 
@@ -709,10 +778,10 @@ name = "emusen-testing-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-sqlite",
  "libc",
  "regex",
+ "serde_json",
 ]
 
 [[package]]
@@ -724,9 +793,16 @@ name = "emusen-trace"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
+ "emusen-suggest",
+ "serde_json",
 ]
+
+[[package]]
+name = "equivalent"
+version = "1.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "00d174d5400e5e8fd687ad1049e2f578285fa914201b1af7e8b112a4546bd826"
 
 [[package]]
 name = "find-msvc-tools"
@@ -744,6 +820,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "foldhash"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
 name = "getrandom"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -753,6 +835,25 @@ dependencies = [
  "libc",
  "wasi",
 ]
+
+[[package]]
+name = "getrandom"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099"
+dependencies = [
+ "cfg-if",
+ "js-sys",
+ "libc",
+ "r-efi",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "hashbrown"
+version = "0.17.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "http"
@@ -777,6 +878,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "27f864f10dfb56725ce5ce5472bc52252c8f93a4ab86327122cebf62c5f59a17"
 dependencies = [
  "typenum",
+]
+
+[[package]]
+name = "indexmap"
+version = "2.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
+dependencies = [
+ "equivalent",
+ "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -835,6 +948,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "js-sys"
+version = "0.3.107"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
+name = "jsonc-parser"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ecded084f9b9a718d39668a42657c32253663d1f6afb3fbb9134f0305f73f48"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -854,6 +986,15 @@ checksum = "754ca22de805bb5744484a5b151a9e1a8e837d5dc232c2d7d8c2e3492edc8b60"
 dependencies = [
  "cfg-if",
  "windows-link",
+]
+
+[[package]]
+name = "libredox"
+version = "0.1.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61ff90caf6077a803a240f62fdbe88645a890bbca49ef8174c3cb0404362171d"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -902,6 +1043,18 @@ name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "nix"
+version = "0.31.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf20d2fde8ff38632c426f1165ed7436270b44f199fc55284c38276f9db47c3d"
+dependencies = [
+ "bitflags",
+ "cfg-if",
+ "cfg_aliases",
+ "libc",
+]
 
 [[package]]
 name = "nom"
@@ -959,6 +1112,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "num_threads"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cabcc654086861f9e1bc5115258de62ef92c79b20f4615a1b0cc57c4e82027d4"
+dependencies = [
+ "libc",
+]
+
+[[package]]
 name = "oid-registry"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -978,6 +1140,12 @@ name = "openssl-probe"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
+
+[[package]]
+name = "option-ext"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "pem"
@@ -1020,6 +1188,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "r-efi"
+version = "6.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
 name = "rcgen"
 version = "0.14.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1031,6 +1205,16 @@ dependencies = [
  "time",
  "x509-parser",
  "yasna",
+]
+
+[[package]]
+name = "redox_users"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "60dc65c0ff1a7ae1294b0c67b9f14baf70b644404010370171787bfac1038fc0"
+dependencies = [
+ "libredox",
+ "thiserror",
 ]
 
 [[package]]
@@ -1070,7 +1254,7 @@ checksum = "a4689e6c2294d81e88dc6261c768b63bc4fcdb852be6d1352498b114f61383b7"
 dependencies = [
  "cc",
  "cfg-if",
- "getrandom",
+ "getrandom 0.2.17",
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
@@ -1168,6 +1352,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustversion"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
 name = "ruzstd"
 version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1254,6 +1444,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_json"
+version = "1.0.154"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
+dependencies = [
+ "foldhash",
+ "indexmap",
+ "itoa",
+ "memchr",
+ "serde",
+ "serde_core",
+ "zmij",
+]
+
+[[package]]
 name = "sha1"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1300,6 +1505,12 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "strsim"
+version = "0.11.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
 
 [[package]]
 name = "subtle"
@@ -1373,7 +1584,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
 dependencies = [
  "deranged",
+ "libc",
  "num-conv",
+ "num_threads",
  "powerfmt",
  "serde_core",
  "time-core",
@@ -1401,6 +1614,12 @@ name = "twox-hash"
 version = "2.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86a801b3cea342a06d468c8710662aa29e5e05e4f5c0d62f00bbb7f2ad7941c2"
+
+[[package]]
+name = "typed-path"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ce898823d8cd0f028662d2f349694b1af0a5cc9be83f1d213a00d3147445e1e"
 
 [[package]]
 name = "typenum"
@@ -1466,6 +1685,50 @@ name = "wasi"
 version = "0.11.1+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
+
+[[package]]
+name = "wasm-bindgen"
+version = "0.2.130"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0181c14ddd6c7b8b0b0132a5f1ea2f32be0d893cd3ea97b6e3b28886b8a3d1c"
+dependencies = [
+ "cfg-if",
+ "rustversion",
+ "wasm-bindgen-macro",
+ "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-macro"
+version = "0.2.130"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6e931a02a39abdbf66966fc35902b5ed58344750a70885bed4ebb3d8eaf28ed9"
+dependencies = [
+ "quote",
+ "wasm-bindgen-macro-support",
+]
+
+[[package]]
+name = "wasm-bindgen-macro-support"
+version = "0.2.130"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ca4b54280e455bd831e33a6b8e734baf432fe63fbc35c42ac14ce67a043a53a"
+dependencies = [
+ "bumpalo",
+ "proc-macro2",
+ "quote",
+ "syn 3.0.9",
+ "wasm-bindgen-shared",
+]
+
+[[package]]
+name = "wasm-bindgen-shared"
+version = "0.2.130"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
+dependencies = [
+ "unicode-ident",
+]
 
 [[package]]
 name = "webpki-root-certs"
@@ -1606,9 +1869,49 @@ name = "zeroize"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
+dependencies = [
+ "zeroize_derive",
+]
+
+[[package]]
+name = "zeroize_derive"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c50655cbb0fe3fc43170059e702f1ce5e19b84cec58dc87b037a09935c2f328"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "zip"
+version = "9.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df3845f734baabdd02de353a20580e30ceccd03897def44a4eb8e9654992e294"
+dependencies = [
+ "constant_time_eq",
+ "crc32fast",
+ "deflate64",
+ "flate2",
+ "getrandom 0.4.3",
+ "indexmap",
+ "libc",
+ "memchr",
+ "nix",
+ "typed-path",
+ "windows-sys 0.61.2",
+ "zeroize",
+]
 
 [[package]]
 name = "zlib-rs"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
+
+[[package]]
+name = "zmij"
+version = "1.0.23"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"

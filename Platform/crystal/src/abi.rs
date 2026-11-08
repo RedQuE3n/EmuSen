@@ -6,7 +6,7 @@
 use std::ffi::c_void;
 
 pub const MAJOR: u32 = 1;
-pub const MINOR: u32 = 12;
+pub const MINOR: u32 = 13;
 pub const VERSION: u32 = (MAJOR << 16) | MINOR;
 
 pub mod status {

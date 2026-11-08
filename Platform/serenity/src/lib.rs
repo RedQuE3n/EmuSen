@@ -23,7 +23,7 @@ pub mod text;
 pub mod vulkan;
 pub mod word;
 
-use emusen_galaxia::dotnet_path::{Style, combine, full_path, is_effectively_empty};
+use emusen_galaxia::path_key;
 
 /// Why a preset or a source could not be read, as the C# exception it is.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,7 +48,7 @@ impl Error {
 
 /// `Path.GetFullPath`, with the paths it refuses: on Windows an empty or all-space path is "empty", elsewhere an empty one is an empty value.
 pub(crate) fn full(path: &str) -> Result<String, Error> {
-    if Style::HOST == Style::Windows && is_effectively_empty(Style::HOST, path) {
+    if cfg!(windows) && path.bytes().all(|b| b == b' ') {
         return Err(Error::Argument { message: "The path is empty.".to_string(), parameter: "path".to_string() });
     }
     if path.is_empty() {
@@ -57,12 +57,12 @@ pub(crate) fn full(path: &str) -> Result<String, Error> {
     if path.contains('\0') {
         return Err(Error::Argument { message: "Null character in path.".to_string(), parameter: "path".to_string() });
     }
-    Ok(full_path(path))
+    Ok(path_key::key_text(path))
 }
 
 /// `Path.GetFullPath(Path.Combine(directory, relative))`.
 pub(crate) fn resolve(directory: &str, relative: &str) -> Result<String, Error> {
-    full(&combine(Style::HOST, directory, relative))
+    full(&std::path::Path::new(directory).join(relative).to_string_lossy())
 }
 
 /// A file's lines, or why it could not be read.

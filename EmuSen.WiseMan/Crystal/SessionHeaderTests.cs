@@ -15,7 +15,7 @@ namespace EmuSen.WiseMan.Crystal
     public class SessionHeaderTests
     {
         private static string Repo => ConfigRoot.Directory;
-        private static string HeaderPath => Path.Combine(Repo, "EmuSen.Crystal", "include", "emusen_session.h");
+        private static string HeaderPath => Path.Combine(Repo, "Platform", "crystal", "include", "emusen_session.h");
         private static string Header => File.ReadAllText(HeaderPath);
 
         private static readonly Dictionary<string, Type> CTypes = new()
@@ -107,7 +107,7 @@ namespace EmuSen.WiseMan.Crystal
                     + string.Concat(fields.Select(f => $"    printf(\"{f} %zu\\n\", offsetof(emusen_session_v1, {f}));\n"))
                     + "    return 0;\n}\n";
                 File.WriteAllText(Path.Combine(dir, "layout.c"), source);
-                string includes = $"-I\"{Path.Combine(Repo, "EmuSen.Crystal", "include")}\" -I\"{Path.Combine(Repo, "EmuSen", "Cores", "Shared", "emusen-native", "include")}\" -I\"{Path.Combine(Repo, "Platform", "include")}\"";
+                string includes = $"-I\"{Path.Combine(Repo, "Platform", "crystal", "include")}\" -I\"{Path.Combine(Repo, "EmuSen", "Cores", "Shared", "emusen-native", "include")}\" -I\"{Path.Combine(Repo, "Platform", "include")}\"";
                 string exe = Path.Combine(dir, "layout");
                 Run(cc, $"-std=c99 -Wall -Wextra -Werror -pedantic {includes} -o \"{exe}\" \"{Path.Combine(dir, "layout.c")}\"");
                 var printed = Run(exe, "").Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(l => l.Split(' ')).ToDictionary(p => p[0], p => int.Parse(p[1]));

@@ -1,0 +1,70 @@
+<Project>
+
+  <!-- The C# projects' one step into the build host, cargo xtask: a project setting EmuSenNativePart to cores or platform has that part of libraries.tsv built and put beside every program that references it; one setting EmuSenNativeSwap takes another platform's libraries into a publish for it; every folder that received cores is checked against their sidecars. -p:EmuSenNative=false keeps cargo out - see EmuSen_RustPlatform.md §28.11. -->
+  <PropertyGroup>
+    <EmuSenNativeForHost Condition="'$(RuntimeIdentifier)' == '' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)' Or '$(RuntimeIdentifier)' == '$(NETCoreSdkPortableRuntimeIdentifier)'">true</EmuSenNativeForHost>
+    <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == '' And '$(_IsPublishing)' == 'true'">dist</EmuSenNativeProfile>
+    <EmuSenNativeProfile Condition="'$(EmuSenNativeProfile)' == ''">release</EmuSenNativeProfile>
+    <EmuSenCargoTargetRoot Condition="'$(EmuSenCargoTargetRoot)' == ''">$(MSBuildProjectDirectory)/obj</EmuSenCargoTargetRoot>
+    <!-- The cargo to run; a name that is not found exercises the path a machine without Rust takes. -->
+    <EmuSenCargo Condition="'$(EmuSenCargo)' == ''">cargo</EmuSenCargo>
+    <_EmuSenXtask>$(EmuSenCargo) run --quiet --manifest-path &quot;$(MSBuildThisFileDirectory)Cargo.toml&quot; --</_EmuSenXtask>
+  </PropertyGroup>
+
+  <Target Name="EmuSenNativeStage" BeforeTargets="BeforeBuild" Condition="'$(EmuSenNativePart)' != '' And '$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' == 'true'">
+    <Exec Command="$(EmuSenCargo) --version" IgnoreExitCode="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="_EmuSenCargoExit" />
+    </Exec>
+    <Warning Condition="'$(_EmuSenCargoExit)' != '0' And '$(EmuSenNativePart)' != 'platform'" Text="cargo was not found: the native $(EmuSenNativePart) are not built, and the programs that need them do not run." />
+    <Error Condition="'$(_EmuSenCargoExit)' != '0' And '$(EmuSenNativePart)' == 'platform'" Text="cargo was not found, so the platform library is not built, and the programs cannot start without it: install Rust, then build it with `cargo xtask stage --part platform`." />
+    <PropertyGroup>
+      <_EmuSenStage>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native/$(EmuSenNativePart)/</_EmuSenStage>
+      <_EmuSenStageFlags Condition="'$(EmuSenCoreReuse)' == 'false'">$(_EmuSenStageFlags) --no-reuse</_EmuSenStageFlags>
+      <_EmuSenStageFlags Condition="'$(EmuSenPgo)' == 'false'">$(_EmuSenStageFlags) --no-pgo</_EmuSenStageFlags>
+      <_EmuSenStageFlags Condition="'$(EmuSenCoreCache)' != ''">$(_EmuSenStageFlags) --cache &quot;$(EmuSenCoreCache)&quot;</_EmuSenStageFlags>
+      <_EmuSenStageFlags Condition="'$(EmuSenChdman)' != ''">$(_EmuSenStageFlags) --chdman &quot;$(EmuSenChdman)&quot;</_EmuSenStageFlags>
+    </PropertyGroup>
+    <!-- A failed step fails the build, so an old library is never left in place of the one the sources describe. -->
+    <Exec Condition="'$(_EmuSenCargoExit)' == '0'" Command="$(_EmuSenXtask) stage --part $(EmuSenNativePart) --profile $(EmuSenNativeProfile) --target-root &quot;$(EmuSenCargoTargetRoot)&quot; --out &quot;$(_EmuSenStage)&quot;$(_EmuSenStageFlags)" />
+    <ItemGroup Condition="'$(_EmuSenCargoExit)' == '0'">
+      <_EmuSenStagedOut Include="$(_EmuSenStage)out/**" />
+      <_EmuSenStagedPublish Include="$(_EmuSenStage)publish/**" />
+      <None Include="@(_EmuSenStagedOut)" Link="%(_EmuSenStagedOut.RecursiveDir)%(_EmuSenStagedOut.Filename)%(_EmuSenStagedOut.Extension)" CopyToOutputDirectory="IfDifferent" CopyToPublishDirectory="Never" />
+      <None Include="@(_EmuSenStagedPublish)" Link="%(_EmuSenStagedPublish.RecursiveDir)%(_EmuSenStagedPublish.Filename)%(_EmuSenStagedPublish.Extension)" CopyToOutputDirectory="Never" CopyToPublishDirectory="Always" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="EmuSenNativeSwap" AfterTargets="ComputeResolvedFilesToPublishList" Condition="'$(EmuSenNativeSwap)' == 'true' And '$(EmuSenNative)' != 'false' And '$(EmuSenNativeForHost)' != 'true'">
+    <PropertyGroup>
+      <_EmuSenSwapStage>$(MSBuildProjectDirectory)/$(IntermediateOutputPath)native/$(RuntimeIdentifier)/</_EmuSenSwapStage>
+    </PropertyGroup>
+    <Exec Command="$(_EmuSenXtask) prebuilt --rid $(RuntimeIdentifier) --from &quot;$(EmuSenNativePrebuilt)&quot; --out &quot;$(_EmuSenSwapStage)&quot;" />
+    <ReadLinesFromFile File="$(_EmuSenSwapStage)drop.txt">
+      <Output TaskParameter="Lines" ItemName="_EmuSenDrop" />
+    </ReadLinesFromFile>
+    <PropertyGroup>
+      <_EmuSenDropNames>;@(_EmuSenDrop);</_EmuSenDropNames>
+    </PropertyGroup>
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$(_EmuSenDropNames.Contains(';%(Filename)%(Extension);'))" />
+      <_EmuSenSwapped Include="$(_EmuSenSwapStage)files/*" />
+      <ResolvedFileToPublish Include="@(_EmuSenSwapped)" Condition="'%(Extension)' != '.json' And '%(Extension)' != '.manifest'" RelativePath="%(Filename)%(Extension)" CopyToPublishDirectory="Always" AssetType="native" />
+      <ResolvedFileToPublish Include="@(_EmuSenSwapped)" Condition="'%(Extension)' == '.json' Or '%(Extension)' == '.manifest'" RelativePath="%(Filename)%(Extension)" CopyToPublishDirectory="Always" />
+    </ItemGroup>
+  </Target>
+
+  <!-- A folder that received Rust cores never keeps one its sidecar does not describe: the build fails instead - see EmuSen_RustPlatform.md §28.10. -->
+  <Target Name="EmuSenCheckOutputCores" AfterTargets="CopyFilesToOutputDirectory">
+    <ItemGroup>
+      <_EmuSenOutputSidecar Include="$(OutDir)*.core.json" />
+    </ItemGroup>
+    <Exec Condition="'@(_EmuSenOutputSidecar)' != ''" Command="$(_EmuSenXtask) check-sidecars &quot;$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(OutDir)'))&quot;" />
+  </Target>
+  <Target Name="EmuSenCheckPublishedCores" AfterTargets="CopyFilesToPublishDirectory">
+    <ItemGroup>
+      <_EmuSenPublishedSidecar Include="$(PublishDir)*.core.json" />
+    </ItemGroup>
+    <Exec Condition="'@(_EmuSenPublishedSidecar)' != ''" Command="$(_EmuSenXtask) check-sidecars &quot;$([MSBuild]::NormalizeDirectory('$(MSBuildProjectDirectory)', '$(PublishDir)'))&quot;" />
+  </Target>
+
+</Project>

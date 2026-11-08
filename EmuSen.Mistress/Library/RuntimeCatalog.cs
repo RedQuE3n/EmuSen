@@ -37,7 +37,13 @@ namespace EmuSen.Mistress.Library
 
         // The systems table's firmware_name, the words for the console's firmware, as "PlayStation BIOS"; null where it gives none.
         public string? FirmwareName { get; init; }
+
+        // How the console is drawn, the systems data's look or the one the runtime computes from its id (EmuSen_Interface.md §22).
+        public SystemLook? Look { get; init; }
     }
+
+    // A console's look as the systems data states it: hue in degrees, body (planet, shards or gem), a planet's palette (none derives it) and features.
+    public sealed record SystemLook(double Hue, string Body, IReadOnlyList<string> Palette, double Craters, double Bands, double Cap, int Moons);
 
     // A row of a console's settings schema, its note as the stored values stand, and the row it is shown with.
     public sealed record SettingRow(string Key, string Label, string Hint, string Kind, string Default, int Min, int Max, IReadOnlyList<string> Choices,
@@ -91,6 +97,12 @@ namespace EmuSen.Mistress.Library
         private static IReadOnlyList<string> Strings(JsonElement e, string name) =>
             e.TryGetProperty(name, out JsonElement a) && a.ValueKind == JsonValueKind.Array ? a.EnumerateArray().Select(s => s.GetString() ?? "").ToArray() : Array.Empty<string>();
 
+        private static SystemLook? LookOf(JsonElement s) =>
+            s.TryGetProperty("look", out JsonElement l) && l.ValueKind == JsonValueKind.Object
+                ? new SystemLook(l.GetProperty("hue").GetDouble(), Text(l, "body") ?? "planet", Strings(l, "palette"), l.GetProperty("craters").GetDouble(),
+                    l.GetProperty("bands").GetDouble(), l.GetProperty("cap").GetDouble(), l.GetProperty("moons").GetInt32())
+                : null;
+
         private static string? Text(JsonElement e, string name) =>
             e.TryGetProperty(name, out JsonElement v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
 
@@ -112,7 +124,7 @@ namespace EmuSen.Mistress.Library
                     Text(s, "manufacturer") ?? "", s.TryGetProperty("release_year", out JsonElement year) ? year.GetInt32() : 0, Text(s, "esde_system") ?? "",
                     s.TryGetProperty("screenscraper_system", out JsonElement ss) && ss.ValueKind == JsonValueKind.Number ? ss.GetInt32() : null,
                     Text(s, "attached_to"), s.GetProperty("starts_empty").GetBoolean(), Strings(s, "engines"), Strings(s, "cheat_systems"), Strings(s, "openvgdb_systems"),
-                    s.TryGetProperty("cover_aspect", out JsonElement aspect) ? aspect.GetDouble() : null, facts) { DisplayName = Text(s, "display_name"), Rumble = s.TryGetProperty("rumble", out JsonElement rumble) && rumble.ValueKind == JsonValueKind.True, FirmwareName = Text(s, "firmware_name") });
+                    s.TryGetProperty("cover_aspect", out JsonElement aspect) ? aspect.GetDouble() : null, facts) { DisplayName = Text(s, "display_name"), Rumble = s.TryGetProperty("rumble", out JsonElement rumble) && rumble.ValueKind == JsonValueKind.True, FirmwareName = Text(s, "firmware_name"), Look = LookOf(s) });
             }
 
             using JsonDocument shelvesDoc = JsonDocument.Parse(CoreSettings.Runtime.Shelves());
@@ -174,7 +186,7 @@ namespace EmuSen.Mistress.Library
         // The library's console filter: every console, then each shelf in release order.
         public static IReadOnlyList<string> FilterChoices => new[] { AllConsoles }.Concat(Shelves.Select(s => s.Name)).ToArray();
 
-        // Height over width of the console's North American box, OpenEmu's fallback for a console whose row gives none - see EmuSen_Settings_Reference.md §4.33.
+        // The systems data's default cover shape (table.json), for a game with no known system; CoverDefaultTests holds it to the data, and it dies with the C# front end.
         public const double DefaultCoverAspect = 1.365385;
 
         // Every extension a console's core takes, for the file picker and the scan.

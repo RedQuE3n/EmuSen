@@ -2,9 +2,9 @@
 //! samplers and its two stages, the preset's text over them, and the folder named by their content that holds them.
 //! See EmuSen_DevicePicture.md §3, §12, §19 and §20, and EmuSen_CRT.md §16.
 
+use std::path::Path;
 use super::number::single;
 use super::{Axis, Filter, Pass, Scale, Size, Values, glsl};
-use emusen_galaxia::dotnet_path::{Style, combine};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -389,23 +389,23 @@ pub enum Refusal {
 /// Writes the preset into a folder of `root` named by its content and returns the preset's path; the same content is written once.
 pub fn write(root: &str, filter: &Filter, console: Option<&str>, chosen: Option<&Values>, reduce_by: i32, nudge: (f32, f32)) -> Result<String, Refusal> {
     let (preset, passes, name) = compose(filter, console, chosen, reduce_by, nudge).map_err(Refusal::Pass)?;
-    let folder = combine(Style::HOST, root, &name);
-    let path = combine(Style::HOST, &folder, "filter.slangp");
-    if std::path::Path::new(&path).is_file() {
-        return Ok(path);
+    let folder = Path::new(root).join(&name);
+    let path = folder.join("filter.slangp");
+    if path.is_file() {
+        return Ok(path.to_string_lossy().into_owned());
     }
-    let failed = |e: std::io::Error| Refusal::Io(format!("{path}: {e}"));
+    let failed = |e: std::io::Error| Refusal::Io(format!("{}: {e}", path.display()));
     std::fs::create_dir_all(&folder).map_err(failed)?;
     for pass in &passes {
-        std::fs::write(combine(Style::HOST, &folder, &pass.file_name), &pass.text).map_err(failed)?;
+        std::fs::write(folder.join(&pass.file_name), &pass.text).map_err(failed)?;
     }
     if preset.contains(&format!("textures = {RAW_TEXTURE}")) {
-        std::fs::write(combine(Style::HOST, &folder, &format!("{RAW_TEXTURE}.png")), BLACK_PIXEL).map_err(failed)?;
+        std::fs::write(folder.join(format!("{RAW_TEXTURE}.png")), BLACK_PIXEL).map_err(failed)?;
     }
-    let temporary = format!("{path}.{}.tmp", std::process::id());
+    let temporary = emusen_galaxia::atomic::beside(&path, &format!(".{}.tmp", std::process::id()));
     std::fs::write(&temporary, &preset).map_err(failed)?;
     std::fs::rename(&temporary, &path).map_err(failed)?;
-    Ok(path)
+    Ok(path.to_string_lossy().into_owned())
 }
 
 #[cfg(test)]

@@ -32,8 +32,8 @@ pub fn title_of(c: &Card<'_>, save: &Entry) -> Option<String> {
     let split = (u16::from_le_bytes([sys[LINE_BREAK_AT], sys[LINE_BREAK_AT + 1]]) as usize).min(field.len());
     let line = |b: &[u8]| crate::psx::shift_jis::nfkc(&crate::psx::shift_jis::decode(b));
     let (first, second) = (line(&field[..split]), line(&field[split..]));
-    let text = format!("{} {}", emusen_dotnet::text::trim(&first), emusen_dotnet::text::trim(&second));
-    let text = emusen_dotnet::text::trim(&text);
+    let text = format!("{} {}", first.trim(), second.trim());
+    let text = text.trim();
     (!text.is_empty()).then(|| text.to_string())
 }
 

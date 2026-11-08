@@ -3,9 +3,8 @@
 
 use crate::text::{self, is_space, parse_float, parse_int, skip_spaces};
 use crate::{Error, full, read_lines, resolve};
-use emusen_galaxia::dotnet_path::{Style, directory_name, equals_ignore_case};
-use emusen_galaxia::dotnet_text::lower_invariant;
-use emusen_galaxia::tree::file_exists;
+use std::path::Path;
+use emusen_galaxia::files::file_exists;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScaleType {
@@ -132,7 +131,7 @@ fn value(text: &str) -> String {
 }
 
 fn boolean(value: Option<&str>) -> bool {
-    value.is_some_and(|value| equals_ignore_case(value, "true") || value == "1")
+    value.is_some_and(|value| value.eq_ignore_ascii_case("true") || value == "1")
 }
 
 fn float(value: Option<&str>, fallback: f32) -> f32 {
@@ -140,7 +139,7 @@ fn float(value: Option<&str>, fallback: f32) -> f32 {
 }
 
 fn lower(text: &str) -> String {
-    text.chars().map(lower_invariant).collect()
+    text.chars().map(|c: char| c.to_ascii_lowercase()).collect()
 }
 
 fn wrap(name: Option<&str>) -> Wrap {
@@ -165,7 +164,7 @@ fn read(path: &str, values: &mut Values, depth: usize) -> Result<(), Error> {
     if !file_exists(path) {
         return Err(Error::NotFound { message: format!("The preset {path} does not exist."), file: path.to_string() });
     }
-    let directory = directory_name(Style::HOST, path).unwrap_or_default();
+    let directory = Path::new(path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
     let mut own = Vec::new();
     for raw in read_lines(path)? {
         if let Some(target) = reference(&raw) {

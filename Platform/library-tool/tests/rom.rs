@@ -5,7 +5,7 @@
 
 use emusen_disc::ecma130::{self, RAW};
 use emusen_galaxia::claims::{Index, Package};
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_galaxia::tree::Tree;
 use emusen_library_tool::job::{self, Job};
@@ -139,7 +139,7 @@ fn library(root: &str) {
 }
 
 fn context(t: &Temp) -> Context {
-    let tree = Tree { root: t.at("root"), data_override: Some(t.at("home")), config_override: Some(t.at("home/etc/EmuSen")), ..Tree::default() };
+    let tree = Tree { root: t.at("root").into(), data_override: Some(t.at("home").into()), config_override: Some(t.at("home/etc/EmuSen").into()), ..Tree::default() };
     let chdman = std::env::var("EMUSEN_CHDMAN").unwrap_or_default();
     let mut ctx = Context::pinned(tree, Some(t.at("library")), chdman.clone());
     ctx.pin = emusen_library_tool::pin::sha256(&chdman).ok();
@@ -151,7 +151,7 @@ fn events(job: &Job) -> Vec<Value> {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(200)) {
             job.take();
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     out
@@ -172,7 +172,7 @@ fn lines(events: &[Value]) -> Vec<(String, String)> {
         if let Some(Value::Array(ls)) = e.get("lines") {
             for l in ls {
                 let size = match l.get("size") {
-                    Some(Value::Number(t)) => t.clone(),
+                    Some(Value::Number(t)) => t.to_string(),
                     _ => String::new(),
                 };
                 out.push((text(l, "name").to_string(), format!("{} {size}", text(l, "sha1"))));
@@ -210,7 +210,7 @@ fn listing(root: &str) -> Vec<(String, u64, String)> {
             if p.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), p.metadata().unwrap().len(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), p.metadata().unwrap().len(), rom_hash::md5(&p).unwrap()));
             }
         }
     }

@@ -14,6 +14,9 @@ emusen-native = { path = "../../Shared/emusen-native" }
 
 [dev-dependencies]
 emusen-singlestep = { path = "../../Shared/emusen-singlestep" }
+# The single-step suites' and the goldens' JSON, and the descriptors checked against the ABI's schemas (EmuSen_RustPlatform.md §47.22).
+serde_json = "1.0.154"
+emusen-core-schema = { path = "../../Shared/emusen-core-schema" }
 # The golden traces' format and the driver over the core ABI, for tests/goldens.rs - see EmuSen_Backend.md §40.10.
 emusen-goldens = { path = "../../Shared/emusen-goldens" }
 emusen-core-host = { path = "../../Shared/emusen-core-host" }

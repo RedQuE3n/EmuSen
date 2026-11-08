@@ -2,9 +2,10 @@
 //! `ManagedRuntime.RouteJson` decide it, routing by content through the same probe and recognisers the library's scan
 //! reads a file by (EmuSen_Backend.md §28.7, §29.2). Reads the file; runs no core.
 
+use emusen_galaxia::path_key;
+use std::path::Path;
 use emusen_core_host::Discovery;
 use emusen_core_host::entry::Waiting;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe};
 use emusen_systems::System;
 use emusen_systems::probe::{self, Candidate};
@@ -20,7 +21,7 @@ pub struct Routed {
 
 /// An extension some console's engine opens: a catalog row's, or a discovered engine's, `IsImageExtension`.
 pub fn is_image_extension(catalog: &Catalog, discovery: &Discovery, extension: &str) -> bool {
-    catalog.rows.iter().any(|r| r.supports(extension)) || discovery.for_extension(&emusen_dotnet::text::to_lower(extension)).next().is_some()
+    catalog.rows.iter().any(|r| r.supports(extension)) || discovery.for_extension(&extension.to_lowercase()).next().is_some()
 }
 
 pub fn image_extension(catalog: &Catalog, discovery: &Discovery, at: &str) -> String {
@@ -33,11 +34,11 @@ pub fn route(catalog: &Catalog, discovery: &Discovery, at: &str) -> (Option<usiz
     let mut rows: Vec<(Option<usize>, Option<&'static System>)> =
         catalog.rows.iter().enumerate().filter(|(_, r)| r.supports(&extension)).map(|(i, r)| (Some(i), catalog::pack_of(r.console()))).collect();
     for c in discovery.for_extension(&extension) {
-        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension)) && takes(c, &s.id, at)) {
+        for s in c.sidecar.info.systems.iter().filter(|s| discovery.offers(c, s) && s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension)) && takes(c, &s.id, at)) {
             let Some(entry) = emusen_systems::find(&s.id) else { continue };
             if catalog::hand_console_of(&entry.id).is_none()
                 && !rows.iter().any(|(r, e)| e.is_some_and(|e| std::ptr::eq(e, entry)) || r.is_some_and(|r| catalog.rows[r].console() == entry.console))
-                && entry.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension))
+                && entry.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension))
             {
                 rows.push((None, Some(entry)));
             }
@@ -66,11 +67,11 @@ fn decide(catalog: &Catalog, discovery: &Discovery, at: &str, candidates: &[&'st
             Err(_) => Vec::new(),
         }
     };
-    let name = path::file_name(Style::HOST, at);
+    let name = Path::new(at).file_name().unwrap_or_default().to_string_lossy();
     let asked = candidates.len() >= 2 && claims.len() != 1;
-    let folder = if asked { path::directory_name(Style::HOST, &path::full_path(at)).map(|d| path::file_name(Style::HOST, &d).to_string()) } else { None };
+    let folder = if asked { path_key::key(at).parent().map(|d| d.file_name().unwrap_or_default().to_string_lossy().into_owned()) } else { None };
     let named: Vec<Candidate> = candidates.iter().map(|s| Candidate { id: &s.id, name: &s.name, esde_system: &s.esde_system }).collect();
-    let r = probe::route(name, folder.as_deref(), &named, &claims);
+    let r = probe::route(&name, folder.as_deref(), &named, &claims);
     Routed { system: r.system.as_deref().and_then(emusen_systems::find), reason: r.reason }
 }
 
@@ -108,8 +109,8 @@ pub fn system_of_file(catalog: &Catalog, discovery: &Discovery, at: &str) -> Opt
 /// A `.gbc` file, or a `.gb` whose header asks for the Color, `CoreCatalog.IsGameBoyColor`.
 fn is_game_boy_color(at: &str) -> bool {
     let byte = image_probe::head_of(at, 0x144).ok().filter(|h| h.len() > 0x143).map(|h| h[0x143]);
-    let extension = path::extension(Style::HOST, at);
-    if emusen_systems::find("gbc").is_some_and(|s| s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, extension))) {
+    let extension = Path::new(at).extension().unwrap_or_default().to_string_lossy();
+    if !extension.is_empty() && emusen_systems::find("gbc").is_some_and(|s| s.extensions.iter().any(|e| e.trim_start_matches('.').eq_ignore_ascii_case(&extension))) {
         return true;
     }
     matches!(byte, Some(0x80 | 0xC0))
@@ -151,7 +152,8 @@ pub fn route_json(
     cartridge(&mut j, system.as_deref(), at);
     let shelf = row.map(|r| {
         let row = &catalog.rows[r];
-        if row.display_name == "Game Boy (Mercury)" && !row.discovered && is_game_boy_color(at) { catalog::GAME_BOY_COLOR_SHELF.to_string() } else { row.display_name.clone() }
+        let colour = row.systems.iter().position(|s| s.id == "gbc").filter(|_| !row.discovered && is_game_boy_color(at));
+        colour.map_or_else(|| row.display_name.clone(), |i| row.shelves[i].clone())
     });
     j.str_or_null("shelf", shelf.as_deref());
     match waiting {

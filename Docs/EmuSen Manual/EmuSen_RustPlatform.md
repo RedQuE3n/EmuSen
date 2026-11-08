@@ -502,6 +502,8 @@ absent. Existing files read identically, including files a person has edited by 
 
 ### 5.2 What System.Text.Json actually does (measured 2026-10-07)
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 Measured in a scratch program on .NET 10 on Linux, with `ConfigJson.Options`' settings (indented, comments skipped,
 trailing commas, case-insensitive names) and `Enum.TryParse` as `SuggestingEnumConverter` calls it. Each row is a
 place where a Rust writer or reader with ordinary defaults would differ:
@@ -535,12 +537,16 @@ refuses.
 
 ### 5.3 Quirks are reproduced
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 A file that loads today must load identically (§5.1), and nothing distinguishes a quirk a person has relied on from
 one nobody has met. So the enumeration rows of §5.2, the U+FFFD replacement and the case-insensitive last-match rule
 are reproduced, each with a corpus case, rather than tidied (§9, Q6). Tidying any of them later is a behaviour
 change with its own record.
 
 ### 5.4 Words are not
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 Galaxia's own messages are reproduced exactly: "'DPadUpp' is not a valid GamepadButton. Did you mean 'DPadUp'?",
 the file path first and "Falling back to defaults." last (`ConfigDiagnosticsTests`). System.Text.Json's exception
@@ -550,6 +556,8 @@ the wording (they assert that a message exists, or Galaxia's own phrases), so th
 reading a log (§9, Q5).
 
 ### 5.5 Three assumptions that do not carry over
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 - **A dictionary's order** on disk is the order C# enumerates it, and Rust preserves the order of the canonical JSON
   it is given, so they agree. They would not agree if Rust edited a model itself: .NET's `Dictionary` reuses a
@@ -850,6 +858,8 @@ variable unset or `0`, and opens it with `1`; its output is the same bytes in al
 
 ### 10.3 .NET's rules, reproduced and measured
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 The tree is built from strings, and a path one character different names a different file. So `dotnet_path` does not
 use `std::path`, whose rules are Rust's: it reproduces `Path.Combine`, `GetFileName`,
 `GetFileNameWithoutExtension`, `ChangeExtension`, `GetDirectoryName`, `TrimEndingDirectorySeparator` and
@@ -1041,6 +1051,8 @@ decodes and writes the file, and System.Text.Json binds the type, since its voca
   that belongs to that step. *Found 2026-10-10: the other facades did not ask, and threw; all now do (§21).*
 
 ### 11.3 System.Text.Json and .NET, measured for this step
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 §5.2's table was the start. These were measured before or while the reader, the binder and the writer were written,
 each in a scratch program on .NET 10, and each is a case of the parity class:
@@ -3032,7 +3044,7 @@ declares them, by the folder that reads them:
 | Diamond's tests | `Reference/analysis/psxplay` |
 | Diamond's kernel harness (in Diamond's folder) | `Diamond_OpenKernel.md` |
 | `Platform/serenity` (`include_str!`) | `EmuSen.Serenity/Slang/spirv-cache-schema.sql` |
-| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `EmuSen.Crystal/include/emusen_session.h` |
+| `Platform/dianash`'s tests | `Platform/dianash/tests/golden`, `Platform/crystal/include/emusen_session.h` |
 
 **The check.** The list will go stale as code changes, so the plan checks it on every run:
 
@@ -3183,6 +3195,55 @@ Libraries rebuilt in another checkout differ in bytes from the first build, beca
 ### 28.10 A copied core keeps the cache's timestamp, so output folders copy by difference (2026-11-03)
 
 A hit copies the library with the timestamp it had when it was stored, which can be days old, while the sidecar is rewritten on every build. The cores and sidecars were copied into each output folder `PreserveNewest`, that is only when the source is newer, so a folder already holding another build of a core with a later timestamp kept it beside a sidecar describing the new one; the runtime then refuses the library ("is not the library its sidecar describes"). Seen on 2026-11-03 in a new checkout's WiseMan output: all eight cores mismatched, no game started, and 265 window-fit states failed. Reproduced the same day by putting an older Diamond build, touched to the present, in `EmuSen/bin` and building: the build succeeded and `libdiamond.so` still differed from its sidecar. The libraries, sidecars, programs and `cores.manifest` are now copied `IfDifferent`, MSBuild's copy whenever size or timestamp differ, and published `Always`. That was chosen over restamping the cache's copies on a hit, which would recopy every core on every build because the copy into `obj/` compares timestamps too, and over a copy by hash, which needs a task of its own while a copy keeps the source's timestamp and so leaves nothing to hash on the next build. After every copy into an output or publish folder, `Directory.Build.targets` runs `EmuSen/Cores/CheckCoreSidecars.proj`, which hashes each library a sidecar names and fails the build when one is missing or differs (it also runs by hand, `dotnet msbuild EmuSen/Cores/CheckCoreSidecars.proj -p:Folder=<dir>`), so a folder whose cores would be refused never comes out of a build silently. `EmuSen/Cores/stale-core-copy-test.sh [project]` plants a core of the same size, one byte changed and an hour newer, in a built project's output and requires the check to refuse it and a build to replace it. With the copy put back to `PreserveNewest` the build fails on the check, and with the check also removed the test finds the stale core left behind.
+
+### 28.11 The build host moves to Rust: `cargo xtask` and one list of the libraries (2026-11-07)
+
+*Decided 2026-11-07 by the tester*, from the house-rules audit of that day (rows 1 and 2: the Rust builds were imports of C# projects, and the list of native cores sat in `RustCores.props`, again in `rust-cores.yml`'s plan and again in its check job), and as `EmuSen_Qt.md` §1.9 places the build host: a cargo `xtask` crate, so one toolchain builds everything once the C# front end retires. Until then the C# projects keep one thin step that calls it. Everything §28.9 and §28.10 say of `EmuSen.csproj`, `RustCores.props` and `CheckCoreSidecars.proj` is now done by the crate below; earlier sections that name those files describe the build as it stood before this date.
+
+**The list.** `xtask/libraries.tsv` is the one owner of which native libraries and programs an installation carries: one tab-separated line each, with its crate's folder, its role (core, part, program, test, platform), whether it is on the core ABI v1 (and so gets a sidecar), whether it ships or is in development, whether it builds on Linux alone, the export prefix CI counts, and the names the build's messages use. It is plain text so that every reader needs no parser of its own: the build host, CI (`library_key.py plan`, and `library_key.py ci` for the check job and the WiseMan job's library listing), `publish.sh`, and the impact graph of `emusen-testing-module`, which gives a project that names `<EmuSenNativePart>` an edge to each crate of that part. CI's library jobs take the list's cores and platform library; the libretro rows stay local, as before. The list is one of the files a library's CI key reads (§28.3), as the workflow's `CRATES` was; a local key (§28.9) also reads `xtask/src`, so a change to how a library is built here retires the cached copies.
+
+**The crate.** `xtask/` (about 740 lines, its own workspace, depending on `serde_json` and `sha2`) is run as `cargo xtask` from the repository root, an alias in `.cargo/config.toml`. Its commands:
+
+| Command | Does what was | Replaces |
+|---|---|---|
+| `stage --part cores --out DIR [--profile P] [--target-root R]` | builds every non-platform row for this machine in the list's order, each into `R/<name>/` from its crate's folder, with its PGO profile when the manifest lists this compiler's flavour (Mars_Native.md §6.17) and from the reuse cache when §28.9's key hits; then the conformance runner and each v1 library's sidecar; then lays out `DIR/out/` (every library, development ones included, and a manifest of all but test libraries) and `DIR/publish/` (only what ships, with its own manifest) | `EmuSen.csproj`'s four targets and `RustCores.props` |
+| `stage --part platform ...` | builds `emusen-platform` and `dianash` with one cargo command into `R/emusen_platform/`, and lays out the library, `dianash/nano`, `dianash/nano.dianash.json` and chdman where the toolchain holds it | `Platform.targets`, `Platform.props` |
+| `check-sidecars FOLDER` | §28.10's check, the same three refusals in the same words | `CheckCoreSidecars.proj` |
+| `prebuilt --rid RID --from DIR --out DIR` | for a publish for another platform: the libraries CI built for it from `DIR/RID/`, their sidecars, a manifest of its own, and the list of the host's native file names the publish drops | `RustCoresPublish.targets` |
+
+The staged files are hard links to cargo's output, so staging costs no copy. Each command is a plain function over the list; nothing in the crate knows MSBuild.
+
+**The thin step.** `xtask/Native.targets`, imported once by `Directory.Build.targets`, holds the C# side: a project setting `EmuSenNativePart` to `cores` (`EmuSen.csproj`) or `platform` (`EmuSen.Galaxia.csproj`) runs `stage` before its build and adds the two staged folders as items copied `IfDifferent` to the output and `Always` to a publish (§28.10's rule kept); `Mistress` and `Shell` set `EmuSenNativeSwap`, which runs `prebuilt` for a foreign `RuntimeIdentifier`; and every project runs `check-sidecars` on its output and publish folders when they hold a sidecar. The properties keep their meanings: `EmuSenNative=false`, `EmuSenNativeProfile` (`dist` when publishing), `EmuSenCargoTargetRoot`, `EmuSenCoreReuse`, `EmuSenCoreCache`, `EmuSenPgo`, `EmuSenChdman`, `EmuSenNativePrebuilt`, `EmuSenCargo`. The step passes the same target folders as before (`EmuSen/obj/<name>`, `EmuSen.Galaxia/obj/emusen_platform`), so an existing checkout's cargo output stays fresh. The xtask clears the variables `cargo run` gives it (`CARGO_PKG_*`, `CARGO_MANIFEST_*` and the like) before running cargo, so a nested build sees the caller's environment.
+
+Two behaviours changed. A machine without cargo used to take the platform library from `EmuSenNativePrebuilt/<its own rid>/`; it now gets the warning that the cores were not built, since the xtask that would stage them needs cargo, and CI's WiseMan job, which builds with `EmuSenNative=false`, places its libraries itself. And a missing platform library is now an error wherever a build or publish would lack it (*decided 2026-11-07 by the tester*): `EmuSenPlatformRequired`, false since the library's first component and stale since B10 deleted the C# halves the programs could fall back to, is gone. A build without cargo stops on the platform part, a platform build that leaves no library stops, and a publish for another platform without its prebuilt library stops, each naming the file and how to build it.
+
+**Measured on 2026-11-07**, desktop, `dotnet publish EmuSen.Mistress -c Release -r linux-x64 --self-contained true -p:DebugType=none` into a scratch folder, first at `ae5649e2e` (the MSBuild host; every core built in `dist`, no cache hit) and then on this change in the same checkout:
+
+| Measure | Result |
+|---|---|
+| Files in the published tree | 699 and 699, the same paths |
+| Native files: the eight cores, their sidecars, `cores.manifest`, the libretro proxy and host, the core runner, the platform library, nano, chdman | byte-identical; every sidecar's SHA-256 unchanged |
+| cargo under the xtask | every crate `Fresh`: the same command, flags and target folders as the MSBuild host's |
+| The publish on this change | 46 s, against the baseline's full build |
+| Managed assemblies | identical once the SDK's stamped commit id is held to the baseline's (`-p:SourceRevisionId`); `EmuSen.LunaP.dll`, and `EmuSen.Mistress.dll` which carries LunaP's version string, differ only in LunaP's own commit id, which that property also overrode |
+| Documents | the four this change edits differ, as they should |
+
+**Open.** `CI` still builds each library with its own `cargo build` steps rather than the xtask; it reads the list but not the build. Moving CI's library job onto `cargo xtask stage` is the next step once a runner has been tried with it.
+
+### 28.12 One owner per fact (2026-11-07)
+
+*Decided 2026-11-07 by the tester*, from the same audit (rows 7, 8, 9, 13 and 14): each fact below had several owners, and each now has one, which every other reader reads or is checked against.
+
+| Fact | Owner now | Former owners, and what became of them |
+|---|---|---|
+| The 16 pad controls and 6 axes, names and order | `emusen-native`'s `Control::NAMES` and `Axis::NAMES` | `emusen_core.h`'s enums, held to them by the ABI check as before; the runtime's `info::BUTTONS`/`AXES` and the goldens' `PAD_BUTTONS` are now those constants; C#'s `PadButton` and `PadAxis` are held to the header by `PadButtonOwnerTests` until the C# goes |
+| The database file names (`games.db`, `records.db`, `states.db`, `media.db`, `themes.db`) and `appsettings.json` | Galaxia: `stores.rs`, and `models.rs` for the settings file | five Rust literals now read Galaxia's constants; the four C# constants are held to them by `StoreNamesTests` |
+| A console's hue, body, palette and planet features | the systems data: `look` in each `data/<id>.json`, null for none, in which case `Look::computed` gives a plain planet in a hue from the id, the rule the C# splash used | `StartupSplash`'s two tables and its maker rule are deleted; the runtime's `systems` answer carries every row's look, which the splash, Choose a console and the engines' marks read |
+| The catalog's four hand rows, their keys, the consoles' sole engines and the refusal naming a missing one | the systems data: `data/catalog-rows.tsv`, read by `emusen_systems::catalog_rows` | `HAND_ROWS`, `HAND_KEYS`, `SOLE_ENGINES` and `GAME_BOY_COLOR_SHELF` in `catalog.rs`, and the refusals by extension in `open.rs`, now derived from the rows and their systems' extensions |
+| `records.db`'s `state_record` | the runtime's `states.rs`, which copies the rows once into `states.db` (D8) | the C# reads and writes of it, which nothing but their own tests called, are deleted; the table stays in the file's version-1 migration, which is history and is not edited |
+| The cover shape of a console whose own is unknown, 1.365385 (OpenEmu's fallback) | the systems data: `data/table.json` | the runtime fills `cover_aspect` from it for every system only an engine names; the C# front end keeps one constant for a game with no known system, held to the data by a test, and the Qt front end is not to need that case |
+
+The look and the catalog rows are data, so a new console gets its look by stating it, or a computed one by stating nothing, and a change to either is a change to a data file the tests read.
 
 ## 29. The Mac mini as the Apple Silicon runner, 2026-10-16
 
@@ -3658,3 +3719,496 @@ system default, answering `ABSENT` with words where no device has the name. An o
 on the device. The C# side is `UiSoundPlayer.SetOutputDevice`. A new number, as §45's was (rule B). Design and tests:
 `EmuSen_Audio_Sync.md` §7.5.
 
+
+## 47. The platform stops imitating .NET, 2026-11-07
+
+*Decided 2026-11-07 by the tester*, with every answer of the cleanup's plan: once the C# front end reads only through
+the Rust library, the platform's code no longer reproduces .NET's rules byte for byte (§5.2–§5.5, §10.3, §11.3).
+serde and serde_json, the zip crate, the `time` crate and the standard library's paths take the place of the
+hand-written readers and writers, and each service keeps one surface. Four facts stay fixed, since they are stored:
+the path keys of `states.db` and `games.db`, the unpacked folder's name, the 100 ns tick, and the round-trip text of a
+time as it is written. Two changes on disk were approved: config files are written in serde's spelling, and new zips
+are written by the zip crate. A file a person edited by hand keeps reading: comments, trailing commas, names in any
+case, a member written twice (the last wins), and UTF-16 and UTF-32 text with a byte-order mark. The C# classes that
+held the Rust to .NET's bytes are deleted by the step that ends each imitation; the disk corpus below is the proof in
+their place. The crates the platform shares are named once, in `[workspace.dependencies]` of `Platform/Cargo.toml`.
+
+### 47.1 The disk corpus
+
+Files as the platform wrote them at `1d3cd893c`, variants edited by hand, and zips made by other programs, each beside
+what it reads to, recorded once and never re-recorded to make a change pass. Each owner keeps its own, in
+`tests/disk/` beside a `tests/disk.rs`:
+
+| Owner | Files | What each is held to |
+|---|---|---|
+| Galaxia | the four config models and `consoles.json` (written, comments and trailing commas, lower-case names, members twice, a stray byte, unknown members, every byte-order mark, `null`, five refusals); `package.json` (written, edited with a mark and comments, newer, a member twice, not JSON); zips: stored, deflated, Deflate64 (7-Zip), Zip64 and with members twice (Python's `zipfile`), a package's with NTFS times, the recorder's | the model as JSON, compared member by member in order with numbers equal as a double or a float; a read, written and read again gives the same model; each zip's entries, lengths and CRC-32 through the game reader and the cheat database's reader, and a package's files unpacked with their times to the 100 ns |
+| Galaxia | `keys.tsv`, `unpacked.tsv` | the key `games.db` and `states.db` store for a path; the unpacked folder's name for a path, length and tick |
+| Crystal | a game's own settings (written, comments, a mark, UTF-16, keys twice, values not strings, `null`, a list, not JSON); a package's state records; `times.tsv` | the values in order; the record's members with its time as the instant it names, so that the zone the test runs in does not matter |
+| The library | `last-played.tsv` | the instant in ticks since 1970; a time without a zone is local and stays with the owner's tests |
+| The scraper | the member file, made-up accounts only | user, password and the instant it was verified |
+| `emusen-core-host` | two sidecars as built, one marked in development, one naming a file outside its folder, one of version 2 | the listing: library, hash, version, capabilities, the info |
+
+The Deflate64 zip is refused by the game reader at this point; the cheat database's reader takes it. The test names
+that one refusal, so that a reader that starts taking it says so.
+
+### 47.2 One store of a call's last words
+
+Five thread-local strings held the words of a thread's last failing call, one per header that has a last-error export:
+the platform's (which the shell's `dianash_last_error` shares), the frontend API's, the session table's, the
+library's and the scraper's. They are now one module, `platform/src/last_error.rs`, with a slot for each, so a
+failure in one header still leaves another's words alone, as before. The scraper redacts its words before they are
+stored, as it did.
+
+### 47.3 The settings folder from `dirs`
+
+`tree::application_data`, the folder the tree's legacy settings and default log folder sit under when the host names
+none, is `dirs::config_dir` (dirs 7.0.0): `$XDG_CONFIG_HOME` where it is absolute, else `~/.config`; `~/Library/Application
+Support` on macOS; the roaming application data on Windows, which `dirs` asks the system for as the removed code did.
+These are the folders §5.5's second point reproduced by hand, about 50 lines and a Windows call written out. The
+firmware search reads the home folder through `tree::user_home` rather than `$HOME` itself. `tests/application_data.rs`
+holds the three Linux cases (absolute, relative, unset) in a process of its own.
+
+### 47.4 Interface 36: the parity-test exports go
+
+`emusen_galaxia_dotnet_path`, `emusen_galaxia_dotnet_test`, `emusen_galaxia_number_format` and
+`emusen_galaxia_text_decode`, with their `EMUSEN_GALAXIA_PATH_*`, `EMUSEN_GALAXIA_TEST_*` and `EMUSEN_GALAXIA_NUMBER_*`
+numbers, existed only so that WiseMan could hold the library's path rules, its yes-or-no text rules, its number
+layout and its file decoding to .NET's own answers (§10.5, §11.5). No program called them. They are deleted, with the
+five WiseMan tests that called them (in `GalaxiaParityTests`: every path rule, blank text and caseless equality, a
+file and a directory existing, every double and float written, a file's bytes decoded), and the interface is 36.
+What those rules do to stored keys and to files a person edits is now held by the disk corpus (§47.1).
+
+### 47.5 White space, letters and digits are the standard library's
+
+`trim`, `trim_start`, `trim_end`, white space, blank text, letters and letters-or-digits are `str` and `char`'s own
+(`trim`, `is_whitespace`, `is_alphabetic`, `is_alphanumeric`); blank text is `trim().is_empty()`. White space was
+already Unicode's White_Space and the same set (§10.3), so trimming and word splitting do not change, and the DianaSh
+goldens hold them. Letters change at the edges: a character outside the Basic Multilingual Plane, two surrogates to
+.NET and so no letter, is a letter when Unicode says so, and the 398 ranges of `letter_or_digit.rs` (.NET 10's own,
+generated 2026-10-17) are gone with them. A digit in the debugger's expressions is an ASCII digit; .NET's took any
+script's decimal digits, which no number in an expression could then be read from.
+
+### 47.6 Numbers are read by `str::parse`
+
+Every integer and floating-point reading of typed text, `.cht` fields, settings rows and scraper answers is the text
+trimmed and given to `str::parse`; the debugger's hexadecimal addresses are `u32::from_str_radix` after an optional
+`0x` or `$`, read as 32 bits so that `ffffffff` is −1 as before. What changes: trailing NULs and a thousands comma
+(`1,000`, which .NET's en-US reading took) are no longer read as part of a number, `inf` and `infinity` are read
+beside `NaN`, and a refusal is worded by the standard library (`'zz' is not a hexadecimal number: invalid digit found
+in string.`) rather than by .NET. `number.rs` (230 lines) is deleted. The goldens and the `.cht` tests did not change.
+
+### 47.7 "Did you mean …?" is a crate of its own, on strsim
+
+The suggestion a refusal ends with (`emusen-suggest`, `Platform/suggest`) measures names by `strsim::osa_distance`
+(strsim 0.11.1), optimal string alignment as before, on the names lower-cased by the standard library, and counts
+characters rather than UTF-16 units: an emoji is one slip, not two, and a word's tolerance (one slip up to three
+characters, two up to six, three beyond) counts its characters. A tie still goes first to a name the typed text
+begins, then to names in order of their upper case. It is a crate of its own because the shell, its command modules
+and the platform library all use it and a module may not link Galaxia (EmuSen_DianaSh.md §16 Q11); emusen-dotnet's
+`suggestion.rs` is deleted, and the C# sweep that held it to the C#'s sentences
+(`GalaxiaParityTests.A_suggestion_is_the_sentence_the_csharp_gave` and its golden) with it. `SuggestionTests` keep
+holding the behaviour, and the DianaSh goldens did not change.
+
+### 47.8 Case and order are the standard library's
+
+emusen-dotnet's `text.rs` (350 lines) is deleted; its callers use `str`'s own:
+
+| What | Now | What changes |
+|---|---|---|
+| Names that are identifiers ignoring case: extensions, keywords, commands, memory spaces, processors, config members, console and system ids | `eq_ignore_ascii_case` | letters outside ASCII are compared exactly; none of these names has one, and the comparison allocates nothing, which the debugger's frame needs (`crystal-debug/tests/alloc.rs`) |
+| Text a person wrote, ignoring case: a game's name searched for, a file's name on a system whose files ignore case; contains, starts and ends with | both sides `to_uppercase()` | Unicode's full mapping: `ß` equals `SS`, and the long s (U+017F) and the dotless i (U+0131), which .NET kept apart, equal `S` and `I` |
+| Ordered ignoring case | by `to_uppercase()` | as before for what a player names: `_` still sorts after the letters |
+| Ordered ordinally | `str`'s `cmp`, UTF-8's order | a character outside the Basic Multilingual Plane sorts after U+E000–U+FFFF, where UTF-16's order put it before |
+| Lower and upper case, the keys names are found under | `to_lowercase()`, `to_uppercase()` | the full mapping, as above |
+| Widths of shell columns | `format!`'s `{:<w$}` and `chars().count()` | widths count characters, not UTF-16 units (an emoji is one, not two); the goldens did not change, so the routine question of §47's plan (Q10) is answered by them |
+| The error log's line breaks | CR LF, LF and CR | form feed, U+0085, U+2028 and U+2029 no longer break an entry's line |
+| The error log's room for a day | the entry's bytes against the 8 MB in bytes | it was the entry's UTF-16 length against bytes |
+
+The cheat codes' alphabets (Game Genie, Action Replay, Pro Action Replay) are ASCII and upper-case their input with
+`to_ascii_uppercase`, which gives the same codes. One Galaxia test was changed with the rules: a day's log is judged
+by bytes (`error_log.rs`).
+
+### 47.9 Files are read and written by `std::fs`, and a mark still chooses the encoding
+
+emusen-dotnet's `file.rs` (116 lines) is deleted. A file a person may have written (a config, a cheat list, a game's
+own settings, a manifest, a cue sheet or an `.m3u` list) is read by `emusen_galaxia::text_file`: its byte-order mark
+chooses UTF-8, UTF-16 or UTF-32 and is dropped, UTF-8 is read without one, and what is not valid becomes U+FFFD, as
+the tester's answer to the plan's Q7 keeps it. That module is ours, about 25 lines, because no crate the platform uses
+reads UTF-32's marks. Everything else is the standard library's: the shell reads a redirect, a man page or a script
+with `read_to_string`, writes with `fs::write` or an appending `OpenOptions`, and lines are `str::lines`.
+
+A refusal is the path and the system's words, `<path>: No such file or directory (os error 2)`, where it was .NET's
+sentence (`Could not find file '<path>'.`, `Access to the path '<path>' is denied.`). Six lines of the DianaSh goldens
+(`awk`, `wc`, `touch` and two cases of `shell` twice) were changed with their lengths to the new words; nothing else
+in them moved.
+
+### 47.10 ScreenScraper's and GitHub's answers and the session's arguments are read by serde
+
+emusen-dotnet's `json_document` (531 lines with its tests), which reproduced `JsonDocument.Parse` and its exceptions'
+words, is deleted. Its three readers:
+
+- **ScreenScraper's answers** (`scrape/src/answer.rs`) are read into typed structures, one per reader, so that a reader
+  decodes only the members it uses, as the C# did: a member of the wrong kind is absent (`Object<T>`), a list that is not
+  one is empty and its non-objects are passed over (`Many<T>`; a genre that is not an object is an empty genre, as
+  before), and a leaf is a string's text or a number's digits (`Text`; a fraction is always shown, so that `77.0` is
+  no whole number). A sign-in's name is read before anything else its member holds. The 155 answers of
+  `scrape/tests/fixtures/answers.jsonl` read to the C#'s models; a refusal is held to being one, since its words are
+  now serde's (`missing field `response` at line 1 column 2`), and `media.db` keeps those words on the rows it writes
+  from now on. The reader's own refusal, "a game without an id", is held word for word.
+- **OpenVGDB's release** (`scrape/src/openemu.rs`) is a `Release` of a tag and its assets.
+- **A session call's arguments** (`crystal/src/service/args.rs`) are a `serde_json::Value` read by the accessors as
+  before. A string holding half a surrogate pair, which .NET read and refused only when the call asked for it, makes the
+  whole argument "not JSON"; an element of the wrong kind is refused as "an element is Number, not a string".
+
+The cores' workspaces that link Galaxia (`emusen-libretro-games`, `-host`, `emusen-core-broker`, `-conform` and
+Diamond's) carry the platform's new dependencies in their locks from this step on.
+
+### 47.11 The systems data is read by serde
+
+`System`, `Medium` and `Look` derive `Deserialize` with unknown fields refused, and every field must be written, `null`
+where a fact is unknown (`stated`). serde refuses a field missing, unknown, written twice or of the wrong kind, in its
+words (`missing field `console` at line 25 column 1`); what serde cannot know is checked after it, in the words it had:
+blank words, a word twice in a list, the year, the cover's shape, the byte order, dotted lower-case extensions, a
+medium named twice and a look's ranges. A medium's three fields may now come in any order. `table.json`'s cover shape
+is a `TableFacts`. `System`'s fields are declared in the order the table writes them.
+
+### 47.12 The API's answers are written by serde_json
+
+The frontend API's JSON answers (`emusen_crystal.h`: the catalog, core info, a game's opening, a console's look, the
+session table's views and lists) are built by `crystal/src/json.rs` as a `serde_json::Value` and written by
+serde_json. The builder keeps its calls (`begin_object`, `str`, `int` and the rest), since 72 answers build in loops
+and helpers, but it writes no text itself: no escaping, no number layout, no commas. Members keep the order they are
+given in (serde_json's `preserve_order`). What changes in the bytes: text is written as UTF-8 rather than escaped
+(`<é>` where .NET wrote `<é>`), a whole double keeps its point (`2.0` where .NET wrote `2`), and a
+double JSON has no number for is `null`. The C# front end reads every answer with a JSON reader, which takes both
+spellings.
+
+### 47.13 The library's and the scraper's requests and answers
+
+`emusen_library.h`'s requests are read as a `serde_json::Value` and its answers built with `json!` (`library/src/json.rs`,
+`library/src/lib.rs`): a record, the records by path, a game, edits, collections, orphans, the games list and an
+identity. A double JSON has no number for is still the name `NaN`, `Infinity` or `-Infinity`, as the C# reader takes
+it. `emusen_scrape.h`'s requests are read the same way, and the requests the scraper sends the library are built with
+`json!`. The scraper's answers are still laid out by its readers' `format!` calls, but every value in them (a text, a
+number, a list of texts) is written by serde_json through `scrape/src/json.rs`; turning those layouts into `json!` is
+left for a later change, since it moves no byte. What changes in the bytes is as §47.12 says: UTF-8 text, and a whole
+double with its point.
+
+### 47.14 The systems table, the session's arguments and the modules' texts are written by serde_json
+
+`System`, `Medium` and `Look` derive `Serialize` beside `Deserialize`, so the systems table (`emusen_systems_table`,
+the frontend API's `systems`) is the data files' own types written by serde_json, its members in `KEYS`' order since
+the fields are declared in it; a cover's shape of 1 is now `1.0`. The save media, cheat codec and libretro core lists
+of `emusen-systems` build `serde_json::Value`s. The session service's `quoted`, which the command modules build their
+arguments with, the shell's JSON strings, the platform's package answer and the library tool's crop text are serde_json's
+or the standard library's. What still reads or writes emusen-dotnet's `json::Value` is Galaxia's models and manifests
+and the files and session answers read through them, which §47's config step replaces.
+
+### 47.15 Zips are read by the zip crate
+
+Every zip the platform reads, a game's, a package's, a core's download and the cheat database, is read by the zip crate
+(9.4, its default features off: deflate through `flate2` on zlib-rs, and Deflate64), through Galaxia's `archive::Zip`,
+opened over a file or over bytes in memory. `dotnet_zip.rs`, the .NET reader, is gone, and with it the second reader of
+the end record and the directory. The crate bounds an entry's bytes by the length the directory declares and checks
+their CRC-32; `Zip::copy` refuses an entry whose bytes fall short of that length. A damaged entry is reported with the
+crate's reason beside what the zip records (`Bad.sfc is damaged (Invalid checksum): the zip records 1000 bytes with
+CRC-32 1a2b3c4d`), which the library tool's `rom-check` shows the player. An entry's time is the NTFS field's,
+to the tick, else the extended timestamp's, to the second; the DOS time is not taken. A name is UTF-8 where it is valid
+UTF-8, else code page 437, as APPNOTE says (the .NET reader decoded it as UTF-8 with replacement).
+
+What the game reader takes changed in three ways, decided 2026-11-07:
+
+1. Zip64 archives and Deflate64 entries are read. An encrypted entry, or one of a method this build does not inflate
+   (bzip2, LZMA, Zstandard), is listed and refused when it is read, in the crate's words ("unsupported Zip archive:
+   Password required to decrypt file"); the archive is no longer refused whole for an entry nobody opens.
+2. A zip that names an entry twice is refused. Readers differ in which copy they take: the old game reader took the
+   first, the cheat installer wrote both so the last remained, and the crate keeps the last. That disagreement is how
+   one archive shows different files to two readers, so neither copy is taken. The corpus's `duplicates.zip` keeps its
+   old listing as the record, and its test names it as refused.
+3. A name holding a NUL is listed; the installers below and a package's unpacking refuse such a name, as before.
+
+The cheat installer no longer writes as .NET's `ExtractToFile` did. A `.cht` entry is written where the crate's
+`enclosed_name` puts it under the folder (`\` is a separator, a `..` that stays inside resolves, a name that would leave
+the folder is skipped), whole and only once its CRC-32 is checked, so a damaged entry is skipped and nothing half-written
+is left. Its time is the zip's own where the zip records one, else the time of the install; the Unix mode in the zip is
+not applied. An archive the reader refuses is refused in its words: `emusen_cheats_install` gives REFUSED with them as
+the last error, and no longer names a .NET exception or a `threw` member; its `libc` local-time code is gone. The core
+installer's check that a core's member is no link reads the crate's Unix mode. The corpus test reads every zip from
+its file and from memory, and the list of zips the game reader refused is gone.
+
+### 47.16 Zips are written by the zip crate
+
+A package's zip (`package_zip::write`, through Galaxia's `archive::ZipWriter`) and the recorder's archive of frame
+pictures are written by the zip crate; the two hand-written writers are gone, and with them Galaxia's last use of
+`flate2`. Approved 2026-11-07 as a change on disk: a new zip's bytes differ from the old writer's, and every reader
+takes both.
+
+- **The times.** A package's entry keeps its time three ways, as before: the DOS fields in local time, the extended
+  timestamp (0x5455, Unix seconds) and the NTFS field (0x000A, the FILETIME to the 100 ns tick, which a state's record
+  is stamped with). The crate writes an extra field's body as it is given (`add_extra_field`); the two bodies, 5 and 32
+  bytes laid out as Info-ZIP's `extrafld.txt` and APPNOTE 4.5.5 state them, are built in `archive.rs` and checked by the
+  crate's own parser before the entry starts (`validate_extra_fields`). The crate reads the NTFS field without its
+  `nt-time` feature, so none is enabled. The recorder's entries carry the DOS time alone, as before.
+- **Stored or deflated.** An entry is stored where its extension says it is already compressed (a CHD, a zip, a
+  picture, a video) and deflated otherwise; the old rule that also stored a file deflate would not shrink, which read
+  the whole file into memory to find out, is gone, so a file is now streamed from the disk a MiB at a time.
+- **Zip64.** An entry past 4 GiB, or an archive whose directory lies past it, is written as Zip64, which the reader
+  takes since §47.15; the writer no longer refuses a package that large.
+- **Checked elsewhere.** On 2026-11-07 a zip from the new writer read without error in Info-ZIP's `unzip -t` and
+  `zipinfo` (which showed the DOS time, the UT field's time and Unix mode 100644) and in Python's `zipfile`.
+
+The proof: `package_zip`'s test writes a package with a time of an odd 100 ns and reads it back to the tick; the corpus's
+`package.zip`, written by the old writer, still unpacks to the tick; the recorder's new test reads its archive back with
+the crate, each picture's bytes and local DOS time.
+
+### 47.17 A tree is walked by walkdir
+
+Galaxia's `dotnet_files` is now `files`, and its walk (`visit_files_with`, which the library's scan, the cheat database,
+the artwork index, the scraper's media and the library tool's disc, package and conversion lists share) is walkdir's,
+with links followed. What a walk hands over is as before: every file under the folder, a link to a folder followed into,
+a link whose target cannot be read handed over as a file, a hidden entry (a name beginning with a period) skipped where
+asked, a folder that refuses to be read passed over where asked, and any other error ending the walk after what was
+handed over before it. Two things changed:
+
+1. **The order.** The walk is depth first, each folder's entries in the system's order; the .NET enumeration handed over
+   a folder's files before any of its subfolders' (breadth first). Every caller that keeps a list sorts it or keys it,
+   except the artwork index, whose ties between two pictures of one name in two folders of one console now follow the
+   walk's order: the system's order was already deciding them within a folder.
+2. **A link that loops** back to a folder it lies in is passed over. The .NET walk followed it until the path grew too
+   long and the walk ended in an error, losing what lay after it.
+
+The tick (100 ns since the year 1, in UTC) that `file_info` and `write_ticks` give is unchanged, since `games.db`,
+`media.db` and the unpacked folder's name store it; the corpus's `unpacked.tsv` holds it. `files.rs`'s new test walks a
+tree holding a link to a folder, a dangling link, a hidden dangling link, a link back to the root and a folder that
+cannot be read.
+
+### 47.18 Paths are std's
+
+Galaxia's `dotnet_path` (`System.IO.Path` as text, with Windows' rules tested on Linux) is gone, and every crate builds
+and takes paths apart with `std::path`: `Path::join` for `Combine`, `file_name`, `file_stem`, `extension`, `parent` and
+`with_extension`. Windows' rules are std's on Windows and are no longer emulated elsewhere. Galaxia's tree (`Tree`,
+`user_home`, `application_data`, `base_directory`, `root_for` and the rest of `tree.rs`) takes and returns `PathBuf`, and
+so do the save paths of `saves.rs`, the unpacked folders of `disc_set.rs`, the companions of `image_sets.rs`, the
+error log's root and the package zip's paths. Text stays text where it is a stored key, a C answer or a manifest's
+`path`: the platform library converts at its C interface, and `claims` keeps its keys as text.
+
+**The one rule std does not give** is the stored key: `path_key::key` makes a path absolute against the working
+directory and normalises it lexically, `.` parts and repeated separators gone, `..` unwinding one part and stopping at
+the root, a trailing separator kept, links not followed. `std::path::absolute` keeps `..` and a leading `//`, so it would
+change keys. The corpus's `keys.tsv` (eight keys) and `unpacked.tsv` (three folder names) read as before, and the rule
+has its own test against the cases `dotnet_path` was held to. States.db, games.db and the unpacked folder's name are
+unchanged.
+
+Where std's answer differs from .NET's, std's was taken, since the cases are ones no player's library holds:
+
+1. **Existence is std's.** `tree::file_exists` and `tree::directory_exists` were second copies of `files`'; they are
+   gone, as is `tree::listed_as_directory`. A dangling link is no longer a file that exists: a battery save that is one
+   reads as absent, where it read as a file that would not read and was then treated as absent.
+2. **A name that begins with its only period is all stem** (`.smc`), and a path ending in a separator names its last
+   folder (`/roms/` names `roms`). A cheat list follows that: a ROM named `.smc` has the list `.smc`. The saved lists'
+   names are still the file names less `.json`. ES-DE's search text keeps ES-DE's own rule, the stem ending at the last
+   period, so its table in `scrape/tests/rules.rs` holds unchanged.
+3. **The cheat list's file-name rule** is the host's (`cfg!(windows)`), and the Windows characters stay tested through
+   the private rule; `is_valid_name`, `sanitized` and `game_list` take no style.
+4. **Two migration roots are one folder** when their keys are equal. The upper-case comparison this replaces took
+   `CAFÉ` and `Café` to be one folder on Linux as well, where they are two. Any other spelling of one folder (a link, a
+   case variant where the file system ignores case) copies nothing either, since every file finds itself already
+   there; the test spells the case variants only on Windows and macOS, where they name the tree.
+5. **Paths compare by part.** `claims::within`, the library tool's `inside`, the cheat pruner's `is_inside` and
+   `game_folders::of` compare with `Path::starts_with`, so `/r` no longer prefixes `/rx` by text and a trailing
+   separator does not matter.
+
+An extension compared with the systems table's, which writes its period, is compared without the period
+(`Path::extension`), and one that is handed on keeps it (`archive::image_entry`'s `is_image`, `image_probe`). `files::join`
+is gone for `Path::join`. Steps 17-19 are one commit: `Tree`'s `PathBuf` reaches every crate that reads the tree, so no
+part of the change builds without the rest. An empty last part is std's too: `Path::join("")` ends the path with a
+separator where .NET's `Combine` returned it as it was, which only an empty file name reaches.
+
+The C# parity methods that held these answers to .NET's text were deleted with their goldens, the disk corpus being the
+proof in their place: five of `GalaxiaParityTests` (the tree under every override, the save names, the unreadable file,
+the declining migrations, the cheat lists' names) and `SerenityParityTests`' preset sweep, whose inputs include an
+empty reference and a folder, now resolved with std's parts (its golden held digests; its lines are compared below).
+Measured on 2026-11-07: Platform `cargo test --workspace` 606 passed, the corpus
+and the DianaSh goldens among them; the C# classes that read these paths (the blast radius's filter with the package,
+disc, core-install, store, Serenity and migration classes) 1,251 passed before the deletions, and the Galaxia and
+Serenity parity classes 229 passed after them.
+
+**The preset sweep's lines, compared after the deletion** (measured on 2026-11-07). The sweep was run uncommitted with
+each answer written as a line instead of a digest, seed 42, once against the platform library of 4a771f781 (before
+these steps) and once against c8c934d83's. Of 3,036 lines (2,500 presets, 525 parameter merges, the path, rule, depth
+and closed-file cases), 358 differ, every one a preset refused as not found whose named path gains a trailing
+separator: `<root>/preset/N` became `<root>/preset/N/` (326 lines) and `<root>/preset/N/sub` became
+`<root>/preset/N/sub/` (32). Each is a `#reference` line with nothing after the keyword, resolved against its preset's
+folder; called directly, both libraries refuse `#reference ` alone as `not_found`, the old one naming `<d>` and the new
+`<d>/`, and they agree on `#reference sub`, `"sub"`, `""sub`, `""`, `"`, `sub" trailing` and `"sub`. No scale, count,
+pass, texture, parameter or refusal differs, so the deletion stands.
+
+### 47.19 Config and record files are serde's
+
+The files a person may edit are read and written in one place, Galaxia's `config_json`. Reading is jsonc-parser 0.34
+with comments and a trailing comma allowed and every other JSON5 liberty refused (single quotes, bare names, hex,
+a leading `+`, a bare decimal point, `NaN`, missing commas, JSON5 escapes); the value is then read into its type through
+a small deserializer that matches each object's member names to the fields its type declares without regard to ASCII
+case, at every depth, while a map's keys keep their case. The last of two members wins whole and keeps the first's
+place. A refusal names its path (`$.Cheats[0].Writes[1].Width: invalid type: ...`), and a text with no document in
+it is refused. Writing is serde_json's `to_string_pretty`: two spaces, a line feed between lines, none at the end
+(decided 2026-11-07 by the tester, plan question 2).
+
+**The models are serde types** (`models.rs`). One `model!` list per class gives each field's name, type and initial
+value, so the struct and its new instance cannot disagree. Nullability is kept as the classes had it: text, lists,
+maps and objects may be null, numbers and flags may not; the items of a cheat list and of its writes may not be null.
+`ConfigModel` gives a type its upgrade (AppSettings' alone) and its file text: a cheat list is written with the two
+values computed from each entry, `IsRomPatch` and `EffectiveWrites`, which are never read, and AppSettings leaves the
+retired `OnlineCovers` out of its file while it is null. The C interface and the corpus reach a model by number
+through `Model`, three functions on JSON text built generically from the type: bind, new and format. What crosses
+out of the library is compact serde JSON with every field. `model.rs`, the binder and writer that reproduced
+System.Text.Json, is gone, and with it `emusen_galaxia_model_schema`, whose only reader was the parity class that held
+the C# classes to the Rust schema; the interface is 37.
+
+Typed the same way: `consoles.json` (`ConsolesConfig`), a game's own settings (a map of strings), and a package's state
+record, `KeptRecord`, whose four texts are required and nullable (`deserialize_with = "Option::deserialize"`), as the
+record bound them. The ScreenScraper member file and the developer file are read member by member from a serde value,
+so a member of the wrong kind empties that member alone, as before; the member file is written by serde_json.
+
+**A package manifest stays a document.** Its point is that a member this build does not know keeps its place, and
+`#[serde(flatten)]` would move every unknown member after the known ones. So the manifest is a `serde_json::Value`
+(`preserve_order`), read through `config_json` into a visitor that also records the first member written twice, with
+its path, so that `x[0].b written twice` is still refused as invalid before the schema is checked. The schema's checks
+and words are unchanged. Every crate that edits a manifest (claims, the library tool, the patcher, the scraper, the
+runtime) works on serde's value.
+
+Crystal's `service::cheat_file`, the reproduction of `JsonSerializer`'s refusal words and of `LoadFrom` reading
+through a null, is gone: CHEAT_IMPORT reads the list through `config_json` and loads it with the registry, whose
+`to_file` and `load` take the typed `CheatFile`.
+
+Differences, each taken deliberately:
+
+1. **Bytes on the first save.** A whole double or float is written `1.0` (`MasterVolume`, `Volume`,
+   `LibraryTileScale`), text outside ASCII is written as itself, a small number as `1e-7`. A manifest's numbers lose
+   their tokens (`1.50` is written `1.5`, `1e2` `100.0`). Approved as plan question 2.
+2. **A lone surrogate escape anywhere refuses the file**, where System.Text.Json passed over an unknown member
+   undecoded. jsonc-parser and serde_json both refuse it. The corpus's `appsettings/unknown.json` holds one, so its
+   model is now `refused`; `unknown-members.json`, the same members with a valid escape, reads to the model
+   `unknown.json` read to before. A manifest holding one is refused as not JSON rather than as invalid.
+3. **A null cheat or a null write is refused at read**, with words, where the C# loaded the cheats before it and then
+   faulted.
+4. **Refusal words** are jsonc-parser's and serde's, with the path, in place of .NET's.
+
+A member a config model does not know is read as if absent and is not written back, as the C# classes dropped it
+(decided 2026-11-07 by the tester); a manifest alone keeps its unknown members in place.
+
+The C# parity sweeps were run once more before they were deleted, with each document's model compared instead of its
+bytes (measured on 2026-11-07). Of 40,349 documents (9,754 property documents and 30,595 malformed or damaged texts),
+764 read to a different model or outcome:
+
+| Read now, refused by System.Text.Json | | Refused now, read by it | | Read alike, a value differs | |
+|---|---|---|---|---|---|
+| a raw control character inside a string | 264 | a null cheat or write | 91 | `-0` reads as `0` | 101 |
+| a comment or a non-ASCII space (U+2028, U+00A0, U+000B) between tokens | 96 | a lone surrogate escape | 60 | | |
+| an earlier member of the wrong kind, overridden by a later one of the same name | 68 | a number out of its type's range, or any number past a double's | 48 | | |
+| nesting deeper than 64 | 36 | | | | |
+
+The first column is jsonc-parser's tolerance and is kept: each is a file a person could write by hand that now reads.
+A float too large for `MasterVolume` is refused at read rather than read as infinity, which the C# could read and then
+not write. A text holding only comments is refused like an empty one (jsonc-parser would give it as `null`), so
+`config_json::parse` asks `parse_to_value` first whether the text holds a value.
+
+The proof is the disk corpus: every config file (five models), manifest, game settings file, state record and member
+file reads to its recorded model, and each config read, written and read again is the same model.
+
+### 47.20 Dates are the `time` crate's
+
+`emusen-dotnet`'s `date.rs` (civil-from-days arithmetic, a .NET format-string imitation, an ISO 8601 reader and
+`localtime_r`) is gone. Galaxia's `clock` owns the platform's times on `time` 0.3.55 (decided 2026-11-07 by the tester,
+plan question 3): the stored unit stays 100 ns ticks from 1970 in UTC; the round-trip text is written with seven
+fraction digits as before (`2026-10-18T14:03:11.2510000+02:00`) through a format description; a stored text is read
+by RFC 3339, or as an unmarked local time, with a `T` required between date and time as the round-trip form has it
+(RFC 3339 alone would also take a space). Formats the callers used as .NET strings are named constants (`DAY`,
+`DAY_NAME`, `STAMP`, `STAMP_NAME`, `MTIME`, `CLOCK`). The system zone's offset is `UtcOffset::local_offset_at`, which in
+0.3.55 calls `localtime_r` itself and answers in a multithreaded process (measured: -14400 at 2026-10-14 in the threaded
+test runner, the machine's daylight offset). The recorder and DianaSh's `ls -l`, which do not link Galaxia, use `time`
+directly; the shell's own Windows offset code went with it.
+
+Proof: the corpus's `crystal/tests/disk/times.tsv`, `library/tests/disk/last-played.tsv` and the scraper's member files
+read to the same instants and texts, and `clock`'s tests hold the old module's cases (the year 9999's last tick, a tick
+before 1970, leap days, milliseconds cut and not rounded).
+
+### 47.21 emusen-dotnet is deleted
+
+The crate that reproduced .NET's rules is gone from the workspace, with every manifest line that named it. After steps
+6-21 only its JSON reader and writer remained; their last callers (the platform library's C layer, the session service,
+the shell and its command modules, the scraper and library crates, the firmware, cheat, debug and trace crates, the core
+tool) now hold `serde_json::Value`. Text the host or another crate wrote is read by `serde_json` strictly; the files
+people edit were already read through `config_json` (§47.19). What `quoted` wrote by hand is `serde_json::to_string`,
+so an answer holds text outside ASCII as itself rather than as a `\u` escape. Numbers are read by value
+(`as_i64`, `as_u64`, `as_f64`) where a token was parsed before, so `1.0` is still no whole number. The shell's test of
+its dependencies names Galaxia and the suggestion crate alone. Sections 5.2-5.5, 10.3 and 11.3 are kept as history.
+
+### 47.22 Descriptors and single-step files are read by serde_json; emusen-native keeps no reader
+
+`emusen-native` held a JSON reader of its own (`src/json.rs`, 288 lines) so that a core's tests needed no dependency,
+and a validator for the subset of JSON Schema the ABI's schemas use, which read through it. *Decided 2026-11-07 by the
+tester* (the cleanup's question 4): `emusen-native` keeps no dependency, and serde_json may be a development
+dependency of the four CPU crates with single-step suites. Both are now done this way:
+
+- **The reader is deleted.** `emusen-native` keeps the descriptor writer (`core::jsonw`, every core's) and, in
+  `core::schema`, the six committed schemas as text. It has no dependency and no development dependency.
+- **The validator is a crate of its own, `emusen-core-schema`** (`EmuSen/Cores/Shared/`), on serde_json with
+  `preserve_order`, so that violations are named in the document's order in every workspace that links it. Its users
+  are the core host (rule 4 of §7.2 and the sidecar writer), the conformance kit and the ABI check. No core links it.
+  A JSON Schema crate was not taken: the schemas use a dozen keywords, and the validator's words are pinned by tests.
+- **The core host reads a core's info, settings schema and sidecar with serde_json**, `preserve_order` set in its own
+  manifest for the same reason. Crystal and its debugger hold the host's `serde_json::Value`. The kit, the goldens'
+  driver and the ABI check read with serde_json; the broker's tests take it as a development dependency.
+- **The single-step files** are read by `emusen-singlestep` with serde_json; `beryl-m68k`, `beryl-z80`,
+  `blackmoon-r3000` and VenusRT name it as a development dependency for their harnesses' cases.
+
+**What changed for a reader of the host.** Four behaviours differ, none on a file the build writes:
+1. A refusal names serde_json's words: "its info is not JSON: expected value at line 1 column 1" where it named a
+   byte offset.
+2. Opening compares the library's info with the sidecar's by serde_json's equality: members in any order, as before,
+   but `1` and `1.0` are no longer the same number, so an info rewritten that way is refused as altered.
+3. A sidecar's `capabilities` is read as any whole number up to 2^64 - 1; one past 2^63 was refused before as a float.
+4. A member written twice keeps its last value, where the old reader kept the first; to the validator `-0` is now a
+   number rather than an integer, and a whole number past 2^63 - 1 an integer rather than a number. No schema or
+   writer of the project writes any of them.
+
+**Tests moved, none dropped.** The nine tests that validated the writer's output against the schemas moved whole from
+`emusen-native/src/core/tests.rs` to `emusen-core-schema/tests/written.rs`, with jsonw's "the text parses" check;
+the test core's six descriptors are validated through the host in `emusen-core-host/tests/host.rs`
+(`every_descriptor_of_the_test_core_validates_against_its_committed_schema`), and the raw picture's listing and the
+info's capabilities are compared as text in `emusen-native`. The reader's own two tests went with it. A new host test
+holds point 2: an info edited in its sidecar is refused, one with its members reversed opens.
+
+**A real sample of the corpora**, fetched 2026-11-07 into `~/.cache/emusen/singlestep-sample/` (about 100 MB, never
+committed) and laid out as each `*_CORPUS` variable expects. Each file is
+`https://raw.githubusercontent.com/SingleStepTests/<repository>/<commit>/<path>`, fetched with curl:
+- `680x0` at `e0d5ece9670205cc84a0101081837deb446f86a3`: `68000/v1/ABCD.json.gz` and `ADD.w.json.gz`, unpacked by
+  gunzip to `beryl/680x0/68000/v1/` (`EMUSEN_BERYL_CORPUS=…/beryl`);
+- `z80` at `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`: `v1/00.json`, `3e.json` and `cb 46.json` to `beryl/z80/v1/`;
+- `65816` at `307c63f5673c8c6b861c52f71ddb89212a227480`: the fourteen files the disputes log names, `v1/01.e.json`,
+  `21.e`, `41.e`, `61.e`, `81.e`, `a1.e`, `c1.e`, `e1.e`, `7c.n`, `7c.e`, `fc.n`, `fc.e`, `42.n` and `42.e`, to
+  `venusrt/src/SingleStepTests-65816/v1/` (`EMUSEN_VENUSRT_CORPUS=…/venusrt`).
+
+The `m68000` and `r3000` suites ship their cases as `.json.bin`, which only their own Python decoders turn into JSON.
+Those two samples were not decoded: a decoder is code fetched from the internet, and such code is not run here. The
+`.json.bin` files never pass through the reader this step changed, so the 68000's primary suite and the R3000A's
+ran on their inline cases, which do.
+
+**Proof, measured on 2026-11-07.**
+- The core host's tool lists the eight sidecars of the published `out/linux-x64/Mistress/lib/EmuSen` to the same bytes
+  built at `5146e4240` and after the step, and `cargo xtask check-sidecars` passes on that folder. The disk corpus's five
+  sidecars read to their recorded listings, and the ABI check finds its 565 facts, the schemas' descriptor fields among
+  them, in agreement with the baseline.
+- On the sample: the Z80 passes 3,000 of 3,000 cases, by the processor and by the replay. The 68000 passes 13,133 of
+  TomHarte's 16,130 (measured, not gated; §3.3 of `Beryl_M68k.md`), with the per-file report, first failures included,
+  identical to the old reader's. VenusRT's 167 tests pass with the 65816 files present; the two that assert the
+  whole suite's 512 files and 5,120,000 cases were left out. Run alone, the whole-suite test writes the same per-file
+  rows as the old reader's and stops at the same case with both: `e1 e 8669` is expected to fail under D-1 and passes
+  in the suite at `307c63f`. The suite's later commit and the disputes log disagree there; the reader is not the cause.
+- **A fresh 16 MiB bus per case.** The disputes check made a new `FlatBus` (16 MiB, zeroed) for every case. With the
+  new reader the run took 694 s, against 20 s before, on an idle machine. Stack samples showed the time in `memset`
+  under `vec![0; 1 << 24]` and in heap trimming: once a freed chunk raises glibc's dynamic mmap threshold past
+  16 MiB, the bus is carved from the heap and cleared by hand, where an mmap'd one arrives zeroed. With
+  `MALLOC_MMAP_THRESHOLD_=4194304` the same run took 8.4 s. The check now keeps one bus for every case, cleared by
+  each run as `run_file`'s already was: 5.4 s.

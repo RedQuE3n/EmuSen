@@ -5,7 +5,6 @@
 use crate::info::Info;
 use emusen_cheats::registry::{Applied, CheatRegistry, Send};
 use emusen_core_host::Machine;
-use emusen_dotnet::text::equals_ignore_case;
 use emusen_native::core::caps;
 use emusen_systems::debug::{Memory, Space};
 
@@ -161,7 +160,7 @@ impl<'m, 'a> ViewMemory<'m, 'a> {
     }
 
     fn index(&self, name: &str) -> Option<usize> {
-        self.spaces.iter().position(|s| s.name == name).or_else(|| self.spaces.iter().position(|s| equals_ignore_case(&s.name, name)))
+        self.spaces.iter().position(|s| s.name == name).or_else(|| self.spaces.iter().position(|s| s.name.eq_ignore_ascii_case(&name)))
     }
 
     /// One byte of the space at `index`, by that space's own rule.

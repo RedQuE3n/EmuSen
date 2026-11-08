@@ -21,7 +21,7 @@ sha2 = "0.11"
 [profile.release]
 panic = "abort"
 
-# What a publish builds (EmuSen.csproj): release without its debug information.
+# What a publish builds (cargo xtask stage): release without its debug information.
 [profile.dist]
 inherits = "release"
 debug = false

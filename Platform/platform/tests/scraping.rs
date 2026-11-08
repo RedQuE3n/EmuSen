@@ -23,7 +23,7 @@ const PNG: [u8; 67] = [
 /// The first recorded `jeuInfos` answer of the scraper's own fixtures.
 fn recorded() -> String {
     let line = include_str!("../../scrape/tests/fixtures/answers.jsonl").lines().next().unwrap();
-    let v = emusen_dotnet::json::parse(line).unwrap();
+    let v = serde_json::from_str::<serde_json::Value>(line).unwrap();
     v.get("input").and_then(|i| i.as_str()).unwrap().to_string()
 }
 
@@ -123,8 +123,8 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
     write(&library.join("snes/Game.sfc"), &vec![0u8; 0x8000]);
     write(&library.join("snes/Other.sfc"), &vec![1u8; 0x8000]);
     write(&etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\", \"OpenEmuFallback\": false}}", library.display()).as_bytes());
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let (game, other) = (library.join("snes/Game.sfc").to_string_lossy().into_owned(), library.join("snes/Other.sfc").to_string_lossy().into_owned());
 
     let games_db = home.join("Library/games.db");

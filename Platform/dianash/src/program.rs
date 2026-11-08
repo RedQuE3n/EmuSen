@@ -4,11 +4,10 @@
 //! directory, and the environment with every exported variable and `DIANASH_ROOT`, `DIANASH_USER` and
 //! `DIANASH_SHELL`; it is given no service (§7.2). See EmuSen_DianaSh.md §7 and §13.11.
 
-use crate::dotnet;
+use std::path::Path;
 use crate::interp::{Interp, Outcome};
 use crate::shell::World;
-use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::tree;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -27,7 +26,7 @@ pub struct Program {
 /// The programs beside the shell, in the order of their manifests' names, read once per process.
 pub fn shipped() -> &'static [Program] {
     static SHIPPED: OnceLock<Vec<Program>> = OnceLock::new();
-    SHIPPED.get_or_init(|| read(&tree::shell_modules_directory()))
+    SHIPPED.get_or_init(|| read(&tree::shell_modules_directory().to_string_lossy()))
 }
 
 /// The manifests of kind `program` in a folder whose executable is there too.
@@ -38,12 +37,12 @@ pub fn read(folder: &str) -> Vec<Program> {
     let mut programs = Vec::new();
     for manifest in manifests {
         let Ok(text) = std::fs::read_to_string(&manifest) else { continue };
-        let Ok(value) = json::parse(&text) else { continue };
+        let Ok(value) = serde_json::from_str::<Value>(&text) else { continue };
         if value.get("kind").and_then(Value::as_str) != Some("program") {
             continue;
         }
         let Some(file) = value.get("file").and_then(Value::as_str) else { continue };
-        let file = path::combine(Style::HOST, folder, &format!("{file}{}", std::env::consts::EXE_SUFFIX));
+        let file = Path::new(folder).join(&format!("{file}{}", std::env::consts::EXE_SUFFIX)).to_string_lossy().into_owned();
         if !std::path::Path::new(&file).is_file() {
             continue;
         }
@@ -74,7 +73,7 @@ pub(crate) fn run(interp: &mut Interp, world: &mut World, program: &Program, arg
     command.args(&args[1..]);
     #[cfg(unix)]
     std::os::unix::process::CommandExt::arg0(&mut command, &args[0]);
-    command.current_dir(dotnet::current_directory());
+    command.current_dir(std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default());
     command.envs(interp.exported_variables());
     command.env("DIANASH_ROOT", world.sandbox.root());
     command.env("DIANASH_USER", world.session(interp.session).map(|s| s.user.clone()).unwrap_or_default());

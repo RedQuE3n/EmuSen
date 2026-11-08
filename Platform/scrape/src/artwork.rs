@@ -2,9 +2,9 @@
 //! console or a libretro system scopes what is under it to that console. The first of a cover's sources. See
 //! EmuSen_Settings_Reference.md §4.33 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::consoles::Core;
-use emusen_galaxia::dotnet_files::{self, Options};
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::files::{self, Options};
 use std::collections::HashMap;
 
 pub const IMAGE_EXTENSIONS: [&str; 4] = [".png", ".jpg", ".jpeg", ".webp"];
@@ -18,7 +18,7 @@ pub struct Index {
 /// libretro-thumbnails' rule for a name that has to be a file name, trimmed and in lower case.
 pub fn key(name: &str) -> String {
     let replaced: String = name.chars().map(|c| if UNSAFE.contains(&c) { '_' } else { c }).collect();
-    emusen_dotnet::text::to_lower(replaced.trim_matches(char::is_whitespace))
+    replaced.trim_matches(char::is_whitespace).to_lowercase()
 }
 
 /// The name without its region and revision tags: `\s*[\(\[][^\)\]]*[\)\]]` taken out; the name itself if nothing is left.
@@ -47,9 +47,9 @@ pub fn untagged(name: &str) -> String {
 impl Index {
     pub fn scan(directory: Option<&str>, cores: &[Core]) -> Index {
         let mut index = Index::default();
-        let Some(dir) = directory.filter(|d| !emusen_dotnet::text::is_blank(Some(d)) && dotnet_files::directory_exists(d)) else { return index };
+        let Some(dir) = directory.filter(|d| !d.trim().is_empty() && files::directory_exists(d)) else { return index };
         let mut console_by_folder: Vec<(String, String)> = Vec::new();
-        let mut set = |name: &str, console: &str| match console_by_folder.iter_mut().find(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, name)) {
+        let mut set = |name: &str, console: &str| match console_by_folder.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(&name)) {
             Some(entry) => entry.1 = console.to_string(),
             None => console_by_folder.push((name.to_string(), console.to_string())),
         };
@@ -59,20 +59,14 @@ impl Index {
                 set(system, &core.console);
             }
         }
-        let style = Style::HOST;
-        let _ = dotnet_files::visit_files_with(dir, Options { skip_hidden: true, ignore_inaccessible: true }, |file, _| {
-            let ext = path::extension(style, file);
-            if !IMAGE_EXTENSIONS.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, ext)) {
+        let _ = files::visit_files_with(dir, Options { skip_hidden: true, ignore_inaccessible: true }, |file, _| {
+            let ext = file.extension().unwrap_or_default().to_string_lossy();
+            if ext.is_empty() || !IMAGE_EXTENSIONS.iter().any(|e| e.trim_start_matches('.').eq_ignore_ascii_case(&ext)) {
                 return;
             }
-            let relative = file[dir.trim_end_matches(style.separator()).len()..].trim_start_matches(style.separator());
-            let folder = path::directory_name(style, relative).unwrap_or_default();
-            let console = if folder.is_empty() {
-                None
-            } else {
-                folder.split(style.separator()).find_map(|part| console_by_folder.iter().find(|(n, _)| emusen_dotnet::text::equals_ignore_case(n, part)).map(|(_, c)| c.clone()))
-            };
-            index.add(console, path::file_name_without_extension(style, file), file);
+            let folder = file.strip_prefix(dir).ok().and_then(Path::parent).unwrap_or(Path::new(""));
+            let console = folder.components().find_map(|part| console_by_folder.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part.as_os_str().to_string_lossy())).map(|(_, c)| c.clone()));
+            index.add(console, &file.file_stem().unwrap_or_default().to_string_lossy(), &file.to_string_lossy());
         });
         index
     }

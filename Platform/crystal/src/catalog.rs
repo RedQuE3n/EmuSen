@@ -1,9 +1,10 @@
 //! The catalog: the systems table joined to what discovery found, as the C# `CoreCatalog` joins them, so that
 //! `systems`, `shelves` and `route` answer as the C# implementation answers (EmuSen_Backend.md §29.2). The catalog's
-//! four hand rows and the engines that are a console's sole engine are the C#'s until state 3, held equal by the parity
-//! class.
+//! hand rows, their keys and the engines that are a console's sole engine are the systems data's
+//! (`emusen_systems::catalog_rows`).
 
 use emusen_core_host::{Discovered, Discovery};
+use emusen_systems::catalog_rows::{HandRow, hand_rows};
 use emusen_systems::System;
 
 use crate::info::{self, SystemDetail};
@@ -18,25 +19,20 @@ pub struct Row {
     pub discovered: bool,
 }
 
-pub const GAME_BOY_COLOR_SHELF: &str = "Game Boy Color (Mercury)";
 pub const ENGINE_KEY: &str = "Engine";
 
-/// The catalog's hand rows, `CoreCatalog.CatalogRows`: display name, shelf names, systems.
-const HAND_ROWS: [(&str, &[&str], &[&str]); 4] = [
-    ("SNES (Venus)", &["SNES (Venus)"], &["snes"]),
-    ("NES (Moon)", &["NES (Moon)"], &["nes"]),
-    ("Game Boy (Mercury)", &["Game Boy (Mercury)", GAME_BOY_COLOR_SHELF], &["gb", "gbc"]),
-    ("Nintendo 64 (Mars)", &["Nintendo 64 (Mars)"], &["n64"]),
-];
+/// The hand row whose systems include `system`.
+fn hand_row_of(system: &str) -> Option<&'static HandRow> {
+    hand_rows().iter().find(|r| r.systems.iter().any(|(id, _)| id == system))
+}
 
-/// The keys a player types for the hand rows, `CatalogKeys`, by the row's place.
-const HAND_KEYS: [(&str, usize); 9] = [("venus", 0), ("snes", 0), ("moon", 1), ("nes", 1), ("mercury", 2), ("gb", 2), ("gbc", 2), ("mars", 3), ("n64", 3)];
-
-/// A console whose one engine is a discovered v1 engine, `SoleDiscoveredEngines`.
-const SOLE_ENGINES: [(&str, &str); 4] = [("SNES", "VenusRT (Rust)"), ("NES", "MoonRT (Rust)"), ("GB", "MercuryRT (Rust)"), ("N64", "MarsRT (Rust)")];
+/// The hand row whose console, its first system's, is `console`.
+pub fn hand_row_for_console(console: &str) -> Option<&'static HandRow> {
+    hand_rows().iter().find(|r| r.systems.first().and_then(|(id, _)| emusen_systems::find(id)).is_some_and(|s| eq_ic(&s.console, console)))
+}
 
 fn eq_ic(a: &str, b: &str) -> bool {
-    emusen_dotnet::text::equals_ignore_case(a, b)
+    a.eq_ignore_ascii_case(&b)
 }
 
 impl Row {
@@ -94,20 +90,17 @@ fn table() -> &'static [System] {
 
 /// The catalog console of a system id, `ConsoleForSystem`: the hand row whose systems include it.
 pub fn hand_console_of(system: &str) -> Option<&'static str> {
-    HAND_ROWS.iter().find(|(_, _, ids)| ids.contains(&system)).and_then(|(_, _, ids)| emusen_systems::find(ids[0])).map(|s| s.console.as_str())
+    hand_row_of(system).and_then(|r| emusen_systems::find(&r.systems[0].0)).map(|s| s.console.as_str())
 }
 
 /// The hand row's system ids for a console, `SystemIdsFor`.
 pub fn system_ids_for(console: &str) -> Vec<&'static str> {
-    HAND_ROWS
-        .iter()
-        .find(|(_, _, ids)| emusen_systems::find(ids[0]).is_some_and(|s| eq_ic(&s.console, console)))
-        .map(|(_, _, ids)| ids.to_vec())
-        .unwrap_or_default()
+    hand_row_for_console(console).map(|r| r.systems.iter().map(|(id, _)| id.as_str()).collect()).unwrap_or_default()
 }
 
+/// A console whose one engine is a discovered v1 engine, `SoleDiscoveredEngines`.
 pub fn sole_engine(console: &str) -> Option<&'static str> {
-    SOLE_ENGINES.iter().find(|(c, _)| eq_ic(c, console)).map(|(_, e)| *e)
+    hand_row_for_console(console).map(|r| r.sole_engine.as_str())
 }
 
 /// The pack of a console no hand row runs, `PackOf`.
@@ -128,12 +121,12 @@ fn first_offered_console(core: &Discovered) -> Option<&'static str> {
 
 impl<'d> Catalog<'d> {
     pub fn new(discovery: &'d Discovery) -> Catalog<'d> {
-        let mut rows: Vec<Row> = HAND_ROWS
+        let mut rows: Vec<Row> = hand_rows()
             .iter()
-            .map(|(name, shelves, ids)| Row {
-                display_name: name.to_string(),
-                systems: ids.iter().filter_map(|id| emusen_systems::find(id)).collect(),
-                shelves: shelves.iter().map(|s| s.to_string()).collect(),
+            .map(|r| Row {
+                display_name: r.name.clone(),
+                systems: r.systems.iter().filter_map(|(id, _)| emusen_systems::find(id)).collect(),
+                shelves: r.systems.iter().map(|(_, shelf)| shelf.clone()).collect(),
                 discovered: false,
             })
             .collect();
@@ -144,13 +137,13 @@ impl<'d> Catalog<'d> {
                 rows.push(Row { display_name: display.clone(), systems: vec![pack], shelves: vec![display], discovered: true });
             }
         }
-        let mut registry: Vec<(String, usize)> = HAND_KEYS.iter().map(|(k, r)| (k.to_string(), *r)).collect();
+        let mut registry: Vec<(String, usize)> = hand_rows().iter().enumerate().flat_map(|(at, r)| r.keys.iter().map(move |k| (k.clone(), at))).collect();
         for (at, row) in rows.iter().enumerate().filter(|(_, r)| r.discovered) {
             // An engine's name reaches the console of the first system its info offers, as Endou's reaches the Master System.
             let engine = discovered_for(discovery, row.console()).filter(|c| first_offered_console(c) == Some(row.console())).map(|c| c.engine_name().to_string());
             for name in [Some(row.console().to_string()), engine].into_iter().flatten() {
                 if !name.is_empty() && !name.chars().any(char::is_whitespace) {
-                    let key = emusen_dotnet::text::to_lower(&name);
+                    let key = name.to_lowercase();
                     if !registry.iter().any(|(k, _)| eq_ic(k, &key)) {
                         registry.push((key, at));
                     }
@@ -180,9 +173,9 @@ impl<'d> Catalog<'d> {
         let mut order: Vec<usize> = (0..self.rows.len()).collect();
         order.sort_by(|&a, &b| {
             let (x, y) = (self.rows[a].systems[0], self.rows[b].systems[0]);
-            emusen_dotnet::text::compare_ignore_case(&x.manufacturer, &y.manufacturer)
+            x.manufacturer.to_uppercase().cmp(&y.manufacturer.to_uppercase())
                 .then(x.release_year.cmp(&y.release_year))
-                .then(emusen_dotnet::text::compare_ignore_case(&x.console, &y.console))
+                .then(x.console.to_uppercase().cmp(&y.console.to_uppercase()))
         });
         order
     }
@@ -263,7 +256,7 @@ impl<'d> Catalog<'d> {
         let Some(core) = core else { return Vec::new() };
         let Ok(lib) = core.open(trust) else { return Vec::new() };
         let Ok(text) = lib.settings_text() else { return Vec::new() };
-        emusen_native::json::parse(text.as_bytes()).map(|v| info::settings(&v)).unwrap_or_default()
+        serde_json::from_str::<serde_json::Value>(&text).map(|v| info::settings(&v)).unwrap_or_default()
     }
 
     /// Each player's controller where the console's pack counts them, `PlayerControllersFor`.
@@ -338,7 +331,7 @@ pub fn discovered_for<'d>(discovery: &'d Discovery, console: &str) -> Option<&'d
 /// `DiscoveredConsoles`.
 pub fn discovered_consoles(discovery: &Discovery) -> Vec<String> {
     let mut packs: Vec<&'static System> = table().iter().filter(|s| hand_console_of(&s.id).is_none() && discovery.for_system(&s.id).any(|c| runs(c, &s.id))).collect();
-    packs.sort_by(|x, y| emusen_dotnet::text::compare_ignore_case(&x.manufacturer, &y.manufacturer).then(x.release_year.cmp(&y.release_year)));
+    packs.sort_by(|x, y| x.manufacturer.to_uppercase().cmp(&y.manufacturer.to_uppercase()).then(x.release_year.cmp(&y.release_year)));
     let mut out: Vec<String> = Vec::new();
     for p in packs {
         if !out.iter().any(|c| eq_ic(c, &p.console)) {

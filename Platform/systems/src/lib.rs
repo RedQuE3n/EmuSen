@@ -8,6 +8,7 @@
 
 pub mod libretro_cores;
 pub mod libretro_extensions;
+pub mod catalog_rows;
 pub mod cheats;
 pub mod debug;
 pub mod gb;
@@ -23,19 +24,22 @@ pub mod sega_disc;
 pub mod sms;
 pub mod snes;
 
-use emusen_dotnet::json::{self, Value};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::sync::OnceLock;
 
-/// One system's facts, as its data file states them.
-#[derive(Clone, Debug, PartialEq)]
+/// A fact that may be unknown but is always written: `null` or a value, and a file without it refused.
+fn stated<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+    Option::<T>::deserialize(d)
+}
+
+/// One system's facts, as its data file states them: every field written, `null` where a fact is unknown, and in the
+/// order the table writes them.
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct System {
     pub id: String,
     pub name: String,
     pub console: String,
-    /// The console's name as the player reads it in a list, "Super Nintendo" where `console` is "SNES" (EmuSen_Cores.md §3.8).
-    pub display_name: String,
-    /// The console's firmware in the player's words, "a PlayStation 2 BIOS" without its article; none where it has none (EmuSen_Cores.md §3.9).
-    pub firmware_name: Option<String>,
     pub manufacturer: String,
     pub release_year: i32,
     /// What the console's games come as, those the runtime expands included (`.m3u`); lower case, each with its dot.
@@ -51,16 +55,25 @@ pub struct System {
     /// Whether an image records its own length, so a malformed one must be refused (EmuSen_CoreAPI.md §21.4).
     pub self_delimiting_images: bool,
     /// The console an attachment plugs into, by its `console`; none for a console of its own.
+    #[serde(deserialize_with = "stated")]
     pub attached_to: Option<String>,
     /// ScreenScraper's `systemeid`; none where ScreenScraper has no such system.
+    #[serde(deserialize_with = "stated")]
     pub screenscraper_system: Option<u32>,
+    /// The console's name as the player reads it in a list, "Super Nintendo" where `console` is "SNES" (EmuSen_Cores.md §3.8).
+    pub display_name: String,
+    /// The console's firmware in the player's words, "a PlayStation 2 BIOS" without its article; none where it has none (EmuSen_Cores.md §3.9).
+    #[serde(deserialize_with = "stated")]
+    pub firmware_name: Option<String>,
     /// The memory space a console's RAM cheats write into, as every engine of it names the space; none for a console
     /// with no codec that writes RAM (EmuSen_Backend.md F27).
+    #[serde(deserialize_with = "stated")]
     pub cheat_space: Option<String>,
     /// The console's save media, each read by a format module of its family's; none for a console that has no medium.
     pub media: Vec<Medium>,
     /// The order of a multi-byte value in the console's memory, `big` or `little`, as every engine's spaces hold it; none
     /// where no one has stated it yet, which a reader takes as little-endian (EmuSen_Backend.md §18.7).
+    #[serde(deserialize_with = "stated")]
     pub byte_order: Option<String>,
     /// The libretro database names of the console's games, as a libretro core's `.info` lists them under `database`
     /// (EmuSen_LibretroHost.md §4.1).
@@ -68,14 +81,73 @@ pub struct System {
     /// The `systemid`s of the libretro cores that run the console, for a core whose `.info` lists no database.
     pub libretro_systemids: Vec<String>,
     /// What the console's firmware is, said once above its files in the firmware overview; none for most (EmuSen_Cores.md §4.10).
+    #[serde(deserialize_with = "stated")]
     pub firmware_note: Option<String>,
     /// Whether the console's games can drive a motor in the player's hands, a controller's, an accessory's or a
     /// cartridge's, so that the player's rumble switch is honoured (EmuSen_Input.md §9.2).
     pub rumble: bool,
+    /// How the front ends draw the console; none where its data gives none, which `look()` computes.
+    #[serde(deserialize_with = "stated")]
+    pub look: Option<Look>,
+}
+
+impl System {
+    /// The console's look as its data gives it, else the one computed from its id.
+    pub fn look(&self) -> Look {
+        self.look.clone().unwrap_or_else(|| Look::computed(&self.id))
+    }
+}
+
+/// How the front ends draw a console: its hue and its body, a planet's palette and features as opacities from 0 to 1
+/// (EmuSen_Interface.md §22, §24.6).
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct Look {
+    /// Degrees, 0 to 360.
+    pub hue: f64,
+    /// One of `BODIES`.
+    pub body: String,
+    /// A planet's light, middle and rim colours as `#RRGGBB`; empty derives them from the hue.
+    pub palette: Vec<String>,
+    pub craters: f64,
+    pub bands: f64,
+    pub cap: f64,
+    /// Moonlets, 0 to 2.
+    pub moons: u32,
+}
+
+impl Look {
+    /// A console's look when its data gives none: a plain planet in a hue taken from its id, the same on every start.
+    pub fn computed(id: &str) -> Look {
+        let hue = id.chars().flat_map(char::to_lowercase).fold(17u32, |h, c| h.wrapping_mul(31).wrapping_add(c as u32)) % 360;
+        Look { hue: f64::from(hue), body: "planet".into(), palette: Vec::new(), craters: 0.0, bands: 0.0, cap: 0.0, moons: 0 }
+    }
+}
+
+/// Every key a look's object holds, in the order the table writes them.
+pub const LOOK_KEYS: [&str; 7] = ["hue", "body", "palette", "craters", "bands", "cap", "moons"];
+
+/// The bodies a console is drawn as.
+pub const BODIES: [&str; 3] = ["planet", "shards", "gem"];
+
+/// The table-wide facts beside each console's own: today the cover shape of a console whose data gives none.
+pub const TABLE_FACTS: &str = include_str!("../data/table.json");
+
+/// Height over width of a box whose console's is unknown (OpenEmu's fallback), from `data/table.json`.
+pub fn default_cover_aspect() -> f64 {
+    static ASPECT: OnceLock<f64> = OnceLock::new();
+    *ASPECT.get_or_init(|| {
+        #[derive(Deserialize)]
+        struct TableFacts {
+            cover_aspect: f64,
+        }
+        serde_json::from_str::<TableFacts>(TABLE_FACTS).ok().map(|t| t.cover_aspect).filter(|a| a.is_finite() && *a > 0.0).unwrap_or(1.0)
+    })
 }
 
 /// A save medium as the console's own manager names it (EmuSen_SaveMedia.md §6.2).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Medium {
     pub id: String,
     pub title: String,
@@ -96,7 +168,7 @@ impl std::fmt::Display for Error {
 }
 
 /// Every key a data file holds, in the order the table writes them; a file with any other key is refused.
-pub const KEYS: [&str; 23] = [
+pub const KEYS: [&str; 24] = [
     "id",
     "name",
     "console",
@@ -120,6 +192,7 @@ pub const KEYS: [&str; 23] = [
     "libretro_systemids",
     "firmware_note",
     "rumble",
+    "look",
 ];
 
 /// Every key a medium's object holds, in the order the table writes them.
@@ -143,155 +216,82 @@ pub const DATA: [(&str, &str); 14] = [
     ("dreamcast", include_str!("../data/dreamcast.json")),
 ];
 
-struct Fields<'a> {
-    file: &'a str,
-    members: &'a [(json::Text, Value)],
-}
-
-impl<'a> Fields<'a> {
-    fn fail<T>(&self, what: impl Into<String>) -> Result<T, Error> {
-        Err(Error { file: self.file.to_string(), what: what.into() })
-    }
-
-    fn value(&self, key: &str) -> Result<&'a Value, Error> {
-        match self.members.iter().find(|(name, _)| name.text == key) {
-            Some((_, value)) => Ok(value),
-            None => self.fail(format!("{key} is missing")),
-        }
-    }
-
-    fn text(&self, key: &str) -> Result<String, Error> {
-        match self.value(key)?.as_str() {
-            Some(text) if !text.trim().is_empty() => Ok(text.to_string()),
-            Some(_) => self.fail(format!("{key} is blank")),
-            None => self.fail(format!("{key} is not a string")),
-        }
-    }
-
-    fn optional_text(&self, key: &str) -> Result<Option<String>, Error> {
-        if self.value(key)?.is_null() { Ok(None) } else { self.text(key).map(Some) }
-    }
-
-    fn texts(&self, key: &str) -> Result<Vec<String>, Error> {
-        let texts = self.texts_or_none(key)?;
-        if texts.is_empty() {
-            return self.fail(format!("{key} is empty"));
-        }
-        Ok(texts)
-    }
-
-    /// A list of words that may be empty, each word once.
-    fn texts_or_none(&self, key: &str) -> Result<Vec<String>, Error> {
-        let Value::Array(items) = self.value(key)? else { return self.fail(format!("{key} is not a list")) };
-        let mut texts = Vec::with_capacity(items.len());
-        for item in items {
-            match item.as_str() {
-                Some(text) if !text.trim().is_empty() => texts.push(text.to_string()),
-                _ => return self.fail(format!("{key} holds something that is not a word")),
-            }
-        }
-        if (1..texts.len()).any(|i| texts[..i].contains(&texts[i])) {
-            return self.fail(format!("{key} names one twice"));
-        }
-        Ok(texts)
-    }
-
-    fn token(&self, key: &str) -> Result<&'a str, Error> {
-        match self.value(key)? {
-            Value::Number(token) => Ok(token),
-            _ => self.fail(format!("{key} is not a number")),
-        }
-    }
-
-    fn media(&self) -> Result<Vec<Medium>, Error> {
-        let Value::Array(items) = self.value("media")? else { return self.fail("media is not a list") };
-        let mut media: Vec<Medium> = Vec::with_capacity(items.len());
-        for item in items {
-            let Value::Object(members) = item else { return self.fail("media holds something that is not a medium") };
-            if members.len() != MEDIUM_KEYS.len() || members.iter().zip(MEDIUM_KEYS).any(|((name, _), key)| name.text != key) {
-                return self.fail(format!("a medium's fields are not {}", MEDIUM_KEYS.join(", ")));
-            }
-            let m = Fields { file: self.file, members };
-            let medium = Medium { id: m.text("id")?, title: m.text("title")?, noun: m.text("noun")? };
-            if media.iter().any(|other| other.id == medium.id) {
-                return self.fail(format!("the medium {} is named twice", medium.id));
-            }
-            media.push(medium);
-        }
-        Ok(media)
-    }
-
-    fn bool(&self, key: &str) -> Result<bool, Error> {
-        match self.value(key)?.as_bool() {
-            Some(value) => Ok(value),
-            None => self.fail(format!("{key} is not true or false")),
-        }
-    }
-}
-
-/// One data file read as a system, refused with words where it is not one; `file` is the id it is named for.
+/// One data file read as a system, refused with words where it is not one; `file` is the id it is named for. serde
+/// refuses a field missing, unknown, written twice or of the wrong kind; the rest is checked here.
 pub fn parse(file: &str, text: &str) -> Result<System, Error> {
     let fail = |what: String| Error { file: file.to_string(), what };
-    let document = json::parse(text).map_err(|e| fail(e.to_string()))?;
-    let Value::Object(members) = &document else { return Err(fail("the file is not an object".into())) };
-    for (i, (name, _)) in members.iter().enumerate() {
-        if !KEYS.contains(&name.text.as_str()) {
-            return Err(fail(format!("{} is not a field of a system", name.text)));
-        }
-        if members[..i].iter().any(|(earlier, _)| earlier.text == name.text) {
-            return Err(fail(format!("{} is given twice", name.text)));
-        }
-    }
-    let f = Fields { file, members };
-    let system = System {
-        id: f.text("id")?,
-        name: f.text("name")?,
-        console: f.text("console")?,
-        display_name: f.text("display_name")?,
-        firmware_name: f.optional_text("firmware_name")?,
-        manufacturer: f.text("manufacturer")?,
-        release_year: match f.token("release_year")?.parse::<i32>() {
-            Ok(year) if (1970..=2100).contains(&year) => year,
-            _ => return f.fail("release_year is not a year"),
-        },
-        extensions: f.texts("extensions")?,
-        cheat_systems: f.texts_or_none("cheat_systems")?,
-        openvgdb_systems: f.texts_or_none("openvgdb_systems")?,
-        cover_aspect: match f.token("cover_aspect")?.parse::<f64>() {
-            Ok(aspect) if aspect.is_finite() && aspect > 0.0 => aspect,
-            _ => return f.fail("cover_aspect is not a positive number"),
-        },
-        esde_system: f.text("esde_system")?,
-        esde_full_name: f.text("esde_full_name")?,
-        self_delimiting_images: f.bool("self_delimiting_images")?,
-        attached_to: f.optional_text("attached_to")?,
-        media: Vec::new(),
-        cheat_space: f.optional_text("cheat_space")?,
-        byte_order: match f.optional_text("byte_order")? {
-            Some(order) if order != "big" && order != "little" => return f.fail(format!("byte_order {order} is neither big nor little")),
-            order => order,
-        },
-        libretro_databases: f.texts_or_none("libretro_databases")?,
-        libretro_systemids: f.texts_or_none("libretro_systemids")?,
-        firmware_note: f.optional_text("firmware_note")?,
-        rumble: f.bool("rumble")?,
-        screenscraper_system: if f.value("screenscraper_system")?.is_null() {
-            None
-        } else {
-            match f.token("screenscraper_system")?.parse::<u32>() {
-                Ok(id) if id > 0 => Some(id),
-                _ => return f.fail("screenscraper_system is not a positive whole number"),
-            }
-        },
-    };
-    let system = System { media: f.media()?, ..system };
+    let system: System = serde_json::from_str(text).map_err(|e| fail(e.to_string()))?;
+    check(&system).map_err(fail)?;
     if system.id != file {
-        return f.fail(format!("its id is {}, not the {file} it is named for", system.id));
-    }
-    if let Some(bad) = system.extensions.iter().find(|e| e.len() < 2 || !e.starts_with('.') || e.chars().any(|c| c.is_uppercase() || c.is_whitespace())) {
-        return f.fail(format!("the extension {bad} is not a dot and lower-case letters"));
+        return Err(fail(format!("its id is {}, not the {file} it is named for", system.id)));
     }
     Ok(system)
+}
+
+/// What a data file states beyond its fields' kinds: no blank words, no word twice in a list, a year, a positive shape,
+/// a known byte order, dotted lower-case extensions, distinct media and a look within its ranges.
+fn check(s: &System) -> Result<(), String> {
+    let blank = |key: &str, text: &str| if text.trim().is_empty() { Err(format!("{key} is blank")) } else { Ok(()) };
+    for (key, text) in [("id", &s.id), ("name", &s.name), ("console", &s.console), ("manufacturer", &s.manufacturer), ("esde_system", &s.esde_system), ("esde_full_name", &s.esde_full_name), ("display_name", &s.display_name)] {
+        blank(key, text)?;
+    }
+    for (key, text) in [("attached_to", &s.attached_to), ("firmware_name", &s.firmware_name), ("cheat_space", &s.cheat_space), ("byte_order", &s.byte_order), ("firmware_note", &s.firmware_note)] {
+        if let Some(text) = text {
+            blank(key, text)?;
+        }
+    }
+    for (key, list) in [("extensions", &s.extensions), ("cheat_systems", &s.cheat_systems), ("openvgdb_systems", &s.openvgdb_systems), ("libretro_databases", &s.libretro_databases), ("libretro_systemids", &s.libretro_systemids)] {
+        if list.iter().any(|w| w.trim().is_empty()) {
+            return Err(format!("{key} holds something that is not a word"));
+        }
+        if (1..list.len()).any(|i| list[..i].contains(&list[i])) {
+            return Err(format!("{key} names one twice"));
+        }
+    }
+    if s.extensions.is_empty() {
+        return Err("extensions is empty".into());
+    }
+    if let Some(bad) = s.extensions.iter().find(|e| e.len() < 2 || !e.starts_with('.') || e.chars().any(|c| c.is_uppercase() || c.is_whitespace())) {
+        return Err(format!("the extension {bad} is not a dot and lower-case letters"));
+    }
+    if !(1970..=2100).contains(&s.release_year) {
+        return Err("release_year is not a year".into());
+    }
+    if !(s.cover_aspect.is_finite() && s.cover_aspect > 0.0) {
+        return Err("cover_aspect is not a positive number".into());
+    }
+    if s.screenscraper_system == Some(0) {
+        return Err("screenscraper_system is not a positive whole number".into());
+    }
+    if let Some(order) = s.byte_order.as_deref().filter(|o| *o != "big" && *o != "little") {
+        return Err(format!("byte_order {order} is neither big nor little"));
+    }
+    for (i, m) in s.media.iter().enumerate() {
+        for (key, text) in [("id", &m.id), ("title", &m.title), ("noun", &m.noun)] {
+            blank(key, text)?;
+        }
+        if s.media[..i].iter().any(|other| other.id == m.id) {
+            return Err(format!("the medium {} is named twice", m.id));
+        }
+    }
+    if let Some(l) = &s.look {
+        for (key, value, max) in [("hue", l.hue, 360.0), ("craters", l.craters, 1.0), ("bands", l.bands, 1.0), ("cap", l.cap, 1.0)] {
+            if !(0.0..=max).contains(&value) {
+                return Err(format!("the look's {key} is not a number from 0 to {max}"));
+            }
+        }
+        if l.moons > 2 {
+            return Err("the look's moons is not 0, 1 or 2".into());
+        }
+        if !BODIES.contains(&l.body.as_str()) {
+            return Err(format!("the look's body {} is not one of {}", l.body, BODIES.join(", ")));
+        }
+        let colour = |c: &String| c.len() == 7 && c.starts_with('#') && c[1..].chars().all(|d| d.is_ascii_hexdigit());
+        if !(l.palette.is_empty() || l.palette.len() == 3 && l.palette.iter().all(colour)) {
+            return Err("the look's palette is not three #RRGGBB colours or none".into());
+        }
+    }
+    Ok(())
 }
 
 /// Data files read as one table, in their order: each a system, no id or console twice, and every attachment's host a console of the table.
@@ -321,57 +321,9 @@ pub fn build(files: &[(&str, &str)]) -> Result<Vec<System>, Error> {
     Ok(systems)
 }
 
-/// The table as JSON, one compact array of objects, each member in `KEYS`' order and each number as .NET writes it.
+/// The table as JSON, one compact array of objects, each member in `KEYS`' order, written by serde_json.
 pub fn to_json(systems: &[System]) -> String {
-    fn words(list: &[String]) -> Value {
-        Value::Array(list.iter().map(|w| Value::string(w.as_str())).collect())
-    }
-    fn or_null(value: Option<Value>) -> Value {
-        value.unwrap_or(Value::Null)
-    }
-    let rows = systems
-        .iter()
-        .map(|s| {
-            let values = [
-                Value::string(s.id.as_str()),
-                Value::string(s.name.as_str()),
-                Value::string(s.console.as_str()),
-                Value::string(s.manufacturer.as_str()),
-                Value::number(s.release_year),
-                words(&s.extensions),
-                words(&s.cheat_systems),
-                words(&s.openvgdb_systems),
-                // Finite by parse, so .NET has a number for it.
-                Value::Number(json::format_f64(s.cover_aspect).unwrap_or_else(|| "0".into())),
-                Value::string(s.esde_system.as_str()),
-                Value::string(s.esde_full_name.as_str()),
-                Value::Bool(s.self_delimiting_images),
-                or_null(s.attached_to.as_deref().map(Value::string)),
-                or_null(s.screenscraper_system.map(Value::number)),
-                Value::string(s.display_name.as_str()),
-                or_null(s.firmware_name.as_deref().map(Value::string)),
-                or_null(s.cheat_space.as_deref().map(Value::string)),
-                Value::Array(
-                    s.media
-                        .iter()
-                        .map(|m| {
-                            let values = [m.id.as_str(), m.title.as_str(), m.noun.as_str()].map(Value::string);
-                            Value::Object(MEDIUM_KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
-                        })
-                        .collect(),
-                ),
-                or_null(s.byte_order.as_deref().map(Value::string)),
-                words(&s.libretro_databases),
-                words(&s.libretro_systemids),
-                or_null(s.firmware_note.as_deref().map(Value::string)),
-                Value::Bool(s.rumble),
-            ];
-            Value::Object(KEYS.iter().zip(values).map(|(key, value)| (json::Text::new(*key), value)).collect())
-        })
-        .collect();
-    let mut out = String::new();
-    json::write_compact(&mut out, &Value::Array(rows));
-    out
+    serde_json::to_string(systems).unwrap_or_default()
 }
 
 static TABLE: OnceLock<Result<(Vec<System>, String), Error>> = OnceLock::new();
@@ -447,6 +399,28 @@ mod tests {
         assert_eq!(refused("nes", &nes().replace("\"byte_order\": \"little\"", "\"byte_order\": \"middle\"")), "byte_order middle is neither big nor little");
     }
 
+    #[test]
+    fn a_look_is_the_datas_or_computed_from_the_id() {
+        let n64 = find("n64").unwrap().look();
+        assert_eq!((n64.hue, n64.body.as_str(), n64.palette.len(), n64.cap, n64.moons), (352.0, "planet", 3, 0.9, 2));
+        assert_eq!(find("ps2").unwrap().look().body, "gem");
+        assert_eq!(parse("nes", &nes().replace(r#""look": {"hue": 330"#, r#""look": null, "x": {"hue": 330"#)).map(|_| ()).unwrap_err().what.split(',').next().unwrap(), "unknown field `x`");
+        let plain = parse("nes", &with_look(&nes(), "null")).unwrap();
+        assert_eq!(plain.look(), Look::computed("nes"));
+        assert_eq!(Look::computed("NES"), Look::computed("nes"), "the id is read without regard to case");
+        assert_eq!(refused("nes", &with_look(&nes(), r#"{"hue": 400, "body": "planet", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"#)), "the look's hue is not a number from 0 to 360");
+        assert_eq!(refused("nes", &with_look(&nes(), r#"{"hue": 1, "body": "cube", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"#)), "the look's body cube is not one of planet, shards, gem");
+        assert_eq!(refused("nes", &with_look(&nes(), r##"{"hue": 1, "body": "planet", "palette": ["#FFF"], "craters": 0, "bands": 0, "cap": 0, "moons": 0}"##)), "the look's palette is not three #RRGGBB colours or none");
+        assert!(to_json(&build(&DATA).unwrap()).contains(r##""look":{"hue":352.0,"body":"planet","palette":["#FFD3D8","#EE4E66","#7E1A38"],"craters":0.0,"bands":0.0,"cap":0.9,"moons":2}"##));
+        assert_eq!(default_cover_aspect(), 1.365385);
+    }
+
+    fn with_look(text: &str, look: &str) -> String {
+        let at = text.find(r#""look": "#).unwrap();
+        let end = text[at..].find('}').unwrap() + at + 1;
+        format!("{}\"look\": {look}{}", &text[..at], &text[end..])
+    }
+
     fn refused(file: &str, text: &str) -> String {
         parse(file, text).expect_err("the file should be refused").what
     }
@@ -515,20 +489,18 @@ mod tests {
     fn the_consoles_whose_games_drive_a_motor_say_so_and_the_rest_do_not() {
         let rumbles: Vec<&str> = table().unwrap().iter().filter(|s| s.rumble).map(|s| s.id.as_str()).collect();
         assert_eq!(rumbles, ["psx", "gb", "gbc", "n64", "ps2", "dreamcast"]);
-        assert_eq!(refused("nes", &nes().replace("\"rumble\": false", "\"rumble\": 1")), "rumble is not true or false");
+        assert!(refused("nes", &nes().replace("\"rumble\": false", "\"rumble\": 1")).contains("expected a boolean"), "expected a boolean");
     }
 
     #[test]
-    fn the_json_has_every_key_in_order_and_numbers_as_dotnet_writes_them() {
+    fn the_json_has_every_key_in_order() {
         let text = table_json().unwrap();
-        let Value::Array(rows) = json::parse(text).unwrap() else { panic!("not an array") };
+        let rows: Vec<serde_json::Map<String, serde_json::Value>> = serde_json::from_str(text).unwrap();
         assert_eq!(rows.len(), DATA.len());
         for row in &rows {
-            let Value::Object(members) = row else { panic!("not an object") };
-            let keys: Vec<&str> = members.iter().map(|(k, _)| k.text.as_str()).collect();
-            assert_eq!(keys, KEYS);
+            assert_eq!(row.keys().map(String::as_str).collect::<Vec<_>>(), KEYS);
         }
-        assert!(text.contains(r#""cover_aspect":1,"#), "1.0 is written as .NET writes it");
+        assert!(text.contains(r#""cover_aspect":1.0,"#));
         assert!(text.contains(r#""cover_aspect":0.73,"#));
         assert!(text.contains(r#""attached_to":null,"#));
         assert!(text.starts_with(r#"[{"id":"nes","name":"Nintendo Entertainment System","console":"NES""#));
@@ -537,27 +509,25 @@ mod tests {
     #[test]
     fn the_json_reads_back_as_the_same_table() {
         let text = table_json().unwrap();
-        let Value::Array(rows) = json::parse(text).unwrap() else { panic!("not an array") };
+        let rows: Vec<serde_json::Value> = serde_json::from_str(text).unwrap();
         for (row, system) in rows.iter().zip(table().unwrap()) {
-            let mut one = String::new();
-            json::write_compact(&mut one, row);
-            assert_eq!(&parse(&system.id, &one).unwrap(), system);
+            assert_eq!(&parse(&system.id, &row.to_string()).unwrap(), system);
         }
     }
 
     #[test]
     fn a_file_with_a_field_missing_unknown_or_twice_is_refused() {
-        assert_eq!(refused("nes", &nes().replace("  \"console\": \"NES\",\n", "")), "console is missing");
-        assert_eq!(refused("nes", &nes().replace("\"console\"", "\"consol\"")), "consol is not a field of a system");
-        assert_eq!(refused("nes", &nes().replace("\"id\": \"nes\",", "\"id\": \"nes\", \"id\": \"nes\",")), "id is given twice");
+        assert!(refused("nes", &nes().replace("  \"console\": \"NES\",\n", "")).contains("missing field `console`"), "missing field `console`");
+        assert!(refused("nes", &nes().replace("\"console\"", "\"consol\"")).contains("unknown field `consol`"), "unknown field `consol`");
+        assert!(refused("nes", &nes().replace("\"id\": \"nes\",", "\"id\": \"nes\", \"id\": \"nes\",")).contains("duplicate field `id`"), "duplicate field `id`");
     }
 
     #[test]
     fn a_field_of_the_wrong_kind_is_refused() {
-        assert_eq!(refused("nes", &nes().replace("1983", "\"1983\"")), "release_year is not a number");
-        assert_eq!(refused("nes", &nes().replace("1983", "83.5")), "release_year is not a year");
+        assert!(refused("nes", &nes().replace("1983", "\"1983\"")).contains("invalid type: string \"1983\", expected i32"), "invalid type: string '1983', expected i32");
+        assert!(refused("nes", &nes().replace("1983", "83.5")).contains("expected i32"), "expected i32");
         assert_eq!(refused("nes", &nes().replace("1.43", "-1")), "cover_aspect is not a positive number");
-        assert_eq!(refused("nes", &nes().replace("\"self_delimiting_images\": false", "\"self_delimiting_images\": 0")), "self_delimiting_images is not true or false");
+        assert!(refused("nes", &nes().replace("\"self_delimiting_images\": false", "\"self_delimiting_images\": 0")).contains("expected a boolean"), "expected a boolean");
         assert_eq!(refused("nes", &nes().replace("\"screenscraper_system\": 3", "\"screenscraper_system\": 0")), "screenscraper_system is not a positive whole number");
         assert_eq!(refused("nes", &nes().replace("\"console\": \"NES\"", "\"console\": \"  \"")), "console is blank");
         assert_eq!(refused("nes", &nes().replace("\"display_name\": \"NES\"", "\"display_name\": \"  \"")), "display_name is blank");
@@ -565,7 +535,7 @@ mod tests {
         assert_eq!(refused("nes", &nes().replace("[\".nes\"]", "[\".nes\", \".nes\"]")), "extensions names one twice");
         assert_eq!(refused("nes", &nes().replace("[\".nes\"]", "[\".NES\"]")), "the extension .NES is not a dot and lower-case letters");
         assert_eq!(refused("nes", &nes().replace("[\".nes\"]", "[\"nes\"]")), "the extension nes is not a dot and lower-case letters");
-        assert_eq!(refused("nes", "[1]"), "the file is not an object");
+        assert!(!refused("nes", "[1]").is_empty(), "a list is no system");
         assert!(refused("nes", "{").contains("line 1"), "a file that is not JSON says where");
     }
 
@@ -589,7 +559,7 @@ mod tests {
     fn a_medium_is_its_three_words_once() {
         let psx = DATA[5].1;
         assert_eq!(find("psx").unwrap().media, [Medium { id: "psx.card".into(), title: "Memory Card".into(), noun: "Card".into() }]);
-        assert_eq!(refused("psx", &psx.replace(r#""noun": "Card" }"#, r#""noun": "Card", "x": 1 }"#)), "a medium's fields are not id, title, noun");
+        assert!(refused("psx", &psx.replace(r#""noun": "Card" }"#, r#""noun": "Card", "x": 1 }"#)).contains("unknown field `x`, expected one of `id`, `title`, `noun`"), "unknown field `x`, expected one of `id`, `title`, `noun`");
         assert_eq!(refused("psx", &psx.replace(r#""title": "Memory Card""#, r#""title": " ""#)), "title is blank");
         let twice = psx.replace(r#"[{ "id": "psx.card", "title": "Memory Card", "noun": "Card" }]"#, r#"[{ "id": "psx.card", "title": "A", "noun": "B" }, { "id": "psx.card", "title": "C", "noun": "D" }]"#);
         assert_eq!(refused("psx", &twice), "the medium psx.card is named twice");
@@ -601,7 +571,7 @@ mod tests {
     fn an_absent_optional_fact_is_null_not_missing() {
         let unknown = nes().replace("\"screenscraper_system\": 3", "\"screenscraper_system\": null");
         assert_eq!(parse("nes", &unknown).unwrap().screenscraper_system, None);
-        assert_eq!(refused("nes", &nes().replace(",\n  \"screenscraper_system\": 3", "")), "screenscraper_system is missing");
+        assert!(refused("nes", &nes().replace(",\n  \"screenscraper_system\": 3", "")).contains("missing field `screenscraper_system`"), "missing field `screenscraper_system`");
     }
 }
 

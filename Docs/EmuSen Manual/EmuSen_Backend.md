@@ -1401,7 +1401,7 @@ on it: SR2 to SR7, D1, D5, D10 and D12 (§11).*
 
 ### 14.1 The artefacts
 
-- **The header, `EmuSen.Crystal/include/emusen_crystal.h`**, beside `emusen_session.h`, which it includes, so that the
+- **The header, `Platform/crystal/include/emusen_crystal.h`** (in `EmuSen.Crystal/include/` until 2026-11-07), beside `emusen_session.h`, which it includes, so that the
   service's statuses and enumerations are the API's too and a twin passes its status through. 132 exports: 54 of the
   API's own and the 78 twins of the session service's 79 functions (the 79th, `last_error`, is the library's own, which
   takes the runtime as its first argument and may be given none). Three size-prefixed structs (`emusen_crystal_config`, 8
@@ -2281,7 +2281,8 @@ file unchanged), `GalaxiaParityTests`, `SystemTableParityTests` and `LeafAssembl
   failure after) and `CheatDatabaseInstaller.Install` (each entry written as `ExtractToFile` writes it: its Unix mode on
   a file it makes and not on one it overwrites, an existing file truncated only once locked, its time read as local
   time with the standard offset where the time falls twice or never, all measured on .NET 10.0.112 on 2026-10-17; no
-  CRC check, as .NET makes none).
+  CRC check, as .NET makes none). Since 2026-11-07 the zip crate reads the archive and these rules are gone
+  (`EmuSen_RustPlatform.md` §47.15).
 - **What stays C#.** The registry a session applies (`CheatRegistry`, B7) and so `CheatImport`, which reads a file with
   `ChtFile.Parse` and adds what it read; the download (§15.4). **The list files** (`cheats/<game>.json`) were Galaxia's
   in Rust already (`EmuSen_RustPlatform.md` §20), so nothing of theirs moved.
@@ -7185,6 +7186,8 @@ phases' times.
   refuses a value of the wrong kind with the .NET type it wanted, the JSON path and the reader's line and byte, which
   Galaxia's binder words otherwise; and `LoadFrom` reads through a null (a null list, entry, list of writes, or a write
   after writes that parsed), so the C# faults after loading the entries before it. Both are reproduced, as measured.
+  (History since 2026-11-07: `service::cheat_file` is gone, and CHEAT_IMPORT reads through Galaxia's `config_json`;
+  see EmuSen_RustPlatform.md §47.19.)
 - **The download** is the platform's: the runtime's config gained `fetch`, the body of a URL or the words of why not,
   which the platform library fills over `emusen-net` with `CheatDatabaseInstaller.FetchTimeout`'s five minutes. So
   `emusen-crystal` takes no HTTP client of its own, as the device lender keeps it free of Vulkan (§29.2).

@@ -17,10 +17,10 @@ use crate::views;
 use crate::watches::{FrameLogRegistry, FreezeRegistry, WatchKind, WatchRegistry};
 use emusen_cheats::registry::{Applied, CheatRegistry};
 use emusen_core_host::Machine;
-use emusen_dotnet::text::{equals_ignore_case, to_lower};
 use emusen_native::core::caps;
 use emusen_native::debug::{flag, range, run, stop};
 use emusen_systems::debug::{Reference, Unit};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -444,7 +444,7 @@ impl Debugger {
     // ---- The bridge (CoreDebugBridge) ------------------------------------------------------------------------------
 
     fn reported_space(&self, name: &str, loads: bool) -> Option<u32> {
-        self.info.spaces.iter().find(|s| (if loads { s.reports_loads } else { s.reports_stores }) && equals_ignore_case(&s.name, name)).map(|s| s.id)
+        self.info.spaces.iter().find(|s| (if loads { s.reports_loads } else { s.reports_stores }) && s.name.eq_ignore_ascii_case(&name)).map(|s| s.id)
     }
 
     /// `PushTables`: the flags, the stack, each processor's breakpoints and the four kinds of range.
@@ -683,7 +683,7 @@ impl Debugger {
             .iter()
             .enumerate()
             .map(|(i, p)| Cpu {
-                name: to_lower(&p.name),
+                name: p.name.to_lowercase(),
                 description: p.name.clone(),
                 can_halt: halts && self.can_halt(i),
                 coverage: halts && i < self.coverage.len(),
@@ -709,8 +709,8 @@ impl Debugger {
         spaces
             .iter()
             .find(|s| p.code_space == Some(s.id))
-            .or_else(|| spaces.iter().find(|s| equals_ignore_case(&s.name, &format!("{}BUS", p.name))))
-            .or_else(|| spaces.iter().find(|s| equals_ignore_case(&s.name, &format!("{}PRG", p.name))))
+            .or_else(|| spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&format!("{}BUS", p.name))))
+            .or_else(|| spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&format!("{}PRG", p.name))))
             .or_else(|| if p.id == 0 { spaces.first() } else { None })
             .map(|s| s.name.as_str())
     }
@@ -728,7 +728,7 @@ impl Debugger {
     }
 
     fn space_index(&self, name: &str) -> Option<usize> {
-        self.info.spaces.iter().position(|s| equals_ignore_case(&s.name, name))
+        self.info.spaces.iter().position(|s| s.name.eq_ignore_ascii_case(&name))
     }
 
     /// A byte of a listed space, by the space's rule.
@@ -754,7 +754,7 @@ impl Debugger {
 
     /// `DebugCpus.Coprocessor`: the first processor after the main one that is not the sound processor.
     pub fn coprocessor(&self) -> Option<usize> {
-        self.info.processors.iter().enumerate().skip(1).find(|(_, p)| !equals_ignore_case(&p.name, "spc")).map(|(i, _)| i)
+        self.info.processors.iter().enumerate().skip(1).find(|(_, p)| !p.name.eq_ignore_ascii_case("spc")).map(|(i, _)| i)
     }
 
     /// A set's registers as its snapshot shows them, `Current`.
@@ -770,10 +770,10 @@ impl Debugger {
 
     fn register(&self, set: Set, name: &str) -> Option<u64> {
         match set {
-            Set::Video | Set::Apu => self.unit_rows(set).into_iter().find(|r| equals_ignore_case(&r.name, name)).map(|r| r.value),
+            Set::Video | Set::Apu => self.unit_rows(set).into_iter().find(|r| r.name.eq_ignore_ascii_case(&name)).map(|r| r.value),
             _ => {
                 let (names, ring) = self.set_names(set)?;
-                let i = names.iter().position(|(n, _)| equals_ignore_case(n, name))?;
+                let i = names.iter().position(|(n, _)| n.eq_ignore_ascii_case(&name))?;
                 Some(ring.with(|v| v.get(i).copied().unwrap_or(0)) as u64)
             }
         }
@@ -1157,21 +1157,21 @@ impl Debugger {
             Ok(t) if !t.is_empty() => t,
             _ => "[]".to_string(),
         };
-        let doc = emusen_native::json::parse(text.as_bytes()).unwrap_or(emusen_native::json::Value::Null);
+        let doc = serde_json::from_str::<Value>(&text).unwrap_or(Value::Null);
         let mut out = Vec::new();
-        for r in doc.as_array().unwrap_or(&[]) {
-            let at = r.get("address").and_then(emusen_native::json::Value::as_i64).unwrap_or(0) as i32;
-            let bytes = r.get("bytes").and_then(emusen_native::json::Value::as_array).unwrap_or(&[]).iter().map(|b| b.as_i64().unwrap_or(0) as u8).collect();
-            let text_of = |k: &str| r.get(k).and_then(emusen_native::json::Value::as_str).unwrap_or("").to_string();
+        for r in doc.as_array().into_iter().flatten() {
+            let at = r.get("address").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let bytes = r.get("bytes").and_then(Value::as_array).into_iter().flatten().map(|b| b.as_i64().unwrap_or(0) as u8).collect();
+            let text_of = |k: &str| r.get(k).and_then(Value::as_str).unwrap_or("").to_string();
             out.push(Instruction { address: at, bytes, mnemonic: text_of("mnemonic"), operands: text_of("operands") });
-            match r.get("reference").filter(|v| matches!(v, emusen_native::json::Value::Object(_))) {
+            match r.get("reference").filter(|v| matches!(v, Value::Object(_))) {
                 Some(reference) => {
-                    let kind = match reference.get("kind").and_then(emusen_native::json::Value::as_str) {
+                    let kind = match reference.get("kind").and_then(Value::as_str) {
                         Some("call") => Reference::Call,
                         Some("write") => Reference::Write,
                         _ => Reference::Read,
                     };
-                    let target = reference.get("target").and_then(emusen_native::json::Value::as_i64).unwrap_or(0) as i32;
+                    let target = reference.get("target").and_then(Value::as_i64).unwrap_or(0) as i32;
                     self.references.insert(at, (kind, target));
                 }
                 None => {

@@ -2,7 +2,6 @@
 //! address an instruction names. A view never holds an engine: a reader hands it bytes, the C# facade's by rounds over
 //! the C layer (`Tape`), Crystal's own when it is in Rust (B7) (EmuSen_Backend.md §13.4, §13.5).
 
-use emusen_dotnet::text::equals_ignore_case;
 
 /// What an instruction does with the address it names.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,12 +51,12 @@ pub trait Memory {
 
 /// A space by its name, ignoring case, as `SystemDebugSpaces.Find` takes it.
 pub fn find<'a>(memory: &'a dyn Memory, name: &str) -> Option<&'a Space> {
-    memory.spaces().iter().find(|s| equals_ignore_case(&s.name, name))
+    memory.spaces().iter().find(|s| s.name.eq_ignore_ascii_case(&name))
 }
 
 /// A register by its name, ignoring case, as `SystemDebugSpaces.Register` takes it.
 pub fn register(registers: &[(String, u64)], name: &str) -> Option<u64> {
-    registers.iter().find(|(n, _)| equals_ignore_case(n, name)).map(|&(_, v)| v)
+    registers.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)).map(|&(_, v)| v)
 }
 
 /// A read the tape had no byte for yet: the space, the first address and how many bytes from it.
@@ -133,5 +132,5 @@ pub struct Unit {
 
 /// A unit by its name, ignoring case.
 pub fn unit<'a>(units: &'a [Unit], name: &str) -> Option<&'a Unit> {
-    units.iter().find(|u| equals_ignore_case(&u.name, name))
+    units.iter().find(|u| u.name.eq_ignore_ascii_case(&name))
 }

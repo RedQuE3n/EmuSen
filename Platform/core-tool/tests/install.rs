@@ -11,7 +11,7 @@ use emusen_core_tool::install::{self, Note};
 use emusen_core_tool::notes::{self, Tested};
 use emusen_core_tool::Context;
 use emusen_galaxia::archive::ZipWriter;
-use emusen_galaxia::json::Value;
+use serde_json::Value;
 use emusen_galaxia::rom_hash::Crc32;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
@@ -333,7 +333,7 @@ fn update_keeps_one_previous_build_falls_back_on_failure_and_rollback_swaps() {
     let e = events(&ctx, r#"{"op":"core-update","core":"pcsx2"}"#);
     let i = of(&e, "installed")[0];
     let h3 = text(i, "sha256").to_string();
-    assert_eq!(i.get("revoke"), Some(&Value::Array(vec![Value::string(&h1)])));
+    assert_eq!(i.get("revoke"), Some(&Value::Array(vec![Value::String(String::from(&h1))])));
     assert_eq!(prev.read_notice().unwrap().sha256, h2);
     let info = events(&ctx, r#"{"op":"core-info","core":"pcsx2"}"#);
     assert_eq!(info[0].get("previous").and_then(|p| p.get("sha256")).and_then(Value::as_str), Some(h2.as_str()));
@@ -376,7 +376,7 @@ fn remove_takes_the_folder_and_its_kept_build_and_never_the_players_own() {
 
     let e = events(&ctx, r#"{"op":"core-rm","cores":["pcsx2","mine"]}"#);
     let removed = of(&e, "removed")[0];
-    assert_eq!(removed.get("revoke"), Some(&Value::Array(vec![Value::string(&h2), Value::string(&h1)])));
+    assert_eq!(removed.get("revoke"), Some(&Value::Array(vec![Value::String(String::from(&h2)), Value::String(String::from(&h1))])));
     assert!(text(of(&e, "refused")[0], "reason").contains("Cores did not make"));
     assert!(!ctx.cores.join("libretro/pcsx2").exists());
     assert!(!ctx.cores.join("libretro").join(PREVIOUS).join("pcsx2").exists());
@@ -404,13 +404,13 @@ fn verify_refreshes_the_project_files_and_never_clears_a_changed_core() {
     let e = events(&ctx, r#"{"op":"core-verify","core":"pcsx2"}"#);
     let v = of(&e, "verified")[0];
     assert_eq!(text(v, "result"), "refreshed");
-    assert_eq!(v.get("files"), Some(&Value::Array(vec![Value::string(format!("emusen-libretro-host.{}", library_suffix()))])));
+    assert_eq!(v.get("files"), Some(&Value::Array(vec![Value::String(String::from(format!("emusen-libretro-host.{}", library_suffix())))])));
     assert_eq!(std::fs::read(entry.adapter_path()).unwrap(), b"the adapter of a newer EmuSen");
     assert_eq!(result(&events(&ctx, r#"{"op":"core-verify","core":"pcsx2"}"#), "pcsx2").as_deref(), Some("ok"));
 
     std::fs::write(entry.target_path(), "something else\n").unwrap();
     let e = events(&ctx, r#"{"op":"core-verify","core":"pcsx2"}"#);
-    assert_eq!(of(&e, "verified")[0].get("files"), Some(&Value::Array(vec![Value::string("broker.target")])));
+    assert_eq!(of(&e, "verified")[0].get("files"), Some(&Value::Array(vec![Value::String(String::from("broker.target"))])));
     assert_eq!(std::fs::read_to_string(entry.target_path()).unwrap(), Entry::target_text());
 
     installation(&dir, b"the adapter of a newer EmuSen", false);

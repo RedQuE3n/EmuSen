@@ -4,12 +4,11 @@
 
 use crate::abi::{self, dianash_host_commands, status, HostJobsFn, HostKillFn, HostRunFn, ReleaseFn};
 use crate::accounts::Accounts;
-use crate::dotnet;
 use crate::interp::Interp;
 use crate::sandbox::Sandbox;
 use crate::table::{Entry, Kind, Table};
 use dianash_module::Module;
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -194,7 +193,7 @@ impl World {
     }
 
     pub fn find_listed(&self, name: &str) -> Option<u32> {
-        self.listed().find(|s| s.name.as_deref().is_some_and(|n| dotnet::same(n, name))).map(|s| s.id)
+        self.listed().find(|s| s.name.as_deref().is_some_and(|n| n.eq_ignore_ascii_case(&name))).map(|s| s.id)
     }
 
     pub fn current_listed(&self) -> Option<&Session> {
@@ -600,7 +599,7 @@ impl Shell {
 
 /// The JSON string of a text.
 pub(crate) fn json_string(text: &str) -> String {
-    json::quoted(text)
+    serde_json::to_string(&text).unwrap_or_default()
 }
 
 /// What the shell reads of a manifest (§5.3); a field it does not know is ignored.
@@ -625,8 +624,8 @@ pub(crate) struct ManifestCommand {
 
 impl Manifest {
     pub fn read(text: &str) -> Result<Manifest, String> {
-        let value = json::parse(text).map_err(|e| format!("the manifest is not JSON: {e:?}"))?;
-        if !matches!(value.get("manifest"), Some(Value::Number(format)) if format == "1") {
+        let value = serde_json::from_str::<Value>(text).map_err(|e| format!("the manifest is not JSON: {e:?}"))?;
+        if !matches!(value.get("manifest"), Some(Value::Number(format)) if format.as_u64() == Some(1)) {
             return Err("the manifest's format is not version 1".to_string());
         }
         let mut manifest = Manifest::default();
@@ -641,7 +640,7 @@ impl Manifest {
         if let Some(Value::Object(aliases)) = value.get("aliases") {
             for (alias, command) in aliases {
                 if let Some(command) = command.as_str() {
-                    manifest.aliases.push((alias.text.clone(), command.to_string()));
+                    manifest.aliases.push((alias.clone(), command.to_string()));
                 }
             }
         }
@@ -669,7 +668,7 @@ pub const DISPLAY_VERSION: &str = "0.1a";
 pub fn banner() -> String {
     const BORDER: &str = "+------------------------------------------------------------------------+";
     let centre = |text: &str| {
-        let pad = 72usize.saturating_sub(emusen_galaxia::dotnet_text::utf16_len(text));
+        let pad = 72usize.saturating_sub(text.chars().count());
         format!("|{}{text}{}|", " ".repeat(pad / 2), " ".repeat(pad - pad / 2))
     };
     [

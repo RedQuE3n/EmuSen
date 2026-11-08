@@ -7,10 +7,10 @@
 
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
-use crate::dotnet_path::{self as path, Style, is_blank};
-use crate::dotnet_text::{replace_line_endings, utf16_len};
-use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
-use crate::tree::{Directory, Tree, file_exists};
+use crate::models::{APP_SETTINGS_FILE, AppSettings};
+use crate::files::file_exists;
+use crate::tree::{Directory, Tree};
+use std::path::{Path, PathBuf};
 use std::io::Write;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,12 +27,12 @@ static FELL_BACK: Mutex<Option<String>> = Mutex::new(None);
 static FELL_BACK_SAID: AtomicBool = AtomicBool::new(false);
 
 /// The words of the fallback, as the log's first entry after it says them.
-pub fn fallback_words(configured: &str, root: &str) -> String {
-    format!("the log folder {configured} cannot be made or written on this machine, so the log is kept in {root}")
+pub fn fallback_words(configured: &str, root: &Path) -> String {
+    format!("the log folder {configured} cannot be made or written on this machine, so the log is kept in {}", root.display())
 }
 
 /// `ErrorLog.DefaultRoot`: the folder used when the setting names none this machine can make.
-pub fn default_root(tree: &Tree) -> String {
+pub fn default_root(tree: &Tree) -> PathBuf {
     tree.directory(Directory::LogDefault).unwrap_or_default()
 }
 
@@ -42,11 +42,11 @@ pub const WRITE_CHECK: &str = ".emusen-write-check";
 /// `ErrorLog.Usable`: a folder that is named, can be made, and takes a file; made by the asking.
 pub fn usable(directory: Option<&str>) -> bool {
     match directory {
-        Some(directory) if !is_blank(Some(directory)) => {
+        Some(directory) if !directory.trim().is_empty() => {
             if std::fs::create_dir_all(directory).is_err() {
                 return false;
             }
-            let check = path::combine(Style::HOST, directory, WRITE_CHECK);
+            let check = Path::new(directory).join(WRITE_CHECK);
             let wrote = std::fs::write(&check, b"").is_ok();
             let _ = std::fs::remove_file(&check);
             wrote
@@ -57,26 +57,26 @@ pub fn usable(directory: Option<&str>) -> bool {
 
 /// `ErrorLog.FallbackRoot`: where a log goes when the setting names no usable folder: the default when it names none,
 /// the home's own `Logs` when it names one this machine cannot make or write (a settings file copied from another).
-pub fn fallback_root(tree: &Tree, configured: Option<&str>) -> String {
+pub fn fallback_root(tree: &Tree, configured: Option<&str>) -> PathBuf {
     match configured {
-        Some(named) if !is_blank(Some(named)) => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
+        Some(named) if !named.trim().is_empty() => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
         _ => default_root(tree),
     }
 }
 
 /// `ErrorLog.Root`: the folder given, else the `LogDirectory` setting when it is usable, else the fallback, said once
 /// in the log; with what reading the settings had to report.
-pub fn root(tree: &Tree, directory_override: Option<&str>) -> (String, Option<String>) {
+pub fn root(tree: &Tree, directory_override: Option<&str>) -> (PathBuf, Option<String>) {
     if let Some(directory) = directory_override {
-        return (directory.to_string(), None);
+        return (PathBuf::from(directory), None);
     }
-    let (settings, said) = config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
-    let configured = settings.get("LogDirectory").and_then(|value| value.as_str());
+    let (settings, said) = config::load_or_new::<AppSettings>(tree, None, APP_SETTINGS_FILE);
+    let configured = settings.log_directory.as_deref();
     if usable(configured) {
-        return (configured.unwrap_or_default().to_string(), said);
+        return (PathBuf::from(configured.unwrap_or_default()), said);
     }
     let root = fallback_root(tree, configured);
-    if let Some(named) = configured.filter(|named| !is_blank(Some(named))) {
+    if let Some(named) = configured.filter(|named| !named.trim().is_empty()) {
         if !FELL_BACK_SAID.swap(true, Ordering::SeqCst) {
             *FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(fallback_words(named, &root));
         }
@@ -85,22 +85,27 @@ pub fn root(tree: &Tree, directory_override: Option<&str>) -> (String, Option<St
 }
 
 /// `ErrorLog.PathFor`: a day's file in a root, the day as the caller's `yyyyMMdd`.
-pub fn path_for(root: &str, day: &str) -> String {
-    path::combine(Style::HOST, root, &format!("{PREFIX}{day}.log"))
+pub fn path_for(root: impl AsRef<Path>, day: &str) -> PathBuf {
+    root.as_ref().join(format!("{PREFIX}{day}.log"))
+}
+
+/// A text's lines, a carriage return and line feed together ending one.
+fn lines(text: &str) -> Vec<String> {
+    text.replace("\r\n", "\n").split(['\n', '\r']).map(str::to_string).collect()
 }
 
 fn one_line(text: &str) -> String {
-    replace_line_endings(text, " \u{23CE} ")
+    lines(text).join(" \u{23CE} ")
 }
 
 /// One entry: its line, its context on a second, and a fault's text indented under them.
 pub fn format_entry(stamp: &str, level: &str, area: &str, message: &str, context: Option<&str>, fault: Option<&str>) -> String {
     let mut entry = format!("{stamp} {level} [{area}] {}\n", one_line(message));
-    if let Some(context) = context.filter(|context| !is_blank(Some(context))) {
+    if let Some(context) = context.filter(|context| !context.trim().is_empty()) {
         entry.push_str(&format!("    context: {}\n", one_line(context)));
     }
     if let Some(fault) = fault {
-        for line in replace_line_endings(fault, "\n").split('\n') {
+        for line in lines(fault) {
             entry.push_str(&format!("    {line}\n"));
         }
     }
@@ -108,7 +113,7 @@ pub fn format_entry(stamp: &str, level: &str, area: &str, message: &str, context
 }
 
 /// Removes the day files last written more than fourteen days before `now`, once in a process's life.
-fn prune(root: &str, now: SystemTime) -> std::io::Result<()> {
+fn prune(root: &Path, now: SystemTime) -> std::io::Result<()> {
     if PRUNED.swap(true, Ordering::SeqCst) {
         return Ok(());
     }
@@ -118,7 +123,7 @@ fn prune(root: &str, now: SystemTime) -> std::io::Result<()> {
         if !begins_as(&name, PREFIX) || !ends_as(&name[PREFIX.len()..], ".log") {
             continue;
         }
-        let file = path::combine(Style::HOST, root, &name);
+        let file = root.join(&name);
         // The time is the entry's own, a link's and not its target's, which is the one .NET reads; a time that cannot be read is as old as files get.
         let old = match (std::fs::symlink_metadata(&file).and_then(|m| m.modified()), cutoff) {
             (Ok(written), Some(cutoff)) => written < cutoff,
@@ -135,21 +140,21 @@ fn prune(root: &str, now: SystemTime) -> std::io::Result<()> {
 /// Appends an entry to a day's file, the file named by `path_for`; false when the day is full or the entry could not be written. The entry that fills the day carries one last notice.
 ///
 /// No text is an entry its caller could not put into UTF-8: it fails where C# fails with one, at the write, after the folder is pruned and the file made.
-pub fn append_to(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) -> bool {
-    append_entry(file, stamp, now, text).is_some()
+pub fn append_to(file: impl AsRef<Path>, stamp: &str, now: SystemTime, text: Option<&str>) -> bool {
+    append_entry(file.as_ref(), stamp, now, text).is_some()
 }
 
 /// Appends an entry to its day's file in a root and returns the file; none when it was not written.
-pub fn append(root: &str, day: &str, stamp: &str, now: SystemTime, text: &str) -> Option<String> {
+pub fn append(root: impl AsRef<Path>, day: &str, stamp: &str, now: SystemTime, text: &str) -> Option<PathBuf> {
     let file = path_for(root, day);
     append_to(&file, stamp, now, Some(text)).then_some(file)
 }
 
-fn append_entry(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) -> Option<()> {
+fn append_entry(file: &Path, stamp: &str, now: SystemTime, text: Option<&str>) -> Option<()> {
     let _held = GATE.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-    let root = path::directory_name(Style::HOST, file)?;
+    let root = file.parent()?;
     std::fs::create_dir_all(&root).ok()?;
-    prune(&root, now).ok()?;
+    prune(root, now).ok()?;
     let size = if file_exists(file) { std::fs::metadata(file).ok()?.len() } else { 0 };
     if size >= MAX_BYTES {
         return None;
@@ -159,8 +164,7 @@ fn append_entry(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) ->
     if let Some(notice) = FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() {
         text.insert_str(0, &format!("{stamp} WARN [log] {notice}\n"));
     }
-    // The length is counted as C# counts a string's, in UTF-16 code units, against a size in bytes.
-    if size + utf16_len(&text) as u64 >= MAX_BYTES {
+    if size + text.len() as u64 >= MAX_BYTES {
         text.push_str(&format!("{stamp} WARN [log] this file reached {} MB; nothing more is written to it today\n", MAX_BYTES >> 20));
     }
     log.write_all(text.as_bytes()).ok()
@@ -239,12 +243,11 @@ mod tests {
         assert_eq!(append(&root, "20261008", "T", now, "refused\n"), None);
         assert_eq!(std::fs::metadata(&file).unwrap().len(), text.len() as u64);
 
-        // The room left is judged by the entry's length as C# counts it, in UTF-16 code units, not by the bytes it takes.
+        // The room left is judged by the bytes an entry takes.
         let wide = "é😀\n";
-        assert_eq!((utf16_len(wide), wide.len()), (4, 7));
-        std::fs::write(&file, vec![b'x'; MAX_BYTES as usize - 5]).unwrap();
+        std::fs::write(&file, vec![b'x'; MAX_BYTES as usize - 8]).unwrap();
         assert!(append(&root, "20261008", "STAMP", now, wide).is_some());
-        assert_eq!(std::fs::metadata(&file).unwrap().len(), MAX_BYTES - 5 + 7);
+        assert_eq!(std::fs::metadata(&file).unwrap().len(), MAX_BYTES - 8 + 7);
 
         std::fs::write(temp.join("blocker"), "a file where the folder should be").unwrap();
         assert_eq!(append(&temp.join("blocker"), "20261008", "T", now, "nowhere\n"), None);
@@ -255,20 +258,20 @@ mod tests {
         let temp = TempDir::new("log");
         let mut tree = Tree { root: temp.join("root"), application_data: temp.join("appdata"), ..Tree::default() };
         tree.set_override(Override::Config, Some(temp.join("etc")));
-        assert_eq!(root(&tree, Some("/given")), ("/given".to_string(), None));
+        assert_eq!(root(&tree, Some("/given")), (PathBuf::from("/given"), None));
         assert_eq!(root(&tree, None), (temp.join("appdata/EmuSen/Logs"), None));
         std::fs::create_dir_all(temp.join("etc")).unwrap();
         let settings = |log: &str| std::fs::write(temp.join("etc/appsettings.json"), format!("{{\"LogDirectory\":{log}}}")).unwrap();
-        settings(&crate::json::quoted(&temp.join("made/Logs")).replace("\\u002B", "+"));
+        settings(&serde_json::to_string(&&temp.text("made/Logs")).unwrap_or_default().replace("\\u002B", "+"));
         assert_eq!(root(&tree, None), (temp.join("made/Logs"), None));
-        assert!(crate::tree::directory_exists(&temp.join("made/Logs")));
+        assert!(crate::files::directory_exists(&temp.join("made/Logs")));
         // A folder this machine cannot make, as a settings file copied from another names, falls back to the home's own Logs, said once in it.
         let _held = crate::test_support::error_log_tests();
         reset();
         let home_logs = tree.directory(Directory::Logs).unwrap();
         std::fs::write(temp.join("blocker"), "x").unwrap();
-        let blocked = temp.join("blocker/Logs");
-        settings(&crate::json::quoted(&blocked));
+        let blocked = temp.text("blocker/Logs");
+        settings(&serde_json::to_string(&&blocked).unwrap_or_default());
         assert_eq!(root(&tree, None).0, home_logs);
         let now = SystemTime::now();
         let file = append(&root(&tree, None).0, "20261101", "T", now, "first\n").unwrap();
@@ -281,18 +284,18 @@ mod tests {
             let shut = temp.join("shut");
             std::fs::create_dir_all(&shut).unwrap();
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
-            if std::fs::write(path::combine(Style::HOST, &shut, "probe"), b"").is_err() {
-                assert!(!usable(Some(&shut)));
-                settings(&crate::json::quoted(&shut));
+            if std::fs::write(shut.join("probe"), b"").is_err() {
+                assert!(!usable(Some(&shut.to_string_lossy())));
+                settings(&serde_json::to_string(&&shut.to_string_lossy()).unwrap_or_default());
                 assert_eq!(root(&tree, None).0, home_logs);
             }
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();
         }
-        assert!(!file_exists(&path::combine(Style::HOST, &temp.join("made/Logs"), WRITE_CHECK)));
+        assert!(!file_exists(temp.join("made/Logs").join(WRITE_CHECK)));
         settings("5");
         let (fallback, said) = root(&tree, None);
         assert_eq!(fallback, temp.join("appdata/EmuSen/Logs"));
-        assert!(said.unwrap().ends_with("$.LogDirectory is not a string. Falling back to defaults."));
+        assert!(said.unwrap().ends_with("$.LogDirectory: invalid type: integer `5`, expected a string. Falling back to defaults."));
         assert!(!usable(None) && !usable(Some("")) && !usable(Some("  ")));
     }
 }

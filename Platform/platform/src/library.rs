@@ -9,14 +9,12 @@ use std::ffi::c_void;
 use std::sync::Arc;
 
 thread_local! {
-    static LAST_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
     /// An answer that did not fit, by the export and the request that made it, taken by the same call asked again.
     static WAITING: RefCell<Option<(u8, Vec<u8>, Vec<u8>)>> = const { RefCell::new(None) };
 }
 
 fn fail(status: i32, words: impl Into<String>) -> i32 {
-    LAST_ERROR.with_borrow_mut(|last| *last = words.into());
-    status
+    crate::last_error::fail(crate::last_error::Slot::Library, status, words.into())
 }
 
 fn failed(error: Error) -> i32 {
@@ -71,12 +69,7 @@ pub extern "C" fn emusen_library_abi_version() -> u32 {
 /// `out` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_library_last_error(out: *mut u8, len: usize) -> i64 {
-    LAST_ERROR.with_borrow(|words| {
-        if !out.is_null() && words.len() <= len {
-            unsafe { std::ptr::copy_nonoverlapping(words.as_ptr(), out, words.len()) };
-        }
-        words.len() as i64
-    })
+    unsafe { crate::last_error::copy_out(crate::last_error::Slot::Library, out, len) }
 }
 
 /// Opens `games.db` with the host's SQLite, migrating it; the handle in `out`.

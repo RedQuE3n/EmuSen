@@ -4,8 +4,9 @@
 //! file that already exists always wins. The ROM library is named here only to be left alone (§3.3).
 
 use crate::atomic::words;
-use crate::dotnet_path::{self as path, Style};
-use crate::tree::{Tree, directory_exists, file_exists, legacy_root_for};
+use crate::files::{directory_exists, file_exists};
+use crate::tree::{Tree, legacy_root_for};
+use std::path::{Path, PathBuf};
 use std::collections::VecDeque;
 use std::io;
 
@@ -14,7 +15,6 @@ pub const MIGRATED_DIRECTORIES: [&str; 4] = ["Saves", "Logs", "Firmware", "Cheat
 /// The old ROM folders, reported and never copied.
 pub const LIBRARY_DIRECTORIES: [&str; 2] = ["Games", "Roms"];
 
-const STYLE: Style = Style::HOST;
 
 /// How many files a copy made, and what it said about the ones it could not.
 #[derive(Debug, Default, PartialEq, Eq)]
@@ -31,20 +31,20 @@ impl Copied {
     }
 }
 
-/// A directory's entries as (name, is a directory), as .NET's enumeration has them (`tree::listed_as_directory`).
-fn entries(directory: &str) -> io::Result<Vec<(String, bool)>> {
+/// A directory's entries as (name, is a directory), a link taken as what it links to.
+fn entries(directory: &Path) -> io::Result<Vec<(String, bool)>> {
     let mut found = Vec::new();
     for entry in std::fs::read_dir(directory)? {
         let entry = entry?;
-        let is_directory = crate::tree::listed_as_directory(&entry);
+        let is_directory = crate::files::listed_as_directory(&entry);
         found.push((entry.file_name().to_string_lossy().into_owned(), is_directory));
     }
     Ok(found)
 }
 
 /// One file copied with its permissions and its modification time, as `File.Copy` leaves it.
-pub(crate) fn copy_file(source: &str, target: &str) -> io::Result<()> {
-    if let Some(directory) = path::directory_name(STYLE, target).filter(|d| !d.is_empty()) {
+pub(crate) fn copy_file(source: &Path, target: &Path) -> io::Result<()> {
+    if let Some(directory) = target.parent().filter(|d| !d.as_os_str().is_empty()) {
         std::fs::create_dir_all(directory)?;
     }
     let metadata = std::fs::metadata(source)?;
@@ -60,42 +60,43 @@ pub(crate) fn copy_file(source: &str, target: &str) -> io::Result<()> {
 }
 
 /// Every file under `source` that `destination` lacks, copied to the same place under it. An unreadable directory is an error, as it is an exception in the C#.
-pub fn copy_tree(source: &str, destination: &str) -> io::Result<Copied> {
+pub fn copy_tree(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> io::Result<Copied> {
+    let (source, destination) = (source.as_ref(), destination.as_ref());
     let mut copied = Copied::default();
     if !directory_exists(source) {
         return Ok(copied);
     }
     // Breadth first, the order .NET's enumeration reports in; it decides only the order of the diagnostics.
-    let mut pending = VecDeque::from([String::new()]);
+    let mut pending = VecDeque::from([PathBuf::new()]);
     while let Some(relative) = pending.pop_front() {
-        for (name, is_directory) in entries(&path::combine(STYLE, source, &relative))? {
-            let relative = path::combine(STYLE, &relative, &name);
+        for (name, is_directory) in entries(&source.join(&relative))? {
+            let relative = relative.join(&name);
             if is_directory {
                 pending.push_back(relative);
                 continue;
             }
-            let target = path::combine(STYLE, destination, &relative);
+            let target = destination.join(&relative);
             if file_exists(&target) {
                 continue;
             }
-            let source_file = path::combine(STYLE, source, &relative);
+            let source_file = source.join(&relative);
             match copy_file(&source_file, &target) {
                 Ok(()) => copied.files += 1,
-                Err(error) => copied.diagnostics.push(format!("{source_file}: {} Left in place.", words(&error))),
+                Err(error) => copied.diagnostics.push(format!("{}: {} Left in place.", source_file.display(), words(&error))),
             }
         }
     }
     Ok(copied)
 }
 
-/// `DataMigration.Run(legacyRoot, destinationRoot)`: the four emulator-written directories, unless the two roots are one.
-pub fn run(legacy_root: &str, destination_root: &str) -> io::Result<Copied> {
-    if !directory_exists(legacy_root) || path::equals_ignore_case(&path::full_path(legacy_root), &path::full_path(destination_root)) {
+/// `DataMigration.Run(legacyRoot, destinationRoot)`: the four emulator-written directories, unless the two roots are one folder.
+pub fn run(legacy_root: &Path, destination_root: &Path) -> io::Result<Copied> {
+    if !directory_exists(legacy_root) || crate::path_key::key(legacy_root) == crate::path_key::key(destination_root) {
         return Ok(Copied::default());
     }
     let mut copied = Copied::default();
     for name in MIGRATED_DIRECTORIES {
-        copied = copied.and(copy_tree(&path::combine(STYLE, legacy_root, name), &path::combine(STYLE, destination_root, name))?);
+        copied = copied.and(copy_tree(legacy_root.join(name), destination_root.join(name))?);
     }
     Ok(copied)
 }
@@ -111,38 +112,38 @@ pub fn run_own(tree: &Tree) -> io::Result<Copied> {
 }
 
 /// `DataMigration.SeedFromBundle`: a Mac bundle's read-only skeleton, copied into home and never over the player's files.
-pub fn seed_from_bundle(seed_directory: Option<&str>, home: &str) -> io::Result<Copied> {
+pub fn seed_from_bundle(seed_directory: Option<&Path>, home: &Path) -> io::Result<Copied> {
     match seed_directory {
         Some(seed) => copy_tree(seed, home),
         None => Ok(Copied::default()),
     }
 }
 
-fn holds_a_file(directory: &str) -> io::Result<bool> {
-    let mut pending = VecDeque::from([directory.to_string()]);
+fn holds_a_file(directory: &Path) -> io::Result<bool> {
+    let mut pending = VecDeque::from([directory.to_path_buf()]);
     while let Some(directory) = pending.pop_front() {
         for (name, is_directory) in entries(&directory)? {
             if !is_directory {
                 return Ok(true);
             }
-            pending.push_back(path::combine(STYLE, &directory, &name));
+            pending.push_back(directory.join(&name));
         }
     }
     Ok(false)
 }
 
 /// The old ROM folders that still hold files, so a caller can say where they are; and what could not be looked into.
-pub fn remaining_library_directories(legacy_root: &str) -> (Vec<String>, Vec<String>) {
+pub fn remaining_library_directories(legacy_root: &Path) -> (Vec<PathBuf>, Vec<String>) {
     let (mut found, mut diagnostics) = (Vec::new(), Vec::new());
     for name in LIBRARY_DIRECTORIES {
-        let directory = path::combine(STYLE, legacy_root, name);
+        let directory = legacy_root.join(name);
         if !directory_exists(&directory) {
             continue;
         }
         match holds_a_file(&directory) {
             Ok(true) => found.push(directory),
             Ok(false) => {}
-            Err(error) => diagnostics.push(format!("{directory}: {}", words(&error))),
+            Err(error) => diagnostics.push(format!("{}: {}", directory.display(), words(&error))),
         }
     }
     (found, diagnostics)
@@ -153,9 +154,9 @@ mod tests {
     use super::*;
     use crate::test_support::TempDir;
 
-    fn put(temp: &TempDir, relative: &str, contents: &str) -> String {
+    fn put(temp: &TempDir, relative: &str, contents: &str) -> PathBuf {
         let file = temp.join(relative);
-        std::fs::create_dir_all(path::directory_name(STYLE, &file).unwrap()).unwrap();
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(&file, contents).unwrap();
         file
     }
@@ -201,12 +202,12 @@ mod tests {
     }
 
     /// Every entry under a directory, with a file's bytes and every entry's modification time, in order.
-    fn snapshot(directory: &str) -> Vec<(String, Option<Vec<u8>>, std::time::SystemTime)> {
+    fn snapshot(directory: &Path) -> Vec<(PathBuf, Option<Vec<u8>>, std::time::SystemTime)> {
         let mut found = Vec::new();
-        let mut pending = vec![directory.to_string()];
+        let mut pending = vec![directory.to_path_buf()];
         while let Some(directory) = pending.pop() {
             for (name, is_directory) in entries(&directory).unwrap() {
-                let entry = path::combine(STYLE, &directory, &name);
+                let entry = directory.join(&name);
                 let modified = std::fs::metadata(&entry).unwrap().modified().unwrap();
                 found.push((entry.clone(), (!is_directory).then(|| std::fs::read(&entry).unwrap()), modified));
                 if is_directory {
@@ -233,10 +234,12 @@ mod tests {
         (length > 0 && length < short.len()).then(|| std::ffi::OsString::from_wide(&short[..length]).to_string_lossy().into_owned())
     }
 
-    /// The tree's own spellings on this system, links to it made in `links`: each names the tree, or is equal to its spelling without regard to case.
-    fn spellings(temp: &TempDir, home: &str, links: &TempDir) -> Vec<String> {
-        let separator = STYLE.separator();
-        let mut spellings = vec![home.to_string(), format!("{home}{separator}"), temp.join("x/../Caf\u{e9}"), temp.join("CAF\u{c9}"), temp.join("caf\u{e9}")];
+    /// The tree's own spellings on this system, links to it made in `links`: each names the same folder, the case variants only where the file system ignores case.
+    fn spellings(temp: &TempDir, home: &Path, links: &TempDir) -> Vec<PathBuf> {
+        let mut spellings = vec![home.to_path_buf(), home.join(""), temp.join("x/../Caf\u{e9}")];
+        if cfg!(any(windows, target_os = "macos")) {
+            spellings.extend([temp.join("CAF\u{c9}"), temp.join("caf\u{e9}")]);
+        }
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(home, links.join("linked")).unwrap();
@@ -247,11 +250,12 @@ mod tests {
         spellings.push(temp.join("Cafe\u{301}"));
         #[cfg(windows)]
         {
-            let lower_drive = home[..1].to_lowercase() + &home[1..];
-            spellings.extend([home.replace('\\', "/"), format!(r"\\?\{home}"), lower_drive, format!("{home}."), format!("{home} "), format!("{home}. .")]);
-            spellings.extend(short_name(home).filter(|short| short != home));
+            let text = home.to_string_lossy().into_owned();
+            let lower_drive = text[..1].to_lowercase() + &text[1..];
+            spellings.extend([text.replace('\\', "/"), format!(r"\\?\{text}"), lower_drive, format!("{text}."), format!("{text} "), format!("{text}. .")].map(PathBuf::from));
+            spellings.extend(short_name(&text).filter(|short| *short != text).map(PathBuf::from));
             let junction = links.join("junction");
-            let made = std::process::Command::new("cmd").args(["/C", "mklink", "/J", &junction, home]).output().unwrap();
+            let made = std::process::Command::new("cmd").arg("/C").arg("mklink").arg("/J").arg(&junction).arg(home).output().unwrap();
             assert!(made.status.success(), "{made:?}");
             spellings.push(junction);
             if std::os::windows::fs::symlink_dir(home, links.join("linked")).is_ok() {
@@ -279,8 +283,8 @@ mod tests {
         }
         let (tree, beside) = (snapshot(&home), snapshot(temp.path()));
         for spelling in &spellings {
-            assert_eq!(run(&home, spelling).unwrap(), Copied::default(), "onto {spelling}");
-            assert_eq!(run(spelling, &home).unwrap(), Copied::default(), "from {spelling}");
+            assert_eq!(run(&home, spelling).unwrap(), Copied::default(), "onto {}", spelling.display());
+            assert_eq!(run(spelling, &home).unwrap(), Copied::default(), "from {}", spelling.display());
         }
         assert_eq!(snapshot(&home), tree, "the tree is as it was");
         assert_eq!(snapshot(temp.path()), beside, "nothing was made beside it");
@@ -311,7 +315,7 @@ mod tests {
         assert_eq!(copied.files, 2);
         assert_eq!(read(&temp, "new/linked/inner/c.txt"), "c");
         assert_eq!(copied.diagnostics.len(), 1);
-        assert!(copied.diagnostics[0].starts_with(&temp.join("old/broken")), "{:?}", copied.diagnostics);
+        assert!(copied.diagnostics[0].starts_with(&temp.text("old/broken")), "{:?}", copied.diagnostics);
         assert!(copied.diagnostics[0].ends_with(" Left in place."), "{:?}", copied.diagnostics);
     }
 

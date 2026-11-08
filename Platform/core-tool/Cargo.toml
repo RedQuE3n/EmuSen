@@ -13,6 +13,8 @@ name = "emusen_core_tool"
 emusen-core-entry = { path = "../core-entry" }
 emusen-tool-job = { path = "../tool-job" }
 emusen-galaxia = { path = "../galaxia" }
+# JSON read and written.
+serde_json.workspace = true
 emusen-net = { path = "../net" }
 # The check that a library's header names this machine, the host's own (EmuSen_Cores.md §5.2 step 3).
 emusen-core-host = { path = "../../EmuSen/Cores/Shared/emusen-core-host" }

@@ -1,0 +1,5 @@
+{
+  // the game's own engine
+  "engine": "mars",
+  "crop": "8,0,8,0", /* edges */
+}

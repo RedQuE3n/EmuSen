@@ -2,12 +2,13 @@
 //! §4.6's rules — a partial file renamed into place only after every check, free space and an unchanged source
 //! required, and a disc done when its package names a CHD still at the size and time recorded with its SHA-1.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::chdman::Chdman;
 use crate::checks::{self, DvdToc, Toc};
 use crate::discs::{self, Item};
 use crate::{Context, Destination};
-use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::{Text, Value};
+use serde_json::Value;
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_disc::Kind;
@@ -34,7 +35,7 @@ pub struct Options {
 pub struct Outcome {
     pub state: &'static str,
     pub words: Option<String>,
-    pub facts: Vec<(Text, Value)>,
+    pub facts: Vec<(String, Value)>,
 }
 
 impl Outcome {
@@ -47,17 +48,22 @@ impl Outcome {
     }
 
     pub fn with(mut self, name: &str, value: Value) -> Outcome {
-        self.facts.push((Text::new(name), value));
+        self.facts.push((String::from(name), value));
         self
     }
 }
 
 pub fn obj(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(n, v)| (Text::new(n), v)).collect())
+    Value::Object(members.into_iter().map(|(n, v)| (String::from(n), v)).collect())
+}
+
+/// Seconds as an event reports them, to a tenth.
+pub fn tenths(seconds: f64) -> f64 {
+    (seconds * 10.0).round() / 10.0
 }
 
 fn text(s: &str) -> Value {
-    Value::string(s)
+    Value::String(String::from(s))
 }
 
 /// Where a disc's CHD and package go: the CHD at the library's relative path under the destination (`Compressed`, the
@@ -74,12 +80,12 @@ pub struct Placed {
 
 fn with_chd(rel: &str) -> String {
     let (dir, name) = rel.rsplit_once('/').map_or(("", rel), |(d, n)| (d, n));
-    let stem = path::file_name_without_extension(Style::Unix, name);
+    let stem = Path::new(name).file_stem().unwrap_or_default().to_string_lossy();
     if dir.is_empty() { format!("{stem}.chd") } else { format!("{dir}/{stem}.chd") }
 }
 
 fn under(root: &str, rel: &str) -> String {
-    rel.split('/').fold(root.to_string(), |at, part| path::combine(Style::HOST, &at, part))
+    rel.split('/').fold(root.to_string(), |at, part| Path::new(&at).join(part).to_string_lossy().into_owned())
 }
 
 pub fn place(ctx: &Context, dest: &Destination, item: &Item) -> Placed {
@@ -90,7 +96,7 @@ pub fn place(ctx: &Context, dest: &Destination, item: &Item) -> Placed {
     let (game_where, game_path) = match dest {
         Destination::Beside { .. } => ("library", chd_rel.clone()),
         Destination::Folder { compressed: true, .. } => ("compressed", chd_rel.clone()),
-        Destination::Folder { .. } => ("absolute", path::full_path(&chd)),
+        Destination::Folder { .. } => ("absolute", path_key::key_text(&chd)),
     };
     Placed { chd, chd_rel, game_where, game_path, package: under(&ctx.packages(), &package_rel), package_rel }
 }
@@ -119,7 +125,7 @@ pub fn utc(t: SystemTime) -> String {
 }
 
 fn seen_json(s: &Seen) -> Value {
-    obj(vec![("size", Value::number(s.size)), ("mtime", text(&utc(s.modified)))])
+    obj(vec![("size", Value::from(s.size)), ("mtime", text(&utc(s.modified)))])
 }
 
 fn same_seen(v: Option<&Value>, s: &Option<Seen>) -> bool {
@@ -131,14 +137,14 @@ fn same_seen(v: Option<&Value>, s: &Option<Seen>) -> bool {
 
 fn number(v: &Value) -> Option<u64> {
     match v {
-        Value::Number(t) => t.parse().ok(),
+        Value::Number(t) => t.as_u64(),
         _ => None,
     }
 }
 
 fn hashes_json(h: &Hashes, extra: Vec<(&str, Value)>) -> Value {
     let mut members = extra;
-    members.extend([("size", Value::number(h.size)), ("crc32", text(&h.crc32)), ("md5", text(&h.md5)), ("sha1", h.sha1.as_deref().map_or(Value::Null, text))]);
+    members.extend([("size", Value::from(h.size)), ("crc32", text(&h.crc32)), ("md5", text(&h.md5)), ("sha1", h.sha1.as_deref().map_or(Value::Null, text))]);
     obj(members)
 }
 
@@ -148,7 +154,7 @@ fn hashes_from(v: &Value) -> Option<Hashes> {
 
 /// The package's manifest, refused words where it is absent or not one this build reads.
 pub fn manifest(placed: &Placed) -> Result<Value, String> {
-    let at = path::combine(Style::HOST, &placed.package, package::FILE_NAME);
+    let at = Path::new(&placed.package).join(package::FILE_NAME).to_string_lossy().into_owned();
     match package::read(&at) {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Err("not converted".into()),
         Err(e) => Err(format!("{at}: {e}")),
@@ -201,9 +207,9 @@ fn free_bytes(_: &str) -> Option<u64> {
 /// Partial files and scratch folders under `Compressed` that a stopped process left more than an hour ago, removed.
 pub fn sweep(ctx: &Context) {
     let mut found = Vec::new();
-    let _ = emusen_galaxia::dotnet_files::visit_files_with(&ctx.compressed(), emusen_galaxia::dotnet_files::Options { skip_hidden: false, ignore_inaccessible: true }, |f, name| {
+    let _ = emusen_galaxia::files::visit_files_with(&ctx.compressed(), emusen_galaxia::files::Options { skip_hidden: false, ignore_inaccessible: true }, |f, name| {
         if name.contains(".partial-") {
-            found.push(f.to_string());
+            found.push(f.to_string_lossy().into_owned());
         }
     });
     let old = |at: &str| std::fs::metadata(at).and_then(|m| m.modified()).ok().and_then(|t| t.elapsed().ok()).is_some_and(|age| age > PARTIAL_AGE);
@@ -221,7 +227,7 @@ pub fn sweep(ctx: &Context) {
 }
 
 fn scratch_for(ctx: &Context, index: usize) -> String {
-    path::combine(Style::HOST, &ctx.compressed(), &format!(".scratch-{}-{index}", std::process::id()))
+    Path::new(&ctx.compressed()).join(&format!(".scratch-{}-{index}", std::process::id())).to_string_lossy().into_owned()
 }
 
 /// A check's word for the event and the log.
@@ -281,7 +287,7 @@ fn reader_checks(check1: &Result<(), String>, at: &str, layout: &Layout, sheet: 
 /// A partial file a stopped process left beside an original more than an hour ago, removed: only the tool's own
 /// `<name>.chd.partial-<process>` beside this disc's CHD (§20.2).
 fn sweep_beside(placed: &Placed) {
-    let (Some(dir), Some(name)) = (path::directory_name(Style::HOST, &placed.chd), std::path::Path::new(&placed.chd).file_name().map(|n| n.to_string_lossy().into_owned())) else { return };
+    let (Some(dir), Some(name)) = (Path::new(&placed.chd).parent().map(|d| d.to_string_lossy().into_owned()), std::path::Path::new(&placed.chd).file_name().map(|n| n.to_string_lossy().into_owned())) else { return };
     let prefix = format!("{name}.partial-");
     let Ok(entries) = std::fs::read_dir(&dir) else { return };
     for e in entries.flatten() {
@@ -364,7 +370,7 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         }
     };
     let original_bytes: u64 = prepared.files.iter().filter_map(|f| seen(f)).map(|s| s.size).sum();
-    let out_dir = path::directory_name(Style::HOST, &placed.chd).unwrap_or_default();
+    let out_dir = Path::new(&placed.chd).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
     // Beside the original the folder is the disc's own, and no folder is made in the library.
     if let Err(e) = if dest.beside() { Ok(()) } else { std::fs::create_dir_all(&out_dir) } {
         return Outcome::said("failed", format!("{out_dir} could not be made: {e}"));
@@ -428,9 +434,9 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
     };
     let chd_seen = seen(&placed.chd);
     let doc = package_of(ctx, item, placed, &prepared, &tracks, &layout, chdman, &info, codecs, chd_seen.as_ref(), &before, &checks_json);
-    let manifest_at = path::combine(Style::HOST, &placed.package, package::FILE_NAME);
+    let manifest_at = Path::new(&placed.package).join(package::FILE_NAME).to_string_lossy().into_owned();
     if let Some((name, bytes)) = &prepared.original {
-        if let Err(w) = emusen_galaxia::atomic::write(&path::combine(Style::HOST, &placed.package, name), bytes) {
+        if let Err(w) = emusen_galaxia::atomic::write(&Path::new(&placed.package).join(name).to_string_lossy().into_owned(), bytes) {
             unplace();
             return Outcome::said("failed", w);
         }
@@ -450,9 +456,9 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         .with("output", text(&placed.chd_rel))
         .with("where", text(placed.game_where))
         .with("package", text(&placed.package_rel))
-        .with("original", Value::number(original_bytes))
-        .with("chd", Value::number(chd_bytes))
-        .with("seconds", Value::number(format!("{:.1}", started.elapsed().as_secs_f64())))
+        .with("original", Value::from(original_bytes))
+        .with("chd", Value::from(chd_bytes))
+        .with("seconds", Value::from(tenths(started.elapsed().as_secs_f64())))
         .with("checks", checks_json)
 }
 
@@ -472,10 +478,10 @@ fn package_of(
     checks_json: &Value,
 ) -> Value {
     let library = ctx.library.clone().unwrap_or_default();
-    let title = path::file_name_without_extension(Style::Unix, &item.rel).to_string();
+    let title = Path::new(&item.rel).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let mut game = package::file_entry("image", placed.game_where, &placed.game_path, chd_seen.map(|s| s.size));
     if let (Value::Object(members), Some(s)) = (&mut game, chd_seen) {
-        members.push((Text::new("seen"), seen_json(s)));
+        members.insert(String::from("seen"), seen_json(s));
     }
     let lone = prepared.original.is_none();
     let dump = obj(vec![
@@ -492,7 +498,7 @@ fn package_of(
         .map(|(s, seen)| {
             let mut m = vec![("where", text("library")), ("path", text(&discs::rel_of(&library, s)))];
             if let Some(seen) = seen {
-                m.extend([("size", Value::number(seen.size)), ("mtime", text(&utc(seen.modified)))]);
+                m.extend([("size", Value::from(seen.size)), ("mtime", text(&utc(seen.modified)))]);
             }
             obj(m)
         })
@@ -522,7 +528,7 @@ fn package_of(
     let mut doc = package::new(Some(&title), &item.system.esde_system, "linked", game);
     if let Value::Object(members) = &mut doc {
         for (name, value) in members.iter_mut() {
-            match name.text.as_str() {
+            match name.as_str() {
                 "dump" => *value = dump.clone(),
                 "container" => *value = container.clone(),
                 _ => {}
@@ -543,7 +549,7 @@ pub fn game_bytes(at: &str) -> u64 {
     if !emusen_galaxia::image_sets::is_sheet(at) {
         return named;
     }
-    named + emusen_galaxia::image_sets::companions(at).unwrap_or_default().iter().filter_map(|f| seen(f)).map(|s| s.size).sum::<u64>()
+    named + emusen_galaxia::image_sets::companions(at).unwrap_or_default().iter().filter_map(|f| seen(&f.to_string_lossy())).map(|s| s.size).sum::<u64>()
 }
 
 /// `chd ls`'s view of one disc: converted, changed since, its CHD gone, or not converted; `taken` where a file already
@@ -554,7 +560,7 @@ pub fn list(ctx: &Context, dest: &Destination, item: &Item) -> Outcome {
     let beside = place(ctx, &Destination::Beside { library: ctx.library.clone().unwrap_or_default() }, item);
     let taken = std::fs::symlink_metadata(&beside.chd).is_ok();
     let base = |state| {
-        let o = Outcome::new(state).with("size", Value::number(size));
+        let o = Outcome::new(state).with("size", Value::from(size));
         if taken { o.with("taken", Value::Bool(true)) } else { o }
     };
     let Ok(doc) = manifest(&placed) else { return base("not converted") };
@@ -570,7 +576,7 @@ pub fn list(ctx: &Context, dest: &Destination, item: &Item) -> Outcome {
     };
     let (original, chd) = recorded_sizes(&doc).unwrap_or((0, 0));
     let (at, output) = recorded_place(&doc);
-    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::number(original)).with("chd", Value::number(chd))
+    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::from(original)).with("chd", Value::from(chd))
 }
 
 /// A converted disc's two sizes from its package's own record, no file read (EmuSen_GamePackages.md §4.4a): the

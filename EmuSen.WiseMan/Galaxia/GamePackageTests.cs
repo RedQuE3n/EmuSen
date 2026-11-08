@@ -48,8 +48,8 @@ namespace EmuSen.WiseMan.Galaxia
             GamePackage read = GamePackage.Read(path);
 
             Assert.Equal(made.Format(), written);
-            Assert.StartsWith("{" + Environment.NewLine + "  \"x-before\": {" + Environment.NewLine + "    \"kept\": 1.50", written);
-            Assert.EndsWith("}" + Environment.NewLine, written);
+            Assert.StartsWith("{\n  \"x-before\": {\n    \"kept\": 1.5", written);
+            Assert.EndsWith("}\n", written);
             Assert.Equal(written, read.Format());
             Assert.Equal("é & <ok>", (string?)read.Document["game"]!["x-inside"]);
             Assert.Equal(new PackageFile("image", "library", "SNES/Aurora Drift (USA).sfc", 4096), read.Game);

@@ -11,6 +11,7 @@ name = "emusen_cores_module"
 
 [dependencies]
 dianash-module = { path = "../dianash-module" }
-emusen-dotnet = { path = "../dotnet" }
+# JSON read and written.
+serde_json.workspace = true
 # The service's table and its one read of an event, shared rather than copied (EmuSen_Cores.md §6).
 emusen-library-module = { path = "../emusen-library-module" }

@@ -94,7 +94,7 @@ pub fn quarantine(store: &Store) -> Result<String, String> {
 }
 
 fn json(text: &str) -> String {
-    emusen_dotnet::json::quoted(text)
+    serde_json::json!(text).to_string()
 }
 
 /// Every trial since `from` as one JSON object a line, with its unit runs.

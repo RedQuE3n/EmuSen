@@ -67,28 +67,6 @@ namespace EmuSen.Galaxia.Native
         Seed,
     }
 
-    // As EMUSEN_GALAXIA_PATH_*: the .NET path rules the library applies, asked one at a time by the parity tests.
-    internal enum GalaxiaPathRule : uint
-    {
-        Combine,
-        FileName,
-        FileNameWithoutExtension,
-        ChangeExtension,
-        DirectoryName,
-        TrimEndingSeparator,
-        FullPath,
-    }
-
-    // As EMUSEN_GALAXIA_TEST_*.
-    internal enum GalaxiaTestRule : uint
-    {
-        FileExists,
-        DirectoryExists,
-        IsBlank,
-        EqualsIgnoreCase,
-        EndsWithIgnoreCase,
-    }
-
     // The config models whose schemas the library owns, as EMUSEN_GALAXIA_MODEL_*.
     internal enum GalaxiaModel : uint
     {
@@ -177,8 +155,6 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _romMd5;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long> _migrate;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _remainingLibrary;
-        private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, byte*, nuint, long> _dotnetPath;
-        private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int> _dotnetTest;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int> _configDelete;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long> _configRead;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int> _configWrite;
@@ -187,7 +163,6 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<uint, uint, byte*, nuint, long> _modelNew;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, uint, byte*, nuint, long> _modelBind;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long> _modelFormat;
-        private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, long> _modelSchema;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long> _modelLoadFrom;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int> _modelSaveTo;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> _cheatNames;
@@ -201,8 +176,6 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<int> _logReset;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int> _suggestDistance;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int, byte*, nuint, long> _suggest;
-        private static delegate* unmanaged[Cdecl]<uint, ulong, byte*, nuint, long> _numberFormat;
-        private static delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long> _textDecode;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, nint*, int> _map;
         private static delegate* unmanaged[Cdecl]<nint, byte**, long> _mappedBytes;
         private static delegate* unmanaged[Cdecl]<nint, int> _unmap;
@@ -224,12 +197,11 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_root_for", "emusen_galaxia_bundle_contents_for", "emusen_galaxia_seed_directory_for",
             "emusen_galaxia_mac_data_directory_for", "emusen_galaxia_legacy_root_for", "emusen_galaxia_save_path", "emusen_galaxia_file_read",
             "emusen_galaxia_file_write", "emusen_galaxia_rom_md5", "emusen_galaxia_migrate", "emusen_galaxia_remaining_library",
-            "emusen_galaxia_dotnet_path", "emusen_galaxia_dotnet_test",
             "emusen_galaxia_config_delete", "emusen_galaxia_config_read", "emusen_galaxia_config_write", "emusen_galaxia_model_load", "emusen_galaxia_model_save",
-            "emusen_galaxia_model_new", "emusen_galaxia_model_bind", "emusen_galaxia_model_format", "emusen_galaxia_model_schema", "emusen_galaxia_model_load_from",
+            "emusen_galaxia_model_new", "emusen_galaxia_model_bind", "emusen_galaxia_model_format", "emusen_galaxia_model_load_from",
             "emusen_galaxia_model_save_to", "emusen_galaxia_cheat_names", "emusen_galaxia_cheat_name_valid", "emusen_galaxia_cheat_game_list", "emusen_galaxia_log_root", "emusen_galaxia_log_usable",
             "emusen_galaxia_log_path", "emusen_galaxia_log_format", "emusen_galaxia_log_append", "emusen_galaxia_log_reset", "emusen_galaxia_suggest_distance",
-            "emusen_galaxia_suggest", "emusen_galaxia_number_format", "emusen_galaxia_text_decode",
+            "emusen_galaxia_suggest",
             "emusen_galaxia_map", "emusen_galaxia_mapped_bytes", "emusen_galaxia_unmap", "emusen_galaxia_mapped_advise",
             "emusen_galaxia_medium_lock_take", "emusen_galaxia_medium_lock_release", "emusen_galaxia_medium_lock_holder",
             "emusen_galaxia_rom_hashes", "emusen_galaxia_rom_hashes_of", "emusen_galaxia_rom_tracks",
@@ -272,8 +244,6 @@ namespace EmuSen.Galaxia.Native
             _romMd5 = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             _migrate = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long>)found[next++];
             _remainingLibrary = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
-            _dotnetPath = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
-            _dotnetTest = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int>)found[next++];
             _configDelete = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int>)found[next++];
             _configRead = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)found[next++];
             _configWrite = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, int>)found[next++];
@@ -282,7 +252,6 @@ namespace EmuSen.Galaxia.Native
             _modelNew = (delegate* unmanaged[Cdecl]<uint, uint, byte*, nuint, long>)found[next++];
             _modelBind = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, uint, byte*, nuint, long>)found[next++];
             _modelFormat = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long>)found[next++];
-            _modelSchema = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, long>)found[next++];
             _modelLoadFrom = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long>)found[next++];
             _modelSaveTo = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int>)found[next++];
             _cheatNames = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
@@ -296,8 +265,6 @@ namespace EmuSen.Galaxia.Native
             _logReset = (delegate* unmanaged[Cdecl]<int>)found[next++];
             _suggestDistance = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, int>)found[next++];
             _suggest = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int, byte*, nuint, long>)found[next++];
-            _numberFormat = (delegate* unmanaged[Cdecl]<uint, ulong, byte*, nuint, long>)found[next++];
-            _textDecode = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)found[next++];
             _map = (delegate* unmanaged[Cdecl]<byte*, nuint, nint*, int>)found[next++];
             _mappedBytes = (delegate* unmanaged[Cdecl]<nint, byte**, long>)found[next++];
             _unmap = (delegate* unmanaged[Cdecl]<nint, int>)found[next++];
@@ -737,7 +704,6 @@ namespace EmuSen.Galaxia.Native
             return Document((o, n) => { fixed (byte* pd = d.Bytes) return _modelFormat((uint)model, pd, d.Length, o, n); })!;
         }
 
-        public static string ModelSchema(GalaxiaModel model) => Document((o, n) => _modelSchema((uint)model, o, n))!;
 
         public static string? ModelLoadFrom(GalaxiaModel model, string path)
         {
@@ -825,26 +791,5 @@ namespace EmuSen.Galaxia.Native
         public static string SuggestHint(string typed, IReadOnlyList<string?> candidates, int max) => Suggest(nearest: false, typed, candidates, max);
 
         public static IReadOnlyList<string> SuggestNearest(string typed, IReadOnlyList<string?> candidates, int max) => Items(Suggest(nearest: true, typed, candidates, max));
-
-        // A double's or a float's bits as the library writes the number; null for one JSON has no token for.
-        public static string? NumberFormat(bool single, ulong bits) => Text((o, n) => _numberFormat(single ? 1u : 0u, bits, o, n));
-
-        public static string TextDecode(byte[] bytes) =>
-            Document((o, n) => { fixed (byte* pb = bytes) return _textDecode(pb, (nuint)bytes.Length, o, n); })!;
-
-        public static string? PathRule(GalaxiaPathRule rule, string a, string? b = null)
-        {
-            Utf8 x = new(a), y = new(b);
-            return Text((o, n) => { fixed (byte* px = x.Bytes, py = y.Bytes) return _dotnetPath((uint)rule, px, x.Length, py, y.Length, o, n); });
-        }
-
-        public static bool TestRule(GalaxiaTestRule rule, string? a, string? b = null)
-        {
-            Utf8 x = new(a), y = new(b);
-            int answer;
-            fixed (byte* px = x.Bytes, py = y.Bytes) answer = _dotnetTest((uint)rule, px, x.Length, py, y.Length);
-            Check(answer);
-            return answer != 0;
-        }
     }
 }

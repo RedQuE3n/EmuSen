@@ -2,13 +2,14 @@
 //! ports, as the C# host's `CoreDescriptorReader` reads them, a field it does not know ignored and one absent taken at
 //! its default (EmuSen_CoreAPI.md §6.3, EmuSen_Backend.md §29.2).
 
-use emusen_native::json::Value;
+use emusen_native::core::{Axis, Control};
+use serde_json::Value;
 
-/// `PadButton`'s names in its order, the canonical controls' numbers (EmuSen_CoreAPI.md §6.4).
-pub const BUTTONS: [&str; 16] = ["B", "Y", "Select", "Start", "Up", "Down", "Left", "Right", "A", "X", "L", "R", "L2", "R2", "L3", "R3"];
+/// The canonical controls' names in their order, their numbers, as emusen-native owns them (EmuSen_CoreAPI.md §6.4).
+pub const BUTTONS: [&str; 16] = Control::NAMES;
 
-/// `PadAxis`'s names in its order.
-pub const AXES: [&str; 6] = ["LeftX", "LeftY", "RightX", "RightY", "LeftTrigger", "RightTrigger"];
+/// The canonical axes' names in their order.
+pub const AXES: [&str; 6] = Axis::NAMES;
 
 /// A name as .NET's `Enum.TryParse` without regard to case off reads it, with `Enum.IsDefined` after: a member's name,
 /// or a number that is a member's.
@@ -77,7 +78,7 @@ pub struct SystemDetail {
 }
 
 fn arr<'a>(v: &'a Value, key: &str) -> &'a [Value] {
-    v.get(key).and_then(Value::as_array).unwrap_or(&[])
+    v.get(key).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn opt_str<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
@@ -157,8 +158,8 @@ pub struct Setting {
 pub fn settings(schema: &Value) -> Vec<Setting> {
     schema
         .as_array()
-        .unwrap_or(&[])
-        .iter()
+        .into_iter()
+        .flatten()
         .filter(|s| !matches!(s.get("hidden"), Some(Value::Bool(true))) && matches!(opt_str(s, "kind"), Some("switch" | "count" | "choice")))
         .map(|s| Setting { key: opt_str(s, "key").unwrap_or("").to_string(), default: opt_str(s, "default").unwrap_or("").to_string() })
         .collect()
@@ -167,11 +168,10 @@ pub fn settings(schema: &Value) -> Vec<Setting> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emusen_native::json::parse;
 
     #[test]
     fn controls_are_read_by_name_or_number_and_ports_counted() {
-        let v = parse(br#"{"systems":[{"id":"s","controllers":[{"id":"p","ports":[0,1],"buttons":[{"control":"A"},{"control":"9"},{"control":"a"},{"control":null}],"axes":[{"control":"LeftY"}]}]}]}"#).unwrap();
+        let v: Value = serde_json::from_slice(br#"{"systems":[{"id":"s","controllers":[{"id":"p","ports":[0,1],"buttons":[{"control":"A"},{"control":"9"},{"control":"a"},{"control":null}],"axes":[{"control":"LeftY"}]}]}]}"#).unwrap();
         let s = &systems(&v)[0];
         assert_eq!(s.buttons(), [8, 9]);
         assert_eq!(s.axes(), [1]);

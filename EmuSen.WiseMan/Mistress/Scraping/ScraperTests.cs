@@ -145,7 +145,7 @@ namespace EmuSen.WiseMan.Mistress.Scraping
             string rom = Rom(Path.Combine("snes", "Packed (USA).sfc"), Filled(4096, 71));
             RomHashes h = RomHash.Of(rom);
             string package = Path.Combine(DataStore.Packages, "SNES", "Packed Package.sfc");
-            EmuSen.WiseMan.Crystal.CrystalParityTests.PackageFor(package, Roms, "snes/Packed (USA).sfc", "snes");
+            EmuSen.WiseMan.Crystal.PackageFixtures.PackageFor(package, Roms, "snes/Packed (USA).sfc", "snes");
             _server.Games.Add(new FakeGame(83, "Packed", h.Md5));
             LibraryScraper s = Scraper();
 

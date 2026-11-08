@@ -18,7 +18,7 @@ fn repo() -> PathBuf {
 }
 
 fn include_dir() -> PathBuf {
-    repo().join("EmuSen.Crystal/include")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("include")
 }
 
 fn read(path: &Path) -> String {

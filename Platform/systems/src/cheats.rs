@@ -3,7 +3,7 @@
 //! "the codecs … keyed by system id"). A family's module decodes; this module names the codecs and pairs them per
 //! system, and writes the answers as JSON for the facade.
 
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 
 /// What a decoded code becomes: a write into a memory space, or a patch of the cartridge.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -198,28 +198,29 @@ pub fn decode(id: &str, code: &str) -> Option<Answer> {
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn error(e: &Error) -> Value {
     match e {
-        Error::Format(words) => object(vec![("format", Value::string(words.as_str()))]),
+        Error::Format(words) => object(vec![("format", Value::from(words.as_str()))]),
         Error::Range => object(vec![("range", Value::Bool(true))]),
     }
 }
 
-fn write_json(w: &Write) -> Value {
+/// A write as the cheat answers give it, one owner for the platform's cheat calls.
+pub fn write_json(w: &Write) -> Value {
     object(vec![
-        ("space", Value::string(w.space.as_str())),
-        ("address", Value::number(w.address)),
-        ("value", Value::number(w.value)),
-        ("width", Value::number(w.width)),
-        ("type", Value::number(w.kind as i32)),
-        ("bit", w.bit_position.map_or(Value::Null, Value::number)),
+        ("space", Value::from(w.space.as_str())),
+        ("address", Value::from(w.address)),
+        ("value", Value::from(w.value)),
+        ("width", Value::from(w.width)),
+        ("type", Value::from(w.kind as i32)),
+        ("bit", w.bit_position.map_or(Value::Null, Value::from)),
         ("big_endian", Value::Bool(w.big_endian)),
-        ("repeat", Value::number(w.repeat_count)),
-        ("repeat_address", Value::number(w.repeat_add_address)),
-        ("repeat_value", Value::number(w.repeat_add_value)),
+        ("repeat", Value::from(w.repeat_count)),
+        ("repeat_address", Value::from(w.repeat_add_address)),
+        ("repeat_value", Value::from(w.repeat_add_value)),
     ])
 }
 
@@ -227,11 +228,11 @@ fn write_json(w: &Write) -> Value {
 /// null), each of the three an object with `format` (the words) or `range` where it refused.
 pub fn answer_json(a: &Answer) -> String {
     let decode = match &a.decode {
-        Ok((address, value)) => object(vec![("address", Value::number(*address)), ("value", Value::number(*value))]),
+        Ok((address, value)) => object(vec![("address", Value::from(*address)), ("value", Value::from(*value))]),
         Err(e) => error(e),
     };
     let compare = match &a.compare {
-        Ok(c) => c.map_or(Value::Null, Value::number),
+        Ok(c) => c.map_or(Value::Null, Value::from),
         Err(e) => error(e),
     };
     let writes = match &a.writes {
@@ -240,7 +241,7 @@ pub fn answer_json(a: &Answer) -> String {
         Err(e) => error(e),
     };
     let mut out = String::new();
-    json::write_compact(&mut out, &object(vec![("can", Value::Bool(a.can_decode)), ("decode", decode), ("compare", compare), ("writes", writes)]));
+    out.push_str(&object(vec![("can", Value::Bool(a.can_decode)), ("decode", decode), ("compare", compare), ("writes", writes)]).to_string());
     out
 }
 
@@ -251,10 +252,10 @@ pub fn codecs_json() -> String {
         .iter()
         .map(|c| {
             object(vec![
-                ("id", Value::string(c.id)),
-                ("name", Value::string(c.name)),
-                ("kind", Value::string(if c.kind == Kind::RamPoke { "RamPoke" } else { "RomPatch" })),
-                ("space", space(c).map_or(Value::Null, Value::string)),
+                ("id", Value::from(c.id)),
+                ("name", Value::from(c.name)),
+                ("kind", Value::from(if c.kind == Kind::RamPoke { "RamPoke" } else { "RomPatch" })),
+                ("space", space(c).map_or(Value::Null, Value::from)),
             ])
         })
         .collect();
@@ -262,14 +263,14 @@ pub fn codecs_json() -> String {
         .iter()
         .map(|(id, auto, explicit)| {
             object(vec![
-                ("id", Value::string(*id)),
-                ("auto", auto.map_or(Value::Null, Value::string)),
-                ("explicit", explicit.map_or(Value::Null, Value::string)),
+                ("id", Value::from(*id)),
+                ("auto", auto.map_or(Value::Null, Value::from)),
+                ("explicit", explicit.map_or(Value::Null, Value::from)),
             ])
         })
         .collect();
     let mut out = String::new();
-    json::write_compact(&mut out, &object(vec![("codecs", Value::Array(codecs)), ("systems", Value::Array(systems))]));
+    out.push_str(&object(vec![("codecs", Value::Array(codecs)), ("systems", Value::Array(systems))]).to_string());
     out
 }
 
@@ -300,7 +301,7 @@ pub(crate) fn hex(text: &str) -> u32 {
 
 /// `code.Split('+', RemoveEmptyEntries | TrimEntries)`.
 pub(crate) fn parts(code: &str) -> Vec<&str> {
-    code.split('+').map(emusen_dotnet::text::trim).filter(|p| !p.is_empty()).collect()
+    code.split('+').map(str::trim).filter(|p| !p.is_empty()).collect()
 }
 
 #[cfg(test)]

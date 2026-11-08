@@ -21,5 +21,6 @@
   "libretro_databases": ["Sega - Master System - Mark III"],
   "libretro_systemids": ["master_system"],
   "firmware_note": null,
-  "rumble": false
+  "rumble": false,
+  "look": {"hue": 220, "body": "shards", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}
 }

@@ -10,8 +10,6 @@ publish.workspace = true
 name = "emusen_galaxia"
 
 [dependencies]
-# .NET's text rules and File.ReadAllText's decoding, which the shell's command modules share without linking Galaxia.
-emusen-dotnet = { path = "../dotnet" }
 md-5 = "0.11"
 # The unpacked folder's name, a hash of the archive's path, length and time (disc_set.rs); the workspace's, from DianaSh and Serenity.
 sha2 = "0.11"
@@ -19,13 +17,24 @@ sha2 = "0.11"
 sha1 = "0.11"
 # A sheet's and a list's meaning, for the files an image brings beside it (image_sets.rs).
 emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
-# Inflate, for an archive entry's first bytes (archive.rs); the workspace's, from emusen-cheats.
-flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
-# Deflate64, the one method .NET's zip reader inflates besides stored and deflate (dotnet_zip.rs); a port of .NET's own
-# decoder, MIT, with no dependencies of its own (EmuSen_Backend.md §40.1).
-deflate64 = "=0.1.12"
+# A tree walked with its links followed (files.rs, EmuSen_RustPlatform.md §47.17).
+walkdir.workspace = true
+# Zips read: a game's, a package's, a core's download and the cheat database (archive.rs, EmuSen_RustPlatform.md §47.15).
+zip.workspace = true
+# The system's folder for a program's settings, on every system the project builds for (tree.rs).
+dirs.workspace = true
+# Config files read and written as typed models; a hand-edited one read with comments and trailing commas (config_json.rs, EmuSen_RustPlatform.md §47.19).
+serde.workspace = true
+serde_json.workspace = true
+jsonc-parser.workspace = true
+# A model's maps keep the file's order (models.rs).
+indexmap.workspace = true
+# Times: the ticks stored, the round-trip text written and read, and the system zone's offset (clock.rs, EmuSen_RustPlatform.md §47.20).
+time.workspace = true
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"
+
+[dev-dependencies]
 
 # The page cache asked directly, for the test that advised bytes reach memory (tests/advise.rs).
 [target.'cfg(target_os = "linux")'.dev-dependencies]

@@ -5,7 +5,7 @@
 
 use crate::serenity::{bits, document, list, number, object, out_json, parameter_of};
 use crate::{fail, status, text};
-use emusen_galaxia::json::Value;
+use serde_json::Value;
 use emusen_serenity::filters::write::{self, Refusal, Written};
 use emusen_serenity::filters::{self, Axis, Filter, Pass, Scale, Setting, Size, Values, glsl, screens};
 use std::borrow::Cow;
@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 
 fn values_from(value: &Value) -> Option<Values> {
     let Value::Object(members) = value else { return None };
-    members.iter().map(|(id, v)| Some((id.text.clone(), f32::from_bits(number(Some(v))?)))).collect()
+    members.iter().map(|(id, v)| Some((id.clone(), f32::from_bits(number(Some(v))?)))).collect()
 }
 
 fn size_from(value: Option<&Value>) -> Option<Option<Size>> {
@@ -52,7 +52,7 @@ fn described(doc: &Value) -> Option<Filter> {
     let mut filter = Filter::plain(name, name, passes, None, "", settings);
     filter.raw_encoding = doc.get("raw").and_then(Value::as_str).map(str::to_string);
     if let Some(Value::Object(members)) = doc.get("defaults") {
-        filter.console_defaults = Some(members.iter().map(|(console, v)| Some((console.text.clone(), values_from(v)?))).collect::<Option<BTreeMap<_, _>>>()?);
+        filter.console_defaults = Some(members.iter().map(|(console, v)| Some((console.clone(), values_from(v)?))).collect::<Option<BTreeMap<_, _>>>()?);
     }
     filter.rows_once = doc.get("rows_once").and_then(Value::as_bool).unwrap_or(false);
     filter.history_depth = number(doc.get("history_depth")).unwrap_or(0) as i32;
@@ -89,24 +89,24 @@ fn size_json(size: Size) -> Value {
         Axis::Viewport => 1,
         Axis::Fixed => 2,
     };
-    object(vec![("axis", Value::number(axis)), ("factor", bits(size.factor))])
+    object(vec![("axis", Value::from(axis)), ("factor", bits(size.factor))])
 }
 
 fn strings(items: &[String]) -> Value {
-    Value::Array(items.iter().map(Value::string).collect())
+    Value::Array(items.iter().map(|s| Value::String(String::from(s))).collect())
 }
 
 fn pass_json(p: &Pass) -> Value {
     object(vec![
-        ("glsl", Value::string(&p.glsl)),
-        ("scale", Value::number(if p.scale == Scale::Source { 0 } else { 1 })),
+        ("glsl", Value::String(String::from(&p.glsl))),
+        ("scale", Value::from(if p.scale == Scale::Source { 0 } else { 1 })),
         ("linear_source", Value::Bool(p.linear_source)),
-        ("history", Value::number(p.history)),
+        ("history", Value::from(p.history)),
         ("width", p.width.map_or(Value::Null, size_json)),
         ("height", p.height.map_or(Value::Null, size_json)),
         ("float", Value::Bool(p.float)),
         ("feedback", Value::Bool(p.feedback)),
-        ("name", p.name.as_deref().map_or(Value::Null, Value::string)),
+        ("name", p.name.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
         ("linear", strings(&p.linear)),
     ])
 }
@@ -117,25 +117,25 @@ fn filter_json(f: &Filter) -> Value {
         .iter()
         .map(|s| {
             let Value::Object(mut members) = crate::serenity::parameter_json(&s.parameter) else { unreachable!() };
-            members.push((emusen_galaxia::json::Text::new("choices"), s.choices.as_deref().map_or(Value::Null, strings)));
+            members.insert(String::from("choices"), s.choices.as_deref().map_or(Value::Null, strings));
             Value::Object(members)
         })
         .collect();
     object(vec![
-        ("key", Value::string(&f.key)),
-        ("name", Value::string(&f.name)),
+        ("key", Value::String(String::from(&f.key))),
+        ("name", Value::String(String::from(&f.name))),
         ("passes", Value::Array(f.passes.iter().map(pass_json).collect())),
         ("built", Value::Bool(f.build.is_some())),
         ("consoles", f.consoles.as_deref().map_or(Value::Null, strings)),
-        ("credit", Value::string(&f.credit)),
+        ("credit", Value::String(String::from(&f.credit))),
         ("settings", Value::Array(settings)),
         ("structural", f.structural.as_deref().map_or(Value::Null, strings)),
-        ("raw", f.raw_encoding.as_deref().map_or(Value::Null, Value::string)),
+        ("raw", f.raw_encoding.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
         ("defaults", f.console_defaults.as_ref().map_or(Value::Null, |d| object(d.iter().map(|(c, v)| (c.as_str(), values_json(v))).collect()))),
-        ("aspect", f.aspect.map_or(Value::Null, |a| Value::number(a.to_bits()))),
+        ("aspect", f.aspect.map_or(Value::Null, |a| Value::from(a.to_bits()))),
         ("crops_itself", Value::Bool(f.crops_itself)),
         ("rows_once", Value::Bool(f.rows_once)),
-        ("history_depth", Value::number(f.history_depth)),
+        ("history_depth", Value::from(f.history_depth)),
     ])
 }
 
@@ -149,21 +149,21 @@ pub unsafe extern "C" fn emusen_serenity_filters(out: *mut u8, cap: usize) -> i6
         .iter()
         .map(|s| {
             object(vec![
-                ("console", Value::string(s.console)),
-                ("kind", Value::string(s.kind.name())),
-                ("profile", Value::string(s.profile)),
+                ("console", Value::String(String::from(s.console))),
+                ("kind", Value::String(String::from(s.kind.name()))),
+                ("profile", Value::String(String::from(s.profile))),
                 ("hosts_picture", Value::Bool(s.hosts_picture)),
-                ("gap", s.gap.map_or(Value::Null, Value::string)),
+                ("gap", s.gap.map_or(Value::Null, |s| Value::String(String::from(s)))),
             ])
         })
         .collect();
-    let owed = screens::OWED.iter().map(|(console, note)| object(vec![("console", Value::string(*console)), ("note", Value::string(*note))])).collect();
+    let owed = screens::OWED.iter().map(|(console, note)| object(vec![("console", Value::String(String::from(*console))), ("note", Value::String(String::from(*note)))])).collect();
     let document = object(vec![
         ("filters", Value::Array(filters::catalog().iter().map(filter_json).collect())),
         ("screens", Value::Array(screens)),
         ("owed", Value::Array(owed)),
-        ("televisions", Value::Array(screens::televisions().into_iter().map(Value::string).collect())),
-        ("reduce", Value::string(glsl::REDUCE)),
+        ("televisions", Value::Array(screens::televisions().into_iter().map(|s| Value::String(String::from(s))).collect())),
+        ("reduce", Value::String(String::from(glsl::REDUCE))),
     ]);
     unsafe { out_json(&document, out, cap) }
 }
@@ -235,9 +235,9 @@ pub unsafe extern "C" fn emusen_serenity_filter_reduce_by(filter: *const u8, fil
 
 fn written_json(pass: &Written) -> Value {
     object(vec![
-        ("file", Value::string(&pass.file_name)),
-        ("text", Value::string(&pass.text)),
-        ("alias", pass.alias.as_deref().map_or(Value::Null, Value::string)),
+        ("file", Value::String(String::from(&pass.file_name))),
+        ("text", Value::String(String::from(&pass.text))),
+        ("alias", pass.alias.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
         ("width", size_json(pass.width)),
         ("height", size_json(pass.height)),
         ("float", Value::Bool(pass.float)),
@@ -307,7 +307,7 @@ mod tests {
         let mut out = vec![0u8; 1 << 20];
         let n = unsafe { emusen_serenity_filters(out.as_mut_ptr(), out.len()) };
         assert!(n > 0 && (n as usize) < out.len());
-        let catalog = emusen_galaxia::json::parse(std::str::from_utf8(&out[..n as usize]).unwrap()).unwrap();
+        let catalog = serde_json::from_str::<serde_json::Value>(std::str::from_utf8(&out[..n as usize]).unwrap()).unwrap();
         let listed = list(catalog.get("filters")).unwrap();
         assert_eq!(listed.len(), filters::catalog().len());
         for (doc, filter) in listed.iter().zip(filters::catalog()) {

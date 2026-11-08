@@ -26,8 +26,9 @@ pub mod runlog;
 pub mod store;
 pub mod zone;
 
+use std::path::Path;
 use clock::Clock;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_sqlite::{Failure, Sqlite};
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard, RwLock};
@@ -144,7 +145,7 @@ impl Settings {
             s.packages = match p {
                 Value::Object(members) => members
                     .iter()
-                    .map(|(k, v)| v.as_str().map(|f| (k.text.clone(), f.to_string())).ok_or_else(|| Error::BadRequest("The request's packages holds a folder that is not text.".into())))
+                    .map(|(k, v)| v.as_str().map(|f| (k.clone(), f.to_string())).ok_or_else(|| Error::BadRequest("The request's packages holds a folder that is not text.".into())))
                     .collect::<Result<Vec<_>, _>>()?,
                 Value::Null => Vec::new(),
                 _ => return Err(Error::BadRequest("The request's packages is not a map of game files to folders.".into())),
@@ -242,7 +243,7 @@ impl Scraper {
 
     /// The store's lock, or why another holds it.
     fn hold(root: &str) -> Result<emusen_galaxia::medium_lock::MediumLock, Error> {
-        let db = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, store::FILE_NAME);
+        let db = Path::new(root).join(store::FILE_NAME).to_string_lossy().into_owned();
         emusen_galaxia::medium_lock::try_take(&db, "EmuSen's scraper in this program", false).ok_or_else(|| {
             let who = emusen_galaxia::medium_lock::holder_of(&db).unwrap_or_else(|| "another program".into());
             Error::InUse(format!("The media store {root} is in use by {who}: one scraper holds it at a time, so that the account's quota is counted once. Close the other (EmuSen, or a shell running scrape) and try again."))
@@ -264,7 +265,7 @@ impl Scraper {
 
     /// The failover's own folder, apart from the player's art: `<store>/openemu/<console>/`.
     pub fn openemu_root(&self) -> String {
-        emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &self.root, "openemu")
+        Path::new(&self.root).join("openemu").to_string_lossy().into_owned()
     }
 
     pub fn art(&self) -> std::sync::RwLockReadGuard<'_, artwork::Index> {
@@ -291,7 +292,7 @@ impl Scraper {
     /// The store's one layout step, taken once the settings name the ROM folder that names each game's folder.
     fn put_in_folders(&self) -> Result<usize, Error> {
         let settings = self.settings();
-        if settings.roms.as_deref().is_none_or(|r| emusen_dotnet::text::is_blank(Some(r))) {
+        if settings.roms.as_deref().is_none_or(|r| r.trim().is_empty()) {
             return Ok(0);
         }
         let store = self.store();

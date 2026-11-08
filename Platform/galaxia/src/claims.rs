@@ -5,13 +5,17 @@
 //! the index cannot disagree with them. The C# `GamePackages` is the twin. See EmuSen_GamePackages.md §3.4–§3.6 and
 //! §14, and EmuSen_Galaxia.md §3.11.
 
-use crate::dotnet_files::{self, Options};
-use crate::dotnet_path::{self as path, Style};
-use crate::json::{Text, Value};
+use crate::files::{self, Options};
+use crate::path_key;
+use std::path::{Path, PathBuf};
+use serde_json::Value;
 use crate::package;
 use crate::rom_hash::{self, Hashes};
 
-const STYLE: Style = Style::HOST;
+/// A package folder's manifest.
+fn manifest_of(folder: impl AsRef<Path>) -> PathBuf {
+    folder.as_ref().join(package::FILE_NAME)
+}
 
 /// How deep the walk of `Packages` looks for a package's folder.
 pub const MAX_DEPTH: usize = 32;
@@ -35,10 +39,9 @@ pub struct Places {
 impl Places {
     /// The tree's folders, and `AppSettings.RomDirectory` as the settings file holds it, checked as a folder setting is.
     pub fn of(tree: &crate::tree::Tree) -> Places {
-        use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
-        let (settings, _) = crate::config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
-        let library = crate::setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &crate::tree::user_home()).path;
-        let folder = |which| tree.directory(which).unwrap_or_default();
+        let (settings, _) = crate::config::load_or_new::<crate::models::AppSettings>(tree, None, crate::models::APP_SETTINGS_FILE);
+        let library = crate::setting_folders::checked(settings.rom_directory.as_deref(), &crate::tree::user_home()).path;
+        let folder = |which| tree.directory(which).unwrap_or_default().to_string_lossy().into_owned();
         Places { packages: folder(crate::tree::Directory::Packages), library, compressed: folder(crate::tree::Directory::Compressed) }
     }
 
@@ -77,13 +80,12 @@ impl Index {
 
 /// Whether `full` is `folder` or lies under it.
 pub fn within(full: &str, folder: &str) -> bool {
-    let folder = path::trim_ending_separator(STYLE, folder);
-    full == folder || full.strip_prefix(folder).is_some_and(|rest| rest.as_bytes().first().is_some_and(|&b| STYLE.is_separator(b)))
+    Path::new(full).starts_with(folder)
 }
 
 /// A path relative to a root, `/` or `\` between its parts, under that root as `Path.Combine` joins each part.
 pub fn under(root: &str, rel: &str) -> String {
-    rel.split(['/', '\\']).filter(|p| !p.is_empty()).fold(root.to_string(), |at, part| path::combine(STYLE, &at, part))
+    rel.split(['/', '\\']).filter(|p| !p.is_empty()).fold(PathBuf::from(root), |at, part| at.join(part)).to_string_lossy().into_owned()
 }
 
 /// The full path an entry's `where` and `path` name, none for `library` with no library set.
@@ -96,7 +98,7 @@ pub fn place(roots: &Roots, folder: &str, entry: &Value) -> Option<String> {
         "absolute" => rel.to_string(),
         _ => return None,
     };
-    Some(path::full_path(&at))
+    Some(path_key::key_text(at))
 }
 
 /// Every package folder under `packages`: a folder holding `package.json` is one, and is not looked inside; hidden
@@ -111,14 +113,14 @@ fn walk(dir: &str, depth: usize, found: &mut Vec<String>) {
     let Ok(listing) = std::fs::read_dir(dir) else { return };
     let mut names: Vec<String> = listing
         .flatten()
-        .filter(dotnet_files::listed_as_directory)
+        .filter(files::listed_as_directory)
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| !dotnet_files::is_hidden(n))
+        .filter(|n| !files::is_hidden(n))
         .collect();
     names.sort();
     for name in names {
-        let sub = dotnet_files::join(dir, &name);
-        if dotnet_files::file_exists(&dotnet_files::join(&sub, package::FILE_NAME)) {
+        let sub = Path::new(dir).join(&name).to_string_lossy().into_owned();
+        if files::file_exists(manifest_of(&sub)) {
             found.push(sub);
         } else if depth + 1 < MAX_DEPTH {
             walk(&sub, depth + 1, found);
@@ -179,7 +181,7 @@ pub fn index(roots: &Roots) -> Index {
     let folders = folders(roots.packages);
     let packages = folders
         .iter()
-        .filter_map(|f| match package::read(&dotnet_files::join(f, package::FILE_NAME)) {
+        .filter_map(|f| match package::read(manifest_of(f)) {
             Ok(Ok(doc)) => package_of(roots, f, &doc),
             _ => None,
         })
@@ -196,16 +198,11 @@ pub fn seen_of(at: &str) -> Option<(u64, String)> {
 /// A time as the manifest's `mtime`: UTC to the second, `yyyy-MM-ddTHH:mm:ssZ`.
 pub fn mtime_text(t: std::time::SystemTime) -> String {
     let secs = t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let (y, m, d) = emusen_dotnet::date::civil(secs.div_euclid(86_400));
-    let s = secs.rem_euclid(86_400);
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", s / 3600, s / 60 % 60, s % 60)
+    crate::clock::text(secs * crate::clock::TICKS_PER_SECOND, crate::clock::MTIME)
 }
 
 fn number(v: Option<&Value>) -> Option<u64> {
-    match v {
-        Some(Value::Number(t)) => t.parse().ok(),
-        _ => None,
-    }
+    v?.as_u64()
 }
 
 /// The hashes that identify a manifest's game file as it lies: `dump.file`, else the sheet's for a disc whose game is
@@ -258,31 +255,26 @@ fn hash(at: &str) -> Option<Hashes> {
 /// Sets a member of an object, in its place where it is there, else at the end.
 pub fn set(object: &mut Value, name: &str, value: Value) {
     if let Value::Object(members) = object {
-        match members.iter_mut().rev().find(|(k, _)| k.text == name) {
-            Some((_, v)) => *v = value,
-            None => members.push((Text::new(name), value)),
-        }
+        members.insert(name.to_string(), value);
     }
 }
 
 fn member_mut<'a>(object: &'a mut Value, name: &str) -> Option<&'a mut Value> {
-    match object {
-        Value::Object(members) => members.iter_mut().rev().find(|(k, _)| k.text == name).map(|(_, v)| v),
-        _ => None,
-    }
+    object.get_mut(name)
 }
 
 fn seen_value(size: u64, mtime: &str) -> Value {
-    Value::Object(vec![(Text::new("size"), Value::number(size)), (Text::new("mtime"), Value::string(mtime))])
+    serde_json::json!({ "size": size, "mtime": mtime })
 }
 
 /// Where a file is as an entry names it: `library` and its path below the library where it lies there, else `absolute`.
 pub fn entry_place(roots: &Roots, full: &str) -> (&'static str, String) {
     if let Some(library) = roots.library {
-        let root = path::full_path(library);
-        if within(full, &root) && full.len() > path::trim_ending_separator(STYLE, &root).len() {
-            let rest = &full[path::trim_ending_separator(STYLE, &root).len()..];
-            return ("library", rest.trim_start_matches(['/', '\\']).replace('\\', "/"));
+        let root = path_key::key(library);
+        if let Ok(rest) = Path::new(full).strip_prefix(&root)
+            && !rest.as_os_str().is_empty()
+        {
+            return ("library", rest.to_string_lossy().replace('\\', "/"));
         }
     }
     ("absolute", full.to_string())
@@ -295,8 +287,8 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
     let old = doc.get("game").and_then(|g| g.get("path")).and_then(Value::as_str).map(str::to_string).unwrap_or_default();
     let old_where = doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str).map(str::to_string).unwrap_or_default();
     if let Some(game) = member_mut(doc, "game") {
-        set(game, "where", Value::string(place));
-        set(game, "path", Value::string(&rel));
+        set(game, "where", Value::from(place));
+        set(game, "path", Value::from(rel.as_str()));
         if let Some((size, mtime)) = seen_of(found) {
             set(game, "seen", seen_value(size, &mtime));
         }
@@ -312,8 +304,8 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
                     Some(d) => format!("{d}/{tail}"),
                     None => tail.to_string(),
                 };
-                set(c, "where", Value::string(place));
-                set(c, "path", Value::string(if place == "absolute" { under(path::directory_name(STYLE, found).as_deref().unwrap_or(""), tail) } else { rebased }));
+                set(c, "where", Value::from(place));
+                set(c, "path", Value::from(if place == "absolute" { under(&Path::new(found).parent().unwrap_or(Path::new("")).to_string_lossy(), tail) } else { rebased }));
             }
         }
     }
@@ -324,9 +316,9 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
 pub fn find_in_library(roots: &Roots, size: u64, recorded: &Value) -> Option<String> {
     let library = roots.library?;
     let mut same: Vec<String> = Vec::new();
-    let _ = dotnet_files::visit_files_with(library, Options { skip_hidden: true, ignore_inaccessible: true }, |at, _| {
+    let _ = files::visit_files_with(library, Options { skip_hidden: true, ignore_inaccessible: true }, |at, _| {
         if std::fs::metadata(at).is_ok_and(|m| m.len() == size) {
-            same.push(path::full_path(at));
+            same.push(path_key::key_text(at));
         }
     });
     same.sort();
@@ -363,13 +355,14 @@ impl From<String> for NotOpened {
 }
 
 fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resolution, NotOpened> {
-    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let manifest = manifest_of(folder);
+    let shown = manifest.display();
     let mut doc = match package::read(&manifest) {
         Ok(Ok(doc)) => doc,
-        Ok(Err(refusal)) => return Err(format!("{manifest}: {}", refusal.words()).into()),
-        Err(e) => return Err(format!("{manifest}: {}", emusen_dotnet::file::io_message(&e, &manifest)).into()),
+        Ok(Err(refusal)) => return Err(format!("{shown}: {}", refusal.words()).into()),
+        Err(e) => return Err(format!("{shown}: {e}").into()),
     };
-    let game = doc.get("game").and_then(|g| place(roots, folder, g)).ok_or_else(|| format!("{manifest}: its game's library is not set (AppSettings.RomDirectory)"))?;
+    let game = doc.get("game").and_then(|g| place(roots, folder, g)).ok_or_else(|| format!("{shown}: its game's library is not set (AppSettings.RomDirectory)"))?;
     let resolution = |game: String, moved: bool| Resolution { game, package: Some(folder.to_string()), moved };
     if let Some((size, mtime)) = seen_of(&game) {
         let seen = doc.get("game").and_then(|g| g.get("seen"));
@@ -402,7 +395,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
         return Ok(resolution(found, true));
     }
     match opened {
-        Some(at) if dotnet_files::file_exists(at) => Ok(resolution(at.to_string(), false)),
+        Some(at) if files::file_exists(at) => Ok(resolution(at.to_string(), false)),
         _ => Err(format!("The package {folder} names {game}, which is gone, and no file of its size and hashes was found in the library.").into()),
     }
 }
@@ -411,7 +404,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
 /// copied from (`sources`) and is no longer that file: its size and time are not those recorded and its SHA-1 is not
 /// the one recorded. Such a file opens as a plain game, as a changed dump does (EmuSen_GamePackages.md §19).
 pub fn source_holds(roots: &Roots, folder: &str, full: &str) -> bool {
-    let Ok(Ok(doc)) = package::read(&dotnet_files::join(folder, package::FILE_NAME)) else { return true };
+    let Ok(Ok(doc)) = package::read(manifest_of(folder)) else { return true };
     let Some(entry) = entries(&doc, "sources").into_iter().find(|e| place(roots, folder, e).as_deref() == Some(full)) else { return true };
     let seen = entry.get("seen");
     let now = seen_of(full);
@@ -450,20 +443,20 @@ pub fn opened_as(tree: &crate::tree::Tree, at: &str) -> (String, Option<String>)
 /// opened itself; a file no package claims, whose size and hashes are those of a package's game that is gone, is that
 /// game moved, and the manifest is rewritten; anything else opens as it is.
 pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
-    let full = path::full_path(at);
-    if dotnet_files::directory_exists(&full) && dotnet_files::file_exists(&dotnet_files::join(&full, package::FILE_NAME)) {
+    let full = path_key::key_text(at);
+    if files::directory_exists(&full) && files::file_exists(manifest_of(&full)) {
         return open_package(roots, &full, None);
     }
-    if crate::archive::is_archive(&full) && dotnet_files::file_exists(&full)
+    if crate::archive::is_archive(&full) && files::file_exists(&full)
         && let Some(folder) = crate::package_zip::opened(roots.packages, &full)?
     {
         return open_package(roots, &folder, None);
     }
-    if path::file_name(STYLE, &full) == package::FILE_NAME && dotnet_files::file_exists(&full) {
-        return open_package(roots, &path::directory_name(STYLE, &full).unwrap_or_default(), None);
+    if Path::new(&full).file_name().is_some_and(|n| n == package::FILE_NAME) && files::file_exists(&full) {
+        return open_package(roots, &Path::new(&full).parent().unwrap_or(Path::new("")).to_string_lossy(), None);
     }
     let plain = || Ok(Resolution { game: at.to_string(), package: None, moved: false });
-    if !dotnet_files::file_exists(&full) {
+    if !files::file_exists(&full) {
         return plain();
     }
     let index = index(roots);
@@ -478,8 +471,8 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     }
     let Some(size) = std::fs::metadata(&full).ok().map(|m| m.len()) else { return plain() };
     let mut taken: Option<Hashes> = None;
-    for p in index.packages.iter().filter(|p| !dotnet_files::file_exists(&p.game)) {
-        let manifest = dotnet_files::join(&p.folder, package::FILE_NAME);
+    for p in index.packages.iter().filter(|p| !files::file_exists(&p.game)) {
+        let manifest = manifest_of(&p.folder);
         let Ok(Ok(mut doc)) = package::read(&manifest) else { continue };
         let where_ = doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str).unwrap_or("");
         if !(where_ == "library" || where_ == "absolute") || recorded_size(&doc) != Some(size) {
@@ -503,8 +496,9 @@ mod tests {
     use super::*;
     use crate::test_support::TempDir;
 
-    fn put(at: &str, bytes: &[u8]) {
-        std::fs::create_dir_all(path::directory_name(STYLE, at).unwrap()).unwrap();
+    fn put(at: impl AsRef<Path>, bytes: &[u8]) {
+        let at = at.as_ref();
+        std::fs::create_dir_all(at.parent().unwrap()).unwrap();
         std::fs::write(at, bytes).unwrap();
     }
 
@@ -517,7 +511,7 @@ mod tests {
             h.md5,
             h.sha1.unwrap()
         );
-        let at = t.join(&format!("Packages/{folder}"));
+        let at = t.text(&format!("Packages/{folder}"));
         put(&format!("{at}/package.json"), text.as_bytes());
         at
     }
@@ -525,27 +519,27 @@ mod tests {
     #[test]
     fn a_claimed_file_resolves_to_its_package_and_a_moved_one_is_found_again_by_hash() {
         let t = TempDir::new("claims");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
         let bytes = b"a cartridge of sixteen bytes!!!!";
-        let game = t.join("Roms/SNES/Game.sfc");
+        let game = t.text("Roms/SNES/Game.sfc");
         put(&game, bytes);
-        put(&t.join("Roms/SNES/Other.sfc"), b"another cartridge, same length..");
+        put(&t.text("Roms/SNES/Other.sfc"), b"another cartridge, same length..");
         let folder = linked(&t, "SNES/Game.sfc", "SNES/Game.sfc", bytes, &game);
-        put(&t.join("Packages/SNES/Game.sfc/saves/Game.srm"), b"save");
-        put(&t.join("Packages/.hidden/x/package.json"), b"{}");
+        put(&t.text("Packages/SNES/Game.sfc/saves/Game.srm"), b"save");
+        put(&t.text("Packages/.hidden/x/package.json"), b"{}");
         let idx = index(&roots);
         assert_eq!(idx.folders, vec![folder.clone()]);
         assert_eq!(idx.packages[0].claims, vec![game.clone()]);
-        assert!(idx.inside_package(&t.join("Packages/SNES/Game.sfc/saves/Game.srm")));
-        assert!(!idx.inside_package(&t.join("Packages/SNES/Game.sfcx")));
+        assert!(idx.inside_package(&t.text("Packages/SNES/Game.sfc/saves/Game.srm")));
+        assert!(!idx.inside_package(&t.text("Packages/SNES/Game.sfcx")));
         let r = resolve(&roots, &game).unwrap();
         assert_eq!((r.game.as_str(), r.package.as_deref(), r.moved), (game.as_str(), Some(folder.as_str()), false));
         assert_eq!(resolve(&roots, &folder).unwrap().package.as_deref(), Some(folder.as_str()));
-        assert_eq!(resolve(&roots, &t.join("Roms/SNES/Other.sfc")).unwrap().package, None);
+        assert_eq!(resolve(&roots, &t.text("Roms/SNES/Other.sfc")).unwrap().package, None);
         // Moved: the plain path at its new place finds the package by size, then hash, and the manifest follows it.
-        let elsewhere = t.join("Roms/SNES/USA/Game (U).sfc");
-        std::fs::create_dir_all(t.join("Roms/SNES/USA")).unwrap();
+        let elsewhere = t.text("Roms/SNES/USA/Game (U).sfc");
+        std::fs::create_dir_all(t.text("Roms/SNES/USA")).unwrap();
         std::fs::rename(&game, &elsewhere).unwrap();
         let r = resolve(&roots, &elsewhere).unwrap();
         assert_eq!((r.game.as_str(), r.package.as_deref(), r.moved), (elsewhere.as_str(), Some(folder.as_str()), true));
@@ -560,10 +554,10 @@ mod tests {
     #[test]
     fn a_changed_game_is_refused_with_both_hashes_and_a_touched_one_is_recorded() {
         let t = TempDir::new("claims-changed");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
         let bytes = b"sixteen bytes!!!";
-        let game = t.join("Roms/NES/G.nes");
+        let game = t.text("Roms/NES/G.nes");
         put(&game, bytes);
         let folder = linked(&t, "NES/G.nes", "NES/G.nes", bytes, &game);
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
@@ -584,12 +578,12 @@ mod tests {
     #[test]
     fn a_self_contained_package_claims_the_file_it_was_copied_from_only_while_it_is_that_file() {
         let t = TempDir::new("claims-sources");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
         let bytes = b"sixteen bytes!!!";
-        let game = t.join("Roms/NES/G.nes");
+        let game = t.text("Roms/NES/G.nes");
         put(&game, bytes);
-        let folder = t.join("Packages/NES/G.nes");
+        let folder = t.text("Packages/NES/G.nes");
         put(&format!("{folder}/G.nes"), bytes);
         let h = rom_hash::hashes_of(bytes);
         let (size, mtime) = seen_of(&game).unwrap();
@@ -621,12 +615,12 @@ mod tests {
     #[test]
     fn a_chd_beside_its_original_claims_the_original_only_while_its_record_verifies_it() {
         let t = TempDir::new("claims-beside");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
-        let (original, chd) = (t.join("Roms/psx/D.bin"), t.join("Roms/psx/D.chd"));
+        let (original, chd) = (t.text("Roms/psx/D.bin"), t.text("Roms/psx/D.chd"));
         put(&original, b"a raw track");
         put(&chd, b"a CHD of it");
-        let folder = t.join("Packages/PlayStation/D.chd");
+        let folder = t.text("Packages/PlayStation/D.chd");
         let manifest = |checks: &str| {
             let ((size, mtime), (csize, cmtime)) = (seen_of(&original).unwrap(), seen_of(&chd).unwrap());
             format!(

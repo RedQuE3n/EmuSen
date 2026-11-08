@@ -1,397 +1,244 @@
-//! The archives a game may be packed in, the C# `ArchiveImages`' reading: a zip's central directory, the entry play
-//! opens, and an entry's first bytes inflated without unpacking. Only a plain zip of stored and deflated entries is read,
-//! its end record and directory read by `dotnet_zip`, the one reader of both, which `emusen-cheats`' installer reads
-//! whole as .NET does (EmuSen_Backend.md §40.1, §40.2). See §28.2. Since game
-//! packages' step 7 the same plain zip is also written, with each file's time to the tick, and an entry is copied out
-//! whole and checked against its CRC-32 (EmuSen_GamePackages.md §19). Written from PKWARE's APPNOTE.TXT, never from an
-//! archiver's source.
+//! The zips a game, a package, a core's download or the cheat database comes in, read by the zip crate: the central
+//! directory, the entry play opens, an entry's first bytes, an entry copied out whole and its time. Every form the
+//! crate reads is taken (Zip64, data descriptors, stored, deflate and Deflate64); an encrypted entry or another method
+//! is refused when it is read, in the crate's words. The crate bounds an entry by its declared length and checks its
+//! CRC-32. See EmuSen_RustPlatform.md §47.15. Since game packages' step 7 a package's zip is also written, by the same
+//! crate since §47.16, with each file's time to the tick (EmuSen_GamePackages.md §19).
 
-use crate::dotnet_zip::{self, u16_at, u32_at};
 use crate::image_sets;
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{Read, Seek, Write};
+use std::path::Path;
 
 /// `ArchiveImages.Extensions`.
 pub const EXTENSIONS: &[&str] = &[".zip"];
 
 /// `ArchiveImages.IsArchive`: by the extension, ignoring case.
-pub fn is_archive(at: &str) -> bool {
-    let extension = crate::dotnet_path::extension(crate::dotnet_path::Style::HOST, at);
-    EXTENSIONS.iter().any(|e| equals_ignore_case(e, extension))
+pub fn is_archive(at: impl AsRef<Path>) -> bool {
+    at.as_ref().extension().is_some_and(|extension| EXTENSIONS.iter().any(|e| e.strip_prefix('.').is_some_and(|e| extension.eq_ignore_ascii_case(e))))
 }
 
 /// One entry of a zip's central directory.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ZipEntry {
-    pub platform: u8,
-    pub method: u16,
-    pub dos_time: u32,
-    pub compressed: usize,
-    pub length: u64,
-    pub external: u32,
-    pub offset: usize,
+    /// Its place in the directory, by which it is read.
+    index: usize,
     pub full_name: String,
+    pub length: u64,
     /// The CRC-32 the directory records for the entry's bytes.
     pub crc32: u32,
-    /// The entry's modification time: the NTFS extra field's, to the tick, else the extended timestamp's, to the second;
+    /// Whether it is stored rather than compressed.
+    pub stored: bool,
+    /// Whether it is a symbolic link, by its Unix mode.
+    pub link: bool,
+    /// Where its name puts it under the folder it is unpacked into; none where the name would leave that folder.
+    pub enclosed: Option<std::path::PathBuf>,
+}
+
+/// A zip opened for reading: its directory read once, its entries read by their place in it.
+pub struct Zip<R> {
+    archive: zip::ZipArchive<R>,
+}
+
+impl Zip<std::io::BufReader<std::fs::File>> {
+    pub fn open(at: impl AsRef<Path>) -> Result<Self, String> {
+        Zip::over(std::io::BufReader::new(std::fs::File::open(at).map_err(|e| e.to_string())?))
+    }
+}
+
+impl<R: Read + Seek> Zip<R> {
+    /// A zip read from any seekable source, a file or bytes in memory; one that names an entry twice is refused, since
+    /// readers differ in which copy they take.
+    pub fn over(source: R) -> Result<Self, String> {
+        let archive = zip::ZipArchive::new(source).map_err(|e| e.to_string())?;
+        if archive.has_duplicate_names() {
+            return Err("the zip names an entry twice, and readers differ in which copy they take".into());
+        }
+        Ok(Zip { archive })
+    }
+
+    /// The entries, in the directory's order.
+    pub fn entries(&self) -> Result<Vec<ZipEntry>, String> {
+        (0..self.archive.len())
+            .map(|index| {
+                let e = self.archive.by_index_data(index).map_err(|x| x.to_string())?;
+                let full_name = e.name().map_err(|x| x.to_string())?.into_owned();
+                Ok(ZipEntry { index, full_name, length: e.size(), crc32: e.crc32(), stored: e.compression() == zip::CompressionMethod::Stored, link: e.is_symlink(), enclosed: e.enclosed_name() })
+            })
+            .collect()
+    }
+
+    /// An entry's first bytes, at most `length` of them.
+    pub fn first_bytes(&mut self, e: &ZipEntry, length: usize) -> Result<Vec<u8>, String> {
+        let file = self.archive.by_index(e.index).map_err(|x| format!("{}: {x}", e.full_name))?;
+        let mut out = Vec::with_capacity((length as u64).min(e.length) as usize);
+        file.take(length as u64).read_to_end(&mut out).map_err(|x| format!("{}: {x}", e.full_name))?;
+        Ok(out)
+    }
+
+    /// An entry copied out whole into `out`; refused where its bytes are not the length and CRC-32 the zip records, so
+    /// that a damaged zip is never taken for its files.
+    pub fn copy(&mut self, e: &ZipEntry, out: &mut dyn Write) -> Result<(), String> {
+        let mut file = self.archive.by_index(e.index).map_err(|x| format!("{}: {x}", e.full_name))?;
+        let damaged = |why: String| format!("{} is damaged ({why}): the zip records {} bytes with CRC-32 {:08x}", e.full_name, e.length, e.crc32);
+        let copied = std::io::copy(&mut file, out).map_err(|x| damaged(x.to_string()))?;
+        if copied != e.length {
+            return Err(damaged(format!("it holds {copied} bytes")));
+        }
+        Ok(())
+    }
+
+    /// An entry's modification time: the NTFS extra field's, to the tick, else the extended timestamp's, to the second;
     /// none where neither is there (the DOS time, local and to two seconds, is not taken).
-    pub modified: Option<std::time::SystemTime>,
-}
-
-/// Where a zip's central directory is, from its end record.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct End {
-    pub start: u64,
-    pub size: u64,
-    pub total: usize,
-}
-
-
-/// The end record in the last bytes of an archive, `tail`, which begin `tail_offset` bytes in; a form not read here
-/// is refused with why.
-pub fn end_of(tail: &[u8]) -> Result<End, String> {
-    let Some(end) = dotnet_zip::find_end(tail) else { return Err("no end of central directory".into()) };
-    if end >= 20 && u32_at(tail, end - 20) == Some(dotnet_zip::ZIP64_LOCATOR) {
-        return Err("a Zip64 archive".into());
-    }
-    let (disk, cd_disk) = (u16_at(tail, end + 4).unwrap_or(1), u16_at(tail, end + 6).unwrap_or(1));
-    let (on_disk, total) = (u16_at(tail, end + 8).unwrap_or(0), u16_at(tail, end + 10).unwrap_or(0));
-    let (size, start) = (u32_at(tail, end + 12).unwrap_or(0), u32_at(tail, end + 16).unwrap_or(0));
-    if disk != 0 || cd_disk != 0 || on_disk != total || total == 0xFFFF || size == u32::MAX || start == u32::MAX {
-        return Err("a spanned or Zip64 archive".into());
-    }
-    Ok(End { start: start as u64, size: size as u64, total: total as usize })
-}
-
-/// The entries of a central directory that begins `at` bytes into `bytes`, `total` of them by the end record; each read
-/// by `dotnet_zip`, and refused here where it is Zip64, spanned, encrypted, of another method or named with a NUL.
-pub fn directory(bytes: &[u8], mut at: usize, total: usize) -> Result<Vec<ZipEntry>, String> {
-    let mut list = Vec::new();
-    while u32_at(bytes, at) == Some(dotnet_zip::CENTRAL) {
-        let e = dotnet_zip::central_entry(bytes, &mut at).ok_or("a short entry")?;
-        if e.zip64 || e.disk != 0 {
-            return Err("a Zip64 or spanned entry".into());
+    pub fn modified(&mut self, e: &ZipEntry) -> Option<std::time::SystemTime> {
+        let file = self.archive.by_index_raw(e.index).ok()?;
+        let mut seconds = None;
+        for field in file.extra_data_fields() {
+            match field {
+                zip::ExtraField::Ntfs(ntfs) => return Some(from_filetime(ntfs.mtime())),
+                zip::ExtraField::ExtendedTimestamp(t) => seconds = t.mod_time().map(|s| from_unix_seconds(s as i32 as i64)),
+                _ => {}
+            }
         }
-        if e.flags & 1 != 0 || (e.method != 0 && e.method != 8) {
-            return Err("an encrypted entry or a method other than stored and deflate".into());
-        }
-        if e.full_name.contains('\0') {
-            return Err("a name holding a NUL".into());
-        }
-        let modified = modified_of(&bytes[e.extra.clone()]);
-        list.push(ZipEntry { platform: e.platform, method: e.method, dos_time: e.dos_time, compressed: e.compressed as usize, length: e.length, external: e.external, offset: e.offset as usize, full_name: e.full_name, crc32: e.crc32, modified });
+        seconds
     }
-    if list.len() != total {
-        return Err("an entry count the directory does not hold".into());
-    }
-    Ok(list)
-}
-
-/// The entries of an archive held whole in memory.
-pub fn entries_in(zip: &[u8]) -> Result<Vec<ZipEntry>, String> {
-    let end = end_of(zip)?;
-    directory(zip, end.start as usize, end.total)
-}
-
-/// The entries of an archive on disk, reading only its end and its directory.
-pub fn entries_of(at: &str) -> Result<Vec<ZipEntry>, String> {
-    let mut file = std::fs::File::open(at).map_err(|e| e.to_string())?;
-    let length = file.metadata().map_err(|e| e.to_string())?.len();
-    let tail_length = length.min(22 + 0xFFFF + 20);
-    file.seek(SeekFrom::Start(length - tail_length)).map_err(|e| e.to_string())?;
-    let mut tail = vec![0u8; tail_length as usize];
-    file.read_exact(&mut tail).map_err(|e| e.to_string())?;
-    let end = end_of(&tail)?;
-    if end.start.checked_add(end.size).is_none_or(|stop| stop > length) {
-        return Err("a central directory past the end".into());
-    }
-    file.seek(SeekFrom::Start(end.start)).map_err(|e| e.to_string())?;
-    let mut bytes = vec![0u8; end.size as usize];
-    file.read_exact(&mut bytes).map_err(|e| e.to_string())?;
-    directory(&bytes, 0, end.total)
-}
-
-/// `ArchiveImages.ImageEntry`: a cue sheet first, then a lone image of an extension `is_image` takes, by depth then by
-/// name ignoring case; none where there is none.
-pub fn image_entry(at: &str, is_image: impl Fn(&str) -> bool) -> Result<Option<String>, String> {
-    let mut names: Vec<String> = entries_of(at)?.into_iter().map(|e| e.full_name).filter(|n| !n.ends_with('/')).collect();
-    names.sort_by(|a, b| a.matches('/').count().cmp(&b.matches('/').count()).then_with(|| compare_ignore_case(a, b)));
-    if let Some(sheet) = names.iter().find(|n| image_sets::is_sheet(n)) {
-        return Ok(Some(sheet.clone()));
-    }
-    Ok(names.into_iter().find(|n| !image_sets::is_playlist(n) && is_image(crate::dotnet_path::extension(crate::dotnet_path::Style::Unix, n))))
-}
-
-/// `ArchiveImages.ReadEntry`: an entry's first bytes, at most `length` of them, found by its exact name and then
-/// ignoring case.
-pub fn read_entry(at: &str, entry: &str, length: usize) -> Result<Vec<u8>, String> {
-    let entries = entries_of(at)?;
-    let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| equals_ignore_case(&e.full_name, entry))).ok_or_else(|| format!("the archive holds no {entry}"))?;
-    let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| "a damaged local header".into()))?;
-    let want = (length as u64).min(e.length) as usize;
-    let raw = file.take(e.compressed as u64);
-    let mut out = Vec::with_capacity(want);
-    let read = if e.method == 0 { raw.take(want as u64).read_to_end(&mut out) } else { flate2::read::DeflateDecoder::new(raw).take(want as u64).read_to_end(&mut out) };
-    read.map_err(|x| x.to_string())?;
-    Ok(out)
 }
 
 /// FILETIME's count of ticks from 1601 to 1970.
 const FILETIME_1970: u64 = 116_444_736_000_000_000;
 
-/// A central directory entry's time from its extra fields: the NTFS field (0x000A, tag 1, three FILETIMEs of which the
-/// first is the modification), else the extended timestamp (0x5455, its flags' bit 0 then four bytes of Unix seconds).
-fn modified_of(extra: &[u8]) -> Option<std::time::SystemTime> {
-    let (mut at, mut seconds) = (0usize, None);
-    while at + 4 <= extra.len() {
-        let (id, size) = (u16_at(extra, at)?, u16_at(extra, at + 2)? as usize);
-        let field = extra.get(at + 4..at + 4 + size)?;
-        if id == 0x000A && size >= 32 && u16_at(field, 4) == Some(1) && u16_at(field, 6).is_some_and(|s| s >= 24) {
-            let ft = u64::from_le_bytes(field[8..16].try_into().ok()?);
-            let unix_ticks = ft as i128 - FILETIME_1970 as i128;
-            let at = if unix_ticks >= 0 {
-                std::time::UNIX_EPOCH + std::time::Duration::from_nanos(unix_ticks as u64 * 100)
-            } else {
-                std::time::UNIX_EPOCH - std::time::Duration::from_nanos((-unix_ticks) as u64 * 100)
-            };
-            return Some(at);
-        }
-        if id == 0x5455 && size >= 5 && field[0] & 1 != 0 {
-            let s = i32::from_le_bytes(field[1..5].try_into().ok()?) as i64;
-            seconds = Some(if s >= 0 { std::time::UNIX_EPOCH + std::time::Duration::from_secs(s as u64) } else { std::time::UNIX_EPOCH - std::time::Duration::from_secs((-s) as u64) });
-        }
-        at += 4 + size;
-    }
-    seconds
+fn from_filetime(ft: u64) -> std::time::SystemTime {
+    let unix_ticks = ft as i128 - FILETIME_1970 as i128;
+    let span = std::time::Duration::from_nanos((unix_ticks.unsigned_abs() * 100) as u64);
+    if unix_ticks >= 0 { std::time::UNIX_EPOCH + span } else { std::time::UNIX_EPOCH - span }
 }
 
-/// The archive opened at an entry's bytes, past its local header; an error's words, or none for a damaged header.
-fn at_data(at: &str, e: &ZipEntry) -> Result<std::fs::File, Option<String>> {
-    let mut file = std::fs::File::open(at).map_err(|x| Some(x.to_string()))?;
-    let mut local = [0u8; 30];
-    file.seek(SeekFrom::Start(e.offset as u64)).map_err(|x| Some(x.to_string()))?;
-    file.read_exact(&mut local).map_err(|x| Some(x.to_string()))?;
-    if u32_at(&local, 0) != Some(dotnet_zip::LOCAL) {
-        return Err(None);
-    }
-    let data = e.offset as u64 + 30 + u16_at(&local, 26).unwrap_or(0) as u64 + u16_at(&local, 28).unwrap_or(0) as u64;
-    file.seek(SeekFrom::Start(data)).map_err(|x| Some(x.to_string()))?;
-    Ok(file)
+fn from_unix_seconds(s: i64) -> std::time::SystemTime {
+    let span = std::time::Duration::from_secs(s.unsigned_abs());
+    if s >= 0 { std::time::UNIX_EPOCH + span } else { std::time::UNIX_EPOCH - span }
 }
 
-/// An entry copied out whole into `out`, inflated where deflated, and checked: its length and CRC-32 against the
-/// directory's, refused with both where they differ, so that a damaged zip is never taken for its files.
-pub fn copy_entry(at: &str, e: &ZipEntry, out: &mut dyn std::io::Write) -> Result<(), String> {
-    let file = at_data(at, e).map_err(|x| x.unwrap_or_else(|| format!("{} has a damaged local header", e.full_name)))?;
-    let raw = file.take(e.compressed as u64);
-    let mut reader: Box<dyn Read> = if e.method == 0 { Box::new(raw) } else { Box::new(flate2::read::DeflateDecoder::new(raw)) };
-    let mut crc = crate::rom_hash::Crc32::default();
-    let mut buffer = vec![0u8; 1 << 16];
-    let mut total = 0u64;
-    loop {
-        let n = reader.read(&mut buffer).map_err(|x| format!("{}: {x}", e.full_name))?;
-        if n == 0 {
-            break;
-        }
-        crc.append(&buffer[..n]);
-        total += n as u64;
-        if total > e.length {
-            break;
-        }
-        out.write_all(&buffer[..n]).map_err(|x| format!("{}: {x}", e.full_name))?;
+/// The entries of an archive held whole in memory.
+pub fn entries_in(zip: &[u8]) -> Result<Vec<ZipEntry>, String> {
+    Zip::over(std::io::Cursor::new(zip))?.entries()
+}
+
+/// The entries of an archive on disk, reading only its end and its directory.
+pub fn entries_of(at: impl AsRef<Path>) -> Result<Vec<ZipEntry>, String> {
+    Zip::open(at)?.entries()
+}
+
+/// `ArchiveImages.ImageEntry`: a cue sheet first, then a lone image of an extension `is_image` takes, by depth then by
+/// name ignoring case; none where there is none.
+pub fn image_entry(at: impl AsRef<Path>, is_image: impl Fn(&str) -> bool) -> Result<Option<String>, String> {
+    let mut names: Vec<String> = entries_of(at)?.into_iter().map(|e| e.full_name).filter(|n| !n.ends_with('/')).collect();
+    names.sort_by(|a, b| a.matches('/').count().cmp(&b.matches('/').count()).then_with(|| a.to_uppercase().cmp(&b.to_uppercase())));
+    if let Some(sheet) = names.iter().find(|n| image_sets::is_sheet(n)) {
+        return Ok(Some(sheet.clone()));
     }
-    if total != e.length || crc.value() != e.crc32 {
-        return Err(format!("{} is damaged: its {total} bytes have CRC-32 {:08x}, and the zip records {} bytes with CRC-32 {:08x}", e.full_name, crc.value(), e.length, e.crc32));
-    }
-    Ok(())
+    let dotted = |n: &str| Path::new(n).extension().map_or(String::new(), |e| format!(".{}", e.to_string_lossy()));
+    Ok(names.into_iter().find(|n| !image_sets::is_playlist(n) && is_image(&dotted(n))))
+}
+
+/// `ArchiveImages.ReadEntry`: an entry's first bytes, at most `length` of them, found by its exact name and then
+/// ignoring case.
+pub fn read_entry(at: impl AsRef<Path>, entry: &str, length: usize) -> Result<Vec<u8>, String> {
+    let mut zip = Zip::open(at)?;
+    let entries = zip.entries()?;
+    let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| e.full_name.to_uppercase() == entry.to_uppercase())).ok_or_else(|| format!("the archive holds no {entry}"))?;
+    zip.first_bytes(e, length)
+}
+
+/// An entry of the zip at `at` copied out whole, as [`Zip::copy`] copies it.
+pub fn copy_entry(at: impl AsRef<Path>, e: &ZipEntry, out: &mut dyn Write) -> Result<(), String> {
+    Zip::open(at)?.copy(e, out)
 }
 
 /// The extensions a writer stores rather than deflates: files already compressed, a CHD above all, which is never
 /// compressed a second time (EmuSen_GamePackages.md §19).
 pub const STORED_EXTENSIONS: &[&str] = &[".chd", ".zip", ".7z", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".mkv", ".webm", ".pdf"];
 
-/// What a plain zip without Zip64 can hold: 65,535 entries and offsets and sizes under 4 GiB.
-pub const MAX_ENTRIES: usize = 0xFFFF;
-pub const MAX_OFFSET: u64 = 0xFFFF_FFFE;
-
-/// A zip written entry by entry to a file, then its central directory and end record: stored or deflated entries,
-/// names in UTF-8, each with its modification time in the DOS fields (local time), the extended timestamp (to the
-/// second) and the NTFS field (to the tick, which a state's record is stamped with).
+/// A zip written entry by entry to a file by the zip crate: stored or deflated entries, names in UTF-8, each with its
+/// modification time in the DOS fields (local time), the extended timestamp (to the second) and the NTFS field (to the
+/// tick, which a state's record is stamped with). Zip64 is written where an entry or the archive needs it.
 pub struct ZipWriter {
-    file: std::fs::File,
-    at: u64,
-    directory: Vec<u8>,
-    entries: usize,
+    zip: zip::ZipWriter<std::fs::File>,
 }
 
-fn dos_time(t: std::time::SystemTime) -> (u16, u16) {
-    let utc = crate::clock::ticks_of(t).div_euclid(emusen_dotnet::date::TICKS_PER_SECOND);
-    let local = utc + crate::clock::local_offset(utc);
-    let (y, m, d) = emusen_dotnet::date::civil(local.div_euclid(86_400));
-    if y < 1980 {
-        return (0, (1 << 5) | 1);
-    }
-    let s = local.rem_euclid(86_400);
-    let time = ((s / 3600) << 11 | (s / 60 % 60) << 5 | (s % 60) / 2) as u16;
-    let date = (((y - 1980).min(127) as u32) << 9 | m << 5 | d) as u16;
-    (time, date)
+/// A time's DOS fields in local time; the first of 1980 for a time before it.
+fn dos_time(t: std::time::SystemTime) -> zip::DateTime {
+    let utc = crate::clock::ticks_of(t);
+    let local = crate::clock::utc(utc + crate::clock::local_offset(utc.div_euclid(crate::clock::TICKS_PER_SECOND)) * crate::clock::TICKS_PER_SECOND);
+    let year = u16::try_from(local.year()).ok();
+    year.and_then(|y| zip::DateTime::from_date_and_time(y, local.month() as u8, local.day(), local.hour(), local.minute(), local.second()).ok()).unwrap_or_default()
 }
 
-fn time_fields(t: std::time::SystemTime) -> Vec<u8> {
-    let ticks = crate::clock::ticks_of(t);
-    let ft = (ticks as i128 + FILETIME_1970 as i128).max(0) as u64;
-    let seconds = ticks.div_euclid(emusen_dotnet::date::TICKS_PER_SECOND).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let mut extra = Vec::with_capacity(45);
-    extra.extend_from_slice(&0x5455u16.to_le_bytes());
-    extra.extend_from_slice(&5u16.to_le_bytes());
-    extra.push(1);
-    extra.extend_from_slice(&seconds.to_le_bytes());
-    extra.extend_from_slice(&0x000Au16.to_le_bytes());
-    extra.extend_from_slice(&32u16.to_le_bytes());
-    extra.extend_from_slice(&[0, 0, 0, 0]);
-    extra.extend_from_slice(&1u16.to_le_bytes());
-    extra.extend_from_slice(&24u16.to_le_bytes());
-    for _ in 0..3 {
-        extra.extend_from_slice(&ft.to_le_bytes());
+/// The extended timestamp's body (0x5455): its flags, modification only, then Unix seconds.
+fn extended_timestamp(t: std::time::SystemTime) -> [u8; 5] {
+    let seconds = crate::clock::ticks_of(t).div_euclid(crate::clock::TICKS_PER_SECOND).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    let mut body = [1u8; 5];
+    body[1..].copy_from_slice(&seconds.to_le_bytes());
+    body
+}
+
+/// The NTFS field's body (0x000A): four reserved bytes, then tag 1 of 24 bytes holding the modification, access and
+/// creation FILETIMEs, all three the one time.
+fn ntfs_times(t: std::time::SystemTime) -> [u8; 32] {
+    let ft = (crate::clock::ticks_of(t) as i128 + FILETIME_1970 as i128).max(0) as u64;
+    let mut body = [0u8; 32];
+    body[4..6].copy_from_slice(&1u16.to_le_bytes());
+    body[6..8].copy_from_slice(&24u16.to_le_bytes());
+    for at in [8, 16, 24] {
+        body[at..at + 8].copy_from_slice(&ft.to_le_bytes());
     }
-    extra
+    body
 }
 
 impl ZipWriter {
-    pub fn create(at: &str) -> Result<ZipWriter, String> {
-        let file = std::fs::OpenOptions::new().write(true).create_new(true).open(at).map_err(|e| format!("{at}: {e}"))?;
-        Ok(ZipWriter { file, at: 0, directory: Vec::new(), entries: 0 })
+    pub fn create(at: impl AsRef<Path>) -> Result<ZipWriter, String> {
+        let at = at.as_ref();
+        let file = std::fs::OpenOptions::new().write(true).create_new(true).open(at).map_err(|e| format!("{}: {e}", at.display()))?;
+        Ok(ZipWriter { zip: zip::ZipWriter::new(file) })
     }
 
-    fn write(&mut self, bytes: &[u8]) -> Result<(), String> {
-        use std::io::Write;
-        self.file.write_all(bytes).map_err(|e| e.to_string())?;
-        self.at += bytes.len() as u64;
-        Ok(())
-    }
-
-    /// The file at `source` added as `name`, stored where `store` says or where deflating would not make it smaller,
-    /// with `modified` as its time; refused past what a plain zip holds.
-    pub fn add(&mut self, name: &str, source: &str, modified: std::time::SystemTime, store: bool, stop: &dyn Fn() -> bool) -> Result<(), String> {
-        use std::io::Write;
-        if self.entries + 1 > MAX_ENTRIES - 1 {
-            return Err(format!("more than {} files, which a zip without Zip64 does not hold", MAX_ENTRIES - 1));
-        }
-        let length = std::fs::metadata(source).map_err(|e| format!("{source}: {e}"))?.len();
-        if length > MAX_OFFSET || self.at > MAX_OFFSET {
-            return Err(format!("{name} reaches past 4 GiB, which a zip without Zip64 does not hold"));
-        }
-        let mut crc = crate::rom_hash::Crc32::default();
-        let deflated: Option<Vec<u8>> = if store {
-            None
-        } else {
-            let bytes = std::fs::read(source).map_err(|e| format!("{source}: {e}"))?;
-            crc.append(&bytes);
-            let mut encoder = flate2::write::DeflateEncoder::new(Vec::with_capacity(bytes.len() / 2), flate2::Compression::new(6));
-            encoder.write_all(&bytes).map_err(|e| e.to_string())?;
-            let packed = encoder.finish().map_err(|e| e.to_string())?;
-            if (packed.len() as u64) < length { Some(packed) } else { None }
-        };
-        let method: u16 = if deflated.is_some() { 8 } else { 0 };
-        let (time, date) = dos_time(modified);
-        let extra = time_fields(modified);
-        let offset = self.at;
-        let header = |crc: u32, compressed: u32, out: &mut Vec<u8>| {
-            out.extend_from_slice(&dotnet_zip::LOCAL.to_le_bytes());
-            out.extend_from_slice(&20u16.to_le_bytes());
-            out.extend_from_slice(&0x0800u16.to_le_bytes());
-            out.extend_from_slice(&method.to_le_bytes());
-            out.extend_from_slice(&time.to_le_bytes());
-            out.extend_from_slice(&date.to_le_bytes());
-            out.extend_from_slice(&crc.to_le_bytes());
-            out.extend_from_slice(&compressed.to_le_bytes());
-            out.extend_from_slice(&(length as u32).to_le_bytes());
-            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
-            out.extend_from_slice(&(extra.len() as u16).to_le_bytes());
-            out.extend_from_slice(name.as_bytes());
-            out.extend_from_slice(&extra);
-        };
-        let (crc_value, compressed) = match &deflated {
-            Some(packed) => {
-                let mut h = Vec::new();
-                header(crc.value(), packed.len() as u32, &mut h);
-                self.write(&h)?;
-                self.write(packed)?;
-                (crc.value(), packed.len() as u64)
+    /// The file at `source` added as `name`, stored where `store` says and deflated otherwise, with `modified` as its
+    /// time; `stop` is asked between each MiB.
+    pub fn add(&mut self, name: &str, source: impl AsRef<Path>, modified: std::time::SystemTime, store: bool, stop: &dyn Fn() -> bool) -> Result<(), String> {
+        let source = source.as_ref();
+        let mut input = std::fs::File::open(source).map_err(|e| format!("{}: {e}", source.display()))?;
+        let length = input.metadata().map_err(|e| format!("{}: {e}", source.display()))?.len();
+        let (method, level) = if store { (zip::CompressionMethod::Stored, None) } else { (zip::CompressionMethod::Deflated, Some(6)) };
+        let mut options = zip::write::FullFileOptions::default()
+            .compression_method(method)
+            .compression_level(level)
+            .last_modified_time(dos_time(modified))
+            .unix_permissions(0o644)
+            .large_file(length > u32::MAX as u64)
+            .validate_extra_fields(true);
+        let field = |e: zip::result::ZipError| format!("{name}: {e}");
+        options.add_extra_field(0x5455, extended_timestamp(modified), false).map_err(field)?;
+        options.add_extra_field(0x000A, ntfs_times(modified), false).map_err(field)?;
+        self.zip.start_file(name, options).map_err(field)?;
+        let mut buffer = vec![0u8; 1 << 20];
+        let mut copied = 0u64;
+        loop {
+            if stop() {
+                return Err("stopped".into());
             }
-            None => {
-                let mut h = Vec::new();
-                header(0, length as u32, &mut h);
-                self.write(&h)?;
-                let mut input = std::fs::File::open(source).map_err(|e| format!("{source}: {e}"))?;
-                let mut crc = crate::rom_hash::Crc32::default();
-                let mut buffer = vec![0u8; 1 << 20];
-                let mut copied = 0u64;
-                loop {
-                    if stop() {
-                        return Err("stopped".into());
-                    }
-                    let n = input.read(&mut buffer).map_err(|e| format!("{source}: {e}"))?;
-                    if n == 0 {
-                        break;
-                    }
-                    crc.append(&buffer[..n]);
-                    self.write(&buffer[..n])?;
-                    copied += n as u64;
-                }
-                if copied != length {
-                    return Err(format!("{source} changed while it was written"));
-                }
-                self.file.seek(SeekFrom::Start(offset + 14)).map_err(|e| e.to_string())?;
-                self.file.write_all(&crc.value().to_le_bytes()).map_err(|e| e.to_string())?;
-                self.file.seek(SeekFrom::Start(self.at)).map_err(|e| e.to_string())?;
-                (crc.value(), length)
+            let n = input.read(&mut buffer).map_err(|e| format!("{}: {e}", source.display()))?;
+            if n == 0 {
+                break;
             }
-        };
-        if self.at > MAX_OFFSET {
-            return Err(format!("{name} reaches past 4 GiB, which a zip without Zip64 does not hold"));
+            self.zip.write_all(&buffer[..n]).map_err(|e| format!("{name}: {e}"))?;
+            copied += n as u64;
         }
-        let d = &mut self.directory;
-        d.extend_from_slice(&dotnet_zip::CENTRAL.to_le_bytes());
-        d.extend_from_slice(&((3u16 << 8) | 20).to_le_bytes());
-        d.extend_from_slice(&20u16.to_le_bytes());
-        d.extend_from_slice(&0x0800u16.to_le_bytes());
-        d.extend_from_slice(&method.to_le_bytes());
-        d.extend_from_slice(&time.to_le_bytes());
-        d.extend_from_slice(&date.to_le_bytes());
-        d.extend_from_slice(&crc_value.to_le_bytes());
-        d.extend_from_slice(&(compressed as u32).to_le_bytes());
-        d.extend_from_slice(&(length as u32).to_le_bytes());
-        d.extend_from_slice(&(name.len() as u16).to_le_bytes());
-        d.extend_from_slice(&(extra.len() as u16).to_le_bytes());
-        d.extend_from_slice(&0u16.to_le_bytes());
-        d.extend_from_slice(&0u16.to_le_bytes());
-        d.extend_from_slice(&0u16.to_le_bytes());
-        d.extend_from_slice(&(0o100644u32 << 16).to_le_bytes());
-        d.extend_from_slice(&(offset as u32).to_le_bytes());
-        d.extend_from_slice(name.as_bytes());
-        d.extend_from_slice(&extra);
-        self.entries += 1;
+        if copied != length {
+            return Err(format!("{} changed while it was written", source.display()));
+        }
         Ok(())
     }
 
     /// The central directory and the end record written, and the file flushed to the disk.
-    pub fn finish(mut self) -> Result<(), String> {
-        let (start, size) = (self.at, self.directory.len() as u64);
-        if start > MAX_OFFSET || start + size > MAX_OFFSET {
-            return Err("the zip's directory would begin past 4 GiB, which a zip without Zip64 does not hold".into());
-        }
-        let directory = std::mem::take(&mut self.directory);
-        self.write(&directory)?;
-        let mut end = Vec::with_capacity(22);
-        end.extend_from_slice(&dotnet_zip::END.to_le_bytes());
-        end.extend_from_slice(&[0, 0, 0, 0]);
-        end.extend_from_slice(&(self.entries as u16).to_le_bytes());
-        end.extend_from_slice(&(self.entries as u16).to_le_bytes());
-        end.extend_from_slice(&(size as u32).to_le_bytes());
-        end.extend_from_slice(&(start as u32).to_le_bytes());
-        end.extend_from_slice(&0u16.to_le_bytes());
-        self.write(&end)?;
-        self.file.sync_all().map_err(|e| e.to_string())
+    pub fn finish(self) -> Result<(), String> {
+        self.zip.finish().map_err(|e| e.to_string())?.sync_all().map_err(|e| e.to_string())
     }
 }

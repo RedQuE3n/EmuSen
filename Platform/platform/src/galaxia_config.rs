@@ -2,19 +2,12 @@
 
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report, required, status, text};
 use emusen_galaxia::config::{self, Loaded};
-use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::models::{self, Model};
-use emusen_galaxia::{cheats, error_log, json, model, suggestion, tree};
+use emusen_galaxia::{cheats, error_log, tree};
 use std::time::{Duration, SystemTime};
 
 /// `EMUSEN_GALAXIA_MODEL_UPGRADE`: apply the model's own upgrade to what was read or made.
 pub const UPGRADE: u32 = 1;
-
-/// What `emusen_galaxia_number_format` formats.
-pub mod number {
-    pub const DOUBLE: u32 = 0;
-    pub const SINGLE: u32 = 1;
-}
 
 /// What `emusen_galaxia_suggest` answers with.
 pub mod suggest {
@@ -88,13 +81,13 @@ pub unsafe extern "C" fn emusen_galaxia_model_load(model: u32, category: *const 
         match config::load(&tree::tree(), model, category, file, flags & UPGRADE != 0).map_err(|words| fail(status::PARSE, words))? {
             Loaded::Missing => Err(status::ABSENT),
             Loaded::Null => Ok("null".to_string()),
-            Loaded::Document(document) => Ok(model::transport(&document)),
+            Loaded::Document(document) => Ok(document),
         }
     };
     answer(result(), out, len)
 }
 
-/// Saves a model's document, given as JSON, as its file: the folder made, the bytes .NET would write put in place by a rename. A null document fails after the folder is made, as a document C# could not serialize does.
+/// Saves a model's document, given as JSON, as its file: the folder made, the model written by serde_json and put in place by a rename. A null document fails after the folder is made.
 ///
 /// # Safety
 /// Each pointer must be valid for its length, or null.
@@ -115,7 +108,7 @@ pub unsafe extern "C" fn emusen_galaxia_model_save(model: u32, category: *const 
 /// `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_model_new(model: u32, flags: u32, out: *mut u8, len: usize) -> i64 {
-    answer(model_of(model).map(|model| model::transport(&config::new_instance(model, flags & UPGRADE != 0))), out, len)
+    answer(model_of(model).map(|model| config::new_instance(model, flags & UPGRADE != 0)), out, len)
 }
 
 /// Text bound to a model with no file involved: the bound document as JSON, `null` for a document that is null, or `PARSE` with the words.
@@ -127,7 +120,7 @@ pub unsafe extern "C" fn emusen_galaxia_model_bind(model: u32, document: *const 
     let result = || -> Result<String, i32> {
         let (model, document) = (model_of(model)?, unsafe { required(document, document_len) }?);
         let bound = config::bind_text(model, document, flags & UPGRADE != 0).map_err(|words| fail(status::PARSE, words))?;
-        Ok(bound.map_or_else(|| "null".to_string(), |bound| model::transport(&bound)))
+        Ok(bound.unwrap_or_else(|| "null".to_string()))
     };
     answer(result(), out, len)
 }
@@ -140,21 +133,9 @@ pub unsafe extern "C" fn emusen_galaxia_model_bind(model: u32, document: *const 
 pub unsafe extern "C" fn emusen_galaxia_model_format(model: u32, document: *const u8, document_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<String, i32> {
         let (model, document) = (model_of(model)?, unsafe { required(document, document_len) }?);
-        match config::bind_text(model, document, false).map_err(|words| fail(status::PARSE, words))? {
-            Some(bound) => model::format(model.schema, &bound).map_err(|words| fail(status::PARSE, words)),
-            None => Ok("null".to_string()),
-        }
+        (model.format)(document).map_err(|words| fail(status::PARSE, words))
     };
     answer(result(), out, len)
-}
-
-/// A model's fields, one to a line, for a host to hold its own classes against.
-///
-/// # Safety
-/// `out` must be valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_model_schema(model: u32, out: *mut u8, len: usize) -> i64 {
-    answer(model_of(model).map(|model| model::describe(model.schema)), out, len)
 }
 
 /// A model read from any path, as JSON. `ABSENT` for a file that is missing, unreadable or will not bind, of which nothing is said.
@@ -165,12 +146,12 @@ pub unsafe extern "C" fn emusen_galaxia_model_schema(model: u32, out: *mut u8, l
 pub unsafe extern "C" fn emusen_galaxia_model_load_from(model: u32, file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<String, i32> {
         let (model, file) = (model_of(model)?, unsafe { required(file, file_len) }?);
-        config::load_from(model, file).map(|document| model::transport(&document)).ok_or(status::ABSENT)
+        config::load_from(model, file).ok_or(status::ABSENT)
     };
     answer(result(), out, len)
 }
 
-/// A model's document written straight to any path, its folder made first; no temp file, as C# writes a file the player picked.
+/// A model's document written straight to any path, its folder made first; no temp file, as a file the player picked is written.
 ///
 /// # Safety
 /// Each pointer must be valid for its length, or null.
@@ -182,30 +163,6 @@ pub unsafe extern "C" fn emusen_galaxia_model_save_to(model: u32, file: *const u
         if config::save_to(model, file, document) { Ok(()) } else { Err(fail(status::IO, "The file could not be written.")) }
     };
     result().map_or_else(|status| status, |()| 0)
-}
-
-/// A file's bytes as .NET's `File.ReadAllText` decodes them, for a test to hold the decoding to .NET's.
-///
-/// # Safety
-/// Each pointer must be valid for its length, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_text_decode(bytes: *const u8, bytes_len: usize, out: *mut u8, len: usize) -> i64 {
-    let bytes = if bytes.is_null() || bytes_len == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(bytes, bytes_len) } };
-    answer(Ok(json::decode(bytes)), out, len)
-}
-
-/// A number as .NET writes it into JSON, from its bits: a double's 64, or a float's in the low 32. `ABSENT` for a value JSON has no number for.
-///
-/// # Safety
-/// `out` must be valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_number_format(kind: u32, bits: u64, out: *mut u8, len: usize) -> i64 {
-    let formatted = match kind {
-        number::DOUBLE => json::format_f64(f64::from_bits(bits)),
-        number::SINGLE => json::format_f32(f32::from_bits(bits as u32)),
-        _ => return fail(status::BAD_ARGUMENT, format!("no number kind {kind}")) as i64,
-    };
-    answer(formatted.ok_or(status::ABSENT), out, len)
 }
 
 /// The saved cheat lists by name, in .NET's caseless order, each followed by a NUL.
@@ -223,7 +180,7 @@ pub unsafe extern "C" fn emusen_galaxia_cheat_names(out: *mut u8, len: usize) ->
 /// `name` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_cheat_name_valid(name: *const u8, len: usize) -> i32 {
-    flag(unsafe { text(name, len) }.map(|name| cheats::is_valid_name(Style::HOST, name)))
+    flag(unsafe { text(name, len) }.map(|name| cheats::is_valid_name(name)))
 }
 
 /// A game's own cheat list as a frontend keeps it: its name, then its category, each followed by a NUL. `ABSENT` for a ROM path that gives no name a list may have.
@@ -234,7 +191,7 @@ pub unsafe extern "C" fn emusen_galaxia_cheat_name_valid(name: *const u8, len: u
 pub unsafe extern "C" fn emusen_galaxia_cheat_game_list(console: *const u8, console_len: usize, rom_path: *const u8, rom_path_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<Vec<u8>, i32> {
         let (console, rom_path) = (unsafe { text(console, console_len) }?, unsafe { text(rom_path, rom_path_len) }?);
-        let list = cheats::game_list(Style::HOST, console, rom_path).ok_or(status::ABSENT)?;
+        let list = cheats::game_list(console, rom_path).ok_or(status::ABSENT)?;
         Ok(join_nul(&[list.name, list.category]))
     };
     match result() {
@@ -255,6 +212,7 @@ pub unsafe extern "C" fn emusen_galaxia_log_root(directory: *const u8, directory
     };
     let waiting = diagnostics_waiting();
     let (root, said) = error_log::root(&tree::tree(), directory);
+    let root = root.to_string_lossy().into_owned();
     said.into_iter().for_each(report);
     if out.is_null() || root.len() > len {
         // The caller comes back with room, and the settings are read and reported then.
@@ -278,7 +236,7 @@ pub unsafe extern "C" fn emusen_galaxia_log_usable(directory: *const u8, len: us
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_log_path(root: *const u8, root_len: usize, day: *const u8, day_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { Ok(error_log::path_for(unsafe { required(root, root_len) }?, unsafe { required(day, day_len) }?)) };
+    let result = || -> Result<String, i32> { Ok(error_log::path_for(unsafe { required(root, root_len) }?, unsafe { required(day, day_len) }?).to_string_lossy().into_owned()) };
     answer(result(), out, len)
 }
 
@@ -340,7 +298,7 @@ pub extern "C" fn emusen_galaxia_log_reset() -> i32 {
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_suggest_distance(a: *const u8, a_len: usize, b: *const u8, b_len: usize) -> i32 {
-    let result = || -> Result<i32, i32> { Ok(suggestion::distance(unsafe { required(a, a_len) }?, unsafe { required(b, b_len) }?) as i32) };
+    let result = || -> Result<i32, i32> { Ok(emusen_suggest::distance(unsafe { required(a, a_len) }?, unsafe { required(b, b_len) }?) as i32) };
     result().unwrap_or_else(|status| status)
 }
 
@@ -354,8 +312,8 @@ pub unsafe extern "C" fn emusen_galaxia_suggest(what: u32, typed: *const u8, typ
         let (typed, candidates) = (unsafe { required(typed, typed_len) }?, unsafe { text(candidates, candidates_len) }?.unwrap_or(""));
         let candidates: Vec<&str> = candidates.split_terminator('\0').collect();
         match what {
-            suggest::HINT => Ok(suggestion::hint(typed, &candidates, max)),
-            suggest::NEAREST => Ok(suggestion::nearest(typed, &candidates, max).iter().map(|name| format!("{name}\0")).collect()),
+            suggest::HINT => Ok(emusen_suggest::hint(typed, &candidates, max)),
+            suggest::NEAREST => Ok(emusen_suggest::nearest(typed, &candidates, max).iter().map(|name| format!("{name}\0")).collect()),
             _ => Err(fail(status::BAD_ARGUMENT, format!("no suggestion {what}"))),
         }
     };
@@ -388,17 +346,10 @@ mod tests {
         assert_eq!(ask(|out, len| unsafe { emusen_galaxia_model_bind(99, b"{}".as_ptr(), 2, 0, out, len) }), Err(status::BAD_ARGUMENT as i64));
         let new = ask(|out, len| unsafe { emusen_galaxia_model_new(models::APP_SETTINGS_ID, UPGRADE, out, len) }).unwrap();
         assert!(new.contains(r#""SelectedCoreUpgraded":true"#));
-        let schema = ask(|out, len| unsafe { emusen_galaxia_model_schema(models::CHEAT_FILE_ID, out, len) }).unwrap();
-        assert!(schema.contains("CheatFileEntry.EffectiveWrites\tlist<CheatFileWrite>\tderived\n"));
     }
 
     #[test]
-    fn numbers_and_suggestions_cross_as_text() {
-        let double = |value: f64| ask(|out, len| unsafe { emusen_galaxia_number_format(number::DOUBLE, value.to_bits(), out, len) });
-        let single = |value: f32| ask(|out, len| unsafe { emusen_galaxia_number_format(number::SINGLE, value.to_bits() as u64, out, len) });
-        assert_eq!(double(1e-7), Ok("1E-07".to_string()));
-        assert_eq!(single(0.8), Ok("0.8".to_string()));
-        assert_eq!(double(f64::NAN), Err(status::ABSENT as i64));
+    fn suggestions_cross_as_text() {
         let candidates = "DPadUp\0DPadDown\0";
         let suggest = |what, typed: &str| ask(|out, len| unsafe { emusen_galaxia_suggest(what, typed.as_ptr(), typed.len(), candidates.as_ptr(), candidates.len(), 2, out, len) });
         assert_eq!(suggest(suggest::HINT, "DPadUpp"), Ok(" Did you mean 'DPadUp'?".to_string()));
@@ -414,7 +365,7 @@ mod tests {
             let (rom_path, rom_path_len) = rom_path.map_or((std::ptr::null(), 0), |r| (r.as_ptr(), r.len()));
             ask(|out, len| unsafe { emusen_galaxia_cheat_game_list(console, console_len, rom_path, rom_path_len, out, len) })
         };
-        let separator = Style::HOST.separator();
+        let separator = std::path::MAIN_SEPARATOR;
         assert_eq!(list(Some("SNES"), Some("/roms/Gamma.smc")), Ok(format!("Gamma\0cheats{separator}SNES\0")));
         assert_eq!(list(None, Some("Gamma.smc")), Ok("Gamma\0cheats\0".to_string()));
         assert_eq!(list(Some(" "), Some("Gamma")), Ok("Gamma\0cheats\0".to_string()));
@@ -432,8 +383,6 @@ mod tests {
         defines("EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG", models::GRAPHICS_CONFIG_ID);
         defines("EMUSEN_GALAXIA_MODEL_CHEAT_FILE", models::CHEAT_FILE_ID);
         defines("EMUSEN_GALAXIA_MODEL_UPGRADE", UPGRADE);
-        defines("EMUSEN_GALAXIA_NUMBER_DOUBLE", number::DOUBLE);
-        defines("EMUSEN_GALAXIA_NUMBER_SINGLE", number::SINGLE);
         defines("EMUSEN_GALAXIA_SUGGEST_HINT", suggest::HINT);
         defines("EMUSEN_GALAXIA_SUGGEST_NEAREST", suggest::NEAREST);
         assert_eq!(models::MODELS.len(), 4);

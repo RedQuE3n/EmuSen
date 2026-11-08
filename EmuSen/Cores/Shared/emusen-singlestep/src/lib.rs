@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 /// The `.json` files of a suite's folder, sorted.
 pub fn suite_files(dir: &Path) -> Vec<PathBuf> {
@@ -18,7 +18,7 @@ pub fn suite_files(dir: &Path) -> Vec<PathBuf> {
 
 /// The cases of one suite file.
 pub fn read_cases(path: &Path) -> Vec<Value> {
-    match json::parse(&std::fs::read(path).expect("a suite file")) {
+    match serde_json::from_slice(&std::fs::read(path).expect("a suite file")) {
         Ok(Value::Array(cases)) => cases,
         other => panic!("{}: not an array of cases ({:?})", path.display(), other.err()),
     }

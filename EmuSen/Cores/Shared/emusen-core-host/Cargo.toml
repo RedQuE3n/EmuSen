@@ -16,6 +16,10 @@ path = "src/bin/emusen-core-host.rs"
 
 [dependencies]
 emusen-native = { path = "../emusen-native" }
+# A core's descriptors are read as JSON values, members in their written order (EmuSen_RustPlatform.md §47.22).
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+# The descriptors checked against the ABI's committed schemas (§7.2).
+emusen-core-schema = { path = "../emusen-core-schema" }
 libloading = "0.9"
 # An installed libretro core's folder and the names of its files, Cores' one owner of them (EmuSen_Cores.md §7).
 emusen-core-entry = { path = "../../../../Platform/core-entry" }

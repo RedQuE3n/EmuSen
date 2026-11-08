@@ -1,9 +1,9 @@
 //! The `emusen.scrape` service: the process's one scraper, lent by its host or opened here - see EmuSen_LibraryTools.md §8.
 
+use std::path::Path;
 use crate::scrape::{answer, fail, failed, text};
-use emusen_dotnet::json::{self, Value};
-use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::models::{APP_SETTINGS_ID, MODELS};
+use serde_json::Value;
+use emusen_galaxia::models::AppSettings;
 use emusen_galaxia::tree::{self, Directory};
 use emusen_galaxia::{config, setting_folders};
 use emusen_library::Library;
@@ -80,40 +80,40 @@ fn every_system() -> Vec<String> {
     emusen_systems::table().map(|t| t.iter().map(|s| s.id.clone()).collect()).unwrap_or_default()
 }
 
-fn setting(settings: &emusen_galaxia::json::Value, name: &str) -> Option<String> {
-    settings.get(name).and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string)
+fn setting(value: &Option<String>) -> Option<String> {
+    value.clone().filter(|s| !s.trim().is_empty())
 }
 
 /// The tree, the settings file and its ROM folder, as the library tool reads them.
-fn settings_file() -> (tree::Tree, emusen_galaxia::json::Value, Option<String>) {
+fn settings_file() -> (tree::Tree, AppSettings, Option<String>) {
     let tree = tree::tree().clone();
-    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
-    let roms = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
+    let (settings, _) = config::load_or_new::<AppSettings>(&tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    let roms = setting_folders::checked(settings.rom_directory.as_deref(), &tree::user_home()).path;
     (tree, settings, roms)
 }
 
 /// The settings file's folders, as `MainWindow.NativeSettings` gives them; each system its own engine, since no runtime catalog is here.
 fn own_settings() -> (String, String, String) {
     let (tree, settings, roms) = settings_file();
-    let art = setting(&settings, "ArtworkDirectory").or_else(|| tree.directory(Directory::Artwork));
-    let mut members = vec![
-        ("roms", roms.map_or(Value::Null, Value::string)),
-        ("art", art.map_or(Value::Null, Value::string)),
-        ("esde_media", setting(&settings, "EsdeMediaDirectory").map_or(Value::Null, Value::string)),
-        ("openemu", Value::Bool(settings.get("OpenEmuFallback").and_then(|v| v.as_bool()).unwrap_or(true))),
-        ("user_agent", Value::string(format!("EmuSen/{}", env!("CARGO_PKG_VERSION")))),
-        ("developer_files", Value::Bool(true)),
-    ];
-    members.push(("cores", Value::Array(every_system().into_iter().map(|id| Value::Array(vec![Value::string(id)])).collect())));
-    let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
-    let media = tree.directory(Directory::Media).unwrap_or_default();
-    let games = path::combine(Style::HOST, &tree.directory(Directory::Library).unwrap_or_default(), "games.db");
+    let art = setting(&settings.artwork_directory).or_else(|| tree.directory(Directory::Artwork).map(|d| d.to_string_lossy().into_owned()));
+    let cores: Vec<[String; 1]> = every_system().into_iter().map(|id| [id]).collect();
+    let out = serde_json::json!({
+        "roms": roms,
+        "art": art,
+        "esde_media": setting(&settings.esde_media_directory),
+        "openemu": settings.open_emu_fallback,
+        "user_agent": format!("EmuSen/{}", env!("CARGO_PKG_VERSION")),
+        "developer_files": true,
+        "cores": cores,
+    })
+    .to_string();
+    let media = tree.directory(Directory::Media).unwrap_or_default().to_string_lossy().into_owned();
+    let games = tree.directory(Directory::Library).unwrap_or_default().join(emusen_galaxia::stores::GAMES_DB).to_string_lossy().into_owned();
     (media, games, out)
 }
 
 fn open_own() -> Result<Slot, Error> {
-    let beside = path::combine(Style::HOST, &tree::base_directory(), emusen_sqlite::SHIPPED_NAME);
+    let beside = Path::new(&tree::base_directory()).join(emusen_sqlite::SHIPPED_NAME).to_string_lossy().into_owned();
     let sqlite = Arc::new(Sqlite::of_process(&[beside]).map_err(Error::Io)?);
     let (media, games, settings) = own_settings();
     let library: &'static Library = Box::leak(Box::new(Library::open(sqlite.clone(), &games).map_err(library_error)?));
@@ -175,7 +175,7 @@ pub unsafe extern "C" fn emusen_scraping_lend(lend: *const Lend) -> i32 {
         } else {
             let systems = match unsafe { text(lend.systems, lend.systems_len) } {
                 Ok("") => every_system(),
-                Ok(t) => match json::parse(t) {
+                Ok(t) => match serde_json::from_str::<Value>(t) {
                     Ok(Value::Array(ids)) => ids.iter().filter_map(Value::as_str).map(str::to_string).collect(),
                     _ => return fail(abi::BAD_REQUEST, "the lend's systems are not a list of system ids"),
                 },
@@ -257,31 +257,31 @@ fn games(h: &Held<'_>, filter: &str) -> Result<String, Error> {
     let roms = roms.unwrap_or_default();
     let scan = Library::open(h.scraper.sqlite(), ":memory:").map_err(library_error)?;
     let members = vec![
-        ("roots", Value::Array(vec![Value::string(roms)])),
-        ("systems", Value::Array(h.systems.iter().map(Value::string).collect())),
-        ("packages", tree.directory(Directory::Packages).map_or(Value::Null, Value::string)),
-        ("compressed", tree.directory(Directory::Compressed).map_or(Value::Null, Value::string)),
+        ("roots", Value::Array(vec![Value::String(String::from(roms))])),
+        ("systems", Value::Array(h.systems.iter().map(|s| Value::String(String::from(s))).collect())),
+        ("packages", tree.directory(Directory::Packages).map_or(Value::Null, |d| Value::String(String::from(d.to_string_lossy())))),
+        ("compressed", tree.directory(Directory::Compressed).map_or(Value::Null, |d| Value::String(String::from(d.to_string_lossy())))),
     ];
     let mut request = String::new();
-    json::write_compact(&mut request, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    request.push_str(&serde_json::to_string(&Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())).expect("a value is JSON"));
     scan.scan_request(&request).map_err(library_error)?;
-    let found = json::parse(&scan.games_request(filter).map_err(library_error)?).map_err(|e| Error::BadRequest(format!("{e:?}")))?;
+    let found = serde_json::from_str::<Value>(&scan.games_request(filter).map_err(library_error)?).map_err(|e| Error::BadRequest(format!("{e:?}")))?;
     let Value::Object(mut top) = found else { return Err(Error::BadRequest("The library's games are not an object.".into())) };
     for (k, v) in top.iter_mut() {
-        if k.text != "games" {
+        if k != "games" {
             continue;
         }
         if let Value::Array(list) = v {
             for g in list.iter_mut() {
                 let esde = g.get("system").and_then(Value::as_str).and_then(emusen_systems::find).map(|s| s.esde_system.clone()).filter(|e| !e.is_empty());
                 if let Value::Object(fields) = g {
-                    fields.push((json::Text::new("esde"), esde.map_or(Value::Null, Value::string)));
+                    fields.insert(String::from("esde"), esde.map_or(Value::Null, |s| Value::String(String::from(s))));
                 }
             }
         }
     }
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(top));
+    out.push_str(&serde_json::to_string(&Value::Object(top)).expect("a value is JSON"));
     Ok(out)
 }
 

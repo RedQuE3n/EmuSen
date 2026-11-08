@@ -5,7 +5,7 @@ use emusen_core_host::Machine;
 use emusen_crystal_debug::breakpoints::{BreakpointRegistry, CallKind};
 use emusen_crystal_debug::context::Set;
 use emusen_crystal_debug::Debugger;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_session_service::abi::{run, status};
 
 use super::args::{self, Raw};
@@ -81,7 +81,7 @@ pub fn info(c: &Call) -> Answer<Vec<u8>> {
 pub fn summary(c: &Call) -> Answer<Vec<u8>> {
     c.target()?;
     c.read(|e, _| {
-        let version = e.info.get("version").and_then(emusen_native::json::Value::as_str).unwrap_or("").to_string();
+        let version = e.info.get("version").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
         let display = e.display_name.clone();
         let (d, m) = dm(e);
         Ok(match m {
@@ -337,7 +337,7 @@ pub fn set_register(c: &Call, processor: u32, name: Raw, value: u64) -> Answer<i
         };
         let cpu = &cpus[i];
         let known = d.registers(Set::Processor(i));
-        if !known.iter().any(|r| name.is_some_and(|n| emusen_dotnet::text::equals_ignore_case(&r.name, n))) {
+        if !known.iter().any(|r| name.is_some_and(|n| r.name.eq_ignore_ascii_case(&n))) {
             return Err(refused(status::NO_SUCH_ID, format!("{} has no register named '{}'.", cpu.name, name.unwrap_or(""))));
         }
         let _ = value;

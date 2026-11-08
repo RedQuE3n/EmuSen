@@ -1,0 +1,8 @@
+console=SNES
+core=Venus
+state_version=3
+build=0.9.1
+saved_at=1792324991.2510000 UTC
+rom_file=Game (USA).sfc
+rom_md5=0123456789abcdef0123456789abcdef
+rom_bytes=3000

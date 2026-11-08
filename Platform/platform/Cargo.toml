@@ -11,6 +11,10 @@ name = "emusen_platform"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# JSON text written by serde_json.
+serde_json.workspace = true
+# "Did you mean …?" for a name that matched nothing.
+emusen-suggest = { path = "../suggest" }
 # DianaSh's shell core, whose host API this library exports (EmuSen_DianaSh.md §10).
 emusen-dianash = { path = "../dianash" }
 # dianash.text, the text tools' module every shell this library makes has linked in (§8.2).
@@ -57,8 +61,6 @@ emusen-sqlite = { path = "../sqlite" }
 emusen-crystal = { path = "../crystal" }
 # The session service's numbers, which the frontend API's statuses share.
 emusen-session-service = { path = "../session-service" }
-# .NET's JSON, for the requests the systems' C layer reads.
-emusen-dotnet = { path = "../dotnet" }
 
 # An installed core's NOTICE, written by the cores test (tests/library_tool.rs).
 [dev-dependencies]

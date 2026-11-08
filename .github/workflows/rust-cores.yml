@@ -1,4 +1,4 @@
-# The Rust cores (EmuSen/Cores/RustCores.props), built and tested where they run, one library a crate a platform - see Mars_Native.md §6.3, Mercury_Native.md §8.6.
+# The Rust cores (xtask/libraries.tsv), built and tested where they run, one library a crate a platform - see Mars_Native.md §6.3, Mercury_Native.md §8.6.
 # The platform library (Platform/, emusen_platform) is built and tested beside them, since the WiseMan job needs both - see EmuSen_RustPlatform.md §2.7.
 name: Rust cores
 
@@ -38,8 +38,8 @@ on:
       - 'EmuSen.Crystal/**'
       - 'EmuSen.WiseMan/DianaSh/**'
       - 'EmuSen.WiseMan/Crystal/**'
-      - 'EmuSen/Cores/RustCores.props'
-      - 'EmuSen/Cores/RustCoresPublish.targets'
+      - 'xtask/**'
+      - 'Directory.Build.targets'
       - 'EmuSen/EmuSen.csproj'
       - 'EmuSen.WiseMan/Cores/MarsRt*'
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
@@ -79,8 +79,8 @@ on:
       - 'EmuSen.Crystal/**'
       - 'EmuSen.WiseMan/DianaSh/**'
       - 'EmuSen.WiseMan/Crystal/**'
-      - 'EmuSen/Cores/RustCores.props'
-      - 'EmuSen/Cores/RustCoresPublish.targets'
+      - 'xtask/**'
+      - 'Directory.Build.targets'
       - 'EmuSen/EmuSen.csproj'
       - 'EmuSen.WiseMan/Cores/MarsRt*'
       - 'EmuSen.WiseMan/Cores/MercuryRt*'
@@ -284,7 +284,9 @@ jobs:
         shell: bash
         run: |
           status=0
-          for dir in "EmuSen/Cores/Nintendo/MarsRT - N64" "EmuSen/Cores/Nintendo/MercuryRT - GB" "EmuSen/Cores/Nintendo/MoonRT - NES" "EmuSen/Cores/Nintendo/VenusRT - SNES" "EmuSen/Cores/Sega/Nephrite - Genesis" "EmuSen/Cores/Sega/Endou - Master System" "EmuSen/Cores/Sony/Diamond - PlayStation/v1" "EmuSen/Cores/Sony/Sapphire - PlayStation 2" Platform EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/ "EmuSen/Cores/Nintendo/SilverMillennium-HW"/*/; do
+          # The libraries CI ships, from xtask/libraries.tsv, then every shared crate.
+          mapfile -t shipped < <(python3 .github/scripts/library_key.py ci | cut -f2)
+          for dir in "${shipped[@]}" EmuSen/Cores/Shared/*/ "EmuSen/Cores/Sega/Beryl-HW"/*/ "EmuSen/Cores/Sony/BlackMoon-HW"/*/ "EmuSen/Cores/Nintendo/SilverMillennium-HW"/*/; do
             case "$dir" in *emusen-core-abi-check/) continue ;; esac
             if [ "${{ matrix.without_c }}" = "true" ] && [ "$dir" = "Platform" ]; then continue; fi
             echo "::group::$dir"
@@ -311,20 +313,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           FULL: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/') || inputs.full == true }}
-          # The crates of RustCores.props, repeated because YAML cannot read it; symbol is the prefix of the exports a built library must define.
-          # Diamond's published library is v1/'s, which holds the machine with its enhancements (Diamond_Enhancements.md §24.1); emusen_platform is not a core but the platform library, built from its workspace and shipped the same way.
-          CRATES: |
-            [
-              {"name": "marsrt", "dir": "EmuSen/Cores/Nintendo/MarsRT - N64", "symbol": "emusen_core_"},
-              {"name": "mercuryrt", "dir": "EmuSen/Cores/Nintendo/MercuryRT - GB", "symbol": "emusen_core_"},
-              {"name": "moonrt", "dir": "EmuSen/Cores/Nintendo/MoonRT - NES", "symbol": "emusen_core_"},
-              {"name": "venusrt", "dir": "EmuSen/Cores/Nintendo/VenusRT - SNES", "symbol": "emusen_core_"},
-              {"name": "nephrite", "dir": "EmuSen/Cores/Sega/Nephrite - Genesis", "symbol": "emusen_core_"},
-              {"name": "diamond", "dir": "EmuSen/Cores/Sony/Diamond - PlayStation/v1", "symbol": "emusen_core_"},
-              {"name": "endou", "dir": "EmuSen/Cores/Sega/Endou - Master System", "symbol": "emusen_core_"},
-              {"name": "sapphire", "dir": "EmuSen/Cores/Sony/Sapphire - PlayStation 2", "symbol": "emusen_core_"},
-              {"name": "emusen_platform", "dir": "Platform", "symbol": "emusen_galaxia_"}
-            ]
           # ubuntu-22.04 for its glibc (2.35), so the library loads on older distributions than the one that built it; macOS is Apple Silicon only, as Intel Macs are not a target.
           PLATFORMS: |
             [
@@ -333,7 +321,7 @@ jobs:
               {"rid": "osx-arm64", "os": "macos-latest", "target": "aarch64-apple-darwin", "prefix": "lib", "suffix": ".dylib", "test": true}
             ]
           ALL_PLATFORMS: ${{ vars.EMUSEN_ALL_PLATFORMS }}
-        # Windows and macOS are paused while Linux is finished, so only linux-x64 is planned unless EMUSEN_ALL_PLATFORMS=on (EmuSen_RustPlatform.md §31).
+        # The libraries come from xtask/libraries.tsv, the build's one list. Windows and macOS are paused while Linux is finished, so only linux-x64 is planned unless EMUSEN_ALL_PLATFORMS=on (EmuSen_RustPlatform.md §31).
         run: |
           if [ "$ALL_PLATFORMS" != on ]; then
             PLATFORMS=$(python3 -c 'import json, os; print(json.dumps([p for p in json.loads(os.environ["PLATFORMS"]) if p["rid"] == "linux-x64"]))')
@@ -546,52 +534,12 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
+      # Every library this run shipped for the platform, under the plan's names; the platform library is absent when its job failed, and the tests that need it then say so.
       - uses: actions/download-artifact@v4
         with:
-          name: marsrt-${{ matrix.rid }}
+          pattern: '*-${{ matrix.rid }}'
           path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: mercuryrt-${{ matrix.rid }}
-          path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: moonrt-${{ matrix.rid }}
-          path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: venusrt-${{ matrix.rid }}
-          path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: nephrite-${{ matrix.rid }}
-          path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: diamond-${{ matrix.rid }}
-          path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: endou-${{ matrix.rid }}
-          path: native
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: sapphire-${{ matrix.rid }}
-          path: native
-
-      # Absent when its job failed; the tests that need it then say so, and the rest run.
-      - uses: actions/download-artifact@v4
-        continue-on-error: true
-        with:
-          name: emusen_platform-${{ matrix.rid }}
-          path: native
+          merge-multiple: true
 
       - uses: actions/download-artifact@v4
         with:
@@ -618,7 +566,7 @@ jobs:
           mkdir -p "$out/dianash"
           for f in native/nano native/nano.exe native/nano.dianash.json; do if [ -f "$f" ]; then mv "$f" "$out/dianash/"; rm -f "$out/$(basename "$f")"; fi; done
           chmod +x "$out/dianash/nano" 2>/dev/null || true
-          ls -la "$out"/*marsrt* "$out"/*mercuryrt* "$out"/*moonrt* "$out"/*venusrt* "$out"/*nephrite* "$out"/*diamond* "$out"/*endou* "$out"/*sapphire* "$out"/*v1_test_core* "$out"/*v1_plain_core*
+          for name in $("$py" EmuSen-Project/.github/scripts/library_key.py ci | awk -F'\t' '$3 == "core" {print $1}') v1_test_core v1_plain_core; do ls -la "$out"/*"$name"* || exit 1; done
           ls -la "$out"/*emusen_platform*
 
       # The front ends' tests over the Rust cores; the cores' own tests are the cargo jobs above, since the C# core host was retired (EmuSen_Backend.md §40.10).

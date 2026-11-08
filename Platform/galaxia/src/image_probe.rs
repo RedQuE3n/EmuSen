@@ -2,12 +2,12 @@
 //! track's, an `.m3u`'s first disc's, an archive's image entry's. The library's scan and the runtime's route both read
 //! a file through it, so the two route one way (EmuSen_Backend.md §28.7, §29.2).
 
-use crate::dotnet_path::{self as path, Style};
-use crate::{archive, dotnet_files, image_sets};
+use std::path::Path;
+use crate::{archive, files, image_sets};
 use std::io::Read;
 
 /// A file's first bytes, at most `length`, as `MappedFile.Head` reads them.
-pub fn head_of(file: &str, length: usize) -> Result<Vec<u8>, String> {
+pub fn head_of(file: impl AsRef<Path>, length: usize) -> Result<Vec<u8>, String> {
     let mut out = Vec::new();
     std::fs::File::open(file).map_err(|e| e.to_string())?.take(length as u64).read_to_end(&mut out).map_err(|e| e.to_string())?;
     Ok(out)
@@ -34,7 +34,7 @@ impl ImageProbe {
         }
         if image_sets::is_playlist(at) {
             return match image_sets::discs(at)?.into_iter().next() {
-                Some(disc) if dotnet_files::file_exists(&disc) => ImageProbe::of(&disc, takes),
+                Some(disc) if files::file_exists(&disc) => ImageProbe::of(&disc.to_string_lossy(), takes),
                 _ => Ok(ImageProbe::Empty),
             };
         }
@@ -50,14 +50,14 @@ impl ImageProbe {
             ImageProbe::Empty => Ok(Vec::new()),
             ImageProbe::File(file) => head_of(file, length),
             ImageProbe::Sheet(sheet) => match image_sets::companions(sheet)?.into_iter().next() {
-                Some(track) if dotnet_files::file_exists(&track) => head_of(&track, length),
+                Some(track) if files::file_exists(&track) => head_of(&track, length),
                 _ => Ok(Vec::new()),
             },
             ImageProbe::Entry(zip, entry) => archive::read_entry(zip, entry, length),
             ImageProbe::SheetEntry(zip, entry) => {
                 let sheet = String::from_utf8_lossy(&archive::read_entry(zip, entry, 1 << 20)?).into_owned();
                 let Some(first) = image_sets::companion_names(&sheet)?.into_iter().next().map(|f| f.replace('\\', "/")) else { return Ok(Vec::new()) };
-                let dir = path::directory_name(Style::Unix, entry).unwrap_or_default();
+                let dir = Path::new(entry).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
                 archive::read_entry(zip, &if dir.is_empty() { first } else { format!("{dir}/{first}") }, length)
             }
         }
@@ -66,11 +66,12 @@ impl ImageProbe {
 
 /// The extension that decides a file's system: an archive's image entry's, else its own, in lower case.
 pub fn image_extension(at: &str, takes: &dyn Fn(&str) -> bool) -> String {
+    let dotted = |name: &str| Path::new(name).extension().map_or(String::new(), |e| format!(".{}", e.to_string_lossy().to_lowercase()));
     if !archive::is_archive(at) {
-        return emusen_dotnet::text::to_lower(path::extension(Style::HOST, at));
+        return dotted(at);
     }
     match archive::image_entry(at, takes) {
-        Ok(Some(entry)) => emusen_dotnet::text::to_lower(path::extension(Style::Unix, &entry)),
+        Ok(Some(entry)) => dotted(&entry),
         _ => String::new(),
     }
 }

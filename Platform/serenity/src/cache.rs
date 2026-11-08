@@ -5,10 +5,10 @@
 //! §40.6), so a file the C# wrote is read as it was. The cache is not locked here; a host that shares one between threads holds it in a lock for
 //! `find` and `store` and compiles outside it, as the C# does.
 
+use std::path::Path;
 use crate::compiler::{Shaderc, Stage};
 use crate::sqlite::{self, Bound, Column, Connection, Failure, Sqlite};
 use crate::{Error, full};
-use emusen_galaxia::dotnet_path::{Style, directory_name};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 
@@ -112,8 +112,8 @@ fn open_once(sqlite: &Arc<Sqlite>, path: &str) -> Result<Connection, Refused> {
         Error::Argument { message, parameter } => Refused::Other(format!("{message} (Parameter '{parameter}')")),
         other => Refused::Other(other.message().to_string()),
     })?;
-    if let Some(directory) = directory_name(Style::HOST, &whole).filter(|directory| !directory.is_empty()) {
-        std::fs::create_dir_all(&directory).map_err(|error| Refused::Other(format!("{directory}: {error}")))?;
+    if let Some(directory) = Path::new(&whole).parent().filter(|directory| !directory.as_os_str().is_empty()) {
+        std::fs::create_dir_all(directory).map_err(|error| Refused::Other(format!("{}: {error}", directory.display())))?;
     }
     let db = Connection::open(sqlite.clone(), path)?;
     db.execute("PRAGMA busy_timeout = 250")?;

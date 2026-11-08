@@ -21,5 +21,6 @@
   "libretro_databases": ["Sega - Saturn"],
   "libretro_systemids": ["sega_saturn"],
   "firmware_note": "Every Saturn game needs a Saturn BIOS of your own. There is no open replacement, and EmuSen never downloads or ships one.",
-  "rumble": false
+  "rumble": false,
+  "look": {"hue": 165, "body": "shards", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}
 }

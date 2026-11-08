@@ -2,7 +2,7 @@
 //! selects and runs) and `~/.config/EmuSen/testing/runners.json` (the household's machines). Each carries a format
 //! number, and a field a reader does not know is ignored. See EmuSen_Testing.md §4.
 
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use regex::Regex;
 
 pub const INPUTS_FORMAT: u32 = 1;
@@ -45,7 +45,7 @@ fn strings(v: Option<&Value>) -> Vec<String> {
 
 fn number(v: Option<&Value>) -> Option<f64> {
     match v {
-        Some(Value::Number(t)) => t.parse().ok(),
+        Some(Value::Number(t)) => t.as_f64(),
         _ => None,
     }
 }
@@ -60,7 +60,7 @@ fn format_of(doc: &Value, key: &str, want: u32, file: &str) -> Result<(), String
 
 impl Inputs {
     pub fn parse(text: &str) -> Result<Inputs, String> {
-        let doc = json::parse(text).map_err(|e| format!("Testing/inputs.json: {e:?}"))?;
+        let doc = serde_json::from_str::<Value>(text).map_err(|e| format!("Testing/inputs.json: {e:?}"))?;
         format_of(&doc, "inputs", INPUTS_FORMAT, "Testing/inputs.json")?;
         let mut out = Inputs { recording_endings: strings(doc.get("recording_endings")), ..Inputs::default() };
         if let Some(Value::Array(lines)) = doc.get("lines") {
@@ -113,7 +113,7 @@ pub struct Tier {
 }
 
 pub fn parse_tier(text: &str, name: &str) -> Result<Tier, String> {
-    let doc = json::parse(text).map_err(|e| format!("Testing/tiers.json: {e:?}"))?;
+    let doc = serde_json::from_str::<Value>(text).map_err(|e| format!("Testing/tiers.json: {e:?}"))?;
     format_of(&doc, "tiers", TIERS_FORMAT, "Testing/tiers.json")?;
     let t = doc.get(name).ok_or_else(|| format!("Testing/tiers.json has no tier {name}"))?;
     Ok(Tier {
@@ -131,9 +131,9 @@ pub fn parse_tier(text: &str, name: &str) -> Result<Tier, String> {
 /// A runner's slots per class; the desktop's two CPU slots and one GPU slot when runners.json is absent.
 pub fn runner_classes(text: Option<&str>, runner: &str) -> Vec<(String, usize)> {
     let fallback = vec![("cpu".to_string(), 2), ("gpu".to_string(), 1)];
-    let Some(doc) = text.and_then(|t| json::parse(t).ok()) else { return fallback };
+    let Some(doc) = text.and_then(|t| serde_json::from_str::<Value>(t).ok()) else { return fallback };
     match doc.get(runner).and_then(|r| r.get("classes")) {
-        Some(Value::Object(members)) => members.iter().filter_map(|(k, v)| number(Some(v)).map(|n| (k.text.clone(), n as usize))).collect(),
+        Some(Value::Object(members)) => members.iter().filter_map(|(k, v)| number(Some(v)).map(|n| (k.clone(), n as usize))).collect(),
         _ => fallback,
     }
 }

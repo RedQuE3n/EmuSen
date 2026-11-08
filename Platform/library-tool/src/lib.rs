@@ -13,7 +13,8 @@ pub mod patches;
 pub mod pin;
 pub mod rom;
 
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_galaxia::tree::{Directory, Tree};
 
 /// Where a job reads and writes, and the chdman it runs: everything the tool knows of the machine.
@@ -69,7 +70,7 @@ impl Context {
     }
 
     fn directory(&self, which: Directory) -> String {
-        self.tree.directory(which).unwrap_or_default()
+        self.tree.directory(which).unwrap_or_default().to_string_lossy().into_owned()
     }
 
     pub fn compressed(&self) -> String {
@@ -136,7 +137,7 @@ impl Context {
 
 /// A path with every link along it followed, as far as it exists; the rest as written.
 pub fn canonical(at: &str) -> String {
-    let full = path::full_path(at);
+    let full = path_key::key_text(at);
     let mut existing = std::path::PathBuf::from(&full);
     let mut rest: Vec<std::ffi::OsString> = Vec::new();
     while !existing.exists() {
@@ -157,6 +158,5 @@ pub fn canonical(at: &str) -> String {
 
 /// Whether `child` is `parent` or lies under it, both canonical.
 pub fn inside(child: &str, parent: &str) -> bool {
-    let parent = path::trim_ending_separator(Style::HOST, parent);
-    child == parent || child.strip_prefix(parent).is_some_and(|rest| rest.starts_with(std::path::MAIN_SEPARATOR))
+    Path::new(child).starts_with(parent)
 }

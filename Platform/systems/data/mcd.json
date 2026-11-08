@@ -24,5 +24,6 @@
   "libretro_databases": ["Sega - Mega-CD - Sega CD"],
   "libretro_systemids": [],
   "firmware_note": null,
-  "rumble": false
+  "rumble": false,
+  "look": {"hue": 190, "body": "shards", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}
 }

@@ -5,7 +5,7 @@
 //!
 //! Usage: cargo run --release --example run_tool -- <program-dir> <ls|convert|check> [<path>...] [--fast] [-j <n>]
 
-use emusen_galaxia::models::{APP_SETTINGS_ID, MODELS};
+use emusen_galaxia::models::AppSettings;
 use emusen_galaxia::{config, setting_folders, tree};
 use emusen_library_tool::{job, Context};
 use std::time::Duration;
@@ -24,13 +24,13 @@ fn main() {
             p => paths.push(format!("\"{}\"", p.replace('\\', "\\\\").replace('"', "\\\""))),
         }
     }
-    tree::init(base, None);
+    tree::init(std::path::Path::new(base), None);
     let tree = tree::tree().clone();
-    let (settings, said) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, "appsettings.json");
+    let (settings, said) = config::load_or_new::<AppSettings>(&tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
     if let Some(words) = said {
         eprintln!("{words}");
     }
-    let library = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
+    let library = setting_folders::checked(settings.rom_directory.as_deref(), &tree::user_home()).path;
     let chdman = std::env::var("EMUSEN_CHDMAN").unwrap_or_else(|_| format!("{base}/chdman"));
     let ctx = Context::pinned(tree, library, chdman);
     eprintln!("library    {:?}\ncompressed {}\npackages   {}\nunpacked   {}\nlogs       {}\nchdman     {}", ctx.library, ctx.compressed(), ctx.packages(), ctx.unpacked(), ctx.logs(), ctx.chdman);

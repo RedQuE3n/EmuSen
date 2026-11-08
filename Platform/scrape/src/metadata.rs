@@ -3,6 +3,7 @@
 //! labels and choices are the editor's words and stay with the frontend. See EmuSen_Settings_Reference.md §4.59 and
 //! EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::store::Record;
 
 /// The editable fields' keys in the order ES-DE's user guide lists them, `GameMetadata.Fields`.
@@ -39,7 +40,7 @@ fn scraped(r: Option<&Record>, field: &str, scraped_names: bool) -> Option<Strin
 
 fn default(rom: &str, field: &str) -> Option<String> {
     match field {
-        "name" => Some(emusen_galaxia::dotnet_path::file_name_without_extension(emusen_galaxia::dotnet_path::Style::HOST, rom).to_string()),
+        "name" => Some(Path::new(rom).file_stem().unwrap_or_default().to_string_lossy().to_string()),
         f if FLAGS.contains(&f) => Some("0".to_string()),
         _ => None,
     }

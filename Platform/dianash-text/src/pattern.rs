@@ -3,7 +3,6 @@
 //! `RegexParseException` words it for the errors the corpus and ordinary use meet. What neither translates nor
 //! words alike is recorded in EmuSen_DianaSh.md §13.8 (P3).
 
-use emusen_dotnet::text::utf16_len;
 use regex::Regex;
 use regex_syntax::ast::ErrorKind;
 
@@ -81,10 +80,10 @@ fn quantifier(rest: &[char]) -> bool {
 
 /// `Invalid pattern '<p>' at offset <n>. <reason>`, as .NET words the ones it shares with the crate.
 fn refusal(pattern: &str) -> String {
-    let end = utf16_len(pattern);
+    let end = pattern.chars().count();
     let (offset, reason) = match regex_syntax::ast::parse::Parser::new().parse(pattern) {
         Err(error) => {
-            let at = utf16_len(&pattern[..error.span().end.offset.min(pattern.len())]);
+            let at = pattern[..error.span().end.offset.min(pattern.len())].chars().count();
             match error.kind() {
                 ErrorKind::ClassUnclosed => (end, "Unterminated [] set.".to_string()),
                 ErrorKind::GroupUnclosed => (end, "Not enough )'s.".to_string()),
@@ -92,7 +91,7 @@ fn refusal(pattern: &str) -> String {
                 ErrorKind::RepetitionMissing => {
                     let start = error.span().start.offset.min(pattern.len());
                     let quantifier = pattern[start..].chars().next().unwrap_or('*');
-                    (utf16_len(&pattern[..start]) + 1, format!("Quantifier '{quantifier}' following nothing."))
+                    (pattern[..start].chars().count() + 1, format!("Quantifier '{quantifier}' following nothing."))
                 }
                 ErrorKind::EscapeUnexpectedEof => (end, "Illegal \\\\ at end of pattern.".to_string()),
                 ErrorKind::ClassRangeInvalid => (at, "[x-y] range in reverse order.".to_string()),

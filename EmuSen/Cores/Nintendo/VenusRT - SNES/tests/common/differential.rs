@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use emusen_core_host::{Create, Library, Machine};
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 use super::golden::library;
 use super::grader::{self, Picture, SPACES, Snapshot, SnesRun};
@@ -242,8 +242,8 @@ fn held(presses: &[Press], button: usize, frame: u32) -> bool {
 pub fn dsp_request(image: &[u8]) -> Option<(String, u64)> {
     let lib = Library::load(&library()).ok()?;
     let text = lib.firmware_for(image).ok()?;
-    let v = json::parse(text.as_bytes()).ok()?;
-    let list = v.as_array().map(<[Value]>::to_vec).or_else(|| v.get("firmware").and_then(Value::as_array).map(<[Value]>::to_vec)).unwrap_or_default();
+    let v = serde_json::from_str::<Value>(&text).ok()?;
+    let list = v.as_array().cloned().or_else(|| v.get("firmware").and_then(Value::as_array).cloned()).unwrap_or_default();
     list.iter().find(|f| f.get("which").and_then(Value::as_i64) == Some(2)).and_then(|f| Some((f.get("name")?.as_str()?.to_string(), f.get("size")?.as_i64()? as u64)))
 }
 
@@ -287,8 +287,8 @@ pub fn venusrt_machine(image: &[u8], dsp: Option<&[u8]>, boot: Option<&[u8]>) ->
 }
 
 fn spaces_by_name(m: &Machine) -> Vec<(String, u32)> {
-    let v = json::parse(m.machine_info().unwrap_or_default().as_bytes()).unwrap_or(Value::Null);
-    v.get("spaces").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(|s| Some((s.get("name")?.as_str()?.to_string(), s.get("id")?.as_i64()? as u32))).collect()
+    let v = serde_json::from_str::<Value>(&m.machine_info().unwrap_or_default()).unwrap_or(Value::Null);
+    v.get("spaces").and_then(Value::as_array).into_iter().flatten().filter_map(|s| Some((s.get("name")?.as_str()?.to_string(), s.get("id")?.as_i64()? as u32))).collect()
 }
 
 /// A space read whole, by its name in any case; empty for one the machine does not list.

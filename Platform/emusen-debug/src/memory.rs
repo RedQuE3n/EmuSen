@@ -2,9 +2,6 @@
 
 use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
-use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::text::{pad_left, pad_right, trim_end};
 use emusen_session_service::words::parse_hex;
 pub(crate) use emusen_session_service::space::{all, find, read, Space};
 
@@ -17,9 +14,9 @@ pub fn spaces(call: &Call) -> Run {
     let session = session(call)?;
     let mut out = format!("{} memory spaces:\n", core_name(&session)?);
     for s in all(&session)? {
-        out += &format!("  {} {} bytes  {}\n", pad_right(&s.name, 10), pad_left(&s.size.to_string(), 8), if s.writable { "R/W" } else { "R/O" });
+        out += &format!("  {} {} bytes  {}\n", format!("{:<10}", s.name), format!("{:>8}", s.size.to_string()), if s.writable { "R/W" } else { "R/O" });
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn mem(call: &Call, parts: &[String]) -> Run {
@@ -50,7 +47,7 @@ pub fn mem(call: &Call, parts: &[String]) -> Run {
         out.push('\n');
         row += 16;
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn write(call: &Call, parts: &[String]) -> Run {
@@ -103,7 +100,7 @@ pub fn memfind(call: &Call, parts: &[String]) -> Run {
     let mut max = 20;
     let mut words: Vec<String> = parts[2..].to_vec();
     if words.len() >= 2 {
-        if let Some(parsed) = parse_i32(words.last().unwrap()).filter(|&p| p > 0) {
+        if let Some(parsed) = words.last().unwrap().trim().parse::<i32>().ok().filter(|&p| p > 0) {
             max = parsed;
             words.pop();
         }
@@ -168,7 +165,7 @@ pub fn dump(call: &Call, parts: &[String]) -> Run {
     if let Some(parent) = std::path::Path::new(&path).parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    write_all_bytes(&path, &data)?;
+    std::fs::write(&path, &data).map_err(|e| format!("{}: {e}", path))?;
     Ok(Answer::ok(format!("Dumped {} 0x{addr:X}-0x{:X} ({len} bytes) to {path}", space.name, addr.wrapping_add(len).wrapping_sub(1))))
 }
 
@@ -190,7 +187,7 @@ pub fn load(call: &Call, parts: &[String]) -> Run {
     if !std::path::Path::new(&path).is_file() {
         return Ok(Answer::ok(format!("No file at {path}.")));
     }
-    let data = read_all_bytes(&path)?;
+    let data = std::fs::read(&path).map_err(|e| format!("{}: {e}", path))?;
     session.space_write(&space.name, addr as u32, &data)?;
     Ok(Answer::ok(format!("Loaded {} bytes from {path} into {} starting at 0x{addr:X}.", data.len(), space.name)))
 }

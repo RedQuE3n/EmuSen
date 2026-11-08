@@ -3,7 +3,7 @@
 //! The scraper keeps ScreenScraper's day as Paris's (EmuSen_BigPicture.md §17.4); with no file, the C# falls back to
 //! UTC, and so does this. See EmuSen_Backend.md §30.5.
 
-use emusen_dotnet::date::{TICKS_PER_SECOND, days_from_civil, weekday};
+use emusen_galaxia::clock::{TICKS_PER_SECOND, days_from_civil, weekday};
 
 /// One POSIX rule's change: month, week (5 the last), weekday and the local second of the day it happens at.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -37,7 +37,7 @@ impl Zone {
     /// The named zone from the system's files, or UTC where it cannot be read.
     pub fn system(name: &str) -> Zone {
         let dir = std::env::var("TZDIR").unwrap_or_else(|_| "/usr/share/zoneinfo".to_string());
-        std::fs::read(std::path::Path::new(&dir).join(name)).ok().and_then(|bytes| Zone::parse(&bytes)).unwrap_or_default()
+        std::fs::read(std::path::Path::new(&dir).join(name).to_string_lossy().into_owned()).ok().and_then(|bytes| Zone::parse(&bytes)).unwrap_or_default()
     }
 
     fn parse(b: &[u8]) -> Option<Zone> {
@@ -187,7 +187,7 @@ impl Change {
 impl Rule {
     fn offset_at(&self, utc: i64) -> i64 {
         let Some((daylight, start, end)) = self.daylight else { return self.standard };
-        let year = emusen_dotnet::date::civil((utc + self.standard).div_euclid(86_400)).0;
+        let year = emusen_galaxia::clock::civil((utc + self.standard).div_euclid(86_400)).0;
         let (on, off) = (start.utc(year, self.standard), end.utc(year, daylight));
         let summer = if on < off { utc >= on && utc < off } else { utc >= on || utc < off };
         if summer { daylight } else { self.standard }
@@ -199,7 +199,7 @@ mod tests {
     use super::*;
 
     fn at(text: &str) -> i64 {
-        emusen_dotnet::date::instant(text).unwrap() / TICKS_PER_SECOND
+        emusen_galaxia::clock::instant(text).unwrap() / TICKS_PER_SECOND
     }
 
     #[test]
@@ -209,8 +209,8 @@ mod tests {
         assert_eq!(z.offset_at(at("2026-03-29T01:00:00Z")), 7200);
         assert_eq!(z.offset_at(at("2026-10-25T00:59:59Z")), 7200);
         assert_eq!(z.offset_at(at("2026-10-25T01:00:00Z")), 3600);
-        assert_eq!(z.offset_of_local(emusen_dotnet::date::instant("2026-10-19T00:00:00Z").unwrap()), 7200);
-        assert_eq!(z.offset_of_local(emusen_dotnet::date::instant("2026-12-19T00:00:00Z").unwrap()), 3600);
+        assert_eq!(z.offset_of_local(emusen_galaxia::clock::instant("2026-10-19T00:00:00Z").unwrap()), 7200);
+        assert_eq!(z.offset_of_local(emusen_galaxia::clock::instant("2026-12-19T00:00:00Z").unwrap()), 3600);
     }
 
     #[test]

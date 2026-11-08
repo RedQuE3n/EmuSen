@@ -42,8 +42,8 @@ fn chd_runs_in_a_shell_this_library_makes_over_the_settings_library() {
     std::fs::create_dir_all(&etc).unwrap();
     std::fs::write(library.join("psx/Game (Track 1).bin"), data(30)).unwrap();
     std::fs::write(etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\"}}", library.display())).unwrap();
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let sh = unsafe { dianash_new(std::ptr::null()) };
     assert!(!sh.is_null());
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
@@ -108,8 +108,8 @@ fn a_job_past_the_budget_goes_on_in_the_background_and_ps_lists_it() {
     std::fs::create_dir_all(&etc).unwrap();
     std::fs::write(library.join("psx/Slow (Track 1).bin"), data(2000)).unwrap();
     std::fs::write(etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\"}}", library.display())).unwrap();
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let config = emusen_dianash::abi::dianash_config { size: std::mem::size_of::<emusen_dianash::abi::dianash_config>() as u32, flags: emusen_dianash::abi::CONFIG_SESSIONS, root: emusen_dianash::abi::dianash_bytes::ABSENT, budget_ms: 1 };
     let sh = unsafe { dianash_new(&config) };
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
@@ -145,8 +145,8 @@ fn rom_dups_is_the_pipe_of_rom_hash_sort_and_uniq_in_a_shell_this_library_makes(
     std::fs::write(library.join("nes/B.nes"), &body).unwrap();
     std::fs::write(library.join("snes/C.sfc"), vec![7u8; 4096]).unwrap();
     std::fs::write(etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\"}}", library.display())).unwrap();
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let sh = unsafe { dianash_new(std::ptr::null()) };
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
     let dups = run(sh, "rom dups");
@@ -203,8 +203,8 @@ fn cores_runs_in_a_shell_this_library_makes_over_the_cached_catalogue() {
     let _ = std::fs::remove_dir_all(&base);
     let (home, etc) = (base.join("home"), base.join("etc"));
     std::fs::create_dir_all(&etc).unwrap();
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let cores = PathBuf::from(tree::tree().directory(tree::Directory::Cores).unwrap());
     seed_cores(&cores);
     let sh = unsafe { dianash_new(std::ptr::null()) };

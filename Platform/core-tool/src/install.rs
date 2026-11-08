@@ -201,7 +201,7 @@ fn download(ctx: &Context, url: &str, zip: &Path, stop: &dyn Fn() -> bool, note:
 /// CRC-32 as the zip records it is the index line's, no link, at most [`CORE_LIMIT`] declared and inflated, its bytes'
 /// CRC-32 checked, its header naming this machine.
 fn unpack(stem: &str, zip: &Path, core: &Path, index_crc32: u32, note: &mut dyn FnMut(Note)) -> Result<(), String> {
-    let entries = archive::entries_of(&zip.to_string_lossy()).map_err(|e| format!("the zip does not read: {e}"))?;
+    let entries = archive::entries_of(zip).map_err(|e| format!("the zip does not read: {e}"))?;
     let want = format!("{stem}_libretro.{}", library_suffix());
     let [entry] = entries.as_slice() else {
         return Err(format!("the zip holds {} members, and a core's zip holds one, {want}", entries.len()));
@@ -213,7 +213,7 @@ fn unpack(stem: &str, zip: &Path, core: &Path, index_crc32: u32, note: &mut dyn 
         return Err(format!("the zip records {want}'s CRC-32 as {:08x}, and the index the plan was made from says {index_crc32:08x}: the build changed since cores fetch, or the bytes did; cores fetch reads the index again", entry.crc32));
     }
     note(Note::Checked("crc32"));
-    if entry.platform == 3 && (entry.external >> 16) & 0o170000 == 0o120000 {
+    if entry.link {
         return Err(format!("the zip's {want} is a link, not a file"));
     }
     note(Note::Checked("shape"));
@@ -223,7 +223,7 @@ fn unpack(stem: &str, zip: &Path, core: &Path, index_crc32: u32, note: &mut dyn 
     note(Note::Checked("size"));
     let file = File::create(core).map_err(|e| io(core, e))?;
     let mut out = BufWriter::new(file);
-    archive::copy_entry(&zip.to_string_lossy(), entry, &mut out)?;
+    archive::copy_entry(zip, entry, &mut out)?;
     out.flush().map_err(|e| io(core, e))?;
     drop(out);
     mode(core, false)?;
@@ -262,7 +262,7 @@ fn stage(ctx: &Context, cat: &Catalogue, stem: &str, stop: &dyn Fn() -> bool, no
     let sha256 = sha256_file(&entry.core_path()).map_err(|e| io(&entry.core_path(), e))?;
     note(Note::Checked("sha256"));
     let cached = catalogue::folder(&ctx.cores).join("info.zip");
-    let info_bytes = archive::read_entry(&cached.to_string_lossy(), &format!("{stem}_libretro.info"), INFO_LIMIT)?;
+    let info_bytes = archive::read_entry(&cached, &format!("{stem}_libretro.info"), INFO_LIMIT)?;
     std::fs::write(entry.info_path(), &info_bytes).map_err(|e| io(&entry.info_path(), e))?;
     mode(&entry.info_path(), false)?;
     let authors = info.list("authors");

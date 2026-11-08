@@ -12,6 +12,9 @@ publish.workspace = true
 name = "emusen_debug"
 
 [dependencies]
+# "Did you mean …?" for a name that matched nothing.
+emusen-suggest = { path = "../suggest" }
 dianash-module = { path = "../dianash-module" }
-emusen-dotnet = { path = "../dotnet" }
+# JSON read and written.
+serde_json.workspace = true
 emusen-session-service = { path = "../session-service" }

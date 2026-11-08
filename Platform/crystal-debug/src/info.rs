@@ -2,7 +2,7 @@
 //! does not know ignored, one absent taken at its default (EmuSen_CoreAPI.md §6.5, §6.33, §6.34).
 
 use crate::context::UnitInfo;
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 /// A memory space and its flags, `CoreSpace`.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -62,7 +62,7 @@ fn int(v: Option<&Value>, key: &str, fallback: i64) -> i64 {
 }
 
 fn arr<'a>(v: Option<&'a Value>, key: &str) -> &'a [Value] {
-    v.and_then(|v| v.get(key)).and_then(Value::as_array).unwrap_or(&[])
+    v.and_then(|v| v.get(key)).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn obj<'a>(v: Option<&'a Value>, key: &str) -> Option<&'a Value> {
@@ -75,7 +75,7 @@ fn registers(v: &Value) -> Vec<(String, i32)> {
 
 impl Info {
     pub fn read(machine_info: &str) -> Info {
-        let doc = json::parse(machine_info.as_bytes()).unwrap_or(Value::Null);
+        let doc = serde_json::from_str::<Value>(&machine_info).unwrap_or(Value::Null);
         let r = Some(&doc);
         let rate = obj(r, "frame_rate");
         let patches = obj(r, "patches");
@@ -129,6 +129,6 @@ impl Info {
     }
 
     pub fn space_named(&self, name: &str) -> Option<&SpaceInfo> {
-        self.spaces.iter().find(|s| emusen_dotnet::text::equals_ignore_case(&s.name, name))
+        self.spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&name))
     }
 }

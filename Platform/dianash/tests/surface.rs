@@ -30,7 +30,7 @@ fn session_identifiers(header: &str) -> Vec<String> {
 #[test]
 fn the_crate_names_nothing_of_the_session_service() {
     let crate_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let header = std::fs::read_to_string(crate_dir.join("../../EmuSen.Crystal/include/emusen_session.h")).unwrap();
+    let header = std::fs::read_to_string(crate_dir.join("../crystal/include/emusen_session.h")).unwrap();
     let names = session_identifiers(&header);
     assert!(names.len() > 50, "the header's identifiers were not found: {names:?}");
     let mut files = Vec::new();
@@ -49,7 +49,7 @@ fn the_crate_depends_on_no_emulator_crate_but_galaxia() {
     for line in manifest.lines().map(str::trim) {
         if let Some((name, _)) = line.split_once(" = ") {
             if name.starts_with("emusen-") {
-                assert!(["emusen-galaxia", "emusen-dotnet"].contains(&name), "the shell's crate depends on {name}");
+                assert!(["emusen-galaxia", "emusen-suggest"].contains(&name), "the shell's crate depends on {name}");
             }
         }
     }

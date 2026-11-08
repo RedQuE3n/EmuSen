@@ -2,6 +2,7 @@
 //! the error log, so that where a run's time went is read off it rather than guessed. Every line passes the redactor and
 //! no line carries an address, an account or a key. See EmuSen_LibraryTools.md §9.10.
 
+use std::path::Path;
 use crate::answer::Quota;
 use crate::redact::redact;
 use std::io::Write;
@@ -39,7 +40,7 @@ impl Log {
     pub fn beside_error_log() -> Log {
         let root = {
             let tree = emusen_galaxia::tree::tree();
-            emusen_galaxia::error_log::root(&tree, None).0
+            emusen_galaxia::error_log::root(&tree, None).0.to_string_lossy().into_owned()
         };
         let folder = (!root.trim().is_empty()).then_some(root);
         if let Some(f) = &folder {
@@ -56,7 +57,7 @@ impl Log {
 
     /// A day's file in a folder, the day as `yyyyMMdd`.
     pub fn path_for(folder: &str, day: &str) -> String {
-        emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, folder, &format!("{PREFIX}{day}.log"))
+        Path::new(folder).join(&format!("{PREFIX}{day}.log")).to_string_lossy().into_owned()
     }
 
     /// One line, stamped with the local time and redacted; a log that cannot be written is never a fault of the run.
@@ -78,9 +79,9 @@ impl Log {
 fn local_now() -> (String, String) {
     let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let seconds = since.as_secs() as i64;
-    let local = (seconds + emusen_dotnet::date::local_offset(seconds)) * emusen_dotnet::date::TICKS_PER_SECOND;
-    let day = emusen_dotnet::date::local_text(local, "yyyyMMdd");
-    let stamp = format!("{}.{:03}", emusen_dotnet::date::local_text(local, "yyyy-MM-dd HH:mm:ss"), since.subsec_millis());
+    let local = (seconds + emusen_galaxia::clock::local_offset(seconds)) * emusen_galaxia::clock::TICKS_PER_SECOND;
+    let day = emusen_galaxia::clock::text(local, emusen_galaxia::clock::DAY_NAME);
+    let stamp = format!("{}.{:03}", emusen_galaxia::clock::text(local, emusen_galaxia::clock::STAMP), since.subsec_millis());
     (day, stamp)
 }
 

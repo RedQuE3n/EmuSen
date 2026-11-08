@@ -2990,7 +2990,7 @@ int32_t  dianash_module_kill(const dianash_call *call, const uint8_t *id, size_t
 
 ## Appendix B. `emusen_session.h`, its first entries sketched
 
-*The sketch as the design left it. The header as built is `EmuSen.Crystal/include/emusen_session.h`, and §13.6 says where
+*The sketch as the design left it. The header as built is `Platform/crystal/include/emusen_session.h` (in `EmuSen.Crystal/include/` until 2026-11-07), and §13.6 says where
 it departs from this.*
 
 ```c

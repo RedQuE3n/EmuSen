@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use emusen_goldens::trace::{fold, hash16, hex_upper, unhex8};
 use emusen_goldens::{Driven, Trace};
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 use super::grader;
 
@@ -99,11 +99,11 @@ pub fn printable(text: &str) -> String {
 
 fn spaces_of(d: &mut Driven) -> Vec<(String, u32)> {
     let info = d.machine.machine_info().unwrap_or_default();
-    let v = json::parse(info.as_bytes()).unwrap_or(Value::Null);
+    let v = serde_json::from_str::<Value>(&info).unwrap_or(Value::Null);
     v.get("spaces")
         .and_then(Value::as_array)
-        .unwrap_or(&[])
-        .iter()
+        .into_iter()
+        .flatten()
         .filter_map(|s| Some((s.get("name")?.as_str()?.to_string(), s.get("id")?.as_i64()? as u32)))
         .collect()
 }

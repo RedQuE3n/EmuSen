@@ -143,8 +143,8 @@ pub fn run(case: &Case, temp: &Path, host: &[String], shell_with_modules: fn(Con
     // Galaxia's tree moved into the case's home, as GoldenRunner moves DataStore's and ConfigStore's.
     {
         let mut tree = emusen_galaxia::tree::tree_mut();
-        tree.set_override(emusen_galaxia::tree::Override::Data, Some(root.clone()));
-        tree.set_override(emusen_galaxia::tree::Override::Config, Some(home.join("etc/EmuSen").to_string_lossy().into_owned()));
+        tree.set_override(emusen_galaxia::tree::Override::Data, Some(home.clone()));
+        tree.set_override(emusen_galaxia::tree::Override::Config, Some(home.join("etc/EmuSen")));
     }
     let normalise = |text: &str| text.replace(&root, "<ROOT>").replace(&*temp.to_string_lossy(), "<TEMP>");
     let mut shell = shell_with_modules(Config { sessions: !case.no_sessions, root: Some(root.clone()), ..Config::default() });

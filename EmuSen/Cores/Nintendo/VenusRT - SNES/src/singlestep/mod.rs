@@ -10,7 +10,7 @@ pub mod w65816;
 use std::path::{Path, PathBuf};
 
 pub use emusen_singlestep::{FileReport, Outcome, int, read_cases, run_cases, run_suite, suite_files, summary};
-use emusen_native::json::Value;
+use serde_json::Value;
 
 pub const CORPUS_VARIABLE: &str = "EMUSEN_VENUSRT_CORPUS";
 

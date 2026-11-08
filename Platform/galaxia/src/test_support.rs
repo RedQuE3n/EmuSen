@@ -1,11 +1,11 @@
 //! A temporary directory for a test, removed when the test ends.
 
-use crate::dotnet_path::Style;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 static NEXT: AtomicU32 = AtomicU32::new(0);
 
-pub struct TempDir(String);
+pub struct TempDir(PathBuf);
 
 impl TempDir {
     pub fn new(label: &str) -> TempDir {
@@ -13,25 +13,29 @@ impl TempDir {
         let dir = std::env::temp_dir().join(name);
         std::fs::create_dir_all(&dir).unwrap();
         // The canonical spelling, so a symbolic link in the temporary directory's own path cannot differ between two answers.
-        TempDir(ordinary(std::fs::canonicalize(&dir).unwrap().to_string_lossy().into_owned()))
+        TempDir(ordinary(std::fs::canonicalize(&dir).unwrap()))
     }
 
-    pub fn path(&self) -> &str {
+    pub fn path(&self) -> &Path {
         &self.0
     }
 
     /// A path under the directory, given with `/` between its parts.
-    pub fn join(&self, relative: &str) -> String {
-        let separator = Style::HOST.separator().to_string();
-        format!("{}{separator}{}", self.0, relative.replace('/', &separator))
+    pub fn join(&self, relative: &str) -> PathBuf {
+        self.0.join(relative)
+    }
+
+    /// [`TempDir::join`] as text, for an interface that takes a path as text.
+    pub fn text(&self, relative: &str) -> String {
+        self.join(relative).to_string_lossy().into_owned()
     }
 }
 
 /// Windows' canonical spelling is the extended `\\?\C:\…`, under which the system takes `..` and `/` as parts of a
 /// name; a player's paths are spelled `C:\…`, and so are the tests', with the long names canonicalising found.
-fn ordinary(canonical: String) -> String {
-    match canonical.strip_prefix(r"\\?\") {
-        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => rest.to_string(),
+fn ordinary(canonical: PathBuf) -> PathBuf {
+    match canonical.to_str().and_then(|c| c.strip_prefix(r"\\?\")) {
+        Some(rest) if rest.as_bytes().get(1) == Some(&b':') => PathBuf::from(rest),
         _ => canonical,
     }
 }

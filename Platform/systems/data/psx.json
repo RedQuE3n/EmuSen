@@ -21,5 +21,6 @@
   "libretro_databases": ["Sony - PlayStation"],
   "libretro_systemids": ["playstation"],
   "firmware_note": null,
-  "rumble": true
+  "rumble": true,
+  "look": {"hue": 230, "body": "gem", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}
 }

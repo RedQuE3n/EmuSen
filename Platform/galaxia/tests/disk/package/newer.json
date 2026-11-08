@@ -1,0 +1,26 @@
+{
+  "format": "emusen-package",
+  "version": "2.0",
+  "title": "Game \u00E9",
+  "system": "snes",
+  "mode": "self-contained",
+  "game": {
+    "role": "game",
+    "where": "package",
+    "path": "Game (USA).sfc",
+    "size": 3000
+  },
+  "dump": null,
+  "companions": [],
+  "patches": [],
+  "patched": null,
+  "identity": "original",
+  "container": null,
+  "x-future": {
+    "kept": [
+      1,
+      2.50,
+      "three"
+    ]
+  }
+}

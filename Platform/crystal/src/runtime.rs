@@ -2,7 +2,7 @@
 //! hold, found by `emusen-core-host` and opened under its trust rules, and the answers about systems, engines and a
 //! file's route, which run no core (EmuSen_Backend.md §29.2, §29.6).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use emusen_core_host::{Discovery, Trust, listing, trust};
@@ -238,6 +238,7 @@ impl Runtime {
                 .bool("self_delimiting_images", e.self_delimiting_images)
                 .bool("rumble", e.rumble)
                 .str_or_null("attached_to", e.attached_to.as_deref());
+            look(&mut j, &e.look());
             match e.screenscraper_system {
                 Some(id) => j.int("screenscraper_system", id as i64),
                 None => j.null("screenscraper_system"),
@@ -263,8 +264,11 @@ impl Runtime {
         }
         for (s, engines, empty) in groups {
             j.begin_object().str("id", &s.id).str("name", &s.name).strs("extensions", &s.extensions).strs("engines", &engines).bool("starts_empty", empty);
+            // A system the table lacks takes the table's default cover shape and the look computed from its id.
+            j.f64("cover_aspect", emusen_systems::default_cover_aspect());
+            look(&mut j, &emusen_systems::Look::computed(&s.id));
             let mut names = vec![s.id.clone()];
-            for n in engines.iter().filter(|n| !n.chars().any(char::is_whitespace)).map(|n| emusen_dotnet::text::to_lower(n)) {
+            for n in engines.iter().filter(|n| !n.chars().any(char::is_whitespace)).map(|n| n.to_lowercase()) {
                 if !names.contains(&n) {
                     names.push(n);
                 }
@@ -509,7 +513,7 @@ impl Runtime {
         let at = {
             let tree = emusen_galaxia::tree::tree();
             let library = tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-            emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &library, crate::states::FILE_NAME)
+            library.join(crate::states::FILE_NAME).to_string_lossy().into_owned()
         };
         let mut held = self.records.lock().unwrap_or_else(|p| p.into_inner());
         if held.as_ref().is_none_or(|(p, _)| *p != at) {
@@ -568,7 +572,7 @@ fn player_directories(configured: Option<&[PathBuf]>) -> Vec<PathBuf> {
 /// The cores directories a runtime given none scans: the program's own and its cores folder.
 pub fn installation_directories() -> Vec<PathBuf> {
     let base = emusen_galaxia::tree::base_directory();
-    vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
+    vec![base.clone(), base.join("cores")]
 }
 
 fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> Discovery {
@@ -580,20 +584,20 @@ fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> D
 }
 
 /// The approvals' file in the config directory, so a test's follows its config override (EmuSen_Backend.md §29.40.3).
-fn approvals_path() -> String {
+fn approvals_path() -> PathBuf {
     emusen_galaxia::tree::tree().config_path(None, trust::APPROVALS)
 }
 
 /// The installation's manifests and the player's approvals; an approvals' file refused is said, and approves nothing.
 fn trust_of(directories: &[PathBuf], player: &[PathBuf], events: &crate::events::Events) -> Trust {
-    let approvals = trust::read_approvals(std::path::Path::new(&approvals_path())).unwrap_or_else(|why| {
+    let approvals = trust::read_approvals(&approvals_path()).unwrap_or_else(|why| {
         events.raise_runtime_lines(0, &[why]);
         Vec::new()
     });
     Trust::new(directories, &approvals).with_player(player)
 }
 
-fn read_text(file: &str) -> Result<String, crate::open::Refused> {
+fn read_text(file: &Path) -> Result<String, crate::open::Refused> {
     let bytes = emusen_galaxia::atomic::try_read(file).map_err(|why| (crate::abi::status::IO, why))?;
     Ok(bytes.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default())
 }
@@ -617,4 +621,17 @@ fn listed_name(discovery: &Discovery, sha256: &str) -> Result<String, crate::ope
         .or_else(|| discovery.waiting().iter().find(|w| w.sha256.eq_ignore_ascii_case(sha256)).map(|w| name(&w.entry.core_path())))
         .or_else(|| discovery.found().iter().filter_map(|c| c.entry.as_ref()).find(|e| emusen_core_host::entry::core_hash(e).is_some_and(|h| h.eq_ignore_ascii_case(sha256))).map(|e| name(&e.core_path())))
         .ok_or_else(|| (emusen_session_service::abi::status::NO_SUCH_ID, format!("no core library listed has the SHA-256 {}", sha256.to_ascii_lowercase())))
+}
+
+/// A system's look as the systems data gives it: `{"hue","body","palette":[colour],"craters","bands","cap","moons"}`.
+fn look(j: &mut Json, l: &emusen_systems::Look) {
+    j.key_object("look")
+        .f64("hue", l.hue)
+        .str("body", &l.body)
+        .strs("palette", &l.palette)
+        .f64("craters", l.craters)
+        .f64("bands", l.bands)
+        .f64("cap", l.cap)
+        .int("moons", i64::from(l.moons))
+        .end_object();
 }

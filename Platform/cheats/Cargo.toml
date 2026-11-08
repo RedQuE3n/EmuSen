@@ -12,10 +12,5 @@ name = "emusen_cheats"
 [dependencies]
 # Each console's codecs, by which a .cht code becomes writes.
 emusen-systems = { path = "../systems" }
-# .NET's path and text rules, and how a folder is listed.
+# Paths, how a folder is listed, and the zip reader.
 emusen-galaxia = { path = "../galaxia" }
-emusen-dotnet = { path = "../dotnet" }
-
-[target.'cfg(unix)'.dependencies]
-# mktime and localtime_r, for a zip entry's local time as .NET reads it.
-libc = "0.2"

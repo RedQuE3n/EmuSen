@@ -7,34 +7,34 @@ use emusen_cheats::cht::{self, Cheat};
 use emusen_cheats::database::Database;
 use emusen_cheats::install::{self, Refusal};
 use emusen_cheats::prune::{self, Pruned};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_systems::cheats::{Kind, Write, WriteType};
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn compact(value: &Value) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, value);
+    out.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     out
 }
 
 fn request(data: *const u8, len: usize) -> Result<Value, i32> {
-    json::parse(unsafe { given(data, len) }?).map_err(|e| fail(status::PARSE, e.to_string()))
+    serde_json::from_str::<Value>(unsafe { given(data, len) }?).map_err(|e| fail(status::PARSE, e.to_string()))
 }
 
 fn text<'a>(v: &'a Value, name: &str) -> Result<Option<&'a str>, i32> {
     match v.get(name) {
         None | Some(Value::Null) => Ok(None),
-        Some(Value::String(t)) => Ok(Some(&t.text)),
+        Some(Value::String(t)) => Ok(Some(t)),
         _ => Err(fail(status::PARSE, format!("{name} is not text"))),
     }
 }
 
 fn number(v: &Value, name: &str) -> Result<i64, i32> {
     match v.get(name) {
-        Some(Value::Number(n)) => n.parse::<i64>().map_err(|_| fail(status::PARSE, format!("{name} is not a whole number"))),
+        Some(Value::Number(n)) => n.as_i64().ok_or_else(|| fail(status::PARSE, format!("{name} is not a whole number"))),
         _ => Err(fail(status::PARSE, format!("{name} is not a number"))),
     }
 }
@@ -54,21 +54,6 @@ fn answer(result: Result<String, i32>, out: *mut u8, len: usize) -> i64 {
 }
 
 const TYPES: [WriteType; 7] = [WriteType::Set, WriteType::Increase, WriteType::Decrease, WriteType::IfEqual, WriteType::IfNotEqual, WriteType::IfLess, WriteType::IfGreater];
-
-fn write_json(w: &Write) -> Value {
-    object(vec![
-        ("space", Value::string(w.space.as_str())),
-        ("address", Value::number(w.address)),
-        ("value", Value::number(w.value)),
-        ("width", Value::number(w.width)),
-        ("type", Value::number(w.kind as i32)),
-        ("bit", w.bit_position.map_or(Value::Null, Value::number)),
-        ("big_endian", Value::Bool(w.big_endian)),
-        ("repeat", Value::number(w.repeat_count)),
-        ("repeat_address", Value::number(w.repeat_add_address)),
-        ("repeat_value", Value::number(w.repeat_add_value)),
-    ])
-}
 
 fn write_from(v: &Value) -> Result<Write, i32> {
     let kind = TYPES.get(number(v, "type")? as usize).copied().ok_or_else(|| fail(status::PARSE, "a write's type is not one there is"))?;
@@ -92,10 +77,10 @@ fn write_from(v: &Value) -> Result<Write, i32> {
 
 fn cheat_json(c: &Cheat) -> Value {
     object(vec![
-        ("desc", Value::string(c.description.as_str())),
+        ("desc", Value::String(String::from(c.description.as_str()))),
         ("enabled", Value::Bool(c.enabled)),
-        ("kind", Value::string(if c.kind == Kind::RomPatch { "RomPatch" } else { "RamPoke" })),
-        ("writes", Value::Array(c.writes.iter().map(write_json).collect())),
+        ("kind", Value::String(String::from(if c.kind == Kind::RomPatch { "RomPatch" } else { "RamPoke" }))),
+        ("writes", Value::Array(c.writes.iter().map(emusen_systems::cheats::write_json).collect())),
     ])
 }
 
@@ -110,7 +95,7 @@ pub unsafe extern "C" fn emusen_cheats_parse(request_data: *const u8, request_le
         let r = request(request_data, request_len)?;
         let parsed = cht::parse(text(&r, "text")?.unwrap_or(""), text(&r, "codec")?, text(&r, "space")?.unwrap_or(""), text(&r, "patch")?)
             .map_err(|_| fail(status::BAD_ARGUMENT, "a codec's index fell outside its code"))?;
-        Ok(compact(&object(vec![("cheats", Value::Array(parsed.cheats.iter().map(cheat_json).collect())), ("skipped", Value::number(parsed.skipped))])))
+        Ok(compact(&object(vec![("cheats", Value::Array(parsed.cheats.iter().map(cheat_json).collect())), ("skipped", Value::from(parsed.skipped))])))
     };
     answer(run(), out, len)
 }
@@ -175,7 +160,7 @@ fn database<'a>(db: *const Database) -> Result<&'a Database, i32> {
 pub unsafe extern "C" fn emusen_cheats_database_entries(db: *const Database, out: *mut u8, len: usize) -> i64 {
     let run = || -> Result<String, i32> {
         let d = database(db)?;
-        Ok(compact(&Value::Array(d.entries.iter().map(|e| Value::Array(vec![Value::string(e.system.as_str()), Value::string(e.game.as_str()), Value::string(e.path.as_str())])).collect())))
+        Ok(compact(&Value::Array(d.entries.iter().map(|e| Value::Array(vec![Value::String(String::from(e.system.as_str())), Value::String(String::from(e.game.as_str())), Value::String(String::from(e.path.as_str()))])).collect())))
     };
     answer(run(), out, len)
 }
@@ -191,9 +176,9 @@ pub unsafe extern "C" fn emusen_cheats_database_query(db: *const Database, reque
         let d = database(db)?;
         let r = request(request_data, request_len)?;
         let value = match text(&r, "op")? {
-            Some("systems") => Value::Array(d.systems().into_iter().map(|(s, n)| Value::Array(vec![Value::string(s), Value::number(n)])).collect()),
-            Some("games") => Value::Array(d.games(text(&r, "system")?.unwrap_or(""), text(&r, "filter")?).into_iter().map(Value::number).collect()),
-            Some("find") => Value::Array(d.find(text(&r, "text")?.unwrap_or(""), number(&r, "limit")?.clamp(i32::MIN as i64, i32::MAX as i64) as i32).into_iter().map(Value::number).collect()),
+            Some("systems") => Value::Array(d.systems().into_iter().map(|(s, n)| Value::Array(vec![Value::String(String::from(s)), Value::from(n)])).collect()),
+            Some("games") => Value::Array(d.games(text(&r, "system")?.unwrap_or(""), text(&r, "filter")?).into_iter().map(Value::from).collect()),
+            Some("find") => Value::Array(d.find(text(&r, "text")?.unwrap_or(""), number(&r, "limit")?.clamp(i32::MIN as i64, i32::MAX as i64) as i32).into_iter().map(Value::from).collect()),
             _ => return Err(fail(status::BAD_ARGUMENT, "no such question")),
         };
         Ok(compact(&value))
@@ -202,7 +187,7 @@ pub unsafe extern "C" fn emusen_cheats_database_query(db: *const Database, reque
 }
 
 fn pruned_json(p: &Pruned) -> Value {
-    object(vec![("system", Value::string(p.system.as_str())), ("path", Value::string(p.path.as_str())), ("files", Value::number(p.files)), ("bytes", Value::number(p.bytes))])
+    object(vec![("system", Value::String(String::from(p.system.as_str()))), ("path", Value::String(String::from(p.path.as_str()))), ("files", Value::from(p.files)), ("bytes", Value::from(p.bytes))])
 }
 
 /// A prune's plan: `{"keep": [...]}` in; out `{"removing": [{system, path, files, bytes}], "keeping", "reason"}`.
@@ -217,8 +202,8 @@ pub unsafe extern "C" fn emusen_cheats_prune_plan(db: *const Database, request_d
         let plan = prune::plan(d, &words(&r, "keep")?);
         Ok(compact(&object(vec![
             ("removing", Value::Array(plan.removing.iter().map(pruned_json).collect())),
-            ("keeping", Value::Array(plan.keeping.iter().map(|k| Value::string(k.as_str())).collect())),
-            ("reason", plan.reason.map_or(Value::Null, Value::string)),
+            ("keeping", Value::Array(plan.keeping.iter().map(|k| Value::String(String::from(k.as_str()))).collect())),
+            ("reason", plan.reason.map_or(Value::Null, |s| Value::String(String::from(s)))),
         ])))
     };
     answer(run(), out, len)
@@ -239,32 +224,23 @@ pub unsafe extern "C" fn emusen_cheats_prune_apply(request_data: *const u8, requ
             .collect::<Result<Vec<_>, i32>>()?;
         let db = Database { directory: text(&r, "directory")?.unwrap_or("").to_string(), entries: Vec::new() };
         let (removed, failed) = prune::apply(&db, &removing);
-        Ok(compact(&object(vec![("removed", Value::number(removed)), ("failed", Value::Array(failed.into_iter().map(Value::string).collect()))])))
+        Ok(compact(&object(vec![("removed", Value::from(removed)), ("failed", Value::Array(failed.into_iter().map(|s| Value::String(String::from(s))).collect()))])))
     };
     answer(run(), out, len)
 }
 
-/// A downloaded archive installed under `target`, as .NET's reader installs it: out `{"installed", "skipped"}`, with
-/// `threw` (`exception` and `words`) where .NET threw part way, the entries before it written; REFUSED with the JSON
-/// `{"exception", "words"}` as the last error for an archive .NET refuses whole; IO, NOT_FOUND or ACCESS where the target
-/// could not be made.
+/// A downloaded archive installed under `target`: out `{"installed", "skipped"}`; REFUSED with the zip reader's words as
+/// the last error for an archive it does not read; IO, NOT_FOUND or ACCESS where the target could not be made.
 ///
 /// # Safety
 /// `zip` must be valid for `zip_len` bytes, `target` for `target_len`; `out` for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_cheats_install(zip: *const u8, zip_len: usize, target: *const u8, target_len: usize, out: *mut u8, len: usize) -> i64 {
-    let thrown = |t: &install::Thrown| object(vec![("exception", Value::string(t.exception)), ("words", Value::string(t.words.as_str()))]);
     let run = || -> Result<String, i32> {
         let (zip, target) = unsafe { (bytes(zip, zip_len)?, required(target, target_len)?) };
         match install::install(zip, target) {
-            Ok((done, threw)) => {
-                let mut members = vec![("installed", Value::number(done.installed)), ("skipped", Value::number(done.skipped))];
-                if let Some(t) = &threw {
-                    members.push(("threw", thrown(t)));
-                }
-                Ok(compact(&object(members)))
-            }
-            Err(Refusal::Thrown(t)) => Err(fail(status::REFUSED, compact(&thrown(&t)))),
+            Ok(done) => Ok(compact(&object(vec![("installed", Value::from(done.installed)), ("skipped", Value::from(done.skipped))]))),
+            Err(Refusal::Unreadable(words)) => Err(fail(status::REFUSED, words)),
             Err(Refusal::Io(e)) => Err(fail_io(&e)),
         }
     };

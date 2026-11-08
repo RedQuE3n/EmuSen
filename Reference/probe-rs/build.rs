@@ -165,7 +165,7 @@ fn find_include_dir() -> Option<PathBuf> {
 // headers and loaded at run time, so the probe stays a program of its own that only loads EmuSen. The folders are the
 // headers' homes in the repository, named once here. See EmuSen_Backend.md §40.11.4.
 #[cfg(feature = "emusen")]
-const EMUSEN_INCLUDE_DIRS: [&str; 3] = ["../../EmuSen.Crystal/include", "../../Platform/include", "../../EmuSen/Cores/Shared/emusen-native/include"];
+const EMUSEN_INCLUDE_DIRS: [&str; 3] = ["../../Platform/crystal/include", "../../Platform/include", "../../EmuSen/Cores/Shared/emusen-native/include"];
 
 #[cfg(feature = "emusen")]
 fn generate_emusen_bindings() {

@@ -6609,7 +6609,7 @@ DESCRIPTION
                    project that imports it) and everything in its reverse
                    closure over Cargo path dependencies, workspaces,
                    ProjectReference and Import, and the host's crate edges
-                   (RustCores.props, Platform.targets); a test project the
+                   (the parts of xtask/libraries.tsv); a test project the
                    closure reaches and no line narrows is selected whole
         closed     a file no rule claims selects the tier's whole set:
                    unknown is closed, never open

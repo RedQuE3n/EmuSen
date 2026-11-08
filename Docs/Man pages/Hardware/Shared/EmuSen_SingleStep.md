@@ -14,7 +14,9 @@ can be fixed in five of them, so it is held once.
 ## 2. What the crate holds
 
 - `suite_files`, `read_cases`, `int` and `ram`: a suite's folder listed in order, a file parsed into cases, the
-  integer and the `[address, value]` pairs a case names (the address masked by the caller).
+  integer and the `[address, value]` pairs a case names (the address masked by the caller). A case is a
+  `serde_json::Value`: since 2026-11-07 the files are read by serde_json, which this crate and the four CPU crates take
+  as a development dependency, in place of `emusen-native`'s own reader (`EmuSen_RustPlatform.md` §47.22).
 - `Outcome`: the three checks of one case, registers, memory and cycles, with the first difference reported.
   `Outcome::from_checks` takes each check's difference (None when it held) and reports registers first, then memory,
   then cycles. `capped` marks a case whose cycle list ends at the suite's cap, and `explained` a failure with a

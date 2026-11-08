@@ -4,7 +4,7 @@
 //! §4.37 and EmuSen_Backend.md §28.4.
 
 use crate::{Error, Library, records};
-use emusen_galaxia::{dotnet_files, rom_hash};
+use emusen_galaxia::{files, rom_hash};
 use std::collections::HashSet;
 use std::sync::atomic::Ordering;
 
@@ -26,12 +26,12 @@ impl Library {
     /// `crc32` the file is read for its CRC-32 too, with `sha1` (1.1) for its SHA-1 as well; with `record` the cache and
     /// the game's row are written.
     pub fn identity(&self, path: &str, systems: Option<&[String]>, crc32: bool, sha1: bool, record: bool) -> Result<Identity, Error> {
-        let Some((bytes, modified)) = dotnet_files::file_info(path) else { return Err(Error::Io(format!("Could not find file '{path}'."))) };
+        let Some((bytes, modified)) = files::file_info(path) else { return Err(Error::Io(format!("Could not find file '{path}'."))) };
         let known = records::known_hash(&*self.db()?, path, bytes, modified)?;
         let (md5, crc, sha, cached) = match known {
             Some(md5) if !crc32 && !sha1 => (md5, None, None, true),
             known => {
-                let hashes = rom_hash::hashes_with(path, None, sha1, &|| false).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, path)))?;
+                let hashes = rom_hash::hashes_with(path, None, sha1, &|| false).map_err(|e| Error::Io(format!("{}: {}", path, e)))?;
                 (hashes.md5, Some(hashes.crc32), hashes.sha1, known.is_some())
             }
         };
@@ -76,7 +76,7 @@ impl Library {
                 if rows.contains(game) {
                     continue;
                 }
-                let Some((bytes, modified)) = dotnet_files::file_info(game) else { continue };
+                let Some((bytes, modified)) = files::file_info(game) else { continue };
                 if !sizes.contains(&bytes) {
                     continue;
                 }

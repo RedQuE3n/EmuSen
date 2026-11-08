@@ -226,7 +226,7 @@ namespace EmuSen.WiseMan.Mistress
             Directory.CreateDirectory(Path.GetDirectoryName(game)!);
             byte[] rom = SyntheticRom.BuildBlank();
             File.WriteAllBytes(game, rom);
-            File.WriteAllBytes(Path.Combine(_library, "snes", "Cobalt Harbor (Synthetic).ips"), EmuSen.WiseMan.Crystal.CrystalParityTests.Ips((0x100, new byte[] { 0x5A })));
+            File.WriteAllBytes(Path.Combine(_library, "snes", "Cobalt Harbor (Synthetic).ips"), EmuSen.WiseMan.Crystal.PackageFixtures.Ips((0x100, new byte[] { 0x5A })));
             Directory.CreateDirectory(Path.Combine(DataStore.Saves, "SNES"));
             File.WriteAllBytes(Path.Combine(DataStore.Saves, "SNES", "Cobalt Harbor (Synthetic).srm"), new byte[] { 9, 9 });
             new AppSettings { RomDirectory = _library }.Save();

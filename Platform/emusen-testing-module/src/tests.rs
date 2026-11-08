@@ -1,5 +1,5 @@
 //! The studio's rules held on a small repository built in a temporary folder: a workspace, a core built into a C#
-//! host by RustCores.props, a test project, a recording, and the inputs and tiers files. See EmuSen_Testing.md §7.
+//! host by its part of xtask/libraries.tsv, a test project, a recording, and the inputs and tiers files. See EmuSen_Testing.md §7.
 
 use crate::catalogue::{self, Snapshot};
 use crate::config::{self, Tier};
@@ -55,8 +55,8 @@ fn fixture(name: &str) -> Fixture {
     write(&dir, "Cores/dep/Cargo.toml", "[package]\nname = \"dep\"\n");
     write(&dir, "Cores/dep/src/lib.rs", "pub fn d() {}\n");
     write(&dir, "Cores/core/Glue.cs", "namespace Core { public class Glue {} }\n");
-    write(&dir, "Host/RustCores.props", "<Project><ItemGroup><EmuSenRustCrate Include=\"core\"><Dir>$(MSBuildThisFileDirectory)..\\Cores\\core\\</Dir></EmuSenRustCrate></ItemGroup></Project>\n");
-    write(&dir, "Host/Host.csproj", "<Project><Import Project=\"RustCores.props\" /></Project>\n");
+    write(&dir, "xtask/libraries.tsv", "# the list\ncore\tCores/core\tcore\t1\tships\tany\t-\tCore\tthe console\nplatform\tPlatform\tplatform\t-\tships\tany\t-\tthe platform\tthe platform\n");
+    write(&dir, "Host/Host.csproj", "<Project><PropertyGroup><EmuSenNativePart>cores</EmuSenNativePart></PropertyGroup></Project>\n");
     write(&dir, "Host/Thing.cs", "namespace Host { public class Thing {} }\n");
     write(&dir, "Wise/Wise.csproj", "<Project><ItemGroup><PackageReference Include=\"xunit\" /><ProjectReference Include=\"..\\Host\\Host.csproj\" /></ItemGroup></Project>\n");
     write(&dir, "Wise/FooTests.cs", "namespace Wise\n{\n    public class FooTests\n    {\n        [Fact]\n        public void Holds() {}\n    }\n}\n");
@@ -423,14 +423,14 @@ fn the_graph_agrees_with_cargo_metadata_on_the_platform_workspace() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap().parent().unwrap();
     let out = Command::new("cargo").args(["metadata", "--no-deps", "--format-version", "1", "--offline", "--manifest-path"]).arg(root.join("Platform/Cargo.toml")).output().unwrap();
     assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let doc = emusen_dotnet::json::parse(&String::from_utf8_lossy(&out.stdout)).unwrap();
+    let doc = serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&out.stdout)).unwrap();
     let prefix = format!("{}/", root.display());
     let rel = |p: &str| p.strip_prefix(&prefix).unwrap_or(p).trim_end_matches("/Cargo.toml").to_string();
     let mut theirs = std::collections::BTreeSet::new();
-    let Some(emusen_dotnet::json::Value::Array(packages)) = doc.get("packages") else { panic!("no packages") };
+    let Some(serde_json::Value::Array(packages)) = doc.get("packages") else { panic!("no packages") };
     for p in packages {
         let me = rel(p.get("manifest_path").and_then(|v| v.as_str()).unwrap());
-        if let Some(emusen_dotnet::json::Value::Array(deps)) = p.get("dependencies") {
+        if let Some(serde_json::Value::Array(deps)) = p.get("dependencies") {
             for d in deps {
                 if let Some(path) = d.get("path").and_then(|v| v.as_str()) {
                     theirs.insert((me.clone(), rel(path)));

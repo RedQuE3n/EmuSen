@@ -2,7 +2,8 @@
 //! folder, a state written whole with its record and its picture, a state loaded unless its record says it is another
 //! machine's, and the history cleared after the jump (EmuSen_Backend.md §14.12, §29.5).
 
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_galaxia::tree::Tree;
 use emusen_session_service::abi::status as svc;
 
@@ -22,9 +23,8 @@ pub fn build_name() -> String {
 
 /// The player's state folder, read at each use, `AppSettings.StateDirectory`.
 fn state_folder(tree: &Tree) -> Option<String> {
-    let model = &emusen_galaxia::models::MODELS[emusen_galaxia::models::APP_SETTINGS_ID as usize];
-    let (settings, _) = emusen_galaxia::config::load_or_new(tree, model, None, emusen_galaxia::models::APP_SETTINGS_FILE);
-    settings.get("StateDirectory").and_then(|v| v.as_str()).map(str::to_string)
+    let (settings, _) = emusen_galaxia::config::load_or_new::<emusen_galaxia::models::AppSettings>(tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    settings.state_directory
 }
 
 fn check_slot(slot: u32) -> Result<i32, Refused> {
@@ -34,15 +34,15 @@ fn check_slot(slot: u32) -> Result<i32, Refused> {
 impl Session {
     pub fn state_path(&self, tree: &Tree, slot: i32) -> String {
         match &self.package {
-            Some(root) => emusen_galaxia::saves::package_state_path(root, slot, self.save_key.as_deref()),
-            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()),
+            Some(root) => emusen_galaxia::saves::package_state_path(root, slot, self.save_key.as_deref()).to_string_lossy().into_owned(),
+            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()).to_string_lossy().into_owned(),
         }
     }
 
     pub fn resume_path(&self, tree: &Tree) -> String {
         match &self.package {
-            Some(root) => emusen_galaxia::saves::package_resume_state_path(root, self.save_key.as_deref()),
-            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()),
+            Some(root) => emusen_galaxia::saves::package_resume_state_path(root, self.save_key.as_deref()).to_string_lossy().into_owned(),
+            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()).to_string_lossy().into_owned(),
         }
     }
 
@@ -52,7 +52,7 @@ impl Session {
         j.begin_array();
         for slot in 0..=SLOTS as i32 {
             let at = if slot == 0 { self.resume_path(tree) } else { self.state_path(tree, slot) };
-            let exists = emusen_galaxia::dotnet_files::file_exists(&at);
+            let exists = emusen_galaxia::files::file_exists(&at);
             j.begin_object().int("slot", slot as i64).str("path", &at).bool("exists", exists);
             match emusen_galaxia::clock::last_write(&at).filter(|_| exists) {
                 Some(t) => j.str("saved_at", &t),
@@ -73,7 +73,7 @@ impl Session {
             state_version: e.state_version(),
             build: build_name(),
             saved_at: emusen_galaxia::clock::now(),
-            rom_file: path::file_name(Style::HOST, &self.game_key()).to_string(),
+            rom_file: Path::new(&self.game_key()).file_name().unwrap_or_default().to_string_lossy().to_string(),
             rom_md5: if game { md5 } else { None },
             rom_bytes: if game { bytes } else { 0 },
         }
@@ -81,8 +81,8 @@ impl Session {
 
     /// Why the record says the state is not this machine's to load, or none.
     fn refusal(&self, e: &Engine, r: &StateRecord) -> Option<String> {
-        if !emusen_dotnet::text::equals_ignore_case(&r.console, &self.console) {
-            return Some(format!("That state was saved by the {} core, and {} runs on the {} core.", r.console, path::file_name(Style::HOST, &self.game_key()), self.console));
+        if !r.console.eq_ignore_ascii_case(&self.console) {
+            return Some(format!("That state was saved by the {} core, and {} runs on the {} core.", r.console, Path::new(&self.game_key()).file_name().unwrap_or_default().to_string_lossy(), self.console));
         }
         let loads = &e.mi.loads_from;
         if r.core == e.display_name && e.machine.is_some() && !loads.is_empty() && !loads.contains(&(r.state_version as i64)) {
@@ -94,12 +94,12 @@ impl Session {
 
     /// The state written whole and its record kept, `ManagedSession.SaveState`; with a picture beside it when asked.
     pub(crate) fn save_in(&self, e: &mut Engine, at: &str, records: Option<&StateRecords>, picture: bool) -> Result<(), Refused> {
-        let full = path::full_path(at);
-        if let Some(folder) = path::directory_name(Style::HOST, &full).filter(|f| !f.is_empty()) {
-            std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, &folder)))?;
+        let full = path_key::key_text(at);
+        if let Some(folder) = Path::new(&full).parent().map(|d| d.to_string_lossy().into_owned()).filter(|f| !f.is_empty()) {
+            std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, format!("{}: {}", folder, err)))?;
         }
         let bytes = e.state_bytes().map_err(|r| (r.status, r.words))?;
-        std::fs::write(at, &bytes).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, at)))?;
+        std::fs::write(at, &bytes).map_err(|err| (abi::status::IO, format!("{}: {}", at, err)))?;
         crate::states::write(records, at, &self.record(e))?;
         self.events.raise(self.id, abi::EVENT_STATE, "state", |j| {
             j.str("op", "saved").str("path", at);
@@ -108,7 +108,7 @@ impl Session {
             let (rgba, width, height) = self.shown_picture(e);
             if width > 0 && height > 0 {
                 let png = emusen_galaxia::saves::picture_path(at);
-                crate::png::write(&png, &rgba, width as u32, height as u32).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, &png)))?;
+                crate::png::write(&png.to_string_lossy(), &rgba, width as u32, height as u32).map_err(|err| (abi::status::IO, format!("{}: {}", png.display(), err)))?;
             }
         }
         Ok(())
@@ -116,7 +116,7 @@ impl Session {
 
     /// A state loaded unless its record refuses it, then the jump's sequence, `ManagedSession.LoadState`.
     pub(crate) fn load_in(&self, e: &mut Engine, run: &mut Run, at: &str, records: Option<&StateRecords>, ctx: &Ctx) -> Result<(), Refused> {
-        if !emusen_galaxia::dotnet_files::file_exists(at) {
+        if !emusen_galaxia::files::file_exists(at) {
             return Err((svc::ABSENT, format!("no state at {at}")));
         }
         if let Some(r) = crate::states::read(records, at)?
@@ -124,7 +124,7 @@ impl Session {
         {
             return Err((abi::status::STATE_REFUSED, why));
         }
-        let bytes = std::fs::read(at).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, at)))?;
+        let bytes = std::fs::read(at).map_err(|err| (abi::status::IO, format!("{}: {}", at, err)))?;
         // With rewind on, the present is kept as the newest moment and the chain stays, so Rewind undoes the load (EmuSen_Backend.md §36).
         let was = run.rewind.withheld().is_some();
         if run.rewind.enabled && run.rewind.capture_unless_held(&mut crate::engine::Snap { engine: e, ctx: Some(ctx) })? && run.rewind.thumbnail_width > 0 && !e.skip_rendering {

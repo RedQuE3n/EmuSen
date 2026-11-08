@@ -8,7 +8,7 @@ use sha1::Sha1;
 use std::io::{Read, Seek, SeekFrom};
 
 /// The file's MD5 as 32 lower-case hexadecimal digits.
-pub fn md5(path: &str) -> std::io::Result<String> {
+pub fn md5(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Md5::new();
     let mut buffer = vec![0u8; 1 << 16];
@@ -85,7 +85,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 /// The hashes of a file, or of `length` bytes from `offset` where a range is given (fewer where the file ends).
-pub fn hashes(path: &str, range: Option<(u64, u64)>) -> std::io::Result<Hashes> {
+pub fn hashes(path: impl AsRef<std::path::Path>, range: Option<(u64, u64)>) -> std::io::Result<Hashes> {
     hashes_with(path, range, false, &|| false)
 }
 
@@ -118,7 +118,7 @@ impl Hasher {
 }
 
 /// As [`hashes`], with SHA-1 too when `sha1`; `stop` is asked before each 64 KiB read, and a stop is `ErrorKind::Interrupted`.
-pub fn hashes_with(path: &str, range: Option<(u64, u64)>, sha1: bool, stop: &dyn Fn() -> bool) -> std::io::Result<Hashes> {
+pub fn hashes_with(path: impl AsRef<std::path::Path>, range: Option<(u64, u64)>, sha1: bool, stop: &dyn Fn() -> bool) -> std::io::Result<Hashes> {
     let mut file = std::fs::File::open(path)?;
     let mut left = u64::MAX;
     if let Some((offset, length)) = range {
@@ -166,9 +166,10 @@ pub struct TrackHashes {
 
 /// Every track of the cue sheet at `sheet_path`, each hashed over the bytes `emusen-disc` places it in, its files found
 /// beside the sheet as a disc's are; SHA-1 always. `stop` is as [`hashes_with`]'s.
-pub fn tracks(sheet_path: &str, stop: &dyn Fn() -> bool) -> std::io::Result<Vec<TrackHashes>> {
+pub fn tracks(sheet_path: impl AsRef<std::path::Path>, stop: &dyn Fn() -> bool) -> std::io::Result<Vec<TrackHashes>> {
     let refuse = |words: String| std::io::Error::new(std::io::ErrorKind::InvalidData, words);
-    let text = emusen_dotnet::file::decode(&std::fs::read(sheet_path)?);
+    let sheet_path = sheet_path.as_ref();
+    let text = crate::text_file::decode(&std::fs::read(sheet_path)?);
     let names = emusen_disc::set::companions(&text).map_err(|e| refuse(e.to_string()))?;
     let spans = emusen_disc::set::track_spans(&text).map_err(refuse)?;
     let paths = crate::image_sets::companions(sheet_path).map_err(refuse)?;
@@ -181,7 +182,7 @@ pub fn tracks(sheet_path: &str, stop: &dyn Fn() -> bool) -> std::io::Result<Vec<
 }
 
 /// A file's SHA-1 alone, as the C# `Scraper.Sha1Of` takes it of a kept media file.
-pub fn sha1(path: &str) -> std::io::Result<String> {
+pub fn sha1(path: impl AsRef<std::path::Path>) -> std::io::Result<String> {
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha1::new();
     let mut buffer = vec![0u8; 1 << 16];

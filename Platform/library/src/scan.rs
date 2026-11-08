@@ -3,11 +3,11 @@
 //! each file routed among the named systems by `emusen-systems` over the bytes Galaxia reads, and the games ordered by
 //! title ignoring case. See EmuSen_Settings_Reference.md §4.11, §4.46 and EmuSen_Backend.md §28.4.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::{Error, Progress};
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
-use emusen_galaxia::{archive, claims, dotnet_files, image_sets, package_zip};
+use emusen_galaxia::{archive, claims, files, image_sets, package_zip};
 use emusen_systems::probe::{self, Candidate, Recognition};
 use std::sync::atomic::Ordering;
 
@@ -71,7 +71,7 @@ impl Systems {
     pub fn extensions(&self) -> Vec<String> {
         let mut all: Vec<String> = Vec::new();
         for e in self.entries.iter().flat_map(|s| s.extensions.iter()).map(String::as_str).chain(archive::EXTENSIONS.iter().copied()) {
-            if !all.iter().any(|a| equals_ignore_case(a, e)) {
+            if !all.iter().any(|a| a.eq_ignore_ascii_case(&e)) {
                 all.push(e.to_string());
             }
         }
@@ -79,11 +79,11 @@ impl Systems {
     }
 
     fn takes(&self, extension: &str) -> bool {
-        self.entries.iter().any(|s| s.extensions.iter().any(|e| equals_ignore_case(e, extension)))
+        self.entries.iter().any(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension)))
     }
 
     fn candidates(&self, extension: &str) -> Vec<&'static emusen_systems::System> {
-        self.entries.iter().copied().filter(|s| s.extensions.iter().any(|e| equals_ignore_case(e, extension))).collect()
+        self.entries.iter().copied().filter(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension))).collect()
     }
 }
 
@@ -103,7 +103,7 @@ fn image_extension(at: &str, systems: &Systems) -> String {
 /// `CoreCatalog.IsGameBoyColor`'s reading: the file's own extension, and its byte at 0x143 where it is longer.
 fn shelved_as_color(at: &str) -> bool {
     let byte = head_of(at, 0x144).ok().filter(|h| h.len() > 0x143).map(|h| h[0x143]);
-    emusen_systems::gb::shelved_as_color(path::extension(Style::HOST, at), byte)
+    emusen_systems::gb::shelved_as_color(&Path::new(at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default(), byte)
 }
 
 /// The system a file is shelved as, among the named systems: the only one taking its image's extension, else the one
@@ -117,9 +117,9 @@ pub fn route(at: &str, systems: &Systems) -> Option<String> {
         _ => {
             let claims = claims(at, &candidates, systems);
             let asked = claims.len() != 1;
-            let folder = if asked { path::directory_name(Style::HOST, &path::full_path(at)).map(|d| path::file_name(Style::HOST, &d).to_string()) } else { None };
+            let folder = if asked { path_key::key(at).parent().map(|d| d.file_name().unwrap_or_default().to_string_lossy().into_owned()) } else { None };
             let named: Vec<Candidate> = candidates.iter().map(|s| Candidate { id: &s.id, name: &s.name, esde_system: &s.esde_system }).collect();
-            probe::route(path::file_name(Style::HOST, at), folder.as_deref(), &named, &claims).system
+            probe::route(&Path::new(at).file_name().unwrap_or_default().to_string_lossy(), folder.as_deref(), &named, &claims).system
         }
     };
     match chosen.as_deref() {
@@ -133,7 +133,7 @@ pub fn route(at: &str, systems: &Systems) -> Option<String> {
 /// The system a package's manifest names, among the named systems: the one of its ES-DE name, else of its id.
 fn system_named(manifest: &str, systems: &Systems) -> Option<String> {
     let by = |f: &dyn Fn(&emusen_systems::System) -> bool| systems.entries.iter().find(|s| f(s)).map(|s| s.id.clone());
-    by(&|s| equals_ignore_case(&s.esde_system, manifest)).or_else(|| by(&|s| equals_ignore_case(&s.id, manifest)))
+    by(&|s| s.esde_system.eq_ignore_ascii_case(&manifest)).or_else(|| by(&|s| s.id.eq_ignore_ascii_case(&manifest)))
 }
 
 /// Walks the roots, keeping what was found in a `Scan`; `progress` is updated as it goes and asked whether to stop.
@@ -148,30 +148,30 @@ pub fn scan(roots: &[String], ids: &[String], progress: &Progress) -> Result<Sca
 pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &Progress) -> Result<Scan, Error> {
     let systems = Systems::named(ids);
     let extensions = systems.extensions();
-    let given: Vec<String> = roots.iter().filter(|r| !emusen_dotnet::text::is_blank(Some(r))).cloned().collect();
+    let given: Vec<String> = roots.iter().filter(|r| !r.trim().is_empty()).cloned().collect();
     let mut scan = Scan { outcome: Outcome::NoDirectory, roots: given.clone(), systems: ids.to_vec(), games: Vec::new() };
     if given.is_empty() {
         return Ok(scan);
     }
-    let options = dotnet_files::Options { skip_hidden: true, ignore_inaccessible: true };
+    let options = files::Options { skip_hidden: true, ignore_inaccessible: true };
     let mut missing = false;
     let mut found: Vec<String> = Vec::new();
     progress.phase.store(1, Ordering::Relaxed);
     for root in &given {
-        if !dotnet_files::directory_exists(root) {
+        if !files::directory_exists(root) {
             missing = true;
             continue;
         }
         let mut files = Vec::new();
         let mut stopped = false;
-        let walked = dotnet_files::visit_files_with(root, options, |at, _| {
+        let walked = files::visit_files_with(root, options, |at, _| {
             if stopped || progress.cancelled() {
                 stopped = true;
                 return;
             }
             progress.files.fetch_add(1, Ordering::Relaxed);
-            if extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, at))) {
-                files.push(at.to_string());
+            if extensions.iter().any(|e| e.eq_ignore_ascii_case(&Path::new(at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default())) {
+                files.push(at.to_string_lossy().into_owned());
             }
         });
         if stopped {
@@ -182,13 +182,13 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
             Err(_) => missing = true,
         }
     }
-    let index = beside.packages.as_deref().filter(|p| dotnet_files::directory_exists(p)).map(|packages| {
+    let index = beside.packages.as_deref().filter(|p| files::directory_exists(p)).map(|packages| {
         let compressed = beside.compressed.clone().unwrap_or_default();
-        for folder in [packages, compressed.as_str()].into_iter().filter(|f| dotnet_files::directory_exists(f)) {
+        for folder in [packages, compressed.as_str()].into_iter().filter(|f| files::directory_exists(f)) {
             let mut files = Vec::new();
-            let _ = dotnet_files::visit_files_with(folder, options, |at, _| {
-                if extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, at))) {
-                    files.push(at.to_string());
+            let _ = files::visit_files_with(folder, options, |at, _| {
+                if extensions.iter().any(|e| e.eq_ignore_ascii_case(&Path::new(at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default())) {
+                    files.push(at.to_string_lossy().into_owned());
                 }
             });
             found.extend(image_sets::shelved(files));
@@ -197,18 +197,18 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
     });
     if let Some(index) = &index {
         found.retain(|at| {
-            let full = path::full_path(at);
+            let full = path_key::key_text(at);
             let zip_of_folder = archive::is_archive(&full) && index.folders.iter().any(|f| package_zip::zip_beside(f) == full);
             !index.inside_package(&full) && index.claimant(&full).is_none() && !zip_of_folder
         });
     }
-    let packages_root = beside.packages.as_deref().map(path::full_path);
+    let packages_root = beside.packages.as_deref().map(path_key::key_text);
     progress.phase.store(2, Ordering::Relaxed);
     for at in found {
         if progress.cancelled() {
             return Err(Error::Cancelled);
         }
-        let zipped = packages_root.as_deref().filter(|p| archive::is_archive(&at) && claims::within(&path::full_path(&at), p)).and_then(|_| package_zip::manifest_in(&at).ok().flatten());
+        let zipped = packages_root.as_deref().filter(|p| archive::is_archive(&at) && claims::within(&path_key::key_text(&at), p)).and_then(|_| package_zip::manifest_in(&at).ok().flatten());
         let system = match zipped {
             Some((_, doc)) => doc.get("system").and_then(|v| v.as_str()).and_then(|s| system_named(s, &systems)),
             None => route(&at, &systems),
@@ -216,12 +216,12 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: at, system, package: None });
     }
-    for p in index.iter().flat_map(|i| i.packages.iter()).filter(|p| dotnet_files::file_exists(&p.game)) {
+    for p in index.iter().flat_map(|i| i.packages.iter()).filter(|p| files::file_exists(&p.game)) {
         let system = system_named(&p.system, &systems).or_else(|| route(&p.game, &systems));
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: p.game.clone(), system, package: Some(p.folder.clone()) });
     }
-    scan.games.sort_by(|a, b| compare_ignore_case(path::file_name_without_extension(Style::HOST, &a.path), path::file_name_without_extension(Style::HOST, &b.path)));
+    scan.games.sort_by(|a, b| Path::new(&a.path).file_stem().unwrap_or_default().to_string_lossy().to_uppercase().cmp(&Path::new(&b.path).file_stem().unwrap_or_default().to_string_lossy().to_uppercase()));
     scan.outcome = if missing { Outcome::NotFound } else if scan.games.is_empty() { Outcome::Empty } else { Outcome::Ok };
     if missing && given.len() == 1 {
         scan.games.clear();

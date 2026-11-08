@@ -9,7 +9,7 @@
 
 use crate::endymion::{hand_over, take};
 use crate::{fail, required, status, text};
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_serenity::cache::{self, Cache};
 use emusen_serenity::compiler::{Shaderc, Stage};
 use emusen_serenity::preset::{self, Preset, ScaleType, Wrap};
@@ -32,7 +32,7 @@ thread_local! {
 pub(crate) fn leave(document: Option<&Value>) {
     let mut text = String::new();
     if let Some(document) = document {
-        json::write_compact(&mut text, document);
+        text.push_str(&serde_json::to_string(document).expect("a value is JSON"));
     }
     PENDING.with_borrow_mut(|pending| *pending = text.into_bytes());
 }
@@ -47,7 +47,7 @@ pub(crate) fn shaderc() -> Result<Arc<Shaderc>, i32> {
     if let Some(shaderc) = SHADERC.get() {
         return Ok(shaderc.clone());
     }
-    let found = Shaderc::find(&emusen_galaxia::tree::base_directory()).map_err(|words| fail(status::NOT_SUPPORTED, words))?;
+    let found = Shaderc::find(&emusen_galaxia::tree::base_directory().to_string_lossy()).map_err(|words| fail(status::NOT_SUPPORTED, words))?;
     Ok(SHADERC.get_or_init(|| Arc::new(found)).clone())
 }
 
@@ -58,29 +58,29 @@ pub(crate) unsafe fn out_bytes(bytes: Vec<u8>, out: *mut u8, cap: usize) -> i64 
 
 pub(crate) unsafe fn out_json(value: &Value, out: *mut u8, cap: usize) -> i64 {
     let mut text = String::new();
-    json::write_compact(&mut text, value);
+    text.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     unsafe { out_bytes(text.into_bytes(), out, cap) }
 }
 
 pub(crate) fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(name, value)| (json::Text::new(name), value)).collect())
+    Value::Object(members.into_iter().map(|(name, value)| (String::from(name), value)).collect())
 }
 
 fn optional(text: &Option<String>) -> Value {
-    text.as_ref().map_or(Value::Null, Value::string)
+    text.as_ref().map_or(Value::Null, |s| Value::String(String::from(s)))
 }
 
 pub(crate) fn bits(value: f32) -> Value {
-    Value::number(value.to_bits())
+    Value::from(value.to_bits())
 }
 
 /// A reader's failure, as the exception the C# throws for it.
 pub(crate) fn failure(error: &Error) -> Value {
     match error {
-        Error::NotFound { message, file } => object(vec![("fail", Value::string("not_found")), ("message", Value::string(message)), ("file", Value::string(file))]),
-        Error::InvalidData(message) => object(vec![("fail", Value::string("invalid_data")), ("message", Value::string(message))]),
-        Error::Argument { message, parameter } => object(vec![("fail", Value::string("argument")), ("message", Value::string(message)), ("parameter", Value::string(parameter))]),
-        Error::Io { message, denied } => object(vec![("fail", Value::string(if *denied { "denied" } else { "io" })), ("message", Value::string(message))]),
+        Error::NotFound { message, file } => object(vec![("fail", Value::String(String::from("not_found"))), ("message", Value::String(String::from(message))), ("file", Value::String(String::from(file)))]),
+        Error::InvalidData(message) => object(vec![("fail", Value::String(String::from("invalid_data"))), ("message", Value::String(String::from(message)))]),
+        Error::Argument { message, parameter } => object(vec![("fail", Value::String(String::from("argument"))), ("message", Value::String(String::from(message))), ("parameter", Value::String(String::from(parameter)))]),
+        Error::Io { message, denied } => object(vec![("fail", Value::String(String::from(if *denied { "denied" } else { "io" }))), ("message", Value::String(String::from(message)))]),
     }
 }
 
@@ -147,7 +147,7 @@ pub unsafe extern "C" fn emusen_serenity_compiler_identity(out: *mut u8, cap: us
 }
 
 fn wrap(wrap: Wrap) -> Value {
-    Value::number(match wrap {
+    Value::from(match wrap {
         Wrap::ClampToBorder => 0,
         Wrap::ClampToEdge => 1,
         Wrap::Repeat => 2,
@@ -156,7 +156,7 @@ fn wrap(wrap: Wrap) -> Value {
 }
 
 fn scale_type(kind: ScaleType) -> Value {
-    Value::number(match kind {
+    Value::from(match kind {
         ScaleType::Source => 0,
         ScaleType::Viewport => 1,
         ScaleType::Absolute => 2,
@@ -165,7 +165,7 @@ fn scale_type(kind: ScaleType) -> Value {
 
 fn preset_json(preset: &Preset) -> Value {
     object(vec![
-        ("path", Value::string(&preset.path)),
+        ("path", Value::String(String::from(&preset.path))),
         (
             "passes",
             Value::Array(
@@ -174,7 +174,7 @@ fn preset_json(preset: &Preset) -> Value {
                     .iter()
                     .map(|pass| {
                         object(vec![
-                            ("shader", Value::string(&pass.shader_path)),
+                            ("shader", Value::String(String::from(&pass.shader_path))),
                             ("alias", optional(&pass.alias)),
                             ("linear", Value::Bool(pass.filter_linear)),
                             ("wrap", wrap(pass.wrap)),
@@ -185,7 +185,7 @@ fn preset_json(preset: &Preset) -> Value {
                             ("float", Value::Bool(pass.float_framebuffer)),
                             ("srgb", Value::Bool(pass.srgb_framebuffer)),
                             ("mipmap", Value::Bool(pass.mipmap_input)),
-                            ("mod", Value::number(pass.frame_count_mod)),
+                            ("mod", Value::from(pass.frame_count_mod)),
                         ])
                     })
                     .collect(),
@@ -199,8 +199,8 @@ fn preset_json(preset: &Preset) -> Value {
                     .iter()
                     .map(|texture| {
                         object(vec![
-                            ("name", Value::string(&texture.name)),
-                            ("path", Value::string(&texture.path)),
+                            ("name", Value::String(String::from(&texture.name))),
+                            ("path", Value::String(String::from(&texture.path))),
                             ("linear", Value::Bool(texture.linear)),
                             ("wrap", wrap(texture.wrap)),
                             ("mipmap", Value::Bool(texture.mipmap)),
@@ -209,7 +209,7 @@ fn preset_json(preset: &Preset) -> Value {
                     .collect(),
             ),
         ),
-        ("parameters", Value::Array(preset.parameters.iter().map(|(key, value)| Value::Array(vec![Value::string(key), bits(*value)])).collect())),
+        ("parameters", Value::Array(preset.parameters.iter().map(|(key, value)| Value::Array(vec![Value::String(String::from(key)), bits(*value)])).collect())),
     ])
 }
 
@@ -232,8 +232,8 @@ pub unsafe extern "C" fn emusen_serenity_preset_load(path: *const u8, len: usize
 
 pub(crate) fn parameter_json(parameter: &Parameter) -> Value {
     object(vec![
-        ("id", Value::string(&parameter.id)),
-        ("description", Value::string(&parameter.description)),
+        ("id", Value::String(String::from(&parameter.id))),
+        ("description", Value::String(String::from(&parameter.description))),
         ("initial", bits(parameter.initial)),
         ("minimum", bits(parameter.minimum)),
         ("maximum", bits(parameter.maximum)),
@@ -243,9 +243,9 @@ pub(crate) fn parameter_json(parameter: &Parameter) -> Value {
 
 fn source_json(source: &Source) -> Value {
     object(vec![
-        ("path", Value::string(&source.path)),
-        ("vertex", Value::string(&source.vertex)),
-        ("fragment", Value::string(&source.fragment)),
+        ("path", Value::String(String::from(&source.path))),
+        ("vertex", Value::String(String::from(&source.vertex))),
+        ("fragment", Value::String(String::from(&source.fragment))),
         ("name", optional(&source.pass_name)),
         ("format", optional(&source.framebuffer_format)),
         ("parameters", Value::Array(source.parameters.iter().map(parameter_json).collect())),
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn emusen_serenity_source_load(path: *const u8, len: usize
 
 pub(crate) fn number(value: Option<&Value>) -> Option<u32> {
     match value? {
-        Value::Number(token) => token.parse().ok(),
+        Value::Number(number) => number.as_u64().and_then(|n| u32::try_from(n).ok()),
         _ => None,
     }
 }
@@ -291,7 +291,7 @@ pub(crate) fn parameter_of(value: &Value) -> Option<Parameter> {
 /// # Safety
 /// `data` valid for `len` bytes.
 pub(crate) unsafe fn document(data: *const u8, len: usize) -> Result<Value, i32> {
-    json::parse(unsafe { required(data, len) }?).map_err(|error| fail(status::PARSE, error.to_string()))
+    serde_json::from_str::<Value>(unsafe { required(data, len) }?).map_err(|error| fail(status::PARSE, error.to_string()))
 }
 
 pub(crate) fn list(value: Option<&Value>) -> Option<&Vec<Value>> {
@@ -359,9 +359,9 @@ fn block_json(block: &Option<Block>) -> Value {
     match block {
         None => Value::Null,
         Some(block) => object(vec![
-            ("binding", Value::number(block.binding)),
-            ("size", Value::number(block.size)),
-            ("members", Value::Array(block.members.iter().map(|m| object(vec![("name", Value::string(&m.name)), ("offset", Value::number(m.offset)), ("size", Value::number(m.size))])).collect())),
+            ("binding", Value::from(block.binding)),
+            ("size", Value::from(block.size)),
+            ("members", Value::Array(block.members.iter().map(|m| object(vec![("name", Value::String(String::from(&m.name))), ("offset", Value::from(m.offset)), ("size", Value::from(m.size))])).collect())),
         ]),
     }
 }
@@ -370,7 +370,7 @@ fn reflection_json(reflection: &Reflection) -> Value {
     object(vec![
         ("uniforms", block_json(&reflection.uniforms)),
         ("push", block_json(&reflection.push_constants)),
-        ("samplers", Value::Array(reflection.samplers.iter().map(|s| object(vec![("name", Value::string(&s.name)), ("binding", Value::number(s.binding))])).collect())),
+        ("samplers", Value::Array(reflection.samplers.iter().map(|s| object(vec![("name", Value::String(String::from(&s.name))), ("binding", Value::from(s.binding))])).collect())),
     ])
 }
 
@@ -381,7 +381,7 @@ pub(crate) fn fault_json(fault: &Fault) -> Value {
         Fault::ArgumentOutOfRange => ("range", "an entry point's name runs to its end"),
         Fault::Endless => ("endless", "a type holds itself"),
     };
-    object(vec![("fail", Value::string(kind)), ("message", Value::string(message))])
+    object(vec![("fail", Value::String(String::from(kind))), ("message", Value::String(String::from(message)))])
 }
 
 /// # Safety
@@ -653,15 +653,15 @@ mod tests {
             samplers: vec![Sampler { name: "Source".into(), binding: 2 }],
         };
         let mut text = String::new();
-        json::write_compact(&mut text, &reflection_json(&reflection));
-        assert_eq!(reflection_of(Some(&json::parse(&text).unwrap())), Some(reflection));
+        text.push_str(&serde_json::to_string(&reflection_json(&reflection)).expect("a value is JSON"));
+        assert_eq!(reflection_of(Some(&serde_json::from_str::<Value>(&text).unwrap())), Some(reflection));
         let mut text = String::new();
-        json::write_compact(&mut text, &failure(&Error::NotFound { message: "The preset /x does not exist.".into(), file: "/x".into() }));
+        text.push_str(&serde_json::to_string(&failure(&Error::NotFound { message: "The preset /x does not exist.".into(), file: "/x".into() })).expect("a value is JSON"));
         assert_eq!(text, r#"{"fail":"not_found","message":"The preset /x does not exist.","file":"/x"}"#);
         let parameter = Parameter { id: "a".into(), description: "d".into(), initial: f32::from_bits(0xFFC0_0000), minimum: f32::NEG_INFINITY, maximum: 1.5, step: -0.0 };
         let mut text = String::new();
-        json::write_compact(&mut text, &parameter_json(&parameter));
-        let back = parameter_of(&json::parse(&text).unwrap()).unwrap();
+        text.push_str(&serde_json::to_string(&parameter_json(&parameter)).expect("a value is JSON"));
+        let back = parameter_of(&serde_json::from_str::<Value>(&text).unwrap()).unwrap();
         assert_eq!((back.initial.to_bits(), back.minimum, back.maximum, back.step.to_bits()), (0xFFC0_0000, f32::NEG_INFINITY, 1.5, 0x8000_0000));
     }
 

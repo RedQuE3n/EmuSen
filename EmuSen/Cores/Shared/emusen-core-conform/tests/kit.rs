@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use emusen_core_conform::{Options, Script, corpus, digest, run, sidecar};
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 /// The examples cargo built beside this test.
 fn library(name: &str) -> PathBuf {
@@ -204,7 +204,7 @@ fn an_accepted_malformed_image_passes_only_where_the_format_is_open() {
 #[test]
 fn a_report_says_what_was_run_and_a_missing_library_fails_c1() {
     let report = run(&library("kit_test_core"), &options());
-    let v = json::parse(report.json().as_bytes()).unwrap();
+    let v = serde_json::from_str::<Value>(&report.json()).unwrap();
     assert_eq!(v.get("passed"), Some(&Value::Bool(true)));
     assert_eq!(v.get("id").and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(25));
@@ -228,7 +228,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     std::fs::copy(library("kit_test_core"), &lib).unwrap();
     let path = sidecar::write(&lib, false).unwrap();
     assert_eq!(path, PathBuf::from(format!("{}.core.json", lib.display())));
-    let v = json::parse(&std::fs::read(&path).unwrap()).unwrap();
+    let v = serde_json::from_slice::<Value>(&std::fs::read(&path).unwrap()).unwrap();
     assert_eq!(v.get("sidecar").and_then(Value::as_i64), Some(1));
     assert_eq!(v.get("library").and_then(Value::as_str), lib.file_name().and_then(|n| n.to_str()));
     assert_eq!(v.get("sha256").and_then(Value::as_str), Some(digest::sha256_hex(&std::fs::read(&lib).unwrap()).as_str()));
@@ -237,7 +237,7 @@ fn a_sidecar_carries_the_librarys_own_descriptors_and_hash() {
     assert_eq!(v.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     assert_eq!(v.get("settings").and_then(Value::as_array).map(|a| a.len()), Some(4));
     assert!(v.get("development").is_none());
-    let marked = json::parse(&std::fs::read(sidecar::write(&lib, true).unwrap()).unwrap()).unwrap();
+    let marked = serde_json::from_slice::<Value>(&std::fs::read(sidecar::write(&lib, true).unwrap()).unwrap()).unwrap();
     assert_eq!(marked.get("development").map(|d| matches!(d, Value::Bool(true))), Some(true));
     assert_eq!(marked.get("info").and_then(|i| i.get("id")).and_then(Value::as_str), Some("v1-test-core"));
     std::fs::remove_dir_all(&dir).unwrap();
@@ -399,7 +399,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
         }
         let out = command.output().unwrap();
         let text = String::from_utf8_lossy(&out.stdout);
-        let summary = json::parse(&std::fs::read(reports.join("summary.json")).unwrap()).unwrap();
+        let summary = serde_json::from_slice::<Value>(&std::fs::read(reports.join("summary.json")).unwrap()).unwrap();
         let images_listed = summary.get("images").and_then(Value::as_array).unwrap();
         assert_eq!(images_listed.len(), count, "{text}");
         // The directory holds the list file too, which is no image of the format: refused, so its C4 passes and C6 fails.
@@ -409,7 +409,7 @@ fn the_runner_takes_a_directory_or_a_list_and_writes_a_report_for_each_image() {
         assert_eq!(summary.get("core").and_then(|c| c.get("cases")).and_then(Value::as_array).map(|a| a.len()), Some(14));
         for i in images_listed {
             let file = i.get("report").and_then(Value::as_str).unwrap();
-            let report = json::parse(&std::fs::read(reports.join(file)).unwrap()).unwrap();
+            let report = serde_json::from_slice::<Value>(&std::fs::read(reports.join(file)).unwrap()).unwrap();
             assert_eq!(report.get("image"), i.get("image"));
             assert_eq!(report.get("cases").and_then(Value::as_array).map(|a| a.len()), Some(12), "the five image cases, C16, MEDIA being claimed, C17, C18, C19, C20, C21 and C24");
         }
@@ -429,7 +429,7 @@ fn a_single_image_report_is_as_it_was() {
     assert!(report.image.is_none());
     assert!(!report.json().contains("\"image\":\"image"));
     assert!(report.json().starts_with("{\"kit\":\"emusen-core-conform "));
-    assert!(report.json().contains("\"library\":") && !json::parse(report.json().as_bytes()).unwrap().get("image").is_some());
+    assert!(report.json().contains("\"library\":") && !serde_json::from_str::<Value>(&report.json()).unwrap().get("image").is_some());
 }
 
 /// The runner on `core` with the faults `mask` leaves on, over `frames`: the cases failed, and its output.

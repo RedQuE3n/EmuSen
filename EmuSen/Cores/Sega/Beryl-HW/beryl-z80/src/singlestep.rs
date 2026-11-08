@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use emusen_native::json::Value;
+use serde_json::Value;
 use emusen_singlestep::{FileReport, Outcome, default_threads, first_mismatch, run_cases};
 
 use crate::{Bus, Registers, Z80};
@@ -214,7 +214,6 @@ pub fn run_suite(files: &[PathBuf], limit: Option<usize>, processor: fn(&Value, 
 
 #[cfg(test)]
 mod tests {
-    use emusen_native::json;
     use emusen_singlestep::{print_misses, total};
 
     use super::*;
@@ -232,7 +231,7 @@ mod tests {
 
     #[test]
     fn the_replay_passes_and_spoiled_replays_fail_on_the_inline_case() {
-        let c = json::parse(CASE.as_bytes()).unwrap();
+        let c = serde_json::from_str::<Value>(&CASE).unwrap();
         let o = grade(&c, &mut replay);
         assert!(o.passed(), "{:?}", o.first_difference);
         let carry = grade(&c, &mut |c, b| {

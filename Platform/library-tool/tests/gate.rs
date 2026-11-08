@@ -4,7 +4,7 @@
 //! `EMUSEN_CHDMAN` naming the pinned binary; without it they are skipped and say so.
 
 use emusen_disc::ecma130::{self, RAW};
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::Tree;
 use emusen_library_tool::job::{self, Job};
@@ -153,7 +153,7 @@ fn listing(root: &Path) -> Vec<(String, u64, std::time::SystemTime, String)> {
             if meta.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p).unwrap()));
             }
         }
     }
@@ -162,7 +162,7 @@ fn listing(root: &Path) -> Vec<(String, u64, std::time::SystemTime, String)> {
 }
 
 fn context(temp: &Temp, chdman: &str, pinned: Option<String>) -> Context {
-    let tree = Tree { root: temp.at("root").to_string_lossy().into_owned(), data_override: Some(temp.at("home").to_string_lossy().into_owned()), ..Tree::default() };
+    let tree = Tree { root: temp.at("root").to_path_buf(), data_override: Some(temp.at("home").to_path_buf()), ..Tree::default() };
     let pin = pinned.or_else(|| rom_hash_sha256(chdman));
     Context { tree, library: Some(temp.at("library").to_string_lossy().into_owned()), chdman: chdman.to_string(), pin, release: "0.289".into(), state_folder: None, sqlite: None, output: None }
 }
@@ -176,7 +176,7 @@ fn events(job: &Job) -> Vec<Value> {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(200)) {
             job.take();
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     out
@@ -191,7 +191,7 @@ fn state_of<'a>(events: &'a [Value], source: &str) -> &'a str {
 }
 
 fn summary(events: &[Value]) -> String {
-    events.iter().map(|e| { let mut l = String::new(); json::write_compact(&mut l, e); l }).collect::<Vec<_>>().join("\n")
+    events.iter().map(|e| { let mut l = String::new(); l.push_str(&serde_json::to_string(e).expect("a value is JSON")); l }).collect::<Vec<_>>().join("\n")
 }
 
 fn chdman() -> Option<String> {
@@ -233,7 +233,7 @@ fn generated_sheets_round_trip_through_all_three_checks_and_the_library_is_uncha
     let listed = run(&ctx, r#"{"op": "ls"}"#);
     let two = listed.iter().find(|e| e.get("source").and_then(Value::as_str) == Some("psx/Two/Two.cue")).unwrap();
     let whole = ["psx/Two/Two.cue", "psx/Two/Two (Track 1).bin", "psx/Two/Two (Track 2).bin"].iter().map(|f| std::fs::metadata(temp.at("library").join(f)).unwrap().len()).sum::<u64>();
-    assert_eq!(two.get("size").and_then(|s| if let Value::Number(n) = s { n.parse::<u64>().ok() } else { None }), Some(whole), "ls gives a sheet's disc its whole size");
+    assert_eq!(two.get("size").and_then(Value::as_u64), Some(whole), "ls gives a sheet's disc its whole size");
     let checked = run(&ctx, r#"{"op": "check"}"#);
     for source in SOURCES {
         assert_eq!(state_of(&listed, source), "converted", "{source}");
@@ -349,7 +349,7 @@ fn a_stopped_batch_resumes_and_finishes_leaving_no_partial() {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(100)) {
             job.take();
-            let e = json::parse(&line).unwrap();
+            let e = serde_json::from_str::<Value>(&line).unwrap();
             if e.get("state").and_then(Value::as_str) == Some("converted") {
                 job.stop();
             }
@@ -434,8 +434,8 @@ fn a_converted_disc_made_self_contained_holds_its_chd_and_its_zip_stores_it() {
     let index = emusen_galaxia::claims::index(&ctx.places().roots());
     let claimant = index.claimant(&compressed.to_string_lossy()).map(|p| p.folder.clone());
     assert_eq!(claimant.as_deref(), Some(package.to_string_lossy().as_ref()), "the CHD in Compressed is the package's source");
-    let entries = emusen_galaxia::archive::entries_of(&temp.at("home/Packages/PlayStation/Two/Two.chd.zip").to_string_lossy()).unwrap();
-    assert_eq!(entries.iter().find(|e| e.full_name == "Two.chd/Two.chd").map(|e| e.method), Some(0), "a CHD is stored, never compressed again");
+    let entries = emusen_galaxia::archive::entries_of(temp.at("home/Packages/PlayStation/Two/Two.chd.zip")).unwrap();
+    assert_eq!(entries.iter().find(|e| e.full_name == "Two.chd/Two.chd").map(|e| e.stored), Some(true), "a CHD is stored, never compressed again");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "ls", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "converted");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "convert", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "already");
@@ -503,7 +503,7 @@ fn beside_the_original_adds_only_the_chd_and_never_replaces_a_file() {
     let ctx = context(&temp, &chdman, None);
     let got = run(&ctx, r#"{"op": "convert", "paths": ["psx/Two", "psx/One.cue", "psx/Noise"], "beside": true}"#);
     let start = got.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("start")).unwrap();
-    assert_eq!((start.get("beside"), start.get("adds")), (Some(&Value::Bool(true)), Some(&Value::number(2))), "{}", summary(&got));
+    assert_eq!((start.get("beside"), start.get("adds")), (Some(&Value::Bool(true)), Some(&Value::from(2))), "{}", summary(&got));
     assert_eq!(state_of(&got, "psx/Two/Two.cue"), "converted", "{}", summary(&got));
     assert_eq!(state_of(&got, "psx/One.cue"), "skipped");
     assert_eq!(state_of(&got, "psx/Noise/Noise.cue"), "failed", "{}", summary(&got));
@@ -558,7 +558,7 @@ fn ps2_library(root: &Path) {
 
 fn number_of(e: &Value, name: &str) -> Option<u64> {
     match e.get(name)? {
-        Value::Number(n) => n.parse().ok(),
+        Value::Number(n) => n.as_u64(),
         _ => None,
     }
 }
@@ -670,10 +670,10 @@ fn rerecord(tool: &emusen_library_tool::chdman::Chdman, manifest: &Path, chd: &P
         for (name, value) in members.iter_mut() {
             let Value::Object(inner) = value else { continue };
             for (field, v) in inner.iter_mut() {
-                match (name.text.as_str(), field.text.as_str()) {
-                    ("game", "size") => *v = Value::number(seen.size),
-                    ("game", "seen") => *v = emusen_library_tool::convert::obj(vec![("size", Value::number(seen.size)), ("mtime", Value::string(&emusen_library_tool::convert::utc(seen.modified)))]),
-                    ("container", "sha1") => *v = Value::string(&sha1),
+                match (name.as_str(), field.as_str()) {
+                    ("game", "size") => *v = Value::from(seen.size),
+                    ("game", "seen") => *v = emusen_library_tool::convert::obj(vec![("size", Value::from(seen.size)), ("mtime", Value::String(String::from(&emusen_library_tool::convert::utc(seen.modified))))]),
+                    ("container", "sha1") => *v = Value::String(String::from(&sha1)),
                     _ => {}
                 }
             }

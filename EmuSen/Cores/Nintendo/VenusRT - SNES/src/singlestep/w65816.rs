@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use emusen_native::json::Value;
+use serde_json::Value;
 
 use super::{FileReport, Outcome, int, ram, run_cases};
 
@@ -345,14 +345,13 @@ impl Cpu for Replay {
 mod tests {
     use super::super::{read_cases, run_suite, suite_dir, suite_files, summary, threads};
     use super::*;
-    use emusen_native::json;
 
     const CASE: &[u8] = br#"{"name": "95 n 1", "initial": {"pc": 100, "s": 511, "p": 4, "a": 4660, "x": 2, "y": 0, "dbr": 0, "d": 16, "pbr": 1, "e": 0, "ram": [[65636, 149], [65637, 32]]},
         "final": {"pc": 102, "s": 511, "p": 4, "a": 4660, "x": 2, "y": 0, "dbr": 0, "d": 16, "pbr": 1, "e": 0, "ram": [[65636, 149], [65637, 32], [50, 52], [51, 18]]},
         "cycles": [[65636, 149, "dp-r----"], [65637, 32, "-p-r----"], [65637, null, "---r----"], [50, 52, "d--w----"], [51, 18, "d--w----"]]}"#;
 
     fn outcome(spoil: Spoil) -> Outcome {
-        let want = Expected::from_json(&json::parse(CASE).unwrap());
+        let want = Expected::from_json(&serde_json::from_slice::<Value>(CASE).unwrap());
         run_case(&mut Replay::new(&want, spoil), &mut FlatBus::default(), &want)
     }
 

@@ -1,9 +1,9 @@
 //! The shell's `/`: Galaxia's home, and paths resolved chroot-style inside it, as `DianaShSandbox.TryResolve`
 //! resolves them. A walled garden, not a security boundary: see `man hier` and EmuSen_DianaSh.md §12.1.
 
-use crate::dotnet;
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::path_key;
 use emusen_galaxia::tree;
+use std::path::Path;
 
 /// Where `/` is: the host's root when it named one, else Galaxia's home, read on every call so that a moved override takes effect at once.
 #[derive(Clone, Debug, Default)]
@@ -13,7 +13,7 @@ pub struct Sandbox {
 
 impl Sandbox {
     pub fn root(&self) -> String {
-        self.root.clone().unwrap_or_else(|| tree::tree().home())
+        self.root.clone().unwrap_or_else(|| tree::tree().home().to_string_lossy().into_owned())
     }
 
     /// A path as the shell takes it: a leading `/` is the sandbox's root unless the path is already a real one inside it.
@@ -21,17 +21,17 @@ impl Sandbox {
         let root = self.root();
         let looks_rooted = requested.starts_with('/') || requested.starts_with('\\');
         if looks_rooted {
-            let as_is = path::full_path(requested);
+            let as_is = path_key::key_text(requested);
             if self.within(&as_is, &root).is_some() {
                 return (true, as_is);
             }
         }
-        let base = if looks_rooted { root.clone() } else { dotnet::current_directory() };
+        let base = if looks_rooted { root.clone() } else { std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default() };
         let mut effective = if looks_rooted { requested.trim_start_matches(['/', '\\']) } else { requested };
         if effective.is_empty() {
             effective = ".";
         }
-        let candidate = path::full_path_from(Style::HOST, effective, &base);
+        let candidate = path_key::key_from(Path::new(effective), Path::new(&base)).to_string_lossy().into_owned();
         let ok = self.within(&candidate, &root).is_some();
         (ok, candidate)
     }
@@ -60,11 +60,11 @@ impl Sandbox {
     pub fn display(&self, real: &str) -> String {
         let root = self.root();
         let Some(root) = self.within(real, &root) else { return real.to_string() };
-        if dotnet::same(real, &root) {
+        if real.eq_ignore_ascii_case(&root) {
             return "/".to_string();
         }
         let rest: String = real.chars().skip(root.chars().count() + 1).collect();
-        format!("/{}", rest.replace(Style::HOST.separator(), "/"))
+        format!("/{}", rest.replace(std::path::MAIN_SEPARATOR, "/"))
     }
 
     /// The words a path above the root is refused with.
@@ -78,9 +78,9 @@ pub const IGNORES_CASE: bool = cfg!(any(windows, target_os = "macos"));
 
 /// `IsInsideRoot`: the root itself or below it, ignoring case only where the file system does (§16 Q15).
 pub fn inside(candidate: &str, root: &str) -> bool {
-    let below = format!("{root}{}", Style::HOST.separator());
+    let below = format!("{root}{}", std::path::MAIN_SEPARATOR);
     if IGNORES_CASE {
-        dotnet::same(candidate, root) || dotnet::starts_with_ignore_case(candidate, &below)
+        candidate.eq_ignore_ascii_case(&root) || candidate.to_uppercase().starts_with(&below.to_uppercase())
     } else {
         candidate == root || candidate.starts_with(&below)
     }

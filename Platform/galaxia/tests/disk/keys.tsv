@@ -1,0 +1,9 @@
+# a path as given	the key games.db and states.db store for it
+/home/player/Roms/SNES/Game (USA).sfc	/home/player/Roms/SNES/Game (USA).sfc
+/home/player/Roms/./SNES//Game.sfc	/home/player/Roms/SNES/Game.sfc
+/home/player/Roms/SNES/../N64/Game.z64	/home/player/Roms/N64/Game.z64
+/home/player/Roms/SNES/	/home/player/Roms/SNES/
+/home/player/Roms/Jeu (France) é.md	/home/player/Roms/Jeu (France) é.md
+/a/b/../../../c	/c
+/home/player/Saves/Game.state.	/home/player/Saves/Game.state.
+//home/player	/home/player

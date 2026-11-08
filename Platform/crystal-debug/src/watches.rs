@@ -2,7 +2,6 @@
 //! (`man framelog`) and `FreezeRegistry` (`man freeze`).
 
 use crate::ordered::Ordered;
-use emusen_dotnet::text::equals_ignore_case;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -129,7 +128,7 @@ impl WatchRegistry {
             if w.kind != WatchKind::Both && w.kind != kind {
                 continue;
             }
-            if !equals_ignore_case(&w.space, space) || address < w.address || address >= w.address.wrapping_add(w.length) {
+            if !w.space.eq_ignore_ascii_case(&space) || address < w.address || address >= w.address.wrapping_add(w.length) {
                 continue;
             }
             let context = context();
@@ -248,7 +247,7 @@ impl FreezeRegistry {
 
     /// A byte pinned, or a pinned byte's value changed.
     pub fn add(&mut self, space: &str, address: i32, value: u8) -> i32 {
-        if let Some(f) = self.frozen.iter_mut().find(|f| f.address == address && equals_ignore_case(&f.space, space)) {
+        if let Some(f) = self.frozen.iter_mut().find(|f| f.address == address && f.space.eq_ignore_ascii_case(&space)) {
             f.value = value;
             return f.id;
         }

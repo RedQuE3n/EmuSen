@@ -12,14 +12,15 @@ publish.workspace = true
 name = "emusen_scrape"
 
 [dependencies]
+# ScreenScraper's and GitHub's answers read into typed structures (answer.rs, openemu.rs).
+serde.workspace = true
+serde_json.workspace = true
 # The platform's one HTTP client (SR9, §16).
 emusen-net = { path = "../net" }
 # Where a file lives, a dump's hashes and a game's folder.
 emusen-galaxia = { path = "../galaxia" }
 # What each system is: ScreenScraper's ids, ES-DE's names, the OpenVGDB rule.
 emusen-systems = { path = "../systems" }
-# .NET's text, number and JSON rules.
-emusen-dotnet = { path = "../dotnet" }
 # The SQLite the program ships, lent by the host (EmuSen_RustPlatform.md Q25).
 emusen-sqlite = { path = "../sqlite" }
 # The player's library, lent by the host: covers chosen from another game, edits, cover lookups (§30.9 Q3).

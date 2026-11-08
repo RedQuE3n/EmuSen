@@ -43,9 +43,11 @@
     <RepositoryUrl>https://github.com/RedQuE3n/EmuSen-Project</RepositoryUrl>
   </PropertyGroup>
 
-  <!-- emusen_platform, the Rust this assembly forwards to behind EMUSEN_GALAXIA_NATIVE. Built here because every
-       program references this project, so the library reaches each of them from one place. Neither a project nor a
-       package reference, so the leaf rule above stands - see EmuSen_RustPlatform.md §2.5. -->
-  <Import Project="..\Platform\Platform.targets" />
+  <!-- emusen_platform, the Rust this assembly forwards to, with nano and chdman: the build host's platform part, built
+       here because every program references this project, so the library reaches each of them from one place. Neither a
+       project nor a package reference, so the leaf rule above stands - see EmuSen_RustPlatform.md §2.5 and §28.11. -->
+  <PropertyGroup>
+    <EmuSenNativePart>platform</EmuSenNativePart>
+  </PropertyGroup>
 
 </Project>

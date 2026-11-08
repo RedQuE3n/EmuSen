@@ -14,7 +14,7 @@ pub fn game_of(name: &str) -> Option<String> {
 /// frame is no title or its text is blank.
 pub fn title_of(image: &[u8], entry: usize) -> Option<String> {
     let text = super::shift_jis::nfkc(&super::shift_jis::decode(card::title(image, entry)?));
-    let text = emusen_dotnet::text::trim(&text);
+    let text = text.trim();
     (!text.is_empty()).then(|| text.to_string())
 }
 

@@ -2,7 +2,6 @@
 //! See EmuSen_Debugging_Tools_Reference_v5.md §3.17b.
 
 use crate::ast::{PartKind, Word, WordPart};
-use crate::dotnet;
 
 /// Named as the C# `TokenType` is, since a syntax error prints the name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -280,9 +279,9 @@ impl Lexer {
             self.part(PartKind::Variable, "?".to_string(), quoted);
             return true;
         }
-        if dotnet::is_letter(self.cur()) || self.cur() == '_' {
+        if self.cur().is_alphabetic() || self.cur() == '_' {
             let start = self.pos;
-            while dotnet::is_letter_or_digit(self.cur()) || self.cur() == '_' {
+            while self.cur().is_alphanumeric() || self.cur() == '_' {
                 self.pos += 1;
             }
             let name: String = self.src[start..self.pos].iter().collect();

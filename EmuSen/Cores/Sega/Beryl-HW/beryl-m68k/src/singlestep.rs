@@ -5,7 +5,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use emusen_native::json::Value;
+use serde_json::Value;
 use emusen_singlestep::{FileReport, Outcome, default_threads, first_mismatch, run_cases};
 
 use crate::{Access, Bus, M68000, Registers, Size};
@@ -231,7 +231,6 @@ pub fn run_suite(files: &[PathBuf], offset: u32, limit: Option<usize>, processor
 
 #[cfg(test)]
 mod tests {
-    use emusen_native::json;
     use emusen_singlestep::{print_misses, read_cases, suite_files, total};
 
     use super::*;
@@ -245,14 +244,14 @@ mod tests {
 
     #[test]
     fn transactions_normalise_both_suites_forms() {
-        let c = json::parse(CASE.as_bytes()).unwrap();
+        let c = serde_json::from_str::<Value>(&CASE).unwrap();
         let t = merged(c.get("transactions").unwrap().as_array().unwrap().iter().flat_map(cycles));
         assert_eq!(t[0], Transaction::Idle(4));
         assert_eq!(t[1], Transaction::Cycle { kind: *b"r\0", function: 5, address: 2001, word: false, value: 7 });
         assert_eq!(t[3], Transaction::Cycle { kind: *b"r\0", function: 5, address: 2000, word: false, value: 7 });
-        let tomharte = json::parse(br#"["r", 4, 5, 2001, ".b", 7]"#).unwrap();
+        let tomharte = serde_json::from_slice::<Value>(br#"["r", 4, 5, 2001, ".b", 7]"#).unwrap();
         assert_eq!(transaction(&tomharte), t[1]);
-        let tas = json::parse(br#"["t", 10, 5, 2001, ".b", 9]"#).unwrap();
+        let tas = serde_json::from_slice::<Value>(br#"["t", 10, 5, 2001, ".b", 9]"#).unwrap();
         assert_eq!(cycles(&tas).len(), 3);
         let r = registers(c.get("initial").unwrap(), 4);
         assert_eq!((r.a[7], r.other_sp, r.ssp(), r.usp(), r.pc), (32, 16, 32, 16, 1020));
@@ -260,7 +259,7 @@ mod tests {
 
     #[test]
     fn the_replay_passes_and_a_spoiled_replay_fails_on_the_inline_case() {
-        let c = json::parse(CASE.as_bytes()).unwrap();
+        let c = serde_json::from_str::<Value>(&CASE).unwrap();
         assert!(grade(&c, 4, &mut replay).passed());
         let o = grade(&c, 4, &mut |c, f, b| {
             let mut r = replay(c, f, b);

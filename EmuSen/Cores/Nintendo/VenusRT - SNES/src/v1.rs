@@ -800,7 +800,7 @@ mod tests {
             let list = <Machine as Core>::firmware_for(&dsp_cartridge(title, 0x03));
             assert!(list.iter().all(|f| !f.required && f.replacement.is_some()));
             let doc = emusen_native::core::desc::firmware_json(&list);
-            assert_eq!(emusen_native::core::schema::validate(emusen_native::core::schema::FIRMWARE, &doc), Vec::<String>::new());
+            assert_eq!(emusen_core_schema::validate(emusen_native::core::schema::FIRMWARE, &doc), Vec::<String>::new());
         }
         assert!(matches!(<Machine as Core>::firmware_for(&dsp_cartridge(b"TOP GEAR 3000", 0x03))[1].replacement, Some(Replacement::Accuracy { .. })));
         assert!(<Machine as Core>::info().systems[0].firmware.iter().all(|f| !f.required && f.replacement.is_some()));

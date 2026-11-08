@@ -4,11 +4,11 @@
 //! split form whole from that folder, then the folder's files of the declared size by their MD5 when the request lists
 //! checksums (EmuSen_Firmware.md §7); size is the only test of a named file. An install writes into home/Firmware alone.
 
-use emusen_dotnet::json::{self, Value};
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
+use serde_json::Value;
 use emusen_galaxia::setting_folders::{self, FolderValue};
 use emusen_galaxia::rom_hash;
-use emusen_galaxia::tree::file_exists;
+use emusen_galaxia::files::file_exists;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -154,7 +154,7 @@ fn by_content(request: &Request, folder: &str) -> Option<(String, String)> {
     let candidates: Vec<(String, String, String)> = names
         .into_iter()
         .filter_map(|name| {
-            let file = path::combine(Style::HOST, folder, &name);
+            let file = Path::new(folder).join(&name).to_string_lossy().into_owned();
             let n = length(&file).filter(|&n| n == request.size as u64)?;
             let digest = md5_of(&file, n)?;
             Some((name, file, digest))
@@ -166,12 +166,12 @@ fn by_content(request: &Request, folder: &str) -> Option<(String, String)> {
 fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec<String>, Vec<T::Part>, bool)> {
     for folder in folders {
         for name in std::iter::once(&request.file).chain(&request.alternates) {
-            if let Some(part) = T::exact(&path::combine(Style::HOST, folder, name), request.size) {
+            if let Some(part) = T::exact(&Path::new(folder).join(name).to_string_lossy().into_owned(), request.size) {
                 return Some((folder.clone(), vec![name.clone()], vec![part], false));
             }
         }
         for form in request.parts.iter().filter(|f| f.len() >= 2) {
-            let parts: Option<Vec<T::Part>> = form.iter().map(|name| T::any(&path::combine(Style::HOST, folder, name))).collect();
+            let parts: Option<Vec<T::Part>> = form.iter().map(|name| T::any(&Path::new(folder).join(name).to_string_lossy().into_owned())).collect();
             let Some(parts) = parts else { continue };
             if request.size > 0 && parts.iter().map(T::len).sum::<u64>() != request.size as u64 {
                 continue;
@@ -199,20 +199,20 @@ pub fn locate(request: &Request, folders: &[String]) -> Option<Located> {
 
 /// The first folder holding a file of the canonical name and the wrong size, for the overview's note.
 pub fn wrong_size_in(request: &Request, folders: &[String]) -> Option<String> {
-    folders.iter().find(|f| length(&path::combine(Style::HOST, f, &request.file)).is_some_and(|n| n != request.size as u64)).cloned()
+    folders.iter().find(|f| length(&Path::new(f).join(&request.file).to_string_lossy().into_owned()).is_some_and(|n| n != request.size as u64)).cloned()
 }
 
 /// `FirmwareLibrary.PathFor`: where an install writes.
 pub fn path_for(request: &Request, store: &str) -> String {
-    path::combine(Style::HOST, store, &request.file)
+    Path::new(store).join(&request.file).to_string_lossy().into_owned()
 }
 
 /// `FirmwareLibrary.Install`: the picked file copied into the store under the canonical name when its size is right;
 /// false without words when it is not, the words when the folder or the file could not be written.
 pub fn install(request: &Request, source: &str, store: &str) -> Result<bool, String> {
     let Some(bytes) = Bytes::exact(source, request.size) else { return Ok(false) };
-    std::fs::create_dir_all(store).map_err(|e| emusen_dotnet::file::io_message(&e, store))?;
-    emusen_dotnet::file::write_all_bytes(&path_for(request, store), &bytes)?;
+    std::fs::create_dir_all(store).map_err(|e| format!("{}: {}", store, e))?;
+    std::fs::write(&path_for(request, store), &bytes).map_err(|e| format!("{}: {e}", path_for(request, store)))?;
     Ok(true)
 }
 
@@ -228,7 +228,7 @@ fn words(value: Option<&Value>) -> Result<Vec<String>, String> {
 pub fn request_from(value: &Value) -> Result<Request, String> {
     let file = value.get("file").and_then(Value::as_str).ok_or("a request has no file")?.to_string();
     let size = match value.get("size") {
-        Some(Value::Number(n)) => n.parse::<i32>().map_err(|_| format!("a request's size {n} is not a whole number"))?,
+        Some(Value::Number(n)) => n.as_i64().and_then(|n| i32::try_from(n).ok()).ok_or_else(|| format!("a request's size {n} is not a whole number"))?,
         _ => return Err("a request has no size".to_string()),
     };
     let parts = match value.get("parts") {
@@ -244,27 +244,27 @@ pub fn folders_from(value: Option<&Value>) -> Result<Vec<String>, String> {
 }
 
 fn text_list(items: &[String]) -> Value {
-    Value::Array(items.iter().map(|s| Value::string(s.as_str())).collect())
+    Value::Array(items.iter().map(|s| Value::String(String::from(s.as_str()))).collect())
 }
 
 fn compact(value: &Value) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, value);
+    out.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     out
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 /// The folders and the setting's value as JSON: `folders`, `state`, `path`, `written`, `problem`.
 pub fn folders_json(list: &[String], value: &FolderValue) -> String {
     compact(&object(vec![
         ("folders", text_list(list)),
-        ("state", Value::string(value.state.name())),
-        ("path", value.path.as_deref().map_or(Value::Null, Value::string)),
-        ("written", Value::string(value.written.as_str())),
-        ("problem", value.problem().map_or(Value::Null, Value::string)),
+        ("state", Value::String(String::from(value.state.name()))),
+        ("path", value.path.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
+        ("written", Value::String(String::from(value.written.as_str()))),
+        ("problem", value.problem().map_or(Value::Null, |s| Value::String(String::from(s)))),
     ]))
 }
 
@@ -272,9 +272,9 @@ pub fn folders_json(list: &[String], value: &FolderValue) -> String {
 /// `lengths`, `content`), then every part's bytes in order.
 pub fn found_envelope(found: &Found) -> Vec<u8> {
     let head = compact(&object(vec![
-        ("folder", Value::string(found.folder.as_str())),
+        ("folder", Value::String(String::from(found.folder.as_str()))),
         ("names", text_list(&found.names)),
-        ("lengths", Value::Array(found.parts.iter().map(|p| Value::number(p.len())).collect())),
+        ("lengths", Value::Array(found.parts.iter().map(|p| Value::from(p.len())).collect())),
         ("content", Value::Bool(found.content)),
     ]));
     let mut out = Vec::with_capacity(4 + head.len() + found.parts.iter().map(Vec::len).sum::<usize>());
@@ -289,8 +289,8 @@ pub fn found_envelope(found: &Found) -> Vec<u8> {
 /// Where the image is and where a wrong-sized file of its name is, as JSON: `found` (`folder`, `names`, `whole`,
 /// `content`, or null) and `wrong` (a folder, or null; looked for only when nothing is found).
 pub fn located_json(located: Option<&Located>, wrong: Option<&str>) -> String {
-    let found = located.map_or(Value::Null, |l| object(vec![("folder", Value::string(l.folder.as_str())), ("names", text_list(&l.names)), ("whole", Value::Bool(l.whole)), ("content", Value::Bool(l.content))]));
-    compact(&object(vec![("found", found), ("wrong", wrong.map_or(Value::Null, Value::string))]))
+    let found = located.map_or(Value::Null, |l| object(vec![("folder", Value::String(String::from(l.folder.as_str()))), ("names", text_list(&l.names)), ("whole", Value::Bool(l.whole)), ("content", Value::Bool(l.content))]));
+    compact(&object(vec![("found", found), ("wrong", wrong.map_or(Value::Null, |s| Value::String(String::from(s))))]))
 }
 
 #[cfg(test)]
@@ -467,7 +467,7 @@ mod tests {
 
     #[test]
     fn a_request_reads_from_its_json() {
-        let v = json::parse(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]],"md5":["e"]}"#).unwrap();
+        let v = serde_json::from_str::<Value>(r#"{"file":"a.rom","size":8,"alternates":["b"],"parts":[["c","d"]],"md5":["e"]}"#).unwrap();
         assert_eq!(request_from(&v).unwrap(), Request { file: "a.rom".into(), size: 8, alternates: vec!["b".into()], parts: vec![vec!["c".into(), "d".into()]], md5: vec!["e".into()] });
     }
 }

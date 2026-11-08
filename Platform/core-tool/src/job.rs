@@ -6,7 +6,7 @@ use crate::catalogue::{self, Catalogue, Row, State};
 use crate::install::{self, Installed, Note, Verified};
 use crate::notes::{self, Match};
 use crate::{Context, Placement};
-use emusen_galaxia::json::{self, Text, Value};
+use serde_json::Value;
 use emusen_tool_job::Events as Queue;
 pub use emusen_tool_job::Job;
 use std::sync::Arc;
@@ -56,15 +56,15 @@ pub fn is_core_op(op: &str) -> bool {
     op.starts_with("core-")
 }
 
-fn placement_of(map: &[(Text, Value)]) -> Result<Placement, String> {
+fn placement_of(map: &serde_json::Map<String, Value>) -> Result<Placement, String> {
     let mut pairs: Vec<(String, Vec<String>)> = Vec::new();
     for (name, ids) in map {
         let ids = match ids {
-            Value::String(s) => vec![s.text.clone()],
+            Value::String(s) => vec![s.clone()],
             Value::Array(a) => a.iter().map(|v| v.as_str().map(str::to_string).ok_or("a system id is not text")).collect::<Result<_, _>>()?,
-            _ => return Err(format!("systems' {} is not an id or a list of ids", name.text.as_str())),
+            _ => return Err(format!("systems' {name} is not an id or a list of ids")),
         };
-        pairs.push((name.text.as_str().to_string(), ids));
+        pairs.push((name.clone(), ids));
     }
     Ok(Arc::new(move |systemid: &str, databases: &[&str]| {
         let mut out: Vec<String> = Vec::new();
@@ -85,7 +85,7 @@ fn placement_of(map: &[(Text, Value)]) -> Result<Placement, String> {
 /// `"systems": {<libretro database or systemid>: <system id> | [<system id>...]}` and an optional
 /// `"test": {"connect": <loopback address:port>, "roots": <PEM>}`, the buildbot's name kept and its address a test's.
 pub fn request(text: &str) -> Result<Request, String> {
-    let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
+    let doc = serde_json::from_str::<Value>(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
         Some("core-fetch") => Op::Fetch,
         Some("core-ls") => Op::List,
@@ -168,17 +168,17 @@ pub fn start(text: &str, mut ctx: Context) -> Result<Job, String> {
 }
 
 fn obj(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn emit(queue: &Queue, event: Value) {
     let mut line = String::new();
-    json::write_compact(&mut line, &event);
+    line.push_str(&serde_json::to_string(&event).expect("a value is JSON"));
     queue.emit(line);
 }
 
 fn strings(list: &[String]) -> Value {
-    Value::Array(list.iter().map(Value::string).collect())
+    Value::Array(list.iter().map(|s| Value::String(String::from(s))).collect())
 }
 
 fn op_word(op: Op) -> &'static str {
@@ -208,22 +208,22 @@ fn shown(row: &Row, show: Show) -> bool {
 pub fn row_event(row: &Row) -> Value {
     let info = row.info.as_ref();
     let mut m = vec![
-        ("event", Value::string("core")),
-        ("stem", Value::string(&row.stem)),
-        ("name", Value::string(row.name())),
-        ("corename", info.and_then(|i| i.get("corename")).or(row.notice.as_ref().map(|n| n.corename.as_str())).map_or(Value::Null, Value::string)),
+        ("event", Value::String(String::from("core"))),
+        ("stem", Value::String(String::from(&row.stem))),
+        ("name", Value::String(String::from(row.name()))),
+        ("corename", info.and_then(|i| i.get("corename")).or(row.notice.as_ref().map(|n| n.corename.as_str())).map_or(Value::Null, Value::from)),
         ("systems", strings(&row.systems)),
-        ("source", Value::string("libretro")),
-        ("version", info.and_then(|i| i.get("display_version")).map_or(Value::Null, Value::string)),
-        ("build", row.notice.as_ref().map(|n| n.build.clone()).or(row.index.as_ref().map(|l| l.date.clone())).map_or(Value::Null, Value::string)),
-        ("offered", row.index.as_ref().map_or(Value::Null, |l| Value::string(&l.date))),
-        ("state", Value::string(row.state.word())),
-        ("license", info.and_then(|i| i.get("license")).or(row.notice.as_ref().map(|n| n.license.as_str())).map_or(Value::Null, Value::string)),
+        ("source", Value::String(String::from("libretro"))),
+        ("version", info.and_then(|i| i.get("display_version")).map_or(Value::Null, Value::from)),
+        ("build", row.notice.as_ref().map(|n| n.build.clone()).or(row.index.as_ref().map(|l| l.date.clone())).map_or(Value::Null, Value::from)),
+        ("offered", row.index.as_ref().map_or(Value::Null, |l| Value::String(String::from(&l.date)))),
+        ("state", Value::String(String::from(row.state.word()))),
+        ("license", info.and_then(|i| i.get("license")).or(row.notice.as_ref().map(|n| n.license.as_str())).map_or(Value::Null, Value::from)),
         ("authors", info.map(|i| i.list("authors")).or(row.notice.as_ref().map(|n| n.authors.clone())).map_or(Value::Array(Vec::new()), |a| strings(&a))),
-        ("size", row.size.map_or(Value::Null, Value::number)),
+        ("size", row.size.map_or(Value::Null, Value::from)),
     ];
     if let Some(why) = &row.reason {
-        m.push(("reason", Value::string(why)));
+        m.push(("reason", Value::String(String::from(why))));
     }
     obj(m)
 }
@@ -231,10 +231,12 @@ pub fn row_event(row: &Row) -> Value {
 /// A row's detail, the listing line and everything the detail pane shows (EmuSen_Cores.md §2.1, §6.1).
 pub fn info_event(row: &Row, ctx: &Context) -> Value {
     let Value::Object(mut members) = row_event(row) else { unreachable!() };
-    let mut add = |k: &str, v: Value| members.push((Text::new(k), v));
+    let mut add = |k: &str, v: Value| {
+        members.insert(String::from(k), v);
+    };
     if let Some(info) = &row.info {
         for (key, field) in [("description", "description"), ("hw_render", "hw_render"), ("required_hw_api", "required_hw_api"), ("savestate", "savestate")] {
-            add(key, info.get(field).map_or(Value::Null, Value::string));
+            add(key, info.get(field).map_or(Value::Null, |s| Value::String(String::from(s))));
         }
         add("notes", strings(&info.list("notes")));
         add("permissions", strings(&info.list("permissions")));
@@ -243,7 +245,7 @@ pub fn info_event(row: &Row, ctx: &Context) -> Value {
         add("experimental", Value::Bool(info.flag("is_experimental")));
         add(
             "firmware",
-            Value::Array(info.firmware().into_iter().map(|f| obj(vec![("desc", Value::string(f.desc)), ("path", Value::string(f.path)), ("optional", Value::Bool(f.optional))])).collect()),
+            Value::Array(info.firmware().into_iter().map(|f| obj(vec![("desc", Value::String(String::from(f.desc))), ("path", Value::String(String::from(f.path))), ("optional", Value::Bool(f.optional))])).collect()),
         );
     }
     let (standing, tested) = notes::standing(&ctx.notes, &row.stem, row.notice.as_ref().map(|n| n.sha256.as_str()));
@@ -251,42 +253,42 @@ pub fn info_event(row: &Row, ctx: &Context) -> Value {
     if let Ok(prev) = emusen_core_entry::Entry::at(ctx.cores.join(emusen_core_entry::LIBRETRO).join(emusen_core_entry::PREVIOUS).join(&row.stem), &row.stem)
         && let Ok(n) = prev.read_notice()
     {
-        add("previous", obj(vec![("build", Value::string(&n.build)), ("sha256", Value::string(&n.sha256))]));
+        add("previous", obj(vec![("build", Value::String(String::from(&n.build))), ("sha256", Value::String(String::from(&n.sha256)))]));
     }
     if let Some(n) = &row.notice {
-        add("sha256", Value::string(&n.sha256));
-        add("from", Value::string(&n.source));
-        add("fetched", Value::string(&n.fetched));
-        add("index_crc32", Value::string(format!("{:08x}", n.index_crc32)));
+        add("sha256", Value::String(String::from(&n.sha256)));
+        add("from", Value::String(String::from(&n.source)));
+        add("fetched", Value::String(String::from(&n.fetched)));
+        add("index_crc32", Value::String(String::from(format!("{:08x}", n.index_crc32))));
     } else if let (Some(l), Some(s)) = (&row.index, &ctx.source) {
-        add("from", Value::string(s.zip_url(&l.file)));
-        add("index_crc32", Value::string(format!("{:08x}", l.crc32)));
+        add("from", Value::String(String::from(s.zip_url(&l.file))));
+        add("index_crc32", Value::String(String::from(format!("{:08x}", l.crc32))));
     }
     Value::Object(members)
 }
 
 fn tested_value(standing: Match, tested: Option<&notes::Tested>) -> Value {
-    let mut m = vec![("match", Value::string(standing.word()))];
+    let mut m = vec![("match", Value::String(String::from(standing.word())))];
     if let Some(t) = tested {
-        m.push(("date", Value::string(&t.date)));
-        m.push(("sha256", Value::string(&t.sha256)));
-        m.push(("kit", Value::string(&t.kit)));
-        m.push(("note", Value::string(&t.note)));
+        m.push(("date", Value::String(String::from(&t.date))));
+        m.push(("sha256", Value::String(String::from(&t.sha256))));
+        m.push(("kit", Value::String(String::from(&t.kit))));
+        m.push(("note", Value::String(String::from(&t.note))));
     }
     obj(m)
 }
 
 fn done(queue: &Queue, op: Op, counts: Vec<(&str, u64)>, catalogue: Option<&str>, error: Option<String>) {
-    let counts = Value::Object(counts.into_iter().map(|(k, v)| (Text::new(k), Value::number(v))).collect());
-    let mut m = vec![("event", Value::string("done")), ("op", Value::string(op_word(op))), ("counts", counts), ("catalogue", catalogue.map_or(Value::Null, Value::string))];
+    let counts = Value::Object(counts.into_iter().map(|(k, v)| (String::from(k), Value::from(v))).collect());
+    let mut m = vec![("event", Value::String(String::from("done"))), ("op", Value::String(String::from(op_word(op)))), ("counts", counts), ("catalogue", catalogue.map_or(Value::Null, |s| Value::String(String::from(s))))];
     if let Some(words) = error {
-        m.push(("error", Value::string(words)));
+        m.push(("error", Value::String(String::from(words))));
     }
     emit(queue, obj(m));
 }
 
 fn refused(queue: &Queue, op: Op, reason: String) {
-    emit(queue, obj(vec![("event", Value::string("refused")), ("reason", Value::string(&reason))]));
+    emit(queue, obj(vec![("event", Value::String(String::from("refused"))), ("reason", Value::String(String::from(&reason)))]));
     done(queue, op, Vec::new(), None, Some(reason));
 }
 
@@ -298,17 +300,17 @@ fn count(counts: &mut Vec<(&'static str, u64)>, word: &'static str) {
 }
 
 fn refused_core(queue: &Queue, stem: &str, reason: &str) {
-    emit(queue, obj(vec![("event", Value::string("refused")), ("stem", Value::string(stem)), ("reason", Value::string(reason))]));
+    emit(queue, obj(vec![("event", Value::String(String::from("refused"))), ("stem", Value::String(String::from(stem))), ("reason", Value::String(String::from(reason)))]));
 }
 
 fn installed_event(ctx: &Context, i: &Installed, word: &str) -> Value {
     let (standing, tested) = notes::standing(&ctx.notes, &i.stem, Some(&i.sha256));
     obj(vec![
-        ("event", Value::string(word)),
-        ("stem", Value::string(&i.stem)),
-        ("sha256", Value::string(&i.sha256)),
-        ("build", Value::string(&i.build)),
-        ("previous", i.previous.as_ref().map_or(Value::Null, Value::string)),
+        ("event", Value::String(String::from(word))),
+        ("stem", Value::String(String::from(&i.stem))),
+        ("sha256", Value::String(String::from(&i.sha256))),
+        ("build", Value::String(String::from(&i.build))),
+        ("previous", i.previous.as_ref().map_or(Value::Null, |p| Value::String(p.clone()))),
         ("revoke", strings(&i.revoke)),
         ("tested", tested_value(standing, tested)),
     ])
@@ -373,14 +375,14 @@ fn one(ctx: &Context, cat: &Catalogue, rows: &[Row], req: &Request, stem: &str, 
     let mut note = |n: Note| match n {
         Note::Progress { step, bytes, total } => emit(
             queue,
-            obj(vec![("event", Value::string("progress")), ("stem", Value::string(stem)), ("step", Value::string(step)), ("bytes", Value::number(bytes)), ("total", total.map_or(Value::Null, Value::number))]),
+            obj(vec![("event", Value::String(String::from("progress"))), ("stem", Value::String(String::from(stem))), ("step", Value::String(String::from(step))), ("bytes", Value::from(bytes)), ("total", total.map_or(Value::Null, Value::from))]),
         ),
-        Note::Checked(check) => emit(queue, obj(vec![("event", Value::string("checked")), ("stem", Value::string(stem)), ("check", Value::string(check))])),
+        Note::Checked(check) => emit(queue, obj(vec![("event", Value::String(String::from("checked"))), ("stem", Value::String(String::from(stem))), ("check", Value::String(String::from(check)))])),
     };
     let row = rows.iter().find(|r| r.stem == stem);
     let plan = |queue: &Queue| {
         if let (Some(line), Some(source)) = (row.and_then(|r| r.index.as_ref()), &ctx.source) {
-            emit(queue, obj(vec![("event", Value::string("plan")), ("stem", Value::string(stem)), ("from", Value::string(source.zip_url(&line.file))), ("build", Value::string(&line.date)), ("crc32", Value::string(format!("{:08x}", line.crc32)))]));
+            emit(queue, obj(vec![("event", Value::String(String::from("plan"))), ("stem", Value::String(String::from(stem))), ("from", Value::String(String::from(source.zip_url(&line.file)))), ("build", Value::String(String::from(&line.date))), ("crc32", Value::String(String::from(format!("{:08x}", line.crc32))))]));
         }
     };
     let on_disk = || {
@@ -412,7 +414,7 @@ fn one(ctx: &Context, cat: &Catalogue, rows: &[Row], req: &Request, stem: &str, 
         }
         Op::Update => {
             if !req.cores.is_empty() && row.is_some_and(|r| r.state == State::Installed) {
-                emit(queue, obj(vec![("event", Value::string("current")), ("stem", Value::string(stem))]));
+                emit(queue, obj(vec![("event", Value::String(String::from("current"))), ("stem", Value::String(String::from(stem)))]));
                 return Ok("current");
             }
             plan(queue);
@@ -427,17 +429,17 @@ fn one(ctx: &Context, cat: &Catalogue, rows: &[Row], req: &Request, stem: &str, 
         }
         Op::Remove => {
             let revoke = install::remove(ctx, stem)?;
-            emit(queue, obj(vec![("event", Value::string("removed")), ("stem", Value::string(stem)), ("revoke", strings(&revoke))]));
+            emit(queue, obj(vec![("event", Value::String(String::from("removed"))), ("stem", Value::String(String::from(stem))), ("revoke", strings(&revoke))]));
             Ok("removed")
         }
         Op::Verify => {
             let (word, mut m): (&'static str, Vec<(&str, Value)>) = match install::verify(ctx, stem)? {
-                Verified::Ok { sha256 } => ("ok", vec![("sha256", Value::string(sha256))]),
-                Verified::Refreshed { sha256, files } => ("refreshed", vec![("sha256", Value::string(sha256)), ("files", strings(&files))]),
-                Verified::Changed { reason } => ("changed", vec![("reason", Value::string(reason))]),
+                Verified::Ok { sha256 } => ("ok", vec![("sha256", Value::String(String::from(sha256)))]),
+                Verified::Refreshed { sha256, files } => ("refreshed", vec![("sha256", Value::String(String::from(sha256))), ("files", strings(&files))]),
+                Verified::Changed { reason } => ("changed", vec![("reason", Value::String(String::from(reason)))]),
                 Verified::Added => ("added", Vec::new()),
             };
-            let mut event = vec![("event", Value::string("verified")), ("stem", Value::string(stem)), ("result", Value::string(word))];
+            let mut event = vec![("event", Value::String(String::from("verified"))), ("stem", Value::String(String::from(stem))), ("result", Value::String(String::from(word)))];
             event.append(&mut m);
             emit(queue, obj(event));
             Ok(word)
@@ -450,10 +452,10 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     match req.op {
         Op::Get | Op::Update | Op::Rollback | Op::Remove | Op::Verify => change(ctx, req, queue, stop),
         Op::Fetch => {
-            emit(queue, obj(vec![("event", Value::string("progress")), ("step", Value::string("catalogue"))]));
+            emit(queue, obj(vec![("event", Value::String(String::from("progress"))), ("step", Value::String(String::from("catalogue")))]));
             match catalogue::fetch(ctx, stop) {
                 Ok(f) => {
-                    emit(queue, obj(vec![("event", Value::string("fetched")), ("cores", Value::number(f.cores)), ("skipped", Value::number(f.skipped)), ("date", Value::string(&f.date))]));
+                    emit(queue, obj(vec![("event", Value::String(String::from("fetched"))), ("cores", Value::from(f.cores)), ("skipped", Value::from(f.skipped)), ("date", Value::String(String::from(&f.date)))]));
                     done(queue, req.op, vec![("cores", f.cores as u64)], Some(&f.date), None);
                 }
                 Err(words) => refused(queue, req.op, words),

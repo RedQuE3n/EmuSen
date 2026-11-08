@@ -5,7 +5,6 @@
 //! change it.
 
 pub mod args;
-pub mod cheat_file;
 pub mod cheats;
 pub mod machine;
 pub mod no_game;
@@ -153,7 +152,7 @@ fn name_list(cpus: &[emusen_crystal_debug::debugger::Cpu]) -> String {
 pub fn space(d: &Debugger, m: Option<&emusen_core_host::Machine>, name: Option<&str>) -> Answer<String> {
     let Some(name) = name else { return Err(refused(status::BAD_ARGUMENT, "a memory space must be named")) };
     let spaces = m.map(|m| d.spaces(m)).unwrap_or_default();
-    match spaces.iter().find(|s| emusen_dotnet::text::equals_ignore_case(&s.name, name)) {
+    match spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&name)) {
         Some(s) => Ok(s.name.clone()),
         None => Err(refused(status::NO_SUCH_SPACE, format!("No memory space named '{name}'. Available: {}", spaces.iter().map(|s| s.name.as_str()).collect::<Vec<_>>().join(", ")))),
     }

@@ -3,19 +3,19 @@
 //! the list; the files are named as RetroArch finds them whenever the list fits its convention (§9 Q10); `patched` is
 //! taken again whenever the list changes. The file given is only read, the library never written.
 
+use std::path::Path;
 use crate::convert::{obj, Outcome};
 use crate::packages::{head, read};
 use crate::Context;
 use emusen_galaxia::claims;
-use emusen_galaxia::dotnet_files;
-use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::Value;
+use emusen_galaxia::files;
+use serde_json::Value;
 use emusen_galaxia::{archive, image_sets, package, rom_hash};
 use emusen_patch::package::{self as listing, Listed};
 use emusen_patch::{Format, Refusal};
 
 fn text(s: &str) -> Value {
-    Value::string(s)
+    Value::String(String::from(s))
 }
 
 /// Names a patch's own file may not take, being a package's own.
@@ -31,7 +31,7 @@ pub fn source_image(ctx: &Context, folder: &str, doc: &Value) -> Result<Vec<u8>,
     if container == Some("chd") || image_sets::is_sheet(&game) || image_sets::is_playlist(&game) || doc.get("dump").and_then(|d| d.get("tracks")).is_some_and(|t| !matches!(t, Value::Null)) {
         return Err("it is a disc game, and disc patches are left to a page of their own (EmuSen_GamePackages.md §9 Q15)".into());
     }
-    if !dotnet_files::file_exists(&game) {
+    if !files::file_exists(&game) {
         return Err(format!("{} is gone: pkg check looks for it", claims::entry_place(&roots, &game).1));
     }
     let bytes = match doc.get("container").and_then(|c| c.get("entry")).and_then(Value::as_str) {
@@ -63,7 +63,7 @@ pub fn names(stem: &str, list: &[(Format, String)]) -> (Vec<String>, bool) {
     let mut named: Vec<String> = Vec::new();
     for (_, own) in list {
         let own = if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(own)) { format!("patch {own}") } else { own.clone() };
-        let (base, ext) = (path::file_name_without_extension(Style::Unix, &own).to_string(), path::extension(Style::Unix, &own).to_string());
+        let (base, ext) = (Path::new(&own).file_stem().unwrap_or_default().to_string_lossy().to_string(), Path::new(&own).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default().to_string());
         let mut candidate = own.clone();
         let mut k = 2;
         while named.iter().any(|n| n.eq_ignore_ascii_case(&candidate)) {
@@ -80,7 +80,7 @@ pub fn names(stem: &str, list: &[(Format, String)]) -> (Vec<String>, bool) {
 fn relayout(folder: &str, moves: &[(String, String)]) -> Result<(), String> {
     let olds: Vec<&String> = moves.iter().map(|(o, _)| o).collect();
     for (old, new) in moves {
-        if old != new && dotnet_files::file_exists(&claims::under(folder, new)) && !olds.iter().any(|o| o.eq_ignore_ascii_case(new)) {
+        if old != new && files::file_exists(&claims::under(folder, new)) && !olds.iter().any(|o| o.eq_ignore_ascii_case(new)) {
             return Err(format!("the package already holds a file named {new} that is not one of its patches, so nothing was changed"));
         }
     }
@@ -98,7 +98,7 @@ fn relayout(folder: &str, moves: &[(String, String)]) -> Result<(), String> {
 }
 
 fn own_name(entry: &Value) -> String {
-    entry.get("name").or_else(|| entry.get("file")).and_then(Value::as_str).map(|n| path::file_name(Style::Unix, &n.replace('\\', "/")).to_string()).unwrap_or_default()
+    entry.get("name").or_else(|| entry.get("file")).and_then(Value::as_str).map(|n| Path::new(&n.replace('\\', "/")).file_name().unwrap_or_default().to_string_lossy().to_string()).unwrap_or_default()
 }
 
 fn set_patches(doc: &mut Value, entries: Vec<Value>, patched: Value) {
@@ -129,7 +129,7 @@ fn commit(folder: &str, doc: &mut Value, mut entries: Vec<Value>, moves_from: Ve
         _ => Value::Null,
     };
     set_patches(doc, entries, patched);
-    match package::write(&dotnet_files::join(folder, package::FILE_NAME), doc) {
+    match package::write(&Path::new(folder).join(package::FILE_NAME).to_string_lossy().into_owned(), doc) {
         Ok(Ok(())) => Ok(fits),
         Ok(Err(words)) => Err(words),
         Err(refusal) => Err(refusal.words().to_string()),
@@ -174,7 +174,7 @@ pub fn add(ctx: &Context, folder: &str, file: &str) -> Outcome {
     };
     let info = match emusen_patch::info(&bytes) {
         Ok(i) => i,
-        Err(r) => return fail(&doc, format!("{}: {}", path::file_name(Style::HOST, file), r.words())),
+        Err(r) => return fail(&doc, format!("{}: {}", Path::new(file).file_name().unwrap_or_default().to_string_lossy(), r.words())),
     };
     let image = match source_image(ctx, folder, &doc) {
         Ok(i) => i,
@@ -191,9 +191,9 @@ pub fn add(ctx: &Context, folder: &str, file: &str) -> Outcome {
     let system = doc.get("system").and_then(Value::as_str).and_then(crate::packages::system_named).map(|s| s.id.clone());
     let result = match emusen_patch::apply(&current, &bytes) {
         Ok(r) => r,
-        Err(r) => return fail(&doc, format!("{}: {}", path::file_name(Style::HOST, file), refused(system.as_deref(), &current, &bytes, &r))),
+        Err(r) => return fail(&doc, format!("{}: {}", Path::new(file).file_name().unwrap_or_default().to_string_lossy(), refused(system.as_deref(), &current, &bytes, &r))),
     };
-    let own = path::file_name(Style::HOST, file).to_string();
+    let own = Path::new(file).file_name().unwrap_or_default().to_string_lossy().to_string();
     let staged = format!(".adding-{}", std::process::id());
     if let Err(words) = emusen_galaxia::atomic::write(&claims::under(folder, &staged), &bytes) {
         return fail(&doc, words);
@@ -212,7 +212,7 @@ pub fn add(ctx: &Context, folder: &str, file: &str) -> Outcome {
             let name = listing::entries(&doc).last().and_then(|e| e.get("file")).and_then(Value::as_str).unwrap_or("").to_string();
             let mut c = rom_hash::Crc32::default();
             c.append(&result);
-            head(&doc, Outcome::new("added").with("patch", text(&name)).with("format", text(info.format.name())).with("retroarch", Value::Bool(fits)).with("patched_crc32", text(&c.hex())).with("patches", Value::number(listing::entries(&doc).len())))
+            head(&doc, Outcome::new("added").with("patch", text(&name)).with("format", text(info.format.name())).with("retroarch", Value::Bool(fits)).with("patched_crc32", text(&c.hex())).with("patches", Value::from(listing::entries(&doc).len())))
         }
         Err(words) => {
             let _ = std::fs::remove_file(claims::under(folder, &staged));
@@ -254,7 +254,7 @@ pub fn remove(ctx: &Context, folder: &str, n: usize) -> Outcome {
     // The removed file is set aside first, so that the rest may take its name.
     let aside = format!(".removing-{}", std::process::id());
     let gone_at = claims::under(folder, &gone_file);
-    let had = listing::inside(&gone_file) && dotnet_files::file_exists(&gone_at);
+    let had = listing::inside(&gone_file) && files::file_exists(&gone_at);
     if had && let Err(e) = std::fs::rename(&gone_at, claims::under(folder, &aside)) {
         return fail(&doc, format!("{gone_file}: {e}"));
     }
@@ -263,7 +263,7 @@ pub fn remove(ctx: &Context, folder: &str, n: usize) -> Outcome {
             if had {
                 let _ = std::fs::remove_file(claims::under(folder, &aside));
             }
-            head(&doc, Outcome::new("removed").with("patch", text(&gone_file)).with("retroarch", Value::Bool(fits)).with("patches", Value::number(listing::entries(&doc).len())))
+            head(&doc, Outcome::new("removed").with("patch", text(&gone_file)).with("retroarch", Value::Bool(fits)).with("patches", Value::from(listing::entries(&doc).len())))
         }
         Err(words) => {
             if had {

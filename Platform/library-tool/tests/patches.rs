@@ -6,7 +6,7 @@
 #[path = "../../patch/tests/encoders/mod.rs"]
 mod encoders;
 
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::Tree;
@@ -51,7 +51,7 @@ fn listing(root: &str) -> Vec<(String, u64, std::time::SystemTime, String)> {
             if meta.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p).unwrap()));
             }
         }
     }
@@ -66,7 +66,7 @@ fn run(ctx: &Context, request: &str) -> Value {
     while !j.finished() {
         if let Some(line) = j.peek(Duration::from_millis(200)) {
             j.take();
-            events.push(json::parse(&line).unwrap());
+            events.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     let package = events.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("package")).cloned();
@@ -75,7 +75,7 @@ fn run(ctx: &Context, request: &str) -> Value {
 
 fn words(e: &Value) -> String {
     let mut l = String::new();
-    json::write_compact(&mut l, e);
+    l.push_str(&serde_json::to_string(e).expect("a value is JSON"));
     l
 }
 
@@ -84,7 +84,7 @@ fn state(e: &Value) -> &str {
 }
 
 fn context(t: &Temp) -> Context {
-    let tree = Tree { root: t.at("root"), data_override: Some(t.at("home")), config_override: Some(t.at("home/etc/EmuSen")), ..Tree::default() };
+    let tree = Tree { root: t.at("root").into(), data_override: Some(t.at("home").into()), config_override: Some(t.at("home/etc/EmuSen").into()), ..Tree::default() };
     Context::pinned(tree, Some(t.at("library")), String::new())
 }
 

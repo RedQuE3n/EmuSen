@@ -2,7 +2,6 @@
 //! writes and tests; the formats, the choices and the refusals are EmuSen_Cheats.md §10.
 
 use crate::cheats::{Decoded, Write, WriteType, format_error, hex, is_hex};
-use emusen_dotnet::text::is_letter_or_digit;
 
 const RAM: &str = "RAM";
 
@@ -32,7 +31,7 @@ impl std::fmt::Display for Line {
 /// Every hex digit of the code, in twelves; none where there are none, a remainder, or a letter or digit that is not hex.
 pub fn read_lines(code: &str) -> Option<Vec<Line>> {
     let digits: String = code.chars().filter(|&c| is_hex(c)).collect();
-    if digits.is_empty() || digits.len() % 12 != 0 || code.chars().any(|c| is_letter_or_digit(c) && !is_hex(c)) {
+    if digits.is_empty() || digits.len() % 12 != 0 || code.chars().any(|c| c.is_alphanumeric() && !is_hex(c)) {
         return None;
     }
     Some((0..digits.len()).step_by(12).map(|at| Line { command: hex(&digits[at..at + 8]), value: hex(&digits[at + 8..at + 12]) as u16 }).collect())

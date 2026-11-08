@@ -21,5 +21,6 @@
   "libretro_databases": ["Sega - Dreamcast"],
   "libretro_systemids": ["dreamcast"],
   "firmware_note": "Flycast starts Dreamcast games without the console's BIOS, so a BIOS of your own is optional.",
-  "rumble": true
+  "rumble": true,
+  "look": {"hue": 25, "body": "shards", "palette": [], "craters": 0, "bands": 0, "cap": 0, "moons": 0}
 }

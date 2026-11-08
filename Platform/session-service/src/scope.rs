@@ -2,8 +2,7 @@
 //! from `processors`. See `man cpus`.
 
 use crate::{Answer, Record, Session};
-use emusen_dotnet::json::Value;
-use emusen_dotnet::text::equals_ignore_case;
+use serde_json::Value;
 
 /// One processor as `processors` lists it.
 #[derive(Clone, Debug, Default)]
@@ -48,22 +47,22 @@ pub fn cpus(session: &Session) -> Answer<Vec<Cpu>> {
 
 /// `DebugCpus.Find`: by name ignoring case, or `cpu` for the first.
 pub fn find<'a>(cpus: &'a [Cpu], name: &str) -> Option<&'a Cpu> {
-    cpus.iter().find(|c| equals_ignore_case(&c.name, name)).or_else(|| (!cpus.is_empty() && equals_ignore_case(name, MAIN_NAME)).then(|| &cpus[0]))
+    cpus.iter().find(|c| c.name.eq_ignore_ascii_case(&name)).or_else(|| (!cpus.is_empty() && name.eq_ignore_ascii_case(&MAIN_NAME)).then(|| &cpus[0]))
 }
 
 /// `DebugCpus.IsMain`.
 pub fn is_main(cpus: &[Cpu], cpu: Option<&Cpu>) -> bool {
-    cpu.is_some_and(|cpu| !cpus.is_empty() && equals_ignore_case(&cpu.name, &cpus[0].name))
+    cpu.is_some_and(|cpu| !cpus.is_empty() && cpu.name.eq_ignore_ascii_case(&cpus[0].name))
 }
 
 /// `DebugCpus.IsScopeWord`: a processor's name, `cpu`, or `cop`, which predates chips having names.
 pub fn is_scope_word(cpus: &[Cpu], word: &str) -> bool {
-    find(cpus, word).is_some() || equals_ignore_case(word, "cop")
+    find(cpus, word).is_some() || word.eq_ignore_ascii_case("cop")
 }
 
 /// `DebugCpus.Coprocessor`: what a bare `cop` means, the first after the main one that is not the sound chip.
 pub fn coprocessor(cpus: &[Cpu]) -> Option<&Cpu> {
-    cpus.iter().skip(1).find(|c| !equals_ignore_case(&c.name, "spc"))
+    cpus.iter().skip(1).find(|c| !c.name.eq_ignore_ascii_case("spc"))
 }
 
 /// `DebugCpus.NameList`.
@@ -79,7 +78,7 @@ pub fn resolve<'a>(cpus: &'a [Cpu], parts: &[String], at: usize) -> (Option<&'a 
     if let Some(named) = find(cpus, &parts[at]) {
         return (Some(named), at + 1);
     }
-    if equals_ignore_case(&parts[at], "cop") {
+    if parts[at].eq_ignore_ascii_case("cop") {
         return (coprocessor(cpus), at + 1);
     }
     (Some(&cpus[0]), at)

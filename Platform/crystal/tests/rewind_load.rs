@@ -47,8 +47,8 @@ fn a_load_with_rewind_on_keeps_the_chain_and_rewind_returns_to_the_moment_before
     install(&cores);
     {
         let mut t = tree_mut();
-        t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
-        t.set_override(Override::Config, Some(root.join("Config").to_string_lossy().into_owned()));
+        t.set_override(Override::Data, Some(root.join("Home")));
+        t.set_override(Override::Config, Some(root.join("Config")));
     }
     let game = root.join("game.tst");
     std::fs::write(&game, [b'V', b'1', b'T', b'C', 4, 0, 1, 2, 3, 4]).unwrap();

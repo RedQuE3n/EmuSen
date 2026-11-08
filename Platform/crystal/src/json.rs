@@ -1,14 +1,14 @@
-//! The API's JSON as the C# implementation writes it with a default `Utf8JsonWriter`: compact, strings escaped by
-//! .NET's default encoder and doubles in .NET's shortest form, so that an answer of the Rust runtime is the C#'s to the
-//! byte (EmuSen_Backend.md §29.2).
+//! The API's JSON answers, built member by member as a `serde_json::Value` and written by serde_json: the builder keeps
+//! the order members are given in and writes nothing itself. See EmuSen_RustPlatform.md §47.12.
 
-use emusen_dotnet::json::{escape_into, format_f64};
+use serde_json::{Map, Value};
 
-/// A writer of one JSON document, its commas placed as values follow one another.
+/// One answer under construction: the containers still open, each with the name it will take in its parent.
 #[derive(Default)]
 pub struct Json {
-    out: String,
-    first: Vec<bool>,
+    open: Vec<(Option<String>, Value)>,
+    name: Option<String>,
+    done: Option<Value>,
 }
 
 impl Json {
@@ -16,193 +16,124 @@ impl Json {
         Json::default()
     }
 
-    fn comma(&mut self) {
-        if let Some(first) = self.first.last_mut() {
-            if !*first {
-                self.out.push(',');
+    /// A finished value placed in the container open now, under the name given last, or as the answer itself.
+    fn put(&mut self, value: Value) -> &mut Json {
+        let name = self.name.take();
+        match self.open.last_mut() {
+            Some((_, Value::Object(members))) => {
+                members.insert(name.unwrap_or_default(), value);
             }
-            *first = false;
-        }
-    }
-
-    fn name(&mut self, key: &str) -> &mut Json {
-        self.comma();
-        self.out.push('"');
-        escape_into(&mut self.out, key);
-        self.out.push_str("\":");
-        if let Some(first) = self.first.last_mut() {
-            *first = true;
+            Some((_, Value::Array(items))) => items.push(value),
+            _ => self.done = Some(value),
         }
         self
     }
 
-    fn open(&mut self, c: char) -> &mut Json {
-        self.comma();
-        self.out.push(c);
-        self.first.push(true);
+    fn begin(&mut self, container: Value) -> &mut Json {
+        let name = self.name.take();
+        self.open.push((name, container));
+        self
+    }
+
+    fn end(&mut self) -> &mut Json {
+        if let Some((name, container)) = self.open.pop() {
+            self.name = name;
+            self.put(container);
+        }
         self
     }
 
     pub fn begin_object(&mut self) -> &mut Json {
-        self.open('{')
+        self.begin(Value::Object(Map::new()))
     }
 
     pub fn end_object(&mut self) -> &mut Json {
-        self.first.pop();
-        self.out.push('}');
-        self
+        self.end()
     }
 
     pub fn begin_array(&mut self) -> &mut Json {
-        self.open('[')
+        self.begin(Value::Array(Vec::new()))
     }
 
     pub fn end_array(&mut self) -> &mut Json {
-        self.first.pop();
-        self.out.push(']');
+        self.end()
+    }
+
+    /// A member's name, its value given next.
+    pub fn key(&mut self, key: &str) -> &mut Json {
+        self.name = Some(key.to_string());
         self
     }
 
     pub fn key_object(&mut self, key: &str) -> &mut Json {
-        self.name(key);
-        self.begin_object()
+        self.key(key).begin_object()
     }
 
     pub fn key_array(&mut self, key: &str) -> &mut Json {
-        self.name(key);
-        self.begin_array()
+        self.key(key).begin_array()
     }
 
     pub fn str_value(&mut self, value: &str) -> &mut Json {
-        self.comma();
-        self.out.push('"');
-        escape_into(&mut self.out, value);
-        self.out.push('"');
-        self
+        self.put(Value::from(value))
     }
 
     pub fn int_value(&mut self, value: i64) -> &mut Json {
-        self.comma();
-        self.out.push_str(&value.to_string());
-        self
+        self.put(Value::from(value))
     }
 
     pub fn u64_value(&mut self, value: u64) -> &mut Json {
-        self.comma();
-        self.out.push_str(&value.to_string());
-        self
+        self.put(Value::from(value))
     }
 
-    pub fn u64(&mut self, key: &str, value: u64) -> &mut Json {
-        self.name(key);
-        self.u64_value(value)
-    }
-
-    /// A double as .NET writes it, as an array's element.
+    /// A double; one JSON has no number for is written as `null`.
     pub fn f64_value(&mut self, value: f64) -> &mut Json {
-        self.comma();
-        self.out.push_str(&format_f64(value).unwrap_or_else(|| "0".to_string()));
-        self
-    }
-
-    /// A parsed document written again as this writer writes, `JsonSerializer.Serialize` into a default writer.
-    pub fn value(&mut self, v: &emusen_dotnet::json::Value) -> &mut Json {
-        use emusen_dotnet::json::Value;
-        match v {
-            Value::Null => self.null_value(),
-            Value::Bool(b) => {
-                self.comma();
-                self.out.push_str(if *b { "true" } else { "false" });
-                self
-            }
-            Value::Number(token) => {
-                self.comma();
-                self.out.push_str(token);
-                self
-            }
-            Value::String(t) => self.str_value(&t.text),
-            Value::Array(items) => {
-                self.begin_array();
-                for item in items {
-                    self.value(item);
-                }
-                self.end_array()
-            }
-            Value::Object(members) => {
-                self.begin_object();
-                for (key, item) in members {
-                    self.name(&key.text);
-                    self.value(item);
-                }
-                self.end_object()
-            }
-        }
-    }
-
-    /// A member's name, its value written next.
-    pub fn key(&mut self, key: &str) -> &mut Json {
-        self.name(key)
-    }
-
-    /// A member whose value is a parsed document.
-    pub fn key_value(&mut self, key: &str, v: &emusen_dotnet::json::Value) -> &mut Json {
-        self.name(key);
-        self.value(v)
+        self.put(Value::from(value))
     }
 
     pub fn null_value(&mut self) -> &mut Json {
-        self.comma();
-        self.out.push_str("null");
-        self
+        self.put(Value::Null)
+    }
+
+    /// A parsed document of the old reader's, written as it holds it.
+    pub fn key_value(&mut self, key: &str, v: &Value) -> &mut Json {
+        self.key(key).put(v.clone())
+    }
+
+    pub fn u64(&mut self, key: &str, value: u64) -> &mut Json {
+        self.key(key).u64_value(value)
     }
 
     pub fn str(&mut self, key: &str, value: &str) -> &mut Json {
-        self.name(key);
-        self.str_value(value)
+        self.key(key).str_value(value)
     }
 
     pub fn str_or_null(&mut self, key: &str, value: Option<&str>) -> &mut Json {
-        match value {
-            Some(v) => self.str(key, v),
-            None => self.null(key),
-        }
+        self.key(key).put(value.map_or(Value::Null, Value::from))
     }
 
     pub fn null(&mut self, key: &str) -> &mut Json {
-        self.name(key);
-        self.null_value()
+        self.key(key).null_value()
     }
 
     pub fn int(&mut self, key: &str, value: i64) -> &mut Json {
-        self.name(key);
-        self.int_value(value)
+        self.key(key).int_value(value)
     }
 
     pub fn bool(&mut self, key: &str, value: bool) -> &mut Json {
-        self.name(key);
-        self.comma();
-        self.out.push_str(if value { "true" } else { "false" });
-        self
+        self.key(key).put(Value::Bool(value))
     }
 
-    /// A double as .NET writes it; .NET refuses a value JSON has no number for, which no answer here holds.
     pub fn f64(&mut self, key: &str, value: f64) -> &mut Json {
-        self.name(key);
-        self.comma();
-        self.out.push_str(&format_f64(value).unwrap_or_else(|| "0".to_string()));
-        self
+        self.key(key).f64_value(value)
     }
 
     pub fn strs<S: AsRef<str>>(&mut self, key: &str, values: impl IntoIterator<Item = S>) -> &mut Json {
-        self.key_array(key);
-        for v in values {
-            self.str_value(v.as_ref());
-        }
-        self.end_array()
+        self.key(key).put(Value::Array(values.into_iter().map(|v| Value::from(v.as_ref())).collect()))
     }
 
+    /// The answer as compact JSON.
     pub fn finish(self) -> String {
-        self.out
+        self.done.map_or_else(String::new, |v| v.to_string())
     }
 }
 
@@ -211,10 +142,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_writes_what_a_default_utf8jsonwriter_writes() {
+    fn members_keep_their_order_and_serde_writes_the_text() {
         let mut j = Json::new();
         j.begin_object().str("a", "<é>\n").int("b", -3).f64("c", 1.365385).f64("d", 2.0).strs("e", ["x", "y"]).null("f").key_array("g");
-        j.begin_object().bool("h", true).end_object().begin_object().end_object().end_array().end_object();
-        assert_eq!(j.finish(), concat!(r#"{"a":""#, "\\u003C\\u00E9\\u003E\\n", r#"","b":-3,"c":1.365385,"d":2,"e":["x","y"],"f":null,"g":[{"h":true},{}]}"#));
+        j.begin_object().bool("h", true).end_object().begin_object().end_object().end_array().f64("i", f64::NAN).end_object();
+        assert_eq!(j.finish(), r#"{"a":"<é>\n","b":-3,"c":1.365385,"d":2.0,"e":["x","y"],"f":null,"g":[{"h":true},{}],"i":null}"#);
+        let mut list = Json::new();
+        list.begin_array().int_value(1).str_value("two").end_array();
+        assert_eq!(list.finish(), r#"[1,"two"]"#);
     }
 }

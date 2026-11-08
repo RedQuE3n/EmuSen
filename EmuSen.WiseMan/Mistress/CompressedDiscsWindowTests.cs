@@ -50,7 +50,7 @@ namespace EmuSen.WiseMan.Mistress
             try { Directory.Delete(_root, recursive: true); } catch (IOException) { }
         }
 
-        // The pinned chdman Platform.targets copies beside the assemblies where the toolchain holds it.
+        // The pinned chdman the build host copies beside the assemblies where the toolchain holds it.
         internal static string? Unready()
         {
             if (!LibraryToolJob.Available) return $"the platform library is not in use ({LibraryToolJob.Report})";

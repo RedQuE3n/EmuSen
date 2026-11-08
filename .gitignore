@@ -62,8 +62,11 @@ Reference/dumps/
 # work dir instead, so this only catches a bare `cargo build` in the crate.
 Reference/probe-rs/target/
 
+# The build host's default target root for a bare `cargo xtask stage` (EmuSen_RustPlatform.md §28.11).
+/target/
+
 # Cargo's build output for the platform workspace. The build directs it under
-# EmuSen.Galaxia/obj/, so this only catches a bare `cargo build` or `cargo test`
+# EmuSen.Galaxia/obj/ (cargo xtask stage --part platform), so this only catches a bare `cargo build` or `cargo test`
 # in Platform/.
 Platform/target/
 

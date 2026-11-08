@@ -4,7 +4,7 @@
 //! a missing one; and the library is left byte for byte as it was. The C# twin and the runtimes are WiseMan's.
 
 use emusen_galaxia::claims;
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::Tree;
@@ -50,7 +50,7 @@ fn listing(root: &str) -> Vec<(String, u64, std::time::SystemTime, String)> {
             if meta.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p).unwrap()));
             }
         }
     }
@@ -63,7 +63,7 @@ fn events(job: &Job) -> Vec<Value> {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(200)) {
             job.take();
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     out
@@ -74,7 +74,7 @@ fn run(ctx: &Context, request: &str) -> Vec<Value> {
 }
 
 fn summary(events: &[Value]) -> String {
-    events.iter().map(|e| { let mut l = String::new(); json::write_compact(&mut l, e); l }).collect::<Vec<_>>().join("\n")
+    events.iter().map(|e| { let mut l = String::new(); l.push_str(&serde_json::to_string(e).expect("a value is JSON")); l }).collect::<Vec<_>>().join("\n")
 }
 
 /// The state of the package event naming `what` as its source or its package.
@@ -97,7 +97,7 @@ fn nes(fill: u8) -> Vec<u8> {
 const SHEET: &str = "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Disc (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
 
 fn context(t: &Temp) -> Context {
-    let tree = Tree { root: t.at("root"), data_override: Some(t.at("home")), config_override: Some(t.at("home/etc/EmuSen")), ..Tree::default() };
+    let tree = Tree { root: t.at("root").into(), data_override: Some(t.at("home").into()), config_override: Some(t.at("home/etc/EmuSen").into()), ..Tree::default() };
     let mut ctx = Context::pinned(tree, Some(t.at("library")), String::new());
     ctx.state_folder = Some(t.at("library/states-in-the-library"));
     ctx
@@ -227,7 +227,7 @@ fn game<'a>(events: &'a [Value], source: &str) -> Option<&'a Value> {
 
 fn bytes(e: &Value, name: &str) -> u64 {
     match e.get(name) {
-        Some(Value::Number(t)) => t.parse().unwrap(),
+        Some(Value::Number(t)) => t.as_u64().unwrap(),
         _ => panic!("no {name}"),
     }
 }

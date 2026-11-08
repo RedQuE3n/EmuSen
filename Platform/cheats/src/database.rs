@@ -1,8 +1,7 @@
 //! The player's cheat database, the C# `CheatDatabase`: an index over a tree of `.cht` files, each in a folder named
 //! for its system as libretro lays them out, scanned once and searched by game (`man cheat`). Nothing EmuSen ships.
 
-use emusen_dotnet::text::{compare_ignore_case, contains_ignore_case, ends_with_ignore_case, equals_ignore_case, is_blank, starts_with_ignore_case, trim};
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
 use std::cmp::Ordering;
 
 /// One `.cht` file in the tree: its folder's name, its name without `.cht`, and its path.
@@ -14,11 +13,11 @@ pub struct Entry {
 }
 
 /// Every file under a folder, as `Directory.EnumerateFiles(folder, pattern, AllDirectories)` yields them: Galaxia's walk.
-pub(crate) use emusen_galaxia::dotnet_files::visit_files;
+pub(crate) use emusen_galaxia::files::visit_files;
 
 /// Whether a name ends as `*.cht` asks, by case on Linux, as .NET's enumeration matches there.
 fn is_cht(name: &str) -> bool {
-    if cfg!(any(windows, target_os = "macos")) { ends_with_ignore_case(name, ".cht") } else { name.ends_with(".cht") }
+    if cfg!(any(windows, target_os = "macos")) { name.to_uppercase().ends_with(".CHT") } else { name.ends_with(".cht") }
 }
 
 /// The index, scanned once.
@@ -29,25 +28,25 @@ pub struct Database {
 }
 
 fn by_system_then_game(a: &Entry, b: &Entry) -> Ordering {
-    compare_ignore_case(&a.system, &b.system).then_with(|| compare_ignore_case(&a.game, &b.game))
+    a.system.to_uppercase().cmp(&b.system.to_uppercase()).then_with(|| a.game.to_uppercase().cmp(&b.game.to_uppercase()))
 }
 
 impl Database {
     /// `CheatDatabase.All` on first use: nothing where the folder is absent or the tree cannot be listed whole.
     pub fn scan(directory: &str) -> Database {
         let mut db = Database { directory: directory.to_string(), entries: Vec::new() };
-        if !emusen_galaxia::tree::directory_exists(directory) {
+        if !emusen_galaxia::files::directory_exists(directory) {
             return db;
         }
         let mut files = Vec::new();
-        if visit_files(directory, |at, name| if is_cht(name) { files.push(at.to_string()) }).is_err() {
+        if visit_files(directory, |at, name| if is_cht(name) { files.push(at.to_string_lossy().into_owned()) }).is_err() {
             return db;
         }
         db.entries = files
             .into_iter()
             .map(|p| Entry {
-                system: path::directory_name(Style::HOST, &p).map(|d| path::file_name(Style::HOST, &d).to_string()).unwrap_or_default(),
-                game: path::file_name_without_extension(Style::HOST, &p).to_string(),
+                system: Path::new(&p).parent().map(|d| d.to_string_lossy().into_owned()).map(|d| Path::new(&d).file_name().unwrap_or_default().to_string_lossy().to_string()).unwrap_or_default(),
+                game: Path::new(&p).file_stem().unwrap_or_default().to_string_lossy().to_string(),
                 path: p,
             })
             .collect();
@@ -59,19 +58,19 @@ impl Database {
     pub fn systems(&self) -> Vec<(String, usize)> {
         let mut groups: Vec<(String, usize)> = Vec::new();
         for e in &self.entries {
-            match groups.iter_mut().find(|(s, _)| equals_ignore_case(s, &e.system)) {
+            match groups.iter_mut().find(|(s, _)| s.eq_ignore_ascii_case(&e.system)) {
                 Some(group) => group.1 += 1,
                 None => groups.push((e.system.clone(), 1)),
             }
         }
-        groups.sort_by(|a, b| compare_ignore_case(&a.0, &b.0));
+        groups.sort_by(|a, b| a.0.to_uppercase().cmp(&b.0.to_uppercase()));
         groups
     }
 
     /// `CheatDatabase.Games`: a system's files, those whose game holds the filter where one is given, by their places.
     pub fn games(&self, system: &str, filter: Option<&str>) -> Vec<usize> {
-        let needle = filter.filter(|f| !is_blank(Some(f))).map(trim);
-        (0..self.entries.len()).filter(|&i| equals_ignore_case(&self.entries[i].system, system) && needle.is_none_or(|n| contains_ignore_case(&self.entries[i].game, n))).collect()
+        let needle = filter.filter(|f| !f.trim().is_empty()).map(str::trim);
+        (0..self.entries.len()).filter(|&i| self.entries[i].system.eq_ignore_ascii_case(&system) && needle.is_none_or(|n| self.entries[i].game.to_uppercase().contains(&n.to_uppercase()))).collect()
     }
 
     /// `CheatDatabase.Find`: games named as the text, then starting with it, then holding it, a ROM's extension dropped
@@ -82,17 +81,17 @@ impl Database {
             return Vec::new();
         }
         let mut scored: Vec<(usize, u8)> = (0..self.entries.len()).map(|i| (i, score(&normalize(&self.entries[i].game), &needle))).filter(|(_, s)| *s > 0).collect();
-        scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| compare_ignore_case(&self.entries[a.0].game, &self.entries[b.0].game)));
+        scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| self.entries[a.0].game.to_uppercase().cmp(&self.entries[b.0].game.to_uppercase())));
         scored.into_iter().take(limit as usize).map(|(i, _)| i).collect()
     }
 }
 
 fn score(game: &str, needle: &str) -> u8 {
-    if equals_ignore_case(game, needle) {
+    if game.to_uppercase() == needle.to_uppercase() {
         3
-    } else if starts_with_ignore_case(game, needle) {
+    } else if game.to_uppercase().starts_with(&needle.to_uppercase()) {
         2
-    } else if contains_ignore_case(game, needle) {
+    } else if game.to_uppercase().contains(&needle.to_uppercase()) {
         1
     } else {
         0
@@ -101,9 +100,9 @@ fn score(game: &str, needle: &str) -> u8 {
 
 /// `Normalize`: trimmed, and the first of `.cht`, `.sfc`, `.smc` and `.zip` it ends with, without regard to case, dropped.
 fn normalize(text: &str) -> String {
-    let t = trim(text);
+    let t = text.trim();
     for extension in [".cht", ".sfc", ".smc", ".zip"] {
-        if ends_with_ignore_case(t, extension) {
+        if t.to_uppercase().ends_with(&extension.to_uppercase()) {
             let keep = t.chars().count() - extension.chars().count();
             return t.chars().take(keep).collect();
         }

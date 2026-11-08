@@ -4,7 +4,7 @@
 //! the redactor the moment it is read, and nothing here prints one. See EmuSen_BigPicture.md §5.7, §17.7 and §28.
 
 use crate::redact;
-use emusen_dotnet::json::{self as dj, Value};
+use serde_json::Value;
 
 pub const DEVELOPER_FILE: &str = "screenscraper-developer.json";
 pub const MEMBER_FILE: &str = "screenscraper.json";
@@ -63,16 +63,13 @@ fn register(secret: &str) {
 }
 
 fn read_text(value: &Value, name: &str) -> Option<String> {
-    match value.get(name) {
-        Some(Value::String(t)) if !t.broken => Some(t.text.clone()),
-        _ => None,
-    }
+    value.get(name)?.as_str().map(str::to_string)
 }
 
 fn parse_developer(json: &str, origin: Origin) -> Option<Developer> {
-    let root = dj::parse(json).ok()?;
+    let root: Value = emusen_galaxia::config_json::parse(json).ok()?;
     let (id, password, soft) = (read_text(&root, "devid")?, read_text(&root, "devpassword")?, read_text(&root, "softname")?);
-    if [&id, &password, &soft].iter().any(|v| emusen_dotnet::text::is_blank(Some(v))) {
+    if [&id, &password, &soft].iter().any(|v| v.trim().is_empty()) {
         return None;
     }
     redact::register(&id);
@@ -138,16 +135,29 @@ impl Member {
     }
 
     pub fn path() -> String {
-        emusen_galaxia::tree::tree().config_path(None, MEMBER_FILE)
+        emusen_galaxia::tree::tree().config_path(None, MEMBER_FILE).to_string_lossy().into_owned()
     }
 
     /// The account file, or an empty account where it is missing or does not read.
     pub fn load() -> Member {
-        let Ok(text) = std::fs::read_to_string(Member::path()) else { return Member::default() };
-        let Ok(root) = dj::parse(&text) else { return Member::default() };
+        std::fs::read_to_string(Member::path()).map_or_else(|_| Member::default(), |text| Member::from_text(&text))
+    }
+
+    /// The account a file's text holds, or an empty one where it does not read.
+    pub fn from_text(text: &str) -> Member {
+        let Ok(root) = emusen_galaxia::config_json::parse::<Value>(text) else { return Member::default() };
         let mut member = Member::new(&read_text(&root, "ssid").unwrap_or_default(), &read_text(&root, "sspassword").unwrap_or_default());
-        member.verified = read_text(&root, "verified").and_then(|t| emusen_dotnet::date::instant(&t));
+        member.verified = read_text(&root, "verified").and_then(|t| emusen_galaxia::clock::instant(&t));
         member
+    }
+
+    /// The file's text.
+    pub fn to_text(&self) -> String {
+        let mut body = serde_json::json!({ "ssid": self.user, "sspassword": self.password });
+        if let Some(at) = self.verified {
+            body["verified"] = Value::from(round_trip_utc(at));
+        }
+        body.to_string()
     }
 
     /// Written whole beside its final name with mode 0600 from the moment it exists, then moved over the old file.
@@ -157,15 +167,7 @@ impl Member {
             std::fs::create_dir_all(dir)?;
         }
         let temp = format!("{path}.part");
-        let mut body = String::from("{\"ssid\":");
-        body.push_str(&dj::quoted(&self.user));
-        body.push_str(",\"sspassword\":");
-        body.push_str(&dj::quoted(&self.password));
-        if let Some(at) = self.verified {
-            body.push_str(",\"verified\":");
-            body.push_str(&dj::quoted(&round_trip_utc(at)));
-        }
-        body.push('}');
+        let body = self.to_text();
         {
             use std::io::Write;
             let mut options = std::fs::OpenOptions::new();
@@ -192,7 +194,7 @@ impl Member {
 
 /// `DateTime.ToString("O")` of a UTC time: `2026-10-18T12:00:00.0000000Z`.
 pub fn round_trip_utc(ticks: i64) -> String {
-    let millis = emusen_dotnet::date::utc_millis(ticks);
-    let fraction = ticks.rem_euclid(emusen_dotnet::date::TICKS_PER_SECOND);
+    let millis = emusen_galaxia::clock::utc_millis(ticks);
+    let fraction = ticks.rem_euclid(emusen_galaxia::clock::TICKS_PER_SECOND);
     format!("{}.{fraction:07}Z", &millis[..19])
 }

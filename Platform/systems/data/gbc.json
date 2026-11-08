@@ -21,5 +21,6 @@
   "libretro_databases": ["Nintendo - Game Boy Color"],
   "libretro_systemids": [],
   "firmware_note": null,
-  "rumble": true
+  "rumble": true,
+  "look": {"hue": 190, "body": "planet", "palette": ["#E0FCFF", "#62D2E6", "#226A88"], "craters": 0, "bands": 0, "cap": 0, "moons": 0}
 }

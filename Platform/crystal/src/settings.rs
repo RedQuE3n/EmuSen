@@ -1,7 +1,7 @@
 //! Settings in layers, game over console over the schema's default: a console's in `consoles.json`, a game's in a file
 //! of its own, `/etc/EmuSen/games/<system>/<file stem>.json` (EmuSen_Backend.md §3.6, §14.7, SR10, SR12).
 
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
 use emusen_galaxia::tree::{Directory, Tree};
 
 /// A retired engine's name a player's settings may still hold, and the engine that runs instead (`RetiredEngines`).
@@ -32,19 +32,19 @@ pub fn current(stored: Option<String>) -> Option<String> {
 /// Where a game's own settings are kept.
 pub fn game_settings_path(tree: &Tree, system: &str, game: &str) -> String {
     let config = tree.directory(Directory::Config).unwrap_or_default();
-    let stem = path::file_name_without_extension(Style::HOST, game);
-    path::combine_all(Style::HOST, &[&config, "games", system, &format!("{stem}.json")])
+    let stem = Path::new(game).file_stem().unwrap_or_default().to_string_lossy();
+    config.join("games").join(system).join(format!("{stem}.json")).to_string_lossy().into_owned()
 }
 
 /// A packaged game's own settings, `GameSettings.PackagePath` (EmuSen_GamePackages.md §18.2).
 pub fn package_settings_path(package: &str) -> String {
-    path::combine(Style::HOST, package, emusen_galaxia::package::SETTINGS_FILE)
+    Path::new(package).join(emusen_galaxia::package::SETTINGS_FILE).to_string_lossy().into_owned()
 }
 
 /// The file a game's values are read from, `GameSettings.ReadPath`: its package's where it has one, else the plain file.
 pub fn read_place(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>) -> Option<String> {
     match package.map(package_settings_path) {
-        Some(at) if emusen_galaxia::dotnet_files::file_exists(&at) => Some(at),
+        Some(at) if emusen_galaxia::files::file_exists(&at) => Some(at),
         _ => system.map(|s| game_settings_path(tree, s, game)),
     }
 }
@@ -66,47 +66,24 @@ pub fn game_values(tree: &Tree, system: Option<&str>, game: &str, package: Optio
 /// The values of one settings file, `GameSettings.Read`'s parse.
 pub fn values_at(at: &str) -> Vec<(String, String)> {
     let Ok(Some(bytes)) = emusen_galaxia::atomic::try_read(at) else { return Vec::new() };
-    let text = emusen_dotnet::file::decode(&bytes);
+    let text = emusen_galaxia::text_file::decode(&bytes);
     let none = |why: String| {
         crate::error_log::warning("settings", &format!("{at} is not a game's settings, and is read as none: {why}"));
         Vec::new()
     };
-    match emusen_dotnet::json::parse(&text) {
-        Ok(emusen_dotnet::json::Value::Object(members)) => {
-            let mut out: Vec<(String, String)> = Vec::new();
-            for (k, v) in members {
-                let Some(v) = v.as_str() else { return none(format!("the value of \"{}\" is not a string.", k.text)) };
-                match out.iter_mut().find(|(key, _)| *key == k.text) {
-                    Some(slot) => slot.1 = v.to_string(),
-                    None => out.push((k.text, v.to_string())),
-                }
-            }
-            out
-        }
-        Ok(emusen_dotnet::json::Value::Null) => Vec::new(),
-        Ok(_) => none("the document is not an object.".to_string()),
-        Err(e) => none(e.to_string()),
+    match emusen_galaxia::config_json::read::<emusen_galaxia::models::Map<String>>(&text) {
+        Ok(values) => values.unwrap_or_default().into_iter().collect(),
+        Err(words) => none(words),
     }
 }
 
-/// A game's values written whole to `at`, indented as `JsonSerializer` writes a dictionary, `GameSettings.Write`.
+/// A game's values written whole to `at`, `GameSettings.Write`.
 pub fn write_values(at: &str, values: &[(String, String)]) -> Result<(), String> {
-    if let Some(folder) = path::directory_name(Style::HOST, at) {
+    if let Some(folder) = Path::new(at).parent().map(|d| d.to_string_lossy().into_owned()) {
         let _ = std::fs::create_dir_all(folder);
     }
-    let mut text = String::new();
-    if values.is_empty() {
-        text.push_str("{}");
-    } else {
-        text.push('{');
-        for (i, (k, v)) in values.iter().enumerate() {
-            text.push_str(if i == 0 { "\n  " } else { ",\n  " });
-            text.push_str(&emusen_dotnet::json::quoted(k));
-            text.push_str(": ");
-            text.push_str(&emusen_dotnet::json::quoted(v));
-        }
-        text.push_str("\n}");
-    }
+    let map: serde_json::Map<String, serde_json::Value> = values.iter().map(|(k, v)| (k.clone(), serde_json::Value::from(v.as_str()))).collect();
+    let text = emusen_galaxia::config_json::write(&map)?;
     emusen_galaxia::atomic::write(at, text.as_bytes()).map_err(|_| format!("{at} could not be written"))
 }
 
@@ -135,14 +112,14 @@ mod tests {
         std::fs::write(config.join("games").join("nes").join("Good.json"), "{\"Engine\":\"MoonRT (Rust)\"}").unwrap();
         {
             let mut t = tree_mut();
-            t.set_override(Override::Config, Some(config.to_string_lossy().into_owned()));
-            t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
+            t.set_override(Override::Config, Some(config.clone()));
+            t.set_override(Override::Data, Some(root.join("Home")));
         }
         let t = tree().clone();
         assert!(super::game_values(&t, Some("nes"), "/roms/Bad.nes", None).is_empty());
         assert_eq!(super::game_values(&t, Some("nes"), "/roms/Good.nes", None), vec![("Engine".to_string(), "MoonRT (Rust)".to_string())]);
         let written: String = std::fs::read_dir(&logs).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
-        assert!(written.contains("WARN [settings]") && written.contains("Bad.json is not a game's settings, and is read as none: the value of \"Engine\" is not a string."), "{written}");
+        assert!(written.contains("WARN [settings]") && written.contains("Bad.json is not a game's settings, and is read as none: $.Engine: invalid type: integer `5`, expected a string."), "{written}");
         assert!(!written.contains("Good.json"));
         let _ = std::fs::remove_dir_all(&root);
     }

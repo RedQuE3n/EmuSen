@@ -3,9 +3,9 @@
 //! change written to `consoles.json` or the game's own file and applied to the open sessions it reaches; and SR10's
 //! one copy of games.db's engine choices (EmuSen_Backend.md §3.6, §14.12, §29.19).
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_core_host::{Discovered, Discovery, Trust};
-use emusen_dotnet::text::equals_ignore_case;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::{Directory, Tree};
 use emusen_session_service::abi::status as svc;
 
@@ -100,7 +100,7 @@ fn sidecar_rows(core: &Discovered, trust: &Trust) -> Vec<Row> {
 fn console_system_ids(console: &str) -> Vec<String> {
     let mut ids: Vec<String> = catalog::system_ids_for(console).into_iter().map(str::to_string).collect();
     for p in emusen_systems::table().unwrap_or(&[]) {
-        if equals_ignore_case(&p.console, console) {
+        if p.console.eq_ignore_ascii_case(&console) {
             ids.push(p.id.clone());
         }
     }
@@ -110,7 +110,7 @@ fn console_system_ids(console: &str) -> Vec<String> {
 /// The discovered engines that run a console's systems, `EnginesOfConsole`.
 fn engines_of_console<'d>(discovery: &'d Discovery, console: &str) -> Vec<&'d Discovered> {
     let ids = console_system_ids(console);
-    let engines = discovery.found().iter().filter(|c| c.sidecar.info.systems.iter().any(|s| ids.contains(&s.id) || equals_ignore_case(&s.id, console))).collect();
+    let engines = discovery.found().iter().filter(|c| c.sidecar.info.systems.iter().any(|s| ids.contains(&s.id) || s.id.eq_ignore_ascii_case(&console))).collect();
     let system = ids.iter().find(|id| emusen_systems::libretro_cores::default_for(id).is_some()).or(ids.first());
     discovery.in_rule_order(engines, system.map(String::as_str))
 }
@@ -120,7 +120,7 @@ fn medium_rows(tree: &Tree, m: &SaveMedium) -> Vec<Row> {
     let noun = emusen_savemedia::in_text(&m.noun);
     let mut names: Vec<String> = (0..crate::media::NAMES_OFFERED).map(|i| m.default_name(i)).collect();
     for n in crate::media::medium_names(tree, &m.console, m.is_console(), &m.extension) {
-        if crate::media::is_name(&n) && !names.iter().any(|x| equals_ignore_case(x, &n)) {
+        if crate::media::is_name(&n) && !names.iter().any(|x| x.eq_ignore_ascii_case(&n)) {
             names.push(n);
         }
     }
@@ -182,7 +182,7 @@ pub fn schema(rt: &Runtime, catalog: &Catalog, discovery: &Discovery, tree: &Tre
             locked: false,
         });
     }
-    let infos: Vec<&emusen_native::json::Value> = engines.iter().map(|e| &e.sidecar.info_json).collect();
+    let infos: Vec<&serde_json::Value> = engines.iter().map(|e| &e.sidecar.info_json).collect();
     if crate::firmware::replacement_offered(&infos, &console_system_ids(console)) {
         rows.push(Row {
             key: crate::firmware::PREFERENCE_KEY.to_string(),
@@ -257,7 +257,7 @@ pub fn schema_json(rows: &[Row], tree: &Tree, console: Option<&str>) -> String {
                 j.str_or_null("note", note.as_deref());
             }
             Note::SameName { medium, slot } => {
-                let same = value(&medium.mode_key()) == crate::media::NAMED && (0..*slot).any(|s| equals_ignore_case(&value(&medium.slot_key(s)), &value(&medium.slot_key(*slot))));
+                let same = value(&medium.mode_key()) == crate::media::NAMED && (0..*slot).any(|s| (&value(&medium.slot_key(s))).eq_ignore_ascii_case(&(&value(&medium.slot_key(*slot)))));
                 let words = same.then(|| format!("The same {} cannot be in two slots: this slot keeps the game's own while they match.", emusen_savemedia::in_text(&medium.noun)));
                 j.str_or_null("note", words.as_deref());
             }
@@ -281,7 +281,7 @@ pub fn schema_json(rows: &[Row], tree: &Tree, console: Option<&str>) -> String {
 fn refusal(row: &Row, value: &str) -> Option<String> {
     match row.kind {
         "switch" if !matches!(value.trim().to_ascii_lowercase().as_str(), "true" | "false") => Some(format!("{} is a switch, true or false, not \"{value}\"", row.key)),
-        "count" if emusen_dotnet::number::parse_i32(value).is_none_or(|n| (n as i64) < row.min || (n as i64) > row.max) => {
+        "count" if value.trim().parse::<i32>().ok().is_none_or(|n| (n as i64) < row.min || (n as i64) > row.max) => {
             Some(format!("{} is a count from {} to {}, not \"{value}\"", row.key, row.min, row.max))
         }
         "choice" if !row.choices.is_empty() && !row.choices.iter().any(|c| c == value) => Some(format!("{} is one of {}, not \"{value}\"", row.key, row.choices.join(", "))),
@@ -316,7 +316,7 @@ pub fn setting_of(tree: &Tree, s: &Session) -> impl Fn(&str) -> Option<String> {
 /// The game's values written whole, indented as `JsonSerializer` writes a dictionary.
 fn write_game_values(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>, values: &[(String, String)]) -> Result<(), Refused> {
     let Some(at) = crate::settings::write_place(tree, system, game, package) else {
-        return Err((svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", path::file_name(Style::HOST, game))));
+        return Err((svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", Path::new(game).file_name().unwrap_or_default().to_string_lossy())));
     };
     crate::settings::write_values(&at, values).map_err(|words| (abi::status::IO, words))
 }
@@ -334,7 +334,7 @@ impl Runtime {
         }
         let s = self.sessions.get(session)?;
         if let Some(c) = console
-            && !equals_ignore_case(c, &s.console)
+            && !c.eq_ignore_ascii_case(&s.console)
         {
             return Err((svc::BAD_ARGUMENT, format!("session {} runs the {}, not the {c}", s.id, s.console)));
         }
@@ -412,7 +412,7 @@ impl Runtime {
         }
         drop(tree);
         for open in self.sessions.all() {
-            if equals_ignore_case(&open.console, &name) && (scope == abi::SCOPE_CONSOLE || s.as_ref().is_some_and(|s| s.id == open.id)) {
+            if open.console.eq_ignore_ascii_case(&name) && (scope == abi::SCOPE_CONSOLE || s.as_ref().is_some_and(|s| s.id == open.id)) {
                 self.apply_to(&open, key);
             }
         }
@@ -465,8 +465,8 @@ impl Runtime {
         let (game, package) = emusen_galaxia::claims::opened_as(&emusen_galaxia::tree::tree(), at);
         let at = game.as_str();
         let (row_console, system) = self.console_and_system(at);
-        let console = row_console.or_else(|| system.as_deref().map(emusen_dotnet::text::to_upper)).ok_or_else(|| {
-            (svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", path::file_name(Style::HOST, at)))
+        let console = row_console.or_else(|| system.as_deref().map(str::to_uppercase)).ok_or_else(|| {
+            (svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", Path::new(at).file_name().unwrap_or_default().to_string_lossy()))
         })?;
         let tree = emusen_galaxia::tree::tree();
         let discovery = self.discovery();
@@ -490,9 +490,9 @@ impl Runtime {
         }
         write_game_values(&tree, system.as_deref(), at, package.as_deref(), &values)?;
         drop(tree);
-        let full = path::full_path(at);
+        let full = path_key::key_text(at);
         for open in self.sessions.all() {
-            if open.game_path.as_deref().is_some_and(|p| path::full_path(p) == full) {
+            if open.game_path.as_deref().is_some_and(|p| path_key::key_text(p) == full) {
                 self.apply_to(&open, key);
             }
         }
@@ -509,13 +509,13 @@ impl Runtime {
         let tree = emusen_galaxia::tree::tree();
         let library = tree.directory(Directory::Library).unwrap_or_default();
         let config = tree.directory(Directory::Config).unwrap_or_default();
-        let games_db = path::combine(Style::HOST, &library, "games.db");
-        let marker = path::combine_all(Style::HOST, &[&config, "games", ".engine-choices-copied"]);
-        if !emusen_galaxia::dotnet_files::file_exists(&games_db) || emusen_galaxia::dotnet_files::file_exists(&marker) {
+        let games_db = Path::new(&library).join(emusen_galaxia::stores::GAMES_DB);
+        let marker = Path::new(&config).join("games").join(".engine-choices-copied");
+        if !emusen_galaxia::files::file_exists(&games_db) || emusen_galaxia::files::file_exists(&marker) {
             return 0;
         }
         let mut choices: Vec<(String, String)> = Vec::new();
-        let read = emusen_sqlite::Connection::open_read_only(sqlite, &games_db)
+        let read = emusen_sqlite::Connection::open_read_only(sqlite, &games_db.to_string_lossy())
             .and_then(|db| db.query("SELECT path, value FROM game_edit WHERE field = 'altemulator'", &[], |row| choices.push((row.text(0), row.text(1)))).map(|_| ()));
         if let Err(e) = read {
             crate::error_log::warning("settings", &format!("games.db's engine choices could not be read, and none was copied: {}", e.message));
@@ -526,7 +526,7 @@ impl Runtime {
         for (game, engine) in choices {
             let (row_console, system) = self.console_and_system(&game);
             let Some(system) = system.filter(|_| !engine.is_empty()) else { continue };
-            let console = row_console.unwrap_or_else(|| emusen_dotnet::text::to_upper(&system));
+            let console = row_console.unwrap_or_else(|| system.to_uppercase());
             let tree = emusen_galaxia::tree::tree();
             let discovery = self.discovery();
             let catalog = Catalog::new(&discovery);
@@ -544,9 +544,9 @@ impl Runtime {
             }
         }
         let tree = emusen_galaxia::tree::tree();
-        let _ = std::fs::create_dir_all(path::directory_name(Style::HOST, &marker).unwrap_or_default());
-        let day = emusen_dotnet::date::local_text(emusen_galaxia::clock::local_ticks_now(), "yyyy-MM-dd");
-        let _ = std::fs::write(&marker, format!("{copied} engine choice(s) copied from {games_db} on {day}\n"));
+        let _ = std::fs::create_dir_all(marker.parent().unwrap_or(Path::new("")));
+        let day = emusen_galaxia::clock::text(emusen_galaxia::clock::local_ticks_now(), emusen_galaxia::clock::DAY);
+        let _ = std::fs::write(&marker, format!("{copied} engine choice(s) copied from {} on {day}\n", games_db.display()));
         drop(tree);
         copied
     }

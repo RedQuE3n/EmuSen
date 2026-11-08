@@ -3,10 +3,10 @@
 //! server has its box under that name, and OpenVGDB's own address is tried last. Asked only inside a run the player
 //! started. See EmuSen_Settings_Reference.md §4.39, EmuSen_BigPicture.md §26 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::client::{TIMEOUT, Wire};
 use crate::consoles::Core;
-use emusen_galaxia::dotnet_files::file_exists;
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::files::file_exists;
 use emusen_sqlite::{Bound, Connection, Sqlite};
 use std::sync::Arc;
 use std::time::Duration;
@@ -138,19 +138,18 @@ pub struct Result {
 
 /// One lookup: the waits between requests are the real clock's, as `CoverFetcher`'s are.
 pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str, stop: &crate::clock::Stop) -> std::result::Result<Result, Option<String>> {
-    let style = Style::HOST;
-    let stem = path::file_name_without_extension(style, rom).to_string();
+    let stem = Path::new(rom).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let mut found = db.by_name(&stem, &core.openvgdb_systems);
     if found.is_none() {
-        let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(emusen_dotnet::file::io_message(&e, rom)))?;
+        let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(format!("{}: {}", rom, e)))?;
         if size <= HASH_LIMIT {
-            let bytes = std::fs::read(rom).map_err(|e| Some(emusen_dotnet::file::io_message(&e, rom)))?;
+            let bytes = std::fs::read(rom).map_err(|e| Some(format!("{}: {}", rom, e)))?;
             let hashed = core.systems.first().and_then(|s| emusen_systems::openvgdb::bytes(s, &bytes)).unwrap_or(bytes);
             found = db.by_md5(&emusen_galaxia::rom_hash::hashes_of(&hashed).md5, &core.openvgdb_systems);
         }
     }
     let Some(m) = found else { return Ok(Result { rom: rom.into(), outcome: Outcome::Unknown, rom_name: None, saved: None, detail: None }) };
-    let target = path::combine_all(style, &[artwork, &core.console, &format!("{}.png", safe(&stem))]);
+    let target = Path::new(artwork).join(&core.console).join(&format!("{}.png", safe(&stem))).to_string_lossy().into_owned();
     if file_exists(&target) {
         return Ok(Result { rom: rom.into(), outcome: Outcome::Found, rom_name: Some(m.rom_name), saved: Some(target), detail: Some("already there".into()) });
     }
@@ -163,8 +162,8 @@ pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str
         }
     }
     if let Some(cover) = m.cover_url.as_deref().filter(|c| c.starts_with("https://") || c.starts_with("http://")) {
-        let ext = path::extension(style, cover.split(['?', '#']).next().unwrap_or(cover));
-        let fallback = path::change_extension(style, &target, if ext == ".jpg" || ext == ".jpeg" { ".jpg" } else { ".png" });
+        let ext = Path::new(cover.split(['?', '#']).next().unwrap_or(cover)).extension().unwrap_or_default().to_string_lossy();
+        let fallback = Path::new(&target).with_extension(if ext == "jpg" || ext == "jpeg" { "jpg" } else { "png" }).to_string_lossy().into_owned();
         if let Some(saved) = fetch(wire, cover, &fallback, stop)? {
             return Ok(Result { rom: rom.into(), outcome: Outcome::Found, rom_name: Some(m.rom_name), saved: Some(saved), detail: Some(cover.to_string()) });
         }
@@ -205,15 +204,20 @@ fn fetch(wire: &Wire, url: &str, target: &str, stop: &crate::clock::Stop) -> std
 pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_net::Progress) -> std::result::Result<String, String> {
     let release = emusen_net::fetch(&wire.request(LATEST_RELEASE, TIMEOUT), cancel).map_err(|f| f.message)?;
     let text = String::from_utf8_lossy(&release).into_owned();
-    let doc = emusen_dotnet::json_document::parse(&text)?;
-    let tag = doc.get("tag_name").and_then(|v| v.as_str()).unwrap_or("?").to_string();
-    let zip = match doc.get("assets") {
-        Some(emusen_dotnet::json::Value::Array(assets)) => assets
-            .iter()
-            .filter(|a| a.get("name").and_then(|n| n.as_str()).is_some_and(|n| emusen_dotnet::text::ends_with_ignore_case(n, ".zip")))
-            .find_map(|a| a.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string)),
-        _ => None,
-    };
+    #[derive(serde::Deserialize)]
+    struct Asset {
+        name: Option<String>,
+        browser_download_url: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Release {
+        tag_name: Option<String>,
+        #[serde(default)]
+        assets: Vec<Asset>,
+    }
+    let release: Release = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let tag = release.tag_name.unwrap_or_else(|| "?".to_string());
+    let zip = release.assets.into_iter().filter(|a| a.name.as_deref().is_some_and(|n| n.to_uppercase().ends_with(".ZIP"))).find_map(|a| a.browser_download_url);
     let Some(zip) = zip else { return Err(format!("OpenVGDB {tag} has no zip to download.")) };
     let archive = emusen_net::fetch(&wire.request(&zip, TIMEOUT), cancel).map_err(|f| f.message)?;
     let part = format!("{target}.part");
@@ -223,7 +227,7 @@ pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_
     let zip_part = format!("{target}.zip.part");
     std::fs::write(&zip_part, &archive).map_err(|e| e.to_string())?;
     let named = emusen_galaxia::archive::entries_of(&zip_part).ok().and_then(|entries| {
-        entries.into_iter().map(|e| e.full_name).find(|n| emusen_dotnet::text::equals_ignore_case(n.rsplit('/').next().unwrap_or(n), FILE_NAME))
+        entries.into_iter().map(|e| e.full_name).find(|n| n.rsplit('/').next().unwrap_or(n).eq_ignore_ascii_case(&FILE_NAME))
     });
     let entry = named.and_then(|n| emusen_galaxia::archive::read_entry(&zip_part, &n, usize::MAX).ok());
     let _ = std::fs::remove_file(&zip_part);
@@ -240,5 +244,5 @@ pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_
 /// Where OpenVGDB is kept: Galaxia's `home/Library`.
 pub fn default_path() -> String {
     let library = emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-    path::combine(Style::HOST, &library, FILE_NAME)
+    Path::new(&library).join(FILE_NAME).to_string_lossy().into_owned()
 }

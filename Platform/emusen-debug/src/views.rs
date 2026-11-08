@@ -4,8 +4,6 @@
 use crate::memory::find;
 use crate::{core_name, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, trim_end};
 use emusen_session_service::words::parse_hex;
 use emusen_session_service::Record;
 
@@ -42,7 +40,7 @@ pub fn tile(call: &Call, parts: &[String]) -> Run {
         }
         out.push('\n');
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn tilemap(call: &Call, parts: &[String]) -> Run {
@@ -91,7 +89,7 @@ pub fn sprites(call: &Call) -> Run {
             boolean(s.flag("flip_y"))
         );
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn pal(call: &Call, parts: &[String]) -> Run {
@@ -108,9 +106,9 @@ pub fn pal(call: &Call, parts: &[String]) -> Run {
                 format!("{:02X}{:02X}{:02X}", rgb.first().copied().unwrap_or(0), rgb.get(1).copied().unwrap_or(0), rgb.get(2).copied().unwrap_or(0))
             })
             .collect();
-        out += &format!("pal {}: {}\n", pad_left(&p.int("index").to_string(), 2), colors.join(" "));
+        out += &format!("pal {}: {}\n", format!("{:>2}", p.int("index").to_string()), colors.join(" "));
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 pub fn channels(call: &Call) -> Run {
@@ -124,10 +122,10 @@ pub fn channels(call: &Call) -> Run {
         out += &format!(
             "[{}] {} active={} level={} muted={} {}\n",
             c.int("index"),
-            pad_right(&c.text("name"), 8),
-            pad_right(boolean(c.flag("active")), 5),
-            pad_left(&c.int("level").to_string(), 3),
-            pad_right(boolean(c.flag("muted")), 5),
+            format!("{:<8}", c.text("name")),
+            format!("{:<5}", boolean(c.flag("active"))),
+            format!("{:>3}", c.int("level").to_string()),
+            format!("{:<5}", boolean(c.flag("muted"))),
             c.text("info")
         );
     }
@@ -140,8 +138,8 @@ pub fn mute(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 3 {
         return Ok(Answer::ok(usage));
     }
-    let Some(index) = parse_i32(&parts[1]) else { return Ok(Answer::ok(usage)) };
-    let on = equals_ignore_case(&parts[2], "on");
+    let Some(index) = parts[1].trim().parse::<i32>().ok() else { return Ok(Answer::ok(usage)) };
+    let on = parts[2].eq_ignore_ascii_case("on");
     session.set_channel_muted(index as u32, on)?;
     Ok(Answer::ok(format!("Channel {index} {}.", if on { "muted" } else { "unmuted" })))
 }

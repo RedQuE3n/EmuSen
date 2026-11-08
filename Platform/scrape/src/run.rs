@@ -3,6 +3,8 @@
 //! §5.2 orders, keep its text and media, and hand what ScreenScraper left without a cover to OpenEmu's sources; the
 //! host drains what happened. See EmuSen_BigPicture.md §17, §17.14, §38, §46 and EmuSen_Backend.md §30.3.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::client::{self, Client, Hashes, MediaOutcome, Wire};
 use crate::clock::Stop;
 use crate::consoles::{self, Core};
@@ -14,9 +16,8 @@ use crate::rules;
 use crate::runlog::{self, Lane, Log, Tally};
 use crate::store::{Key, Priority, Queued, Record, State, Stored};
 use crate::{Error, Scraper, layout};
-use emusen_dotnet::date::TICKS_PER_SECOND;
-use emusen_galaxia::dotnet_files::{file_exists, file_info};
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::clock::TICKS_PER_SECOND;
+use emusen_galaxia::files::{file_exists, file_info};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
@@ -26,8 +27,6 @@ use std::time::{Duration, Instant};
 pub const MAX_ATTEMPTS: i32 = 5;
 pub const RECENT_LIMIT: usize = 200;
 const IDLE_POLL: Duration = Duration::from_millis(100);
-const STYLE: Style = Style::HOST;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Outcome {
     Found,
@@ -254,7 +253,7 @@ impl Handle {
 }
 
 fn io(e: std::io::Error, at: &str) -> String {
-    emusen_dotnet::file::io_message(&e, at)
+    format!("{}: {}", at, e)
 }
 
 enum Turn {
@@ -319,7 +318,7 @@ impl Scraper {
                     if one {
                         store.forget_unfound(rom)?;
                         if let Ok(library) = self.library() {
-                            let _ = library.change_request(&format!("{{\"op\":\"forget_cover_lookup\",\"path\":{}}}", emusen_dotnet::json::quoted(rom)));
+                            let _ = library.change_request(&serde_json::json!({ "op": "forget_cover_lookup", "path": rom }).to_string());
                         }
                         self.runs.failover.lock().unwrap_or_else(|p| p.into_inner()).asked.remove(rom);
                     }
@@ -700,7 +699,7 @@ impl Scraper {
         let settings = self.settings();
         let cores = consoles::cores(&settings.cores);
         let choices = w.choices.clone();
-        let hand_cover = self.console_for(rom, &cores).is_some_and(|c| self.art().find(Some(&c), path::file_name_without_extension(STYLE, rom)).is_some());
+        let hand_cover = self.console_for(rom, &cores).is_some_and(|c| self.art().find(Some(&c), &Path::new(rom).file_stem().unwrap_or_default().to_string_lossy()).is_some());
         let wanted: Vec<Kind> = choices.kinds.iter().copied().filter(|k| !(hand_cover && k.esde_type == kinds::COVER.esde_type)).collect();
 
         if let Some(picked) = self.runs.chosen.lock().unwrap_or_else(|p| p.into_inner()).remove(rom) {
@@ -739,7 +738,7 @@ impl Scraper {
         };
         let by_file = if quick { "name+size" } else { "file" };
         self.note(Activity { path: rom.into(), system: item.system.clone(), step: "looking_up", kind: None, saved: None });
-        let file_name = path::file_name(STYLE, rom).to_string();
+        let file_name = Path::new(rom).file_name().unwrap_or_default().to_string_lossy().to_string();
         // A patched package sends the dump's hashes, the file's, unless its identity is "patched": then the patched image's first, and the dump's after a miss (EmuSen_GamePackages.md §5.5).
         let patched = if by_name { None } else { patched_first(rom) };
         let first = patched.clone().unwrap_or_else(|| own.clone());
@@ -862,8 +861,8 @@ impl Scraper {
     #[allow(clippy::too_many_arguments)]
     fn keep(&self, item: &Queued, key: &Key, game: &crate::answer::Game, choices: &Choices, wanted: &[Kind], matched_by: &str, refresh: bool, w: &Workers, lane: &mut Lane, settings: &crate::Settings) -> Result<Option<Finished>, String> {
         let rom = item.path.as_str();
-        let stem = path::file_name_without_extension(STYLE, rom).to_string();
-        let file_name = path::file_name(STYLE, rom).to_string();
+        let stem = Path::new(rom).file_stem().unwrap_or_default().to_string_lossy().to_string();
+        let file_name = Path::new(rom).file_name().unwrap_or_default().to_string_lossy().to_string();
         let regions = rules::region_order(&file_name, &choices.region, choices.region_fallback);
         let languages = rules::language_order(&choices.language);
         let offered: Vec<&str> = kinds::ALL.iter().filter(|k| rules::choose_media(&game.media, k, &regions, true).is_some()).map(|k| k.esde_type).collect();
@@ -896,19 +895,19 @@ impl Scraper {
         // A packaged game's art is written into its package, never over or in place of the store's (EmuSen_GamePackages.md §18.3).
         let package = package_of(rom);
         for kind in wanted {
-            let kept = stored.iter().find(|s| s.ty == kind.esde_type && file_exists(&path::combine(STYLE, &root, &s.relative_path)));
+            let kept = stored.iter().find(|s| s.ty == kind.esde_type && file_exists(&Path::new(&root).join(&s.relative_path).to_string_lossy().into_owned()));
             if kept.is_some() && !refresh {
                 continue;
             }
             let Some(media) = rules::choose_media(&game.media, kind, &regions, choices.region_fallback) else { continue };
             let extension = rules::extension(media.format.as_deref(), kind.payload);
             let relative = match &package {
-                Some(p) => emusen_galaxia::package::media_path(p, kind.folder, &extension),
+                Some(p) => emusen_galaxia::package::media_path(p, kind.folder, &extension).to_string_lossy().into_owned(),
                 None => layout::relative(&item.system, kind.folder, &folder, &format!("{stem}{extension}")),
             };
             let mut local_sha1 = None;
             if let Some(k) = kept {
-                let at = path::combine(STYLE, &root, &k.relative_path);
+                let at = Path::new(&root).join(&k.relative_path).to_string_lossy().into_owned();
                 let sha = emusen_galaxia::rom_hash::sha1(&at).map_err(|e| io(e, &at))?;
                 if media.sha1.as_deref().is_some_and(|theirs| !theirs.is_empty() && theirs == sha) {
                     unchanged += 1;
@@ -923,7 +922,7 @@ impl Scraper {
             }
             self.note(Activity { path: rom.into(), system: item.system.clone(), step: "downloading", kind: Some(kind.esde_type.into()), saved: None });
             let replace = kept.is_some_and(|k| k.relative_path == relative);
-            let target = path::combine(STYLE, &root, &relative);
+            let target = Path::new(&root).join(&relative).to_string_lossy().into_owned();
             let (client, cancel, url, at, payload, size) = (w.client.clone(), w.cancel.clone(), media.url.clone(), target.clone(), kind.payload, media.size);
             let got = match crate::clock::detached(&w.stop, move || client.download(&url, &at, &cancel, payload, local_sha1.as_deref(), replace, size)) {
                 Some(Ok(g)) => g,
@@ -945,8 +944,8 @@ impl Scraper {
             if !matches!(got.outcome, MediaOutcome::Saved | MediaOutcome::AlreadyThere) {
                 continue;
             }
-            if let Some(k) = kept.filter(|k| !replace && package.as_deref().is_none_or(|p| emusen_galaxia::claims::within(&path::full_path(&path::combine(STYLE, &root, &k.relative_path)), p))) {
-                let old = path::combine(STYLE, &root, &k.relative_path);
+            if let Some(k) = kept.filter(|k| !replace && package.as_deref().is_none_or(|p| emusen_galaxia::claims::within(&path_key::key_text(&Path::new(&root).join(&k.relative_path).to_string_lossy().into_owned()), p))) {
+                let old = Path::new(&root).join(&k.relative_path).to_string_lossy().into_owned();
                 std::fs::remove_file(&old).map_err(|e| io(e, &old))?;
             }
             self.note(Activity { path: rom.into(), system: item.system.clone(), step: "arrived", kind: Some(kind.esde_type.into()), saved: got.path.clone() });
@@ -963,7 +962,7 @@ impl Scraper {
         if got.outcome != MediaOutcome::Saved {
             return Duration::ZERO;
         }
-        let owed = emusen_dotnet::date::ticks_from_seconds(got.bytes as f64 / (speed as f64 * 1024.0)) - client::ticks(got.took);
+        let owed = emusen_galaxia::clock::ticks_from_seconds(got.bytes as f64 / (speed as f64 * 1024.0)) - client::ticks(got.took);
         let began = Instant::now();
         if owed > 0 {
             self.clock.delay(owed, stop);
@@ -973,34 +972,34 @@ impl Scraper {
 
     fn has_cover(&self, key: &Key) -> bool {
         let root = self.root();
-        self.store().media(key).map(|m| m.iter().any(|s| s.ty == kinds::COVER.esde_type && file_exists(&path::combine(STYLE, &root, &s.relative_path)))).unwrap_or(false)
+        self.store().media(key).map(|m| m.iter().any(|s| s.ty == kinds::COVER.esde_type && file_exists(&Path::new(&root).join(&s.relative_path).to_string_lossy().into_owned()))).unwrap_or(false)
     }
 
     /// A renamed or moved file takes its media to its new name and folder; a copy beside the old one gets copies.
     fn follow_rename(&self, key: &Key, rom: &str, settings: &crate::Settings) -> Result<Vec<String>, String> {
         let mut moved = Vec::new();
-        let stem = path::file_name_without_extension(STYLE, rom).to_string();
+        let stem = Path::new(rom).file_stem().unwrap_or_default().to_string_lossy().to_string();
         let root = self.root();
         let media = self.store().media(key).map_err(|e| e.words())?;
         for m in media {
-            if path::is_rooted(STYLE, &m.relative_path) {
+            if Path::new(&m.relative_path).has_root() {
                 continue;
             }
-            let old = path::combine(STYLE, &root, &m.relative_path);
-            let relative = layout::relative(&layout::system_of(&m.relative_path), &layout::kind_folder_of(&m.relative_path), &settings.folder_of(rom), &format!("{stem}{}", path::extension(STYLE, &m.relative_path)));
-            let target = path::combine(STYLE, &root, &relative);
+            let old = Path::new(&root).join(&m.relative_path).to_string_lossy().into_owned();
+            let relative = layout::relative(&layout::system_of(&m.relative_path), &layout::kind_folder_of(&m.relative_path), &settings.folder_of(rom), &format!("{stem}{}", Path::new(&m.relative_path).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default()));
+            let target = Path::new(&root).join(&relative).to_string_lossy().into_owned();
             if relative == m.relative_path || !file_exists(&old) || file_exists(&target) {
                 continue;
             }
-            let old_stem = path::file_name_without_extension(STYLE, &m.relative_path).to_string();
+            let old_stem = Path::new(&m.relative_path).file_stem().unwrap_or_default().to_string_lossy().to_string();
             let old_folder = layout::folder_of(&m.relative_path);
             let still_there = self
                 .store()
                 .paths_of(key)
                 .map_err(|e| e.words())?
                 .iter()
-                .any(|p| p != rom && path::file_name_without_extension(STYLE, p) == old_stem && settings.folder_of(p) == old_folder && file_exists(p));
-            if let Some(dir) = path::directory_name(STYLE, &target) {
+                .any(|p| p != rom && Path::new(p).file_stem().unwrap_or_default().to_string_lossy() == old_stem && settings.folder_of(p) == old_folder && file_exists(p));
+            if let Some(dir) = Path::new(&target).parent().map(|d| d.to_string_lossy().into_owned()) {
                 std::fs::create_dir_all(&dir).map_err(|e| io(e, &dir))?;
             }
             if still_there {
@@ -1049,7 +1048,7 @@ impl Scraper {
             return false;
         }
         if let Ok(library) = self.library() {
-            let known = library.get_request(&format!("{{\"what\":\"cover_lookup\",\"path\":{}}}", emusen_dotnet::json::quoted(rom))).unwrap_or_default();
+            let known = library.get_request(&serde_json::json!({ "what": "cover_lookup", "path": rom }).to_string()).unwrap_or_default();
             if known != "null" && !known.is_empty() {
                 return false;
             }
@@ -1137,10 +1136,8 @@ impl Scraper {
             };
             if result.outcome != openemu::Outcome::Failed {
                 if let Ok(library) = self.library() {
-                    let mut request = format!("{{\"op\":\"record_cover_lookup\",\"path\":{},\"outcome\":\"{}\",\"rom_name\":", emusen_dotnet::json::quoted(&rom), result.outcome.word());
-                    request.push_str(&result.rom_name.as_deref().map_or("null".to_string(), emusen_dotnet::json::quoted));
-                    request.push('}');
-                    let _ = library.change_request(&request);
+                    let request = serde_json::json!({ "op": "record_cover_lookup", "path": rom, "outcome": result.outcome.word(), "rom_name": result.rom_name });
+                    let _ = library.change_request(&request.to_string());
                 }
             }
             self.failover_arrived(result);
@@ -1257,9 +1254,9 @@ fn set_paused(p: &mut Progress, paused: bool, now: i64) {
 fn local_day_time(utc: i64) -> String {
     let seconds = utc.div_euclid(TICKS_PER_SECOND);
     let local = utc + crate::changes::local_offset(seconds) * TICKS_PER_SECOND;
-    let days = local.div_euclid(emusen_dotnet::date::TICKS_PER_DAY);
+    let days = local.div_euclid(emusen_galaxia::clock::TICKS_PER_DAY);
     let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    format!("{} {}", names[emusen_dotnet::date::weekday(days) as usize], emusen_dotnet::date::local_text(local, "HH:mm"))
+    format!("{} {}", names[emusen_galaxia::clock::weekday(days) as usize], emusen_galaxia::clock::text(local, emusen_galaxia::clock::CLOCK))
 }
 
 /// The package `rom` opens as, as the runtime resolves it, `Scraper.PackageOf`.
@@ -1270,13 +1267,13 @@ fn package_of(rom: &str) -> Option<String> {
 /// The patched image's hashes where `rom` opens as a package whose identity is `patched`, as the runtime resolves it.
 fn patched_first(rom: &str) -> Option<Hashes> {
     let folder = package_of(rom)?;
-    let doc = emusen_galaxia::package::read(&emusen_galaxia::dotnet_files::join(&folder, emusen_galaxia::package::FILE_NAME)).ok()?.ok()?;
+    let doc = emusen_galaxia::package::read(&Path::new(&folder).join(emusen_galaxia::package::FILE_NAME).to_string_lossy().into_owned()).ok()?.ok()?;
     scraped_first(&doc)
 }
 
 /// What a package's manifest has the scraper send first: the patched image's hashes under `identity: patched`, else
 /// none, so that the file's own, the dump's, are sent (EmuSen_GamePackages.md §5.5).
-pub fn scraped_first(doc: &emusen_galaxia::json::Value) -> Option<Hashes> {
+pub fn scraped_first(doc: &serde_json::Value) -> Option<Hashes> {
     if !emusen_galaxia::package::scrapes_as_patched(doc) {
         return None;
     }

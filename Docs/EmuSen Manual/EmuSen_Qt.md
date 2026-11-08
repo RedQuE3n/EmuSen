@@ -97,7 +97,7 @@ versioned theme package, both defined in §5).
 ### 1.1 The back end, through the frontend API
 
 The front end is a client in the sense of `EmuSen_Surfaces.md` §6.2 rule E: it holds the runtime through
-`emusen_crystal.h` (version 1.12 today; rule A) and the platform library through `emusen_platform.h` (interface 35; rule
+`emusen_crystal.h` (version 1.13 today; rule A) and the platform library through `emusen_platform.h` (interface 35; rule
 B), and never a runtime type. That the implementation behind both headers is Rust changes nothing: the header is the
 contract. Two client crates carry them: `emusen-crystal-client`, a safe Rust binding generated from `emusen_crystal.h`
 (bindgen at build time, the generated module committed and diffed so a header change is a reviewed line), with typed
@@ -443,7 +443,7 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
 | Surface | For whom | Rule | Stable from |
 |---|---|---|---|
 | Core ABI v1 (`emusen_core.h` 1.19) | core authors | A: additive minors, never removed | already (2026-10-03) |
-| Frontend API (`emusen_crystal.h` 1.12) | front ends and tools | A | already |
+| Frontend API (`emusen_crystal.h` 1.13) | front ends and tools | A | already |
 | libretro API | libretro core authors | libretro's own; EmuSen implements the host | theirs |
 | DianaSh command modules | tool authors | DianaSh's ABIs (`EmuSen_DianaSh.md`) | that page's |
 | `EmuSen.Theme` 1.x and `theme.json` | theme authors | **Q** + **T** (below) | **1.0**; before it, breaking changes allowed under the same rules and listed |
@@ -871,5 +871,5 @@ end. The questions are kept as asked, with their recommendations, as the record 
   glibc 2.43, icu 78.3-1, the platform plugins and styles listed in §9.2.
 - EmuSen: `EmuSen_Interface.md` §0, §5, §7, §21 to §24; `EmuSen_BigPicture.md` §0, §2, §25, §31; `EmuSen_InterfaceSpec.md`
   §1, §4, §7; `EmuSen_Backend.md` §40; `EmuSen_Surfaces.md` §6; `EmuSen_LibretroHost.md` §1, §4.4, §4.8;
-  `emusen_crystal.h` 1.12, `emusen_platform.h` 35, `emusen_core.h` 1.19; `Platform/systems/data/`; the libretro host's
+  `emusen_crystal.h` 1.13, `emusen_platform.h` 35, `emusen_core.h` 1.19; `Platform/systems/data/`; the libretro host's
   `machine.rs` and `front.rs`; the approved mockups (Choose a console, Home, the grid, 2026-11-05).

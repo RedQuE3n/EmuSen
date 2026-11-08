@@ -13,5 +13,5 @@ name = "emusen_library_module"
 
 [dependencies]
 dianash-module = { path = "../dianash-module" }
-# .NET's JSON, to read the tool's events.
-emusen-dotnet = { path = "../dotnet" }
+# JSON read and written.
+serde_json.workspace = true

@@ -2,10 +2,10 @@
 //! the settings' layers choose, its firmware asked first, or a console started empty; the engine made with the
 //! console's stored settings and media, the layered settings applied (EmuSen_Backend.md §29.2).
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use emusen_core_host::{Discovered, Discovery, Library, Trust};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_session_service::abi::status as svc;
 
@@ -49,12 +49,13 @@ fn library_for<'d>(catalog: &Catalog, discovery: &'d Discovery, trust: &Trust, a
         }
     }
     let extension = crate::route::image_extension(catalog, discovery, at);
-    Err(match extension.as_str() {
-        ".smc" | ".sfc" => missing(discovery, "SNES", "VenusRT (Rust)"),
-        ".nes" => missing(discovery, "NES", "MoonRT (Rust)"),
-        ".gb" | ".gbc" => missing(discovery, "Game Boy", "MercuryRT (Rust)"),
-        ".z64" | ".n64" | ".v64" => missing(discovery, "N64", "MarsRT (Rust)"),
-        other => (crate::abi::status::NO_ENGINE, format!("No core in this build handles '{other}' - see CoreCatalog for what is registered.")),
+    // A hand row's console taking the extension names its missing sole engine (the systems data's catalog rows).
+    let row = emusen_systems::catalog_rows::hand_rows().iter().find(|r| {
+        r.systems.iter().filter_map(|(id, _)| emusen_systems::find(id)).any(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension)))
+    });
+    Err(match row {
+        Some(r) => missing(discovery, &r.refusal, &r.sole_engine),
+        None => (crate::abi::status::NO_ENGINE, format!("No core in this build handles '{extension}' - see CoreCatalog for what is registered.")),
     })
 }
 
@@ -119,7 +120,7 @@ impl Sessions {
 /// The empty consoles in release order, `ConsolesThatStartEmpty`.
 fn empty_starts(catalog: &Catalog) -> Vec<(String, String)> {
     let mut packs: Vec<&emusen_systems::System> = emusen_systems::table().unwrap_or(&[]).iter().filter(|e| catalog.starts_empty(&e.id)).collect();
-    packs.sort_by(|x, y| emusen_dotnet::text::compare_ignore_case(&x.manufacturer, &y.manufacturer).then(x.release_year.cmp(&y.release_year)));
+    packs.sort_by(|x, y| x.manufacturer.to_uppercase().cmp(&y.manufacturer.to_uppercase()).then(x.release_year.cmp(&y.release_year)));
     packs.into_iter().map(|e| (e.console.clone(), e.id.clone())).collect()
 }
 
@@ -185,7 +186,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
 
 /// The patched image's MD5 and size where the package at `folder` lists patches.
 fn patched_identity(folder: &str) -> Option<(String, u64)> {
-    let manifest = emusen_galaxia::dotnet_files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let manifest = std::path::Path::new(folder).join(emusen_galaxia::package::FILE_NAME);
     let doc = emusen_galaxia::package::read(&manifest).ok()?.ok()?;
     emusen_patch::package::patched_identity(&doc)
 }
@@ -225,7 +226,7 @@ fn open_game(
     package: Option<String>,
     save_key: Option<String>,
 ) -> Result<Engine, Refused> {
-    if !emusen_galaxia::dotnet_files::file_exists(at) {
+    if !emusen_galaxia::files::file_exists(at) {
         return Err((crate::abi::status::IO, format!("{at} does not exist")));
     }
     let chosen = engine.map(str::to_string).or_else(|| {
@@ -236,7 +237,7 @@ fn open_game(
     let (core_name, missing) = crate::firmware::needed(rt, tree, at, chosen.as_deref());
     if !missing.is_empty() {
         let list: Vec<String> = missing.iter().map(|m| format!("{core_name} {} firmware - {}, {} bytes", m.label, m.name, crate::firmware::n0(m.size))).collect();
-        return Err((crate::abi::status::FIRMWARE, format!("{} needs firmware the library does not hold: {}", path::file_name(Style::HOST, at), list.join("; "))));
+        return Err((crate::abi::status::FIRMWARE, format!("{} needs firmware the library does not hold: {}", Path::new(at).file_name().unwrap_or_default().to_string_lossy(), list.join("; "))));
     }
     let (core, lib) = library_for(catalog, discovery, &rt.trust(), at, chosen.as_deref())?;
     crate::firmware::link_player_firmware(core, discovery, tree);
@@ -266,7 +267,7 @@ fn open_game(
 /// creation: the table's console of its system, else the system id in capitals, else the row's, else the core's id.
 fn session_console(system: Option<&crate::info::SystemDetail>, row_console: Option<String>, core: &Discovered) -> String {
     system
-        .and_then(|s| Catalog::discovered_console_for_system(&s.id).map(str::to_string).or_else(|| Some(emusen_dotnet::text::to_upper(&s.id))))
+        .and_then(|s| Catalog::discovered_console_for_system(&s.id).map(str::to_string).or_else(|| Some(s.id.to_uppercase())))
         .or(row_console)
         .unwrap_or_else(|| core.sidecar.info.id.clone())
 }
@@ -286,12 +287,12 @@ fn start_console(
     let starts = empty_starts(catalog);
     let console = starts
         .iter()
-        .find(|(c, id)| emusen_dotnet::text::equals_ignore_case(c, asked) || emusen_dotnet::text::equals_ignore_case(id, asked))
+        .find(|(c, id)| c.eq_ignore_ascii_case(&asked) || id.eq_ignore_ascii_case(&asked))
         .map(|(c, _)| c.clone())
         .ok_or_else(|| (crate::abi::status::NO_ENGINE, format!("no console named \"{asked}\" starts with nothing in it in this build")))?;
     let chosen = engine.map(str::to_string).or_else(|| crate::settings::current(stored.value(&console, catalog::ENGINE_KEY).map(str::to_string)));
     let not_here = || (crate::abi::status::NO_ENGINE, format!("No core in this build starts the {console} with nothing in it."));
-    let (_, system_id) = starts.iter().find(|(c, _)| emusen_dotnet::text::equals_ignore_case(c, &console)).cloned().ok_or_else(not_here)?;
+    let (_, system_id) = starts.iter().find(|(c, _)| c.eq_ignore_ascii_case(&console)).cloned().ok_or_else(not_here)?;
     let mut candidates: Vec<&Discovered> =
         discovery.for_system(&system_id).filter(|c| c.sidecar.info.systems.iter().any(|s| s.id == system_id && s.starts_empty)).collect();
     candidates.sort_by_key(|c| if Some(c.engine_name()) == chosen.as_deref() { 0 } else { 1 });

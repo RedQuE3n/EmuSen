@@ -9,7 +9,7 @@ pub mod space;
 pub mod words;
 
 use abi::{emusen_session_v1, status};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use std::ffi::c_void;
 
 /// A call the session refused: its status, and the words `last_error` gave for it.
@@ -135,7 +135,7 @@ impl<'a> Session<'a> {
     fn json(&self, fill: impl Fn(*mut u8, usize) -> i64) -> Answer<Value> {
         let bytes = self.bytes(fill)?;
         let text = String::from_utf8_lossy(&bytes);
-        json::parse(&text).map_err(|e| Refusal::new(status::FAULT, format!("the session's answer is not JSON: {e}")))
+        serde_json::from_str::<Value>(&text).map_err(|e| Refusal::new(status::FAULT, format!("the session's answer is not JSON: {e}")))
     }
 
     fn string(&self, fill: impl Fn(*mut u8, usize) -> i64) -> Answer<String> {
@@ -575,7 +575,7 @@ pub trait Record {
 /// A JSON number as an integer; a fraction is cut toward zero.
 pub fn number(value: &Value) -> Option<i64> {
     match value {
-        Value::Number(token) => token.parse::<i64>().ok().or_else(|| token.parse::<f64>().ok().map(|f| f as i64)),
+        Value::Number(number) => number.as_i64().or_else(|| number.as_f64().map(|f| f as i64)),
         _ => None,
     }
 }
@@ -591,7 +591,7 @@ impl Record for Value {
 
     fn float(&self, key: &str) -> f64 {
         match self.field(key) {
-            Some(Value::Number(token)) => token.parse().unwrap_or(0.0),
+            Some(Value::Number(number)) => number.as_f64().unwrap_or(0.0),
             _ => 0.0,
         }
     }
@@ -626,11 +626,11 @@ impl Record for Value {
 
 /// A JSON object written from members already rendered as JSON values.
 pub fn object(members: &[(&str, String)]) -> String {
-    let body: Vec<String> = members.iter().map(|(key, value)| format!("{}:{value}", json::quoted(key))).collect();
+    let body: Vec<String> = members.iter().map(|(key, value)| format!("{}:{value}", quoted(key))).collect();
     format!("{{{}}}", body.join(","))
 }
 
-/// A string as a JSON value.
+/// A string as a JSON value, written by serde_json.
 pub fn quoted(text: &str) -> String {
-    json::quoted(text)
+    serde_json::to_string(&text).unwrap_or_default()
 }

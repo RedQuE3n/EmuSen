@@ -1,11 +1,12 @@
-//! Requests read and answers written for `emusen_scrape.h`'s calls. See EmuSen_Backend.md §30.3.
+//! Requests read and answers' values written for `emusen_scrape.h`'s calls, both by serde_json. See EmuSen_Backend.md
+//! §30.3 and EmuSen_RustPlatform.md §47.13.
 
 use crate::Error;
-use emusen_dotnet::json::{self as dj, Value};
+use serde_json::Value;
 
 pub fn parse(text: &str) -> Result<Value, Error> {
-    let value = dj::parse(text).map_err(|e| Error::BadRequest(format!("The request is not JSON: {e}")))?;
-    if !matches!(value, Value::Object(_)) {
+    let value: Value = serde_json::from_str(text).map_err(|e| Error::BadRequest(format!("The request is not JSON: {e}")))?;
+    if !value.is_object() {
         return Err(Error::BadRequest("The request is not a JSON object.".into()));
     }
     Ok(value)
@@ -21,7 +22,7 @@ fn wrong(name: &str, what: &str) -> Error {
 
 pub fn text(r: &Value, name: &str) -> Result<String, Error> {
     match r.get(name) {
-        Some(Value::String(t)) if !t.broken => Ok(t.text.clone()),
+        Some(Value::String(t)) => Ok(t.clone()),
         Some(_) => Err(wrong(name, "text")),
         None => Err(missing(name)),
     }
@@ -44,8 +45,7 @@ pub fn flag(r: &Value, name: &str, default: bool) -> Result<bool, Error> {
 
 pub fn integer(r: &Value, name: &str) -> Result<i64, Error> {
     match r.get(name) {
-        Some(Value::Number(token)) => token.parse::<i64>().map_err(|_| wrong(name, "a whole number")),
-        Some(_) => Err(wrong(name, "a whole number")),
+        Some(v) => v.as_i64().ok_or_else(|| wrong(name, "a whole number")),
         None => Err(missing(name)),
     }
 }
@@ -61,49 +61,31 @@ pub fn strings(r: &Value, name: &str) -> Result<Vec<String>, Error> {
     match r.get(name) {
         Some(Value::Array(items)) => items
             .iter()
-            .map(|v| match v {
-                Value::String(t) if !t.broken => Ok(t.text.clone()),
-                _ => Err(wrong(name, "a list of texts")),
-            })
+            .map(|v| v.as_str().map(str::to_string).ok_or_else(|| wrong(name, "a list of texts")))
             .collect(),
         None | Some(Value::Null) => Ok(Vec::new()),
         Some(_) => Err(wrong(name, "a list of texts")),
     }
 }
 
+/// A text as a JSON string.
 pub fn quoted(text: &str) -> String {
-    dj::quoted(text)
+    Value::from(text).to_string()
 }
 
 pub fn text_or_null(out: &mut String, text: Option<&str>) {
-    match text {
-        Some(t) => out.push_str(&dj::quoted(t)),
-        None => out.push_str("null"),
-    }
+    out.push_str(&Value::from(text).to_string());
 }
 
 pub fn number_or_null(out: &mut String, n: Option<i64>) {
-    match n {
-        Some(n) => out.push_str(&n.to_string()),
-        None => out.push_str("null"),
-    }
+    out.push_str(&Value::from(n).to_string());
 }
 
 /// A float as the shortest text that reads back as the same float, or null.
 pub fn float_or_null(out: &mut String, n: Option<f32>) {
-    match n {
-        Some(f) if f.is_finite() => out.push_str(&format!("{f:?}")),
-        _ => out.push_str("null"),
-    }
+    out.push_str(&n.filter(|f| f.is_finite()).map_or(Value::Null, Value::from).to_string());
 }
 
 pub fn strings_into(out: &mut String, items: impl IntoIterator<Item = impl AsRef<str>>) {
-    out.push('[');
-    for (i, s) in items.into_iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        out.push_str(&dj::quoted(s.as_ref()));
-    }
-    out.push(']');
+    out.push_str(&Value::Array(items.into_iter().map(|s| Value::from(s.as_ref())).collect()).to_string());
 }

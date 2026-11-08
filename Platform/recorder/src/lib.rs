@@ -3,8 +3,6 @@
 //! the recorder names, and on stopping the pictures encoded by ffmpeg, losslessly, and archived. Every line the C#
 //! wrote to the console is said, for the runtime's log (EmuSen_Backend.md §29.11 Q2, §29.36).
 
-mod zip;
-
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -23,8 +21,9 @@ pub fn local_now() -> (i64, u32, u32, u32, u32, u32, u32) {
 }
 
 fn local(seconds: i64, millis: u32) -> (i64, u32, u32, u32, u32, u32, u32) {
-    let (y, mo, d, h, mi, s) = emusen_dotnet::date::local_fields(seconds);
-    (y, mo, d, h, mi, s, millis)
+    let utc = time::OffsetDateTime::from_unix_timestamp(seconds).unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+    let at = time::UtcOffset::local_offset_at(utc).map_or(utc, |offset| utc.to_offset(offset));
+    (at.year() as i64, at.month() as u32, at.day() as u32, at.hour() as u32, at.minute() as u32, at.second() as u32, millis)
 }
 
 /// The fields of a file's time in the local zone.
@@ -144,20 +143,61 @@ fn archive(folder: &Path, said: &mut Vec<String>) {
     }
     let zip_path = folder.join("frames.zip");
     let written = (|| -> std::io::Result<()> {
-        let mut entries = Vec::with_capacity(pictures.len());
+        let mut out = zip::ZipWriter::new(File::create(&zip_path)?);
         for p in &pictures {
-            let bytes = std::fs::read(p)?;
-            let time = local_of(std::fs::metadata(p)?.modified()?);
-            entries.push((p.file_name().unwrap().to_string_lossy().into_owned(), bytes, time));
+            let (y, mo, d, h, mi, s, _) = local_of(std::fs::metadata(p)?.modified()?);
+            let time = u16::try_from(y).ok().and_then(|y| zip::DateTime::from_date_and_time(y, mo as u8, d as u8, h as u8, mi as u8, s as u8).ok()).unwrap_or_default();
+            let options = zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).compression_level(Some(9)).last_modified_time(time);
+            out.start_file(p.file_name().unwrap().to_string_lossy(), options)?;
+            out.write_all(&std::fs::read(p)?)?;
         }
-        std::fs::write(&zip_path, zip::write(&entries)?)?;
+        out.finish()?.sync_all()?;
         for p in &pictures {
             std::fs::remove_file(p)?;
         }
         Ok(())
     })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&zip_path);
+    }
     match written {
         Ok(()) => said.push(format!("[RECORD] Archived {} frame PNGs -> {}", pictures.len(), zip_path.display())),
         Err(e) => said.push(format!("[RECORD] Zipping frame PNGs failed ({e}); leaving them as loose files in {}", folder.display())),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_pictures_are_archived_with_their_local_times_and_removed() {
+        let folder = std::env::temp_dir().join(format!("emusen-recorder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&folder);
+        std::fs::create_dir_all(&folder).unwrap();
+        let frames = [("frame_00000.png", vec![1u8; 1500]), ("frame_00001.png", (0..1500u32).map(|i| i as u8).collect())];
+        for (name, bytes) in &frames {
+            std::fs::write(folder.join(name), bytes).unwrap();
+        }
+        std::fs::write(folder.join("frames.log"), "kept").unwrap();
+        let (y, mo, d, h, mi, s, _) = local_of(std::fs::metadata(folder.join(frames[0].0)).unwrap().modified().unwrap());
+        let mut said = Vec::new();
+        archive(&folder, &mut said);
+        assert!(said[0].starts_with("[RECORD] Archived 2 frame PNGs"), "{said:?}");
+        let mut zip = zip::ZipArchive::new(File::open(folder.join("frames.zip")).unwrap()).unwrap();
+        let mut names: Vec<String> = zip.file_names().map(|n| n.unwrap().into_owned()).collect();
+        names.sort();
+        assert_eq!(names, ["frame_00000.png", "frame_00001.png"]);
+        for (name, bytes) in &frames {
+            let mut entry = zip.by_name(name).unwrap();
+            let mut read = Vec::new();
+            std::io::Read::read_to_end(&mut entry, &mut read).unwrap();
+            assert_eq!(&read, bytes);
+            assert!(!folder.join(name).exists());
+        }
+        let t = zip.by_name(frames[0].0).unwrap().last_modified().unwrap();
+        assert_eq!((t.year() as i64, t.month() as u32, t.day() as u32, t.hour() as u32, t.minute() as u32, t.second() as u32), (y, mo, d, h, mi, s / 2 * 2));
+        assert!(folder.join("frames.log").exists());
+        std::fs::remove_dir_all(&folder).unwrap();
     }
 }

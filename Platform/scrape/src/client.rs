@@ -3,13 +3,14 @@
 //! answer read as it read it. Every request goes through `emusen-net` (SR9), with the program's `User-Agent` and the
 //! client's 30 s. See EmuSen_BigPicture.md §5.1, §17.3, §38 and EmuSen_Backend.md §30.5.
 
+use std::path::Path;
 use crate::answer::{self, Game, Member, Quota};
 use crate::credentials::{self, Developer};
 use crate::kinds::Payload;
 use crate::quota::Status;
 use crate::redact::redact;
 use crate::{Settings, Test};
-use emusen_dotnet::date::TICKS_PER_SECOND;
+use emusen_galaxia::clock::TICKS_PER_SECOND;
 use emusen_net::{Progress, Request};
 use std::io::Write;
 use std::time::{Duration, Instant};
@@ -63,7 +64,7 @@ impl Wire {
 /// The start of a body, for the status line: never more than a line of 160 characters, and never a credential.
 pub fn snippet(body: &str) -> String {
     let line = body.split('\n').next().unwrap_or("").trim_matches(char::is_whitespace);
-    let cut: String = if emusen_dotnet::text::utf16_len(line) > 160 { take_utf16(line, 160) } else { line.to_string() };
+    let cut: String = if line.chars().count() > 160 { take_utf16(line, 160) } else { line.to_string() };
     redact(&cut)
 }
 
@@ -187,7 +188,7 @@ impl Client {
     pub fn jeu_infos_url(&self, system_id: i32, hashes: &Hashes, file_name: &str, game_id: Option<i64>) -> String {
         let system = system_id.to_string();
         let size = hashes.size.to_string();
-        let name = emusen_galaxia::dotnet_path::file_name(emusen_galaxia::dotnet_path::Style::HOST, file_name).to_string();
+        let name = Path::new(file_name).file_name().unwrap_or_default().to_string_lossy().to_string();
         let id = game_id.map(|g| g.to_string());
         let mut query: Vec<(&str, &str)> = vec![("romtype", "rom"), ("systemeid", &system)];
         if !hashes.by_name_and_size() {
@@ -253,7 +254,7 @@ impl Client {
         let Some(q) = url.find('?') else { return url.to_string() };
         let kept: Vec<&str> = url[q + 1..]
             .split('&')
-            .filter(|p| !(emusen_dotnet::text::starts_with_ignore_case(p, "ssid=") || emusen_dotnet::text::starts_with_ignore_case(p, "sspassword=")))
+            .filter(|p| !(p.to_uppercase().starts_with("SSID=") || p.to_uppercase().starts_with("SSPASSWORD=")))
             .collect();
         format!("{}{}", &url[..q + 1], kept.join("&"))
     }
@@ -278,7 +279,7 @@ impl Client {
         let started = Instant::now();
         let mut sent = (0u16, 0u64);
         let done = |outcome, path: Option<String>, bytes, sha1, detail: String, sent: (u16, u64)| MediaAnswer { outcome, path, bytes, sha1, detail, took: started.elapsed(), code: sent.0, received: sent.1 };
-        if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
+        if !replace && emusen_galaxia::files::file_exists(target) {
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);
             return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new(), sent));
         }
@@ -355,14 +356,14 @@ impl Client {
                 MediaOutcome::TooSmall | MediaOutcome::TooLarge => format!("{length} bytes"),
                 _ => text.clone(),
             };
-            let path = (no == MediaOutcome::Unchanged && emusen_galaxia::dotnet_files::file_exists(target)).then(|| target.to_string());
+            let path = (no == MediaOutcome::Unchanged && emusen_galaxia::files::file_exists(target)).then(|| target.to_string());
             return Ok(done(no, path, if no == MediaOutcome::NotAnImage { length } else { 0 }, None, detail, sent));
         }
         if cancel.is_cancelled() {
             let _ = std::fs::remove_file(&temp);
             return Err(());
         }
-        if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
+        if !replace && emusen_galaxia::files::file_exists(target) {
             let _ = std::fs::remove_file(&temp);
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);
             return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new(), sent));
@@ -401,7 +402,7 @@ pub fn sign_in_result(status: Status, body: &str) -> (&'static str, Option<Membe
             Ok(None) => ("wrong_account", None, said),
             Err(_) => ("unreadable", None, said),
         },
-        Status::BadCredentials if emusen_dotnet::text::contains_ignore_case(body, "velop") => ("developer_refused", None, said),
+        Status::BadCredentials if body.to_uppercase().contains("VELOP") => ("developer_refused", None, said),
         Status::BadCredentials => ("wrong_account", None, said),
         Status::ServerBusy => ("busy", None, said),
         Status::ApiClosed => ("closed", None, said),

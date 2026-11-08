@@ -6,7 +6,7 @@
 //! half (saves, states and their records, settings, art and patches read on the other machine) is WiseMan's.
 
 use emusen_galaxia::claims::{self, Places};
-use emusen_galaxia::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::tree::Tree;
 use emusen_galaxia::{package, package_zip, rom_hash};
 use emusen_library_tool::job::{self, Job};
@@ -51,7 +51,7 @@ fn files(root: &str) -> Vec<(String, u64, SystemTime, String)> {
                 stack.push(p);
             } else {
                 let rel = p.strip_prefix(root).unwrap().to_string_lossy().into_owned();
-                out.push((rel, meta.len(), meta.modified().unwrap(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((rel, meta.len(), meta.modified().unwrap(), rom_hash::md5(&p).unwrap()));
             }
         }
     }
@@ -74,7 +74,7 @@ fn events(job: &Job) -> Vec<Value> {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(200)) {
             job.take();
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     out
@@ -85,7 +85,7 @@ fn run(ctx: &Context, request: &str) -> Vec<Value> {
 }
 
 fn summary(events: &[Value]) -> String {
-    events.iter().map(|e| { let mut l = String::new(); json::write_compact(&mut l, e); l }).collect::<Vec<_>>().join("\n")
+    events.iter().map(|e| { let mut l = String::new(); l.push_str(&serde_json::to_string(e).expect("a value is JSON")); l }).collect::<Vec<_>>().join("\n")
 }
 
 fn event<'a>(events: &'a [Value], what: &str) -> Option<&'a Value> {
@@ -108,7 +108,7 @@ fn nes(fill: u8) -> Vec<u8> {
 const SHEET: &str = "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Disc (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
 
 fn context(t: &Temp, machine: &str) -> Context {
-    let tree = Tree { root: t.at(&format!("{machine}/root")), data_override: Some(t.at(&format!("{machine}/home"))), config_override: Some(t.at(&format!("{machine}/home/etc/EmuSen"))), ..Tree::default() };
+    let tree = Tree { root: t.at(&format!("{machine}/root")).into(), data_override: Some(t.at(&format!("{machine}/home")).into()), config_override: Some(t.at(&format!("{machine}/home/etc/EmuSen")).into()), ..Tree::default() };
     Context::pinned(tree, Some(t.at(&format!("{machine}/library"))), String::new())
 }
 

@@ -1,12 +1,13 @@
-// EmuSen_Qt.md §7's stage 0 gate: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and the style sweep, green on the gallery at the four sizes, in every form and variant; the grabs saved for a human look.
+// EmuSen_Qt.md §7's stage 0 gate: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and the style sweep, green on the gallery at the four sizes, in every form and variant; the grabs saved for a human look, each with its state recorded in the spec format beside it.
 
 use std::path::PathBuf;
 
 use emusen_kit_core::input::{UiButton, WalkForm};
 use emusen_kit_core::tokens::Variant;
 use emusen_kit_gallery::GALLERY_URL;
-use emusen_qt_test::harness::{palette, SIZES};
+use emusen_qt_test::harness::{edges, palette, Measures, Step, SIZES};
 use emusen_qt_test::lint::{frontend, qmllint, rules};
+use emusen_qt_test::spec::{self, Header};
 use emusen_qt_test::{Harness, Scene};
 
 const FORMS: [(WalkForm, &str, &str); 3] =
@@ -21,6 +22,29 @@ fn grabs() -> PathBuf {
     let dir = PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache").join("emusen").join("tmp").join("kit-gallery");
     std::fs::create_dir_all(&dir).expect("the grabs folder");
     dir
+}
+
+/// The state as a recording beside its grab (EmuSen_Kit.md §7.11): a menu on the big screen and the card, a sheet on the desktop.
+fn record(
+    name: &str,
+    tree: &emusen_qt_test::tree::Tree,
+    root: &emusen_kit_core::audit::Item,
+    (form, variant): (WalkForm, Variant),
+    (w, h): (i32, i32),
+    focus: Option<u32>,
+    walk: &[Step],
+) {
+    let declared = palette(variant);
+    let header = Header {
+        state: name,
+        case: "Gallery",
+        kind: if form == WalkForm::Desktop { "sheet" } else { "menu" },
+        width: w,
+        height: h,
+        measures: Measures::of(form, f64::from(h)),
+        palette: &declared,
+    };
+    std::fs::write(grabs().join(format!("{name}.spec")), spec::write(tree, root, &header, focus, walk)).expect("the recording");
 }
 
 /// Waits for the splash's last frame, so its words are audited as they stay.
@@ -182,7 +206,6 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                 assert_eq!(scene.property("scene", "page"), page.to_string(), "the section turned the page");
                 for (w, h) in SIZES {
                     scene.resize(w, h);
-                    scene.wait(60);
                     if page == 2 {
                         finish_moonrise(&mut scene);
                         moonrise_stars(&mut scene);
@@ -206,7 +229,9 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                     };
                     assert!(scene.grab(&grabs.join(format!("{name}.png")).display().to_string()), "grab {name}");
                     scene.sample_behind(&mut tree, f64::from(w), f64::from(h));
-                    let edges = scene.record_edges(&tree);
+                    let walk = scene.walk(&tree);
+                    let edges = edges(&walk);
+                    record(&name, &tree, &tree.root, (form, variant), (w, h), focus, &walk);
                     faults.extend(
                         scene.audit(&tree, form, variant, focus, &edges, f64::from(w), f64::from(h)).iter().map(ToString::to_string),
                     );
@@ -241,7 +266,9 @@ fn qt_7_stage_0_gate_on_the_gallery() {
     let sheet = tree.root.find(emusen_kit_core::input::ElementId(popup)).expect("the popup in the tree").clone();
     let focus = scene.focus(&tree);
     assert!(scene.grab(&grabs.join("question-1280x800.png").display().to_string()));
-    let edges = scene.record_edges(&tree);
+    let walk = scene.walk(&tree);
+    let edges = edges(&walk);
+    record("question-1280x800", &tree, &sheet, (WalkForm::BigScreen, Variant::Dark), (1280, 800), focus, &walk);
     let faults = scene.audit_item(&sheet, WalkForm::BigScreen, Variant::Dark, focus, &edges, 1280.0, 800.0);
     report.extend(faults.iter().map(|f| format!("question: {f}")));
     scene.pad(UiButton::Back);

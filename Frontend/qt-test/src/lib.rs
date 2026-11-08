@@ -7,6 +7,7 @@
 pub mod ffi;
 pub mod harness;
 pub mod lint;
+pub mod spec;
 pub mod tree;
 
 pub use harness::{Harness, Scene};

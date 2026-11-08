@@ -20,6 +20,11 @@ pub struct Node {
     pub h: f64,
     pub visible: bool,
     pub opacity: f64,
+    #[serde(default = "yes")]
+    pub enabled: bool,
+    /// Scene pixels to one of the item's own units.
+    #[serde(default = "one")]
+    pub scale: f64,
     pub clip: bool,
     pub hit: bool,
     pub operable: bool,
@@ -37,6 +42,8 @@ pub struct Node {
     pub size: f64,
     #[serde(default)]
     pub bold: bool,
+    #[serde(default)]
+    pub face: Option<String>,
     /// Where the words are drawn: x, y, width, height in the scene.
     #[serde(default)]
     pub glyphs: Option<[f64; 4]>,
@@ -56,6 +63,9 @@ pub struct Node {
     pub sh: bool,
     #[serde(default)]
     pub wheel: bool,
+    /// A flickable's content height in the scene.
+    #[serde(default)]
+    pub ch: f64,
     #[serde(default, rename = "fadeTop")]
     pub fade_top: bool,
     #[serde(default, rename = "fadeBottom")]
@@ -70,6 +80,20 @@ pub struct Node {
     pub role: i32,
     #[serde(default)]
     pub colors: Vec<String>,
+    /// What a press may move: Qt Quick's own selection, value and scroll properties, by name (EmuSen_Kit.md §7.11).
+    #[serde(default)]
+    pub kept: std::collections::BTreeMap<String, f64>,
+    /// A focus scope's remembered item, by its id, empty for none: what a press may move too.
+    #[serde(default)]
+    pub scoped: String,
+}
+
+fn yes() -> bool {
+    true
+}
+
+fn one() -> f64 {
+    1.0
 }
 
 /// The kit's drawn world: its colours are hues by design, so palette reach treats it as a scene.

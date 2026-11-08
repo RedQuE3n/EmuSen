@@ -17,6 +17,12 @@ use emusen_kit_qt::tokens::qobject::Tokens;
 use crate::ffi::ffi;
 use crate::tree::Tree;
 
+/// How long a view may take to come to rest before a state is refused: over twelve of the longest motion token's steps (Reel, 400 ms).
+pub const SETTLE_MS: i32 = 5000;
+
+/// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
+const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
+
 /// The four sizes the gate runs at (EmuSen_Interface.md §24.7).
 pub const SIZES: [(i32, i32); 4] = [(1280, 800), (1920, 1080), (1280, 720), (3840, 2160)];
 
@@ -116,9 +122,46 @@ impl Scene<'_> {
         unsafe { Pin::new_unchecked(&mut *self.window) }
     }
 
+    /// Resizes the window, waits for Qt to lay every item out, and settles its views.
     pub fn resize(&mut self, width: i32, height: i32) {
         ffi::harness_resize(self.window(), width, height);
-        self.wait(30);
+        let tree = self.tree();
+        self.settle(&tree);
+    }
+
+    /// Waits until every view of the tree is at rest as Qt declares it: a flickable or path view neither moving nor
+    /// flicking, and a path view that keeps its current item in its highlight range at the offset that item rests at,
+    /// Qt's `fmod(count - currentIndex, count)`, since Qt declares a step to a current index as no movement
+    /// (EmuSen_Kit.md §7.11). It polls those declarations and fails past `SETTLE_MS`, so an unsettled state is never read.
+    pub fn settle(&mut self, tree: &Tree) {
+        let views: Vec<(u64, bool)> = tree
+            .nodes
+            .iter()
+            .filter(|n| n.kept.contains_key("contentY") || n.kept.contains_key("offset"))
+            .map(|n| (n.id.parse().unwrap_or(0), n.kept.contains_key("offset")))
+            .collect();
+        let mut waited = 0;
+        while let Some(&(id, _)) = views.iter().find(|&&(id, path)| !self.at_rest(id, path)) {
+            assert!(waited < SETTLE_MS, "a view ({id:#x}) still moving after {SETTLE_MS} ms");
+            self.wait(10);
+            waited += 10;
+        }
+    }
+
+    fn at_rest(&mut self, id: u64, path: bool) -> bool {
+        let mut get = |property: &str| ffi::harness_get(self.window(), id, &QString::from(property));
+        if get("moving") != 0.0 || get("flicking") != 0.0 {
+            return false;
+        }
+        if !path || get("highlightRangeMode") != STRICTLY_ENFORCE_RANGE {
+            return true;
+        }
+        let (count, current, offset) = (get("count"), get("currentIndex"), get("offset"));
+        if count < 1.0 || current < 0.0 {
+            return true;
+        }
+        let apart = (offset - (count - current).rem_euclid(count)).abs();
+        apart < 1e-6 || (apart - count).abs() < 1e-6
     }
 
     pub fn wait(&mut self, ms: i32) {
@@ -151,10 +194,21 @@ impl Scene<'_> {
         self.wait(20);
     }
 
-    /// The walkable element holding the active focus, by its number in a tree, if any.
+    /// The walkable element holding the active focus, by its number in a tree, if any; a focus on an item made since the
+    /// tree was read (a carousel's card scrolled in) is found by its nearest ancestor the tree holds.
     pub fn focus(&mut self, tree: &Tree) -> Option<u32> {
         let id = ffi::harness_focus(self.window());
-        tree.index_of(id).map(|index| tree.walkable_of(index))
+        if let Some(index) = tree.index_of(id) {
+            return Some(tree.walkable_of(index));
+        }
+        let now = self.tree();
+        let mut at = now.index_of(id)? as usize;
+        loop {
+            if let Some(index) = now.nodes[at].id.parse().ok().and_then(|held| tree.index_of(held)) {
+                return Some(tree.walkable_of(index));
+            }
+            at = now.nodes.iter().position(|n| n.id == now.nodes[at].parent)?;
+        }
     }
 
     pub fn focus_item(&mut self, tree: &Tree, index: u32) -> bool {
@@ -251,23 +305,53 @@ impl Scene<'_> {
         self.wait(5);
     }
 
-    /// Where a press of each direction from each operable element lands: the edges pad reach is judged by.
-    pub fn record_edges(&mut self, tree: &Tree) -> Vec<Edge> {
-        let mut edges = Vec::new();
+    /// Where a press of each direction from each operable element lands, kept whatever the outcome, as a recording keeps it;
+    /// what each press moved (a list's selection, a tab, a value, a scroll) is put back before the next, as InterfaceSpec §3's walk does.
+    pub fn walk(&mut self, tree: &Tree) -> Vec<Step> {
+        let mut steps = Vec::new();
         for from in tree.operable() {
             for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
                 if !self.focus_item(tree, from) {
                     continue;
                 }
                 self.pad(button);
-                if let Some(to) = self.focus(tree) {
-                    if to != from {
-                        edges.push(Edge { from: ElementId(from), button, to: ElementId(to) });
-                    }
+                let to = match self.focus(tree) {
+                    Some(to) if to == from => Landing::Same,
+                    Some(to) => Landing::At(to),
+                    None => Landing::Lost,
+                };
+                steps.push(Step { from, button, to });
+                self.put_back(tree);
+            }
+        }
+        steps
+    }
+
+    /// Writes back every selection, value, scroll and focus scope's remembered item that differs from the tree's, then
+    /// settles the views; a path's offset is not written, since it follows its current index by the view's own animation.
+    fn put_back(&mut self, before: &Tree) {
+        for node in before.nodes.iter().filter(|n| !n.scoped.is_empty()) {
+            let want: u64 = node.scoped.parse().unwrap_or(0);
+            if ffi::harness_scoped(self.window(), node.id.parse().unwrap_or(0)) != want {
+                ffi::harness_give_focus(self.window(), want);
+            }
+        }
+        for node in &before.nodes {
+            let id: u64 = node.id.parse().unwrap_or(0);
+            for (property, value) in node.kept.iter().filter(|(property, _)| *property != "offset") {
+                let name = QString::from(property.as_str());
+                let now = ffi::harness_get(self.window(), id, &name);
+                if now.is_finite() && value.is_finite() && (now - value).abs() > 1e-6 {
+                    ffi::harness_put(self.window(), id, &name, *value);
                 }
             }
         }
-        edges
+        self.settle(before);
+    }
+
+    /// The edges pad reach is judged by: the presses that moved the focus.
+    pub fn record_edges(&mut self, tree: &Tree) -> Vec<Edge> {
+        edges(&self.walk(tree))
     }
 
     /// kit-core's rules over the tree at this window size, for a form, with the focus and the edges given.
@@ -296,17 +380,64 @@ impl Scene<'_> {
         height: f64,
     ) -> Vec<Fault> {
         let declared = palette(variant);
-        let scale = (height / 800.0).max(1.0);
+        let measures = Measures::of(form, height);
         let state = State {
             panel: audit::Rect::new(0.0, 0.0, width, height),
             form,
             focus: focus.map(ElementId),
             edges,
             declared: &declared,
-            slack: if scale > 1.0 { 1.5 } else { 1.0 },
-            smallest: if form == WalkForm::Desktop { 0.0 } else { audit::smallest_capitals() * scale },
+            slack: measures.slack,
+            smallest: measures.floor * audit::DESKTOP_CAPS * measures.unit,
         };
         audit::check(root, &state)
+    }
+}
+
+/// Where one press from an element landed: another element, the same one, or no element of the tree.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Landing {
+    At(u32),
+    Same,
+    Lost,
+}
+
+/// One press of the walk: from an element, a direction, and where the focus landed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Step {
+    pub from: u32,
+    pub button: UiButton,
+    pub to: Landing,
+}
+
+/// The presses of a walk that moved the focus, as kit-core's pad reach reads them.
+pub fn edges(steps: &[Step]) -> Vec<Edge> {
+    steps
+        .iter()
+        .filter_map(|s| match s.to {
+            Landing::At(to) => Some(Edge { from: ElementId(s.from), button: s.button, to: ElementId(to) }),
+            Landing::Same | Landing::Lost => None,
+        })
+        .collect()
+}
+
+/// The audit's measures of a state: screen pixels to a design pixel, the slack, and the smallest words as a size of the desktop face (0 where none is held).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Measures {
+    pub unit: f64,
+    pub slack: f64,
+    pub floor: f64,
+}
+
+impl Measures {
+    pub fn of(form: WalkForm, height: f64) -> Measures {
+        let unit = (height / 800.0).max(1.0);
+        let slack = if unit > 1.0 { 1.5 } else { 1.0 };
+        if form == WalkForm::Desktop {
+            Measures { unit: 1.0, slack, floor: 0.0 }
+        } else {
+            Measures { unit, slack, floor: audit::SMALLEST_TEXT }
+        }
     }
 }
 

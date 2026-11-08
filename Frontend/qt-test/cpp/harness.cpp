@@ -8,6 +8,8 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QMetaProperty>
+#include <QtGui/QAccessible>
 #include <QtGui/QColor>
 #include <QtGui/QFontMetricsF>
 #include <QtGui/QImage>
@@ -16,8 +18,10 @@
 #include <QtQml/QQmlProperty>
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
+#include <QtQuickTest/quicktest.h>
 #include <QtTest/QTest>
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 
 namespace {
@@ -71,6 +75,19 @@ QJsonArray coloursOf(QQuickItem* item)
     return colours;
 }
 
+// What a press may move and the walk puts back after each: a selection, a value or a scroll, as Qt Quick's own classes declare them (EmuSen_Kit.md §7.11).
+QJsonObject keptOf(QQuickItem* item)
+{
+    QJsonObject kept;
+    for (const char* name : {"currentIndex", "value", "contentX", "contentY", "offset"}) {
+        const QMetaProperty p = item->metaObject()->property(item->metaObject()->indexOfProperty(name));
+        if (p.isValid() && p.isWritable() && QByteArray(p.enclosingMetaObject()->className()).startsWith("QQuick")) {
+            kept[QLatin1String(name)] = p.read(item).toDouble();
+        }
+    }
+    return kept;
+}
+
 // Where the words are laid out: inside the paddings, the text's own size placed by its alignment, in the scene.
 QRectF glyphBox(QQuickItem* item)
 {
@@ -102,6 +119,8 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["w"] = rect.width();
     node["h"] = rect.height();
     node["visible"] = item->isVisible() && opacity > 0;
+    node["enabled"] = item->isEnabled();
+    node["scale"] = unit.height();
     node["opacity"] = opacity;
     node["clip"] = item->clip();
     node["hit"] = item->isVisible() && item->isEnabled() && (item->acceptedMouseButtons() != Qt::NoButton || handlers);
@@ -127,6 +146,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["ink"] = item->isEnabled() ? ink.name(QColor::HexArgb) : QString(); // words of a disabled control are exempt (WCAG 2.1, 1.4.3)
         node["size"] = font.pixelSize() > 0 ? font.pixelSize() : font.pointSizeF() * 4.0 / 3.0;
         node["bold"] = font.weight() >= QFont::Bold;
+        node["face"] = font.family();
         const QRectF glyphs = glyphBox(item);
         node["glyphs"] = QJsonArray{glyphs.x(), glyphs.y(), glyphs.width(), glyphs.height()};
     }
@@ -135,6 +155,7 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         node["sv"] = direction != 1 && item->property("contentHeight").toDouble() > item->height() + 0.5;
         node["sh"] = direction != 2 && item->property("contentWidth").toDouble() > item->width() + 0.5;
         node["wheel"] = item->property("interactive").toBool();
+        node["ch"] = item->property("contentHeight").toDouble() * unit.height();
     }
     if (item->inherits("QQuickPathView")) {
         node["sh"] = item->property("count").toInt() > item->property("pathItemCount").toInt();
@@ -151,8 +172,11 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
         heard = item->property("placeholderText").toString();
     }
     node["heard"] = heard;
-    node["role"] = QQmlProperty(item, QStringLiteral("Accessible.role"), qmlContext(item)).read().toInt();
+    const QAccessibleInterface* reader = QAccessible::queryAccessibleInterface(item); // the role a screen reader is given
+    node["role"] = reader != nullptr ? static_cast<int>(reader->role()) : 0;
     node["colors"] = coloursOf(item);
+    node["kept"] = keptOf(item);
+    node["scoped"] = item->scopedFocusItem() != nullptr ? QString::number(idOf(item->scopedFocusItem())) : QString();
     out.append(node);
     for (QQuickItem* child : item->childItems()) {
         dump(child, idOf(item), opacity, out);
@@ -170,6 +194,12 @@ QQuickItem* find(QQuickItem* item, std::uint64_t id)
         }
     }
     return nullptr;
+}
+
+QQuickItem* itemOf(QObject& window, std::uint64_t id)
+{
+    QQuickWindow* w = quick(window);
+    return w != nullptr ? find(w->contentItem(), id) : nullptr;
 }
 
 // Every text at no opacity, or back at the opacity it had, so a grab shows what is behind the words.
@@ -267,7 +297,7 @@ void harness_resize(QObject& window, int width, int height)
 {
     if (QQuickWindow* w = quick(window)) {
         w->resize(width, height);
-        QTest::qWait(20);
+        QQuickTest::qWaitForPolish(w); // what Qt declares: no item still to lay out
     }
 }
 
@@ -313,13 +343,39 @@ std::uint64_t harness_focus(QObject& window)
 
 bool harness_focus_item(QObject& window, std::uint64_t id)
 {
-    QQuickWindow* w = quick(window);
-    QQuickItem* item = w != nullptr ? find(w->contentItem(), id) : nullptr;
+    QQuickItem* item = itemOf(window, id);
     if (item == nullptr) {
         return false;
     }
     item->forceActiveFocus();
     return true;
+}
+
+// One item's number property by its id, read (NaN when there is none) or written back.
+double harness_get(QObject& window, std::uint64_t id, const QString& property)
+{
+    QQuickItem* item = itemOf(window, id);
+    return item != nullptr ? item->property(property.toUtf8().constData()).toDouble() : std::nan("");
+}
+
+bool harness_put(QObject& window, std::uint64_t id, const QString& property, double value)
+{
+    QQuickItem* item = itemOf(window, id);
+    return item != nullptr && item->setProperty(property.toUtf8().constData(), value);
+}
+
+// A focus scope's remembered item, read by its id, or given back with setFocus, which moves no focus outside its scope.
+std::uint64_t harness_scoped(QObject& window, std::uint64_t scope)
+{
+    QQuickItem* item = itemOf(window, scope);
+    return item != nullptr && item->scopedFocusItem() != nullptr ? idOf(item->scopedFocusItem()) : 0;
+}
+
+void harness_give_focus(QObject& window, std::uint64_t id)
+{
+    if (QQuickItem* item = itemOf(window, id)) {
+        item->setFocus(true);
+    }
 }
 
 bool harness_grab(QObject& window, const QString& path)

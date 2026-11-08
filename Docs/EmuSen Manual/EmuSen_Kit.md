@@ -768,6 +768,146 @@ composited over what is behind it, the spare tenth, and no ink nothing to judge.
 failed the gate with a list cut short in every form, variant and size. The first star moved 12.8 pixels to the right
 failed the gate's comparison with the reference at 7 pixels, against 4 spare and 0 when clean.
 
+### 7.11 The spec writer (stage 0, the rest, step 1; 2026-11-08)
+
+`emusen-qt-test`'s `spec` module writes a shown state in `EmuSen_InterfaceSpec.md` §2's `spec 1` format, so that a Qt
+screen is held to the C# recording of the screen it replaces by the C# side's own reader, comparator and rules
+(`EmuSen_Qt.md` §8.2) *[own, because the format is EmuSen's own and Qt has no writer for it]*. Its one job is
+translation: it takes kit-core's audit `Item` tree as `tree.rs` built it, the raw dump beside it and the walk, and
+writes text. It decides none of the facts the rules read; each is the decision kit-core's audit already made, so a
+recording and the audit cannot disagree about the state they describe.
+
+**The header.** `state`, `size`, `kind` (the caller's: the gallery writes `menu` on the big screen and the card, `sheet`
+on the desktop), `root` (the root item's QML type and `objectName`), `unit`, `slack` and `floor`, `frame` (the window),
+`case` and `palette` (the variant's token colours, each once, as `#RRGGBBAA`). `unit`, `slack` and `floor` come from
+`harness::Measures::of(form, height)`, the same value the audit's `State` is now built from. The banner, a comment every
+reader skips, names the Qt front end.
+
+**The tree.** Every shown item under the root, depth first, numbered from 0. An item kit-core does not show (Qt's
+`visible` false, at no opacity, or wholly outside a clip that scrolls, §7.10) is left out with what is under it, and a
+backdrop is one line, as the rules read it. Each key, from where:
+
+| Key | From |
+|---|---|
+| `role` | the role Qt's accessibility gives the item (`QAccessible::queryAccessibleInterface`, what a screen reader is told), in the format's words, which are Avalonia's control types (`text`, `button`, `listitem`, `scrollbar`, …); a Qt role with no counterpart is `none` |
+| `name`, `text`, `heard` | `objectName`; a text's words; the spoken name kit-core's item carries (§7.9) |
+| `at`, `seen` | the scene rectangle; the part no clipping ancestor hides, where that differs |
+| `op`, `unseen`, `off` | kit-core's operable and unseen; a disabled item |
+| `drawn`, `nohit` | kit-core's `is_drawn`; not hit-testable |
+| `limit`, `by` | on drawn items, kit-core's limit: the nearest ancestor that clips or scrolls (`scroll` when it scrolls down, else `clip`), or the window (`panel`) |
+| `owner`, `in` | words whose parent is a control or a row, as kit-core's rule reads them; the scrollers above |
+| `overflow`, `viewport`, `fades`, `vfixed` | a scroller's content height past its own, its rectangle, the edges it declares it fades, and no vertical scrolling |
+| `layout`, `box`, `ellipsis`, `size`, `caps`, `face` | a text's laid-out size and its item's, in scene pixels; truncation; the font's size and capitals in design pixels; the family |
+| `paints` | the colours kit-core reads, except under a scene (`Body`, `Sky`, `Moonrise`, a backdrop), which kit-core exempts from palette reach while the format exempts only whole scenes |
+| `allow` | the reason of `SMALL_TEXT_EXCEPTIONS` for the item it names |
+
+**The focus and the walk.** `Scene::walk` keeps every press's outcome (`Landing::At`, `Same`, `Lost`), and
+`record_edges` is now the moves among them, so the audit and the recording read one walk. A press from or onto an item
+not written (a row built out of view) names it by its `path:` of child indices, the format's reference for a control it
+did not record. A focus that lands on an item made after the tree was read (a carousel's card scrolled in) is the
+walkable element holding it, found through a fresh tree by its nearest ancestor the first one holds.
+
+**The walk puts back what each press moved**, as `EmuSen_InterfaceSpec.md` §3's walk puts back lists' selections and
+scroll offsets: a recording must not depend on the states visited before it. After every press the harness reads back
+and restores what the tree recorded of two kinds. The selections, values and scrolls Qt Quick's own classes declare
+(`currentIndex`, `value`, `contentX`, `contentY`, and a path's `offset`, each only where a `QQuick` class declares it
+and it is writable, so a binding is written only where a press already broke it) are written back where they differ;
+a path's offset is not written, since it follows its current index by the view's own animation, and writing it
+mid-move was measured to leave the carousel between cards; the views are settled instead (below). A focus scope's
+remembered item is given back with `setFocus`, which moves no focus outside the scope. Found on 2026-11-08: the dark
+and the light Controls state at 1280 × 800 differed by six focus edges, because the first state's walk had pressed
+Right on the tab bar (changing the tab) and Right from the combo box (leaving its row remembering the text field), and
+every later state began there; it showed at one size only because that state is visited first.
+
+**A state is read only when its views are at rest, as Qt declares it** (`Scene::settle`). Every flickable and path
+view in the tree must be neither `moving` nor `flicking`, and a path view that holds its current item in its highlight
+range (`StrictlyEnforceRange`) must stand at the offset that item rests at, `fmod(count - currentIndex, count)`, the
+target Qt's own step to an index moves to. The harness polls those declarations every 10 ms and fails the state past
+5 s, so an unsettled state is refused rather than read. `resize` settles after `QQuickTest::qWaitForPolish` (Qt's word
+that no item is still to be laid out) where it slept 20 ms, and the put-back settles after its writes. The gallery gate
+reads each state after a resize and so after a settle; its fixed 60 ms wait is gone.
+
+The defect that showed it, measured on 2026-11-08. The release gate failed about two runs in three with
+`big-Dark-menu-3840x2160: rests outside the carousel 341: 350, Card… at 2950,875 486x648`, the same card at the same
+rectangle, at 4K only, while the debug gate passed. The mechanism: the walk's Left and Right on the carousel each start
+a Reel step (400 ms) towards a new current index, and **Qt declares no movement during such a step**: a probe sampling
+the carousel every 10 ms after a press read `moving=false flicking=false` throughout, while the offset went from 8 to 7
+over 380 ms (`~/.cache/emusen/tmp/qt-stage0/probe-carousel-moving.log`). The walk left the carousel stepping back to its
+index, and the next state was read about 110 ms later with the offset a few thousandths of an item short: logged before
+each big-screen Menu read in a release run, 0.0029 at 1920 × 1080, 0.0072 at 1280 × 720 and 0.0032 at 3840 × 2160, the
+run that failed. A thousandth of an item is 0.55 pixels at 4K, where an item is 551 pixels, and 0.28 at 1920 × 1080, so
+only at 4K did the card at the carousel's edge stand past its box by more than the audit's 1.5-pixel slack; the release
+build's steady timing left the same residue each time, hence the same rectangle. With the settle, the same log read an
+offset of 0 at every state. Without it (the put-back and the settle taken out), three release runs failed once, with
+that line exactly.
+
+Measured on 2026-11-08 with the settle: **10 release runs of the gate, each beside a release build of the kit in a
+target folder of its own with the compiler cache off, at a load average of 10.2 to 13.2 on 16 threads: 10 passed**,
+41 to 48 s each (`~/.cache/emusen/tmp/qt-stage0/runs/`). The check still catches a real spill: the carousel's old
+`pathItemCount` (as many as cover its width, plus two) seeded again failed the release gate with 192 `rests outside the
+carousel` faults, the first `big-Dark-menu-1280x800: … Card… at 1229,324 180x240`.
+
+Seen in every run since step 1, the debug and release gates alike and before any change of this section, and not part
+of it: when the question opens, Qt logs `RangeError: Maximum call stack size exceeded` twenty times from `Sheet.qml`
+and `Frame.qml`. The gate passes over it; it is owed to the sheet's focus handling (§7.7).
+
+**Not written, and why.** `focus` (focusable): the dump has one fact, `operable`, and writing it twice would be an
+invention. `sideways`, `live`, `element`, `volatile`, `part`, `title`, `footer`, `walk` and `entered`: nothing in the
+kit has them yet, and the walk starts from every operable item, so it is never truncated. The grammar's presses after
+the walk are owed to stage 1, where each screen's test says what its presses observe.
+
+**Two toolkits' facts, read side by side.** A Qt `Text` is not hit-testable where Avalonia's `TextBlock` is, so C#'s
+overlap rule, which reads drawn items without `nohit`, passes over words that kit-core's overlap rule still judges;
+the Qt slack is kit-core's 1.5 above a unit of 1, where the C# recordings at 1920 × 1200 write 2; and `layout` and `box`
+are scene pixels, where the C# writes the control's own. None changes a comparison (`InterfaceSpec.Compare` reads names,
+roles, words, rectangles and the focus graph), and each is the toolkit's fact rather than one bent to match.
+
+**The C++** grows by 59 lines (`harness.cpp` 420, `harness.h` 28): four facts in the dump (enabled, the item's scale in
+the scene, the face, a flickable's content height); the role read from Qt's accessibility instead of the attached
+`Accessible.role`, which only items that declare one carry (every `Text` read `none` through it); and the put-back's
+reads and writes (what a press may move, a focus scope's remembered item, an item found by its id, a number read and
+written, the focus given back). Switching accessibility on (`QAccessible::setActive`) was tried first and changed no
+recorded byte, so it is not done. A first put-back that read the whole tree after every press took the gate from 44 s to
+103 s; reading only the recorded properties keeps it at 50 s.
+
+**Proved with the C# side's own code**, measured on 2026-11-08. The gate writes each of its 73 states as `<state>.spec`
+beside its grab in `~/.cache/emusen/tmp/kit-gallery/`. A program outside the tree
+(`~/.cache/emusen/tmp/qt-stage0/spec-proof/`) compiled WiseMan's `Fixtures/InterfaceSpec.cs` and
+`Fixtures/InterfaceRules.cs` unchanged, with `FitAudit.DesktopCaps` (0.7273, the one value the rules read from the
+Avalonia-bound `FitAudit.cs`, and kit-core's `DESKTOP_CAPS`) stated beside them. For every recording it read the file
+with `SpecDocument.Parse`, wrote it back with `SpecDocument.Write` and compared the bytes after the banner, ran
+`InterfaceRules.All`, and ran `InterfaceSpec.Compare` against `big-Dark-menu-1280x800`. Its output (`all.txt` there):
+
+- 73 of 73 written back byte for byte;
+- the C# rules (fit, pad reach, names, palette reach) found **0 faults in all 73**, as kit-core's audit had;
+- the comparator, which reads no colours, found **0 differences** between the dark and the light recording of every
+  state, all 36 pairs (six in one pair before the put-back, above); against `big-Dark-menu-1280x800` it named 19 in
+  the same state at 1920 × 1080, rectangles measured in the expected state's design pixels, for example `navigation: at
+  86.4,54,1747.2,135, recorded 64,40,1152,100, 617.6 design px apart`, and 95 in the Controls section, beginning
+  `missing: MenuPanel panel`.
+
+Two runs of the gate wrote the 73 recordings identically but for one line in each of the eight desktop Menu states:
+the width of the section list's content item, Qt's own estimate, 1278.35 in one run and 1277.83 in the other. It is an
+unnamed item the comparator does not read; a byte-for-byte hold of a recording would have to leave it out.
+
+Recordings are change detectors only (`EmuSen_Qt.md` §8.2). The gallery's are written for the comparison and a reader's
+look, not committed and not held byte for byte: the gallery has no C# screen to be compared with, and its own pictures
+are held by the gate.
+
+**Held to**: `qt-test/tests/spec.rs`, one test: numbers and quoting as C#'s `Num` and `Quote` write them; the menu scene
+recorded, its header in the format's order, the ids in order with no level jumped, each line's facts in key order, the
+panel by name, the rows operable and named, a row's words owned by the row with their capitals, face and limit, the
+focus on the first row, Down reaching the second, Up staying (`same`), every press an edge line. The harness's scenes
+(`menu`, `sheet`, `style`, `lint`) and the gate pass unchanged over the walk. Measured on 2026-11-08 with three seeded
+faults, each reverted: words owned by their outermost ancestor rather than their parent failed `spec.rs` (no owner on the
+first row's words); a press that kept the focus recorded as lost failed it (`edge 8 up same` missing); the facts written
+in reverse order failed its key order, and, before that check existed, the C# round trip (`written back DIFFERENTLY`,
+the first difference at line 14). The put-back is held by `spec.rs` (a second walk records the same text) and
+`style.rs` (after the walk the tab, the slider's value, the combo box's choice and its row's remembered focus are as
+before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s second walk; selections never written
+failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
+so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -804,7 +944,11 @@ CubicOut curve numbered as InCubic failed the easing test; the swap applied inve
 **Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
 kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
 `cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
-harness 254), not the 264 first written here. Budget: under 600 for the whole front end.
+harness 254), not the 264 first written here. Budget: under 600 for the whole front end. With §7.11's 59 lines,
+`cpp/harness.cpp` is 420, `cpp/harness.h` 28, and the front end **471**; with the polish wait's include, 421 and **472**.
+The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not bind: `QAccessible::queryAccessibleInterface`,
+`QMetaProperty`'s declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address, and
+`QQuickTest::qWaitForPolish`.
 
 ### 7.7 Open
 
@@ -822,6 +966,9 @@ harness 254), not the 264 first written here. Budget: under 600 for the whole fr
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
 - Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
   units as the audit's named exception to the floor (§7.10).
+- Owed by §7.11: the question's opening logs `RangeError: Maximum call stack size exceeded` from `Sheet.qml` and
+  `Frame.qml` twenty times, in every gate run since 54f2dc43c; a recursion between the sheet's focus and the frame's,
+  read and fixed in the kit, not the gate.
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help

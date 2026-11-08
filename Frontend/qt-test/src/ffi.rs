@@ -20,6 +20,10 @@ pub mod ffi {
         fn harness_wait(ms: i32);
         fn harness_focus(window: Pin<&mut QObject>) -> u64;
         fn harness_focus_item(window: Pin<&mut QObject>, id: u64) -> bool;
+        fn harness_get(window: Pin<&mut QObject>, id: u64, property: &QString) -> f64;
+        fn harness_put(window: Pin<&mut QObject>, id: u64, property: &QString, value: f64) -> bool;
+        fn harness_scoped(window: Pin<&mut QObject>, scope: u64) -> u64;
+        fn harness_give_focus(window: Pin<&mut QObject>, id: u64);
         fn harness_grab(window: Pin<&mut QObject>, path: &QString) -> bool;
         fn harness_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> QString;
         unsafe fn harness_singleton(engine: Pin<&mut QQmlApplicationEngine>, module: &QString, name: &QString) -> *mut QObject;

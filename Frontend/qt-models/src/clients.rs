@@ -4,6 +4,7 @@
 //! store through the scraper's sources-alone handle (emusen.scrape `media`, EmuSen_Backend.md §40.5).
 
 use crate::esde_shelves::{MediaIndex, Plays};
+use crate::gamelists::Collection;
 use crate::library::{without_port_mark, Engine, LibrarySource};
 use emusen_crystal_client::shapes::{CoreRow, SystemRow};
 use emusen_crystal_client::{Runtime, Scope};
@@ -135,6 +136,27 @@ impl LibrarySource for ClientSource {
         Ok(games.iter().filter_map(of).collect())
     }
 
+    fn collections(&self) -> Result<Vec<Collection>, String> {
+        let all = self.library.get(&json!({ "what": "collections" })).map_err(words)?;
+        let mut out = Vec::new();
+        for c in all.as_array().into_iter().flatten() {
+            let Some(id) = c.get("id").and_then(Value::as_i64) else { continue };
+            let members = self.library.get(&json!({ "what": "members", "id": id })).map_err(words)?;
+            let members = members.as_array().map(|m| m.iter().filter_map(|p| p.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+            out.push(Collection { id, name: c.get("name").and_then(Value::as_str).unwrap_or("").to_owned(), members });
+        }
+        Ok(out)
+    }
+
+    fn folder_links(&self) -> Result<Vec<(String, String)>, String> {
+        let edits = self.library.get(&json!({ "what": "all_edits" })).map_err(words)?;
+        let link = |(folder, e): (&String, &Value)| {
+            let link = e.get("folderlink")?.as_str().filter(|l| !l.is_empty())?;
+            Some((folder.clone(), lexical(&std::path::Path::new(folder).join(link))))
+        };
+        Ok(edits.as_object().map(|by| by.iter().filter_map(link).collect()).unwrap_or_default())
+    }
+
     fn media_index(&self, systems: &[String]) -> Result<MediaIndex, String> {
         let Some((_, scraper)) = &self.scraper else { return Ok(MediaIndex::default()) };
         let settings = app_settings(&self.platform)?;
@@ -226,4 +248,20 @@ fn open_scraper(platform: &Arc<Platform>, runtime: &Runtime, games_db: &str, sql
     };
     let serial = platform.scraper_open(&config, Some(sqlite)).ok()?;
     Some((serial, platform.scrape_service().ok()?))
+}
+
+/// A path with its `.` and `..` resolved by name alone, as .NET's GetFullPath resolves a folder link.
+fn lexical(path: &std::path::Path) -> String {
+    use std::path::Component;
+    let mut out = std::path::PathBuf::new();
+    for part in path.components() {
+        match part {
+            Component::ParentDir => {
+                out.pop();
+            }
+            Component::CurDir => {}
+            other => out.push(other),
+        }
+    }
+    out.to_string_lossy().into_owned()
 }

@@ -5836,6 +5836,12 @@ minors as a client needs them:
 ```
 
 A game no named system takes has `"system": null`. Narrowing recomputes `ok` and `empty`, as `RomLibrary.Narrow` does.
+Since 1.2 each game has `"package"`, its package's folder or null. Since 1.3 (decided 2026-11-08, for the ES-DE view's
+folders, `EmuSen_Qt.md` §4.6) each has `"folder"`: the folders between the console folder (a root's first level) and
+the file, '/'-separated, as ES-DE's `ROMs/<system>/<folder>/<file>` reads them, from Galaxia's `game_folders::of`
+against the first root that holds the game; `""` at the console folder's top and for a package's game, which is one
+entry at its console's top (`EmuSen_GamePackages.md` §3.6). A 1.2 client skips the key, as the header's rule has it;
+`tests/library.rs` reads the answer with 1.2's shapes.
 
 **`identity`** answers what a dump is: `{"path": …, "systems": [...]?, "record": true}` gives `{"path": …, "bytes":
 40976, "modified": 638000000000000000, "md5": "…", "crc32": "…", "system": "nes", "cached": true}`. `modified` is

@@ -25,7 +25,7 @@ pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("hwcount", false, "  hwcount --from TEXT [--to TEXT] [--per N] [--units FILE] [--functions N] [--period N] -- <program> [args]\n                                host instructions, cycles and IPC of a program's window, per thread and by unit"),
     ("qml-rules", false, "  qml-rules [--fixture] <path>...\n                                the Qt front end's rule that QML is layout only, over .qml files; one finding a line, then ok or N findings"),
     ("esde-check", false, "  esde-check [--diagnostics | --properties] [--systems a,b,...] <folder>...\n                                ES-DE themes loaded for every variant and system, as TSV: a row a theme, its diagnostics, or its property map"),
-    ("theme-check", false, "  theme-check <folder>...\n                                an EmuSen theme package's manifest, QML and token overrides; one finding a line, then ok or N findings"),
+    ("theme-check", false, "  theme-check [--static] [--state DIR] <folder>...\n                                an EmuSen theme package's manifest, QML and token overrides, then its screens loaded and audited; one finding a line, then ok or N findings"),
 ];
 
 const USAGE: &str = "Usage: dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n  Exit 1 for a finding of --min-tokens (100) or more, 0 otherwise, 2 when it could not run. See man dupes.";

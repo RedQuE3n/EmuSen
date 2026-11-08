@@ -74,6 +74,7 @@ ElementBox {
         contentY: root.contentY - root.marginY
         delegate: Item {
             id: cell
+            objectName: "cell-" + cell.index
             required property int index
             required property string text
             required property url image

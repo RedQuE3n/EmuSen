@@ -230,6 +230,22 @@ fn element_roles() -> impl Iterator<Item = &'static str> {
     values::ELEMENT_ROLES.into_iter().chain(values::GRID_ROLES)
 }
 
+// A list follows its EsdeModel: a new scene takes a share of the painter, and each change of it or of the revision refreshes.
+// A macro, since cxx-qt generates each `on_*_changed` as an inherent method of its own type, with no trait to be generic over.
+macro_rules! follow_scene {
+    ($model:ident) => {
+        $model
+            .as_mut()
+            .on_scene_changed(|mut m| {
+                let shared = shared_of(*m.scene());
+                m.as_mut().rust_mut().shared = shared;
+                m.refresh();
+            })
+            .release();
+        $model.as_mut().on_revision_changed(|m| m.refresh()).release();
+    };
+}
+
 // The painter of the EsdeModel a list was given; the list keeps a share of it, not the pointer.
 fn shared_of(scene: *mut EsdeModel) -> Option<Shared> {
     // SAFETY: QML hands a live EsdeModel or null; it is read once, here, on the GUI thread.
@@ -290,14 +306,7 @@ impl ElementModelRust {
 
 impl cxx_qt::Initialize for qobject::ElementModel {
     fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut()
-            .on_scene_changed(|mut m| {
-                let shared = shared_of(*m.scene());
-                m.as_mut().rust_mut().shared = shared;
-                m.refresh();
-            })
-            .release();
-        self.as_mut().on_revision_changed(|m| m.refresh()).release();
+        follow_scene!(self);
     }
 }
 
@@ -368,14 +377,7 @@ impl Default for SlotsModelRust {
 
 impl cxx_qt::Initialize for qobject::SlotsModel {
     fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut()
-            .on_scene_changed(|mut m| {
-                let shared = shared_of(*m.scene());
-                m.as_mut().rust_mut().shared = shared;
-                m.refresh();
-            })
-            .release();
-        self.as_mut().on_revision_changed(|m| m.refresh()).release();
+        follow_scene!(self);
         self.as_mut().on_leaving_changed(|m| m.refresh()).release();
     }
 }
@@ -436,14 +438,7 @@ impl Default for RowsModelRust {
 
 impl cxx_qt::Initialize for qobject::RowsModel {
     fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut()
-            .on_scene_changed(|mut m| {
-                let shared = shared_of(*m.scene());
-                m.as_mut().rust_mut().shared = shared;
-                m.refresh();
-            })
-            .release();
-        self.as_mut().on_revision_changed(|m| m.refresh()).release();
+        follow_scene!(self);
         self.as_mut().on_leaving_changed(|m| m.refresh()).release();
     }
 }
@@ -494,14 +489,7 @@ impl Default for PartsModelRust {
 
 impl cxx_qt::Initialize for qobject::PartsModel {
     fn initialize(mut self: Pin<&mut Self>) {
-        self.as_mut()
-            .on_scene_changed(|mut m| {
-                let shared = shared_of(*m.scene());
-                m.as_mut().rust_mut().shared = shared;
-                m.refresh();
-            })
-            .release();
-        self.as_mut().on_revision_changed(|m| m.refresh()).release();
+        follow_scene!(self);
         self.as_mut().on_element_changed(|m| m.refresh()).release();
     }
 }

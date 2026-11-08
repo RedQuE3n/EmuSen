@@ -71,8 +71,8 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
     assert!(mapping::is_mapped("helpsystem", "textColorDimmed"));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
     assert!(!mapping::is_mapped("carousel", "itemLinearScale"));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 367);
-    assert!(mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"));
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 347);
+    assert!(!mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"), "the gameselector waits for its family; sound is played");
 }
 
 #[test]
@@ -216,6 +216,30 @@ fn a_picture_with_max_size_is_contained_once_its_own_size_is_known() {
 }
 
 #[test]
+fn a_pictures_own_size_holds_across_a_resize() {
+    let t = Synth::new();
+    t.asset("art.png");
+    let images = "<image name=\"i\"><pos>0 0</pos><maxSize>0.5 0.5</maxSize><path>./art.png</path></image>\
+                  <image name=\"j\"><pos>0 0.5</pos><size>0 0.25</size><path>./art.png</path></image>";
+    let mut s = stage(&t, images, "", "system", 0);
+    for name in ["i", "j"] {
+        let id = placed(&s.frame(), name).id;
+        s.measured(id, 400.0, 100.0);
+    }
+    let boxes = |s: &mut Stage| ["i", "j"].map(|n| placed(&s.frame(), n).clone()).map(|p| (p.w / s.current.data.width, p.h / s.current.data.height));
+    let before = boxes(&mut s);
+    assert_eq!(before[0], (0.5, 0.2));
+    let mut data = s.current.data.clone();
+    (data.width, data.height) = (W * 1.5, H * 1.5);
+    s.restart(data, "system", 0);
+    assert_eq!(boxes(&mut s), before, "no delegate need report again: the picture's aspect is its file's");
+    // Decoded again at the new box's width, the picture's height rounds to a whole pixel: the same aspect, so nothing moves.
+    let id = placed(&s.frame(), "i").id;
+    assert!(!s.measured(id, 240.0, 61.0), "a rounding of the same aspect is no new measurement");
+    assert!(s.measured(id, 240.0, 80.0), "another aspect is");
+}
+
+#[test]
 fn a_text_sized_by_its_words_is_placed_by_its_origin_once_measured() {
     let t = Synth::new();
     let text = "<text name=\"t\"><pos>1 0</pos><origin>1 0</origin><text>Hello</text><letterCase>uppercase</letterCase><fontSize>0.1</fontSize><backgroundColor>000000</backgroundColor><backgroundMargins>0.01 0.02</backgroundMargins></text>";
@@ -231,7 +255,7 @@ fn a_text_sized_by_its_words_is_placed_by_its_origin_once_measured() {
 }
 
 #[test]
-fn the_help_names_the_project_s_actions_on_the_buttons_and_icons_of_the_pad() {
+fn the_help_names_es_de_s_actions_on_the_buttons_and_icons_of_the_pad() {
     let t = Synth::new();
     t.asset("b.svg");
     let help = "<helpsystem name=\"h\"><entries>a,b,up/down</entries><customButtonIcon button=\"button_b_PS\">./b.svg</customButtonIcon></helpsystem>";
@@ -239,14 +263,15 @@ fn the_help_names_the_project_s_actions_on_the_buttons_and_icons_of_the_pad() {
     let f = s.frame();
     let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
     let shown: Vec<_> = h.entries.iter().map(|e| (e.label.as_str(), e.button, e.pair)).collect();
-    assert_eq!(shown, [("LAUNCH", PadButton::South, false), ("BACK", PadButton::East, false), ("CHOOSE", PadButton::DpadUpDown, true)]);
+    // ES-DE 3.4.1 lists no up/down entry in a gamelist, and A reads Select on a game as on a folder.
+    assert_eq!(shown, [("SELECT", PadButton::South, false), ("BACK", PadButton::East, false)]);
     assert!(h.entries.iter().all(|e| e.icon.is_none()) && h.filled_glyphs);
     s.current.data.controller_type = ControllerType::PlayStation;
     s.current.data.swap = true;
     let f = s.frame();
     let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
     assert_eq!(h.entries[0].button, PadButton::East);
-    assert!(h.entries[0].icon.as_deref().is_some_and(|p| p.ends_with("b.svg")), "the swapped Launch takes the theme's B icon");
+    assert!(h.entries[0].icon.as_deref().is_some_and(|p| p.ends_with("b.svg")), "the swapped Select takes the theme's B icon");
 }
 
 #[test]
@@ -327,4 +352,41 @@ fn a_shown_clock_wakes_the_painter_at_the_next_minute() {
     assert_eq!(f.next_change_ms, Some(15_000));
     let Paint::Text(k) = &placed(&f, "k").paint else { panic!() };
     assert_eq!(k.text, "12:00");
+}
+
+#[test]
+fn the_help_follows_es_de_s_order_and_the_player_s_switches() {
+    let t = Synth::new();
+    let help = "<helpsystem name=\"h\"/>";
+    let labels = |s: &Stage| {
+        let f = s.frame();
+        let Paint::Help(h) = &placed(&f, "h").paint else { panic!() };
+        h.entries.iter().map(|e| e.label.clone()).collect::<Vec<_>>()
+    };
+    let mut s = stage(&t, help, "", "system", 0);
+    assert_eq!(labels(&s), ["MENU", "SELECT", "CHOOSE"]);
+    s.current.data.help.screensaver = true;
+    s.current.data.help.random_systems = true;
+    assert_eq!(labels(&s), ["MENU", "SELECT", "SCREENSAVER", "CHOOSE", "RANDOM"]);
+    let mut s = stage(&t, "", help, "gamelist", 0);
+    s.current.data.help.random_games = true;
+    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "FAVORITES", "SYSTEM", "RANDOM"]);
+    s.current.data.help.quick_select = "disabled".into();
+    assert_eq!(labels(&s), ["OPTIONS", "MENU", "SELECT", "BACK", "FAVORITES", "RANDOM"]);
+}
+
+#[test]
+fn only_a_picture_named_by_path_tiles() {
+    let t = Synth::new();
+    t.asset("a.png");
+    let gamelist = "<image name=\"path\"><pos>0 0</pos><size>0.5 0.5</size><path>./a.png</path><tile>true</tile></image>\
+        <image name=\"typed\"><pos>0.5 0</pos><size>0.5 0.5</size><imageType>screenshot</imageType><default>./a.png</default><tile>true</tile></image>";
+    let s = stage(&t, "", gamelist, "gamelist", 0);
+    let f = s.frame();
+    let fit = |name: &str| match &placed(&f, name).paint {
+        Paint::Picture(p) => p.fit,
+        _ => panic!("{name} is a picture"),
+    };
+    assert_eq!(fit("path"), Fit::Tile);
+    assert_eq!(fit("typed"), Fit::Fill, "THEMES.md: tile can only be used when path has been set");
 }

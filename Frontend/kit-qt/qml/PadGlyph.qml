@@ -12,7 +12,9 @@ Item {
     property alias style: marks.style
     property color ink: Kit.Tokens.text
     readonly property alias name: marks.name
-    implicitWidth: Kit.Tokens.fontGlyph * 1.4
+    // The glyph's own side over the glyph type's size.
+    readonly property real sideShare: 1.4
+    implicitWidth: Kit.Tokens.fontGlyph * root.sideShare
     implicitHeight: root.implicitWidth
     Accessible.role: Accessible.Graphic
     Accessible.name: marks.name
@@ -22,7 +24,8 @@ Item {
     }
     TextMetrics {
         id: inked
-        font.pixelSize: Kit.Tokens.fontGlyph * marks.letterScale
+        // The letter in proportion to the drawn glyph, read from the marks so no binding reads the item's own size (EmuSen_Kit.md §7.28).
+        font.pixelSize: Math.max(1, marks.size * marks.letterScale / root.sideShare)
         font.bold: marks.letterBold
         text: marks.letter
     }

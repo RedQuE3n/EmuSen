@@ -5,7 +5,7 @@ use crate::loader::Animation;
 
 use super::data::Data;
 use super::draw::{Drawn, Measures};
-use super::frame::{Frame, Row, Rows};
+use super::frame::{Frame, Paint, Row, Rows};
 use super::motion::{Glide, Time};
 use super::view::{ElementState, SceneView};
 
@@ -32,6 +32,12 @@ fn overlay(kind: &str) -> bool {
 impl Stage {
     pub fn new(data: Data, view: &str, now: Time) -> Self {
         Stage { current: SceneView::new(data, view, now), leaving: None, slide: Glide::at(0.0), direction: 0.0, measures: Measures::new() }
+    }
+
+    /// A new view over new data that keeps the painter's measurements, as a reload, a resize or another system asks (EmuSen_Qt.md §4.8.5).
+    pub fn restart(&mut self, data: Data, view: &str, now: Time) {
+        let measures = std::mem::take(&mut self.measures);
+        *self = Stage { measures, ..Stage::new(data, view, now) };
     }
 
     pub fn is_moving(&self) -> bool {
@@ -139,10 +145,17 @@ impl Stage {
     /// The painter's measurement of an element's content, kept while that content is shown; true when the frame changes (EmuSen_Qt.md §4.5.5).
     pub fn measured(&mut self, id: u64, w: f64, h: f64) -> bool {
         let (drawn, _) = self.drawn(&Measures::new());
-        let Some(content) = drawn.iter().find(|d| d.placed.id == id).map(|d| d.content) else { return false };
-        let entry = (content, w, h);
+        let Some(d) = drawn.iter().find(|d| d.placed.id == id) else { return false };
+        let entry = (d.content, w, h);
         if self.measures.get(&id) == Some(&entry) {
             return false;
+        }
+        // The same picture decoded at another width is its aspect again, to the pixel's rounding: the first stands, so a
+        // box is the same share of every window (EmuSen_Qt.md §4.8.5).
+        if let (Paint::Picture(_), Some(&(k, ow, oh))) = (&d.placed.paint, self.measures.get(&id)) {
+            if k == d.content && ow > 0.0 && oh > 0.0 && ((oh * w / ow - h).abs() <= 1.0 || (ow * h / oh - w).abs() <= 1.0) {
+                return false;
+            }
         }
         self.measures.insert(id, entry);
         true

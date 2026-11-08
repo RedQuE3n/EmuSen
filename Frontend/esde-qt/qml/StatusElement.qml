@@ -13,6 +13,10 @@ ElementBox {
     required property bool hasBackground
     required property color background
     required property real backgroundRadius
+    required property real padLeft
+    required property real padTop
+    required property real padRight
+    required property real padBottom
     PartsModel {
         id: parts
         scene: root.esde
@@ -20,15 +24,21 @@ ElementBox {
         element: root.elementId
     }
     Rectangle {
-        anchors.fill: parent
+        x: -root.padLeft
+        y: -root.padTop
+        width: root.width + root.padLeft + root.padRight
+        height: root.height + root.padTop + root.padBottom
         visible: root.hasBackground
         color: root.background
         radius: root.backgroundRadius
     }
+    // The icons' row is the element's size: the scene places it by its origin once measured (EmuSen_Qt.md §4.8.5).
+    onIconHeightChanged: root.esde.measured(root.elementId, items.width, root.iconHeight)
     Row {
         id: items
         x: root.width - items.width
-        height: root.height
+        height: root.iconHeight
+        onWidthChanged: root.esde.measured(root.elementId, items.width, root.iconHeight)
         spacing: root.entrySpacing
         Repeater {
             model: parts
@@ -37,7 +47,7 @@ ElementBox {
                 required property url source
                 required property string mark
                 required property string text
-                height: root.height
+                height: root.iconHeight
                 Icon {
                     anchors.verticalCenter: parent.verticalCenter
                     width: root.iconHeight
@@ -48,7 +58,7 @@ ElementBox {
                 }
                 TextBlock {
                     width: contentWidth
-                    height: root.height
+                    height: root.iconHeight
                     visible: item.text.length > 0
                     text: item.text
                     fontSource: root.fontSource

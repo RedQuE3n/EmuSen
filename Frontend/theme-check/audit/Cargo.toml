@@ -1,0 +1,45 @@
+[package]
+name = "emusen-theme-audit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-theme-audit"
+
+# theme-check's loaded step (EmuSen_Qt.md §3.7): a theme's screens placed offscreen through the theme host on a synthetic library,
+# then the fit, pad reach, pointer reach and no-chrome audits at the gate's five sizes in both variants. A program of its own on
+# the Qt side, which theme-check runs as a process, since the dev module that links theme-check must never pull in Qt.
+[[bin]]
+name = "theme-audit"
+path = "src/main.rs"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+serde_json.workspace = true
+# The audits' rules over an item tree (fit, pad and pointer reach, no chrome), never copied.
+emusen-kit-core.workspace = true
+# The kit's Tokens, switched in the theme's engine for each variant and for reduced motion.
+emusen-kit-qt.workspace = true
+# The headless harness: the offscreen window, its item tree, the walk, the grabs and the recordings.
+emusen-qt-test.workspace = true
+# The host that loads a theme the way the program does, with its sandbox (EmuSen_Qt.md §3.5.1).
+emusen-theme-host = { path = "../../theme-host" }
+# theme.json's screens, through the schema's one owner.
+emusen-theme-manifest = { path = "../manifest" }
+# What a theme sees, EmuSen.Theme 1.0, and the feeds of its views (EmuSen_Qt.md §3.2).
+emusen-theme-qt = { path = "../../theme-qt" }
+# The library's view as the program reads it, and Home's lines.
+emusen-qt-models = { path = "../../qt-models" }
+# The synthetic library's world: the platform library built from this commit and a scratch tree Galaxia is redirected to.
+emusen-client-fixture = { path = "../../client-fixture" }
+emusen-crystal-client = { path = "../../crystal-client" }
+emusen-platform-client = { path = "../../platform-client" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+[dev-dependencies]
+# The static step, to prove the two together as the command runs them.
+emusen-theme-check = { path = ".." }

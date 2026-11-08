@@ -278,6 +278,7 @@ pub enum Marker {
     None,
     Star,
     Folder,
+    FolderLink,
     Tick,
 }
 

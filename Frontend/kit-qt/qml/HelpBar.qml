@@ -4,7 +4,7 @@ import QtQuick.Controls
 import EmuSen.Kit as Kit
 
 // The help bar: every entry a button that raises its press, its glyph the pad's own in the pad's family and the style's set, so a pointer has every action the bar names (EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.12, §7.28).
-Rectangle {
+Item {
     id: root
     // A frame's controller offered each press; optional, since a bar outside a frame takes its presses from `pressed`.
     property Kit.FrameController controller: null
@@ -20,7 +20,11 @@ Rectangle {
     property color iconColor: Kit.Tokens.text
     // Each entry's glyph, gap and label at this share of their own size.
     property real entryScale: 1
-    // The bar's own colour and radius are the Rectangle's; the paddings are its box's around the entries.
+    // A glyph's side in pixels before entryScale; 0 is the glyph's own size.
+    property real glyphSize: 0
+    // The bar's own colour and radius, drawn by its backing; the paddings are its box's around the entries.
+    property color color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
+    property alias radius: backing.radius
     property real horizontalPadding: 0
     property real verticalPadding: 0
     // A box that hugs its entries, as a theme's help element; off, the band on the foot.
@@ -33,8 +37,13 @@ Rectangle {
     signal pressed(int button)
     implicitWidth: root.leftInset + 2 * root.horizontalPadding + row.implicitWidth
     implicitHeight: root.fitted ? row.implicitHeight + 2 * root.verticalPadding : Kit.Tokens.helpBar
-    // A translucent colour, never "transparent": on Vulkan a clear Rectangle cleared its strip to alpha 0 (EmuSen_Qt.md §7.1, step 7).
-    color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
+    // A clear colour draws no backing at all: on Vulkan a clear Rectangle cleared its strip to alpha 0 (EmuSen_Kit.md §7.28).
+    Rectangle {
+        id: backing
+        anchors.fill: parent
+        visible: root.color.a > 0
+        color: root.color
+    }
     Rectangle {
         objectName: "helpGlassRule"
         visible: root.glass && !root.fitted
@@ -98,8 +107,8 @@ Rectangle {
                         objectName: "glyph-" + entry.label
                         anchors.verticalCenter: parent.verticalCenter
                         visible: entry.picture.length === 0
-                        width: implicitWidth * root.entryScale
-                        height: implicitHeight * root.entryScale
+                        width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
+                        height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
                         style: root.glyphStyle
                         ink: root.iconColor
@@ -110,8 +119,8 @@ Rectangle {
                         objectName: "glyph2-" + entry.label
                         anchors.verticalCenter: parent.verticalCenter
                         visible: entry.pair >= 0
-                        width: implicitWidth * root.entryScale
-                        height: implicitHeight * root.entryScale
+                        width: (root.glyphSize > 0 ? root.glyphSize : implicitWidth) * root.entryScale
+                        height: (root.glyphSize > 0 ? root.glyphSize : implicitHeight) * root.entryScale
                         family: root.family
                         style: root.glyphStyle
                         ink: root.iconColor

@@ -1115,6 +1115,48 @@ a folder import dropped (the screens test); a newer minor accepted (the API test
 fixture). The step that loads the screens offscreen and runs §8.1's audits is a Qt-side program of its own (C2), run by
 `theme-check` as a process.
 
+#### 3.7.2 The loaded step as built **[M 2026-11-08]**
+
+**`theme-audit`** (`Frontend/theme-check/audit`, the crate `emusen-theme-audit`, a member of the Frontend workspace) is the loaded
+step, a Qt program of its own that `theme-check` runs as a process on a package whose static step found nothing, reading its lines
+back as findings (decided 2026-11-08: the dev module links `theme-check`, whose fence forbids Qt). `theme-check` finds it through
+`EMUSEN_THEME_AUDIT` or `PATH`, and does not run without it unless `--static` is given; `--state DIR` passes through. Its parts, one
+job each: `world.rs`, the synthetic library read through the real clients; `crowd.rs`, a `LibrarySource` adding consoles to the
+clients' answers up to 120; `audit.rs`, placing, feeding and judging; `glue.rs` with `cpp/audit_glue.cpp`, the one C++ function
+(`QQmlEngine::singletonInstance` of the kit, which cxx-qt-lib does not bind). Its new dependencies are stated in its manifest: the
+host, `EmuSen.Theme`, the models, the harness and the clients' test world; the static crates gain none.
+
+**How a screen is judged.** Each screen the package lists is placed through `ThemeHost.place()` in a fresh engine, as `ThemeHost.qml`
+does, then its views are fed (`Library.show`, `Session.show`, `Device.show`) after placement, as the program reads its library after
+placing a theme's screens; the kit's `Tokens` of the theme's engine are set to the big screen form and reduced motion. The screen must
+be still at rest; then at the five sizes of §3.6 in both variants the harness's tree is walked by arrow keys and held to kit-core's
+`fit`, `pad_reach`, `pointer_reach` and `no_chrome`. Choose a console is placed once more over the same library grown to 120
+consoles (decided 2026-11-08, so a theme survives cores being added: 40 under one maker, ten under none), judged in the dark variant
+with every element held to the pointer and the pad's reach measured by a sweep that must hear each console's name on the focus,
+inside the window.
+Anything Qt logs while a screen is shown is a finding. The kinds, the sweep and the library are in `man theme-check`.
+
+**What it found on the way.** Two defects of the host, each proved and fixed at its source: the engine's empty plugin path, with which
+no theme could place the kit's `Frame` (`QtQuick.Controls`' plugin not found; fixed on WiseMan 62cd4a45a), and Qt's versioned
+`qmldir` probes for `EmuSen.Theme 1.0`, four a screen, refused and logged as though the theme had reached past the sandbox (§3.5.1,
+30a14261b). And one of kit-core's fit rule: a scroller or clip, which draws nothing itself, was never held to its panel, so a faded
+list ending at 844 in a 1280 × 800 window passed every rule while its last rows lay under the foot; the 120-console sweep, which
+counts a console only when its focused tile's centre is inside the window, found it, and `fit` now holds a scroller or clip to its
+limit as it holds a drawn item (4fd5d3e7c). A `Rows` fixture written as the kit's own walk scene is, with its focus bound to its current item, was unreachable past its
+second row until its current index followed the focus, and held no focus at all when its rows came after placement: both are faults a
+theme can have, and both are caught.
+
+**Proof, measured on 2026-11-08.** Fixtures under `theme-check/tests/themes`: `loaded` is `ok` through both steps (about 80 s, most of it
+the crowd); `cut-games` places its count in window pixels at y 730 and is past its panel at 1280 × 720 and fits at 800; `unreachable`
+has a tile no walk leads to, named at every size in both variants; `by-hand` lays its rows out as tall as they are and runs off every
+size with 120 consoles; `literal`, `multimedia` and `low-contrast` are each named by the static step and not loaded. `theme-check`'s
+reading of the program's lines, the note, and its refusal without the program are tested with a stand-in script, with no Qt.
+`emusen-theme-manifest`'s `API` and `CUES` are held to `EmuSen.Theme`'s committed registry by `tests/registry.rs` (rule Q).
+
+**Not yet.** The reference package (R) has not been through it; a theme's token overrides are not applied to the theme's engine by
+the host yet, so the loaded step judges the kit's own colours; the splash's still frame is judged as every screen is, under reduced
+motion, since the host gives a splash no `still` of its own yet.
+
 ---
 
 ## 4. ES-DE themes: the engine as a component
@@ -1362,7 +1404,7 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 367 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it |
+| `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
 | `accepted` | 9 | the help's eight `*Dimmed` properties (decided 2026-11-08; the design counted six, `THEMES.md` lists eight: `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`), and `sound.path`, which the host plays |
 | `later:video` | 16 | the video family |
 | `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
@@ -1372,6 +1414,11 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 | `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
 | `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
 | `later:help-layout` | 1 | `entryLayout` |
+| `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
+| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
+| `later:container` | 2 | a text container's `containerVerticalSnap` (not read) and `containerScrollSpeed` (read, no visible change by 1 s) |
+| `later:grid-rows` | 1 | `fractionalRows`: the grid's record carries no row count, so a partial row is drawn either way |
+| `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
 
 `check` counts a pair as `set` when it is drawn or accepted, `unsupported` otherwise; nothing reads `catalog.tsv`'s
 `deferred` column for it any more.
@@ -1731,6 +1778,102 @@ still, a wheel's logo centres (§36.3) and the `(default)` help and status place
 own tests (`Frontend/esde/tests/scene.rs`, `frame.rs`), and in the painter they are bindings of the same roles. The
 side-by-sides of Art Book Next beside piece B's grabs need the oracle's synthetic library and are left for piece C's
 rig. The scene allocates its `Frame` each tick and the lists copy what changed; the cost of both is measured with H.
+
+#### 4.8.5 The mapping, the five sizes and the motion on the GPU tier (E3) **[M 2026-11-08]**
+
+Three GPU-tier tests, each in a `kwin_wayland --virtual` of its own on the RX 6800 with the validation layer on, Qt's
+log required quiet; what they share is `tests/common/mod.rs` (the compositor, a written theme, BMP and GIF writers so
+no image crate is needed, the oracle library read as the three texts of §4.6).
+
+- **`tests/motion.rs`** (green): the slide pans the coming list while the clock keeps its box exactly and the help its
+  place (its entries are the coming view's at once, so only its width may change);
+  a step fades a `scrollFadeIn` cover in from half (0.45–0.95 at 60 ms, 1 when the motion ends) and the view's opening
+  does not; a held Down (the harness's `pad_down`, EmuSen_Kit.md §7.28's router left holding) keeps the developer text
+  at 1 at 300 ms, 0 at 800 ms (the first repeat at 500, the fade 149), frames swapping, and 1 again after `pad_up`.
+- **`tests/mapping.rs`** (green): the C# `SceneMappingTests` translated, its cases as data
+  (`tests/themes/mapping-cases.tsv`, the shared properties made from the catalogue as the C# `Common` made them), the
+  C# case library as `esdeShelves` (five consoles, an automatic collection, a console whose sixth game is a folder, a
+  custom collection, a console of pads), each case's system and game rotated to the front so the view starts on them.
+  Each case is rendered twice through the bridge at 640 × 400 and the two grabs must differ; each case's two themes
+  load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
+  The first runs found 47 drawn pairs that painted nothing, and each was settled one way or the other:
+
+| Found | Settled |
+|---|---|
+| `grid.selectorLayer`: the role compared the layer with `"boxY"`, a rename of `top` that reached a string | fixed in `values.rs` |
+| `helpsystem` and `systemstatus` (24 pairs): neither delegate reported its extent, so both stood in a 0 × 0 box and the origin, the background and its paddings had nothing to act on | both delegates report their row's size through `measured`; the status background grows by its paddings |
+| `TextBlock`: a vertical container bound the text's height to its own implicit height, a binding loop Qt logged | the height is left to the text (`undefined`) while it scrolls vertically |
+| `textlist.indicators`, `collectionIndicators`, `grid.imageCropPos`, `image.tileVerticalAlignment` | the fixtures: the shelves now carry `stars`, a custom collection's games `in_collection` (which `shelves.rs` now reads; qt-models writes none yet, so the tick waits for collection editing), and picture A is four quadrants, so a vertical crop or tile shows |
+| the gameselector (13), a GIF's timing (3), `fractionalRows`, `containerVerticalSnap`, `containerScrollSpeed`, datetime `lineSpacing` | not drawn: marked `later:` in `mapping.tsv` with their families (§4.5.5), 367 → 347 drawn |
+
+- **`tests/sizes.rs`** (green, measured 2026-11-08): the three watched themes (`Testing/esde-baseline/states.tsv`), both
+  views (the SNES; its first game, the folder being entry 0), at the five `SIZES`, on the oracle's library with the
+  systems in the order ES-DE showed them and its counts (every game of a system, those inside folders too: 14 games and
+  7 favourites on the SNES, as ES-DE's captures read). Held: nothing drawn but the elements, the help's entries and the
+  primary's items inside the window and taking the pointer, a step and A and B answered, the pointer selecting, and
+  every element's box ÷ (W, H) equal within 0.001 across the sizes of one aspect ratio. A box sized by its laid-out
+  words (a help bar, a status row, an auto-sized text) may differ by a further 4 % of its extent: each run's advance is
+  rounded to whole pixels and hinted at its own size, so a 14 px bar is not two thirds of a 21 px one (CarAlt's help
+  measured 3.3 % apart at 1280 × 720 and 1920 × 1080), and ES-DE's own is not proportional either (Art Book Next's
+  gamelist help 0.2883 W at 1280 × 800, 0.2906 W at 1920 × 1200, 0.8 % apart, on its captures). A size is read only
+  after its install has published, since the old frame stands until the new size's load comes back. The defects it
+  found, each fixed and proved:
+
+| Found | Fixed |
+|---|---|
+| A reload or resize installed a new `Stage` with no measurements, and a picture, text or bar whose extent had not changed never reported again, so Art Book Next's date, players and play time, its icons and Artflix's overlay stood at width 0 | `Stage::restart` keeps the measurements while a new view and data are installed (the painter's reload, resize and quick system select use it); a text reports again on new words, size or face, and a picture once it is ready, since the scene keys a measurement by what it shows |
+| An auto-sized text was elided in its 0 box, so it measured nothing and was never given a box (the chicken-and-egg of §4.8.5's first run) | an auto-sized text has no ellipsis (`paint.rs`) |
+| A vector picture contained or covered was decoded at both of the box's sides, so Qt stretched it to them and the scene measured the box's aspect, not the picture's (Art Book Next's system logo 0.2167 H high at 1280 × 800, 0.35 H at 1920 × 1200; CarAlt's controllers and screenshot) | a contained or covered picture asks only a width (a cover twice its height), so the decoded picture keeps its own aspect |
+| The help bar's glyphs were the kit's pixel size and its paddings moved the entries in | the glyph's side is 0.9 of `fontSize` × H (ES-DE's icon measured 30–32 px at a 36.7 px font on 1280 × 800, 45 px at 55 px on 1920 × 1200); `entryRelativeScale` shrinks the icons above 1 and the text below 1, as THEMES.md has it; the background grows outward by its paddings and leaves `pos` and `origin` alone; the kit's `HelpBar.glyphSize` and the glyph's letter growing with its glyph (EmuSen_Kit.md §7.28) |
+| A carousel item drawn as text (no picture) had no `slot-` name, so neither the test nor a pointer test could find it | the text item carries the slot's name |
+| An item gliding under a still pointer took the selection, and the carousel chased the pointer for ever | hover selects only while the items are at rest; a tap selects at once, glide or not (`painter.rs`) |
+| The run of 2026-11-08 at the end of E3 (20 failures): every contained or aspect-sized picture lost its box at a size after the first (Art Book Next's system logo 0.35 H high where 0.2167, its play-time, players and release-date icons and Artflix's wide overlay at width 0, CarAlt's controllers, cover and marquee), because the scene keyed a picture's measurement by its paint and its box, both of which change with the window, and a delegate reports again only when Qt's image changes status or height, which a cached decode may not do | a picture sized by its own aspect (`maxSize`, `size` with one axis 0, no size) keys its measurement by its file alone (`draw.rs`), so the measurement holds across a resize and a reload; text and rows keep the key by paint and box. A later report of the same file within a pixel's rounding of the kept aspect (the picture decoded again at the new box's width) is not a new measurement, so the first stands: Artflix's system logo had come back 0.0583 H high at 1280 × 720 and 0.0573 H at 1920 × 1080, a 42 px and a 62 px decode of one picture. Proved by `frame.rs`'s `a_pictures_own_size_holds_across_a_resize`, which fails on the old key with the very boxes the run showed |
+| Art Book Next's help a see-through strip at every size after the first, its glyphs white on nothing | the kit's `HelpBar` draws no backing when its colour is clear (EmuSen_Kit.md §7.28); every grab is now sampled for alpha below 255 on a 32 × 20 grid and along each help bar |
+| "The pointer over an item selected nothing" on Art Book Next's gamelist | the test's: it hovered the second-nearest item to the middle, which after the pad's step was the selected one. It now hovers the two nearest, of which one at most is selected |
+
+  Two were the fixtures': the oracle's media index listed a folder's own media subfolder as Tower Set's picture, and
+  its shelves carried no counts.
+
+**The side-by-sides, re-made 2026-11-08** (`~/.cache/emusen/tmp/qt-s4/compare/side-*.png`: ES-DE 3.4.1 | C# | Qt;
+`sizes-*.png`: the five sizes of each view). Every difference found, against ES-DE's captures and its published
+THEMES.md and USERGUIDE.md, settled or named:
+
+| Seen | Settled |
+|---|---|
+| The help's words: LAUNCH, SYSTEM on the system view, JUMP, FIRST, LAST and CHOOSE in a gamelist, FAVORITE | ES-DE 3.4.1's entries in its order and words (`help.rs`): the system view MENU, SELECT, SCREENSAVER, CHOOSE; a gamelist OPTIONS, MENU, SELECT, BACK, FAVORITES, SYSTEM, RANDOM. A reads Select on every entry, as ES-DE's documentation of the A button and the captures have it. The project's words of `EmuSen_BigPicture.md` §15 stay the C# painter's |
+| No SCREENSAVER or RANDOM entry | the help reads the player's *Enable screensaver controls* (`ScreensaverControls`, on by default) and *Random entry button* (`RandomEntryButton`, games by default), and resolves *Quick system select*'s two "or" settings by the gamelist's primary (UG "Quick system select") |
+| Wi-Fi, a battery and 80 % drawn where ES-DE drew none | the view shows no indicator until the host reports the device on `EsdeModel.device` (a JSON text, `{"wifi":true,"battery":80}`; an addition to EmuSen.Esde 1.0's registry, copied to `Testing/qmltypes`) |
+| CarAlt's title screen, screenshots and marquee tiled into strips | THEMES.md: `tile` "can only be used when `path` has been set", so a game's media is never tiled (`paint.rs`) |
+| Art Book Next's Tower Set drawn with a folder where ES-DE draws its folder-link mark | a folder with a link has the `FolderLink` marker (`primary.rs`); the mark is the scene's link, where ES-DE's symbol is an arrow into a bracket: **named, open** |
+| The list's names indented on a row with no marker (Brass Lantern), the selection bar beginning at the name, the star larger | ES-DE prefixes the marker to the name: a row with none starts at the margin, the bar covers marker and name, the marker is one `fontSize` square |
+| The list's rows 6–8 px lower than ES-DE's | a row's name takes the face's own line height, not the list's `lineSpacing`, which is the rows' pitch |
+| Artflix's clock missing | ES-DE draws a clock "in the upper left corner" where a theme has none (UG "Display clock"); the loader adds one with THEMES.md's defaults, as it adds the help and the status |
+| Artflix's game count read "12 games available, 6 favorites" | THEMES.md's `gamecount`: "Number of favorites is printed inside brackets", from the shelf's counts: "14 games (7 favorites)" |
+| Artflix's title reads SUPER NINTENDO where ES-DE reads NINTENDO SNES (SUPER NINTENDO) | not accepted as a difference: **owed to H**. The systems table's `esde_full_name` is the project's short name, not ES-DE 3.4.1's full name, a data change in `Platform/systems/data` rather than the painter's |
+| The D-pad pair drawn as two glyphs (left lit, right lit) where ES-DE draws one cross | the kit has no glyph for an axis: **named, open** |
+| No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
+| The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |
+| The clock's time | the wall clock at the grab |
+| CarAlt's system view: a band of the theme's yellow down the middle where ES-DE draws three games' screenshots | those screenshots are the system view's `cover1`–`cover3`, fed by a gameselector, which is later (13 pairs, §4.5.5); the yellow is the theme's own picture beneath them: **named, later** with the gameselector |
+| CarAlt's gamelist: the lower screenshot (`cover3`, zIndex 3) drawn over the theme's dark mask (`topline3`, `circle2.svg`, zIndex 3), where ES-DE draws the mask over it | the loader breaks a zIndex tie by first definition, a choice (EmuSen_BigPicture.md §12.2), and `topline3` is defined first; ES-DE 3.4.1 drew the later-defined `cover3` beneath. THEMES.md states no tie order, and one capture does not tell an order by name from others: **named, open**, to be settled on captures of more ties before the loader's rule changes |
+
+**Seeded faults of E3**, each reverted after its run:
+
+| Seed | Fault | Caught by |
+|---|---|---|
+| S1 | measurements dropped on a reload | painter `a_measurement_survives_a_reload` |
+| S2 | a game's media tiled | frame `only_a_picture_named_by_path_tiles` |
+| S3 | hover selects while the items glide | painter's glide test |
+| S4 | A worded Launch | frame's help tests |
+| S5 | the textlist's `selectorColor` clear (GPU) | `mapping.rs`, `ESDE_MAPPING_ONLY=textlist.selectorColor` |
+| S6 | the help's glyph at 30 px whatever the size (GPU) | `sizes.rs` |
+| S7 | a picture's measurement keyed by paint and box again | frame `a_pictures_own_size_holds_across_a_resize` |
+| S8 | the glyph letter reading its item's size (the branch's first form) | qt-app's `program` test (CPU tier): Qt's binding-loop warnings |
+
+**GPU tier, measured 2026-11-08 after these fixes:** sizes, motion, primitives, view and mapping (347 drawn, 272 s)
+green; emusen-qt-test `helpbar` and `menu` green; qt-app's acceptance green. One motion run failed once at its last
+check, a frame swapped in the 2 s still window with no animation running; the two runs after it passed. The theme shows a clock,
+whose minute can turn within the window: not reproduced, recorded here.
 
 ---
 

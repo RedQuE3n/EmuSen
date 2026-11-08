@@ -117,6 +117,7 @@ ElementBox {
                 fadeFalloff: slot.reflectionFalloff
             }
             TextBlock {
+                objectName: "slot-" + slot.row
                 x: slot.boxX
                 y: slot.boxY
                 width: slot.boxWidth

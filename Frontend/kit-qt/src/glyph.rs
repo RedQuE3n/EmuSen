@@ -155,12 +155,18 @@ impl cxx_qt::Initialize for qobject::PadGlyphMarks {
         self.as_mut().on_family_changed(|this| this.refresh()).release();
         self.as_mut().on_button_changed(|this| this.refresh()).release();
         self.as_mut().on_swap_changed(|this| this.refresh()).release();
-        self.as_mut().on_size_changed(|this| this.refresh()).release();
+        self.as_mut().on_size_changed(|this| this.resize()).release();
         self.as_mut().on_style_changed(|this| this.refresh()).release();
     }
 }
 
 impl qobject::PadGlyphMarks {
+    // Only the outlines scale with the size; the letter and its scale do not, so their signals stay quiet (EmuSen_Kit.md §7.28).
+    fn resize(mut self: Pin<&mut Self>) {
+        self.as_mut().begin_reset_model();
+        self.as_mut().end_reset_model();
+    }
+
     fn refresh(mut self: Pin<&mut Self>) {
         self.as_mut().begin_reset_model();
         self.as_mut().rust_mut().rebuild();

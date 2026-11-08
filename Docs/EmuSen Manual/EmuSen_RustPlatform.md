@@ -4445,6 +4445,10 @@ so nothing they do changes; the dependency is what makes the host's case correct
 `emusen_platform.h` and `PlatformLibrary.InterfaceVersion` moved to 42 together, and `Frontend/platform-client`'s binding
 was regenerated, with a `serenity` module over the calls the picture needs.
 
+Folded 2026-11-08: `emusen_serenity_device_new` is `_new_for` with no host's extensions (as `Device::create` is
+`create_for` with an empty `Host`), so the two no longer carry the same body; the platform's unit test
+`a_device_made_for_no_host_is_the_card_by_its_name_and_an_absent_name_is_refused` holds them to the same card by name.
+
 ## 50. Interface 43, 2026-11-08: a player's bound buttons, for the Qt front end's game pads
 
 For the Qt front end's game input (`EmuSen_Qt.md` §1.8.5, `EmuSen_Kit.md` §7.17). One addition, an extension of the

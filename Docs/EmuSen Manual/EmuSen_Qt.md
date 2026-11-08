@@ -1466,6 +1466,139 @@ clean. Seeded faults, each reverted: the section's rule on Game Options rather t
 the slide's duration written as 200 ms in place of the token (`pause.rs`, under reduced motion); B on Leave returning
 to the first row (`pause.rs`, the row that opened the page).
 
+### 7.2 Stage 2: the Card form, the Home card and the List card (2026-11-08)
+
+`EmuSen_Interface.md` §2.3 and §18.1; the oracle is Mistress's own cards, recorded as `HomeCardPower`, `HomeCardQuit`,
+`HomeCardHandheldPower`, `GamesListCard` and `GamesSearch` in `EmuSen.WiseMan/Mistress/Specification/`, and her renders
+(`HomeCardPower-plain` of 2026-11-02, `GamesListCard` and `GamesSearch` of the courts build of 2026-11-05). The
+`HomeCardDesktop*` states and the themed `BigPicture-Gamelist` and `GamelistFilter` are read for reference: the first
+belongs to the desktop form (stage 6) and the other two to the ES-DE engine (stage 4), whose Sort, Filter and Jump To
+sheets the List card replaces (§18.1).
+
+**One form for every card.** The Pause Card, the Home card and the List card are the same Card form (§2.8: "shares the
+Home card's title row, rows, pane and help bar"). It is built once, in two parts, and the Pause Card's later pages are
+built on it too:
+
+- `qt-models/src/card.rs` holds the pages as plain data with no Qt. A `Row` has its key, its words, its marks (steps,
+  opens, the lighter rule that ends a section) and its `Pane` (lines with a muted line under each, or a picture with its
+  caption). A `Page` has a title, the words above it (the way back, or a question's sentence) and its rows. `question`
+  makes a question a page of No then Yes, as Mistress's `Ask` does, so the focus starts on the answer that changes
+  nothing. `Choice` says what a row does: turn to a page, go back, close and act, act and stay, or nothing yet. The
+  `Pages` trait gives a card's pages, and `Deck` is the stack of pages turned through, so B returns to the row that
+  opened a page. `CardModel` (`card_model.rs`) puts any card's pages on Qt: the rows as a list model (`label`, `value`,
+  `steps`, `opens`, `sectionEnd`, `key`), and `title`, `breadcrumb`, `current` and the focused row's pane as properties.
+  It opens at `start` each time `shown` turns on. A value stepped on the same page changes the rows in place
+  (`dataChanged`), so the focused row keeps its delegate; a page turn resets them. Without that, the gate's walk lost
+  the List card's rows after Left on Sort: the reset made new delegates under the walk (a seeded fault below).
+- `qt-app/qml/MenuCard.qml` draws it: the scrim, the panel at 40% with its shadow, the title row (an optional cover, the
+  breadcrumb above the title), the rows as the kit's `MenuRow`s, the pane at 576,156, the 98-unit band with its help bar,
+  and the slide (Enter in, Exit out, nothing under reduced motion). Its words are its host's properties, its pane is
+  lines or a picture or the host's own items (its default property, for the Pause Card's reel and slots), and its
+  signals are `chosen`, `stepped(index, by, held)`, `focused`, `backed`, `acted` and `gone`, each answered in one call.
+  **The shadow falls over the help band** beside the panel, as Mistress's does (the tester's note on stage 1's Pause
+  Card, 2026-11-08). The band and its bar are painted after the panel, opaque because a transparent bar cleared its
+  strip on Vulkan (§7.1 step 7). So the part of the shadow beside the panel is drawn again over them, clipped to the band
+  and to 64 units past the panel's edge. Its falloff is matched to Mistress's render. The design's offset of 0,8 is kept,
+  with a radius of 48 and black at 90% (`shadowOpacity`, `shadowRadius`). Measured on Vulkan at 1280 × 800 on
+  2026-11-08, every 4 pixels from the panel's edge over the band, Mistress's render reads 15, 17, 20, 23, 25 and 26
+  against Surface's 27, and Qt reads 16, 19, 21, 23, 24 and 25. Before, at the Pause Card's radius of 24 and 50%, Qt read
+  22 at the edge and nothing by 17 pixels.
+
+**The Home card** (`home_card.rs`): Mistress's `HomeRows`, `ToolRows` and `PowerRows` in her words. The first page is
+Continue (while a game is suspended), Selected game ▸, Search, Start Console ▸, Tools ▸, Settings ▸ and Power ▸, with
+Tools and Power each starting a section. Tools lists the five tools with their summaries as values, then Themes,
+Collections, Compressed Discs and Shell. Power has Exit Big Picture, then Quit EmuSen..., whose question says "EmuSen
+closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone. Under
+Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; within a pixel of her render at 1280 ×
+800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
+than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
+console of the systems table starts with nothing in it (`starts_empty`, Mistress's `ConsolesThatStartEmpty`, through
+`LibraryModel.startsEmpty`).
+`start.rs` reads Game Mode as Mistress's `InGameModeSession` does: gamescope among `XDG_CURRENT_DESKTOP`'s names, else
+`SteamDeck=1`. Its facts come from `LibraryModel.homeCardFacts` (the suspended game, its paused words, the tools'
+summaries, Game Mode).
+
+**Start and the routes, as Mistress's own look has them** (decided 2026-11-08; `OwnScreenPadCommand`,
+`EmuSen_BigPicture.md` §51.2, §51.5). Start on the grid or on Choose a console goes Home, and on Home it takes the focus
+back to where Home starts (`Screens.homeAgain`). Home's Power place opens the Home card at Power, with Home as the way
+back. On the big screen's own look the card's first page and Tools are not reached: Mistress draws that card only over
+a theme and on the desktop. They are built and held by the models' test, and have nowhere to show until stage 3 (themes)
+and stage 6 (the desktop form). The screen under a card is drawn dimmed, is disabled, and declares itself a `backdrop`,
+so the gate does not judge what the scrim covers. Start on Choose a console is declared as an action its help bar does
+not name (`help::unnamed`), since the mockup's bar shows four entries.
+
+**The List card and search** (`list_card.rs`, `listing.rs`). Select on the grid opens it, titled with the section and its
+count ("All · 8 games") under the breadcrumb "List". Its rows are Search ▸, Sort ◂ Name ▸ (Name, Last played, Most
+played, Year, Rating), Filter ▸, Jump to ◂ letter ▸, Random game and Collections ▸, each with Mistress's pane. Filter's
+page has Every game and Favourites (not offered in the Favourites section); each section keeps its own choice. The grid's
+`GameModel` gained the listing (`section`, `sectionName`, `search`, `focused`, `countLine`, `listFacts`, `listAct`,
+`back`). It is applied off the GUI thread with the rows' read, which also finds each letter's first row, so Jump to and
+Random game are steps through a few dozen letters or one number. The count reads "1 of 8 games" while narrowed. B
+clears a search, then the section's favourites, then goes back a screen (`passedBack`). Search docks the keyboard: the
+field at 64,100 1152 × 44 over one row of covers, the keyboard's place at 0,398 304 high, and the help bar's keyboard
+entries (Type, Delete, Space, Done, Move to grid, Home), as `GamesScreen.HintsFor` gives them. Until the kit's docked
+`Keyboard` lands, a plain rectangle stands in its place and the field takes the physical keyboard; Down from the field
+reaches the covers.
+
+**Compared with Mistress** (measured on 2026-11-08). Every Qt recording (`~/.cache/emusen/tmp/qt-s2/compare/qt/`) was read
+by WiseMan's `SpecDocument.Parse` and written back byte for byte, and `InterfaceRules.All` found 0 faults in each.
+`InterfaceSpec.Compare` against Mistress's recording of the same state found the card's root (`PadCard`), its scrim, rows
+and list in place at both sizes, with these differences, each a fact of the toolkit or named here: Avalonia's wrappers
+(`AdaptiveLayers`, `AdaptiveContent`, `PART_ScrollViewer`, `PauseCardPane`); `AdaptiveCard` at 512 wide where Avalonia's
+`MenuPanel` spans the window; the Qt items the C# tree has no names for; the walk's edges, where Mistress records `walk
+none`; and the screens beneath under their stage 1 names. The side-by-sides (Mistress left, Qt right, nothing drawn
+over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
+
+**Differences that remain, each for the tester:**
+- Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
+- The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
+  pane are declared and do nothing yet. Each opens a screen of a later stage.
+- Most played, Year and Rating sort by name, since the library reads no play counts, years or ratings yet. Mistress
+  falls back the same way for Rating.
+- The Filter page lists no collections of the player's own, since the library does not read them yet.
+- The docked keyboard is a stand-in. B clears the whole search where Mistress's keyboard deletes one letter, and the
+  shoulders do not yet move between the keys and the covers.
+- The words of the screen under a card read under 4.5:1 through the scrim. Mistress's recordings hold the card alone, so
+  the test names this (`cards.rs`' `named`), as it names the grid's 18-unit neighbours at 1280 × 720 that stage 1 named.
+- The title stands one or two units higher than Mistress's, as the Pause Card's does (§7.1 step 7).
+
+**Held to** (measured on 2026-11-08). `qt-models/tests/cards.rs` (4): the Home card's pages and words (Power with and
+without Game Mode, the question's two sentences, the first page's order and sections, Tools' values and panes, the
+attention value); the deck's way back; the listing (the name sort in any case, Last played, Recent's own order,
+favourites, search, wrapping sorts, the count line, letters and jumps); the List card's rows, marks, panes and choices; and
+the screens' rule for Start and the cards. `qt-app/tests/cards.rs` drives the program on the software backend: Power
+opens the card at Power, Quit asks, B returns to its row, No goes back, B closes, Start takes Home's focus back, and
+Start on the grid goes Home. Select opens the List card; Sort steps both ways; Jump to moves the grid's focus; Filter ▸
+Favourites narrows the grid to "0 of 8 games"; B clears it. Search narrows it to "1 of 8 games"; B clears the search,
+closes the keyboard, then goes back. Each card is held at the gate's five sizes with nothing logged and recorded.
+`scale.rs` holds, over 9,000 games, Sort and Jump to within 400 ms each and a search's narrowing within 400 ms.
+`start.rs` holds Game Mode. The library's actions test, `screens.rs` (which now waits for the grid's off-thread read),
+`program.rs`'s QML rules and `qmllint`, and `pause.rs` pass, and clippy is clean. Seeded faults, each reverted:
+- B returning to a page's first row: the models' deck test.
+- The recently played sorted by name: the listing test.
+- The rows reset on a stepped value: the program's cards test, where the gate's walk did not reach the List card's rows.
+- Start on the grid left where it was: the program's cards test.
+
+**A narrowed tile is the full grid's tile** (checked on 2026-11-08). The first GamesSearch side-by-side showed the found
+game as a generated card, smaller and lower than Mistress's cover. The cause was the fixture, not the search. The program
+test's sandbox had no media store, so every tile of its grid, narrowed or not, was a generated card, and it was set
+beside Mistress's render of a library with covers. The test now draws the covers of Mistress's own-look fixture into an
+ES-DE media folder (`common::draw_covers`, shared with `acceptance.rs`). It holds Granite Choir's tile in the search to the
+full grid's: the same picture heard by its title, the same box, and the same colours at 25 points inside it. A tile
+whose cover is dropped while searching fails that check (seeded and reverted). The re-made side-by-sides show the
+cover at Mistress's place and size; the keyboard's area stays empty until the kit's keyboard lands.
+
+**On Vulkan** (`acceptance.rs`, measured on 2026-11-08 in its own compositor on the RX 6800, 72 s). The program over
+Mistress's own-look fixture holds the List card over the grid of eight covers ("All · 8 games"), HomeCardPower and
+HomeCardQuit at the gate's five sizes with nothing logged, and checks the shadow over the band (`shadow_over_band`). The
+fixture's systems table, read through the runtime with its three engines, marks no console as starting empty, so the
+row is absent there; the models' test holds it present where the table says so. The test now reads each card's slide
+through its canvas (`cardCanvas`, `homeCardCanvas`, `listCardCanvas`), since every card's root is `PadCard`, as
+Mistress names it. The first run, with the Pause Card's shadow (radius 24, black at 50%), failed `shadow_over_band` at
+22, 27 and 27 for 1, 17 and 36 pixels out, which is why the shadow was matched as above.
+
+The C# side is unchanged. No C++ was added.
+
 ---
 
 ## 8. Testing

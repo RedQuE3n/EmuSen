@@ -20,6 +20,10 @@ pub enum Screen {
     Pause,
     /// A page of the Pause Card past the first.
     PausePage,
+    /// A card over the library: the Home card and the List card (Mistress's `ShowCard` away from a game).
+    Card,
+    /// The grid's search with the keyboard docked (`GamesScreen.HintsFor` in the keyboard).
+    Search,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -33,19 +37,19 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Screensaver, "Game page", Some("gamePage")),
             (UiButton::Search, "Favourite", Some("favourite")),
             (UiButton::Options, "Search", Some("search")),
-            (UiButton::Menu, "Home", Some("homeCard")),
+            (UiButton::Menu, "Home", Some(HOME)),
         ],
         Screen::HomeShelf => &[
             (UiButton::Accept, "Play", None),
             (UiButton::Screensaver, "Game page", Some("gamePage")),
             (UiButton::Search, "Favourite", Some("favourite")),
             (UiButton::Options, "Search", Some("search")),
-            (UiButton::Menu, "Home", Some("homeCard")),
+            (UiButton::Menu, "Home", Some(HOME)),
         ],
         Screen::HomePlaces => &[
             (UiButton::Accept, "Open", None),
             (UiButton::Options, "Search", Some("search")),
-            (UiButton::Menu, "Home", Some("homeCard")),
+            (UiButton::Menu, "Home", Some(HOME)),
         ],
         Screen::Consoles => &[
             (UiButton::Accept, "Open", None),
@@ -60,7 +64,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::PageUp, "Console", Some("previous")),
             (UiButton::Options, "List", Some("list")),
             (UiButton::Back, "Consoles", None),
-            (UiButton::Menu, "Home", Some("homeCard")),
+            (UiButton::Menu, "Home", Some(HOME)),
         ],
         // Mistress's ShowCard and SetCardActions: B resumes on the first page and goes back on the others; Start resumes.
         Screen::Pause => &[
@@ -75,8 +79,23 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Screensaver, "Screenshot", Some("screenshot")),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
+        Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
+        Screen::Search => &[
+            (UiButton::Accept, "Type", None),
+            (UiButton::Back, "Delete", None),
+            (UiButton::Search, "Space", Some("space")),
+            (UiButton::Screensaver, "Done", Some("done")),
+            (UiButton::PageUp, "Move to grid", Some("toGrid")),
+            (UiButton::Menu, "Home", Some("home")),
+        ],
     }
 }
+
+/// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
+pub const HOME: &str = "home";
+
+/// A card's declared action that closes it, as Start closes a card away from a game.
+pub const CLOSE: &str = "close";
 
 /// The second button an entry names: the shoulders are one entry, LB and RB, as the accepted render draws them.
 pub fn pair_of(button: UiButton) -> Option<UiButton> {
@@ -85,5 +104,14 @@ pub fn pair_of(button: UiButton) -> Option<UiButton> {
 
 /// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.19).
 pub fn action_lines(screen: Screen) -> String {
-    entries(screen).iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+    entries(screen).iter().chain(unnamed(screen)).filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
+}
+
+/// A screen's actions its help bar does not name: Start on Choose a console goes Home, as Mistress's
+/// `ConsolesPadCommand` has it, though the mockup's bar shows four entries.
+pub fn unnamed(screen: Screen) -> &'static [Entry] {
+    match screen {
+        Screen::Consoles => &[(UiButton::Menu, "Home", Some(HOME))],
+        _ => &[],
+    }
 }

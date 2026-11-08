@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 pub fn to_json(games: &[GameRow]) -> String {
     let rows: Vec<Value> = games
         .iter()
-        .map(|g| json!({ "path": g.path, "system": g.system, "title": g.title, "hue": g.hue, "favourite": g.favourite, "cover": g.cover, "hero": g.hero, "console": g.console, "facts": g.facts }))
+        .map(|g| json!({ "path": g.path, "system": g.system, "title": g.title, "hue": g.hue, "favourite": g.favourite, "cover": g.cover, "hero": g.hero, "console": g.console, "facts": g.facts, "played": g.played_at }))
         .collect();
     Value::Array(rows).to_string()
 }
@@ -33,6 +33,7 @@ pub fn from_json(text: &str) -> Vec<GameRow> {
             hero: words(v, "hero"),
             console: words(v, "console"),
             facts: words(v, "facts"),
+            played_at: v.get("played").and_then(Value::as_i64).unwrap_or_default(),
         })
         .collect()
 }

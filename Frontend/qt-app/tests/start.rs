@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{platform_library, reduced_motion_from, splash_from, LIBRARY_FILE};
+use emusen_qt::start::{game_mode_from, platform_library, reduced_motion_from, splash_from, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -27,4 +27,14 @@ fn motion_is_reduced_only_when_the_player_chose_it() {
     assert!(reduced_motion_from(&json!({ "ReducedMotion": "on" })));
     assert!(!reduced_motion_from(&json!({ "ReducedMotion": "off" })));
     assert!(!reduced_motion_from(&json!({ "ReducedMotion": "system" })), "the desktop's preference is not read yet");
+}
+
+#[test]
+fn steam_s_game_mode_is_read_as_mistress_reads_it() {
+    assert!(game_mode_from(Some("gamescope"), None));
+    assert!(game_mode_from(Some("KDE:Gamescope"), Some("0")), "gamescope among the desktop's names, in any case");
+    assert!(!game_mode_from(Some("KDE"), Some("1")), "a Deck in Desktop Mode names its desktop");
+    assert!(game_mode_from(None, Some("1")), "no desktop named, SteamDeck=1");
+    assert!(game_mode_from(Some(""), Some("1")));
+    assert!(!game_mode_from(None, None));
 }

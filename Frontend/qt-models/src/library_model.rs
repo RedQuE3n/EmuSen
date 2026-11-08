@@ -71,6 +71,8 @@ pub mod qobject {
         #[qproperty(QString, tool_summaries, cxx_name = "toolSummaries")]
         #[qproperty(bool, dark)]
         #[qproperty(QString, home_lines, cxx_name = "homeLines", READ, NOTIFY)]
+        /// Whether a console starts with nothing in it, so the cards offer Start Console.
+        #[qproperty(bool, starts_empty, cxx_name = "startsEmpty", READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -97,6 +99,12 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "titleOf"]
         fn title_of(self: &LibraryModel, path: &QString) -> QString;
+
+        /// The Home card's facts as plain data (home_card.rs): the suspended game by its path and the words of its pause,
+        /// the tools' summaries, and whether Steam's Game Mode holds the session.
+        #[qinvokable]
+        #[cxx_name = "homeCardFacts"]
+        fn home_card_facts(self: &LibraryModel, suspended: &QString, paused: &QString, game_mode: bool) -> QString;
 
         /// Records the game at `path` as started now, then reads the games again, so Recent and Continue lead with it.
         #[qinvokable]
@@ -156,6 +164,7 @@ pub struct LibraryModelRust {
     dark: bool,
     /// Home's places' second lines as a JSON array of `{"status", "attention"}`.
     home_lines: QString,
+    starts_empty: bool,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -178,6 +187,7 @@ impl Default for LibraryModelRust {
             tool_summaries: QString::default(),
             dark: true,
             home_lines: QString::from("[]"),
+            starts_empty: false,
             view: LibraryView::empty(),
             source: None,
         }
@@ -268,6 +278,19 @@ impl qobject::LibraryModel {
 
     pub fn title_of(&self, path: &QString) -> QString {
         QString::from(crate::library::title_of(&path.to_string()).as_str())
+    }
+
+    pub fn home_card_facts(&self, suspended: &QString, paused: &QString, game_mode: bool) -> QString {
+        let suspended = suspended.to_string();
+        let facts = crate::home_card::Facts {
+            suspended: if suspended.is_empty() { String::new() } else { crate::library::title_of(&suspended) },
+            paused: paused.to_string(),
+            game_mode,
+            start_console: self.view.starts_empty(),
+            tools: serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null),
+            ..crate::home_card::Facts::default()
+        };
+        QString::from(facts.to_json().as_str())
     }
 
     pub fn started(mut self: Pin<&mut Self>, path: &QString) {
@@ -387,6 +410,11 @@ impl qobject::LibraryModel {
         if self.home_lines != home_lines {
             self.as_mut().rust_mut().home_lines = home_lines;
             self.as_mut().home_lines_changed();
+        }
+        let starts_empty = self.view.starts_empty();
+        if self.starts_empty != starts_empty {
+            self.as_mut().rust_mut().starts_empty = starts_empty;
+            self.as_mut().starts_empty_changed();
         }
         if self.summary != summary {
             self.as_mut().rust_mut().summary = summary;

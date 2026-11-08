@@ -45,6 +45,19 @@ pub mod qobject {
         #[qproperty(QString, leave_out, cxx_name = "leaveOut")]
         #[qproperty(i32, count, READ, NOTIFY)]
         #[qproperty(i32, revision, READ, NOTIFY)]
+        /// The grid's section by its row's key and its name; empty for a list shown as given (Home's shelf, the fan).
+        #[qproperty(QString, section)]
+        #[qproperty(QString, section_name, cxx_name = "sectionName")]
+        /// The search's words: the section's games whose title holds them (EmuSen_Interface.md §18.1).
+        #[qproperty(QString, search)]
+        /// The focused row, whose letter the List card's Jump to names.
+        #[qproperty(i32, focused)]
+        /// Whether a console starts with nothing in it, so the List card offers Start Console.
+        #[qproperty(bool, start_console, cxx_name = "startConsole")]
+        /// The count beside the section's name: "8 games", or "1 of 8 games" where narrowed.
+        #[qproperty(QString, count_line, cxx_name = "countLine", READ, NOTIFY)]
+        /// The List card's facts as plain data (list_card.rs).
+        #[qproperty(QString, list_facts, cxx_name = "listFacts", READ, NOTIFY)]
         type GameModel = super::GameModelRust;
     }
 
@@ -102,6 +115,18 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "hueAt"]
         fn hue_at(self: &GameModel, row: i32) -> f64;
+        /// A List card's action carried out on the listing (list_card.rs): a sort or a letter stepped, a random game, a
+        /// filter chosen. Gives the row to focus: the focused row where the action moves none.
+        #[qinvokable]
+        #[cxx_name = "listAct"]
+        fn list_act(self: Pin<&mut GameModel>, action: &QString) -> i32;
+        /// B on the grid: the search cleared, else the section's favourites; with neither, `passedBack`.
+        #[qinvokable]
+        fn back(self: Pin<&mut GameModel>);
+        /// B found nothing of the listing's to clear: the grid goes back a screen.
+        #[qsignal]
+        #[cxx_name = "passedBack"]
+        fn passed_back(self: Pin<&mut GameModel>);
     }
 
     unsafe extern "RustQt" {
@@ -141,12 +166,36 @@ pub struct GameModelRust {
     rows: Vec<GameRow>,
     /// Counts the reads asked for, so only the newest read's rows are taken.
     asked: u64,
+    section: QString,
+    section_name: QString,
+    search: QString,
+    focused: i32,
+    start_console: bool,
+    count_line: QString,
+    list_facts: QString,
+    /// The sort, global as Mistress's is, and the sections narrowed to their favourites, each keeping its own.
+    sort: usize,
+    favourites_in: std::collections::HashSet<String>,
+    /// What the last read found: the section's count and each letter's first row in the shown list.
+    read: Read,
+}
+
+/// What a read finds beside the rows, off the GUI thread.
+#[derive(Clone, Debug, Default)]
+pub struct Read {
+    pub all: usize,
+    pub letters: Vec<(String, usize)>,
 }
 
 impl cxx_qt::Initialize for qobject::GameModel {
     fn initialize(mut self: Pin<&mut Self>) {
         self.as_mut().on_games_changed(|model| model.read()).release();
-        self.on_leave_out_changed(|model| model.read()).release();
+        self.as_mut().on_leave_out_changed(|model| model.read()).release();
+        self.as_mut().on_section_changed(|model| model.read()).release();
+        self.as_mut().on_section_name_changed(|model| model.said()).release();
+        self.as_mut().on_search_changed(|model| model.read()).release();
+        self.as_mut().on_start_console_changed(|model| model.said()).release();
+        self.on_focused_changed(|model| model.said()).release();
     }
 }
 
@@ -230,19 +279,106 @@ impl qobject::GameModel {
     /// The games text read into rows off the GUI thread; the newest read's rows are taken, the model reset once.
     fn read(mut self: Pin<&mut Self>) {
         let (text, leave_out) = (self.games.to_string(), self.leave_out.to_string());
+        let (section, listing) = (self.section.to_string(), self.listing());
         let asked = self.asked.wrapping_add(1);
         self.as_mut().rust_mut().asked = asked;
         let qt = self.qt_thread();
         std::thread::spawn(move || {
             let rows = crate::games::without(crate::games::from_json(&text), &leave_out);
-            let _ = qt.queue(move |model| model.take(asked, rows));
+            let (rows, read) = if section.is_empty() {
+                let all = rows.len();
+                (rows, Read { all, letters: Vec::new() })
+            } else {
+                let shown = crate::listing::shown(&rows, &section, &listing);
+                let letters = crate::listing::letter_rows(&shown);
+                (shown, Read { all: rows.len(), letters })
+            };
+            let _ = qt.queue(move |model| model.take(asked, rows, read));
         });
     }
 
-    fn take(mut self: Pin<&mut Self>, asked: u64, rows: Vec<GameRow>) {
+    /// The listing the section is read with now.
+    fn listing(&self) -> crate::listing::Listing {
+        let section = self.section.to_string();
+        crate::listing::Listing { sort: self.sort, favourites_only: self.favourites_in.contains(&section), search: self.search.to_string() }
+    }
+
+    pub fn list_act(mut self: Pin<&mut Self>, action: &QString) -> i32 {
+        use crate::list_card::{action_of, EVERY_GAME, FAVOURITES_ONLY, JUMP, RANDOM, SORT};
+        let action = action.to_string();
+        let section = self.section.to_string();
+        match action_of(&action) {
+            (SORT, by) => {
+                let sort = crate::listing::step_sort(self.sort, by);
+                self.as_mut().rust_mut().sort = sort;
+                self.read();
+                0
+            }
+            (JUMP, by) => {
+                let here = self.at(self.focused).map(|g| crate::listing::letter(&g.title)).unwrap_or_default();
+                crate::listing::jump_letter(&self.read.letters, &here, by).map_or(self.focused, |row| row as i32)
+            }
+            (RANDOM, _) if !self.rows.is_empty() => {
+                let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos() as usize);
+                (nanos % self.rows.len()) as i32
+            }
+            (FAVOURITES_ONLY, _) => {
+                self.as_mut().rust_mut().favourites_in.insert(section);
+                self.read();
+                0
+            }
+            (EVERY_GAME, _) => {
+                self.as_mut().rust_mut().favourites_in.remove(&section);
+                self.read();
+                0
+            }
+            _ => self.focused,
+        }
+    }
+
+    pub fn back(mut self: Pin<&mut Self>) {
+        let section = self.section.to_string();
+        if !self.search.is_empty() {
+            self.as_mut().set_search(QString::default());
+        } else if self.as_mut().rust_mut().favourites_in.remove(&section) {
+            self.read();
+        } else {
+            self.passed_back();
+        }
+    }
+
+    /// The count and the List card's facts said again from the last read and the focus.
+    fn said(mut self: Pin<&mut Self>) {
+        let listing = self.listing();
+        let count = crate::listing::count_line(self.read.all, self.rows.len(), listing.narrowed());
+        let letter = self.at(self.focused).or(self.rows.first()).map_or_else(|| "#".to_owned(), |g| crate::listing::letter(&g.title));
+        let facts = serde_json::json!({
+            "section": self.section_name.to_string(),
+            "count": count,
+            "sort": crate::listing::SORTS[self.sort],
+            "filter": if listing.favourites_only { "Favourites" } else { "" },
+            "letter": letter,
+            "letters": self.read.letters.iter().map(|(l, _)| l.as_str()).collect::<Vec<_>>().join(" "),
+            "favouritesSection": self.section.to_string() == crate::library::FAVOURITES,
+            "startConsole": self.start_console,
+        })
+        .to_string();
+        let (count, facts) = (QString::from(count.as_str()), QString::from(facts.as_str()));
+        if self.count_line != count {
+            self.as_mut().rust_mut().count_line = count;
+            self.as_mut().count_line_changed();
+        }
+        if self.list_facts != facts {
+            self.as_mut().rust_mut().list_facts = facts;
+            self.list_facts_changed();
+        }
+    }
+
+    fn take(mut self: Pin<&mut Self>, asked: u64, rows: Vec<GameRow>, read: Read) {
         if self.asked != asked {
             return;
         }
+        self.as_mut().rust_mut().read = read;
         let count = rows.len() as i32;
         self.as_mut().begin_reset_model();
         self.as_mut().rust_mut().rows = rows;
@@ -253,6 +389,7 @@ impl qobject::GameModel {
         }
         let revision = self.revision.wrapping_add(1);
         self.as_mut().rust_mut().revision = revision;
-        self.revision_changed();
+        self.as_mut().revision_changed();
+        self.said();
     }
 }

@@ -128,6 +128,8 @@ pub const PLACE_HEADINGS: [&str; 3] = ["All", "Favourites", "Recent"];
 
 /// The recently played games' key, which Home's shelf shows.
 pub const RECENT: &str = "recent";
+/// Every game's key.
+pub const ALL: &str = "all";
 
 /// The favourites' key, which Choose a console's Y opens as a place.
 pub const FAVOURITES: &str = "favourites";
@@ -164,6 +166,8 @@ pub struct GameRow {
     pub console: String,
     /// The console's name and when it was last played: "Super Nintendo · 3 h ago".
     pub facts: String,
+    /// When it was last played, in seconds since 1970; 0 for never.
+    pub played_at: i64,
 }
 
 /// The media store's type for a cover.
@@ -225,6 +229,7 @@ fn game_rows(systems: &[SystemRow], catalog: &Catalog, now: i64) -> Vec<GameRow>
                 cover: covers.get(&g.path).cloned().unwrap_or_default(),
                 hero: heroes.get(&g.path).cloned().unwrap_or_default(),
                 facts: [Some(console.clone()), when].into_iter().flatten().filter(|w| !w.is_empty()).collect::<Vec<_>>().join(" · "),
+                played_at: played.get(g.path.as_str()).copied().unwrap_or(0),
                 path: g.path.clone(),
                 system,
                 console,
@@ -420,6 +425,12 @@ pub struct LibraryView {
 }
 
 impl LibraryView {
+    /// Whether a console of the systems table starts with nothing in it, where the List card and the Home card offer
+    /// Start Console (Mistress's `ConsolesThatStartEmpty`).
+    pub fn starts_empty(&self) -> bool {
+        self.systems.iter().any(|s| s.starts_empty)
+    }
+
     /// "11 consoles · 1,566 games": the consoles shown and every game.
     pub fn summary(&self) -> String {
         let consoles = self.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).count();

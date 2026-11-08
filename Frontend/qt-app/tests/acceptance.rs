@@ -195,6 +195,8 @@ fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
 /// Surface's 27 at the panel's edge, 25 at 16 pixels out, Surface again by 24): darker than Surface at the edge and back
 /// to it within 32 pixels.
 fn shadow_over_band(scene: &mut Scene<'_>) {
+    let profile: Vec<u8> = scene.colours_at(&(0..12).map(|i| (512.0 + 4.0 * f64::from(i), 760.0)).collect::<Vec<_>>()).iter().map(|c| c.map_or(255, |c| c.r)).collect();
+    eprintln!("the shadow over the band, every 4 pixels from the panel's edge: {profile:?}");
     let at = scene.colours_at(&[(513.0, 760.0), (529.0, 760.0), (548.0, 760.0)]);
     let level = |c: &Option<emusen_kit_core::tokens::Colour>| c.map_or(255, |c| c.r);
     let (edge, mid, out) = (level(&at[0]), level(&at[1]), level(&at[2]));

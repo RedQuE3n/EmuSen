@@ -54,6 +54,8 @@ pub mod qobject {
         #[qproperty(bool, first, READ, NOTIFY)]
         #[qproperty(QString, title, READ, NOTIFY)]
         #[qproperty(QString, breadcrumb, READ, NOTIFY)]
+        /// The line under the rows; empty for none.
+        #[qproperty(QString, footer, READ, NOTIFY)]
         /// The focused row, which a page turn sets.
         #[qproperty(i32, current, READ, NOTIFY)]
         /// The focused row's pane: its lines and the muted line under each, or a picture with its caption.
@@ -147,6 +149,7 @@ pub struct CardModelRust {
     first: bool,
     title: QString,
     breadcrumb: QString,
+    footer: QString,
     current: i32,
     pane_lines: QStringList,
     pane_muted: QStringList,
@@ -167,6 +170,7 @@ impl Default for CardModelRust {
             first: false,
             title: QString::default(),
             breadcrumb: QString::default(),
+            footer: QString::default(),
             current: 0,
             pane_lines: QStringList::default(),
             pane_muted: QStringList::default(),
@@ -355,6 +359,11 @@ impl qobject::CardModel {
         if self.breadcrumb != breadcrumb {
             self.as_mut().rust_mut().breadcrumb = breadcrumb;
             self.as_mut().breadcrumb_changed();
+        }
+        let footer = QString::from(self.page_shown.footer.as_str());
+        if self.footer != footer {
+            self.as_mut().rust_mut().footer = footer;
+            self.as_mut().footer_changed();
         }
         // Said after a reset, since a view's current row does not survive its model's reset.
         let current = self.current;

@@ -162,6 +162,7 @@ Window {
             rows: homeCardModel
             title: homeCardModel.title
             breadcrumb: homeCardModel.breadcrumb
+            footer: homeCardModel.footer
             current: homeCardModel.current
             paneLines: homeCardModel.paneLines
             paneMuted: homeCardModel.paneMuted

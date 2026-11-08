@@ -1505,13 +1505,22 @@ built on it too:
   **The shadow falls over the help band** beside the panel, as Mistress's does (the tester's note on stage 1's Pause
   Card, 2026-11-08). The band and its bar are painted after the panel, opaque because a transparent bar cleared its
   strip on Vulkan (§7.1 step 7). So the part of the shadow beside the panel is drawn again over them, clipped to the band
-  and to 64 units past the panel's edge.
+  and to 64 units past the panel's edge. Its falloff is matched to Mistress's render. The design's offset of 0,8 is kept,
+  with a radius of 48 and black at 90% (`shadowOpacity`, `shadowRadius`). Measured on Vulkan at 1280 × 800 on
+  2026-11-08, every 4 pixels from the panel's edge over the band, Mistress's render reads 15, 17, 20, 23, 25 and 26
+  against Surface's 27, and Qt reads 16, 19, 21, 23, 24 and 25. Before, at the Pause Card's radius of 24 and 50%, Qt read
+  22 at the edge and nothing by 17 pixels.
 
 **The Home card** (`home_card.rs`): Mistress's `HomeRows`, `ToolRows` and `PowerRows` in her words. The first page is
 Continue (while a game is suspended), Selected game ▸, Search, Start Console ▸, Tools ▸, Settings ▸ and Power ▸, with
 Tools and Power each starting a section. Tools lists the five tools with their summaries as values, then Themes,
 Collections, Compressed Discs and Shell. Power has Exit Big Picture, then Quit EmuSen..., whose question says "EmuSen
-closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone.
+closes." or "The game closes, then EmuSen."; Yes quits the program. In Steam's Game Mode Power holds Quit alone. Under
+Power's rows stands "EmuSen 0.9.1" in Muted at 26 (Mistress's `BigMenuFooter`; within a pixel of her render at 1280 ×
+800). The version's owner is still MSBuild's `Directory.Build.props`. `qt-models/build.rs` reads it from there rather
+than copying it, and the reading moves with the build host (§1.9). Start Console is offered on both cards wherever a
+console of the systems table starts with nothing in it (`starts_empty`, Mistress's `ConsolesThatStartEmpty`, through
+`LibraryModel.startsEmpty`).
 `start.rs` reads Game Mode as Mistress's `InGameModeSession` does: gamescope among `XDG_CURRENT_DESKTOP`'s names, else
 `SteamDeck=1`. Its facts come from `LibraryModel.homeCardFacts` (the suspended game, its paused words, the tools'
 summaries, Game Mode).
@@ -1548,13 +1557,9 @@ none`; and the screens beneath under their stage 1 names. The side-by-sides (Mis
 over either) are `~/.cache/emusen/tmp/qt-s2/compare/<State>-<size>-side.png`.
 
 **Differences that remain, each for the tester:**
-- The List card has no Start Console row. Mistress offers it where a console starts with no disc (`StartableConsoles`),
-  which no Rust owner reads yet, so its card has six rows where her fixture's has seven.
-- Power has no "EmuSen 0.9.1" line under its rows. The version is MSBuild's (`Directory.Build.props`) and has no Rust
-  owner yet.
 - Exit Big Picture closes the card and does nothing more: emusen-qt has only the big-screen form until stage 6.
-- The Tools page's rows, Settings ▸, Collections ▸ and the paused frame in Continue's pane are declared and do nothing
-  yet. Each opens a screen of a later stage.
+- The Tools page's rows, Settings ▸, Start Console ▸ (§18.3's page), Collections ▸ and the paused frame in Continue's
+  pane are declared and do nothing yet. Each opens a screen of a later stage.
 - Most played, Year and Rating sort by name, since the library reads no play counts, years or ratings yet. Mistress
   falls back the same way for Rating.
 - The Filter page lists no collections of the player's own, since the library does not read them yet.
@@ -1580,6 +1585,15 @@ closes the keyboard, then goes back. Each card is held at the gate's five sizes 
 - The recently played sorted by name: the listing test.
 - The rows reset on a stepped value: the program's cards test, where the gate's walk did not reach the List card's rows.
 - Start on the grid left where it was: the program's cards test.
+
+**On Vulkan** (`acceptance.rs`, measured on 2026-11-08 in its own compositor on the RX 6800, 72 s). The program over
+Mistress's own-look fixture holds the List card over the grid of eight covers ("All · 8 games"), HomeCardPower and
+HomeCardQuit at the gate's five sizes with nothing logged, and checks the shadow over the band (`shadow_over_band`). The
+fixture's systems table, read through the runtime with its three engines, marks no console as starting empty, so the
+row is absent there; the models' test holds it present where the table says so. The test now reads each card's slide
+through its canvas (`cardCanvas`, `homeCardCanvas`, `listCardCanvas`), since every card's root is `PadCard`, as
+Mistress names it. The first run, with the Pause Card's shadow (radius 24, black at 50%), failed `shadow_over_band` at
+22, 27 and 27 for 1, 17 and 36 pixels out, which is why the shadow was matched as above.
 
 The C# side is unchanged. No C++ was added.
 

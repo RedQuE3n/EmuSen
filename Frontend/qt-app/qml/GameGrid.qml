@@ -217,6 +217,7 @@ FocusScope {
                     section: root.key
                     sectionName: root.heading
                     focused: cells.currentIndex
+                    startConsole: root.library.startsEmpty
                     onPassedBack: root.closed()
                 }
                 delegate: Kit.Walkable {
@@ -310,6 +311,7 @@ FocusScope {
         rows: listCardModel
         title: listCardModel.title
         breadcrumb: listCardModel.breadcrumb
+        footer: listCardModel.footer
         current: listCardModel.current
         paneLines: listCardModel.paneLines
         paneMuted: listCardModel.paneMuted

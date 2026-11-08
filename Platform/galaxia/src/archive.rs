@@ -2,11 +2,11 @@
 //! directory, the entry play opens, an entry's first bytes, an entry copied out whole and its time. Every form the
 //! crate reads is taken (Zip64, data descriptors, stored, deflate and Deflate64); an encrypted entry or another method
 //! is refused when it is read, in the crate's words. The crate bounds an entry by its declared length and checks its
-//! CRC-32. See EmuSen_RustPlatform.md §47.15. Since game packages' step 7 the same plain zip is also written, with each
-//! file's time to the tick (EmuSen_GamePackages.md §19).
+//! CRC-32. See EmuSen_RustPlatform.md §47.15. Since game packages' step 7 a package's zip is also written, by the same
+//! crate since §47.16, with each file's time to the tick (EmuSen_GamePackages.md §19).
 
 use crate::image_sets;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::io::{Read, Seek, Write};
 
 /// `ArchiveImages.Extensions`.
 pub const EXTENSIONS: &[&str] = &[".zip"];
@@ -156,190 +156,88 @@ pub fn copy_entry(at: &str, e: &ZipEntry, out: &mut dyn Write) -> Result<(), Str
 /// compressed a second time (EmuSen_GamePackages.md §19).
 pub const STORED_EXTENSIONS: &[&str] = &[".chd", ".zip", ".7z", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".mkv", ".webm", ".pdf"];
 
-/// What a plain zip without Zip64 can hold: 65,535 entries and offsets and sizes under 4 GiB.
-pub const MAX_ENTRIES: usize = 0xFFFF;
-pub const MAX_OFFSET: u64 = 0xFFFF_FFFE;
-
-/// A zip written entry by entry to a file, then its central directory and end record: stored or deflated entries,
-/// names in UTF-8, each with its modification time in the DOS fields (local time), the extended timestamp (to the
-/// second) and the NTFS field (to the tick, which a state's record is stamped with).
+/// A zip written entry by entry to a file by the zip crate: stored or deflated entries, names in UTF-8, each with its
+/// modification time in the DOS fields (local time), the extended timestamp (to the second) and the NTFS field (to the
+/// tick, which a state's record is stamped with). Zip64 is written where an entry or the archive needs it.
 pub struct ZipWriter {
-    file: std::fs::File,
-    at: u64,
-    directory: Vec<u8>,
-    entries: usize,
+    zip: zip::ZipWriter<std::fs::File>,
 }
 
-const LOCAL: u32 = 0x0403_4B50;
-const CENTRAL: u32 = 0x0201_4B50;
-const END: u32 = 0x0605_4B50;
-
-fn dos_time(t: std::time::SystemTime) -> (u16, u16) {
+/// A time's DOS fields in local time; the first of 1980 for a time before it.
+fn dos_time(t: std::time::SystemTime) -> zip::DateTime {
     let utc = crate::clock::ticks_of(t).div_euclid(emusen_dotnet::date::TICKS_PER_SECOND);
     let local = utc + crate::clock::local_offset(utc);
     let (y, m, d) = emusen_dotnet::date::civil(local.div_euclid(86_400));
-    if y < 1980 {
-        return (0, (1 << 5) | 1);
-    }
     let s = local.rem_euclid(86_400);
-    let time = ((s / 3600) << 11 | (s / 60 % 60) << 5 | (s % 60) / 2) as u16;
-    let date = (((y - 1980).min(127) as u32) << 9 | m << 5 | d) as u16;
-    (time, date)
+    let fields = (u16::try_from(y).ok(), m as u8, d as u8, (s / 3600) as u8, (s / 60 % 60) as u8, (s % 60) as u8);
+    fields.0.and_then(|y| zip::DateTime::from_date_and_time(y, fields.1, fields.2, fields.3, fields.4, fields.5).ok()).unwrap_or_default()
 }
 
-fn time_fields(t: std::time::SystemTime) -> Vec<u8> {
-    let ticks = crate::clock::ticks_of(t);
-    let ft = (ticks as i128 + FILETIME_1970 as i128).max(0) as u64;
-    let seconds = ticks.div_euclid(emusen_dotnet::date::TICKS_PER_SECOND).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
-    let mut extra = Vec::with_capacity(45);
-    extra.extend_from_slice(&0x5455u16.to_le_bytes());
-    extra.extend_from_slice(&5u16.to_le_bytes());
-    extra.push(1);
-    extra.extend_from_slice(&seconds.to_le_bytes());
-    extra.extend_from_slice(&0x000Au16.to_le_bytes());
-    extra.extend_from_slice(&32u16.to_le_bytes());
-    extra.extend_from_slice(&[0, 0, 0, 0]);
-    extra.extend_from_slice(&1u16.to_le_bytes());
-    extra.extend_from_slice(&24u16.to_le_bytes());
-    for _ in 0..3 {
-        extra.extend_from_slice(&ft.to_le_bytes());
+/// The extended timestamp's body (0x5455): its flags, modification only, then Unix seconds.
+fn extended_timestamp(t: std::time::SystemTime) -> [u8; 5] {
+    let seconds = crate::clock::ticks_of(t).div_euclid(emusen_dotnet::date::TICKS_PER_SECOND).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    let mut body = [1u8; 5];
+    body[1..].copy_from_slice(&seconds.to_le_bytes());
+    body
+}
+
+/// The NTFS field's body (0x000A): four reserved bytes, then tag 1 of 24 bytes holding the modification, access and
+/// creation FILETIMEs, all three the one time.
+fn ntfs_times(t: std::time::SystemTime) -> [u8; 32] {
+    let ft = (crate::clock::ticks_of(t) as i128 + FILETIME_1970 as i128).max(0) as u64;
+    let mut body = [0u8; 32];
+    body[4..6].copy_from_slice(&1u16.to_le_bytes());
+    body[6..8].copy_from_slice(&24u16.to_le_bytes());
+    for at in [8, 16, 24] {
+        body[at..at + 8].copy_from_slice(&ft.to_le_bytes());
     }
-    extra
+    body
 }
 
 impl ZipWriter {
     pub fn create(at: &str) -> Result<ZipWriter, String> {
         let file = std::fs::OpenOptions::new().write(true).create_new(true).open(at).map_err(|e| format!("{at}: {e}"))?;
-        Ok(ZipWriter { file, at: 0, directory: Vec::new(), entries: 0 })
+        Ok(ZipWriter { zip: zip::ZipWriter::new(file) })
     }
 
-    fn write(&mut self, bytes: &[u8]) -> Result<(), String> {
-        self.file.write_all(bytes).map_err(|e| e.to_string())?;
-        self.at += bytes.len() as u64;
-        Ok(())
-    }
-
-    /// The file at `source` added as `name`, stored where `store` says or where deflating would not make it smaller,
-    /// with `modified` as its time; refused past what a plain zip holds.
+    /// The file at `source` added as `name`, stored where `store` says and deflated otherwise, with `modified` as its
+    /// time; `stop` is asked between each MiB.
     pub fn add(&mut self, name: &str, source: &str, modified: std::time::SystemTime, store: bool, stop: &dyn Fn() -> bool) -> Result<(), String> {
-        if self.entries + 1 > MAX_ENTRIES - 1 {
-            return Err(format!("more than {} files, which a zip without Zip64 does not hold", MAX_ENTRIES - 1));
-        }
-        let length = std::fs::metadata(source).map_err(|e| format!("{source}: {e}"))?.len();
-        if length > MAX_OFFSET || self.at > MAX_OFFSET {
-            return Err(format!("{name} reaches past 4 GiB, which a zip without Zip64 does not hold"));
-        }
-        let mut crc = crate::rom_hash::Crc32::default();
-        let deflated: Option<Vec<u8>> = if store {
-            None
-        } else {
-            let bytes = std::fs::read(source).map_err(|e| format!("{source}: {e}"))?;
-            crc.append(&bytes);
-            let mut encoder = flate2::write::DeflateEncoder::new(Vec::with_capacity(bytes.len() / 2), flate2::Compression::new(6));
-            encoder.write_all(&bytes).map_err(|e| e.to_string())?;
-            let packed = encoder.finish().map_err(|e| e.to_string())?;
-            if (packed.len() as u64) < length { Some(packed) } else { None }
-        };
-        let method: u16 = if deflated.is_some() { 8 } else { 0 };
-        let (time, date) = dos_time(modified);
-        let extra = time_fields(modified);
-        let offset = self.at;
-        let header = |crc: u32, compressed: u32, out: &mut Vec<u8>| {
-            out.extend_from_slice(&LOCAL.to_le_bytes());
-            out.extend_from_slice(&20u16.to_le_bytes());
-            out.extend_from_slice(&0x0800u16.to_le_bytes());
-            out.extend_from_slice(&method.to_le_bytes());
-            out.extend_from_slice(&time.to_le_bytes());
-            out.extend_from_slice(&date.to_le_bytes());
-            out.extend_from_slice(&crc.to_le_bytes());
-            out.extend_from_slice(&compressed.to_le_bytes());
-            out.extend_from_slice(&(length as u32).to_le_bytes());
-            out.extend_from_slice(&(name.len() as u16).to_le_bytes());
-            out.extend_from_slice(&(extra.len() as u16).to_le_bytes());
-            out.extend_from_slice(name.as_bytes());
-            out.extend_from_slice(&extra);
-        };
-        let (crc_value, compressed) = match &deflated {
-            Some(packed) => {
-                let mut h = Vec::new();
-                header(crc.value(), packed.len() as u32, &mut h);
-                self.write(&h)?;
-                self.write(packed)?;
-                (crc.value(), packed.len() as u64)
+        let mut input = std::fs::File::open(source).map_err(|e| format!("{source}: {e}"))?;
+        let length = input.metadata().map_err(|e| format!("{source}: {e}"))?.len();
+        let (method, level) = if store { (zip::CompressionMethod::Stored, None) } else { (zip::CompressionMethod::Deflated, Some(6)) };
+        let mut options = zip::write::FullFileOptions::default()
+            .compression_method(method)
+            .compression_level(level)
+            .last_modified_time(dos_time(modified))
+            .unix_permissions(0o644)
+            .large_file(length > u32::MAX as u64)
+            .validate_extra_fields(true);
+        let field = |e: zip::result::ZipError| format!("{name}: {e}");
+        options.add_extra_field(0x5455, extended_timestamp(modified), false).map_err(field)?;
+        options.add_extra_field(0x000A, ntfs_times(modified), false).map_err(field)?;
+        self.zip.start_file(name, options).map_err(field)?;
+        let mut buffer = vec![0u8; 1 << 20];
+        let mut copied = 0u64;
+        loop {
+            if stop() {
+                return Err("stopped".into());
             }
-            None => {
-                let mut h = Vec::new();
-                header(0, length as u32, &mut h);
-                self.write(&h)?;
-                let mut input = std::fs::File::open(source).map_err(|e| format!("{source}: {e}"))?;
-                let mut crc = crate::rom_hash::Crc32::default();
-                let mut buffer = vec![0u8; 1 << 20];
-                let mut copied = 0u64;
-                loop {
-                    if stop() {
-                        return Err("stopped".into());
-                    }
-                    let n = input.read(&mut buffer).map_err(|e| format!("{source}: {e}"))?;
-                    if n == 0 {
-                        break;
-                    }
-                    crc.append(&buffer[..n]);
-                    self.write(&buffer[..n])?;
-                    copied += n as u64;
-                }
-                if copied != length {
-                    return Err(format!("{source} changed while it was written"));
-                }
-                self.file.seek(SeekFrom::Start(offset + 14)).map_err(|e| e.to_string())?;
-                self.file.write_all(&crc.value().to_le_bytes()).map_err(|e| e.to_string())?;
-                self.file.seek(SeekFrom::Start(self.at)).map_err(|e| e.to_string())?;
-                (crc.value(), length)
+            let n = input.read(&mut buffer).map_err(|e| format!("{source}: {e}"))?;
+            if n == 0 {
+                break;
             }
-        };
-        if self.at > MAX_OFFSET {
-            return Err(format!("{name} reaches past 4 GiB, which a zip without Zip64 does not hold"));
+            self.zip.write_all(&buffer[..n]).map_err(|e| format!("{name}: {e}"))?;
+            copied += n as u64;
         }
-        let d = &mut self.directory;
-        d.extend_from_slice(&CENTRAL.to_le_bytes());
-        d.extend_from_slice(&((3u16 << 8) | 20).to_le_bytes());
-        d.extend_from_slice(&20u16.to_le_bytes());
-        d.extend_from_slice(&0x0800u16.to_le_bytes());
-        d.extend_from_slice(&method.to_le_bytes());
-        d.extend_from_slice(&time.to_le_bytes());
-        d.extend_from_slice(&date.to_le_bytes());
-        d.extend_from_slice(&crc_value.to_le_bytes());
-        d.extend_from_slice(&(compressed as u32).to_le_bytes());
-        d.extend_from_slice(&(length as u32).to_le_bytes());
-        d.extend_from_slice(&(name.len() as u16).to_le_bytes());
-        d.extend_from_slice(&(extra.len() as u16).to_le_bytes());
-        d.extend_from_slice(&0u16.to_le_bytes());
-        d.extend_from_slice(&0u16.to_le_bytes());
-        d.extend_from_slice(&0u16.to_le_bytes());
-        d.extend_from_slice(&(0o100644u32 << 16).to_le_bytes());
-        d.extend_from_slice(&(offset as u32).to_le_bytes());
-        d.extend_from_slice(name.as_bytes());
-        d.extend_from_slice(&extra);
-        self.entries += 1;
+        if copied != length {
+            return Err(format!("{source} changed while it was written"));
+        }
         Ok(())
     }
 
     /// The central directory and the end record written, and the file flushed to the disk.
-    pub fn finish(mut self) -> Result<(), String> {
-        let (start, size) = (self.at, self.directory.len() as u64);
-        if start > MAX_OFFSET || start + size > MAX_OFFSET {
-            return Err("the zip's directory would begin past 4 GiB, which a zip without Zip64 does not hold".into());
-        }
-        let directory = std::mem::take(&mut self.directory);
-        self.write(&directory)?;
-        let mut end = Vec::with_capacity(22);
-        end.extend_from_slice(&END.to_le_bytes());
-        end.extend_from_slice(&[0, 0, 0, 0]);
-        end.extend_from_slice(&(self.entries as u16).to_le_bytes());
-        end.extend_from_slice(&(self.entries as u16).to_le_bytes());
-        end.extend_from_slice(&(size as u32).to_le_bytes());
-        end.extend_from_slice(&(start as u32).to_le_bytes());
-        end.extend_from_slice(&0u16.to_le_bytes());
-        self.write(&end)?;
-        self.file.sync_all().map_err(|e| e.to_string())
+    pub fn finish(self) -> Result<(), String> {
+        self.zip.finish().map_err(|e| e.to_string())?.sync_all().map_err(|e| e.to_string())
     }
 }

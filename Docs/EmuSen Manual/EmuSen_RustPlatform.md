@@ -3923,3 +3923,28 @@ not applied. An archive the reader refuses is refused in its words: `emusen_chea
 the last error, and no longer names a .NET exception or a `threw` member; its `libc` local-time code is gone. The core
 installer's check that a core's member is no link reads the crate's Unix mode. The corpus test reads every zip from
 its file and from memory, and the list of zips the game reader refused is gone.
+
+### 47.16 Zips are written by the zip crate
+
+A package's zip (`package_zip::write`, through Galaxia's `archive::ZipWriter`) and the recorder's archive of frame
+pictures are written by the zip crate; the two hand-written writers are gone, and with them Galaxia's last use of
+`flate2`. Approved 2026-11-07 as a change on disk: a new zip's bytes differ from the old writer's, and every reader
+takes both.
+
+- **The times.** A package's entry keeps its time three ways, as before: the DOS fields in local time, the extended
+  timestamp (0x5455, Unix seconds) and the NTFS field (0x000A, the FILETIME to the 100 ns tick, which a state's record
+  is stamped with). The crate writes an extra field's body as it is given (`add_extra_field`); the two bodies, 5 and 32
+  bytes laid out as Info-ZIP's `extrafld.txt` and APPNOTE 4.5.5 state them, are built in `archive.rs` and checked by the
+  crate's own parser before the entry starts (`validate_extra_fields`). The crate reads the NTFS field without its
+  `nt-time` feature, so none is enabled. The recorder's entries carry the DOS time alone, as before.
+- **Stored or deflated.** An entry is stored where its extension says it is already compressed (a CHD, a zip, a
+  picture, a video) and deflated otherwise; the old rule that also stored a file deflate would not shrink, which read
+  the whole file into memory to find out, is gone, so a file is now streamed from the disk a MiB at a time.
+- **Zip64.** An entry past 4 GiB, or an archive whose directory lies past it, is written as Zip64, which the reader
+  takes since §47.15; the writer no longer refuses a package that large.
+- **Checked elsewhere.** On 2026-11-07 a zip from the new writer read without error in Info-ZIP's `unzip -t` and
+  `zipinfo` (which showed the DOS time, the UT field's time and Unix mode 100644) and in Python's `zipfile`.
+
+The proof: `package_zip`'s test writes a package with a time of an odd 100 ns and reads it back to the tick; the corpus's
+`package.zip`, written by the old writer, still unpacks to the tick; the recorder's new test reads its archive back with
+the crate, each picture's bytes and local DOS time.

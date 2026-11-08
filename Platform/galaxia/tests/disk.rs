@@ -122,9 +122,9 @@ fn an_unpacked_folder_keeps_its_name() {
 }
 
 fn crc32(bytes: &[u8]) -> u32 {
-    let mut crc = flate2::Crc::new();
-    crc.update(bytes);
-    crc.sum()
+    let mut crc = emusen_galaxia::rom_hash::Crc32::default();
+    crc.append(bytes);
+    crc.value()
 }
 
 /// A zip as one line per entry, `name<TAB>length<TAB>CRC-32`; with `times`, each entry's own time in nanoseconds since 1970.

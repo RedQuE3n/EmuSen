@@ -239,7 +239,6 @@ dependencies = [
  "dirs",
  "emusen-disc",
  "emusen-dotnet",
- "flate2",
  "md-5",
  "memmap2",
  "sha1",

@@ -435,7 +435,6 @@ dependencies = [
  "dirs",
  "emusen-disc",
  "emusen-dotnet",
- "flate2",
  "md-5",
  "memmap2",
  "sha1",
@@ -628,7 +627,7 @@ name = "emusen-recorder"
 version = "0.1.0"
 dependencies = [
  "emusen-dotnet",
- "flate2",
+ "zip",
 ]
 
 [[package]]

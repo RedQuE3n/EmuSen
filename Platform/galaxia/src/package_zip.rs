@@ -272,9 +272,9 @@ mod tests {
         assert_eq!(opened(&t.join("Third"), &outside).unwrap().unwrap(), t.join("Third/Game.sfc"));
         std::fs::write(t.join("Third/Game.sfc/package.json"), manifest.replace("00000000\",\"md5", "11111111\",\"md5").replace("\"sha1\":\"0000000000000000000000000000000000000000\"", "\"sha1\":\"1111111111111111111111111111111111111111\"")).unwrap();
         assert!(opened(&t.join("Third"), &outside).unwrap_err().contains("another game's package"));
-        // A damaged entry is refused and nothing is left.
+        // A damaged entry, the stored CHD's, is refused and nothing is left.
         let mut bytes = std::fs::read(&zip).unwrap();
-        let at = bytes.windows(13).position(|w| w == b"SAVEDATA-1234").unwrap();
+        let at = bytes.windows(16).position(|w| w == b"MComprHD pretend").unwrap();
         bytes[at] = b'X';
         let damaged = t.join("Fourth/Packages/Game.sfc.zip");
         put(&damaged, &bytes);

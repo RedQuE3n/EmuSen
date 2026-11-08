@@ -9,7 +9,7 @@
 
 use crate::serenity::{CacheHandle, bytes, document, failure, fault_json, leave, list, number, object, out_json, parameter_json, shaderc};
 use crate::{fail, put, required, status, text};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_serenity::cache;
 use emusen_serenity::chain::{self, Chain, Failure, Unfed};
 use emusen_serenity::compiler::Stage;
@@ -324,7 +324,7 @@ pub unsafe extern "C" fn emusen_serenity_device_marks(h: *const DeviceHandle, ou
 
 fn integer(value: Option<&Value>) -> Option<i32> {
     match value? {
-        Value::Number(token) => token.parse().ok(),
+        Value::Number(number) => number.as_i64().and_then(|n| i32::try_from(n).ok()),
         _ => None,
     }
 }
@@ -399,7 +399,7 @@ fn preset_of(value: &Value) -> Option<Preset> {
 
 /// Why a chain was not built, as a document of the exception the C# throws for it, left for the caller to take.
 fn refuse(why: &Failure) -> i32 {
-    let said = |kind: &str, message: &str| object(vec![("fail", Value::string(kind)), ("message", Value::string(message))]);
+    let said = |kind: &str, message: &str| object(vec![("fail", Value::String(String::from(kind))), ("message", Value::String(String::from(message)))]);
     let (code, document) = match why {
         Failure::Source(error) => (status::IO, failure(error)),
         Failure::Compile(words) => (status::PARSE, said("compile", words)),
@@ -781,12 +781,11 @@ pub unsafe extern "C" fn emusen_serenity_parse_format(name: *const u8, len: usiz
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emusen_dotnet::json;
-
+    
     #[test]
     fn a_preset_crosses_back_from_the_document_its_reader_answers_with() {
         let text = r#"{"path":"/p/a.slangp","passes":[{"shader":"/p/a.slang","alias":null,"linear":true,"wrap":2,"type_x":0,"type_y":2,"scale_x":1073741824,"scale_y":4290772992,"float":false,"srgb":true,"mipmap":false,"mod":-3},{"shader":"/p/b.slang","alias":"B","linear":false,"wrap":0,"type_x":1,"type_y":1,"scale_x":1065353216,"scale_y":1065353216,"float":true,"srgb":false,"mipmap":true,"mod":0}],"textures":[{"name":"Lut","path":"/p/lut.png","linear":true,"wrap":3,"mipmap":true}],"parameters":[["gain",1056964608]]}"#;
-        let preset = preset_of(&json::parse(text).unwrap()).unwrap();
+        let preset = preset_of(&serde_json::from_str::<Value>(text).unwrap()).unwrap();
         assert_eq!(preset.path, "/p/a.slangp");
         assert_eq!((preset.passes.len(), preset.passes[0].alias.as_deref(), preset.passes[1].alias.as_deref()), (2, None, Some("B")));
         assert_eq!((preset.passes[0].wrap, preset.passes[0].scale_type_x, preset.passes[0].scale_type_y), (Wrap::Repeat, ScaleType::Source, ScaleType::Absolute));
@@ -795,9 +794,9 @@ mod tests {
         assert_eq!(preset.textures, vec![TextureSpec { name: "Lut".into(), path: "/p/lut.png".into(), linear: true, wrap: Wrap::MirroredRepeat, mipmap: true }]);
         assert_eq!(preset.parameters, vec![("gain".to_string(), 0.5)]);
         // A preset with no pass, or with a member of the wrong kind, is not one.
-        assert!(preset_of(&json::parse(r#"{"path":"/p","passes":[],"textures":[],"parameters":[]}"#).unwrap()).is_none());
-        assert!(preset_of(&json::parse(&text.replace("\"wrap\":2", "\"wrap\":9")).unwrap()).is_none());
-        assert!(preset_of(&json::parse(&text.replace("\"linear\":true,\"wrap\":2", "\"wrap\":2")).unwrap()).is_none());
+        assert!(preset_of(&serde_json::from_str::<Value>(r#"{"path":"/p","passes":[],"textures":[],"parameters":[]}"#).unwrap()).is_none());
+        assert!(preset_of(&serde_json::from_str::<Value>(&text.replace("\"wrap\":2", "\"wrap\":9")).unwrap()).is_none());
+        assert!(preset_of(&serde_json::from_str::<Value>(&text.replace("\"linear\":true,\"wrap\":2", "\"wrap\":2")).unwrap()).is_none());
     }
 
     #[test]
@@ -805,7 +804,7 @@ mod tests {
         assert_eq!(refuse(&Failure::Compile("a.slang (Vertex) does not compile:\nwords".into())), status::PARSE);
         let mut out = [0u8; 256];
         let length = unsafe { crate::serenity::emusen_serenity_take(out.as_mut_ptr(), out.len()) } as usize;
-        let waiting = json::parse(std::str::from_utf8(&out[..length]).unwrap()).unwrap();
+        let waiting = serde_json::from_str::<Value>(std::str::from_utf8(&out[..length]).unwrap()).unwrap();
         assert_eq!(waiting.get("fail").and_then(Value::as_str), Some("compile"));
         assert_eq!(waiting.get("message").and_then(Value::as_str), Some("a.slang (Vertex) does not compile:\nwords"));
         assert_eq!(refuse(&Failure::Device("vkCreateImage returned ErrorOutOfDeviceMemory".into())), status::DEVICE);

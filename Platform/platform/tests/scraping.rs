@@ -23,7 +23,7 @@ const PNG: [u8; 67] = [
 /// The first recorded `jeuInfos` answer of the scraper's own fixtures.
 fn recorded() -> String {
     let line = include_str!("../../scrape/tests/fixtures/answers.jsonl").lines().next().unwrap();
-    let v = emusen_dotnet::json::parse(line).unwrap();
+    let v = serde_json::from_str::<serde_json::Value>(line).unwrap();
     v.get("input").and_then(|i| i.as_str()).unwrap().to_string()
 }
 

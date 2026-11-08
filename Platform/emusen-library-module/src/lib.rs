@@ -5,7 +5,7 @@
 //! `man chd`; `pkg` is §14's, and `rom hash`, `rom check` and `rom dups` EmuSen_LibraryTools.md §7's (`man rom`).
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use std::ffi::c_void;
 
 pub const SERVICE: &str = "emusen.library";
@@ -67,19 +67,19 @@ pub fn rom_request(args: &[String]) -> Result<String, String> {
             "-r" if op != "rom-dups" => recursive = true,
             "--comparable" if op == "rom-hash" => comparable = true,
             o if o.starts_with('-') && o.len() > 1 => return Err(format!("rom: {o} is not an option of rom {sub}\n{ROM_USAGE}")),
-            p => paths.push(Value::string(p)),
+            p => paths.push(Value::String(String::from(p))),
         }
     }
     if op == "rom-dups" {
         if paths.len() > 1 {
             return Err(format!("rom dups: one console at most\n{ROM_USAGE}"));
         }
-        return Ok(compact(vec![("op", Value::string(op)), ("console", paths.pop().unwrap_or(Value::Null))]));
+        return Ok(compact(vec![("op", Value::String(String::from(op))), ("console", paths.pop().unwrap_or(Value::Null))]));
     }
     if paths.is_empty() {
         return Err(format!("rom {sub}: name what to {sub}, or / with -r for the whole library\n{ROM_USAGE}"));
     }
-    let mut members = vec![("op", Value::string(op)), ("paths", Value::Array(paths)), ("recursive", Value::Bool(recursive))];
+    let mut members = vec![("op", Value::String(String::from(op))), ("paths", Value::Array(paths)), ("recursive", Value::Bool(recursive))];
     if op == "rom-hash" {
         members.push(("comparable", Value::Bool(comparable)));
     }
@@ -120,7 +120,7 @@ pub fn rom_lines(e: &Value, groups_before: u64) -> (String, String) {
         }
         ("end", "rom-check") if e.get("error").is_none() => (String::new(), format!("rom check: {}; {} s.\n", counts(e), token(e, "seconds"))),
         ("end", "rom-dups") if e.get("error").is_none() => {
-            let n = e.get("counts").and_then(|c| c.get("groups")).map_or("0".to_string(), |v| if let Value::Number(t) = v { t.clone() } else { "0".into() });
+            let n = e.get("counts").and_then(|c| c.get("groups")).map_or("0".to_string(), |v| if let Value::Number(t) = v { t.to_string() } else { "0".into() });
             let stopped = e.get("counts").and_then(|c| c.get("stopped")).is_some();
             (String::new(), if stopped { "rom dups: stopped before every file was hashed, so no group is given.\n".to_string() } else { format!("rom dups: {n} group(s); {}; {} s.\n", counts(e), token(e, "seconds")) })
         }
@@ -130,7 +130,7 @@ pub fn rom_lines(e: &Value, groups_before: u64) -> (String, String) {
 
 fn counts(e: &Value) -> String {
     match e.get("counts") {
-        Some(Value::Object(c)) if !c.is_empty() => c.iter().filter(|(k, _)| k.text != "groups").map(|(k, v)| format!("{} {}", if let Value::Number(t) = v { t.as_str() } else { "" }, k.text)).collect::<Vec<_>>().join(", "),
+        Some(Value::Object(c)) if !c.is_empty() => c.iter().filter(|(k, _)| *k != "groups").map(|(k, v)| format!("{} {}", if let Value::Number(t) = v { t.to_string() } else { String::new() }, k)).collect::<Vec<_>>().join(", "),
         _ => "no file".into(),
     }
 }
@@ -139,7 +139,7 @@ const PKG_USAGE: &str = "Usage: pkg make <path>... [--self-contained] [--zip] | 
 
 fn compact(members: Vec<(&str, Value)>) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    out.push_str(&serde_json::to_string(&Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())).expect("a value is JSON"));
     out
 }
 
@@ -149,11 +149,11 @@ fn patch_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Strin
     match words.as_slice() {
         ["add", package, file] => {
             let real = resolve(file).map_err(|w| format!("pkg patch add: {w}"))?;
-            Ok(compact(vec![("op", Value::string("pkg-patch-add")), ("paths", Value::Array(vec![Value::string(*package)])), ("patch", Value::string(&real))]))
+            Ok(compact(vec![("op", Value::String(String::from("pkg-patch-add"))), ("paths", Value::Array(vec![Value::String(String::from(*package))])), ("patch", Value::String(String::from(&real)))]))
         }
         ["rm", package, n] => {
             let n: u64 = n.parse().ok().filter(|&n| n > 0).ok_or_else(|| format!("pkg patch rm: {n} is not a patch's number; pkg ls numbers them from 1\n{PKG_USAGE}"))?;
-            Ok(compact(vec![("op", Value::string("pkg-patch-rm")), ("paths", Value::Array(vec![Value::string(*package)])), ("index", Value::number(n))]))
+            Ok(compact(vec![("op", Value::String(String::from("pkg-patch-rm"))), ("paths", Value::Array(vec![Value::String(String::from(*package))])), ("index", Value::from(n))]))
         }
         _ => Err(format!("pkg patch: add <package> <file> or rm <package> <n>\n{PKG_USAGE}")),
     }
@@ -163,7 +163,7 @@ fn patch_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Strin
 fn identity_request(args: &[String]) -> Result<String, String> {
     let words: Vec<&str> = args.iter().skip(2).map(String::as_str).collect();
     match words.as_slice() {
-        [package, which @ ("original" | "patched")] => Ok(compact(vec![("op", Value::string("pkg-identity")), ("paths", Value::Array(vec![Value::string(*package)])), ("identity", Value::string(*which))])),
+        [package, which @ ("original" | "patched")] => Ok(compact(vec![("op", Value::String(String::from("pkg-identity"))), ("paths", Value::Array(vec![Value::String(String::from(*package))])), ("identity", Value::String(String::from(*which)))])),
         _ => Err(format!("pkg identity: <package> original or <package> patched\n{PKG_USAGE}")),
     }
 }
@@ -190,7 +190,7 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
             "--all" if op == "pkg-ls" => all = true,
             "--zip" if op == "pkg-make" => zip = true,
             o if o.starts_with('-') && o.len() > 1 => return Err(format!("pkg: {o} is not an option of pkg {sub}\n{PKG_USAGE}")),
-            p => paths.push(Value::string(p)),
+            p => paths.push(Value::String(String::from(p))),
         }
     }
     if matches!(op, "pkg-make" | "pkg-migrate" | "pkg-zip") && paths.is_empty() {
@@ -201,16 +201,16 @@ pub fn pkg_request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, Str
             return Err(format!("pkg ls: one console at most\n{PKG_USAGE}"));
         }
         let console = paths.pop().unwrap_or(Value::Null);
-        let mut members = vec![("op", Value::string(op)), ("paths", Value::Array(Vec::new())), ("console", console)];
+        let mut members = vec![("op", Value::String(String::from(op))), ("paths", Value::Array(Vec::new())), ("console", console)];
         if all {
             members.push(("unpackaged", Value::Bool(true)));
         }
         return Ok(compact(members));
     }
     if contained || zip {
-        return Ok(compact(vec![("op", Value::string(op)), ("paths", Value::Array(paths)), ("self_contained", Value::Bool(true)), ("zip", Value::Bool(zip))]));
+        return Ok(compact(vec![("op", Value::String(String::from(op))), ("paths", Value::Array(paths)), ("self_contained", Value::Bool(true)), ("zip", Value::Bool(zip))]));
     }
-    Ok(compact(vec![("op", Value::string(op)), ("paths", Value::Array(paths))]))
+    Ok(compact(vec![("op", Value::String(String::from(op))), ("paths", Value::Array(paths))]))
 }
 
 /// The request a command line makes, or the usage.
@@ -234,7 +234,7 @@ pub fn request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, String>
             }
             "-j" if op == "convert" => threads = words.next().and_then(|n| n.parse().ok()).filter(|&n| n > 0).ok_or_else(|| format!("chd: -j needs a number of threads above 0\n{USAGE}"))?,
             o if o.starts_with('-') && o.len() > 1 => return Err(format!("chd: {o} is not an option of chd {op}\n{USAGE}")),
-            p => paths.push(Value::string(p)),
+            p => paths.push(Value::String(String::from(p))),
         }
     }
     if op == "convert" && paths.is_empty() {
@@ -243,18 +243,18 @@ pub fn request(args: &[String], resolve: &dyn Fn(&str) -> Result<String, String>
     if beside && output.is_some() {
         return Err(format!("chd convert: --output and --beside name two places; choose one\n{USAGE}"));
     }
-    let mut members = vec![("op", Value::string(op)), ("paths", Value::Array(paths))];
+    let mut members = vec![("op", Value::String(String::from(op))), ("paths", Value::Array(paths))];
     if op == "convert" {
-        members.extend([("fast", Value::Bool(fast)), ("threads", Value::number(threads))]);
+        members.extend([("fast", Value::Bool(fast)), ("threads", Value::from(threads))]);
     }
     if let Some(folder) = output {
-        members.push(("output", Value::string(folder)));
+        members.push(("output", Value::String(String::from(folder))));
     }
     if beside {
         members.push(("beside", Value::Bool(true)));
     }
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    out.push_str(&serde_json::to_string(&Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())).expect("a value is JSON"));
     Ok(out)
 }
 
@@ -277,14 +277,14 @@ fn text<'a>(e: &'a Value, name: &str) -> &'a str {
 
 fn number(e: &Value, name: &str) -> Option<u64> {
     match e.get(name) {
-        Some(Value::Number(t)) => t.parse().ok(),
+        Some(Value::Number(t)) => t.as_u64(),
         _ => None,
     }
 }
 
 fn token(e: &Value, name: &str) -> String {
     match e.get(name) {
-        Some(Value::Number(t)) => t.clone(),
+        Some(Value::Number(t)) => t.to_string(),
         _ => String::new(),
     }
 }
@@ -350,7 +350,7 @@ pub fn line(e: &Value) -> Option<String> {
         "end" if e.get("error").is_some() => None,
         "end" => {
             let counts = match e.get("counts") {
-                Some(Value::Object(c)) => c.iter().map(|(k, v)| format!("{} {}", if let Value::Number(t) = v { t.as_str() } else { "" }, k.text)).collect::<Vec<_>>().join(", "),
+                Some(Value::Object(c)) => c.iter().map(|(k, v)| format!("{} {}", if let Value::Number(t) = v { t.to_string() } else { String::new() }, k)).collect::<Vec<_>>().join(", "),
                 _ => String::new(),
             };
             Some(if counts.is_empty() { format!("No disc, {} s.", token(e, "seconds")) } else { format!("{counts}; {} s.", token(e, "seconds")) })
@@ -557,7 +557,7 @@ fn follow(call: &Call, r: &mut Running, status: &mut i32) -> Followed {
             }
             Next::Event(raw) => raw,
         };
-        let Ok(event) = json::parse(&raw) else { continue };
+        let Ok(event) = serde_json::from_str::<Value>(&raw) else { continue };
         if let Some(Value::Array(refused)) = event.get("refused") {
             for words in refused.iter().filter_map(Value::as_str) {
                 call.err(&format!("{}: {words}\n", r.prefix));
@@ -621,7 +621,7 @@ fn drain(r: &mut Running) -> bool {
             Next::Absent | Next::Failed(_) => return false,
             Next::Event(raw) => raw,
         };
-        let Ok(event) = json::parse(&raw) else { continue };
+        let Ok(event) = serde_json::from_str::<Value>(&raw) else { continue };
         match (text(&event, "event"), text(&event, "state")) {
             ("start", _) => r.of = number(&event, "discs").or_else(|| number(&event, "packages")).or_else(|| number(&event, "files")).unwrap_or(0),
             ("disc", "working") => r.current = text(&event, "source").to_string(),
@@ -779,7 +779,7 @@ mod tests {
 
     #[test]
     fn each_event_is_one_line() {
-        let e = |t: &str| json::parse(t).unwrap();
+        let e = |t: &str| serde_json::from_str::<Value>(t).unwrap();
         assert_eq!(grouped(617_209_488), "617,209,488");
         assert_eq!(grouped(12), "12");
         assert_eq!(
@@ -819,7 +819,7 @@ mod tests {
         assert!(rom_request(&args("rom dups a b")).unwrap_err().contains("one console"));
         assert!(rom_request(&args("rom hash")).unwrap_err().contains("name what to hash"));
         assert!(rom_request(&args("rom")).unwrap_err().starts_with("Usage: rom"));
-        let e = |t: &str| json::parse(t).unwrap();
+        let e = |t: &str| serde_json::from_str::<Value>(t).unwrap();
         let line = r#"{"crc32":"0000abcd","md5":"m","sha1":"s","size":4,"name":"psx/a b.cue#02"}"#;
         assert_eq!(rom_lines(&e(&format!(r#"{{"event":"file","source":"psx/a b.cue","state":"hashed","lines":[{line}]}}"#)), 0).0, "0000abcd m s 4 psx/a b.cue#02\n");
         assert_eq!(rom_lines(&e(r#"{"event":"file","source":"a.nes","state":"failed","words":"a.nes: gone"}"#), 0), (String::new(), "rom: a.nes: a.nes: gone\n".into()));
@@ -855,7 +855,7 @@ mod tests {
         assert_eq!(pkg_request_plain(&args("pkg ls --all")).unwrap(), r#"{"op":"pkg-ls","paths":[],"console":null,"unpackaged":true}"#);
         assert!(pkg_request_plain(&args("pkg check --all")).unwrap_err().contains("not an option of pkg check"));
         assert!(pkg_request_plain(&args("pkg")).unwrap_err().starts_with("Usage: pkg"));
-        let e = |t: &str| json::parse(t).unwrap();
+        let e = |t: &str| serde_json::from_str::<Value>(t).unwrap();
         assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":2,"source":"SNES/a.sfc","state":"made","package":"SNES/a.sfc"}"#)), "[1/2] SNES/a.sfc: made, Packages/SNES/a.sfc");
         assert_eq!(package_line(&e(r#"{"event":"package","index":2,"of":2,"package":"NES/b.nes","state":"changed","words":"b.nes has SHA-1 1"}"#)), "[2/2] NES/b.nes: changed: b.nes has SHA-1 1");
         assert_eq!(package_line(&e(r#"{"event":"package","index":1,"of":1,"package":"NES/b.nes","state":"migrated","copied":[{"from":"a","to":"b"}],"kept":0}"#)), "[1/1] NES/b.nes: migrated, 1 file(s) copied, 0 already there");

@@ -67,9 +67,8 @@ impl Rumble {
 
 /// `AppSettings.Rumble`, the player's switch, on unless the file says otherwise; read as a session opens.
 pub fn switch(tree: &emusen_galaxia::tree::Tree) -> bool {
-    let model = &emusen_galaxia::models::MODELS[emusen_galaxia::models::APP_SETTINGS_ID as usize];
-    let (settings, _) = emusen_galaxia::config::load_or_new(tree, model, None, emusen_galaxia::models::APP_SETTINGS_FILE);
-    settings.get("Rumble").and_then(|v| v.as_bool()).unwrap_or(true)
+    let (settings, _) = emusen_galaxia::config::load_or_new::<emusen_galaxia::models::AppSettings>(tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    settings.rumble
 }
 
 /// Whether the systems table says a system's games drive a motor; false for a system with no row.

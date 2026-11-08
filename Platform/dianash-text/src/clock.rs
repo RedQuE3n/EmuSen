@@ -1,42 +1,14 @@
-//! A file's modified time in the machine's own time zone, as `File.GetLastWriteTime` gives it to `ls -l`.
+//! A file's modified time in the machine's own time zone, as `ls -l` shows it.
 
-use emusen_dotnet::date::civil_time;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
+use time::macros::format_description;
+use time::{OffsetDateTime, UtcOffset};
 
 /// `yyyy-MM-dd HH:mm:ss`, local.
 pub fn local(time: SystemTime) -> String {
-    let seconds = match time.duration_since(UNIX_EPOCH) {
-        Ok(d) => d.as_secs() as i64,
-        Err(e) => -(e.duration().as_secs() as i64),
-    };
-    let (y, mo, d, h, mi, s) = civil_time(seconds + offset(seconds));
-    format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02}:{s:02}")
-}
-
-#[cfg(unix)]
-use emusen_dotnet::date::local_offset as offset;
-
-#[cfg(windows)]
-fn offset(_: i64) -> i64 {
-    #[repr(C)]
-    struct SystemTimeW([u16; 8]);
-    #[repr(C)]
-    struct TimeZoneInformation {
-        bias: i32,
-        standard_name: [u16; 32],
-        standard_date: SystemTimeW,
-        standard_bias: i32,
-        daylight_name: [u16; 32],
-        daylight_date: SystemTimeW,
-        daylight_bias: i32,
-    }
-    unsafe extern "system" {
-        fn GetTimeZoneInformation(info: *mut TimeZoneInformation) -> u32;
-    }
-    let mut info: TimeZoneInformation = unsafe { std::mem::zeroed() };
-    let kind = unsafe { GetTimeZoneInformation(&mut info) };
-    let bias = info.bias + if kind == 2 { info.daylight_bias } else { info.standard_bias };
-    -(bias as i64) * 60
+    let utc = OffsetDateTime::from(time);
+    let at = UtcOffset::local_offset_at(utc).map_or(utc, |offset| utc.to_offset(offset));
+    at.format(format_description!("[year]-[month]-[day] [hour]:[minute]:[second]")).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -44,9 +16,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn dates_fall_where_the_calendar_puts_them() {
-        assert_eq!(civil_time(0), (1970, 1, 1, 0, 0, 0));
-        assert_eq!(civil_time(951_782_400), (2000, 2, 29, 0, 0, 0));
-        assert_eq!(civil_time(1_791_936_000 + 3661), (2026, 10, 14, 1, 1, 1));
+    fn a_time_is_written_in_the_local_zone_to_the_second() {
+        let at = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_791_936_000 + 3661);
+        let offset = UtcOffset::local_offset_at(OffsetDateTime::from(at)).unwrap_or(UtcOffset::UTC);
+        let expected = OffsetDateTime::from(at).to_offset(offset);
+        assert_eq!(local(at), format!("{:04}-{:02}-{:02} {:02}:{:02}:{:02}", expected.year(), expected.month() as u8, expected.day(), expected.hour(), expected.minute(), expected.second()));
+        assert_eq!(local(std::time::UNIX_EPOCH + std::time::Duration::from_secs(951_782_400)).len(), 19);
     }
 }

@@ -71,42 +71,19 @@ pub fn values_at(at: &str) -> Vec<(String, String)> {
         crate::error_log::warning("settings", &format!("{at} is not a game's settings, and is read as none: {why}"));
         Vec::new()
     };
-    match emusen_dotnet::json::parse(&text) {
-        Ok(emusen_dotnet::json::Value::Object(members)) => {
-            let mut out: Vec<(String, String)> = Vec::new();
-            for (k, v) in members {
-                let Some(v) = v.as_str() else { return none(format!("the value of \"{}\" is not a string.", k.text)) };
-                match out.iter_mut().find(|(key, _)| *key == k.text) {
-                    Some(slot) => slot.1 = v.to_string(),
-                    None => out.push((k.text, v.to_string())),
-                }
-            }
-            out
-        }
-        Ok(emusen_dotnet::json::Value::Null) => Vec::new(),
-        Ok(_) => none("the document is not an object.".to_string()),
-        Err(e) => none(e.to_string()),
+    match emusen_galaxia::config_json::read::<emusen_galaxia::models::Map<String>>(&text) {
+        Ok(values) => values.unwrap_or_default().into_iter().collect(),
+        Err(words) => none(words),
     }
 }
 
-/// A game's values written whole to `at`, indented as `JsonSerializer` writes a dictionary, `GameSettings.Write`.
+/// A game's values written whole to `at`, `GameSettings.Write`.
 pub fn write_values(at: &str, values: &[(String, String)]) -> Result<(), String> {
     if let Some(folder) = Path::new(at).parent().map(|d| d.to_string_lossy().into_owned()) {
         let _ = std::fs::create_dir_all(folder);
     }
-    let mut text = String::new();
-    if values.is_empty() {
-        text.push_str("{}");
-    } else {
-        text.push('{');
-        for (i, (k, v)) in values.iter().enumerate() {
-            text.push_str(if i == 0 { "\n  " } else { ",\n  " });
-            text.push_str(&emusen_dotnet::json::quoted(k));
-            text.push_str(": ");
-            text.push_str(&emusen_dotnet::json::quoted(v));
-        }
-        text.push_str("\n}");
-    }
+    let map: serde_json::Map<String, serde_json::Value> = values.iter().map(|(k, v)| (k.clone(), serde_json::Value::from(v.as_str()))).collect();
+    let text = emusen_galaxia::config_json::write(&map)?;
     emusen_galaxia::atomic::write(at, text.as_bytes()).map_err(|_| format!("{at} could not be written"))
 }
 
@@ -142,7 +119,7 @@ mod tests {
         assert!(super::game_values(&t, Some("nes"), "/roms/Bad.nes", None).is_empty());
         assert_eq!(super::game_values(&t, Some("nes"), "/roms/Good.nes", None), vec![("Engine".to_string(), "MoonRT (Rust)".to_string())]);
         let written: String = std::fs::read_dir(&logs).unwrap().flatten().map(|e| std::fs::read_to_string(e.path()).unwrap()).collect();
-        assert!(written.contains("WARN [settings]") && written.contains("Bad.json is not a game's settings, and is read as none: the value of \"Engine\" is not a string."), "{written}");
+        assert!(written.contains("WARN [settings]") && written.contains("Bad.json is not a game's settings, and is read as none: $.Engine: invalid type: integer `5`, expected a string."), "{written}");
         assert!(!written.contains("Good.json"));
         let _ = std::fs::remove_dir_all(&root);
     }

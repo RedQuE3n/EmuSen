@@ -2,12 +2,12 @@
 //! generated inputs (a probe over EmuSen.Mistress, outside the repository), so a difference here is a difference from
 //! the C#. See EmuSen_Backend.md §30.7.
 
-use emusen_dotnet::json::{self as dj, Value};
+use serde_json::Value;
 use emusen_scrape::{redact, rules};
 
 fn lines(name: &str) -> Vec<Value> {
     let text = std::fs::read_to_string(format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap();
-    text.lines().filter(|l| !l.is_empty()).map(|l| dj::parse(l).unwrap()).collect()
+    text.lines().filter(|l| !l.is_empty()).map(|l| serde_json::from_str::<serde_json::Value>(l).unwrap()).collect()
 }
 
 fn s(v: &Value, name: &str) -> Option<String> {

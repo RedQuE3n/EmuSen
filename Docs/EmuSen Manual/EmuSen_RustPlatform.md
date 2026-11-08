@@ -502,6 +502,8 @@ absent. Existing files read identically, including files a person has edited by 
 
 ### 5.2 What System.Text.Json actually does (measured 2026-10-07)
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 Measured in a scratch program on .NET 10 on Linux, with `ConfigJson.Options`' settings (indented, comments skipped,
 trailing commas, case-insensitive names) and `Enum.TryParse` as `SuggestingEnumConverter` calls it. Each row is a
 place where a Rust writer or reader with ordinary defaults would differ:
@@ -535,12 +537,16 @@ refuses.
 
 ### 5.3 Quirks are reproduced
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 A file that loads today must load identically (§5.1), and nothing distinguishes a quirk a person has relied on from
 one nobody has met. So the enumeration rows of §5.2, the U+FFFD replacement and the case-insensitive last-match rule
 are reproduced, each with a corpus case, rather than tidied (§9, Q6). Tidying any of them later is a behaviour
 change with its own record.
 
 ### 5.4 Words are not
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 Galaxia's own messages are reproduced exactly: "'DPadUpp' is not a valid GamepadButton. Did you mean 'DPadUp'?",
 the file path first and "Falling back to defaults." last (`ConfigDiagnosticsTests`). System.Text.Json's exception
@@ -550,6 +556,8 @@ the wording (they assert that a message exists, or Galaxia's own phrases), so th
 reading a log (§9, Q5).
 
 ### 5.5 Three assumptions that do not carry over
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 - **A dictionary's order** on disk is the order C# enumerates it, and Rust preserves the order of the canonical JSON
   it is given, so they agree. They would not agree if Rust edited a model itself: .NET's `Dictionary` reuses a
@@ -850,6 +858,8 @@ variable unset or `0`, and opens it with `1`; its output is the same bytes in al
 
 ### 10.3 .NET's rules, reproduced and measured
 
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
+
 The tree is built from strings, and a path one character different names a different file. So `dotnet_path` does not
 use `std::path`, whose rules are Rust's: it reproduces `Path.Combine`, `GetFileName`,
 `GetFileNameWithoutExtension`, `ChangeExtension`, `GetDirectoryName`, `TrimEndingDirectorySeparator` and
@@ -1041,6 +1051,8 @@ decodes and writes the file, and System.Text.Json binds the type, since its voca
   that belongs to that step. *Found 2026-10-10: the other facades did not ask, and threw; all now do (§21).*
 
 ### 11.3 System.Text.Json and .NET, measured for this step
+
+*History since 2026-11-07: the code this section describes, `emusen-dotnet`, is deleted; JSON is serde_json's and the files people edit are read by Galaxia's `config_json` (§47.19, §47.21).*
 
 §5.2's table was the start. These were measured before or while the reader, the binder and the writer were written,
 each in a scratch program on .NET 10, and each is a case of the parity class:
@@ -4015,8 +4027,119 @@ separator where .NET's `Combine` returned it as it was, which only an empty file
 The C# parity methods that held these answers to .NET's text were deleted with their goldens, the disk corpus being the
 proof in their place: five of `GalaxiaParityTests` (the tree under every override, the save names, the unreadable file,
 the declining migrations, the cheat lists' names) and `SerenityParityTests`' preset sweep, whose inputs include an
-empty reference and a folder, now resolved with std's parts (its golden holds digests, so the lines themselves were not
-compared). Measured on 2026-11-07: Platform `cargo test --workspace` 606 passed, the corpus
+empty reference and a folder, now resolved with std's parts (its golden held digests; its lines are compared below).
+Measured on 2026-11-07: Platform `cargo test --workspace` 606 passed, the corpus
 and the DianaSh goldens among them; the C# classes that read these paths (the blast radius's filter with the package,
 disc, core-install, store, Serenity and migration classes) 1,251 passed before the deletions, and the Galaxia and
 Serenity parity classes 229 passed after them.
+
+**The preset sweep's lines, compared after the deletion** (measured on 2026-11-07). The sweep was run uncommitted with
+each answer written as a line instead of a digest, seed 42, once against the platform library of 4a771f781 (before
+these steps) and once against c8c934d83's. Of 3,036 lines (2,500 presets, 525 parameter merges, the path, rule, depth
+and closed-file cases), 358 differ, every one a preset refused as not found whose named path gains a trailing
+separator: `<root>/preset/N` became `<root>/preset/N/` (326 lines) and `<root>/preset/N/sub` became
+`<root>/preset/N/sub/` (32). Each is a `#reference` line with nothing after the keyword, resolved against its preset's
+folder; called directly, both libraries refuse `#reference ` alone as `not_found`, the old one naming `<d>` and the new
+`<d>/`, and they agree on `#reference sub`, `"sub"`, `""sub`, `""`, `"`, `sub" trailing` and `"sub`. No scale, count,
+pass, texture, parameter or refusal differs, so the deletion stands.
+
+### 47.19 Config and record files are serde's
+
+The files a person may edit are read and written in one place, Galaxia's `config_json`. Reading is jsonc-parser 0.34
+with comments and a trailing comma allowed and every other JSON5 liberty refused (single quotes, bare names, hex,
+a leading `+`, a bare decimal point, `NaN`, missing commas, JSON5 escapes); the value is then read into its type through
+a small deserializer that matches each object's member names to the fields its type declares without regard to ASCII
+case, at every depth, while a map's keys keep their case. The last of two members wins whole and keeps the first's
+place. A refusal names its path (`$.Cheats[0].Writes[1].Width: invalid type: ...`), and a text with no document in
+it is refused. Writing is serde_json's `to_string_pretty`: two spaces, a line feed between lines, none at the end
+(decided 2026-11-07 by the tester, plan question 2).
+
+**The models are serde types** (`models.rs`). One `model!` list per class gives each field's name, type and initial
+value, so the struct and its new instance cannot disagree. Nullability is kept as the classes had it: text, lists,
+maps and objects may be null, numbers and flags may not; the items of a cheat list and of its writes may not be null.
+`ConfigModel` gives a type its upgrade (AppSettings' alone) and its file text: a cheat list is written with the two
+values computed from each entry, `IsRomPatch` and `EffectiveWrites`, which are never read, and AppSettings leaves the
+retired `OnlineCovers` out of its file while it is null. The C interface and the corpus reach a model by number
+through `Model`, three functions on JSON text built generically from the type: bind, new and format. What crosses
+out of the library is compact serde JSON with every field. `model.rs`, the binder and writer that reproduced
+System.Text.Json, is gone, and with it `emusen_galaxia_model_schema`, whose only reader was the parity class that held
+the C# classes to the Rust schema; the interface is 37.
+
+Typed the same way: `consoles.json` (`ConsolesConfig`), a game's own settings (a map of strings), and a package's state
+record, `KeptRecord`, whose four texts are required and nullable (`deserialize_with = "Option::deserialize"`), as the
+record bound them. The ScreenScraper member file and the developer file are read member by member from a serde value,
+so a member of the wrong kind empties that member alone, as before; the member file is written by serde_json.
+
+**A package manifest stays a document.** Its point is that a member this build does not know keeps its place, and
+`#[serde(flatten)]` would move every unknown member after the known ones. So the manifest is a `serde_json::Value`
+(`preserve_order`), read through `config_json` into a visitor that also records the first member written twice, with
+its path, so that `x[0].b written twice` is still refused as invalid before the schema is checked. The schema's checks
+and words are unchanged. Every crate that edits a manifest (claims, the library tool, the patcher, the scraper, the
+runtime) works on serde's value.
+
+Crystal's `service::cheat_file`, the reproduction of `JsonSerializer`'s refusal words and of `LoadFrom` reading
+through a null, is gone: CHEAT_IMPORT reads the list through `config_json` and loads it with the registry, whose
+`to_file` and `load` take the typed `CheatFile`.
+
+Differences, each taken deliberately:
+
+1. **Bytes on the first save.** A whole double or float is written `1.0` (`MasterVolume`, `Volume`,
+   `LibraryTileScale`), text outside ASCII is written as itself, a small number as `1e-7`. A manifest's numbers lose
+   their tokens (`1.50` is written `1.5`, `1e2` `100.0`). Approved as plan question 2.
+2. **A lone surrogate escape anywhere refuses the file**, where System.Text.Json passed over an unknown member
+   undecoded. jsonc-parser and serde_json both refuse it. The corpus's `appsettings/unknown.json` holds one, so its
+   model is now `refused`; `unknown-members.json`, the same members with a valid escape, reads to the model
+   `unknown.json` read to before. A manifest holding one is refused as not JSON rather than as invalid.
+3. **A null cheat or a null write is refused at read**, with words, where the C# loaded the cheats before it and then
+   faulted.
+4. **Refusal words** are jsonc-parser's and serde's, with the path, in place of .NET's.
+
+A member a config model does not know is read as if absent and is not written back, as the C# classes dropped it
+(decided 2026-11-07 by the tester); a manifest alone keeps its unknown members in place.
+
+The C# parity sweeps were run once more before they were deleted, with each document's model compared instead of its
+bytes (measured on 2026-11-07). Of 40,349 documents (9,754 property documents and 30,595 malformed or damaged texts),
+764 read to a different model or outcome:
+
+| Read now, refused by System.Text.Json | | Refused now, read by it | | Read alike, a value differs | |
+|---|---|---|---|---|---|
+| a raw control character inside a string | 264 | a null cheat or write | 91 | `-0` reads as `0` | 101 |
+| a comment or a non-ASCII space (U+2028, U+00A0, U+000B) between tokens | 96 | a lone surrogate escape | 60 | | |
+| an earlier member of the wrong kind, overridden by a later one of the same name | 68 | a number out of its type's range, or any number past a double's | 48 | | |
+| nesting deeper than 64 | 36 | | | | |
+
+The first column is jsonc-parser's tolerance and is kept: each is a file a person could write by hand that now reads.
+A float too large for `MasterVolume` is refused at read rather than read as infinity, which the C# could read and then
+not write. A text holding only comments is refused like an empty one (jsonc-parser would give it as `null`), so
+`config_json::parse` asks `parse_to_value` first whether the text holds a value.
+
+The proof is the disk corpus: every config file (five models), manifest, game settings file, state record and member
+file reads to its recorded model, and each config read, written and read again is the same model.
+
+### 47.20 Dates are the `time` crate's
+
+`emusen-dotnet`'s `date.rs` (civil-from-days arithmetic, a .NET format-string imitation, an ISO 8601 reader and
+`localtime_r`) is gone. Galaxia's `clock` owns the platform's times on `time` 0.3.55 (decided 2026-11-07 by the tester,
+plan question 3): the stored unit stays 100 ns ticks from 1970 in UTC; the round-trip text is written with seven
+fraction digits as before (`2026-10-18T14:03:11.2510000+02:00`) through a format description; a stored text is read
+by RFC 3339, or as an unmarked local time, with a `T` required between date and time as the round-trip form has it
+(RFC 3339 alone would also take a space). Formats the callers used as .NET strings are named constants (`DAY`,
+`DAY_NAME`, `STAMP`, `STAMP_NAME`, `MTIME`, `CLOCK`). The system zone's offset is `UtcOffset::local_offset_at`, which in
+0.3.55 calls `localtime_r` itself and answers in a multithreaded process (measured: -14400 at 2026-10-14 in the threaded
+test runner, the machine's daylight offset). The recorder and DianaSh's `ls -l`, which do not link Galaxia, use `time`
+directly; the shell's own Windows offset code went with it.
+
+Proof: the corpus's `crystal/tests/disk/times.tsv`, `library/tests/disk/last-played.tsv` and the scraper's member files
+read to the same instants and texts, and `clock`'s tests hold the old module's cases (the year 9999's last tick, a tick
+before 1970, leap days, milliseconds cut and not rounded).
+
+### 47.21 emusen-dotnet is deleted
+
+The crate that reproduced .NET's rules is gone from the workspace, with every manifest line that named it. After steps
+6-21 only its JSON reader and writer remained; their last callers (the platform library's C layer, the session service,
+the shell and its command modules, the scraper and library crates, the firmware, cheat, debug and trace crates, the core
+tool) now hold `serde_json::Value`. Text the host or another crate wrote is read by `serde_json` strictly; the files
+people edit were already read through `config_json` (§47.19). What `quoted` wrote by hand is `serde_json::to_string`,
+so an answer holds text outside ASCII as itself rather than as a `\u` escape. Numbers are read by value
+(`as_i64`, `as_u64`, `as_f64`) where a token was parsed before, so `1.0` is still no whole number. The shell's test of
+its dependencies names Galaxia and the suggestion crate alone. Sections 5.2-5.5, 10.3 and 11.3 are kept as history.

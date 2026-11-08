@@ -49,7 +49,7 @@ fn the_crate_depends_on_no_emulator_crate_but_galaxia() {
     for line in manifest.lines().map(str::trim) {
         if let Some((name, _)) = line.split_once(" = ") {
             if name.starts_with("emusen-") {
-                assert!(["emusen-galaxia", "emusen-dotnet", "emusen-suggest"].contains(&name), "the shell's crate depends on {name}");
+                assert!(["emusen-galaxia", "emusen-suggest"].contains(&name), "the shell's crate depends on {name}");
             }
         }
     }

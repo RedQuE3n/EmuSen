@@ -545,7 +545,7 @@ impl Runtime {
         }
         let tree = emusen_galaxia::tree::tree();
         let _ = std::fs::create_dir_all(marker.parent().unwrap_or(Path::new("")));
-        let day = emusen_dotnet::date::local_text(emusen_galaxia::clock::local_ticks_now(), "yyyy-MM-dd");
+        let day = emusen_galaxia::clock::text(emusen_galaxia::clock::local_ticks_now(), emusen_galaxia::clock::DAY);
         let _ = std::fs::write(&marker, format!("{copied} engine choice(s) copied from {} on {day}\n", games_db.display()));
         drop(tree);
         copied

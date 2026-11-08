@@ -13,5 +13,5 @@ name = "emusen_patch"
 [dependencies]
 # CRC-32 and SHA-1, whose one owner is RomHash; the manifest, and where a package's files are.
 emusen-galaxia = { path = "../galaxia" }
-# The JSON value and the text rules, named by their owner rather than through Galaxia.
-emusen-dotnet = { path = "../dotnet" }
+# The manifest's document, as Galaxia reads it.
+serde_json.workspace = true

@@ -9,13 +9,13 @@ use crate::packages::{head, read};
 use crate::Context;
 use emusen_galaxia::claims;
 use emusen_galaxia::files;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_galaxia::{archive, image_sets, package, rom_hash};
 use emusen_patch::package::{self as listing, Listed};
 use emusen_patch::{Format, Refusal};
 
 fn text(s: &str) -> Value {
-    Value::string(s)
+    Value::String(String::from(s))
 }
 
 /// Names a patch's own file may not take, being a package's own.
@@ -212,7 +212,7 @@ pub fn add(ctx: &Context, folder: &str, file: &str) -> Outcome {
             let name = listing::entries(&doc).last().and_then(|e| e.get("file")).and_then(Value::as_str).unwrap_or("").to_string();
             let mut c = rom_hash::Crc32::default();
             c.append(&result);
-            head(&doc, Outcome::new("added").with("patch", text(&name)).with("format", text(info.format.name())).with("retroarch", Value::Bool(fits)).with("patched_crc32", text(&c.hex())).with("patches", Value::number(listing::entries(&doc).len())))
+            head(&doc, Outcome::new("added").with("patch", text(&name)).with("format", text(info.format.name())).with("retroarch", Value::Bool(fits)).with("patched_crc32", text(&c.hex())).with("patches", Value::from(listing::entries(&doc).len())))
         }
         Err(words) => {
             let _ = std::fs::remove_file(claims::under(folder, &staged));
@@ -263,7 +263,7 @@ pub fn remove(ctx: &Context, folder: &str, n: usize) -> Outcome {
             if had {
                 let _ = std::fs::remove_file(claims::under(folder, &aside));
             }
-            head(&doc, Outcome::new("removed").with("patch", text(&gone_file)).with("retroarch", Value::Bool(fits)).with("patches", Value::number(listing::entries(&doc).len())))
+            head(&doc, Outcome::new("removed").with("patch", text(&gone_file)).with("retroarch", Value::Bool(fits)).with("patches", Value::from(listing::entries(&doc).len())))
         }
         Err(words) => {
             if had {

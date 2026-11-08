@@ -3,7 +3,7 @@
 
 use crate::{core_name, required, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_session_service::scope::{self, Cpu};
 use emusen_session_service::words::{describe, hex, label_at, parse_hex};
 use emusen_session_service::{abi, Record, Session};
@@ -22,7 +22,7 @@ fn registers(value: &Value) -> Vec<Register> {
 /// A JSON number as the unsigned 64-bit register value it was written from.
 fn unsigned(value: &Value) -> Option<u64> {
     match value {
-        Value::Number(token) => token.parse::<u64>().ok().or_else(|| token.parse::<i64>().ok().map(|v| v as u64)),
+        Value::Number(number) => number.as_u64().or_else(|| number.as_i64().map(|v| v as u64)),
         _ => None,
     }
 }
@@ -314,7 +314,7 @@ pub fn vectors(call: &Call) -> Run {
     let Some(bus) = spaces.iter().find(|s| s.name.eq_ignore_ascii_case("CpuBus")) else {
         return Ok(Answer::fail("This core publishes no CpuBus space to read the vectors from."));
     };
-    let coverage_armed = session.coverage_op(session.no_processor(), abi::coverage::STATUS, b"{}").ok().and_then(|b| emusen_dotnet::json::parse(&String::from_utf8_lossy(&b)).ok()).is_some_and(|s| s.flag("armed"));
+    let coverage_armed = session.coverage_op(session.no_processor(), abi::coverage::STATUS, b"{}").ok().and_then(|b| serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&b)).ok()).is_some_and(|s| s.flag("armed"));
     let mut lines = Vec::new();
     let mut mode = String::new();
     for vector in vectors.items() {
@@ -338,7 +338,7 @@ pub fn vectors(call: &Call) -> Run {
 /// `CoverageRegistry.WasExecuted` on the main processor's coverage.
 fn executed(session: &Session, address: i32) -> bool {
     let args = format!("{{\"address\":{},\"length\":1,\"limit\":0}}", address as u32);
-    session.coverage_op(session.no_processor(), abi::coverage::QUERY, args.as_bytes()).ok().and_then(|b| emusen_dotnet::json::parse(&String::from_utf8_lossy(&b)).ok()).is_some_and(|q| q.int("executed") > 0)
+    session.coverage_op(session.no_processor(), abi::coverage::QUERY, args.as_bytes()).ok().and_then(|b| serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&b)).ok()).is_some_and(|q| q.int("executed") > 0)
 }
 
 pub fn addr(call: &Call, parts: &[String]) -> Run {

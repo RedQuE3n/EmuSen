@@ -12,6 +12,5 @@ name = "emusen_savemedia"
 [dependencies]
 # Each medium's format module and the words the systems table gives it.
 emusen-systems = { path = "../systems" }
-# The lock, the atomic write and .NET's path rules, which are Galaxia's.
+# The lock and the atomic write, which are Galaxia's.
 emusen-galaxia = { path = "../galaxia" }
-emusen-dotnet = { path = "../dotnet" }

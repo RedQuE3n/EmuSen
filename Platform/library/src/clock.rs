@@ -1,45 +1,19 @@
-//! Times as the C# `GameRecords` writes them: .NET's round-trip text of a local time, `DateTime.Now.ToString("o")`, for
-//! a call that gives none; and the instant such a text names, for ordering. See EmuSen_Backend.md §28.4.
+//! Times as the records hold them: the round-trip text of a local time, for a call that gives none; and the instant
+//! such a text names, for ordering. See EmuSen_Backend.md §28.4.
 
-use emusen_dotnet::date::{self, days_from_civil, local_offset};
+use emusen_galaxia::clock::{self, TICKS_PER_SECOND, local_offset};
 
-/// Now, as `DateTime.Now.ToString("o", CultureInfo.InvariantCulture)`: `2026-10-18T14:03:11.2510000+02:00`.
+/// Now as the round-trip text of the local time: `2026-10-18T14:03:11.2510000+02:00`.
 pub fn now() -> String {
-    date::local_of_utc(date::ticks_of(std::time::SystemTime::now()))
+    clock::now()
 }
 
-/// The instant a round-trip text names, in 100 ns ticks from 1970 in UTC; a text with no offset is a local time, as
-/// .NET's `ToUniversalTime` reads one (`wall_offset`). None for a text that is not one.
+/// The instant a round-trip text names, in 100 ns ticks from 1970 in UTC; a text with no offset is a local time
+/// (`wall_offset`). None for a text that is not one.
 pub fn instant(text: &str) -> Option<i64> {
-    let b = text.as_bytes();
-    let num = |from: usize, len: usize| -> Option<i64> { text.get(from..from + len)?.parse::<i64>().ok() };
-    if b.len() < 19 || b[4] != b'-' || b[7] != b'-' || b[10] != b'T' || b[13] != b':' || b[16] != b':' {
-        return None;
-    }
-    let (y, mo, d, h, mi, s) = (num(0, 4)?, num(5, 2)?, num(8, 2)?, num(11, 2)?, num(14, 2)?, num(17, 2)?);
-    let mut at = 19;
-    let mut fraction = 0i64;
-    if b.get(at) == Some(&b'.') {
-        at += 1;
-        let start = at;
-        while b.get(at).is_some_and(u8::is_ascii_digit) {
-            at += 1;
-        }
-        let digits = &text[start..at];
-        let padded = format!("{:0<7}", &digits[..digits.len().min(7)]);
-        fraction = padded.parse().ok()?;
-    }
-    let wall = days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + s;
-    let offset = match b.get(at) {
-        None => wall_offset(wall),
-        Some(b'Z') => 0,
-        Some(sign @ (b'+' | b'-')) => {
-            let minutes = num(at + 1, 2)? * 60 + num(at + 4, 2)?;
-            60 * if *sign == b'-' { -minutes } else { minutes }
-        }
-        _ => return None,
-    };
-    Some((wall - offset) * 10_000_000 + fraction)
+    let (wall, offset) = clock::wall(text)?;
+    let offset = offset.unwrap_or_else(|| wall_offset(wall.div_euclid(TICKS_PER_SECOND)));
+    Some(wall - offset * TICKS_PER_SECOND)
 }
 
 /// The local zone's offset, in seconds, for a wall time counted as if in UTC: the one in force there, or the standard

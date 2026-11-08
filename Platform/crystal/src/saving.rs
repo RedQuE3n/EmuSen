@@ -23,9 +23,8 @@ pub fn build_name() -> String {
 
 /// The player's state folder, read at each use, `AppSettings.StateDirectory`.
 fn state_folder(tree: &Tree) -> Option<String> {
-    let model = &emusen_galaxia::models::MODELS[emusen_galaxia::models::APP_SETTINGS_ID as usize];
-    let (settings, _) = emusen_galaxia::config::load_or_new(tree, model, None, emusen_galaxia::models::APP_SETTINGS_FILE);
-    settings.get("StateDirectory").and_then(|v| v.as_str()).map(str::to_string)
+    let (settings, _) = emusen_galaxia::config::load_or_new::<emusen_galaxia::models::AppSettings>(tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    settings.state_directory
 }
 
 fn check_slot(slot: u32) -> Result<i32, Refused> {

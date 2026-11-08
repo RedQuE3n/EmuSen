@@ -1,14 +1,13 @@
-//! One config file: where it is, how it is read and how it is written. The C# `ConfigFile<T>`, for the models this
-//! crate owns and for the files whose types belong to a frontend. See EmuSen_Config_Reference.md §2.
+//! One config file: where it is, how it is read and how it is written, for the models this crate owns and for the files
+//! whose types belong to a frontend. See EmuSen_Config_Reference.md §2.
 //!
 //! Reading is best effort: a missing file is no error, and a file that will not load is reported and its defaults
 //! used. Writing is the temp file and the rename of `atomic`, and its failure is a `false` and nothing more.
 
 use crate::atomic::{self, words};
-use emusen_dotnet::json::{self, Value};
+use crate::config_json;
 use crate::migration::copy_file;
-use crate::model;
-use crate::models::Model;
+use crate::models::{ConfigModel, Model};
 use crate::files::file_exists;
 use crate::tree::Tree;
 use std::path::{Path, PathBuf};
@@ -68,39 +67,46 @@ pub fn write_text(tree: &Tree, category: Option<&str>, file: &str, text: Option<
 
 /// What reading a model's file found.
 #[derive(Debug, PartialEq)]
-pub enum Loaded {
+pub enum Loaded<T> {
     /// No file.
     Missing,
-    /// A file whose whole document is `null`, which .NET reads as no settings and no error.
+    /// A file whose whole document is `null`, which is no settings and no error.
     Null,
-    Document(Value),
+    Document(T),
 }
 
-/// Text bound to a model: parsed, bound, and upgraded when asked. None for a document that is `null`.
-pub fn bind_text(model: &Model, text: &str, upgrade: bool) -> Result<Option<Value>, String> {
-    let document = json::parse(text).map_err(|error| error.to_string())?;
-    let mut bound = model.schema.bind(&document).map_err(|error| error.to_string())?;
-    if let (true, Some(upgrade), Some(bound)) = (upgrade, model.upgrade, bound.as_mut()) {
-        upgrade(bound);
-    }
-    Ok(bound)
+/// Text bound to a model by number: its transport, upgraded when asked; none for a document that is `null`.
+pub fn bind_text(model: &Model, text: &str, upgrade: bool) -> Result<Option<String>, String> {
+    (model.bind)(text, upgrade)
 }
 
-/// A new instance of a model, upgraded when asked, as C# upgrades the settings it makes when there is no file.
-pub fn new_instance(model: &Model, upgrade: bool) -> Value {
-    let mut new = model.schema.new_instance();
-    if let (true, Some(upgrade)) = (upgrade, model.upgrade) {
-        upgrade(&mut new);
-    }
-    new
+/// A new instance of a model by number, upgraded when asked, as the settings made when there is no file are.
+pub fn new_instance(model: &Model, upgrade: bool) -> String {
+    (model.new)(upgrade)
 }
 
-/// `ConfigFile<T>.Load` for a model: the error is the words to report, after which the caller falls back to defaults.
-pub fn load(tree: &Tree, model: &Model, category: Option<&str>, file: &str, upgrade: bool) -> Result<Loaded, String> {
+/// A model's file by number, as its transport: the error is the words to report, after which the caller falls back to defaults.
+pub fn load(tree: &Tree, model: &Model, category: Option<&str>, file: &str, upgrade: bool) -> Result<Loaded<String>, String> {
     let Some(text) = read_text(tree, category, file)? else {
         return Ok(Loaded::Missing);
     };
     Ok(bind_text(model, &text, upgrade)?.map_or(Loaded::Null, Loaded::Document))
+}
+
+/// A model's file as its type, upgraded when asked.
+pub fn load_model<M: ConfigModel>(tree: &Tree, category: Option<&str>, file: &str, upgrade: bool) -> Result<Loaded<M>, String> {
+    let Some(text) = read_text(tree, category, file)? else {
+        return Ok(Loaded::Missing);
+    };
+    Ok(match config_json::read::<Option<M>>(&text)? {
+        Some(mut model) => {
+            if upgrade {
+                model.upgrade();
+            }
+            Loaded::Document(model)
+        }
+        None => Loaded::Null,
+    })
 }
 
 /// The diagnostic for a config file that would not load.
@@ -109,38 +115,45 @@ pub fn load_diagnostic(tree: &Tree, category: Option<&str>, file: &str, words: &
 }
 
 /// A model's settings as a program wants them: the file's, upgraded, or a new instance's when there is no file or it will not load, with the diagnostic for the second case.
-pub fn load_or_new(tree: &Tree, model: &Model, category: Option<&str>, file: &str) -> (Value, Option<String>) {
-    match load(tree, model, category, file, true) {
-        Ok(Loaded::Document(document)) => (document, None),
-        Ok(Loaded::Missing | Loaded::Null) => (new_instance(model, true), None),
-        Err(words) => (new_instance(model, true), Some(load_diagnostic(tree, category, file, &words))),
+pub fn load_or_new<M: ConfigModel>(tree: &Tree, category: Option<&str>, file: &str) -> (M, Option<String>) {
+    let new = || {
+        let mut model = M::default();
+        model.upgrade();
+        model
+    };
+    match load_model::<M>(tree, category, file, true) {
+        Ok(Loaded::Document(model)) => (model, None),
+        Ok(Loaded::Missing | Loaded::Null) => (new(), None),
+        Err(words) => (new(), Some(load_diagnostic(tree, category, file, &words))),
     }
 }
 
-/// A model's document as its file's bytes. `canonical` is the document as JSON, or none where the caller could not produce it, which fails after the folder is made, as C# fails.
+/// A model's document as its file's bytes. `canonical` is the document as JSON, or none where the caller could not produce it, which fails after the folder is made.
 fn bytes_for(model: &Model, canonical: Option<&str>) -> Result<String, String> {
-    let canonical = canonical.ok_or("The settings could not be serialized.")?;
-    match bind_text(model, canonical, false)? {
-        Some(bound) => model::format(model.schema, &bound),
-        // Settings that are null are written as that word, which is what C# writes for them.
-        None => Ok("null".to_string()),
-    }
+    (model.format)(canonical.ok_or("The settings could not be serialized.")?)
 }
 
-/// `ConfigFile<T>.Save` for a model: the folder made, the document formatted, and the bytes put in place by a rename.
+/// Saves a model's document by number: the folder made, the document written as its file, the bytes put in place by a rename.
 pub fn save(tree: &Tree, model: &Model, category: Option<&str>, file: &str, canonical: Option<&str>) -> Result<(), String> {
     let target = tree.config_path(category, file);
     make_folder(&target)?;
     atomic::write(&target, bytes_for(model, canonical)?.as_bytes())
 }
 
-/// `CheatFile.LoadFrom`: a model read from any path; none for a file that is missing, unreadable or will not bind.
-pub fn load_from(model: &Model, file: impl AsRef<Path>) -> Option<Value> {
+/// Saves a model of a type as its file, as `save` does.
+pub fn save_model<M: ConfigModel>(tree: &Tree, category: Option<&str>, file: &str, model: &M) -> Result<(), String> {
+    let target = tree.config_path(category, file);
+    make_folder(&target)?;
+    atomic::write(&target, model.file_text()?.as_bytes())
+}
+
+/// `CheatFile.LoadFrom`: a model read from any path, as its transport; none for a file that is missing, unreadable or will not bind.
+pub fn load_from(model: &Model, file: impl AsRef<Path>) -> Option<String> {
     let text = crate::text_file::decode(&std::fs::read(file).ok()?);
     bind_text(model, &text, false).ok().flatten()
 }
 
-/// `CheatFile.SaveTo`: a model written straight to any path the player picked, with no temp file, as C# writes it.
+/// `CheatFile.SaveTo`: a model written straight to any path the player picked, with no temp file.
 pub fn save_to(model: &Model, file: impl AsRef<Path>, canonical: Option<&str>) -> bool {
     let file = file.as_ref();
     let write = || -> Result<(), String> {
@@ -155,7 +168,7 @@ pub fn save_to(model: &Model, file: impl AsRef<Path>, canonical: Option<&str>) -
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{APP_SETTINGS_ID, AUDIO_CONFIG_ID, CHEAT_FILE_ID, MODELS};
+    use crate::models::{AppSettings, AUDIO_CONFIG_ID, CHEAT_FILE_ID, MODELS};
     use crate::test_support::TempDir;
     use crate::tree::Override;
 
@@ -173,7 +186,6 @@ mod tests {
     }
 
     const AUDIO: &Model = &MODELS[AUDIO_CONFIG_ID as usize];
-    const APP: &Model = &MODELS[APP_SETTINGS_ID as usize];
 
     #[test]
     fn a_missing_file_a_null_document_and_a_broken_one_are_three_answers() {
@@ -183,13 +195,16 @@ mod tests {
         put(&temp.join("etc/audio.json"), b" null ");
         assert_eq!(load(&tree, AUDIO, None, "audio.json", false), Ok(Loaded::Null));
         put(&temp.join("etc/audio.json"), b"{ \"SampleRate\": 44100, // by hand\n }");
-        let Ok(Loaded::Document(config)) = load(&tree, AUDIO, None, "audio.json", false) else { panic!() };
-        assert_eq!(config.get("SampleRate"), Some(&Value::number("44100")));
+        let Ok(Loaded::Document(config)) = load_model::<crate::models::AudioConfig>(&tree, None, "audio.json", false) else { panic!() };
+        assert_eq!(config.sample_rate, 44100);
         put(&temp.join("etc/audio.json"), b"{ \"SampleRate\": \"fast\" }");
-        assert_eq!(load(&tree, AUDIO, None, "audio.json", false), Err("$.SampleRate is not a whole number.".to_string()));
+        assert_eq!(load(&tree, AUDIO, None, "audio.json", false), Err("$.SampleRate: invalid type: string \"fast\", expected i32.".to_string()));
         put(&temp.join("etc/audio.json"), b"{ not json at all");
         let words = load(&tree, AUDIO, None, "audio.json", false).unwrap_err();
-        assert_eq!(load_diagnostic(&tree, None, "audio.json", &words), format!("{}: Neither a name nor '}}' in an object at line 1, byte 3. Falling back to defaults.", temp.text("etc/audio.json")));
+        assert!(load_diagnostic(&tree, None, "audio.json", &words).starts_with(&format!("{}: ", temp.text("etc/audio.json"))));
+        assert!(words.contains("line 1"), "{words}");
+        put(&temp.join("etc/audio.json"), b" \n");
+        assert!(load(&tree, AUDIO, None, "audio.json", false).is_err());
     }
 
     #[test]
@@ -198,7 +213,7 @@ mod tests {
         let tree = tree(&temp);
         save(&tree, AUDIO, None, "audio.json", Some(r#"{"SampleRate":48000,"MasterVolume":0.8}"#)).unwrap();
         let text = std::fs::read_to_string(temp.join("etc/audio.json")).unwrap();
-        assert!(text.starts_with('{') && text.ends_with('}') && text.contains("\"SampleRate\": 48000,") && text.contains("\"Muted\": false,"));
+        assert!(text.starts_with('{') && text.ends_with('}') && text.contains("\"SampleRate\": 48000,") && text.contains("\"MasterVolume\": 0.8,") && text.contains("\"Muted\": false,"));
         assert!(!file_exists(&temp.join("etc/audio.json.tmp")));
         assert!(exists(&tree, None, "audio.json"));
         assert!(save(&tree, AUDIO, None, "audio.json", None).is_err());
@@ -252,18 +267,18 @@ mod tests {
     fn settings_are_upgraded_when_loaded_for_use_and_not_when_only_read() {
         let temp = TempDir::new("config");
         let tree = tree(&temp);
-        let (new, said) = load_or_new(&tree, APP, None, "appsettings.json");
-        assert_eq!((new.get("SelectedCoreUpgraded"), said), (Some(&Value::Bool(true)), None));
+        let (new, said) = load_or_new::<AppSettings>(&tree, None, "appsettings.json");
+        assert_eq!((new.selected_core_upgraded, said), (true, None));
         put(&temp.join("etc/appsettings.json"), b"{\"SelectedCore\":\"SNES (Venus)\",\"LogDirectory\":\"/logs\"}");
-        let (settings, said) = load_or_new(&tree, APP, None, "appsettings.json");
-        assert_eq!((settings.get("SelectedCore").and_then(Value::as_str), said), (Some("All consoles"), None));
-        assert_eq!(settings.get("LogDirectory").and_then(Value::as_str), Some("/logs"));
-        let Ok(Loaded::Document(read)) = load(&tree, APP, None, "appsettings.json", false) else { panic!() };
-        assert_eq!(read.get("SelectedCore").and_then(Value::as_str), Some("SNES (Venus)"));
+        let (settings, said) = load_or_new::<AppSettings>(&tree, None, "appsettings.json");
+        assert_eq!((settings.selected_core.as_deref(), said), (Some("All consoles"), None));
+        assert_eq!(settings.log_directory.as_deref(), Some("/logs"));
+        let Ok(Loaded::Document(read)) = load_model::<AppSettings>(&tree, None, "appsettings.json", false) else { panic!() };
+        assert_eq!(read.selected_core.as_deref(), Some("SNES (Venus)"));
         put(&temp.join("etc/appsettings.json"), b"[]");
-        let (fallback, said) = load_or_new(&tree, APP, None, "appsettings.json");
-        assert_eq!(fallback.get("SelectedCore").and_then(Value::as_str), Some("All consoles"));
-        assert_eq!(said, Some(format!("{}: $ is not an object. Falling back to defaults.", temp.text("etc/appsettings.json"))));
+        let (fallback, said) = load_or_new::<AppSettings>(&tree, None, "appsettings.json");
+        assert_eq!(fallback.selected_core.as_deref(), Some("All consoles"));
+        assert_eq!(said, Some(format!("{}: invalid type: sequence, expected struct AppSettings. Falling back to defaults.", temp.text("etc/appsettings.json"))));
     }
 
     #[test]
@@ -273,7 +288,7 @@ mod tests {
         let file = temp.join("exports/deep/mine.json");
         assert!(save_to(cheats, &file, Some(r#"{"Cheats":[{"Description":"é","Writes":[{"Address":"7E0019"}]}]}"#)));
         let back = load_from(cheats, &file).unwrap();
-        assert_eq!(model::transport(&back), r#"{"Cheats":[{"Kind":"RamPoke","Writes":[{"Space":"","Address":"7E0019","Value":"00","Width":1,"Type":"Set","BitPosition":null,"BigEndian":false,"RepeatCount":1,"RepeatAddAddress":"0","RepeatAddValue":"0"}],"Compare":null,"Description":"é","Enabled":true,"Space":null,"Address":null,"Value":null}]}"#);
+        assert_eq!(back, r#"{"Cheats":[{"Kind":"RamPoke","Writes":[{"Space":"","Address":"7E0019","Value":"00","Width":1,"Type":"Set","BitPosition":null,"BigEndian":false,"RepeatCount":1,"RepeatAddAddress":"0","RepeatAddValue":"0"}],"Compare":null,"Description":"é","Enabled":true,"Space":null,"Address":null,"Value":null}]}"#);
         assert!(!save_to(cheats, &temp.join("made/anyway/broken.json"), None));
         assert!(crate::files::directory_exists(&temp.join("made/anyway")));
         assert_eq!(load_from(cheats, &temp.join("absent.json")), None);

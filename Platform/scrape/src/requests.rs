@@ -11,7 +11,7 @@ use crate::redact::redact;
 use crate::run::{Choices, Phase};
 use crate::store::Priority;
 use crate::{Error, Scraper, credentials, openemu};
-use emusen_dotnet::date::TICKS_PER_SECOND;
+use emusen_galaxia::clock::TICKS_PER_SECOND;
 use serde_json::Value;
 
 /// `ScrapeCost.Kinds`: the share of §17.9's 39 found answers offering each kind, and the mean size the region rule took.
@@ -185,7 +185,7 @@ impl Scraper {
         let kb = not_asked as f64 * expected_kb(&kinds) + again_kb;
         let kbps = q.max_kbps;
         let asking = (not_asked + again) as i64;
-        let time = asking * emusen_dotnet::date::ticks_from_seconds(3.9) + emusen_dotnet::date::ticks_from_seconds(kb / kbps.unwrap_or(128).max(1) as f64);
+        let time = asking * emusen_galaxia::clock::ticks_from_seconds(3.9) + emusen_galaxia::clock::ticks_from_seconds(kb / kbps.unwrap_or(128).max(1) as f64);
         let mut out = format!(
             "{{\"games\":{},\"not_yet_asked\":{not_asked},\"asked_again\":{again},\"max_requests\":{},\"requests_left_today\":",
             paths.len(),

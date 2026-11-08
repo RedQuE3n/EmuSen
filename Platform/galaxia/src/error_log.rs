@@ -7,7 +7,7 @@
 
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
-use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
+use crate::models::{APP_SETTINGS_FILE, AppSettings};
 use crate::files::file_exists;
 use crate::tree::{Directory, Tree};
 use std::path::{Path, PathBuf};
@@ -70,8 +70,8 @@ pub fn root(tree: &Tree, directory_override: Option<&str>) -> (PathBuf, Option<S
     if let Some(directory) = directory_override {
         return (PathBuf::from(directory), None);
     }
-    let (settings, said) = config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
-    let configured = settings.get("LogDirectory").and_then(|value| value.as_str());
+    let (settings, said) = config::load_or_new::<AppSettings>(tree, None, APP_SETTINGS_FILE);
+    let configured = settings.log_directory.as_deref();
     if usable(configured) {
         return (PathBuf::from(configured.unwrap_or_default()), said);
     }
@@ -262,7 +262,7 @@ mod tests {
         assert_eq!(root(&tree, None), (temp.join("appdata/EmuSen/Logs"), None));
         std::fs::create_dir_all(temp.join("etc")).unwrap();
         let settings = |log: &str| std::fs::write(temp.join("etc/appsettings.json"), format!("{{\"LogDirectory\":{log}}}")).unwrap();
-        settings(&emusen_dotnet::json::quoted(&temp.text("made/Logs")).replace("\\u002B", "+"));
+        settings(&serde_json::to_string(&&temp.text("made/Logs")).unwrap_or_default().replace("\\u002B", "+"));
         assert_eq!(root(&tree, None), (temp.join("made/Logs"), None));
         assert!(crate::files::directory_exists(&temp.join("made/Logs")));
         // A folder this machine cannot make, as a settings file copied from another names, falls back to the home's own Logs, said once in it.
@@ -271,7 +271,7 @@ mod tests {
         let home_logs = tree.directory(Directory::Logs).unwrap();
         std::fs::write(temp.join("blocker"), "x").unwrap();
         let blocked = temp.text("blocker/Logs");
-        settings(&emusen_dotnet::json::quoted(&blocked));
+        settings(&serde_json::to_string(&&blocked).unwrap_or_default());
         assert_eq!(root(&tree, None).0, home_logs);
         let now = SystemTime::now();
         let file = append(&root(&tree, None).0, "20261101", "T", now, "first\n").unwrap();
@@ -286,7 +286,7 @@ mod tests {
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
             if std::fs::write(shut.join("probe"), b"").is_err() {
                 assert!(!usable(Some(&shut.to_string_lossy())));
-                settings(&emusen_dotnet::json::quoted(&shut.to_string_lossy()));
+                settings(&serde_json::to_string(&&shut.to_string_lossy()).unwrap_or_default());
                 assert_eq!(root(&tree, None).0, home_logs);
             }
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -295,7 +295,7 @@ mod tests {
         settings("5");
         let (fallback, said) = root(&tree, None);
         assert_eq!(fallback, temp.join("appdata/EmuSen/Logs"));
-        assert!(said.unwrap().ends_with("$.LogDirectory is not a string. Falling back to defaults."));
+        assert!(said.unwrap().ends_with("$.LogDirectory: invalid type: integer `5`, expected a string. Falling back to defaults."));
         assert!(!usable(None) && !usable(Some("")) && !usable(Some("  ")));
     }
 }

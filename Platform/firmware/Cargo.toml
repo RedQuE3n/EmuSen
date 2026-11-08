@@ -10,6 +10,7 @@ publish.workspace = true
 name = "emusen_firmware"
 
 [dependencies]
-# .NET's path rules and File.Exists, and the folder setting's rules, which are Galaxia's.
+# The tree and the folder setting's rules, which are Galaxia's.
 emusen-galaxia = { path = "../galaxia" }
-emusen-dotnet = { path = "../dotnet" }
+# JSON read and written.
+serde_json.workspace = true

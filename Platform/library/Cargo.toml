@@ -16,7 +16,5 @@ serde_json.workspace = true
 emusen-galaxia = { path = "../galaxia" }
 # What each system is and how a file is routed among them.
 emusen-systems = { path = "../systems" }
-# .NET's text and JSON rules.
-emusen-dotnet = { path = "../dotnet" }
 # The SQLite the program ships, lent by the host (EmuSen_RustPlatform.md Q25).
 emusen-sqlite = { path = "../sqlite" }

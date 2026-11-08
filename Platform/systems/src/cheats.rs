@@ -208,7 +208,8 @@ fn error(e: &Error) -> Value {
     }
 }
 
-fn write_json(w: &Write) -> Value {
+/// A write as the cheat answers give it, one owner for the platform's cheat calls.
+pub fn write_json(w: &Write) -> Value {
     object(vec![
         ("space", Value::from(w.space.as_str())),
         ("address", Value::from(w.address)),

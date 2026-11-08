@@ -4,7 +4,7 @@
 
 use emusen_core_tool::{job, Context, Placement, Source};
 use emusen_galaxia::archive::ZipWriter;
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, DnType, IsCa, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::collections::HashMap;
@@ -121,7 +121,7 @@ pub fn events(ctx: &Context, request: &str) -> Vec<Value> {
     let mut out = Vec::new();
     while !j.finished() {
         if let Some(line) = j.peek(Duration::from_millis(200)) {
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
             j.take();
         }
     }

@@ -7,7 +7,7 @@
 use std::path::Path;
 use crate::interp::{Interp, Outcome};
 use crate::shell::World;
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::tree;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -37,7 +37,7 @@ pub fn read(folder: &str) -> Vec<Program> {
     let mut programs = Vec::new();
     for manifest in manifests {
         let Ok(text) = std::fs::read_to_string(&manifest) else { continue };
-        let Ok(value) = json::parse(&text) else { continue };
+        let Ok(value) = serde_json::from_str::<Value>(&text) else { continue };
         if value.get("kind").and_then(Value::as_str) != Some("program") {
             continue;
         }

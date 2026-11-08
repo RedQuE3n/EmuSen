@@ -8,7 +8,7 @@
 use crate::files::{self, Options};
 use crate::path_key;
 use std::path::{Path, PathBuf};
-use emusen_dotnet::json::{Text, Value};
+use serde_json::Value;
 use crate::package;
 use crate::rom_hash::{self, Hashes};
 
@@ -39,9 +39,8 @@ pub struct Places {
 impl Places {
     /// The tree's folders, and `AppSettings.RomDirectory` as the settings file holds it, checked as a folder setting is.
     pub fn of(tree: &crate::tree::Tree) -> Places {
-        use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
-        let (settings, _) = crate::config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
-        let library = crate::setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &crate::tree::user_home()).path;
+        let (settings, _) = crate::config::load_or_new::<crate::models::AppSettings>(tree, None, crate::models::APP_SETTINGS_FILE);
+        let library = crate::setting_folders::checked(settings.rom_directory.as_deref(), &crate::tree::user_home()).path;
         let folder = |which| tree.directory(which).unwrap_or_default().to_string_lossy().into_owned();
         Places { packages: folder(crate::tree::Directory::Packages), library, compressed: folder(crate::tree::Directory::Compressed) }
     }
@@ -199,16 +198,11 @@ pub fn seen_of(at: &str) -> Option<(u64, String)> {
 /// A time as the manifest's `mtime`: UTC to the second, `yyyy-MM-ddTHH:mm:ssZ`.
 pub fn mtime_text(t: std::time::SystemTime) -> String {
     let secs = t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let (y, m, d) = emusen_dotnet::date::civil(secs.div_euclid(86_400));
-    let s = secs.rem_euclid(86_400);
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", s / 3600, s / 60 % 60, s % 60)
+    crate::clock::text(secs * crate::clock::TICKS_PER_SECOND, crate::clock::MTIME)
 }
 
 fn number(v: Option<&Value>) -> Option<u64> {
-    match v {
-        Some(Value::Number(t)) => t.parse().ok(),
-        _ => None,
-    }
+    v?.as_u64()
 }
 
 /// The hashes that identify a manifest's game file as it lies: `dump.file`, else the sheet's for a disc whose game is
@@ -261,22 +255,16 @@ fn hash(at: &str) -> Option<Hashes> {
 /// Sets a member of an object, in its place where it is there, else at the end.
 pub fn set(object: &mut Value, name: &str, value: Value) {
     if let Value::Object(members) = object {
-        match members.iter_mut().rev().find(|(k, _)| k.text == name) {
-            Some((_, v)) => *v = value,
-            None => members.push((Text::new(name), value)),
-        }
+        members.insert(name.to_string(), value);
     }
 }
 
 fn member_mut<'a>(object: &'a mut Value, name: &str) -> Option<&'a mut Value> {
-    match object {
-        Value::Object(members) => members.iter_mut().rev().find(|(k, _)| k.text == name).map(|(_, v)| v),
-        _ => None,
-    }
+    object.get_mut(name)
 }
 
 fn seen_value(size: u64, mtime: &str) -> Value {
-    Value::Object(vec![(Text::new("size"), Value::number(size)), (Text::new("mtime"), Value::string(mtime))])
+    serde_json::json!({ "size": size, "mtime": mtime })
 }
 
 /// Where a file is as an entry names it: `library` and its path below the library where it lies there, else `absolute`.
@@ -299,8 +287,8 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
     let old = doc.get("game").and_then(|g| g.get("path")).and_then(Value::as_str).map(str::to_string).unwrap_or_default();
     let old_where = doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str).map(str::to_string).unwrap_or_default();
     if let Some(game) = member_mut(doc, "game") {
-        set(game, "where", Value::string(place));
-        set(game, "path", Value::string(&rel));
+        set(game, "where", Value::from(place));
+        set(game, "path", Value::from(rel.as_str()));
         if let Some((size, mtime)) = seen_of(found) {
             set(game, "seen", seen_value(size, &mtime));
         }
@@ -316,8 +304,8 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
                     Some(d) => format!("{d}/{tail}"),
                     None => tail.to_string(),
                 };
-                set(c, "where", Value::string(place));
-                set(c, "path", Value::string(if place == "absolute" { under(&Path::new(found).parent().unwrap_or(Path::new("")).to_string_lossy(), tail) } else { rebased }));
+                set(c, "where", Value::from(place));
+                set(c, "path", Value::from(if place == "absolute" { under(&Path::new(found).parent().unwrap_or(Path::new("")).to_string_lossy(), tail) } else { rebased }));
             }
         }
     }

@@ -4,7 +4,7 @@
 use crate::control::{has_call_stack, upper};
 use crate::{required, scoped, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope;
 use emusen_session_service::space::{find, read};
@@ -14,7 +14,7 @@ use emusen_session_service::{object, quoted, Record, Refusal, Session};
 /// An op's answer read as JSON.
 fn record(bytes: Result<Vec<u8>, Refusal>) -> Result<Value, String> {
     let bytes = bytes?;
-    json::parse(&String::from_utf8_lossy(&bytes)).map_err(|e| e.to_string())
+    serde_json::from_str::<Value>(&String::from_utf8_lossy(&bytes)).map_err(|e| e.to_string())
 }
 
 fn hint_and_try(word: &str, subcommands: &[&str]) -> String {
@@ -602,7 +602,7 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
             .map(|n| match frame.items().iter().find(|r| r.text("name") == *n) {
                 Some(r) => {
                     let digits = (r.int("bits") / 4).max(1) as usize;
-                    let value = r.field("value").and_then(|v| if let Value::Number(t) = v { t.parse::<u64>().ok() } else { None }).unwrap_or(0);
+                    let value = r.field("value").and_then(|v| v.as_u64()).unwrap_or(0);
                     format!("{:>6}", format!("{value:0digits$X}"))
                 }
                 None => format!("{:>6}", ""),

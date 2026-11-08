@@ -3,8 +3,8 @@
 //! conversion or a patch is their callers'; this owns the file. See EmuSen_GamePackages.md §3.3 and EmuSen_Galaxia.md
 //! §3.10.
 
-use emusen_dotnet::json::{self, Value};
-use crate::model::NEW_LINE;
+use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use serde_json::{Map, Value};
 
 /// The manifest's name inside a package's folder.
 pub const FILE_NAME: &str = "package.json";
@@ -33,7 +33,7 @@ pub fn media_path(root: impl AsRef<std::path::Path>, type_folder: &str, extensio
 /// Why a text is not a manifest this build takes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Refusal {
-    /// Not JSON as .NET reads a file a person edits: comments and a trailing comma allowed, 64 levels deep.
+    /// Not JSON as a file a person edits is read (`config_json`): comments and a trailing comma allowed.
     NotJson(String),
     /// JSON that the schema does not allow.
     Invalid(String),
@@ -51,9 +51,89 @@ impl Refusal {
 
 /// Reads a manifest's text: parsed, checked, and returned whole, unknown fields in their places.
 pub fn parse(text: &str) -> Result<Value, Refusal> {
-    let doc = json::parse(text).map_err(|e| Refusal::NotJson(format!("the manifest is not JSON: {e}")))?;
-    check(&doc)?;
-    Ok(doc)
+    let read: Document = crate::config_json::parse(text).map_err(|e| Refusal::NotJson(format!("the manifest is not JSON: {e}")))?;
+    if let Some(at) = read.twice {
+        return Err(invalid(format!("{at} is written twice")));
+    }
+    check(&read.value)?;
+    Ok(read.value)
+}
+
+/// A manifest as parsed: the document, and the path of its first member written twice, which a map alone would hide.
+struct Document {
+    value: Value,
+    twice: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for Document {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Document, D::Error> {
+        deserializer.deserialize_any(DocumentVisitor)
+    }
+}
+
+struct DocumentVisitor;
+
+impl<'de> Visitor<'de> for DocumentVisitor {
+    type Value = Document;
+
+    fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("a JSON value")
+    }
+
+    fn visit_bool<E>(self, v: bool) -> Result<Document, E> {
+        Ok(Document { value: Value::Bool(v), twice: None })
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Document, E> {
+        Ok(Document { value: Value::from(v), twice: None })
+    }
+
+    fn visit_u64<E>(self, v: u64) -> Result<Document, E> {
+        Ok(Document { value: Value::from(v), twice: None })
+    }
+
+    fn visit_f64<E>(self, v: f64) -> Result<Document, E> {
+        Ok(Document { value: Value::from(v), twice: None })
+    }
+
+    fn visit_str<E>(self, v: &str) -> Result<Document, E> {
+        Ok(Document { value: Value::from(v), twice: None })
+    }
+
+    fn visit_string<E>(self, v: String) -> Result<Document, E> {
+        Ok(Document { value: Value::String(v), twice: None })
+    }
+
+    fn visit_unit<E>(self) -> Result<Document, E> {
+        Ok(Document { value: Value::Null, twice: None })
+    }
+
+    fn visit_none<E>(self) -> Result<Document, E> {
+        Ok(Document { value: Value::Null, twice: None })
+    }
+
+    fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Document, A::Error> {
+        let (mut items, mut twice) = (Vec::new(), None);
+        while let Some(item) = seq.next_element::<Document>()? {
+            twice = twice.or(item.twice.map(|at| if at.starts_with('[') { format!("[{}]{at}", items.len()) } else { format!("[{}].{at}", items.len()) }));
+            items.push(item.value);
+        }
+        Ok(Document { value: Value::Array(items), twice })
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Document, A::Error> {
+        let (mut members, mut twice) = (Map::new(), None);
+        while let Some(name) = map.next_key::<String>()? {
+            let member = map.next_value::<Document>()?;
+            let deeper = member.twice.map(|at| if at.starts_with('[') { format!("{name}{at}") } else { format!("{name}.{at}") });
+            if members.contains_key(&name) {
+                twice = twice.or(Some(name.clone()));
+            }
+            twice = twice.or(deeper);
+            members.insert(name, member.value);
+        }
+        Ok(Document { value: Value::Object(members), twice })
+    }
 }
 
 /// Reads the manifest at `path`, decoded as `File.ReadAllText` decodes a file.
@@ -69,73 +149,29 @@ pub fn write(path: impl AsRef<std::path::Path>, doc: &Value) -> Result<Result<()
     Ok(crate::atomic::write(path, format(doc).as_bytes()))
 }
 
-/// The bytes a manifest is written as: System.Text.Json's indented layout, two spaces, its encoder's escapes, each
-/// number as its token, the platform's line ending, and one at the end.
+/// The bytes a manifest is written as: serde_json's indented layout, two spaces, and a line feed at the end.
 pub fn format(doc: &Value) -> String {
-    let mut out = String::new();
-    indented(&mut out, doc, 0);
-    out.push_str(NEW_LINE);
+    let mut out = crate::config_json::write(doc).expect("a document is JSON");
+    out.push('\n');
     out
-}
-
-fn indented(out: &mut String, value: &Value, depth: usize) {
-    let line = |out: &mut String, depth: usize| {
-        out.push_str(NEW_LINE);
-        out.push_str(&"  ".repeat(depth));
-    };
-    match value {
-        Value::Null => out.push_str("null"),
-        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
-        Value::Number(token) => out.push_str(token),
-        Value::String(text) => out.push_str(&json::quoted(&text.text)),
-        Value::Array(items) if items.is_empty() => out.push_str("[]"),
-        Value::Object(members) if members.is_empty() => out.push_str("{}"),
-        Value::Array(items) => {
-            out.push('[');
-            for (i, item) in items.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                line(out, depth + 1);
-                indented(out, item, depth + 1);
-            }
-            line(out, depth);
-            out.push(']');
-        }
-        Value::Object(members) => {
-            out.push('{');
-            for (i, (name, member)) in members.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                line(out, depth + 1);
-                out.push_str(&json::quoted(&name.text));
-                out.push_str(": ");
-                indented(out, member, depth + 1);
-            }
-            line(out, depth);
-            out.push('}');
-        }
-    }
 }
 
 /// A new manifest in the schema's order, linked or self-contained, with the fields a later step fills left empty.
 pub fn new(title: Option<&str>, system: &str, mode: &str, game: Value) -> Value {
-    let text = |s: &str| Value::string(s);
-    Value::Object(vec![
-        (json::Text::new("format"), text(FORMAT)),
-        (json::Text::new("version"), text(&format!("{MAJOR}.{MINOR}"))),
-        (json::Text::new("title"), title.map_or(Value::Null, text)),
-        (json::Text::new("system"), text(system)),
-        (json::Text::new("mode"), text(mode)),
-        (json::Text::new("game"), game),
-        (json::Text::new("dump"), Value::Null),
-        (json::Text::new("companions"), Value::Array(Vec::new())),
-        (json::Text::new("patches"), Value::Array(Vec::new())),
-        (json::Text::new("patched"), Value::Null),
-        (json::Text::new("identity"), text("original")),
-        (json::Text::new("container"), Value::Null),
-    ])
+    serde_json::json!({
+        "format": FORMAT,
+        "version": format!("{MAJOR}.{MINOR}"),
+        "title": title,
+        "system": system,
+        "mode": mode,
+        "game": game,
+        "dump": null,
+        "companions": [],
+        "patches": [],
+        "patched": null,
+        "identity": "original",
+        "container": null,
+    })
 }
 
 /// The patched image's hashes as `patched` records them, where the list holds patches and they were taken; what a
@@ -154,10 +190,7 @@ pub fn patched(doc: &Value) -> Option<Patched> {
     }
     let p = doc.get("patched")?;
     let text = |name: &str| p.get(name).and_then(Value::as_str).map(str::to_ascii_lowercase);
-    let size = match p.get("size") {
-        Some(Value::Number(t)) => t.parse::<u64>().ok()?,
-        _ => return None,
-    };
+    let size = p.get("size")?.as_u64()?;
     Some(Patched { md5: text("md5")?, crc32: text("crc32")?, sha1: text("sha1")?, size })
 }
 
@@ -209,15 +242,11 @@ pub fn is_save_key(key: &str) -> bool {
 
 /// A file entry, `game`'s shape and each companion's.
 pub fn file_entry(role: &str, place: &str, path: &str, size: Option<u64>) -> Value {
-    let mut members = vec![
-        (json::Text::new("role"), Value::string(role)),
-        (json::Text::new("where"), Value::string(place)),
-        (json::Text::new("path"), Value::string(path)),
-    ];
+    let mut entry = serde_json::json!({ "role": role, "where": place, "path": path });
     if let Some(size) = size {
-        members.push((json::Text::new("size"), Value::number(size)));
+        entry["size"] = Value::from(size);
     }
-    Value::Object(members)
+    entry
 }
 
 // ---- The schema. Each refusal names the field by its path; the C# half words them identically. ----
@@ -238,38 +267,12 @@ fn child(path: &str, name: &str) -> String {
     if path.is_empty() { name.to_string() } else { format!("{path}.{name}") }
 }
 
-/// No member written twice, and no text that is not valid Unicode, anywhere in the document, in document order.
-fn well_formed(value: &Value, path: &str) -> Result<(), Refusal> {
-    match value {
-        Value::String(text) if text.broken => Err(invalid(format!("{path} is not valid Unicode"))),
-        Value::Array(items) => items.iter().enumerate().try_for_each(|(i, item)| well_formed(item, &format!("{path}[{i}]"))),
-        Value::Object(members) => {
-            let mut seen: Vec<&str> = Vec::with_capacity(members.len());
-            for (name, member) in members {
-                if name.broken {
-                    let at = if path.is_empty() { "the manifest" } else { path };
-                    return Err(invalid(format!("{at} has a member name that is not valid Unicode")));
-                }
-                let at = child(path, &name.text);
-                if seen.contains(&name.text.as_str()) {
-                    return Err(invalid(format!("{at} is written twice")));
-                }
-                seen.push(&name.text);
-                well_formed(member, &at)?;
-            }
-            Ok(())
-        }
-        _ => Ok(()),
-    }
-}
-
-/// Checks a document against the schema: well formed, then `format`, then `version` (so that a newer major is named
+/// Checks a document against the schema: `format`, then `version` (so that a newer major is named
 /// before anything it may have changed), then every known field in the schema's order.
 pub fn check(doc: &Value) -> Result<(), Refusal> {
     if !matches!(doc, Value::Object(_)) {
         return Err(invalid("the manifest is not a JSON object".to_string()));
     }
-    well_formed(doc, "")?;
     match doc.get("format") {
         None => return Err(missing("format")),
         Some(v) if v.as_str() == Some(FORMAT) => {}
@@ -348,7 +351,7 @@ fn one_of(v: &Value, path: &str, allowed: &[&str], want: &str) -> Result<(), Ref
 
 fn whole(v: &Value, path: &str, want: &str) -> Result<(), Refusal> {
     match v {
-        Value::Number(token) if token.parse::<i64>().is_ok_and(|n| n >= 0) => Ok(()),
+        Value::Number(number) if number.as_i64().is_some_and(|n| n >= 0) => Ok(()),
         _ => Err(wrong(path, want)),
     }
 }
@@ -499,19 +502,19 @@ mod tests {
     #[test]
     fn the_pages_example_round_trips_to_its_own_bytes() {
         let doc = parse(SPEC).unwrap();
-        assert_eq!(format(&doc), SPEC.replace('\n', NEW_LINE));
+        assert_eq!(format(&doc), SPEC);
     }
 
     #[test]
-    fn unknown_fields_are_kept_where_they_were_with_their_tokens() {
+    fn unknown_fields_are_kept_where_they_were() {
         let text = r#"{"x-first": 1.50, "format": "emusen-package", "version": "1.7", "system": "nes", "mode": "linked",
             "game": {"role": "image", "where": "package", "path": "g.nes", "later": {"a": [1e2, -0, "é<"]}}, "zz": null, }"#;
         let doc = parse(text).unwrap();
         let out = format(&doc);
-        assert!(out.starts_with("{\n  \"x-first\": 1.50,\n".replace('\n', NEW_LINE).as_str()), "{out}");
+        assert!(out.starts_with("{\n  \"x-first\": 1.5,\n"), "{out}");
         assert!(out.contains("\"later\": {"), "{out}");
-        assert!(out.contains("1e2") && out.contains("-0") && out.contains("\"\\u00E9\\u003C\""), "{out}");
-        assert!(out.ends_with(&format!("\"zz\": null{NEW_LINE}}}{NEW_LINE}")), "{out}");
+        assert!(out.contains("100.0") && out.contains("\"é<\""), "{out}");
+        assert!(out.ends_with("\"zz\": null\n}\n"), "{out}");
         assert_eq!(parse(&out).unwrap(), doc);
     }
 
@@ -537,7 +540,7 @@ mod tests {
             (r#"{"format": "emusen-package", "version": "1"}"#, "version must be two numbers, major.minor"),
             (r#"{"format": "emusen-package", "version": "1.0", "format": "emusen-package"}"#, "format is written twice"),
             (r#"{"format": "emusen-package", "version": "1.0", "x": {"a": 1, "a": 2}}"#, "x.a is written twice"),
-            (r#"{"format": "emusen-package", "version": "1.0", "x": ["\ud800"]}"#, "x[0] is not valid Unicode"),
+            (r#"{"format": "emusen-package", "version": "1.0", "x": [{"b": [{"c": 1, "c": 2}]}]}"#, "x[0].b[0].c is written twice"),
             (r#"{"format": "emusen-package", "version": "1.0", "mode": "linked", "game": {}}"#, "system is missing"),
         ];
         for (text, words) in cases {
@@ -571,6 +574,7 @@ mod tests {
             assert_eq!(parse(text).map(|_| ()).unwrap_err().words(), *words, "{text}");
         }
         assert!(matches!(refusal("{\"format\": "), Refusal::NotJson(_)));
+        assert!(matches!(refusal(r#"{"format": "emusen-package", "version": "1.0", "x": ["\ud800"]}"#), Refusal::NotJson(_)));
         assert!(parse(&base(r#", "game2": {"where": "anything"}, "dump": {"file": {"md5": "00112233445566778899AABBCCDDEEFF"}}"#)).is_ok());
         assert!(parse(&base(r#", "companions": [{"role": "extra", "where": "absolute", "path": "D:\\msu\\a.pcm"}]"#)).is_ok());
     }

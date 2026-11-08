@@ -95,10 +95,8 @@ impl Json {
     }
 
     /// A parsed document of the old reader's, written as it holds it.
-    pub fn key_value(&mut self, key: &str, v: &emusen_dotnet::json::Value) -> &mut Json {
-        let mut compact = String::new();
-        emusen_dotnet::json::write_compact(&mut compact, v);
-        self.key(key).put(serde_json::from_str(&compact).unwrap_or(Value::Null))
+    pub fn key_value(&mut self, key: &str, v: &Value) -> &mut Json {
+        self.key(key).put(v.clone())
     }
 
     pub fn u64(&mut self, key: &str, value: u64) -> &mut Json {

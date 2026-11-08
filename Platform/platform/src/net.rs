@@ -5,20 +5,20 @@
 use std::time::Duration;
 
 use crate::{fail, given, put, status};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_net::{Download, Failure, Request};
 
 fn request(data: *const u8, len: usize) -> Result<Request, i32> {
-    let r = json::parse(unsafe { given(data, len) }?).map_err(|e| fail(status::PARSE, e.to_string()))?;
+    let r = serde_json::from_str::<Value>(unsafe { given(data, len) }?).map_err(|e| fail(status::PARSE, e.to_string()))?;
     let url = r.get("url").and_then(Value::as_str).ok_or_else(|| fail(status::PARSE, "url is not text"))?.to_string();
     let timeout = match r.get("timeout_ms") {
         None | Some(Value::Null) => Duration::MAX,
-        Some(Value::Number(n)) => Duration::from_millis(n.parse::<u64>().map_err(|_| fail(status::PARSE, "timeout_ms is not a whole number of milliseconds"))?),
+        Some(Value::Number(n)) => Duration::from_millis(n.as_u64().ok_or_else(|| fail(status::PARSE, "timeout_ms is not a whole number of milliseconds"))?),
         _ => return Err(fail(status::PARSE, "timeout_ms is not a number")),
     };
     let test_roots = match r.get("test_roots") {
         None | Some(Value::Null) => Vec::new(),
-        Some(Value::String(pem)) => emusen_net::pem_certificates(&pem.text).ok_or_else(|| fail(status::PARSE, "test_roots holds a certificate that does not read"))?,
+        Some(Value::String(pem)) => emusen_net::pem_certificates(pem).ok_or_else(|| fail(status::PARSE, "test_roots holds a certificate that does not read"))?,
         _ => return Err(fail(status::PARSE, "test_roots is not text")),
     };
     Ok(Request { test_roots, ..Request::new(url, timeout) })
@@ -110,20 +110,20 @@ pub unsafe extern "C" fn emusen_net_download_body(d: *const Download, out: *mut 
 }
 
 fn failure_json(f: &Failure) -> String {
-    let words = |t: &Option<String>| t.as_deref().map_or(Value::Null, Value::string);
+    let words = |t: &Option<String>| t.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)));
     let value = Value::Object(
         [
-            ("kind", Value::string(f.kind.name())),
-            ("message", Value::string(f.message.as_str())),
+            ("kind", Value::String(String::from(f.kind.name()))),
+            ("message", Value::String(String::from(f.message.as_str()))),
             ("inner", words(&f.inner)),
-            ("status", f.status.map_or(Value::Null, Value::number)),
+            ("status", f.status.map_or(Value::Null, Value::from)),
         ]
         .into_iter()
-        .map(|(k, v)| (json::Text::new(k), v))
+        .map(|(k, v)| (String::from(k), v))
         .collect(),
     );
     let mut out = String::new();
-    json::write_compact(&mut out, &value);
+    out.push_str(&serde_json::to_string(&value).expect("a value is JSON"));
     out
 }
 

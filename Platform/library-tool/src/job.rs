@@ -8,7 +8,7 @@ use crate::convert::{self, obj, Options, Outcome};
 use crate::discs::{self, Item};
 use crate::{packages, Context};
 use emusen_galaxia::claims;
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_tool_job::Events as Queue;
 pub use emusen_tool_job::Job;
 use std::time::{Duration, Instant};
@@ -81,7 +81,7 @@ pub struct Request {
 /// `{"op": "rom-dups", "console": null}` (EmuSen_LibraryTools.md §7), or since 1.7 `pkg-ls`'s
 /// `"unpackaged": true`.
 pub fn request(text: &str) -> Result<Request, String> {
-    let doc = json::parse(text).map_err(|e| format!("the request is not JSON: {e}"))?;
+    let doc: Value = serde_json::from_str(text).map_err(|e| format!("the request is not JSON: {e}"))?;
     let op = match doc.get("op").and_then(Value::as_str) {
         Some("convert") => Op::Convert,
         Some("check") => Op::Check,
@@ -105,13 +105,13 @@ pub fn request(text: &str) -> Result<Request, String> {
         Some(_) => return Err("the request's paths are not a list".into()),
     };
     let threads = match doc.get("threads") {
-        Some(Value::Number(t)) => t.parse::<usize>().map_err(|_| "the request's threads are not a whole number")?,
+        Some(Value::Number(t)) => t.as_u64().map(|n| n as usize).ok_or("the request's threads are not a whole number")?,
         _ => 0,
     };
     let console = doc.get("console").and_then(Value::as_str).map(str::to_string);
     let patch = doc.get("patch").and_then(Value::as_str).map(str::to_string);
     let index = match doc.get("index") {
-        Some(Value::Number(t)) => t.parse::<usize>().map_err(|_| "the request's index is not a whole number")?,
+        Some(Value::Number(t)) => t.as_u64().map(|n| n as usize).ok_or("the request's index is not a whole number")?,
         _ => 0,
     };
     if op == Op::PkgPatchAdd && patch.as_deref().is_none_or(str::is_empty) {
@@ -128,7 +128,7 @@ pub fn request(text: &str) -> Result<Request, String> {
     let making = packages::Making { self_contained: flag("self_contained") || flag("zip"), zip: flag("zip") };
     let output = match doc.get("output") {
         None | Some(Value::Null) => None,
-        Some(Value::String(t)) if !t.text.trim().is_empty() && matches!(op, Op::Convert | Op::Check | Op::List) => Some(t.text.clone()),
+        Some(Value::String(t)) if !t.trim().is_empty() && matches!(op, Op::Convert | Op::Check | Op::List) => Some(t.clone()),
         Some(_) => return Err("the request's output is a folder's path, for convert, check or ls".into()),
     };
     let beside = flag("beside");
@@ -157,7 +157,7 @@ pub fn request(text: &str) -> Result<Request, String> {
 
 fn emit(queue: &Queue, event: Value) {
     let mut line = String::new();
-    json::write_compact(&mut line, &event);
+    line.push_str(&serde_json::to_string(&event).expect("a value is JSON"));
     queue.emit(line);
 }
 
@@ -188,10 +188,10 @@ fn op_word(op: &Op) -> &'static str {
 }
 
 fn end(queue: &Queue, op: &Op, counts: &[(&'static str, u64)], started: Instant, error: Option<String>) {
-    let counts = Value::Object(counts.iter().map(|(k, v)| (json::Text::new(*k), Value::number(*v))).collect());
-    let mut members = vec![("event", Value::string("end")), ("op", Value::string(op_word(op))), ("counts", counts), ("seconds", Value::number(format!("{:.1}", started.elapsed().as_secs_f64())))];
+    let counts = Value::Object(counts.iter().map(|(k, v)| (String::from(*k), Value::from(*v))).collect());
+    let mut members = vec![("event", Value::String(String::from("end"))), ("op", Value::String(String::from(op_word(op)))), ("counts", counts), ("seconds", Value::from(convert::tenths(started.elapsed().as_secs_f64())))];
     if let Some(words) = error {
-        members.push(("error", Value::string(&words)));
+        members.push(("error", Value::String(String::from(&words))));
     }
     emit(queue, obj(members));
 }
@@ -232,25 +232,25 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
     };
     let (items, refused) = discs::items(&library, &req.paths);
     let threads = if req.options.threads > 0 { req.options.threads } else { std::thread::available_parallelism().map_or(1, |n| n.get()) };
-    let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("discs", Value::number(items.len()))];
+    let mut start = vec![("event", Value::String(String::from("start"))), ("op", Value::String(String::from(op_word(&req.op)))), ("discs", Value::from(items.len()))];
     if let Some(c) = &chdman {
-        start.push(("chdman", Value::string(&c.version)));
+        start.push(("chdman", Value::String(String::from(&c.version))));
     }
     let log_at = log_path(ctx, std::time::SystemTime::now());
     if req.op != Op::List {
-        start.push(("log", Value::string(&log_at)));
+        start.push(("log", Value::String(String::from(&log_at))));
     }
     if req.op == Op::Convert {
-        start.push(("codecs", Value::string(if req.options.fast { convert::FAST_CODECS } else { convert::CD_CODECS })));
-        start.push(("dvd_codecs", Value::string(if req.options.fast { convert::FAST_DVD_CODECS } else { convert::DVD_CODECS })));
-        start.push(("threads", Value::number(threads)));
-        start.push(("output", Value::string(dest.root())));
+        start.push(("codecs", Value::String(String::from(if req.options.fast { convert::FAST_CODECS } else { convert::CD_CODECS }))));
+        start.push(("dvd_codecs", Value::String(String::from(if req.options.fast { convert::FAST_DVD_CODECS } else { convert::DVD_CODECS }))));
+        start.push(("threads", Value::from(threads)));
+        start.push(("output", Value::String(String::from(dest.root()))));
         if dest.beside() {
             let adds = items.iter().filter(|i| convert::adds(ctx, &dest, i)).count();
-            start.extend([("beside", Value::Bool(true)), ("adds", Value::number(adds))]);
+            start.extend([("beside", Value::Bool(true)), ("adds", Value::from(adds))]);
         }
     }
-    start.push(("refused", Value::Array(refused.iter().map(Value::string).collect())));
+    start.push(("refused", Value::Array(refused.iter().map(|s| Value::String(String::from(s))).collect())));
     emit(queue, obj(start));
     if req.op == Op::Convert {
         convert::sweep(ctx);
@@ -262,11 +262,11 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
             continue;
         }
         let head = |state: &str| {
-            let mut h = vec![("event", Value::string("disc"))];
+            let mut h = vec![("event", Value::String(String::from("disc")))];
             if req.op != Op::List {
-                h.extend([("index", Value::number(i + 1)), ("of", Value::number(items.len()))]);
+                h.extend([("index", Value::from(i + 1)), ("of", Value::from(items.len()))]);
             }
-            h.extend([("source", Value::string(&item.rel)), ("system", Value::string(&item.system.console)), ("state", Value::string(state))]);
+            h.extend([("source", Value::String(String::from(&item.rel))), ("system", Value::String(String::from(&item.system.console))), ("state", Value::String(String::from(state)))]);
             h
         };
         if req.op != Op::List {
@@ -281,9 +281,9 @@ fn run(ctx: &Context, req: &Request, queue: &Queue, stop: &dyn Fn() -> bool) {
         count(&mut counts, outcome.state);
         let mut event = head(outcome.state);
         if let Some(words) = &outcome.words {
-            event.push(("words", Value::string(words)));
+            event.push(("words", Value::String(String::from(words))));
         }
-        let mut members: Vec<(json::Text, Value)> = event.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect();
+        let mut members: serde_json::Map<String, Value> = event.into_iter().map(|(k, v)| (String::from(k), v)).collect();
         members.extend(outcome.facts);
         let event = Value::Object(members);
         if req.op != Op::List {
@@ -323,18 +323,18 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
     let unclaimed = if req.unpackaged { packages::unpackaged(ctx, library, req.console.as_deref(), &systems) } else { Vec::new() };
     let total = games.len() + folders.len();
     let log_at = Path::new(&ctx.logs()).join(&format!("pkg_{}.log", &convert::utc(std::time::SystemTime::now())[..10])).to_string_lossy().into_owned();
-    let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("packages", Value::number(total))];
+    let mut start = vec![("event", Value::String(String::from("start"))), ("op", Value::String(String::from(op_word(&req.op)))), ("packages", Value::from(total))];
     if req.op != Op::PkgList {
-        start.push(("log", Value::string(&log_at)));
+        start.push(("log", Value::String(String::from(&log_at))));
     }
     if req.unpackaged {
-        start.push(("games", Value::number(unclaimed.len())));
+        start.push(("games", Value::from(unclaimed.len())));
     }
     if req.op == Op::PkgMake {
-        start.push(("mode", Value::string(if req.making.self_contained { "self-contained" } else { "linked" })));
+        start.push(("mode", Value::String(String::from(if req.making.self_contained { "self-contained" } else { "linked" }))));
         start.push(("zip", Value::Bool(req.making.zip)));
     }
-    start.push(("refused", Value::Array(refused.iter().map(Value::string).collect())));
+    start.push(("refused", Value::Array(refused.iter().map(|s| Value::String(String::from(s))).collect())));
     emit(queue, obj(start));
     let mut index = if req.op == Op::PkgMake { claims::index(&ctx.places().roots()) } else { claims::Index::default() };
     let jobs: Vec<(Option<&packages::Game>, Option<&String>)> = games.iter().map(|g| (Some(g), None)).chain(folders.iter().map(|f| (None, Some(f)))).collect();
@@ -357,27 +357,22 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
             _ => continue,
         };
         count(&mut counts, outcome.state);
-        let mut members = vec![("event", Value::string("package")), ("index", Value::number(i + 1)), ("of", Value::number(total))];
+        let mut members = vec![("event", Value::String(String::from("package"))), ("index", Value::from(i + 1)), ("of", Value::from(total))];
         match (game, folder) {
-            (Some(g), _) => members.extend([("source", Value::string(&g.rel)), ("system", Value::string(&g.system.console))]),
-            (_, Some(f)) => members.push(("package", Value::string(packages::package_rel(ctx, f)))),
+            (Some(g), _) => members.extend([("source", Value::String(String::from(&g.rel))), ("system", Value::String(String::from(&g.system.console)))]),
+            (_, Some(f)) => members.push(("package", Value::String(String::from(packages::package_rel(ctx, f))))),
             _ => {}
         }
-        members.push(("state", Value::string(outcome.state)));
+        members.push(("state", Value::String(String::from(outcome.state))));
         if let Some(words) = &outcome.words {
-            members.push(("words", Value::string(words)));
+            members.push(("words", Value::String(String::from(words))));
         }
-        let mut event: Vec<(json::Text, Value)> = members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect();
-        for (k, v) in outcome.facts {
-            match event.iter_mut().find(|(e, _)| e.text == k.text) {
-                Some(slot) => slot.1 = v,
-                None => event.push((k, v)),
-            }
-        }
+        let mut event: serde_json::Map<String, Value> = members.into_iter().map(|(k, v)| (String::from(k), v)).collect();
+        event.extend(outcome.facts);
         let event = Value::Object(event);
         if req.op != Op::PkgList {
             let mut line = String::new();
-            json::write_compact(&mut line, &event);
+            line.push_str(&serde_json::to_string(&event).expect("a value is JSON"));
             let text = format!("{}	{}	{:.1}s	{line}
 ", convert::utc(std::time::SystemTime::now()), op_word(&req.op), begun.elapsed().as_secs_f64());
             append(&log_at, &text);
@@ -386,8 +381,8 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
     }
     for (i, (game, size, convertible)) in unclaimed.iter().enumerate() {
         count(&mut counts, "unpackaged");
-        let mut members = vec![("event", Value::string("game")), ("index", Value::number(i + 1)), ("of", Value::number(unclaimed.len()))];
-        members.extend([("source", Value::string(&game.rel)), ("system", Value::string(&game.system.console)), ("state", Value::string("unpackaged")), ("size", Value::number(*size))]);
+        let mut members = vec![("event", Value::String(String::from("game"))), ("index", Value::from(i + 1)), ("of", Value::from(unclaimed.len()))];
+        members.extend([("source", Value::String(String::from(&game.rel))), ("system", Value::String(String::from(&game.system.console))), ("state", Value::String(String::from("unpackaged"))), ("size", Value::from(*size))]);
         if *convertible {
             members.push(("convertible", Value::Bool(true)));
         }
@@ -416,7 +411,7 @@ fn log_path(ctx: &Context, started: std::time::SystemTime) -> String {
 fn log(at: &str, op: &Op, item: &Item, event: &Value, took: Duration) {
     let stamp = convert::utc(std::time::SystemTime::now());
     let mut line = String::new();
-    json::write_compact(&mut line, event);
+    line.push_str(&serde_json::to_string(event).expect("a value is JSON"));
     let text = format!("{stamp}\t{}\t{}\t{:.1}s\t{line}\n", op_word(op), item.rel, took.as_secs_f64());
     append(at, &text);
 }

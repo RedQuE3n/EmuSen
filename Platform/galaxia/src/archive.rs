@@ -166,17 +166,15 @@ pub struct ZipWriter {
 
 /// A time's DOS fields in local time; the first of 1980 for a time before it.
 fn dos_time(t: std::time::SystemTime) -> zip::DateTime {
-    let utc = crate::clock::ticks_of(t).div_euclid(emusen_dotnet::date::TICKS_PER_SECOND);
-    let local = utc + crate::clock::local_offset(utc);
-    let (y, m, d) = emusen_dotnet::date::civil(local.div_euclid(86_400));
-    let s = local.rem_euclid(86_400);
-    let fields = (u16::try_from(y).ok(), m as u8, d as u8, (s / 3600) as u8, (s / 60 % 60) as u8, (s % 60) as u8);
-    fields.0.and_then(|y| zip::DateTime::from_date_and_time(y, fields.1, fields.2, fields.3, fields.4, fields.5).ok()).unwrap_or_default()
+    let utc = crate::clock::ticks_of(t);
+    let local = crate::clock::utc(utc + crate::clock::local_offset(utc.div_euclid(crate::clock::TICKS_PER_SECOND)) * crate::clock::TICKS_PER_SECOND);
+    let year = u16::try_from(local.year()).ok();
+    year.and_then(|y| zip::DateTime::from_date_and_time(y, local.month() as u8, local.day(), local.hour(), local.minute(), local.second()).ok()).unwrap_or_default()
 }
 
 /// The extended timestamp's body (0x5455): its flags, modification only, then Unix seconds.
 fn extended_timestamp(t: std::time::SystemTime) -> [u8; 5] {
-    let seconds = crate::clock::ticks_of(t).div_euclid(emusen_dotnet::date::TICKS_PER_SECOND).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
+    let seconds = crate::clock::ticks_of(t).div_euclid(crate::clock::TICKS_PER_SECOND).clamp(i32::MIN as i64, i32::MAX as i64) as i32;
     let mut body = [1u8; 5];
     body[1..].copy_from_slice(&seconds.to_le_bytes());
     body

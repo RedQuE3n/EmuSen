@@ -7186,6 +7186,8 @@ phases' times.
   refuses a value of the wrong kind with the .NET type it wanted, the JSON path and the reader's line and byte, which
   Galaxia's binder words otherwise; and `LoadFrom` reads through a null (a null list, entry, list of writes, or a write
   after writes that parsed), so the C# faults after loading the entries before it. Both are reproduced, as measured.
+  (History since 2026-11-07: `service::cheat_file` is gone, and CHEAT_IMPORT reads through Galaxia's `config_json`;
+  see EmuSen_RustPlatform.md §47.19.)
 - **The download** is the platform's: the runtime's config gained `fetch`, the body of a URL or the words of why not,
   which the platform library fills over `emusen-net` with `CheatDatabaseInstaller.FetchTimeout`'s five minutes. So
   `emusen-crystal` takes no HTTP client of its own, as the device lender keeps it free of Vulkan (§29.2).

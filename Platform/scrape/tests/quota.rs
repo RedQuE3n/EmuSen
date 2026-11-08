@@ -1,7 +1,7 @@
 //! §5.5's rules one by one on a clock the test moves: `ScrapeQuotaTests`' cases, held by the Rust half too. The two
 //! halves' paces are compared directly by part 4's replay (EmuSen_Backend.md §30.7).
 
-use emusen_dotnet::date::{TICKS_PER_SECOND, instant};
+use emusen_galaxia::clock::{TICKS_PER_SECOND, instant};
 use emusen_scrape::answer::Quota;
 use emusen_scrape::clock::{Clock, Stop};
 use emusen_scrape::quota::{Gate, Manager, Status, day_of, start_of_next_day};

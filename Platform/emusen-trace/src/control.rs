@@ -272,7 +272,7 @@ pub fn bp(call: &Call, parts: &[String]) -> Run {
                     None => none,
                 }));
             }
-            let state = |b: &emusen_dotnet::json::Value| format!("({}, {} {}x)", if b.flag("enabled") { "enabled" } else { "disabled" }, if b.field("log").is_none() { "hit" } else { "logged" }, b.int("hits"));
+            let state = |b: &serde_json::Value| format!("({}, {} {}x)", if b.flag("enabled") { "enabled" } else { "disabled" }, if b.field("log").is_none() { "hit" } else { "logged" }, b.int("hits"));
             let mut lines = Vec::new();
             for b in code {
                 let (start, end) = (b.address("address"), b.address("end"));
@@ -554,7 +554,7 @@ pub fn bt(call: &Call, parts: &[String]) -> Run {
     let limit = if parts.len() > at { parse_hex(&parts[at])? } else { 32 };
     let frames = session.call_stack(processor, i32::MAX as u32)?;
     let frames = frames.items();
-    let status = emusen_dotnet::json::parse(&String::from_utf8_lossy(&session.profile_op(processor, abi::profile::STATUS, "{}")?)).map_err(|e| e.to_string())?;
+    let status = serde_json::from_str::<serde_json::Value>(&String::from_utf8_lossy(&session.profile_op(processor, abi::profile::STATUS, "{}")?)).map_err(|e| e.to_string())?;
     let unmatched = status.int("unmatched_returns");
     if frames.is_empty() {
         return Ok(Answer::ok(if unmatched > 0 {

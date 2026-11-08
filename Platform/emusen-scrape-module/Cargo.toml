@@ -12,5 +12,5 @@ name = "emusen_scrape_module"
 
 [dependencies]
 dianash-module = { path = "../dianash-module" }
-# .NET's JSON, to read the scraper's answers.
-emusen-dotnet = { path = "../dotnet" }
+# JSON read and written.
+serde_json.workspace = true

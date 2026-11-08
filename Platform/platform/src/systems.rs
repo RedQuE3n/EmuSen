@@ -2,7 +2,7 @@
 //! `SystemTable` and `SystemCode` facades (EmuSen_Backend.md §5.4, §12, §13). Nothing is decided here.
 
 use crate::{bytes, fail, given, put, required, status};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_systems::cheats;
 use emusen_systems::probe::{self, Candidate, Head, Recognition};
 use emusen_systems::media::{self, Fault};
@@ -183,7 +183,7 @@ pub unsafe extern "C" fn emusen_systems_cheat_encode(codec: *const u8, codec_len
 pub unsafe extern "C" fn emusen_systems_code(out: *mut u8, len: usize) -> i64 {
     let rows = emusen_systems::table().unwrap_or(&[]).iter().map(|s| {
         object(vec![
-            ("id", Value::string(s.id.as_str())),
+            ("id", Value::String(String::from(s.id.as_str()))),
             ("recognises", Value::Bool(probe::recognises(&s.id))),
             ("openvgdb", Value::Bool(emusen_systems::openvgdb::transforms(&s.id))),
             ("header", Value::Bool(matches!(s.id.as_str(), "nes" | "gb" | "gbc"))),
@@ -193,21 +193,21 @@ pub unsafe extern "C" fn emusen_systems_code(out: *mut u8, len: usize) -> i64 {
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn compact(value: &Value) -> String {
     let mut out = String::new();
-    json::write_compact(&mut out, value);
+    out.push_str(&serde_json::to_string(value).expect("a value is JSON"));
     out
 }
 
 fn recognition_json(r: Option<&Recognition>) -> Value {
     r.map_or(Value::Null, |r| {
         object(vec![
-            ("system", Value::string(r.system.as_str())),
-            ("serial", r.serial.as_deref().map_or(Value::Null, Value::string)),
-            ("region", r.region.as_deref().map_or(Value::Null, Value::string)),
+            ("system", Value::String(String::from(r.system.as_str()))),
+            ("serial", r.serial.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
+            ("region", r.region.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
         ])
     })
 }
@@ -257,7 +257,7 @@ pub unsafe extern "C" fn emusen_systems_route(request: *const u8, request_len: u
         Ok(t) => t,
         Err(s) => return s as i64,
     };
-    let Ok(r) = json::parse(text) else { return fail(status::PARSE, "the request is not JSON") as i64 };
+    let Ok(r) = serde_json::from_str::<Value>(text) else { return fail(status::PARSE, "the request is not JSON") as i64 };
     let (Some(file), Some(Value::Array(cs)), Some(Value::Array(ks))) = (r.get("file").and_then(Value::as_str), r.get("candidates"), r.get("claims")) else {
         return fail(status::PARSE, "the request lacks file, candidates or claims") as i64;
     };
@@ -267,7 +267,7 @@ pub unsafe extern "C" fn emusen_systems_route(request: *const u8, request_len: u
     let mut claims = Vec::new();
     for k in ks {
         let at = match k.get("at") {
-            Some(Value::Number(n)) => n.parse::<usize>().ok().filter(|&a| a < candidates.len()),
+            Some(Value::Number(n)) => n.as_u64().map(|n| n as usize).filter(|&a| a < candidates.len()),
             _ => None,
         };
         let Some(at) = at else { return fail(status::PARSE, "a claim names no candidate") as i64 };
@@ -275,9 +275,9 @@ pub unsafe extern "C" fn emusen_systems_route(request: *const u8, request_len: u
     }
     let routed = probe::route(file, folder.as_deref(), &candidates, &claims);
     let answer = object(vec![
-        ("system", routed.system.as_deref().map_or(Value::Null, Value::string)),
+        ("system", routed.system.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
         ("recognition", recognition_json(routed.recognition.as_ref())),
-        ("reason", routed.reason.as_deref().map_or(Value::Null, Value::string)),
+        ("reason", routed.reason.as_deref().map_or(Value::Null, |s| Value::String(String::from(s)))),
     ]);
     unsafe { put(compact(&answer).as_bytes(), out, len) }
 }
@@ -310,31 +310,31 @@ pub unsafe extern "C" fn emusen_systems_header(system: *const u8, system_len: us
         (Ok(s), Ok(h)) => (s, h),
         (Err(s), _) | (_, Err(s)) => return s as i64,
     };
-    let refused = |kind: &str, words: String| object(vec![("refused", Value::string(kind)), ("words", Value::string(words))]);
+    let refused = |kind: &str, words: String| object(vec![("refused", Value::String(String::from(kind))), ("words", Value::String(String::from(words)))]);
     let answer = match system {
         "nes" => match emusen_systems::nes::header::read(head, length as usize) {
             Ok(h) => object(vec![
-                ("mapper", Value::number(h.mapper)),
-                ("prg_banks", Value::number(h.prg_banks)),
-                ("chr_banks", Value::number(h.chr_banks)),
+                ("mapper", Value::from(h.mapper)),
+                ("prg_banks", Value::from(h.prg_banks)),
+                ("chr_banks", Value::from(h.chr_banks)),
                 ("battery", Value::Bool(h.battery)),
                 ("trainer", Value::Bool(h.trainer)),
                 ("nes20", Value::Bool(h.nes20)),
-                ("trust", Value::number(h.trust)),
-                ("mirroring", Value::number(h.mirroring)),
+                ("trust", Value::from(h.trust)),
+                ("mirroring", Value::from(h.mirroring)),
             ]),
             Err(words) => refused("invalid", words),
         },
         "gb" | "gbc" => match emusen_systems::gb::cartridge::read(head, length as usize) {
             Ok(c) => object(vec![
-                ("type", Value::number(c.kind)),
-                ("board", Value::string(c.board)),
-                ("rom_banks", Value::number(c.rom_banks)),
-                ("ram_length", Value::number(c.ram_length)),
+                ("type", Value::from(c.kind)),
+                ("board", Value::String(String::from(c.board))),
+                ("rom_banks", Value::from(c.rom_banks)),
+                ("ram_length", Value::from(c.ram_length)),
                 ("battery", Value::Bool(c.battery)),
                 ("timer", Value::Bool(c.timer)),
                 ("rumble", Value::Bool(c.rumble)),
-                ("cgb_flag", Value::number(c.cgb_flag)),
+                ("cgb_flag", Value::from(c.cgb_flag)),
             ]),
             Err(emusen_systems::gb::cartridge::Refusal::Invalid(w)) => refused("invalid", w),
         },

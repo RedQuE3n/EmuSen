@@ -6,7 +6,6 @@ use std::path::Path;
 use emusen_galaxia::path_key;
 use std::sync::Arc;
 
-use emusen_dotnet::json::Value;
 use emusen_sqlite::{Bound, Connection, Sqlite};
 
 pub const FILE_NAME: &str = emusen_galaxia::stores::STATES_DB;
@@ -207,21 +206,47 @@ SELECT path, state_bytes, state_modified, console, core, state_version, build, s
     run(db, "INSERT INTO copied (source, at) VALUES ($source, $at)", &[("$source", source), ("$at", Bound::Text(&at))])
 }
 
-/// A package's record of one of its states, the C# `StateRecords.WritePackaged`: the record's members and the state's
-/// size and time, one line of JSON beside the state, so that a package moved or renamed keeps it (EmuSen_GamePackages.md §18.1).
+/// A state's record as a package keeps it, and as an earlier build's sidecar held it: each member by name in any case,
+/// the four texts required and nullable, the state's size and time only beside a packaged state (EmuSen_GamePackages.md §18.1).
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "PascalCase")]
+struct KeptRecord {
+    #[serde(deserialize_with = "Option::deserialize")]
+    console: Option<String>,
+    #[serde(deserialize_with = "Option::deserialize")]
+    core: Option<String>,
+    state_version: i32,
+    #[serde(deserialize_with = "Option::deserialize")]
+    build: Option<String>,
+    saved_at: String,
+    #[serde(deserialize_with = "Option::deserialize")]
+    rom_file: Option<String>,
+    #[serde(default)]
+    rom_md5: Option<String>,
+    #[serde(default)]
+    rom_bytes: i64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    state_bytes: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    state_modified: Option<i64>,
+}
+
+/// A package's record of one of its states: the record's members and the state's size and time, one line of JSON
+/// beside the state, so that a package moved or renamed keeps it (EmuSen_GamePackages.md §18.1).
 pub fn package_record_text(r: &StateRecord, state_bytes: i64, state_modified: i64) -> String {
-    let q = emusen_dotnet::json::quoted;
-    let md5 = r.rom_md5.as_deref().map_or("null".to_string(), q);
-    format!(
-        "{{\"Console\":{},\"Core\":{},\"StateVersion\":{},\"Build\":{},\"SavedAt\":{},\"RomFile\":{},\"RomMd5\":{md5},\"RomBytes\":{},\"StateBytes\":{state_bytes},\"StateModified\":{state_modified}}}\n",
-        q(&r.console),
-        q(&r.core),
-        r.state_version,
-        q(&r.build),
-        q(&r.saved_at),
-        q(&r.rom_file),
-        r.rom_bytes
-    )
+    let kept = KeptRecord {
+        console: Some(r.console.clone()),
+        core: Some(r.core.clone()),
+        state_version: r.state_version,
+        build: Some(r.build.clone()),
+        saved_at: r.saved_at.clone(),
+        rom_file: Some(r.rom_file.clone()),
+        rom_md5: r.rom_md5.clone(),
+        rom_bytes: r.rom_bytes,
+        state_bytes: Some(state_bytes),
+        state_modified: Some(state_modified),
+    };
+    serde_json::to_string(&kept).expect("a record is JSON") + "\n"
 }
 
 fn write_packaged(record_at: &Path, state_path: &str, r: &StateRecord) -> Result<(), Refused> {
@@ -232,12 +257,8 @@ fn write_packaged(record_at: &Path, state_path: &str, r: &StateRecord) -> Result
 /// A package's record while its state is the file it was written for; none where it is not, or does not bind.
 pub fn read_packaged(record_at: &Path, state_path: &str) -> Option<StateRecord> {
     let (bytes, modified) = stat(&path_key::key_text(state_path))?;
-    let doc = parse_file(record_at)?;
-    let number = |name: &str| match member(&doc, name) {
-        Some(Value::Number(t)) => t.as_str().parse::<i64>().ok(),
-        _ => None,
-    };
-    (number("StateBytes") == Some(bytes) && number("StateModified") == Some(modified)).then(|| bind(&doc)).flatten()
+    let kept = parse_file(record_at)?;
+    (kept.state_bytes == Some(bytes) && kept.state_modified == Some(modified)).then(|| bind(kept)).flatten()
 }
 
 /// A state's record wherever it is kept: a packaged state's in its package, read first, then states.db's.
@@ -304,62 +325,26 @@ pub fn write_package_copy(copy: &str, r: &StateRecord) -> Result<(), String> {
     write_packaged(&at, copy, r).map_err(|(_, words)| words)
 }
 
-/// A member by its name without regard to case, the last of several, as `PropertyNameCaseInsensitive` binds it.
-fn member<'a>(v: &'a Value, name: &str) -> Option<&'a Value> {
-    match v {
-        Value::Object(members) => members.iter().rev().find(|(k, _)| k.text.eq_ignore_ascii_case(name)).map(|(_, v)| v),
-        _ => None,
-    }
-}
-
 /// The sidecar an earlier build wrote, `StateRecord.ReadSidecar`: none for no sidecar or one that does not bind.
 pub fn read_sidecar(state_path: &str) -> Option<StateRecord> {
-    bind(&parse_file(&Path::new(state_path).with_extension("json"))?)
+    bind(parse_file(&Path::new(state_path).with_extension("json"))?)
 }
 
-fn parse_file(at: &Path) -> Option<Value> {
+fn parse_file(at: &Path) -> Option<KeptRecord> {
     let text = std::fs::read_to_string(at).ok()?;
-    emusen_dotnet::json::parse(text.trim_start_matches('\u{feff}')).ok()
+    emusen_galaxia::config_json::read(text.trim_start_matches('\u{feff}')).ok()
 }
 
-/// A record's members bound as `StateRecord` binds them, case ignored; none where one does not bind.
-fn bind(doc: &Value) -> Option<StateRecord> {
-    let text_of = |name: &str| -> Option<Option<String>> {
-        match member(&doc, name)? {
-            Value::String(t) => Some(Some(t.text.clone())),
-            Value::Null => Some(None),
-            _ => None,
-        }
-    };
-    let required = |name: &str| -> Option<String> { text_of(name).map(Option::unwrap_or_default) };
-    let number = |name: &str| -> Option<Option<&str>> {
-        match member(&doc, name) {
-            None => Some(None),
-            Some(Value::Number(t)) => Some(Some(t.as_str())),
-            Some(_) => None,
-        }
-    };
-    let state_version: i32 = number("StateVersion")??.parse().ok()?;
-    let rom_bytes: i64 = match number("RomBytes")? {
-        None => 0,
-        Some(t) => t.parse().ok()?,
-    };
-    let saved_at = match member(&doc, "SavedAt")? {
-        Value::String(t) => emusen_galaxia::clock::round_trip(&t.text)?,
-        _ => return None,
-    };
-    let rom_md5 = match member(&doc, "RomMd5") {
-        None => None,
-        Some(_) => text_of("RomMd5")?,
-    };
+/// A kept record as `StateRecord`; none where its time is not one a record holds.
+fn bind(kept: KeptRecord) -> Option<StateRecord> {
     Some(StateRecord {
-        console: required("Console")?,
-        core: required("Core")?,
-        state_version,
-        build: required("Build")?,
-        saved_at,
-        rom_file: required("RomFile")?,
-        rom_md5,
-        rom_bytes,
+        console: kept.console.unwrap_or_default(),
+        core: kept.core.unwrap_or_default(),
+        state_version: kept.state_version,
+        build: kept.build.unwrap_or_default(),
+        saved_at: emusen_galaxia::clock::round_trip(&kept.saved_at)?,
+        rom_file: kept.rom_file.unwrap_or_default(),
+        rom_md5: kept.rom_md5,
+        rom_bytes: kept.rom_bytes,
     })
 }

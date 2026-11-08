@@ -13,7 +13,7 @@ use crate::{packages, Context};
 use emusen_disc::cue::{FileKind, Sheet};
 use emusen_disc::{Kind, Lone, Medium};
 use emusen_galaxia::files::{self, Options};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{self, Hasher, Hashes};
 use emusen_galaxia::{archive, claims, image_sets};
@@ -432,17 +432,17 @@ pub fn groups(mut members: Vec<Member>, index: &claims::Index) -> Vec<Vec<Member
 }
 
 fn hashes_json(h: &Hashes, name: &str) -> Value {
-    obj(vec![("crc32", Value::string(&h.crc32)), ("md5", Value::string(&h.md5)), ("sha1", Value::string(h.sha1.as_deref().unwrap_or(""))), ("size", Value::number(h.size)), ("name", Value::string(name))])
+    obj(vec![("crc32", Value::String(String::from(&h.crc32))), ("md5", Value::String(String::from(&h.md5))), ("sha1", Value::String(String::from(h.sha1.as_deref().unwrap_or("")))), ("size", Value::from(h.size)), ("name", Value::String(String::from(name)))])
 }
 
 fn head(f: &File, index: usize, of: usize, state: &str) -> Vec<(&'static str, Value)> {
     vec![
-        ("event", Value::string("file")),
-        ("index", Value::number(index + 1)),
-        ("of", Value::number(of)),
-        ("source", Value::string(&f.rel)),
-        ("system", f.system.map_or(Value::Null, |s| Value::string(&s.id))),
-        ("state", Value::string(state)),
+        ("event", Value::String(String::from("file"))),
+        ("index", Value::from(index + 1)),
+        ("of", Value::from(of)),
+        ("source", Value::String(String::from(&f.rel))),
+        ("system", f.system.map_or(Value::Null, |s| Value::String(String::from(&s.id)))),
+        ("state", Value::String(String::from(state))),
     ]
 }
 
@@ -466,21 +466,21 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
         Op::RomCheck => "rom-check",
         _ => "rom-dups",
     };
-    let mut start = vec![("event", Value::string("start")), ("op", Value::string(word)), ("files", Value::number(files.len()))];
+    let mut start = vec![("event", Value::String(String::from("start"))), ("op", Value::String(String::from(word))), ("files", Value::from(files.len()))];
     let mut chdman = None;
     if req.op == Op::RomCheck && files.iter().any(|f| f.path.to_uppercase().ends_with(".CHD")) {
         match Chdman::open(&ctx.chdman, ctx.pin.as_deref(), &ctx.release) {
             Ok(c) => {
-                start.push(("chdman", Value::string(&c.version)));
+                start.push(("chdman", Value::String(String::from(&c.version))));
                 chdman = Some(c);
             }
-            Err(words) => start.push(("chdman_words", Value::string(&words.replace(", and nothing was converted.", ".").replace(": nothing was converted.", ".")))),
+            Err(words) => start.push(("chdman_words", Value::String(String::from(&words.replace(", and nothing was converted.", ".").replace(": nothing was converted.", "."))))),
         }
     }
     if let Some(c) = console {
-        start.push(("console", Value::string(&c.id)));
+        start.push(("console", Value::String(String::from(&c.id))));
     }
-    start.push(("refused", Value::Array(refused.iter().map(Value::string).collect())));
+    start.push(("refused", Value::Array(refused.iter().map(|s| Value::String(String::from(s))).collect())));
     emit(obj(start));
     let mut members = Vec::new();
     let mut stopped = false;
@@ -500,7 +500,7 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
                 };
                 count(state);
                 let mut e = head(f, i, files.len(), state);
-                e.push(("failed", Value::Array(failures.iter().map(|x| obj(vec![("check", Value::string(x.check)), ("words", Value::string(&x.words))])).collect())));
+                e.push(("failed", Value::Array(failures.iter().map(|x| obj(vec![("check", Value::String(String::from(x.check))), ("words", Value::String(String::from(&x.words)))])).collect())));
                 e
             }
             Op::RomHash => match hash(f, req.comparable, stop) {
@@ -513,7 +513,7 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
                 Err(words) => {
                     count(state_of(&words));
                     let mut e = head(f, i, files.len(), state_of(&words));
-                    e.push(("words", Value::string(&words)));
+                    e.push(("words", Value::String(String::from(&words))));
                     e
                 }
             },
@@ -527,7 +527,7 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
                 Err(words) => {
                     count(state_of(&words));
                     let mut e = head(f, i, files.len(), state_of(&words));
-                    e.push(("words", Value::string(&words)));
+                    e.push(("words", Value::String(String::from(&words))));
                     e
                 }
             },
@@ -544,12 +544,12 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
                 .map(|m| {
                     let mut e = hashes_json(&m.hashes, &m.rel);
                     if let Some(p) = index.claimant(&path_key::key_text(&m.path)) {
-                        claims::set(&mut e, "package", Value::string(&crate::packages::package_rel(ctx, &p.folder)));
+                        claims::set(&mut e, "package", Value::String(String::from(&crate::packages::package_rel(ctx, &p.folder))));
                     }
                     e
                 })
                 .collect();
-            emit(obj(vec![("event", Value::string("group")), ("members", Value::Array(listed))]));
+            emit(obj(vec![("event", Value::String(String::from("group"))), ("members", Value::Array(listed))]));
         }
     }
     Ok(())

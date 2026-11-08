@@ -2,7 +2,7 @@
 //! from `processors`. See `man cpus`.
 
 use crate::{Answer, Record, Session};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 
 /// One processor as `processors` lists it.
 #[derive(Clone, Debug, Default)]

@@ -3,7 +3,7 @@
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report, required, status, text};
 use emusen_galaxia::config::{self, Loaded};
 use emusen_galaxia::models::{self, Model};
-use emusen_galaxia::{cheats, error_log, model, tree};
+use emusen_galaxia::{cheats, error_log, tree};
 use std::time::{Duration, SystemTime};
 
 /// `EMUSEN_GALAXIA_MODEL_UPGRADE`: apply the model's own upgrade to what was read or made.
@@ -81,13 +81,13 @@ pub unsafe extern "C" fn emusen_galaxia_model_load(model: u32, category: *const 
         match config::load(&tree::tree(), model, category, file, flags & UPGRADE != 0).map_err(|words| fail(status::PARSE, words))? {
             Loaded::Missing => Err(status::ABSENT),
             Loaded::Null => Ok("null".to_string()),
-            Loaded::Document(document) => Ok(model::transport(&document)),
+            Loaded::Document(document) => Ok(document),
         }
     };
     answer(result(), out, len)
 }
 
-/// Saves a model's document, given as JSON, as its file: the folder made, the bytes .NET would write put in place by a rename. A null document fails after the folder is made, as a document C# could not serialize does.
+/// Saves a model's document, given as JSON, as its file: the folder made, the model written by serde_json and put in place by a rename. A null document fails after the folder is made.
 ///
 /// # Safety
 /// Each pointer must be valid for its length, or null.
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn emusen_galaxia_model_save(model: u32, category: *const 
 /// `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_model_new(model: u32, flags: u32, out: *mut u8, len: usize) -> i64 {
-    answer(model_of(model).map(|model| model::transport(&config::new_instance(model, flags & UPGRADE != 0))), out, len)
+    answer(model_of(model).map(|model| config::new_instance(model, flags & UPGRADE != 0)), out, len)
 }
 
 /// Text bound to a model with no file involved: the bound document as JSON, `null` for a document that is null, or `PARSE` with the words.
@@ -120,7 +120,7 @@ pub unsafe extern "C" fn emusen_galaxia_model_bind(model: u32, document: *const 
     let result = || -> Result<String, i32> {
         let (model, document) = (model_of(model)?, unsafe { required(document, document_len) }?);
         let bound = config::bind_text(model, document, flags & UPGRADE != 0).map_err(|words| fail(status::PARSE, words))?;
-        Ok(bound.map_or_else(|| "null".to_string(), |bound| model::transport(&bound)))
+        Ok(bound.unwrap_or_else(|| "null".to_string()))
     };
     answer(result(), out, len)
 }
@@ -133,21 +133,9 @@ pub unsafe extern "C" fn emusen_galaxia_model_bind(model: u32, document: *const 
 pub unsafe extern "C" fn emusen_galaxia_model_format(model: u32, document: *const u8, document_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<String, i32> {
         let (model, document) = (model_of(model)?, unsafe { required(document, document_len) }?);
-        match config::bind_text(model, document, false).map_err(|words| fail(status::PARSE, words))? {
-            Some(bound) => model::format(model.schema, &bound).map_err(|words| fail(status::PARSE, words)),
-            None => Ok("null".to_string()),
-        }
+        (model.format)(document).map_err(|words| fail(status::PARSE, words))
     };
     answer(result(), out, len)
-}
-
-/// A model's fields, one to a line, for a host to hold its own classes against.
-///
-/// # Safety
-/// `out` must be valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_model_schema(model: u32, out: *mut u8, len: usize) -> i64 {
-    answer(model_of(model).map(|model| model::describe(model.schema)), out, len)
 }
 
 /// A model read from any path, as JSON. `ABSENT` for a file that is missing, unreadable or will not bind, of which nothing is said.
@@ -158,12 +146,12 @@ pub unsafe extern "C" fn emusen_galaxia_model_schema(model: u32, out: *mut u8, l
 pub unsafe extern "C" fn emusen_galaxia_model_load_from(model: u32, file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<String, i32> {
         let (model, file) = (model_of(model)?, unsafe { required(file, file_len) }?);
-        config::load_from(model, file).map(|document| model::transport(&document)).ok_or(status::ABSENT)
+        config::load_from(model, file).ok_or(status::ABSENT)
     };
     answer(result(), out, len)
 }
 
-/// A model's document written straight to any path, its folder made first; no temp file, as C# writes a file the player picked.
+/// A model's document written straight to any path, its folder made first; no temp file, as a file the player picked is written.
 ///
 /// # Safety
 /// Each pointer must be valid for its length, or null.
@@ -358,8 +346,6 @@ mod tests {
         assert_eq!(ask(|out, len| unsafe { emusen_galaxia_model_bind(99, b"{}".as_ptr(), 2, 0, out, len) }), Err(status::BAD_ARGUMENT as i64));
         let new = ask(|out, len| unsafe { emusen_galaxia_model_new(models::APP_SETTINGS_ID, UPGRADE, out, len) }).unwrap();
         assert!(new.contains(r#""SelectedCoreUpgraded":true"#));
-        let schema = ask(|out, len| unsafe { emusen_galaxia_model_schema(models::CHEAT_FILE_ID, out, len) }).unwrap();
-        assert!(schema.contains("CheatFileEntry.EffectiveWrites\tlist<CheatFileWrite>\tderived\n"));
     }
 
     #[test]

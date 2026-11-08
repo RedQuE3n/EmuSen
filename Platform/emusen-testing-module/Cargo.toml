@@ -15,7 +15,6 @@ name = "emusen_testing_module"
 # JSON text written by serde_json.
 serde_json.workspace = true
 dianash-module = { path = "../dianash-module" }
-emusen-dotnet = { path = "../dotnet" }
 emusen-sqlite = { path = "../sqlite" }
 regex = "1"
 

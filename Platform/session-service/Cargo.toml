@@ -15,5 +15,3 @@ name = "emusen_session_service"
 [dependencies]
 # JSON text written by serde_json.
 serde_json.workspace = true
-# JSON as System.Text.Json writes it, .NET's number and case rules, and the C# Suggestion.
-emusen-dotnet = { path = "../dotnet" }

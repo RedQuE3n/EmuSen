@@ -8,7 +8,7 @@ use crate::interp::Interp;
 use crate::sandbox::Sandbox;
 use crate::table::{Entry, Kind, Table};
 use dianash_module::Module;
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -599,7 +599,7 @@ impl Shell {
 
 /// The JSON string of a text.
 pub(crate) fn json_string(text: &str) -> String {
-    serde_json::Value::from(text).to_string()
+    serde_json::to_string(&text).unwrap_or_default()
 }
 
 /// What the shell reads of a manifest (§5.3); a field it does not know is ignored.
@@ -624,8 +624,8 @@ pub(crate) struct ManifestCommand {
 
 impl Manifest {
     pub fn read(text: &str) -> Result<Manifest, String> {
-        let value = json::parse(text).map_err(|e| format!("the manifest is not JSON: {e:?}"))?;
-        if !matches!(value.get("manifest"), Some(Value::Number(format)) if format == "1") {
+        let value = serde_json::from_str::<Value>(text).map_err(|e| format!("the manifest is not JSON: {e:?}"))?;
+        if !matches!(value.get("manifest"), Some(Value::Number(format)) if format.as_u64() == Some(1)) {
             return Err("the manifest's format is not version 1".to_string());
         }
         let mut manifest = Manifest::default();
@@ -640,7 +640,7 @@ impl Manifest {
         if let Some(Value::Object(aliases)) = value.get("aliases") {
             for (alias, command) in aliases {
                 if let Some(command) = command.as_str() {
-                    manifest.aliases.push((alias.text.clone(), command.to_string()));
+                    manifest.aliases.push((alias.clone(), command.to_string()));
                 }
             }
         }

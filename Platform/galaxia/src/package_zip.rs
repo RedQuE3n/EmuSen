@@ -8,7 +8,7 @@ use crate::archive::{self, ZipWriter};
 use crate::files;
 use crate::path_key;
 use std::path::{Path, PathBuf};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use crate::package;
 
 
@@ -200,14 +200,7 @@ pub fn same_game(a: &Value, b: &Value) -> bool {
             _ => None,
         }) == Some(true),
         _ => {
-            let text = |v: Option<&Value>| {
-                let mut s = String::new();
-                if let Some(v) = v {
-                    emusen_dotnet::json::write_compact(&mut s, v);
-                }
-                s
-            };
-            text(a.get("dump")) == text(b.get("dump")) && a.get("dump").is_some()
+            a.get("dump") == b.get("dump") && a.get("dump").is_some()
         }
     }
 }

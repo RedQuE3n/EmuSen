@@ -21,8 +21,6 @@ emusen-net = { path = "../net" }
 emusen-galaxia = { path = "../galaxia" }
 # What each system is: ScreenScraper's ids, ES-DE's names, the OpenVGDB rule.
 emusen-systems = { path = "../systems" }
-# .NET's text, number and JSON rules.
-emusen-dotnet = { path = "../dotnet" }
 # The SQLite the program ships, lent by the host (EmuSen_RustPlatform.md Q25).
 emusen-sqlite = { path = "../sqlite" }
 # The player's library, lent by the host: covers chosen from another game, edits, cover lookups (§30.9 Q3).

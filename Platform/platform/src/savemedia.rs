@@ -2,7 +2,7 @@
 //! and over Galaxia's medium lock, for the C# `MediumLock` behind Galaxia's own switch (EmuSen_Backend.md §15.2).
 
 use crate::{fail, fail_io, given, put, report, required, status, text};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::medium_lock;
 use emusen_savemedia::{Card, Manager, Media, Medium, Outcome, Thrown};
 
@@ -18,7 +18,7 @@ impl Media for Given {
 
 fn media_from(value: Option<&Value>) -> Result<Given, i32> {
     match value {
-        Some(Value::Object(members)) => Ok(Given(members.iter().map(|(k, v)| (k.text.clone(), v.as_str().map(str::to_string))).collect())),
+        Some(Value::Object(members)) => Ok(Given(members.iter().map(|(k, v)| (k.clone(), v.as_str().map(str::to_string))).collect())),
         _ => Err(fail(status::PARSE, "the request has no media")),
     }
 }
@@ -28,20 +28,20 @@ fn field<'a>(value: &'a Value, name: &str) -> Result<&'a str, i32> {
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 fn outcome_json(o: &Outcome) -> Value {
-    object(vec![("done", Value::Bool(o.done)), ("words", Value::string(o.words.as_str()))])
+    object(vec![("done", Value::Bool(o.done)), ("words", Value::String(String::from(o.words.as_str())))])
 }
 
 fn card_json(card: Option<&Card>) -> Result<Value, i32> {
     let Some(card) = card else { return Ok(object(vec![("card", Value::Null)])) };
     let listing = match &card.listing {
-        Some(l) => json::parse(&emusen_systems::media::listing_json(l)).map_err(|e| fail(status::PARSE, e.to_string()))?,
+        Some(l) => serde_json::from_str::<Value>(&emusen_systems::media::listing_json(l)).map_err(|e| fail(status::PARSE, e.to_string()))?,
         None => Value::Null,
     };
-    Ok(object(vec![("card", object(vec![("exists", Value::Bool(card.exists)), ("length", Value::number(card.length)), ("listing", listing)]))]))
+    Ok(object(vec![("card", object(vec![("exists", Value::Bool(card.exists)), ("length", Value::from(card.length)), ("listing", listing)]))]))
 }
 
 fn thrown(t: Thrown) -> i32 {
@@ -79,7 +79,7 @@ fn run(r: &Value) -> Result<String, i32> {
         report(line);
     }
     let mut out = String::new();
-    json::write_compact(&mut out, &answer?);
+    out.push_str(&serde_json::to_string(&answer?).expect("a value is JSON"));
     Ok(out)
 }
 
@@ -93,7 +93,7 @@ fn run(r: &Value) -> Result<String, i32> {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_savemedia_op(request_data: *const u8, request_len: usize, out: *mut u8, len: usize) -> i64 {
     let answer = || -> Result<String, i32> {
-        let r = json::parse(unsafe { given(request_data, request_len) }?).map_err(|e| fail(status::PARSE, e.to_string()))?;
+        let r = serde_json::from_str::<Value>(unsafe { given(request_data, request_len) }?).map_err(|e| fail(status::PARSE, e.to_string()))?;
         run(&r)
     };
     match answer() {

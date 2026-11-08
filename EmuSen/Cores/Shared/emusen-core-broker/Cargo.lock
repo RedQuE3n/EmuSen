@@ -221,6 +221,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac6b926516df9c60bfa16e107b21086399f8285a44ca9711344b9e553c5146e2"
 
 [[package]]
+name = "deranged"
+version = "0.5.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
+
+[[package]]
 name = "dianash-module"
 version = "0.1.0"
 
@@ -229,9 +235,9 @@ name = "dianash-text"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "regex",
  "regex-syntax",
+ "time",
 ]
 
 [[package]]
@@ -275,16 +281,15 @@ name = "emusen-cheat"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
  "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
 name = "emusen-cheats"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
 ]
@@ -329,10 +334,10 @@ version = "0.1.0"
 dependencies = [
  "emusen-core-entry",
  "emusen-core-host",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-net",
  "emusen-tool-job",
+ "serde_json",
 ]
 
 [[package]]
@@ -340,8 +345,8 @@ name = "emusen-cores-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-library-module",
+ "serde_json",
 ]
 
 [[package]]
@@ -351,7 +356,6 @@ dependencies = [
  "emusen-cheats",
  "emusen-core-host",
  "emusen-crystal-debug",
- "emusen-dotnet",
  "emusen-firmware",
  "emusen-galaxia",
  "emusen-native",
@@ -362,6 +366,7 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
+ "serde",
  "serde_json",
 ]
 
@@ -371,9 +376,9 @@ version = "0.1.0"
 dependencies = [
  "emusen-cheats",
  "emusen-core-host",
- "emusen-dotnet",
  "emusen-native",
  "emusen-systems",
+ "serde_json",
 ]
 
 [[package]]
@@ -381,9 +386,9 @@ name = "emusen-debug"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
  "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
@@ -391,7 +396,6 @@ name = "emusen-dianash"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-suggest",
  "serde_json",
@@ -406,13 +410,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "emusen-dotnet"
-version = "0.1.0"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "emusen-endymion"
 version = "0.1.0"
 dependencies = [
@@ -424,8 +421,8 @@ dependencies = [
 name = "emusen-firmware"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
@@ -434,11 +431,15 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "emusen-disc",
- "emusen-dotnet",
+ "indexmap",
+ "jsonc-parser",
  "md-5",
  "memmap2",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
+ "time",
  "walkdir",
  "zip",
 ]
@@ -454,7 +455,6 @@ dependencies = [
 name = "emusen-library"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "emusen-systems",
@@ -466,7 +466,7 @@ name = "emusen-library-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -475,7 +475,6 @@ version = "0.1.0"
 dependencies = [
  "emusen-crystal",
  "emusen-disc",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
  "emusen-patch",
@@ -484,6 +483,7 @@ dependencies = [
  "emusen-systems",
  "emusen-tool-job",
  "libc",
+ "serde_json",
  "sha2",
 ]
 
@@ -542,7 +542,6 @@ dependencies = [
  "dianash-module",
  "emusen-core-host",
  "emusen-crystal",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-savemedia",
  "emusen-systems",
@@ -573,8 +572,8 @@ dependencies = [
 name = "emusen-patch"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
@@ -591,7 +590,6 @@ dependencies = [
  "emusen-debug",
  "emusen-dianash",
  "emusen-disc",
- "emusen-dotnet",
  "emusen-endymion",
  "emusen-firmware",
  "emusen-galaxia",
@@ -627,7 +625,7 @@ version = "0.1.0"
 name = "emusen-recorder"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
+ "time",
  "zip",
 ]
 
@@ -635,7 +633,6 @@ dependencies = [
 name = "emusen-savemedia"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
 ]
@@ -644,7 +641,6 @@ dependencies = [
 name = "emusen-scrape"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
  "emusen-net",
@@ -662,7 +658,7 @@ name = "emusen-scrape-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
+ "serde_json",
 ]
 
 [[package]]
@@ -670,7 +666,6 @@ name = "emusen-serenity"
 version = "0.1.0"
 dependencies = [
  "ash",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-sqlite",
  "libc",
@@ -690,7 +685,6 @@ dependencies = [
 name = "emusen-session-service"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "serde_json",
 ]
 
@@ -715,7 +709,6 @@ version = "0.1.0"
 dependencies = [
  "beryl-sms-colours",
  "emusen-6502",
- "emusen-dotnet",
  "emusen-mcd-bram",
  "emusen-mips",
  "emusen-n64-pak",
@@ -735,9 +728,9 @@ name = "emusen-trace"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "emusen-session-service",
  "emusen-suggest",
+ "serde_json",
 ]
 
 [[package]]
@@ -850,6 +843,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -915,6 +910,15 @@ checksum = "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a"
 dependencies = [
  "cfg-if",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "jsonc-parser"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ecded084f9b9a718d39668a42657c32253663d1f6afb3fbb9134f0305f73f48"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
@@ -1017,6 +1021,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "num-conv"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "521739c6d2bac4aa25192232afe6841231376b2b26d4d9fae5ecf8ca5772e441"
+
+[[package]]
 name = "num-derive"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1034,6 +1044,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cabcc654086861f9e1bc5115258de62ef92c79b20f4615a1b0cc57c4e82027d4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -1059,6 +1078,12 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
+name = "powerfmt"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a6394b9e965e73d0a289ee54f589087e2c676aedf60885baf52c76b771e4958"
 
 [[package]]
 name = "proc-macro2"
@@ -1432,6 +1457,38 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.9",
+]
+
+[[package]]
+name = "time"
+version = "0.3.55"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
+dependencies = [
+ "deranged",
+ "libc",
+ "num-conv",
+ "num_threads",
+ "powerfmt",
+ "serde_core",
+ "time-core",
+ "time-macros",
+]
+
+[[package]]
+name = "time-core"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e1c906769ad99c88eaa54e728060edef082f8e358ff32030cb7c7d315e81109"
+
+[[package]]
+name = "time-macros"
+version = "0.2.32"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e689342a48d2ea927c87ea50cabf8594854bf940e9310208848d680d668ed85"
+dependencies = [
+ "num-conv",
+ "time-core",
 ]
 
 [[package]]

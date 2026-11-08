@@ -6,7 +6,7 @@
 use std::path::Path;
 use crate::Error;
 use crate::kinds;
-use emusen_dotnet::date::{instant, utc_millis};
+use emusen_galaxia::clock::{instant, utc_millis};
 use emusen_sqlite::{Bound, Connection, Row, Sqlite};
 use std::sync::Arc;
 

@@ -4405,6 +4405,8 @@ and `_defaults`; the C# classes that read and wrote them bind what crosses and n
 the settings file and the five stores by number (`stores::File`), so a front end copies neither `appsettings.json` nor
 `games.db`; the games service opens games.db through it. Endymion gains its first dependency on Galaxia (the config
 directory and `config_json`) and one on `emusen-suggest`. Platform interface 40; the C# twin's number with it.
+The runtime's `states.db` opens at `File::States`'s path too since 2026-11-08 (`EmuSen_Galaxia.md` §3), the same
+path it joined itself before.
 
 ## 48. Interface 41, 2026-11-08: the printing on a pad's buttons
 

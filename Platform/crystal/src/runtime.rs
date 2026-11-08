@@ -496,11 +496,7 @@ impl Runtime {
     /// states.db, opened where the data folder now has it, for `call`; none where no SQLite was lent.
     pub fn with_records<T>(&self, call: impl FnOnce(Option<&crate::states::StateRecords>) -> Result<T, Refused>) -> Result<T, Refused> {
         let Some(sqlite) = &self.sqlite else { return call(None) };
-        let at = {
-            let tree = emusen_galaxia::tree::tree();
-            let library = tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-            library.join(crate::states::FILE_NAME).to_string_lossy().into_owned()
-        };
+        let at = states_db(&emusen_galaxia::tree::tree());
         let mut held = self.records.lock().unwrap_or_else(|p| p.into_inner());
         if held.as_ref().is_none_or(|(p, _)| *p != at) {
             *held = None;
@@ -569,6 +565,11 @@ fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> D
     Discovery::scan_with_player(directories, player, development).with_hosted(hosted)
 }
 
+/// states.db's path, Galaxia's as `emusen_galaxia_file` answers it (EmuSen_Galaxia.md's store list).
+fn states_db(tree: &emusen_galaxia::tree::Tree) -> String {
+    emusen_galaxia::stores::File::States.path(tree).to_string_lossy().into_owned()
+}
+
 /// The approvals' file in the config directory, so a test's follows its config override (EmuSen_Backend.md §29.40.3).
 fn approvals_path() -> PathBuf {
     emusen_galaxia::tree::tree().config_path(None, trust::APPROVALS)
@@ -620,4 +621,19 @@ fn look(j: &mut Json, l: &emusen_systems::Look) {
         .f64("cap", l.cap)
         .int("moons", i64::from(l.moons))
         .end_object();
+}
+
+#[cfg(test)]
+mod tests {
+    use emusen_galaxia::tree::Tree;
+
+    #[test]
+    fn states_db_is_where_an_existing_install_keeps_it() {
+        let home = std::path::PathBuf::from("/srv/emusen-install/Home");
+        let portable = Tree { data_override: Some(home.clone()), ..Tree::default() };
+        assert_eq!(super::states_db(&portable), home.join("Library").join("states.db").to_string_lossy());
+        let installed = Tree::default();
+        let before = installed.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default().join("states.db");
+        assert_eq!(super::states_db(&installed), before.to_string_lossy());
+    }
 }

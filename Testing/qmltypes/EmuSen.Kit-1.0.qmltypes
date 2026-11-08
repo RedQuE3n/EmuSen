@@ -79,7 +79,7 @@ Module {
     }
     Component {
         file: "body.cxxqt.h"
-        lineNumber: 106
+        lineNumber: 124
         name: "BodyShapes"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -89,7 +89,7 @@ Module {
             name: "BodyRole"
             isScoped: true
             type: "int"
-            lineNumber: 121
+            lineNumber: 141
             values: [
                 "Outline",
                 "FillInk",
@@ -117,7 +117,7 @@ Module {
             write: "setShape"
             notify: "shapeChanged"
             index: 0
-            lineNumber: 111
+            lineNumber: 129
         }
         Property {
             name: "hue"
@@ -126,7 +126,7 @@ Module {
             write: "setHue"
             notify: "hueChanged"
             index: 1
-            lineNumber: 112
+            lineNumber: 130
         }
         Property {
             name: "focused"
@@ -135,7 +135,7 @@ Module {
             write: "setFocused"
             notify: "focusedChanged"
             index: 2
-            lineNumber: 113
+            lineNumber: 131
         }
         Property {
             name: "craters"
@@ -144,7 +144,7 @@ Module {
             write: "setCraters"
             notify: "cratersChanged"
             index: 3
-            lineNumber: 114
+            lineNumber: 132
         }
         Property {
             name: "bands"
@@ -153,7 +153,7 @@ Module {
             write: "setBands"
             notify: "bandsChanged"
             index: 4
-            lineNumber: 115
+            lineNumber: 133
         }
         Property {
             name: "cap"
@@ -162,7 +162,7 @@ Module {
             write: "setCap"
             notify: "capChanged"
             index: 5
-            lineNumber: 116
+            lineNumber: 134
         }
         Property {
             name: "ring"
@@ -171,7 +171,7 @@ Module {
             write: "setRing"
             notify: "ringChanged"
             index: 6
-            lineNumber: 117
+            lineNumber: 135
         }
         Property {
             name: "moons"
@@ -180,15 +180,33 @@ Module {
             write: "setMoons"
             notify: "moonsChanged"
             index: 7
-            lineNumber: 118
+            lineNumber: 136
+        }
+        Property {
+            name: "inks"
+            type: "QString"
+            read: "getInks"
+            write: "setInks"
+            notify: "inksChanged"
+            index: 8
+            lineNumber: 137
+        }
+        Property {
+            name: "world"
+            type: "QString"
+            read: "getWorld"
+            write: "setWorld"
+            notify: "worldChanged"
+            index: 9
+            lineNumber: 138
         }
         Property {
             name: "unitWidth"
             type: "double"
             read: "getUnitWidth"
             notify: "unitWidthChanged"
-            index: 8
-            lineNumber: 119
+            index: 10
+            lineNumber: 139
             isReadonly: true
         }
         Property {
@@ -196,65 +214,77 @@ Module {
             type: "double"
             read: "getUnitHeight"
             notify: "unitHeightChanged"
-            index: 9
-            lineNumber: 120
+            index: 11
+            lineNumber: 140
             isReadonly: true
         }
-        Signal { name: "shapeChanged"; lineNumber: 163 }
-        Signal { name: "hueChanged"; lineNumber: 164 }
-        Signal { name: "focusedChanged"; lineNumber: 165 }
-        Signal { name: "cratersChanged"; lineNumber: 166 }
-        Signal { name: "bandsChanged"; lineNumber: 167 }
-        Signal { name: "capChanged"; lineNumber: 168 }
-        Signal { name: "ringChanged"; lineNumber: 169 }
-        Signal { name: "moonsChanged"; lineNumber: 170 }
-        Signal { name: "unitWidthChanged"; lineNumber: 171 }
-        Signal { name: "unitHeightChanged"; lineNumber: 172 }
+        Signal { name: "shapeChanged"; lineNumber: 187 }
+        Signal { name: "hueChanged"; lineNumber: 188 }
+        Signal { name: "focusedChanged"; lineNumber: 189 }
+        Signal { name: "cratersChanged"; lineNumber: 190 }
+        Signal { name: "bandsChanged"; lineNumber: 191 }
+        Signal { name: "capChanged"; lineNumber: 192 }
+        Signal { name: "ringChanged"; lineNumber: 193 }
+        Signal { name: "moonsChanged"; lineNumber: 194 }
+        Signal { name: "inksChanged"; lineNumber: 195 }
+        Signal { name: "worldChanged"; lineNumber: 196 }
+        Signal { name: "unitWidthChanged"; lineNumber: 197 }
+        Signal { name: "unitHeightChanged"; lineNumber: 198 }
         Method {
             name: "setShape"
-            lineNumber: 146
+            lineNumber: 166
             Parameter { name: "value"; type: "Bodies::BodyShape" }
         }
         Method {
             name: "setHue"
-            lineNumber: 148
+            lineNumber: 168
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setFocused"
-            lineNumber: 150
+            lineNumber: 170
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setCraters"
-            lineNumber: 152
+            lineNumber: 172
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setBands"
-            lineNumber: 154
+            lineNumber: 174
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setCap"
-            lineNumber: 156
+            lineNumber: 176
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setRing"
-            lineNumber: 158
+            lineNumber: 178
             Parameter { name: "value"; type: "Rings::Ring" }
         }
         Method {
             name: "setMoons"
-            lineNumber: 160
+            lineNumber: 180
             Parameter { name: "value"; type: "int" }
+        }
+        Method {
+            name: "setInks"
+            lineNumber: 182
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setWorld"
+            lineNumber: 184
+            Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 173
+            lineNumber: 199
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -262,13 +292,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 174
+            lineNumber: 200
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 175
+            lineNumber: 201
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
@@ -623,7 +653,7 @@ Module {
     }
     Component {
         file: "moonrise.cxxqt.h"
-        lineNumber: 412
+        lineNumber: 421
         name: "MoonriseModel"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -633,7 +663,7 @@ Module {
             name: "PlanetRole"
             isScoped: true
             type: "int"
-            lineNumber: 473
+            lineNumber: 483
             values: [
                 "PlanetX",
                 "PlanetY",
@@ -660,7 +690,8 @@ Module {
                 "RimInk",
                 "FocusX",
                 "FocusY",
-                "FocusRadius"
+                "FocusRadius",
+                "Palette"
             ]
         }
         Property {
@@ -670,7 +701,7 @@ Module {
             write: "setWidth"
             notify: "widthChanged"
             index: 0
-            lineNumber: 417
+            lineNumber: 426
         }
         Property {
             name: "height"
@@ -679,7 +710,7 @@ Module {
             write: "setHeight"
             notify: "heightChanged"
             index: 1
-            lineNumber: 418
+            lineNumber: 427
         }
         Property {
             name: "title"
@@ -688,7 +719,7 @@ Module {
             write: "setTitle"
             notify: "titleChanged"
             index: 2
-            lineNumber: 419
+            lineNumber: 428
         }
         Property {
             name: "caption"
@@ -697,7 +728,16 @@ Module {
             write: "setCaption"
             notify: "captionChanged"
             index: 3
-            lineNumber: 420
+            lineNumber: 429
+        }
+        Property {
+            name: "worlds"
+            type: "QString"
+            read: "getWorlds"
+            write: "setWorlds"
+            notify: "worldsChanged"
+            index: 4
+            lineNumber: 430
         }
         Property {
             name: "hues"
@@ -705,15 +745,15 @@ Module {
             read: "getHues"
             write: "setHues"
             notify: "huesChanged"
-            index: 4
-            lineNumber: 421
+            index: 5
+            lineNumber: 431
         }
         Property {
             name: "seed"
             type: "int"
             read: "getSeed"
-            index: 5
-            lineNumber: 422
+            index: 6
+            lineNumber: 432
             isReadonly: true
             isPropertyConstant: true
         }
@@ -721,8 +761,8 @@ Module {
             name: "starCount"
             type: "int"
             read: "getStarCount"
-            index: 6
-            lineNumber: 423
+            index: 7
+            lineNumber: 433
             isReadonly: true
             isPropertyConstant: true
         }
@@ -730,8 +770,8 @@ Module {
             name: "length"
             type: "double"
             read: "getLength"
-            index: 7
-            lineNumber: 424
+            index: 8
+            lineNumber: 434
             isReadonly: true
             isPropertyConstant: true
         }
@@ -740,8 +780,8 @@ Module {
             type: "double"
             read: "getTime"
             notify: "timeChanged"
-            index: 8
-            lineNumber: 425
+            index: 9
+            lineNumber: 435
             isReadonly: true
         }
         Property {
@@ -749,8 +789,8 @@ Module {
             type: "double"
             read: "getDraftTime"
             notify: "draftTimeChanged"
-            index: 9
-            lineNumber: 426
+            index: 10
+            lineNumber: 436
             isReadonly: true
         }
         Property {
@@ -758,8 +798,8 @@ Module {
             type: "double"
             read: "getUnit"
             notify: "unitChanged"
-            index: 10
-            lineNumber: 427
+            index: 11
+            lineNumber: 437
             isReadonly: true
         }
         Property {
@@ -767,8 +807,8 @@ Module {
             type: "bool"
             read: "getFinished"
             notify: "finishedChanged"
-            index: 11
-            lineNumber: 428
+            index: 12
+            lineNumber: 438
             isReadonly: true
         }
         Property {
@@ -776,8 +816,8 @@ Module {
             type: "double"
             read: "getStarsOpacity"
             notify: "starsOpacityChanged"
-            index: 12
-            lineNumber: 429
+            index: 13
+            lineNumber: 439
             isReadonly: true
         }
         Property {
@@ -785,8 +825,8 @@ Module {
             type: "double"
             read: "getMoonX"
             notify: "moonXChanged"
-            index: 13
-            lineNumber: 430
+            index: 14
+            lineNumber: 440
             isReadonly: true
         }
         Property {
@@ -794,8 +834,8 @@ Module {
             type: "double"
             read: "getMoonY"
             notify: "moonYChanged"
-            index: 14
-            lineNumber: 431
+            index: 15
+            lineNumber: 441
             isReadonly: true
         }
         Property {
@@ -803,8 +843,8 @@ Module {
             type: "double"
             read: "getMoonRadius"
             notify: "moonRadiusChanged"
-            index: 15
-            lineNumber: 432
+            index: 16
+            lineNumber: 442
             isReadonly: true
         }
         Property {
@@ -812,8 +852,8 @@ Module {
             type: "double"
             read: "getHaloOpacity"
             notify: "haloOpacityChanged"
-            index: 16
-            lineNumber: 433
+            index: 17
+            lineNumber: 443
             isReadonly: true
         }
         Property {
@@ -821,8 +861,8 @@ Module {
             type: "double"
             read: "getHaloInnerRadius"
             notify: "haloInnerRadiusChanged"
-            index: 17
-            lineNumber: 434
+            index: 18
+            lineNumber: 444
             isReadonly: true
         }
         Property {
@@ -830,8 +870,8 @@ Module {
             type: "double"
             read: "getHaloRadius"
             notify: "haloRadiusChanged"
-            index: 18
-            lineNumber: 435
+            index: 19
+            lineNumber: 445
             isReadonly: true
         }
         Property {
@@ -839,8 +879,8 @@ Module {
             type: "double"
             read: "getOutlineDrawn"
             notify: "outlineDrawnChanged"
-            index: 19
-            lineNumber: 436
+            index: 20
+            lineNumber: 446
             isReadonly: true
         }
         Property {
@@ -848,8 +888,8 @@ Module {
             type: "double"
             read: "getOutlineWidth"
             notify: "outlineWidthChanged"
-            index: 20
-            lineNumber: 437
+            index: 21
+            lineNumber: 447
             isReadonly: true
         }
         Property {
@@ -857,8 +897,8 @@ Module {
             type: "double"
             read: "getFill"
             notify: "fillChanged"
-            index: 21
-            lineNumber: 438
+            index: 22
+            lineNumber: 448
             isReadonly: true
         }
         Property {
@@ -866,8 +906,8 @@ Module {
             type: "double"
             read: "getLitFocusX"
             notify: "litFocusXChanged"
-            index: 22
-            lineNumber: 439
+            index: 23
+            lineNumber: 449
             isReadonly: true
         }
         Property {
@@ -875,8 +915,8 @@ Module {
             type: "double"
             read: "getLitFocusY"
             notify: "litFocusYChanged"
-            index: 23
-            lineNumber: 440
+            index: 24
+            lineNumber: 450
             isReadonly: true
         }
         Property {
@@ -884,8 +924,8 @@ Module {
             type: "double"
             read: "getLitFocusRadius"
             notify: "litFocusRadiusChanged"
-            index: 24
-            lineNumber: 441
+            index: 25
+            lineNumber: 451
             isReadonly: true
         }
         Property {
@@ -893,8 +933,8 @@ Module {
             type: "double"
             read: "getLitRadius"
             notify: "litRadiusChanged"
-            index: 25
-            lineNumber: 442
+            index: 26
+            lineNumber: 452
             isReadonly: true
         }
         Property {
@@ -902,8 +942,8 @@ Module {
             type: "QVariant"
             read: "getShadowOutline"
             notify: "shadowOutlineChanged"
-            index: 26
-            lineNumber: 443
+            index: 27
+            lineNumber: 453
             isReadonly: true
         }
         Property {
@@ -911,8 +951,8 @@ Module {
             type: "bool"
             read: "getSweepVisible"
             notify: "sweepVisibleChanged"
-            index: 27
-            lineNumber: 444
+            index: 28
+            lineNumber: 454
             isReadonly: true
         }
         Property {
@@ -920,8 +960,8 @@ Module {
             type: "double"
             read: "getSweepX"
             notify: "sweepXChanged"
-            index: 28
-            lineNumber: 445
+            index: 29
+            lineNumber: 455
             isReadonly: true
         }
         Property {
@@ -929,8 +969,8 @@ Module {
             type: "double"
             read: "getSweepY"
             notify: "sweepYChanged"
-            index: 29
-            lineNumber: 446
+            index: 30
+            lineNumber: 456
             isReadonly: true
         }
         Property {
@@ -938,8 +978,8 @@ Module {
             type: "double"
             read: "getSweepWidth"
             notify: "sweepWidthChanged"
-            index: 30
-            lineNumber: 447
+            index: 31
+            lineNumber: 457
             isReadonly: true
         }
         Property {
@@ -947,8 +987,8 @@ Module {
             type: "double"
             read: "getSweepHeight"
             notify: "sweepHeightChanged"
-            index: 31
-            lineNumber: 448
+            index: 32
+            lineNumber: 458
             isReadonly: true
         }
         Property {
@@ -956,8 +996,8 @@ Module {
             type: "bool"
             read: "getLineVisible"
             notify: "lineVisibleChanged"
-            index: 32
-            lineNumber: 449
+            index: 33
+            lineNumber: 459
             isReadonly: true
         }
         Property {
@@ -965,8 +1005,8 @@ Module {
             type: "double"
             read: "getLineFromX"
             notify: "lineFromXChanged"
-            index: 33
-            lineNumber: 450
+            index: 34
+            lineNumber: 460
             isReadonly: true
         }
         Property {
@@ -974,8 +1014,8 @@ Module {
             type: "double"
             read: "getLineToX"
             notify: "lineToXChanged"
-            index: 34
-            lineNumber: 451
+            index: 35
+            lineNumber: 461
             isReadonly: true
         }
         Property {
@@ -983,8 +1023,8 @@ Module {
             type: "double"
             read: "getLineY"
             notify: "lineYChanged"
-            index: 35
-            lineNumber: 452
+            index: 36
+            lineNumber: 462
             isReadonly: true
         }
         Property {
@@ -992,8 +1032,8 @@ Module {
             type: "double"
             read: "getLineWidth"
             notify: "lineWidthChanged"
-            index: 36
-            lineNumber: 453
+            index: 37
+            lineNumber: 463
             isReadonly: true
         }
         Property {
@@ -1001,8 +1041,8 @@ Module {
             type: "double"
             read: "getLineOpacity"
             notify: "lineOpacityChanged"
-            index: 37
-            lineNumber: 454
+            index: 38
+            lineNumber: 464
             isReadonly: true
         }
         Property {
@@ -1010,8 +1050,8 @@ Module {
             type: "bool"
             read: "getWordsVisible"
             notify: "wordsVisibleChanged"
-            index: 38
-            lineNumber: 455
+            index: 39
+            lineNumber: 465
             isReadonly: true
         }
         Property {
@@ -1019,8 +1059,8 @@ Module {
             type: "double"
             read: "getWordsOpacity"
             notify: "wordsOpacityChanged"
-            index: 39
-            lineNumber: 456
+            index: 40
+            lineNumber: 466
             isReadonly: true
         }
         Property {
@@ -1028,8 +1068,8 @@ Module {
             type: "double"
             read: "getTitleSize"
             notify: "titleSizeChanged"
-            index: 40
-            lineNumber: 457
+            index: 41
+            lineNumber: 467
             isReadonly: true
         }
         Property {
@@ -1037,8 +1077,8 @@ Module {
             type: "double"
             read: "getTitleSpacing"
             notify: "titleSpacingChanged"
-            index: 41
-            lineNumber: 458
+            index: 42
+            lineNumber: 468
             isReadonly: true
         }
         Property {
@@ -1046,8 +1086,8 @@ Module {
             type: "double"
             read: "getTitleBaselineY"
             notify: "titleBaselineYChanged"
-            index: 42
-            lineNumber: 459
+            index: 43
+            lineNumber: 469
             isReadonly: true
         }
         Property {
@@ -1055,8 +1095,8 @@ Module {
             type: "double"
             read: "getCaptionSize"
             notify: "captionSizeChanged"
-            index: 43
-            lineNumber: 460
+            index: 44
+            lineNumber: 470
             isReadonly: true
         }
         Property {
@@ -1064,8 +1104,8 @@ Module {
             type: "double"
             read: "getCaptionSpacing"
             notify: "captionSpacingChanged"
-            index: 44
-            lineNumber: 461
+            index: 45
+            lineNumber: 471
             isReadonly: true
         }
         Property {
@@ -1073,16 +1113,16 @@ Module {
             type: "double"
             read: "getCaptionBaselineY"
             notify: "captionBaselineYChanged"
-            index: 45
-            lineNumber: 462
+            index: 46
+            lineNumber: 472
             isReadonly: true
         }
         Property {
             name: "haloInk"
             type: "QColor"
             read: "getHaloInk"
-            index: 46
-            lineNumber: 463
+            index: 47
+            lineNumber: 473
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1090,8 +1130,8 @@ Module {
             name: "haloEdgeInk"
             type: "QColor"
             read: "getHaloEdgeInk"
-            index: 47
-            lineNumber: 464
+            index: 48
+            lineNumber: 474
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1099,8 +1139,8 @@ Module {
             name: "outlineInk"
             type: "QColor"
             read: "getOutlineInk"
-            index: 48
-            lineNumber: 465
+            index: 49
+            lineNumber: 475
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1108,8 +1148,8 @@ Module {
             name: "litInnerInk"
             type: "QColor"
             read: "getLitInnerInk"
-            index: 49
-            lineNumber: 466
+            index: 50
+            lineNumber: 476
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1117,8 +1157,8 @@ Module {
             name: "litOuterInk"
             type: "QColor"
             read: "getLitOuterInk"
-            index: 50
-            lineNumber: 467
+            index: 51
+            lineNumber: 477
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1126,8 +1166,8 @@ Module {
             name: "shadowInk"
             type: "QColor"
             read: "getShadowInk"
-            index: 51
-            lineNumber: 468
+            index: 52
+            lineNumber: 478
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1135,8 +1175,8 @@ Module {
             name: "sweepInk"
             type: "QColor"
             read: "getSweepInk"
-            index: 52
-            lineNumber: 469
+            index: 53
+            lineNumber: 479
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1144,8 +1184,8 @@ Module {
             name: "lineInk"
             type: "QColor"
             read: "getLineInk"
-            index: 53
-            lineNumber: 470
+            index: 54
+            lineNumber: 480
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1153,8 +1193,8 @@ Module {
             name: "titleInk"
             type: "QColor"
             read: "getTitleInk"
-            index: 54
-            lineNumber: 471
+            index: 55
+            lineNumber: 481
             isReadonly: true
             isPropertyConstant: true
         }
@@ -1162,82 +1202,88 @@ Module {
             name: "captionInk"
             type: "QColor"
             read: "getCaptionInk"
-            index: 55
-            lineNumber: 472
+            index: 56
+            lineNumber: 482
             isReadonly: true
             isPropertyConstant: true
         }
-        Signal { name: "widthChanged"; lineNumber: 567 }
-        Signal { name: "heightChanged"; lineNumber: 568 }
-        Signal { name: "titleChanged"; lineNumber: 569 }
-        Signal { name: "captionChanged"; lineNumber: 570 }
-        Signal { name: "huesChanged"; lineNumber: 571 }
-        Signal { name: "timeChanged"; lineNumber: 572 }
-        Signal { name: "draftTimeChanged"; lineNumber: 573 }
-        Signal { name: "unitChanged"; lineNumber: 574 }
-        Signal { name: "finishedChanged"; lineNumber: 575 }
-        Signal { name: "starsOpacityChanged"; lineNumber: 576 }
-        Signal { name: "moonXChanged"; lineNumber: 577 }
-        Signal { name: "moonYChanged"; lineNumber: 578 }
-        Signal { name: "moonRadiusChanged"; lineNumber: 579 }
-        Signal { name: "haloOpacityChanged"; lineNumber: 580 }
-        Signal { name: "haloInnerRadiusChanged"; lineNumber: 581 }
-        Signal { name: "haloRadiusChanged"; lineNumber: 582 }
-        Signal { name: "outlineDrawnChanged"; lineNumber: 583 }
-        Signal { name: "outlineWidthChanged"; lineNumber: 584 }
-        Signal { name: "fillChanged"; lineNumber: 585 }
-        Signal { name: "litFocusXChanged"; lineNumber: 586 }
-        Signal { name: "litFocusYChanged"; lineNumber: 587 }
-        Signal { name: "litFocusRadiusChanged"; lineNumber: 588 }
-        Signal { name: "litRadiusChanged"; lineNumber: 589 }
-        Signal { name: "shadowOutlineChanged"; lineNumber: 590 }
-        Signal { name: "sweepVisibleChanged"; lineNumber: 591 }
-        Signal { name: "sweepXChanged"; lineNumber: 592 }
-        Signal { name: "sweepYChanged"; lineNumber: 593 }
-        Signal { name: "sweepWidthChanged"; lineNumber: 594 }
-        Signal { name: "sweepHeightChanged"; lineNumber: 595 }
-        Signal { name: "lineVisibleChanged"; lineNumber: 596 }
-        Signal { name: "lineFromXChanged"; lineNumber: 597 }
-        Signal { name: "lineToXChanged"; lineNumber: 598 }
-        Signal { name: "lineYChanged"; lineNumber: 599 }
-        Signal { name: "lineWidthChanged"; lineNumber: 600 }
-        Signal { name: "lineOpacityChanged"; lineNumber: 601 }
-        Signal { name: "wordsVisibleChanged"; lineNumber: 602 }
-        Signal { name: "wordsOpacityChanged"; lineNumber: 603 }
-        Signal { name: "titleSizeChanged"; lineNumber: 604 }
-        Signal { name: "titleSpacingChanged"; lineNumber: 605 }
-        Signal { name: "titleBaselineYChanged"; lineNumber: 606 }
-        Signal { name: "captionSizeChanged"; lineNumber: 607 }
-        Signal { name: "captionSpacingChanged"; lineNumber: 608 }
-        Signal { name: "captionBaselineYChanged"; lineNumber: 609 }
+        Signal { name: "widthChanged"; lineNumber: 580 }
+        Signal { name: "heightChanged"; lineNumber: 581 }
+        Signal { name: "titleChanged"; lineNumber: 582 }
+        Signal { name: "captionChanged"; lineNumber: 583 }
+        Signal { name: "worldsChanged"; lineNumber: 584 }
+        Signal { name: "huesChanged"; lineNumber: 585 }
+        Signal { name: "timeChanged"; lineNumber: 586 }
+        Signal { name: "draftTimeChanged"; lineNumber: 587 }
+        Signal { name: "unitChanged"; lineNumber: 588 }
+        Signal { name: "finishedChanged"; lineNumber: 589 }
+        Signal { name: "starsOpacityChanged"; lineNumber: 590 }
+        Signal { name: "moonXChanged"; lineNumber: 591 }
+        Signal { name: "moonYChanged"; lineNumber: 592 }
+        Signal { name: "moonRadiusChanged"; lineNumber: 593 }
+        Signal { name: "haloOpacityChanged"; lineNumber: 594 }
+        Signal { name: "haloInnerRadiusChanged"; lineNumber: 595 }
+        Signal { name: "haloRadiusChanged"; lineNumber: 596 }
+        Signal { name: "outlineDrawnChanged"; lineNumber: 597 }
+        Signal { name: "outlineWidthChanged"; lineNumber: 598 }
+        Signal { name: "fillChanged"; lineNumber: 599 }
+        Signal { name: "litFocusXChanged"; lineNumber: 600 }
+        Signal { name: "litFocusYChanged"; lineNumber: 601 }
+        Signal { name: "litFocusRadiusChanged"; lineNumber: 602 }
+        Signal { name: "litRadiusChanged"; lineNumber: 603 }
+        Signal { name: "shadowOutlineChanged"; lineNumber: 604 }
+        Signal { name: "sweepVisibleChanged"; lineNumber: 605 }
+        Signal { name: "sweepXChanged"; lineNumber: 606 }
+        Signal { name: "sweepYChanged"; lineNumber: 607 }
+        Signal { name: "sweepWidthChanged"; lineNumber: 608 }
+        Signal { name: "sweepHeightChanged"; lineNumber: 609 }
+        Signal { name: "lineVisibleChanged"; lineNumber: 610 }
+        Signal { name: "lineFromXChanged"; lineNumber: 611 }
+        Signal { name: "lineToXChanged"; lineNumber: 612 }
+        Signal { name: "lineYChanged"; lineNumber: 613 }
+        Signal { name: "lineWidthChanged"; lineNumber: 614 }
+        Signal { name: "lineOpacityChanged"; lineNumber: 615 }
+        Signal { name: "wordsVisibleChanged"; lineNumber: 616 }
+        Signal { name: "wordsOpacityChanged"; lineNumber: 617 }
+        Signal { name: "titleSizeChanged"; lineNumber: 618 }
+        Signal { name: "titleSpacingChanged"; lineNumber: 619 }
+        Signal { name: "titleBaselineYChanged"; lineNumber: 620 }
+        Signal { name: "captionSizeChanged"; lineNumber: 621 }
+        Signal { name: "captionSpacingChanged"; lineNumber: 622 }
+        Signal { name: "captionBaselineYChanged"; lineNumber: 623 }
         Method {
             name: "setWidth"
-            lineNumber: 507
+            lineNumber: 518
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setHeight"
-            lineNumber: 509
+            lineNumber: 520
             Parameter { name: "value"; type: "double" }
         }
         Method {
             name: "setTitle"
-            lineNumber: 511
+            lineNumber: 522
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setCaption"
-            lineNumber: 513
+            lineNumber: 524
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "setWorlds"
+            lineNumber: 526
             Parameter { name: "value"; type: "QString" }
         }
         Method {
             name: "setHues"
-            lineNumber: 515
+            lineNumber: 528
             Parameter { name: "value"; type: "QList_f64" }
         }
         Method {
             name: "addBody"
-            lineNumber: 610
+            lineNumber: 624
             Parameter { name: "name"; type: "QString" }
             Parameter { name: "hue"; type: "double" }
             Parameter { name: "shape"; type: "Bodies::BodyShape" }
@@ -1247,17 +1293,17 @@ Module {
             Parameter { name: "ring"; type: "Rings::Ring" }
             Parameter { name: "moons"; type: "int" }
         }
-        Method { name: "clearBodies"; lineNumber: 611 }
+        Method { name: "clearBodies"; lineNumber: 625 }
         Method {
             name: "tick"
-            lineNumber: 612
+            lineNumber: 626
             Parameter { name: "seconds"; type: "double" }
         }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 613
+            lineNumber: 627
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -1265,13 +1311,13 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 614
+            lineNumber: 628
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 615
+            lineNumber: 629
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }

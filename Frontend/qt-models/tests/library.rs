@@ -137,7 +137,15 @@ fn a_failed_refresh_keeps_the_rows_and_shows_the_source_s_words() {
 fn moonrise_has_a_planet_for_each_system_with_an_engine_games_or_not() {
     let mut systems = fake().systems;
     systems.push(SystemRow { engines: Vec::new(), ..system("pico", "Pico", 99.0, "") });
-    assert_eq!(emusen_qt_models::library::splash_hues(&systems), vec![330.0, 38.0, 212.0], "in the table's order, none without an engine");
+    systems[0].look.palette = vec!["#FFF8FB".into(), "#F3CFE3".into(), "#A9789F".into()];
+    systems[0].look.craters = 0.28;
+    systems[1].look.body = "gem".into();
+    let worlds = emusen_qt_models::library::splash_worlds(&systems);
+    assert_eq!(
+        worlds,
+        vec!["330 planet 0.28 0 0 none 0 #FFF8FB #F3CFE3 #A9789F", "38 gem 0 0 0 none 0", "212 planet 0 0 0 none 0"],
+        "in the table's order, each from the table's look, none without an engine"
+    );
     assert_eq!(emusen_qt_models::words::splash_caption(3), "3 CONSOLES");
     assert_eq!(emusen_qt_models::words::splash_caption(1), "1 CONSOLE");
     assert_eq!(emusen_qt_models::words::counted(1566, "game", "games"), "1,566 games");

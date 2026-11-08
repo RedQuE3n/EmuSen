@@ -69,6 +69,7 @@ pub mod qobject {
         FocusX,
         FocusY,
         FocusRadius,
+        Palette,
     }
 
     #[auto_cxx_name]
@@ -80,6 +81,7 @@ pub mod qobject {
         #[qproperty(f64, height)]
         #[qproperty(QString, title)]
         #[qproperty(QString, caption)]
+        #[qproperty(QString, worlds)]
         #[qproperty(QList_f64, hues)]
         #[qproperty(i32, seed, READ, CONSTANT)]
         #[qproperty(i32, star_count, READ, CONSTANT)]
@@ -191,7 +193,7 @@ pub mod qobject {
 
 use qobject::PlanetRole;
 
-pub const ROLE_NAMES: [(PlanetRole, &str); 26] = [
+pub const ROLE_NAMES: [(PlanetRole, &str); 27] = [
     (PlanetRole::PlanetX, "planetX"),
     (PlanetRole::PlanetY, "planetY"),
     (PlanetRole::PlanetRadius, "planetRadius"),
@@ -218,6 +220,7 @@ pub const ROLE_NAMES: [(PlanetRole, &str); 26] = [
     (PlanetRole::FocusX, "focusX"),
     (PlanetRole::FocusY, "focusY"),
     (PlanetRole::FocusRadius, "focusRadius"),
+    (PlanetRole::Palette, "inks"),
 ];
 
 pub struct MoonriseModelRust {
@@ -225,6 +228,7 @@ pub struct MoonriseModelRust {
     height: f64,
     title: QString,
     caption: QString,
+    worlds: QString,
     hues: QList<f64>,
     seed: i32,
     star_count: i32,
@@ -292,6 +296,7 @@ impl Default for MoonriseModelRust {
             height: 0.0,
             title: QString::default(),
             caption: QString::default(),
+            worlds: QString::default(),
             hues: QList::default(),
             seed: timeline.seed as i32,
             star_count: timeline.star_count as i32,
@@ -407,6 +412,18 @@ impl cxx_qt::Initialize for qobject::MoonriseModel {
             .on_hues_changed(|mut this| {
                 let bodies: Vec<SplashBody> =
                     this.hues.iter().map(|hue| SplashBody { name: String::new(), hue: *hue, body: None }).collect();
+                let mut rust = this.as_mut().rust_mut();
+                rust.bodies = bodies;
+                rust.splash = None;
+            })
+            .release();
+        // `worlds` is the declarative way to a row of drawn worlds, one line each (EmuSen_Kit.md §7.16).
+        self.as_mut()
+            .on_worlds_changed(|mut this| {
+                let bodies: Vec<SplashBody> = emusen_kit_core::world::parse_worlds(&this.worlds.to_string())
+                    .into_iter()
+                    .map(|(hue, body)| SplashBody { name: String::new(), hue, body: (body != WorldBody::PLAIN).then_some(body) })
+                    .collect();
                 let mut rust = this.as_mut().rust_mut();
                 rust.bodies = bodies;
                 rust.splash = None;
@@ -553,6 +570,7 @@ impl qobject::MoonriseModel {
             PlanetRole::FocusX => QVariant::from(&(planet.focus[0] - planet.centre[0] + planet.radius)),
             PlanetRole::FocusY => QVariant::from(&(planet.focus[1] - planet.centre[1] + planet.radius)),
             PlanetRole::FocusRadius => QVariant::from(&planet.focus_radius),
+            PlanetRole::Palette => QVariant::from(&QString::from(crate::world::palette_words(body.palette))),
             _ => QVariant::default(),
         }
     }

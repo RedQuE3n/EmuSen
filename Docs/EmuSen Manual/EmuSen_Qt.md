@@ -832,9 +832,12 @@ press is the splash's alone: while it shows it holds the focus, so the frame's `
 With the setting off it is never shown. **Words**: `Words`, a QML singleton over `words.rs`, holds the screens' fixed
 words, so a QML file names a word and never writes one (§1.3); `words::counted` writes "1,566 games" as the mockups do.
 
-Differences from the C# splash, named: the planets are the draft's plain discs in their hues, not each console's body
-(§24.6 there), since the kit's `addBody` is an invokable a view cannot call in a loop under §1.3; a `bodies` list model
-the splash reads is the change, owed. Reduced motion (the finished frame held still) is not yet read from the settings,
+**The bodies** (decided 2026-11-08 by the tester, `EmuSen_Interface.md` §24.6): the splash draws each console's body,
+as its tile does. `library::world_of` reads a console's body from the systems table's look, the one owner (its shape,
+its three colours where the table gives three, its craters, bands, cap and moons), and writes it as the kit's world line
+(`EmuSen_Kit.md` §7.16); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
+hands them to `Moonrise.worlds`, and every console's row carries its line as the role `world`. The draft stays the
+splash's oracle for everything else. Differences from the C# splash, named: reduced motion (the finished frame held still) is not yet read from the settings,
 and the skip takes every key, Tab and Shift included.
 
 **Held to** (measured 2026-11-08): `tests/start.rs` (2: the library's path in its order; the splash on unless turned off),
@@ -842,7 +845,9 @@ and the skip takes every key, Tab and Shift included.
 window, runs once the systems arrive with a caption counting them, a pad press finishes it, it goes once the library is
 read, Home holds the focus and the library's selection is unmoved; nothing logged; the scenes keep `qml-rules` and
 `qmllint`), and the library view's test of the planets (a system with no engine has none, in the table's order) and the
-counted words. Three seeded faults, each reverted: every system given a planet failed the library test; the splash
+counted words; since the bodies, the worlds' lines in the table's order from each look, with the NES's palette and
+a gem. Seeded faults, each reverted: every system given a planet failed the library test; the palette dropped by
+`world_of` failed it; the splash
 deaf to the pad failed the program test (the splash never finished); the setting read inverted failed `start.rs`.
 
 **The mockups as numbers, step 2.** `Testing/mockups/Consoles.mockup.spec`, `Home.mockup.spec` and `Grid.mockup.spec`,

@@ -4,6 +4,7 @@
 
 use crate::keyed::{Keyed, KeyedRows};
 use emusen_crystal_client::shapes::SystemRow;
+use emusen_kit_core::world::{hex, shape_of, world_line, WorldBody, WorldRing};
 use emusen_platform_client::library::GameFile;
 
 /// What the library view reads, from the client crates or a test's fake.
@@ -49,6 +50,8 @@ pub struct LibraryRow {
     pub year: i32,
     /// The engine the console runs by default: the first the runtime lists for it.
     pub engine: String,
+    /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.16).
+    pub world: String,
 }
 
 impl Keyed for LibraryRow {
@@ -86,14 +89,31 @@ pub fn rows(systems: &[SystemRow], games: &[GameFile], favourites: usize, recent
             maker: s.manufacturer.clone(),
             year: s.release_year,
             engine: s.engines.first().cloned().unwrap_or_default(),
+            world: world_line(s.look.hue, &world_of(s)),
         });
     }
     out
 }
 
-/// Moonrise's planets: one hue for each system the table lists with an engine, in the table's order (EmuSen_Interface.md §22).
-pub fn splash_hues(systems: &[SystemRow]) -> Vec<f64> {
-    systems.iter().filter(|s| !s.engines.is_empty()).map(|s| s.look.hue).collect()
+/// A console's body from the systems table's look, the one owner of which console is which body (EmuSen_Interface.md
+/// §24.6): its shape, its three colours where the table gives three, and its features.
+pub fn world_of(s: &SystemRow) -> WorldBody {
+    let colours: Vec<_> = s.look.palette.iter().filter_map(|c| hex(c)).collect();
+    WorldBody {
+        shape: shape_of(&s.look.body),
+        palette: <[_; 3]>::try_from(colours).ok(),
+        craters: s.look.craters,
+        bands: s.look.bands,
+        cap: s.look.cap,
+        ring: WorldRing::None,
+        moons: s.look.moons.min(2) as u8,
+    }
+}
+
+/// Moonrise's planets: one world for each system the table lists with an engine, in the table's order, each the body its
+/// tile shows (EmuSen_Interface.md §22, §24.6).
+pub fn splash_worlds(systems: &[SystemRow]) -> Vec<String> {
+    systems.iter().filter(|s| !s.engines.is_empty()).map(|s| world_line(s.look.hue, &world_of(s))).collect()
 }
 
 /// What one refresh read: the rows, or the words for why it could not.

@@ -2,10 +2,10 @@
 //! Qt. A refresh runs off the GUI thread and comes back through qt_thread().queue, the one way in.
 
 use crate::clients::ClientSource;
-use crate::library::{refresh, splash_hues, LibrarySource, LibraryView, Refreshed};
+use crate::library::{refresh, splash_worlds, LibrarySource, LibraryView, Refreshed};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 use std::sync::Arc;
 
 #[cxx_qt::bridge]
@@ -39,6 +39,7 @@ pub mod qobject {
         Maker,
         Year,
         Engine,
+        World,
     }
 
     extern "RustQt" {
@@ -50,7 +51,7 @@ pub mod qobject {
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(bool, loading, READ, NOTIFY)]
         #[qproperty(QString, platform_library, cxx_name = "platformLibrary")]
-        #[qproperty(QVariant, splash_hues, cxx_name = "splashHues", READ, NOTIFY)]
+        #[qproperty(QString, splash_worlds, cxx_name = "splashWorlds", READ, NOTIFY)]
         #[qproperty(i32, splash_planets, cxx_name = "splashPlanets", READ, NOTIFY)]
         #[qproperty(QString, splash_caption, cxx_name = "splashCaption", READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
@@ -103,7 +104,7 @@ pub struct LibraryModelRust {
     problem: QString,
     loading: bool,
     platform_library: QString,
-    splash_hues: QVariant,
+    splash_worlds: QString,
     splash_planets: i32,
     splash_caption: QString,
     view: LibraryView,
@@ -118,7 +119,7 @@ impl Default for LibraryModelRust {
             problem: QString::default(),
             loading: false,
             platform_library: QString::default(),
-            splash_hues: QVariant::from(&QList::<f64>::default()),
+            splash_worlds: QString::default(),
             splash_planets: 0,
             splash_caption: QString::default(),
             view: LibraryView::empty(),
@@ -150,6 +151,7 @@ impl qobject::LibraryModel {
             Role::Maker => text(&row.maker),
             Role::Year => QVariant::from(&row.year),
             Role::Engine => text(&row.engine),
+            Role::World => text(&row.world),
             _ => QVariant::default(),
         }
     }
@@ -166,6 +168,7 @@ impl qobject::LibraryModel {
             (Role::Maker, "maker"),
             (Role::Year, "year"),
             (Role::Engine, "engine"),
+            (Role::World, "world"),
         ];
         for (role, name) in names {
             roles.insert(role.repr, QByteArray::from(name));
@@ -208,8 +211,8 @@ impl qobject::LibraryModel {
                         let source: Arc<dyn LibrarySource> = Arc::new(source);
                         // The systems come before the scan, so Moonrise's planets do not wait for the games.
                         if let Ok(systems) = source.systems() {
-                            let hues = splash_hues(&systems);
-                            let _ = qt.queue(move |model| model.show_splash(hues));
+                            let worlds = splash_worlds(&systems);
+                            let _ = qt.queue(move |model| model.show_splash(worlds));
                         }
                         let refreshed = refresh(source.as_ref());
                         (Some(source), refreshed)
@@ -237,17 +240,12 @@ impl qobject::LibraryModel {
         self.publish();
     }
 
-    /// Moonrise's planets and its caption, from the systems.
-    fn show_splash(mut self: Pin<&mut Self>, hues: Vec<f64>) {
-        let caption = QString::from(crate::words::splash_caption(hues.len()));
-        let planets = hues.len() as i32;
-        let mut list = QList::<f64>::default();
-        for hue in hues {
-            list.append(hue);
-        }
-        // A variant holding the list, which QML reads as a list of numbers.
-        self.as_mut().rust_mut().splash_hues = QVariant::from(&list);
-        self.as_mut().splash_hues_changed();
+    /// Moonrise's worlds, one line each, and its caption, from the systems.
+    fn show_splash(mut self: Pin<&mut Self>, worlds: Vec<String>) {
+        let caption = QString::from(crate::words::splash_caption(worlds.len()));
+        let planets = worlds.len() as i32;
+        self.as_mut().rust_mut().splash_worlds = QString::from(worlds.join("\n"));
+        self.as_mut().splash_worlds_changed();
         self.as_mut().rust_mut().splash_planets = planets;
         self.as_mut().splash_planets_changed();
         self.as_mut().rust_mut().splash_caption = caption;

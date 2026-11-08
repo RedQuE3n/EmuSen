@@ -14,6 +14,8 @@ Item {
     property alias cap: shapes.cap
     property alias ring: shapes.ring
     property alias moons: shapes.moons
+    property alias inks: shapes.inks
+    property alias world: shapes.world
     implicitWidth: shapes.unitWidth
     implicitHeight: shapes.unitHeight
     Kit.BodyShapes {

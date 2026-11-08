@@ -7,6 +7,7 @@ Item {
     id: root
     property alias title: splash.title
     property alias caption: splash.caption
+    property alias worlds: splash.worlds
     property list<real> hues
     property alias model: splash
     property bool running: true
@@ -171,6 +172,7 @@ Item {
             required property real cap
             required property int ringKind
             required property int moons
+            required property string inks
             opacity: world.planetOpacity
             Rectangle {
                 x: world.planetX - world.glowRadius
@@ -223,6 +225,7 @@ Item {
                 cap: world.cap
                 ring: world.ringKind
                 moons: world.moons
+                inks: world.inks
             }
             Rectangle {
                 x: world.planetX - world.flareRadius

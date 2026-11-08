@@ -1180,6 +1180,35 @@ queued nothing). The last was first seeded against the harness test alone and pa
 takes a name it was not given as a path and answers success: the play's proof is the queued bytes, read through the
 client's `InterfacePlayer::queued`, added for it.
 
+### 7.16 Worlds as lines: Moonrise's and the tiles' bodies from the host's data (2026-11-08)
+
+Decided 2026-11-08 by the tester, from `EmuSen_Interface.md` §24.6: each console is drawn by its maker in Choose a console
+and in Moonrise, so the program's splash draws the bodies, the approved draft remaining the oracle for everything else
+in it (sky, stars, moon, halo, title, layout). The kit's splash took a host's bodies only through the `addBody`
+invokable, which a view cannot call in a loop under `EmuSen_Qt.md` §1.3, and a `Body` had no palette, though kit-core's
+`WorldBody` has carried one since LunaP §222.1. A minor addition of the kit's surface closes both: a world as one line
+of plain text, the form of a declarative input.
+
+- **kit-core** `world::line`: `world_line(hue, body)` writes and `parse_world` reads `HUE SHAPE CRATERS BANDS CAP RING
+  MOONS [#LIGHT #MIDDLE #RIM]` (shapes `planet`, `shards`, `gem`; rings `none`, `subtle`, `big`; moons at most 2; the
+  palette three colours or none, a world without one drawn from its hue); `parse_worlds` reads one a line and leaves out a
+  line it cannot read. The grammar has one owner, here; a host writes lines with `world_line`, never by hand.
+- **kit-qt** `MoonriseModel.worlds` (and `Moonrise.worlds`): the lines, each a planet of the row, a plain one (no palette,
+  no feature, a planet) drawn as the draft's lit disc as before, any other as a `Body`; each planet's row gained the role
+  `inks`, the palette as three words. `BodyShapes` and `Body` gained `inks` (the palette as three `#RRGGBB` words; empty
+  is the hue's own) and `world` (a whole line, which, when it reads, stands for the hue, the shape and the features). The
+  name is `inks`, not `palette`, because every `QQuickItem` has a `palette` and QML warns that the member overrides it.
+- **The registry** (rule Q, §7.6) gained `BodyShapes.inks`, `BodyShapes.world`, `MoonriseModel.worlds` and the role
+  enumeration's `Palette`, additions only; reviewed and copied.
+
+The host's side is `EmuSen_Qt.md` §7.1: `LibraryModel` writes each console's line from the systems table's look (the one
+owner of which console is which body), as the role `world` of a console's row and as `splashWorlds`, the systems with an
+engine in the table's order. **Held to** (measured 2026-11-08): kit-core's `world` test (the NES's line with its palette
+written and read back; a capped, ringed planet with two moons and a shard cluster read from a text with an unreadable
+line left out; a palette of two colours and an unknown shape refused); kit-qt's `world` test (three words a palette,
+two or none not; the palette, not the hue, paints the disc); the registry test. Seeded on 2026-11-08 and reverted: the
+palette dropped in `parse_world` failed kit-core's test.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

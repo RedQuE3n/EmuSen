@@ -48,7 +48,7 @@ Window {
         focus: program.splashShown
         title: Words.title
         caption: library.splashCaption
-        hues: library.splashHues
+        worlds: library.splashWorlds
         Behavior on opacity {
             NumberAnimation {
                 duration: Kit.Tokens.fade

@@ -3,7 +3,7 @@
 # the back end's dev module depends on qml-rules, which must never pull in Qt. The two client crates, their shared idioms and their test fixture stay outside for the same reason (EmuSen_Qt.md §1.1.1).
 [workspace]
 resolver = "2"
-members = ["kit-qt", "qt-test", "kit-gallery", "qt-models"]
+members = ["kit-qt", "qt-test", "kit-gallery", "qt-models", "qt-endymion"]
 exclude = ["kit-core", "qml-rules", "crystal-client", "platform-client", "client-fixture", "c-calls"]
 
 [workspace.package]

@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import EmuSen.Kit as Kit
+import EmuSen.Endymion
 
 // The kit's gallery: every control and drawn item in three sections the shoulders step, in the form the host sets and the variant the tokens paint; the gate runs on it at the four sizes (EmuSen_Kit.md §7.10).
 Window {
@@ -13,7 +14,16 @@ Window {
     height: 800
     color: Kit.Tokens.voidFill
     property int form: Kit.Forms.BigScreen
-    property int padFamily: Kit.Families.Generic
+    property int padFamily: pads.family
+    property alias platformLibrary: pads.platformLibrary
+    property alias onlyPads: pads.onlyPads
+    property alias padsConnected: pads.connected
+    // Endymion's pads, once the host names the platform library: each press into the router's queue, the help bar's family from the pad last used (EmuSen_Kit.md §7.15).
+    PadReader {
+        id: pads
+        objectName: "pads"
+        onButton: (button, down) => Kit.PadRouter.push(button, down)
+    }
     property int activated: -1
     property int chosen: -1
     readonly property int page: frame.controller.sections.indexOf(frame.controller.selectedSection)

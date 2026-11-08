@@ -1,4 +1,4 @@
-//! `PadRouter`: the kit's one pad entry, a singleton whose queue tests push `PadEvent`s into; the real reader arrives with the platform client (EmuSen_Kit.md §7.4).
+//! `PadRouter`: the kit's one pad entry, a singleton whose queue tests and Endymion's reader push `PadEvent`s into (EmuSen_Kit.md §7.4, §7.15).
 //! `clockRunning` lets a `Frame`'s timer pump on the wall clock; a test turns it off and pumps at stated times.
 
 use core::pin::Pin;

@@ -2,7 +2,12 @@ use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 fn main() {
     CxxQtBuilder::new_qml_module(
-        QmlModule::new("EmuSen.Gallery").version(1, 0).qml_files(["qml/Gallery.qml"]).depend("QtQuick").depend("EmuSen.Kit"),
+        QmlModule::new("EmuSen.Gallery")
+            .version(1, 0)
+            .qml_files(["qml/Gallery.qml"])
+            .depend("QtQuick")
+            .depend("EmuSen.Kit")
+            .depend("EmuSen.Endymion"),
     )
     .files(["src/grab.rs"])
     .qt_module("Quick")

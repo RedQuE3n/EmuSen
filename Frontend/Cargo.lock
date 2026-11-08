@@ -306,9 +306,12 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "emusen-client-fixture",
  "emusen-kit-core",
  "emusen-kit-qt",
+ "emusen-qt-endymion",
  "emusen-qt-test",
+ "libloading",
 ]
 
 [[package]]
@@ -336,6 +339,21 @@ dependencies = [
 [[package]]
 name = "emusen-qml-rules"
 version = "0.1.0"
+
+[[package]]
+name = "emusen-qt-endymion"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-client-fixture",
+ "emusen-kit-core",
+ "emusen-kit-qt",
+ "emusen-platform-client",
+ "emusen-qt-test",
+]
 
 [[package]]
 name = "emusen-qt-models"

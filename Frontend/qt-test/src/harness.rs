@@ -358,16 +358,33 @@ impl Scene<'_> {
         self.wait(5);
     }
 
+    /// Whether the router holds a button, as its last pump left it.
+    pub fn pad_held(&mut self, button: UiButton) -> bool {
+        self.harness.router().is_some_and(|router| router.is_held(kinds::pad_button(button)))
+    }
+
+    /// The router pumped by the frame's timer on the wall clock again, as a real pad needs it; `pad` turns it off.
+    pub fn run_pad_clock(&mut self) {
+        if let Some(router) = self.harness.router() {
+            router.set_clock_running(true);
+        }
+    }
+
     /// Where a press of each direction from each operable element lands, kept whatever the outcome, as a recording keeps it;
     /// what each press moved (a list's selection, a tab, a value, a scroll) is put back before the next, as InterfaceSpec §3's walk does.
     pub fn walk(&mut self, tree: &Tree) -> Vec<Step> {
+        self.walk_by(tree, |scene, button| scene.pad(button))
+    }
+
+    /// The walk with each press made by `press`: a real pad's, where `walk` pushes into the router's queue.
+    pub fn walk_by(&mut self, tree: &Tree, mut press: impl FnMut(&mut Self, UiButton)) -> Vec<Step> {
         let mut steps = Vec::new();
         for from in tree.operable() {
             for button in [UiButton::Up, UiButton::Down, UiButton::Left, UiButton::Right] {
                 if !self.focus_item(tree, from) {
                     continue;
                 }
-                self.pad(button);
+                press(self, button);
                 let to = match self.focus(tree) {
                     Some(to) if to == from => Landing::Same,
                     Some(to) => Landing::At(to),

@@ -56,6 +56,11 @@ impl InterfacePlayer {
             .map(|n| n != 0)
     }
 
+    /// The bytes queued on the stream and not yet played.
+    pub fn queued(&self) -> Result<i64> {
+        self.platform.status(unsafe { self.platform.lib.emusen_endymion_ui_get(self.ui.as_ptr(), raw::EMUSEN_ENDYMION_UI_QUEUED) })
+    }
+
     /// The volume, 0 to 1.
     pub fn set_volume(&self, volume: f32) -> Result<()> {
         self.platform.status(unsafe { self.platform.lib.emusen_endymion_ui_set_volume(self.ui.as_ptr(), volume) }.into()).map(drop)

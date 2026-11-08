@@ -360,7 +360,7 @@ ways in:
 
 ### 7.4 `PadRouter`
 
-A QML singleton whose queue tests push `PadEvent`s into, as the real reader will from the platform client later: `push
+A QML singleton whose queue tests push `PadEvent`s into, as Endymion's reader does (§7.15): `push
 (button, down)` queues, `pump()` applies the queue on the router's own clock (an `Instant` from construction; no
 static) and `pumpAt(ms)` on a stated one, so a test writes the exact times kit-core's tests write. Each pump runs
 `router::Router`: the queue sets the held buttons, `Grammar::menu_chord` is checked (once, and then `forget`, so the
@@ -417,8 +417,8 @@ data, the framework drawing it. So the kit's own part is a model, not a renderer
   owns no words), placed by their baselines. A `FrameAnimation` ticks until `finished`.
 - **`Bells`.** A QObject over `BellCache`: `prepare(cue)` renders a cue through kit-core the first time and keeps it,
   `prepareAll`, `durationMs`, `peak`, `quickSelectFrames`; `renders` counts renders so a test sees the cache hold,
-  `rate` is 48 000. Playback through Endymion's interface player and the pairing of Moonrise's `strike_times` with the
-  chime come with the platform client (§7.7).
+  `rate` is 48 000. Playback through Endymion's interface player is `BellPlayer`'s (§7.15); the pairing of Moonrise's
+  `strike_times` with the chime is owed (§7.7).
 
 **Two cxx-qt facts found here.** A `#[qenum]` named `Roles` in three bridges clashes: cxx-qt emits `using Roles =
 enum class X::Roles` at namespace scope in each header and the module's type registration includes them all, so each
@@ -1040,6 +1040,106 @@ gate (`Qt logged 20 warnings or errors`, the `RangeError` from `Sheet.qml` and `
 the shadow beginning invalid failed the gate (`PathPolyline: path of type 0 not supported`). With both fixed, the
 harness tests, the debug gate and the release gate pass with nothing logged.
 
+### 7.15 Endymion's pads and the bells: `emusen-qt-endymion` (stage 0, the rest, step 4; 2026-11-08)
+
+`EmuSen_Qt.md` §1.7 as built. Qt 6 has no gamepad module, so the pad is Endymion's, read through the platform client
+(`EmuSen_Qt.md` §1.1.2) on a thread of its own and put on the GUI thread through `qt_thread().queue`, into the
+`PadRouter` of §7.4; the bells of §7.5 play through Endymion's interface player.
+
+**Where the pad's family lives** (decided 2026-11-08). Which printing a pad carries is a fact about the pad, read from
+SDL's `SDL_GamepadType` and, where SDL says Standard or Unknown, the pad's name (the Legion Go S and a Steam Deck print an
+Xbox layout). Two homes were weighed: kit-core reading what Endymion reports (the SDL type's number and the name), or
+Endymion reporting the family. kit-core stands without EmuSen and names no SDL number, and the C# front end, which reads
+pads through the same platform library, could not have read kit-core's copy, so the C# table would have stayed a second
+owner. So Endymion owns it: `emusen_endymion::family` holds the table moved from Mistress's `PadFamilies.cs`, which is
+deleted, and `emusen_endymion_pads_get(…, EMUSEN_ENDYMION_PADS_FAMILY)` answers it, an extension of the existing call
+(platform interface 40, `EmuSen_RustPlatform.md` §48). Mistress's help bar and the Qt reader both read that one answer;
+kit-core's `PadFamily` stays the kit's drawing of a family, and the reader pairs the header's four numbers with it by
+name (`reading::family_of`).
+
+**The crate.** `Frontend/qt-endymion`, `emusen-qt-endymion`, the QML module `EmuSen.Endymion` 1.0, a member of the Qt
+workspace. Its dependencies are the workspace's cxx-qt crates, kit-core and kit-qt (the presses, controls, thresholds,
+cues and the enumerations Qt has them as) and the platform client by path; kit-qt still names no client, so the kit
+stands alone and only this crate joins it to Endymion. Four parts, one job each:
+
+- `reading.rs`, **one poll as the interface reads it**, plain Rust over the client's `Pads`: the devices polled, the
+  changes taken, the devices brought up to date (`update`, SDL's events pumped, every tick as the C# poll ends), then
+  every pad the interface reads (`FRONTEND_COUNT`) read control by control. A control's press is kit-core's
+  `PadControl::press`, `UiButton::control` read the other way (either stick's click is Random, as the C# read them),
+  added to kit-core for this step; the player's swap is not applied here, since the router applies it once (§7.3). The
+  left stick is the d-pad through kit-core's `stick_direction` (0.55), and a trigger is held past
+  `TRIGGER_THRESHOLD` (0.5, the C#'s), now kit-core's beside the stick's. The pads read are merged (a button is held
+  while any pad holds it, so a second pad's press and release of a held direction changes nothing), and a tick gives
+  the buttons that went down or up since the last, in the kit's order. The pad that went from holding nothing to
+  holding something is the last used; the help bar's family is its family while it is read, else the first pad's, else
+  the generic face. A pad pulled out lets go of what it held. *[own, because Qt has no gamepad reading and Endymion
+  answers raw controls, which the interface's grammar must read; `sdl_button` names SDL's button numbers, which
+  Endymion's calls take, once.]*
+- `reader.rs`, **the thread**: `Reader::spawn(open, only, deliver)` opens the pads on the thread, then reads every 16 ms
+  (Mistress's pad timer, `EmuSen_Input.md` §8.12) and hands each non-empty tick to the sink whole; a failure is said
+  once until a poll succeeds; dropping the reader stops and joins the thread, and a sink that refuses stops it too.
+  **Coalescing per axis** is the poll itself: an axis is read once a tick and only its direction's crossing leaves the
+  thread, so however many events SDL saw between two ticks, the GUI thread receives at most one change per direction
+  and one closure per tick, and none when nothing changed.
+- `pad_reader.rs`, **`PadReader`**: writable `platformLibrary` (the path, as `LibraryModel` takes it: a QML element
+  cannot be handed a Rust value, §1.2.1 of `EmuSen_Qt.md`) and `onlyPads`; read-only `family` (kit-qt's `Families`),
+  `connected` and `problem`; one signal, `button(PadButton, down)`. Naming the library lends SDL (`libSDL3.so.0`, once
+  a process) and starts the reader, whose ticks come back only through `qt_thread().queue`, where each press is emitted
+  in order and the properties published. `onlyPads` is SDL's pad ids, separated by spaces, read alone, as
+  `emusen_endymion_pads_show_only` is a test's: it keeps a test's virtual pads from opening a pad on the desk.
+- `bell_player.rs`, **`BellPlayer`**: writable `platformLibrary` and `volume` (kit-core's `DEFAULT_VOLUME` until set),
+  read-only `ready` and `problem`, and `play(cue)`. The player is made off the GUI thread once the library is named,
+  every cue rendered by kit-core once and remembered by Endymion's interface player under its name (48 kHz stereo
+  32-bit floats, little-endian, as the player keeps them), and comes back through the queue; `play` replaces the cue
+  still playing, as the player does. kit-qt's `Bells` stays the render cache a test inspects.
+
+**Into the router.** A host declares the reader in its scene and joins its signal to the router in one line, so the
+real pad's presses enter the same queue tests push into (§7.4), and binds the help bar's family to the reader's:
+
+    PadReader { id: pads; onButton: (button, down) => Kit.PadRouter.push(button, down) }
+    property int padFamily: pads.family
+
+The gallery does this (`Gallery.qml`, with `platformLibrary`, `onlyPads` and `padsConnected` on its root for the
+host). The gallery program names no platform library yet, so a human look reads no pad until a host does (§7.7).
+
+**Held to.** No C++ was added. Measured on 2026-11-08 on the desktop, against the platform library built from the same
+commit:
+- Endymion's `family` (3 unit tests): every SDL 3.4 type, Unknown to GameCube, as the C# table classified them, SDL's
+  type before a name that says otherwise, a newer type read by its name; the names of the C# test (Legion Go S, Steam
+  Deck, Steam's virtual pad, DualSense, Switch Pro, an 8BitDo pad, none); the header's numbers.
+- The platform client's simulated-pads test: a pad of no known type or name is generic, SDL's PS5 type PlayStation, a
+  Standard pad named "Nintendo Switch Pro Controller" Nintendo, and the family kept once the pad closes.
+- kit-core's `glyph` test: every press's control, swapped or not, read back by `press` and the router's swap gives the
+  press again; either stick's click is Random.
+- `reading` (3 tests, 3.1 s, Endymion's simulated pads): each of SDL's fifteen buttons and the six axes gives its
+  press and lets go, the stick and the triggers short of their thresholds give none, two presses come in the kit's
+  order; two pads merged, the family following the pad last used, the last used pulled out while holding Accept
+  (Accept up, the family back to the first pad, one pad read), one plugged in while reading and used, and none left
+  (the generic face); the thread hands on the first tick, a press and its release, sends nothing after it drops, and
+  says a failed opening once.
+- `bells` (3.1 s, SDL's dummy audio driver, nothing reaches the speakers): each of the nine cues played under its name
+  queues its samples on the player's stream. `qml`: `BellPlayer` made through the queue in a harness scene, every cue
+  played with no failure said, nothing logged, and the scene keeps the QML rules.
+- The gallery, `kit-gallery`'s `pads` (11.9 s): an SDL virtual pad (SDL's own virtual joystick, attached in-process
+  with an Xbox 360's vendor and product, as WiseMan's `SdlVirtualPadsTests` attaches them; `onlyPads` names it alone)
+  read by the gallery's `PadReader` puts the Xbox face on the help bar, then walks the gallery, every operable element
+  in four directions with what each press moved put back, each press held until the router holds it and let go until
+  it lets go; the landings equal the same walk made through the router's queue, as the gate makes it. A second pad
+  (a DualShock 4's vendor and product) plugged in while the gallery runs is read and leaves the family on the pad last
+  used until a click of its stick, when the PlayStation face shows; pulled out, the family returns to the Xbox pad, and
+  with both gone, to the generic face. Nothing logged. The harness's walk takes its press as a parameter for this
+  (`walk_by`), and `pad_held` and `run_pad_clock` read and restart the router's clock. *[own, because SDL's virtual
+  joysticks are SDL's test interface and no SDL binding crate is in the tree: the test declares
+  `SDL_VirtualJoystickDesc` and five calls from SDL_joystick.h itself.]*
+
+Four seeded faults, each reverted: the family taken from the first pad read, ignoring the pad last used, failed
+`reading`'s merge test (no change of family to the Nintendo pad); the stick's vertical read inverted failed the
+controls test (Down for the stick pushed up); the platform library answering the SDL type for the family failed the
+platform client's test (6 for PlayStation's 2); the player remembering eight of the nine cues failed `bells` (Refused
+queued nothing). The last was first seeded against the harness test alone and passed it, since the interface player
+takes a name it was not given as a path and answers success: the play's proof is the queued bytes, read through the
+client's `InterfacePlayer::queued`, added for it.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -1088,8 +1188,13 @@ which neither cxx nor cxx-qt-lib can supply.
 - **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
   add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
   §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
-- Owed by §7.5 to a later step: the cues played through Endymion's interface player and Moonrise's strikes paired with
-  the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.5 to a later step: Moonrise's strikes paired with the chime (the cues play through Endymion's interface
+  player since §7.15); the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.15: which of the interface's events rings which cue (a move, a section, a choice, back) is a screen's,
+  decided with stage 1's first screen; the gallery program names no platform library, so a human look at it reads no
+  pad until a host passes one **[routine]**; a uinput pad (a kernel device, seen by every program on the desk, as
+  WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
+  same path without one.
 - Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker` and `DatePicker`; the drawn
   glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
   pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.

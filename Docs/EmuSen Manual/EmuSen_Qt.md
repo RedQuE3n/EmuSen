@@ -224,9 +224,11 @@ built from the same commit (`Error::Refused`); only then is every symbol resolve
   a front end keeps its own handle, as that header says.
 - *Endymion's pads:* SDL's pads or a simulated set's, started, polled and taken as events (opened or closed, announced
   or not, by key), the open keys, a pad's numbers, texts and axes, the PadButton as the game hears it, the player light,
-  the motors and the five settings; simulated pads and sets, pressed and plugged as tests do.
+  the motors and the five settings; simulated pads and sets, pressed and plugged as tests do. Since 2026-11-08 (the pad
+  bridge, `EmuSen_Kit.md` §7.15): the family a pad's buttons print (`FAMILY`, interface 40), `show_only` for a test's
+  virtual pads, and a simulated pad's numbers and texts set (its SDL type, its name).
 - *Endymion's interface player:* made once SDL is lent (refused with words before), samples remembered and played, the
-  device by name and the volume.
+  device by name and the volume; since 2026-11-08 the bytes still queued, which prove a play.
 - *The rule for SQLite* **[D 2026-11-08]**: the Qt front end lends the system's `libsqlite3.so.0` to every call that
   takes one (the library handle, the scraper and, once wrapped, the runtime's states), so the process holds one copy of
   SQLite, as `EmuSen_RustPlatform.md` §47.25's argument requires.
@@ -246,8 +248,8 @@ tracks, packages, mapped files, migration, `config_read`, `config_write` and `co
 (`emusen_disc_*`); emusen-systems' libretro cores, save media formats, code, recognition, route, OpenVGDB, header,
 disassembly, board name and view; `emusen_firmware_find` and `_locate`; the cheat files and database
 (`emusen_cheats_*`); the HTTP client (`emusen_net_download_*`); the medium locks; Endymion's resampler, rate control,
-router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`, `pads_show_only`,
-`pads_rescan_due`, the simulated pads' texts, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
+router, player slots, `pad_resolve`, `pad_combine`, `pad_controls_for`, `pads_use`,
+`pads_rescan_due`, the simulated pads' texts read, holds and device calls, the game's audio player (`emusen_endymion_audio_*`),
 the interface player's `decode`, `decode_take` and `volume`; and all of Serenity (presets, sources, the compiler,
 reflection, the cache, the device, the lend, the chain, the ring and the built-in filters). Each is wrapped when a
 screen needs it: the router and slots with the Device screen, the audio player, rate control and Serenity with the
@@ -407,7 +409,10 @@ thread with `qt_thread().queue`, coalesced per axis. `PadRouter` (kit) applies t
 in `EmuSen_BigPicture.md` §14 and the player's A/B swap, then offers each press in order to the active sheet or question,
 the focused `Frame`'s walk, and, if declined, the window's focus item as a `QKeyEvent` (directions → arrows, A → Return,
 B → Escape, Start → Menu, Select → Select), so stock controls and `ListView` answer a pad with no code of their own. Tests
-push `PadEvent`s into the same queue a real pad uses.
+push `PadEvent`s into the same queue a real pad uses. As built on 2026-11-08 (`EmuSen_Kit.md` §7.15): `PadReader` in
+`emusen-qt-endymion` (module `EmuSen.Endymion`) reads the pads, a scene joins its `button` signal to `PadRouter.push`,
+and the help bar's family is the family Endymion reports for the pad last used (`EMUSEN_ENDYMION_PADS_FAMILY`, since
+Endymion owns pads); `BellPlayer` plays the kit's cues through Endymion's interface player.
 
 **The pointer and the keyboard are equals of the pad (§0.2), not a fallback.** Qt Quick delivers both already: stock
 controls, `ListView`, `GridView` and `PathView` take clicks, the wheel, flicks and keys with no code of ours. The kit adds

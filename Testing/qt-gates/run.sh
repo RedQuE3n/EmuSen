@@ -6,6 +6,8 @@
 # pad started only once the program holds the focus.
 # Usage: run.sh <run-dir> <seconds> <program> [<arg>...]
 #   PAD="wait:4 tap:start ..."  the pad's steps; none, no pad
+#   PAD_FIRST=1                 the pad made (and ready) before the program starts, so a press can come at its first picture
+#   RSS=<comm>                  the program's memory sampled every 0.5 s to rss.tsv (rss.py; <comm> its process name)
 #   BOX="r0-r1,g0-g1,b0-b1"     the game's colour box grab.py measures; INTERVAL grab interval in ms (35)
 #   WIDTH, HEIGHT               the virtual compositor's size (1920, 1200); FULL=1 keeps each grab at full size
 #   DESK=<output>               the session's compositor, fullscreen on that output; MATCH the program's window class
@@ -33,15 +35,23 @@ printf '%q ' "$@" > "$run/command"
 cat > "$run/launch.sh" <<EOF
 #!/bin/bash
 export XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
-date +%s.%N > "$run/start"
-end=\$((\$(date +%s%N) + $seconds * 1000000000))
 if [ -z "\${DESK:-}" ]; then
   python3 -I "$here/grab.py" "$run/grabs" $((seconds + 2)) \${INTERVAL:-35} "\${BOX:-0-255,0-255,0-255}" > "$run/grabs.tsv" 2> "$run/grab.err" &
   grabber=\$!
 fi
+if [ -n "\${PAD:-}" ] && [ -n "\${PAD_FIRST:-}" ]; then
+  python3 -I "$here/pad.py" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
+  for i in \$(seq 100); do grep -q ready "$run/pad.log" 2>/dev/null && break; sleep 0.1; done
+fi
+date +%s.%N > "$run/start"
+end=\$((\$(date +%s%N) + $seconds * 1000000000))
 $(cat "$run/command") > "$run/program.log" 2>&1 &
 program=\$!
-if [ -n "\${PAD:-}" ]; then
+if [ -n "\${RSS:-}" ]; then
+  python3 -I "$here/rss.py" "$run/rss.tsv" \$program \${RSS} &
+  rsser=\$!
+fi
+if [ -n "\${PAD:-}" ] && [ -z "\${PAD_FIRST:-}" ]; then
   if [ -n "\${DESK:-}" ]; then for i in \$(seq 150); do [ -e "$run/active" ] && break; sleep 0.1; done; fi
   if [ -z "\${DESK:-}" ] || [ -e "$run/active" ]; then
     python3 -I "$here/pad.py" \$PAD > "$run/pad.log" 2>&1 & pad=\$!
@@ -53,6 +63,7 @@ left=\$(( (end - \$(date +%s%N)) / 1000000 ))
 [ \$left -gt 0 ] && sleep \$((left / 1000)).\$(printf %03d \$((left % 1000)))
 kill \$program 2>/dev/null; sleep 1; kill -9 \$program 2>/dev/null
 [ -n "\${pad:-}" ] && kill \$pad 2>/dev/null && wait \$pad
+[ -n "\${rsser:-}" ] && kill \$rsser 2>/dev/null
 [ -n "\${grabber:-}" ] && wait \$grabber
 true
 EOF

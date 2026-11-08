@@ -3094,6 +3094,52 @@ picture either way. Steam opened a window each time the pad appeared.
 
 The logs of every run are in `~/.cache/emusen/tmp/qt-desk/runs/`; the sandbox was removed after the runs.
 
+#### 9.3.5 The start-up and memory gates with the reference theme as a package, on a rebuilt method **[M 2026-11-08]**
+
+The window now holds two theme hosts (the reference theme, compiled in as a package, and the chosen theme), so Home's
+first picture, the first press and memory were measured again on `WiseMan` (`0cfed0437`) and on `qt-s3-r` (`b14e92dc6`),
+both `emusen-qt` in release (opt-level 2), by one script, three rounds each, the two builds alternating within a round.
+
+**The method is a rebuild.** The script and sandbox of §9.3.1 were not kept, so `Testing/qt-gates/` gained `sandbox.sh`,
+`gates.sh`, `figures.py`, `press.py` and `rss.py` (README.md) from §9.3.1's written method. These figures are
+comparable between the two builds measured here, and with §9.3.1's only as far as the method below agrees with it. Where
+the written method left a choice, it was taken as follows:
+
+- The sandbox: the published tree's program folder (2026-11-08 07:58) with the build beside the platform library, a home
+  of its own (Moonrise off, the big screen in the reference look, scraping and online covers off, the player's ROM folder
+  as the library, bound read-only with `bwrap`), restored from a snapshot taken after one start had read the library
+  (9,007 games shown) before every run. §9.3.1's home was snapshotted the same way; its exact settings were not written.
+- "Home shown" is given twice, since the earlier rule (the first grab with Games' focus ring standing) was not kept: the
+  first grab with the window lit (over 1% of the screen) and the first grab whose lit share equals the settled value
+  (within 0.5%), the whole picture. Each is late by up to one grab interval (35 ms) and 0.03 to 0.05 s of grab latency.
+- The first press: the pad is made before the program starts; it presses Right once the window is lit and its lit share
+  has stood unchanged for 0.1 s in the polled grabs (the "still window" rule), and the answer is the first grab whose
+  picture differs from the last before the press. Qt's `qt.quick.focus` log wrote nothing in these builds (the program
+  logs nothing under `QT_LOGGING_RULES`), so §9.3.1's focus-log answer was not available.
+- Memory idle: `VmRSS` of the `emusen-qt` process 10 s after the window was lit, in a run with no pad. Memory at the
+  Pause Card: the median of the samples 3 to 6 s after the Guide chord, over ActRaiser (U) [!] on VenusRT (Home, Choose
+  a console, Super Nintendo, the grid's second row, Play, 10 s of play, the chord); the card was seen in each run's
+  last grabs. The pad's route is timed by waits, and the same route was seen to reach the card in all six runs.
+- A KWin virtual compositor at 1,920 x 1,200 on the RX 6800, one run at a time, Mistress's X11 path not involved.
+
+| Gate | WiseMan, rounds 1-3 | qt-s3-r, rounds 1-3 |
+|---|---|---|
+| Home: first grab with the window lit | 0.318, 0.316, 0.316 s | 0.354, 0.331, 0.347 s |
+| Home: the picture whole | 0.458, 0.456, 0.456 s | 0.495, 0.471, 0.487 s |
+| Window still, press, picture changed (answer) | 0.62, 0.60, 0.60 s; 0.055, 0.035, 0.036 s | 0.64, 0.63, 0.64 s; 0.035, 0.052, 0.026 s |
+| RSS 10 s after Home (anonymous) | 208, 207, 208 MiB (87, 87, 87) | 222, 221, 223 MiB (102, 102, 102) |
+| RSS at the Pause Card (anonymous) | 260, 259, 260 MiB (134, 134, 135) | 279, 258, 257 MiB (147, 132, 132) |
+
+**Reading.** The first press is equal (answered within 26 to 55 ms on both; its press comes 30 to 40 ms later on qt-s3-r
+only because the picture is whole later). Home's picture is later on qt-s3-r by 15 to 39 ms, against the spread of the
+three rounds of 2 ms on WiseMan and 24 ms on qt-s3-r, and idle memory is higher by 14 MiB (15 MiB anonymous, a steady
+figure with a spread of 2 MiB): both are more than the rounds' spread, and both inside the margin to the earlier
+gates' figures (Home 0.25 to 0.34 s, idle 201 MiB). At the Pause Card two of qt-s3-r's three rounds equal WiseMan's; the
+third is 19 MiB higher. **Not traced:** a profile of the cause was not made; the increases fit a second engine holding the
+reference theme's package, but that is not proved here. A trace would count the engines' items and the memory of the
+host's engine at idle, which needs the harness's counters rather than these external grabs. No change was made to
+qt-s3-r.
+
 ---
 
 ## 10. The toolchain spike (outside the tree, `~/.cache/emusen/qt-spike/`)

@@ -6,7 +6,7 @@
 //! half (saves, states and their records, settings, art and patches read on the other machine) is WiseMan's.
 
 use emusen_galaxia::claims::{self, Places};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::tree::Tree;
 use emusen_galaxia::{package, package_zip, rom_hash};
 use emusen_library_tool::job::{self, Job};
@@ -74,7 +74,7 @@ fn events(job: &Job) -> Vec<Value> {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(200)) {
             job.take();
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     out
@@ -85,7 +85,7 @@ fn run(ctx: &Context, request: &str) -> Vec<Value> {
 }
 
 fn summary(events: &[Value]) -> String {
-    events.iter().map(|e| { let mut l = String::new(); json::write_compact(&mut l, e); l }).collect::<Vec<_>>().join("\n")
+    events.iter().map(|e| { let mut l = String::new(); l.push_str(&serde_json::to_string(e).expect("a value is JSON")); l }).collect::<Vec<_>>().join("\n")
 }
 
 fn event<'a>(events: &'a [Value], what: &str) -> Option<&'a Value> {

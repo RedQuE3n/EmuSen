@@ -128,9 +128,8 @@ pub fn store(tree: &Tree) -> String {
 
 /// The folders searched, first to last, `FirmwareLibrary.Folders`.
 pub fn folders(tree: &Tree) -> Vec<String> {
-    let models = &emusen_galaxia::models::MODELS[emusen_galaxia::models::APP_SETTINGS_ID as usize];
-    let (settings, _) = emusen_galaxia::config::load_or_new(tree, models, None, emusen_galaxia::models::APP_SETTINGS_FILE);
-    let chosen = settings.get("FirmwareDirectory").and_then(|v| v.as_str()).map(str::to_string);
+    let (settings, _) = emusen_galaxia::config::load_or_new::<emusen_galaxia::models::AppSettings>(tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    let chosen = settings.firmware_directory;
     let home = emusen_galaxia::tree::user_home();
     emusen_firmware::folders(chosen.as_deref(), &home.to_string_lossy(), &store(tree)).0
 }

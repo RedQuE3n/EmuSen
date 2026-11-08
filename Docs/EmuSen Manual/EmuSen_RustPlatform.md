@@ -4030,3 +4030,76 @@ separator: `<root>/preset/N` became `<root>/preset/N/` (326 lines) and `<root>/p
 folder; called directly, both libraries refuse `#reference ` alone as `not_found`, the old one naming `<d>` and the new
 `<d>/`, and they agree on `#reference sub`, `"sub"`, `""sub`, `""`, `"`, `sub" trailing` and `"sub`. No scale, count,
 pass, texture, parameter or refusal differs, so the deletion stands.
+
+### 47.19 Config and record files are serde's
+
+The files a person may edit are read and written in one place, Galaxia's `config_json`. Reading is jsonc-parser 0.34
+with comments and a trailing comma allowed and every other JSON5 liberty refused (single quotes, bare names, hex,
+a leading `+`, a bare decimal point, `NaN`, missing commas, JSON5 escapes); the value is then read into its type through
+a small deserializer that matches each object's member names to the fields its type declares without regard to ASCII
+case, at every depth, while a map's keys keep their case. The last of two members wins whole and keeps the first's
+place. A refusal names its path (`$.Cheats[0].Writes[1].Width: invalid type: ...`), and a text with no document in
+it is refused. Writing is serde_json's `to_string_pretty`: two spaces, a line feed between lines, none at the end
+(decided 2026-11-07 by the tester, plan question 2).
+
+**The models are serde types** (`models.rs`). One `model!` list per class gives each field's name, type and initial
+value, so the struct and its new instance cannot disagree. Nullability is kept as the classes had it: text, lists,
+maps and objects may be null, numbers and flags may not; the items of a cheat list and of its writes may not be null.
+`ConfigModel` gives a type its upgrade (AppSettings' alone) and its file text: a cheat list is written with the two
+values computed from each entry, `IsRomPatch` and `EffectiveWrites`, which are never read, and AppSettings leaves the
+retired `OnlineCovers` out of its file while it is null. The C interface and the corpus reach a model by number
+through `Model`, three functions on JSON text built generically from the type: bind, new and format. What crosses
+out of the library is compact serde JSON with every field. `model.rs`, the binder and writer that reproduced
+System.Text.Json, is gone, and with it `emusen_galaxia_model_schema`, whose only reader was the parity class that held
+the C# classes to the Rust schema; the interface is 37.
+
+Typed the same way: `consoles.json` (`ConsolesConfig`), a game's own settings (a map of strings), and a package's state
+record, `KeptRecord`, whose four texts are required and nullable (`deserialize_with = "Option::deserialize"`), as the
+record bound them. The ScreenScraper member file and the developer file are read member by member from a serde value,
+so a member of the wrong kind empties that member alone, as before; the member file is written by serde_json.
+
+**A package manifest stays a document.** Its point is that a member this build does not know keeps its place, and
+`#[serde(flatten)]` would move every unknown member after the known ones. So the manifest is a `serde_json::Value`
+(`preserve_order`), read through `config_json` into a visitor that also records the first member written twice, with
+its path, so that `x[0].b written twice` is still refused as invalid before the schema is checked. The schema's checks
+and words are unchanged. Every crate that edits a manifest (claims, the library tool, the patcher, the scraper, the
+runtime) works on serde's value.
+
+Crystal's `service::cheat_file`, the reproduction of `JsonSerializer`'s refusal words and of `LoadFrom` reading
+through a null, is gone: CHEAT_IMPORT reads the list through `config_json` and loads it with the registry, whose
+`to_file` and `load` take the typed `CheatFile`.
+
+Differences, each taken deliberately:
+
+1. **Bytes on the first save.** A whole double or float is written `1.0` (`MasterVolume`, `Volume`,
+   `LibraryTileScale`), text outside ASCII is written as itself, a small number as `1e-7`. A manifest's numbers lose
+   their tokens (`1.50` is written `1.5`, `1e2` `100.0`). Approved as plan question 2.
+2. **A lone surrogate escape anywhere refuses the file**, where System.Text.Json passed over an unknown member
+   undecoded. jsonc-parser and serde_json both refuse it. The corpus's `appsettings/unknown.json` holds one, so its
+   model is now `refused`; `unknown-members.json`, the same members with a valid escape, reads to the model
+   `unknown.json` read to before. A manifest holding one is refused as not JSON rather than as invalid.
+3. **A null cheat or a null write is refused at read**, with words, where the C# loaded the cheats before it and then
+   faulted.
+4. **Refusal words** are jsonc-parser's and serde's, with the path, in place of .NET's.
+
+A member a config model does not know is read as if absent and is not written back, as the C# classes dropped it
+(decided 2026-11-07 by the tester); a manifest alone keeps its unknown members in place.
+
+The C# parity sweeps were run once more before they were deleted, with each document's model compared instead of its
+bytes (measured on 2026-11-07). Of 40,349 documents (9,754 property documents and 30,595 malformed or damaged texts),
+764 read to a different model or outcome:
+
+| Read now, refused by System.Text.Json | | Refused now, read by it | | Read alike, a value differs | |
+|---|---|---|---|---|---|
+| a raw control character inside a string | 264 | a null cheat or write | 91 | `-0` reads as `0` | 101 |
+| a comment or a non-ASCII space (U+2028, U+00A0, U+000B) between tokens | 96 | a lone surrogate escape | 60 | | |
+| an earlier member of the wrong kind, overridden by a later one of the same name | 68 | a number out of its type's range, or any number past a double's | 48 | | |
+| nesting deeper than 64 | 36 | | | | |
+
+The first column is jsonc-parser's tolerance and is kept: each is a file a person could write by hand that now reads.
+A float too large for `MasterVolume` is refused at read rather than read as infinity, which the C# could read and then
+not write. A text holding only comments is refused like an empty one (jsonc-parser would give it as `null`), so
+`config_json::parse` asks `parse_to_value` first whether the text holds a value.
+
+The proof is the disk corpus: every config file (five models), manifest, game settings file, state record and member
+file reads to its recorded model, and each config read, written and read again is the same model.

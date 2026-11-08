@@ -25,12 +25,16 @@ walkdir.workspace = true
 zip.workspace = true
 # The system's folder for a program's settings, on every system the project builds for (tree.rs).
 dirs.workspace = true
+# Config files read and written as typed models; a hand-edited one read with comments and trailing commas (config_json.rs, EmuSen_RustPlatform.md §47.19).
+serde.workspace = true
+serde_json.workspace = true
+jsonc-parser.workspace = true
+# A model's maps keep the file's order (models.rs).
+indexmap.workspace = true
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"
 
 [dev-dependencies]
-# The disk corpus's models compared as JSON (tests/disk.rs).
-serde_json.workspace = true
 
 # The page cache asked directly, for the test that advised bytes reach memory (tests/advise.rs).
 [target.'cfg(target_os = "linux")'.dev-dependencies]

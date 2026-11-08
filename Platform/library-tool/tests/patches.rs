@@ -6,7 +6,7 @@
 #[path = "../../patch/tests/encoders/mod.rs"]
 mod encoders;
 
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::Tree;
@@ -66,7 +66,7 @@ fn run(ctx: &Context, request: &str) -> Value {
     while !j.finished() {
         if let Some(line) = j.peek(Duration::from_millis(200)) {
             j.take();
-            events.push(json::parse(&line).unwrap());
+            events.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     let package = events.iter().find(|e| e.get("event").and_then(Value::as_str) == Some("package")).cloned();
@@ -75,7 +75,7 @@ fn run(ctx: &Context, request: &str) -> Value {
 
 fn words(e: &Value) -> String {
     let mut l = String::new();
-    json::write_compact(&mut l, e);
+    l.push_str(&serde_json::to_string(e).expect("a value is JSON"));
     l
 }
 

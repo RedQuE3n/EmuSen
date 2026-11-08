@@ -10,7 +10,7 @@ use crate::convert::{obj, Outcome};
 use crate::Context;
 use emusen_galaxia::claims::{self, Index, Roots};
 use emusen_galaxia::files::{self, Options};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_galaxia::{archive, cheats, image_sets, package};
 
@@ -101,19 +101,19 @@ pub fn package_rel(ctx: &Context, folder: &str) -> String {
 }
 
 fn text(s: &str) -> Value {
-    Value::string(s)
+    Value::String(String::from(s))
 }
 
 fn hashes_json(h: &Hashes, extra: Vec<(&str, Value)>) -> Value {
     let mut members = extra;
-    members.extend([("size", Value::number(h.size)), ("crc32", text(&h.crc32)), ("md5", text(&h.md5)), ("sha1", h.sha1.as_deref().map_or(Value::Null, text))]);
+    members.extend([("size", Value::from(h.size)), ("crc32", text(&h.crc32)), ("md5", text(&h.md5)), ("sha1", h.sha1.as_deref().map_or(Value::Null, text))]);
     obj(members)
 }
 
 fn entry(role: &str, place: &str, rel: &str, at: &str) -> Value {
     let mut e = package::file_entry(role, place, rel, claims::seen_of(at).map(|s| s.0));
     if let Some((size, mtime)) = claims::seen_of(at) {
-        claims::set(&mut e, "seen", obj(vec![("size", Value::number(size)), ("mtime", text(&mtime))]));
+        claims::set(&mut e, "seen", obj(vec![("size", Value::from(size)), ("mtime", text(&mtime))]));
     }
     e
 }
@@ -227,7 +227,7 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
     if how != Making::default() {
         return further(ctx, index, &folder, how, "made", stop);
     }
-    Outcome::new("made").with("package", text(&folder_rel)).with("mode", text("linked")).with("size", Value::number(claims::seen_of(&game.path).map_or(0, |s| s.0)))
+    Outcome::new("made").with("package", text(&folder_rel)).with("mode", text("linked")).with("size", Value::from(claims::seen_of(&game.path).map_or(0, |s| s.0)))
 }
 
 /// A package made self-contained where asked and it is not, then written as its zip where asked: `made` or `already`
@@ -270,7 +270,7 @@ fn further(ctx: &Context, index: &mut Index, folder: &str, how: Making, found: &
         let zip = emusen_galaxia::package_zip::zip_beside(folder).to_string_lossy().into_owned();
         match emusen_galaxia::package_zip::write(folder, &zip, stop) {
             Ok((_, bytes)) => {
-                outcome_zip = obj(vec![("path", text(&package_rel(ctx, &zip))), ("bytes", Value::number(bytes))]);
+                outcome_zip = obj(vec![("path", text(&package_rel(ctx, &zip))), ("bytes", Value::from(bytes))]);
                 if state == "already" {
                     state = "zipped";
                 }
@@ -354,7 +354,7 @@ fn copy_in(folder: &str, from: &str, rel: &str, stop: &dyn Fn() -> bool) -> Resu
 }
 
 fn seen_json(at: &str) -> Value {
-    claims::seen_of(at).map_or(Value::Null, |(size, mtime)| obj(vec![("size", Value::number(size)), ("mtime", text(&mtime))]))
+    claims::seen_of(at).map_or(Value::Null, |(size, mtime)| obj(vec![("size", Value::from(size)), ("mtime", text(&mtime))]))
 }
 
 /// A package made self-contained (§3.4, §19): its game and every companion copied in beside the manifest, in the places
@@ -409,7 +409,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
         let (sha1, size) = copy_in(folder, at, rel, stop)?;
         let mut source = entry.clone();
         claims::set(&mut source, "seen", seen_json(at));
-        claims::set(&mut source, "size", Value::number(size));
+        claims::set(&mut source, "size", Value::from(size));
         claims::set(&mut source, "sha1", text(&sha1));
         sources.push(source);
         let copy = claims::under(folder, rel);
@@ -585,7 +585,7 @@ fn chd(doc: &Value) -> bool {
 
 fn same_seen(doc: &Value, now: &(u64, String)) -> bool {
     let seen = doc.get("game").and_then(|g| g.get("seen"));
-    seen.and_then(|s| s.get("size")).and_then(|v| if let Value::Number(t) = v { t.parse::<u64>().ok() } else { None }) == Some(now.0) && seen.and_then(|s| s.get("mtime")).and_then(Value::as_str) == Some(now.1.as_str())
+    seen.and_then(|s| s.get("size")).and_then(Value::as_u64) == Some(now.0) && seen.and_then(|s| s.get("mtime")).and_then(Value::as_str) == Some(now.1.as_str())
 }
 
 /// `pkg ls`'s view of one package with its sizes (EmuSen_Packages.md §2): `console`, its system's console as the
@@ -593,7 +593,7 @@ fn same_seen(doc: &Value, now: &(u64, String)) -> bool {
 /// the game is found; `convertible` where `chd convert` takes the game; and for a converted disc `original` and `chd`,
 /// the two sizes its record holds (EmuSen_GamePackages.md §4.4a).
 pub fn list(ctx: &Context, library: &str, folder: &str, systems: &emusen_library::scan::Systems) -> Outcome {
-    let mut outcome = listed(ctx, folder).with("size", Value::number(folder_bytes(folder)));
+    let mut outcome = listed(ctx, folder).with("size", Value::from(folder_bytes(folder)));
     let places = ctx.places();
     let roots = places.roots();
     let doc = read(folder).ok();
@@ -601,13 +601,13 @@ pub fn list(ctx: &Context, library: &str, folder: &str, systems: &emusen_library
         outcome = outcome.with("console", text(&system.console));
     }
     if let Some((original, chd_bytes)) = doc.as_ref().filter(|d| chd(d)).and_then(crate::convert::recorded_sizes) {
-        outcome = outcome.with("original", Value::number(original)).with("chd", Value::number(chd_bytes));
+        outcome = outcome.with("original", Value::from(original)).with("chd", Value::from(chd_bytes));
     }
     let Some(game) = doc.and_then(|doc| doc.get("game").and_then(|g| claims::place(&roots, folder, g))) else { return outcome };
     if claims::seen_of(&game).is_none() {
         return outcome;
     }
-    let outcome = outcome.with("game_size", Value::number(crate::convert::game_bytes(&game)));
+    let outcome = outcome.with("game_size", Value::from(crate::convert::game_bytes(&game)));
     if claims::within(&game, library) && crate::discs::convertible(library, &game, systems) {
         return outcome.with("convertible", Value::Bool(true));
     }
@@ -760,10 +760,8 @@ pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
     if let Some(now) = claims::seen_of(&game).filter(|n| !same_seen(&doc, n))
         && doc.get("game").and_then(|g| g.get("seen")).is_some()
     {
-        if let Value::Object(members) = &mut doc
-            && let Some((_, g)) = members.iter_mut().rev().find(|(k, _)| k.text == "game")
-        {
-            claims::set(g, "seen", obj(vec![("size", Value::number(now.0)), ("mtime", text(&now.1))]));
+        if let Some(g) = doc.get_mut("game") {
+            claims::set(g, "seen", obj(vec![("size", Value::from(now.0)), ("mtime", text(&now.1))]));
         }
         let _ = package::write(&manifest, &doc);
         words = words.or(Some("its time changed and it is still the dump; the time is recorded".into()));
@@ -890,7 +888,7 @@ pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
     } else {
         Outcome::new("migrated")
     };
-    let outcome = outcome.with("copied", list).with("kept", Value::number(kept)).with("records", Value::number(records.copied));
+    let outcome = outcome.with("copied", list).with("kept", Value::from(kept)).with("records", Value::from(records.copied));
     head(&doc, match records.unread {
         Some(why) => outcome.with("records_words", text(&format!("the states' records were not copied: {why}"))),
         None => outcome,
@@ -1006,6 +1004,6 @@ mod tests {
         claims::set(&mut o, "a", text("x"));
         claims::set(&mut o, "c", text("y"));
         let Value::Object(m) = &o else { panic!() };
-        assert_eq!(m.iter().map(|(k, _)| k.text.as_str()).collect::<Vec<_>>(), ["a", "b", "c"]);
+        assert_eq!(m.iter().map(|(k, _)| k.as_str()).collect::<Vec<_>>(), ["a", "b", "c"]);
     }
 }

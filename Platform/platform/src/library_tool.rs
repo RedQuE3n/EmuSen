@@ -5,7 +5,7 @@
 
 use std::path::Path;
 use crate::{bytes, fail, put, status};
-use emusen_galaxia::models::{APP_SETTINGS_ID, MODELS};
+use emusen_galaxia::models::AppSettings;
 use emusen_galaxia::{config, setting_folders, tree};
 use emusen_library_tool::{job, Context};
 use std::time::Duration;
@@ -48,12 +48,12 @@ fn chdman() -> String {
 /// them, and the process's SQLite where it has one loaded or one ships beside it.
 fn context() -> Context {
     let tree = tree::tree().clone();
-    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
-    let library = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
-    let states = settings.get("StateDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
+    let (settings, _) = config::load_or_new::<AppSettings>(&tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    let library = setting_folders::checked(settings.rom_directory.as_deref(), &tree::user_home()).path;
+    let states = settings.state_directory.filter(|s| !s.trim().is_empty());
     let beside = Path::new(&tree::base_directory()).join(emusen_sqlite::SHIPPED_NAME).to_string_lossy().into_owned();
     let sqlite = emusen_sqlite::Sqlite::of_process(&[beside]).ok().map(std::sync::Arc::new);
-    let output = settings.get("ChdOutputDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
+    let output = settings.chd_output_directory.filter(|s| !s.trim().is_empty());
     Context { state_folder: states, sqlite, output, ..Context::pinned(tree, library, chdman()) }
 }
 

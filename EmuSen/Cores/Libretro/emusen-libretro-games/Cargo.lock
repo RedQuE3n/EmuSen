@@ -284,7 +284,6 @@ dependencies = [
 name = "emusen-cheats"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-systems",
 ]
@@ -354,6 +353,7 @@ dependencies = [
  "emusen-sqlite",
  "emusen-systems",
  "flate2",
+ "serde",
  "serde_json",
 ]
 
@@ -366,6 +366,7 @@ dependencies = [
  "emusen-dotnet",
  "emusen-native",
  "emusen-systems",
+ "serde_json",
 ]
 
 [[package]]
@@ -427,8 +428,12 @@ dependencies = [
  "dirs",
  "emusen-disc",
  "emusen-dotnet",
+ "indexmap",
+ "jsonc-parser",
  "md-5",
  "memmap2",
+ "serde",
+ "serde_json",
  "sha1",
  "sha2",
  "walkdir",
@@ -467,7 +472,6 @@ version = "0.1.0"
 dependencies = [
  "emusen-crystal",
  "emusen-disc",
- "emusen-dotnet",
  "emusen-galaxia",
  "emusen-library",
  "emusen-patch",
@@ -476,6 +480,7 @@ dependencies = [
  "emusen-systems",
  "emusen-tool-job",
  "libc",
+ "serde_json",
  "sha2",
 ]
 
@@ -572,8 +577,8 @@ dependencies = [
 name = "emusen-patch"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
  "emusen-galaxia",
+ "serde_json",
 ]
 
 [[package]]
@@ -849,6 +854,8 @@ checksum = "cc4e190f5d26ca7051642629da2c52fc03bde85a03197c99408dcd291734c855"
 dependencies = [
  "equivalent",
  "hashbrown",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -914,6 +921,15 @@ checksum = "8dc09d2154098bbf4ef54eab6b117a3c24cbbffe94046b16ee6d6d4510584d3a"
 dependencies = [
  "cfg-if",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "jsonc-parser"
+version = "0.34.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ecded084f9b9a718d39668a42657c32253663d1f6afb3fbb9134f0305f73f48"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

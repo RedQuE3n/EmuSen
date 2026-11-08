@@ -10,6 +10,8 @@ serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtr
 dirs = "7.0.0"
 strsim = "0.11.1"
 walkdir = "2.5.0"
+jsonc-parser = { version = "0.34.0", features = ["serde"] }
+indexmap = { version = "2.14.2", features = ["serde"] }
 zip = { version = "9.4.1", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64"] }
 
 [workspace.package]

@@ -5,7 +5,6 @@
 //! change it.
 
 pub mod args;
-pub mod cheat_file;
 pub mod cheats;
 pub mod machine;
 pub mod no_game;

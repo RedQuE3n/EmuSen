@@ -6,7 +6,7 @@
 
 use emusen_disc::cue::Sheet;
 use emusen_disc::{Disc, Dvd, IsoForm, Kind, Lone, Medium};
-use emusen_dotnet::json::{Text, Value};
+use serde_json::Value;
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{Hasher, Hashes};
 
@@ -49,11 +49,11 @@ pub fn toc_of<B: AsRef<[u8]>>(disc: &Disc<B>) -> Toc {
 }
 
 fn n(v: u64) -> Value {
-    Value::number(v)
+    Value::from(v)
 }
 
-fn member(name: &str, value: Value) -> (Text, Value) {
-    (Text::new(name), value)
+fn member(name: &str, value: Value) -> (String, Value) {
+    (String::from(name), value)
 }
 
 impl Toc {
@@ -61,15 +61,15 @@ impl Toc {
         let tracks = self
             .tracks
             .iter()
-            .map(|t| Value::Object(vec![member("track", n(t.number as u64)), member("audio", Value::Bool(t.audio)), member("pregap", n(t.pregap as u64)), member("start", n(t.start as u64)), member("end", n(t.end as u64))]))
+            .map(|t| Value::Object(vec![member("track", n(t.number as u64)), member("audio", Value::Bool(t.audio)), member("pregap", n(t.pregap as u64)), member("start", n(t.start as u64)), member("end", n(t.end as u64))].into_iter().collect()))
             .collect();
-        Value::Object(vec![member("tracks", Value::Array(tracks)), member("lead_out", n(self.lead_out as u64)), member("disc_type", n(self.disc_type as u64))])
+        Value::Object(vec![member("tracks", Value::Array(tracks)), member("lead_out", n(self.lead_out as u64)), member("disc_type", n(self.disc_type as u64))].into_iter().collect())
     }
 
     pub fn from_json(v: &Value) -> Option<Toc> {
         let int = |v: &Value, name: &str| -> Option<u64> {
             match v.get(name)? {
-                Value::Number(t) => t.parse().ok(),
+                Value::Number(t) => t.as_u64().and_then(|n| n.try_into().ok()),
                 _ => None,
             }
         };
@@ -162,13 +162,13 @@ impl DvdToc {
     }
 
     pub fn to_json(&self) -> Value {
-        Value::Object(vec![member("sectors", n(self.sectors as u64)), member("layer_break", self.layer_break.map_or(Value::Null, |l| n(l as u64)))])
+        Value::Object(vec![member("sectors", n(self.sectors as u64)), member("layer_break", self.layer_break.map_or(Value::Null, |l| n(l as u64)))].into_iter().collect())
     }
 
     pub fn from_json(v: &Value) -> Option<DvdToc> {
         let int = |name: &str| -> Option<u64> {
             match v.get(name)? {
-                Value::Number(t) => t.parse().ok(),
+                Value::Number(t) => t.as_u64().and_then(|n| n.try_into().ok()),
                 _ => None,
             }
         };

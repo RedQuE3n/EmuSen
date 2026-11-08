@@ -31,6 +31,8 @@ emusen-native = { path = "../../EmuSen/Cores/Shared/emusen-native" }
 emusen-systems = { path = "../systems" }
 # The session's cheat registry and its application at the frame's points.
 emusen-cheats = { path = "../cheats" }
+# The tool's cheat lists in and out as JSON.
+serde_json.workspace = true
 # .NET's text rules, so each answer is the C# debugger's to the byte.
 emusen-dotnet = { path = "../dotnet" }
 # The recorder, for the parity tool's recordings.

@@ -36,14 +36,14 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 36u
+#define EMUSEN_PLATFORM_ABI_VERSION 37u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
 #define EMUSEN_PLATFORM_BAD_STRING (-5)      /* text that is not UTF-8 */
 #define EMUSEN_PLATFORM_NOT_SUPPORTED (-256) /* an operation this build does not have */
 #define EMUSEN_PLATFORM_IO (-1024)           /* reading or writing failed */
-#define EMUSEN_PLATFORM_PARSE (-1025)        /* text that is not JSON as .NET reads it, or not what its model allows */
+#define EMUSEN_PLATFORM_PARSE (-1025)        /* text that is not JSON as a hand-edited file is read, or not what its model allows */
 #define EMUSEN_PLATFORM_NEWER_FILE (-1027)   /* a file of a newer build, in a version this one does not read; since 23 */
 /* -1026 and -1029 are kept for later components. */
 #define EMUSEN_PLATFORM_DEVICE (-1028)       /* there is no Vulkan device, or one refused a call */
@@ -209,13 +209,13 @@ int64_t emusen_galaxia_rom_tracks(const uint8_t *sheet, size_t sheet_len, const 
  * EMUSEN_PLATFORM_PARSE; a newer major version is EMUSEN_PLATFORM_NEWER_FILE; each with words naming the field.
  */
 
-/* The manifest at `file`, decoded as File.ReadAllText decodes, checked; NOT_FOUND, ACCESS or IO for a file that will not read. */
+/* The manifest at `file`, decoded by its byte-order mark, checked; NOT_FOUND, ACCESS or IO for a file that will not read. */
 int64_t emusen_galaxia_package_read(const uint8_t *file, size_t file_len, uint8_t *out, size_t len);
 
 /* A manifest checked and written at `file` as the bytes emusen_galaxia_package_format gives, atomically; a refused one is not written. */
 int32_t emusen_galaxia_package_write(const uint8_t *file, size_t file_len, const uint8_t *manifest, size_t manifest_len);
 
-/* A manifest checked and laid out as it is written: indented by two, System.Text.Json's escapes, numbers as their tokens, a final line ending. */
+/* A manifest checked and laid out as it is written: serde_json's indented layout, two spaces, a line feed at the end. */
 int64_t emusen_galaxia_package_format(const uint8_t *manifest, size_t manifest_len, uint8_t *out, size_t len);
 
 /*
@@ -373,24 +373,24 @@ int32_t emusen_galaxia_config_write(const uint8_t *category, size_t category_len
 
 /* ---- Galaxia: the models (EmuSen_Config_Reference.md, section 3) ---- */
 
-/* The config models whose schemas the library owns, each mirroring a C# class of EmuSen.Galaxia.Models. */
+/* The config models the library owns the types of; a host's own classes of EmuSen.Galaxia.Models bind what crosses. */
 #define EMUSEN_GALAXIA_MODEL_APP_SETTINGS 0u    /* AppSettings, appsettings.json */
 #define EMUSEN_GALAXIA_MODEL_AUDIO_CONFIG 1u    /* AudioConfig, audio.json */
 #define EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG 2u /* GraphicsConfig, graphics.json */
 #define EMUSEN_GALAXIA_MODEL_CHEAT_FILE 3u      /* CheatFile, a file of the cheats category */
 
 /* Flags of the calls that read or make a model. */
-#define EMUSEN_GALAXIA_MODEL_UPGRADE 1u /* apply the model's own upgrade, as AppSettings.Load does and ConfigFile<T>.Load does not */
+#define EMUSEN_GALAXIA_MODEL_UPGRADE 1u /* apply the model's own upgrade, as loading settings for use does and reading a file alone does not */
 
 /*
- * A model crosses as a JSON document. Out of the library it is the bound document: an object holding every field
- * the model can set, in the model's order, with a number as the token the file had. Into the library it is any
- * JSON the model binds, by the rules of reading a file. A value the model computes and writes but never reads
- * (CheatFileEntry.IsRomPatch and EffectiveWrites) is left out on the way out and ignored on the way in.
+ * A model crosses as a JSON document. Out of the library it is the bound document: compact JSON holding every field
+ * the model can set, in the model's order, as serde_json writes it. Into the library it is any JSON the model binds,
+ * by the rules of reading a file. A value the model computes and writes but never reads (CheatFileEntry.IsRomPatch
+ * and EffectiveWrites) is left out on the way out and ignored on the way in.
  *
- * Reading follows System.Text.Json under ConfigJson.Options, measured rule by rule (EmuSen_RustPlatform.md,
- * sections 5.2 and 11.3): comments and a trailing comma are allowed, names match without case, the last of two
- * members wins whole, an unknown member is ignored, and a field with no member keeps its value in a new instance.
+ * Reading (EmuSen_RustPlatform.md, section 47.19): comments and a trailing comma are allowed and no other liberty,
+ * names match without case, the last of two members wins whole, an unknown member is ignored, a field with no member
+ * keeps its value in a new instance, and a text that is empty or not valid Unicode is refused.
  */
 
 /*
@@ -401,9 +401,9 @@ int32_t emusen_galaxia_config_write(const uint8_t *category, size_t category_len
 int64_t emusen_galaxia_model_load(uint32_t model, const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, uint32_t flags, uint8_t *out, size_t len);
 
 /*
- * Saves a document as a model's file: the folder is made, the document is written as the bytes System.Text.Json
- * writes for the class, and they are put in place by a rename. A null pointer for the document fails, after the
- * folder is made, as a class C# could not serialize fails. 0 or IO. Nothing is queued as a diagnostic.
+ * Saves a document as a model's file: the folder is made, the model is written as serde_json's indented layout (two
+ * spaces, a line feed between lines), and the bytes are put in place by a rename. A null pointer for the document
+ * fails after the folder is made. 0 or IO. Nothing is queued as a diagnostic.
  */
 int32_t emusen_galaxia_model_save(uint32_t model, const uint8_t *category, size_t category_len, const uint8_t *file, size_t file_len, const uint8_t *document, size_t document_len);
 
@@ -416,8 +416,6 @@ int64_t emusen_galaxia_model_bind(uint32_t model, const uint8_t *text, size_t te
 /* A document as the bytes of the model's file. PARSE, with the words, for one that cannot be written (a number JSON has no token for, a cheat with no list of writes). */
 int64_t emusen_galaxia_model_format(uint32_t model, const uint8_t *document, size_t document_len, uint8_t *out, size_t len);
 
-/* A model's fields, one to a line: Class.Name, a tab, the type, and after another tab "derived" or "skipped when null" where that applies. Each class once, the classes it holds after it. */
-int64_t emusen_galaxia_model_schema(uint32_t model, uint8_t *out, size_t len);
 
 /* A model read from any path, as CheatFile.LoadFrom reads one. ABSENT for a file that is missing, unreadable or will not bind; nothing is said of it. */
 int64_t emusen_galaxia_model_load_from(uint32_t model, const uint8_t *file, size_t file_len, uint8_t *out, size_t len);

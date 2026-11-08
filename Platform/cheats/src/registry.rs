@@ -3,7 +3,7 @@
 //! written. [`Applied`] is the registry's application at the frame's points, `CoreEngine.RefreshCheats`' division of
 //! the pokes into those a core gates itself and those the host writes (EmuSen_Backend.md §29.4, §29.33).
 
-use emusen_dotnet::json::{Text, Value};
+use emusen_galaxia::models::{CheatFile, CheatFileEntry, CheatFileWrite};
 use emusen_systems::cheats::{Kind, Write, WriteType};
 
 /// One cheat as the registry holds it, `CheatInfo`.
@@ -291,9 +291,9 @@ impl CheatRegistry {
         bytes
     }
 
-    /// `ToCheatFile`: the list as `cheats/<game>.json` holds it, the canonical JSON Galaxia's model binds.
-    pub fn to_file(&self) -> Value {
-        let text = |s: &str| Value::string(s);
+    /// `ToCheatFile`: the list as `cheats/<game>.json` holds it.
+    pub fn to_file(&self) -> CheatFile {
+        let text = |s: &str| Some(s.to_string());
         let entries = self
             .cheats
             .iter()
@@ -302,61 +302,49 @@ impl CheatRegistry {
                 let writes = c
                     .writes
                     .iter()
-                    .map(|w| {
-                        object(vec![
-                            ("Space", text(&w.space)),
-                            ("Address", text(&hex(w.address as u32, if rom { 6 } else { 1 }))),
-                            ("Value", text(&hex(w.value, (effective_width(w) * 2) as usize))),
-                            ("Width", Value::number(effective_width(w))),
-                            ("Type", text(type_name(w.kind))),
-                            ("BitPosition", w.bit_position.map_or(Value::Null, Value::number)),
-                            ("BigEndian", Value::Bool(w.big_endian)),
-                            ("RepeatCount", Value::number(w.effective_repeat_count())),
-                            ("RepeatAddAddress", text(&hex(w.repeat_add_address as u32, 1))),
-                            ("RepeatAddValue", text(&hex(w.repeat_add_value, 1))),
-                        ])
+                    .map(|w| CheatFileWrite {
+                        space: text(&w.space),
+                        address: text(&hex(w.address as u32, if rom { 6 } else { 1 })),
+                        value: text(&hex(w.value, (effective_width(w) * 2) as usize)),
+                        width: effective_width(w),
+                        r#type: text(type_name(w.kind)),
+                        bit_position: w.bit_position,
+                        big_endian: w.big_endian,
+                        repeat_count: w.effective_repeat_count(),
+                        repeat_add_address: text(&hex(w.repeat_add_address as u32, 1)),
+                        repeat_add_value: text(&hex(w.repeat_add_value, 1)),
                     })
                     .collect();
-                object(vec![
-                    ("Kind", text(if rom { "RomPatch" } else { "RamPoke" })),
-                    ("Writes", Value::Array(writes)),
-                    ("Compare", c.compare.map_or(Value::Null, |x| text(&format!("{x:02X}")))),
-                    ("Description", text(&c.description)),
-                    ("Enabled", Value::Bool(c.enabled)),
-                    ("Space", Value::Null),
-                    ("Address", Value::Null),
-                    ("Value", Value::Null),
-                ])
+                CheatFileEntry {
+                    kind: text(if rom { "RomPatch" } else { "RamPoke" }),
+                    writes: Some(writes),
+                    compare: c.compare.map(|x| format!("{x:02X}")),
+                    description: text(&c.description),
+                    enabled: c.enabled,
+                    space: None,
+                    address: None,
+                    value: None,
+                }
             })
             .collect();
-        object(vec![("Cheats", Value::Array(entries))])
+        CheatFile { cheats: Some(entries) }
     }
 
     /// `LoadFrom`: a saved list's cheats added, one bad entry skipped and the rest loaded; how many of each.
-    pub fn load(&mut self, file: &Value) -> (usize, usize) {
+    pub fn load(&mut self, file: &CheatFile) -> (usize, usize) {
         let (mut loaded, mut skipped) = (0, 0);
-        let entries = match file.get("Cheats") {
-            Some(Value::Array(e)) => e.as_slice(),
-            _ => &[],
-        };
-        for e in entries {
+        for e in file.cheats.iter().flatten() {
             let Some((kind, writes, compare)) = read_entry(e) else {
                 skipped += 1;
                 continue;
             };
-            let description = e.get("Description").and_then(Value::as_str).unwrap_or("");
-            let enabled = e.get("Enabled").and_then(Value::as_bool).unwrap_or(true);
-            match self.add(kind, writes, compare, description, enabled) {
+            match self.add(kind, writes, compare, e.description.as_deref().unwrap_or(""), e.enabled) {
                 Ok(_) => loaded += 1,
                 Err(_) => skipped += 1,
             }
         }
         (loaded, skipped)
     }
-}
-
-fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (Text::new(k), v)).collect())
 }
 
 /// `CheatFileWrite.Hex`: `value.ToString("X" + digits)`.
@@ -418,8 +406,8 @@ fn hex_number(text: &str, digits: usize) -> Option<u32> {
 }
 
 /// `TryReadEntry`: a saved cheat's writes and compare, or none for an entry that is broken.
-fn read_entry(e: &Value) -> Option<(Kind, Vec<Write>, Option<u8>)> {
-    let compare = match e.get("Compare").and_then(Value::as_str) {
+fn read_entry(e: &CheatFileEntry) -> Option<(Kind, Vec<Write>, Option<u8>)> {
+    let compare = match e.compare.as_deref() {
         None => None,
         Some(c) if c.trim().is_empty() || c.trim() == "-" => None,
         Some(c) => {
@@ -428,50 +416,28 @@ fn read_entry(e: &Value) -> Option<(Kind, Vec<Write>, Option<u8>)> {
             Some(hex_number(stripped, 2)? as u8)
         }
     };
-    let kind = if e.get("Kind").and_then(Value::as_str).is_some_and(|k| k.eq_ignore_ascii_case("RomPatch")) { Kind::RomPatch } else { Kind::RamPoke };
-    let listed: Vec<Value> = match e.get("Writes") {
-        Some(Value::Array(w)) if !w.is_empty() => w.clone(),
-        _ => match e.get("Address").and_then(Value::as_str) {
-            None => Vec::new(),
-            Some(address) => vec![object(vec![
-                ("Space", Value::string(e.get("Space").and_then(Value::as_str).unwrap_or(""))),
-                ("Address", Value::string(address)),
-                ("Value", Value::string(e.get("Value").and_then(Value::as_str).unwrap_or("00"))),
-            ])],
-        },
-    };
+    let kind = if e.is_rom_patch() { Kind::RomPatch } else { Kind::RamPoke };
+    let listed = e.listed_writes();
     if listed.is_empty() {
         return None;
     }
     let mut writes = Vec::new();
     for w in &listed {
-        let s = |name: &str, fallback: &'static str| -> Option<String> {
-            match w.get(name) {
-                Some(Value::String(t)) => Some(t.text.clone()),
-                Some(Value::Null) => None,
-                _ => Some(fallback.to_string()),
-            }
-        };
-        let int = |name: &str, fallback: i64| -> i64 { number(w.get(name)).unwrap_or(fallback) };
-        let address = try_hex(s("Address", "0").as_deref())?;
-        let value = try_hex(s("Value", "00").as_deref())?;
-        let repeat_address = s("RepeatAddAddress", "0");
-        let repeat_value = s("RepeatAddValue", "0");
-        let repeat_address = if repeat_address.as_deref().is_none_or(|t| t.trim().is_empty()) { 0 } else { try_hex(repeat_address.as_deref())? };
-        let repeat_value = if repeat_value.as_deref().is_none_or(|t| t.trim().is_empty()) { 0 } else { try_hex(repeat_value.as_deref())? };
-        let kind = parse_write_type(s("Type", "Set").as_deref())?;
+        let address = try_hex(w.address.as_deref())?;
+        let value = try_hex(w.value.as_deref())?;
+        let blank_or = |t: &Option<String>| if t.as_deref().is_none_or(|t| t.trim().is_empty()) { Some(0) } else { try_hex(t.as_deref()) };
+        let repeat_address = blank_or(&w.repeat_add_address)?;
+        let repeat_value = blank_or(&w.repeat_add_value)?;
+        let kind = parse_write_type(w.r#type.as_deref())?;
         writes.push(Write {
-            space: s("Space", "").unwrap_or_default(),
+            space: w.space.clone().unwrap_or_default(),
             address: address as i32,
             value,
-            width: int("Width", 1) as i32,
+            width: w.width,
             kind,
-            bit_position: match w.get("BitPosition") {
-                Some(Value::Number(_)) => number(w.get("BitPosition")).map(|b| b as i32),
-                _ => None,
-            },
-            big_endian: w.get("BigEndian").and_then(Value::as_bool).unwrap_or(false),
-            repeat_count: int("RepeatCount", 1) as i32,
+            bit_position: w.bit_position,
+            big_endian: w.big_endian,
+            repeat_count: w.repeat_count,
             repeat_add_address: repeat_address as i32,
             repeat_add_value: repeat_value,
         });
@@ -554,13 +520,6 @@ impl Applied {
     /// The registry the host writes at the frame's end: the session's own where the core takes no pokes.
     pub fn host<'a>(&'a self, cheats: &'a CheatRegistry) -> &'a CheatRegistry {
         if self.host_is_all { cheats } else { &self.host }
-    }
-}
-
-fn number(v: Option<&Value>) -> Option<i64> {
-    match v {
-        Some(Value::Number(n)) => n.parse().ok(),
-        _ => None,
     }
 }
 

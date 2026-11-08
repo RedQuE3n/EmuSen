@@ -8,7 +8,7 @@ use crate::chdman::Chdman;
 use crate::checks::{self, DvdToc, Toc};
 use crate::discs::{self, Item};
 use crate::{Context, Destination};
-use emusen_dotnet::json::{Text, Value};
+use serde_json::Value;
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_disc::Kind;
@@ -35,7 +35,7 @@ pub struct Options {
 pub struct Outcome {
     pub state: &'static str,
     pub words: Option<String>,
-    pub facts: Vec<(Text, Value)>,
+    pub facts: Vec<(String, Value)>,
 }
 
 impl Outcome {
@@ -48,17 +48,22 @@ impl Outcome {
     }
 
     pub fn with(mut self, name: &str, value: Value) -> Outcome {
-        self.facts.push((Text::new(name), value));
+        self.facts.push((String::from(name), value));
         self
     }
 }
 
 pub fn obj(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(n, v)| (Text::new(n), v)).collect())
+    Value::Object(members.into_iter().map(|(n, v)| (String::from(n), v)).collect())
+}
+
+/// Seconds as an event reports them, to a tenth.
+pub fn tenths(seconds: f64) -> f64 {
+    (seconds * 10.0).round() / 10.0
 }
 
 fn text(s: &str) -> Value {
-    Value::string(s)
+    Value::String(String::from(s))
 }
 
 /// Where a disc's CHD and package go: the CHD at the library's relative path under the destination (`Compressed`, the
@@ -120,7 +125,7 @@ pub fn utc(t: SystemTime) -> String {
 }
 
 fn seen_json(s: &Seen) -> Value {
-    obj(vec![("size", Value::number(s.size)), ("mtime", text(&utc(s.modified)))])
+    obj(vec![("size", Value::from(s.size)), ("mtime", text(&utc(s.modified)))])
 }
 
 fn same_seen(v: Option<&Value>, s: &Option<Seen>) -> bool {
@@ -132,14 +137,14 @@ fn same_seen(v: Option<&Value>, s: &Option<Seen>) -> bool {
 
 fn number(v: &Value) -> Option<u64> {
     match v {
-        Value::Number(t) => t.parse().ok(),
+        Value::Number(t) => t.as_u64(),
         _ => None,
     }
 }
 
 fn hashes_json(h: &Hashes, extra: Vec<(&str, Value)>) -> Value {
     let mut members = extra;
-    members.extend([("size", Value::number(h.size)), ("crc32", text(&h.crc32)), ("md5", text(&h.md5)), ("sha1", h.sha1.as_deref().map_or(Value::Null, text))]);
+    members.extend([("size", Value::from(h.size)), ("crc32", text(&h.crc32)), ("md5", text(&h.md5)), ("sha1", h.sha1.as_deref().map_or(Value::Null, text))]);
     obj(members)
 }
 
@@ -451,9 +456,9 @@ fn convert_in(ctx: &Context, dest: &Destination, chdman: &Chdman, item: &Item, p
         .with("output", text(&placed.chd_rel))
         .with("where", text(placed.game_where))
         .with("package", text(&placed.package_rel))
-        .with("original", Value::number(original_bytes))
-        .with("chd", Value::number(chd_bytes))
-        .with("seconds", Value::number(format!("{:.1}", started.elapsed().as_secs_f64())))
+        .with("original", Value::from(original_bytes))
+        .with("chd", Value::from(chd_bytes))
+        .with("seconds", Value::from(tenths(started.elapsed().as_secs_f64())))
         .with("checks", checks_json)
 }
 
@@ -476,7 +481,7 @@ fn package_of(
     let title = Path::new(&item.rel).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let mut game = package::file_entry("image", placed.game_where, &placed.game_path, chd_seen.map(|s| s.size));
     if let (Value::Object(members), Some(s)) = (&mut game, chd_seen) {
-        members.push((Text::new("seen"), seen_json(s)));
+        members.insert(String::from("seen"), seen_json(s));
     }
     let lone = prepared.original.is_none();
     let dump = obj(vec![
@@ -493,7 +498,7 @@ fn package_of(
         .map(|(s, seen)| {
             let mut m = vec![("where", text("library")), ("path", text(&discs::rel_of(&library, s)))];
             if let Some(seen) = seen {
-                m.extend([("size", Value::number(seen.size)), ("mtime", text(&utc(seen.modified)))]);
+                m.extend([("size", Value::from(seen.size)), ("mtime", text(&utc(seen.modified)))]);
             }
             obj(m)
         })
@@ -523,7 +528,7 @@ fn package_of(
     let mut doc = package::new(Some(&title), &item.system.esde_system, "linked", game);
     if let Value::Object(members) = &mut doc {
         for (name, value) in members.iter_mut() {
-            match name.text.as_str() {
+            match name.as_str() {
                 "dump" => *value = dump.clone(),
                 "container" => *value = container.clone(),
                 _ => {}
@@ -555,7 +560,7 @@ pub fn list(ctx: &Context, dest: &Destination, item: &Item) -> Outcome {
     let beside = place(ctx, &Destination::Beside { library: ctx.library.clone().unwrap_or_default() }, item);
     let taken = std::fs::symlink_metadata(&beside.chd).is_ok();
     let base = |state| {
-        let o = Outcome::new(state).with("size", Value::number(size));
+        let o = Outcome::new(state).with("size", Value::from(size));
         if taken { o.with("taken", Value::Bool(true)) } else { o }
     };
     let Ok(doc) = manifest(&placed) else { return base("not converted") };
@@ -571,7 +576,7 @@ pub fn list(ctx: &Context, dest: &Destination, item: &Item) -> Outcome {
     };
     let (original, chd) = recorded_sizes(&doc).unwrap_or((0, 0));
     let (at, output) = recorded_place(&doc);
-    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::number(original)).with("chd", Value::number(chd))
+    outcome.with("output", text(&output)).with("where", text(&at)).with("original", Value::from(original)).with("chd", Value::from(chd))
 }
 
 /// A converted disc's two sizes from its package's own record, no file read (EmuSen_GamePackages.md §4.4a): the

@@ -398,7 +398,7 @@ fn fail_package(refusal: &package::Refusal) -> i32 {
 pub unsafe extern "C" fn emusen_galaxia_package_read(file: *const u8, file_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<String, i32> {
         let doc = package::read(unsafe { required(file, file_len) }?).map_err(|e| fail_io(&e))?.map_err(|r| fail_package(&r))?;
-        Ok(emusen_galaxia::model::transport(&doc))
+        Ok(doc.to_string())
     };
     answer(result(), out, len)
 }

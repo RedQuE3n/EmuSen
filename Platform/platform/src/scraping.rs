@@ -3,7 +3,7 @@
 use std::path::Path;
 use crate::scrape::{answer, fail, failed, text};
 use emusen_dotnet::json::{self, Value};
-use emusen_galaxia::models::{APP_SETTINGS_ID, MODELS};
+use emusen_galaxia::models::AppSettings;
 use emusen_galaxia::tree::{self, Directory};
 use emusen_galaxia::{config, setting_folders};
 use emusen_library::Library;
@@ -80,33 +80,33 @@ fn every_system() -> Vec<String> {
     emusen_systems::table().map(|t| t.iter().map(|s| s.id.clone()).collect()).unwrap_or_default()
 }
 
-fn setting(settings: &emusen_dotnet::json::Value, name: &str) -> Option<String> {
-    settings.get(name).and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string)
+fn setting(value: &Option<String>) -> Option<String> {
+    value.clone().filter(|s| !s.trim().is_empty())
 }
 
 /// The tree, the settings file and its ROM folder, as the library tool reads them.
-fn settings_file() -> (tree::Tree, emusen_dotnet::json::Value, Option<String>) {
+fn settings_file() -> (tree::Tree, AppSettings, Option<String>) {
     let tree = tree::tree().clone();
-    let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
-    let roms = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
+    let (settings, _) = config::load_or_new::<AppSettings>(&tree, None, emusen_galaxia::models::APP_SETTINGS_FILE);
+    let roms = setting_folders::checked(settings.rom_directory.as_deref(), &tree::user_home()).path;
     (tree, settings, roms)
 }
 
 /// The settings file's folders, as `MainWindow.NativeSettings` gives them; each system its own engine, since no runtime catalog is here.
 fn own_settings() -> (String, String, String) {
     let (tree, settings, roms) = settings_file();
-    let art = setting(&settings, "ArtworkDirectory").or_else(|| tree.directory(Directory::Artwork).map(|d| d.to_string_lossy().into_owned()));
-    let mut members = vec![
-        ("roms", roms.map_or(Value::Null, Value::string)),
-        ("art", art.map_or(Value::Null, Value::string)),
-        ("esde_media", setting(&settings, "EsdeMediaDirectory").map_or(Value::Null, Value::string)),
-        ("openemu", Value::Bool(settings.get("OpenEmuFallback").and_then(|v| v.as_bool()).unwrap_or(true))),
-        ("user_agent", Value::string(format!("EmuSen/{}", env!("CARGO_PKG_VERSION")))),
-        ("developer_files", Value::Bool(true)),
-    ];
-    members.push(("cores", Value::Array(every_system().into_iter().map(|id| Value::Array(vec![Value::string(id)])).collect())));
-    let mut out = String::new();
-    json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
+    let art = setting(&settings.artwork_directory).or_else(|| tree.directory(Directory::Artwork).map(|d| d.to_string_lossy().into_owned()));
+    let cores: Vec<[String; 1]> = every_system().into_iter().map(|id| [id]).collect();
+    let out = serde_json::json!({
+        "roms": roms,
+        "art": art,
+        "esde_media": setting(&settings.esde_media_directory),
+        "openemu": settings.open_emu_fallback,
+        "user_agent": format!("EmuSen/{}", env!("CARGO_PKG_VERSION")),
+        "developer_files": true,
+        "cores": cores,
+    })
+    .to_string();
     let media = tree.directory(Directory::Media).unwrap_or_default().to_string_lossy().into_owned();
     let games = tree.directory(Directory::Library).unwrap_or_default().join(emusen_galaxia::stores::GAMES_DB).to_string_lossy().into_owned();
     (media, games, out)

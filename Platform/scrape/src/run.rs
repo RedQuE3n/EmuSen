@@ -1273,7 +1273,7 @@ fn patched_first(rom: &str) -> Option<Hashes> {
 
 /// What a package's manifest has the scraper send first: the patched image's hashes under `identity: patched`, else
 /// none, so that the file's own, the dump's, are sent (EmuSen_GamePackages.md §5.5).
-pub fn scraped_first(doc: &emusen_dotnet::json::Value) -> Option<Hashes> {
+pub fn scraped_first(doc: &serde_json::Value) -> Option<Hashes> {
     if !emusen_galaxia::package::scrapes_as_patched(doc) {
         return None;
     }

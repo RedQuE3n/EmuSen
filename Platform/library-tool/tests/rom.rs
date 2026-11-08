@@ -5,7 +5,7 @@
 
 use emusen_disc::ecma130::{self, RAW};
 use emusen_galaxia::claims::{Index, Package};
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_galaxia::tree::Tree;
 use emusen_library_tool::job::{self, Job};
@@ -151,7 +151,7 @@ fn events(job: &Job) -> Vec<Value> {
     while !job.finished() {
         if let Some(line) = job.peek(Duration::from_millis(200)) {
             job.take();
-            out.push(json::parse(&line).unwrap());
+            out.push(serde_json::from_str::<Value>(&line).unwrap());
         }
     }
     out
@@ -172,7 +172,7 @@ fn lines(events: &[Value]) -> Vec<(String, String)> {
         if let Some(Value::Array(ls)) = e.get("lines") {
             for l in ls {
                 let size = match l.get("size") {
-                    Some(Value::Number(t)) => t.clone(),
+                    Some(Value::Number(t)) => t.to_string(),
                     _ => String::new(),
                 };
                 out.push((text(l, "name").to_string(), format!("{} {size}", text(l, "sha1"))));

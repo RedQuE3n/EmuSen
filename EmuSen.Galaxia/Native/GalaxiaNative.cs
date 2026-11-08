@@ -163,7 +163,6 @@ namespace EmuSen.Galaxia.Native
         private static delegate* unmanaged[Cdecl]<uint, uint, byte*, nuint, long> _modelNew;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, uint, byte*, nuint, long> _modelBind;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long> _modelFormat;
-        private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, long> _modelSchema;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long> _modelLoadFrom;
         private static delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int> _modelSaveTo;
         private static delegate* unmanaged[Cdecl]<byte*, nuint, long> _cheatNames;
@@ -199,7 +198,7 @@ namespace EmuSen.Galaxia.Native
             "emusen_galaxia_mac_data_directory_for", "emusen_galaxia_legacy_root_for", "emusen_galaxia_save_path", "emusen_galaxia_file_read",
             "emusen_galaxia_file_write", "emusen_galaxia_rom_md5", "emusen_galaxia_migrate", "emusen_galaxia_remaining_library",
             "emusen_galaxia_config_delete", "emusen_galaxia_config_read", "emusen_galaxia_config_write", "emusen_galaxia_model_load", "emusen_galaxia_model_save",
-            "emusen_galaxia_model_new", "emusen_galaxia_model_bind", "emusen_galaxia_model_format", "emusen_galaxia_model_schema", "emusen_galaxia_model_load_from",
+            "emusen_galaxia_model_new", "emusen_galaxia_model_bind", "emusen_galaxia_model_format", "emusen_galaxia_model_load_from",
             "emusen_galaxia_model_save_to", "emusen_galaxia_cheat_names", "emusen_galaxia_cheat_name_valid", "emusen_galaxia_cheat_game_list", "emusen_galaxia_log_root", "emusen_galaxia_log_usable",
             "emusen_galaxia_log_path", "emusen_galaxia_log_format", "emusen_galaxia_log_append", "emusen_galaxia_log_reset", "emusen_galaxia_suggest_distance",
             "emusen_galaxia_suggest",
@@ -253,7 +252,6 @@ namespace EmuSen.Galaxia.Native
             _modelNew = (delegate* unmanaged[Cdecl]<uint, uint, byte*, nuint, long>)found[next++];
             _modelBind = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, uint, byte*, nuint, long>)found[next++];
             _modelFormat = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long>)found[next++];
-            _modelSchema = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, long>)found[next++];
             _modelLoadFrom = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, long>)found[next++];
             _modelSaveTo = (delegate* unmanaged[Cdecl]<uint, byte*, nuint, byte*, nuint, int>)found[next++];
             _cheatNames = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)found[next++];
@@ -706,7 +704,6 @@ namespace EmuSen.Galaxia.Native
             return Document((o, n) => { fixed (byte* pd = d.Bytes) return _modelFormat((uint)model, pd, d.Length, o, n); })!;
         }
 
-        public static string ModelSchema(GalaxiaModel model) => Document((o, n) => _modelSchema((uint)model, o, n))!;
 
         public static string? ModelLoadFrom(GalaxiaModel model, string path)
         {

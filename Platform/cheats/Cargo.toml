@@ -14,4 +14,3 @@ name = "emusen_cheats"
 emusen-systems = { path = "../systems" }
 # Paths, how a folder is listed, and the zip reader.
 emusen-galaxia = { path = "../galaxia" }
-emusen-dotnet = { path = "../dotnet" }

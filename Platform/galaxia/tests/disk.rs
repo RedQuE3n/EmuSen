@@ -2,7 +2,7 @@
 //! zips, each beside the model it reads to. Every change to how a file is read is held to it. See
 //! EmuSen_RustPlatform.md §47.
 
-use emusen_galaxia::{archive, config, disc_set, model, models, package, package_zip};
+use emusen_galaxia::{archive, config, disc_set, models, package, package_zip};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -40,7 +40,7 @@ fn assert_same_model(file: &Path, got: &str, want: &str) {
 /// A config file's outcome: its model as JSON, `null`, or `refused`.
 fn config_outcome(model: &models::Model, bytes: &[u8]) -> String {
     match config::bind_text(model, &emusen_galaxia::text_file::decode(bytes), true) {
-        Ok(Some(bound)) => model::transport(&bound),
+        Ok(Some(bound)) => bound,
         Ok(None) => "null".to_string(),
         Err(_) => "refused".to_string(),
     }
@@ -48,7 +48,7 @@ fn config_outcome(model: &models::Model, bytes: &[u8]) -> String {
 
 fn config_written(model: &models::Model, bytes: &[u8]) -> String {
     let bound = config::bind_text(model, &emusen_galaxia::text_file::decode(bytes), true).unwrap().unwrap();
-    model::format(model.schema, &bound).unwrap()
+    (model.format)(&bound).unwrap()
 }
 
 const CONFIGS: [(&str, &models::Model); 5] =
@@ -86,11 +86,7 @@ fn a_config_read_written_and_read_again_is_the_same_model() {
 /// A manifest's outcome: its document as compact JSON, or the kind of refusal.
 fn package_outcome(bytes: &[u8]) -> String {
     match package::parse(&emusen_galaxia::text_file::decode(bytes)) {
-        Ok(doc) => {
-            let mut out = String::new();
-            emusen_dotnet::json::write_compact(&mut out, &doc);
-            out
-        }
+        Ok(doc) => doc.to_string(),
         Err(package::Refusal::NotJson(_)) => "refused: not JSON".to_string(),
         Err(package::Refusal::Invalid(_)) => "refused: invalid".to_string(),
         Err(package::Refusal::Newer(_)) => "refused: newer".to_string(),

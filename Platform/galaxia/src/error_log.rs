@@ -7,7 +7,7 @@
 
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
-use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
+use crate::models::{APP_SETTINGS_FILE, AppSettings};
 use crate::files::file_exists;
 use crate::tree::{Directory, Tree};
 use std::path::{Path, PathBuf};
@@ -70,8 +70,8 @@ pub fn root(tree: &Tree, directory_override: Option<&str>) -> (PathBuf, Option<S
     if let Some(directory) = directory_override {
         return (PathBuf::from(directory), None);
     }
-    let (settings, said) = config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
-    let configured = settings.get("LogDirectory").and_then(|value| value.as_str());
+    let (settings, said) = config::load_or_new::<AppSettings>(tree, None, APP_SETTINGS_FILE);
+    let configured = settings.log_directory.as_deref();
     if usable(configured) {
         return (PathBuf::from(configured.unwrap_or_default()), said);
     }
@@ -295,7 +295,7 @@ mod tests {
         settings("5");
         let (fallback, said) = root(&tree, None);
         assert_eq!(fallback, temp.join("appdata/EmuSen/Logs"));
-        assert!(said.unwrap().ends_with("$.LogDirectory is not a string. Falling back to defaults."));
+        assert!(said.unwrap().ends_with("$.LogDirectory: invalid type: integer `5`, expected a string. Falling back to defaults."));
         assert!(!usable(None) && !usable(Some("")) && !usable(Some("  ")));
     }
 }

@@ -30,8 +30,12 @@ pub fn fit(root: &Item, panel: Rect, slack: f64, smallest: f64) -> Vec<Fault> {
         if ancestors.iter().any(|a| a.kind == Kind::Popup) || item.kind == Kind::Popup {
             return;
         }
-        if item.is_drawn() {
+        // A scroller or a clip is held to its limit too, though it draws nothing: what it shows lies inside it (decided 2026-11-08).
+        let bounds = item.visible && (item.clips || item.kind == Kind::Scroller);
+        if item.is_drawn() || bounds {
             past_its_limit(item, ancestors, panel, slack, &mut faults);
+        }
+        if item.is_drawn() {
             cut_at_an_edge(item, ancestors, slack, &mut faults);
             if item.kind == Kind::Words {
                 words(item, ancestors, slack, smallest, &mut faults);

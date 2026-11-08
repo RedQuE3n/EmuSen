@@ -34,7 +34,7 @@ Item {
     Timer {
         interval: 8
         repeat: true
-        running: root.inFront && Kit.PadRouter.clockRunning
+        running: root.inFront && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
         onTriggered: Kit.PadRouter.pump()
     }
 
@@ -47,6 +47,13 @@ Item {
         engine: root.engine
         pads: root.pads
         game: root.game
+    }
+
+    // The bars are the game's and always black, whatever the theme: nothing white or themed ever shows beside the picture.
+    Rectangle {
+        objectName: "bars"
+        anchors.fill: parent
+        color: "#000000"
     }
 
     // The picture at its display shape, the session's, centred with bars where the window's shape differs, as Mistress letterboxes it.

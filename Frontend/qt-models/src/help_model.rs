@@ -38,6 +38,8 @@ pub mod qobject {
         Search,
         PauseSlots,
         PauseReel,
+        Question,
+        QuestionBack,
     }
 
     extern "RustQt" {
@@ -125,6 +127,8 @@ impl qobject::HelpModel {
             HelpScreen::Search => Screen::Search,
             HelpScreen::PauseSlots => Screen::PauseSlots,
             HelpScreen::PauseReel => Screen::PauseReel,
+            HelpScreen::Question => Screen::Question,
+            HelpScreen::QuestionBack => Screen::QuestionBack,
             _ => Screen::Home,
         }
     }
@@ -168,6 +172,8 @@ pub fn shown_screen(screen: Screen) -> i32 {
         Screen::PauseReel => HelpScreen::PauseReel,
         Screen::Card => HelpScreen::Card,
         Screen::Search => HelpScreen::Search,
+        Screen::Question => HelpScreen::Question,
+        Screen::QuestionBack => HelpScreen::QuestionBack,
     };
     shown.repr
 }

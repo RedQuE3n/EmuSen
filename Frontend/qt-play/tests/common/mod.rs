@@ -104,6 +104,33 @@ pub fn painted_differences(scene: &mut Scene<'_>, feed: &PictureFeed) -> (u64, V
     (serial, differ)
 }
 
+/// The window's pixels beside the picture, in its bars, that are not black: (x, y, shown). Points a fifth of the way in from
+/// each edge to the picture, at its top, middle and foot; none where the picture meets the edge.
+pub fn bar_pixels_not_black(scene: &mut Scene<'_>) -> Vec<(f64, f64, [u8; 4])> {
+    let tree = scene.tree();
+    let window = tree.nodes.iter().find(|n| n.name == "bars").map(|n| (n.w, n.h)).expect("the game's bars");
+    let (px, py, pw, ph) = tree.nodes.iter().find(|n| n.name == "picture").map(|n| (n.x, n.y, n.w, n.h)).expect("the picture's item");
+    let mut points = Vec::new();
+    for y in [ph * 0.1, ph * 0.5, ph * 0.9].map(|f| py + f) {
+        if px >= 2.0 {
+            points.extend([(px * 0.2, y), (window.0 - (window.0 - px - pw) * 0.2, y)]);
+        }
+    }
+    for x in [pw * 0.1, pw * 0.5, pw * 0.9].map(|f| px + f) {
+        if py >= 2.0 {
+            points.extend([(x, py * 0.2), (x, window.1 - (window.1 - py - ph) * 0.2)]);
+        }
+    }
+    assert!(!points.is_empty(), "the picture leaves no bars at {window:?}");
+    let colours = scene.colours_at(&points);
+    points
+        .into_iter()
+        .zip(colours)
+        .map(|((x, y), c)| (x, y, c.map_or([255; 4], |c| [c.r, c.g, c.b, c.a])))
+        .filter(|(_, _, c)| c[0] != 0 || c[1] != 0 || c[2] != 0)
+        .collect()
+}
+
 /// What the layer said over a window grab: only the two hazards Qt's `grabWindow` makes on its own swapchain under the
 /// threaded loop, a render pass after the present and a barrier after the acquire, which a run without the grab never
 /// shows (EmuSen_Qt.md §1.8.8).

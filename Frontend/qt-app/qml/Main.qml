@@ -231,7 +231,7 @@ Window {
         Timer {
             interval: 8
             repeat: true
-            running: moonrise.activeFocus && Kit.PadRouter.clockRunning
+            running: moonrise.activeFocus && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
             onTriggered: Kit.PadRouter.pump()
         }
     }

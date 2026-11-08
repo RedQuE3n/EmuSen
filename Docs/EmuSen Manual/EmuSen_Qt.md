@@ -593,6 +593,14 @@ resumes it; the reader and session say no failure and the validation layer's fin
 caught: the window not naming the reader's hand-over (no battery file: the game heard nothing), `chordOnly` never set
 (the router gave everything during the game), and the chord not reaching the session (no pause in 10 s).
 
+**The bars are black** (the tester, 2026-11-08: a game never shows white around its picture). On the desk the 4:3
+picture stood between two white bars: `Play.qml`'s window set no colour and Qt's default is white, and `emusen-qt`'s
+window paints `voidFill`, which the light variant makes light. The bars belong to the game, not the theme, so `Game.qml`
+fills its whole box with plain black (`#000000`, no token) behind the picture, for every host and every variant, and
+`Play.qml`'s window is black for the moment before the first frame. **Held to:** qt-play's `device.rs`, once the core's
+frame is read back, samples the window beside the picture (a fifth of the way from each edge, at the picture's top,
+middle and foot) in the dark and the light variant and requires black.
+
 #### 1.8.6 The game's sound **[M 2026-11-08]**
 
 The sound takes the C# front end's path through the platform library, so it has one owner: Endymion's game player
@@ -1728,6 +1736,23 @@ the screenshot and the card stays in place).
 opens, sectionEnd, key, dimmed) and each row's value for them; `CardModel` and `PauseModel` both answer `data` and
 `roleNames` through it, where each had held its own copy.
 
+### 7.4 Stage 2, the forms: the question, notices and the docked keyboard (2026-11-08)
+
+Kit pieces the stage's screens use, each an extension of `EmuSen.Kit` reviewed under rule Q (`EmuSen_Kit.md` §7.22 to
+§7.25, where each is held to its tests): the **docked keyboard** (`KeyboardModel` and `Keyboard`, kit-core's
+`keyboard.rs`), at Mistress's boxes from `GamesSearch-1280x800.spec`; the **question form** (`Question` rebuilt to
+Mistress's question card from `CoresPlan-1280x800.spec`, `MenuRow.overRaised`, and the words in `emusen-qt-models`'
+`question.rs`, the Resume question's among them); **notices** (`NoticeModel` and `NoticeLayer`, kit-core's `notice.rs`);
+the **vertical walk** passing a field and a combo box (`KeyPass`); B offered to the focused control before the host's
+`backDeclined`; the router's clock asleep while it has nothing to do; and the night **help band** as glass. The
+side-by-sides, Mistress left and the kit right, are in `~/.cache/emusen/tmp/qt-s2/compare/`.
+
+**Named, for the tester:** the question's cover stops at the 58-unit help bar on the foot (742), where Mistress's Cores
+window, whose band is 98 high, stops it at 702, so the card is centred 20 units lower; the notice has no shadow on the
+software tier; with a combo box's list open, the pad does not reach the frame until it closes (owed to stage 5). The
+Resume question is built as words and form; asking it at a game's start needs the runtime's "where you left off" state
+through the clients, which they do not wrap yet.
+
 ---
 
 ## 8. Testing
@@ -2056,10 +2081,10 @@ stars test; `glowSettled` never announced failed `idle.rs`; the Pause Card's res
 `idle.rs` (55 frames in 2 s on Home); the picture `live` under a paused game failed `acceptance.rs` (120 frames in 2 s
 at the Pause Card).
 
-**Seen, not changed.** Each `Frame` (and `Game.qml` while the game is in front) runs an 8 ms `Timer` that pumps the pad
-router while it has the focus, waking the GUI thread 125 times a second at an idle screen. It draws nothing (the counts
-above), and it is the router's repeat clock, so it is left as it is; whether it should sleep until a pad event is a
-question for the router (`EmuSen_Kit.md` §7.4).
+**Seen, then changed (2026-11-08).** Each `Frame` (and `Game.qml` while the game is in front, and the splash) ran an 8 ms
+`Timer` pumping the pad router while it had the focus, waking the GUI thread 125 times a second at an idle screen. It drew
+nothing, but it woke the thread for nothing; the timers now run only while `PadRouter.pending` (an event waiting or a
+button held), `EmuSen_Kit.md` §7.25.
 
 #### 9.3.3 Play to the first picture on a hosted core **[M 2026-11-08]**
 

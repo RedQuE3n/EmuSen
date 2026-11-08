@@ -28,7 +28,9 @@ pub fn named(root: &Item) -> Vec<Fault> {
     faults
 }
 
-/// Palette reach (InterfaceSpec §4.4): every colour an element paints is one the state declares; a theme's scene is exempt.
+/// Palette reach (InterfaceSpec §4.4): every colour an element paints is one the state declares, at any alpha, since a
+/// token painted through a colour's alpha is the token as it is through an item's opacity (the night help band's glass,
+/// EmuSen_Kit.md §7.25); a theme's scene is exempt.
 pub fn palette_reach(root: &Item, declared: &[Colour]) -> Vec<Fault> {
     let mut faults = Vec::new();
     root.visit(&mut |item, ancestors| {
@@ -36,7 +38,7 @@ pub fn palette_reach(root: &Item, declared: &[Colour]) -> Vec<Fault> {
             return;
         }
         for colour in &item.paints {
-            if !declared.contains(colour) {
+            if !declared.iter().any(|d| (d.r, d.g, d.b) == (colour.r, colour.g, colour.b) && (d.a == colour.a || d.a == 255)) {
                 faults.push(Fault::OutsidePalette { item: item.id, colour: *colour });
             }
         }

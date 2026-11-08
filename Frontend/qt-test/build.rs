@@ -4,7 +4,15 @@ fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("EmuSen.Scenes")
             .version(1, 0)
-            .qml_files(["qml/MenuScene.qml", "qml/ControlsScene.qml", "qml/SheetScene.qml", "qml/GlyphScene.qml"])
+            .qml_files([
+                "qml/MenuScene.qml",
+                "qml/ControlsScene.qml",
+                "qml/SheetScene.qml",
+                "qml/GlyphScene.qml",
+                "qml/KeyboardScene.qml",
+                "qml/NoticeScene.qml",
+                "qml/WalkScene.qml",
+            ])
             .depend("QtQuick")
             .depend("EmuSen.Kit"),
     )

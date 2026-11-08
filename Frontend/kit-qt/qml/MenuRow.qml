@@ -18,6 +18,8 @@ Kit.Walkable {
     // The words' distance from the row's edges, and their face.
     property real inset: Kit.Tokens.base * 4
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
+    // The row stands on a raised surface, a question's card: clear at rest, Surface when focused (EmuSen_Kit.md §7.24).
+    property bool overRaised: false
     // The marks' sizes as Mistress's render draws them: a step's ◂ and ▸, and the larger ▸ of a row that opens a page.
     readonly property size stepMark: Qt.size(8, 11)
     readonly property size openMark: Qt.size(9, 13)
@@ -29,7 +31,7 @@ Kit.Walkable {
     Rectangle {
         anchors.fill: parent
         radius: Kit.Tokens.rowRadius
-        color: root.activeFocus || root.current ? Kit.Tokens.surfaceRaised : Kit.Tokens.surface
+        color: root.activeFocus || root.current ? (root.overRaised ? Kit.Tokens.surface : Kit.Tokens.surfaceRaised) : (root.overRaised ? "transparent" : Kit.Tokens.surface)
         border.width: root.hovered ? Kit.Tokens.hoverBorder : 0
         border.color: Kit.Tokens.border
         Rectangle {

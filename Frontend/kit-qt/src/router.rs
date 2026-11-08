@@ -49,6 +49,12 @@ impl Router {
         self.chord_only = on;
     }
 
+    /// Whether a pump has work: an event queued or a button held, whose repeats and chord the clock times. With neither,
+    /// a host's clock may sleep until the next push (EmuSen_Kit.md §7.4).
+    pub fn pending(&self) -> bool {
+        !self.queue.is_empty() || self.held.iter().any(|&down| down)
+    }
+
     pub fn is_held(&self, button: UiButton) -> bool {
         self.held[button.index()]
     }

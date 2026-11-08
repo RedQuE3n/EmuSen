@@ -78,7 +78,8 @@ QNetworkAccessManager* SandboxNetwork::create(QObject* parent)
 Sandbox::Sandbox(const Policy& policy) : interceptor(policy, log), network(log), engine(std::make_unique<QQmlEngine>())
 {
     engine->setImportPathList({ sandbox_qt_qml(), QStringLiteral("qrc:/qt/qml"), QStringLiteral("qrc:/qt-project.org/imports") });
-    engine->setPluginPathList({});
+    // "." is Qt's default: a qmldir's plugin is found in its own folder, one the qmldir check has allowed.
+    engine->setPluginPathList({ QStringLiteral(".") });
     engine->addUrlInterceptor(&interceptor);
     engine->setNetworkAccessManagerFactory(&network);
     engine->setOfflineStoragePath(QString());

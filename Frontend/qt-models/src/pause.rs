@@ -1,4 +1,4 @@
-//! The Pause Card's pages as plain data (EmuSen_Interface.md §2.8, §18.5, §20; EmuSen_Qt.md §7.1 step 7, §7.2): the
+//! The Pause Card's pages as plain data (EmuSen_Interface.md §2.8, §18.5, §20; EmuSen_Qt.md §7.1 step 7, §7.3): the
 //! card's state (`Card`), its rows and words from the facts the running session gives, its context pane, and what a
 //! choice, a step, B or a shoulder does. No Qt here; `PauseModel` puts it on Qt. The rows and words are Mistress's
 //! (`GameMenuRows`, `LeaveRows`, `ReelRows`, `PauseCardPane`), so the two front ends say the same.

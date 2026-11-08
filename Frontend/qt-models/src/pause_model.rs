@@ -1,4 +1,4 @@
-//! `PauseModel`, the Pause Card's page as a QAbstractListModel (EmuSen_Qt.md §7.1 step 7, §7.2): pause.rs's card put
+//! `PauseModel`, the Pause Card's page as a QAbstractListModel (EmuSen_Qt.md §7.1 step 7, §7.3): pause.rs's card put
 //! on Qt, its rows, words, pane and help bar; a row chosen or stepped, a declared action, B or a shoulder answered by
 //! pause.rs's rule, and what the session must do said as a signal, so QML writes no words and no logic.
 

@@ -70,7 +70,7 @@ fn first_page(f: &Value) -> Page {
         rows.push(Row::new(START_CONSOLE, "Start Console").opens().pane(Pane::said("Starts a console with no disc in it.", "Change Disc on the Pause Card puts a game in.")));
     }
     rows.push(Row::new(COLLECTIONS, "Collections").opens().pane(Pane::said("Your collections, and the automatic ones.", "A opens a collection as a section of the library.")));
-    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows }
+    Page { title: format!("{} · {}", words(f, "section"), words(f, "count")), breadcrumb: "List".to_owned(), rows, footer: String::new() }
 }
 
 /// The Filter page: every game, then Favourites except in the Favourites section; the player's collections follow
@@ -80,7 +80,7 @@ fn filter_page(f: &Value) -> Page {
     if !f.get("favouritesSection").and_then(Value::as_bool).unwrap_or(false) {
         rows.push(Row::new(FAVOURITES_ONLY, "Favourites"));
     }
-    Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows }
+    Page { title: "Filter".to_owned(), breadcrumb: "List".to_owned(), rows, footer: String::new() }
 }
 
 pub struct ListCard;

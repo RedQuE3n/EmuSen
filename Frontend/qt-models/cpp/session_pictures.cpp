@@ -1,4 +1,4 @@
-// The session's pictures served to QML's Image by address (EmuSen_Qt.md §7.2).
+// The session's pictures served to QML's Image by address (EmuSen_Qt.md §7.3).
 #include "session_pictures.h"
 
 #include <QtQml/QQmlEngine>

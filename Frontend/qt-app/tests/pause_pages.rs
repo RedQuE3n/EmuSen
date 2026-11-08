@@ -1,4 +1,4 @@
-//! The Pause Card's pages through the harness on the software backend (EmuSen_Qt.md §7.2): the context pane on Rewind,
+//! The Pause Card's pages through the harness on the software backend (EmuSen_Qt.md §7.3): the context pane on Rewind,
 //! Save and Load from the session's facts, Left and Right choosing the slot, and the reel's page with its strip, its
 //! steps and B back to Rewind. The pictures are judged on Vulkan, over a running game, in acceptance.rs.
 

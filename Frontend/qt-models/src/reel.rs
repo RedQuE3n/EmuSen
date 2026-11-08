@@ -1,4 +1,4 @@
-//! The rewind reel as the Pause Card shows it (EmuSen_Interface.md §18.5, §20.1; EmuSen_Qt.md §7.2): the moments the
+//! The rewind reel as the Pause Card shows it (EmuSen_Interface.md §18.5, §20.1; EmuSen_Qt.md §7.3): the moments the
 //! runtime holds with pictures, newest first from the present, the strip's stops, Left and Right, the shoulders and the
 //! triggers over them, and the words. Mistress's `MainWindow.Rewind`, restated as plain Rust, so both front ends agree.
 

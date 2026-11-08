@@ -1,4 +1,4 @@
-//! `PaneModel`, a card's context pane as a QAbstractListModel (EmuSen_Qt.md §7.2): the pane a page model describes as
+//! `PaneModel`, a card's context pane as a QAbstractListModel (EmuSen_Qt.md §7.3): the pane a page model describes as
 //! plain data (pause.rs's `Pane`), its tiles as rows and its large picture and sentence as properties, so the pane's
 //! view writes no words and no logic.
 

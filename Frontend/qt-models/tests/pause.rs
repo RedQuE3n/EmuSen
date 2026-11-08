@@ -1,4 +1,4 @@
-//! The Pause Card's pages as plain data, no Qt (EmuSen_Qt.md §7.1 step 7, §7.2, §8.2): Mistress's rows and words from
+//! The Pause Card's pages as plain data, no Qt (EmuSen_Qt.md §7.1 step 7, §7.3, §8.2): Mistress's rows and words from
 //! the session's facts, the card's pane, the reel, Save and Load with their slots, what a choice, a step and B do, and the
 //! declared actions read back by the walk's parser.
 

@@ -139,7 +139,7 @@ fn first_page(f: &Facts) -> Page {
     let power_at = rows.len();
     rows.push(Row::new(POWER, "Power").opens());
     end_section_before(&mut rows, power_at);
-    Page { title: TITLE.to_owned(), breadcrumb: String::new(), rows }
+    Page { title: TITLE.to_owned(), breadcrumb: String::new(), rows, footer: String::new() }
 }
 
 fn tools_page(f: &Facts) -> Page {
@@ -154,7 +154,7 @@ fn tools_page(f: &Facts) -> Page {
         })
         .collect();
     rows.extend(OTHER_TOOLS.iter().map(|(key, name)| Row::new(key, name).opens().pane(Pane::said(name, &hint(name)))));
-    Page { title: "Tools".to_owned(), breadcrumb: TITLE.to_owned(), rows }
+    Page { title: "Tools".to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: String::new() }
 }
 
 fn power_page(f: &Facts) -> Page {
@@ -163,7 +163,7 @@ fn power_page(f: &Facts) -> Page {
         rows.push(Row::new(BIG_PICTURE, "Exit Big Picture"));
     }
     rows.push(Row::new(QUIT, "Quit EmuSen..."));
-    Page { title: "Power".to_owned(), breadcrumb: TITLE.to_owned(), rows }
+    Page { title: "Power".to_owned(), breadcrumb: TITLE.to_owned(), rows, footer: crate::words::version_line() }
 }
 
 /// The card's pages.

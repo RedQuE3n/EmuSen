@@ -23,6 +23,7 @@ fn the_home_card_has_mistress_rows_and_pages() {
     // The big screen's Power page (HomeCardPower), and Steam's Game Mode's (HomeCardHandheldPower).
     let power = home.page(home_card::POWER, &facts(Facts::default()));
     assert_eq!((power.title.as_str(), power.breadcrumb.as_str()), ("Power", "Home"));
+    assert!(power.footer.starts_with("EmuSen ") && power.footer.len() > 7, "the program's version under Power: {}", power.footer);
     assert_eq!(labels(home_card::CARD, home_card::POWER, &facts(Facts::default())), ["Exit Big Picture", "Quit EmuSen..."]);
     assert_eq!(labels(home_card::CARD, home_card::POWER, &facts(Facts { game_mode: true, ..Facts::default() })), ["Quit EmuSen..."]);
     // Quit asks first (HomeCardQuit): No, then Yes; its sentence says whether a game closes too.
@@ -98,6 +99,9 @@ fn the_list_card_and_the_listing_are_mistress_games_screen() {
     assert_eq!((page.rows[1].value.as_str(), page.rows[3].value.as_str()), ("Name", "A"));
     assert_eq!(page.rows[0].pane.lines[0], ("Type part of a name; the covers narrow as you type.".to_owned(), "The keyboard docks at the foot of the screen.".to_owned()));
     assert_eq!(page.rows[1].pane.lines[0].1, "Also: Last played · Most played · Year · Rating");
+    let mut startable = f.clone();
+    startable["startConsole"] = json!(true);
+    assert_eq!(list.page(list_card::FIRST, &startable).rows[5].label, "Start Console", "offered where a console starts empty, before Collections");
     assert_eq!(list.choose(list_card::FIRST, list_card::SORT), Choice::Stay("sort+1".into()));
     assert_eq!(list.step(list_card::FIRST, list_card::JUMP, -1), Some("jump-1".into()));
     assert_eq!(list.step(list_card::FIRST, list_card::SEARCH, 1), None, "Search steps nothing");

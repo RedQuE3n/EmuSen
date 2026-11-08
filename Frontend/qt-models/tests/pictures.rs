@@ -1,5 +1,5 @@
 //! The card's runtime half over the platform library built from this commit, no window and no device (EmuSen_Qt.md
-//! §7.2): rewind kept as Mistress keeps it, the reel's moments read into the card's facts with their pictures as the
+//! §7.3): rewind kept as Mistress keeps it, the reel's moments read into the card's facts with their pictures as the
 //! provider serves them, a slot saved with its picture beside it where Galaxia names it, loaded, and the game returned
 //! to a moment of the reel.
 

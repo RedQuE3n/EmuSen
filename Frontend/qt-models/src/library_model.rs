@@ -71,6 +71,8 @@ pub mod qobject {
         #[qproperty(QString, tool_summaries, cxx_name = "toolSummaries")]
         #[qproperty(bool, dark)]
         #[qproperty(QString, home_lines, cxx_name = "homeLines", READ, NOTIFY)]
+        /// Whether a console starts with nothing in it, so the cards offer Start Console.
+        #[qproperty(bool, starts_empty, cxx_name = "startsEmpty", READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -162,6 +164,7 @@ pub struct LibraryModelRust {
     dark: bool,
     /// Home's places' second lines as a JSON array of `{"status", "attention"}`.
     home_lines: QString,
+    starts_empty: bool,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -184,6 +187,7 @@ impl Default for LibraryModelRust {
             tool_summaries: QString::default(),
             dark: true,
             home_lines: QString::from("[]"),
+            starts_empty: false,
             view: LibraryView::empty(),
             source: None,
         }
@@ -282,6 +286,7 @@ impl qobject::LibraryModel {
             suspended: if suspended.is_empty() { String::new() } else { crate::library::title_of(&suspended) },
             paused: paused.to_string(),
             game_mode,
+            start_console: self.view.starts_empty(),
             tools: serde_json::from_str(&self.tool_summaries.to_string()).unwrap_or(serde_json::Value::Null),
             ..crate::home_card::Facts::default()
         };
@@ -405,6 +410,11 @@ impl qobject::LibraryModel {
         if self.home_lines != home_lines {
             self.as_mut().rust_mut().home_lines = home_lines;
             self.as_mut().home_lines_changed();
+        }
+        let starts_empty = self.view.starts_empty();
+        if self.starts_empty != starts_empty {
+            self.as_mut().rust_mut().starts_empty = starts_empty;
+            self.as_mut().starts_empty_changed();
         }
         if self.summary != summary {
             self.as_mut().rust_mut().summary = summary;

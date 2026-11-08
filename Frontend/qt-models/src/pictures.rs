@@ -1,4 +1,4 @@
-//! The running session's pictures by address, for QML's `Image` (EmuSen_Qt.md §7.2): the reel's moments
+//! The running session's pictures by address, for QML's `Image` (EmuSen_Qt.md §7.3): the reel's moments
 //! (`<serial>/reel/<frame>`), the picture on show (`<serial>/now`) and a state slot's picture (`<serial>/file/<path>`),
 //! read from the runtime when asked, on the thread that asks. A `QQuickImageProvider` serves them, C++ glue in
 //! `cpp/session_pictures.cpp`, since cxx-qt subclasses no Qt class but a QObject's.

@@ -217,6 +217,7 @@ FocusScope {
                     section: root.key
                     sectionName: root.heading
                     focused: cells.currentIndex
+                    startConsole: root.library.startsEmpty
                     onPassedBack: root.closed()
                 }
                 delegate: Kit.Walkable {
@@ -250,6 +251,8 @@ FocusScope {
             }
             Text {
                 objectName: "gridFocusTitle"
+                // Under the docked keyboard while a search is typed, as Mistress's keyboard covers them.
+                visible: !root.searching
                 x: 64
                 y: 628
                 width: root.width - 128
@@ -264,6 +267,8 @@ FocusScope {
             }
             Text {
                 objectName: "gridFocusFacts"
+                // Under the docked keyboard while a search is typed, as Mistress's keyboard covers them.
+                visible: !root.searching
                 x: 64
                 y: 670
                 width: root.width - 128
@@ -291,9 +296,13 @@ FocusScope {
         target: listCardModel
         function onActed(key) { root.acted(key) }
     }
+    // The List card's own canvas name, so a test finds its slide among the program's cards.
+    Item {
+        objectName: "listCardCanvas"
+        readonly property alias slide: listCard.slide
+    }
     MenuCard {
         id: listCard
-        objectName: "listCard"
         anchors.fill: parent
         visible: listCard.open || listCard.leaving
         open: root.listOpen
@@ -302,6 +311,7 @@ FocusScope {
         rows: listCardModel
         title: listCardModel.title
         breadcrumb: listCardModel.breadcrumb
+        footer: listCardModel.footer
         current: listCardModel.current
         paneLines: listCardModel.paneLines
         paneMuted: listCardModel.paneMuted

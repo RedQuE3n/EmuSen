@@ -64,6 +64,8 @@ pub struct Page {
     pub title: String,
     pub breadcrumb: String,
     pub rows: Vec<Row>,
+    /// A line under the rows (the Home card's Power page: the program's version); empty for none.
+    pub footer: String,
 }
 
 pub const NO: &str = "no";
@@ -72,7 +74,7 @@ pub const YES: &str = "yes";
 /// A question as a page, as Mistress's `Ask` turns a row into one: its title the question, its sentence above it, No
 /// then Yes, so the focus starts on the answer that changes nothing.
 pub fn question(title: &str, sentence: &str) -> Page {
-    Page { title: title.to_owned(), breadcrumb: sentence.to_owned(), rows: vec![Row::new(NO, "No"), Row::new(YES, "Yes")] }
+    Page { title: title.to_owned(), breadcrumb: sentence.to_owned(), rows: vec![Row::new(NO, "No"), Row::new(YES, "Yes")], footer: String::new() }
 }
 
 /// The section a row ends: the row before the one that starts a new section has its rule drawn lighter.

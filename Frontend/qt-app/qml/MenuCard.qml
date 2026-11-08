@@ -12,6 +12,8 @@ FocusScope {
     property var rows
     property string title
     property string breadcrumb
+    // A line under the rows, in Muted: the Home card's Power page names the program's version there.
+    property string footer
     // A cover's URL before the title, the Pause Card's; empty for none.
     property string cover
     // The row the page opens on, as the host's model says it.
@@ -36,6 +38,9 @@ FocusScope {
     readonly property bool leaving: !root.open && root.slide < 1
     readonly property bool paneShown: (root.paneLines?.length ?? 0) > 0 || root.panePicture.length > 0 || root.paneCaption.length > 0 || root.paneDrawn
     readonly property alias controller: frame.controller
+    // The panel's shadow as Mistress's render measures it (2026-11-02, 1280 x 800): 15 of Surface's 27 at the panel's edge, back to Surface about 20 units out; offset 0,8 (EmuSen_Interface.md §5.4).
+    readonly property real shadowOpacity: 0.9
+    readonly property real shadowRadius: 48
     signal chosen(int index)
     // Left (-1) or Right (+1) on a row; `held` while the press repeats.
     signal stepped(int index, int by, bool held)
@@ -84,7 +89,7 @@ FocusScope {
         visible: root.paneShown
         opacity: 1 - root.slide
         Column {
-            objectName: "PaneLines"
+            objectName: "AdaptiveDetail"
             x: 24
             y: 24
             width: parent.width - 48
@@ -178,6 +183,7 @@ FocusScope {
             height: root.height
             Rectangle {
                 id: caster
+                objectName: "cardShadowCaster"
                 width: root.panelWidth
                 height: root.height
                 color: Kit.Tokens.surface
@@ -189,9 +195,9 @@ FocusScope {
                 anchors.fill: caster
                 shadowEnabled: true
                 shadowColor: "#000000"
-                shadowOpacity: 0.5
+                shadowOpacity: root.shadowOpacity
                 shadowVerticalOffset: 8
-                blurMax: 24
+                blurMax: root.shadowRadius
                 shadowBlur: 1
             }
             Rectangle {
@@ -240,6 +246,18 @@ FocusScope {
                     minimumPixelSize: 22
                     elide: Text.ElideRight
                 }
+            }
+            Text {
+                objectName: "cardFooter"
+                x: 64
+                y: 156 + list.count * Kit.Tokens.rowHeight + 22
+                width: root.panelWidth - 88
+                visible: text.length > 0
+                text: root.footer
+                color: Kit.Tokens.muted
+                font.family: faces.regular
+                font.pixelSize: 26
+                elide: Text.ElideRight
             }
             Item {
                 objectName: "AdaptiveCardRows"
@@ -298,5 +316,27 @@ FocusScope {
         labelFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         entrySpacing: 40
         glyphGap: 10
+    }
+    // The panel's shadow falls over the help band too, as Mistress's does: the band and its bar are painted after the panel, so the shadow's part beside the panel is drawn again over them.
+    Item {
+        objectName: "bandShadow"
+        x: frame.x + root.panelWidth
+        y: band.y
+        width: 64
+        height: root.bandHeight
+        clip: true
+        MultiEffect {
+            x: -root.panelWidth
+            y: -band.y
+            width: root.panelWidth
+            height: root.height
+            source: caster
+            shadowEnabled: true
+            shadowColor: "#000000"
+            shadowOpacity: root.shadowOpacity
+            shadowVerticalOffset: 8
+            blurMax: root.shadowRadius
+            shadowBlur: 1
+        }
     }
 }

@@ -3,7 +3,7 @@ import QtQuick
 import EmuSen.Kit as Kit
 import EmuSen.Models
 
-// The Pause Card over the paused game: the card form drawing PauseModel's pages, the context pane its own drawing in the form's pane box, and what the card asks of the session carried to it (EmuSen_Interface.md §2.8, §18.5, §20; EmuSen_Qt.md §7.1 step 7, §7.2).
+// The Pause Card over the paused game: the card form drawing PauseModel's pages, the context pane its own drawing in the form's pane box, and what the card asks of the session carried to it (EmuSen_Interface.md §2.8, §18.5, §20; EmuSen_Qt.md §7.1 step 7, §7.3).
 MenuCard {
     id: root
     required property LibraryModel library

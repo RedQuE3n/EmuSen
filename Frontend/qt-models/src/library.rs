@@ -425,6 +425,12 @@ pub struct LibraryView {
 }
 
 impl LibraryView {
+    /// Whether a console of the systems table starts with nothing in it, where the List card and the Home card offer
+    /// Start Console (Mistress's `ConsolesThatStartEmpty`).
+    pub fn starts_empty(&self) -> bool {
+        self.systems.iter().any(|s| s.starts_empty)
+    }
+
     /// "11 consoles · 1,566 games": the consoles shown and every game.
     pub fn summary(&self) -> String {
         let consoles = self.rows.rows().iter().filter(|r| r.kind == Some(Kind::Console)).count();

@@ -1,4 +1,4 @@
-// The session's pictures served to QML's Image by address (EmuSen_Qt.md §7.2): a QQuickImageProvider, which cxx-qt cannot subclass.
+// The session's pictures served to QML's Image by address (EmuSen_Qt.md §7.3): a QQuickImageProvider, which cxx-qt cannot subclass.
 #ifndef EMUSEN_QT_MODELS_SESSION_PICTURES_H
 #define EMUSEN_QT_MODELS_SESSION_PICTURES_H
 

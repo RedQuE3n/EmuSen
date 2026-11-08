@@ -1,6 +1,6 @@
 // EmuSen_Qt.md §1.3: what a QML file may hold, and the spike's three deliberate breaks as the first cases (§10.3).
 
-use emusen_qml_rules::{check, Options, Rule};
+use emusen_qml_rules::{check, check_theme, local_imports, Options, Rule};
 
 fn rules(text: &str) -> Vec<Rule> {
     check("t.qml", text, Options::default()).into_iter().map(|f| f.rule).collect()
@@ -76,4 +76,40 @@ fn qt_1_3_logic_literals_rows_and_imports_are_findings() {
 fn qt_1_3_a_finding_reads_as_file_line_rule_words() {
     let finding = &check("Main.qml", "\n\nText { text: \"Hi\" }", Options::default())[0];
     assert_eq!(finding.to_string(), "Main.qml:3 words \"Hi\"");
+}
+
+#[test]
+fn qt_3_5_a_theme_imports_only_the_sandbox_list_and_its_own_folders() {
+    let text = r##"
+import QtQuick
+import QtQuick.Effects
+import QtQuick.Controls 2.15
+import EmuSen.Theme 1.0
+import "../parts"
+import QtMultimedia
+import EmuSen.Models
+import EmuSen.Kit as Kit
+import QtQuick.Templates
+import QtQml
+import "/etc"
+import "qrc:/emusen"
+Item { width: 4 }
+"##;
+    let found: Vec<(usize, String)> = check_theme("t.qml", text).into_iter().map(|f| (f.line, f.words)).collect();
+    let want: Vec<(usize, String)> = [
+        (7, "QtMultimedia"),
+        (8, "EmuSen.Models"),
+        (9, "EmuSen.Kit"),
+        (10, "QtQuick.Templates"),
+        (11, "QtQml"),
+        (12, "\"/etc\""),
+        (13, "\"qrc:/emusen\""),
+    ]
+    .into_iter()
+    .map(|(l, w)| (l, w.to_owned()))
+    .collect();
+    assert_eq!(found, want);
+    assert_eq!(local_imports(text), vec![(6, "../parts".to_owned()), (12, "/etc".to_owned()), (13, "qrc:/emusen".to_owned())]);
+    let words = check_theme("t.qml", "import QtQuick\nText { text: \"Hello\" }\n");
+    assert_eq!(words.iter().map(|f| f.rule).collect::<Vec<_>>(), vec![Rule::Words], "the §1.3 rules hold in a theme");
 }

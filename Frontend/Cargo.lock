@@ -365,9 +365,24 @@ dependencies = [
  "cxx-qt-lib",
  "emusen-client-fixture",
  "emusen-crystal-client",
+ "emusen-kit-qt",
  "emusen-platform-client",
  "emusen-qt-test",
  "serde_json",
+]
+
+[[package]]
+name = "emusen-qt-play"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-kit-qt",
+ "emusen-platform-client",
+ "emusen-qt-models",
+ "emusen-qt-test",
 ]
 
 [[package]]

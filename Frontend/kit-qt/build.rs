@@ -36,9 +36,10 @@ fn main() {
         "src/moonrise.rs",
         "src/bells.rs",
         "src/glyph.rs",
+        "src/picture.rs",
     ])
     .include_dir("cpp")
-    .cpp_files(["cpp/kit_glue.cpp"])
+    .cpp_files(["cpp/kit_glue.cpp", "cpp/game_picture.h", "cpp/game_picture.cpp"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
     .build()

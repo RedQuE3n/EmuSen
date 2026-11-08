@@ -5,3 +5,6 @@ pub mod clients;
 pub mod keyed;
 pub mod library;
 pub mod library_model;
+pub mod picture;
+pub mod session;
+pub mod session_model;

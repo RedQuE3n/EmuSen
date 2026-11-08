@@ -59,8 +59,19 @@ pub const ALLOWED_IMPORTS: [&str; 7] =
 pub const FORBIDDEN_IMPORTS: [&str; 2] = ["QtQml.Models", "QtQuick.LocalStorage"];
 
 /// Bindings whose string is a name, a path or a colour rather than words: never findings.
-const NAMED_BINDINGS: [&str; 9] =
-    ["objectName", "font.family", "source", "property", "properties", "pragma", "Accessible.role", "placeholderText", "sequence"];
+const NAMED_BINDINGS: [&str; 11] = [
+    "objectName",
+    "font.family",
+    "source",
+    "fragmentShader",
+    "vertexShader",
+    "property",
+    "properties",
+    "pragma",
+    "Accessible.role",
+    "placeholderText",
+    "sequence",
+];
 
 /// How the check reads a file: as a view, or as a fixture (a test scene, the gallery) whose words, rows and literals stand in for models.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

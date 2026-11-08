@@ -1,0 +1,11 @@
+module EmuSen.Esde
+optional plugin EmuSen_Esde
+classname EmuSen_Esde_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+depends QtQuick.Shapes
+depends EmuSen.Kit
+prefer :/qt/qml/EmuSen/Esde/
+Picture 1.0 qml/Picture.qml
+Mark 1.0 qml/Mark.qml
+TextBlock 1.0 qml/TextBlock.qml

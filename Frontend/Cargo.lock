@@ -292,6 +292,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-esde"
+version = "0.1.0"
+dependencies = [
+ "quick-xml",
+]
+
+[[package]]
+name = "emusen-esde-qt"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-esde",
+ "emusen-kit-core",
+ "emusen-kit-qt",
+ "emusen-qt-test",
+]
+
+[[package]]
 name = "emusen-kit-core"
 version = "0.1.0"
 dependencies = [
@@ -586,6 +607,15 @@ dependencies = [
  "serde",
  "thiserror 1.0.69",
  "which",
+]
+
+[[package]]
+name = "quick-xml"
+version = "0.38.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b66c2058c55a409d601666cffe35f04333cf1013010882cec174a7467cd4e21c"
+dependencies = [
+ "memchr",
 ]
 
 [[package]]

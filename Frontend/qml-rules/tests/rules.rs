@@ -27,6 +27,7 @@ Item {
         function onPressed(button) { root.controller.offer(button) }
     }
     NumberAnimation { property: "opacity"; duration: Kit.Tokens.quick }
+    ShaderEffect { fragmentShader: "qrc:/emusen/esde/picture.frag.qsb"; vertexShader: "qrc:/emusen/esde/picture.vert.qsb" }
     text: model[control.textRole]
 }
 "##;

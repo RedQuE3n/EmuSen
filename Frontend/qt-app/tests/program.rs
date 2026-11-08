@@ -1,39 +1,17 @@
 //! The program's window through the harness (EmuSen_Qt.md §7, §8.1): Moonrise over Home at the start with the systems'
 //! planets, a pad press skipping it, and Home holding the focus once it has gone and the library is read.
 
-use emusen_client_fixture::{library, World};
+mod common;
+
+use common::{sandbox, wait_for};
+use emusen_client_fixture::library;
 use emusen_kit_core::input::UiButton;
-use emusen_platform_client::galaxia::consts::MODEL_APP_SETTINGS;
-use emusen_platform_client::Platform;
 use emusen_qt::MAIN_URL;
 use emusen_qt_test::Harness;
 
-fn wait_for(scene: &mut emusen_qt_test::Scene<'_>, object: &str, property: &str, value: &str, ms: i32) {
-    let mut waited = 0;
-    while scene.property(object, property) != value && waited < ms {
-        scene.wait(50);
-        waited += 50;
-    }
-    assert_eq!(scene.property(object, property), value, "{object}.{property} after {ms} ms");
-}
-
-/// A scratch tree whose settings name its ROM folder, holding one synthetic NES image.
-fn sandbox(name: &str) -> World {
-    let world = World::new(name);
-    let roms = world.dir("Roms/NES");
-    let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
-    image.resize(16 + 16384, 0);
-    std::fs::write(roms.join("Synthetic.nes"), image).unwrap();
-    let platform = Platform::load(library()).unwrap();
-    let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
-    settings["RomDirectory"] = serde_json::json!(world.root.join("Roms").to_str().unwrap());
-    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
-    world
-}
-
 #[test]
 fn moonrise_plays_over_home_and_a_press_skips_it() {
-    let _world = sandbox("qt-app-program");
+    let _world = sandbox("qt-app-program", &[("NES", "Synthetic.nes")]);
     assert!(emusen_qt::start::read(library()).splash, "the settings saved leave the splash on");
 
     let mut harness = Harness::new();

@@ -921,6 +921,43 @@ gives it with facts ending "an EmuSen core". Seeded faults, each reverted: the e
 place of the source's answer failed the rows' test; the port's mark dropped from any name ending in "RT" failed the
 engine test; the recently played reversed failed the games' test.
 
+**The screens, step 3's second part** (measured 2026-11-08). `Home.qml`, `Consoles.qml` (Choose a console) and
+`GameGrid.qml` (the grid; not `Grid`, which is Qt Quick's positioner and was taken in its place) are in `qt-app/qml`, with
+`GameCard.qml` (a game without its cover: a card in its console's hue with its title), `CoverFan.qml` (up to four of a
+row's games, fanned) and `Faces.qml` (the two Barlow faces). Each lays its content out in canvas units from the window's
+corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`, and keeps the qml-rules and `qmllint`:
+
+- **What a screen shows is a model's.** Choose a console is one `Repeater` over `LibraryModel`: the places first
+  (`LibraryModel.places` counts them), then each console with games as its body; the tiles' boxes and the walk between
+  rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.17), the body's size `Body.tileWidth`/`tileHeight`, the focused
+  console's words its row's `fullName` and `facts`, the fan `GameModel` over `gamesOf` of the selected row. The grid's
+  cells are a `GridView` over `GameModel`, its heading the row it opened. Home's Continue and shelf are
+  `LibraryModel.recent` (the recently played as plain data, kept current by the model), its places `Words.homePlaces`,
+  its status line `Clock.time` (`clock.rs`, `QTime`'s, ticked by a `Timer` every 15 s). An empty `games` text is no
+  games, so a screen never writes a fallback list.
+- **The walk** is the frame's: a tile is a `Kit.Walkable`, and `KeyNavigation` names its neighbours (on Choose a console
+  from the layout's lists; on Home Continue, the shelf and the places). Each binding reads its `Repeater`'s count, so it
+  is read again once the items exist. A walkable is named apart from the painted rectangle the mockup names
+  (`tile.N` and `place.N` over `consoleTile.N` and `placeTile.N`, `continue` over `continuePanel`), so the comparison
+  finds the paint, and Home's and Choose a console's names do not meet.
+- **Switching screens** is `Screens` (`screens.rs`), one rule in Rust: Home's first place opens Choose a console, a row
+  chosen there opens its grid, the favourites' action (Y) opens theirs, B goes back one screen and stays on Home. The
+  other actions (X's random game, the game page, Home's card, Home's other six places) change nothing until their stage.
+  `Main.qml` shows the screen `Screens.shown` names and hands each screen's signal to it in one call. A change is
+  applied after the event that asked (`qt_thread().queue`): applied at once, the screen it opened took the same B press
+  and went back a second screen, which the seeded fault below shows. The actions are declared as data (§7.17 of
+  `EmuSen_Kit.md`): `HelpModel.actionLines` from `help.rs`, whose entries now carry their action keys.
+
+**Held to** (`qt-app/tests/screens.rs`, measured 2026-11-08, beside `program.rs` whose `sandbox` and `wait_for` moved to
+`tests/common`): over a sandbox of three synthetic games on two consoles, Home holds the focus on Continue; Down goes to
+the places when nothing was played; A on Games opens Choose a console on the selected row; Down goes to the first
+planet, Right along the row; A opens that console's grid with its own two games and its name; B goes back to Choose a
+console on the same console; Y opens the favourites; B twice goes Home, and nothing is logged. The tree, not the
+window's children, finds a `Repeater`'s items. `qt-models/tests/library.rs` holds `screens::step` and each screen's
+declared actions read back by the walk's parser. Seeded faults, each reverted: the switch applied at once failed the
+screens test at B from the grid; the favourites' action key misspelt failed it at Y. The kit's two are in `EmuSen_Kit.md`
+§7.17.
+
 ---
 
 ## 8. Testing

@@ -5,6 +5,7 @@
 pub mod audit;
 pub mod glyph;
 pub mod input;
+pub mod layout;
 pub mod motion;
 pub mod sound;
 pub mod tokens;

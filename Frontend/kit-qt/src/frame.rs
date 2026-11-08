@@ -87,6 +87,7 @@ pub mod qobject {
         #[qproperty(Role, focused_role, READ, NOTIFY)]
         #[qproperty(bool, detail_open, READ, NOTIFY)]
         #[qproperty(bool, page_open, READ, NOTIFY)]
+        #[qproperty(QString, action_lines)]
         type FrameController = super::FrameControllerRust;
     }
 
@@ -163,12 +164,15 @@ pub struct FrameControllerRust {
     sections: QStringList,
     selected_section: QString,
     sheet_open: bool,
+    action_lines: QString,
     focused_role: Role,
     detail_open: bool,
     page_open: bool,
     walk: Walk,
     actions: Vec<WalkAction>,
     syncing: bool,
+    /// A declined press is on its way to the focused control as a key; if the key comes back, it was walked already.
+    passing: bool,
 }
 
 impl Default for FrameControllerRust {
@@ -183,12 +187,14 @@ impl Default for FrameControllerRust {
             sections: QStringList::default(),
             selected_section: QString::default(),
             sheet_open: false,
+            action_lines: QString::default(),
             focused_role: Role::NoRole,
             detail_open: false,
             page_open: false,
             walk: Walk::new(WalkForm::BigScreen),
             actions: Vec::new(),
             syncing: false,
+            passing: false,
         }
     }
 }
@@ -226,6 +232,14 @@ impl cxx_qt::Initialize for qobject::FrameController {
             })
             .release();
         self.as_mut().on_sections_changed(|this| this.apply_sections()).release();
+        self.as_mut()
+            .on_action_lines_changed(|mut this| {
+                let declared = WalkAction::from_lines(&this.action_lines.to_string());
+                let mut rust = this.as_mut().rust_mut();
+                rust.actions = declared.clone();
+                rust.walk.set_actions(declared);
+            })
+            .release();
         self.as_mut()
             .on_selected_section_changed(|mut this| {
                 if this.syncing {
@@ -265,9 +279,11 @@ impl qobject::FrameController {
                 if ui == UiButton::Back {
                     self.as_mut().back_declined();
                 }
-                self.sync();
+                self.as_mut().sync();
                 if let Some(code) = key.and_then(qt_keys::qt_key) {
+                    self.as_mut().rust_mut().passing = true;
                     qobject::send_key(code, 0);
+                    self.as_mut().rust_mut().passing = false;
                 }
                 false
             }
@@ -301,6 +317,9 @@ impl qobject::FrameController {
     }
 
     pub fn key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        if self.passing {
+            return false;
+        }
         let (key, shift) = qt_keys::kit_key(key, modifiers);
         match intent(InputEvent::Key { key, shift }) {
             Some(Intent::Walk(by)) => self.move_focus(by),

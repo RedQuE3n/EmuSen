@@ -15,6 +15,10 @@ Window {
     property string platformLibrary
     property bool splash: true
     readonly property bool splashShown: program.splash && !moonrise.done
+    Screens {
+        id: screens
+        objectName: "screens"
+    }
     LibraryModel {
         id: library
         objectName: "library"
@@ -34,7 +38,31 @@ Window {
             anchors.fill: parent
             library: library
             padFamily: pads.family
-            focus: !program.splashShown
+            visible: screens.shown === Screens.Home
+            focus: !program.splashShown && visible
+            onPlaceChosen: (index) => screens.place(index)
+        }
+        Consoles {
+            id: consoles
+            anchors.fill: parent
+            library: library
+            padFamily: pads.family
+            visible: screens.shown === Screens.Consoles
+            focus: !program.splashShown && visible
+            onClosed: screens.back()
+            onOpened: (key) => screens.open(key)
+            onActed: (key) => screens.act(key)
+        }
+        GameGrid {
+            id: grid
+            anchors.fill: parent
+            library: library
+            padFamily: pads.family
+            visible: screens.shown === Screens.Grid
+            focus: !program.splashShown && visible
+            key: screens.key
+            row: consoles.tiles.count > 0 ? consoles.tiles.itemAt(library.indexOf(screens.key)) : null
+            onClosed: screens.back()
         }
     }
     Kit.Moonrise {

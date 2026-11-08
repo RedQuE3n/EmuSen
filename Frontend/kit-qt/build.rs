@@ -36,6 +36,7 @@ fn main() {
         "src/moonrise.rs",
         "src/bells.rs",
         "src/glyph.rs",
+        "src/planets.rs",
     ])
     .include_dir("cpp")
     .cpp_files(["cpp/kit_glue.cpp"])

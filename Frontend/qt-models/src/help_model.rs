@@ -1,8 +1,9 @@
 //! `HelpModel`, a screen's help bar as a QAbstractListModel with the roles the kit's HelpBar reads (button, label), from
 //! help.rs, so no screen writes its entries in QML (EmuSen_Qt.md §1.3).
 
-use crate::help::{entries, Screen};
+use crate::help::{action_lines, entries, Screen};
 use core::pin::Pin;
+use cxx_qt::CxxQtType;
 use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
 
 #[cxx_qt::bridge]
@@ -36,6 +37,7 @@ pub mod qobject {
         #[base = QAbstractListModel]
         #[qml_element]
         #[qproperty(HelpScreen, screen)]
+        #[qproperty(QString, action_lines, cxx_name = "actionLines", READ, NOTIFY)]
         type HelpModel = super::HelpModelRust;
     }
 
@@ -73,11 +75,13 @@ use qobject::HelpScreen;
 /// The model's state: the screen whose entries it lists.
 pub struct HelpModelRust {
     screen: HelpScreen,
+    /// The screen's actions as the kit's frame reads them (EmuSen_Kit.md §7.17).
+    action_lines: QString,
 }
 
 impl Default for HelpModelRust {
     fn default() -> Self {
-        HelpModelRust { screen: HelpScreen::Home }
+        HelpModelRust { screen: HelpScreen::Home, action_lines: QString::from(action_lines(Screen::Home).as_str()) }
     }
 }
 
@@ -85,7 +89,10 @@ impl cxx_qt::Initialize for qobject::HelpModel {
     fn initialize(self: Pin<&mut Self>) {
         self.on_screen_changed(|mut model| {
             model.as_mut().begin_reset_model();
-            model.end_reset_model();
+            model.as_mut().end_reset_model();
+            let lines = QString::from(action_lines(model.listed()).as_str());
+            model.as_mut().rust_mut().action_lines = lines;
+            model.as_mut().action_lines_changed();
         })
         .release();
     }
@@ -96,7 +103,7 @@ const BUTTON: i32 = 0;
 const LABEL: i32 = 1;
 
 impl qobject::HelpModel {
-    fn listed(&self) -> Screen {
+    pub fn listed(&self) -> Screen {
         match self.screen {
             HelpScreen::Consoles => Screen::Consoles,
             HelpScreen::Grid => Screen::Grid,
@@ -105,7 +112,7 @@ impl qobject::HelpModel {
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
-        let Some((button, label)) = entries(self.listed()).get(index.row() as usize) else {
+        let Some((button, label, _)) = entries(self.listed()).get(index.row() as usize) else {
             return QVariant::default();
         };
         match role {

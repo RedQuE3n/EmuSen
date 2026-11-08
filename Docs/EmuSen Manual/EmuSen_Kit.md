@@ -1232,6 +1232,50 @@ caption's box is loose enough to let a digit through, so the test also holds its
 reverted: the palette dropped by `world_of` failed it at 407 pixels; the moonlets dropped at 30; the caption counting one
 too many passed the pictures and failed the words, which is why the words are held.
 
+### 7.17 Rows of bodies and a screen's declared actions (stage 1; 2026-11-08)
+
+**Decided 2026-11-08: two additive extensions of the kit, for stage 1's screens.** Both were weighed as `EmuSen_Qt.md`
+§1.3 asks (an extension, a module, or a component of its own): each is an extension, a new type and a new property on
+existing surfaces, since the job is the kit's and neither gives a component a second job.
+
+**The planet rows' layout and walk** are the kit's: the C# drawing of Choose a console was LunaP's (`LunaP.md` §222, as
+`EmuSen_Interface.md` §24.6 records). `kit-core`'s `layout::planet_layout(width, leading, bodies, geometry)` lays out a
+leading row of wide tiles across the margins and then the bodies in centred rows of fixed tiles: as few rows as fit
+(`capacity`, (width − 2 × margin + gap) / (tile + gap)), as even as they divide; every tile gets its box, its row and its
+four neighbours, Left and Right within its row and stopping at the ends, Up and Down the tile of the next row whose centre
+is nearest, the first of two at the same distance. `PlanetGeometry::COURTS` is the courts canvas's measures (margin 64,
+gap 18, leading tiles 72 high at 100, tiles 176 × 190 from 186 every 200, the orbit 52 into a tile, the focused tile
+lifted 6). It names no console: the host hands it counts. `kit-qt`'s `PlanetLayout` puts it on Qt as lists a screen's
+tiles bind to by index (`xs`, `ys`, `widths`, `heights`, `left`, `right`, `up`, `down`, `orbits`, `lift`), each a
+QList inside a `QVariant`, since `qmllint` cannot name cxx-qt's list aliases (`QList_f64`) and failed every binding on
+them. The screen's tiles bind `KeyNavigation` to the neighbours, so the walk between rows is data and Qt's own. A
+body's size on a tile is kit-core's `size_of` (LunaP §222.2), now `Body.tileWidth` and `Body.tileHeight`, so a screen
+writes no shape's size.
+
+**A screen's actions as data.** A frame's X and Y (and any other button the walk does not answer itself) are declared
+as text, one action a line, `key Button` with the button as `UiButton` names it (`kit-core`'s `WalkAction::from_lines`;
+`UiButton::named`). `FrameController.actionLines` takes the text and replaces the walk's actions with it; `Frame.qml`
+binds it to its help model's `actionLines` where the model has one, so one declaration feeds both the help bar's
+entries and the walk, and a screen writes no handler and no `setAction` call. `emusen-qt-models`' `HelpModel` gives
+each screen's lines from the same table as its entries (`help.rs`, `EmuSen_Qt.md` §7.1). The pressed action comes back
+as `actionInvoked(key)`; a screen passes the key on in one call.
+
+**A press passed on as a key is not walked twice** (found 2026-11-08 with the program's screens). A press the walk
+declines goes to the focused control as its key (§7.3); when the control declines that key too, it reaches the frame's
+`Keys.onPressed`, which walked it again. For B that raised `backDeclined` twice, and the program went back two screens
+for one press. `offer` now marks the key it sends, and `key` declines a key while it is being passed on. The C# frame
+had no second path, since its keys and the pad met in one handler.
+
+**The registry** (rule Q, §7.6) gained `PlanetLayout`, `BodyShapes.tileWidth` and `tileHeight`, and
+`FrameController.actionLines` (placed last, so the other properties keep their indexes); nothing was removed.
+
+**Held to** (`kit-core/tests/layout.rs`, 3, and `input.rs`'s action lines, measured 2026-11-08): the courts canvas's
+eleven bodies under three places (the places at 64, 454 and 844, 372 wide; six tiles from 67, five from 164; the orbits
+at 238 and 438); the walk's neighbours, a tie going to the first, the ends stopping; capacity at three widths and seven
+bodies dividing four and three; the lines read with their buttons by name, a line naming no button skipped. The program's
+`tests/screens.rs` holds the rest through the harness (`EmuSen_Qt.md` §7.1). Seeded faults, each reverted: a tie going to
+the last failed the walk test; the passed key's mark dropped failed the program's screens test at B from the grid.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

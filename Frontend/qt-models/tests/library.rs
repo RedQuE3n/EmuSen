@@ -5,7 +5,7 @@ use emusen_crystal_client::shapes::{CoreRow, LibretroCore, Look, SystemRow};
 use emusen_platform_client::library::GameFile;
 use emusen_qt_models::clients::engine_shown;
 use emusen_qt_models::games::{from_json, to_json};
-use emusen_qt_models::help::{entries, Screen};
+use emusen_qt_models::help::{action_lines, entries, Screen};
 use emusen_qt_models::library::{games_of, refresh, title_of, without_port_mark, Engine, Kind, LibrarySource, LibraryView};
 use std::sync::Mutex;
 
@@ -141,10 +141,20 @@ fn an_engine_is_named_by_its_own_info_and_the_port_s_mark_is_dropped() {
 
 #[test]
 fn each_screen_s_help_bar_names_its_presses() {
-    let labels = |s| entries(s).iter().map(|(b, l)| format!("{b:?} {l}")).collect::<Vec<_>>();
+    let labels = |s| entries(s).iter().map(|(b, l, _)| format!("{b:?} {l}")).collect::<Vec<_>>();
     assert_eq!(labels(Screen::Consoles), ["Accept Open", "Back Back", "Search Favourites", "Screensaver Random game"]);
     assert_eq!(labels(Screen::Home)[0], "Accept Resume");
     assert_eq!(labels(Screen::Grid)[0], "Accept Play");
+}
+
+#[test]
+fn each_screen_declares_its_own_actions_and_the_walk_reads_them() {
+    assert_eq!(action_lines(Screen::Consoles), "favourites Search\nrandom Screensaver\n");
+    for screen in [Screen::Home, Screen::Consoles, Screen::Grid] {
+        let read = emusen_kit_core::input::WalkAction::from_lines(&action_lines(screen));
+        let named: Vec<_> = entries(screen).iter().filter(|e| e.2.is_some()).map(|e| (e.2.unwrap().to_owned(), Some(e.0))).collect();
+        assert_eq!(read.into_iter().map(|a| (a.key, a.button)).collect::<Vec<_>>(), named, "{screen:?}");
+    }
 }
 
 #[test]
@@ -211,4 +221,17 @@ fn moonrise_has_a_planet_for_each_system_with_an_engine_games_or_not() {
     assert_eq!(emusen_qt_models::words::splash_caption(1), "1 CONSOLE");
     assert_eq!(emusen_qt_models::words::counted(1566, "game", "games"), "1,566 games");
     assert_eq!(emusen_qt_models::words::grouped(1_234_567), "1,234,567");
+}
+
+#[test]
+fn the_screens_switch_by_what_was_asked() {
+    use emusen_qt_models::screens::{step, Ask, Shown};
+    assert_eq!(step(Shown::Home, &Ask::Place(0)), Some((Shown::Consoles, None)));
+    assert_eq!(step(Shown::Home, &Ask::Place(1)), None, "the scraper is a later stage's");
+    assert_eq!(step(Shown::Consoles, &Ask::Open("nes".into())), Some((Shown::Grid, Some("nes".into()))));
+    assert_eq!(step(Shown::Consoles, &Ask::Act("favourites".into())), Some((Shown::Grid, Some("favourites".into()))));
+    assert_eq!(step(Shown::Consoles, &Ask::Act("random".into())), None, "a later stage's action changes nothing yet");
+    assert_eq!(step(Shown::Grid, &Ask::Back), Some((Shown::Consoles, None)));
+    assert_eq!(step(Shown::Consoles, &Ask::Back), Some((Shown::Home, None)));
+    assert_eq!(step(Shown::Home, &Ask::Back), None, "B on Home stays");
 }

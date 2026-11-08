@@ -91,7 +91,13 @@ impl Keyed for LibraryRow {
 }
 
 /// The places, their keys and their names, in order (EmuSen_Interface.md §24).
-pub const PLACES: [(&str, &str); 3] = [("all", "All games"), ("favourites", "Favourites"), ("recent", "Recently played")];
+pub const PLACES: [(&str, &str); 3] = [("all", "All games"), (FAVOURITES, "Favourites"), (RECENT, "Recently played")];
+
+/// The recently played games' key, which Home's shelf shows.
+pub const RECENT: &str = "recent";
+
+/// The favourites' key, which Choose a console's Y opens as a place.
+pub const FAVOURITES: &str = "favourites";
 
 /// What a refresh read of the games: each game, which are favourites, and which were played, the most recent first.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -131,7 +137,7 @@ pub fn games_of(key: &str, systems: &[SystemRow], catalog: &Catalog) -> Vec<Game
             system,
         }
     };
-    if key == "recent" {
+    if key == RECENT {
         return catalog.recent.iter().filter_map(|p| catalog.games.iter().find(|g| &g.path == p)).map(row).collect();
     }
     let mut out: Vec<GameRow> = catalog
@@ -140,7 +146,7 @@ pub fn games_of(key: &str, systems: &[SystemRow], catalog: &Catalog) -> Vec<Game
         .map(row)
         .filter(|g| match key {
             "all" => true,
-            "favourites" => g.favourite,
+            FAVOURITES => g.favourite,
             system => g.system == system,
         })
         .collect();

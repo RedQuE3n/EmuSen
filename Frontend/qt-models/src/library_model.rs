@@ -62,6 +62,8 @@ pub mod qobject {
         #[qproperty(i32, splash_planets, cxx_name = "splashPlanets", READ, NOTIFY)]
         #[qproperty(QString, splash_caption, cxx_name = "splashCaption", READ, NOTIFY)]
         #[qproperty(QString, summary, READ, NOTIFY)]
+        #[qproperty(i32, places, READ, NOTIFY)]
+        #[qproperty(QString, recent, READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -88,6 +90,11 @@ pub mod qobject {
         #[qinvokable]
         #[cxx_name = "gamesOf"]
         fn games_of(self: &LibraryModel, key: &QString) -> QString;
+
+        /// The row of a key, or -1.
+        #[qinvokable]
+        #[cxx_name = "indexOf"]
+        fn index_of(self: &LibraryModel, key: &QString) -> i32;
 
         /// Selects a row; false where there is none.
         #[qinvokable]
@@ -121,6 +128,10 @@ pub struct LibraryModelRust {
     splash_planets: i32,
     splash_caption: QString,
     summary: QString,
+    /// How many rows are places; they come first.
+    places: i32,
+    /// The recently played games as GameModel reads them, the most recent first.
+    recent: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -137,6 +148,8 @@ impl Default for LibraryModelRust {
             splash_planets: 0,
             splash_caption: QString::default(),
             summary: QString::default(),
+            places: 0,
+            recent: QString::default(),
             view: LibraryView::empty(),
             source: None,
         }
@@ -222,6 +235,11 @@ impl qobject::LibraryModel {
         QString::from(crate::games::to_json(&games).as_str())
     }
 
+    pub fn index_of(&self, key: &QString) -> i32 {
+        let key = key.to_string();
+        self.view.rows.rows().iter().position(|r| r.key == key).map_or(-1, |i| i as i32)
+    }
+
     pub fn select(mut self: Pin<&mut Self>, index: i32) -> bool {
         let taken = index >= 0 && self.as_mut().rust_mut().view.rows.select(index as usize);
         self.publish();
@@ -298,6 +316,16 @@ impl qobject::LibraryModel {
         let key = QString::from(self.view.rows.selected_key().unwrap_or(""));
         let problem = QString::from(self.view.problem.as_str());
         let summary = QString::from(self.view.summary().as_str());
+        let places = self.view.rows.rows().iter().filter(|r| r.kind == Some(crate::library::Kind::Place)).count() as i32;
+        if self.places != places {
+            self.as_mut().rust_mut().places = places;
+            self.as_mut().places_changed();
+        }
+        let recent = self.games_of(&QString::from(crate::library::RECENT));
+        if self.recent != recent {
+            self.as_mut().rust_mut().recent = recent;
+            self.as_mut().recent_changed();
+        }
         if self.summary != summary {
             self.as_mut().rust_mut().summary = summary;
             self.as_mut().summary_changed();

@@ -24,6 +24,7 @@ FocusScope {
     objectName: "frame"
     Kit.FrameController {
         id: frameController
+        actionLines: root.help?.actionLines ?? ""
     }
     Rectangle {
         anchors.fill: parent

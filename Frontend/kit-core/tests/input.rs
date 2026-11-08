@@ -338,3 +338,12 @@ fn lunap_202_4_a_change_of_form_keeps_the_section_and_the_focus_and_closes_the_p
     assert_eq!(plain.focused(), Some(Role::Content), "a layout without sections or detail walks its content alone");
     assert!(!plain.press(UiButton::Accept), "no detail: A is the host's");
 }
+
+#[test]
+fn a_screen_s_actions_read_from_lines_with_buttons_by_name() {
+    let actions = WalkAction::from_lines("favourites Search\nrandom Screensaver\nnothing\nbad Nowhere\n");
+    let keys: Vec<(&str, Option<UiButton>)> = actions.iter().map(|a| (a.key.as_str(), a.button)).collect();
+    assert_eq!(keys, vec![("favourites", Some(UiButton::Search)), ("random", Some(UiButton::Screensaver))]);
+    assert!(actions.iter().all(|a| a.enabled));
+    assert!(UiButton::ALL.iter().all(|b| UiButton::named(&format!("{b:?}")) == Some(*b)));
+}

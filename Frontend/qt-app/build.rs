@@ -5,7 +5,7 @@ fn main() {
     CxxQtBuilder::new_qml_module(
         QmlModule::new("EmuSen.App")
             .version(1, 0)
-            .qml_files(["qml/Main.qml", "qml/Home.qml"])
+            .qml_files(["qml/Main.qml", "qml/Home.qml", "qml/Consoles.qml", "qml/GameGrid.qml", "qml/CoverFan.qml", "qml/GameCard.qml", "qml/Faces.qml"])
             .depend("QtQuick")
             .depend("EmuSen.Kit")
             .depend("EmuSen.Models")

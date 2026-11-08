@@ -14,6 +14,12 @@ T.ComboBox {
     rightPadding: padding + (control.mirrored || !indicator || !indicator.visible ? Kit.Tokens.base : indicator.width + spacing)
     spacing: Kit.Tokens.base * 2
     font.pixelSize: Kit.Tokens.fontBody
+    // Closed, Up and Down walk to the rows around the box and never change its value; open, they move in its list (EmuSen_Kit.md §7.24).
+    Keys.onUpPressed: (event) => event.accepted = !control.popup.visible && Kit.KeyPass.toAncestors(control, event.key, event.modifiers)
+    Keys.onDownPressed: (event) => event.accepted = !control.popup.visible && Kit.KeyPass.toAncestors(control, event.key, event.modifiers)
+    // A, Return or Enter, opens the closed list; open, the box's own keys choose the highlighted value.
+    Keys.onReturnPressed: (event) => control.popup.visible ? event.accepted = false : control.popup.open()
+    Keys.onEnterPressed: (event) => control.popup.visible ? event.accepted = false : control.popup.open()
     delegate: ItemDelegate {
         required property var model
         required property int index

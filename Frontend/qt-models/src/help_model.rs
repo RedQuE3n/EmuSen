@@ -38,6 +38,8 @@ pub mod qobject {
         Search,
         PauseSlots,
         PauseReel,
+        Question,
+        QuestionBack,
     }
 
     extern "RustQt" {
@@ -125,6 +127,8 @@ impl qobject::HelpModel {
             HelpScreen::Search => Screen::Search,
             HelpScreen::PauseSlots => Screen::PauseSlots,
             HelpScreen::PauseReel => Screen::PauseReel,
+            HelpScreen::Question => Screen::Question,
+            HelpScreen::QuestionBack => Screen::QuestionBack,
             _ => Screen::Home,
         }
     }

@@ -100,7 +100,7 @@ FocusScope {
     Timer {
         interval: 8
         repeat: true
-        running: (root.activeFocus || root.controller.sheetOpen) && Kit.PadRouter.clockRunning
+        running: (root.activeFocus || root.controller.sheetOpen) && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
         onTriggered: Kit.PadRouter.pump()
     }
     Keys.onPressed: (event) => event.accepted = root.controller.key(event.key, event.modifiers)

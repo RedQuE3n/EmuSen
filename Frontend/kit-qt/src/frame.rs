@@ -60,7 +60,7 @@ pub mod qobject {
         #[namespace = "Pad"]
         type PadButton = crate::kinds::ffi::PadButton;
         include!("kit_glue.h");
-        fn send_key(key: i32, modifiers: i32);
+        fn send_key(key: i32, modifiers: i32) -> bool;
     }
 
     unsafe extern "C++Qt" {
@@ -276,14 +276,16 @@ impl qobject::FrameController {
                 true
             }
             Routed::Declined(key) => {
-                if ui == UiButton::Back {
-                    self.as_mut().back_declined();
-                }
                 self.as_mut().sync();
+                let mut taken = false;
                 if let Some(code) = key.and_then(qt_keys::qt_key) {
                     self.as_mut().rust_mut().passing = true;
-                    qobject::send_key(code, 0);
+                    taken = qobject::send_key(code, 0);
                     self.as_mut().rust_mut().passing = false;
+                }
+                // B the focused control took as Escape (the docked keyboard's erase, an open list) is not the host's.
+                if ui == UiButton::Back && !taken {
+                    self.as_mut().back_declined();
                 }
                 false
             }

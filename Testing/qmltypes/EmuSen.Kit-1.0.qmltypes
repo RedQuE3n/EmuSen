@@ -716,6 +716,156 @@ Module {
         Signal { name: "liveChanged"; lineNumber: 43 }
     }
     Component {
+        file: "keypass.cxxqt.h"
+        lineNumber: 15
+        name: "KeyPass"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/KeyPass 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [256]
+        Method {
+            name: "toAncestors"
+            type: "bool"
+            isMethodConstant: true
+            lineNumber: 25
+            Parameter { name: "item"; type: "QQuickItem"; isPointer: true }
+            Parameter { name: "key"; type: "int" }
+            Parameter { name: "modifiers"; type: "int" }
+        }
+    }
+    Component {
+        file: "keyboard.cxxqt.h"
+        lineNumber: 77
+        name: "KeyboardModel"
+        accessSemantics: "reference"
+        prototype: "QAbstractListModel"
+        exports: ["EmuSen.Kit/KeyboardModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "text"
+            type: "QString"
+            read: "getText"
+            notify: "textChanged"
+            index: 0
+            lineNumber: 82
+            isReadonly: true
+        }
+        Property {
+            name: "caret"
+            type: "int"
+            read: "getCaret"
+            notify: "caretChanged"
+            index: 1
+            lineNumber: 83
+            isReadonly: true
+        }
+        Property {
+            name: "current"
+            type: "int"
+            read: "getCurrent"
+            notify: "currentChanged"
+            index: 2
+            lineNumber: 84
+            isReadonly: true
+        }
+        Property {
+            name: "shifted"
+            type: "bool"
+            read: "getShifted"
+            notify: "shiftedChanged"
+            index: 3
+            lineNumber: 85
+            isReadonly: true
+        }
+        Property {
+            name: "bandHeight"
+            type: "double"
+            read: "getBandHeight"
+            notify: "bandHeightChanged"
+            index: 4
+            lineNumber: 86
+            isReadonly: true
+        }
+        Property {
+            name: "layouts"
+            type: "QString"
+            read: "getLayouts"
+            write: "setLayouts"
+            notify: "layoutsChanged"
+            index: 5
+            lineNumber: 87
+        }
+        Signal { name: "textChanged"; lineNumber: 99 }
+        Signal { name: "caretChanged"; lineNumber: 100 }
+        Signal { name: "currentChanged"; lineNumber: 101 }
+        Signal { name: "shiftedChanged"; lineNumber: 102 }
+        Signal { name: "bandHeightChanged"; lineNumber: 103 }
+        Signal { name: "layoutsChanged"; lineNumber: 104 }
+        Signal {
+            name: "closed"
+            lineNumber: 113
+            Parameter { name: "kept"; type: "bool" }
+        }
+        Method {
+            name: "setLayouts"
+            lineNumber: 98
+            Parameter { name: "value"; type: "QString" }
+        }
+        Method {
+            name: "data"
+            type: "QVariant"
+            isMethodConstant: true
+            lineNumber: 105
+            Parameter { name: "index"; type: "QModelIndex" }
+            Parameter { name: "role"; type: "int" }
+        }
+        Method {
+            name: "roleNames"
+            type: "QHash_i32_QByteArray"
+            isMethodConstant: true
+            lineNumber: 106
+        }
+        Method {
+            name: "rowCount"
+            type: "int"
+            isMethodConstant: true
+            lineNumber: 107
+            Parameter { name: "parent"; type: "QModelIndex" }
+        }
+        Method {
+            name: "key"
+            type: "bool"
+            lineNumber: 108
+            Parameter { name: "key"; type: "int" }
+            Parameter { name: "modifiers"; type: "int" }
+            Parameter { name: "text"; type: "QString" }
+        }
+        Method {
+            name: "act"
+            type: "bool"
+            lineNumber: 109
+            Parameter { name: "action"; type: "QString" }
+        }
+        Method {
+            name: "point"
+            lineNumber: 110
+            Parameter { name: "index"; type: "int" }
+        }
+        Method {
+            name: "click"
+            lineNumber: 111
+            Parameter { name: "index"; type: "int" }
+        }
+        Method {
+            name: "setText"
+            lineNumber: 112
+            Parameter { name: "text"; type: "QString" }
+            Parameter { name: "caret"; type: "int" }
+        }
+    }
+    Component {
         file: "moonrise.cxxqt.h"
         lineNumber: 430
         name: "MoonriseModel"
@@ -1408,6 +1558,78 @@ Module {
         }
     }
     Component {
+        file: "notices.cxxqt.h"
+        lineNumber: 59
+        name: "NoticeModel"
+        accessSemantics: "reference"
+        prototype: "QObject"
+        exports: ["EmuSen.Kit/NoticeModel 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "words"
+            type: "QString"
+            read: "getWords"
+            notify: "wordsChanged"
+            index: 0
+            lineNumber: 64
+            isReadonly: true
+        }
+        Property {
+            name: "attention"
+            type: "bool"
+            read: "getAttention"
+            notify: "attentionChanged"
+            index: 1
+            lineNumber: 65
+            isReadonly: true
+        }
+        Property {
+            name: "shown"
+            type: "bool"
+            read: "getShown"
+            notify: "shownChanged"
+            index: 2
+            lineNumber: 66
+            isReadonly: true
+        }
+        Property {
+            name: "holdMs"
+            type: "int"
+            read: "getHoldMs"
+            index: 3
+            lineNumber: 67
+            isReadonly: true
+            isPropertyConstant: true
+        }
+        Property {
+            name: "gameRunning"
+            type: "bool"
+            read: "getGameRunning"
+            write: "setGameRunning"
+            notify: "gameRunningChanged"
+            index: 4
+            lineNumber: 68
+        }
+        Signal { name: "wordsChanged"; lineNumber: 79 }
+        Signal { name: "attentionChanged"; lineNumber: 80 }
+        Signal { name: "shownChanged"; lineNumber: 81 }
+        Signal { name: "gameRunningChanged"; lineNumber: 82 }
+        Signal { name: "raised"; lineNumber: 85 }
+        Method {
+            name: "setGameRunning"
+            lineNumber: 78
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "raise"
+            lineNumber: 83
+            Parameter { name: "words"; type: "QString" }
+            Parameter { name: "attention"; type: "bool" }
+            Parameter { name: "over_game"; type: "bool" }
+        }
+        Method { name: "expire"; lineNumber: 84 }
+    }
+    Component {
         file: "kinds.cxxqt.h"
         lineNumber: 6
         name: "Pad"
@@ -1603,7 +1825,7 @@ Module {
     }
     Component {
         file: "pad.cxxqt.h"
-        lineNumber: 68
+        lineNumber: 77
         name: "PadRouter"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1618,7 +1840,7 @@ Module {
             write: "setTiers"
             notify: "tiersChanged"
             index: 0
-            lineNumber: 74
+            lineNumber: 83
         }
         Property {
             name: "swapAcceptBack"
@@ -1627,7 +1849,7 @@ Module {
             write: "setSwapAcceptBack"
             notify: "swapAcceptBackChanged"
             index: 1
-            lineNumber: 75
+            lineNumber: 84
         }
         Property {
             name: "clockRunning"
@@ -1636,7 +1858,7 @@ Module {
             write: "setClockRunning"
             notify: "clockRunningChanged"
             index: 2
-            lineNumber: 76
+            lineNumber: 85
         }
         Property {
             name: "chordOnly"
@@ -1645,57 +1867,67 @@ Module {
             write: "setChordOnly"
             notify: "chordOnlyChanged"
             index: 3
-            lineNumber: 77
+            lineNumber: 86
         }
-        Signal { name: "tiersChanged"; lineNumber: 90 }
-        Signal { name: "swapAcceptBackChanged"; lineNumber: 91 }
-        Signal { name: "clockRunningChanged"; lineNumber: 92 }
-        Signal { name: "chordOnlyChanged"; lineNumber: 93 }
+        Property {
+            name: "pending"
+            type: "bool"
+            read: "getPending"
+            notify: "pendingChanged"
+            index: 4
+            lineNumber: 87
+            isReadonly: true
+        }
+        Signal { name: "tiersChanged"; lineNumber: 101 }
+        Signal { name: "swapAcceptBackChanged"; lineNumber: 102 }
+        Signal { name: "clockRunningChanged"; lineNumber: 103 }
+        Signal { name: "chordOnlyChanged"; lineNumber: 104 }
+        Signal { name: "pendingChanged"; lineNumber: 105 }
         Signal {
             name: "pressed"
-            lineNumber: 98
+            lineNumber: 110
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
-        Signal { name: "menuChord"; lineNumber: 99 }
+        Signal { name: "menuChord"; lineNumber: 111 }
         Method {
             name: "setTiers"
-            lineNumber: 83
+            lineNumber: 93
             Parameter { name: "value"; type: "Repeat::Tiers" }
         }
         Method {
             name: "setSwapAcceptBack"
-            lineNumber: 85
+            lineNumber: 95
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setClockRunning"
-            lineNumber: 87
+            lineNumber: 97
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setChordOnly"
-            lineNumber: 89
+            lineNumber: 99
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "push"
-            lineNumber: 94
+            lineNumber: 106
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "down"; type: "bool" }
         }
-        Method { name: "pump"; lineNumber: 95 }
+        Method { name: "pump"; lineNumber: 107 }
         Method {
             name: "pumpAt"
-            lineNumber: 96
+            lineNumber: 108
             Parameter { name: "now_ms"; type: "int" }
         }
         Method {
             name: "isHeld"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 97
+            lineNumber: 109
             Parameter { name: "button"; type: "Pad::PadButton" }
         }
     }

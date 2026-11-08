@@ -1100,6 +1100,20 @@ gate (`Qt logged 20 warnings or errors`, the `RangeError` from `Sheet.qml` and `
 the shadow beginning invalid failed the gate (`PathPolyline: path of type 0 not supported`). With both fixed, the
 harness tests, the debug gate and the release gate pass with nothing logged.
 
+**A message at the process's exit, known and harmless** (proved 2026-11-08). The acceptance test's binary, and any harness
+binary that shows a picture decoded at a `sourceSize`, prints `QObject::~QObject: Timers cannot be stopped from another
+thread` after its test result. The object is Qt Quick's process-wide pixmap cache, a global static in libQt6Quick: when a
+small picture is released (a cover's delegate, or every picture as the engine is dropped) the cache keeps it and starts a
+30 s expiry timer on the thread that released it, which is libtest's test thread; the cache is destroyed at process exit
+on the main thread, with the timer still running. Shown with a probe on the software backend: an `Image` with a
+`sourceSize` printed it and one without did not (its full-size picture is over the cache's limit and freed at once); an
+`Image` with `cache: false` did not; a logged exit trace put the destructor in libQt6Quick's exit handlers right after
+the image plugins'; and the cache purged (`QQuickPixmap::purgeCache`) with 31.5 s waited before the test returned
+removed it, the timer having expired. Unloading the image plugins changed nothing. It cannot be stopped from the harness
+(the cache is not exported), and running each Qt test on the process's main thread (`harness = false` in every test
+file) was weighed and declined on 2026-11-08 as churn for a message. It cannot fail a test: `assert_quiet` reads the
+messages kept while the test runs, and this one is printed after the test function has returned.
+
 ### 7.15 Endymion's pads and the bells: `emusen-qt-endymion` (stage 0, the rest, step 4; 2026-11-08)
 
 `EmuSen_Qt.md` §1.7 as built. Qt 6 has no gamepad module, so the pad is Endymion's, read through the platform client
@@ -1422,6 +1436,126 @@ None changes what an existing screen draws: the gallery's gate passes unchanged.
 **Held to**: the gallery's gate (4) and the kit's 39 tests pass unchanged; `qt-app/tests/pause.rs` reads the marks' rows
 through the card. No C++ was added.
 
+### 7.22 The docked keyboard (stage 2, the forms; 2026-11-08)
+
+Owed by §7.8 and decided by `EmuSen_Interface.md` §18.1: one docked keyboard serves every text row (search, Edit
+Details, the Shell, a tool's search). Weighed as `EmuSen_Qt.md` §1.3 asks, it is an extension of the kit: a new type and
+a new model, no second job for any existing one. *[own, because Qt Virtual Keyboard is GPL-only in the open edition and
+docks nowhere, §1.4.]*
+
+- **The rules are kit-core's** (`keyboard.rs`, no Qt). A layout is plain text: its name, then one row a line, keys apart
+  by spaces with a width after a colon (`Space:5`), the special keys named `Erase`, `Space`, `Shift`, `Next` and `Done`.
+  `LETTERS` and `SYMBOLS` are LunaP's `KeyboardLayout.Search` and `Symbols`, the layouts Mistress's search shows; a host
+  may hand its own through `KeyboardModel.layouts` (layouts apart by a blank line). A key's box is `DOCKED.key_box`:
+  keys 72 × 48 units, 8 apart, each row centred, the first row 16 units under a 1-unit rule at the band's top, the band
+  304 units high for five rows (Mistress's band is 398 to 702 with its keys 15 above its foot). The walk is LunaP's
+  `OnScreenKeyboard.Move`: across a row it wraps; up and down it goes to the key whose middle is nearest, the first of two
+  as near, and stops at the top and the foot. Characters go in at the caret, upper-cased while shifted, the shift letting
+  go after one letter; Next shows the next layout and is labelled with its name; Erase shows as `⌫`. **B erases the
+  character before the caret, and with nothing to erase closes the keyboard, not keeping**; Done closes it keeping the
+  text.
+- **`KeyboardModel`** (kit-qt, `keyboard.rs`) is the keys as a list model (roles `label`, `keyX` from the band's centre,
+  `keyY`, `keyWidth`, `keyHeight`), with `text`, `caret`, `current`, `shifted` and `bandHeight`; `key(key, modifiers,
+  text)` takes what the band's item is given (the arrows walk, Return types, Escape is B, Backspace erases, printable
+  text from a physical keyboard goes in at the caret), `act` takes a frame's declared actions (`space`, `done`, `erase`),
+  `point` and `click` the pointer's, `setText` a field's own edits; `closed(kept)` reports the close.
+- **`Keyboard.qml`** draws the band on Surface under its Border rule, each key on SurfaceRaised with the row radius, the
+  current key ringed in the accent 2 units wide with its word in TextStrong while the band holds the focus (LunaP's
+  docked keyboard draws no ring once the focus has left it). The pad reaches it as any control: the frame's walk declines
+  the directions, A and B, which arrive as keys (§7.3). Y and X are a screen's declared actions (`HelpModel`'s `Typing`
+  entries: `space Search`, `done Screensaver`), passed to `act` in one call; the shoulders and Start stay the screen's.
+  Hovering a key makes it current; a click types it. A `TextField` shows the text by binding `text` and `cursorPosition`
+  to the model and hands its own edits back through `setText`.
+- **B is the focused control's before it is the host's.** Before this step the frame raised `backDeclined` as soon as
+  its walk declined B, and then sent Escape to the focused control too, so a screen would have gone back while the
+  keyboard erased. `send_key` now reports whether an item took the press (`QKeyEvent::isAccepted`, with no focus item
+  counting as none), and `backDeclined` is raised only when nothing took it. An open combo box's list closes on B the
+  same way without the screen going back.
+
+**Held to**: kit-core's `tests/keyboard.rs` (5: Mistress's boxes on a 1280 band from `GamesSearch-1280x800.spec`, the
+labels through the shift and the layouts, the walk's wrap, nearest key and ends, B and Done, a layout read from lines);
+qt-test's `keyboard.rs` (the band at 0,398 1280 × 304 and the keys at Mistress's boxes; Down and A type `q` into the
+field, Y a space, B erases; a click types its key and makes it current; B twice more empties the field and the third
+closes without keeping and without the screen's B; X keeps; the gate at the five sizes; still once settled; nothing
+logged). Measured on 2026-11-08.
+
+### 7.23 Notices (stage 2, the forms; 2026-11-08)
+
+`EmuSen_Interface.md` §18.6. An extension of the kit, as §7.22: kit-core's rule, a model, and a layer.
+
+- **The rule** (kit-core `notice.rs`): one notice shown at a time, a second replacing the first and its hold starting
+  again (`HOLD_MS`, 2,000 ms). Over running gameplay only a notice raised as fit for it shows (Saved, Loaded, the
+  screenshot); any other waits, a later one replacing the one waiting, and is shown when gameplay stops, which is when
+  a card or a screen comes up. A notice unfit for gameplay that is showing as gameplay starts goes back to waiting.
+- **`NoticeModel`** (kit-qt) puts the shown notice on Qt (`words`, `attention`, `shown`, `holdMs`) and takes
+  `gameRunning` from the host; `raise(words, attention, overGame)` and `expire()`. **How a model raises one**: the model
+  that knows (a session saving a state, a tool approving a core) emits a signal with its words, and the window passes it
+  on to `raise` in one handler line; the kit knows no words and no games.
+- **`NoticeLayer.qml`** draws it at the top right inside the safe area (its right edge at 1216 and its top at 40 on the
+  1280 × 800 canvas): SurfaceRaised, the tile radius, a 1-unit Border, padding 14 × 24, the status glyph in Success (a
+  check) or Attention (a triangle) and the words in Body TextStrong. It fades and slides in over Enter and out over Exit
+  (nothing moves under reduced motion; the fades keep their 120 ms), and a `Timer` of `holdMs`, restarted on each
+  `raised`, ends it. The big-screen and card forms have no status bar (`EmuSen_Qt.md` §1.7), so a status line there is a
+  notice. *Not drawn yet*: the shadow of §5.4, which the software backend cannot draw (`MultiEffect` is an empty box
+  there, `EmuSen_Qt.md` §7.1 step 6), and the desktop's status-bar line, which is stage 6's.
+
+**Held to**: kit-core's `tests/notice.rs` (2); qt-test's `notice.rs` (the card at the top right; a second replacing the
+first with its hold started again; gone after 2 s; over gameplay a notice of the game's own shown and another waiting
+until gameplay stops; still once gone; nothing logged). Measured on 2026-11-08.
+
+### 7.24 The question form, and the vertical walk past a field (stage 2, the forms; 2026-11-08)
+
+**The question** is `EmuSen_Interface.md` §15.6's form and §18.3's Resume question, drawn as Mistress's question card
+(`CoresPlan-1280x800.spec`, LunaP's `ManagerLayout` plan sheet in its big-screen form). `Question.qml` stays a `Sheet`, so
+the controller offers it every press first (§7.3), and gains its form: the popup covers the window, its content on a
+`NormalizedCanvas` (so the card is in design units at every size; the desktop form, stage 6's dialog, draws it
+unscaled); a cover in `overArtScrim` (#000000B8, the value of Mistress's cover) from the top to the help bar, which stays
+undimmed; the card 720 wide on SurfaceRaised with the Border edge and the tile radius, centred over the cover, its words
+33 units inside (padding 32 and the border), as tall as its content up to the cover's height less 100; the title in Title
+(the reference theme sets Barlow Condensed Regular, the card titles' face, §7.21) in Text; then `message` and the
+`sentences` in Body, 8 apart, and the `caption` in Caption Muted (the setting that stops the asking, a hash), scrolling
+between the title and the answers when they are long; then the answers as `MenuRow`s 654 × 54, 4 apart, 12 under the
+words and 33 above the card's foot, **the first focused** (the safe answer, `No` or `Continue`: a hurried A never does
+what cannot be undone). A chooses the focused answer, a click chooses the one under it, and **B gives `backIndex`**
+(`No`'s index, or -1 to go back without answering, as the Resume question's B goes back to the library). Its own help bar
+is `help`, a host's model (`HelpModel`'s `Question`, A Choose · B No, or `QuestionBack`, A Choose · B Back). The words
+are a model's: `emusen-qt-models`' `question.rs` writes `confirm(title, sentences)` (No first, B No) and `resume(game)`
+(§18.3: "Continue where you left off?", one sentence, Continue and Start again, the caption naming Settings ▸ EmuSen ▸
+Saves and states ▸ Resume ◂ Ask each time ▸).
+
+`MenuRow.overRaised` (an additive property, off by default) is the answers' look: a row on a raised card is clear at
+rest and Surface when focused, as Mistress's question draws its focused answer, with the accent bar.
+
+**The vertical walk past a field or a combo box** (owed by §7.9 and §7.7, decided with the docked keyboard): the row walks
+first, and the control takes the keys only once chosen. Measured on 2026-11-08 with Qt 6.11.2, a one-line `TextField`
+already declines Up and Down (with the caret mid-word, Up and Down reached the list), so it is unchanged; the combo box
+took them and changed its value. The style's `ComboBox` now hands Up and Down, while its list is closed, to its
+ancestors as Qt's own propagation would and never acts on them (`KeyPass.toAncestors`, a singleton over `pass_key` in
+`kit_glue.cpp`, which offers the key to each ancestor in turn until one accepts it), so a `ListView` of rows moves past
+it and its value stays; its open list keeps Up and Down; A (Return or Enter) opens a closed list. A declared path (`KeyNavigation` on the control, as the gallery's fixtures have) still wins,
+since its handler runs first.
+
+**Held to**: qt-test's `sheet.rs` (the card at 280, 720 wide, centred over a cover that stops at the help bar at 742, the
+title 33 units inside and 39 high, the answers 654 × 54 four apart and 33 above the foot, No focused; B answering No;
+Down and A choosing Yes; a click choosing Yes; a key declined behind it not looping, §7.14; the gate at the five sizes
+with it open; still; nothing logged) and `walk.rs` (Down passing a field and a combo box in a list with their caret and
+value unmoved, Up passing both and leaving the field to the row above with its caret unmoved, A opening the combo box's
+list); qt-models' `question.rs` (3). Measured on 2026-11-08.
+
+**Not done, named:** with a combo box's list open, the focus leaves the frame for the list's popup, so the frame's
+`Connections` stop offering the pad's presses until the list closes; the pointer and the keyboard work. A popup in the
+frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings pages are the first with combo boxes.
+
+### 7.25 The pad router sleeps (stage 2; 2026-11-08)
+
+- **The router's clock runs only while it has work** (owed by `EmuSen_Qt.md` §9.3.2, "Seen, not changed"). Each
+  `Frame`, `Game.qml` and the splash ran an 8 ms `Timer` pumping `PadRouter` while shown, waking the GUI thread 125
+  times a second on a still screen. `Router::pending` is true while an event waits or a button is held (its repeats and
+  the chord are timed by the clock); `PadRouter.pending` follows it after every push and pump, and the three timers run
+  only while it is true. A push starts the clock and the pump that applies the last release stops it. Repeats are
+  unchanged: a held button keeps the clock running. Held to by `kit-qt/tests/router.rs` (idle, a waiting event, a held
+  button, let go) and by `idle.rs`, `pause.rs` and the gallery's `pads.rs`, which drive the router through it.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -1479,12 +1613,11 @@ cxx-qt-lib binds.
   pad until a host passes one **[routine]**; a uinput pad (a kernel device, seen by every program on the desk, as
   WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
   same path without one.
-- Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker` and `DatePicker`; the drawn
+- Owed by §7.8: `RatingPicker` and `DatePicker` (`Keyboard` is built, §7.22); the drawn
   glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
   pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.
-- Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
-  by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
-  do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
+- Done 2026-11-08 (§7.24): a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) is passed by a
+  vertical walk; the row walks first, the control takes the keys once chosen.
 - Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
   units as the audit's named exception to the floor (§7.10).
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's

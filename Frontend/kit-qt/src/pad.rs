@@ -1,5 +1,5 @@
 //! `PadRouter`: the kit's one pad entry, a singleton whose queue tests and Endymion's reader push `PadEvent`s into (EmuSen_Kit.md §7.4, §7.15).
-//! `clockRunning` lets a `Frame`'s timer pump on the wall clock; a test turns it off and pumps at stated times.
+//! `clockRunning` lets a `Frame`'s timer pump on the wall clock while `pending`; a test turns it off and pumps at stated times.
 
 use core::pin::Pin;
 
@@ -30,6 +30,7 @@ pub mod qobject {
         #[qproperty(bool, swap_accept_back)]
         #[qproperty(bool, clock_running)]
         #[qproperty(bool, chord_only)]
+        #[qproperty(bool, pending, READ, NOTIFY)]
         type PadRouter = super::PadRouterRust;
     }
 
@@ -67,6 +68,7 @@ pub struct PadRouterRust {
     swap_accept_back: bool,
     clock_running: bool,
     chord_only: bool,
+    pending: bool,
     router: Router,
     started: Instant,
 }
@@ -78,6 +80,7 @@ impl Default for PadRouterRust {
             swap_accept_back: false,
             clock_running: true,
             chord_only: false,
+            pending: false,
             router: Router::new(RepeatTiers::OWN),
             started: Instant::now(),
         }
@@ -111,6 +114,16 @@ impl qobject::PadRouter {
     pub fn push(mut self: Pin<&mut Self>, button: PadButton, down: bool) {
         if let Some(button) = kinds::ui_button(button) {
             self.as_mut().rust_mut().router.push(PadEvent { button, down });
+            self.update_pending();
+        }
+    }
+
+    /// `pending` follows the router: a frame's clock runs only while a pump has work, so an idle screen is not woken.
+    fn update_pending(mut self: Pin<&mut Self>) {
+        let pending = self.router.pending();
+        if pending != self.pending {
+            self.as_mut().rust_mut().pending = pending;
+            self.as_mut().pending_changed();
         }
     }
 
@@ -126,6 +139,7 @@ impl qobject::PadRouter {
 
     fn pump_now(mut self: Pin<&mut Self>, now: Duration) {
         let pumped = self.as_mut().rust_mut().router.pump(now);
+        self.as_mut().update_pending();
         if pumped.menu_chord {
             self.as_mut().menu_chord();
         }

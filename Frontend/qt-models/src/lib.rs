@@ -24,6 +24,7 @@ pub mod pane_model;
 pub mod picture;
 pub mod pictures;
 pub mod reel;
+pub mod question;
 pub mod screens;
 pub mod session;
 pub mod session_model;

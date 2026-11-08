@@ -28,6 +28,10 @@ pub enum Screen {
     PauseSlots,
     /// The Pause Card's reel (EmuSen_Interface.md §20.1): A goes back, Left and Right step the moment, Start is not offered.
     PauseReel,
+    /// A question whose B answers No (EmuSen_Interface.md §15.6).
+    Question,
+    /// A question whose B goes back, the Resume question's (§18.3).
+    QuestionBack,
 }
 
 /// One entry: Accept and Back are the walk's own, so they name no action.
@@ -83,6 +87,8 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Screensaver, "Screenshot", Some(crate::pause::SCREENSHOT)),
             (UiButton::Menu, "Resume", Some(crate::pause::RESUME)),
         ],
+        Screen::Question => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "No", None)],
+        Screen::QuestionBack => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None)],
         Screen::Card => &[(UiButton::Accept, "Choose", None), (UiButton::Back, "Back", None), (UiButton::Menu, "Close", Some(CLOSE))],
         Screen::Search => &[
             (UiButton::Accept, "Type", None),

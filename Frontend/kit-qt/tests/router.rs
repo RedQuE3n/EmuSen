@@ -88,3 +88,17 @@ fn kit_7_17_while_a_game_owns_the_pad_only_the_chord_leaves_and_nothing_held_the
     router.push(PadEvent { button: UiButton::Down, down: true });
     assert_eq!(buttons(&mut router, 1064), vec![(UiButton::Down, false, 1)]);
 }
+
+// EmuSen_Kit.md §7.4: the router has work only while an event waits or a button is held, so a frame's clock sleeps otherwise.
+#[test]
+fn kit_7_4_the_router_is_pending_only_while_an_event_waits_or_a_button_is_held() {
+    let mut router = Router::new(RepeatTiers::OWN);
+    assert!(!router.pending(), "idle");
+    router.push(PadEvent { button: UiButton::Down, down: true });
+    assert!(router.pending(), "an event waits");
+    router.pump(Duration::from_millis(0));
+    assert!(router.pending(), "Down is held, its repeats are due");
+    router.push(PadEvent { button: UiButton::Down, down: false });
+    router.pump(Duration::from_millis(10));
+    assert!(!router.pending(), "let go and applied");
+}

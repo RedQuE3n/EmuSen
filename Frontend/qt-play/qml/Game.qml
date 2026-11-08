@@ -34,7 +34,7 @@ Item {
     Timer {
         interval: 8
         repeat: true
-        running: root.inFront && Kit.PadRouter.clockRunning
+        running: root.inFront && Kit.PadRouter.clockRunning && Kit.PadRouter.pending
         onTriggered: Kit.PadRouter.pump()
     }
 

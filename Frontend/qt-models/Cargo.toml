@@ -1,0 +1,31 @@
+[package]
+name = "emusen-qt-models"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-qt-models"
+
+# The view models of EmuSen_Qt.md §1.2: the client crates' answers as Qt models and properties for QML, the module
+# EmuSen.Models 1.0. Behaviour is plain Rust tested with a fake client; the bridges only put it on Qt.
+[lib]
+name = "emusen_qt_models"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+# A source's JSON reads (the library's records).
+serde_json.workspace = true
+# The frontend API and the platform library, the only ways to the back end (EmuSen_Qt.md §1.1).
+emusen-crystal-client = { path = "../crystal-client" }
+emusen-platform-client = { path = "../platform-client" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+[dev-dependencies]
+# One harness test proves the QML side sees the roles (EmuSen_Qt.md §8.1).
+emusen-qt-test.workspace = true
+# The platform library built from this commit and a scratch tree, for the client source's test.
+emusen-client-fixture = { path = "../client-fixture" }

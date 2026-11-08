@@ -3,10 +3,11 @@
 //! pause.rs's rule, and what the session must do said as a signal, so QML writes no words and no logic.
 
 use crate::help_model::shown_screen;
+use crate::row_roles;
 use crate::pause::{Card, Facts, Outcome, Page};
 use core::pin::Pin;
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector};
+use cxx_qt_lib::{QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -222,14 +223,6 @@ impl cxx_qt::Initialize for qobject::PauseModel {
     }
 }
 
-const LABEL: i32 = 0;
-const VALUE: i32 = 1;
-const STEPS: i32 = 2;
-const OPENS: i32 = 3;
-const SECTION_END: i32 = 4;
-const KEY: i32 = 5;
-const DIMMED: i32 = 6;
-
 fn shown_page(page: Page) -> PausePage {
     match page {
         Page::First => PausePage::First,
@@ -242,26 +235,20 @@ fn shown_page(page: Page) -> PausePage {
 impl qobject::PauseModel {
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
         let rows = self.card.rows();
-        let Some(row) = rows.get(index.row() as usize) else { return QVariant::default() };
-        match role {
-            LABEL => QVariant::from(&QString::from(row.label.as_str())),
-            VALUE => QVariant::from(&QString::from(row.value.as_str())),
-            STEPS => QVariant::from(&row.steps),
-            OPENS => QVariant::from(&row.opens),
-            SECTION_END => QVariant::from(&row.section_end),
-            KEY => QVariant::from(&QString::from(row.key)),
-            DIMMED => QVariant::from(&row.dimmed),
-            _ => QVariant::default(),
-        }
+        let shown = rows.get(index.row() as usize).map(|r| row_roles::Shown {
+            key: r.key,
+            label: &r.label,
+            value: &r.value,
+            steps: r.steps,
+            opens: r.opens,
+            section_end: r.section_end,
+            dimmed: r.dimmed,
+        });
+        row_roles::data(shown, role)
     }
 
     pub fn role_names(&self) -> QHash<QHashPair_i32_QByteArray> {
-        let mut roles = QHash::<QHashPair_i32_QByteArray>::default();
-        let names = [(LABEL, "label"), (VALUE, "value"), (STEPS, "steps"), (OPENS, "opens"), (SECTION_END, "sectionEnd"), (KEY, "key"), (DIMMED, "dimmed")];
-        for (role, name) in names {
-            roles.insert(role, QByteArray::from(name));
-        }
-        roles
+        row_roles::role_names()
     }
 
     pub fn row_count(&self, _parent: &QModelIndex) -> i32 {

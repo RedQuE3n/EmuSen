@@ -206,7 +206,6 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                 assert_eq!(scene.property("scene", "page"), page.to_string(), "the section turned the page");
                 for (w, h) in SIZES {
                     scene.resize(w, h);
-                    scene.wait(60);
                     if page == 2 {
                         finish_moonrise(&mut scene);
                         moonrise_stars(&mut scene);

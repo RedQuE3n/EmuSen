@@ -15,6 +15,7 @@ fn main() {
     .qt_module("QuickControls2")
     .qt_module("Qml")
     .qt_module("Test")
+    .qt_module("QuickTest")
     .build()
     .export();
 }

@@ -17,6 +17,12 @@ use emusen_kit_qt::tokens::qobject::Tokens;
 use crate::ffi::ffi;
 use crate::tree::Tree;
 
+/// How long a view may take to come to rest before a state is refused: over twelve of the longest motion token's steps (Reel, 400 ms).
+pub const SETTLE_MS: i32 = 5000;
+
+/// `PathView.StrictlyEnforceRange`: the current item held in the highlight range, so the offset follows the current index.
+const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
+
 /// The four sizes the gate runs at (EmuSen_Interface.md §24.7).
 pub const SIZES: [(i32, i32); 4] = [(1280, 800), (1920, 1080), (1280, 720), (3840, 2160)];
 
@@ -116,9 +122,46 @@ impl Scene<'_> {
         unsafe { Pin::new_unchecked(&mut *self.window) }
     }
 
+    /// Resizes the window, waits for Qt to lay every item out, and settles its views.
     pub fn resize(&mut self, width: i32, height: i32) {
         ffi::harness_resize(self.window(), width, height);
-        self.wait(30);
+        let tree = self.tree();
+        self.settle(&tree);
+    }
+
+    /// Waits until every view of the tree is at rest as Qt declares it: a flickable or path view neither moving nor
+    /// flicking, and a path view that keeps its current item in its highlight range at the offset that item rests at,
+    /// Qt's `fmod(count - currentIndex, count)`, since Qt declares a step to a current index as no movement
+    /// (EmuSen_Kit.md §7.11). It polls those declarations and fails past `SETTLE_MS`, so an unsettled state is never read.
+    pub fn settle(&mut self, tree: &Tree) {
+        let views: Vec<(u64, bool)> = tree
+            .nodes
+            .iter()
+            .filter(|n| n.kept.contains_key("contentY") || n.kept.contains_key("offset"))
+            .map(|n| (n.id.parse().unwrap_or(0), n.kept.contains_key("offset")))
+            .collect();
+        let mut waited = 0;
+        while let Some(&(id, _)) = views.iter().find(|&&(id, path)| !self.at_rest(id, path)) {
+            assert!(waited < SETTLE_MS, "a view ({id:#x}) still moving after {SETTLE_MS} ms");
+            self.wait(10);
+            waited += 10;
+        }
+    }
+
+    fn at_rest(&mut self, id: u64, path: bool) -> bool {
+        let mut get = |property: &str| ffi::harness_get(self.window(), id, &QString::from(property));
+        if get("moving") != 0.0 || get("flicking") != 0.0 {
+            return false;
+        }
+        if !path || get("highlightRangeMode") != STRICTLY_ENFORCE_RANGE {
+            return true;
+        }
+        let (count, current, offset) = (get("count"), get("currentIndex"), get("offset"));
+        if count < 1.0 || current < 0.0 {
+            return true;
+        }
+        let apart = (offset - (count - current).rem_euclid(count)).abs();
+        apart < 1e-6 || (apart - count).abs() < 1e-6
     }
 
     pub fn wait(&mut self, ms: i32) {
@@ -284,9 +327,8 @@ impl Scene<'_> {
         steps
     }
 
-    /// Writes back every selection, value, scroll and focus scope's remembered item that differs from the tree's, and waits
-    /// up to a second for a view's own motion to end; a path's offset is not written, since it follows its current index by
-    /// the view's own animation.
+    /// Writes back every selection, value, scroll and focus scope's remembered item that differs from the tree's, then
+    /// settles the views; a path's offset is not written, since it follows its current index by the view's own animation.
     fn put_back(&mut self, before: &Tree) {
         for node in before.nodes.iter().filter(|n| !n.scoped.is_empty()) {
             let want: u64 = node.scoped.parse().unwrap_or(0);
@@ -294,26 +336,17 @@ impl Scene<'_> {
                 ffi::harness_give_focus(self.window(), want);
             }
         }
-        for _ in 0..100 {
-            let mut settled = true;
-            for node in &before.nodes {
-                let id: u64 = node.id.parse().unwrap_or(0);
-                for (property, value) in &node.kept {
-                    let name = QString::from(property.as_str());
-                    let now = ffi::harness_get(self.window(), id, &name);
-                    if now.is_finite() && value.is_finite() && (now - value).abs() > 1e-6 {
-                        settled = false;
-                        if property != "offset" {
-                            ffi::harness_put(self.window(), id, &name, *value);
-                        }
-                    }
+        for node in &before.nodes {
+            let id: u64 = node.id.parse().unwrap_or(0);
+            for (property, value) in node.kept.iter().filter(|(property, _)| *property != "offset") {
+                let name = QString::from(property.as_str());
+                let now = ffi::harness_get(self.window(), id, &name);
+                if now.is_finite() && value.is_finite() && (now - value).abs() > 1e-6 {
+                    ffi::harness_put(self.window(), id, &name, *value);
                 }
             }
-            if settled {
-                return;
-            }
-            self.wait(10);
         }
+        self.settle(before);
     }
 
     /// The edges pad reach is judged by: the presses that moved the focus.

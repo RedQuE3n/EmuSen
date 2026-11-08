@@ -812,12 +812,44 @@ scroll offsets: a recording must not depend on the states visited before it. Aft
 and restores what the tree recorded of two kinds. The selections, values and scrolls Qt Quick's own classes declare
 (`currentIndex`, `value`, `contentX`, `contentY`, and a path's `offset`, each only where a `QQuick` class declares it
 and it is writable, so a binding is written only where a press already broke it) are written back where they differ;
-a path's offset is not written but waited for, up to a second, since it follows its current index by the view's own
-animation, and writing it mid-move was measured to leave the carousel between cards. A focus scope's remembered item
-is given back with `setFocus`, which moves no focus outside the scope. Found on 2026-11-08: the dark and the light
-Controls state at 1280 × 800 differed by six focus edges, because the first state's walk had pressed Right on the tab
-bar (changing the tab) and Right from the combo box (leaving its row remembering the text field), and every later state
-began there; it showed at one size only because that state is visited first.
+a path's offset is not written, since it follows its current index by the view's own animation, and writing it
+mid-move was measured to leave the carousel between cards; the views are settled instead (below). A focus scope's
+remembered item is given back with `setFocus`, which moves no focus outside the scope. Found on 2026-11-08: the dark
+and the light Controls state at 1280 × 800 differed by six focus edges, because the first state's walk had pressed
+Right on the tab bar (changing the tab) and Right from the combo box (leaving its row remembering the text field), and
+every later state began there; it showed at one size only because that state is visited first.
+
+**A state is read only when its views are at rest, as Qt declares it** (`Scene::settle`). Every flickable and path
+view in the tree must be neither `moving` nor `flicking`, and a path view that holds its current item in its highlight
+range (`StrictlyEnforceRange`) must stand at the offset that item rests at, `fmod(count - currentIndex, count)`, the
+target Qt's own step to an index moves to. The harness polls those declarations every 10 ms and fails the state past
+5 s, so an unsettled state is refused rather than read. `resize` settles after `QQuickTest::qWaitForPolish` (Qt's word
+that no item is still to be laid out) where it slept 20 ms, and the put-back settles after its writes. The gallery gate
+reads each state after a resize and so after a settle; its fixed 60 ms wait is gone.
+
+The defect that showed it, measured on 2026-11-08. The release gate failed about two runs in three with
+`big-Dark-menu-3840x2160: rests outside the carousel 341: 350, Card… at 2950,875 486x648`, the same card at the same
+rectangle, at 4K only, while the debug gate passed. The mechanism: the walk's Left and Right on the carousel each start
+a Reel step (400 ms) towards a new current index, and **Qt declares no movement during such a step**: a probe sampling
+the carousel every 10 ms after a press read `moving=false flicking=false` throughout, while the offset went from 8 to 7
+over 380 ms (`~/.cache/emusen/tmp/qt-stage0/probe-carousel-moving.log`). The walk left the carousel stepping back to its
+index, and the next state was read about 110 ms later with the offset a few thousandths of an item short: logged before
+each big-screen Menu read in a release run, 0.0029 at 1920 × 1080, 0.0072 at 1280 × 720 and 0.0032 at 3840 × 2160, the
+run that failed. A thousandth of an item is 0.55 pixels at 4K, where an item is 551 pixels, and 0.28 at 1920 × 1080, so
+only at 4K did the card at the carousel's edge stand past its box by more than the audit's 1.5-pixel slack; the release
+build's steady timing left the same residue each time, hence the same rectangle. With the settle, the same log read an
+offset of 0 at every state. Without it (the put-back and the settle taken out), three release runs failed once, with
+that line exactly.
+
+Measured on 2026-11-08 with the settle: **10 release runs of the gate, each beside a release build of the kit in a
+target folder of its own with the compiler cache off, at a load average of 10.2 to 13.2 on 16 threads: 10 passed**,
+41 to 48 s each (`~/.cache/emusen/tmp/qt-stage0/runs/`). The check still catches a real spill: the carousel's old
+`pathItemCount` (as many as cover its width, plus two) seeded again failed the release gate with 192 `rests outside the
+carousel` faults, the first `big-Dark-menu-1280x800: … Card… at 1229,324 180x240`.
+
+Seen in every run since step 1, the debug and release gates alike and before any change of this section, and not part
+of it: when the question opens, Qt logs `RangeError: Maximum call stack size exceeded` twenty times from `Sheet.qml`
+and `Frame.qml`. The gate passes over it; it is owed to the sheet's focus handling (§7.7).
 
 **Not written, and why.** `focus` (focusable): the dump has one fact, `operable`, and writing it twice would be an
 invention. `sideways`, `live`, `element`, `volatile`, `part`, `title`, `footer`, `walk` and `entered`: nothing in the
@@ -913,7 +945,10 @@ CubicOut curve numbered as InCubic failed the easing test; the swap applied inve
 kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
 `cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
 harness 254), not the 264 first written here. Budget: under 600 for the whole front end. With §7.11's 59 lines,
-`cpp/harness.cpp` is 420, `cpp/harness.h` 28, and the front end **471**.
+`cpp/harness.cpp` is 420, `cpp/harness.h` 28, and the front end **471**; with the polish wait's include, 421 and **472**.
+The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not bind: `QAccessible::queryAccessibleInterface`,
+`QMetaProperty`'s declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address, and
+`QQuickTest::qWaitForPolish`.
 
 ### 7.7 Open
 
@@ -931,6 +966,9 @@ harness 254), not the 264 first written here. Budget: under 600 for the whole fr
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
 - Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
   units as the audit's named exception to the floor (§7.10).
+- Owed by §7.11: the question's opening logs `RangeError: Maximum call stack size exceeded` from `Sheet.qml` and
+  `Frame.qml` twenty times, in every gate run since 54f2dc43c; a recursion between the sheet's focus and the frame's,
+  read and fixed in the kit, not the gate.
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
   the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help

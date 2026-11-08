@@ -18,6 +18,7 @@
 #include <QtQml/QQmlProperty>
 #include <QtQuick/QQuickItem>
 #include <QtQuick/QQuickWindow>
+#include <QtQuickTest/quicktest.h>
 #include <QtTest/QTest>
 #include <algorithm>
 #include <cmath>
@@ -296,7 +297,7 @@ void harness_resize(QObject& window, int width, int height)
 {
     if (QQuickWindow* w = quick(window)) {
         w->resize(width, height);
-        QTest::qWait(20);
+        QQuickTest::qWaitForPolish(w); // what Qt declares: no item still to lay out
     }
 }
 

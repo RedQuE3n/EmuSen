@@ -846,6 +846,34 @@ loads each screen offscreen on the synthetic library and runs the fit and reach 
 four sizes, and prints one line per finding (`file:line kind words`) and a last line `ok` or `N findings`. The Themes tab runs it before offering
 "Use", as the install gate; the compatibility corpus of §4.4 runs the ES-DE equivalent.
 
+#### 3.7.1 The static step as built **[M 2026-11-08]**
+
+Three Qt-free crates, each outside the Frontend workspace with its own lock file and a fence test, since the back end's dev module
+links the command and must never pull in Qt. The rules and their kinds are in `man theme-check`.
+
+- **`emusen-theme-manifest`** (`Frontend/theme-check/manifest`) is the one owner of `theme.json`'s schema 1: `parse(text)` gives the
+  manifest as plain data (name, author, licence, `api`, `variants`, `fontSizes`, `screens`, token overrides per variant with their
+  lines, `cues`, `previews`) and each break as a finding on its line. A schema above 1 or an API newer than the build's `1.0` (a
+  newer major, or a newer minor) is refused with words naming both; a path that leaves the package is refused; an unknown key is a
+  note that refuses nothing (§5.2). The theme host reads `theme.json` through it, so the schema is not written twice.
+- **`emusen-qml-rules`** gained a theme profile: `THEME_IMPORTS` (the six modules of §3.5, matched whole, which the host's engine
+  reads too), `check_theme`, §1.3's rules with that list in place of the view list, and quoted relative folder imports allowed,
+  and `local_imports`, so the checker can hold each folder inside the package.
+- **`emusen-theme-check`** (`Frontend/theme-check`), the command `theme-check <folder>...` in `emusen.dev`: the manifest; the listed
+  screens against the files present; the files it names; every `.qml` through the theme profile; each token override against the
+  kit's committed registry (a read-only property of `Tokens`, of its declared type), the text scales against kit-core's range; and
+  kit-core's 25 contrast pairs a variant, with the overrides applied, through `Colour::contrast`. A pair is measured only when the
+  theme overrides one of its tokens. The colour token to property table (`overAccent` for `OnAccent`, and so on) is held to the
+  registry both ways by a test.
+
+Proof, 2026-11-08: four fixture packages under `tests/themes` (clean `ok`; a literal in a part; `import QtMultimedia` in Home; a
+dark `accent` of #37526F, 2.13:1 on the surface, giving four contrast findings and none in the light variant), each named in the
+output; the schema, token and screen cases in temporary packages. Five seeded faults, each caught: the `OnAccent` property misnamed
+(the registry test and the contrast fixture); `EmuSen.*` let through the theme profile (qml-rules' theme test); the containment of
+a folder import dropped (the screens test); a newer minor accepted (the API test); an overridden back ignored (the contrast
+fixture). The step that loads the screens offscreen and runs §8.1's audits is a Qt-side program of its own (C2), run by
+`theme-check` as a process.
+
 ---
 
 ## 4. ES-DE themes: the engine as a component

@@ -58,6 +58,10 @@ pub const ALLOWED_IMPORTS: [&str; 7] =
 /// Imports never allowed, even under an allowed prefix.
 pub const FORBIDDEN_IMPORTS: [&str; 2] = ["QtQml.Models", "QtQuick.LocalStorage"];
 
+/// The modules a theme may import, matched whole (EmuSen_Qt.md §3.5): the sandboxed engine's allow-list, read by its host too.
+pub const THEME_IMPORTS: [&str; 6] =
+    ["QtQuick", "QtQuick.Layouts", "QtQuick.Effects", "QtQuick.Shapes", "QtQuick.Controls", "EmuSen.Theme"];
+
 /// Bindings whose string is a name, a path or a colour rather than words: never findings.
 const NAMED_BINDINGS: [&str; 11] = [
     "objectName",
@@ -193,6 +197,34 @@ fn is_handler_function(line: &str) -> bool {
 
 /// Every finding in one file's text.
 pub fn check(file: &str, text: &str, options: Options) -> Vec<Finding> {
+    check_as(file, text, options, false)
+}
+
+/// Every finding in one file of a theme: §1.3's rules as a view's, with the theme's imports (`THEME_IMPORTS`, and quoted relative folders).
+pub fn check_theme(file: &str, text: &str) -> Vec<Finding> {
+    check_as(file, text, Options::default(), true)
+}
+
+/// A file's quoted folder imports (`import "../parts"`), with their lines, for a caller that knows where the file sits.
+pub fn local_imports(text: &str) -> Vec<(usize, String)> {
+    let clean = strip_comments(text);
+    clean
+        .lines()
+        .enumerate()
+        .filter_map(|(i, line)| {
+            line.trim().strip_prefix("import \"").and_then(|rest| rest.split('"').next()).map(|p| (i + 1, p.to_owned()))
+        })
+        .collect()
+}
+
+fn theme_import_allowed(module: &str) -> bool {
+    match module.strip_prefix('"').and_then(|m| m.strip_suffix('"')) {
+        Some(folder) => !folder.is_empty() && !folder.starts_with('/') && !folder.contains(':'),
+        None => THEME_IMPORTS.contains(&module),
+    }
+}
+
+fn check_as(file: &str, text: &str, options: Options, theme: bool) -> Vec<Finding> {
     let clean = strip_comments(text);
     let mut findings = Vec::new();
     let mut push =
@@ -205,6 +237,12 @@ pub fn check(file: &str, text: &str, options: Options) -> Vec<Finding> {
         }
         if let Some(module) = t.strip_prefix("import ") {
             let module = module.split_whitespace().next().unwrap_or("");
+            if theme {
+                if !theme_import_allowed(module) {
+                    push(n, Rule::Import, module);
+                }
+                continue;
+            }
             let allowed = ALLOWED_IMPORTS.iter().any(|a| {
                 module == a.trim_end_matches('.') || module.starts_with(a) && (a.ends_with('.') || module[a.len()..].starts_with('.'))
             });

@@ -1,6 +1,6 @@
 //! The kit's enumerations for QML, each a mirror of a kit-core type in a namespace of its own, so QML says `Kit.Pad.Accept` or `Kit.Forms.BigScreen` (EmuSen_Kit.md §7.1).
 
-use emusen_kit_core::glyph::PadFamily;
+use emusen_kit_core::glyph::{GlyphStyle as CoreGlyphStyle, PadFamily};
 use emusen_kit_core::input::{RepeatTiers, Role as WalkRole, UiButton, WalkForm};
 use emusen_kit_core::sound::Cue as SoundCue;
 use emusen_kit_core::tokens::{Form as TokenForm, Variant as TokenVariant};
@@ -138,9 +138,20 @@ pub mod ffi {
         Loaded,
         Refused,
     }
+
+    #[qml_element]
+    qnamespace!("GlyphStyles");
+
+    /// The pad glyphs' two sets: kit-core's `GlyphStyle`, in its order.
+    #[qenum]
+    #[namespace = "GlyphStyles"]
+    enum GlyphStyle {
+        Outlined,
+        Filled,
+    }
 }
 
-pub use ffi::{BodyShape, Cue, Family, Form, PadButton, Ring, Role, Tiers, Variant};
+pub use ffi::{BodyShape, Cue, Family, Form, GlyphStyle, PadButton, Ring, Role, Tiers, Variant};
 
 pub fn world_shape(shape: BodyShape) -> WorldShape {
     match shape {
@@ -197,6 +208,15 @@ pub fn pad_family(family: Family) -> PadFamily {
 
 pub fn family_of(family: PadFamily) -> Family {
     Family { repr: PadFamily::ALL.iter().position(|f| *f == family).map_or(0, |i| i as i32) }
+}
+
+/// A style by its number, the outlined set for one out of range.
+pub fn glyph_style(style: GlyphStyle) -> CoreGlyphStyle {
+    usize::try_from(style.repr).ok().and_then(|i| CoreGlyphStyle::ALL.get(i).copied()).unwrap_or(CoreGlyphStyle::Outlined)
+}
+
+pub fn glyph_style_of(style: CoreGlyphStyle) -> GlyphStyle {
+    GlyphStyle { repr: CoreGlyphStyle::ALL.iter().position(|s| *s == style).map_or(0, |i| i as i32) }
 }
 
 pub fn walk_form(form: Form) -> WalkForm {

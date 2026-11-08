@@ -1625,6 +1625,68 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   `NoticeLayer`, a pill on HudSurface) draws no shadow; the design's (`EmuSen_Interface.md` §18.6, "the shadow") is
   kept (decided 2026-11-08 by the tester), a difference from Mistress named in `EmuSen_Qt.md` §7.6. Held to `qt-app`'s `acceptance.rs` on Vulkan.
 
+### 7.28 The kit's extensions for the ES-DE painter: a release, a key through the queue, the filled glyphs, a help bar outside a frame (stage 4, K; 2026-11-08)
+
+The ES-DE view (`EmuSen_Qt.md` §4) takes the router directly, as `Game.qml` does, and draws a theme's `helpsystem`
+element in the theme's style. Each piece below is an extension of an existing surface under rule Q, declared after
+what was there; none changes what an existing screen draws, and the gallery's gate passes unchanged (73 states).
+
+- **`PadRouter.released(button)`.** ES-DE fades its metadata back in as a held direction is let go, and a held list
+  stops at its end. `Router` raises a release at the pump that applies it, once, and only for a button whose press it
+  raised (`raised`, cleared on release and by the menu chord), with the player's swap as the press had it. A button
+  held over a game, or one the menu chord took, was never pressed and is never released. The pad's releases are
+  raised before the pump's presses, so a release and a press at one pump leave the press last.
+- **`PadRouter.pushKey(key, modifiers)`**, an invokable returning whether the key is known: the kit's key map
+  (`qt_keys::press_of`, the one owner of what a key means) made a press through the router's queue, so the view's
+  `Keys.onPressed` is one line and a key and a pad share the pump's order. A key the map does not know (Tab, letters)
+  is declined, false. A key is a tap: at the pump it is raised as a press and then its release, after the pad's
+  presses, never swapped (Return is Accept whatever the swap, as a key is not the pad's button), and nothing while a
+  game owns the pad (`chordOnly`). A key held down repeats at the keyboard's own rate, each repeat a tap; ES-DE's
+  measured tiers apply to the pad only (a named difference, §7.7).
+- **The filled set** (`glyph::GlyphStyle::Filled`, `glyph/filled.rs`): every control of every family one solid shape
+  with its letter, symbol or mark cut out, as ES-DE's help draws its buttons and LunaP's `PadGlyphStyle.Filled` drew
+  them for Mistress (`EmuSen_BigPicture.md` §40.1): the face buttons a disc 0.425 of the box (22 pixels beside a
+  26-pixel label), lettered by the family or, on PlayStation, its shape cut as the band between two outlines; the
+  shoulders and triggers their bodies with the family's name cut out; Start and Select a disc (a pill on PlayStation)
+  with the family's mark cut; the d-pad a solid plus with an arrow cut into the tip of the arm the press moves along;
+  a stick's click a disc with a ring cut, Guide a disc with a hole. A cut letter is bold (`Letter.bold`), so it reads
+  at 22 pixels. **An unknown pad is lettered as an Xbox pad in the filled set** (`glyph::lettered`), ES-DE's default
+  type, as Mistress did; the outlined set keeps the positional face. `Mark` gained `holes`, closed polygons cut out of
+  a filled mark odd-even, so a ring is two of them and no two holes overlap. kit-qt: `Kit.GlyphStyles` mirrors the
+  style; `PadGlyphMarks` gained `style`, the `holes` role and `letterBold`; `PadGlyph.style`, its holes drawn by a
+  `PathMultiline` in the mark's own `ShapePath`.
+- **`HelpBar`** gains `pressed(button)`, raised by every entry's click; `controller` is optional (null by default), and
+  `Frame` connects its bar's `pressed` to `controller.offer` instead of passing it, so a press is offered once. Further:
+  `glyphStyle`, `labelColor`, `iconColor` (the glyphs' ink), `entryScale` (an entry's glyph, gap and label at that share
+  of their size), `horizontalPadding` and `verticalPadding`, and `fitted`, a box that hugs its entries (each entry as
+  high as its content, by a `Binding` that leaves the style's height on the band) in place of the band on the foot.
+  The background's colour and corner radius are the bar's own `color` and `radius`, so no property was added for them.
+  An entry whose model gives an `icon` role (a theme's `customButtonIcon`) draws that picture in the glyph's place.
+
+**The filled help bar beside Mistress's**, at 1280 × 800: `emusen-qt-test`'s `helpbar` writes
+`~/.cache/emusen/tmp/qt-test/helpbar-filled.png` (the ES-DE gamelist's ten entries in the four families, white on
+`#202020`, at §40.1's sizes, and a fitted bar with a picture), and `side-by-side-helpbar.png` beside it pairs each bar
+with `MenusFollowupPictureTool`'s `synthetic-1280x800-gamelist-<family>` (§40.9). Looked at on 2026-11-08: the same
+letters by family and by position (Nintendo's B on South), the same discs, pills and cut shapes, the same order and
+spacing within a few pixels. Differences seen, none a defect of the set: Mistress's d-pad for Choose shows both arrows
+of its axis where one press draws one; the fixture's labels sit in a taller line box (the kit's face, not ES-DE's), so
+its box is 47 pixels high against 34; the glyphs' letters are a little lighter than LunaP's widened ones.
+
+**Held to**: kit-core's `tests/glyph.rs` (every control of every family in the filled set one closed solid shape in its
+box, a cut letter (bold) or holes and never both, every hole inside its shape, no two controls of a family alike but
+the two sticks; the unknown pad lettered as Xbox in the filled set only; the outlined set unchanged); kit-qt's `router`
+(a release once after its press, swapped as it was, none for a button held over a game or taken by the chord; Return
+and Enter Accept and Escape Back with the swap on, Tab and a letter declined, no key while a game owns the pad),
+`kinds` (the styles pair by pair) and `qmltypes`; `emusen-qt-test`'s `glyphs` (the filled set's 64 beside the outlined
+64, Accept's name on each family's South, every filled glyph showing its cut), `helpbar` (a click raises its press once
+with no controller, the fitted box round its entries and paddings, the picture drawn and the glyph hidden, every
+filled glyph of the four bars cut) and `menu` (the frame's bar still offers its press); the gallery's gate. Rule Q's
+registry gained `GlyphStyles`, `PadGlyphMarks.style` and `letterBold` and the `Holes` role, and `PadRouter.released`
+and `pushKey`, each declared last; the diff was read before it was copied, additions only. Measured on 2026-11-08 with
+four seeded faults, each reverted: a release raised without its press failed `router` (held over a game, released);
+the key's press swapped failed `router` (Return as Back); the holes not drawn failed `glyphs` (18 filled glyphs with
+nothing cut out); the frame's bar not offering its press failed `menu` (the help bar's Open reached no row).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
@@ -1682,6 +1744,9 @@ cxx-qt-lib binds.
   pad until a host passes one **[routine]**; a uinput pad (a kernel device, seen by every program on the desk, as
   WiseMan's `UinputHotplugTests` makes under `EMUSEN_UINPUT_PADS=1`) is not used, since SDL's virtual pads prove the
   same path without one.
+- Owed by §7.28 **[routine]**: a theme's button picture is drawn in its own colours, where ES-DE shifts it by
+  `iconColor`; and a key held in the ES-DE view repeats at the keyboard's rate, not ES-DE's tiers (a key release
+  through the queue would give the tiers, if wanted).
 - Owed by §7.8: `RatingPicker` and `DatePicker` (`Keyboard` is built, §7.22); the drawn
   glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
   pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.

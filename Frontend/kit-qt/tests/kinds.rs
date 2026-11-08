@@ -79,3 +79,16 @@ fn kit_7_12_every_family_names_its_pad_family() {
     }
     assert_eq!(kinds::pad_family(Family { repr: 9 }), PadFamily::Generic, "an unknown number is the generic face");
 }
+
+#[test]
+fn kit_7_28_every_glyph_style_names_its_core_style() {
+    use emusen_kit_core::glyph::GlyphStyle as Core;
+    use emusen_kit_qt::kinds::GlyphStyle;
+    let pairs = [(GlyphStyle::Outlined, Core::Outlined), (GlyphStyle::Filled, Core::Filled)];
+    assert_eq!(pairs.len(), Core::ALL.len());
+    for (qml, core) in pairs {
+        assert_eq!(kinds::glyph_style(qml), core, "{core:?}");
+        assert_eq!(kinds::glyph_style_of(core).repr, qml.repr, "{core:?}");
+    }
+    assert_eq!(kinds::glyph_style(GlyphStyle { repr: 7 }), Core::Outlined, "an unknown number is the outlined set");
+}

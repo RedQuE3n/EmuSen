@@ -3,12 +3,13 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant};
+use cxx_qt_lib::{QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant};
 use emusen_kit_core::glyph::{self, Glyph};
+use emusen_kit_core::world::Point;
 use emusen_kit_core::input::UiButton;
 
 use crate::convert::polygon;
-use crate::kinds::{self, Family, PadButton};
+use crate::kinds::{self, Family, GlyphStyle, PadButton};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -31,6 +32,8 @@ pub mod qobject {
         type Family = crate::kinds::ffi::Family;
         #[namespace = "Pad"]
         type PadButton = crate::kinds::ffi::PadButton;
+        #[namespace = "GlyphStyles"]
+        type GlyphStyle = crate::kinds::ffi::GlyphStyle;
     }
 
     #[qenum(PadGlyphMarks)]
@@ -39,6 +42,7 @@ pub mod qobject {
         Filled,
         Stroke,
         CutLetter,
+        Holes,
     }
 
     #[auto_cxx_name]
@@ -54,6 +58,9 @@ pub mod qobject {
         #[qproperty(f64, letter_scale, READ, NOTIFY)]
         #[qproperty(bool, cut, READ, NOTIFY)]
         #[qproperty(QString, name, READ, NOTIFY)]
+        /// The outlined set or the filled one (EmuSen_Kit.md §7.28).
+        #[qproperty(GlyphStyle, style)]
+        #[qproperty(bool, letter_bold, READ, NOTIFY)]
         type PadGlyphMarks = super::PadGlyphMarksRust;
     }
 
@@ -85,8 +92,13 @@ pub mod qobject {
 
 use qobject::MarkRole;
 
-pub const ROLE_NAMES: [(MarkRole, &str); 4] =
-    [(MarkRole::Outline, "outline"), (MarkRole::Filled, "filled"), (MarkRole::Stroke, "stroke"), (MarkRole::CutLetter, "cutLetter")];
+pub const ROLE_NAMES: [(MarkRole, &str); 5] = [
+    (MarkRole::Outline, "outline"),
+    (MarkRole::Filled, "filled"),
+    (MarkRole::Stroke, "stroke"),
+    (MarkRole::CutLetter, "cutLetter"),
+    (MarkRole::Holes, "holes"),
+];
 
 pub struct PadGlyphMarksRust {
     family: Family,
@@ -97,6 +109,8 @@ pub struct PadGlyphMarksRust {
     letter_scale: f64,
     cut: bool,
     name: QString,
+    style: GlyphStyle,
+    letter_bold: bool,
     glyph: Glyph,
 }
 
@@ -111,6 +125,8 @@ impl Default for PadGlyphMarksRust {
             letter_scale: 1.0,
             cut: false,
             name: QString::default(),
+            style: GlyphStyle::Outlined,
+            letter_bold: false,
             glyph: Glyph { marks: Vec::new(), letter: None },
         };
         rust.rebuild();
@@ -119,14 +135,16 @@ impl Default for PadGlyphMarksRust {
 }
 
 impl PadGlyphMarksRust {
-    /// kit-core's glyph for the control that gives the press, with the player's swap.
+    /// kit-core's glyph for the control that gives the press, with the player's swap, in the style's set; named as it is lettered.
     fn rebuild(&mut self) {
-        let family = kinds::pad_family(self.family);
+        let style = kinds::glyph_style(self.style);
+        let family = glyph::lettered(kinds::pad_family(self.family), style);
         let control = kinds::ui_button(self.button).unwrap_or(UiButton::Guide).control(self.swap);
-        self.glyph = glyph::glyph(family, control);
+        self.glyph = glyph::styled(family, control, style);
         let letter = self.glyph.letter;
         self.letter = QString::from(letter.map_or("", |l| l.text));
         self.letter_scale = letter.map_or(1.0, |l| l.scale);
+        self.letter_bold = letter.is_some_and(|l| l.bold);
         self.cut = self.glyph.marks.iter().any(|m| m.cut);
         self.name = QString::from(glyph::name(family, control));
     }
@@ -138,6 +156,7 @@ impl cxx_qt::Initialize for qobject::PadGlyphMarks {
         self.as_mut().on_button_changed(|this| this.refresh()).release();
         self.as_mut().on_swap_changed(|this| this.refresh()).release();
         self.as_mut().on_size_changed(|this| this.refresh()).release();
+        self.as_mut().on_style_changed(|this| this.refresh()).release();
     }
 }
 
@@ -150,6 +169,7 @@ impl qobject::PadGlyphMarks {
         self.as_mut().letter_scale_changed();
         self.as_mut().cut_changed();
         self.as_mut().name_changed();
+        self.as_mut().letter_bold_changed();
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
@@ -164,6 +184,14 @@ impl qobject::PadGlyphMarks {
             MarkRole::Filled => QVariant::from(&mark.filled),
             MarkRole::Stroke => QVariant::from(&(mark.stroke * self.size)),
             MarkRole::CutLetter => QVariant::from(&if mark.cut { self.letter.clone() } else { QString::default() }),
+            MarkRole::Holes => {
+                let mut holes = QList::<QVariant>::default();
+                for hole in &mark.holes {
+                    let points: Vec<Point> = hole.iter().map(|p| [p[0] * self.size, p[1] * self.size]).collect();
+                    holes.append(polygon(&points));
+                }
+                QVariant::from(&holes)
+            }
             _ => QVariant::default(),
         }
     }

@@ -85,7 +85,7 @@ FocusScope {
     Kit.HelpBar {
         id: helpBar
         objectName: "helpBar"
-        controller: root.controller
+        onPressed: (button) => root.controller.offer(button)
         visible: !root.desktop && root.helpShown
         glass: root.bigScreen && !root.surfaceDrawn
         anchors.left: parent.left

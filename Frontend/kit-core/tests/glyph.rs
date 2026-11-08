@@ -1,6 +1,7 @@
 // EmuSen_Kit.md §7.12: every control of every family has a glyph, inside its box, lettered and named as the pad prints it, and each press of the interface has its control.
 
-use emusen_kit_core::glyph::{self, PadFamily};
+use emusen_kit_core::glyph::{self, GlyphStyle, PadFamily};
+use emusen_kit_core::world::Point;
 use emusen_kit_core::input::{PadControl, UiButton};
 
 #[test]
@@ -102,4 +103,65 @@ fn every_control_gives_back_the_press_whose_control_it_is_and_the_router_s_swap_
     assert_eq!(PadControl::RightStick.press(), Some(UiButton::Random), "either stick's click is Random");
     let pressed: Vec<UiButton> = PadControl::ALL.iter().filter_map(|c| c.press()).collect();
     assert_eq!(pressed.len(), PadControl::ALL.len(), "every control gives a press");
+}
+
+fn inside(p: Point, polygon: &[Point]) -> bool {
+    let mut inside = false;
+    for pair in polygon.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < a[0] + (p[1] - a[1]) * (b[0] - a[0]) / (b[1] - a[1]) {
+            inside = !inside;
+        }
+    }
+    inside
+}
+
+// EmuSen_Kit.md §7.28: the filled set, one solid shape a control with its letter or its mark cut out, in every family.
+#[test]
+fn kit_7_28_every_control_of_every_family_draws_a_filled_shape_with_a_cut_mark() {
+    for family in PadFamily::ALL {
+        let mut drawn = Vec::new();
+        for control in PadControl::ALL {
+            let g = glyph::styled(family, control, GlyphStyle::Filled);
+            assert_eq!(g.marks.len(), 1, "{family:?} {control:?}: one solid shape");
+            let m = &g.marks[0];
+            assert!(m.filled && m.stroke == 0.0, "{family:?} {control:?}: filled, not stroked");
+            assert_eq!(m.points.first(), m.points.last(), "{family:?} {control:?}: the shape is closed");
+            assert!(m.points.iter().flatten().all(|v| (0.0..=1.0).contains(v)), "{family:?} {control:?} leaves the box");
+            assert!(m.cut != !m.holes.is_empty(), "{family:?} {control:?}: a letter or holes cut out, one of the two");
+            assert_eq!(m.cut, g.letter.is_some(), "{family:?} {control:?}: a cut letter and a letter go together");
+            assert!(g.letter.is_none_or(|l| l.bold), "{family:?} {control:?}: a letter cut out of a filled shape is bold");
+            for hole in &m.holes {
+                assert!(hole.len() >= 4 && hole.first() == hole.last(), "{family:?} {control:?}: a hole is a closed polygon");
+                assert!(hole.iter().all(|p| inside(*p, &m.points)), "{family:?} {control:?}: a hole leaves its shape");
+            }
+            let name = glyph::name(glyph::lettered(family, GlyphStyle::Filled), control);
+            assert!(!name.is_empty(), "{family:?} {control:?} has a name");
+            drawn.push((control, g));
+        }
+        for (i, (a, ga)) in drawn.iter().enumerate() {
+            for (b, gb) in &drawn[i + 1..] {
+                let sticks = matches!((a, b), (PadControl::LeftStick, PadControl::RightStick));
+                assert!(sticks || ga != gb, "{family:?}: {a:?} and {b:?} draw the same glyph");
+            }
+        }
+    }
+}
+
+#[test]
+fn kit_7_28_an_unknown_pad_is_lettered_as_an_xbox_pad_in_the_filled_set_only() {
+    assert_eq!(glyph::lettered(PadFamily::Generic, GlyphStyle::Filled), PadFamily::Xbox);
+    assert_eq!(glyph::lettered(PadFamily::Generic, GlyphStyle::Outlined), PadFamily::Generic);
+    assert_eq!(glyph::lettered(PadFamily::Nintendo, GlyphStyle::Filled), PadFamily::Nintendo);
+    let filled = |f, c| glyph::styled(f, c, GlyphStyle::Filled);
+    assert_eq!(filled(PadFamily::Generic, PadControl::South), filled(PadFamily::Xbox, PadControl::South));
+    assert_eq!(filled(PadFamily::Xbox, PadControl::South).letter.map(|l| l.text), Some("A"));
+    assert_eq!(filled(PadFamily::Nintendo, PadControl::South).letter.map(|l| l.text), Some("B"), "Nintendo letters by position");
+    assert_eq!(filled(PadFamily::PlayStation, PadControl::South).letter, None, "PlayStation's shapes are cut, not lettered");
+    assert_eq!(filled(PadFamily::Xbox, PadControl::RightTrigger).letter.map(|l| l.text), Some("RT"));
+    for family in PadFamily::ALL {
+        for control in PadControl::ALL {
+            assert_eq!(glyph::styled(family, control, GlyphStyle::Outlined), glyph::glyph(family, control), "the outlined set is unchanged");
+        }
+    }
 }

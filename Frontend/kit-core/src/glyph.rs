@@ -5,6 +5,8 @@
 use crate::input::PadControl;
 use crate::world::Point;
 
+mod filled;
+
 /// What a pad prints on its buttons; `Generic` is a pad whose printing is not known, drawn by position as the RetroPad names its buttons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PadFamily {
@@ -19,20 +21,36 @@ impl PadFamily {
 }
 
 /// One mark in the unit box: a polyline, filled or stroked (`stroke` a share of the box, 0 for none); `cut` when the
-/// glyph's letter is cut out of it rather than drawn over it.
+/// glyph's letter is cut out of it rather than drawn over it; `holes`, closed polygons cut out of a filled mark, filled
+/// with it odd-even, so a hole inside a hole is filled again (a ring is two).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mark {
     pub points: Vec<Point>,
     pub filled: bool,
     pub stroke: f64,
     pub cut: bool,
+    pub holes: Vec<Vec<Point>>,
 }
 
-/// The words a family prints on a control, centred, in the interface's glyph type at `scale` of its size.
+/// The kit's two sets: LunaP's outlined set (§7.12), and the filled set, each control a solid shape with its letter,
+/// symbol or mark cut out, as ES-DE's help draws its buttons (EmuSen_BigPicture.md §40.1, EmuSen_Kit.md §7.28).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum GlyphStyle {
+    Outlined,
+    Filled,
+}
+
+impl GlyphStyle {
+    pub const ALL: [GlyphStyle; 2] = [GlyphStyle::Outlined, GlyphStyle::Filled];
+}
+
+/// The words a family prints on a control, centred, in the interface's glyph type at `scale` of its size, `bold` where
+/// cut out of a filled shape, so a hole reads at 22 pixels as ES-DE's heavy letters do (§7.28).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Letter {
     pub text: &'static str,
     pub scale: f64,
+    pub bold: bool,
 }
 
 /// A control's glyph: its marks, and the letter drawn over them or cut out of the one marked `cut`.
@@ -89,11 +107,30 @@ fn rounded(x: f64, y: f64, w: f64, h: f64, top: f64, bottom: f64) -> Vec<Point> 
 }
 
 fn stroked(points: Vec<Point>, stroke: f64) -> Mark {
-    Mark { points, filled: false, stroke, cut: false }
+    Mark { points, filled: false, stroke, cut: false, holes: Vec::new() }
 }
 
 fn solid(points: Vec<Point>) -> Mark {
-    Mark { points, filled: true, stroke: 0.0, cut: false }
+    Mark { points, filled: true, stroke: 0.0, cut: false, holes: Vec::new() }
+}
+
+/// A plus about the centre, its arms `half` either side of the axes and reaching `reach` from the centre.
+fn plus(half: f64, reach: f64) -> Vec<Point> {
+    let corners = [
+        (-half, -reach),
+        (half, -reach),
+        (half, -half),
+        (reach, -half),
+        (reach, half),
+        (half, half),
+        (half, reach),
+        (-half, reach),
+        (-half, half),
+        (-reach, half),
+        (-reach, -half),
+        (-half, -half),
+    ];
+    closed(corners.iter().map(|&(x, y)| at(x, y)).collect())
 }
 
 fn line(a: Point, b: Point) -> Mark {
@@ -184,7 +221,25 @@ pub fn name(family: PadFamily, control: PadControl) -> &'static str {
     }
 }
 
-/// The glyph of a control in a family (LunaP.md §103.1's table).
+/// The family whose printing a style letters: the filled set has no positional drawing, so a pad whose printing is not
+/// known is lettered as an Xbox pad, ES-DE's default type (EmuSen_BigPicture.md §40.1).
+pub fn lettered(family: PadFamily, style: GlyphStyle) -> PadFamily {
+    if style == GlyphStyle::Filled && family == PadFamily::Generic {
+        PadFamily::Xbox
+    } else {
+        family
+    }
+}
+
+/// The glyph of a control in a family and a style.
+pub fn styled(family: PadFamily, control: PadControl, style: GlyphStyle) -> Glyph {
+    match style {
+        GlyphStyle::Outlined => glyph(family, control),
+        GlyphStyle::Filled => filled::glyph(lettered(family, style), control),
+    }
+}
+
+/// The glyph of a control in a family in the outlined set (LunaP.md §103.1's table).
 pub fn glyph(family: PadFamily, control: PadControl) -> Glyph {
     match control {
         PadControl::South | PadControl::East | PadControl::West | PadControl::North => face(family, control),
@@ -210,7 +265,7 @@ fn direction(control: PadControl) -> (f64, f64) {
 }
 
 fn face(family: PadFamily, control: PadControl) -> Glyph {
-    let letter = face_letter(family, control).map(|text| Letter { text, scale: 1.0 });
+    let letter = face_letter(family, control).map(|text| Letter { text, scale: 1.0, bold: false });
     match family {
         // Four dots in a diamond, the one meant filled: a position, for a pad whose printing is not known.
         PadFamily::Generic => {
@@ -248,21 +303,7 @@ fn face(family: PadFamily, control: PadControl) -> Glyph {
 fn dpad(control: PadControl) -> Glyph {
     let (arm, reach, inset) = (0.28, 0.46, 0.07);
     let a = arm / 2.0;
-    let plus = [
-        (-a, -reach),
-        (a, -reach),
-        (a, -a),
-        (reach, -a),
-        (reach, a),
-        (a, a),
-        (a, reach),
-        (-a, reach),
-        (-a, a),
-        (-reach, a),
-        (-reach, -a),
-        (-a, -a),
-    ];
-    let outline = closed(plus.iter().map(|&(x, y)| at(x, y)).collect());
+    let outline = plus(a, reach);
     let (half, length) = (a - inset, reach - a - inset);
     let filled = match control {
         PadControl::Up => rect(C[0] - half, C[1] - reach + inset, 2.0 * half, length),
@@ -287,7 +328,7 @@ fn shoulder(family: PadFamily, control: PadControl) -> Glyph {
         marks.push(solid(rect(if left { x + inset } else { C[0] }, y + inset, w / 2.0 - inset, h - 2.0 * inset)));
         return Glyph { marks, letter: None };
     }
-    Glyph { marks, letter: Some(Letter { text: shoulder_label(family, control), scale: LABEL_SCALE }) }
+    Glyph { marks, letter: Some(Letter { text: shoulder_label(family, control), scale: LABEL_SCALE, bold: false }) }
 }
 
 /// The two middle buttons: a ring for the families that print a mark in a circle, a pill for the others, each with its own mark.

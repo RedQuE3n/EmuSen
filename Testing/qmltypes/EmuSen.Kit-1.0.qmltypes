@@ -66,14 +66,14 @@ Module {
             name: "BodyShape"
             isScoped: true
             type: "int"
-            lineNumber: 119
+            lineNumber: 124
             values: ["Planet", "Shards", "Gem"]
         }
         Enum {
             name: "BodyShape"
             isScoped: true
             type: "int"
-            lineNumber: 119
+            lineNumber: 124
             values: ["Planet", "Shards", "Gem"]
         }
     }
@@ -334,7 +334,7 @@ Module {
             name: "Cue"
             isScoped: true
             type: "int"
-            lineNumber: 150
+            lineNumber: 155
             values: [
                 "Move",
                 "Section",
@@ -351,7 +351,7 @@ Module {
             name: "Cue"
             isScoped: true
             type: "int"
-            lineNumber: 150
+            lineNumber: 155
             values: [
                 "Move",
                 "Section",
@@ -377,14 +377,14 @@ Module {
             name: "Family"
             isScoped: true
             type: "int"
-            lineNumber: 139
+            lineNumber: 144
             values: ["Generic", "Xbox", "PlayStation", "Nintendo"]
         }
         Enum {
             name: "Family"
             isScoped: true
             type: "int"
-            lineNumber: 139
+            lineNumber: 144
             values: ["Generic", "Xbox", "PlayStation", "Nintendo"]
         }
     }
@@ -400,14 +400,14 @@ Module {
             name: "Form"
             isScoped: true
             type: "int"
-            lineNumber: 76
+            lineNumber: 81
             values: ["Desktop", "BigScreen", "Card"]
         }
         Enum {
             name: "Form"
             isScoped: true
             type: "int"
-            lineNumber: 76
+            lineNumber: 81
             values: ["Desktop", "BigScreen", "Card"]
         }
     }
@@ -714,6 +714,29 @@ Module {
         }
         Signal { name: "feedChanged"; lineNumber: 42 }
         Signal { name: "liveChanged"; lineNumber: 43 }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 51
+        name: "GlyphStyles"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/GlyphStyles 1.0", "EmuSen.Kit/GlyphStyles 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "GlyphStyle"
+            isScoped: true
+            type: "int"
+            lineNumber: 171
+            values: ["Outlined", "Filled"]
+        }
+        Enum {
+            name: "GlyphStyle"
+            isScoped: true
+            type: "int"
+            lineNumber: 171
+            values: ["Outlined", "Filled"]
+        }
     }
     Component {
         file: "keypass.cxxqt.h"
@@ -1641,7 +1664,7 @@ Module {
             name: "PadButton"
             isScoped: true
             type: "int"
-            lineNumber: 53
+            lineNumber: 58
             values: [
                 "Up",
                 "Down",
@@ -1665,7 +1688,7 @@ Module {
             name: "PadButton"
             isScoped: true
             type: "int"
-            lineNumber: 53
+            lineNumber: 58
             values: [
                 "Up",
                 "Down",
@@ -1688,7 +1711,7 @@ Module {
     }
     Component {
         file: "glyph.cxxqt.h"
-        lineNumber: 88
+        lineNumber: 106
         name: "PadGlyphMarks"
         accessSemantics: "reference"
         prototype: "QAbstractListModel"
@@ -1698,8 +1721,8 @@ Module {
             name: "MarkRole"
             isScoped: true
             type: "int"
-            lineNumber: 101
-            values: ["Outline", "Filled", "Stroke", "CutLetter"]
+            lineNumber: 121
+            values: ["Outline", "Filled", "Stroke", "CutLetter", "Holes"]
         }
         Property {
             name: "family"
@@ -1708,7 +1731,7 @@ Module {
             write: "setFamily"
             notify: "familyChanged"
             index: 0
-            lineNumber: 93
+            lineNumber: 111
         }
         Property {
             name: "button"
@@ -1717,7 +1740,7 @@ Module {
             write: "setButton"
             notify: "buttonChanged"
             index: 1
-            lineNumber: 94
+            lineNumber: 112
         }
         Property {
             name: "swap"
@@ -1726,7 +1749,7 @@ Module {
             write: "setSwap"
             notify: "swapChanged"
             index: 2
-            lineNumber: 95
+            lineNumber: 113
         }
         Property {
             name: "size"
@@ -1735,7 +1758,7 @@ Module {
             write: "setSize"
             notify: "sizeChanged"
             index: 3
-            lineNumber: 96
+            lineNumber: 114
         }
         Property {
             name: "letter"
@@ -1743,7 +1766,7 @@ Module {
             read: "getLetter"
             notify: "letterChanged"
             index: 4
-            lineNumber: 97
+            lineNumber: 115
             isReadonly: true
         }
         Property {
@@ -1752,7 +1775,7 @@ Module {
             read: "getLetterScale"
             notify: "letterScaleChanged"
             index: 5
-            lineNumber: 98
+            lineNumber: 116
             isReadonly: true
         }
         Property {
@@ -1761,7 +1784,7 @@ Module {
             read: "getCut"
             notify: "cutChanged"
             index: 6
-            lineNumber: 99
+            lineNumber: 117
             isReadonly: true
         }
         Property {
@@ -1770,42 +1793,67 @@ Module {
             read: "getName"
             notify: "nameChanged"
             index: 7
-            lineNumber: 100
+            lineNumber: 118
             isReadonly: true
         }
-        Signal { name: "familyChanged"; lineNumber: 124 }
-        Signal { name: "buttonChanged"; lineNumber: 125 }
-        Signal { name: "swapChanged"; lineNumber: 126 }
-        Signal { name: "sizeChanged"; lineNumber: 127 }
-        Signal { name: "letterChanged"; lineNumber: 128 }
-        Signal { name: "letterScaleChanged"; lineNumber: 129 }
-        Signal { name: "cutChanged"; lineNumber: 130 }
-        Signal { name: "nameChanged"; lineNumber: 131 }
+        Property {
+            name: "style"
+            type: "GlyphStyles::GlyphStyle"
+            read: "getStyle"
+            write: "setStyle"
+            notify: "styleChanged"
+            index: 8
+            lineNumber: 119
+        }
+        Property {
+            name: "letterBold"
+            type: "bool"
+            read: "getLetterBold"
+            notify: "letterBoldChanged"
+            index: 9
+            lineNumber: 120
+            isReadonly: true
+        }
+        Signal { name: "familyChanged"; lineNumber: 148 }
+        Signal { name: "buttonChanged"; lineNumber: 149 }
+        Signal { name: "swapChanged"; lineNumber: 150 }
+        Signal { name: "sizeChanged"; lineNumber: 151 }
+        Signal { name: "letterChanged"; lineNumber: 152 }
+        Signal { name: "letterScaleChanged"; lineNumber: 153 }
+        Signal { name: "cutChanged"; lineNumber: 154 }
+        Signal { name: "nameChanged"; lineNumber: 155 }
+        Signal { name: "styleChanged"; lineNumber: 156 }
+        Signal { name: "letterBoldChanged"; lineNumber: 157 }
         Method {
             name: "setFamily"
-            lineNumber: 113
+            lineNumber: 134
             Parameter { name: "value"; type: "Families::Family" }
         }
         Method {
             name: "setButton"
-            lineNumber: 115
+            lineNumber: 136
             Parameter { name: "value"; type: "Pad::PadButton" }
         }
         Method {
             name: "setSwap"
-            lineNumber: 117
+            lineNumber: 138
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setSize"
-            lineNumber: 119
+            lineNumber: 140
             Parameter { name: "value"; type: "double" }
+        }
+        Method {
+            name: "setStyle"
+            lineNumber: 146
+            Parameter { name: "value"; type: "GlyphStyles::GlyphStyle" }
         }
         Method {
             name: "data"
             type: "QVariant"
             isMethodConstant: true
-            lineNumber: 132
+            lineNumber: 158
             Parameter { name: "index"; type: "QModelIndex" }
             Parameter { name: "role"; type: "int" }
         }
@@ -1813,19 +1861,19 @@ Module {
             name: "roleNames"
             type: "QHash_i32_QByteArray"
             isMethodConstant: true
-            lineNumber: 133
+            lineNumber: 159
         }
         Method {
             name: "rowCount"
             type: "int"
             isMethodConstant: true
-            lineNumber: 134
+            lineNumber: 160
             Parameter { name: "parent"; type: "QModelIndex" }
         }
     }
     Component {
         file: "pad.cxxqt.h"
-        lineNumber: 104
+        lineNumber: 113
         name: "PadRouter"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1840,7 +1888,7 @@ Module {
             write: "setTiers"
             notify: "tiersChanged"
             index: 0
-            lineNumber: 110
+            lineNumber: 119
         }
         Property {
             name: "swapAcceptBack"
@@ -1849,7 +1897,7 @@ Module {
             write: "setSwapAcceptBack"
             notify: "swapAcceptBackChanged"
             index: 1
-            lineNumber: 111
+            lineNumber: 120
         }
         Property {
             name: "clockRunning"
@@ -1858,7 +1906,7 @@ Module {
             write: "setClockRunning"
             notify: "clockRunningChanged"
             index: 2
-            lineNumber: 112
+            lineNumber: 121
         }
         Property {
             name: "chordOnly"
@@ -1867,7 +1915,7 @@ Module {
             write: "setChordOnly"
             notify: "chordOnlyChanged"
             index: 3
-            lineNumber: 113
+            lineNumber: 122
         }
         Property {
             name: "pending"
@@ -1875,7 +1923,7 @@ Module {
             read: "getPending"
             notify: "pendingChanged"
             index: 4
-            lineNumber: 114
+            lineNumber: 123
             isReadonly: true
         }
         Property {
@@ -1885,7 +1933,7 @@ Module {
             write: "setGuideChords"
             notify: "guideChordsChanged"
             index: 5
-            lineNumber: 115
+            lineNumber: 124
         }
         Property {
             name: "guideHeld"
@@ -1893,72 +1941,84 @@ Module {
             read: "getGuideHeld"
             notify: "guideHeldChanged"
             index: 6
-            lineNumber: 116
+            lineNumber: 125
             isReadonly: true
         }
-        Signal { name: "tiersChanged"; lineNumber: 133 }
-        Signal { name: "swapAcceptBackChanged"; lineNumber: 134 }
-        Signal { name: "clockRunningChanged"; lineNumber: 135 }
-        Signal { name: "chordOnlyChanged"; lineNumber: 136 }
-        Signal { name: "pendingChanged"; lineNumber: 137 }
-        Signal { name: "guideChordsChanged"; lineNumber: 138 }
-        Signal { name: "guideHeldChanged"; lineNumber: 139 }
+        Signal { name: "tiersChanged"; lineNumber: 142 }
+        Signal { name: "swapAcceptBackChanged"; lineNumber: 143 }
+        Signal { name: "clockRunningChanged"; lineNumber: 144 }
+        Signal { name: "chordOnlyChanged"; lineNumber: 145 }
+        Signal { name: "pendingChanged"; lineNumber: 146 }
+        Signal { name: "guideChordsChanged"; lineNumber: 147 }
+        Signal { name: "guideHeldChanged"; lineNumber: 148 }
         Signal {
             name: "pressed"
-            lineNumber: 144
+            lineNumber: 154
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
-        Signal { name: "menuChord"; lineNumber: 145 }
+        Signal { name: "menuChord"; lineNumber: 155 }
         Signal {
             name: "guideChord"
-            lineNumber: 146
+            lineNumber: 156
+            Parameter { name: "button"; type: "Pad::PadButton" }
+        }
+        Signal {
+            name: "released"
+            lineNumber: 157
             Parameter { name: "button"; type: "Pad::PadButton" }
         }
         Method {
             name: "setTiers"
-            lineNumber: 122
+            lineNumber: 131
             Parameter { name: "value"; type: "Repeat::Tiers" }
         }
         Method {
             name: "setSwapAcceptBack"
-            lineNumber: 124
+            lineNumber: 133
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setClockRunning"
-            lineNumber: 126
+            lineNumber: 135
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setChordOnly"
-            lineNumber: 128
+            lineNumber: 137
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setGuideChords"
-            lineNumber: 131
+            lineNumber: 140
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "push"
-            lineNumber: 140
+            lineNumber: 149
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "down"; type: "bool" }
         }
-        Method { name: "pump"; lineNumber: 141 }
+        Method { name: "pump"; lineNumber: 150 }
         Method {
             name: "pumpAt"
-            lineNumber: 142
+            lineNumber: 151
             Parameter { name: "now_ms"; type: "int" }
         }
         Method {
             name: "isHeld"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 143
+            lineNumber: 152
             Parameter { name: "button"; type: "Pad::PadButton" }
+        }
+        Method {
+            name: "pushKey"
+            type: "bool"
+            lineNumber: 153
+            Parameter { name: "key"; type: "int" }
+            Parameter { name: "modifiers"; type: "int" }
         }
     }
     Component {
@@ -2118,14 +2178,14 @@ Module {
             name: "Tiers"
             isScoped: true
             type: "int"
-            lineNumber: 108
+            lineNumber: 113
             values: ["Own", "EsdeList", "EsdeCarouselFast", "EsdeCarousel"]
         }
         Enum {
             name: "Tiers"
             isScoped: true
             type: "int"
-            lineNumber: 108
+            lineNumber: 113
             values: ["Own", "EsdeList", "EsdeCarouselFast", "EsdeCarousel"]
         }
     }
@@ -2141,14 +2201,14 @@ Module {
             name: "Ring"
             isScoped: true
             type: "int"
-            lineNumber: 129
+            lineNumber: 134
             values: ["NoRing", "Subtle", "Big"]
         }
         Enum {
             name: "Ring"
             isScoped: true
             type: "int"
-            lineNumber: 129
+            lineNumber: 134
             values: ["NoRing", "Subtle", "Big"]
         }
     }
@@ -2164,7 +2224,7 @@ Module {
             name: "Role"
             isScoped: true
             type: "int"
-            lineNumber: 86
+            lineNumber: 91
             values: [
                 "Navigation",
                 "Content",
@@ -2178,7 +2238,7 @@ Module {
             name: "Role"
             isScoped: true
             type: "int"
-            lineNumber: 86
+            lineNumber: 91
             values: [
                 "Navigation",
                 "Content",
@@ -3407,14 +3467,14 @@ Module {
             name: "Variant"
             isScoped: true
             type: "int"
-            lineNumber: 99
+            lineNumber: 104
             values: ["Dark", "Light"]
         }
         Enum {
             name: "Variant"
             isScoped: true
             type: "int"
-            lineNumber: 99
+            lineNumber: 104
             values: ["Dark", "Light"]
         }
     }

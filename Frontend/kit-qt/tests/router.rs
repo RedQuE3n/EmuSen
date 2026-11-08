@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use emusen_kit_core::input::{RepeatTiers, UiButton};
+use emusen_kit_qt::qt_keys;
 use emusen_kit_qt::router::{PadEvent, Router};
 
 fn ms(v: u64) -> Duration {
@@ -146,4 +147,61 @@ fn kit_7_26_over_a_game_guide_is_read_for_its_chords() {
     assert!(pumped.menu_chord, "with the chords off Guide opens the menu as it goes down");
     assert!(!router.guide_held(), "and the game is not kept from the pad");
     assert_eq!(press(&mut router, UiButton::Up, true).guide_chord, None);
+}
+
+// EmuSen_Kit.md §7.28: a release is raised once, at the pump that applies it, only after a press that was raised, and
+// with the swap as the press had it; nothing held over a game or into the menu chord is released.
+#[test]
+fn kit_7_28_a_release_raises_once_after_its_press() {
+    let mut router = Router::new(RepeatTiers::OWN);
+    router.set_swap_accept_back(true);
+    router.push(PadEvent { button: UiButton::Down, down: true });
+    router.push(PadEvent { button: UiButton::Accept, down: true });
+    assert!(router.pump(ms(0)).released.is_empty(), "nothing let go yet");
+    assert!(router.pump(ms(500)).released.is_empty(), "a repeat is no release");
+    router.push(PadEvent { button: UiButton::Down, down: false });
+    router.push(PadEvent { button: UiButton::Accept, down: false });
+    assert_eq!(router.pump(ms(510)).released, vec![UiButton::Down, UiButton::Back], "once each, Accept swapped as its press was");
+    assert!(router.pump(ms(520)).released.is_empty(), "and only once");
+    router.push(PadEvent { button: UiButton::Up, down: false });
+    assert!(router.pump(ms(530)).released.is_empty(), "a button never pressed is never released");
+
+    router.set_chord_only(true);
+    router.push(PadEvent { button: UiButton::Left, down: true });
+    router.pump(ms(540));
+    router.set_chord_only(false);
+    router.push(PadEvent { button: UiButton::Left, down: false });
+    assert!(router.pump(ms(550)).released.is_empty(), "held over a game: no press, so no release");
+
+    router.push(PadEvent { button: UiButton::Guide, down: true });
+    assert!(router.pump(ms(560)).menu_chord);
+    router.push(PadEvent { button: UiButton::Guide, down: false });
+    assert!(router.pump(ms(570)).released.is_empty(), "the chord's button reached nothing, so is not released");
+}
+
+// EmuSen_Kit.md §7.28: a key is the pad's press by the kit's key map, through the same queue: Return is Accept whatever
+// the swap, a key the map does not know is declined, and a key reaches nothing while a game owns the pad.
+#[test]
+fn kit_7_28_a_key_is_a_press_and_its_release_through_the_queue() {
+    const RETURN: i32 = 0x0100_0004;
+    const ESCAPE: i32 = 0x0100_0000;
+    const TAB: i32 = 0x0100_0001;
+    const LETTER_A: i32 = 0x41;
+    let mut router = Router::new(RepeatTiers::OWN);
+    router.set_swap_accept_back(true);
+    assert!(router.push_key(RETURN, 0));
+    assert!(router.pending(), "a key waits for a pump");
+    let pumped = router.pump(ms(0));
+    assert_eq!((pumped.presses.len(), pumped.keyed.clone()), (0, vec![UiButton::Accept]), "Return is Accept, not swapped");
+    assert!(pumped.released.is_empty(), "a key's release is its own press's, raised with it");
+    assert!(!router.pending(), "nothing held after a key");
+    assert!(!router.push_key(TAB, 0), "Tab walks and is no press");
+    assert!(!router.push_key(LETTER_A, 0), "a key the map does not know");
+    assert!(router.pump(ms(10)).keyed.is_empty());
+    assert!(router.push_key(qt_keys::KEY_ENTER, 0));
+    assert!(router.push_key(ESCAPE, 0));
+    assert_eq!(router.pump(ms(20)).keyed, vec![UiButton::Accept, UiButton::Back]);
+    router.set_chord_only(true);
+    assert!(router.push_key(RETURN, 0));
+    assert!(router.pump(ms(30)).keyed.is_empty(), "nothing while a game owns the pad");
 }

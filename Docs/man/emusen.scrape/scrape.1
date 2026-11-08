@@ -21,11 +21,13 @@ DESCRIPTION
     one scraper, the emusen-scrape component, through the emusen.scrape
     service, so the quota rules, the order of the sources (ScreenScraper,
     then OpenEmu's sources where switched on) and the media store are the
-    scraper's and are the same as from a game's menu. Inside EmuSen the
-    shell is lent EmuSen's own open scraper, so a process never holds two
-    and never counts the account's quota twice; in a shell with no host
-    the platform library opens one from the settings file (the media
-    store under Media, games.db under Library) on first use.
+    scraper's and are the same as from a game's menu. The library's games
+    and records come through the emusen.games service. Inside EmuSen the
+    shell speaks for the scraper EmuSen opened, the process's one, so a
+    process never holds two and never counts the account's quota twice;
+    in a shell with no host the platform library opens one from the
+    settings file (the media store under Media, games.db under Library)
+    on first use.
 
     Data lines go to standard output and notes to standard error, so each
     form pipes. Nothing is sent to ScreenScraper except by 'scrape run'.

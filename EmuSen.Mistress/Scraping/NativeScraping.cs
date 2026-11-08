@@ -10,7 +10,7 @@ using EmuSen.Crystal.Client.Scrape;
 
 namespace EmuSen.Mistress.Scraping
 {
-    // The scraper in Rust behind the binding (EMUSEN_SCRAPE_NATIVE, state 2): the window's reads, runs, sign-ins, searches and pictures asked of emusen_scrape.h, answered in the C# types the windows already read - see EmuSen_Backend.md §30.14.
+    // The scraper in Rust behind the binding (EMUSEN_SCRAPE_NATIVE, state 2): the window's reads, runs, sign-ins, searches and pictures asked of the emusen.scrape service, answered in the C# types the windows already read - see EmuSen_Backend.md §30.14.
     public sealed class NativeScraping : IDisposable
     {
         private readonly MediaService _service;
@@ -18,8 +18,8 @@ namespace EmuSen.Mistress.Scraping
 
         private NativeScraping(MediaService service) => _service = service;
 
-        public static NativeScraping Open(string root, string settings, GameLibrary? library, byte[]? embedded) =>
-            new(MediaService.Open(root, settings, library, embedded));
+        public static NativeScraping Open(string root, string settings, GameLibrary? library, byte[]? embedded, IEnumerable<string>? systems = null, Func<string, IReadOnlyList<string>?>? themeKinds = null) =>
+            new(MediaService.Open(root, settings, library, embedded, systems, themeKinds));
 
         public MediaService Service => _service;
 

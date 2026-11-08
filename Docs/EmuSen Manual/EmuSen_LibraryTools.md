@@ -302,32 +302,47 @@ scraper changed: its quota rules, the order of its sources and its store are wha
 addition to the crate is `Scraper::sqlite()`, so that the service's scan uses the SQLite the host lent rather than
 loading another.
 
+Since 2026-11-08 the service is **2.0 and scraping's only surface** (EmuSen_RustPlatform.md §47.25): a front end calls
+the same table through `emusen_scraping_service()`, `emusen_scrape.h`'s handle API and `emusen_scraping_lend` are
+gone, and the library's two calls, `library_get` and `games`, are a service of their own, **`emusen.games` 1.0**
+(`Platform/include/emusen_games_service.h`, `Platform/platform/src/games_service.rs`), which the module asks for beside
+`emusen.scrape`. The name `emusen.library` was already the library tool's (`emusen_library_tool.h`).
+
 ### 8.2 One scraper a process
 
 The service's calls take no handle. Each speaks for the process's one scraper, held in a slot of the platform library
-under a lock (`Platform/platform/src/scraping.rs`):
+under a lock (`Platform/platform/src/scraping.rs`). As built on 2026-10-31 a host lent the scraper it had opened
+through `emusen_scrape.h` with `emusen_scraping_lend` (platform interface 28); since 2026-11-08 (interface 39) the
+platform library opens it:
 
-1. A host that holds a scraper lends it with `emusen_scraping_lend` (platform interface 28), with the `games.db`
-   library it was opened with, the systems the build opens and, where it loads themes, a function answering the kinds
-   its active theme draws for a system. Mistress lends its native scraper as soon as it opens it (`OpenNative`), and
-   says at start, before any shell exists, that it scrapes with none open (a null lend). Closing the scraper or its
-   library withdraws the lend first (`ScrapingLend.Release`), and a lend or withdrawal waits for the calls in flight,
-   so a handle is never closed under a shell's call. A service `wait` is held to 250 ms for the same reason.
-2. In a process whose host never lent one, the platform library opens one on the first `scrape` that needs it, from the
+1. A front end opens the process's scraper with `emusen_scraping_open`: the store, `games.db` by its file, its loaded
+   SQLite, its embedded developer blob, the settings, the systems the build opens and, where it loads themes, a
+   function answering the kinds its active theme draws for a system. The open closes the scraper before it and answers
+   a serial; `emusen_scraping_close(serial)` closes that one while it is still the process's, and a close with 0 any.
+   Mistress opens its scraper as soon as scraping is on (`OpenNative`), or one for the sources alone while no
+   `media.db` exists, which runs nothing, and closes any at start, before any shell exists (`MediaService.CloseAny`).
+   An open or close waits for the calls in flight, so a scraper is never closed under a shell's call. A service `wait`
+   is held to 250 ms for the same reason; the C# `MediaService.Wait` asks again for a longer one. A `MediaService`
+   whose scraper a later open replaced refuses every call as disposed.
+2. In a process whose front end never opened one, the platform library opens one on the first `scrape` that needs it, from the
    settings file as the library tool reads it: the store under the tree's `Media`, `games.db` under `Library`, the
    art and ES-DE folders, OpenEmu's switch, and the developer file where it is (no embedded credentials outside the
    program). The runtime catalogue is not here, so each system is taken as its own engine for the art index: a picture
    placed by hand under a folder two systems share is found only through the system that names it.
-3. After any lend the platform library never opens a scraper of its own; a lend made after one was opened closes it.
-   A process therefore holds one scraper and one quota manager. Across processes the store lock of §8.8 refuses a
-   second.
+3. After any open or close by a front end the platform library never opens a scraper of its own; an open made after
+   one was opened closes it. A process therefore holds one scraper and one quota manager. Across processes the store
+   lock of §8.8 refuses a second.
+4. `games.db` named at the open is also what `emusen.games` speaks for, on the same connection as the scraper's
+   lookups; otherwise the tree's, opened on first use. The front end's own `GameLibrary` is a second connection on the
+   file, shown safe in EmuSen_RustPlatform.md §47.25.
 
 ### 8.3 Choosing the games
 
 The choice is the module's alone. The games are a scan of the settings' ROM folder, with `Packages` and `Compressed`
 beside it, on a database of the service's own, as `RomLibrary.ScanNative` makes it, each game given its ES-DE system
-from the systems table; a game with none is not one the scraper can ask about. The criteria are read through
-`emusen_library.h`: `records` for favourites, `collections` and `members` for a collection (its name matched ignoring
+from the systems table; a game with none is not one the scraper can ask about (since 2026-11-08 the `emusen.games`
+service's `games`). The criteria are read through `emusen_library.h`'s get, the `emusen.games` service's since
+2026-11-08: `records` for favourites, `collections` and `members` for a collection (its name matched ignoring
 case), `all_edits` for `nomultiscrape`. A game marked "Exclude from multi-scraper" is left out of a wide choice, as
 Mistress's `ScopeGames` leaves it out, and is chosen when it is named by hand, as an argument or a line of standard
 input (its first tab-separated field, so that `scrape ls` pipes back in). `--missing <kind>` keeps a game only when
@@ -341,7 +356,7 @@ host for each chosen system's kinds; Mistress answers by loading the active them
 were present, so that no trigger hides what it can draw, and taking the gamelist's `imageType` lists, `video` for a
 video element, and the media types of the selected variant's triggers (`ThemeMediaKinds`). The theme and its choices
 are a snapshot taken when the library is shown, so the shell's thread never reads the window's settings. Outside
-EmuSen no theme loader is lent and `--kinds theme` is refused with its reason. A run over several systems asks the
+EmuSen no theme loader is named and `--kinds theme` is refused with its reason. A run over several systems asks the
 union. Videos are asked only with `--videos` (`EmuSen_BigPicture.md` §21 Q20); a video named otherwise is dropped with
 a note.
 
@@ -363,16 +378,18 @@ not copied; T5's first step routes Scrape Games through the command's choice, so
 
 - `emusen-scrape-module` (7): the command line, a piped list, the choice and its exclusion rule, the theme's kinds per
   system and the videos rule, the plan, start, result, end and status lines (no account name), the manifest.
-- `Platform/platform/tests/scraping.rs`: a shell this library makes, over a scraper lent as a host lends it and a
+- `Platform/platform/tests/scraping.rs`: a shell this library makes, over a scraper opened as a front end opens it (lent until 2026-11-08) and a
   recorded-response HTTPS server on 127.0.0.1 answering the scraper's own recorded `jeuInfos` fixture, with a
   certificate made at test time; status, `ls` by system and by the theme, `plan` with and without favourites, a game
   named by hand through a pipe, nothing sent before `run`, a run that finds the game and saves its cover, `--missing`
-  afterwards, the library unwritten, and a withdrawal after which the service refuses and has opened nothing.
-  `scraping_default.rs`: a process with no lend opens its own store and `games.db` from the settings, and a later lend
-  closes it. Both load SQLite through `emusen_sqlite::for_tests`, which makes `libm` global first: the NuGet build
+  afterwards, the library unwritten, a favourite written on the front end's own connection read by the shell, a close
+  that names another serial refused, and a close after which the service refuses and has opened nothing.
+  `scraping_default.rs`: a process with no open opens its own store and `games.db` from the settings, a later open
+  closes it, and a scraper opened for its sources alone refuses a run and makes no `media.db`. Both load SQLite through `emusen_sqlite::for_tests`, which makes `libm` global first: the NuGet build
   leaves `trunc` to its host, and tests that loaded it otherwise passed without reaching SQLite.
-- `ScrapingLendTests` (WiseMan): Mistress's binding lends a `MediaService`, a native shell answers from it, and
-  disposing it withdraws the lend; `ThemeMediaKinds` on a synthetic theme.
+- `ScrapingServiceTests` (WiseMan, `ScrapingLendTests` until 2026-11-08): a native shell answers from the
+  `MediaService` the program opened and refuses once it is disposed; an open closes the one before, whose calls are
+  then refused, and its store can be opened again; `ThemeMediaKinds` on a synthetic theme.
 
 Open question: whether the other Rust tests that load SQLite should all use `emusen_sqlite::for_tests`, which since
 2026-10-31 loads `libm` first and fails loudly where no copy loads; the scraping tests use it.
@@ -403,8 +420,9 @@ uses, and the platform library exports it as **`emusen_scraping_command`** (plat
 `{"args": [...], "paths": [...], "sources": bool}`, `args` the words after `scrape`: `ls` answers the chosen games with
 each kind's source, `plan` the scraper's `ScrapePlan` with the shell's sentence, `run` a started run and the serial to
 follow it from, `progress` the scraper's progress with the shell's end sentence once it is not running, and `status`,
-`wait`, `cancel` and `collections` what their names say. Failures carry `emusen_scrape.h`'s statuses and words. Galaxia's
-`ScrapeCommand` is the C# binding; nothing of the scraper or its service changed.
+`wait`, `cancel` and `collections` what their names say. Failures carry the scraper's statuses and words (since
+2026-11-08 read through the `emusen.scrape` table's `last_error`). Galaxia's `ScrapeCommand` is the C# binding; nothing
+of the scraper or its service changed.
 
 `--missing` was extended so that ES-DE's four criteria are the module's: a comma list of kinds keeps a game with none
 of them (ES-DE's "No game image" is `miximage,screenshot,titlescreen,cover`), and `--missing metadata` a game whose
@@ -466,7 +484,7 @@ managed half does. A shelf's run chooses its ES-DE system's games, which is the 
 - `emusen-scrape-module` (9, two new): `--missing` as a list, `any` and `metadata`; the window's `ls` with each kind's
   source and without, a plan naming an excluded game by hand, nothing started before `run`, a run's priority, a refusal,
   `status`, `progress` with its end sentence and a serial past every result, `collections`.
-- `ScraperWindowTests` (7): through Mistress's own scraper lent to the command and the fake ScreenScraper over HTTPS,
+- `ScraperWindowTests` (7): through Mistress's own scraper, the process's one, reached by the command and the fake ScreenScraper over HTTPS,
   the library's game listed with its four kinds, marked, planned with nothing sent, run and found, the request counted
   by Mistress's quota, and the status sheet not opened while the Scraper is; with a scripted command, each section's
   words, the plan and run naming the marked games by hand with Overwrite, the run followed to its end sentence, a held

@@ -1,8 +1,8 @@
 //! `emusen-scrape`: scraping below every frontend, a component of its own beside the library and Crystal and never in
 //! either (EmuSen_Backend.md D13). A handle is one media store and its `media.db`: it keeps what ScreenScraper and
 //! OpenEmu's sources answered, runs the queue on the player's word alone, honours the quota, and answers where a game's
-//! pictures are. Requests and answers are JSON, as `emusen_scrape.h` describes them; this crate decides, the platform
-//! library's C layer only converts. See EmuSen_Backend.md §2.4 and §30.
+//! pictures are. Requests and answers are JSON, as `emusen_scrape_service.h` describes them; this crate decides, the platform
+//! library's service table only converts. See EmuSen_Backend.md §2.4 and §30.
 
 pub mod abi;
 pub mod answer;
@@ -62,7 +62,7 @@ impl Error {
         redact::redact(&match self {
             Error::Newer(w) | Error::BadRequest(w) | Error::Busy(w) | Error::Io(w) | Error::InUse(w) => w.clone(),
             Error::Database(f) => f.message.clone(),
-            Error::NoLibrary => "No library was lent to the scraper.".to_string(),
+            Error::NoLibrary => "No games.db was named when the scraper was opened.".to_string(),
         })
     }
 }
@@ -182,7 +182,7 @@ impl Settings {
     }
 }
 
-/// One media store, its `media.db`, its quota and what its host lent it.
+/// One media store, its `media.db`, its quota and the SQLite and games.db it was opened with.
 pub struct Scraper {
     store: Mutex<store::Store>,
     pub clock: Clock,
@@ -190,7 +190,7 @@ pub struct Scraper {
     settings: RwLock<Settings>,
     embedded: Vec<u8>,
     pub(crate) sqlite: Arc<Sqlite>,
-    library: Option<&'static emusen_library::Library>,
+    library: Option<Arc<emusen_library::Library>>,
     pub(crate) runs: run::Runs,
     pub(crate) background: fingerprint::Background,
     art: RwLock<artwork::Index>,
@@ -208,9 +208,8 @@ impl Drop for Scraper {
 }
 
 impl Scraper {
-    /// Opens the store at `root` with the SQLite and the library lent for the handle's life. The library, when given,
-    /// must outlive the handle; the C layer's caller promises it.
-    pub fn open(sqlite: Arc<Sqlite>, root: &str, library: Option<&'static emusen_library::Library>, embedded: &[u8], settings: &str) -> Result<Scraper, Error> {
+    /// Opens the store at `root` with the SQLite given and, when given, the games.db library it shares with its opener.
+    pub fn open(sqlite: Arc<Sqlite>, root: &str, library: Option<Arc<emusen_library::Library>>, embedded: &[u8], settings: &str) -> Result<Scraper, Error> {
         let settings = Settings::read(settings)?;
         let clock = match settings.test.clock {
             Some(start) => Clock::test(start),
@@ -285,8 +284,8 @@ impl Scraper {
         self.settings.read().unwrap_or_else(|p| p.into_inner()).test.fingerprint_above.unwrap_or(fingerprint::ABOVE)
     }
 
-    pub fn library(&self) -> Result<&'static emusen_library::Library, Error> {
-        self.library.ok_or(Error::NoLibrary)
+    pub fn library(&self) -> Result<&emusen_library::Library, Error> {
+        self.library.as_deref().ok_or(Error::NoLibrary)
     }
 
     /// The store's one layout step, taken once the settings name the ROM folder that names each game's folder.
@@ -304,12 +303,12 @@ impl Scraper {
         credentials::developer(self.settings().developer_files, embedded)
     }
 
-    /// `emusen_scrape_get`'s request and answer.
+    /// The service's `get` request and answer.
     pub fn get_request(&self, request: &str) -> Result<String, Error> {
         reads::get(self, &json::parse(request)?)
     }
 
-    /// `emusen_scrape_change`'s request and answer.
+    /// The service's `change` request and answer.
     pub fn change_request(&self, request: &str) -> Result<String, Error> {
         changes::change(self, &json::parse(request)?)
     }

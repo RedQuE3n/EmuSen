@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 namespace EmuSen.WiseMan.Mistress
 {
     // Where an edit lives and how it wins: games.db's game_edit over media.db's answer over the file's name - see EmuSen_Settings_Reference.md §4.59.
+    [Collection(EmuSen.WiseMan.Fixtures.TestCollections.ProcessGlobals)]
     public class GameMetadataTests : IDisposable
     {
         private readonly string _dir = Path.Combine(Path.GetTempPath(), "EmuSenGameMetadata", Guid.NewGuid().ToString("N"));

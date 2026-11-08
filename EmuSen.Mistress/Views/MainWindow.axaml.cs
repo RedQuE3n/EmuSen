@@ -161,7 +161,7 @@ namespace EmuSen.Mistress.Views
             _frames = new FrameHandOff((pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring) => GameFrame.UpdateFrame(pixels, width, height, rowRepeat, release, sequence, aspect, lines, raw, lend, ring), (picture, width, height) => _ringRelease.Release(picture, width, height));
             EarlyLoader = OpenSession;
             // Mistress scrapes, so no shell of this process opens a scraper of its own (EmuSen_LibraryTools.md §8).
-            ScrapingLend.Withdraw();
+            MediaService.CloseAny();
             _pause = new LunaAction("_Pause", _ => TogglePause()) { IsCheckable = true };
             _frameAdvance = new LunaAction("Frame _Advance", AdvanceOneFrame);
             _reset = new LunaAction("_Reset", ResetEmulation);

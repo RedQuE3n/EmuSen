@@ -1,4 +1,4 @@
-//! The run's calls and the reads and changes that ask the server, as `emusen_scrape.h` describes them: `start`,
+//! The run's calls and the reads and changes that ask the server, as `emusen_scrape_service.h` describes them: `start`,
 //! `progress`, the plan, the name search, signing in and out, OpenVGDB's download and removal, and a picture's source.
 //! See EmuSen_Backend.md §30.3.
 
@@ -61,8 +61,11 @@ pub(crate) fn choices(r: Option<&Value>, refresh: bool) -> Result<Choices, Error
 }
 
 impl Scraper {
-    /// `emusen_scrape_start`'s request: the games queued, or a status.
+    /// The service's `start` request: the games queued, or a status; a store opened for its sources alone runs nothing.
     pub fn start_request(&self, request: &str) -> Result<usize, Error> {
+        if self.settings().sources_alone {
+            return Err(Error::BadRequest("The scraper is open for finding pictures alone, with no media store, so it runs nothing; scraping opens the store.".into()));
+        }
         let r = json::parse(request)?;
         let games = crate::reads::games(&r)?;
         let priority = match json::text_or_none(&r, "priority")? {
@@ -75,7 +78,7 @@ impl Scraper {
         self.start(&games, priority, json::flag(&r, "one", false)?, resume, json::integer_or_none(&r, "pick")?, json::flag(&r, "enabled", true)?, choices)
     }
 
-    /// `emusen_scrape_progress`'s answer, the games finished after `since` among its results.
+    /// The service's `progress` answer, the games finished after `since` among its results.
     pub fn progress_request(&self, request: &str) -> Result<String, Error> {
         let since = if request.trim().is_empty() { 0 } else { json::integer_or_none(&json::parse(request)?, "since")?.unwrap_or(0) as u64 };
         let mut out = String::new();

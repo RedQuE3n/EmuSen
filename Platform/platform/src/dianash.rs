@@ -118,7 +118,7 @@ pub unsafe extern "C" fn dianash_new(config: *const dianash_config) -> *mut Dian
         }
     }
     if let Err(code) = shell.set_services(&with_library(&[])) {
-        fail(code, "the library tool's and the scraper's services could not be handed to the shell");
+        fail(code, "the library tool's, the scraper's and games.db's services could not be handed to the shell");
         return std::ptr::null_mut();
     }
     let cancel = shell.cancel_flag();
@@ -164,11 +164,12 @@ pub unsafe extern "C" fn dianash_add_commands(sh: *mut DianashShell, session: u3
     }
 }
 
-/// The host's services and, unless it names its own, the library tool's and the scraper's (EmuSen_GamePackages.md §12.3, EmuSen_LibraryTools.md §8).
+/// The host's services and, unless it names its own, the library tool's, the scraper's and games.db's (EmuSen_GamePackages.md §12.3, EmuSen_LibraryTools.md §8).
 fn with_library(given: &[dianash_service]) -> Vec<dianash_service> {
-    let defaults: [(&str, u32, u32, *const std::ffi::c_void); 2] = [
+    let defaults: [(&str, u32, u32, *const std::ffi::c_void); 3] = [
         (crate::library_tool::SERVICE, crate::library_tool::MAJOR, crate::library_tool::MINOR, &crate::library_tool::TABLE as *const crate::library_tool::LibraryToolV1 as *const std::ffi::c_void),
-        (crate::scraping::SERVICE, crate::scraping::MAJOR, crate::scraping::MINOR, &crate::scraping::TABLE as *const crate::scraping::ScrapeServiceV1 as *const std::ffi::c_void),
+        (crate::scraping::SERVICE, crate::scraping::MAJOR, crate::scraping::MINOR, &crate::scraping::TABLE as *const crate::scraping::ScrapeServiceV2 as *const std::ffi::c_void),
+        (crate::games_service::SERVICE, crate::games_service::MAJOR, crate::games_service::MINOR, &crate::games_service::TABLE as *const crate::games_service::GamesServiceV1 as *const std::ffi::c_void),
     ];
     let mut all = given.to_vec();
     for (name, major, minor, table) in defaults {

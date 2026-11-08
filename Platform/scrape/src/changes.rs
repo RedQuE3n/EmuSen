@@ -1,4 +1,4 @@
-//! `emusen_scrape_change`: one change, `{"op": …}`, as `emusen_scrape.h` lists them. See EmuSen_Backend.md §30.3.
+//! The service's `change`: one change, `{"op": …}`, as `emusen_scrape_service.h` lists them. See EmuSen_LibraryTools.md §8.
 
 pub(crate) use emusen_galaxia::clock::local_offset;
 use crate::json::{self, quoted, strings_into};

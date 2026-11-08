@@ -13,6 +13,7 @@ using Microsoft.Data.Sqlite;
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
     // media.db's schema, what it answers by path, a closed handle, and the order a picture is looked for in, through the binding; the queue's order and a retry's due time are emusen-scrape's store_queue tests - see EmuSen_BigPicture.md §5.6, §17 and EmuSen_Backend.md §40.5.
+    [Collection(TestCollections.ProcessGlobals)]
     public class MediaStoreTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMediaStoreTests", Guid.NewGuid().ToString("N"));

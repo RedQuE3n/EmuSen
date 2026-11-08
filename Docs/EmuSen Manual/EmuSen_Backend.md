@@ -8414,6 +8414,11 @@ build that enforces the manifest in the C# reaches the handheld** it must go the
 
 ## 30. B9, scraping in Rust: the design, 2026-10-18
 
+**Since 2026-11-08 (EmuSen_RustPlatform.md §47.25), scraping has one surface, the `emusen.scrape` service 2.0
+(`Platform/include/emusen_scrape_service.h`).** `emusen_scrape.h`'s handle API, its baseline and `scrape_abi.rs` are
+deleted; a front end opens the process's one scraper with `emusen_scraping_open` (emusen_platform.h 39) and calls the
+table, whose requests, answers, settings and statuses are this section's. What follows is the design and its history.
+
 *Written on branch `b9-scrape` from `WiseMan` at `c9f81568`, before anything was built, as §6's B9 row asks: the
 scraper's header and its JSON, the crate and where its exports live, how `emusen-net` is reused and the quota kept,
 the media store and `media.db` under Q25, the identity the scraper needs, OpenVGDB's place, the recorded-answer harness
@@ -8516,6 +8521,10 @@ version, `emusen_scrape_abi_version`, under §3.2's policy. **So the platform in
 (21 at `c9f81568`); this step takes no interface number, and 22 is left to the step that needs it.
 
 ### 30.3 The header
+
+*Since 2026-11-08 the calls below are the `emusen.scrape` table's, without the handle; open and close are
+`emusen_scraping_open` and `emusen_scraping_close`, and the statuses are declared in `emusen_scrape_service.h` (§47.25 of
+EmuSen_RustPlatform.md). The requests and answers are unchanged.*
 
 `emusen_scrape.h`, version 1.0, on §3.3's rules: the host calls and the scraper returns; reads are copied out by the
 length-query idiom, and an answer is made once (§28.8: a change answered into a short buffer waits on the calling
@@ -9111,7 +9120,8 @@ the generator widened as above, both fail.
 
 ### 30.14 Built 2026-10-19: part 6, the surface frozen and Mistress in state 2
 
-*Measured on 2026-10-19.*
+*Measured on 2026-10-19. The frozen surface below was retired on 2026-11-08 for the `emusen.scrape` service 2.0; its
+statuses are held by `Platform/scrape/tests/scrape_service.rs` instead (EmuSen_RustPlatform.md §47.25).*
 
 **The surface.** `emusen_scrape.h` 1.0 is now held as the library's is (§28.4): `Platform/scrape/tests/scrape_abi.rs`
 checks every constant against `emusen_scrape::abi`, every prototype against the platform library's `emusen_scrape_`

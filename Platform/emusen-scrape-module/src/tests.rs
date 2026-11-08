@@ -56,7 +56,7 @@ impl Backend for Fake {
         Ok(r#"{"status":"ok","roots":["/r"],"games":[{"path":"/r/snes/a.sfc","system":"snes","package":null,"esde":"snes"},{"path":"/r/snes/b.sfc","system":"snes","package":null,"esde":"snes"},{"path":"/r/nes/c.nes","system":"nes","package":null,"esde":"nes"},{"path":"/r/odd/d.bin","system":null,"package":null,"esde":null}]}"#.into())
     }
     fn theme_kinds(&self, system: &str) -> Result<String, String> {
-        self.theme.get(system).cloned().ok_or_else(|| "no theme loader is lent here".to_string())
+        self.theme.get(system).cloned().ok_or_else(|| "no theme loader was named here".to_string())
     }
 }
 
@@ -159,7 +159,7 @@ fn the_plan_result_end_and_status_print_plain_lines() {
 #[test]
 fn the_manifest_names_scrape_its_job_and_requires_the_service() {
     let m = ScrapeCommands.manifest();
-    assert!(m.contains("\"id\":\"emusen.scrape\"") && m.contains("\"name\":\"scrape\"") && m.contains("\"name\":\"emusen.scrape\",\"major\":1,\"minor\":0,\"required\":true") && m.contains("\"jobs\":[\"scrape\"]"), "{m}");
+    assert!(m.contains("\"id\":\"emusen.scrape\"") && m.contains("\"name\":\"scrape\"") && m.contains("\"name\":\"emusen.scrape\",\"major\":2,\"minor\":0,\"required\":true") && m.contains("\"name\":\"emusen.games\",\"major\":1,\"minor\":0,\"required\":true") && m.contains("\"jobs\":[\"scrape\"]"), "{m}");
 }
 
 #[test]

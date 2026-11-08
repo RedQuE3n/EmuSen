@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- The frontend API's C# binding, the one assembly a frontend references to drive the cores and, in Library/, to reach the player's library (emusen_library.h, EmuSen_Backend.md §28), and in Scrape/ the scraper (emusen_scrape.h, §30): the contract layer, C-shaped
+  <!-- The frontend API's C# binding, the one assembly a frontend references to drive the cores and, in Library/, to reach the player's library (emusen_library.h, EmuSen_Backend.md §28), and in Scrape/ the scraper (the emusen.scrape service, emusen_scrape_service.h, EmuSen_LibraryTools.md §8): the contract layer, C-shaped
        functions over emusen_crystal.h's exports, and the binding over it, classes that dispose their handles. The
        contract layer calls the platform library's exports; the C# implementation of step B2 was deleted on 2026-11-04 -
        see EmuSen_Backend.md §3.9 and §40.8. -->
@@ -30,7 +30,7 @@
   <ItemGroup>
     <None Include="..\Platform\crystal\include\emusen_crystal.h" Link="include\emusen_crystal.h" />
     <None Include="..\Platform\library\include\emusen_library.h" Link="include\emusen_library.h" />
-    <None Include="..\Platform\scrape\include\emusen_scrape.h" Link="include\emusen_scrape.h" />
+    <None Include="..\Platform\include\emusen_scrape_service.h" Link="include\emusen_scrape_service.h" />
   </ItemGroup>
 
 </Project>

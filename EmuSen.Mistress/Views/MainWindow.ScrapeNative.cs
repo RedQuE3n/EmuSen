@@ -13,7 +13,7 @@ using EmuSen.Mistress.Scraping;
 
 namespace EmuSen.Mistress.Views
 {
-    // The scraper in Rust behind the binding (EMUSEN_SCRAPE_NATIVE, state 2): the window's store, runs and pictures through emusen_scrape.h - see EmuSen_Backend.md §30.14.
+    // The scraper in Rust behind the binding (EMUSEN_SCRAPE_NATIVE, state 2): the window's store, runs and pictures through the emusen.scrape service - see EmuSen_Backend.md §30.14.
     public partial class MainWindow
     {
         // Replaced by tests: the scraper's test seams as JSON (a server's address and root, a clock, offline); null in a player's run.
@@ -51,7 +51,7 @@ namespace EmuSen.Mistress.Views
 
         private string NativeSettings() => NativeSettings(false);
 
-        // sourcesAlone opens a handle that finds pictures and makes nothing on disk (emusen_scrape.h 1.2).
+        // sourcesAlone opens a scraper that finds pictures, runs nothing and makes nothing on disk (EmuSen_Backend.md §40.5).
         private string NativeSettings(bool sourcesAlone)
         {
             string json = JsonSerializer.Serialize(new Dictionary<string, object?>
@@ -68,12 +68,11 @@ namespace EmuSen.Mistress.Views
             if (_native is not null) return true;
             try
             {
-                _native = NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(), _records.Library, NativeEmbedded());
+                _scrapeTheme ??= ThemeNow();
+                _native = NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(), _records.Library, NativeEmbedded(), ShelfSystems(), ThemeKindsFor);
                 _sources?.Dispose();
                 _sources = null;
                 ScrapePlaying(_running);
-                _scrapeTheme ??= ThemeNow();
-                ScrapingLend.Lend(_native.Service, _records.Library, RuntimeCatalog.Shelves.Select(s => s.System), ThemeKindsFor);
                 return true;
             }
             catch (MediaServiceException ex)
@@ -87,6 +86,9 @@ namespace EmuSen.Mistress.Views
 
         private NativeScraping? _sources;
 
+        // The systems the build opens, which the shells' scrape chooses games from.
+        private static IEnumerable<string> ShelfSystems() => RuntimeCatalog.Shelves.Select(s => s.System);
+
         // media.db refused to open (another program holds it, or it is newer); asked again when the settings are applied.
         private bool _storeRefused;
 
@@ -95,7 +97,7 @@ namespace EmuSen.Mistress.Views
         {
             NativeScraping handle = _native
                 ?? (!_storeRefused && File.Exists(Path.Combine(MediaStore.DefaultRoot, MediaStore.FileName)) && OpenNative() ? _native! : null)
-                ?? (_sources ??= NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(true), _records.Library, NativeEmbedded()));
+                ?? (_sources ??= NativeScraping.Open(MediaStore.DefaultRoot, NativeSettings(true), _records.Library, NativeEmbedded(), ShelfSystems(), ThemeKindsFor));
             string key = $"{_appSettings.RomDirectory}|{ArtworkDirectory}|{_appSettings.EsdeMediaDirectory}|{_appSettings.OpenEmuFallback}";
             if (handle != _sourcesHandle) (_sourcesHandle, _sourcesKey) = (handle, key);
             else if (key != _sourcesKey)

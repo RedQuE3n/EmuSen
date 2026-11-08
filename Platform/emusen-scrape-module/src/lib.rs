@@ -1,15 +1,17 @@
-//! `emusen.scrape`: the `scrape` command over the scraper lent as the `emusen.scrape` service - see EmuSen_LibraryTools.md §8 and `man scrape`.
+//! `emusen.scrape`: the `scrape` command over the `emusen.scrape` and `emusen.games` services - see EmuSen_LibraryTools.md §8 and `man scrape`.
 
 use dianash_module::{Answer, Call, Manifest, Module};
 use serde_json::Value;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub const SERVICE: &str = "emusen.scrape";
-pub const MAJOR: u32 = 1;
+pub const MAJOR: u32 = 2;
+pub const GAMES: &str = "emusen.games";
+pub const GAMES_MAJOR: u32 = 1;
 
 /// `emusen_scrape_service.h`'s table.
 #[repr(C)]
-pub struct ScrapeServiceV1 {
+pub struct ScrapeServiceV2 {
     pub size: u32,
     pub get: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
     pub change: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
@@ -18,9 +20,16 @@ pub struct ScrapeServiceV1 {
     pub wait: extern "C" fn(u64, u32) -> i64,
     pub pause: extern "C" fn(i32) -> i32,
     pub cancel: extern "C" fn() -> i32,
-    pub library_get: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
-    pub games: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
     pub theme_kinds: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
+    pub last_error: unsafe extern "C" fn(*mut u8, usize) -> i64,
+}
+
+/// `emusen_games_service.h`'s table.
+#[repr(C)]
+pub struct GamesServiceV1 {
+    pub size: u32,
+    pub get: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
+    pub games: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64,
     pub last_error: unsafe extern "C" fn(*mut u8, usize) -> i64,
 }
 
@@ -60,32 +69,47 @@ pub trait Backend {
     fn theme_kinds(&self, system: &str) -> Result<String, String>;
 }
 
-/// The service's table as a `Backend`.
-pub struct Service(pub *const ScrapeServiceV1);
+/// The two services' tables as a `Backend`: the scraper's, and the library's games.
+pub struct Service {
+    pub scrape: *const ScrapeServiceV2,
+    pub games: *const GamesServiceV1,
+}
+
+fn words(last_error: unsafe extern "C" fn(*mut u8, usize) -> i64) -> String {
+    let mut buffer = vec![0u8; 1024];
+    let n = unsafe { last_error(buffer.as_mut_ptr(), buffer.len()) };
+    String::from_utf8_lossy(&buffer[..(n.max(0) as usize).min(buffer.len())]).into_owned()
+}
+
+fn call_table(call: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64, last_error: unsafe extern "C" fn(*mut u8, usize) -> i64, request: &str) -> Result<String, String> {
+    let mut buffer = vec![0u8; 4096];
+    loop {
+        let n = unsafe { call(request.as_ptr(), request.len(), buffer.as_mut_ptr(), buffer.len()) };
+        if n < 0 {
+            return Err(words(last_error));
+        }
+        if n as usize <= buffer.len() {
+            return Ok(String::from_utf8_lossy(&buffer[..n as usize]).into_owned());
+        }
+        buffer.resize(n as usize, 0);
+    }
+}
 
 impl Service {
-    fn table(&self) -> &ScrapeServiceV1 {
-        unsafe { &*self.0 }
+    fn table(&self) -> &ScrapeServiceV2 {
+        unsafe { &*self.scrape }
+    }
+
+    fn library(&self) -> &GamesServiceV1 {
+        unsafe { &*self.games }
     }
 
     fn last_error(&self) -> String {
-        let mut buffer = vec![0u8; 1024];
-        let n = unsafe { (self.table().last_error)(buffer.as_mut_ptr(), buffer.len()) };
-        String::from_utf8_lossy(&buffer[..(n.max(0) as usize).min(buffer.len())]).into_owned()
+        words(self.table().last_error)
     }
 
     fn ask(&self, call: unsafe extern "C" fn(*const u8, usize, *mut u8, usize) -> i64, request: &str) -> Result<String, String> {
-        let mut buffer = vec![0u8; 4096];
-        loop {
-            let n = unsafe { call(request.as_ptr(), request.len(), buffer.as_mut_ptr(), buffer.len()) };
-            if n < 0 {
-                return Err(self.last_error());
-            }
-            if n as usize <= buffer.len() {
-                return Ok(String::from_utf8_lossy(&buffer[..n as usize]).into_owned());
-            }
-            buffer.resize(n as usize, 0);
-        }
+        call_table(call, self.table().last_error, request)
     }
 }
 
@@ -112,11 +136,11 @@ impl Backend for Service {
     }
 
     fn library_get(&self, request: &str) -> Result<String, String> {
-        self.ask(self.table().library_get, request)
+        call_table(self.library().get, self.library().last_error, request)
     }
 
     fn games(&self) -> Result<String, String> {
-        self.ask(self.table().games, "")
+        call_table(self.library().games, self.library().last_error, "")
     }
 
     fn theme_kinds(&self, system: &str) -> Result<String, String> {
@@ -124,7 +148,7 @@ impl Backend for Service {
     }
 }
 
-// SAFETY: the service's table is the platform library's or the host's, callable from any thread (emusen_scrape_service.h).
+// SAFETY: the services' tables are the platform library's or the host's, callable from any thread (emusen_scrape_service.h, emusen_games_service.h).
 unsafe impl Send for Service {}
 
 fn compact(members: Vec<(&str, Value)>) -> String {
@@ -830,7 +854,7 @@ fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
 }
 
 fn backend_of(call: &Call) -> Option<Service> {
-    call.service(SERVICE, MAJOR).map(|t| Service(t as *const ScrapeServiceV1))
+    Some(Service { scrape: call.service(SERVICE, MAJOR)? as *const ScrapeServiceV2, games: call.service(GAMES, GAMES_MAJOR)? as *const GamesServiceV1 })
 }
 
 pub struct ScrapeCommands;
@@ -840,14 +864,14 @@ pub static MODULE: ScrapeCommands = ScrapeCommands;
 impl Module for ScrapeCommands {
     fn manifest(&self) -> &'static str {
         static MANIFEST: std::sync::OnceLock<String> = std::sync::OnceLock::new();
-        MANIFEST.get_or_init(|| Manifest { id: "emusen.scrape", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 0, true)], commands: COMMANDS, aliases: &[], jobs: &["scrape"], settings: &[], approvals: false }.json())
+        MANIFEST.get_or_init(|| Manifest { id: "emusen.scrape", version: env!("CARGO_PKG_VERSION"), services: &[(SERVICE, MAJOR, 0, true), (GAMES, GAMES_MAJOR, 0, true)], commands: COMMANDS, aliases: &[], jobs: &["scrape"], settings: &[], approvals: false }.json())
     }
 
     fn run(&self, call: &Call) -> i32 {
         if call.command() != "scrape" {
             return call.answer(Answer::fault(format!("emusen.scrape has no command '{}'", call.command())));
         }
-        let Some(backend) = backend_of(call) else { return call.answer(Answer::fail("scrape: needs emusen.scrape, which this program does not provide")) };
+        let Some(backend) = backend_of(call) else { return call.answer(Answer::fail("scrape: needs emusen.scrape and emusen.games, which this program does not provide")) };
         let args = call.args();
         if args.get(1).map(String::as_str) == Some("wait") {
             return call.answer(wait(call, &backend, jobs_of(call)));

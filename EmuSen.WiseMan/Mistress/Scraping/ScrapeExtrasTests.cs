@@ -15,6 +15,7 @@ using EmuSen.Galaxia.Library;
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
     // Pass 8 at the library's run: the new kinds, what an older answer says of them, Refresh by checksum, a game chosen by name, and every request counted - see EmuSen_BigPicture.md §38 and EmuSen_Backend.md §40.5.
+    [Collection(EmuSen.WiseMan.Fixtures.TestCollections.ProcessGlobals)]
     public class ScrapeExtrasTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenScrapeExtrasTests", Guid.NewGuid().ToString("N"));

@@ -5,8 +5,8 @@
  * Serenity's shaders and device, the file services, the shell, and the frontend API (emusen_crystal.h), which a front
  * end calls for what both offer. This header is the components' own interface; since 38 the systems table, the cheat
  * codecs, a firmware install, the card manager and a cheat database's install are the frontend API's alone
- * (EmuSen_RustPlatform.md, section 47.24). The rules are argued in EmuSen_RustPlatform.md, section 3, and are the core
- * ABI's (emusen_core.h) one layer up:
+ * (EmuSen_RustPlatform.md, section 47.24); since 39 scraping is the emusen.scrape service's table alone (47.25). The
+ * rules are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
  *    delegate is returned to it, as a status, as words or as queued diagnostics.
@@ -35,11 +35,13 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "emusen_scrape_service.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 38u
+#define EMUSEN_PLATFORM_ABI_VERSION 39u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -290,34 +292,49 @@ int32_t emusen_galaxia_mapped_advise(const emusen_galaxia_mapped *mapped, uint64
 /* Releases the mapping; a null handle is nothing to release. No address it gave may be read afterwards. */
 int32_t emusen_galaxia_unmap(emusen_galaxia_mapped *mapped);
 
-/* ---- The scraper lent to every shell (EmuSen_LibraryTools.md, section 8; since 28) ---- */
+/* ---- Scraping (EmuSen_LibraryTools.md, section 8; since 39 its one surface) ---- */
 
 /*
- * The emusen.scrape service (emusen_scrape_service.h) speaks for the process's one scraper. A host that holds its own
- * lends it here, with the games.db library it was opened with, the systems the build opens (a JSON list of system ids,
- * empty for every system of the table) and, where it loads themes, a function answering a system's ES-DE name with the
- * media types its active theme draws, by the length-query idiom, callable from any thread with ctx. A null lend, or one
- * with a null scraper, withdraws it: the service then refuses rather than open a scraper of its own, as it does in a
- * process whose host has ever lent one. A lend or withdrawal waits for the service's calls in flight, so the host may
- * close its handles once it returns.
+ * Since 39 a front end scrapes through the emusen.scrape service's table (emusen_scrape_service.h), the same table the
+ * platform library hands every shell, and opens the process's one scraper here. The config names the media store
+ * (media.db in it), games.db (empty for none: a cover chosen from another game, edits and cover lookups need it), the
+ * front end's loaded e_sqlite3 (null for the process's own; kept loaded while the platform library holds the scraper or
+ * games.db), the program's embedded developer blob or none, the settings' JSON (EmuSen_Backend.md, section 30.3), the
+ * systems the build opens (a JSON list of system ids, empty for every system of the table) and, where the front end
+ * loads themes, a function answering a system's ES-DE name with the media types its active theme draws, by the
+ * length-query idiom, callable from any thread with ctx. games.db and the systems are also what the emusen.games
+ * service speaks for (emusen_games_service.h). An open waits for the service's calls in flight, closes the scraper
+ * before it and answers the new one's serial, above zero, or a status of emusen_scrape_service.h with its words read
+ * through the table's last_error; after a failed open no scraper is open. A close with the serial closes that scraper
+ * while it is still the one open (1; 0 when a later open replaced it); a close with 0 closes any. After any open or
+ * close the service refuses rather than open a scraper of its own from the settings file, as it does on first use in a
+ * process whose front end never opened one.
  */
-typedef struct emusen_scraping_lend_info {
+typedef struct emusen_scraping_config {
     uint32_t size;
-    struct emusen_scrape *scraper;
-    struct emusen_library *library;
+    const uint8_t *root; size_t root_len;
+    const uint8_t *games_db; size_t games_db_len;
+    void *sqlite;
+    const uint8_t *embedded; size_t embedded_len;
+    const uint8_t *settings; size_t settings_len;
     const uint8_t *systems; size_t systems_len;
     int64_t (*theme_kinds)(void *ctx, const uint8_t *system, size_t len, uint8_t *out, size_t out_len);
     void *ctx;
-} emusen_scraping_lend_info;
+} emusen_scraping_config;
 
-int32_t emusen_scraping_lend(const emusen_scraping_lend_info *lend);
+int64_t emusen_scraping_open(const emusen_scraping_config *config);
+
+int32_t emusen_scraping_close(uint64_t serial);
+
+/* The emusen.scrape table, for a front end; it lives as long as the library is loaded. */
+const emusen_scrape_service_v2 *emusen_scraping_service(void);
 
 /*
  * Since 29: the scrape command as data, for a window that fronts it (EmuSen_LibraryTools.md, section 9). The request is
  * {"args": [...], "paths": [...], "sources": bool}, args the words after "scrape" (ls, plan, run, status, progress,
  * wait, cancel, collections), and the answer JSON by the length-query idiom: the games the module chooses with each kind's source,
- * the plan, a started run, the status. The choice is the emusen.scrape module's own, over the same service as a shell's.
- * A failure is a status of emusen_scrape.h, its words read with emusen_scrape_last_error on the same thread.
+ * the plan, a started run, the status. The choice is the emusen.scrape module's own, over the same services as a shell's.
+ * A failure is a status of emusen_scrape_service.h, its words read through the table's last_error on the same thread.
  */
 int64_t emusen_scraping_command(const uint8_t *request, size_t len, uint8_t *out, size_t out_len);
 

@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 publish.workspace = true
 
-# emusen.scrape, the scraper as a command module (EmuSen_LibraryTools.md §8): `scrape`, over the scraper lent as the
-# emusen.scrape service, since a module links neither the scraper nor Galaxia.
+# emusen.scrape, the scraper as a command module (EmuSen_LibraryTools.md §8): `scrape`, over the emusen.scrape and
+# emusen.games services, since a module links neither the scraper, the library nor Galaxia.
 [lib]
 name = "emusen_scrape_module"
 

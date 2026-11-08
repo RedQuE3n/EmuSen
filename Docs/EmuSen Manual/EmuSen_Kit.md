@@ -1389,7 +1389,8 @@ None changes what an existing screen draws: the gallery's gate passes unchanged.
 
 - **`MenuRow.steps`, `opens`, `ruled`, `sectionEnd`, `inset` and `labelFont`.** A stepped value stands between ◂ and ▸
   (Save State's slot, the speed), a row that turns to a page of its own ends in ▸ (Game Options, Leave), each mark a
-  `Shape` triangle 7 × 10 units in Muted, 12 units from the value, as Mistress's render measures them. `ruled` draws a
+  `Shape` triangle in Muted 12 units from the value, a step's 8 × 11 units and an opening row's 9 × 13, as Mistress's
+  render measures them (measured 2026-11-08 within a pixel at 1280 × 800). `ruled` draws a
   one-unit rule in `Rule` along the row's foot, and `sectionEnd` draws it in `Border`, the lighter rule before a new
   section (Mistress's `SectionRule` is `#707076`, six levels from `Border` in blue: the token is the one owner, and the
   difference is named in `EmuSen_Qt.md` §7.1). `inset` is the words' distance from the row's edges (the kit's default
@@ -1398,6 +1399,10 @@ None changes what an existing screen draws: the gallery's gate passes unchanged.
 - **`Frame.helpShown`**: the frame's own help bar on the foot, on by default. The Pause Card's band is 98 units high, lies
   under the panel and its shadow, and slides down on its own, so the card draws a `HelpBar` of its own over the frame's
   controller and help model while the frame keeps the model for its declared actions (§7.19).
+
+- **A fourth face**, `fonts/BarlowCondensed-Regular.ttf` (LunaP's own file, SHA-256 beginning `b4bb48af`; the Barlow
+  licence and notice already cover it): the face of LunaP's card titles (`AdaptiveLayout`'s `TitleSize` 32 in
+  `CondensedFile`). The card's title in Medium came out 265 units wide where Mistress's is 255; in Regular, 254.
 
 **Held to**: the gallery's gate (4) and the kit's 39 tests pass unchanged; `qt-app/tests/pause.rs` reads the marks' rows
 through the card. No C++ was added.

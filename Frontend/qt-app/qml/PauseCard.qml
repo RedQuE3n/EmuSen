@@ -174,8 +174,8 @@ FocusScope {
                     width: parent.width
                     text: pause.title
                     color: Kit.Tokens.textStrong
-                    font.family: faces.condensed
-                    font.weight: Font.Medium
+                    font.family: faces.condensedRegular
+                    font.weight: Font.Normal
                     font.pixelSize: 32
                     fontSizeMode: Text.HorizontalFit
                     minimumPixelSize: 22
@@ -229,7 +229,7 @@ FocusScope {
         controller: frame.controller
         model: frame.help
         family: root.padFamily
-        color: "transparent"
+        color: Kit.Tokens.surface
         ruled: false
         leftInset: 64
         labelFont: Qt.font({ family: faces.regular, pixelSize: 20 })

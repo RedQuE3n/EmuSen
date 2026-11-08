@@ -581,7 +581,8 @@ game's read crosses to the frame thread by a hand-over (`GamePads`) and is route
   (`PortRouter`), so both front ends route by one rule.
 - `SessionModel.pads` names the reader's hand-over (`PadReader.gamePads`); a session with none named hears no pad.
 - While the game runs and is not paused, `PadRouter.chordOnly` keeps the walk from game input and the menu chord reaches
-  the program; `Play.qml` pauses on it until the Pause Card opens there.
+  the program. emusen-qt opens the Pause Card on it (§7.1, step 7); `Play.qml`, emusen-qt-play's window of one game,
+  has no card and pauses and resumes on it.
 
 The new dependency, `emusen-qt-models` on `emusen-qt-endymion`, is stated: the session must reach the one reader's
 hand-over, and a third crate for one struct would add a boundary with nothing behind it. Owed: the seats the player
@@ -1382,6 +1383,85 @@ and `qml`; qt-models' `library` 12 (the hero art's order, the shelf less the sus
 screens' rule for the game); clippy clean. Seeded faults, each reverted: the shelf keeping the suspended game (the
 models' test), the hero art's order with the screenshot first (the models' test), `RoundPicture` drawing square corners
 (the acceptance test's corner sample, at 66,205,110 where the box's corner must show what is behind).
+
+**Step 7, the Pause Card's first page** (2026-11-08; `EmuSen_Interface.md` §2.8, §5 item 4, §18.5, §20.6). Stage 1's
+last screen. The oracle is Mistress's own card over a paused game: the recordings
+`EmuSen.WiseMan/Mistress/Specification/PauseCard-{1280x800,1920x1200}.spec` and its accepted renders at 1280 × 800 and
+1920 × 1080, plus the Leave page's (`PauseCardLeave`).
+
+- **The chord opens it, as Mistress's `OpenPadMenu` does over a game.** Decided 2026-11-08: the chord over the game no
+  longer shows Home. `Screens` gained `Pause` and the ask `Library` (`screens::step`: the chord over the game is the
+  card; the card resuming is the game; Back to Library is Home with the game suspended; a game that stops under the card
+  is Home). Home over a paused game is reached as in Mistress, by Leave ▸ Back to Library, so the player keeps a way
+  home while a game runs.
+- **Every word from a model, the actions as data.** `pause.rs` (plain Rust) holds the pages: the first page's seven rows
+  in Mistress's words (`GameMenuRows`: Resume, Rewind, Save State ◂ slot ▸, Load State ◂ slot ▸, Speed ◂ 100% ▸, Game
+  Options ▸, Leave ▸, the lighter rule ending the first section), Leave's page, each row's key, what a choice does
+  (`choose`) and what B does (`back`: to the first page on the row that opened the page, else resume). The words come
+  from the session's facts, read as the game pauses: `SessionModel.cardFacts` (the runtime's `session_info`,
+  `rewind_reel` and `state_slots`, all reads, which the runtime answers on any thread, emusen_crystal.h), worded as
+  Mistress words them (`RewindUnavailable`, `RewindHeld`, `SlotValue`). `PauseModel` puts the page on Qt as rows, title
+  and breadcrumb; the help bar is `HelpModel`'s `Pause` and `PausePage` (A Select or Choose, B Resume or Back, X
+  Screenshot, Start Resume), whose `resume` line is the frame's declared action (`EmuSen_Kit.md` §7.19).
+- **The drawing** (`PauseCard.qml`, canvas units): the scrim over the paused frame, which never moves; the panel at the
+  left edge at 40% of the width on Surface, its shadow by `MultiEffect` (offset 0,8, blur 24, black at 50%, §5.4) from a
+  caster behind it, so the panel's words are never drawn through a layer; the title row (the game's cover at 60 × 80
+  where the library has one, the breadcrumb in Muted above the title on a page past the first, the title in Barlow
+  Condensed Regular at 32 down to 22, LunaP's card's face); the rows from 64,156 as `Kit.MenuRow`s 54 high with their
+  marks and rules (`EmuSen_Kit.md` §7.21); the band, 98 units of Surface with a Border rule under the panel and its
+  shadow, and its help bar over both. The help bar paints Surface: painted `transparent` on Vulkan it cleared its strip
+  to alpha 0 across the window (the panel and band beneath read 0,0,0,0 in the grab, measured 2026-11-08; on the
+  software backend it drew as expected), so it is opaque, and the panel's shadow does not darken the band within it.
+- **The slide** (§20.6, LunaP §218): `slide` from 1 to 0 over Enter (200 ms, quadratic out) as the card opens and back
+  over Exit (160 ms, quadratic in) as it closes; the panel moves left by its right edge and 40 units times `slide`, the
+  band down by its height, the pane fades. A page turn moves nothing. The tokens' durations are nothing under reduced
+  motion, so the card comes and goes at once. B or Start closes it at once (the card stops taking the pad), and the
+  game resumes only when it says it is `gone`.
+
+**Owed to stage 2, named:** the context pane (the reel's three pictures on Rewind, the slots' pictures and sentence on
+Save and Load: the pane is laid out, empty); what Rewind, Save State, Load State, Speed, their Left and Right, Game
+Options ▸ and X's screenshot do (declared, answering nothing yet); the console rows (Change Disc, Swap Players); Leave's
+Restart Game…, Quit Game… and Quit EmuSen… with their questions; the Guide chords (Up saves, Down loads, R1 a
+screenshot); and a card opened again while it slides out taking over that pause. `Play.qml`, emusen-qt-play's window of
+one game, keeps pausing and resuming on the chord.
+
+**Compared with Mistress** (measured on 2026-11-08). The Qt recordings `PauseCard-1280x800.spec` and `-1920x1200.spec`
+were read by WiseMan's own `SpecDocument.Parse` and written back byte for byte, `InterfaceRules.All` found 0 faults, and
+`InterfaceSpec.Compare` against Mistress's recordings found the card's root (`PadCard`, a pane over the window), the scrim
+(`AdaptiveCardScrim`), the rows' box (`AdaptiveCardRows`, 64,156 424 × 378) and the list (`PadMenuList`, a list) in place
+at both sizes. Its 53 differences at each size are these, each a fact of the toolkit rather than of the card: Avalonia's
+wrappers, which Qt has no counterpart for (`AdaptiveLayers`, `AdaptiveContent`, the list's `PART_ScrollViewer`: the card
+holds at most eight rows and never scrolls); `AdaptiveCard` at 0,0,512,800, where Avalonia's `MenuPanel` control spans the
+window and paints its panel inside; the Qt items the C# tree has no names for; and the walk's 28 edges through the
+seven rows, where Mistress records `walk none` because its menu moves its own selection. The grabs beside Mistress's
+renders at 1280 × 800 and 1920 × 1080, with nothing drawn over either, are `~/.cache/emusen/tmp/qt-s1/compare/
+PauseCard-*-side.png` and `PauseCardLeave-*-side.png`, with their differences as `*-diff.png`: the title within one unit
+of width (254 against 255), the marks within a pixel, the rows one pixel lower, the help bar's last entry three units
+right.
+
+**Differences that remain, each for the tester:** the Rewind row reads "nothing to go back to yet", where Mistress's
+render shows no value, because emusen-qt's session does not yet turn the runtime's rewind on from the player's settings
+as Mistress does at a game's start (owed with Rewind's page); the paused frame is the test core's dark picture where the
+render's is black; the panel's shadow does not darken the band within the help bar's strip (above); Mistress draws the
+section's rule in `#707076`, the card in `Border` (`#707070`); the title's shrink floor is the design's 22 units
+(`EmuSen_Interface.md` §5 item 4), where LunaP's card shrinks to 0.55 of 32; and Leave's page holds Back to Library
+alone.
+
+**Held to** (measured on 2026-11-08): `acceptance.rs` on Vulkan in its own compositor with the RX 6800, the game a real
+session on the test core opened from the program's own path: the chord pausing it under the card, the card in place
+with Mistress's seven rows and her words, held at the gate's five sizes with nothing logged and recorded; B resuming the
+game only once the card has gone; the chord again, Leave ▸ (a page turn, nothing moved), Back to Library to Home over the
+paused game, held as before. A watchdog stops its compositor: `Compositor::watch` (`emusen-qt-test`) makes a panic, or a
+run past ten minutes, write its words to the process's own stderr, stop KWin and end the process, since unwinding
+faulted in Qt's swapchain release and left the compositor running (step 6's open point); a first failed run showed the
+panic's words and left no KWin. `pause.rs` on the software backend: the first page's words and help bar, the slide part
+of the way in at 60 ms and in place by 400, a page turn moving nothing, B back to Leave's row, Back to Library, B and
+Start resuming once gone, and none of the motion under reduced motion. qt-models' `pause` 4 (the rows and words from the
+facts, the facts read as Mistress reads them, the choices and B, the help bar and declared actions) and `library` 12
+(the screens' rule with the card); `program.rs`'s QML rules and `qmllint`; the kit's 39 and the gallery's gate 4; clippy
+clean. Seeded faults, each reverted: the section's rule on Game Options rather than Speed (the models' `pause` test);
+the slide's duration written as 200 ms in place of the token (`pause.rs`, under reduced motion); B on Leave returning
+to the first row (`pause.rs`, the row that opened the page).
 
 ---
 

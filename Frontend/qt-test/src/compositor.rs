@@ -56,14 +56,18 @@ impl Compositor {
             let _ = Command::new("kill").arg(pid.to_string()).status();
             std::process::abort();
         };
-        let report = std::panic::take_hook();
+        // Written to the process's stderr itself, since the test harness captures what the macros print and an abort loses it.
+        let say = |words: String| {
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(words.as_bytes());
+        };
         std::panic::set_hook(Box::new(move |info| {
-            report(info);
+            say(format!("{info}\n{}\n", std::backtrace::Backtrace::capture()));
             stop();
         }));
         std::thread::spawn(move || {
             std::thread::sleep(Duration::from_secs(seconds));
-            eprintln!("the run took longer than {seconds} s; its compositor is stopped");
+            say(format!("the run took longer than {seconds} s; its compositor is stopped\n"));
             stop();
         });
     }

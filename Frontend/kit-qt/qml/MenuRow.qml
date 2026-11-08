@@ -18,7 +18,10 @@ Kit.Walkable {
     // The words' distance from the row's edges, and their face.
     property real inset: Kit.Tokens.base * 4
     property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontRow })
-    readonly property real markWidth: 7
+    // The marks' sizes as Mistress's render draws them: a step's ◂ and ▸, and the larger ▸ of a row that opens a page.
+    readonly property size stepMark: Qt.size(8, 11)
+    readonly property size openMark: Qt.size(9, 13)
+    readonly property size afterMark: root.steps ? root.stepMark : root.openMark
     readonly property real markGap: Kit.Tokens.base * 3
     implicitHeight: Kit.Tokens.rowHeight
     Accessible.role: Accessible.ListItem
@@ -61,8 +64,8 @@ Kit.Walkable {
     Shape {
         objectName: "before"
         visible: root.steps
-        width: root.markWidth
-        height: root.markWidth * 10 / 7
+        width: root.stepMark.width
+        height: root.stepMark.height
         anchors.right: valueText.left
         anchors.rightMargin: root.markGap
         anchors.verticalCenter: parent.verticalCenter
@@ -70,7 +73,7 @@ Kit.Walkable {
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted
-            PathPolyline { path: [Qt.point(root.markWidth, 0), Qt.point(0, root.markWidth * 5 / 7), Qt.point(root.markWidth, root.markWidth * 10 / 7)] }
+            PathPolyline { path: [Qt.point(root.stepMark.width, 0), Qt.point(0, root.stepMark.height / 2), Qt.point(root.stepMark.width, root.stepMark.height)] }
         }
     }
     Text {
@@ -87,8 +90,8 @@ Kit.Walkable {
         id: after
         objectName: "after"
         visible: root.steps || root.opens
-        width: root.markWidth
-        height: root.markWidth * 10 / 7
+        width: root.afterMark.width
+        height: root.afterMark.height
         anchors.right: parent.right
         anchors.rightMargin: root.inset
         anchors.verticalCenter: parent.verticalCenter
@@ -96,7 +99,7 @@ Kit.Walkable {
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted
-            PathPolyline { path: [Qt.point(0, 0), Qt.point(root.markWidth, root.markWidth * 5 / 7), Qt.point(0, root.markWidth * 10 / 7)] }
+            PathPolyline { path: [Qt.point(0, 0), Qt.point(root.afterMark.width, root.afterMark.height / 2), Qt.point(0, root.afterMark.height)] }
         }
     }
 }

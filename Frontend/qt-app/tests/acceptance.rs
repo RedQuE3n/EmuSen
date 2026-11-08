@@ -231,6 +231,25 @@ fn hold(scene: &mut Scene<'_>, screen: &str, m: &mockup::Mockup, report: &mut Ve
     scene.wait(100);
 }
 
+/// The Pause Card's first page as Mistress's shows it over Cobalt Harbor: the title, the seven rows in her words, the help
+/// bar, Resume focused; then held at the gate's sizes and recorded for the C# reader (PauseCard-*.spec).
+fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
+    assert_eq!(scene.property("pauseTitle", "text"), "Cobalt Harbor (Synthetic)");
+    let tree = scene.tree();
+    let words = |parent: &str, name: &str| tree.nodes.iter().find(|n| n.parent == parent && n.name == name).and_then(|n| n.text.clone()).unwrap_or_default();
+    let mut rows: Vec<(f64, String, String)> =
+        tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.y, words(&n.id, "label"), words(&n.id, "value"))).collect();
+    rows.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
+    assert_eq!(labels, ["Resume", "Rewind", "Save State", "Load State", "Speed", "Game Options", "Leave"]);
+    assert_eq!(rows[2].2, "Slot 1 (Empty)", "the session's first slot holds nothing");
+    assert_eq!(rows[4].2, "100%");
+    let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone());
+    assert_eq!(focus.as_deref(), Some("Resume"), "the card opens on Resume");
+    assert!(tree.nodes.iter().any(|n| n.visible && n.name == "help-Screenshot"), "the help bar names X");
+    hold(scene, "PauseCard", &mockup::Mockup::default(), report);
+}
+
 fn mockup_of(name: &str) -> mockup::Mockup {
     let path = emusen_qt_test::lint::frontend().join("..").join("Testing").join("mockups").join(format!("{name}.mockup.spec"));
     mockup::parse(&std::fs::read_to_string(path).unwrap()).unwrap()
@@ -269,7 +288,8 @@ fn approved_test_core(world: &emusen_client_fixture::World, cores: &Path) {
 
 #[test]
 fn each_screen_matches_its_mockup_and_passes_the_gate() {
-    let _kwin = Compositor::start(3840, 2160);
+    let kwin = Compositor::start(3840, 2160);
+    kwin.watch(600);
     std::env::set_var("QT_QUICK_BACKEND", "rhi");
     std::env::set_var("QSG_RHI_BACKEND", "vulkan");
     std::env::set_var("QSG_RENDER_LOOP", "threaded");
@@ -354,7 +374,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     hold(&mut scene, "Grid", &mockup_of("Grid"), &mut report);
 
     // Cobalt Harbor played on the test core (the sandbox has no Super Nintendo core, so its file becomes the test core's
-    // image, which no shelf of the library holds), then the menu chord: Home over the paused game, as the render's.
+    // image, which no shelf of the library holds), then the menu chord: the Pause Card over the paused game.
     scene.pad(UiButton::Back);
     wait_for(&mut scene, "screens", "shown", "Consoles", 1000);
     scene.pad(UiButton::Back);
@@ -377,13 +397,35 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
         s.property("session", "running") == "true"
     });
     until(&mut scene, "the first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
-    assert!(scene.pad_chord_only(), "the game owns the pad");
-    // The router's clock back on the wall clock, as a real pad needs it, since the harness's presses stopped it.
-    scene.run_pad_clock();
     let guide = emusen_qt_endymion::reading::sdl_button(emusen_kit_core::input::PadControl::Guide).unwrap();
-    sdl.press(&pad, guide, true);
-    until(&mut scene, "the chord pausing the game and showing Home", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Home");
-    sdl.press(&pad, guide, false);
+    let chord = |scene: &mut Scene<'_>| {
+        assert!(scene.pad_chord_only(), "the game owns the pad");
+        // The router's clock back on the wall clock, as a real pad needs it, since the harness's presses stopped it.
+        scene.run_pad_clock();
+        sdl.press(&pad, guide, true);
+        until(scene, "the chord pausing the game under the Pause Card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
+        sdl.press(&pad, guide, false);
+        until(scene, "the card in place", |s| s.property("PadCard", "slide") == "0");
+    };
+    chord(&mut scene);
+    pause_card(&mut scene, &mut report);
+
+    // B resumes the game once the card has slid away; the chord opens it again, and Leave ▸ Back to Library is Home over
+    // the paused game, as the render's.
+    scene.pad(UiButton::Back);
+    until(&mut scene, "B resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    assert_eq!(scene.property("cardCanvas", "visible"), "false", "the card gone");
+    chord(&mut scene);
+    for _ in 0..6 {
+        scene.pad(UiButton::Down);
+    }
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pauseTitle", "text", "Leave", 1000);
+    assert_eq!(scene.property("PadCard", "slide"), "0", "a page turn moves nothing");
+    hold(&mut scene, "PauseCardLeave", &mockup::Mockup::default(), &mut report);
+    scene.pad(UiButton::Accept);
+    until(&mut scene, "Back to Library showing Home over the paused game", |s| s.property("screens", "shown") == "Home");
+    assert_eq!(scene.property("session", "paused"), "true", "the game kept suspended");
     wait_for(&mut scene, "continue", "activeFocus", "true", 1000);
     assert_eq!(text_of(&mut scene, "continueTitle").as_deref(), Some("Cobalt Harbor (Synthetic)"), "Continue holds the suspended game");
     assert!(text_of(&mut scene, "continueFacts").is_some_and(|t| t == "Paused just now"), "Continue says when it was paused");

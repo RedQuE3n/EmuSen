@@ -5,6 +5,8 @@ Item {
     readonly property string condensed: condensedFace.font.family
     readonly property string regular: regularFace.font.family
     readonly property string light: lightFace.font.family
+    // The cards' titles' face, LunaP's card's (Barlow Condensed Regular).
+    readonly property string condensedRegular: condensedRegularFace.font.family
     FontLoader {
         id: lightFace
         source: "qrc:/emusen/fonts/BarlowCondensed-Light.ttf"
@@ -12,6 +14,10 @@ Item {
     FontLoader {
         id: condensedFace
         source: "qrc:/emusen/fonts/BarlowCondensed-Medium.ttf"
+    }
+    FontLoader {
+        id: condensedRegularFace
+        source: "qrc:/emusen/fonts/BarlowCondensed-Regular.ttf"
     }
     FontLoader {
         id: regularFace

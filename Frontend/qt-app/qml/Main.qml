@@ -61,6 +61,8 @@ Window {
         objectName: "pads"
         platformLibrary: program.platformLibrary
         onlyPads: program.onlyPads
+        // While Guide is held for its chords the game hears nothing, as Mistress keeps the pad from it.
+        gameMuted: Kit.PadRouter.guideHeld
         onButton: (button, down) => Kit.PadRouter.push(button, down)
     }
     // The game, under the screens: in front on its own screen, paused under the Pause Card, and behind Home while it is suspended there, where Continue draws its picture.

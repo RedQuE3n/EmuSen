@@ -41,6 +41,8 @@ struct State {
     quiet: bool,
     /// Players 1 and 2 swapped, for as long as the program runs (Mistress's `SwapPlayers`).
     swapped: bool,
+    /// The game hears nothing while the interface holds a button of its own (Guide, for its chords).
+    muted: bool,
     read: Read,
 }
 
@@ -75,6 +77,16 @@ impl GamePads {
 
     pub fn owned(&self) -> bool {
         self.state().owned
+    }
+
+    /// While muted the game hears nothing; let go, it hears nothing until every button is let go, as after a menu
+    /// (Mistress's `_padQuiet` while Guide is held for its chords).
+    pub fn set_muted(&self, muted: bool) {
+        let mut state = self.state();
+        if state.muted && !muted {
+            state.quiet = true;
+        }
+        state.muted = muted;
     }
 
     /// Players 1 and 2 swap pads from the next tick; false where player 2 has none.
@@ -178,8 +190,8 @@ impl GameReading {
         if state.want_serial != serial || !state.owned {
             return Ok(());
         }
-        if state.quiet {
-            if read.held.iter().any(|&h| h != 0) {
+        if state.quiet || state.muted {
+            if state.muted || read.held.iter().any(|&h| h != 0) {
                 read.held = [0; PLAYERS];
                 read.axes.iter_mut().for_each(|a| *a = 0.0);
             } else {

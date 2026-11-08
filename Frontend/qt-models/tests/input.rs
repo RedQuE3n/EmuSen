@@ -82,6 +82,23 @@ fn the_game_hears_the_pad_through_the_players_bindings_and_not_the_press_that_ga
     run(5, &mut input, &mut reading);
     assert!(counted() <= held + 1, "let go, it is not heard");
 
+    // Muted while Guide is held for its chords (Mistress's `_padQuiet`): A is not heard, nor after, until let go.
+    hand.set_muted(true);
+    let muted = counted();
+    pad.press(bound, true).unwrap();
+    run(5, &mut input, &mut reading);
+    assert_eq!(counted(), muted, "a muted game hears nothing");
+    hand.set_muted(false);
+    run(5, &mut input, &mut reading);
+    assert_eq!(counted(), muted, "A held through the mute is not heard after it");
+    pad.press(bound, false).unwrap();
+    run(2, &mut input, &mut reading);
+    pad.press(bound, true).unwrap();
+    run(5, &mut input, &mut reading);
+    assert!(counted() >= muted + 3, "pressed again, it is heard");
+    pad.press(bound, false).unwrap();
+    run(5, &mut input, &mut reading);
+
     // A button bound to nothing on the pad's other buttons is never heard as A.
     let other = if bound == 3 { 2 } else { 3 };
     let quiet = counted();

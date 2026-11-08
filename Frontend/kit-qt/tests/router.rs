@@ -116,8 +116,10 @@ fn kit_7_26_over_a_game_guide_is_read_for_its_chords() {
         at += 16;
         router.pump(ms(at))
     };
+    assert!(!router.guide_held());
     let pumped = press(&mut router, UiButton::Guide, true);
     assert!(!pumped.menu_chord, "Guide going down opens nothing yet");
+    assert!(router.guide_held(), "the game is to hear nothing while Guide is held (EmuSen_Kit.md §7.26)");
     let pumped = press(&mut router, UiButton::Up, true);
     assert_eq!((pumped.guide_chord, pumped.menu_chord), (Some(UiButton::Up), false));
     assert!(pumped.presses.is_empty(), "the chord is no press");
@@ -127,6 +129,7 @@ fn kit_7_26_over_a_game_guide_is_read_for_its_chords() {
     press(&mut router, UiButton::PageDown, false);
     let pumped = press(&mut router, UiButton::Guide, false);
     assert!(!pumped.menu_chord, "a chord made, so Guide let go opens nothing");
+    assert!(!router.guide_held());
 
     press(&mut router, UiButton::Guide, true);
     let pumped = press(&mut router, UiButton::Guide, false);
@@ -141,5 +144,6 @@ fn kit_7_26_over_a_game_guide_is_read_for_its_chords() {
     router.set_guide_chords(false);
     let pumped = press(&mut router, UiButton::Guide, true);
     assert!(pumped.menu_chord, "with the chords off Guide opens the menu as it goes down");
+    assert!(!router.guide_held(), "and the game is not kept from the pad");
     assert_eq!(press(&mut router, UiButton::Up, true).guide_chord, None);
 }

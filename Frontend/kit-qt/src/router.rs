@@ -59,6 +59,12 @@ impl Router {
         self.guide_chords = on;
     }
 
+    /// Guide held while the Guide chords are read over a game, as the last pump left it: the game is to hear nothing
+    /// then, as Mistress keeps the pad from it (EmuSen_Kit.md §7.26).
+    pub fn guide_held(&self) -> bool {
+        self.guide_chords && self.chord_only && self.held[UiButton::Guide.index()]
+    }
+
     /// Whether a pump has work: an event queued or a button held, whose repeats and chord the clock times. With neither,
     /// a host's clock may sleep until the next push (EmuSen_Kit.md §7.4).
     pub fn pending(&self) -> bool {

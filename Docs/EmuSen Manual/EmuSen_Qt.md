@@ -1765,7 +1765,10 @@ meaning. `pause::guide_chord` says Guide with Up saves to the slot chosen, with 
 takes a screenshot; `SessionModel.guideChord` acts through the session's own `saveState`, `loadState` and `screenshot`,
 off the GUI thread, their notices as before. `start.rs` reads `AppSettings.GuideChords` as Mistress's `GuideChordsOn`
 does ("On", "Off", or Auto, the default, off under Steam's Game Mode), and `Main.qml` hands it to `Game.qml`, which
-binds `PadRouter.guideChords`.
+binds `PadRouter.guideChords`. While Guide is held the game hears nothing (`PadRouter.guideHeld` bound to
+`PadReader.gameMuted`, `EmuSen_Kit.md` §7.26), so the state saved is the one the game was in before Up.
+Decided by the tester on 2026-11-08: the Controllers, Display, Sound and Memory Cards pages and the Cheats window wait
+for stage 5.
 
 **The first page's console rows** (§48.3). `Change Disc ▸` stands after Speed where the session's drive can change (the
 runtime's `discs.can_change`, Mistress's `DriveEngine`); `Swap Players 1 and 2` stands there instead where player 2 has
@@ -1810,8 +1813,6 @@ the defect is hers too; `reel.rs` now takes two moments within a nanosecond as o
 - The generated card in the cover pane is drawn at hue 0, where Mistress's carries the console's hue.
 - Swap Players' notice does not name the pads, where Mistress's reads "Wireless pad: player 1 · …": the pads' names do
   not reach the session's side of the hand-over.
-- With the chords on, the game still hears Up or Down while Guide is held, where Mistress keeps the pad from the game
-  from the moment Guide goes down (`_padQuiet`). The router knows Guide is held; the game's hand-over does not.
 
 **Held to** (measured on 2026-11-08). kit-core's `input` (the reader), kit-qt's `router` 8, `route`, `qt_keys` and
 `qmltypes`; `qt-models`' `pause` 14 (Game Options' rows and way back, Change Disc's rows, outcomes, panes and way back,

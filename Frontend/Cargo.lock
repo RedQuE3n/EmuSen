@@ -310,6 +310,7 @@ dependencies = [
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-qt-test",
+ "serde_json",
 ]
 
 [[package]]

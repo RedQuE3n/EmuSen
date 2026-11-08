@@ -3,3 +3,5 @@
 
 pub mod base;
 pub mod marks;
+pub mod painter;
+pub mod shelves;

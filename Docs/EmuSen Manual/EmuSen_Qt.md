@@ -1338,6 +1338,48 @@ The watched states hold no desaturated and no rounded picture, since Art Book Ne
 and its rounded cover is not in the variant measured, so those two are held to LunaP's arithmetic by the numbers
 above, not to a grab.
 
+#### 4.8.3 The painter without Qt: `shelves.rs` and `painter.rs` (E2, first part)
+
+What the bridge will put on Qt, written and tested as plain Rust first, so the behaviours below are held without a
+Qt application.
+
+- **`shelves.rs`** reads §4.6's texts. `settings` takes `esdeSettings`: the theme folder, the choices under Mistress's
+  keys (`Variant`, `ColorScheme`, `FontSize`, `AspectRatio`, `Language`, `Transitions`, as `BigPictureChoices` stores
+  them) and the interface's switches (`DisplayClock`, `DisplayHelp`, `ListScrollOverlay`, `QuickSystemSelect`,
+  `StartupView`); a text that does not read gives the defaults. `shelves` takes `esdeShelves` and `esdeMedia` into the
+  scene's `ThemeSystem` and `Game`s: a collection's entry, carried by its file alone, takes the row its console's shelf
+  carries, and its `source` is that console's system; a game's media is looked up by its folder and stem, then its
+  stem, under its own console (§4.6); `last_played` (seconds since 1970) becomes a civil date in UTC by Howard
+  Hinnant's days-to-civil; `release_date` reads the metadata's `yyyy-MM-dd`. `presence` takes `esdePresence`.
+- **`painter.rs`**: `ThemeCache` keeps a resolved theme per (folder, system, choices, media presence), as
+  `ThemedLibrary._themes` did, behind a mutex so the data thread fills it, with `forget` for a folder updated on disk;
+  `systems` is the data thread's work, shelves and their themes. `Painter` holds the `Stage`, its clock in
+  microseconds (`tick(ms)` adds), the latest `Frame`, and the pad's grammar on the view, the C# `ThemedLibrary.Command`'s:
+  a direction along the primary element's axis (a list's and a vertical carousel's vertical, a grid's both) presses
+  the scene; Left and Right across it change the system in a gamelist when the quick system select names them, as do
+  the shoulders or the triggers it names; otherwise the shoulders jump ten and the triggers to the first and last; A
+  opens the gamelist or plays the game; B goes back from a gamelist and does nothing at the system view (decided
+  2026-11-08); Y is the favourite; Start and Select are the host's menu and options. `install` keeps the view and the
+  selection across a refresh.
+- **The hold is the scene's.** The router's repeats are not passed on: the scene repeats a held direction on its own
+  clock, and only the scene knows the measured consequences of a hold (the metadata fading out from the first repeat,
+  the list's fast tier jumping four entries). The router gives the first press and the release.
+- **The pointer makes the pad's calls.** `hover(row)` steps to the row as the pad's step does, `tap(row)` is that and A,
+  and a wheel notch is one step, back for a notch up.
+
+**Proof**, `tests/painter.rs` (6, on a synthetic theme the test writes, no Qt application): the settings under
+Mistress's keys and a text that does not read; a collection's entry and the media by folder then stem, the two dates;
+the cache read on the second refresh while the file changed, and read again after `forget`; a carousel step moving at
+200 ms, settled after 401, and its frame equal to the static frame of the new state; the router's repeat not a second
+step, the scene's hold reaching the fourth game in 960 ms, and nothing moving after the release; hover, tap and the
+wheel making the same selection and the same `Played` as the pad, and B at the system view doing nothing. Seeded
+faults, each applied alone and reverted: the router's repeats passed on failed the hold test; hover one row off failed
+the pointer test; nothing cached failed the cache test.
+
+**Owed to the rest of E2** (the bridge, `View.qml`, the delegates, the GPU-tier proofs and the side-by-sides of the
+directions), recorded where the work stands: the description is not read yet (`LibraryModel.esdeDescription(file)`
+is a call the bridge makes for the selected game); the system view's random gameselector picks; the cue's sound files.
+
 ---
 
 ## 5. The stable developer surface

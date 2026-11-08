@@ -33,7 +33,7 @@ pub struct WalkAction {
 
 impl WalkAction {
     /// A screen's actions declared as text, one a line, `key Button` with the button by its name; a line naming no
-    /// button is skipped (EmuSen_Kit.md §7.17).
+    /// button is skipped (EmuSen_Kit.md §7.18).
     pub fn from_lines(text: &str) -> Vec<WalkAction> {
         text.lines()
             .filter_map(|line| {

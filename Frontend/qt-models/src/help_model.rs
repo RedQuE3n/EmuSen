@@ -75,7 +75,7 @@ use qobject::HelpScreen;
 /// The model's state: the screen whose entries it lists.
 pub struct HelpModelRust {
     screen: HelpScreen,
-    /// The screen's actions as the kit's frame reads them (EmuSen_Kit.md §7.17).
+    /// The screen's actions as the kit's frame reads them (EmuSen_Kit.md §7.18).
     action_lines: QString,
 }
 

@@ -133,9 +133,9 @@ pub struct BodyShapesRust {
     cap: f64,
     ring: Ring,
     moons: i32,
-    /// The palette: the light, middle and rim colours as `#RRGGBB` words, or empty for the hue's own; `inks`, since a QQuickItem has a `palette` (EmuSen_Kit.md §7.16).
+    /// The palette: the light, middle and rim colours as `#RRGGBB` words, or empty for the hue's own; `inks`, since a QQuickItem has a `palette` (EmuSen_Kit.md §7.17).
     inks: cxx_qt_lib::QString,
-    /// A whole world as one line (EmuSen_Kit.md §7.16); when it reads, it stands for the hue, the shape and the features.
+    /// A whole world as one line (EmuSen_Kit.md §7.17); when it reads, it stands for the hue, the shape and the features.
     world: cxx_qt_lib::QString,
     unit_width: f64,
     unit_height: f64,

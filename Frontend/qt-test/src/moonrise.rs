@@ -1,5 +1,5 @@
 //! Moonrise's finished frame against a C# reference picture, pixel by pixel, under one tolerance shared by the kit's
-//! gate and the program's test (EmuSen_Kit.md §7.10, §7.16).
+//! gate and the program's test (EmuSen_Kit.md §7.10, §7.17).
 
 use crate::{Scene, Tree};
 

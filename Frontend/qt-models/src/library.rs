@@ -80,7 +80,7 @@ pub struct LibraryRow {
     pub engine: String,
     pub engine_name: String,
     pub libretro: bool,
-    /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.16).
+    /// The console's world as one line, from the systems table's look (EmuSen_Kit.md §7.17).
     pub world: String,
 }
 

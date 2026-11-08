@@ -946,7 +946,7 @@ words, so a QML file names a word and never writes one (§1.3); `words::counted`
 **The bodies** (decided 2026-11-08 by the tester, `EmuSen_Interface.md` §24.6): the splash draws each console's body,
 as its tile does. `library::world_of` reads a console's body from the systems table's look, the one owner (its shape,
 its three colours where the table gives three, its craters, bands, cap and moons), and writes it as the kit's world line
-(`EmuSen_Kit.md` §7.16); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
+(`EmuSen_Kit.md` §7.17); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
 hands them to `Moonrise.worlds`, and every console's row carries its line as the role `world`. The draft stays the
 splash's oracle for everything else. Differences from the C# splash, named: reduced motion (the finished frame held still) is not yet read from the settings,
 and the skip takes every key, Tab and Shift included.
@@ -1040,7 +1040,7 @@ corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`,
 
 - **What a screen shows is a model's.** Choose a console is one `Repeater` over `LibraryModel`: the places first
   (`LibraryModel.places` counts them), then each console with games as its body; the tiles' boxes and the walk between
-  rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.17), the body's size `Body.tileWidth`/`tileHeight`, the focused
+  rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.18), the body's size `Body.tileWidth`/`tileHeight`, the focused
   console's words its row's `fullName` and `facts`, the fan `GameModel` over `gamesOf` of the selected row. The grid's
   cells are a `GridView` over `GameModel`, its heading the row it opened. Home's Continue and shelf are
   `LibraryModel.recent` (the recently played as plain data, kept current by the model), its places `Words.homePlaces`,
@@ -1056,7 +1056,7 @@ corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`,
   other actions (X's random game, the game page, Home's card, Home's other six places) change nothing until their stage.
   `Main.qml` shows the screen `Screens.shown` names and hands each screen's signal to it in one call. A change is
   applied after the event that asked (`qt_thread().queue`): applied at once, the screen it opened took the same B press
-  and went back a second screen, which the seeded fault below shows. The actions are declared as data (§7.17 of
+  and went back a second screen, which the seeded fault below shows. The actions are declared as data (§7.18 of
   `EmuSen_Kit.md`): `HelpModel.actionLines` from `help.rs`, whose entries now carry their action keys.
 
 **Held to** (`qt-app/tests/screens.rs`, measured 2026-11-08, beside `program.rs` whose `sandbox` and `wait_for` moved to
@@ -1067,7 +1067,7 @@ console on the same console; Y opens the favourites; B twice goes Home, and noth
 window's children, finds a `Repeater`'s items. `qt-models/tests/library.rs` holds `screens::step` and each screen's
 declared actions read back by the walk's parser. Seeded faults, each reverted: the switch applied at once failed the
 screens test at B from the grid; the favourites' action key misspelt failed it at Y. The kit's two are in `EmuSen_Kit.md`
-§7.17.
+§7.18.
 
 ---
 

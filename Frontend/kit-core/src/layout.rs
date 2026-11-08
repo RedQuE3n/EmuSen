@@ -1,4 +1,4 @@
-//! Rows of bodies on a picker: where each tile sits and where the walk goes from it (EmuSen_Kit.md §7.17).
+//! Rows of bodies on a picker: where each tile sits and where the walk goes from it (EmuSen_Kit.md §7.18).
 //! A leading row of wide tiles spans the margins; the bodies follow in centred rows of fixed tiles. It names no console.
 
 /// The picker's measures in canvas units, as the courts canvas sets them (EmuSen_Interface.md §24.1, LunaP §222).

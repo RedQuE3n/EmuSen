@@ -1,4 +1,4 @@
-//! The program's splash against Mistress's own (EmuSen_Kit.md §7.16), in a process of its own, as each harness wants.
+//! The program's splash against Mistress's own (EmuSen_Kit.md §7.17), in a process of its own, as each harness wants.
 
 use emusen_client_fixture::{library, World};
 use emusen_kit_core::input::UiButton;
@@ -37,7 +37,7 @@ fn sandbox(name: &str) -> World {
 /// The courts canvas's consoles, as Mistress's picture states them (MoonrisePictureTool.Consoles).
 const CONSOLES: [&str; 11] = ["nes", "snes", "n64", "gb", "gbc", "sms", "md", "mcd", "psx", "ps2", "dreamcast"];
 
-/// The program's finished splash against Mistress's own with the canvas's eleven consoles (EmuSen_Kit.md §7.16): each
+/// The program's finished splash against Mistress's own with the canvas's eleven consoles (EmuSen_Kit.md §7.17): each
 /// console's world from this commit's systems table, in its order, whatever engines the build has. The test holds the
 /// splash up, as the C# picture holds it with start-up work never done.
 #[test]

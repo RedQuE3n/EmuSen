@@ -38,7 +38,7 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
     }
 }
 
-/// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.17).
+/// The screen's actions as the frame declares them: `key Button`, one a line (EmuSen_Kit.md §7.18).
 pub fn action_lines(screen: Screen) -> String {
     entries(screen).iter().filter_map(|(button, _, action)| action.map(|key| format!("{key} {button:?}\n"))).collect()
 }

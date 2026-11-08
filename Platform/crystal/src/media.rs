@@ -148,10 +148,10 @@ pub fn medium_folder(tree: &Tree, console: &str, console_kind: bool) -> String {
 fn files_in(folder: &str) -> Vec<(String, String)> {
     let Ok(read) = std::fs::read_dir(folder) else { return Vec::new() };
     read.flatten()
-        .filter(|e| !emusen_galaxia::dotnet_files::listed_as_directory(e))
+        .filter(|e| !emusen_galaxia::files::listed_as_directory(e))
         .map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
-            (emusen_galaxia::dotnet_files::join(folder, &name), name)
+            (emusen_galaxia::files::join(folder, &name), name)
         })
         .collect()
 }
@@ -230,7 +230,7 @@ pub fn cards_of(tree: &Tree, m: &SaveMedium) -> Vec<MediumFile> {
 /// Each game's own file of a medium in its console's folder: its game, its slot, and whether a slot's suffix named it.
 fn games_own(tree: &Tree, m: &SaveMedium) -> Vec<(String, String, usize, bool)> {
     let own = path::combine(Style::HOST, &tree.saves(), &m.console);
-    if !emusen_galaxia::dotnet_files::directory_exists(&own) {
+    if !emusen_galaxia::files::directory_exists(&own) {
         return Vec::new();
     }
     let mut suffixes: Vec<(String, usize)> = m.slots.iter().enumerate().map(|(n, s)| (s.suffix.clone(), n)).collect();
@@ -279,7 +279,7 @@ pub fn import_to_offer<'m>(tree: &Tree, media: &'m [SaveMedium], stored: &dyn Fn
             && m.default_mode() == SHARED
             && m.entry.as_ref().is_some_and(|e| e.module.is_some())
             && stored(&m.offered_key()).is_none()
-            && !emusen_galaxia::dotnet_files::file_exists(&m.path_of(tree, &m.default_name(0)))
+            && !emusen_galaxia::files::file_exists(&m.path_of(tree, &m.default_name(0)))
             && cards_of(tree, m).iter().any(|c| c.games_own)
     })
 }
@@ -518,7 +518,7 @@ pub fn place(
 fn apart(tree: &Tree, medium: &SaveMedium, name: &str, slot: usize, holder: &str, taken: &mut Vec<String>, placed: &mut Placement, disabled: bool, adopts: bool) -> Option<crate::battery::BatterySave> {
     let key = medium.path_of(tree, name);
     let without_module = medium.entry.as_ref().is_none_or(|e| e.module.is_none());
-    let adopted = if adopts && medium.is_console() && without_module && !emusen_galaxia::dotnet_files::file_exists(&key) { newest_own(tree, medium, slot) } else { None };
+    let adopted = if adopts && medium.is_console() && without_module && !emusen_galaxia::files::file_exists(&key) { newest_own(tree, medium, slot) } else { None };
     let save = crate::battery::BatterySave::medium(tree, &medium.console, medium.is_console(), name, &medium.extension, disabled, adopted);
     if taken.iter().any(|t| t.eq_ignore_ascii_case(&key)) {
         placed.notices.push(format!("{name} is already in another slot; {} keeps the game's own {}.", medium.slot_label(slot), emusen_savemedia::in_text(&medium.noun)));

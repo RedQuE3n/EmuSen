@@ -52,7 +52,7 @@ impl Session {
         j.begin_array();
         for slot in 0..=SLOTS as i32 {
             let at = if slot == 0 { self.resume_path(tree) } else { self.state_path(tree, slot) };
-            let exists = emusen_galaxia::dotnet_files::file_exists(&at);
+            let exists = emusen_galaxia::files::file_exists(&at);
             j.begin_object().int("slot", slot as i64).str("path", &at).bool("exists", exists);
             match emusen_galaxia::clock::last_write(&at).filter(|_| exists) {
                 Some(t) => j.str("saved_at", &t),
@@ -116,7 +116,7 @@ impl Session {
 
     /// A state loaded unless its record refuses it, then the jump's sequence, `ManagedSession.LoadState`.
     pub(crate) fn load_in(&self, e: &mut Engine, run: &mut Run, at: &str, records: Option<&StateRecords>, ctx: &Ctx) -> Result<(), Refused> {
-        if !emusen_galaxia::dotnet_files::file_exists(at) {
+        if !emusen_galaxia::files::file_exists(at) {
             return Err((svc::ABSENT, format!("no state at {at}")));
         }
         if let Some(r) = crate::states::read(records, at)?

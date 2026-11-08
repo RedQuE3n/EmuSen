@@ -27,7 +27,7 @@ fn unpacked(tree: &Tree) -> String {
 /// that is not there has none, as `FileInfo.Length` throws.
 pub fn folder_for(tree: &Tree, archive_path: &str) -> Result<String, String> {
     let full = path::full_path(archive_path);
-    let (length, ticks) = crate::dotnet_files::file_info(&full).ok_or_else(|| format!("Could not find file '{full}'."))?;
+    let (length, ticks) = crate::files::file_info(&full).ok_or_else(|| format!("Could not find file '{full}'."))?;
     Ok(path::combine(Style::HOST, &unpacked(tree), &folder_name(&full, length, ticks)))
 }
 
@@ -70,12 +70,12 @@ fn renamed(entry: &str, chosen: &str, archive_path: &str) -> String {
 pub fn unpack(tree: &Tree, archive_path: &str, is_image: &dyn Fn(&str) -> bool) -> Result<String, String> {
     let folder = folder_for(tree, archive_path)?;
     let marker = path::combine(Style::HOST, &folder, MARKER);
-    if !crate::dotnet_files::file_exists(&marker) {
-        if crate::dotnet_files::directory_exists(&folder) {
+    if !crate::files::file_exists(&marker) {
+        if crate::files::directory_exists(&folder) {
             let _ = std::fs::remove_dir_all(&folder);
         }
         let partial = format!("{folder}.partial-{}", std::process::id());
-        if crate::dotnet_files::directory_exists(&partial) {
+        if crate::files::directory_exists(&partial) {
             std::fs::remove_dir_all(&partial).map_err(|e| e.to_string())?;
         }
         std::fs::create_dir_all(&partial).map_err(|e| e.to_string())?;
@@ -96,7 +96,7 @@ pub fn unpack(tree: &Tree, archive_path: &str, is_image: &dyn Fn(&str) -> bool) 
         let words = format!("{}\n{}\n", path::full_path(archive_path), renamed(&chosen, &chosen, archive_path));
         std::fs::write(path::combine(Style::HOST, &partial, MARKER), words).map_err(|e| e.to_string())?;
         if std::fs::rename(&partial, &folder).is_err() {
-            if crate::dotnet_files::file_exists(&marker) {
+            if crate::files::file_exists(&marker) {
                 let _ = std::fs::remove_dir_all(&partial);
             } else {
                 return Err(format!("{folder} could not be put in place"));
@@ -167,7 +167,7 @@ pub fn prune(tree: &Tree, keep: Option<&str>, kept: u64) {
 
 fn remove_unless_held(dir: &str) {
     let marker = path::combine(Style::HOST, dir, MARKER);
-    if crate::dotnet_files::file_exists(&marker) {
+    if crate::files::file_exists(&marker) {
         let Ok(alone) = File::open(&marker) else { return };
         if alone.try_lock().is_err() {
             return;

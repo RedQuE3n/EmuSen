@@ -6,7 +6,7 @@
 use crate::Error;
 use crate::kinds;
 use crate::store::{CLEANUP_FOLDER, FOLDERS_STEP, Key, Store};
-use emusen_galaxia::dotnet_files;
+use emusen_galaxia::files;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
@@ -58,17 +58,17 @@ pub fn forget(store: &Store, rom: &str, system: Option<&str>, folder: &str) -> R
         let stem = path::file_name_without_extension(STYLE, rom).to_string();
         for ty in kinds::ALL_FOLDER_ORDER.iter().map(|k| k.folder) {
             let dir = path::combine_all(STYLE, &[&store.root, system, ty, &folder.replace('/', &STYLE.separator().to_string())]);
-            if !dotnet_files::directory_exists(&dir) {
+            if !files::directory_exists(&dir) {
                 continue;
             }
             if let Ok(entries) = std::fs::read_dir(&dir) {
                 for entry in entries.flatten() {
                     let name = entry.file_name().to_string_lossy().into_owned();
-                    if dotnet_files::listed_as_directory(&entry) || !name.starts_with(&format!("{stem}.")) {
+                    if files::listed_as_directory(&entry) || !name.starts_with(&format!("{stem}.")) {
                         continue;
                     }
                     if path::file_name_without_extension(STYLE, &name) == stem {
-                        files.push(dotnet_files::join(&dir, &name));
+                        files.push(files::join(&dir, &name));
                     }
                 }
             }
@@ -78,7 +78,7 @@ pub fn forget(store: &Store, rom: &str, system: Option<&str>, folder: &str) -> R
     let mut seen = HashSet::new();
     let mut deleted = Vec::new();
     for file in files.iter().map(|f| path::full_path(f)) {
-        if !seen.insert(file.clone()) || !file.starts_with(&root) || !dotnet_files::file_exists(&file) {
+        if !seen.insert(file.clone()) || !file.starts_with(&root) || !files::file_exists(&file) {
             continue;
         }
         std::fs::remove_file(&file).map_err(|e| io(e, &file))?;
@@ -135,9 +135,9 @@ pub fn put_in_folders(store: &Store, folder_of_rom: &dyn Fn(&str) -> String, now
         let targets: Vec<String> = entry.folders.iter().map(|f| relative(&system, &kind, f, &name)).collect();
         for (i, target) in targets.iter().enumerate() {
             let full = path::combine(STYLE, &store.root, target);
-            let how = if dotnet_files::file_exists(&full) {
+            let how = if files::file_exists(&full) {
                 "found"
-            } else if !dotnet_files::file_exists(&source) {
+            } else if !files::file_exists(&source) {
                 continue;
             } else {
                 if let Some(dir) = path::directory_name(STYLE, &full) {
@@ -157,7 +157,7 @@ pub fn put_in_folders(store: &Store, folder_of_rom: &dyn Fn(&str) -> String, now
         for (key, ty, folder) in &entry.rows {
             let Some(folder) = folder else { continue };
             let target = relative(&system, &kind, folder, &name);
-            if dotnet_files::file_exists(&path::combine(STYLE, &store.root, &target)) {
+            if files::file_exists(&path::combine(STYLE, &store.root, &target)) {
                 store.repoint_media(key, ty, &target)?;
             }
         }
@@ -178,10 +178,10 @@ pub fn orphans(store: &Store, names_by_system: &BTreeMap<String, HashSet<String>
     for (system, names) in names_by_system {
         for folder in &folders {
             let dir = path::combine_all(STYLE, &[&store.root, system, folder]);
-            if !dotnet_files::directory_exists(&dir) {
+            if !files::directory_exists(&dir) {
                 continue;
             }
-            let _ = dotnet_files::visit_files(&dir, |file, _| {
+            let _ = files::visit_files(&dir, |file, _| {
                 let rel = &file[dir.len()..].trim_start_matches(STYLE.separator());
                 let parent = path::directory_name(STYLE, rel).unwrap_or_default();
                 let name = path::combine(STYLE, &parent, path::file_name_without_extension(STYLE, rel)).replace(STYLE.separator(), "/");
@@ -224,7 +224,7 @@ pub fn clean_up(store: &Store, relatives: &[String], machine_local: i64, given_l
     let mut log = Vec::new();
     for rel in relatives {
         let source = path::full_path(&path::combine(STYLE, &store.root, rel));
-        if !source.starts_with(&root) || rel.starts_with(CLEANUP_FOLDER) || !dotnet_files::file_exists(&source) {
+        if !source.starts_with(&root) || rel.starts_with(CLEANUP_FOLDER) || !files::file_exists(&source) {
             continue;
         }
         let target = path::combine(STYLE, &backup, rel);
@@ -232,7 +232,7 @@ pub fn clean_up(store: &Store, relatives: &[String], machine_local: i64, given_l
             std::fs::create_dir_all(&dir).map_err(|e| io(e, &dir))?;
         }
         let size = std::fs::metadata(&source).map(|m| m.len()).unwrap_or(0);
-        if dotnet_files::file_exists(&target) {
+        if files::file_exists(&target) {
             return Err(Error::Io(format!("The file '{target}' already exists.")));
         }
         std::fs::rename(&source, &target).map_err(|e| io(e, &source))?;

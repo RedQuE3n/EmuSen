@@ -12,7 +12,7 @@ pub mod clock;
 pub mod config;
 pub mod consoles;
 pub mod disc_set;
-pub mod dotnet_files;
+pub mod files;
 pub mod dotnet_path;
 pub mod game_folders;
 pub mod error_log;

@@ -431,6 +431,7 @@ dependencies = [
  "memmap2",
  "sha1",
  "sha2",
+ "walkdir",
  "zip",
 ]
 

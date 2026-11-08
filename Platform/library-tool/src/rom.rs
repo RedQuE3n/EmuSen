@@ -10,7 +10,7 @@ use crate::job::{Op, Request};
 use crate::{packages, Context};
 use emusen_disc::cue::{FileKind, Sheet};
 use emusen_disc::{Kind, Lone, Medium};
-use emusen_galaxia::dotnet_files::{self, Options};
+use emusen_galaxia::files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
 use emusen_galaxia::mapped::Mapped;
@@ -61,13 +61,13 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
             }
         };
         let at = claims::under(library, &rel);
-        if dotnet_files::directory_exists(&at) {
+        if files::directory_exists(&at) {
             if !recursive {
                 refused.push(format!("{}: a folder; -r takes what is under it", if g.is_empty() { "/" } else { g }));
                 continue;
             }
-            let _ = dotnet_files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| walked.push(f.to_string()));
-        } else if dotnet_files::file_exists(&at) {
+            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| walked.push(f.to_string()));
+        } else if files::file_exists(&at) {
             direct.push(at);
         } else {
             refused.push(format!("{g}: no such file or folder in the library"));
@@ -96,7 +96,7 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
         let discs = if image_sets::is_playlist(&f.path) { image_sets::discs(&f.path).unwrap_or_default() } else { Vec::new() };
         let system = f.system;
         out.push(f);
-        for d in discs.into_iter().filter(|d| dotnet_files::file_exists(d)) {
+        for d in discs.into_iter().filter(|d| files::file_exists(d)) {
             if !out.iter().any(|o| o.path == d) {
                 out.push(File { rel: rel_of(library, &d), path: d, system });
             }
@@ -283,7 +283,7 @@ fn check_sheet(f: &File, stop: &dyn Fn() -> bool, out: &mut Vec<Failed>) {
     };
     let mut sizes = Vec::with_capacity(files.len());
     for (name, at) in sheet.files.iter().zip(&files) {
-        if !dotnet_files::file_exists(at) {
+        if !files::file_exists(at) {
             out.push(failed("sheet", format!("it names {name}, which is not there")));
             sizes.push(None);
             continue;
@@ -369,7 +369,7 @@ pub fn check(f: &File, chdman: Option<&Chdman>, stop: &dyn Fn() -> bool) -> Vec<
     } else if image_sets::is_playlist(&f.path) {
         match image_sets::discs(&f.path) {
             Ok(discs) if discs.is_empty() => out.push(failed("sheet", "it lists no disc")),
-            Ok(discs) => out.extend(discs.iter().filter(|d| !dotnet_files::file_exists(d)).map(|d| failed("sheet", format!("it lists {}, which is not there", path::file_name(Style::HOST, d))))),
+            Ok(discs) => out.extend(discs.iter().filter(|d| !files::file_exists(d)).map(|d| failed("sheet", format!("it lists {}, which is not there", path::file_name(Style::HOST, d))))),
             Err(words) => out.push(failed("sheet", words)),
         }
     } else if std::fs::metadata(&f.path).map(|m| m.len() == 0).unwrap_or(false) {

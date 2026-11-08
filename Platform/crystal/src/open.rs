@@ -186,7 +186,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
 
 /// The patched image's MD5 and size where the package at `folder` lists patches.
 fn patched_identity(folder: &str) -> Option<(String, u64)> {
-    let manifest = emusen_galaxia::dotnet_files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let manifest = emusen_galaxia::files::join(folder, emusen_galaxia::package::FILE_NAME);
     let doc = emusen_galaxia::package::read(&manifest).ok()?.ok()?;
     emusen_patch::package::patched_identity(&doc)
 }
@@ -226,7 +226,7 @@ fn open_game(
     package: Option<String>,
     save_key: Option<String>,
 ) -> Result<Engine, Refused> {
-    if !emusen_galaxia::dotnet_files::file_exists(at) {
+    if !emusen_galaxia::files::file_exists(at) {
         return Err((crate::abi::status::IO, format!("{at} does not exist")));
     }
     let chosen = engine.map(str::to_string).or_else(|| {

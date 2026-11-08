@@ -143,7 +143,7 @@ pub(crate) fn get(s: &Scraper, r: &Value) -> Result<String, Error> {
         }
         "orphans" => {
             let settings = s.settings();
-            let roms_there = settings.roms.as_deref().is_some_and(emusen_galaxia::dotnet_files::directory_exists);
+            let roms_there = settings.roms.as_deref().is_some_and(emusen_galaxia::files::directory_exists);
             let found = if roms_there {
                 let names = layout::names_by_system(&games(r)?, &|p| settings.folder_of(p));
                 layout::orphans(&s.store(), &names)

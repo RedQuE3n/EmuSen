@@ -2,7 +2,7 @@
 //! each found as the folder holds it, and a folder's files as a library shelves them. What each list means is
 //! `emusen-disc`'s set module. See EmuSen_Galaxia.md §3.8 and EmuSen_Backend.md §28.2.
 
-use crate::dotnet_files::{directory_exists, file_exists};
+use crate::files::{directory_exists, file_exists};
 use crate::dotnet_path::{self as path, Style};
 use std::collections::HashSet;
 

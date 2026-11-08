@@ -13,7 +13,7 @@ pub struct Entry {
 }
 
 /// Every file under a folder, as `Directory.EnumerateFiles(folder, pattern, AllDirectories)` yields them: Galaxia's walk.
-pub(crate) use emusen_galaxia::dotnet_files::visit_files;
+pub(crate) use emusen_galaxia::files::visit_files;
 
 /// Whether a name ends as `*.cht` asks, by case on Linux, as .NET's enumeration matches there.
 fn is_cht(name: &str) -> bool {

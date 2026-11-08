@@ -3,7 +3,7 @@
 //! screen and gives way the moment one starts. See EmuSen_LibraryTools.md §9.12.
 
 use crate::Scraper;
-use emusen_galaxia::dotnet_files::file_info;
+use emusen_galaxia::files::file_info;
 use sha1::{Digest, Sha1};
 use std::collections::HashSet;
 use std::io::{Read, Seek, SeekFrom};

@@ -5,7 +5,7 @@
 //! the index cannot disagree with them. The C# `GamePackages` is the twin. See EmuSen_GamePackages.md §3.4–§3.6 and
 //! §14, and EmuSen_Galaxia.md §3.11.
 
-use crate::dotnet_files::{self, Options};
+use crate::files::{self, Options};
 use crate::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::{Text, Value};
 use crate::package;
@@ -111,14 +111,14 @@ fn walk(dir: &str, depth: usize, found: &mut Vec<String>) {
     let Ok(listing) = std::fs::read_dir(dir) else { return };
     let mut names: Vec<String> = listing
         .flatten()
-        .filter(dotnet_files::listed_as_directory)
+        .filter(files::listed_as_directory)
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|n| !dotnet_files::is_hidden(n))
+        .filter(|n| !files::is_hidden(n))
         .collect();
     names.sort();
     for name in names {
-        let sub = dotnet_files::join(dir, &name);
-        if dotnet_files::file_exists(&dotnet_files::join(&sub, package::FILE_NAME)) {
+        let sub = files::join(dir, &name);
+        if files::file_exists(&files::join(&sub, package::FILE_NAME)) {
             found.push(sub);
         } else if depth + 1 < MAX_DEPTH {
             walk(&sub, depth + 1, found);
@@ -179,7 +179,7 @@ pub fn index(roots: &Roots) -> Index {
     let folders = folders(roots.packages);
     let packages = folders
         .iter()
-        .filter_map(|f| match package::read(&dotnet_files::join(f, package::FILE_NAME)) {
+        .filter_map(|f| match package::read(&files::join(f, package::FILE_NAME)) {
             Ok(Ok(doc)) => package_of(roots, f, &doc),
             _ => None,
         })
@@ -324,7 +324,7 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
 pub fn find_in_library(roots: &Roots, size: u64, recorded: &Value) -> Option<String> {
     let library = roots.library?;
     let mut same: Vec<String> = Vec::new();
-    let _ = dotnet_files::visit_files_with(library, Options { skip_hidden: true, ignore_inaccessible: true }, |at, _| {
+    let _ = files::visit_files_with(library, Options { skip_hidden: true, ignore_inaccessible: true }, |at, _| {
         if std::fs::metadata(at).is_ok_and(|m| m.len() == size) {
             same.push(path::full_path(at));
         }
@@ -363,7 +363,7 @@ impl From<String> for NotOpened {
 }
 
 fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resolution, NotOpened> {
-    let manifest = dotnet_files::join(folder, package::FILE_NAME);
+    let manifest = files::join(folder, package::FILE_NAME);
     let mut doc = match package::read(&manifest) {
         Ok(Ok(doc)) => doc,
         Ok(Err(refusal)) => return Err(format!("{manifest}: {}", refusal.words()).into()),
@@ -402,7 +402,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
         return Ok(resolution(found, true));
     }
     match opened {
-        Some(at) if dotnet_files::file_exists(at) => Ok(resolution(at.to_string(), false)),
+        Some(at) if files::file_exists(at) => Ok(resolution(at.to_string(), false)),
         _ => Err(format!("The package {folder} names {game}, which is gone, and no file of its size and hashes was found in the library.").into()),
     }
 }
@@ -411,7 +411,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
 /// copied from (`sources`) and is no longer that file: its size and time are not those recorded and its SHA-1 is not
 /// the one recorded. Such a file opens as a plain game, as a changed dump does (EmuSen_GamePackages.md §19).
 pub fn source_holds(roots: &Roots, folder: &str, full: &str) -> bool {
-    let Ok(Ok(doc)) = package::read(&dotnet_files::join(folder, package::FILE_NAME)) else { return true };
+    let Ok(Ok(doc)) = package::read(&files::join(folder, package::FILE_NAME)) else { return true };
     let Some(entry) = entries(&doc, "sources").into_iter().find(|e| place(roots, folder, e).as_deref() == Some(full)) else { return true };
     let seen = entry.get("seen");
     let now = seen_of(full);
@@ -451,19 +451,19 @@ pub fn opened_as(tree: &crate::tree::Tree, at: &str) -> (String, Option<String>)
 /// game moved, and the manifest is rewritten; anything else opens as it is.
 pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     let full = path::full_path(at);
-    if dotnet_files::directory_exists(&full) && dotnet_files::file_exists(&dotnet_files::join(&full, package::FILE_NAME)) {
+    if files::directory_exists(&full) && files::file_exists(&files::join(&full, package::FILE_NAME)) {
         return open_package(roots, &full, None);
     }
-    if crate::archive::is_archive(&full) && dotnet_files::file_exists(&full)
+    if crate::archive::is_archive(&full) && files::file_exists(&full)
         && let Some(folder) = crate::package_zip::opened(roots.packages, &full)?
     {
         return open_package(roots, &folder, None);
     }
-    if path::file_name(STYLE, &full) == package::FILE_NAME && dotnet_files::file_exists(&full) {
+    if path::file_name(STYLE, &full) == package::FILE_NAME && files::file_exists(&full) {
         return open_package(roots, &path::directory_name(STYLE, &full).unwrap_or_default(), None);
     }
     let plain = || Ok(Resolution { game: at.to_string(), package: None, moved: false });
-    if !dotnet_files::file_exists(&full) {
+    if !files::file_exists(&full) {
         return plain();
     }
     let index = index(roots);
@@ -478,8 +478,8 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     }
     let Some(size) = std::fs::metadata(&full).ok().map(|m| m.len()) else { return plain() };
     let mut taken: Option<Hashes> = None;
-    for p in index.packages.iter().filter(|p| !dotnet_files::file_exists(&p.game)) {
-        let manifest = dotnet_files::join(&p.folder, package::FILE_NAME);
+    for p in index.packages.iter().filter(|p| !files::file_exists(&p.game)) {
+        let manifest = files::join(&p.folder, package::FILE_NAME);
         let Ok(Ok(mut doc)) = package::read(&manifest) else { continue };
         let where_ = doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str).unwrap_or("");
         if !(where_ == "library" || where_ == "absolute") || recorded_size(&doc) != Some(size) {

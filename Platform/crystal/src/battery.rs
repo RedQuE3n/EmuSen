@@ -33,7 +33,7 @@ impl BatterySave {
         if disabled || rom.is_empty() {
             return BatterySave::NONE;
         }
-        let exists = emusen_galaxia::dotnet_files::file_exists;
+        let exists = emusen_galaxia::files::file_exists;
         let plain = path::change_extension(Style::HOST, &saves::sram_path(tree, rom, console), extension);
         let Some(root) = package.filter(|p| !p.is_empty()) else {
             let previous = if exists(&plain) { None } else { previous_home(tree, rom, console, extension) };
@@ -64,7 +64,7 @@ impl BatterySave {
     /// The save kept before copied into its own place, once a load knows the machine keeps the file.
     pub fn settle(&self, say: &dyn Fn(String)) {
         if let (Some(at), Some(previous)) = (&self.path, &self.previous)
-            && !emusen_galaxia::dotnet_files::file_exists(at)
+            && !emusen_galaxia::files::file_exists(at)
         {
             if path::full_path(previous) == path::full_path(at) {
                 return;
@@ -87,7 +87,7 @@ impl BatterySave {
             return Some(bytes);
         }
         match &self.previous {
-            Some(previous) if !emusen_galaxia::dotnet_files::file_exists(at) => atomic::try_read(previous).ok().flatten(),
+            Some(previous) if !emusen_galaxia::files::file_exists(at) => atomic::try_read(previous).ok().flatten(),
             _ => None,
         }
     }

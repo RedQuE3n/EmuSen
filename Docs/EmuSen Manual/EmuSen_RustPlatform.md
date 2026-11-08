@@ -3948,3 +3948,24 @@ takes both.
 The proof: `package_zip`'s test writes a package with a time of an odd 100 ns and reads it back to the tick; the corpus's
 `package.zip`, written by the old writer, still unpacks to the tick; the recorder's new test reads its archive back with
 the crate, each picture's bytes and local DOS time.
+
+### 47.17 A tree is walked by walkdir
+
+Galaxia's `dotnet_files` is now `files`, and its walk (`visit_files_with`, which the library's scan, the cheat database,
+the artwork index, the scraper's media and the library tool's disc, package and conversion lists share) is walkdir's,
+with links followed. What a walk hands over is as before: every file under the folder, a link to a folder followed into,
+a link whose target cannot be read handed over as a file, a hidden entry (a name beginning with a period) skipped where
+asked, a folder that refuses to be read passed over where asked, and any other error ending the walk after what was
+handed over before it. Two things changed:
+
+1. **The order.** The walk is depth first, each folder's entries in the system's order; the .NET enumeration handed over
+   a folder's files before any of its subfolders' (breadth first). Every caller that keeps a list sorts it or keys it,
+   except the artwork index, whose ties between two pictures of one name in two folders of one console now follow the
+   walk's order: the system's order was already deciding them within a folder.
+2. **A link that loops** back to a folder it lies in is passed over. The .NET walk followed it until the path grew too
+   long and the walk ended in an error, losing what lay after it.
+
+The tick (100 ns since the year 1, in UTC) that `file_info` and `write_ticks` give is unchanged, since `games.db`,
+`media.db` and the unpacked folder's name store it; the corpus's `unpacked.tsv` holds it. `files.rs`'s new test walks a
+tree holding a link to a folder, a dangling link, a hidden dangling link, a link back to the root and a folder that
+cannot be read.

@@ -7,7 +7,7 @@ use crate::convert::{obj, Outcome};
 use crate::packages::{head, read};
 use crate::Context;
 use emusen_galaxia::claims;
-use emusen_galaxia::dotnet_files;
+use emusen_galaxia::files;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
 use emusen_galaxia::{archive, image_sets, package, rom_hash};
@@ -31,7 +31,7 @@ pub fn source_image(ctx: &Context, folder: &str, doc: &Value) -> Result<Vec<u8>,
     if container == Some("chd") || image_sets::is_sheet(&game) || image_sets::is_playlist(&game) || doc.get("dump").and_then(|d| d.get("tracks")).is_some_and(|t| !matches!(t, Value::Null)) {
         return Err("it is a disc game, and disc patches are left to a page of their own (EmuSen_GamePackages.md §9 Q15)".into());
     }
-    if !dotnet_files::file_exists(&game) {
+    if !files::file_exists(&game) {
         return Err(format!("{} is gone: pkg check looks for it", claims::entry_place(&roots, &game).1));
     }
     let bytes = match doc.get("container").and_then(|c| c.get("entry")).and_then(Value::as_str) {
@@ -80,7 +80,7 @@ pub fn names(stem: &str, list: &[(Format, String)]) -> (Vec<String>, bool) {
 fn relayout(folder: &str, moves: &[(String, String)]) -> Result<(), String> {
     let olds: Vec<&String> = moves.iter().map(|(o, _)| o).collect();
     for (old, new) in moves {
-        if old != new && dotnet_files::file_exists(&claims::under(folder, new)) && !olds.iter().any(|o| o.eq_ignore_ascii_case(new)) {
+        if old != new && files::file_exists(&claims::under(folder, new)) && !olds.iter().any(|o| o.eq_ignore_ascii_case(new)) {
             return Err(format!("the package already holds a file named {new} that is not one of its patches, so nothing was changed"));
         }
     }
@@ -129,7 +129,7 @@ fn commit(folder: &str, doc: &mut Value, mut entries: Vec<Value>, moves_from: Ve
         _ => Value::Null,
     };
     set_patches(doc, entries, patched);
-    match package::write(&dotnet_files::join(folder, package::FILE_NAME), doc) {
+    match package::write(&files::join(folder, package::FILE_NAME), doc) {
         Ok(Ok(())) => Ok(fits),
         Ok(Err(words)) => Err(words),
         Err(refusal) => Err(refusal.words().to_string()),
@@ -254,7 +254,7 @@ pub fn remove(ctx: &Context, folder: &str, n: usize) -> Outcome {
     // The removed file is set aside first, so that the rest may take its name.
     let aside = format!(".removing-{}", std::process::id());
     let gone_at = claims::under(folder, &gone_file);
-    let had = listing::inside(&gone_file) && dotnet_files::file_exists(&gone_at);
+    let had = listing::inside(&gone_file) && files::file_exists(&gone_at);
     if had && let Err(e) = std::fs::rename(&gone_at, claims::under(folder, &aside)) {
         return fail(&doc, format!("{gone_file}: {e}"));
     }

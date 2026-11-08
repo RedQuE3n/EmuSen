@@ -278,7 +278,7 @@ impl Client {
         let started = Instant::now();
         let mut sent = (0u16, 0u64);
         let done = |outcome, path: Option<String>, bytes, sha1, detail: String, sent: (u16, u64)| MediaAnswer { outcome, path, bytes, sha1, detail, took: started.elapsed(), code: sent.0, received: sent.1 };
-        if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
+        if !replace && emusen_galaxia::files::file_exists(target) {
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);
             return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new(), sent));
         }
@@ -355,14 +355,14 @@ impl Client {
                 MediaOutcome::TooSmall | MediaOutcome::TooLarge => format!("{length} bytes"),
                 _ => text.clone(),
             };
-            let path = (no == MediaOutcome::Unchanged && emusen_galaxia::dotnet_files::file_exists(target)).then(|| target.to_string());
+            let path = (no == MediaOutcome::Unchanged && emusen_galaxia::files::file_exists(target)).then(|| target.to_string());
             return Ok(done(no, path, if no == MediaOutcome::NotAnImage { length } else { 0 }, None, detail, sent));
         }
         if cancel.is_cancelled() {
             let _ = std::fs::remove_file(&temp);
             return Err(());
         }
-        if !replace && emusen_galaxia::dotnet_files::file_exists(target) {
+        if !replace && emusen_galaxia::files::file_exists(target) {
             let _ = std::fs::remove_file(&temp);
             let len = std::fs::metadata(target).map(|m| m.len()).unwrap_or(0);
             return Ok(done(MediaOutcome::AlreadyThere, Some(target.to_string()), len, None, String::new(), sent));

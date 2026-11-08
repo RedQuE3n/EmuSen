@@ -44,7 +44,7 @@ pub fn package_settings_path(package: &str) -> String {
 /// The file a game's values are read from, `GameSettings.ReadPath`: its package's where it has one, else the plain file.
 pub fn read_place(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>) -> Option<String> {
     match package.map(package_settings_path) {
-        Some(at) if emusen_galaxia::dotnet_files::file_exists(&at) => Some(at),
+        Some(at) if emusen_galaxia::files::file_exists(&at) => Some(at),
         _ => system.map(|s| game_settings_path(tree, s, game)),
     }
 }

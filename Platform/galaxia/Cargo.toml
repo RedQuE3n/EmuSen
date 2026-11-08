@@ -19,6 +19,8 @@ sha2 = "0.11"
 sha1 = "0.11"
 # A sheet's and a list's meaning, for the files an image brings beside it (image_sets.rs).
 emusen-disc = { path = "../../EmuSen/Cores/Shared/emusen-disc" }
+# A tree walked with its links followed (files.rs, EmuSen_RustPlatform.md §47.17).
+walkdir.workspace = true
 # Zips read: a game's, a package's, a core's download and the cheat database (archive.rs, EmuSen_RustPlatform.md §47.15).
 zip.workspace = true
 # The system's folder for a program's settings, on every system the project builds for (tree.rs).

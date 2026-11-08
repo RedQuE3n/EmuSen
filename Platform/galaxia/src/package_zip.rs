@@ -5,7 +5,7 @@
 //! EmuSen_GamePackages.md §3.4 and §19, and EmuSen_Galaxia.md §3.13.
 
 use crate::archive::{self, ZipWriter};
-use crate::dotnet_files;
+use crate::files;
 use crate::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
 use crate::package;
@@ -35,11 +35,11 @@ fn collect(dir: &str, prefix: &str, found: &mut Vec<(String, String)>) -> Result
     let listing = std::fs::read_dir(dir).map_err(|e| format!("{dir}: {e}"))?;
     for entry in listing.flatten() {
         let name = entry.file_name().to_string_lossy().into_owned();
-        if dotnet_files::is_hidden(&name) {
+        if files::is_hidden(&name) {
             continue;
         }
         let Ok(kind) = entry.file_type() else { continue };
-        let at = dotnet_files::join(dir, &name);
+        let at = files::join(dir, &name);
         let rel = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
         if kind.is_dir() {
             collect(&at, &rel, found)?;
@@ -54,7 +54,7 @@ fn collect(dir: &str, prefix: &str, found: &mut Vec<(String, String)>) -> Result
 /// renamed into place only when whole. The number of files and the zip's bytes.
 pub fn write(folder: &str, zip: &str, stop: &dyn Fn() -> bool) -> Result<(usize, u64), String> {
     let folder = path::trim_ending_separator(STYLE, folder).to_string();
-    if !dotnet_files::file_exists(&dotnet_files::join(&folder, package::FILE_NAME)) {
+    if !files::file_exists(&files::join(&folder, package::FILE_NAME)) {
         return Err(format!("{folder} holds no {}", package::FILE_NAME));
     }
     if std::fs::symlink_metadata(zip).is_ok() {
@@ -137,7 +137,7 @@ pub fn unpack(zip: &str, top: &str, target: &str, stop: &dyn Fn() -> bool) -> Re
     let parent = path::directory_name(STYLE, target).unwrap_or_default();
     std::fs::create_dir_all(&parent).map_err(|e| format!("{parent}: {e}"))?;
     let partial = path::combine(STYLE, &parent, &format!(".{}.partial-{}", path::file_name(STYLE, target), std::process::id()));
-    if dotnet_files::directory_exists(&partial) {
+    if files::directory_exists(&partial) {
         std::fs::remove_dir_all(&partial).map_err(|e| format!("{partial}: {e}"))?;
     }
     let done = (|| {
@@ -210,7 +210,7 @@ pub fn opened(packages: &str, zip: &str) -> Result<Option<String>, String> {
         return Err(format!("{zip} holds a package, and there is no Packages folder to unpack it into"));
     }
     let target = target(packages, zip, &top);
-    let manifest = dotnet_files::join(&target, package::FILE_NAME);
+    let manifest = files::join(&target, package::FILE_NAME);
     if std::fs::symlink_metadata(&target).is_ok() {
         return match package::read(&manifest) {
             Ok(Ok(there)) if same_game(&there, &doc) => Ok(Some(target)),

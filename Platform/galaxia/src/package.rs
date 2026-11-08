@@ -198,7 +198,7 @@ pub fn save_key(doc: &Value) -> Option<String> {
 
 /// `save_key` of the manifest in the package at `folder`; none where it lists no patches or does not read.
 pub fn save_key_at(folder: &str) -> Option<String> {
-    let doc = read(&crate::dotnet_files::join(folder, FILE_NAME)).ok()?.ok()?;
+    let doc = read(&crate::files::join(folder, FILE_NAME)).ok()?.ok()?;
     save_key(&doc)
 }
 

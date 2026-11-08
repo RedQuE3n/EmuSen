@@ -9,6 +9,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["preserve_order", "float_roundtrip"] }
 dirs = "7.0.0"
 strsim = "0.11.1"
+walkdir = "2.5.0"
 zip = { version = "9.4.1", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64"] }
 
 [workspace.package]

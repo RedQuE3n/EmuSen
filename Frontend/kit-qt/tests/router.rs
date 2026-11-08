@@ -102,3 +102,44 @@ fn kit_7_4_the_router_is_pending_only_while_an_event_waits_or_a_button_is_held()
     router.pump(Duration::from_millis(10));
     assert!(!router.pending(), "let go and applied");
 }
+
+// EmuSen_Kit.md §7.26: with the Guide chords on over a game, Guide alone opens the menu as it is let go, Guide with Up,
+// Down or the right shoulder is a chord and no menu, and Options with Menu open it at once only while Guide is up.
+#[test]
+fn kit_7_26_over_a_game_guide_is_read_for_its_chords() {
+    let mut router = Router::new(RepeatTiers::OWN);
+    router.set_chord_only(true);
+    router.set_guide_chords(true);
+    let mut at = 0;
+    let mut press = |router: &mut Router, button: UiButton, down: bool| {
+        router.push(PadEvent { button, down });
+        at += 16;
+        router.pump(ms(at))
+    };
+    let pumped = press(&mut router, UiButton::Guide, true);
+    assert!(!pumped.menu_chord, "Guide going down opens nothing yet");
+    let pumped = press(&mut router, UiButton::Up, true);
+    assert_eq!((pumped.guide_chord, pumped.menu_chord), (Some(UiButton::Up), false));
+    assert!(pumped.presses.is_empty(), "the chord is no press");
+    press(&mut router, UiButton::Up, false);
+    let pumped = press(&mut router, UiButton::PageDown, true);
+    assert_eq!(pumped.guide_chord, Some(UiButton::PageDown));
+    press(&mut router, UiButton::PageDown, false);
+    let pumped = press(&mut router, UiButton::Guide, false);
+    assert!(!pumped.menu_chord, "a chord made, so Guide let go opens nothing");
+
+    press(&mut router, UiButton::Guide, true);
+    let pumped = press(&mut router, UiButton::Guide, false);
+    assert!(pumped.menu_chord, "Guide alone opens the menu as it is let go");
+
+    press(&mut router, UiButton::Options, true);
+    let pumped = press(&mut router, UiButton::Menu, true);
+    assert!(pumped.menu_chord, "the two middle buttons open it at once");
+    press(&mut router, UiButton::Options, false);
+    press(&mut router, UiButton::Menu, false);
+
+    router.set_guide_chords(false);
+    let pumped = press(&mut router, UiButton::Guide, true);
+    assert!(pumped.menu_chord, "with the chords off Guide opens the menu as it goes down");
+    assert_eq!(press(&mut router, UiButton::Up, true).guide_chord, None);
+}

@@ -31,6 +31,8 @@ pub mod qobject {
         #[qproperty(bool, clock_running)]
         #[qproperty(bool, chord_only)]
         #[qproperty(bool, pending, READ, NOTIFY)]
+        /// Guide held with Up, Down or the right shoulder is a chord while a game owns the pad, and Guide alone opens the menu as it is let go.
+        #[qproperty(bool, guide_chords)]
         type PadRouter = super::PadRouterRust;
     }
 
@@ -58,6 +60,10 @@ pub mod qobject {
 
         #[qinvokable]
         fn is_held(self: &PadRouter, button: PadButton) -> bool;
+
+        /// Guide was held and `button` went down (Up, Down or the right shoulder) while a game owned the pad; what it means is the host's.
+        #[qsignal]
+        fn guide_chord(self: Pin<&mut PadRouter>, button: PadButton);
     }
 
     impl cxx_qt::Initialize for PadRouter {}
@@ -69,6 +75,7 @@ pub struct PadRouterRust {
     clock_running: bool,
     chord_only: bool,
     pending: bool,
+    guide_chords: bool,
     router: Router,
     started: Instant,
 }
@@ -81,6 +88,7 @@ impl Default for PadRouterRust {
             clock_running: true,
             chord_only: false,
             pending: false,
+            guide_chords: false,
             router: Router::new(RepeatTiers::OWN),
             started: Instant::now(),
         }
@@ -105,6 +113,12 @@ impl cxx_qt::Initialize for qobject::PadRouter {
             .on_chord_only_changed(|mut this| {
                 let on = this.chord_only;
                 this.as_mut().rust_mut().router.set_chord_only(on);
+            })
+            .release();
+        self.as_mut()
+            .on_guide_chords_changed(|mut this| {
+                let on = this.guide_chords;
+                this.as_mut().rust_mut().router.set_guide_chords(on);
             })
             .release();
     }
@@ -142,6 +156,9 @@ impl qobject::PadRouter {
         self.as_mut().update_pending();
         if pumped.menu_chord {
             self.as_mut().menu_chord();
+        }
+        if let Some(button) = pumped.guide_chord {
+            self.as_mut().guide_chord(kinds::pad_button(button));
         }
         for press in pumped.presses {
             let jump = i32::try_from(press.jump).unwrap_or(i32::MAX);

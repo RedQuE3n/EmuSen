@@ -161,6 +161,8 @@ fn qt_1_7_the_swap_trades_accept_and_back_and_the_declined_press_becomes_a_key()
     assert_eq!(UiButton::Menu.key(), Some(Key::Menu));
     assert_eq!(UiButton::Options.key(), Some(Key::Select));
     assert_eq!(UiButton::Guide.key(), None);
+    assert_eq!([UiButton::PageUp, UiButton::PageDown, UiButton::First, UiButton::Last].map(UiButton::key),
+        [Some(Key::PageUp), Some(Key::PageDown), Some(Key::Home), Some(Key::End)], "a card's shoulders and triggers reach its row (EmuSen_Kit.md §7.26)");
 }
 
 #[test]
@@ -346,4 +348,30 @@ fn a_screen_s_actions_read_from_lines_with_buttons_by_name() {
     assert_eq!(keys, vec![("favourites", Some(UiButton::Search)), ("random", Some(UiButton::Screensaver))]);
     assert!(actions.iter().all(|a| a.enabled));
     assert!(UiButton::ALL.iter().all(|b| UiButton::named(&format!("{b:?}")) == Some(*b)));
+}
+
+#[test]
+fn kit_7_26_guide_chords_read_as_mistress_reads_them() {
+    use emusen_kit_core::input::{GuideChord, GuideChords};
+    let mut r = GuideChords::default();
+    let feed = |r: &mut GuideChords, buttons: &[UiButton]| r.feed(|b| buttons.contains(&b));
+    let (g, up, down, r1) = (UiButton::Guide, UiButton::Up, UiButton::Down, UiButton::PageDown);
+    assert_eq!(feed(&mut r, &[g]), None);
+    assert_eq!(feed(&mut r, &[]), Some(GuideChord::Alone), "Guide let go alone");
+    assert_eq!(feed(&mut r, &[]), None);
+
+    assert_eq!(feed(&mut r, &[g]), None);
+    assert_eq!(feed(&mut r, &[g, up]), Some(GuideChord::With(up)));
+    assert_eq!(feed(&mut r, &[g, up]), None, "held, not chorded again");
+    assert_eq!(feed(&mut r, &[g, down]), Some(GuideChord::With(down)));
+    assert_eq!(feed(&mut r, &[g, r1]), Some(GuideChord::With(r1)));
+    assert_eq!(feed(&mut r, &[]), None, "a chord made, so Guide let go opens nothing");
+
+    assert_eq!(feed(&mut r, &[g, up]), None, "a button already down when Guide went down is no chord");
+    assert_eq!(feed(&mut r, &[g, up]), None);
+    assert_eq!(feed(&mut r, &[up]), Some(GuideChord::Alone));
+
+    r.reset(true);
+    assert_eq!(feed(&mut r, &[]), None, "a Guide held across a menu opens nothing when let go");
+    assert_eq!(feed(&mut r, &[g, UiButton::Left]), None, "Left is no chord");
 }

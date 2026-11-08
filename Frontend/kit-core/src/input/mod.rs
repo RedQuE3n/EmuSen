@@ -4,10 +4,12 @@ mod button;
 mod control;
 mod event;
 mod grammar;
+mod guide;
 mod walk;
 
 pub use button::{Key, UiButton};
 pub use control::PadControl;
 pub use event::{ElementId, InputEvent, Intent, PointerButton, intent};
 pub use grammar::{FastTier, Grammar, Press, RepeatTiers, STICK_THRESHOLD, TRIGGER_THRESHOLD, stick_direction};
+pub use guide::{GuideChord, GuideChords};
 pub use walk::{Role, Walk, WalkAction, WalkEvent, WalkForm};

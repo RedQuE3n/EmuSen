@@ -1825,7 +1825,7 @@ Module {
     }
     Component {
         file: "pad.cxxqt.h"
-        lineNumber: 77
+        lineNumber: 95
         name: "PadRouter"
         accessSemantics: "reference"
         prototype: "QObject"
@@ -1840,7 +1840,7 @@ Module {
             write: "setTiers"
             notify: "tiersChanged"
             index: 0
-            lineNumber: 83
+            lineNumber: 101
         }
         Property {
             name: "swapAcceptBack"
@@ -1849,7 +1849,7 @@ Module {
             write: "setSwapAcceptBack"
             notify: "swapAcceptBackChanged"
             index: 1
-            lineNumber: 84
+            lineNumber: 102
         }
         Property {
             name: "clockRunning"
@@ -1858,7 +1858,7 @@ Module {
             write: "setClockRunning"
             notify: "clockRunningChanged"
             index: 2
-            lineNumber: 85
+            lineNumber: 103
         }
         Property {
             name: "chordOnly"
@@ -1867,7 +1867,7 @@ Module {
             write: "setChordOnly"
             notify: "chordOnlyChanged"
             index: 3
-            lineNumber: 86
+            lineNumber: 104
         }
         Property {
             name: "pending"
@@ -1875,59 +1875,79 @@ Module {
             read: "getPending"
             notify: "pendingChanged"
             index: 4
-            lineNumber: 87
+            lineNumber: 105
             isReadonly: true
         }
-        Signal { name: "tiersChanged"; lineNumber: 101 }
-        Signal { name: "swapAcceptBackChanged"; lineNumber: 102 }
-        Signal { name: "clockRunningChanged"; lineNumber: 103 }
-        Signal { name: "chordOnlyChanged"; lineNumber: 104 }
-        Signal { name: "pendingChanged"; lineNumber: 105 }
+        Property {
+            name: "guideChords"
+            type: "bool"
+            read: "getGuideChords"
+            write: "setGuideChords"
+            notify: "guideChordsChanged"
+            index: 5
+            lineNumber: 106
+        }
+        Signal { name: "tiersChanged"; lineNumber: 122 }
+        Signal { name: "swapAcceptBackChanged"; lineNumber: 123 }
+        Signal { name: "clockRunningChanged"; lineNumber: 124 }
+        Signal { name: "chordOnlyChanged"; lineNumber: 125 }
+        Signal { name: "pendingChanged"; lineNumber: 126 }
+        Signal { name: "guideChordsChanged"; lineNumber: 127 }
         Signal {
             name: "pressed"
-            lineNumber: 110
+            lineNumber: 132
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
-        Signal { name: "menuChord"; lineNumber: 111 }
+        Signal { name: "menuChord"; lineNumber: 133 }
+        Signal {
+            name: "guideChord"
+            lineNumber: 134
+            Parameter { name: "button"; type: "Pad::PadButton" }
+        }
         Method {
             name: "setTiers"
-            lineNumber: 93
+            lineNumber: 112
             Parameter { name: "value"; type: "Repeat::Tiers" }
         }
         Method {
             name: "setSwapAcceptBack"
-            lineNumber: 95
+            lineNumber: 114
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setClockRunning"
-            lineNumber: 97
+            lineNumber: 116
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "setChordOnly"
-            lineNumber: 99
+            lineNumber: 118
+            Parameter { name: "value"; type: "bool" }
+        }
+        Method {
+            name: "setGuideChords"
+            lineNumber: 121
             Parameter { name: "value"; type: "bool" }
         }
         Method {
             name: "push"
-            lineNumber: 106
+            lineNumber: 128
             Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "down"; type: "bool" }
         }
-        Method { name: "pump"; lineNumber: 107 }
+        Method { name: "pump"; lineNumber: 129 }
         Method {
             name: "pumpAt"
-            lineNumber: 108
+            lineNumber: 130
             Parameter { name: "now_ms"; type: "int" }
         }
         Method {
             name: "isHeld"
             type: "bool"
             isMethodConstant: true
-            lineNumber: 109
+            lineNumber: 131
             Parameter { name: "button"; type: "Pad::PadButton" }
         }
     }

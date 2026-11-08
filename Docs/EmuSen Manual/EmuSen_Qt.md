@@ -1706,7 +1706,8 @@ owed with Rewind's page); Mistress's status line counted "0 controllers" while i
    only when the window has been still for 0.1 s, and Home now presents frames continuously (its sky's
    `FrameAnimation`, present before the fix from 2.5 s on), so the rule waits its full 5 s. Two runs pressing as Home
    stood measured the answer from the focus log instead: pressed at 0.325 and 0.353 s, the focus on the next place at
-   0.345 and 0.369 s.
+   0.345 and 0.369 s. (The continuous frames were two causes, the sky's clock and the game picture's loop, fixed in
+   §9.3.2; since then the driver's own rule answers at 0.65 to 0.70 s on its first attempt.)
 - *The real path's bare sky on Moonrise* was the start's stop of finding 1 (no frame for 2 s from 0.66 s) after a clock held until the
    systems arrived. The clock now runs from the first frame (§7.1); the systems arrive within 2 to 15 ms (timed over the
    real library), long before the row of worlds at 1.78 s. Grabs at 0.62, 1.17, 2.23, 3.30 and 5.37 s after the start
@@ -1732,6 +1733,79 @@ fan equal to `games_of` at 9,000 games), `qt-models/tests/session.rs`'s shape te
 1,280 × 800, and `qt-play`'s read-back over the picture's own item. Seeded faults, each reverted: the fan over the whole
 row failed the scale test (9,000 fanned); the view's move dropped failed it (cover 10 below the view); the declared
 aspect ignored failed the shape test (1.143 for 1.333); the clock held for the systems failed the first-frame test.
+
+#### 9.3.2 A still screen is not drawn again **[M 2026-11-08]**
+
+§9.3 requires that an unchanged scene is not re-rendered and that the sky's glow animates only while the focus moves
+(`EmuSen_Interface.md` §24: Moonrise's stars held still, one glow that follows the focus). §9.3.1's runs found the
+opposite: Home presented about 54 frames a second while nothing on it changed.
+
+**Mechanism.** Three causes, each proved before it was fixed:
+
+1. *The sky's clock.* Through the harness (offscreen, the software backend), the window's `frameSwapped` counted over
+   2 s once the focus had settled, with every running animation under the window's items listed: Home 124 frames,
+   Choose a console 125 to 158, the grid 159 to 160, and on every screen one running animation, the `FrameAnimation`
+   of that screen's `Sky` (`homeSky`, `consolesSky`, `gridSky`). It ran whenever the sky was visible and ticked the
+   stars' twinkle into all 220 rows, so every tick changed the scene. The standalone Pause Card scene was already still.
+2. *A hidden list's highlight.* With the sky's clock stopped, Home still swapped 55 frames in its first 2 s. An item
+   tree read every 150 ms showed one item changing: the invisible highlight of the Pause Card's `PadMenuList`, its
+   width growing from −80 to 424 over about 1.3 s, which is `ListView`'s default `highlightResizeVelocity` of 400 pixels
+   a second. The views set `highlightMoveDuration` to the instant token but left the resize at its default; Qt's own
+   highlight animation is private to the view, so it runs while the card is hidden and is in no list of animations.
+3. *The game picture's loop.* In the real window (virtual KWin, Vulkan, the gates' `run.sh` with Qt's render-loop log,
+   `qt.scenegraph.time.renderloop`) the build with causes 1 and 2 fixed still rendered 54 to 55 frames a second on all
+   four screens, one "frame rendered" line for each buffer commit. `GamePicture` asks for the next frame at every
+   `frameSwapped` while `live` (`EmuSen_Kit.md` §7.16), and `Game.qml` set `live` whenever the window had a feed, which
+   it has from the start whether or not a game runs; so once any frame was drawn, each swap asked for the next, under
+   the library with no game, under the Pause Card over a paused one, and behind Home over a suspended one. The harness
+   has no feed, which is why only the real window showed it.
+
+**Fixes.** A screen's stars hold still at their twinkle for time 0, as `LunaSky` draws them, and the sky's
+`FrameAnimation` runs only while kit-core's glow is not settled (`Sky.glowSettled`, `EmuSen_Kit.md` §7.5); Moonrise's
+stars twinkle for the splash's length only, as before. The kit's `MenuPanel`, the style's `Menu` and `ComboBox` and the
+Pause Card's list set `highlightResizeDuration` to the instant token beside `highlightMoveDuration`. `Game.qml` keeps the
+picture `live` only while the session runs unpaused; paused, its last picture stands. Since no swap then comes while a
+game is paused, the frame thread restarts its display clock as the game pauses (`DisplayClock::restart`, the clock as
+new, §1.8.3), so the pause is not read as one long period; the first swaps after the resume read the period afresh.
+
+**Re-measured** in the same virtual KWin with the same script (`runs/idle-before-qt`, `pause-before-qt`; after:
+`runs/idle-r1-*`, `idle-r2-*`, `pause-after-qt`, `idle-cost-*`), frames presented in 5 s spans 3 s after each arrival:
+
+| | Before (the gates' fixed build, `d7cb1000a`) | After, round 1 | After, round 2 |
+|---|---|---|---|
+| Home, idle | 55.0 a second (fix-r1/r2 startup: 54.8, 54.3) | 0 | 0 |
+| Choose a console, idle | 54.6 | 0 | 0 |
+| Choose a console on a planet, idle | 54.8 | 0 | 0 |
+| The grid, idle | 54.8 | 0 | 0 |
+| The Pause Card over a paused Super Nintendo game | 54.4 | 0 | |
+| Start to the first press answered (the driver presses once the window is still 0.1 s) | waits its 5 s | 0.696 s, first attempt | 0.648 s, first attempt |
+| The grid, Down held 24.4 s: median, worst interval | 16.6, 17.0 ms; 82.6, 70.0 ms | 17.0 ms; 81.8 ms | 17.0 ms; 74.6 ms |
+| The grid: frames presented, intervals over 50 ms | 1,335, 1,331; 42, 45 | 1,296; 58 | 1,290; 59 |
+
+The render-loop counts matched the protocol log's commits frame for frame in every span. The scroll is no slower: one
+more round each with the render-loop log (`idle-cost-before-qt`, `idle-cost-after-qt`) gave a frame's work on the GUI
+thread (polish, lock, sync, animations) at most 3 ms and the render thread's at most 2 ms both before and after, with the
+worst interval 68.4 against 75.5 ms. The after build presents about 40 fewer frames and 15 more intervals over 50 ms; read
+as steps where nothing moved (the glow keeps its hue between covers of one console), which before were filled by the
+sky's frames; not traced frame by frame.
+
+**Held to.** The harness counts `frameSwapped` and lists running animations (`EmuSen_Kit.md` §7.9); `Scene::assert_still`
+waits for the animations to stop (within `SETTLE_MS`) and then requires no frame for 2 s. `qt-app/tests/idle.rs` holds
+Home, Choose a console and the grid still after the focus settles, and requires the glow to ease (frames and a running
+animation within 100 ms) after Down and Right on Choose a console; `pause.rs` holds the card still once in place;
+`acceptance.rs`, on Vulkan over a real session, holds the Pause Card over the paused game and Home over the suspended
+one still, and requires the resumed game to be drawn again (over 10 frames in 0.5 s); `kit-qt/tests/stars.rs` holds a
+screen's stars to their time-0 twinkle, the splash's moving, and the glow settled after Pan; `platform-client/tests/pace.rs`
+holds a restarted clock to no period across a 5 s pause. Seeded faults, each reverted: the sky's clock running whenever
+visible failed `idle.rs` (the `FrameAnimation` in `homeSky` running); a screen's stars twinkling on the clock failed the
+stars test; `glowSettled` never announced failed `idle.rs`; the Pause Card's resize left at its default failed
+`idle.rs` (55 frames in 2 s on Home); the picture `live` under a paused game failed `acceptance.rs` (120 frames in 2 s
+at the Pause Card).
+
+**Seen, not changed.** Each `Frame` (and `Game.qml` while the game is in front) runs an 8 ms `Timer` that pumps the pad
+router while it has the focus, waking the GUI thread 125 times a second at an idle screen. It draws nothing (the counts
+above), and it is the router's repeat clock, so it is left as it is; whether it should sleep until a pad event is a
+question for the router (`EmuSen_Kit.md` §7.4).
 
 ---
 

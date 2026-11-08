@@ -447,3 +447,58 @@ QString harness_colours_at(QObject& window, const QString& points)
     }
     return colours.join(QLatin1Char(';'));
 }
+
+// The frames the window has swapped since the first call, counted at Qt's own frameSwapped (EmuSen_Qt.md §9.3.2).
+std::uint64_t harness_frames(QObject& window)
+{
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return 0;
+    }
+    if (!w->property("harnessFrames").isValid()) {
+        w->setProperty("harnessFrames", QVariant::fromValue<qulonglong>(0));
+        QObject::connect(w, &QQuickWindow::frameSwapped, w, [w] { w->setProperty("harnessFrames", w->property("harnessFrames").toULongLong() + 1); });
+    }
+    return w->property("harnessFrames").toULongLong();
+}
+
+namespace {
+
+// An animation running, an item's own or inside one of its objects (a Behavior's), not inside a child item.
+bool animating(QObject* object)
+{
+    return (object->inherits("QQuickFrameAnimation") || object->inherits("QQuickAbstractAnimation")) && object->property("running").toBool();
+}
+
+// Each running animation under an item, as "Class in name", the name its nearest named item's.
+void runningUnder(QQuickItem* item, const QString& named, QStringList& out)
+{
+    const QString here = item->objectName().isEmpty() ? named : item->objectName();
+    for (QObject* object : item->findChildren<QObject*>(Qt::FindDirectChildrenOnly)) {
+        if (qobject_cast<QQuickItem*>(object) != nullptr) {
+            continue;
+        }
+        QList<QObject*> inside = object->findChildren<QObject*>();
+        inside.prepend(object);
+        for (QObject* each : inside) {
+            if (animating(each)) {
+                out.append(QString::fromLatin1(each->metaObject()->className()) + QLatin1String(" in ") + here);
+            }
+        }
+    }
+    for (QQuickItem* child : item->childItems()) {
+        runningUnder(child, here, out);
+    }
+}
+
+}
+
+QString harness_running(QObject& window)
+{
+    QStringList out;
+    if (QQuickWindow* w = quick(window)) {
+        runningUnder(w->contentItem(), QString(), out);
+    }
+    out.removeDuplicates();
+    return out.join(QLatin1Char('\n'));
+}

@@ -70,6 +70,7 @@ T.ComboBox {
             model: control.delegateModel
             currentIndex: control.highlightedIndex
             highlightMoveDuration: Kit.Tokens.instant
+            highlightResizeDuration: Kit.Tokens.instant
             T.ScrollBar.vertical: ScrollBar {}
         }
         background: Rectangle {

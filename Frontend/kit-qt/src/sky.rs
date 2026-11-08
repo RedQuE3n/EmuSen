@@ -61,6 +61,7 @@ pub mod qobject {
         #[qproperty(f64, stop2_at, READ, NOTIFY)]
         #[qproperty(QColor, stop2_ink, READ, NOTIFY)]
         #[qproperty(bool, glow_visible, READ, NOTIFY)]
+        #[qproperty(bool, glow_settled, READ, NOTIFY)]
         #[qproperty(f64, glow_center_x, READ, NOTIFY)]
         #[qproperty(f64, glow_center_y, READ, NOTIFY)]
         #[qproperty(f64, glow_radius_x, READ, NOTIFY)]
@@ -136,6 +137,7 @@ pub struct StarFieldRust {
     stop2_at: f64,
     stop2_ink: QColor,
     glow_visible: bool,
+    glow_settled: bool,
     glow_center_x: f64,
     glow_center_y: f64,
     glow_radius_x: f64,
@@ -174,6 +176,7 @@ impl Default for StarFieldRust {
             stop2_at: 0.0,
             stop2_ink: QColor::default(),
             glow_visible: false,
+            glow_settled: true,
             glow_center_x: 0.0,
             glow_center_y: 0.0,
             glow_radius_x: 0.0,
@@ -221,6 +224,7 @@ impl StarFieldRust {
             }
             None => self.glow_visible = false,
         }
+        self.glow_settled = self.state.glow_settled(self.now());
     }
 }
 
@@ -232,7 +236,8 @@ impl cxx_qt::Initialize for qobject::StarField {
         self.as_mut().on_width_changed(|this| this.redraw()).release();
         self.as_mut().on_height_changed(|this| this.redraw()).release();
         self.as_mut().on_stars_opacity_changed(|this| this.redraw()).release();
-        self.as_mut().on_time_changed(|this| this.redraw()).release();
+        // Only the splash's stars move with the clock; a screen's hold still, so a tick moves the glow alone.
+        self.as_mut().on_time_changed(|this| if this.state.twinkles() { this.redraw() } else { this.announce_glow() }).release();
         self.as_mut()
             .on_glow_hue_changed(|mut this| {
                 let (hue, now) = (this.glow_hue, this.now());
@@ -299,8 +304,11 @@ impl qobject::StarField {
     }
 
     fn announce_glow(mut self: Pin<&mut Self>) {
-        let shown = self.glow_visible;
+        let (shown, settled) = (self.glow_visible, self.glow_settled);
         self.as_mut().rust_mut().read_glow();
+        if self.glow_settled != settled {
+            self.as_mut().glow_settled_changed();
+        }
         if self.glow_visible != shown {
             self.as_mut().glow_visible_changed();
         }

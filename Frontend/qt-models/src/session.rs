@@ -143,6 +143,8 @@ fn run(
             input.set_owned(!held);
         }
         if held && !was_held {
+            // No swap comes while the picture is still, so the display clock starts over rather than read the pause as a period (EmuSen_Qt.md §9.3.2).
+            clock.restart();
             // A game that stops playing for a while starts its rate control over, as Mistress's does.
             if let Some(Err(e)) = sound.as_mut().map(GameSound::reset) {
                 *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());

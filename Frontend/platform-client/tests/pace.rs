@@ -1,6 +1,6 @@
 //! Serenity's display clock through the library (EmuSen_Qt.md §1.8.3): swaps at 60 Hz give their period, a game within a
-//! hundredth of it locks to the display, one at 50 Hz does not, swaps seen together count one period each, and a look
-//! before any swap is no sample.
+//! hundredth of it locks to the display, one at 50 Hz does not, swaps seen together count one period each, a look
+//! before any swap is no sample, and a restarted clock reads nothing across a pause.
 
 use emusen_client_fixture::library;
 use emusen_platform_client::pace::DisplayClock;
@@ -24,4 +24,19 @@ fn the_display_clock_reads_the_period_and_locks_a_game_within_a_hundredth_of_it(
     assert!(!clock.locks(20_000_000).unwrap(), "a 50 Hz game runs on its own clock");
     clock.saw(12, 1_000_000_000 + 12 * 16_666_667).unwrap();
     assert!((clock.period_ns() - 16_666_667.0).abs() < 1.0, "two swaps between looks are one period each");
+}
+
+#[test]
+fn a_restarted_clock_reads_no_period_across_a_pause() {
+    let platform = Platform::load(library()).unwrap();
+    let mut clock = DisplayClock::new(&platform);
+    for n in 1..=10u64 {
+        clock.saw(n, n as i64 * 16_666_667).unwrap();
+    }
+    // Paused for five seconds with the picture still: no swap, so the clock starts over.
+    clock.restart();
+    assert!(!clock.locks(16_666_667).unwrap(), "no swap seen since the restart");
+    clock.saw(11, 10 * 16_666_667 + 5_000_000_000).unwrap();
+    clock.saw(12, 11 * 16_666_667 + 5_000_000_000).unwrap();
+    assert!((clock.period_ns() - 16_666_667.0).abs() < 1.0, "the pause is no period: {}", clock.period_ns());
 }

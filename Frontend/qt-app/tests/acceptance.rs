@@ -417,6 +417,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     };
     chord(&mut scene);
     pause_card(&mut scene, &mut report);
+    scene.assert_still("the Pause Card over the paused game");
 
     // B resumes the game once the card has slid away; the chord opens it again, and Leave ▸ Back to Library is Home over
     // the paused game, as the render's.
@@ -440,10 +441,14 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(shown(&mut scene, "continueFrame") && !shown(&mut scene, "continueArt"), "Continue shows the paused frame");
     assert!(shown(&mut scene, "continueHeading"));
     hold(&mut scene, "Home", &mockup_of("Home"), &mut report);
+    scene.assert_still("Home over the suspended game");
 
     // Continue resumes the game; closed, Home has no Continue again and the shelf leads with it.
     scene.pad(UiButton::Accept);
     until(&mut scene, "Continue resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
+    let before = scene.frames();
+    scene.wait(500);
+    assert!(scene.frames() - before > 10, "the resumed game drawn at the display's rate: {} frames in 0.5 s", scene.frames() - before);
     assert!(scene.set_property("game", "game", ""));
     until(&mut scene, "the game closed and Home shown", |s| s.property("session", "running") == "false" && s.property("screens", "shown") == "Home");
     until(&mut scene, "Continue gone", |s| !shown(s, "continueHeading"));

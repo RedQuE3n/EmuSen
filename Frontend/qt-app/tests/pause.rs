@@ -95,6 +95,7 @@ fn the_card_slides_in_shows_mistresss_first_page_and_resumes() {
     );
     assert_eq!(help(&mut scene), ["Select", "Resume", "Screenshot", "Resume"]);
     assert_eq!(scene.property("PadMenuList", "currentIndex"), "0", "the card opens on Resume");
+    scene.assert_still("the Pause Card in place");
 
     // Leave turns the page: no motion, its one row, the game as the way back; B returns to Leave's row.
     for _ in 0..6 {

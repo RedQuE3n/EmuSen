@@ -33,6 +33,8 @@ pub mod ffi {
         fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
         fn harness_colours_at(window: Pin<&mut QObject>, points: &QString) -> QString;
         fn harness_hide_words(window: Pin<&mut QObject>, hidden: bool);
+        fn harness_frames(window: Pin<&mut QObject>) -> u64;
+        fn harness_running(window: Pin<&mut QObject>) -> QString;
         fn harness_difference(
             window: Pin<&mut QObject>,
             reference: &QString,

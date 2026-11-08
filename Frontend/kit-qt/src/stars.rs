@@ -41,11 +41,14 @@ impl SkyState {
         }
     }
 
-    /// The stars at a time for a screen size, into the buffer: a screen's at its height over 800, the splash's as LunaSplash
-    /// draws them, at its height over 720 and its own size.
+    /// The stars at a time for a screen size, into the buffer: a screen's at its height over 800 and held still at their
+    /// twinkle for time 0, as LunaSky draws them; the splash's twinkling as LunaSplash draws them, at its height over 720.
     pub fn tick(&mut self, time: f64, size: Point, opacity: f64) {
-        let (unit, scale) =
-            if self.moonrise { (size[1] / world::UNIT, world::SPLASH_STAR_SIZE) } else { (size[1] / world::DESIGN_HEIGHT, STAR_SIZE) };
+        let (unit, scale, time) = if self.moonrise {
+            (size[1] / world::UNIT, world::SPLASH_STAR_SIZE, time)
+        } else {
+            (size[1] / world::DESIGN_HEIGHT, STAR_SIZE, 0.0)
+        };
         world::star_points(&self.stars, size, unit, scale, opacity, time, &mut self.points);
     }
 
@@ -55,6 +58,16 @@ impl SkyState {
 
     pub fn set_glow_centre(&mut self, centre: Point, now: Duration) {
         self.glow.set_centre(centre, now);
+    }
+
+    /// Whether the glow has nothing left to ease: its hue, strength and centre all at rest.
+    pub fn glow_settled(&self, now: Duration) -> bool {
+        self.glow.is_settled(now)
+    }
+
+    /// Whether a later time draws different stars: only the splash's twinkle.
+    pub fn twinkles(&self) -> bool {
+        self.moonrise
     }
 
     pub fn glow_at(&self, now: Duration, size: Point) -> Option<GlowDrawn> {

@@ -404,6 +404,15 @@ data, the framework drawing it. So the kit's own part is a model, not a renderer
   gradient is circular) and a `FrameAnimation` calling `tick` while `animating`. *[own, because the per-tick update of
   220 rows is a cost to measure: 220 opacity bindings a frame; if it shows on the handheld, the stars become one
   `QSGGeometryNode` behind a GPU-only path with the software backend keeping the rectangles.]*
+  **Still when nothing moves** (2026-11-08, `EmuSen_Qt.md` §9.3.2). A screen's stars hold still, each at its twinkle for
+  time 0, as LunaP's `LunaSky` draws them (LunaP §221.2; `SkyState::tick` ignores the clock unless the sky is
+  Moonrise's, and a tick of a screen's sky announces the glow alone, not the 220 rows). `glowSettled` (read-only, on
+  `StarField` and `Sky`) is kit-core's `SkyGlow::is_settled` at the clock's time, and the `FrameAnimation` runs only
+  while it is false, so the clock runs while the glow eases after a focus move and stops when it is at rest. The clock is
+  the sum of the animation's `frameTime`s, not its `elapsedTime`, because `elapsedTime` starts again from zero at each
+  start (measured with Qt 6.11.2: frame 0 after a restart reads 0.016 s), which would put the clock before the glide it
+  is easing. Moonrise's own `Sky` stays `animating: false` with the splash's time bound in, so its stars twinkle for the
+  splash's length and stop with it.
 - **`MoonriseModel` and `Moonrise.qml`.** The model holds the splash's bodies (`addBody(name, hue, shape, craters,
   bands, cap, ring, moons)`, `clearBodies`), places `Splash` from `Timeline::MOONRISE` at the first tick after a change,
   and on `tick(seconds)` reads `Splash::frame` into read-only properties (the moon's centre, radius, halo, outline
@@ -550,6 +559,11 @@ gallery and the program's window share one copy; `pad_chord_only` reads whether 
 - **C++**: `cpp/harness.cpp` and `harness.h`, the tree dump and QTest's verbs (`mouseClick`, `keyClick`, a wheel event,
   `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton). QTest's mouse, keyboard and
   window helpers are declared only under `QT_GUI_LIB`, which CMake defines and cc-rs does not, so the file defines it.
+  Since 2026-11-08 also a count of the window's `frameSwapped` (kept as a dynamic property on the window, connected at
+  the first read) and a list of the animations running under the items (`QQuickFrameAnimation` and
+  `QQuickAbstractAnimation` with `running` true, each named by its nearest named item), which `Scene::frames`,
+  `Scene::running` and `Scene::assert_still` read (`EmuSen_Qt.md` §9.3.2). A view's own highlight animations are
+  private to Qt and not in the list; the frame count still sees them.
 
 **What the harness found in the kit** on 2026-11-07, each fixed in the kit, not the test: a help-bar button took the
 focus on a click, so the row it was meant to act on lost it (`focusPolicy: Qt.NoFocus`); a sheet took the focus out of
@@ -1195,7 +1209,8 @@ graph's own device, and says when each frame was swapped.
 - **`GamePicture`** (`cpp/game_picture.h`, `.cpp`), an item of `EmuSen.Kit` 1.0, registered from its `QML_ELEMENT` by the
   module's own type registration. Two properties: `feed`, the address of a host's `EmuSenPictureFeed` (a number, since
   QML carries no native pointer and a QML-made element cannot be handed a Rust value), and `live`, which keeps the item
-  redrawn at every swap. At the item's sync, on the render thread with the GUI thread held, it asks the feed to draw for
+  redrawn at every swap (so a host sets it only while its game runs unpaused: set always, every swap asks for the
+  next and the window never rests, `EmuSen_Qt.md` §9.3.2). At the item's sync, on the render thread with the GUI thread held, it asks the feed to draw for
   its size in pixels and wraps the image the feed names with `QNativeInterface::QSGVulkanTexture::fromNative` in a
   `QSGSimpleTextureNode`, made again only when the image or its size changes: no copy and no upload. Each
   `frameSwapped`, on the render thread, it hands the steady clock's nanoseconds to the feed and, while `live`, asks

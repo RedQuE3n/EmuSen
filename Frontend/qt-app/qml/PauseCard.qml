@@ -198,6 +198,7 @@ FocusScope {
                     keyNavigationEnabled: true
                     keyNavigationWraps: false
                     highlightMoveDuration: Kit.Tokens.instant
+                    highlightResizeDuration: Kit.Tokens.instant
                     Accessible.role: Accessible.List
                     delegate: Kit.MenuRow {
                         id: row

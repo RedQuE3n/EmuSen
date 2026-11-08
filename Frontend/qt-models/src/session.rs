@@ -3,8 +3,9 @@
 //! puts it on Qt.
 
 use crate::input::GameInput;
-use crate::picture::{Frame, Handoff};
+use crate::picture::{Frame, Handoff, Source};
 use emusen_crystal_client::shapes::SessionId;
+use emusen_crystal_client::FrameInfo;
 use emusen_crystal_client::{frame_info, Open, Runtime};
 use emusen_platform_client::audio::GameSound;
 use std::ptr::NonNull;
@@ -96,7 +97,10 @@ impl Session {
         let thread = std::thread::spawn({
             let control = control.clone();
             move || {
-                let open = Open { path: Some(path), engine, device: NonNull::new(device as *mut std::ffi::c_void), ..Open::default() };
+                let device = NonNull::new(device as *mut std::ffi::c_void);
+                // A machine whose core draws on a ring of its own is lent one wherever the window has a device (§1.8.7).
+                let flags = if device.is_some() { emusen_crystal_client::consts::OPEN_RING } else { 0 };
+                let open = Open { flags, path: Some(path), engine, device, ..Open::default() };
                 run(&runtime, open, &handoff, io, &control, &report)
             }
         });
@@ -186,17 +190,18 @@ fn run(
             break;
         }
         let mut handed = false;
-        if info.rendered != 0 && info.width > 0 && info.height > 0 {
-            frame.rgba.resize(info.width as usize * info.height as usize * 4, 0);
-            if runtime.picture_copy(session, &mut frame.rgba).is_ok() {
-                (frame.width, frame.height, frame.row_repeat, frame.serial) =
-                    (info.width, info.height, info.row_repeat.max(1), info.picture_serial);
-                taken = handoff.taken();
-                handoff.hand_over(&mut frame);
-                handed = true;
-                if std::mem::take(&mut first) {
-                    report(Report::FirstPicture { after: started.elapsed() });
-                }
+        if info.rendered != 0 && info.width > 0 && info.height > 0 && take_picture(runtime, session, &info, &mut frame) {
+            taken = handoff.taken();
+            let on_device = frame.source != Source::Pixels;
+            handoff.hand_over(&mut frame);
+            handed = true;
+            if std::mem::take(&mut first) {
+                report(Report::FirstPicture { after: started.elapsed() });
+            }
+            // A picture on the device is drawn before the machine runs again, so a frame never waits on a ring slot
+            // nobody takes and no lend or ring is remade under a picture still to be drawn (§1.8.7).
+            while on_device && handoff.taken() <= taken && !stop.load(Ordering::Relaxed) {
+                handoff.wait_taken(taken, SWAP_BOUND);
             }
         }
         if let Err(words) = play_sound(runtime, session, &mut audio, sound.as_mut(), &control.sounded) {
@@ -224,12 +229,34 @@ fn run(
         }
     }
     handoff.set_running(false);
+    handoff.withdraw();
     drop(input);
     let _ = runtime.close(session);
     match failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
         Some(words) => report(Report::Failed(words)),
         None => report(Report::Closed),
     }
+}
+
+/// The frame's picture into `frame`: where the machine left it on the device (its ring's slot, or its lend), else its
+/// pixels read back; false where none could be had.
+fn take_picture(runtime: &Runtime, session: SessionId, info: &FrameInfo, frame: &mut Frame) -> bool {
+    let ring = (info.picture_in_ring != 0).then(|| runtime.picture_ring(session)).flatten();
+    let lend = (info.picture_on_device != 0).then(|| runtime.picture_lend(session)).flatten();
+    frame.source = match (ring, lend) {
+        (Some(ring), _) => Source::Ring { ring: ring.as_ptr() as usize, slot: info.ring_slot, value: info.ring_value },
+        (None, Some(lend)) => Source::Lent(lend.as_ptr() as usize),
+        (None, None) => {
+            frame.rgba.resize(info.width as usize * info.height as usize * 4, 0);
+            if runtime.picture_copy(session, &mut frame.rgba).is_err() {
+                return false;
+            }
+            Source::Pixels
+        }
+    };
+    (frame.width, frame.height, frame.serial) = (info.width, info.height, info.picture_serial);
+    frame.row_repeat = if frame.source == Source::Pixels { info.row_repeat.max(1) } else { 1 };
+    true
 }
 
 /// The frame's sound drained and handed to the player (EmuSen_Qt.md §1.8.6); with none, drained and dropped.

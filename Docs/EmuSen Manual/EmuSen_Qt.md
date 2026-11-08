@@ -618,6 +618,32 @@ took exactly those); `qt-models`' `session` on the RX 6800 (every handed frame's
 Seeded and caught: the submit skipped (no frames taken, `session`), the device opened at a fixed rate (`sound`), and the
 window's player made and dropped (`pads`).
 
+#### 1.8.7 Pictures on the device: a machine's lend and its ring **[M 2026-11-08, proof owed]**
+
+Every kind of picture the runtime offers now crosses the feed (`picture.rs`), as Mistress's `OfferPicture` offers them
+(`EmuSen_Backend.md` §14.12, §33): a frame's `Source` is its pixels (read back by `picture_copy`), the newest picture the
+machine took through its lend (`picture_on_device`, `picture_lend`), or a slot of its ring (`picture_in_ring`,
+`picture_ring`, the slot and value of the frame). The render thread advances the chain from where the picture lies
+(`Chain::advance_lent`, `Chain::advance_ring`, new in `platform-client`), and a picture that will not advance is never
+tried again. The session opens with `OPEN_RING` wherever the window has a device.
+
+**The rules that keep a lend and a ring alive while the render thread may read them:**
+1. A picture on the device is drawn before the machine runs again: the frame thread waits (stopping when asked) until a
+   draw has taken it. A core whose ring slots are all held therefore never waits inside `frame`, and no lend or ring is
+   remade (a reset, a state of another size, a ring's maxima growing) under a picture still to be drawn. The cost is
+   that a window that does not draw (hidden, minimised) holds such a game still; Mistress instead gives each slot back
+   through a one-pixel chain (`SlangRingRelease`) and shows the picture read back, which in Qt would submit from the
+   frame thread to the queue Qt's render thread uses, so it is not taken.
+2. Before the machine is freed the frame thread withdraws the frame still waiting (`Handoff::withdraw`) and waits out a
+   draw under way, which holds the feed's `drawing` lock from taking a frame to its end.
+
+**Proof owed.** Measured 2026-11-08 only on the copy path (the crystal test core refuses rings and paints nothing on the
+device): `qt-models`' `session` and `qt-play`'s `pads` pass unchanged. The lend's proof needs `device_test_core`
+(`EmuSen/Cores/Libretro/emusen-libretro-host/examples`, DEVICE_PICTURE with a painter), installed as a player's core;
+the ring's needs a libretro entry laid out as `LibretroEntryFixture` lays one (the proxy, the libretro host, the
+libretro test core and its `.info`, `EMUSEN_CORE_RUNNER`, the setting `tc_hw` = `vulkan`), which is also the hosted
+core's path to the first picture. Both are EmuSen-workspace builds.
+
 ### 1.9 Homes for the front-end logic still in C#
 
 The survey of the remaining C# (2026-11-07) lists front-end logic that needs a Rust owner. Each is given one layer here,

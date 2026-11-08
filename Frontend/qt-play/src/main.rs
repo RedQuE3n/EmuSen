@@ -161,7 +161,7 @@ fn main() {
 
 /// A moving test picture, 256 by 224, one frame a swap, until `stop`.
 fn test_picture(handoff: &Handoff, stop: &AtomicBool) {
-    let mut frame = Frame { rgba: vec![0; 256 * 224 * 4], width: 256, height: 224, row_repeat: 1, serial: 0 };
+    let mut frame = Frame { rgba: vec![0; 256 * 224 * 4], width: 256, height: 224, row_repeat: 1, ..Frame::default() };
     handoff.set_running(true);
     let mut seen = handoff.swaps();
     while !stop.load(Ordering::Relaxed) {

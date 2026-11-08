@@ -139,6 +139,9 @@ impl Policy {
     /// Empty when the engine may fetch `url`; else the words of its refusal. `local` is the URL's file path when it is a `file:`
     /// URL, and `text` the file's contents where `reads` asked for them.
     pub fn judge(&self, url: &str, local: &str, kind: Kind, text: &str) -> String {
+        if url.is_empty() {
+            return String::new();
+        }
         if self.in_folder(url, local) {
             let file = url.strip_prefix(self.folder.as_str()).or_else(|| local.rsplit('/').next()).unwrap_or(url);
             let refused = match kind {
@@ -172,9 +175,23 @@ impl Policy {
     }
 }
 
-/// A resource: Qt's own and the theme's modules pass, the program's other resources do not.
+/// A folder's name without the version Qt adds when it probes for `import M 1.0`: `Theme.1.0` and `Theme.1` → `Theme`.
+fn unversioned(folder: &str) -> &str {
+    let mut name = folder;
+    while let Some((head, tail)) = name.rsplit_once('.') {
+        if tail.is_empty() || !tail.bytes().all(|b| b.is_ascii_digit()) {
+            break;
+        }
+        name = head;
+    }
+    name
+}
+
+/// A resource: Qt's own and the theme's modules pass, the program's other resources do not. A qmldir is judged by the module it
+/// is probed for, so Qt's versioned probes of an allowed module (`EmuSen/Theme.1.0/qmldir`) pass and are simply not found.
 fn judge_resource(url: &str, kind: Kind) -> String {
     let path = format!("/{}", url.trim_start_matches("qrc:").trim_start_matches('/'));
+    let path = if kind == Kind::Qmldir { path.split('/').map(unversioned).collect::<Vec<_>>().join("/") } else { path };
     let qml = path.strip_prefix("/qt/qml/");
     if let Some(module) = qml.filter(|_| kind == Kind::Qmldir).and_then(module_of).or_else(|| path.strip_prefix("/qt-project.org/imports/").and_then(module_of)) {
         if never_resolved(&module) {

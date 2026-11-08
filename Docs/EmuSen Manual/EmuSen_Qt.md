@@ -227,6 +227,9 @@ built from the same commit (`Error::Refused`); only then is every symbol resolve
   the motors and the five settings; simulated pads and sets, pressed and plugged as tests do.
 - *Endymion's interface player:* made once SDL is lent (refused with words before), samples remembered and played, the
   device by name and the volume.
+- *The rule for SQLite* **[D 2026-11-08]**: the Qt front end lends the system's `libsqlite3.so.0` to every call that
+  takes one (the library handle, the scraper and, once wrapped, the runtime's states), so the process holds one copy of
+  SQLite, as `EmuSen_RustPlatform.md` §47.25's argument requires.
 - *The firmware folders* for a setting. What a game or a system needs, and whether the library holds it, is the
   frontend API's (`firmware_needed`, `firmware_status`), as are the systems table and the cheat codecs since interface
   38 (`EmuSen_RustPlatform.md` §47.24).
@@ -261,8 +264,7 @@ motors driven to 1000 and 2000, a setting set and read, and its unplugging polle
 refused before SDL is lent; the firmware folders `Unset` with the store among them; the scraper opened on the system
 SQLite, read, an unknown read refused as `BAD_REQUEST` with the table's own words, and closed once by its serial; and,
 alone in its binary, SDL3 lent on its dummy audio driver (no sound reaches the speakers) and a remembered tenth of a
-second of silence played. The scraper with no SQLite lent looks for the C# program's `libe_sqlite3.so`; the Qt front
-end lends the system's. Three faults were seeded and caught: a newer interface taken (the unit test), the library's
+second of silence played. The scraper with no SQLite lent looks for the C# program's `libe_sqlite3.so`. Three faults were seeded and caught: a newer interface taken (the unit test), the library's
 failures read with the platform's `last_error` (the library test) and pads' opened and closed swapped (the pads test).
 
 #### 1.1.3 The clients' test world: `emusen-client-fixture` **[M 2026-11-08]**
@@ -295,6 +297,57 @@ property or a role from here, so QML carries no strings.
 The crate's surface is the `.qmltypes` registry its bridges generate (rule Q in §5.3, module `EmuSen.Models` 1.0); it is
 internal to the application until 1.0 and a theme never imports it directly: themes see the curated `EmuSen.Theme` module
 (§3.2), which is a view over these models.
+
+#### 1.2.1 `LibraryModel` as built **[M 2026-11-08]**
+
+`Frontend/qt-models`, the crate `emusen-qt-models` (module `EmuSen.Models` 1.0), a member of the Qt workspace. Its
+dependencies are the workspace's cxx-qt 0.10 crates, `serde_json`, and the two client crates by path; the kit's harness
+and the clients' fixture are dev-dependencies. It names no C header and no runtime crate.
+
+Four parts, each with one job:
+- `keyed.rs`, **`KeyedRows<T>`**: rows held by a key that stays the same across refreshes, with one selected. A refresh
+  replaces them whole; the selection follows its key, stays at its index clamped to the last row where its row is
+  gone, and starts at the first row. *[own, because QAbstractListModel keeps no selection and knows no keys]*. Every
+  later model holds its rows in it.
+- `library.rs`, **the view as plain Rust**: a `LibrarySource` trait (the systems, the games found afresh, how many are
+  favourites, how many have been played) and the rows a source's answers make: the three places (`all`, `favourites`,
+  `recent`, with their names and counts), then each system that has games, in the systems table's order, named by the
+  table's `display_name` or else the declaration's `name`, with the look's hue and body, the maker, the year, and the
+  first engine the runtime lists for it. Nothing per console is written: a system only an engine declares shows by its
+  declared name and computed look. A failed refresh keeps the rows and shows the source's words.
+- `clients.rs`, **the source over the clients**: the systems and shelves from `emusen-crystal-client`, the games from a
+  scan of the library handle whose roots are the player's ROM folder (`AppSettings.RomDirectory`, read through Galaxia's
+  model) and whose systems are the shelves' (as `emusen_library.h` says), with the packages and compressed folders
+  beside, and the records from games.db (`records` once, `recent` once).
+- `library_model.rs`, **the bridge**: `LibraryModel`, a `#[base = QAbstractListModel]` QObject over a `LibraryView`,
+  roles `kind`, `key`, `name`, `count`, `hue`, `body`, `maker`, `year` and `engine` (from 0, §10.4); read-only
+  properties `selectedIndex`, `selectedKey`, `problem` and `loading`; writable `platformLibrary` and `gamesDatabase`,
+  plain text a window binds once; invokables `refresh()` and `select(index)`. Naming both properties opens the clients
+  and refreshes on a thread of its own, and the answer comes back to the GUI thread only through
+  `qt_thread().queue`, where the rows are replaced inside `beginResetModel`/`endResetModel` (a whole reset, the simplest
+  correct change; finer signals wait for a measured need) and the selection kept by its key. Before a source is named
+  the model holds the places alone. Every word it shows is a role or a property; QML holds none.
+
+**What the model is handed, and why as text.** A QML element is made by the engine, so it cannot be handed a Rust
+value; the platform library's path and games.db's are plain text that a window's root binds from its initial
+properties, and the model opens its own clients from them. No static carries them (§2). Two facts are copied here
+from their owner because `emusen_platform.h` does not answer them, and are owed as an extension of that interface: the
+settings file's name, `appsettings.json` (the header names it in a comment beside `EMUSEN_GALAXIA_MODEL_APP_SETTINGS`),
+and games.db's (Galaxia's `stores::GAMES_DB`), which is why the model takes games.db's path whole. A `Directory`-like
+call for Galaxia's store files would remove both **[routine]**.
+
+**Proof, measured 2026-11-08.** Seven tests pass: four of the view with a fake source and no Qt (the places then the
+consoles with games in the table's order, the Super Nintendo with none left out; a console only an engine declares,
+shown by its declared name; the selection following the Game Boy when a console appears before it, and staying at its
+place when the Game Boy's games are gone; a failed refresh keeping the rows and showing the words, cleared by the next);
+one of the source over the clients built from the same commit (the scan's roots from `AppSettings`, its systems the
+shelves', and a synthetic NES image, an iNES header and 16 KiB of zeros, making the places and the NES's row with the
+table's name and hue); and the harness test, in which QML reads the rows' `name`, `key`, `kind` and `count` by role and
+the model's properties, then names the real clients through the two properties and sees the NES's row arrive from the
+background refresh with `loading` false and the selection kept; and the kit's QML rules over the test's scene. Four
+faults were seeded and caught: the selection kept by index (the selection test), consoles with no games shown (three
+view tests), the rows replaced without the model's reset (the harness test: QML never saw the fourth row) and two
+roles' names swapped (the harness test).
 
 ### 1.3 QML views: layout only
 

@@ -559,6 +559,19 @@ mod tests {
         uniq(&line.split_whitespace().map(str::to_string).collect::<Vec<_>>(), Some(stdin.to_string()))
     }
 
+    fn sort_of(line: &str, stdin: &str) -> Answer {
+        sort(&line.split_whitespace().map(str::to_string).collect::<Vec<_>>(), Some(stdin.to_string()))
+    }
+
+    // sort orders by code point, as `LC_ALL=C sort` does on UTF-8; -n reads numbers as Rust's str::parse does - see EmuSen_RustPlatform.md §47.
+    #[test]
+    fn sort_orders_by_code_point_and_n_by_rusts_number_rules() {
+        assert_eq!(sort_of("sort", "\u{1F600}\n\u{E000}\nb\nB\na").out, "B\na\nb\n\u{E000}\n\u{1F600}");
+        assert_eq!(sort_of("sort -r", "a\nb").out, "b\na");
+        assert_eq!(sort_of("sort -n", "10\n9\n1,000\n-2").out, "-2\n1,000\n9\n10");
+        assert_eq!(sort_of("sort -n", "inf\n1\nNaN").out, "NaN\n1\ninf");
+    }
+
     #[test]
     fn uniq_d_prints_every_line_of_each_run_and_w_keys_on_the_first_characters() {
         assert_eq!(uniq_of("uniq", "a\na\nb\n").out, "a\nb\n");

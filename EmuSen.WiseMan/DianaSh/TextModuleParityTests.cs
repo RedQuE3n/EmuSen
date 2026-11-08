@@ -23,7 +23,6 @@ namespace EmuSen.WiseMan.DianaSh
         // Each a command line as the shell is given it, its arguments in single quotes.
         private static readonly string[][] Lines =
         {
-            new[] { "sort" }, new[] { "sort", "-n" }, new[] { "sort", "-r" }, new[] { "sort", "-n", "-r" },
             new[] { "uniq" }, new[] { "uniq", "-c" }, new[] { "uniq", "-D" }, new[] { "uniq", "-D", "-w", "1" }, new[] { "uniq", "-w", "2" }, new[] { "uniq", "-c", "-w1" },
             new[] { "wc" }, new[] { "wc", "-l" }, new[] { "wc", "-w" }, new[] { "wc", "-c" },
             new[] { "head" }, new[] { "head", "-n", "3" }, new[] { "tail" }, new[] { "tail", "-n", "2" },
@@ -53,7 +52,7 @@ namespace EmuSen.WiseMan.DianaSh
             return text.ToString();
         }
 
-        // Recorded from the C# classes on 2026-11-06 as 64-answer digests, before they were deleted; the Rust module is held to them - see EmuSen_Backend.md §40.7.
+        // Recorded from the C# classes on 2026-11-06 as 64-answer digests; sort left on 2026-11-07, when it took code-point order (EmuSen_RustPlatform.md §47) - see EmuSen_Backend.md §40.7.
         [Fact]
         public void Every_text_command_answers_generated_input_as_its_csharp_class_did()
         {

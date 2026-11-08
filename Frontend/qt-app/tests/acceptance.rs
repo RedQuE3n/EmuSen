@@ -248,6 +248,8 @@ fn pages(scene: &mut Scene<'_>, report: &mut Vec<String>, chord: &dyn Fn(&mut Sc
     // Its notice shown over the card, then gone (2 s, then Exit), so the pages held next are the card's alone.
     wait_for(scene, "notices", "shown", "true", 1000);
     wait_for(scene, "notices", "shown", "false", 3000);
+    // shown turns false as the fade starts; the card draws until its opacity reaches 0.
+    wait_for(scene, "notice", "visible", "false", 1000);
     scene.wait(400);
     assert_eq!(scene.property("cardCanvas", "slide"), "0", "the card stays");
 }
@@ -515,6 +517,7 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     assert!(shown(&mut scene, "continueHeading"));
     // The screenshot's notice from the card gone, so Home is still (it holds 2 s, then fades over Exit).
     wait_for(&mut scene, "notices", "shown", "false", 3000);
+    wait_for(&mut scene, "notice", "visible", "false", 1000);
     scene.wait(400);
     hold(&mut scene, "Home", &mockup_of("Home"), named_difference, &mut report);
     scene.assert_still("Home over the suspended game");

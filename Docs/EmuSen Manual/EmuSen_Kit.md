@@ -604,8 +604,9 @@ The gallery's words, rows and lists are a fixture's (`qml-rules --fixture`). Not
 render and cache are held by `tests/bells.rs`), and the parts owed by §7.8.
 
 **The gate** is `tests/gate.rs`, one test of about 40 s on the desktop. It runs `qml-rules` and `qmllint` over the
-gallery, then visits 72 states: both variants, three forms, three sections, and the four sizes of the harness's
-`SIZES` (1280 × 800, 1920 × 1080, 1280 × 720, 3840 × 2160). In each state it focuses the first operable element, reads
+gallery, then visits 90 states: both variants, three forms, three sections, and the five sizes of the harness's
+`SIZES` (1280 × 800, 1920 × 1200, 1920 × 1080, 1280 × 720, 3840 × 2160; the second, the handheld's own panel, added
+2026-11-08, §7.13). In each state it focuses the first operable element, reads
 the tree, sweeps the style (Controls), grabs, records the edges, and gives kit-core's `audit::check` the tree the edges
 were recorded on: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and contrast. A 73rd state is the
 question open at 1280 × 800, audited alone as a player sees a sheet. The style sweep samples one grab at each styled
@@ -983,7 +984,8 @@ graphics plugins, `NO_STRIP=1` and `PATCHELF` as §9.2 explains), then appimaget
 tools' own and the command only orders them and checks the pins, as the host's other commands do]*
 
 **The program.** `kit-gallery` sets `QSG_RHI_BACKEND=vulkan` unless the environment names another backend (§9.2, §1.8),
-and its window is shown by its scene (`visible: true`). `--grab FILE` saves the window's first swapped frame and ends:
+and its window is shown by its scene (`visible: true`). `--grab FILE` saves the window's first swapped frame of the
+window's own size and ends (below, *The handheld's panel*):
 `QQuickWindow::grabWindow`, its `frameSwapped` signal and `QCoreApplication::quit` are bound in Rust through cxx-qt's
 `extern "C++Qt"`, and `QImage::save` through a type of the crate's own over the same C++ `QImage` (`grab::Picture`),
 since cxx binds no method on another crate's type; no hand-written C++. On Qt's offscreen platform the scene graph has
@@ -1010,6 +1012,40 @@ missing one told where it comes from), and the run above. Measured on 2026-11-08
 reverted: the sha256 comparison skipped failed that test; a pin changed by one digit made `cargo xtask appimage` refuse
 before building (`appimagetool-x86_64.AppImage is not the pinned 1.9.1`); `PATCHELF` unset made it refuse (`PATCHELF
 names no patchelf`). The bundle built with linuxdeploy's own patchelf, before the fix, crashed at start, as §9.2 records.
+
+**The handheld's panel, and the grab's timing** (2026-11-08). The handheld is a Lenovo Legion Go S; its panel is a BOE
+NS080WUM-LX1, 8 inches, 1920 × 1200 (`gamescopectl info` and `xdpyinfo` agree). 1280 × 800, the gallery's own size and
+the gate's first, is a Steam Deck–class size, kept as a fit size, as every window fits at 1280 × 800 and 1920 × 1200;
+the gate runs at 1920 × 1200 too since this date. On the handheld under gamescope (Vulkan, `DISPLAY=:0`, on the
+charger) the program's X window was 1920 × 1200 (`xwininfo`), and `--grab` saved a 1920 × 1200 frame whose content was
+laid out at 1280 × 800 in the top-left corner, the void (black) over the rest.
+
+What was ruled out on the desktop, 2026-11-08:
+- *The layout.* `tests/fill.rs` shows the gallery at its own 1280 × 800, then gives it 1920 × 1200 through the platform
+  (on the offscreen platform `QWindow::resize` reaches Qt through `QWindowSystemInterface::handleGeometryChange`, the
+  call a platform makes for a window manager's resize) and samples six points near the edges and corners: none shows
+  the void. Seeded: the canvas's scale read once (`unit: 1`) failed it, at the bottom-right corner.
+- *The ratio, the Vulkan path and a resize before the first frame.* The program on this desktop's Xwayland under KWin,
+  with Vulkan: at the session's ratio of 1.25 (a 1600 × 1000 frame) and at 1.875 (`QT_SCALE_FACTOR=1.5`, a window
+  KWin clamped to 2400 × 1348 before its first frame), each grab filled to within four pixels of its edges; the
+  software backend offscreen at a ratio of 1.5 filled 1920 × 1200 likewise.
+
+**The mechanism, as its picture states it.** A frame of 1920 × 1200 pixels drawn at 1280 × 800 is a frame whose size
+is not the window's size at its ratio as Qt knew it. Qt's Vulkan swapchain takes its size from the surface, which is
+the X window gamescope had made 1920 × 1200, while Qt Quick drew at the size Qt last heard, 1280 × 800 at a ratio of 1:
+gamescope's resize had not yet reached Qt, and `--grab` took the first frame swapped, inside that gap. **So `--grab`
+now takes the first frame of the window's own size** (`grab::settled`: the frame's pixels are the window's size at its
+ratio, within a pixel), asks for another frame (`QQuickWindow::update`) while a frame of another size comes, saves what
+it has after 300 frames, and prints both sizes: `grab FILE: saved, frame 1600x1000, window 1280x800 at ratio 1.25,
+after 0 frames of another size` on this desktop's Xwayland, `frame 1280x800, window 1280x800 at ratio 1` offscreen.
+Held by the `grab` unit test (the window's own size at ratios 1, 1.5 and 1.25 as Qt rounds them; the swapchain's size
+before Qt is told, and a frame from before a resize, refused). Seeded: the ratio left out of `settled` failed it.
+
+Predictions for the handheld's next run, to be measured there: (1) the line names one frame or more of another size,
+then a 1920 × 1200 frame of a 1920 × 1200 window, and the picture fills it: the defect was the grab's timing, and a
+window on the panel was never wrong for longer than gamescope's resize took to arrive; (2) the line names 300 frames
+and a 1280 × 800 window: Qt never hears gamescope's size, a fault between gamescope and Qt's `xcb` platform, and the
+fix becomes the program's (the big-screen form asks for the screen's size) — not built until measured.
 
 ### 7.14 A test fails on any warning Qt logs; the sheet's key loop (2026-11-08)
 

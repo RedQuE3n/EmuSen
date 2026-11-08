@@ -26,8 +26,9 @@ const STRICTLY_ENFORCE_RANGE: f64 = 2.0;
 /// Messages Qt logs of its own accord that no code of ours causes, each with its reason (EmuSen_Kit.md §7.14).
 pub const QT_INTERNAL: [(&str, &str); 0] = [];
 
-/// The four sizes the gate runs at (EmuSen_Interface.md §24.7).
-pub const SIZES: [(i32, i32); 4] = [(1280, 800), (1920, 1080), (1280, 720), (3840, 2160)];
+/// The sizes the gate runs at (EmuSen_Interface.md §24.7): 1280 × 800, a Steam Deck–class size kept as a fit size; the
+/// handheld's own 1920 × 1200 (a Legion Go S, decided 2026-11-08); 1920 × 1080, 1280 × 720 and 3840 × 2160.
+pub const SIZES: [(i32, i32); 5] = [(1280, 800), (1920, 1200), (1920, 1080), (1280, 720), (3840, 2160)];
 
 /// The engine is declared first so it drops before the application, as Qt requires.
 pub struct Harness {

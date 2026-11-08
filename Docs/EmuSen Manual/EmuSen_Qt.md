@@ -586,7 +586,7 @@ would be too narrow; none does. **[A]**
 | **Switch-like** | a horizontal strip of game tiles at mid-height, round places beneath (favourites, recent, search, settings), a light or dark variant; a cue on every move | `gamesOf(All)`, `places`, `Cues`, `Tokens.variant` | `Carousel` horizontal with equal tiles, `WholeRow` for the round places, `HelpBar`; `Cues.scroll` on move, `select` on A |
 
 Each of the four is also a fit-audit and pad-reach case (§8): a theme passes when every operable item is reached from
-the first focus and nothing is cut at 1280 × 800, 1920 × 1080, 1280 × 720 and 3840 × 2160. The two or three the tester
+the first focus and nothing is cut at 1280 × 800, 1920 × 1200 (the handheld's panel), 1920 × 1080, 1280 × 720 and 3840 × 2160. The two or three the tester
 picks are built in stage 3 (§7) as the first third-party-shaped themes, and they stay in the repository as the API's
 regression tests.
 
@@ -1064,6 +1064,13 @@ and without one the program takes the first file of the themes folder in name or
 `night.qml`; the desktop runs of §10.2 had named `--theme night` and did not show it. The command above now names the
 theme. The lesson is the design's own rule for the real program: a default is a stated choice (the reference theme by
 name, stored in Settings), never the order of a folder listing.
+
+**Game Mode shows only what Steam started** (measured 2026-11-08). The kit's gallery as an AppImage, started over ssh
+with `DISPLAY=:0` while the handheld was in Game Mode, rendered (its `--grab` saved), but gamescope kept it behind
+Steam's interface: `gamescopectl`'s screenshot showed Steam's game page. An on-screen check in Game Mode therefore needs
+the program added to Steam as a non-Steam shortcut and started from Steam. The handheld is a Lenovo Legion Go S; its
+panel is 1920 × 1200 (a BOE NS080WUM-LX1, 8 inches), not the Steam Deck's 1280 × 800, and that grab is what
+`EmuSen_Kit.md` §7.13 reads the grab's timing from.
 
 ---
 

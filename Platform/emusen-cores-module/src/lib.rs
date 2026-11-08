@@ -359,7 +359,7 @@ fn wait(call: &Call, jobs: &mut Jobs) -> Answer {
     }
 }
 
-fn jobs_of<'a>(call: &'a Call) -> &'a mut Jobs {
+fn jobs_of<'a>(call: &'a Call) -> std::sync::MutexGuard<'a, Jobs> {
     call.slot(Jobs::default)
 }
 
@@ -371,16 +371,16 @@ impl Module for CoresCommands {
 
     fn run(&self, call: &Call) -> i32 {
         call.answer(match call.command().as_str() {
-            "cores" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, jobs_of(call)),
+            "cores" if call.args().get(1).map(String::as_str) == Some("wait") => wait(call, &mut jobs_of(call)),
             "cores" if call.args().get(1).map(String::as_str) == Some("default") => default(call),
             "cores" if call.args().get(1).map(String::as_str) == Some("approve") => approve(call),
-            "cores" => start(call, jobs_of(call)),
+            "cores" => start(call, &mut jobs_of(call)),
             other => Answer::fault(format!("emusen.cores has no command '{other}'")),
         })
     }
 
     fn jobs(&self, call: &Call) {
-        let jobs = jobs_of(call);
+        let mut jobs = jobs_of(call);
         jobs.running.retain(|r| {
             let ended = r.job.ended();
             call.out(&format!("  cores{:<5} {:<11} {}\n", r.id, r.op, if ended { "ended" } else if r.stopping { "stopping" } else { "running" }));
@@ -390,7 +390,8 @@ impl Module for CoresCommands {
 
     fn kill(&self, call: &Call, id: &str) -> Option<i32> {
         let n = id.strip_prefix("cores")?.parse::<u32>().ok()?;
-        let Some(r) = jobs_of(call).running.iter_mut().find(|r| r.id == n) else {
+        let mut jobs = jobs_of(call);
+        let Some(r) = jobs.running.iter_mut().find(|r| r.id == n) else {
             call.err(&format!("kill: no cores job cores{n} found.\n"));
             return Some(1);
         };

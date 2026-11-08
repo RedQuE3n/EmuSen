@@ -68,7 +68,7 @@ pub(crate) struct State {
     snapshots: Ordered<(String, Vec<u8>)>,
 }
 
-fn state<'a>(call: &'a Call) -> &'a mut State {
+fn state<'a>(call: &'a Call) -> std::sync::MutexGuard<'a, State> {
     call.slot(State::default)
 }
 
@@ -89,7 +89,8 @@ pub fn search(call: &Call, parts: &[String]) -> Run {
         return Ok(Answer::ok("Usage: search <space> <value> [<width>] | search refine <value> | search changed|unchanged|increased|decreased | search list [<count>] | search reset"));
     }
     let first = parts[1].to_lowercase();
-    let st = &mut state(call).search;
+    let mut held = state(call);
+    let st = &mut held.search;
     match first.as_str() {
         "reset" => {
             st.space = None;
@@ -188,7 +189,8 @@ pub fn snapshot(call: &Call, parts: &[String]) -> Run {
         return Ok(Answer::ok("Usage: snapshot <space> <name> | snapshot list | snapshot remove <name>"));
     }
     let first = parts[1].to_lowercase();
-    let snapshots = &mut state(call).snapshots;
+    let mut held = state(call);
+    let snapshots = &mut held.snapshots;
     if first == "list" {
         if snapshots.len() == 0 {
             return Ok(Answer::ok("No saved snapshots."));

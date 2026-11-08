@@ -15,6 +15,7 @@ use emusen_galaxia::clock::TICKS_PER_SECOND;
 use serde_json::Value;
 
 /// `ScrapeCost.Kinds`: the share of §17.9's 39 found answers offering each kind, and the mean size the region rule took.
+#[allow(clippy::eq_op)] // Each share is found/39 as counted, 39/39 included.
 const COST: [(&str, f64, f64); 11] = [
     ("cover", 33.0 / 39.0, 653.0),
     ("screenshot", 36.0 / 39.0, 5.0),

@@ -580,6 +580,26 @@ typedef struct {
   shell, through the `release` the module set, when that shell ends. `search` keeps its candidates there and
   `snapshot`/`diff` their baselines (today `SearchCommand`'s fields and `SnapshotStore`), so two shells in one process
   no longer share them.
+
+  *Held through a lock, 2026-11-08.* `dianash-module`'s `Call::slot` handed out `&mut T` from `&self`, so a command
+  that asked for its slot twice in one call held two mutable references to one value, and a module that asked for
+  it as two types read one as the other; Clippy's `mut_from_ref` refused it. Whether two calls could reach one slot at
+  once was checked first, and they cannot: `Shell::submit` takes `&mut Shell`, the platform library keeps each shell
+  behind a `Mutex` and answers `DIANASH_BUSY` to a call back in on the thread running its line (§13.7, point 4), the
+  interpreter starts no thread but a program's pipe readers, and §6.4 promises the same of any host. The defect was
+  within one call. The slot now keeps a `Kept<T>`, `#[repr(C)]` with the `TypeId` it was made as first and the state
+  in a `std::sync::Mutex`, and `slot` returns that mutex's guard: a second hold while one is live, or a request as
+  another type, panics, which the export's fault boundary answers as `FAULT` with the command's name (§6.7). A lock
+  was chosen over the other two forms. `&mut self` on `Call` would ripple through the `Module` trait and every helper
+  that takes a call beside its state; a closure (`with_slot(|state| ..)`) still lets the closure ask again through
+  the same `&Call`, so it needs the same guard. The lock costs one uncontended atomic per hold, and keeps the module
+  sound even under a host that broke §6.4. A poisoned lock, left by a command that faulted while holding it, is taken
+  as it stands, as the reference it replaced was. The C ABI is unchanged: the shell still keeps one pointer and its
+  `release`. Tests: `dianash-module`'s own four (made once and kept, a second hold faults, a released hold lets the
+  next in, another type faults). With it `cargo clippy -p emusen-platform --all-targets` reached two more refusals,
+  both fixed the same day so that it finishes: `emusen-library-module`'s public `next_event` took a job's raw handle
+  in a safe function, and is now `ServiceJob::next`'s body, its only caller; and `emusen-scrape`'s cost table divides
+  39 by 39 on purpose (each share is found/39 as counted), so `eq_op` is allowed on that table alone.
 - **`terminal`** answers the size and mode of a real terminal when there is one; a module that needs raw input (none
   today but `nano`, which becomes a program, §8) is told there is none in a console window.
 

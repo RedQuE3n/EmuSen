@@ -7,8 +7,10 @@
 pub mod abi;
 
 use abi::*;
+use std::any::TypeId;
 use std::ffi::c_void;
 use std::panic::{catch_unwind, AssertUnwindSafe};
+use std::sync::{Mutex, MutexGuard, TryLockError};
 
 /// What a command gives back: its standard output, its standard error and its exit status. A C# command's returned
 /// text is `ok`, its `DianaShResult.Fail` is `fail`, and an exception the dispatcher caught is `fault`.
@@ -245,22 +247,36 @@ impl<'a> Call<'a> {
         query(|out, cap, needed| unsafe { (io.environment)(io.ctx, name.as_ptr(), name.len(), out, cap, needed) }).ok()
     }
 
-    /// This module's per-shell state, made by `make` on the shell's first call and dropped when that shell's session ends.
-    pub fn slot<T: Send + 'static>(&self, make: impl FnOnce() -> T) -> &mut T {
+    /// This module's per-shell state, made by `make` on the shell's first call, behind a lock a second hold faults on (EmuSen_DianaSh.md §6.3).
+    pub fn slot<T: Send + 'static>(&self, make: impl FnOnce() -> T) -> MutexGuard<'_, T> {
         unsafe extern "C" fn release<T>(state: *mut c_void) {
-            drop(unsafe { Box::from_raw(state as *mut T) });
+            drop(unsafe { Box::from_raw(state as *mut Kept<T>) });
         }
         let io = self.io();
         let mut state: *mut c_void = std::ptr::null_mut();
         let mut releaser: Option<ReleaseFn> = None;
         unsafe { (io.slot)(io.ctx, &mut state, &mut releaser) };
         if state.is_null() {
-            state = Box::into_raw(Box::new(make())) as *mut c_void;
+            state = Box::into_raw(Box::new(Kept { kind: TypeId::of::<T>(), value: Mutex::new(make()) })) as *mut c_void;
             releaser = Some(release::<T>);
             unsafe { (io.slot)(io.ctx, &mut state, &mut releaser) };
         }
-        unsafe { &mut *(state as *mut T) }
+        // `kind` sits first in a repr(C) Kept of any T, so it is read before the cast is trusted.
+        assert!(unsafe { *(state as *const TypeId) } == TypeId::of::<T>(), "{}: the per-shell slot holds another type", self.command());
+        let kept = unsafe { &*(state as *const Kept<T>) };
+        match kept.value.try_lock() {
+            Ok(held) => held,
+            Err(TryLockError::Poisoned(poisoned)) => poisoned.into_inner(),
+            Err(TryLockError::WouldBlock) => panic!("{}: the per-shell slot is already held", self.command()),
+        }
     }
+}
+
+/// What a slot keeps: the type it was made as, then the state behind its lock.
+#[repr(C)]
+struct Kept<T> {
+    kind: TypeId,
+    value: Mutex<T>,
 }
 
 /// Runs a module's command with the fault boundary every export has: a panic becomes `FAULT`, its words on standard error.
@@ -417,5 +433,127 @@ impl Settings<'_> {
             status::OK => Ok(()),
             code => Err(self.words(code)),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A shell's side of one slot, as `io_slot` keeps it: one pointer and its release.
+    struct Shelf {
+        state: *mut c_void,
+        release: Option<ReleaseFn>,
+    }
+
+    unsafe extern "C" fn keep(ctx: *mut c_void, state: *mut *mut c_void, release: *mut Option<ReleaseFn>) -> i32 {
+        let shelf = unsafe { &mut *(ctx as *mut Shelf) };
+        unsafe {
+            if (*state).is_null() {
+                *state = shelf.state;
+                *release = shelf.release;
+            } else {
+                shelf.state = *state;
+                shelf.release = *release;
+            }
+        }
+        status::OK
+    }
+    unsafe extern "C" fn none_out(_: *mut c_void, _: *const u8, _: usize) -> i32 {
+        status::OK
+    }
+    unsafe extern "C" fn none_query(_: *mut c_void, _: *const u8, _: usize, _: *mut u8, _: usize, _: *mut i64) -> i32 {
+        status::ABSENT
+    }
+    unsafe extern "C" fn none_resolve(_: *mut c_void, _: *const u8, _: usize, _: u32, _: *mut u8, _: usize, _: *mut i64) -> i32 {
+        status::ABSENT
+    }
+    unsafe extern "C" fn none_cancelled(_: *mut c_void) -> i32 {
+        0
+    }
+    unsafe extern "C" fn none_terminal(_: *mut c_void, _: *mut dianash_terminal) -> i32 {
+        status::OK
+    }
+
+    /// Runs `body` on calls over one shelf, as two lines of one shell would, then releases the slot as the shell does.
+    fn with_shell(body: impl Fn(&Call)) {
+        let mut shelf = Shelf { state: std::ptr::null_mut(), release: None };
+        let io = dianash_io {
+            size: std::mem::size_of::<dianash_io>() as u32,
+            ctx: &mut shelf as *mut Shelf as *mut c_void,
+            out: none_out,
+            err: none_out,
+            resolve: none_resolve,
+            display: none_query,
+            cancelled: none_cancelled,
+            slot: keep,
+            environment: none_query,
+            terminal: none_terminal,
+        };
+        let raw = dianash_call {
+            size: std::mem::size_of::<dianash_call>() as u32,
+            command: dianash_bytes::of(b"probe"),
+            argv: std::ptr::null(),
+            argc: 0,
+            stdin_data: dianash_bytes::ABSENT,
+            stdin_present: 0,
+            flags: 0,
+            cwd: dianash_bytes::ABSENT,
+            user: dianash_bytes::ABSENT,
+            io: &io,
+            services: std::ptr::null(),
+            service_count: 0,
+        };
+        for _ in 0..2 {
+            body(&unsafe { Call::from_raw(&raw) }.unwrap());
+        }
+        if let Some(release) = shelf.release {
+            unsafe { release(shelf.state) };
+        }
+    }
+
+    #[test]
+    fn a_slot_is_made_once_and_kept_between_calls() {
+        let (made, calls) = (std::cell::Cell::new(0), std::cell::Cell::new(0));
+        with_shell(|call| {
+            calls.set(calls.get() + 1);
+            let mut count = call.slot(|| {
+                made.set(made.get() + 1);
+                0u32
+            });
+            *count += 1;
+            assert_eq!(*count, calls.get());
+        });
+        assert_eq!(made.get(), 1);
+    }
+
+    #[test]
+    fn a_second_hold_in_one_call_faults_rather_than_aliases() {
+        with_shell(|call| {
+            let _first = call.slot(|| 0u32);
+            let second = catch_unwind(AssertUnwindSafe(|| drop(call.slot(|| 0u32))));
+            assert!(second.is_err());
+        });
+    }
+
+    #[test]
+    fn a_hold_released_lets_the_next_hold_in() {
+        with_shell(|call| {
+            drop(call.slot(|| 0u32));
+            *call.slot(|| 0u32) += 1;
+        });
+    }
+
+    #[test]
+    fn a_slot_asked_for_as_another_type_faults() {
+        let asked = std::cell::Cell::new(0);
+        with_shell(|call| {
+            asked.set(asked.get() + 1);
+            if asked.get() == 1 {
+                drop(call.slot(|| 0u32));
+            } else {
+                assert!(catch_unwind(AssertUnwindSafe(|| drop(call.slot(String::new)))).is_err());
+            }
+        });
     }
 }

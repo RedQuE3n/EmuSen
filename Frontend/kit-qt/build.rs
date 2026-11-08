@@ -1,7 +1,7 @@
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 // The kit's own components (EmuSen_Qt.md §1.4); the EmuSen style travels as a resource module, style/EmuSen.qrc (§1.5).
-const KIT_FILES: [&str; 13] = [
+const KIT_FILES: [&str; 14] = [
     "qml/Walkable.qml",
     "qml/Body.qml",
     "qml/Sky.qml",
@@ -15,6 +15,7 @@ const KIT_FILES: [&str; 13] = [
     "qml/MenuRow.qml",
     "qml/WholeRow.qml",
     "qml/Carousel.qml",
+    "qml/NormalizedCanvas.qml",
 ];
 
 fn main() {

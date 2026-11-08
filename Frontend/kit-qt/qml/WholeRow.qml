@@ -1,12 +1,12 @@
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A row whose whole width is its content (a slider, a switch with its words): the row's height and focus marks, the content in its slot (EmuSen_Kit.md §7.8).
+// A row whose whole width is its content (a slider, a switch with its words): the row's height, or the content's where taller, and focus marks, the content in its slot (EmuSen_Kit.md §7.8).
 Kit.Walkable {
     id: root
     default property alias content: slot.data
     property bool current: false
-    implicitHeight: Kit.Tokens.rowHeight
+    implicitHeight: Math.max(Kit.Tokens.rowHeight, slot.childrenRect.height + 2 * Kit.Tokens.base)
     Accessible.role: Accessible.ListItem
     Rectangle {
         anchors.fill: parent

@@ -139,6 +139,12 @@ fn lunap_219_2_the_first_frame_is_dark_and_the_sweep_crosses_the_rows_middle_hal
     assert!(mid.planets[0].flare < 0.01, "the first planet has stopped flaring");
     assert!(mid.moon.shadow_centre[0] > mid.moon.centre[0], "the shadow sits to the right, cutting a crescent");
 
+    let no_size = splash.frame(3.0 * 1.55, 0.0, 0.0);
+    assert!(
+        no_size.planets.iter().all(|p| p.flare == 0.0 && p.flare_opacity == 0.0 && p.flare_radius.is_finite()),
+        "no size yet: no flare, nothing undefined"
+    );
+
     let partly = splash.frame(1.0 * 1.55, w, h);
     assert!(partly.moon.outline_drawn > 0.0 && partly.moon.outline_drawn < 1.0);
     assert_eq!(partly.moon.fill, 0.0, "the fill begins at 1.2");

@@ -1,0 +1,28 @@
+[package]
+name = "emusen-kit-gallery"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-kit-gallery"
+
+# The kit's gallery (EmuSen_Qt.md §7, stage 0's gate): every control and drawn item in every form and variant, a program for a human look and the fixture the gate runs on at the four sizes.
+[lib]
+name = "emusen_kit_gallery"
+
+[[bin]]
+name = "kit-gallery"
+path = "src/main.rs"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+emusen-kit-qt.workspace = true
+
+[dev-dependencies]
+emusen-kit-core.workspace = true
+emusen-qt-test.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true

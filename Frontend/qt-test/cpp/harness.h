@@ -18,3 +18,5 @@ bool harness_grab(QObject& window, const QString& path);
 QString harness_property(QObject& root, const QString& object_name, const QString& property);
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name);
 int harness_roots(QQmlApplicationEngine& engine);
+bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value);
+QString harness_colours_at(QObject& window, const QString& points);

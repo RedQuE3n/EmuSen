@@ -29,6 +29,8 @@ pub struct Node {
     pub menubar: bool,
     pub picture: bool,
     #[serde(default)]
+    pub backdrop: bool,
+    #[serde(default)]
     pub text: Option<String>,
     #[serde(default)]
     pub elided: bool,
@@ -195,6 +197,18 @@ impl Tree {
             .join("\n")
     }
 
+    /// The nearest operable item at or above this one: where a focus that landed inside an element (a carousel's current card) stands in the walk.
+    pub fn walkable_of(&self, index: u32) -> u32 {
+        let mut at = index as usize;
+        while !self.nodes[at].operable {
+            match self.nodes.iter().position(|n| n.id == self.nodes[at].parent) {
+                Some(parent) => at = parent,
+                None => return index,
+            }
+        }
+        at as u32
+    }
+
     /// The numbers of every operable, visible item.
     pub fn operable(&self) -> Vec<u32> {
         self.nodes.iter().enumerate().filter(|(_, n)| n.operable && n.visible).map(|(i, _)| i as u32).collect()
@@ -218,9 +232,19 @@ fn words_under(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usiz
     None
 }
 
-/// Builds an item and its children; a child kept outside its nearest clipping ancestor is `unseen`, as a row built out of view.
-fn build(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize, clip: Option<Rect>) -> Item {
+/// The nearest clipping ancestor's box, and whether it scrolls.
+#[derive(Clone, Copy)]
+struct Clip {
+    rect: Rect,
+    scrolls: bool,
+}
+
+/// Builds an item and its children: wholly outside a clip that scrolls it is not shown, outside one that does not an operable item is `unseen` (EmuSen_Kit.md §7.10).
+fn build(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize, clip: Option<Clip>) -> Item {
     let node = &nodes[index];
+    if node.backdrop {
+        return backdrop_item(nodes, children, index);
+    }
     let mut it = item(index as u32, node);
     if node.operable && it.heard.is_none() {
         if let Some(words) = words_under(nodes, children, index) {
@@ -228,15 +252,32 @@ fn build(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize, cli
         }
     }
     if let Some(clip) = clip {
-        if node.operable && clip.overlap(&it.rect).is_empty() {
-            it = it.unseen();
+        if clip.rect.overlap(&it.rect).is_empty() {
+            if clip.scrolls {
+                it = it.hidden();
+            } else if node.operable {
+                it = it.unseen();
+            }
         }
     }
-    let own_clip = if node.clip { Some(it.rect) } else { clip };
+    let own_clip = if node.clip { Some(Clip { rect: it.rect, scrolls: node.sv || node.sh }) } else { clip };
     if let Some(kids) = children.get(node.id.as_str()) {
         for &child in kids {
             it = it.child(build(nodes, children, child, own_clip));
         }
+    }
+    it
+}
+
+/// A backdrop (an item declaring `backdrop`, as the sky's paint does) and everything under it: drawn behind the screen, so a panel to the rules.
+fn backdrop_item(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize) -> Item {
+    let node = &nodes[index];
+    let mut it = Item::new(index as u32, Kind::Panel, Rect::new(node.x, node.y, node.w, node.h)).scene();
+    if !node.visible {
+        it = it.hidden();
+    }
+    for &child in children.get(node.id.as_str()).map(Vec::as_slice).unwrap_or(&[]) {
+        it = it.child(backdrop_item(nodes, children, child));
     }
     it
 }

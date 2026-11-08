@@ -3,7 +3,7 @@
 use core::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QByteArray, QColor, QHash, QHashPair_i32_QByteArray, QModelIndex, QString, QVariant, QVector};
+use cxx_qt_lib::{QByteArray, QColor, QHash, QHashPair_i32_QByteArray, QList, QModelIndex, QString, QVariant, QVector};
 use emusen_kit_core::world::{self, Frame, PlanetFrame, Splash, SplashBody, Timeline, WorldBody, WorldShape};
 
 use crate::convert::qcolor;
@@ -29,6 +29,8 @@ pub mod qobject {
         type QColor = cxx_qt_lib::QColor;
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
+        include!("cxx-qt-lib/qlist.h");
+        type QList_f64 = cxx_qt_lib::QList<f64>;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Bodies"]
         type BodyShape = crate::kinds::ffi::BodyShape;
@@ -69,6 +71,7 @@ pub mod qobject {
         #[qproperty(f64, height)]
         #[qproperty(QString, title)]
         #[qproperty(QString, caption)]
+        #[qproperty(QList_f64, hues)]
         #[qproperty(i32, seed, READ, CONSTANT)]
         #[qproperty(i32, star_count, READ, CONSTANT)]
         #[qproperty(f64, length, READ, CONSTANT)]
@@ -200,6 +203,7 @@ pub struct MoonriseModelRust {
     height: f64,
     title: QString,
     caption: QString,
+    hues: QList<f64>,
     seed: i32,
     star_count: i32,
     length: f64,
@@ -257,6 +261,7 @@ impl Default for MoonriseModelRust {
             height: 0.0,
             title: QString::default(),
             caption: QString::default(),
+            hues: QList::default(),
             seed: timeline.seed as i32,
             star_count: timeline.star_count as i32,
             length: timeline.length,
@@ -348,7 +353,30 @@ impl MoonriseModelRust {
 }
 
 impl cxx_qt::Initialize for qobject::MoonriseModel {
-    fn initialize(self: Pin<&mut Self>) {}
+    /// `hues` is the declarative way to a row of plain worlds, one per hue; `addBody` is the host's full form.
+    fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut()
+            .on_hues_changed(|mut this| {
+                let bodies: Vec<SplashBody> =
+                    this.hues.iter().map(|hue| SplashBody { name: String::new(), hue: *hue, body: None }).collect();
+                let mut rust = this.as_mut().rust_mut();
+                rust.bodies = bodies;
+                rust.splash = None;
+            })
+            .release();
+        // A resize lays the frame out again at the time shown, so a finished splash follows its window.
+        self.as_mut().on_width_changed(|this| this.relayout()).release();
+        self.as_mut().on_height_changed(|this| this.relayout()).release();
+    }
+}
+
+impl qobject::MoonriseModel {
+    fn relayout(self: Pin<&mut Self>) {
+        let time = self.time;
+        if self.frame.is_some() {
+            self.tick(time);
+        }
+    }
 }
 
 impl qobject::MoonriseModel {

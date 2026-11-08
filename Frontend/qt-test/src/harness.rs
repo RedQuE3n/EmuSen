@@ -12,6 +12,7 @@ use emusen_kit_core::input::{ElementId, UiButton, WalkForm};
 use emusen_kit_core::tokens::{self, Colour, ColourToken, Variant};
 use emusen_kit_qt::kinds;
 use emusen_kit_qt::pad::qobject::PadRouter;
+use emusen_kit_qt::tokens::qobject::Tokens;
 
 use crate::ffi::ffi;
 use crate::tree::Tree;
@@ -75,17 +76,26 @@ impl Harness {
         Scene { harness: self, window }
     }
 
-    fn router(&mut self) -> Option<Pin<&mut PadRouter>> {
+    fn singleton<T: Upcast<QObject>>(&mut self, name: &str) -> Option<Pin<&mut T>> {
         let engine = self.engine.as_mut()?;
-        let object = unsafe { ffi::harness_singleton(engine, &QString::from("EmuSen.Kit"), &QString::from("PadRouter")) };
+        let object = unsafe { ffi::harness_singleton(engine, &QString::from("EmuSen.Kit"), &QString::from(name)) };
         if object.is_null() {
             return None;
         }
-        let router = unsafe { <PadRouter as Upcast<QObject>>::from_base_ptr(object as *const QObject) } as *mut PadRouter;
-        if router.is_null() {
+        let typed = unsafe { T::from_base_ptr(object as *const QObject) } as *mut T;
+        if typed.is_null() {
             return None;
         }
-        Some(unsafe { Pin::new_unchecked(&mut *router) })
+        Some(unsafe { Pin::new_unchecked(&mut *typed) })
+    }
+
+    fn router(&mut self) -> Option<Pin<&mut PadRouter>> {
+        self.singleton::<PadRouter>("PadRouter")
+    }
+
+    /// The kit's Tokens singleton, to switch the variant or the form under a scene.
+    pub fn tokens(&mut self) -> Option<Pin<&mut Tokens>> {
+        self.singleton::<Tokens>("Tokens")
     }
 
     pub fn process_events(&self) {
@@ -141,21 +151,51 @@ impl Scene<'_> {
         self.wait(20);
     }
 
-    /// The active focus item's number in a tree, if any.
+    /// The walkable element holding the active focus, by its number in a tree, if any.
     pub fn focus(&mut self, tree: &Tree) -> Option<u32> {
         let id = ffi::harness_focus(self.window());
-        tree.index_of(id)
+        tree.index_of(id).map(|index| tree.walkable_of(index))
     }
 
     pub fn focus_item(&mut self, tree: &Tree, index: u32) -> bool {
         let id = tree.id_of(index);
         let done = ffi::harness_focus_item(self.window(), id);
-        self.wait(20);
+        self.wait(5);
         done
     }
 
     pub fn grab(&mut self, path: &str) -> bool {
         ffi::harness_grab(self.window(), &QString::from(path))
+    }
+
+    /// Sets a property of the object with this objectName (or the root's) from text, a dotted path reaching into an object property; Qt converts.
+    pub fn set_property(&mut self, object_name: &str, property: &str, value: &str) -> bool {
+        let done = ffi::harness_set_property(self.window(), &QString::from(object_name), &QString::from(property), &QString::from(value));
+        self.wait(30);
+        done
+    }
+
+    /// The variant the tokens paint, switched under the shown scene.
+    pub fn set_variant(&mut self, variant: Variant) {
+        if let Some(tokens) = self.harness.tokens() {
+            tokens.set_variant(kinds::Variant { repr: if variant == Variant::Light { 1 } else { 0 } });
+        }
+        self.wait(30);
+    }
+
+    /// The form the tokens read, switched under the shown scene.
+    pub fn set_token_form(&mut self, form: WalkForm) {
+        if let Some(tokens) = self.harness.tokens() {
+            tokens.set_form(kinds::form_of(form));
+        }
+        self.wait(30);
+    }
+
+    /// The colours drawn at these window points, from one grab.
+    pub fn colours_at(&mut self, points: &[(f64, f64)]) -> Vec<Option<Colour>> {
+        let list = points.iter().map(|(x, y)| format!("{},{}", x.round() as i64, y.round() as i64)).collect::<Vec<_>>().join(";");
+        let text = ffi::harness_colours_at(self.window(), &QString::from(list.as_str())).to_string();
+        text.split(';').map(crate::tree::colour).collect()
     }
 
     /// A property of the object with this objectName (or the root's), as text.
@@ -177,7 +217,7 @@ impl Scene<'_> {
             router.as_mut().push(kinds::pad_button(button), false);
             router.as_mut().pump_at(up);
         }
-        self.wait(20);
+        self.wait(5);
     }
 
     /// Where a press of each direction from each operable element lands: the edges pad reach is judged by.
@@ -210,6 +250,20 @@ impl Scene<'_> {
         width: f64,
         height: f64,
     ) -> Vec<Fault> {
+        self.audit_item(&tree.root, form, variant, focus, edges, width, height)
+    }
+
+    /// The same over one item and what is under it, as a player sees an open sheet alone.
+    pub fn audit_item(
+        &mut self,
+        root: &audit::Item,
+        form: WalkForm,
+        variant: Variant,
+        focus: Option<u32>,
+        edges: &[Edge],
+        width: f64,
+        height: f64,
+    ) -> Vec<Fault> {
         let declared = palette(variant);
         let scale = (height / 800.0).max(1.0);
         let state = State {
@@ -221,7 +275,7 @@ impl Scene<'_> {
             slack: if scale > 1.0 { 1.5 } else { 1.0 },
             smallest: if form == WalkForm::Desktop { 0.0 } else { audit::smallest_capitals() * scale },
         };
-        audit::check(&tree.root, &state)
+        audit::check(root, &state)
     }
 }
 

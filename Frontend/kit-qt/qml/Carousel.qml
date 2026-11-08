@@ -1,9 +1,10 @@
 import QtQuick
 import EmuSen.Kit as Kit
 
-// A carousel over PathView: one step per wheel notch, a swipe is PathView's own flick, Reel between items (EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.8).
+// A carousel over PathView, an element the frame walks to: items one item apart about the centre and clipped to its box, one step per wheel notch, a swipe is PathView's own flick, Reel between items, hovering focuses it and a click is A (EmuSen_Qt.md §1.7, EmuSen_Kit.md §7.8).
 PathView {
     id: root
+    required property Kit.FrameController controller
     property real itemWidth: Kit.Tokens.tileWidth + Kit.Tokens.tileGap
     pathItemCount: Math.ceil(width / itemWidth) + 2
     preferredHighlightBegin: 0.5
@@ -12,13 +13,23 @@ PathView {
     snapMode: PathView.SnapOneItem
     highlightMoveDuration: Kit.Tokens.reel
     focus: true
+    activeFocusOnTab: true
+    Accessible.focusable: true
+    clip: true
     path: Path {
-        startX: -root.itemWidth / 2
+        startX: (root.width - root.pathItemCount * root.itemWidth) / 2
         startY: root.height / 2
         PathLine {
-            x: root.width + root.itemWidth / 2
+            x: (root.width + root.pathItemCount * root.itemWidth) / 2
             y: root.height / 2
         }
+    }
+    HoverHandler {
+        onHoveredChanged: root.controller.hover(root, hovered)
+    }
+    TapHandler {
+        acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.BackButton
+        onTapped: (point, button) => root.controller.click(root, button)
     }
     WheelHandler {
         onWheel: (event) => event.angleDelta.y < 0 ? root.incrementCurrentIndex() : root.decrementCurrentIndex()

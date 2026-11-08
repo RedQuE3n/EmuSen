@@ -24,5 +24,7 @@ pub mod ffi {
         fn harness_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> QString;
         unsafe fn harness_singleton(engine: Pin<&mut QQmlApplicationEngine>, module: &QString, name: &QString) -> *mut QObject;
         fn harness_roots(engine: Pin<&mut QQmlApplicationEngine>) -> i32;
+        fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
+        fn harness_colours_at(window: Pin<&mut QObject>, points: &QString) -> QString;
     }
 }

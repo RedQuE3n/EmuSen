@@ -72,6 +72,7 @@ QJsonArray coloursOf(QQuickItem* item)
 void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArray& out)
 {
     const QRectF rect = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+    const QRectF unit = item->mapRectToScene(QRectF(0, 0, 1, 1)); // words are measured in the item's units; the rules read the scene's
     const double opacity = parentOpacity * item->opacity();
     const bool control = item->inherits("QQuickControl");
     const bool handlers = hasPointerHandler(item);
@@ -89,24 +90,31 @@ void dump(QQuickItem* item, std::uint64_t parent, double parentOpacity, QJsonArr
     node["opacity"] = opacity;
     node["clip"] = item->clip();
     node["hit"] = item->isVisible() && item->isEnabled() && (item->acceptedMouseButtons() != Qt::NoButton || handlers);
-    const bool container = item->isFocusScope() && item->scopedFocusItem() != nullptr;
-    node["operable"] = item->isEnabled() && !container && ((control && item->property("focusPolicy").toInt() != 0) || (handlers && item->activeFocusOnTab()));
+    const QQuickItem* inner = item->isFocusScope() ? item->scopedFocusItem() : nullptr;
+    const bool container = inner != nullptr && (inner->activeFocusOnTab() || inner->inherits("QQuickControl"));
+    const bool typed = item->inherits("QQuickTextInput") || item->inherits("QQuickTextEdit");
+    node["operable"] = item->isEnabled() && !container && ((control && item->property("focusPolicy").toInt() != 0) || ((handlers || typed) && item->activeFocusOnTab()));
     node["control"] = control;
     node["focus"] = item->hasActiveFocus();
     node["popup"] = item->inherits("QQuickPopupItem");
     node["menubar"] = item->inherits("QQuickMenuBar");
     node["picture"] = item->inherits("QQuickImage") || item->inherits("QQuickShape");
+    node["backdrop"] = item->property("backdrop").toBool();
     if (item->inherits("QQuickText") || item->inherits("QQuickTextInput")) {
         node["text"] = item->property("text").toString();
         node["elided"] = item->property("truncated").toBool();
-        node["tw"] = item->property("contentWidth").toDouble();
-        node["th"] = item->property("contentHeight").toDouble();
-        node["cap"] = QFontMetricsF(item->property("font").value<QFont>()).capHeight();
+        node["tw"] = item->property("contentWidth").toDouble() * unit.width();
+        node["th"] = item->property("contentHeight").toDouble() * unit.height();
+        node["cap"] = QFontMetricsF(item->property("font").value<QFont>()).capHeight() * unit.height();
     }
     if (item->inherits("QQuickFlickable")) {
         const int direction = item->property("flickableDirection").toInt();
         node["sv"] = direction != 1 && item->property("contentHeight").toDouble() > item->height() + 0.5;
         node["sh"] = direction != 2 && item->property("contentWidth").toDouble() > item->width() + 0.5;
+        node["wheel"] = item->property("interactive").toBool();
+    }
+    if (item->inherits("QQuickPathView")) {
+        node["sh"] = item->property("count").toInt() > item->property("pathItemCount").toInt();
         node["wheel"] = item->property("interactive").toBool();
     }
     for (const char* edge : {"fadeTop", "fadeBottom", "fadeLeft", "fadeRight"}) {
@@ -232,3 +240,26 @@ QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module,
 }
 
 int harness_roots(QQmlApplicationEngine& engine) { return static_cast<int>(engine.rootObjects().size()); }
+
+bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value)
+{
+    QObject* object = root.objectName() == object_name ? &root : root.findChild<QObject*>(object_name);
+    return object != nullptr && QQmlProperty(object, property, qmlContext(object)).write(QVariant(value));
+}
+
+// One grab, many samples: "x,y;x,y" in, "#AARRGGBB;#AARRGGBB" out.
+QString harness_colours_at(QObject& window, const QString& points)
+{
+    QQuickWindow* w = quick(window);
+    if (w == nullptr) {
+        return QString();
+    }
+    const QImage image = w->grabWindow();
+    QStringList colours;
+    for (const QString& point : points.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+        const QStringList xy = point.split(QLatin1Char(','));
+        const QPoint at(xy.value(0).toInt(), xy.value(1).toInt());
+        colours.append(image.valid(at) ? image.pixelColor(at).name(QColor::HexArgb) : QString());
+    }
+    return colours.join(QLatin1Char(';'));
+}

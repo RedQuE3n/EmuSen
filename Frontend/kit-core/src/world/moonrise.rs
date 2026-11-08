@@ -99,7 +99,7 @@ pub const ROW_MOST: f64 = 980.0;
 pub const TITLE_Y: f64 = 0.85;
 pub const TITLE_SIZE: f64 = 78.0;
 pub const CAPTION_Y: f64 = 0.91;
-pub const CAPTION_SIZE: f64 = 15.0;
+pub const CAPTION_SIZE: f64 = 18.0;
 
 pub const HALO: Colour = Colour::rgba(201, 214, 255, 71);
 pub const OUTLINE: Colour = Colour::rgba(243, 239, 226, 242);
@@ -312,7 +312,7 @@ impl Splash {
                 let centre = self.planet_at(i, t, w, h, row_w);
                 let r = Self::planet_radius(i, unit);
                 let hue = self.bodies[i].hue;
-                let hit = if sweeping { (-((centre[0] - sweep_x) / (tl.flare_width * unit)).powi(2)).exp() } else { 0.0 };
+                let hit = if sweeping && unit > 0.0 { (-((centre[0] - sweep_x) / (tl.flare_width * unit)).powi(2)).exp() } else { 0.0 };
                 let shape = self.bodies[i].body.map_or(WorldShape::Planet, |b| b.shape);
                 Some(PlanetFrame {
                     index: i,

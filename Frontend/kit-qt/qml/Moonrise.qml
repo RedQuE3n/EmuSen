@@ -7,6 +7,7 @@ Item {
     id: root
     property alias title: splash.title
     property alias caption: splash.caption
+    property list<real> hues
     property alias model: splash
     property bool running: true
     readonly property alias finished: splash.finished
@@ -14,6 +15,11 @@ Item {
         id: splash
         width: root.width
         height: root.height
+    }
+    Binding {
+        target: splash
+        property: "hues"
+        value: root.hues
     }
     Kit.Sky {
         anchors.fill: parent

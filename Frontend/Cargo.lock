@@ -271,6 +271,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "emusen-kit-gallery"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-kit-core",
+ "emusen-kit-qt",
+ "emusen-qt-test",
+]
+
+[[package]]
 name = "emusen-kit-qt"
 version = "0.1.0"
 dependencies = [

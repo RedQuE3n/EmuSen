@@ -1693,7 +1693,7 @@ no image crate is needed, the oracle library read as the three texts of §4.6).
 | The help bar's glyphs were the kit's pixel size and its paddings moved the entries in | the glyph's side is 0.9 of `fontSize` × H (ES-DE's icon measured 30–32 px at a 36.7 px font on 1280 × 800, 45 px at 55 px on 1920 × 1200); `entryRelativeScale` shrinks the icons above 1 and the text below 1, as THEMES.md has it; the background grows outward by its paddings and leaves `pos` and `origin` alone; the kit's `HelpBar.glyphSize` and the glyph's letter growing with its glyph (EmuSen_Kit.md §7.28) |
 | A carousel item drawn as text (no picture) had no `slot-` name, so neither the test nor a pointer test could find it | the text item carries the slot's name |
 | An item gliding under a still pointer took the selection, and the carousel chased the pointer for ever | hover selects only while the items are at rest; a tap selects at once, glide or not (`painter.rs`) |
-| The run of 2026-11-08 at the end of E3 (20 failures): every contained or aspect-sized picture lost its box at a size after the first (Art Book Next's system logo 0.35 H high where 0.2167, its play-time, players and release-date icons and Artflix's wide overlay at width 0, CarAlt's controllers, cover and marquee), because the scene keyed a picture's measurement by its paint and its box, both of which change with the window, and a delegate reports again only when Qt's image changes status or height, which a cached decode may not do | a picture sized by its own aspect (`maxSize`, `size` with one axis 0, no size) keys its measurement by its file alone (`draw.rs`), so the measurement holds across a resize and a reload; text and rows keep the key by paint and box. Proved by `frame.rs`'s `a_pictures_own_size_holds_across_a_resize`, which fails on the old key with the very boxes the run showed |
+| The run of 2026-11-08 at the end of E3 (20 failures): every contained or aspect-sized picture lost its box at a size after the first (Art Book Next's system logo 0.35 H high where 0.2167, its play-time, players and release-date icons and Artflix's wide overlay at width 0, CarAlt's controllers, cover and marquee), because the scene keyed a picture's measurement by its paint and its box, both of which change with the window, and a delegate reports again only when Qt's image changes status or height, which a cached decode may not do | a picture sized by its own aspect (`maxSize`, `size` with one axis 0, no size) keys its measurement by its file alone (`draw.rs`), so the measurement holds across a resize and a reload; text and rows keep the key by paint and box. A later report of the same file within a pixel's rounding of the kept aspect (the picture decoded again at the new box's width) is not a new measurement, so the first stands: Artflix's system logo had come back 0.0583 H high at 1280 × 720 and 0.0573 H at 1920 × 1080, a 42 px and a 62 px decode of one picture. Proved by `frame.rs`'s `a_pictures_own_size_holds_across_a_resize`, which fails on the old key with the very boxes the run showed |
 | Art Book Next's help a see-through strip at every size after the first, its glyphs white on nothing | the kit's `HelpBar` draws no backing when its colour is clear (EmuSen_Kit.md §7.28); every grab is now sampled for alpha below 255 on a 32 × 20 grid and along each help bar |
 | "The pointer over an item selected nothing" on Art Book Next's gamelist | the test's: it hovered the second-nearest item to the middle, which after the pad's step was the selected one. It now hovers the two nearest, of which one at most is selected |
 
@@ -1720,6 +1720,26 @@ THEMES.md and USERGUIDE.md, settled or named:
 | No VIEW MEDIA entry in a gamelist | the media viewer is not built; the entry would name a press that does nothing: **named, open** |
 | The help labels wider than ES-DE's | the kit's face where ES-DE uses its own (decided, design §12) |
 | The clock's time | the wall clock at the grab |
+| CarAlt's system view: a band of the theme's yellow down the middle where ES-DE draws three games' screenshots | those screenshots are the system view's `cover1`–`cover3`, fed by a gameselector, which is later (13 pairs, §4.5.5); the yellow is the theme's own picture beneath them: **named, later** with the gameselector |
+| CarAlt's gamelist: the lower screenshot (`cover3`, zIndex 3) drawn over the theme's dark mask (`topline3`, `circle2.svg`, zIndex 3), where ES-DE draws the mask over it | the loader breaks a zIndex tie by first definition, a choice (EmuSen_BigPicture.md §12.2), and `topline3` is defined first; ES-DE 3.4.1 drew the later-defined `cover3` beneath. THEMES.md states no tie order, and one capture does not tell an order by name from others: **named, open**, to be settled on captures of more ties before the loader's rule changes |
+
+**Seeded faults of E3**, each reverted after its run:
+
+| Seed | Fault | Caught by |
+|---|---|---|
+| S1 | measurements dropped on a reload | painter `a_measurement_survives_a_reload` |
+| S2 | a game's media tiled | frame `only_a_picture_named_by_path_tiles` |
+| S3 | hover selects while the items glide | painter's glide test |
+| S4 | A worded Launch | frame's help tests |
+| S5 | the textlist's `selectorColor` clear (GPU) | `mapping.rs`, `ESDE_MAPPING_ONLY=textlist.selectorColor` |
+| S6 | the help's glyph at 30 px whatever the size (GPU) | `sizes.rs` |
+| S7 | a picture's measurement keyed by paint and box again | frame `a_pictures_own_size_holds_across_a_resize` |
+| S8 | the glyph letter reading its item's size (the branch's first form) | qt-app's `program` test (CPU tier): Qt's binding-loop warnings |
+
+**GPU tier, measured 2026-11-08 after these fixes:** sizes, motion, primitives, view and mapping (347 drawn, 272 s)
+green; emusen-qt-test `helpbar` and `menu` green; qt-app's acceptance green. One motion run failed once at its last
+check, a frame swapped in the 2 s still window with no animation running; the two runs after it passed. The theme shows a clock,
+whose minute can turn within the window: not reproduced, recorded here.
 
 ---
 

@@ -233,6 +233,10 @@ fn a_pictures_own_size_holds_across_a_resize() {
     (data.width, data.height) = (W * 1.5, H * 1.5);
     s.restart(data, "system", 0);
     assert_eq!(boxes(&mut s), before, "no delegate need report again: the picture's aspect is its file's");
+    // Decoded again at the new box's width, the picture's height rounds to a whole pixel: the same aspect, so nothing moves.
+    let id = placed(&s.frame(), "i").id;
+    assert!(!s.measured(id, 240.0, 61.0), "a rounding of the same aspect is no new measurement");
+    assert!(s.measured(id, 240.0, 80.0), "another aspect is");
 }
 
 #[test]

@@ -1,4 +1,4 @@
-# THEMES.md's element types and properties, translated from the C# loader's ThemeCatalog (EmuSen_BigPicture.md §12.2, EmuSen_Qt.md §4.2).
+# THEMES.md's element types and properties, translated from the C# loader's ThemeCatalog (EmuSen_BigPicture.md §12.2, EmuSen_Qt.md §4.2), re-checked against THEMES.md on 2026-11-08 (§4.5.5).
 # '@' rows open an element: type, group, views. Property rows: name, type, default, sameAs, computed, min, max, maxY, rule, shape, values, maxItems, key, onlyIn, deferred, validRange; '-' is none.
 @	carousel	primary	system,gamelist
 pos	pair	0 0.38378	-	-	-	-	-	-	single	-	-	-	-	-	-
@@ -17,6 +17,8 @@ selectedItemMargins	pair	0 0	-	-	-1	1	-	-	single	-	-	-	-	-	-
 selectedItemOffset	pair	0 0	-	-	-1	1	-	-	single	-	-	-	-	-	-
 itemSize	pair	0.25 0.155	-	-	0.05	1	-	-	single	-	-	-	-	-	-
 itemScale	float	1.2	-	-	0.2	3	-	-	single	-	-	-	-	-	-
+itemLinearScale	pair	0 0	-	-	-0.5	1	-	-	single	-	-	-	-	-	-
+itemLinearSpacing	pair	0 0	-	-	-0.5	1	-	-	single	-	-	-	-	-	-
 itemRotation	float	7.5	-	-	-	-	-	-	single	-	-	-	-	-	-
 itemRotationOrigin	pair	-3 0.5	-	-	-	-	-	-	single	-	-	-	-	-	-
 itemAxisHorizontal	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
@@ -197,6 +199,7 @@ metadataElement	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
 gameselector	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
 tile	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+scaleFactor	float	1	-	-	0.1	1	-	-	single	-	-	-	-	-	-
 tileSize	pair	-	-	-	0	1	-	ZeroAxisAuto	single	-	-	-	-	-	-
 tileHorizontalAlignment	string	left	-	-	-	-	-	-	enum	left right	-	-	-	-	-
 tileVerticalAlignment	string	bottom	-	-	-	-	-	-	enum	top bottom	-	-	-	-	-
@@ -258,6 +261,7 @@ zIndex	float	30	-	-	-	-	-	-	single	-	-	-	-	-	-
 pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 size	pair	-	-	-	0.01	1	-	ZeroAxisAuto	single	-	-	-	-	-	-
 maxSize	pair	-	-	-	0.01	1	-	-	single	-	-	-	-	-	-
+scaleFactor	float	1	-	-	0.1	1	-	-	single	-	-	-	-	-	-
 origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
 rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
 rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
@@ -319,7 +323,7 @@ rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
 stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
 text	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 systemdata	string	-	-	-	-	-	-	-	enum	name fullname gamecount gamecountGames gamecountGamesNoText gamecountFavorites gamecountFavoritesNoText	-	-	system	-	-
-metadata	string	-	-	-	-	-	-	-	enum	name description rating developer publisher genre players favorite completed kidgame broken manual playcount playtime controller altemulator emulator physicalName physicalNameExtension systemName systemFullname sourceSystemName sourceSystemFullname	-	-	-	-	-
+metadata	string	-	-	-	-	-	-	-	enum	name description rating developer publisher genre players favorite completed kidgame broken manual playcount playtime controller altemulator emulator physicalName physicalNameExtension systemName systemFullname sourceSystemName sourceSystemFullname customCollectionNameGrouped customCollectionNameGames	-	-	-	-	-
 defaultValue	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
 systemNameSuffix	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
 letterCaseSystemNameSuffix	string	uppercase	-	-	-	-	-	-	enum	uppercase lowercase capitalize	-	-	-	-	-

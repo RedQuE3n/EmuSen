@@ -9,14 +9,14 @@ use emusen_esde::loader::values::number;
 use emusen_esde::loader::{Binding, Color, Pair, Severity, ThemePath, Value};
 
 #[test]
-fn the_catalogue_holds_themes_md_s_fifteen_reference_elements_and_sound_with_468_properties() {
+fn the_catalogue_holds_themes_md_s_fifteen_reference_elements_and_sound_with_472_properties() {
     let expected: BTreeMap<&str, usize> = [
-        ("carousel", 71),
+        ("carousel", 73),
         ("grid", 64),
         ("textlist", 38),
-        ("image", 35),
+        ("image", 36),
         ("video", 41),
-        ("animation", 22),
+        ("animation", 23),
         ("badges", 32),
         ("text", 35),
         ("datetime", 25),
@@ -32,7 +32,7 @@ fn the_catalogue_holds_themes_md_s_fifteen_reference_elements_and_sound_with_468
     .collect();
     let actual: BTreeMap<&str, usize> = catalog().elements.iter().map(|e| (e.kind.as_str(), e.properties.len())).collect();
     assert_eq!(actual, expected);
-    assert_eq!(catalog().property_count(), 468);
+    assert_eq!(catalog().property_count(), 472);
 }
 
 // Spot checks read from THEMES.md by hand, independent of how the catalogue was drafted.
@@ -250,7 +250,7 @@ fn every_documented_property_of_every_element_is_read_into_its_type() {
             seen.insert((element.clone(), property.clone()));
         }
     }
-    assert_eq!(seen.len(), 468);
+    assert_eq!(seen.len(), 472);
 }
 
 fn normalise(text: &str, kind: PropertyType) -> String {
@@ -319,7 +319,7 @@ fn every_literal_default_is_in_the_effective_values_of_an_element_that_sets_noth
         .flat_map(|e| e.properties.iter().filter(|p| p.default.is_some()).map(|p| (e.kind.clone(), p.name.clone())))
         .collect();
     assert!(literal.difference(&covered).next().is_none(), "{:?}", literal.difference(&covered).collect::<Vec<_>>());
-    assert_eq!(covered.len(), 336);
+    assert_eq!(covered.len(), 340);
 }
 
 #[test]

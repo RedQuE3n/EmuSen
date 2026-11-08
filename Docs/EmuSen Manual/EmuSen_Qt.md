@@ -928,7 +928,8 @@ here.
 | Module | Job | Files |
 |---|---|---|
 | `loader` | a theme folder to a `Theme` for one system and one set of choices: capabilities, selection, the parsing order, includes, variables, merging, typing, defaults, bindings, drawing order and every diagnostic with its code, file and line | `xml`, `diagnostics`, `values`, `catalog` (with `catalog.tsv`), `capabilities`, `choices`, `parse`, `view`, `resolved` |
-| `scene` | each element's rectangle, rotation, opacity, offset and text at a time on the host's clock, for a resolved view, the selection and ES-DE's measured motion; the move between views | `data`, `motion`, `words`, `grid`, `mapping` (with `mapping.tsv`), `view`, `stage` |
+| `scene` | each element's rectangle, rotation, opacity, offset and text at a time on the host's clock, for a resolved view, the selection and ES-DE's measured motion; the move between views; the painter's `Frame` (§4.5.5) | `data`, `motion`, `words`, `grid`, `mapping` (with `mapping.tsv`), `view`, `stage`, `frame`, `paint`, `primary`, `help`, `draw` |
+| `marks` | the built-in icons a theme does not supply, as polylines in a unit box (§4.5.5) | `marks` |
 | `check` | a theme or a corpus loaded for every selectable variant and each system, measured as TSV | `check` |
 
 - **A translation, file by file.** `loader` follows the C# `BigPicture/Theme` one to one: `ThemeXml` → `xml`,
@@ -937,7 +938,7 @@ here.
   readings (`EmuSen_BigPicture.md` §31, §35) are kept to the character: ES-DE's leading-number FLOAT, C-style
   UNSIGNED_INTEGER and COLOR, the pair split at its first space, `selectable` false only on `0`, `f` or `n`, untrimmed
   paths and includes, an unknown `imageType` hiding the element.
-- **The catalogue is data.** The 16 element types and 468 properties are `catalog.tsv`, one row a property (type,
+- **The catalogue is data.** The 16 element types and 472 properties (468 until the re-check of §4.5.5) are `catalog.tsv`, one row a property (type,
   literal default, same-as default, computed default, range, pair rule, shape, values, view limit, deferral), read once.
   It was generated from the C# `ThemeCatalog` by a script outside the repository on 2026-11-08 and is checked by the
   C# catalogue tests re-expressed (§4.5.3), the 39 hand-read entries among them.
@@ -955,14 +956,16 @@ here.
   since the selection, the `TextScroll` rule a self-scrolling text follows (LunaP's §102.3, with ES-DE's measured
   rates), the grid's focus, and what a text, datetime or clock says in its letter case. `Stage::layers()` gives the two
   views during a pan with their shifts, the help bar, clock and status held still. The clock is microseconds the host
-  passes in; nothing reads wall time. Text widths are the painter's: it measures and asks the rule for the offset.
-- **What the C# scene did that this one leaves to the host or the painter.** Media lookup (the C# `ISceneMedia`), the
-  system view's gameselector picks (`GameSelectors`; the system view's game is none here), badges, help prompts and
-  device status contents, the quick-scroll letters, animation frame timing, and the rebuild-on-step lever of
-  `EmuSen_BigPicture.md` §14.8, which has no meaning where a frame is a function of state.
-- **What is drawn** is `scene/mapping.tsv`, the C# `SceneMapping` as it stood on 2026-11-08: the pairs the painter must
-  draw to match the C# one, and the table `check` counts unsupported pairs against. Each painter stage that draws more
-  extends it.
+  passes in; nothing reads wall time. Text widths are the painter's: it reports them through `Stage::measured` and the
+  scene gives the offset (§4.5.5).
+- **What the C# scene did that this one leaves to the host or the painter.** Media lookup (the C# `ISceneMedia`; the
+  host fills `Game::media`), the system view's gameselector picks (`GameSelectors`; the system view's game is none
+  here), animation frame timing, and the rebuild-on-step lever of `EmuSen_BigPicture.md` §14.8, which has no meaning
+  where a frame is a function of state. Badges, help entries, device status and the quick-scroll letters moved into
+  the scene with the painter's contract (§4.5.5).
+- **What is drawn** is `scene/mapping.tsv`: every catalogue pair once, with its status (§4.5.5). Its `drawn` rows are
+  the C# `SceneMapping` as it stood on 2026-11-08, the pairs the painter must draw to match the C# one; `check` counts
+  a pair neither drawn nor accepted as unsupported. Each painter stage that draws more extends it.
 
 #### 4.5.2 `check` and `esde-check`
 
@@ -1028,11 +1031,139 @@ The measure is `Testing/esde-corpus/2026-11-08.tsv`, taken in 2.6 s:
   so each is an unknown property and unthemes every system. Both are documented in ES-DE's current `THEMES.md` (master,
   read 2026-11-08, its "carousel" section: NORMALIZED_PAIR, the scale and the spacing of the items before and after the
   centre); the catalogue was read from `THEMES.md` in September. The C# loader shares the catalogue and would refuse it
-  the same way. This is two catalogue rows to add, not a translation defect; adding them waits on the tester.
+  the same way. This is two catalogue rows to add, not a translation defect. Decided 2026-11-08: add them; with the
+  re-check of §4.5.5 NXE Menu loads, and all 71 do.
 - **The watched subset, fetched whole:** Art Book Next in all 100 runs with no error and no warning, 168 pairs set
   and 5 unsupported (the video playback properties); Artflix (Revisited) and CarAlt load in every run, with 6 and 8
   unsupported pairs, and both use a vertical wheel carousel, which the scene draws only in part. The pixel comparison against ES-DE's captures waits
   for the painter.
+
+#### 4.5.5 The painter's contract: `Stage::frame`, `mapping.tsv`, `marks` and the catalogue re-check **[M 2026-11-08]**
+
+The scene's output for the QML painter, as the painter's design (§3 and §13 there) defines it. Everything is in window
+pixels at the scene's time, a pure function of (view, data, size, time, measurements); the painter binds it and
+animates nothing.
+
+**The records** (`scene/frame.rs`), produced by `Stage::frame()` (`scene/draw.rs` per view, `scene/stage.rs` for the
+two views of a pan):
+
+| Record | Holds | Built from |
+|---|---|---|
+| `Frame` | `elements: Vec<Placed>` in drawing order (the leaving view's then the current view's during a pan, the overlays unmoved), `primary`, `leaving_primary`, `moving`, `next_change_ms`, `overlay` | `Stage` |
+| `Placed` | `id` (FNV-1a of view, kind and name, stable across frames and steps), kind, name, `x y w h`, rotation, rotation origin (fractions), opacity (the element's × the metadata fade × `scrollFadeIn`), `paint` | `SceneView::frame()`'s `ElementState`, its box re-placed by origin once measured |
+| `Paint::Picture` | source, fit (Fill, Contain, Cover, Tile), crop position, tile size and alignment, tint (colour, gradient end, direction), saturation, corner radius px, nearest, GIF frame | `paint.rs`, the C# `ImageElements` translated: image, video's still, animation (GIF) |
+| `Paint::Text` | words in their case, font, px, colour, alignments, line spacing, wrap, ellipsis, background (grown outward by its padding), `Scroll` | `TextElements` and the clock |
+| `Scroll` | a horizontal offset and the distance to the following copy, or a vertical offset and opacity | `TextScroll::loop_offset` and `run_at`, once measured |
+| `Paint::Rating` | value, filled and unfilled (`Icon`: the theme's file or the star mark), tint, overlay | the box 5:1 when one axis is 0 |
+| `Paint::Badges` | each shown slot's cell, its icon (a file fills the cell, a mark a centred square), the controller and folder link overlays | `SceneBadges` and LunaP's `BadgeStrip.Cells` |
+| `Paint::Help` | entries (label in case, `PadButton`, pair, the theme's icon for the button), font, px, colours, background, spacings, scale, filled glyphs | `HelpPrompts`, `help.rs` |
+| `Paint::Info`, `Paint::Status` | marks and texts, styles | gamelistinfo's counts (§39 of `EmuSen_BigPicture.md`); the device's radios and battery |
+| `Primary` | the element's id, `Rows` (systems, or one system's games), selected, and `Carousel { slots }`, `TextList { first_row, row_h, content_y, selector, colours, marquee }` or `Grid { columns, pitch, margin, content_y, focus, styles }` | `primary.rs`: the C# `PrimaryElements` and `GridElements`, LunaP's `ImageCarousel` and `TextRowList` |
+| `Slot` | row, the item box before scale, scale and its origin, turn and its origin, opacity, dim, saturation, tint, reflection | `ImageCarousel.ItemRect`, `GrowthPoint`, `WheelTransform`, `WheelAlignShift`, farthest first |
+| `ScrollLetters` | letters, star, px, opacity | the C# `ShowScrollLetters` |
+
+- **A slot's matrix as two transforms.** LunaP placed a carousel item by one matrix: scale about the growth point, the
+  wheel's turn about its centre, then the vertical wheel's alignment shift (or, upright, a translation round the
+  wheel). A translation after a scale and a turn equals the same scale and turn about origins moved by it, so a slot
+  carries the box already moved and the two origins moved with it, which QML's `Scale` and `Rotation` take directly.
+- **`measured(id, w, h)`** is the painter's report of what only it can know: a picture's own size, a text's or an
+  indicator row's extent, a text list's selected name's width. The scene keeps it with a key of the content it measured
+  (FNV-1a of the paint before measurement), so a measurement of the last game's name or cover is never applied to the
+  next: after a step the scroll is none and the box is the unmeasured one until the painter reports again.
+  `Stage::measured` returns whether the frame changed. It sizes `maxSize` pictures (contained), pictures with one axis
+  0 (the other by aspect) or none (their own size), and texts and the help, status and info rows on the axes the theme
+  left at 0, placed by `origin`.
+- **`moving` and `next_change_ms`.** `moving` is a glide, a hold, a fade, a `scrollFadeIn`, a pan or a measured scroll
+  in motion. `SceneView::is_animating` is the first five; `is_moving` keeps its old meaning (any text that may scroll),
+  which the scene tests use. `next_change_ms` is the nearest of each measured scroll's wait (`TextScroll::loop_wait`,
+  `run_wait`: until the delay, the pause or the fade ends) and a shown clock's next minute, or next second when its
+  format shows seconds, from `Data::now`. At rest with no clock and nothing measured to scroll, the frame asks for
+  nothing: the condition for §6's zero frames at rest.
+- **Inputs added to `Data`, `System` and `Game`:** the device status and the indicators kept, ES-DE's controller type
+  (which picks a theme's help icons), the face-button swap, the help context, the quick-scroll setting; a system's
+  stars, favourites-first and counts; a game's media by type (the host's lookup), controller, manual, alternative
+  emulator, folder link and collection membership.
+- **`PadButton`, not the kit's `UiButton`.** The crate depends on nothing of EmuSen's (`tests/fence.rs`), so a help
+  entry names its button by place, as THEMES.md's entries do (a, b, x, y in Xbox positions, the pads, shoulders,
+  triggers, back, start, stick click); the bridge maps place to the kit's button. One owner each: the places are
+  ES-DE's, the kit's functions the kit's.
+
+**`scene/mapping.tsv`** is now one row per (element, property): all 472 catalogue pairs, each once, with a status. The
+test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` holds it equal to the catalogue.
+
+| Status | Pairs | Meaning |
+|---|---|---|
+| `drawn` | 367 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it |
+| `accepted` | 9 | the help's eight `*Dimmed` properties (decided 2026-11-08; the design counted six, `THEMES.md` lists eight: `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`), and `sound.path`, which the host plays |
+| `later:video` | 16 | the video family |
+| `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
+| `later:item-text` | 19 | carousel and grid item text styles and scrolling, the collections' letter cases, name suffixes |
+| `later:picture` | 16 | interpolation, corner radius and brightness where not drawn, flips, mipmap, `scaleFactor`, `gameOverridePath`, `defaultFolderImage` |
+| `later:stationary` | 11 | `stationary`, `renderDuringTransitions`, `fadeAbovePrimary` |
+| `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
+| `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
+| `later:help-layout` | 1 | `entryLayout` |
+
+`check` counts a pair as `set` when it is drawn or accepted, `unsupported` otherwise; nothing reads `catalog.tsv`'s
+`deferred` column for it any more.
+
+**`marks`** (`src/marks.rs`): 30 icons as `Mark { aspect, parts }`, each part rings of points in the unit box (the first
+the outline, the rest holes, filled even-odd) filled or stroked at a width in box heights, in the element's colour, the
+idiom of kit-core's `Shape`. They are LunaP's drawings translated: the list's star, folder and tick; gamelistinfo's
+gamepad, star, funnel and folder (an em high, the baseline 0.85 down); the status's Bluetooth, Wi-Fi, cellular and the
+battery at 0 to 4 bars; the nine badges and the folder link; the controllers (unknown, generic pad, NES, SNES, N64).
+Arcs are flattened (eight segments a corner, 32 a circle). One difference is named: the unknown controller's "?" was a
+font glyph in LunaP and is a stroked hook and dot here, since the crate sets no type.
+
+**The catalogue re-check.** ES-DE's `THEMES.md` (master, fetched from gitlab.com/es-de/emulationstation-de on
+2026-11-08) was read element by element against `catalog.tsv`: names, types, literal defaults, ranges and enumerated
+values. Six differences, all additions since September:
+
+| Element | Added | From `THEMES.md` |
+|---|---|---|
+| `carousel` | `itemLinearScale`, `itemLinearSpacing` | NORMALIZED_PAIR, −0.5 to 1 per axis, default `0 0`, horizontal and vertical types only |
+| `image`, `animation` | `scaleFactor` | FLOAT 0.1 to 1, default 1; SVG (image) and Lottie (animation) rasterisation scale |
+| `text` | `metadata` values `customCollectionNameGrouped`, `customCollectionNameGames` | the custom collection's name in the grouped system, and inside it |
+
+The two new `metadata` values are accepted by the loader and draw nothing yet (a text with nothing to say is skipped):
+the scene has no grouped custom collections, which belong to the shelves (the design's piece D2).
+
+**The corpus re-measured**, `Testing/esde-corpus/2026-11-08b.tsv`, the same 71 themes' XML as §4.5.4, in 2.75 s:
+
+| | 2026-11-08 (§4.5.4) | 2026-11-08b |
+|---|---|---|
+| Load for all five systems | 70 | **71** |
+| Drawn whole | 0 | 0 |
+| Use no undrawn kind | 61 | 61 |
+
+No row worsened but one, and that one by loading: NXE Menu loads in all five runs with no error (was 20 errors, 2 unknown properties; its unsupported
+pairs rise from 10 to 12, the two carousel rows now known and `later`). 30 themes set
+fewer unsupported pairs, each by its help's dimmed properties now accepted (CarAlt 8 to 2, Epic Noir Revisited 8 to 2,
+Razor 4 to 2). Atelier and Analogue 3D Menu warn less (6,795 to 6,585 and 2,575 to 2,540), each by the two
+`customCollectionName` values no longer refused. Nine themes now set at most two unsupported pairs; the pairs most often
+unsupported are the video family's (`video.delay` in 55 themes, `pillarboxes` 49), then `carousel.imageInterpolation`
+(20) and `image.stationary` (18), the order the painter's design ranks the families in.
+
+**Proof.** 14 tests in `tests/frame.rs` (the mapping and its accepted pairs through `check`, the marks in their box,
+the carousel at rest and mid-step, a wheel and a reflecting row, the text list's window and marquee through a
+measurement, a `maxSize` picture and a text sized by its words, the help's words, buttons and icons under the swap,
+badges, status and rating, the overlays through a pan, the quick-scroll letters, the clock's wake); the crate's 157
+tests pass. Seeded faults, each applied alone and reverted:
+
+| Fault | Caught by |
+|---|---|
+| carousel slots drawn nearest first | `a_carousel_s_selected_slot_grows…`, `a_carousel_mid_step…`, `a_wheel_turns…` |
+| a list's measurement kept after its name changes | `a_text_list_keeps_the_selection_mid_window_and_scrolls_its_name_once_measured` |
+| accepted pairs counted unsupported | `mapping_lists_every_catalogue_pair_once…`, `a_theme_setting_only_accepted_pairs_counts_none_unsupported` |
+| the swap moving the button but not its icon | `the_help_names_the_project_s_actions_on_the_buttons_and_icons_of_the_pad` |
+| overlays panned with the view | `the_overlays_hold_still_while_the_views_pan_and_both_primaries_are_drawn` |
+| the next change ignoring the scrolls | `a_text_list_keeps_the_selection_mid_window…` |
+| `maxSize` contained by the larger ratio | `a_picture_with_max_size_is_contained_once_its_own_size_is_known` |
+
+**Left for later, named:** a GIF's frame at the time (`Picture::frame` is none until the painter reports the file's
+frame delays); the system view's gameselector picks (the host's); the grid's and carousel's per-row text styles beyond
+the C#'s (`later:item-text`). A frame allocates its records each tick; the bridge's models change rows in place
+(design §4), and whether the scene's own allocation shows in a frame's cost is measured with the painter, not assumed.
 
 ---
 

@@ -111,6 +111,11 @@ pub mod qobject {
         #[cxx_name = "titleOf"]
         fn title_of(self: &LibraryModel, path: &QString) -> QString;
 
+        /// A game's console's name from its path, as its facts begin; empty for a game the library does not hold.
+        #[qinvokable]
+        #[cxx_name = "consoleOf"]
+        fn console_of(self: &LibraryModel, path: &QString) -> QString;
+
         /// The Home card's facts as plain data (home_card.rs): the suspended game by its path and the words of its pause,
         /// the tools' summaries, and whether Steam's Game Mode holds the session.
         #[qinvokable]
@@ -264,6 +269,11 @@ impl cxx_qt::Initialize for qobject::LibraryModel {
 }
 
 impl qobject::LibraryModel {
+    /// The whole view as last read, for a host that curates it (an EmuSen theme's `Library`, EmuSen_Qt.md §3.2).
+    pub fn view(&self) -> &LibraryView {
+        &self.view
+    }
+
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {
         let Some(row) = self.view.rows.rows().get(index.row() as usize) else {
             return QVariant::default();
@@ -334,6 +344,10 @@ impl qobject::LibraryModel {
             let refreshed = refresh_with(source.as_ref(), &gamelists);
             let _ = qt.queue(move |model| model.apply(None, refreshed));
         });
+    }
+
+    pub fn console_of(&self, path: &QString) -> QString {
+        QString::from(self.view.console_of(&path.to_string()).as_str())
     }
 
     pub fn title_of(&self, path: &QString) -> QString {

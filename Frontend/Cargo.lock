@@ -379,6 +379,7 @@ dependencies = [
  "emusen-qt-play",
  "emusen-qt-test",
  "emusen-theme-host",
+ "emusen-theme-qt",
  "serde_json",
 ]
 

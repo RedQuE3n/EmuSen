@@ -21,6 +21,9 @@ Item {
     readonly property bool splash: splashSlot.themed
     readonly property alias failed: host.failed
     readonly property alias warnings: host.warnings
+    readonly property alias host: host
+    // Whether one of the theme's screens holds the focus, so the pad's presses go to the theme's engine.
+    readonly property bool holdsFocus: homeSlot.activeFocus || consolesSlot.activeFocus || gamesSlot.activeFocus
     // One screen of the theme: a slot made while the theme provides its role, the screen created into it in the theme's own engine.
     component Slot: Loader {
         id: slot
@@ -37,7 +40,9 @@ Item {
         active: slot.wanted && slot.host.ready && slot.host.provides(slot.role)
         visible: slot.shown && slot.themed
         focus: slot.visible && slot.inputs
-        sourceComponent: FocusScope {}
+        sourceComponent: FocusScope {
+            focus: true
+        }
         onLoaded: slot.placed = slot.host.place(slot.role, slot.item)
     }
     Host.ThemeHost {

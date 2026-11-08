@@ -431,6 +431,13 @@ QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module,
     return engine.singletonInstance<QObject*>(module, name);
 }
 
+QObject* harness_focused_singleton(QObject& window, const QString& module, const QString& name)
+{
+    QQuickWindow* w = quick(window);
+    QQmlEngine* engine = w != nullptr && w->activeFocusItem() != nullptr ? qmlEngine(w->activeFocusItem()) : nullptr;
+    return engine != nullptr ? engine->singletonInstance<QObject*>(module, name) : nullptr;
+}
+
 int harness_roots(QQmlApplicationEngine& engine) { return static_cast<int>(engine.rootObjects().size()); }
 
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value)

@@ -46,15 +46,15 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
     match screen {
         Screen::Home => &[
             (UiButton::Accept, "Resume", None),
-            (UiButton::Screensaver, "Game page", Some("gamePage")),
-            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Screensaver, "Game page", Some(GAME_PAGE)),
+            (UiButton::Search, "Favourite", Some(FAVOURITE)),
             (UiButton::Options, "Search", Some("search")),
             (UiButton::Menu, "Home", Some(HOME)),
         ],
         Screen::HomeShelf => &[
             (UiButton::Accept, "Play", None),
-            (UiButton::Screensaver, "Game page", Some("gamePage")),
-            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Screensaver, "Game page", Some(GAME_PAGE)),
+            (UiButton::Search, "Favourite", Some(FAVOURITE)),
             (UiButton::Options, "Search", Some("search")),
             (UiButton::Menu, "Home", Some(HOME)),
         ],
@@ -67,12 +67,12 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
             (UiButton::Accept, "Open", None),
             (UiButton::Back, "Back", None),
             (UiButton::Search, "Favourites", Some(crate::library::FAVOURITES)),
-            (UiButton::Screensaver, "Random game", Some("random")),
+            (UiButton::Screensaver, "Random game", Some(RANDOM)),
         ],
         Screen::Grid => &[
             (UiButton::Accept, "Play", None),
-            (UiButton::Screensaver, "Game page", Some("gamePage")),
-            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Screensaver, "Game page", Some(GAME_PAGE)),
+            (UiButton::Search, "Favourite", Some(FAVOURITE)),
             (UiButton::PageUp, "Console", Some(PREVIOUS)),
             (UiButton::Options, "List", Some("list")),
             (UiButton::Back, "Consoles", None),
@@ -80,8 +80,8 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
         ],
         Screen::GridSearched => &[
             (UiButton::Accept, "Play", None),
-            (UiButton::Screensaver, "Game page", Some("gamePage")),
-            (UiButton::Search, "Favourite", Some("favourite")),
+            (UiButton::Screensaver, "Game page", Some(GAME_PAGE)),
+            (UiButton::Search, "Favourite", Some(FAVOURITE)),
             (UiButton::PageUp, "Console", Some(PREVIOUS)),
             (UiButton::Options, "List", Some("list")),
             (UiButton::Back, "Clear search", None),
@@ -134,6 +134,11 @@ pub fn entries(screen: Screen) -> &'static [Entry] {
 
 /// Start's action away from a game and a card: Home (EmuSen_BigPicture.md §51.2, §51.3).
 pub const HOME: &str = "home";
+
+/// The focused game's page, its heart, and a random game: actions a later stage carries out.
+pub const GAME_PAGE: &str = "gamePage";
+pub const FAVOURITE: &str = "favourite";
+pub const RANDOM: &str = "random";
 
 /// The shoulders on the grid: the console before and the console after (Mistress's `StepSection`).
 pub const PREVIOUS: &str = "previous";

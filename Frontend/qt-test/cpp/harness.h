@@ -24,6 +24,7 @@ void harness_give_focus(QObject& window, std::uint64_t id);
 bool harness_grab(QObject& window, const QString& path);
 QString harness_property(QObject& root, const QString& object_name, const QString& property);
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name);
+QObject* harness_focused_singleton(QObject& window, const QString& module, const QString& name);
 int harness_roots(QQmlApplicationEngine& engine);
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value);
 bool harness_watch(QObject& root, const QString& object_name, const QString& property);

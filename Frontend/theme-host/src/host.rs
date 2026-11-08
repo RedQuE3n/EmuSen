@@ -194,6 +194,11 @@ impl qobject::ThemeHost {
         Ok(package)
     }
 
+    /// The theme's engine, which the program's feed hands the views (EmuSen_Qt.md §3.5.1); null while none is loaded.
+    pub fn engine(&self) -> *mut cxx_qt::QObject {
+        self.sandbox.as_ref().map_or(std::ptr::null_mut(), sandbox_engine)
+    }
+
     pub fn provides(&self, role: qobject::Role) -> bool {
         self.package.as_ref().is_some_and(|p| p.screens.contains(&screen(role)))
     }

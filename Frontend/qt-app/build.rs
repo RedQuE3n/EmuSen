@@ -15,6 +15,7 @@ fn main() {
             .depend("EmuSen.Play")
             .depend("EmuSen.ThemeHost"),
     )
+    .files(["src/theme.rs"])
     .qt_module("Quick")
     .qt_module("QuickControls2")
     .build()

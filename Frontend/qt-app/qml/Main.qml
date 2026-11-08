@@ -4,6 +4,7 @@ import EmuSen.Kit as Kit
 import EmuSen.Models
 import EmuSen.Endymion
 import EmuSen.Play as Play
+import EmuSen.App
 
 // emusen-qt's window: the screens on the big screen's canvas, the game under them and the Pause Card over it, Moonrise over them at the start until it ends and the library is read, the pads through Endymion (EmuSen_Qt.md §7, EmuSen_Interface.md §22).
 Window {
@@ -67,7 +68,22 @@ Window {
         onlyPads: program.onlyPads
         // While Guide is held for its chords the game hears nothing, as Mistress keeps the pad from it.
         gameMuted: Kit.PadRouter.guideHeld
-        onButton: (button, down) => Kit.PadRouter.push(button, down)
+        // A theme's screens hear the pad through their own engine's router (EmuSen_Qt.md §3.5.2).
+        onButton: (button, down) => themeHost.holdsFocus ? feed.push(button, down) : Kit.PadRouter.push(button, down)
+    }
+    // Home's lines that change with the time: the status line and the paused game's facts.
+    Clock {
+        id: clock
+        objectName: "clock"
+        controllers: pads.connected
+        console: player.session.running ? library.consoleOf(player.session.game) : ""
+        gamePaused: player.session.running && player.session.paused
+    }
+    Timer {
+        interval: 15000
+        repeat: true
+        running: true
+        onTriggered: clock.tick()
     }
     // The game, under the screens: in front on its own screen, paused under the Pause Card, and behind Home while it is suspended there, where Continue draws its picture.
     Play.Game {
@@ -163,6 +179,53 @@ Window {
         gamesShown: screens.shown === Screens.Grid || screens.shown === Screens.List || screens.shown === Screens.Search || screens.shown === Screens.SearchGrid
         splashShown: program.splashShown
         splashLayer: splashLayer
+    }
+    // The theme's engine fed from the program's models, and its Actions carried out (EmuSen_Qt.md §3.5.2).
+    ThemeFeed {
+        id: feed
+        objectName: "themeFeed"
+        host: themeHost.host
+        onPlayed: (game) => {
+            if (game !== player.session.game || !player.session.running)
+                return program.play(game)
+            player.session.resume()
+            screens.play()
+        }
+        onPlaceChosen: (index) => screens.place(index)
+        onOpened: (key) => screens.open(key)
+        onBacked: screens.back()
+        onActed: (key) => screens.act(key)
+    }
+    // A new engine is fed everything; each feed after is the one model that changed.
+    Connections {
+        target: themeHost.host
+        function onGenerationChanged() {
+            feed.showMotion(program.reducedMotion)
+            feed.showLibrary(library)
+            feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture)
+            feed.showDevice(pads.connected, program.padFamily, clock.time)
+            feed.attach()
+        }
+    }
+    Connections {
+        target: pads
+        function onConnectedChanged() { feed.showDevice(pads.connected, program.padFamily, clock.time) }
+    }
+    onReducedMotionChanged: feed.showMotion(program.reducedMotion)
+    Connections {
+        target: library
+        function onLoadingChanged() { feed.showLibrary(library) }
+        function onHomeLinesChanged() { feed.showLibrary(library) }
+    }
+    Connections {
+        target: player.session
+        function onRunningChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
+        function onGameChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
+    }
+    Connections {
+        target: clock
+        function onPausedChanged() { feed.showSession(player.session.game, player.session.running, clock.pausedAt(), player.picture) }
+        function onLineChanged() { feed.showDevice(pads.connected, program.padFamily, clock.time) }
     }
     // The Home card over Home, opened at Power by its place (EmuSen_Interface.md §2.3; EmuSen_BigPicture.md §51.2).
     Kit.NormalizedCanvas {

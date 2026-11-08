@@ -33,6 +33,7 @@ fn qt_3_5_no_network_and_no_unknown_scheme() {
     }
     assert!(passes(&p, "data:image/png;base64,AAAA", Kind::Url));
     assert!(passes(&p, "image://provider/x", Kind::Url));
+    assert!(passes(&p, "", Kind::Url), "an empty URL, a picture with no source yet, reaches nothing");
 }
 
 #[test]

@@ -139,6 +139,10 @@ impl Policy {
     /// Empty when the engine may fetch `url`; else the words of its refusal. `local` is the URL's file path when it is a `file:`
     /// URL, and `text` the file's contents where `reads` asked for them.
     pub fn judge(&self, url: &str, local: &str, kind: Kind, text: &str) -> String {
+        // An empty URL (a picture with no source yet) names nothing and reaches nothing.
+        if url.is_empty() {
+            return String::new();
+        }
         if self.in_folder(url, local) {
             let file = url.strip_prefix(self.folder.as_str()).or_else(|| local.rsplit('/').next()).unwrap_or(url);
             let refused = match kind {

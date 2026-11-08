@@ -30,6 +30,8 @@ pub mod ffi {
         fn harness_grab(window: Pin<&mut QObject>, path: &QString) -> bool;
         fn harness_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> QString;
         unsafe fn harness_singleton(engine: Pin<&mut QQmlApplicationEngine>, module: &QString, name: &QString) -> *mut QObject;
+        /// The singleton of the engine that made the window's focused item, as a hosted theme's engine has its own; null for none.
+        fn harness_focused_singleton(window: Pin<&mut QObject>, module: &QString, name: &QString) -> *mut QObject;
         fn harness_roots(engine: Pin<&mut QQmlApplicationEngine>) -> i32;
         fn harness_set_property(root: Pin<&mut QObject>, object_name: &QString, property: &QString, value: &QString) -> bool;
         fn harness_watch(root: Pin<&mut QObject>, object_name: &QString, property: &QString) -> bool;

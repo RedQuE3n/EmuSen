@@ -27,6 +27,8 @@ emusen-qt-endymion = { path = "../qt-endymion" }
 emusen-qt-play = { path = "../qt-play" }
 # The chosen EmuSen theme in its sandboxed engine, beside the reference's screens (EmuSen_Qt.md §3.5).
 emusen-theme-host = { path = "../theme-host" }
+# The views a theme reads, which the program feeds into the theme's engine (src/theme.rs, EmuSen_Qt.md §3.5.2).
+emusen-theme-qt = { path = "../theme-qt" }
 # The settings read before the window opens (Moonrise on or off), through the platform library.
 emusen-platform-client = { path = "../platform-client" }
 

@@ -238,6 +238,11 @@ impl qobject::GameModel {
         self.rows.len() as i32
     }
 
+    /// The rows as shown, for a host that curates them (an EmuSen theme's `Browse`, EmuSen_Qt.md §3.2).
+    pub fn rows(&self) -> &[GameRow] {
+        &self.rows
+    }
+
     fn at(&self, row: i32) -> Option<&GameRow> {
         usize::try_from(row).ok().and_then(|i| self.rows.get(i))
     }

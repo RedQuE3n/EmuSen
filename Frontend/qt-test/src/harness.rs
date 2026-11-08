@@ -390,6 +390,18 @@ impl Scene<'_> {
         usize::try_from(ffi::harness_notified(self.window(), &QString::from(object_name), &QString::from(property))).ok()
     }
 
+    /// The pad router of the engine whose item holds the focus, as the program hands a hosted theme's engine its presses
+    /// (EmuSen_Qt.md §3.5.2); the scene's own otherwise.
+    fn router(&mut self) -> Option<Pin<&mut PadRouter>> {
+        let object = ffi::harness_focused_singleton(self.window(), &QString::from("EmuSen.Kit"), &QString::from("PadRouter"));
+        if object.is_null() {
+            return self.harness.router();
+        }
+        // Safety: the kit registers PadRouter as this type in every engine, which keeps it alive as long as itself.
+        let typed = unsafe { PadRouter::from_base_ptr(object as *const QObject) } as *mut PadRouter;
+        Some(unsafe { Pin::new_unchecked(&mut *typed) })
+    }
+
     /// A pad press through the router's queue, down then up, on the harness's own clock; the router's wall clock is off.
     pub fn pad(&mut self, button: UiButton) {
         let (down, up) = {
@@ -397,7 +409,7 @@ impl Scene<'_> {
             self.harness.now_ms += 32;
             (now, now + 16)
         };
-        if let Some(mut router) = self.harness.router() {
+        if let Some(mut router) = self.router() {
             router.as_mut().set_clock_running(false);
             router.as_mut().push(kinds::pad_button(button), true);
             router.as_mut().pump_at(down);
@@ -409,17 +421,20 @@ impl Scene<'_> {
 
     /// Whether the router gives the menu chord alone, as it does while a game owns the pad.
     pub fn pad_chord_only(&mut self) -> bool {
-        self.harness.router().is_some_and(|router| *router.chord_only())
+        self.router().is_some_and(|router| *router.chord_only())
     }
 
     /// Whether the router holds a button, as its last pump left it.
     pub fn pad_held(&mut self, button: UiButton) -> bool {
-        self.harness.router().is_some_and(|router| router.is_held(kinds::pad_button(button)))
+        self.router().is_some_and(|router| router.is_held(kinds::pad_button(button)))
     }
 
     /// The router pumped by the frame's timer on the wall clock again, as a real pad needs it; `pad` turns it off.
     pub fn run_pad_clock(&mut self) {
         if let Some(router) = self.harness.router() {
+            router.set_clock_running(true);
+        }
+        if let Some(router) = self.router() {
             router.set_clock_running(true);
         }
     }

@@ -31,6 +31,10 @@ pub mod qobject {
         #[qproperty(bool, clock_running)]
         #[qproperty(bool, chord_only)]
         #[qproperty(bool, pending, READ, NOTIFY)]
+        /// Guide held with Up, Down or the right shoulder is a chord while a game owns the pad, and Guide alone opens the menu as it is let go.
+        #[qproperty(bool, guide_chords)]
+        /// Guide held while its chords are read over a game: the game is to hear nothing (`PadReader.gameMuted`).
+        #[qproperty(bool, guide_held, READ, NOTIFY)]
         type PadRouter = super::PadRouterRust;
     }
 
@@ -58,6 +62,10 @@ pub mod qobject {
 
         #[qinvokable]
         fn is_held(self: &PadRouter, button: PadButton) -> bool;
+
+        /// Guide was held and `button` went down (Up, Down or the right shoulder) while a game owned the pad; what it means is the host's.
+        #[qsignal]
+        fn guide_chord(self: Pin<&mut PadRouter>, button: PadButton);
     }
 
     impl cxx_qt::Initialize for PadRouter {}
@@ -69,6 +77,8 @@ pub struct PadRouterRust {
     clock_running: bool,
     chord_only: bool,
     pending: bool,
+    guide_chords: bool,
+    guide_held: bool,
     router: Router,
     started: Instant,
 }
@@ -81,6 +91,8 @@ impl Default for PadRouterRust {
             clock_running: true,
             chord_only: false,
             pending: false,
+            guide_chords: false,
+            guide_held: false,
             router: Router::new(RepeatTiers::OWN),
             started: Instant::now(),
         }
@@ -105,6 +117,14 @@ impl cxx_qt::Initialize for qobject::PadRouter {
             .on_chord_only_changed(|mut this| {
                 let on = this.chord_only;
                 this.as_mut().rust_mut().router.set_chord_only(on);
+                this.as_mut().update_guide_held();
+            })
+            .release();
+        self.as_mut()
+            .on_guide_chords_changed(|mut this| {
+                let on = this.guide_chords;
+                this.as_mut().rust_mut().router.set_guide_chords(on);
+                this.as_mut().update_guide_held();
             })
             .release();
     }
@@ -127,6 +147,14 @@ impl qobject::PadRouter {
         }
     }
 
+    fn update_guide_held(mut self: Pin<&mut Self>) {
+        let held = self.router.guide_held();
+        if held != self.guide_held {
+            self.as_mut().rust_mut().guide_held = held;
+            self.as_mut().guide_held_changed();
+        }
+    }
+
     pub fn pump(mut self: Pin<&mut Self>) {
         let now = self.started.elapsed();
         self.as_mut().pump_now(now);
@@ -140,8 +168,12 @@ impl qobject::PadRouter {
     fn pump_now(mut self: Pin<&mut Self>, now: Duration) {
         let pumped = self.as_mut().rust_mut().router.pump(now);
         self.as_mut().update_pending();
+        self.as_mut().update_guide_held();
         if pumped.menu_chord {
             self.as_mut().menu_chord();
+        }
+        if let Some(button) = pumped.guide_chord {
+            self.as_mut().guide_chord(kinds::pad_button(button));
         }
         for press in pumped.presses {
             let jump = i32::try_from(press.jump).unwrap_or(i32::MAX);

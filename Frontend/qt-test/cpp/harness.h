@@ -25,6 +25,8 @@ QString harness_property(QObject& root, const QString& object_name, const QStrin
 QObject* harness_singleton(QQmlApplicationEngine& engine, const QString& module, const QString& name);
 int harness_roots(QQmlApplicationEngine& engine);
 bool harness_set_property(QObject& root, const QString& object_name, const QString& property, const QString& value);
+bool harness_watch(QObject& root, const QString& object_name, const QString& property);
+int harness_notified(QObject& root, const QString& object_name, const QString& property);
 QString harness_colours_at(QObject& window, const QString& points);
 void harness_hide_words(QObject& window, bool hidden);
 std::uint64_t harness_frames(QObject& window);

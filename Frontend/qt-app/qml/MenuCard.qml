@@ -47,6 +47,8 @@ FocusScope {
     signal focused(int index)
     signal backed()
     signal acted(string key)
+    // A key the focused row did not take, for the host's model: the Pause Card's reel strides on the shoulders and triggers.
+    signal keyed(int key)
     // The card has left the screen.
     signal gone()
     Accessible.role: Accessible.Pane
@@ -298,6 +300,7 @@ FocusScope {
                         onActiveFocusChanged: list.currentIndex = row.activeFocus ? row.index : list.currentIndex
                         Keys.onLeftPressed: (event) => root.stepped(row.index, -1, event.isAutoRepeat)
                         Keys.onRightPressed: (event) => root.stepped(row.index, 1, event.isAutoRepeat)
+                        Keys.onPressed: (event) => root.keyed(event.key)
                     }
                 }
             }

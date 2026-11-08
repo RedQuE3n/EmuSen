@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{game_mode_from, platform_library, reduced_motion_from, splash_from, LIBRARY_FILE};
+use emusen_qt::start::{game_mode_from, guide_chords_from, platform_library, reduced_motion_from, splash_from, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -37,4 +37,13 @@ fn steam_s_game_mode_is_read_as_mistress_reads_it() {
     assert!(game_mode_from(None, Some("1")), "no desktop named, SteamDeck=1");
     assert!(game_mode_from(Some(""), Some("1")));
     assert!(!game_mode_from(None, None));
+}
+
+#[test]
+fn the_guide_chords_are_on_off_or_auto_away_from_game_mode() {
+    assert!(guide_chords_from(&serde_json::Value::Null, false), "Auto, the default, on the desktop");
+    assert!(!guide_chords_from(&serde_json::Value::Null, true), "Auto under Game Mode, where Steam holds Guide");
+    assert!(guide_chords_from(&json!({ "GuideChords": "On" }), true));
+    assert!(!guide_chords_from(&json!({ "GuideChords": "Off" }), false));
+    assert!(!guide_chords_from(&json!({ "GuideChords": "Auto" }), true));
 }

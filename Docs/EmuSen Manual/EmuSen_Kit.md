@@ -1565,6 +1565,47 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   Mistress's (15, 17, 27) at 1920 × 1200. kit-core's palette reach now takes a declared opaque token at any alpha, since
   a token through a colour's alpha is the token as it is through an item's opacity (`tests/audit.rs`).
 
+### 7.26 The Guide chords, the shoulders on a card, and a property's signal in the harness (stage 2; 2026-11-08)
+
+- **The Guide chords** (`EmuSen_BigPicture.md` §48.7, Mistress's `GuideChordReader`). kit-core's `GuideChords`
+  (`input/guide.rs`) reads the held buttons each tick: Guide held with Up, Down or the right shoulder going down is
+  `With(button)`, the first of `GuideChords::BUTTONS` to go down winning the tick; a button already down when Guide went
+  down is no chord; Guide let go with nothing chorded is `Alone`; `reset` forgets a Guide held across a menu. The kit
+  says only which button was chorded. What each means (save, load, a screenshot) is the program's, in
+  `emusen-qt-models`' `pause::guide_chord`.
+- **The router reads them while a game owns the pad.** With `set_guide_chords` on and `chord_only`, Guide alone opens the
+  menu as it is let go (`Pumped.menu_chord`), a chord is `Pumped.guide_chord` and opens nothing, and Options with Menu
+  open the menu at once only while Guide is up, as Mistress's `MainWindow.Pad` has it. Away from a game, or with the
+  chords off, the reader is reset each pump and Guide opens the menu as it goes down, as before.
+- **`PadRouter` gains `guideChords` and `guideChord(button)`**, reviewed under rule Q: an extension, both declared last
+  (property index 5 after `pending`; the signal after `isHeld`), so no existing index moves. The committed registry was
+  diffed before it was copied: 16 lines added, none changed beyond line numbers. `Game.qml` binds the property and
+  hands the signal to `SessionModel.guideChord`.
+- **`guideHeld`, and the game kept from the pad while Guide is held** (decided by the tester on 2026-11-08, as Mistress's
+  `_padQuiet` keeps it). `Router::guide_held` is true while Guide is held with the chords read over a game, and
+  `PadRouter.guideHeld` follows it after every pump and every change of `guideChords` or `chordOnly`: a read-only
+  property, the seventh, declared last under rule Q (the registry's diff again additions only). The program binds it to
+  `PadReader.gameMuted`, and the pads' hand-over (`GamePads::set_muted`) gives the game no button while it is on and,
+  after it, none until every button is let go, as after a menu. So Guide with Up saves the state the game was in, not
+  one with Up pressed.
+- **A card's shoulders and triggers reach its row.** `UiButton::key` gave no key for PageUp, PageDown, First and Last,
+  though `Key::button` mapped PageUp, PageDown, Home and End to them, so a press the walk declined on a card (whose
+  form has no sections to step) was dropped. They now become PageUp, PageDown, Home and End for the focused control,
+  as every other declined press becomes its key. On the big screen and the desktop the walk still takes the shoulders
+  for its sections first. `MenuCard` hands a key its row did not take to its host (`keyed`), and the Pause Card's
+  model strides the reel with it (`EmuSen_Qt.md` §7.5).
+- **The harness counts a property's change signal.** `Scene::watch(object, property)` puts a `QSignalSpy` on the
+  property's notify signal and `notified` reads how many times it fired since. Since Qt 6.9 `QSignalSpy` is no
+  QObject, so a child object of the watched one holds it, to live and be found with it. This answers the seeded fault
+  that no test caught in stage 2's Speed step (`EmuSen_Qt.md` §7.3): a property whose value is right but whose change is
+  never announced. *C++ part*: `harness_watch` and `harness_notified` in `qt-test/cpp/harness.cpp` [own, because QtTest's
+  spy is C++ and cxx-qt reaches no signal by its meta-method].
+- Held to by `kit-core/tests/input.rs` (Mistress's cases of the reader, and the four keys), `kit-qt/tests/router.rs`
+  (a chord, Guide alone on release, the two middle buttons, the chords off, `guide_held` while Guide is held and only
+  with the chords on), `qmltypes.rs`, and `emusen-qt-models`' `input` over the test core and a simulated pad (A held
+  while muted is not heard, nor after the mute until let go, and is heard pressed again). Seeded faults, each reverted:
+  the hand-over ignoring the mute (`input`); `guide_held` with the chords off (`router`).
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

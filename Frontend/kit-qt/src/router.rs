@@ -3,7 +3,7 @@
 use std::collections::VecDeque;
 use std::time::Duration;
 
-use emusen_kit_core::input::{Grammar, Press, RepeatTiers, UiButton};
+use emusen_kit_core::input::{Grammar, GuideChord, GuideChords, Press, RepeatTiers, UiButton};
 
 /// One pad event, as a test or a pad reader pushes it: a button went down or up.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,6 +17,8 @@ pub struct PadEvent {
 pub struct Pumped {
     pub presses: Vec<Press>,
     pub menu_chord: bool,
+    /// The button Guide was chorded with (`GuideChords::BUTTONS`), while the Guide chords are read.
+    pub guide_chord: Option<UiButton>,
 }
 
 #[derive(Clone, Debug)]
@@ -28,11 +30,13 @@ pub struct Router {
     chord_only: bool,
     /// Buttons held while only the chord left, kept from the grammar until let go.
     muted: [bool; 16],
+    guide_chords: bool,
+    guide: GuideChords,
 }
 
 impl Router {
     pub fn new(tiers: RepeatTiers) -> Router {
-        Router { grammar: Grammar::new(tiers), held: [false; 16], queue: VecDeque::new(), swap_accept_back: false, chord_only: false, muted: [false; 16] }
+        Router { grammar: Grammar::new(tiers), held: [false; 16], queue: VecDeque::new(), swap_accept_back: false, chord_only: false, muted: [false; 16], guide_chords: false, guide: GuideChords::default() }
     }
 
     pub fn set_tiers(&mut self, tiers: RepeatTiers) {
@@ -47,6 +51,18 @@ impl Router {
     /// again: a game on screen owns the pad (EmuSen_Kit.md §7.17).
     pub fn set_chord_only(&mut self, on: bool) {
         self.chord_only = on;
+    }
+
+    /// While on, and while a game owns the pad (`chord_only`), Guide is read for its chords: alone it opens the menu as it
+    /// is let go, and Options with Menu open it at once only while Guide is up (EmuSen_Kit.md §7.26).
+    pub fn set_guide_chords(&mut self, on: bool) {
+        self.guide_chords = on;
+    }
+
+    /// Guide held while the Guide chords are read over a game, as the last pump left it: the game is to hear nothing
+    /// then, as Mistress keeps the pad from it (EmuSen_Kit.md §7.26).
+    pub fn guide_held(&self) -> bool {
+        self.guide_chords && self.chord_only && self.held[UiButton::Guide.index()]
     }
 
     /// Whether a pump has work: an event queued or a button held, whose repeats and chord the clock times. With neither,
@@ -70,7 +86,22 @@ impl Router {
             self.held[event.button.index()] = event.down;
         }
         let raw = self.held;
-        let menu_chord = self.grammar.menu_chord(|button: UiButton| raw[button.index()]);
+        let mut guide_chord = None;
+        let menu_chord = if self.guide_chords && self.chord_only {
+            let chorded = self.guide.feed(|button: UiButton| raw[button.index()]);
+            let pair = self.grammar.menu_chord(|button: UiButton| button != UiButton::Guide && raw[button.index()]);
+            match chorded {
+                Some(GuideChord::Alone) => true,
+                Some(GuideChord::With(button)) => {
+                    guide_chord = Some(button);
+                    false
+                }
+                None => pair && !self.guide.guide_held(),
+            }
+        } else {
+            self.guide.reset(raw[UiButton::Guide.index()]);
+            self.grammar.menu_chord(|button: UiButton| raw[button.index()])
+        };
         for (muted, &down) in self.muted.iter_mut().zip(&raw) {
             *muted = down && (*muted || self.chord_only);
         }
@@ -81,6 +112,6 @@ impl Router {
         }
         let swap = self.swap_accept_back;
         let presses = self.grammar.feed(is_held, now).iter().map(|p| Press { button: p.button.swapped(swap), ..*p }).collect();
-        Pumped { presses, menu_chord }
+        Pumped { presses, menu_chord, guide_chord }
     }
 }

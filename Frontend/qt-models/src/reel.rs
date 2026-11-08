@@ -14,6 +14,9 @@ pub const STOP_SECONDS: [f64; 4] = [1.5, 4.0, 8.0, 12.0];
 /// The shoulders' stride, in seconds.
 pub const STRIDE_SECONDS: f64 = 5.0;
 
+/// Seconds closer than this are one time: a moment exactly five seconds on lies an ulp short of `from + 5` (EmuSen_Qt.md §7.5).
+const SAME_MOMENT: f64 = 1e-9;
+
 /// The frames between two snapshots for a game at `hz`.
 pub fn interval_for(hz: f64) -> u32 {
     if hz > 0.0 { (hz / SNAPSHOTS_PER_SECOND).round().max(1.0) as u32 } else { 30 }
@@ -143,7 +146,8 @@ impl Reel {
         let mut i = self.at as i64 + back as i64;
         while i >= 0 && i <= last as i64 {
             let s = self.marks[i as usize].seconds_back;
-            if (back > 0 && s >= from + STRIDE_SECONDS) || (back < 0 && s <= from - STRIDE_SECONDS) {
+            let apart = (s - from) * back as f64;
+            if apart >= STRIDE_SECONDS - SAME_MOMENT {
                 target = i as usize;
                 break;
             }

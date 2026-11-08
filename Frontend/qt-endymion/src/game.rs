@@ -39,6 +39,10 @@ struct State {
     want_serial: u64,
     owned: bool,
     quiet: bool,
+    /// Players 1 and 2 swapped, for as long as the program runs (Mistress's `SwapPlayers`).
+    swapped: bool,
+    /// The game hears nothing while the interface holds a button of its own (Guide, for its chords).
+    muted: bool,
     read: Read,
 }
 
@@ -73,6 +77,31 @@ impl GamePads {
 
     pub fn owned(&self) -> bool {
         self.state().owned
+    }
+
+    /// While muted the game hears nothing; let go, it hears nothing until every button is let go, as after a menu
+    /// (Mistress's `_padQuiet` while Guide is held for its chords).
+    pub fn set_muted(&self, muted: bool) {
+        let mut state = self.state();
+        if state.muted && !muted {
+            state.quiet = true;
+        }
+        state.muted = muted;
+    }
+
+    /// Players 1 and 2 swap pads from the next tick; false where player 2 has none.
+    pub fn swap_players(&self) -> bool {
+        let mut state = self.state();
+        if state.read.seated & 0b11 != 0b11 {
+            return false;
+        }
+        state.swapped = !state.swapped;
+        true
+    }
+
+    /// The players seated at the newest read, a bit each.
+    pub fn seated(&self) -> u32 {
+        self.state().read.seated
     }
 
     /// The newest read into `out` when it is newer than `out`'s; true when it was.
@@ -118,9 +147,9 @@ impl GameReading {
     /// One tick: the pads as the game hears them handed over, when a game wants them. Players are seated in the order the
     /// pads were opened, player 1 alone where the first controller only is read.
     pub fn read(&mut self, pads: &Pads, game: &GamePads) -> Result<()> {
-        let (serial, want) = {
+        let (serial, want, swapped) = {
             let state = game.state();
-            (state.want_serial, (state.want_serial != self.want_serial).then(|| state.want.clone()))
+            (state.want_serial, (state.want_serial != self.want_serial).then(|| state.want.clone()), state.swapped)
         };
         if let Some(want) = want {
             self.bind(pads, want)?;
@@ -130,9 +159,11 @@ impl GameReading {
         let open = pads.open()?;
         let first_only = pads.setting(consts::SETTING_FIRST_CONTROLLER_ONLY)? != 0.0;
         let seated = open.len().min(if first_only { 1 } else { PLAYERS });
-        if self.seats[..] != open[..seated] {
+        let swap = swapped && seated >= 2;
+        let seat_of = |player: usize| open[if swap && player < 2 { 1 - player } else { player }];
+        if self.seats.len() != seated || (0..seated).any(|p| self.seats[p] != seat_of(p)) {
             self.seats.clear();
-            self.seats.extend_from_slice(&open[..seated]);
+            self.seats.extend((0..seated).map(seat_of));
             for (player, &key) in self.seats.iter().enumerate() {
                 pads.set_player_index(key, player as i32)?;
             }
@@ -159,8 +190,8 @@ impl GameReading {
         if state.want_serial != serial || !state.owned {
             return Ok(());
         }
-        if state.quiet {
-            if read.held.iter().any(|&h| h != 0) {
+        if state.quiet || state.muted {
+            if state.muted || read.held.iter().any(|&h| h != 0) {
                 read.held = [0; PLAYERS];
                 read.axes.iter_mut().for_each(|a| *a = 0.0);
             } else {

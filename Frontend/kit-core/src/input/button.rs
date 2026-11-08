@@ -106,6 +106,10 @@ impl UiButton {
             UiButton::Back => Some(Key::Escape),
             UiButton::Menu => Some(Key::Menu),
             UiButton::Options => Some(Key::Select),
+            UiButton::PageUp => Some(Key::PageUp),
+            UiButton::PageDown => Some(Key::PageDown),
+            UiButton::First => Some(Key::Home),
+            UiButton::Last => Some(Key::End),
             _ => None,
         }
     }

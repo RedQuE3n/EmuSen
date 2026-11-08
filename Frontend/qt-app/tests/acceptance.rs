@@ -154,7 +154,8 @@ fn pause_card(scene: &mut Scene<'_>, report: &mut Vec<String>) {
         tree.nodes.iter().filter(|n| n.visible && n.ty.starts_with("MenuRow")).map(|n| (n.y, words(&n.id, "label"), words(&n.id, "value"))).collect();
     rows.sort_by(|a, b| a.0.total_cmp(&b.0));
     let labels: Vec<&str> = rows.iter().map(|r| r.1.as_str()).collect();
-    assert_eq!(labels, ["Resume", "Rewind", "Save State", "Load State", "Speed", "Game Options", "Leave"]);
+    // The test core claims a drive (MEDIA with a drive named), so Change Disc stands after Speed, as Mistress's rule has it.
+    assert_eq!(labels, ["Resume", "Rewind", "Save State", "Load State", "Speed", "Change Disc", "Game Options", "Leave"]);
     assert_eq!(rows[2].2, "Slot 1 (Empty)", "the session's first slot holds nothing");
     assert_eq!(rows[4].2, "100%");
     let focus = scene.focus(&tree).map(|i| tree.nodes[i as usize].heard.clone());
@@ -426,13 +427,51 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     scene.assert_still("the Pause Card over the paused game");
     pages(&mut scene, &mut report, &chord);
 
+    // Change Disc from the Speed row the pages left, over the test core's drive: the game's own disc first, marked
+    // Inserted, its pane the generated card beside its name (PauseCardChangeDisc); B back to its row.
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pause", "title", "Change Disc", 1000);
+    assert_eq!(scene.property("cardCanvas", "slide"), "0", "a page turn moves nothing");
+    assert_eq!(text_of(&mut scene, "PaneTitle").as_deref(), Some("Cobalt Harbor (Synthetic)"));
+    hold(&mut scene, "PauseCardChangeDisc", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "pause", "current", "5", 1000);
+    // Game Options: Mistress's four rows and Memory Cards for a console with a drive (PauseCardGameOptions), B back to its row.
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Accept);
+    wait_for(&mut scene, "pause", "title", "Game Options", 1000);
+    hold(&mut scene, "PauseCardGameOptions", &mockup::Mockup::default(), named_difference, &mut report);
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "pause", "current", "6", 1000);
+
     // B resumes the game once the card has slid away; the chord opens it again, and Leave ▸ Back to Library is Home over
     // the paused game, as the render's.
     scene.pad(UiButton::Back);
     until(&mut scene, "B resuming the game", |s| s.property("session", "paused") == "false" && s.property("screens", "shown") == "Game");
     assert_eq!(scene.property("cardCanvas", "visible"), "false", "the card gone");
-    chord(&mut scene);
-    for _ in 0..6 {
+
+    // The Guide chords on, over the running game: Guide with Up saves to the slot through the session and opens no menu;
+    // Guide let go alone opens the card (EmuSen_Kit.md §7.26).
+    assert!(scene.set_property("program", "guideChords", "true"));
+    let up = emusen_qt_endymion::reading::sdl_button(emusen_kit_core::input::PadControl::Up).unwrap();
+    scene.run_pad_clock();
+    sdl.press(&pad, guide, true);
+    scene.wait(100);
+    sdl.press(&pad, up, true);
+    until(&mut scene, "Guide with Up saving", |s| s.property("session", "notice") == "State saved to slot 1");
+    sdl.press(&pad, up, false);
+    sdl.press(&pad, guide, false);
+    scene.wait(300);
+    assert_eq!((scene.property("screens", "shown"), scene.property("session", "paused")), ("Game".into(), "false".into()), "a chord opens no menu");
+    sdl.press(&pad, guide, true);
+    scene.wait(300);
+    assert_eq!(scene.property("screens", "shown"), "Game", "Guide going down opens nothing yet");
+    sdl.press(&pad, guide, false);
+    until(&mut scene, "Guide let go alone opening the card", |s| s.property("session", "paused") == "true" && s.property("screens", "shown") == "Pause");
+    until(&mut scene, "the card in place", |s| s.property("cardCanvas", "slide") == "0");
+    assert!(scene.set_property("program", "guideChords", "false"));
+    for _ in 0..7 {
         scene.pad(UiButton::Down);
     }
     scene.pad(UiButton::Accept);

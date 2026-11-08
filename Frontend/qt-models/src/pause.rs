@@ -5,8 +5,10 @@
 
 use crate::card;
 use crate::help::Screen;
+use crate::library::GameRow;
 use crate::reel::{self, Reel};
 use emusen_crystal_client::shapes::{RewindReel, SessionInfo};
+use emusen_kit_core::input::UiButton;
 use serde_json::{json, Value};
 
 /// A page of the card.
@@ -16,6 +18,10 @@ pub enum Page {
     Leave,
     /// Rewind's reel (§20.1).
     Reel,
+    /// Game Options (§18.5, Mistress's `GameOptionsRows`).
+    Options,
+    /// Change Disc (§20.2): the game's own discs, the console's other games, the tray.
+    Disc,
     /// One of Leave's questions, on the card form's question page (`card::question`).
     Ask(Ask),
 }
@@ -86,6 +92,21 @@ pub struct Facts {
     pub speed: u32,
     /// The address the session's pictures are served under, ending in a slash ("image://session/3/").
     pub pictures: String,
+    /// The game's file, its system as the library keys it, and its discs as the runtime says.
+    pub path: String,
+    pub system: String,
+    pub discs: DiscFacts,
+    /// Whether player 2 has a pad, so Swap Players is offered.
+    pub second_player: bool,
+}
+
+/// The session's drive (Mistress's `Discs`): how many discs the game has, the one in, and whether it can change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DiscFacts {
+    pub count: u32,
+    pub index: Option<u32>,
+    pub can_change: bool,
+    pub lid_open: bool,
 }
 
 impl Default for Facts {
@@ -100,6 +121,10 @@ impl Default for Facts {
             hz: 60.0,
             speed: 100,
             pictures: String::new(),
+            path: String::new(),
+            system: String::new(),
+            discs: DiscFacts::default(),
+            second_player: false,
         }
     }
 }
@@ -110,7 +135,9 @@ impl Facts {
         let slots: Vec<Value> =
             self.slots.iter().map(|s| json!({ "slot": s.slot, "exists": s.exists, "when": s.when, "picture": s.picture })).collect();
         json!({ "slot": self.slot, "slots": slots, "rewindWhy": self.rewind_why, "rewindSeconds": self.rewind_seconds,
-                "held": self.held, "now": self.now, "hz": self.hz, "speed": self.speed, "pictures": self.pictures })
+                "held": self.held, "now": self.now, "hz": self.hz, "speed": self.speed, "pictures": self.pictures,
+                "path": self.path, "system": self.system, "secondPlayer": self.second_player,
+                "discs": { "count": self.discs.count, "index": self.discs.index, "canChange": self.discs.can_change, "lidOpen": self.discs.lid_open } })
         .to_string()
     }
 
@@ -139,6 +166,15 @@ impl Facts {
             hz: v["hz"].as_f64().unwrap_or(d.hz),
             speed: v["speed"].as_u64().map_or(d.speed, |n| n as u32),
             pictures: words(&v["pictures"]),
+            path: words(&v["path"]),
+            system: words(&v["system"]),
+            discs: DiscFacts {
+                count: v["discs"]["count"].as_u64().unwrap_or(0) as u32,
+                index: v["discs"]["index"].as_u64().map(|i| i as u32),
+                can_change: v["discs"]["canChange"].as_bool().unwrap_or(false),
+                lid_open: v["discs"]["lidOpen"].as_bool().unwrap_or(false),
+            },
+            second_player: v["secondPlayer"].as_bool().unwrap_or(false),
         }
     }
 
@@ -180,7 +216,10 @@ pub fn facts_of(info: &SessionInfo, reel: Option<&RewindReel>) -> Facts {
     };
     let held = reel.map_or_else(Vec::new, |r| r.moments.iter().filter(|m| m.picture.is_some()).map(|m| m.frame).collect());
     let hz = if info.frame_rate_hz > 0.0 { info.frame_rate_hz } else { 60.0 };
-    Facts { rewind_why, rewind_seconds, held, now: info.total_frames, hz, ..Facts::default() }
+    let d = &info.discs;
+    let discs = DiscFacts { count: d.count, index: d.index, can_change: d.can_change, lid_open: d.lid_open };
+    let path = info.game.as_ref().map(|g| g.path.clone()).unwrap_or_default();
+    Facts { rewind_why, rewind_seconds, held, now: info.total_frames, hz, path, system: info.system.clone(), discs, ..Facts::default() }
 }
 
 /// What a slot with nothing in it, or a picture not to be had, says.
@@ -222,6 +261,35 @@ pub const QUIT_EMUSEN: &str = "quitEmuSen";
 pub const GO_BACK: &str = "goBack";
 pub const MOMENT: &str = "moment";
 pub const HOLD: &str = "hold";
+pub const OPTIONS: &str = "options";
+pub const CHANGE_DISC: &str = "changeDisc";
+pub const SWAP: &str = "swapPlayers";
+pub const CHEATS: &str = "cheats";
+pub const CONTROLLERS: &str = "controllers";
+pub const DISPLAY: &str = "display";
+pub const SOUND: &str = "sound";
+pub const MEMORY_CARDS: &str = "memoryCards";
+/// A disc of the game's own, another game of the console, and the tray, on Change Disc's page.
+pub const OWN_DISC: &str = "ownDisc";
+pub const OTHER_DISC: &str = "otherDisc";
+pub const TRAY: &str = "tray";
+
+/// What Swap Players says once done. Mistress names each player's pad; the pads' names do not reach the session yet.
+pub const SWAPPED: &str = "Players 1 and 2 swapped";
+
+/// What A does on Change Disc, as Mistress says it (`DiscSentence`).
+pub const DISC_SENTENCE: &str = "A opens the tray, swaps the disc and closes it, as the console sees it.";
+
+/// What Guide held with a button asks of the running game (EmuSen_BigPicture.md §48.7): Up saves to the slot, Down
+/// loads it, the right shoulder takes a screenshot; the kit says only which button was chorded.
+pub fn guide_chord(button: UiButton, slot: u32) -> Outcome {
+    match button {
+        UiButton::Up => Outcome::Save(slot),
+        UiButton::Down => Outcome::Load(slot),
+        UiButton::PageDown => Outcome::Screenshot,
+        _ => Outcome::Nothing,
+    }
+}
 
 /// The slot Save and Load act on, and whether anything is in it (Mistress's `SlotValue`).
 pub fn slot_value(slot: u32, saved: bool) -> String {
@@ -271,6 +339,14 @@ pub enum Outcome {
     QuitEmuSen,
     /// The picture on show saved as a screenshot; the card stays.
     Screenshot,
+    /// The game's own disc of that index put in, and the card closed.
+    ChangeDisc(u32),
+    /// The console's other game at that place on Change Disc's page put in (`Card::other`), and the card closed.
+    InsertDisc(usize),
+    /// The tray opened with no disc in, and the card closed.
+    Eject,
+    /// Players 1 and 2 swapped, and the card closed.
+    SwapPlayers,
 }
 
 /// The context pane's kind.
@@ -283,6 +359,10 @@ pub enum PaneKind {
     Moment,
     /// The slots, on Save and Load.
     Slots,
+    /// A disc's cover with its name and what A does, on Change Disc.
+    Cover,
+    /// A sentence alone.
+    Sentence,
 }
 
 impl PaneKind {
@@ -292,6 +372,8 @@ impl PaneKind {
             PaneKind::Reel => "reel",
             PaneKind::Moment => "moment",
             PaneKind::Slots => "slots",
+            PaneKind::Cover => "cover",
+            PaneKind::Sentence => "sentence",
         }
     }
 }
@@ -313,11 +395,13 @@ pub struct Pane {
     pub big: String,
     pub tiles: Vec<Tile>,
     pub sentence: String,
+    /// The words beside a cover: the disc's name.
+    pub title: String,
 }
 
 impl Pane {
     fn none() -> Pane {
-        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new() }
+        Pane { kind: PaneKind::None, big: String::new(), tiles: Vec::new(), sentence: String::new(), title: String::new() }
     }
 
     /// The pane as plain data, the way it crosses from `PauseModel` to `PaneModel`.
@@ -327,7 +411,7 @@ impl Pane {
             .iter()
             .map(|t| json!({ "picture": t.picture, "name": t.name, "when": t.when, "ringed": t.ringed }))
             .collect();
-        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "blank": EMPTY }).to_string()
+        json!({ "kind": self.kind.name(), "big": self.big, "tiles": tiles, "sentence": self.sentence, "title": self.title, "blank": EMPTY }).to_string()
     }
 }
 
@@ -338,11 +422,13 @@ pub struct Card {
     pub current: usize,
     pub reel: Option<Reel>,
     pub facts: Facts,
+    /// The console's games in the library, as `LibraryModel.gamesOf` lists them for the game's system.
+    pub shelf: Vec<GameRow>,
 }
 
 impl Default for Card {
     fn default() -> Self {
-        Card { page: Page::First, current: 0, reel: None, facts: Facts::default() }
+        Card { page: Page::First, current: 0, reel: None, facts: Facts::default(), shelf: Vec::new() }
     }
 }
 
@@ -360,22 +446,45 @@ impl Card {
         }
     }
 
-    /// The page's rows. The first page holds Mistress's seven; its console rows (Change Disc, Swap Players) are owed.
+    /// The page's rows. The first page holds Mistress's seven, with Change Disc where the game's drive can change and Swap
+    /// Players where player 2 has a pad and the page has room for it, before Game Options' section (§48.3).
     pub fn rows(&self) -> Vec<Row> {
         let facts = &self.facts;
         match self.page {
             Page::First => {
                 let slot = slot_value(facts.slot, facts.saved());
-                vec![
+                let mut rows = vec![
                     row(RESUME, "Resume", String::new()),
                     row(REWIND, "Rewind", rewind_value(facts)),
                     Row { steps: true, ..row(SAVE, "Save State", slot.clone()) },
                     Row { steps: true, ..row(LOAD, "Load State", slot) },
-                    Row { steps: true, section_end: true, ..row(SPEED, "Speed", speed_value(facts.speed)) },
-                    Row { opens: true, ..row("options", "Game Options", String::new()) },
-                    Row { opens: true, ..row(LEAVE, "Leave", String::new()) },
-                ]
+                    Row { steps: true, ..row(SPEED, "Speed", speed_value(facts.speed)) },
+                ];
+                if facts.discs.can_change {
+                    rows.push(Row { opens: true, ..row(CHANGE_DISC, "Change Disc", String::new()) });
+                } else if facts.second_player {
+                    rows.push(row(SWAP, "Swap Players 1 and 2", String::new()));
+                }
+                if let Some(last) = rows.last_mut() {
+                    last.section_end = true;
+                }
+                rows.push(Row { opens: true, ..row(OPTIONS, "Game Options", String::new()) });
+                rows.push(Row { opens: true, ..row(LEAVE, "Leave", String::new()) });
+                rows
             }
+            Page::Options => {
+                let mut rows = vec![
+                    Row { opens: true, ..row(CHEATS, "Cheats", String::new()) },
+                    Row { opens: true, ..row(CONTROLLERS, "Controllers", String::new()) },
+                    Row { opens: true, ..row(DISPLAY, "Display", String::new()) },
+                    Row { opens: true, ..row(SOUND, "Sound", String::new()) },
+                ];
+                if facts.discs.can_change {
+                    rows.push(Row { opens: true, ..row(MEMORY_CARDS, "Memory Cards", String::new()) });
+                }
+                rows
+            }
+            Page::Disc => self.disc_rows(),
             Page::Leave => vec![
                 row(LIBRARY, "Back to Library", String::new()),
                 row(RESTART, "Restart Game...", String::new()),
@@ -406,6 +515,8 @@ impl Card {
             Page::First => game.to_string(),
             Page::Leave => "Leave".to_string(),
             Page::Reel => "Rewind".to_string(),
+            Page::Options => "Game Options".to_string(),
+            Page::Disc => "Change Disc".to_string(),
             Page::Ask(ask) => ask.page().title,
         }
     }
@@ -454,6 +565,16 @@ impl Card {
                 self.turn(Page::Leave, 0);
                 Outcome::Shown
             }
+            OPTIONS => {
+                self.turn(Page::Options, 0);
+                Outcome::Shown
+            }
+            CHANGE_DISC if self.facts.discs.can_change => {
+                self.turn(Page::Disc, 0);
+                Outcome::Shown
+            }
+            SWAP => Outcome::SwapPlayers,
+            OWN_DISC | OTHER_DISC | TRAY if self.page == Page::Disc => self.put_in(self.current),
             LIBRARY => Outcome::Library,
             RESTART | QUIT_GAME | QUIT_EMUSEN if self.page == Page::Leave => {
                 let ask = match key {
@@ -504,6 +625,18 @@ impl Card {
         }
     }
 
+    /// A shoulder or a trigger on the reel's page, as Mistress's reel takes them: the left shoulder 5 s further back, the
+    /// right 5 s nearer, the left trigger the oldest moment, the right the present.
+    pub fn shoulder(&mut self, button: UiButton) -> Outcome {
+        match button {
+            UiButton::PageUp => self.stride(1, false),
+            UiButton::PageDown => self.stride(-1, false),
+            UiButton::First => self.stride(1, true),
+            UiButton::Last => self.stride(-1, true),
+            _ => Outcome::Nothing,
+        }
+    }
+
     /// A shoulder (+1 further back) or a trigger (`end`) on the reel's page.
     pub fn stride(&mut self, back: i32, end: bool) -> Outcome {
         if self.page != Page::Reel {
@@ -531,6 +664,8 @@ impl Card {
             Page::First => return Outcome::Resume,
             Page::Leave => (Page::First, LEAVE),
             Page::Reel => (Page::First, REWIND),
+            Page::Options => (Page::First, OPTIONS),
+            Page::Disc => (Page::First, CHANGE_DISC),
             Page::Ask(ask) => (Page::Leave, ask.key()),
         };
         self.turn(to, 0);
@@ -544,6 +679,7 @@ impl Card {
             (Page::First, Some(SAVE | LOAD)) => Screen::PauseSlots,
             (Page::First, _) => Screen::Pause,
             (Page::Reel, _) => Screen::PauseReel,
+            (Page::Disc, _) => Screen::PauseDisc,
             _ => Screen::PausePage,
         }
     }
@@ -554,6 +690,7 @@ impl Card {
             (Page::Reel, _) => self.moment_pane(),
             (Page::First, Some(REWIND)) => self.reel_pane(),
             (Page::First, Some(key @ (SAVE | LOAD))) => self.slots_pane(key == LOAD),
+            (Page::Disc, _) => self.disc_pane(),
             _ => Pane::none(),
         }
     }
@@ -586,7 +723,7 @@ impl Card {
                 Tile { picture: self.facts.moment_picture(mark), name: mark.short(), ringed: i == reel.at, ..Tile::default() }
             })
             .collect();
-        Pane { kind: PaneKind::Moment, big: self.facts.moment_picture(focused), tiles, sentence: reel.sentence() }
+        Pane { kind: PaneKind::Moment, big: self.facts.moment_picture(focused), tiles, sentence: reel.sentence(), ..Pane::none() }
     }
 
     /// Three slots with the current one among them, as near the middle as the ends allow, and what A does to it.
@@ -614,5 +751,72 @@ impl Card {
             (false, false) => format!("A saves to Slot {current}."),
         };
         Pane { kind: PaneKind::Slots, tiles, sentence, ..Pane::none() }
+    }
+
+    /// The game's title: its file name without the extension, as the library titles it.
+    fn own_title(&self) -> String {
+        crate::library::title_of(&self.facts.path)
+    }
+
+    /// The console's other games on Change Disc's page, the running game left out.
+    pub fn others(&self) -> Vec<&GameRow> {
+        self.shelf.iter().filter(|g| g.path != self.facts.path).collect()
+    }
+
+    fn own_discs(&self) -> u32 {
+        if self.facts.path.is_empty() { 0 } else { self.facts.discs.count.max(1) }
+    }
+
+    /// Change Disc's rows (Mistress's `ChangeDiscRows`): the game's own discs, the one in marked, then the console's other
+    /// games, then the tray while a disc is in.
+    fn disc_rows(&self) -> Vec<Row> {
+        let discs = self.facts.discs;
+        let title = self.own_title();
+        let mut rows: Vec<Row> = (0..self.own_discs())
+            .map(|i| {
+                let name = if discs.count > 1 { format!("{title} (Disc {})", i + 1) } else { title.clone() };
+                let inserted = discs.index == Some(i) && !discs.lid_open;
+                row(OWN_DISC, &name, if inserted { "Inserted".to_string() } else { String::new() })
+            })
+            .collect();
+        rows.extend(self.others().into_iter().map(|g| row(OTHER_DISC, &g.title, String::new())));
+        if discs.index.is_some() {
+            rows.push(row(TRAY, "Open the tray", String::new()));
+        }
+        rows
+    }
+
+    /// A row of Change Disc chosen: the own disc of that place unless it is in, another game, or the tray.
+    fn put_in(&self, index: usize) -> Outcome {
+        let own = self.own_discs() as usize;
+        let others = self.others().len();
+        let discs = self.facts.discs;
+        match index {
+            i if i < own && (discs.index != Some(i as u32) || discs.lid_open) => Outcome::ChangeDisc(i as u32),
+            i if i < own => Outcome::Resume,
+            i if i < own + others => Outcome::InsertDisc(i - own),
+            _ => Outcome::Eject,
+        }
+    }
+
+    /// Change Disc's pane: the focused disc's cover, its name and what A does; the tray's sentence.
+    fn disc_pane(&self) -> Pane {
+        let own = self.own_discs() as usize;
+        let others = self.others();
+        let discs = self.facts.discs;
+        let i = self.current;
+        let cover = |path: &str| self.shelf.iter().find(|g| g.path == path).map(|g| g.cover.clone()).unwrap_or_default();
+        let (big, name, sentence) = if i < own {
+            let title = self.own_title();
+            let said = if discs.count > 1 { format!("{title}, Disc {} of {}", i + 1, discs.count) } else { title };
+            let inserted = discs.index == Some(i as u32) && !discs.lid_open;
+            (cover(&self.facts.path), said, if inserted { "In the console now. B goes back." } else { DISC_SENTENCE })
+        } else if let Some(game) = others.get(i - own) {
+            (game.cover.clone(), game.title.clone(), DISC_SENTENCE)
+        } else {
+            let sentence = "A opens the tray and leaves it open, with no disc in, as the console sees it.".to_string();
+            return Pane { kind: PaneKind::Sentence, sentence, ..Pane::none() };
+        };
+        Pane { kind: PaneKind::Cover, big, title: name, sentence: sentence.to_string(), ..Pane::none() }
     }
 }

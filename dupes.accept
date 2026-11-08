@@ -2,3 +2,6 @@
 #   <file>:<first>-<last>  duplicates  <file>:<first>-<last>  <reason>
 # A pair is skipped only while both places stand at exactly these lines.
 Frontend/kit-qt/src/moonrise.rs:13-32  duplicates  Frontend/kit-qt/src/sky.rs:11-30  each cxx-qt bridge declares the cxx-qt-lib types its list model names, and cxx has no declaration block bridges share (EmuSen_Kit.md §7.5)
+Frontend/kit-qt/src/glyph.rs:11-27  duplicates  Frontend/kit-qt/src/body.rs:11-27  each cxx-qt bridge declares the cxx-qt-lib types its list model names, and cxx has no declaration block bridges share (EmuSen_Kit.md §7.5)
+Frontend/kit-qt/src/glyph.rs:11-27  duplicates  Frontend/kit-qt/src/moonrise.rs:13-29  each cxx-qt bridge declares the cxx-qt-lib types its list model names, and cxx has no declaration block bridges share (EmuSen_Kit.md §7.5)
+Frontend/kit-qt/src/glyph.rs:11-27  duplicates  Frontend/kit-qt/src/sky.rs:11-27  each cxx-qt bridge declares the cxx-qt-lib types its list model names, and cxx has no declaration block bridges share (EmuSen_Kit.md §7.5)

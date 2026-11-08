@@ -4015,8 +4015,18 @@ separator where .NET's `Combine` returned it as it was, which only an empty file
 The C# parity methods that held these answers to .NET's text were deleted with their goldens, the disk corpus being the
 proof in their place: five of `GalaxiaParityTests` (the tree under every override, the save names, the unreadable file,
 the declining migrations, the cheat lists' names) and `SerenityParityTests`' preset sweep, whose inputs include an
-empty reference and a folder, now resolved with std's parts (its golden holds digests, so the lines themselves were not
-compared). Measured on 2026-11-07: Platform `cargo test --workspace` 606 passed, the corpus
+empty reference and a folder, now resolved with std's parts (its golden held digests; its lines are compared below).
+Measured on 2026-11-07: Platform `cargo test --workspace` 606 passed, the corpus
 and the DianaSh goldens among them; the C# classes that read these paths (the blast radius's filter with the package,
 disc, core-install, store, Serenity and migration classes) 1,251 passed before the deletions, and the Galaxia and
 Serenity parity classes 229 passed after them.
+
+**The preset sweep's lines, compared after the deletion** (measured on 2026-11-07). The sweep was run uncommitted with
+each answer written as a line instead of a digest, seed 42, once against the platform library of 4a771f781 (before
+these steps) and once against c8c934d83's. Of 3,036 lines (2,500 presets, 525 parameter merges, the path, rule, depth
+and closed-file cases), 358 differ, every one a preset refused as not found whose named path gains a trailing
+separator: `<root>/preset/N` became `<root>/preset/N/` (326 lines) and `<root>/preset/N/sub` became
+`<root>/preset/N/sub/` (32). Each is a `#reference` line with nothing after the keyword, resolved against its preset's
+folder; called directly, both libraries refuse `#reference ` alone as `not_found`, the old one naming `<d>` and the new
+`<d>/`, and they agree on `#reference sub`, `"sub"`, `""sub`, `""`, `"`, `sub" trailing` and `"sub`. No scale, count,
+pass, texture, parameter or refusal differs, so the deletion stands.

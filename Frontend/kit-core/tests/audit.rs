@@ -107,6 +107,26 @@ fn settings_4_83_2_past_its_panel_and_past_a_scrollers_side_but_not_past_its_foo
 }
 
 #[test]
+fn settings_4_83_2_a_scroller_or_a_clip_past_its_panel_is_cut_though_it_draws_nothing() {
+    // theme-audit's fixture, measured on 2026-11-08: a faded list in a frame's content pane, its foot at 844 in a 1280 x 800 window.
+    let list = Item::new(60, Kind::Scroller, Rect::new(128.0, 236.0, 480.0, 608.0))
+        .scrolling(Axes { vertical: true, horizontal: false })
+        .clipping()
+        .wheel_scrolls()
+        .fading(Edges { top: true, bottom: true, left: false, right: false })
+        .child(Item::new(62, Kind::Row, Rect::new(128.0, 236.0, 480.0, 56.0)).named("Synthetic 001"));
+    assert_eq!(fit_faults(&clean().child(list.clone())), vec![Fault::PastItsLimit { item: id(60), limit: None }]);
+    let mut fitted = list;
+    fitted.rect.h = 506.0;
+    assert_eq!(fit_faults(&clean().child(fitted)), vec![], "the same list ending above the help bar fits");
+
+    let clip = Item::new(70, Kind::Panel, Rect::new(1000.0, 600.0, 400.0, 100.0)).clipping();
+    assert_eq!(fit_faults(&clean().child(clip)), vec![Fault::PastItsLimit { item: id(70), limit: None }], "a clip past the side");
+    let hidden = Item::new(71, Kind::Panel, Rect::new(1000.0, 600.0, 400.0, 100.0)).clipping().hidden();
+    assert_eq!(fit_faults(&clean().child(hidden)), vec![], "a hidden clip is not judged");
+}
+
+#[test]
 fn settings_4_83_2_words_past_their_button() {
     let mut tree = clean();
     tree.children[2].children[0].rect = Rect::new(690.0, 128.0, 230.0, 28.0);

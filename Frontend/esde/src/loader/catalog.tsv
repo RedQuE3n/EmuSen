@@ -1,0 +1,486 @@
+# THEMES.md's element types and properties, translated from the C# loader's ThemeCatalog (EmuSen_BigPicture.md §12.2, EmuSen_Qt.md §4.2).
+# '@' rows open an element: type, group, views. Property rows: name, type, default, sameAs, computed, min, max, maxY, rule, shape, values, maxItems, key, onlyIn, deferred, validRange; '-' is none.
+@	carousel	primary	system,gamelist
+pos	pair	0 0.38378	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	1 0.2324	-	-	0.05	2	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+type	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical horizontalWheel verticalWheel	-	-	-	-	-
+staticImage	path	-	-	-	-	-	-	-	single	-	-	-	system	-	-
+imageType	string	marquee	-	-	-	-	-	-	list	marquee cover backcover 3dbox physicalmedia screenshot titlescreen miximage fanart none	2	-	gamelist	-	-
+defaultImage	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+defaultFolderImage	path	-	defaultImage	-	-	-	-	-	single	-	-	-	gamelist	-	-
+maxItemCount	float	3	-	-	0.5	30	-	-	single	-	-	-	-	-	-
+itemsBeforeCenter	uint	8	-	-	0	20	-	-	single	-	-	-	-	-	-
+itemsAfterCenter	uint	8	-	-	0	20	-	-	single	-	-	-	-	-	-
+itemStacking	string	centered	-	-	-	-	-	-	enum	centered ascending ascendingRaised descending descendingRaised	-	-	-	-	-
+selectedItemMargins	pair	0 0	-	-	-1	1	-	-	single	-	-	-	-	-	-
+selectedItemOffset	pair	0 0	-	-	-1	1	-	-	single	-	-	-	-	-	-
+itemSize	pair	0.25 0.155	-	-	0.05	1	-	-	single	-	-	-	-	-	-
+itemScale	float	1.2	-	-	0.2	3	-	-	single	-	-	-	-	-	-
+itemRotation	float	7.5	-	-	-	-	-	-	single	-	-	-	-	-	-
+itemRotationOrigin	pair	-3 0.5	-	-	-	-	-	-	single	-	-	-	-	-	-
+itemAxisHorizontal	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+itemAxisRotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+imageFit	string	contain	-	-	-	-	-	-	enum	contain fill cover	-	-	-	-	-
+imageCropPos	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+imageInterpolation	string	linear	-	-	-	-	-	-	enum	nearest linear	-	-	-	-	-
+imageCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+imageColor	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+imageColorEnd	color	-	imageColor	-	-	-	-	-	single	-	-	-	-	-	-
+imageGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+imageSelectedColor	color	-	imageColor	-	-	-	-	-	single	-	-	-	-	-	-
+imageSelectedColorEnd	color	-	imageSelectedColor	-	-	-	-	-	single	-	-	-	-	-	-
+imageSelectedGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+imageBrightness	float	0	-	-	-2	2	-	-	single	-	-	-	-	-	-
+imageSaturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+itemTransitions	string	animate	-	-	-	-	-	-	enum	animate instant	-	-	-	-	-
+itemDiagonalOffset	float	0	-	-	-0.5	0.5	-	-	single	-	-	-	-	-	-
+itemHorizontalAlignment	string	center	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+itemVerticalAlignment	string	center	-	-	-	-	-	-	enum	top center bottom	-	-	-	-	-
+wheelHorizontalAlignment	string	center	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+wheelVerticalAlignment	string	center	-	-	-	-	-	-	enum	top center bottom	-	-	-	-	-
+horizontalOffset	float	0	-	-	-1	1	-	-	single	-	-	-	-	-	-
+verticalOffset	float	0	-	-	-1	1	-	-	single	-	-	-	-	-	-
+reflections	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+reflectionsOpacity	float	0.5	-	-	0.1	1	-	-	single	-	-	-	-	-	-
+reflectionsFalloff	float	1	-	-	0	10	-	-	single	-	-	-	-	-	-
+unfocusedItemOpacity	float	0.5	-	-	0.1	1	-	-	single	-	-	-	-	-	-
+unfocusedItemSaturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+unfocusedItemDimming	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+fastScrolling	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+color	color	FFFFFFD8	-	-	-	-	-	-	single	-	-	-	-	-	-
+colorEnd	color	-	color	-	-	-	-	-	single	-	-	-	-	-	-
+gradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+text	string	-	-	SystemFullName	-	-	-	-	single	-	-	-	system	-	-
+textRelativeScale	float	1	-	-	0.2	1	-	-	single	-	-	-	-	-	-
+textBackgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+textColor	color	000000FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+textBackgroundColor	color	FFFFFF00	-	-	-	-	-	-	single	-	-	-	-	-	-
+textSelectedColor	color	-	textColor	-	-	-	-	-	single	-	-	-	-	-	-
+textSelectedBackgroundColor	color	-	textBackgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+textHorizontalScrolling	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+textHorizontalScrollSpeed	float	1	-	-	0.1	10	-	-	single	-	-	-	-	-	-
+textHorizontalScrollDelay	float	3	-	-	0	10	-	-	single	-	-	-	-	-	-
+textHorizontalScrollGap	float	1.5	-	-	0.1	5	-	-	single	-	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.085	-	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+letterCase	string	none	-	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+letterCaseAutoCollections	string	-	letterCase	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	system	-	-
+letterCaseCustomCollections	string	-	letterCase	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+lineSpacing	float	1.5	-	-	0.5	3	-	-	single	-	-	-	-	-	-
+systemNameSuffix	boolean	true	-	-	-	-	-	-	single	-	-	-	gamelist	-	-
+letterCaseSystemNameSuffix	string	uppercase	-	-	-	-	-	-	enum	uppercase lowercase capitalize	-	-	gamelist	-	-
+fadeAbovePrimary	boolean	false	-	-	-	-	-	-	single	-	-	-	system	-	-
+zIndex	float	50	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	grid	primary	system,gamelist
+pos	pair	0 0.1	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	1 0.8	-	-	0.05	1	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+staticImage	path	-	-	-	-	-	-	-	single	-	-	-	system	-	-
+imageType	string	marquee	-	-	-	-	-	-	list	marquee cover backcover 3dbox physicalmedia screenshot titlescreen miximage fanart none	2	-	gamelist	-	-
+defaultImage	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+defaultFolderImage	path	-	defaultImage	-	-	-	-	-	single	-	-	-	gamelist	-	-
+itemSize	pair	0.15 0.25	-	-	0.05	1	-	MinusOneMatchesOther	single	-	-	-	-	-	-
+itemScale	float	1.05	-	-	0.5	2	-	-	single	-	-	-	-	-	-
+itemSpacing	pair	-	-	-	0	0.1	-	MinusOneMatchesOther	single	-	-	-	-	-	-
+scaleInwards	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+fractionalRows	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+itemTransitions	string	animate	-	-	-	-	-	-	enum	animate instant	-	-	-	-	-
+rowTransitions	string	animate	-	-	-	-	-	-	enum	animate instant	-	-	-	-	-
+unfocusedItemOpacity	float	1	-	-	0.1	1	-	-	single	-	-	-	-	-	-
+unfocusedItemSaturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+unfocusedItemDimming	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+imageFit	string	contain	-	-	-	-	-	-	enum	contain fill cover	-	-	-	-	-
+imageCropPos	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+imageInterpolation	string	linear	-	-	-	-	-	-	enum	nearest linear	-	-	-	-	-
+imageRelativeScale	float	1	-	-	0.2	1	-	-	single	-	-	-	-	-	-
+imageCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+imageColor	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+imageColorEnd	color	-	imageColor	-	-	-	-	-	single	-	-	-	-	-	-
+imageGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+imageSelectedColor	color	-	imageColor	-	-	-	-	-	single	-	-	-	-	-	-
+imageSelectedColorEnd	color	-	imageSelectedColor	-	-	-	-	-	single	-	-	-	-	-	-
+imageSelectedGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+imageBrightness	float	0	-	-	-2	2	-	-	single	-	-	-	-	-	-
+imageSaturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundImage	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundRelativeScale	float	1	-	-	0.2	1	-	-	single	-	-	-	-	-	-
+backgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+backgroundColor	color	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColorEnd	color	-	backgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+selectorImage	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectorRelativeScale	float	1	-	-	0.2	1	-	-	single	-	-	-	-	-	-
+selectorLayer	string	top	-	-	-	-	-	-	enum	bottom middle top	-	-	-	-	-
+selectorCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+selectorColor	color	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectorColorEnd	color	-	selectorColor	-	-	-	-	-	single	-	-	-	-	-	-
+selectorGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+text	string	-	-	SystemFullName	-	-	-	-	single	-	-	-	system	-	-
+textRelativeScale	float	1	-	-	0.2	1	-	-	single	-	-	-	-	-	-
+textBackgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+textColor	color	000000FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+textBackgroundColor	color	FFFFFF00	-	-	-	-	-	-	single	-	-	-	-	-	-
+textSelectedColor	color	-	textColor	-	-	-	-	-	single	-	-	-	-	-	-
+textSelectedBackgroundColor	color	-	textBackgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+textHorizontalScrolling	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+textHorizontalScrollSpeed	float	1	-	-	0.1	10	-	-	single	-	-	-	-	-	-
+textHorizontalScrollDelay	float	3	-	-	0	10	-	-	single	-	-	-	-	-	-
+textHorizontalScrollGap	float	1.5	-	-	0.1	5	-	-	single	-	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.045	-	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+letterCase	string	none	-	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+letterCaseAutoCollections	string	-	letterCase	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	system	-	-
+letterCaseCustomCollections	string	-	letterCase	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+lineSpacing	float	1.5	-	-	0.5	3	-	-	single	-	-	-	-	-	-
+systemNameSuffix	boolean	true	-	-	-	-	-	-	single	-	-	-	gamelist	-	-
+letterCaseSystemNameSuffix	string	uppercase	-	-	-	-	-	-	enum	uppercase lowercase capitalize	-	-	gamelist	-	-
+fadeAbovePrimary	boolean	false	-	-	-	-	-	-	single	-	-	-	system	-	-
+zIndex	float	50	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	textlist	primary	system,gamelist
+pos	pair	0 0.1	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	1 0.8	-	-	0.05	1	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+selectorWidth	float	-	-	ElementWidth	0	1	-	-	single	-	-	-	-	-	-
+selectorHeight	float	-	-	OneAndAHalfFontSize	0	1	-	-	single	-	-	-	-	-	-
+selectorHorizontalOffset	float	0	-	-	-1	1	-	-	single	-	-	-	-	-	-
+selectorVerticalOffset	float	0	-	-	-1	1	-	-	single	-	-	-	-	-	-
+selectorColor	color	333333FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectorColorEnd	color	333333FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectorGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+selectorImagePath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectorImageTile	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+primaryColor	color	0000FFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+secondaryColor	color	00FF00FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectedColor	color	-	primaryColor	-	-	-	-	-	single	-	-	-	-	-	-
+selectedSecondaryColor	color	-	selectedColor	-	-	-	-	-	single	-	-	-	-	-	-
+selectedBackgroundColor	color	00000000	-	-	-	-	-	-	single	-	-	-	-	-	-
+selectedSecondaryBackgroundColor	color	-	selectedBackgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+selectedBackgroundMargins	pair	0 0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+selectedBackgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+textHorizontalScrolling	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+textHorizontalScrollSpeed	float	1	-	-	0.1	10	-	-	single	-	-	-	-	-	-
+textHorizontalScrollDelay	float	3	-	-	0	10	-	-	single	-	-	-	-	-	-
+textHorizontalScrollGap	float	1.5	-	-	0.1	5	-	-	single	-	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.045	-	-	-	-	-	-	single	-	-	-	-	-	-
+horizontalAlignment	string	left	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+horizontalMargin	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+letterCase	string	none	-	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+letterCaseAutoCollections	string	-	letterCase	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	system	-	-
+letterCaseCustomCollections	string	-	letterCase	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+lineSpacing	float	1.5	-	-	0.5	3	-	-	single	-	-	-	-	-	-
+indicators	string	symbols	-	-	-	-	-	-	enum	none ascii symbols	-	-	-	-	-
+collectionIndicators	string	symbols	-	-	-	-	-	-	enum	ascii symbols	-	-	-	-	-
+systemNameSuffix	boolean	true	-	-	-	-	-	-	single	-	-	-	gamelist	-	-
+letterCaseSystemNameSuffix	string	uppercase	-	-	-	-	-	-	enum	uppercase lowercase capitalize	-	-	gamelist	-	-
+fadeAbovePrimary	boolean	false	-	-	-	-	-	-	single	-	-	-	system	-	-
+zIndex	float	50	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	image	secondary	system,gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	0.001	3	-	ZeroAxisAuto	single	-	-	-	-	-	-
+maxSize	pair	-	-	-	0.001	3	-	-	single	-	-	-	-	-	-
+cropSize	pair	-	-	-	0.001	3	-	-	single	-	-	-	-	-	-
+cropPos	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+renderDuringTransitions	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+flipHorizontal	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+flipVertical	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+path	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameOverridePath	path	-	-	-	-	-	-	-	single	-	-	-	gamelist	-	-
+default	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+imageType	string	-	-	-	-	-	-	-	list	image miximage marquee screenshot titlescreen cover backcover 3dbox physicalmedia fanart	0	-	-	-	-
+metadataElement	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselector	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
+tile	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+tileSize	pair	-	-	-	0	1	-	ZeroAxisAuto	single	-	-	-	-	-	-
+tileHorizontalAlignment	string	left	-	-	-	-	-	-	enum	left right	-	-	-	-	-
+tileVerticalAlignment	string	bottom	-	-	-	-	-	-	enum	top bottom	-	-	-	-	-
+interpolation	string	-	-	InterpolationByRotation	-	-	-	-	enum	nearest linear	-	-	-	-	-
+mipmap	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+cornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+color	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+colorEnd	color	-	color	-	-	-	-	-	single	-	-	-	-	-	-
+gradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+scrollFadeIn	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+brightness	float	0	-	-	-2	2	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+saturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	30	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	video	secondary	system,gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	0.01	2	-	ZeroAxisAuto	single	-	-	-	-	-	-
+maxSize	pair	-	-	-	0.01	2	-	-	single	-	-	-	-	-	-
+cropSize	pair	-	-	-	0.01	2	-	-	single	-	-	-	-	-	-
+cropPos	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+imageSize	pair	-	size	-	0.01	2	-	ZeroAxisAuto	single	-	-	-	-	-	-
+imageMaxSize	pair	-	maxSize	-	0.01	2	-	-	single	-	-	-	-	-	-
+imageCropSize	pair	-	cropSize	-	0.01	2	-	-	single	-	-	-	-	-	-
+imageCropPos	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+path	path	-	-	-	-	-	-	-	single	-	-	-	-	video	-
+default	path	-	-	-	-	-	-	-	single	-	-	-	-	video	-
+defaultImage	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+imageType	string	-	-	-	-	-	-	-	list	image miximage marquee screenshot titlescreen cover backcover 3dbox physicalmedia fanart none	0	-	-	-	-
+metadataElement	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselector	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
+iterationCount	uint	0	-	-	0	10	-	-	single	-	-	-	-	video	-
+onIterationsDone	string	nothing	-	-	-	-	-	-	enum	nothing image	-	-	-	video	-
+audio	boolean	true	-	-	-	-	-	-	single	-	-	-	-	video	-
+interpolation	string	-	-	InterpolationByRotation	-	-	-	-	enum	nearest linear	-	-	-	-	-
+imageCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+videoCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	video	-
+color	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+colorEnd	color	-	color	-	-	-	-	-	single	-	-	-	-	-	-
+gradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+pillarboxes	boolean	true	-	-	-	-	-	-	single	-	-	-	-	video	-
+pillarboxThreshold	pair	0.85 0.90	-	-	0.2	1	-	-	single	-	-	-	-	video	-
+scanlines	boolean	false	-	-	-	-	-	-	single	-	-	-	-	video	-
+delay	float	1.5	-	-	0	15	-	-	single	-	-	-	-	video	-
+fadeInType	string	black	-	-	-	-	-	-	enum	black transparent	-	-	-	video	-
+fadeInTime	float	1	-	-	0	8	-	-	single	-	-	-	-	video	-
+scrollFadeIn	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+brightness	float	0	-	-	-2	2	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+saturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	30	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	animation	secondary	system,gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	0.01	1	-	ZeroAxisAuto	single	-	-	-	-	-	-
+maxSize	pair	-	-	-	0.01	1	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+metadataElement	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+path	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+speed	float	1	-	-	0.2	3	-	-	single	-	-	-	-	-	-
+direction	string	normal	-	-	-	-	-	-	enum	normal reverse alternate alternateReverse	-	-	-	-	-
+iterationCount	uint	0	-	-	0	10	-	-	single	-	-	-	-	-	-
+interpolation	string	-	-	InterpolationByRotation	-	-	-	-	enum	nearest linear	-	-	-	-	-
+cornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+color	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+colorEnd	color	-	color	-	-	-	-	-	single	-	-	-	-	-	-
+gradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+brightness	float	0	-	-	-2	2	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+saturation	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	35	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	badges	secondary	gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	0.15 0.20	-	-	0.03	1	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+horizontalAlignment	string	-	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+direction	string	row	-	-	-	-	-	-	enum	row column	-	-	-	-	-
+lines	uint	3	-	-	-	-	-	-	single	-	-	-	-	-	1-10
+itemsPerLine	uint	4	-	-	-	-	-	-	single	-	-	-	-	-	1-10
+itemMargin	pair	0.01 0.01	-	-	0	0.2	-	MinusOneMatchesOther	single	-	-	-	-	-	-
+slots	string	-	-	-	-	-	-	-	list	collection folder favorite completed kidgame broken controller altemulator manual all	0	-	-	-	-
+controllerPos	pair	0.5 0.5	-	-	-1	2	-	-	single	-	-	-	-	-	-
+controllerSize	float	0.5	-	-	0.1	2	-	-	single	-	-	-	-	-	-
+customBadgeIcon	path	-	-	-	-	-	-	-	keyed	collection folder favorite completed kidgame broken controller altemulator manual	-	badge	-	-	-
+customControllerIcon	path	-	-	-	-	-	-	-	keyed	gamepad_generic gamepad_nintendo_nes gamepad_nintendo_snes gamepad_nintendo_64 gamepad_nintendo_gamecube gamepad_playstation gamepad_sega_master_system gamepad_sega_md_3_buttons gamepad_sega_md_6_buttons gamepad_sega_dreamcast gamepad_xbox joystick_generic joystick_arcade_no_buttons joystick_arcade_no_buttons_twin joystick_arcade_1_button joystick_arcade_2_buttons joystick_arcade_3_buttons joystick_arcade_4_buttons joystick_arcade_5_buttons joystick_arcade_6_buttons keyboard_generic keyboard_and_mouse_generic mouse_generic mouse_amiga lightgun_generic lightgun_nintendo steering_wheel_generic flight_stick_generic spinner_generic trackball_generic wii_remote_nintendo wii_remote_and_nunchuk_nintendo joycon_left_or_right_nintendo joycon_pair_nintendo xbox_kinect unknown	-	controller	-	-	-
+folderLinkPos	pair	0.5 0.5	-	-	-1	2	-	-	single	-	-	-	-	-	-
+folderLinkSize	float	0.5	-	-	0.1	1	-	-	single	-	-	-	-	-	-
+customFolderLinkIcon	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+badgeIconColor	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+badgeIconColorEnd	color	-	badgeIconColor	-	-	-	-	-	single	-	-	-	-	-	-
+badgeIconGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+controllerIconColor	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+controllerIconColorEnd	color	-	controllerIconColor	-	-	-	-	-	single	-	-	-	-	-	-
+controllerIconGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+folderLinkIconColor	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+folderLinkIconColorEnd	color	-	folderLinkIconColor	-	-	-	-	-	single	-	-	-	-	-	-
+folderLinkIconGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+interpolation	string	-	-	InterpolationByRotation	-	-	-	-	enum	nearest linear	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	35	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	text	secondary	system,gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+text	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+systemdata	string	-	-	-	-	-	-	-	enum	name fullname gamecount gamecountGames gamecountGamesNoText gamecountFavorites gamecountFavoritesNoText	-	-	system	-	-
+metadata	string	-	-	-	-	-	-	-	enum	name description rating developer publisher genre players favorite completed kidgame broken manual playcount playtime controller altemulator emulator physicalName physicalNameExtension systemName systemFullname sourceSystemName sourceSystemFullname	-	-	-	-	-
+defaultValue	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+systemNameSuffix	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+letterCaseSystemNameSuffix	string	uppercase	-	-	-	-	-	-	enum	uppercase lowercase capitalize	-	-	-	-	-
+metadataElement	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselector	string	-	-	-	-	-	-	-	single	-	-	-	system	-	-
+gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
+container	boolean	-	-	ContainerForDescription	-	-	-	-	single	-	-	-	-	-	-
+containerType	string	vertical	-	-	-	-	-	-	enum	vertical horizontal	-	-	-	-	-
+containerVerticalSnap	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+containerScrollSpeed	float	1	-	-	0.1	10	-	-	single	-	-	-	-	-	-
+containerStartDelay	float	-	-	ContainerStartDelayByType	0	10	-	-	single	-	-	-	-	-	-
+containerResetDelay	float	7	-	-	0	20	-	-	single	-	-	-	-	-	-
+containerScrollGap	float	1.5	-	-	0.1	5	-	-	single	-	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.045	-	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+horizontalAlignment	string	left	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+verticalAlignment	string	center	-	-	-	-	-	-	enum	top center bottom	-	-	-	-	-
+color	color	000000FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColor	color	00000000	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundMargins	pair	0 0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+backgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+letterCase	string	none	-	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+lineSpacing	float	1.5	-	-	0.5	3	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	40	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	datetime	secondary	system,gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+metadata	string	-	-	-	-	-	-	-	enum	releasedate lastplayed	-	-	-	-	-
+defaultValue	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselector	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.045	-	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+horizontalAlignment	string	left	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+verticalAlignment	string	center	-	-	-	-	-	-	enum	top center bottom	-	-	-	-	-
+color	color	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColor	color	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundMargins	pair	0 0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+backgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+letterCase	string	none	-	-	-	-	-	-	enum	none uppercase lowercase capitalize	-	-	-	-	-
+lineSpacing	float	1.5	-	-	0.5	3	-	-	single	-	-	-	-	-	-
+format	string	%Y-%m-%d	-	-	-	-	-	-	single	-	-	-	-	-	-
+displayRelative	boolean	-	-	DisplayRelativeForLastPlayed	-	-	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	40	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	gamelistinfo	secondary	gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.045	-	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+horizontalAlignment	string	left	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+verticalAlignment	string	center	-	-	-	-	-	-	enum	top center bottom	-	-	-	-	-
+color	color	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColor	color	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	45	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	rating	secondary	system,gamelist
+pos	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	0 0.06	-	-	0.01	1	0.5	OneAxisOnly	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+stationary	string	never	-	-	-	-	-	-	enum	withinView betweenViews always never	-	-	-	-	-
+hideIfZero	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselector	string	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+gameselectorEntry	uint	0	-	-	0	-	-	-	single	-	-	-	system	-	-
+interpolation	string	-	-	InterpolationByRotation	-	-	-	-	enum	nearest linear	-	-	-	-	-
+color	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+filledPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+unfilledPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+overlay	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+visible	boolean	true	-	-	-	-	-	-	single	-	-	-	-	-	-
+zIndex	float	45	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	gameselector	special	system
+selection	string	random	-	-	-	-	-	-	enum	random lastplayed mostplayed	-	-	-	-	-
+gameCount	uint	1	-	-	1	30	-	-	single	-	-	-	-	-	-
+allowDuplicates	boolean	false	-	-	-	-	-	-	single	-	-	-	-	-	-
+@	helpsystem	special	system,gamelist
+pos	pair	-	-	HelpPosByOrientation	-	-	-	-	single	-	-	-	-	-	-
+posDimmed	pair	-	pos	-	-	-	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+originDimmed	pair	-	origin	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+textColor	color	777777FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+textColorDimmed	color	-	textColor	-	-	-	-	-	single	-	-	-	-	-	-
+iconColor	color	777777FF	-	-	-	-	-	-	single	-	-	-	-	-	-
+iconColorDimmed	color	-	iconColor	-	-	-	-	-	single	-	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	-	-	HelpFontSizeByOrientation	0.001	1.5	-	-	single	-	-	-	-	-	-
+fontSizeDimmed	float	-	fontSize	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+scope	string	shared	-	-	-	-	-	-	enum	shared view menu none	-	-	-	-	-
+entries	string	all	-	-	-	-	-	-	list	all back start a b x y l r lt rt left/right down up up/down up/down/left/right ltrt lr thumbstickclick	0	-	-	-	-
+entryLayout	string	iconFirst	-	-	-	-	-	-	enum	iconFirst textFirst	-	-	-	-	-
+entryRelativeScale	float	1	-	-	0.2	3	-	-	single	-	-	-	-	-	-
+entrySpacing	float	0.00833	-	-	0	0.04	-	-	single	-	-	-	-	-	-
+entrySpacingDimmed	float	-	entrySpacing	-	0	0.04	-	-	single	-	-	-	-	-	-
+iconTextSpacing	float	0.00416	-	-	0	0.04	-	-	single	-	-	-	-	-	-
+iconTextSpacingDimmed	float	-	iconTextSpacing	-	0	0.04	-	-	single	-	-	-	-	-	-
+letterCase	string	uppercase	-	-	-	-	-	-	enum	uppercase lowercase capitalize	-	-	-	-	-
+backgroundColor	color	00000000	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColorEnd	color	-	backgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+backgroundHorizontalPadding	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundVerticalPadding	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0.2	1	-	-	single	-	-	-	-	-	-
+opacityDimmed	float	-	opacity	-	0.2	1	-	-	single	-	-	-	-	-	-
+customButtonIcon	path	-	-	-	-	-	-	-	keyed	dpad_updown dpad_leftright dpad_all thumbstick_click button_l button_r button_lr button_lt button_rt button_ltrt button_a_XBOX button_b_XBOX button_x_XBOX button_y_XBOX button_back_XBOX button_start_XBOX button_back_XBOX360 button_start_XBOX360 button_a_PS button_b_PS button_x_PS button_y_PS button_back_PS123 button_start_PS123 button_back_PS4 button_start_PS4 button_back_PS5 button_start_PS5 button_a_switch button_b_switch button_x_switch button_y_switch button_back_switch button_start_switch button_a_SNES button_b_SNES button_x_SNES button_y_SNES button_back_SNES button_start_SNES	-	button	-	-	-
+@	systemstatus	special	system,gamelist
+pos	pair	0.982 0.016	-	-	-	-	-	-	single	-	-	-	-	-	-
+height	float	0.035	-	-	0.01	0.5	-	-	single	-	-	-	-	-	-
+origin	pair	1 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+scope	string	shared	-	-	-	-	-	-	enum	shared view menu none	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+textRelativeScale	float	0.9	-	-	0.5	1	-	-	single	-	-	-	-	-	-
+color	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColor	color	00000000	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColorEnd	color	-	backgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+backgroundHorizontalPadding	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundVerticalPadding	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+entries	string	all	-	-	-	-	-	-	list	bluetooth wifi cellular battery all	0	-	-	-	-
+entrySpacing	float	0.005	-	-	0	0.04	-	-	single	-	-	-	-	-	-
+customIcon	path	-	-	-	-	-	-	-	keyed	icon_bluetooth icon_wifi icon_cellular icon_battery_charging icon_battery_low icon_battery_medium icon_battery_high icon_battery_full	-	icon	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+@	clock	special	system,gamelist
+pos	pair	0.018 0.016	-	-	-	-	-	-	single	-	-	-	-	-	-
+size	pair	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+origin	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+rotation	float	0	-	-	-	-	-	-	single	-	-	-	-	-	-
+rotationOrigin	pair	0.5 0.5	-	-	0	1	-	-	single	-	-	-	-	-	-
+scope	string	shared	-	-	-	-	-	-	enum	shared view menu none	-	-	-	-	-
+fontPath	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-
+fontSize	float	0.035	-	-	0.001	1.5	-	-	single	-	-	-	-	-	-
+horizontalAlignment	string	left	-	-	-	-	-	-	enum	left center right	-	-	-	-	-
+verticalAlignment	string	center	-	-	-	-	-	-	enum	top center bottom	-	-	-	-	-
+color	color	FFFFFFFF	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColor	color	00000000	-	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundColorEnd	color	-	backgroundColor	-	-	-	-	-	single	-	-	-	-	-	-
+backgroundGradientType	string	horizontal	-	-	-	-	-	-	enum	horizontal vertical	-	-	-	-	-
+backgroundHorizontalPadding	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundVerticalPadding	pair	0 0	-	-	0	1	-	-	single	-	-	-	-	-	-
+backgroundCornerRadius	float	0	-	-	0	0.5	-	-	single	-	-	-	-	-	-
+format	string	%H:%M	-	-	-	-	-	-	single	-	-	-	-	-	-
+opacity	float	1	-	-	0	1	-	-	single	-	-	-	-	-	-
+@	sound	special	all
+path	path	-	-	-	-	-	-	-	single	-	-	-	-	-	-

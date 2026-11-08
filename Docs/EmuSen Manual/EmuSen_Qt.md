@@ -916,6 +916,124 @@ scene or painter change; the loader is done. The ranking is re-measured by the c
 - **Change detection.** The corpus TSV of each measurement is committed under `Testing/esde-corpus/<date>.tsv`; a row
   that worsens fails the landing until explained.
 
+### 4.5 `emusen-esde` as built: the loader, the scene and `esde-check` **[M 2026-11-08]**
+
+Stage 4's first half. The crate is `Frontend/esde`, outside the Frontend workspace with its own lock file, as
+`qml-rules` is, because the back end's development module links it; `tests/fence.rs` holds its tree to the crate,
+quick-xml and memchr, with no Qt, no cxx-qt and no other EmuSen crate. The QML painter is the second half and is not
+here.
+
+#### 4.5.1 The three modules
+
+| Module | Job | Files |
+|---|---|---|
+| `loader` | a theme folder to a `Theme` for one system and one set of choices: capabilities, selection, the parsing order, includes, variables, merging, typing, defaults, bindings, drawing order and every diagnostic with its code, file and line | `xml`, `diagnostics`, `values`, `catalog` (with `catalog.tsv`), `capabilities`, `choices`, `parse`, `view`, `resolved` |
+| `scene` | each element's rectangle, rotation, opacity, offset and text at a time on the host's clock, for a resolved view, the selection and ES-DE's measured motion; the move between views | `data`, `motion`, `words`, `grid`, `mapping` (with `mapping.tsv`), `view`, `stage` |
+| `check` | a theme or a corpus loaded for every selectable variant and each system, measured as TSV | `check` |
+
+- **A translation, file by file.** `loader` follows the C# `BigPicture/Theme` one to one: `ThemeXml` → `xml`,
+  `ThemeValueParser` and `ThemeValues` → `values`, `ThemeCapabilities` → `capabilities`, `ThemeChoices` → `choices`,
+  `ThemeLoader`'s `ParseRun` → `parse`, `ThemeViewBuilder` → `view`, `ResolvedTheme` → `resolved`. Q47's and Q70/Q71's
+  readings (`EmuSen_BigPicture.md` §31, §35) are kept to the character: ES-DE's leading-number FLOAT, C-style
+  UNSIGNED_INTEGER and COLOR, the pair split at its first space, `selectable` false only on `0`, `f` or `n`, untrimmed
+  paths and includes, an unknown `imageType` hiding the element.
+- **The catalogue is data.** The 16 element types and 468 properties are `catalog.tsv`, one row a property (type,
+  literal default, same-as default, computed default, range, pair rule, shape, values, view limit, deferral), read once.
+  It was generated from the C# `ThemeCatalog` by a script outside the repository on 2026-11-08 and is checked by the
+  C# catalogue tests re-expressed (§4.5.3), the 39 hand-read entries among them.
+- **The XML reader.** quick-xml 0.38 (MIT), a streaming reader, with a small owned tree built over it. It was chosen
+  over a DOM parser because ES-DE's lenient reading needs a fragment read: when the strict reading fails, a bare `&`
+  is escaped, declarations are blanked, the first element is read whole and anything after it is ignored, as the C#
+  `ThemeXml` does through `XmlReader` in fragment mode. Whitespace-only text is dropped and line ends normalised, as
+  `XDocument` does; lines are counted from the reader's byte offsets.
+- **One addition to the C# model.** A diagnostic carries a `subject` (the tag, the element type, or `type.property`)
+  for the three unknown codes, so the property map does not parse messages.
+- **The scene's record.** `SceneView::frame()` gives one `ElementState` per element in drawing order: why it is
+  skipped (the C# `SceneBuilder.Skip` reasons, and "nothing to show" for a text with no words), the box in pixels from
+  `pos`, `size` and `origin`, `rotation` and `rotationOrigin`, the opacity (its own, times `scrollFadeIn`'s rise, times
+  the held list's metadata fade), the offset (a carousel's or list's position in items, a grid's first row), the time
+  since the selection, the `TextScroll` rule a self-scrolling text follows (LunaP's §102.3, with ES-DE's measured
+  rates), the grid's focus, and what a text, datetime or clock says in its letter case. `Stage::layers()` gives the two
+  views during a pan with their shifts, the help bar, clock and status held still. The clock is microseconds the host
+  passes in; nothing reads wall time. Text widths are the painter's: it measures and asks the rule for the offset.
+- **What the C# scene did that this one leaves to the host or the painter.** Media lookup (the C# `ISceneMedia`), the
+  system view's gameselector picks (`GameSelectors`; the system view's game is none here), badges, help prompts and
+  device status contents, the quick-scroll letters, animation frame timing, and the rebuild-on-step lever of
+  `EmuSen_BigPicture.md` §14.8, which has no meaning where a frame is a function of state.
+- **What is drawn** is `scene/mapping.tsv`, the C# `SceneMapping` as it stood on 2026-11-08: the pairs the painter must
+  draw to match the C# one, and the table `check` counts unsupported pairs against. Each painter stage that draws more
+  extends it.
+
+#### 4.5.2 `check` and `esde-check`
+
+`esde-check` is the fourth command of the `emusen.dev` module (`Platform/emusen-dev-module/src/esde_check.rs`, a
+cross-component dependency on `Frontend/esde`, the same shape as `qml-rules`'s), with its page at
+`Docs/man/emusen.dev/esde-check.1`. A theme is loaded once for each selectable variant (once when none is offered) and
+each of EmuSen's five systems, at 1280 × 800, as pass 3's survey loaded it. The default table is one row a theme
+(loads, systems themed, variants, runs, errors, warnings, pairs set, unknown, unsupported, drawn whole, kinds, undrawn
+kinds), ending in the three headline numbers; `--diagnostics` and `--properties` print the diagnostics and the property
+map. It exits 1 when a theme does not load, which is the landing check §4.4 asks for.
+
+#### 4.5.3 Proof: the C# fixtures, then the C# survey's own corpus
+
+**The fixtures.** Every loader fixture of `ThemeCapabilitiesTests`, `ThemeLoaderTests`, `ThemeErrorTests`,
+`ThemeCatalogTests`, `ThemeEsdeRulesTests` and `ThemeValueRulesTests` is re-expressed in `Frontend/esde/tests/` against
+the same synthetic themes (`tests/common` is `SyntheticTheme`), theory rows as loops over the same rows: 116 tests, all
+passing. Left out are the two install-gate cases, which test the C# downloader, not the loader. The scene's fixtures
+are those of `SceneMotionTests`, `GridSceneTests` and `SceneSemanticsTests` that assert state rather than a control's
+pixels, 22 tests over the same synthetic library and the same round-number motion. One translation defect was found
+by them: the grid's two focus levels were assigned one after the other, so the second read the first's new value; the
+C# assigns them as a pair. `A_step_while_moving_starts_from_the_items_current_focus` caught it.
+
+**The September corpus.** `esde-check` was run over the 66 themes' XML that pass 3 fetched on 2026-09-26
+(`~/.cache/emusen/bigpicture/theme-survey/xml`) and compared theme by theme with the C# survey's `survey.json` of
+2026-09-27. For all 66: the same systems themed, the same errors (0), the same runs, the same undrawn element kinds and
+the same count of unsupported pairs. Warnings differ in 22 themes by 1 or 2, each by the theme's own capabilities
+warnings, which the C# survey counted once more outside its loads (`ThemeSurveyTool.Analyse_the_fetched_themes`);
+checked on SimpleMenu (one bare `&`) and Razor (a bare `&` and `ar_SA`). 66 of 66 load, as in C#. The whole run takes
+2.7 s, against the C# survey's 3.6 s.
+
+**Seeded faults**, each applied alone and reverted:
+
+| Fault | Caught by |
+|---|---|
+| general `<view>`s parsed before `<variables>` | `errors::a_property_made_empty_by_its_variables_is_ignored_with_a_warning` and the parsing-order tests |
+| a bare `&` left raw in the lenient reading | `xml::a_bare_ampersand_and_text_outside_are_read_leniently`, `esde_rules::a_bare_ampersand_is_kept_as_text_and_references_are_decoded` |
+| the fast tier stepping one item, not four | `scene::a_list_wraps_on_a_tap_stops_at_its_end_when_held_and_jumps_at_the_fast_tier` |
+| the metadata fading at the press, not the first repeat | `scene::metadata_fades_out_while_the_list_scrolls_fast_and_back_in_when_it_stops`, `scene::a_held_grid_fades_the_metadata_out_from_the_first_repeat` |
+
+#### 4.5.4 The corpus measured on 2026-11-08
+
+ES-DE's `themes.json` was fetched from its list's repository on 2026-11-08: **71 themes** (the 66 of September and five
+new: Atelier, Hyperflix, NXE Menu, PSOne-ish, Unreleased), all on github.com but one on gitlab.com, and
+`latestStableRelease` 52. That field is the list's own release number, not a count of themes (it was 51 in September).
+Each theme's XML was fetched by a blobless, sparse, depth-one `git clone` from the address the list names, so that
+only `*.xml` blobs came down and no API allowance was spent: 25,548 files, 291 MB, every XML file rather than pass 3's
+five systems' (68.8 MB), since a file skipped by name could be one an include needs. Art Book Next, Artflix (Revisited)
+and CarAlt were fetched whole with their theme files (XML, images, fonts, sounds; no video): 219, 72 and 30 MB. Hooks,
+LFS filters and links were off, nothing fetched was run, and each folder keeps its commit in `.corpus-commit`. All of it
+is under `~/.cache/emusen/bigpicture/corpus/`, outside the repository.
+
+The measure is `Testing/esde-corpus/2026-11-08.tsv`, taken in 2.6 s:
+
+| | September (C#, 66 themes) | 2026-11-08 (Rust, 71 themes) |
+|---|---|---|
+| Load for all five systems | 66 | **70** |
+| Drawn whole | 0 | 0 |
+| Use no undrawn kind | 57 | 61 |
+
+- **Every one of the 66 still loads,** and against the Rust run over September's XML no row worsened; one improved
+  (X-Grid sets two fewer unsupported pairs, 9 to 7).
+- **NXE Menu does not load:** its carousels set `itemLinearScale` and `itemLinearSpacing`, which the catalogue lacks,
+  so each is an unknown property and unthemes every system. Both are documented in ES-DE's current `THEMES.md` (master,
+  read 2026-11-08, its "carousel" section: NORMALIZED_PAIR, the scale and the spacing of the items before and after the
+  centre); the catalogue was read from `THEMES.md` in September. The C# loader shares the catalogue and would refuse it
+  the same way. This is two catalogue rows to add, not a translation defect; adding them waits on the tester.
+- **The watched subset, fetched whole:** Art Book Next in all 100 runs with no error and no warning, 168 pairs set
+  and 5 unsupported (the video playback properties); Artflix (Revisited) and CarAlt load in every run, with 6 and 8
+  unsupported pairs, and both use a vertical wheel carousel, which the scene draws only in part. The pixel comparison against ES-DE's captures waits
+  for the painter.
+
 ---
 
 ## 5. The stable developer surface

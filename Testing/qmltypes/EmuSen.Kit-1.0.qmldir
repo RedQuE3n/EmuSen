@@ -1,0 +1,21 @@
+module EmuSen.Kit
+optional plugin EmuSen_Kit
+classname EmuSen_Kit_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+depends QtQuick.Shapes
+prefer :/qt/qml/EmuSen/Kit/
+Walkable 1.0 qml/Walkable.qml
+Body 1.0 qml/Body.qml
+Sky 1.0 qml/Sky.qml
+Moonrise 1.0 qml/Moonrise.qml
+Frame 1.0 qml/Frame.qml
+Card 1.0 qml/Card.qml
+Sheet 1.0 qml/Sheet.qml
+Question 1.0 qml/Question.qml
+HelpBar 1.0 qml/HelpBar.qml
+MenuPanel 1.0 qml/MenuPanel.qml
+MenuRow 1.0 qml/MenuRow.qml
+WholeRow 1.0 qml/WholeRow.qml
+Carousel 1.0 qml/Carousel.qml
+NormalizedCanvas 1.0 qml/NormalizedCanvas.qml

@@ -91,6 +91,8 @@ pub struct SplashBody {
 
 /// The draft's unit: positions are in units of the height over 720.
 pub const UNIT: f64 = 720.0;
+/// The splash's star: its radius in units of the height over 720 (LunaSplash draws them at 1.4).
+pub const SPLASH_STAR_SIZE: f64 = 1.4;
 pub const MOON_Y: f64 = 0.36;
 pub const MOON_RADIUS: f64 = 92.0;
 pub const ROW_Y: f64 = 0.66;
@@ -102,6 +104,8 @@ pub const CAPTION_Y: f64 = 0.91;
 pub const CAPTION_SIZE: f64 = 15.0;
 
 pub const HALO: Colour = Colour::rgba(201, 214, 255, 71);
+/// The halo's outer edge: its colour at no alpha.
+pub const HALO_EDGE: Colour = Colour::rgba(201, 214, 255, 0);
 pub const OUTLINE: Colour = Colour::rgba(243, 239, 226, 242);
 pub const LIT_INNER: Colour = Colour::hex("#FAF7EC");
 pub const LIT_OUTER: Colour = Colour::hex("#D6D2C4");
@@ -138,11 +142,48 @@ pub struct Moon {
     pub centre: Point,
     pub radius: f64,
     pub halo_opacity: f64,
+    /// The halo is HALO out to `halo_inner_radius` and fades to nothing at `halo_radius`, the draft's gradient from 0.6 to 3.2 radii.
+    pub halo_inner_radius: f64,
     pub halo_radius: f64,
     pub outline_drawn: f64,
+    pub outline_width: f64,
     pub fill: f64,
+    /// The lit face's two-circle gradient: LIT_INNER from a small circle up and to the left, LIT_OUTER at 1.1 radii about the centre.
+    pub lit_focus: Point,
+    pub lit_focus_radius: f64,
+    pub lit_radius: f64,
     pub shadow_centre: Point,
     pub shadow_radius: f64,
+}
+
+impl Moon {
+    /// The shadow as it is drawn, clipped to the moon: the outline of the two discs' overlap, `steps` points along each arc, into `out`.
+    pub fn shadow_outline(&self, steps: usize, out: &mut Vec<Point>) {
+        out.clear();
+        let ([ax, ay], ar) = (self.centre, self.radius);
+        let ([bx, by], br) = (self.shadow_centre, self.shadow_radius);
+        let d = (bx - ax).hypot(by - ay);
+        let arc = |out: &mut Vec<Point>, [cx, cy]: Point, r: f64, from: f64, to: f64| {
+            for i in 0..=steps {
+                let a = from + (to - from) * i as f64 / steps as f64;
+                out.push([cx + r * a.cos(), cy + r * a.sin()]);
+            }
+        };
+        if ar <= 0.0 || br <= 0.0 || d >= ar + br {
+            return;
+        }
+        if d <= (ar - br).abs() {
+            let (centre, r) = if br < ar { (self.shadow_centre, br) } else { (self.centre, ar) };
+            arc(out, centre, r, 0.0, std::f64::consts::TAU);
+            return;
+        }
+        let towards = (by - ay).atan2(bx - ax);
+        let on_moon = ((d * d + ar * ar - br * br) / (2.0 * d * ar)).clamp(-1.0, 1.0).acos();
+        let on_shadow = ((d * d + br * br - ar * ar) / (2.0 * d * br)).clamp(-1.0, 1.0).acos();
+        arc(out, self.centre, ar, towards - on_moon, towards + on_moon);
+        let back = towards + std::f64::consts::PI;
+        arc(out, self.shadow_centre, br, back - on_shadow, back + on_shadow);
+    }
 }
 
 /// One planet at a time: where it is, how large, how far it has appeared, its glow, and its flare as the sweep passes.
@@ -160,6 +201,13 @@ pub struct PlanetFrame {
     pub flare_colour: Colour,
     /// The box the body is drawn in about its centre: a disc of the radius, shards and a gem 2.5 radii tall.
     pub body_box: Box2,
+    /// No world was given: the draft's planet, a disc lit by a two-circle gradient from `light` at a tenth of the radius
+    /// about `focus`, 0.4 radii up and left, to `rim` at the radius about the centre.
+    pub plain: bool,
+    pub light: Colour,
+    pub rim: Colour,
+    pub focus: Point,
+    pub focus_radius: f64,
 }
 
 /// The light sweeping along the row: its centre and the band drawn round it.
@@ -174,7 +222,9 @@ pub struct Sweep {
 pub struct Line {
     pub from_x: f64,
     pub to_x: f64,
+    /// The line's centre, a stroke of `width` (one unit) about it.
     pub y: f64,
+    pub width: f64,
     pub opacity: f64,
 }
 
@@ -292,9 +342,14 @@ impl Splash {
             centre: [mx, my],
             radius: mr,
             halo_opacity: ease(tl.halo.at(t)),
+            halo_inner_radius: mr * 0.6,
             halo_radius: mr * 3.2,
             outline_drawn: ease(tl.stroke.at(t)),
+            outline_width: 2.2 * unit,
             fill,
+            lit_focus: [mx - mr * 0.35, my - mr * 0.3],
+            lit_focus_radius: mr * 0.1,
+            lit_radius: mr * 1.1,
             shadow_centre: [mx + mr * (0.42 + (1.0 - fill) * 0.7), my - mr * 0.12],
             shadow_radius: mr * 0.96,
         };
@@ -312,7 +367,7 @@ impl Splash {
                 let centre = self.planet_at(i, t, w, h, row_w);
                 let r = Self::planet_radius(i, unit);
                 let hue = self.bodies[i].hue;
-                let hit = if sweeping { (-((centre[0] - sweep_x) / (tl.flare_width * unit)).powi(2)).exp() } else { 0.0 };
+                let hit = if sweeping && unit > 0.0 { (-((centre[0] - sweep_x) / (tl.flare_width * unit)).powi(2)).exp() } else { 0.0 };
                 let shape = self.bodies[i].body.map_or(WorldShape::Planet, |b| b.shape);
                 Some(PlanetFrame {
                     index: i,
@@ -326,6 +381,11 @@ impl Splash {
                     flare_opacity: 0.55 * hit,
                     flare_colour: Colour::hsl(hue, 0.9, 0.86, 1.0),
                     body_box: body_box(shape, centre, r),
+                    plain: self.bodies[i].body.is_none(),
+                    light: Colour::hsl(hue, 0.7, 0.78, 1.0),
+                    rim: Colour::hsl(hue, 0.55, 0.38, 1.0),
+                    focus: [centre[0] - r * 0.4, centre[1] - r * 0.4],
+                    focus_radius: r * 0.1,
                 })
             })
             .collect();
@@ -342,6 +402,7 @@ impl Splash {
                 from_x: w / 2.0 - row_w / 2.0 * line,
                 to_x: w / 2.0 + row_w / 2.0 * line,
                 y: row_y,
+                width: unit,
                 opacity: line,
             }),
             words: (word > 0.0).then(|| Words {

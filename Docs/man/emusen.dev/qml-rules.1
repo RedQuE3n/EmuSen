@@ -1,0 +1,53 @@
+NAME
+    qml-rules - check that QML files hold layout only, as the Qt front end requires
+
+SYNOPSIS
+    qml-rules [--fixture] <path>...
+
+DESCRIPTION
+    The development tool of the emusen.dev module for the Qt front end's
+    rule (EmuSen_Qt.md §1.3): a QML file arranges, binds and calls into
+    models; every decision is Rust's. Each <path> is a .qml file or a
+    directory searched for .qml files (a 'target' folder is skipped).
+    Findings print one a line:
+
+        file:line rule words
+
+    and the last line is 'ok' or 'N findings'. The rules, with the
+    checker's name for each:
+
+        function     a function, other than a Connections handler of the
+                     form 'function onX(...) { one.call() }'
+        callLater    Qt.callLater
+        literal      an array or object literal built in QML
+        words        a string the player would read, outside the bindings
+                     that take a name (objectName, font.family, source,
+                     property, properties, sequence, Accessible.role,
+                     placeholderText) and colour
+                     literals ('#rrggbb', 'transparent')
+        onCompleted  Component.onCompleted doing more than taking the
+                     focus
+        rows         a ListModel with ListElement rows
+        import       a module outside QtQuick, QtQuick.Controls,
+                     QtQuick.Templates, QtQuick.Layouts, QtQuick.Shapes,
+                     QtQml (never QtQml.Models) and EmuSen.*; or the kit
+                     imported unqualified, since every file writes
+                     'import EmuSen.Kit as Kit' so that Qt's Frame and
+                     the kit's never shadow each other
+
+    --fixture reads the paths as fixtures (test scenes, the gallery):
+    their words, rows and literals stand in for the models a screen
+    would have, so the words, rows and literal rules are off and the
+    others hold.
+
+EXIT STATUS
+    0 for no finding, 1 for one or more, 2 when it could not run (a path
+    missing, an option unknown).
+
+EXAMPLES
+    qml-rules Frontend/kit-qt
+    qml-rules --fixture Frontend/qt-test/qml Frontend/kit-gallery/qml
+    qml-rules themes/night/Main.qml
+
+SEE ALSO
+    dupes(1), hwcount(1); EmuSen_Qt.md §1.3 and §8.4; EmuSen_Kit.md §7.9.

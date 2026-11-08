@@ -7,6 +7,7 @@ mod finding;
 mod hw;
 #[cfg(target_os = "linux")]
 mod hwcount;
+mod qml_rules;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 mod units;
 
@@ -20,6 +21,7 @@ pub use finding::{Block as DupeBlock, Finding, Place, Report};
 pub const COMMANDS: &[(&str, bool, &str)] = &[
     ("dupes", false, "  dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n                                duplicated blocks that overlap the lines added since <rev> (the whole tree without --base)"),
     ("hwcount", false, "  hwcount --from TEXT [--to TEXT] [--per N] [--units FILE] [--functions N] [--period N] -- <program> [args]\n                                host instructions, cycles and IPC of a program's window, per thread and by unit"),
+    ("qml-rules", false, "  qml-rules [--fixture] <path>...\n                                the Qt front end's rule that QML is layout only, over .qml files; one finding a line, then ok or N findings"),
 ];
 
 const USAGE: &str = "Usage: dupes [--base <rev>] [--min-tokens N] [--warn-tokens N] [--lang cs|rust|all] [--repo <dir>]\n  Exit 1 for a finding of --min-tokens (100) or more, 0 otherwise, 2 when it could not run. See man dupes.";
@@ -163,6 +165,10 @@ impl Module for DevCommands {
             #[cfg(target_os = "linux")]
             "hwcount" => match hwcount::run(&call.args()) {
                 Ok(out) => Answer { out, err: String::new(), status: 0 },
+                Err(words) => Answer { out: String::new(), err: words, status: 2 },
+            },
+            "qml-rules" => match qml_rules::run(&call.args(), |path| call.resolve(path)) {
+                Ok((out, status)) => Answer { out, err: String::new(), status },
                 Err(words) => Answer { out: String::new(), err: words, status: 2 },
             },
             other => Answer::fault(format!("emusen.dev has no command '{other}'")),

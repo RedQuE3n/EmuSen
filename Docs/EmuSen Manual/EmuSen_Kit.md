@@ -2,8 +2,8 @@
 
 The design is `EmuSen_Qt.md` §1.4: two crates and one QML module carry what was LunaP's. This page is the record of the
 first crate, `emusen-kit-core`, at `Frontend/kit-core`: what it owns, where each value comes from, what it was held to,
-and where it differs from the C# it replaces. The second crate, `emusen-kit-qt`, and the module's `.qml` files are stage
-0's later work and will have sections here when they are built.
+and where it differs from the C# it replaces. The second crate, `emusen-kit-qt`, is §7, and the module's `.qml` files
+join it step by step.
 
 The crate names no Qt type, no runtime, no client crate and no console. It builds with cargo alone, outside the
 Platform workspace, and a test (`tests/fence.rs`) fails if its lock file ever names a Qt binding, a runtime, client or
@@ -172,6 +172,7 @@ it). The Qt harness of §8.1 will fill such a tree from `objectName`, `mapToScen
 | No chrome: in the big-screen and card forms no menu bar or status bar is visible | `no_chrome` | §8.1 |
 | Names a reader hears: every operable element has a non-blank one | `named` | InterfaceSpec §4.3 |
 | Palette reach: every painted colour is declared; a theme's scene and everything under it exempt | `palette_reach` | InterfaceSpec §4.4 |
+| Contrast: words drawn over what is behind them reach 4.5:1, or 3:1 for large type (24 px, or 18.66 px bold), over all but a spare tenth of what is behind them (since 2026-11-08, §7.10) | `contrast` | WCAG 2.1, 1.4.3 |
 
 `check(root, &State)` runs them all for one recorded state: its panel, form, focus, edges, declared colours, slack (a
 pixel, or a pixel and a half at a scale above one) and the capitals' floor.
@@ -221,7 +222,9 @@ their boxes to the fit audit; text is Qt's here, so a `Frame` gives the words' s
 Qt item measures them. The chime is not part of the `Timeline` (the C# record carried it): the sound is §5's, and a host
 pairs `strike_times` with it. `WorldPaint` drew the ring's back as a whole ellipse under the disc; the geometry does the
 same, so a scene graph may draw it as one closed stroke. The draft's `6.28` for a turn is kept as `DRAFT_TURN` rather
-than tau, so the frames stay comparable with the seeded copy of the draft page LunaP §219.5 measured against.
+than tau, so the frames stay comparable with the seeded copy of the draft page LunaP §219.5 measured against. Since
+2026-11-08 a frame with no size has no flare, a planet carries the draft's inks and focus, and the row's line its width
+(§7.10).
 
 ### 4.1 What it is held to
 
@@ -279,3 +282,548 @@ items over these decisions), the `EmuSen` style, the two client crates, the firs
 harness that fills §3's tree from a Qt item tree, the spec writer and the AppImage. Not carried from LunaP, and said
 so above: the hub, gallery, planet and page layouts' own arrangement and `Move(dx, dy)`, which are Qt Quick's layouts
 and views in the design; the List card and the open cover, which are sheets; text layout, which is Qt's.
+
+## 7. The Qt half: `emusen-kit-qt` (stage 0, step 6; 2026-11-07)
+
+`Frontend/kit-qt` is the cxx-qt 0.10.0 binding that puts kit-core's decisions on Qt (`EmuSen_Qt.md` §1.4): a library
+crate with `links = "emusen-kit-qt"` that exports its cxx-qt interface, so the gallery and the harness, which link it,
+register its QML module by running `CxxQtBuilder` themselves. Its dependencies are `cxx`, `cxx-qt`, `cxx-qt-lib`
+(`qt_full`) and `emusen-kit-core` by path; nothing of the runtime or the client crates. It lives in a cargo workspace,
+`Frontend/Cargo.toml`, which excludes `kit-core` on purpose: the workspace would take over kit-core's lock file, and
+kit-core's fence test reads that file. Every decision stays kit-core's; the crate translates Qt's types, events and
+numbers to and from it, and a reader audits it by checking each translation against the kit-core function it calls.
+
+The QML module is `EmuSen.Kit` 1.0, registered by `build.rs`, its `.qml` files in the resource system under
+`qrc:/qt/qml/EmuSen/Kit/`. Its surface is the `.qmltypes` of §7.6 (rule Q).
+
+### 7.1 The enumerations (`kinds`)
+
+Each mirror is a `Q_ENUM_NS` in a namespace element of its own, since a QML namespace resolves a key by name alone and
+`Back` is a pad button and a cue, `Search` a pad button and a role: QML writes `Kit.Pad.Accept`, `Kit.Forms.BigScreen`,
+`Kit.Roles.Content`, `Kit.Variants.Dark`, `Kit.Repeat.EsdeList`, `Kit.Bodies.Planet`, `Kit.Rings.Big` and `Kit.Cues.Back`
+under the module's alias (§7.8): `PadButton` is `UiButton` in its order (the conversion goes through `UiButton::index`
+and `UiButton::ALL`, and `tests/kinds.rs` names every pair so a reordering on either side fails); `Form` is the frame's
+`WalkForm` with its three values, and the tokens read Card as the big screen's column; `Role` is the walk's `Role` plus
+`NoRole` for no focus; `Variant` and `Tiers` are the tokens' variant and the grammar's four measured repeat sets.
+
+### 7.2 `Tokens`
+
+A QML singleton with four inputs, `form`, `variant`, `textScale` and `reducedMotion`, and 71 read-only properties, one
+per token, recomputed by `column::Column::compute` from kit-core whenever an input changes: the 18 colours as `QColor`
+(`surface`, `surfaceRaised`, `inputSurface`, `voidFill`, `scrim`, `captionSurface`, `border`, `rule`, `text`,
+`textStrong`, `muted`, `accent`, `overAccent`, `success`, `attention`, `error`, `overArt`, `overArtScrim`); the type
+scale as pixel sizes (`fontDisplay` to `fontGlyph`) and `headerSize`; the spacing (`base`, `rowHeight`,
+`controlHeight`, `paneGutter`, `paneGap`, `cardWidth`, `titleRow`, `helpBar`, `tileWidth`, `tileHeight`, `tileGap`,
+`rowRadius`, `tileRadius`) and `safeArea` as `QMarginsF`, with `safeAreaOf(width, height)` for a screen's own; the
+focus marks (`ringThickness`, `ringOffset`, `barWidth`, `tileScale`, `hoverBorder`); the eight motion tokens as
+milliseconds with reduced motion applied (`instant`, `quick`, `enter`, `exit`, `pan`, `reel`, `fade`, `poster`), the
+fade of each (`quickFade` … `posterFade`; `fade` itself is the Fade token's fade, 120 ms under reduced motion) and each
+token's curve as `QEasingCurve::Type`'s number so QML binds `easing.type` to it (Linear 0, InQuad 1, OutQuad 2, OutCubic
+6); and the breath (`breathDelay`, `breathPeriod`, `breathLow`, `breathes`). The properties are read-only on purpose:
+a theme overrides token values through §3.4's mechanism, never by writing the singleton.
+
+Three tokens are renamed from the design's table: OnAccent, OnArt and OnArtScrim are `overAccent`, `overArt` and
+`overArtScrim`. In QML a property named `onX` reads as a signal handler, and cxx-qt's connector for `accent`'s change
+signal is `on_accent_changed`, the same name a property `on_accent` would give its own signal; the build failed on
+exactly that collision on 2026-11-07. Font families are not here: kit-core has no such token (§1.3), and the one owner
+rule says one joins kit-core first (§7.7).
+
+### 7.3 `FrameController`, and the three ways in
+
+One `FrameController` per `Frame`, over one kit-core `Walk`. Its writable properties feed the walk (`form`, `hasDetail`,
+`detailBeside`, `navigationShown`, `actionsShown`, `searchShown`, `sections` as a `QStringList`, `selectedSection`,
+`sheetOpen`); its read-only ones mirror it after every call (`focusedRole`, `detailOpen`, `pageOpen`); its signals are
+the walk's events (`sectionChosen`, `focusMoved`, `detailOpened`, `detailClosed`, `pageClosed`, `actionInvoked`) plus
+two of its own, `sheetPressed` and `backDeclined`. Its invokables are the walk's verbs (`moveFocus`, `focusRole`,
+`stepSection`, `openDetail`, `closeDetail`, `openPage`, `closePage`, `setAction`, `clearActions`, `press`) and the three
+ways in:
+
+- **The pad.** `offer(button)` is §1.7's order, as the pure function `frame::route` states it and `tests/route.rs`
+  holds it: an open sheet or question first (`sheetOpen`, and the press comes back as `sheetPressed` for the sheet's
+  own handler), then the walk, then, declined, the focused control as the key `UiButton::key` names (`send_key`, the one
+  C++ function of this step, 16 lines: a `QKeyEvent` press and release sent to `QGuiApplication::focusWindow()`, which
+  Qt Quick delivers to the active focus item). B declined at the top also raises `backDeclined`, the host's signal to
+  close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
+  so the fact has one owner.
+- **The pointer.** `Walkable.qml`, the module's first component, is the §1.7 declaration made once: an `Item` with a
+  `HoverHandler` calling `controller.hover(item, hovered)` and one `TapHandler` for the left, right and back buttons
+  calling `controller.click(item, button)`. Rust maps Qt's button to kit-core's `PointerButton` (`qt_keys`), asks
+  `intent` and acts: `Focus` gives the item the active focus (`QQuickItem::forceActiveFocus`, called through cxx-qt's
+  `extern "C++Qt"` without glue); `Activate` focuses the item and then offers Accept through the same `offer`, so a
+  click and A take one path and reach the same call, the `activated` signal `Walkable` raises on Return or Enter;
+  `Press(Back)` offers B. No screen interprets a device, and nothing is per screen.
+- **The keyboard.** `key(key, modifiers)` takes what the focused control declined and propagated up to the frame:
+  Backtab is Tab with Shift, Enter is Return, and the rest is `qt_keys`' table against kit-core's `Key`; `intent` then
+  gives `Walk(±1)` for Tab or the press a key means, which goes to the sheet or the walk and never back out as a key,
+  so a key cannot loop.
+
+### 7.4 `PadRouter`
+
+A QML singleton whose queue tests push `PadEvent`s into, as the real reader will from the platform client later: `push
+(button, down)` queues, `pump()` applies the queue on the router's own clock (an `Instant` from construction; no
+static) and `pumpAt(ms)` on a stated one, so a test writes the exact times kit-core's tests write. Each pump runs
+`router::Router`: the queue sets the held buttons, `Grammar::menu_chord` is checked (once, and then `forget`, so the
+button that opened a menu reaches nothing under it, raised as `menuChord`), and `Grammar::feed` gives the tick's
+presses, each swapped by `swapAcceptBack` and raised as `pressed(button, repeat, jump)`. `tiers` chooses the repeat set.
+A `Frame` consumes presses through a `Connections` on the singleton, enabled while it holds the active focus, calling
+`controller.offer`; a `Timer` in `Frame` pumps while a frame is shown (step 8). Both arrive with `Frame.qml`.
+
+### 7.5 The drawn items: `Body`, `Sky`, `Moonrise` and `Bells` (stage 0, step 7; 2026-11-07)
+
+**Drawn by Qt Quick Shapes, not by a geometry node of our own.** `EmuSen_Qt.md` §10.4 said the bodies and the sky
+should be the scene graph's, a `QSGGeometryNode` or a `ShaderEffect`. Both were weighed against §8.1's harness, which
+runs on the software backend: that backend draws no custom geometry node and no shader effect, so a gallery grabbed
+under it would show no bodies at all, and a geometry node also means hand-written C++ for the node, its material and its
+vertex layout against §1.4's budget. Qt Quick Shapes is the scene graph's own vector item: on a GPU its geometry
+renderer builds exactly those geometry nodes, and under the software backend its own renderer paints the same paths, so
+one `.qml` draws the same picture on both. kit-core's `Shape` (an outline, closed or open, a solid or radial fill, a
+stroke, an opacity) maps onto `ShapePath` with a `PathPolyline` one to one, which is the design's intent: the world as
+data, the framework drawing it. So the kit's own part is a model, not a renderer.
+
+- **`BodyShapes` and `Body.qml`.** `BodyShapes` is a list model over `world::rows`, one row per kit-core shape of
+  `geometry(body, hue, focused)` in the body's unit box (100 by 100, or 100 by 160), rebuilt (a model reset) when
+  `shape`, `hue`, `focused`, `craters`, `bands`, `cap`, `ring` or `moons` change; `unitWidth` and `unitHeight` are
+  read-only. A row's roles are `outline` (a `QPolygonF`, the closed outline with its first point repeated), `fillInk`,
+  `hasGradient` with `gradientX`, `gradientY`, `gradientRadius` and four stops `stop0At`/`stop0Ink` to `stop3At`/`stop3Ink`,
+  `strokeInk`, `strokeSize` and `inkOpacity`. `Body.qml` is an `Item` with one `Shape` per row from a `Repeater`, each
+  with one `ShapePath`, a `RadialGradient` bound to the four stops and switched in by `hasGradient`, round caps and
+  joins, and a `Scale` transform from the unit box to the item's size, so a resize (the focused tile growing from 58 to
+  84) costs no model work; its `implicitWidth` and `implicitHeight` are the unit box. Two limits, stated: a gradient
+  carries four stops at most and a shorter one repeats its last, because QML cannot repeat a `GradientStop` without
+  logic (kit-core's bodies use three, the glow four); and a linear paint, which no body uses, is drawn as its first
+  stop's colour.
+- **`StarField` and `Sky.qml`.** `StarField` is a list model of the stars placed once by kit-core from `seed` and
+  `count` (Moonrise's by default, so the splash and the screens share one sky), with `moonriseSky` choosing the
+  gradient's stops (`stop0At`/`stop0Ink` to `stop2…`), `width`, `height` and `starsOpacity`, and a glow driven by
+  `glowHue` (negative for none), `glowX` and `glowY` as shares, whose eased state (`SkyGlow`) is read as `glowVisible`,
+  `glowCenterX/Y`, `glowRadiusX/Y` and four stops. `tick(seconds)` is the host's clock: `star_points` fills one buffer
+  (no allocation per frame) and every row's roles are announced at once. `Sky.qml` (its paint one clipped `backdrop` item since §7.10) is a `Rectangle` with the three-stop
+  gradient, a `Repeater` of rounded `Rectangle`s for the stars (a disc of a pixel or two needs no path), one `Shape`
+  for the glow (a circle with the radial gradient, scaled to the ellipse by a `Scale` transform, since QML's radial
+  gradient is circular) and a `FrameAnimation` calling `tick` while `animating`. *[own, because the per-tick update of
+  220 rows is a cost to measure: 220 opacity bindings a frame; if it shows on the handheld, the stars become one
+  `QSGGeometryNode` behind a GPU-only path with the software backend keeping the rectangles.]*
+- **`MoonriseModel` and `Moonrise.qml`.** The model holds the splash's bodies (`addBody(name, hue, shape, craters,
+  bands, cap, ring, moons)`, `clearBodies`), places `Splash` from `Timeline::MOONRISE` at the first tick after a change,
+  and on `tick(seconds)` reads `Splash::frame` into read-only properties (the moon's centre, radius, halo, outline
+  drawn, fill and shadow; the sweep's band; the line; the words' sizes, spacings and baselines; `starsOpacity`,
+  `unit`, `finished`) and the planets into rows (`planetX/Y`, `planetRadius`, `planetOpacity`, the glow and flare, the
+  body's box and its kind, hue and features), with a model reset only when a planet appears. The nine colours of the
+  draft are constant properties. `Moonrise.qml` lays the frame out: a `Sky` with the model's seed and star count, the
+  halo and crescent shadow as rounded rectangles, the lit disc as a `Shape` with a radial gradient, the outline as a
+  `PathAngleArc` whose sweep is `360 × outlineDrawn`, a `Repeater` of worlds each with its glow, `Body` and flare, the
+  sweep band as a horizontal `Gradient`, the line, and two `Text`s for `title` and `caption`, set by the host (the kit
+  owns no words), placed by their baselines. A `FrameAnimation` ticks until `finished`.
+- **`Bells`.** A QObject over `BellCache`: `prepare(cue)` renders a cue through kit-core the first time and keeps it,
+  `prepareAll`, `durationMs`, `peak`, `quickSelectFrames`; `renders` counts renders so a test sees the cache hold,
+  `rate` is 48 000. Playback through Endymion's interface player and the pairing of Moonrise's `strike_times` with the
+  chime come with the platform client (§7.7).
+
+**Two cxx-qt facts found here.** A `#[qenum]` named `Roles` in three bridges clashes: cxx-qt emits `using Roles =
+enum class X::Roles` at namespace scope in each header and the module's type registration includes them all, so each
+model's roles have their own name (`BodyRole`, `StarRole`, `PlanetRole`). And an `extern "C++Qt"` base type may be
+declared once per crate: cxx-qt generates an upcast shim named for the type (`rust::cxxqt1::…QAbstractListModel_upcastPtr`),
+so a second bridge declaring `QAbstractListModel` fails the link with a duplicate symbol; `src/base.rs` declares it and
+the models alias it (`type QAbstractListModel = crate::base::ffi::QAbstractListModel`).
+
+**Held to** (`tests/world.rs`, `stars.rs`, `bells.rs`, 10 tests): a planet with every feature gives twelve rows in
+kit-core's order with the opacities kept and closed outlines closed once; the disc's radial gradient at kit-core's
+centre, radius and stops, padded to four; solid, stroked and bare shapes; shards and a gem inside their tall box; the
+stars are Moonrise's draws, fill the screen and vanish at no opacity; the two skies; the glow comes in over Pan to the
+strength, at the radii, clear at its edge, and goes with no hue; a cue renders once, durations are stereo frames at
+48 kHz, the cues mirror kit-core's. Measured on 2026-11-07 with four seeded faults, each reverted: `pad_stops`
+repeating the first stop failed the disc test; a closed outline left open failed the rows test; the two skies swapped
+failed the skies test; a cache that rendered on every ask failed the render-once test. `qmllint` passes the four `.qml`
+files against the built module (`Body.qml` and `Sky.qml` carry `pragma ComponentBehavior: Bound`, as their delegates
+read the outer model). No C++ was added: the count stays at 23 lines.
+
+### 7.8 The `EmuSen` style and the kit's controls (stage 0, step 8; 2026-11-07)
+
+**The style** is `EmuSen_Qt.md` §1.5's: a directory of control files, `Frontend/kit-qt/style`, each composing its
+`QtQuick.Templates` type and painting in `Tokens`, with Basic as the fallback for a control not written. It travels in
+the kit's binary as a resource module named `EmuSen` at `qrc:/qt/qml/EmuSen/`, beside `EmuSen/Kit`, with a hand-written
+`qmldir` (`style/EmuSen.qrc`): Qt 6 resolves a custom style by importing a module named for the style, so
+`QQuickStyle::setStyle("EmuSen")` before the engine loads is `import EmuSen` (measured 2026-11-07: a module
+`QtQuick.Controls.EmuSen` was not found, with "module EmuSen is not installed"; the `QtQuick.Controls.*` names are the
+built-in styles'). cxx-qt 0.10 registers one QML module per crate, so a second `QmlModule` was not open, and a resource
+module is the plainer form anyway, since the style has no Rust type. Twenty-one controls are written: `Button`, `CheckBox`, `RadioButton`, `Switch`, `Slider`, `ComboBox`,
+`TextField`, `Label`, `ItemDelegate`, `ScrollBar`, `TabBar`, `TabButton`, `ProgressBar`, `ToolTip`, `Menu`,
+`MenuItem`, `MenuSeparator`, `Popup`, `Dialog`, `DialogButtonBox` (because `Dialog` instantiates it, and a Basic one
+would paint Basic's colours into a sweep) and `Pane`. The rules every file keeps, held by `tests/style.rs`: it imports
+`QtQuick.Templates as T` and `EmuSen.Kit`, it paints only `Tokens.*` (no `palette.*`, nothing from Basic), its sizes are
+the tokens' (`controlHeight`, `rowHeight`, `base`, `rowRadius`, `tileRadius`, `paneGutter`, the type scale), and the
+focus is marked as §5.4 says: the ring (`ringThickness` in the accent) on `activeFocus`, the hover border
+(`hoverBorder`), the focus bar (`barWidth`) at a row's left. **`activeFocus`, not `visualFocus`**: Qt shows the latter
+only for keyboard focus reasons, and a pad moves the focus with `forceActiveFocus`, which is "other"; the design makes
+every input an equal, so the ring follows the focus however it got there. The marks a reader would see drawn
+(a check, a radio dot, a chevron) are plain rectangles and discs for now; drawn glyphs are owed (§7.7). `IconLabel`,
+`CheckLabel` and `PlaceholderText` come from `QtQuick.Controls.impl`, as every Qt style's files do, so no text or icon
+layout is written here.
+
+**The kit's controls**, in `Frontend/kit-qt/qml`, each a `.qml` of layout and handler lines only:
+
+- `Frame`: a `FocusScope` with its own `FrameController` (exposed as `controller`, its `form` as `form`) and four
+  slots, `navigation`, `content` (the default), `detail` and `actions`, plus `help`, the help bar's model. The forms
+  are three arrangements of the same panes bound to `form`: the **desktop** has the navigation at the left
+  (`navigationWidth`), the content beside it, the detail beside the content when `detailBeside`, the actions row at the
+  foot and no help bar; the **big screen** keeps the safe area (`Tokens.safeAreaX/Y`), the navigation as a row of
+  `titleRow` at the top, the content under it, the detail as a page over the content when `detailOpen` (or beside), the
+  actions above the help bar, and the help bar flush on the foot (`EmuSen_Interface.md` §24.7); the **card** form puts
+  the scrim over everything and the content in a column of `cardWidth`. The pad reaches it through a `Connections` on
+  `PadRouter`, enabled while the frame holds the active focus, whose one line is `controller.offer(button)`; a `Timer`
+  pumps the router on the wall clock while `PadRouter.clockRunning` (a test turns it off and pumps at stated times);
+  and `Keys.onPressed` hands the keys its controls declined to `controller.key`, which decides and reports acceptance.
+  The desktop chrome (menu bar, status bar) is the desktop form's and not here (§7.7).
+
+**The kit is always imported as `Kit`** (decided 2026-11-07): every `.qml` file writes `import EmuSen.Kit as Kit` and
+`Kit.Frame`, `Kit.Tokens`, `Kit.Pad.Accept`, as Kirigami's convention has it (`import org.kde.kirigami as Kirigami`),
+because Qt Quick Controls has a `Frame` too and theme authors will import it unqualified out of habit, and with two
+unqualified imports whichever comes last silently shadows the other. `qml-rules` reports an unqualified `import
+EmuSen.Kit` (§7.9); the kit's own files, the style and the gallery follow it, and the theme API's pages will repeat it.
+- `HelpBar`: a row of entries from a model with `button` and `label` roles, each a flat `Button` whose press is
+  `controller.offer(button)`, so a pointer has every action the bar names (§1.7); a ring stands where the glyph will be.
+- `MenuRow` and `WholeRow`: `Walkable`s of `rowHeight`, so a click is A there and hovering focuses them; the row's
+  surface raises on focus or when `current`, the focus bar shows at the left, the hover border on hover
+  (`Walkable.hovered`). `MenuRow` has `label` and `value` words (`Accessible.name` is the label); `WholeRow` gives its
+  whole width to its content (a slider, a switch with its words).
+- `MenuPanel`: a raised panel with a `ListView` of `MenuRow`s (`model` with `label` and `value`, or a `delegate` of the
+  host's), the current row holding the focus so Up and Down are the view's own, Return the row's `activated`, the
+  wheel and a `ScrollBar` the view's; it raises `activated(index)`.
+- `Card`: a raised column of `cardWidth` with the tile radius, its content inside the pane gutter.
+- `Sheet`: a modal `Popup` that sets `controller.sheetOpen` while open, so the controller offers presses to it first:
+  B comes back as `sheetDismissed` and closes it, every other press as `sheetPressed(button)` and as the key the
+  sheet's focused control reads (`frame::sheet_route`, held by `tests/route.rs`). Its enter and exit are fades of
+  the tokens' durations and curves.
+- `Question`: a `Sheet` with `title`, `message` and `choices` (a list of words from the host) as `Button`s in a
+  horizontal `ListView`, so Left and Right are the view's own and A is the current button's; `chosen(index)`.
+- `Carousel`: a `PathView` on a straight path with `pathItemCount` from its width and `itemWidth`, snapping one item
+  at a time over `Tokens.reel`; a `WheelHandler` steps one item per notch, Left and Right step by key, and a swipe is
+  the view's own flick.
+
+Not here, as the step said and §7.7 lists: `Keyboard`, `RatingPicker`, `DatePicker`, `NormalizedCanvas`, the glyphs.
+
+**Held to** (`tests/style.rs`, three tests; `tests/route.rs` has the sheet rule): the qmldir lists every control file
+once with its version, the `.qrc` carries the qmldir and every file, every file composes a template in the tokens and
+reads no palette. `qmllint` passes the 34 kit and style files against the built module and the style directory, with
+the project's import paths. Measured on 2026-11-07 with four seeded faults, each reverted: a sheet that never dismissed
+failed the sheet-rule test; `Slider` dropped from the style's qmldir failed the qmldir test; `Frame.qml` dropped from
+the kit module failed rule Q's qmldir comparison; a misspelt token in `Button.qml` (`surfaceRaise`) was caught by
+`qmllint` as a missing property. Tests in the crate: 34. No C++ was added (23 lines).
+
+### 7.9 The harness `emusen-qt-test` and the checker `qml-rules` (stage 0, step 9; 2026-11-07)
+
+**The harness** is `EmuSen_Qt.md` §8.1's first tier and §8.3's shape, at `Frontend/qt-test`: a library crate the kit's
+gallery and later the screens' tests link, with one `QGuiApplication` per process (so one test function per test
+binary, the suite serial, as §8.3 says). `Harness::new` sets `QT_QPA_PLATFORM=offscreen`, `QT_QUICK_BACKEND=software`
+and the EmuSen style before Qt starts, and `QT_FORCE_STDERR_LOGGING=1`, because Fedora's Qt sends its warnings to
+journald when stderr is not a terminal (measured 2026-11-07: a scene that failed to load printed nothing in a test run
+while the journal held "module EmuSen is not installed"; a harness that swallows Qt's words is useless). `load(url, w, h)`
+loads a scene whose root is a `Window`, taking the root from the engine's `objectCreated`, shows it exposed and active
+at the size, and gives a `Scene` with the verbs: `tree`, `click`, `right_click`, `key`, `wheel`, `focus`, `focus_item`,
+`grab`, `property` and `pad`, plus `record_edges` and `audit`.
+
+- **The item tree becomes kit-core's.** `harness_tree` (C++) walks the window's items once and writes one JSON object
+  per item: its type (Qt names a QML component's meta-object after it, `MenuRow_QMLTYPE_3`, so the type is the class
+  name before `_QMLTYPE_`), its scene rectangle, visibility with the effective opacity, clip, whether it is hit-testable
+  (it accepts a mouse button or holds a pointer handler), operable (a control with a focus policy, or a walkable with
+  `activeFocusOnTab`, and not a focus scope whose content holds the focus), the words of a `Text` with `truncated`, the
+  content size and the font's cap height, a flickable's scrolling axes and `interactive`, the edges it declares it fades
+  (`fadeTop` … `fadeRight` properties, the protocol a scroller follows), its spoken name (`Accessible.name`, then its
+  `text`, then its `placeholderText`) and the colours it paints (`color`, a drawn border's colour, a shape path's fill
+  and stroke). `tree.rs` reads that into kit-core's `Item`s: the kind by what the dump says (a popup item, a menu bar,
+  a scroller only when it scrolls, words, a picture, a row of the kit's or Qt's, a control), `unseen` for an operable
+  item outside its nearest clipping ancestor (a row built out of view), the spoken name of a nameless operable item from
+  the first words under it (as Avalonia's peers resolved it, InterfaceSpec §4.3), `Body`, `Sky` and `Moonrise` as
+  scenes, and clear colours dropped. So every rule is kit-core's; the harness re-implements none.
+- **Pad reach is measured, not declared.** `record_edges` focuses each operable item in turn and presses Up, Down, Left
+  and Right through `PadRouter`'s queue on the harness's own clock (`clockRunning` off), reading where the focus lands;
+  `audit` hands kit-core those edges with the panel, the form, the focus, the variant's eighteen colours and the slack.
+- **The pad goes in where a pad goes in.** `pad(button)` pushes a down and an up into the router's queue and pumps at
+  stated times; the router is reached as the engine's singleton, downcast to the kit's `PadRouter` by cxx-qt's `Upcast`.
+- **C++**: `cpp/harness.cpp` and `harness.h`, the tree dump and QTest's verbs (`mouseClick`, `keyClick`, a wheel event,
+  `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton), 241 lines. QTest's mouse, keyboard and
+  window helpers are declared only under `QT_GUI_LIB`, which CMake defines and cc-rs does not, so the file defines it.
+
+**What the harness found in the kit** on 2026-11-07, each fixed in the kit, not the test: a help-bar button took the
+focus on a click, so the row it was meant to act on lost it (`focusPolicy: Qt.NoFocus`); a sheet took the focus out of
+the frame's scope, so the frame's `Connections` went quiet while a sheet was open (enabled while `sheetOpen` too); a row
+given the focus by a hover or a forced focus did not become the list's current row, so Down then jumped back (the panel's
+row makes itself current on focus); a list cut rows at an edge that did not fade (the panel fades its scroll edges and
+declares them); a scroll bar lay over the rows' right ends (it stands in the panel's margin); Qt's buttons ignore Return,
+their key being Space, so A did nothing on a stock button (the style's buttons take Return and Enter as a click or a
+toggle); a `TabBar`'s focus stopped at the bar (its list takes the focus and the current tab holds it); and `Walkable` is
+now a `FocusScope`, so a row whose content asks for the focus hands it on. Two findings are owed to stage 1 (§7.7): a
+`TextField` and a `ComboBox` take Up and Down themselves, so a vertical walk cannot pass them, and the four audited sizes
+are the gallery's (step 10).
+
+**`qml-rules`** is `EmuSen_Qt.md` §1.3's checker, a pure-Rust library at `Frontend/qml-rules` exposed as the third
+command of the `emusen.dev` DianaSh module (`Platform/emusen-dev-module`, with its man page `qml-rules(1)`), per the
+2026-10-26 rule that every tool is a DianaSh command. It reads `.qml` text with comments stripped and reports, one a line
+as `file:line rule words` with a last line `ok` or `N findings`: a `function` other than a `Connections` handler of one
+call; `Qt.callLater`; an array or object literal; words the player would read outside the bindings that take a name
+(`objectName`, `font.family`, `source`, `property`, `properties`, `sequence`, `Accessible.role`, `placeholderText`) and
+colour literals; `Component.onCompleted` beyond taking the focus; a `ListModel` with rows; an import outside the allowed
+list, or `EmuSen.Kit` imported without `as Kit` (§7.8). `--fixture` reads test scenes and the gallery as fixtures,
+whose words, rows and literals stand in for models. `tests/rules.rs` holds every rule and the spike's three deliberate
+breaks (`EmuSen_Qt.md` §10.3); `qt-test/tests/lint.rs` runs the checker and `qmllint`, with the project's import paths,
+over every file of the kit, the style and the scenes on every test run.
+
+**Held to**: `tests/menu.rs` (a menu scene: the panel and its eight rows in the tree, Down moves the focus and A
+activates, a click at a row's centre focuses and activates it the same way, the help bar's Open acts on the focused row,
+then the gate at 1280 × 800 from recorded edges, and the wheel), `tests/sheet.rs` (F1 opens the question, B dismisses it
+choosing nothing, A chooses the current button), `tests/style.rs` (eleven styled controls present, the gate passes over
+them, a grab is written), `tests/lint.rs`; `qml-rules/tests/rules.rs` (4); the dev module's two tests. Measured on
+2026-11-07 with four seeded faults, each reverted: every item marked hit-testable in the dump put the panel's fade over
+its rows and failed the menu scene's pointer reach; a colour read with its channels reversed failed the style scene's
+palette reach; the unqualified import allowed failed the rules test; the frame deaf while a sheet is open failed the
+sheet test. Two faults seeded first were not observable and are recorded as such: nothing hit-testable in the dump
+changes nothing for rows, since kit-core's `operable()` makes an item hit-testable itself; and `unseen` never set
+changes nothing in the menu scene, whose out-of-view rows are visible items the walk explores anyway.
+
+### 7.10 The gallery and stage 0's gate (stage 0, step 10; 2026-11-08)
+
+**The gallery** is `Frontend/kit-gallery`: the QML module `EmuSen.Gallery` (one file, `qml/Gallery.qml`) and a program,
+`kit-gallery`, that opens it in a window with the EmuSen style; the gate loads the same scene headlessly through the
+harness. One `Frame` holds three sections, which the walk steps with the shoulders (`controller.sections`); the
+navigation shows them as a row of `TabButton`s on the big screen and a column on the desktop, pointer targets with no
+focus of their own, as the help bar's buttons are, since the pad reaches sections by the shoulders and never by a
+direction (§2.3).
+
+- **Menu**: a `MenuPanel` of eight rows that scrolls; the screens' `Sky` with its glow behind four `Body`s (a planet
+  with every feature, focused; a plain planet; shards; a gem); a `Carousel` of eight `Card`s, each with a world. The
+  panel's Right reaches the carousel and the carousel's Up the panel, a path the fixture declares with `KeyNavigation`.
+- **Controls**: eight `WholeRow`s holding every styled control (a `Button`, a highlighted one, `CheckBox`, `RadioButton`,
+  `Switch`, `Slider`, `TabBar`, and a `ComboBox` beside a `TextField`), a `ProgressBar` and a `Label`.
+- **Moonrise**: the splash over the whole window at its real size, as a player sees it. The frame stays under it at no
+  opacity, so it keeps the focus and the shoulders still turn the page.
+
+The `Question` opens on F1; the `HelpBar` and `NormalizedCanvas` frame every section. `NormalizedCanvas` is new here:
+the big screen's 800 design units scaled to the window's height (`EmuSen_Interface.md` §24.7), inactive on the desktop.
+The gallery's words, rows and lists are a fixture's (`qml-rules --fixture`). Not shown: `Bells`, which is sound (its
+render and cache are held by `tests/bells.rs`), and the parts owed by §7.8.
+
+**The gate** is `tests/gate.rs`, one test of about 40 s on the desktop. It runs `qml-rules` and `qmllint` over the
+gallery, then visits 72 states: both variants, three forms, three sections, and the four sizes of the harness's
+`SIZES` (1280 × 800, 1920 × 1080, 1280 × 720, 3840 × 2160). In each state it focuses the first operable element, reads
+the tree, sweeps the style (Controls), grabs, records the edges, and gives kit-core's `audit::check` the tree the edges
+were recorded on: the fit audit, pad reach, pointer reach, no chrome, names, palette reach and contrast. A 73rd state is the
+question open at 1280 × 800, audited alone as a player sees a sheet. The style sweep samples one grab at each styled
+control's right end, inside its background, and requires a token of the variant *[own, because `EmuSen_Qt.md` §8.3's
+`TestCase` is JavaScript, which §1.3 keeps out of QML, and the harness already holds the grab]*. A state with faults
+writes `<state>.faults.txt` beside its grab: the faults, the tree's legend and the recorded edges. Two checks of the
+kit's own promises run beside the rules: in the Menu section nothing under the carousel rests outside its box (within
+the audit's slack of a pixel and a half); a list that scrolls has taken the height it was given (in the first ancestor
+with 48 design pixels of room below the list, something stands below it and across it, or the list was cut short with
+empty space under its fade); and the finished splash shows all 220 of its stars. **Measured on 2026-11-08:
+73 states, no fault, 41.0 s and 41.7 s.** The grabs are written to `~/.cache/emusen/tmp/kit-gallery/` for a human look.
+
+**Contrast, measured.** For every visible, enabled text the dump gives its colour with its opacity folded into the
+alpha, its size and weight, and where its words are laid out: inside the paddings, the text's own width and height
+placed by its alignment (an item's `boundingRect` ignores the paddings, so a check box's label box took in the
+indicator). The harness then hides every text (opacity 0, given back afterwards, which keeps QML's bindings), grabs
+once and samples each text's box on a grid a few pixels apart, up to 16 by 6 points: what is behind the words as drawn.
+Kit-core composites the ink over each sample and computes WCAG 2.1's ratio; the tenth of samples that may fall short
+lets a star or a rule's edge pass and catches words half over their own colour. A disabled control's words are exempt,
+as WCAG exempts an inactive component's.
+
+**What the gate found in the kit**, each fixed where it lived and no rule loosened:
+
+1. kit-core: `Splash::frame` at no size gave a NaN flare (0/0 where the sweep met a planet at a unit of 0). A hidden
+   splash ticks at 0 × 0, and the dump wrote the NaN as JSON's null. The flare is now 0 with no size, as
+   `strike_times` already gives no times; `tests/world.rs` holds a 0 × 0 frame.
+2. kit-core: the Moonrise caption at the draft's 15 units fell under the big screen's floor (§3: the capitals of 16
+   design pixels of the desktop face, 11.64) at every size: in the system face its capitals measured 0.68 of its size
+   (7.14 pixels at 10.5), so 10.2 pixels at 1280 × 720. It was raised to 18 units, then set back the same day: the
+   draft is the splash's oracle (decided 2026-11-08 by the tester), so the caption is the draft's 15 units and the
+   audit names it, `SMALL_TEXT_EXCEPTIONS` in `audit/fit.rs`, the one exception to the floor, with its reason.
+3. kit-qt: a finished `Moonrise` did not follow a resize, since its frame was read only on the clock's tick, which
+   stops when the splash finishes. The model now lays the frame out again at the shown time when its size changes.
+4. kit-qt: `Carousel` spaced its items by the path's length over `pathItemCount` (132 units for items 204 units wide,
+   so the cards overlapped) and drew items past its box over its neighbours. Items now sit one `itemWidth` apart about
+   the centre, and the view clips. It is also an element the frame walks to: `activeFocusOnTab`, §1.7's
+   `HoverHandler` and `TapHandler`, and a required `controller`, so the gate holds it to pad and pointer reach.
+5. kit-qt: `WholeRow` was `rowHeight` tall whatever it held; on the desktop a 34-pixel control in a 24-pixel row
+   overlapped the next row. It is now the taller of the two.
+6. kit-qt: the sky's glow is 1.125 times the sky's height and spilled over its neighbours. The sky's own paint is now
+   one clipped item that declares `backdrop`.
+7. `NormalizedCanvas`: at the first layout, before the window had a height, a unit of 0 made the section bar's
+   `contentX` NaN for good. The unit is 1 until the parent has a height.
+8. Three layout faults seen in the grabs on 2026-11-08, each fixed where it lived. The gallery fixed its menu panel at
+   five rows, so the list scrolled and faded with a third of the page empty under it; the Menu page is a `RowLayout`
+   whose panel fills the height (`Layout.fillHeight`), and the fade shows only when rows overflow. The desktop form
+   had no margin, its content flush against the window's top edge; the frame's edge is now the pane gutter there,
+   the content starting after the navigation's right edge. The slider's handle was `textStrong`, black in the light
+   variant; it is `overAccent`, as the switch's knob.
+9. kit-qt: the card form had no surface: its content stood on the Scrim over whatever was behind, and "A label in the
+   tokens" in the light variant was dark grey on black. The frame now draws the card's raised surface (`surfaceRaised`,
+   the tile radius) a pane gutter outside the content area, which is `EmuSen_Qt.md`'s card over the theme.
+10. kit-qt: Moonrise showed no stars. Kit-core draws no stars at no opacity, so the star model's rows went from 0 to 220
+   with only `dataChanged`, and the view never made them; the splash begins at no opacity, the screens' sky at 1, which
+   is why only the splash lost them. The model now resets when the stars appear or vanish.
+11. kit-qt and kit-core: the Moonrise shadow was a whole disc drawn over the halo, and the halo a flat translucent disc.
+    Compared with the approved draft (`~/.cache/emusen/tmp/moonrise/reference-8s.html`, its finished frame) and the C#
+    `LunaSplash` side by side, both clip the shadow to the moon and draw the halo as a radial gradient, flat out to 0.6
+    radii and clear at 3.2. Kit-core's `Moon` now gives the shadow as it is drawn (`shadow_outline`, the outline of the
+    two discs' overlap, into the host's buffer), the halo's inner radius, the face's two-circle gradient (from a tenth of
+    a radius at 0.35 and 0.3 radii up and left, to 1.1 radii) and the outline's width (2.2 units); Moonrise draws them
+    in the draft's order, the outline before the face. `MoonriseModel`'s `shadowX`, `shadowY` and `shadowRadius` gave
+    way to `shadowOutline`; rule Q's registry was reviewed and copied (before 1.0 the comparison is strict equality).
+    The comparison is in `~/.cache/emusen/tmp/kit-gallery/compare/`: the draft, the C#, and Qt on the GPU and on the
+    software backend at 1280 × 720, the draft's 13 hues and words.
+
+**Moonrise against the C# reference**, measured on 2026-11-08. The C# `LunaSplash` render of the finished frame
+(`Testing/moonrise/LunaSplash-1280x720.png`, 1280 × 720, the draft's 13 consoles and words) is the draft's picture
+star for star (258 pixels of 921,600 differ by more than 2%, all glyph and circle edges). Five more differences made
+Qt's frame match it:
+
+- **The stars.** The splash's sky drew its stars as the screens' do (a radius of 0.7 at the height over 800) on its own
+  clock. They now follow `LunaSplash`: 1.4 at the height over 720 (`SPLASH_STAR_SIZE`), twinkling on the draft's time,
+  which the splash hands its sky (`MoonriseModel.draftTime` to `Sky.time`), so the finished frame holds still as the
+  C#'s does. Placement was already the same seeded draws. A star is an antialiased disc (a `Shape`), as the canvas draws
+  it: the software backend snapped a sub-pixel rounded `Rectangle` to whole pixels.
+- **The faces.** The title is Barlow Condensed Light and the caption Barlow Medium, the C#'s own files (SIL Open Font
+  License 1.1, `kit-qt/fonts/`, the licence `licenses/Barlow-OFL-1.1.txt` as for the C#, SHA-256 of the title's face beginning `2c37e1e6`, as LunaP §206.3
+  records), loaded from the kit's resource `fonts/Fonts.qrc` by `FontLoader`.
+- **The planets.** A plain planet (no world from the host) is the draft's disc: a two-circle gradient from
+  hsl(hue, 70%, 78%) at a tenth of the radius about a focus 0.4 radii up and left, to hsl(hue, 55%, 38%) at the radius
+  (`PlanetFrame`'s `plain`, `light`, `rim`, `focus`, `focus_radius`); a host's world is still a `Body`.
+- **The row's line** is a stroke one unit wide centred on the row (`Line.width`), drawn over the planets as the draft
+  draws it; it was a 1-pixel rectangle with its top on the row, below them.
+- **The caption** is back at the draft's 15 units (above).
+
+The gate checks it: at 1280 × 720, the big screen, dark, Qt's finished Moonrise is compared with the reference pixel by
+pixel (`Scene::difference`). A pixel matches when the other picture has a pixel within 2 pixels and 24 levels on every
+channel, either way round; inside the boxes of the title, the caption and the moon (4 pixels out), 128 levels. Up to 4
+pixels may differ. The tolerance is antialiasing's: the reference was drawn by Skia with subpixel (LCD) text, colour
+fringes no grayscale renderer reproduces, and its own coverage of a stroke's edge; Qt's software backend draws the same
+edges under a pixel apart, and a glyph or the moon out of place still differs by far more than 128 levels. Measured:
+0 pixels differ. The differing pixels are marked in `moonrise-difference.png` beside the grabs; the comparison
+pictures, with the difference magnified eight times, are in `~/.cache/emusen/tmp/kit-gallery/compare/`. What it cannot
+see: a star dimmer than 24 levels over the sky.
+
+**What the harness read wrongly**, fixed in the harness. Each is a translation of Qt's tree; the rules are unchanged.
+
+- Words were measured in their item's units (`contentWidth`, `contentHeight`, the cap height) while boxes were in the
+  scene's, so under the canvas's scale every text at 1280 × 720 ran past its box and every text at 3840 × 2160 read as
+  too small. The dump multiplies them by the item's scale in the scene.
+- A `TextField` is a `QQuickTextInput`, not a `QQuickControl`, so no text field was operable or held to pad reach. A
+  text input or edit with `activeFocusOnTab` now is.
+- A focus scope was a container, not operable, whenever any child held its focus. A `PathView` gives its current card
+  the focus, so the carousel stopped being operable once walked. It is a container only when that child is operable.
+- A focus that lands inside an element (the carousel's current card) is reported as the walkable element holding it
+  (`Tree::walkable_of`).
+- An item wholly outside a clip that scrolls (a list's rows built out of view, a carousel's cards past its box) is not
+  shown: Qt draws none of it and delivers no pointer to it. A `PathView` scrolls when it holds more items than it shows.
+  Outside a clip that does not scroll, an operable item stays shown and `unseen`, as before, so a misplaced control is
+  still past its limit.
+- An item that declares `backdrop`, and everything under it, is a panel to the rules: the sky is behind the screen,
+  not a picture a player reads, and the worlds pass over its glow by design.
+- `set_property` takes a dotted path (`controller.selectedSection`) through `QQmlProperty`. New verbs: `colours_at`
+  (one grab sampled at many points), `audit_item` (one item's subtree, as an open sheet), `set_variant` and
+  `set_token_form` (the `Tokens` singleton, reached as the router is).
+
+**The GPU against the software backend**, measured on 2026-11-08: the harness's own `Harness` run with
+`QT_QUICK_BACKEND=rhi` and `QSG_RHI_BACKEND=opengl` on the offscreen platform renders on the RX 6800 (radeonsi, Mesa
+26.2.4) through GLX, with no window on the desktop. Two differences showed:
+
+- The software backend ignores a clip for Qt Quick Shapes (a red `Shape` at x = 150 inside a clipping `Item` 100 wide
+  was red at (175, 145)); the GPU clips. So the carousel's worlds past its box, hidden on the GPU, were drawn over the
+  menu's rows in the gate's grabs. The kit no longer depends on the clip: the carousel shows as many whole items as fit,
+  an odd number about the centre (`pathItemCount`), so none rests outside its box on either renderer; the clip stays
+  for the half items passing its edges during a step. The gate holds the promise (above).
+- The stars, rounded rectangles under a pixel across, were drawn by the software rasterizer and nearly all lost on the
+  GPU, so the grabs showed a sky the player did not see. They are now antialiased, which draws a sub-pixel star as a
+  faint dot on both, as the draft's canvas does.
+
+Compared over the whole frame at 12% tolerance, the two backends then differ only in the edges of glyphs and the help
+bar's circles (0.14% of the pixels at 1280 × 800). The probe's offscreen GLX surface keeps the size it was created
+with, so a state is grabbed in a window made at its own size; the gate stays on the software backend, which needs no
+GPU.
+
+**qml-rules' fence.** The back end's `emusen.dev` module depends on `Frontend/qml-rules`, so qml-rules has left the
+Frontend workspace and keeps its own lock file, as kit-core does. `qml-rules/tests/fence.rs` holds its tree to no
+EmuSen crate and nothing named for Qt or cxx, and its manifest to no path dependency and no workspace inheritance.
+
+**A duplicate accepted.** `dupes` finds the opening of the list models' bridges alike (`moonrise.rs` and `sky.rs`, 114
+tokens; `body.rs` under the threshold): each bridge declares the cxx-qt-lib types its model names, with the header
+that declares each. A type can be aliased from another bridge, as `QAbstractListModel` is from `base.rs`, but its
+header is still included in every bridge that names it, so the block would repeat either way. `dupes.accept` records
+the pair with that reason.
+
+**Held to**: the gate; `tests/world.rs`'s 0 × 0 frame in kit-core; the fence (2); the harness's own scenes (`menu`,
+`sheet`, `style`, `lint`), which pass unchanged under the corrected reading. Measured on 2026-11-08 with five seeded
+faults, each reverted: the Moonrise model not laying out again on a resize failed the gate (the words of the finished
+splash past the window at 1280 × 720 and too small at 1920 × 1080); the carousel's old path failed the gate (cards past
+its clip, cut at an edge with no fade); the dump's cap height in the item's units failed the gate (too small to read at
+1920 × 1080); a path dependency in qml-rules' manifest failed both fence tests; the flare without the size guard failed
+the 0 × 0 frame. That last test first asked at 1280 × 0, where the planets stand apart from the sweep and the division
+gives an infinity, not a NaN, so the fault went unseen; it asks at 0 × 0 now, the size the gallery met.
+
+Measured on 2026-11-08 with four more seeded faults, each reverted: the card form's surface not drawn failed the gate on
+contrast in the light card form at all four sizes; the carousel's old `pathItemCount` (as many as cover its width, plus
+two) failed the gate with cards resting outside it; the star model not reset failed the gate's count of the splash's
+stars; the shadow drawn as its whole disc failed kit-core's test that the shadow stays inside the moon. Kit-core's
+`tests/audit.rs` holds the contrast rule itself: 4.5:1 and the large type's 3:1 at 24 px and 18.66 px bold, the ink
+composited over what is behind it, the spare tenth, and no ink nothing to judge. The gallery's menu panel fixed at five rows again
+failed the gate with a list cut short in every form, variant and size. The first star moved 12.8 pixels to the right
+failed the gate's comparison with the reference at 7 pixels, against 4 spare and 0 when clean.
+
+### 7.6 Building, linking, the registry, and what it is held to
+
+**The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4
+proposed). cxx-qt's build utilities find it and pass `-fuse-ld=lld` themselves, so no crate names a linker, and the two
+GNU `ld.bfd` workarounds the kit carried for a day are gone from `build.rs`: the `--no-as-needed` naming of the Qt
+libraries from §10.4, and `--undefined=cxx_qt_init_*` for the four initializers. The second one is worth keeping on
+record: when a crate that links the kit as an rlib is the final link (the kit's own integration tests), rustc places
+the extracted whole-archive `call-initializers` members after the rlib, and `ld.bfd`'s single pass has already left the
+rlib's archive, so the init functions went undefined; `lld` resolves across the whole input and has no such order.
+
+Measured on 2026-11-07 on the desktop, six compilers, CPU weight 20, the compiler cache (`sccache`) switched off so the
+figures are the compilers' own: a cold debug build of the kit and its dependencies is **65 s** under `lld` (the first
+build, under `ld.bfd`, was 73 s; cxx-qt's generated C++ dominates both, as `EmuSen_Qt.md` §10.2 found); a change to a
+Rust file that holds no bridge rebuilds in **11.4 s** (5.1 s with the cache warm), a QML file in 5.0 s with the cache;
+the ten test binaries build and link in **2.3 s** together. With the cache warm a cold build is 19.7 s, which is the
+figure a day's work sees.
+
+**Rule Q.** `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes` and `EmuSen.Kit-1.0.qmldir` are the registry as
+`qmltyperegistrar` and cxx-qt write them (`Frontend/target/cxxqt/qml_modules/EmuSen/Kit/`). `tests/qmltypes.rs`
+compares the build's files to the committed ones with line numbers and header file names dropped, since those move
+with every edit; a difference fails until it is reviewed, the minor bumped for an addition or the major for a removal,
+and the files copied. Until 1.0 the comparison is strict equality; the addition and removal distinction is a reviewer's
+step, not the test's.
+
+**Tests** (`Frontend/kit-qt/tests`, 34 with §7.5's and §7.8's, no Qt application needed; the bridges themselves are
+exercised by the harness of step 9): `kinds` (the mirrors pair by pair), `column` (every colour of both variants, the metrics by form and text
+scale, motion in milliseconds and Qt's easing numbers, reduced motion zeroing movements and keeping fades at 120 ms),
+`qt_keys` (every declinable press has a Qt key both ways, Shift+Tab, Enter, the mouse's buttons), `route` (the sheet
+before the walk before the key), `router` (the queue applies at a pump only, the own tiers at 400 then 80 ms, the swap
+once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on 2026-11-07 with four seeded faults,
+each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
+CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
+
+**Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
+kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
+`cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
+harness 254), not the 264 first written here. Budget: under 600 for the whole front end.
+
+### 7.7 Open
+
+- **[routine]** Install Fedora's `lld` for the toolchain, as §10.4 proposed; both linker workarounds then go.
+- **[routine]** The interface's typeface is not a token in kit-core (§1.3), so `Tokens` has no font family. Recommended:
+  add `fontDisplayFamily` and `fontBodyFamily` to kit-core's tokens with their values read from `EmuSen_Interface.md`
+  §5.2 when the first screen needs them, the gallery included, and bundle the faces as §10.2 found necessary.
+- Owed by §7.5 to a later step: the cues played through Endymion's interface player and Moonrise's strikes paired with
+  the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.
+- Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker` and `DatePicker`; the drawn
+  glyphs (the pad's buttons for the help bar, a check, a radio dot, a chevron) in place of the rings, discs and
+  rectangles the style draws now; the desktop form's menu bar and status bar.
+- Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
+  by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
+  do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
+- Decided 2026-11-08 by the tester: the approved draft is Moonrise's oracle, so its caption stays at the draft's 15
+  units as the audit's named exception to the floor (§7.10).
+- Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
+  content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
+  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help
+  bar's glyphs are empty circles until the pad's button glyphs are drawn (above). The other screens' faces (§5.2) are
+  bundled when the first screen needs them; Moonrise's two are.

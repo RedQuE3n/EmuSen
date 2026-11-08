@@ -1,0 +1,26 @@
+<RCC>
+  <qresource prefix="/qt/qml/EmuSen">
+    <file>qmldir</file>
+    <file>Button.qml</file>
+    <file>CheckBox.qml</file>
+    <file>ComboBox.qml</file>
+    <file>Dialog.qml</file>
+    <file>DialogButtonBox.qml</file>
+    <file>ItemDelegate.qml</file>
+    <file>Label.qml</file>
+    <file>Menu.qml</file>
+    <file>MenuItem.qml</file>
+    <file>MenuSeparator.qml</file>
+    <file>Pane.qml</file>
+    <file>Popup.qml</file>
+    <file>ProgressBar.qml</file>
+    <file>RadioButton.qml</file>
+    <file>ScrollBar.qml</file>
+    <file>Slider.qml</file>
+    <file>Switch.qml</file>
+    <file>TabBar.qml</file>
+    <file>TabButton.qml</file>
+    <file>TextField.qml</file>
+    <file>ToolTip.qml</file>
+  </qresource>
+</RCC>

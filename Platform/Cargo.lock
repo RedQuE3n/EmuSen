@@ -479,6 +479,7 @@ name = "emusen-dev-module"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
+ "emusen-qml-rules",
  "libc",
 ]
 
@@ -668,6 +669,10 @@ version = "0.1.0"
 
 [[package]]
 name = "emusen-psx-card"
+version = "0.1.0"
+
+[[package]]
+name = "emusen-qml-rules"
 version = "0.1.0"
 
 [[package]]

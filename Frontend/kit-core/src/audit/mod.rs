@@ -7,10 +7,10 @@ mod tree;
 
 use std::fmt;
 
-pub use fit::{CAPS_SLACK, DESKTOP_CAPS, SMALLEST_TEXT, TWO_ROWS, fit, smallest_capitals};
+pub use fit::{CAPS_SLACK, DESKTOP_CAPS, SMALL_TEXT_EXCEPTIONS, SMALLEST_TEXT, TWO_ROWS, fit, smallest_capitals};
 pub use reach::{Edge, pad_reach, pointer_reach, reached};
-pub use rules::{named, no_chrome, palette_reach};
-pub use tree::{Axes, Edges, Item, Kind, Rect, Text};
+pub use rules::{CONTRAST_SPARE, LARGE_BOLD_TEXT, LARGE_TEXT, contrast, named, no_chrome, palette_reach};
+pub use tree::{Axes, Edges, Item, Kind, Legibility, Rect, Text};
 
 use crate::input::{ElementId, WalkForm};
 use crate::tokens::Colour;
@@ -45,6 +45,7 @@ pub enum Fault {
     Chrome { item: ElementId },
     Unnamed { item: ElementId },
     OutsidePalette { item: ElementId, colour: Colour },
+    LowContrast { item: ElementId, ratio: f64, needed: f64 },
 }
 
 impl fmt::Display for Fault {
@@ -68,6 +69,7 @@ impl fmt::Display for Fault {
             Fault::WheelDoesNotMove { item } => write!(f, "the wheel does not move the scroller {}", item.0),
             Fault::Chrome { item } => write!(f, "desktop chrome on the big screen: {}", item.0),
             Fault::Unnamed { item } => write!(f, "no name a reader hears: {}", item.0),
+            Fault::LowContrast { item, ratio, needed } => write!(f, "low contrast: {} at {ratio:.2}:1, needs {needed}:1", item.0),
             Fault::OutsidePalette { item, colour } => write!(f, "a colour outside the palette on {}: {}", item.0, colour.to_hex()),
         }
     }
@@ -99,5 +101,6 @@ pub fn check(root: &Item, state: &State<'_>) -> Vec<Fault> {
     faults.extend(no_chrome(root, state.form));
     faults.extend(named(root));
     faults.extend(palette_reach(root, state.declared));
+    faults.extend(contrast(root));
     faults
 }

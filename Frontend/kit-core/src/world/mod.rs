@@ -8,9 +8,9 @@ mod sky;
 
 pub use body::{WorldBody, WorldRing, WorldShape, colours, facet_inks, geometry, glow, size_of, tallness, unit_box};
 pub use moonrise::{
-    CAPTION, CAPTION_SIZE, CAPTION_Y, Frame, HALO, LINE, LIT_INNER, LIT_OUTER, Line, MOON_RADIUS, MOON_Y, Moon, OUTLINE, PlanetFrame,
-    ROW_MOST, ROW_SHARE, ROW_Y, SHADOW, SWEEP, Span, Splash, SplashBody, Sweep, TITLE, TITLE_SIZE, TITLE_Y, Timeline, UNIT, Words,
-    body_box, ease, round_spacing,
+    CAPTION, CAPTION_SIZE, CAPTION_Y, Frame, HALO, HALO_EDGE, LINE, LIT_INNER, LIT_OUTER, Line, MOON_RADIUS, MOON_Y, Moon, OUTLINE,
+    PlanetFrame, ROW_MOST, ROW_SHARE, ROW_Y, SHADOW, SPLASH_STAR_SIZE, SWEEP, Span, Splash, SplashBody, Sweep, TITLE, TITLE_SIZE, TITLE_Y,
+    Timeline, UNIT, Words, body_box, ease, round_spacing,
 };
 pub use random::SeededRandom;
 pub use shape::{Box2, ELLIPSE_SEGMENTS, Paint, Point, Shape, Stroke, arc, circle, ellipse, into_box, quadratic, transform};

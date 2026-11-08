@@ -43,3 +43,36 @@ pub fn palette_reach(root: &Item, declared: &[Colour]) -> Vec<Fault> {
     });
     faults
 }
+
+/// The share of what is behind words that may fall under the bar (a star, a rule's edge); the rest must pass.
+pub const CONTRAST_SPARE: f64 = 0.1;
+/// Large type in WCAG 2.1's sense: 18 points, or 14 points bold, as pixels.
+pub const LARGE_TEXT: f64 = 24.0;
+pub const LARGE_BOLD_TEXT: f64 = 18.66;
+
+/// Contrast (WCAG 2.1, 1.4.3): words drawn over what is behind them reach 4.5:1, or 3:1 for large type, over all but the spare share.
+pub fn contrast(root: &Item) -> Vec<Fault> {
+    let mut faults = Vec::new();
+    root.visit(&mut |item, _| {
+        let Some(words) = &item.legibility else { return };
+        if words.behind.is_empty() || words.ink.a == 0 {
+            return;
+        }
+        let mut ratios: Vec<f64> = words
+            .behind
+            .iter()
+            .map(|back| {
+                let back = Colour::rgb(back.r, back.g, back.b);
+                words.ink.over(back).contrast(back)
+            })
+            .collect();
+        ratios.sort_by(f64::total_cmp);
+        let ratio = ratios[((ratios.len() as f64) * CONTRAST_SPARE).floor() as usize];
+        let large = words.size >= LARGE_TEXT || (words.bold && words.size >= LARGE_BOLD_TEXT);
+        let needed = if large { 3.0 } else { 4.5 };
+        if ratio < needed {
+            faults.push(Fault::LowContrast { item: item.id, ratio, needed });
+        }
+    });
+    faults
+}

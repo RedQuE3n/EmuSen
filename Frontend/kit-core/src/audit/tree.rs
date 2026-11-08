@@ -105,6 +105,18 @@ pub struct Text {
     pub ellipsis: bool,
 }
 
+/// What words are drawn in and what lies behind them, for the contrast rule (EmuSen_Kit.md §7.10).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Legibility {
+    /// The words' colour, the item's opacity folded into its alpha.
+    pub ink: Colour,
+    /// The type's size in the item's own units, design pixels on a big screen.
+    pub size: f64,
+    pub bold: bool,
+    /// What is behind the words, sampled across their box with no words drawn.
+    pub behind: Vec<Colour>,
+}
+
 /// One item of a screen's tree, as a recording or a harness describes it; the rules read nothing else.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Item {
@@ -120,6 +132,7 @@ pub struct Item {
     pub scroll: Axes,
     pub fades: Edges,
     pub text: Option<Text>,
+    pub legibility: Option<Legibility>,
     pub heard: Option<String>,
     pub paints: Vec<Colour>,
     pub scene: bool,
@@ -146,6 +159,7 @@ impl Item {
             scroll: Axes { vertical: kind == Kind::Scroller, horizontal: false },
             fades: Edges::default(),
             text: None,
+            legibility: None,
             heard: None,
             paints: Vec::new(),
             scene: false,
@@ -207,6 +221,11 @@ impl Item {
 
     pub fn words(mut self, text: Text) -> Item {
         self.text = Some(text);
+        self
+    }
+
+    pub fn legible(mut self, legibility: Legibility) -> Item {
+        self.legibility = Some(legibility);
         self
     }
 

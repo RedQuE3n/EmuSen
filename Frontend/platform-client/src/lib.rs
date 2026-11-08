@@ -5,6 +5,7 @@
 //! EmuSen_Qt.md §1.1.2. The systems table, firmware status and the cheat codecs are the frontend API's
 //! (emusen-crystal-client). Nothing here knows Qt or names a runtime type.
 
+pub mod audio;
 pub mod bindings;
 mod error;
 pub mod firmware;

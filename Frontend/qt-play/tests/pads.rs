@@ -2,7 +2,7 @@
 //! the test core while the window runs it; the router gives only the chord while the game owns the pad, and the chord
 //! pauses and resumes the game. The test core counts in its battery each frame port 0's first button is held, so what the
 //! game heard is read from the save the session leaves. Qt adopts Serenity's device in a compositor of the test's own, on
-//! the RX 6800 (EMUSEN_GPU_DEVICE names another).
+//! the RX 6800 (EMUSEN_GPU_DEVICE names another); the game's sound plays on SDL's dummy driver, which `Sdl::open` sets.
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -98,6 +98,7 @@ fn a_virtual_pad_plays_the_game_in_the_window_and_its_chord_pauses_and_resumes_i
     });
     until(&mut scene, "the first picture", |s| s.property("session", "firstPictureMs").parse::<f64>().is_ok_and(|ms| ms > 0.0));
     assert!(scene.pad_chord_only(), "a running game owns the pad: only the chord leaves the router");
+    assert_eq!(scene.property("session", "sounding"), "true", "the game's sound reaches a player (SDL's dummy driver)");
 
     // A, the test core's first button (East by Endymion's defaults), held about half a second.
     let east = sdl_button(PadControl::East).unwrap();

@@ -2,13 +2,14 @@
 //! thread put on Qt; its reports come back through qt_thread().queue, the one way in.
 
 use crate::picture::PictureFeed;
-use crate::session::{Report, Session};
+use crate::session::{GameIo, Report, Session};
 use core::pin::Pin;
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::QString;
 use crate::input::GameInput;
 use emusen_crystal_client::{Api, Config, Runtime};
-use emusen_platform_client::Platform;
+use emusen_platform_client::audio::{GameSound, SoundSettings};
+use emusen_platform_client::{Lent, Platform};
 use emusen_qt_endymion::game::GamePads;
 use std::sync::Arc;
 
@@ -30,6 +31,8 @@ pub mod qobject {
         #[qproperty(QString, game, READ, WRITE = set_game, NOTIFY)]
         #[qproperty(bool, running, READ, NOTIFY)]
         #[qproperty(bool, paused, READ, NOTIFY)]
+        /// Whether the open game's sound reaches a player.
+        #[qproperty(bool, sounding, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(f64, first_picture_ms, cxx_name = "firstPictureMs", READ, NOTIFY)]
         type SessionModel = super::SessionModelRust;
@@ -76,6 +79,7 @@ pub struct SessionModelRust {
     game: QString,
     running: bool,
     paused: bool,
+    sounding: bool,
     problem: QString,
     first_picture_ms: f64,
     runtime: Option<Runtime>,
@@ -105,6 +109,13 @@ impl qobject::SessionModel {
         }
     }
 
+    fn set_sounding(mut self: Pin<&mut Self>, value: bool) {
+        if self.sounding != value {
+            self.as_mut().rust_mut().sounding = value;
+            self.sounding_changed();
+        }
+    }
+
     fn set_first_picture_ms(mut self: Pin<&mut Self>, value: f64) {
         if self.first_picture_ms != value {
             self.as_mut().rust_mut().first_picture_ms = value;
@@ -128,19 +139,25 @@ impl qobject::SessionModel {
             }
         }
         let Some(runtime) = self.runtime.clone() else { return };
-        let input = match self.as_mut().game_input() {
-            Ok(input) => input,
+        let pads = match self.as_mut().game_input() {
+            Ok(pads) => pads,
             Err(words) => return self.as_mut().set_problem(QString::from(&words)),
         };
+        let (sound, unsounded) = match self.as_mut().game_sound() {
+            Ok(sound) => (Some(sound), None),
+            Err(words) => (None, Some(format!("The game plays without sound: {words}"))),
+        };
+        let sounding = sound.is_some();
         let queue = self.qt_thread();
         let report = move |report: Report| {
             let _ = queue.queue(move |model| model.reported(report));
         };
         let engine = (!self.engine.is_empty()).then(|| self.engine.to_string());
         let session =
-            Session::start(runtime, path.to_string(), engine, std::ptr::NonNull::new(device.as_ptr().cast_mut()), handoff, input, report);
+            Session::start(runtime, path.to_string(), engine, std::ptr::NonNull::new(device.as_ptr().cast_mut()), handoff, GameIo { pads, sound }, report);
+        self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
-        self.as_mut().set_problem(QString::default());
+        self.as_mut().set_problem(QString::from(unsounded.as_deref().unwrap_or_default()));
         self.as_mut().set_paused(false);
         self.as_mut().set_first_picture_ms(0.0);
     }
@@ -150,12 +167,25 @@ impl qobject::SessionModel {
     fn game_input(mut self: Pin<&mut Self>) -> Result<Option<GameInput>, String> {
         // SAFETY: a window names a reader's `gamePads` while the reader lives; `at` takes a reference of its own.
         let Some(pads) = (unsafe { GamePads::at(self.pads) }) else { return Ok(None) };
+        let platform = self.as_mut().platform()?;
+        GameInput::new(pads, &platform).map(Some).map_err(|e| e.to_string())
+    }
+
+    /// The game's sound player on SDL lent to the library, at audio.json's defaults until the settings are read (§1.8.6).
+    fn game_sound(self: Pin<&mut Self>) -> Result<GameSound, String> {
+        let platform = self.platform()?;
+        let words = |e: emusen_platform_client::Error| e.to_string();
+        platform.lend_sdl(&Lent::open("libSDL3.so.0").map_err(words)?).map_err(words)?;
+        GameSound::new(&platform, SoundSettings::default()).map_err(words)
+    }
+
+    /// The platform library, loaded once.
+    fn platform(mut self: Pin<&mut Self>) -> Result<Arc<Platform>, String> {
         if self.platform.is_none() {
             let platform = Platform::load(self.platform_library.to_string()).map_err(|e| e.to_string())?;
             self.as_mut().rust_mut().platform = Some(platform);
         }
-        let platform = self.platform.as_ref().ok_or("no platform library")?;
-        GameInput::new(pads, platform).map(Some).map_err(|e| e.to_string())
+        self.platform.clone().ok_or_else(|| "no platform library".to_string())
     }
 
     fn set_platform_library(mut self: Pin<&mut Self>, path: QString) {
@@ -218,6 +248,7 @@ impl qobject::SessionModel {
         drop(self.as_mut().rust_mut().session.take());
         self.as_mut().set_running(false);
         self.as_mut().set_paused(false);
+        self.as_mut().set_sounding(false);
     }
 
     fn reported(mut self: Pin<&mut Self>, report: Report) {

@@ -160,6 +160,28 @@ impl Chain {
         self.platform.status(n.into()).map(drop)
     }
 
+    /// The newest picture a machine took through `lend` (a runtime's `picture_lend`) as the new frame, read on the device
+    /// by the next draw: true when it was newer than the last.
+    ///
+    /// # Safety
+    /// `lend` is a live `emusen_serenity_lend` made on this chain's device, alive until the next draw.
+    pub unsafe fn advance_lent(&mut self, lend: NonNull<std::ffi::c_void>) -> Result<bool> {
+        let n = unsafe { self.platform.lib.emusen_serenity_chain_advance_lent(self.handle.as_ptr(), lend.as_ptr().cast()) };
+        self.platform.status(n.into()).map(|n| n == 1)
+    }
+
+    /// The picture in `ring` (a runtime's `picture_ring`) at `slot` once its ready reaches `value`, as the new frame; the
+    /// next draw copies it and gives the slot back.
+    ///
+    /// # Safety
+    /// `ring` is a live `emusen_serenity_ring` made on this chain's device, alive until the next draw.
+    pub unsafe fn advance_ring(&mut self, ring: NonNull<std::ffi::c_void>, slot: u32, value: u64, width: i32, height: i32) -> Result<()> {
+        let n = unsafe {
+            self.platform.lib.emusen_serenity_chain_advance_ring(self.handle.as_ptr(), ring.as_ptr().cast(), slot, value, width, height)
+        };
+        self.platform.status(n.into()).map(drop)
+    }
+
     /// Every pass run for a view of `width` by `height`, the picture left in place for the adopting host to sample.
     pub fn draw(&mut self, width: i32, height: i32) -> Result<Drawn> {
         let mut out = raw::emusen_serenity_drawn { size: size_of::<raw::emusen_serenity_drawn>() as u32, ..Default::default() };

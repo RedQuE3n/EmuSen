@@ -11,6 +11,7 @@ mod error;
 pub mod firmware;
 pub mod galaxia;
 pub mod library;
+pub mod pace;
 mod out;
 pub mod pads;
 pub mod router;

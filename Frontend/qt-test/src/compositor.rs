@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 /// The running compositor, stopped when dropped; Qt's Wayland platform points at it from `start` on.
 pub struct Compositor {
     child: Child,
+    socket: PathBuf,
 }
 
 impl Compositor {
@@ -27,7 +28,7 @@ impl Compositor {
             .stderr(Stdio::null())
             .spawn()
             .expect("kwin_wayland");
-        let mut compositor = Compositor { child };
+        let mut compositor = Compositor { child, socket: at.clone() };
         let start = Instant::now();
         while !at.exists() {
             assert!(compositor.child.try_wait().ok().flatten().is_none(), "kwin_wayland stopped before its socket was made");
@@ -40,9 +41,18 @@ impl Compositor {
     }
 }
 
+impl Compositor {
+    /// The compositor's process, for a watchdog that must stop it when the test cannot unwind.
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+}
+
 impl Drop for Compositor {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+        let _ = std::fs::remove_file(&self.socket);
+        let _ = std::fs::remove_file(self.socket.with_extension("lock"));
     }
 }

@@ -9,7 +9,8 @@ use cxx_qt_lib::QString;
 use crate::input::GameInput;
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_platform_client::audio::{GameSound, SoundSettings};
-use emusen_platform_client::{Lent, Platform};
+use emusen_platform_client::pace::DisplayClock;
+use emusen_platform_client::{galaxia, Lent, Platform};
 use emusen_qt_endymion::game::GamePads;
 use std::sync::Arc;
 
@@ -131,8 +132,10 @@ impl qobject::SessionModel {
         };
         if self.runtime.is_none() {
             let library = self.platform_library.to_string();
-            // The cores folder a host names, else the runtime's own default (emusen_crystal.h, the config's `cores`).
-            let config = Config { cores: (!self.cores.is_empty()).then(|| vec![self.cores.to_string()]), ..Config::default() };
+            let config = match self.as_mut().runtime_config() {
+                Ok(config) => config,
+                Err(words) => return self.as_mut().set_problem(QString::from(&words)),
+            };
             match Api::load(&library).and_then(|api| Runtime::new(&api, &config)) {
                 Ok(runtime) => self.as_mut().rust_mut().runtime = Some(runtime),
                 Err(e) => return self.as_mut().set_problem(QString::from(&e.to_string())),
@@ -152,14 +155,30 @@ impl qobject::SessionModel {
         let report = move |report: Report| {
             let _ = queue.queue(move |model| model.reported(report));
         };
+        let clock = match self.as_mut().platform() {
+            Ok(platform) => DisplayClock::new(&platform),
+            Err(words) => return self.as_mut().set_problem(QString::from(&words)),
+        };
         let engine = (!self.engine.is_empty()).then(|| self.engine.to_string());
-        let session =
-            Session::start(runtime, path.to_string(), engine, std::ptr::NonNull::new(device.as_ptr().cast_mut()), handoff, GameIo { pads, sound }, report);
+        let device = std::ptr::NonNull::new(device.as_ptr().cast_mut());
+        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
         self.as_mut().set_problem(QString::from(unsounded.as_deref().unwrap_or_default()));
         self.as_mut().set_paused(false);
         self.as_mut().set_first_picture_ms(0.0);
+    }
+
+    /// The cores folder a host names, else the runtime's own default (emusen_crystal.h, the config's `cores`); the
+    /// player's cores folder Galaxia's either way, which a named folder would otherwise leave unscanned (EmuSen_Qt.md §1.8.7).
+    fn runtime_config(self: Pin<&mut Self>) -> Result<Config, String> {
+        if self.cores.is_empty() {
+            return Ok(Config::default());
+        }
+        let cores = vec![self.cores.to_string()];
+        let platform = self.platform()?;
+        let player = platform.directory(galaxia::consts::DIR_CORES).map_err(|e| e.to_string())?;
+        Ok(Config { cores: Some(cores), player_cores: Some(player.into_iter().map(|p| p.to_string_lossy().into_owned()).collect()), ..Config::default() })
     }
 
     /// The game's side of the pads a `PadReader` hands over, when one is named by its `gamePads`; the router is made on the

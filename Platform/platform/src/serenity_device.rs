@@ -48,17 +48,8 @@ unsafe fn device(h: *const DeviceHandle) -> Result<Device, i32> {
 /// `name` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_serenity_device_new(name: *const u8, len: usize, validate: i32) -> *mut DeviceHandle {
-    let Ok(name) = (unsafe { text(name, len) }) else { return std::ptr::null_mut() };
-    match Device::create(name, validate != 0) {
-        Ok(device) => {
-            let findings = device.findings();
-            Box::into_raw(Box::new(DeviceHandle { device: Mutex::new(Some(device)), findings, heard: Mutex::default(), marks: Mutex::default() }))
-        }
-        Err(report) => {
-            fail(status::DEVICE, report);
-            std::ptr::null_mut()
-        }
-    }
+    // SAFETY: the caller's name; no extension lists, which is the device a host that adopts none needs.
+    unsafe { emusen_serenity_device_new_for(name, len, validate, std::ptr::null(), 0, std::ptr::null(), 0) }
 }
 
 /// The same, with the extensions a host's own renderer needs enabled, Vulkan's names separated by spaces: `instance`
@@ -886,6 +877,31 @@ mod tests {
         assert_eq!(unsafe { emusen_serenity_chain_get(std::ptr::null(), CHAIN_MAX_LENT) }, 3);
         assert_eq!(emusen_serenity_lent_release(0), status::ABSENT);
         assert_eq!(std::mem::size_of::<LentOut>(), 48);
+    }
+
+    /// On the RX 6800 (EMUSEN_GPU_DEVICE names another): `_new` is `_new_for` with no host's extensions, the same card by
+    /// the same name, and a name no card holds is refused with the words why.
+    #[test]
+    fn a_device_made_for_no_host_is_the_card_by_its_name_and_an_absent_name_is_refused() {
+        let wanted = std::env::var("EMUSEN_GPU_DEVICE").unwrap_or_else(|_| "6800".into());
+        let name_of = |h: *const DeviceHandle| {
+            let mut out = [0u8; 256];
+            let n = unsafe { emusen_serenity_device_name(h, out.as_mut_ptr(), out.len()) };
+            String::from_utf8_lossy(&out[..n.max(0) as usize]).into_owned()
+        };
+        let plain = unsafe { emusen_serenity_device_new(wanted.as_ptr(), wanted.len(), 0) };
+        assert!(!plain.is_null(), "a device named {wanted}");
+        let named = name_of(plain);
+        assert!(named.to_lowercase().contains(&wanted.to_lowercase()), "{named}");
+        let host = unsafe { emusen_serenity_device_new_for(wanted.as_ptr(), wanted.len(), 0, std::ptr::null(), 0, std::ptr::null(), 0) };
+        assert_eq!(name_of(host), named);
+        unsafe { emusen_serenity_device_free(host) };
+        unsafe { emusen_serenity_device_free(plain) };
+        let absent = "no card is named this";
+        assert!(unsafe { emusen_serenity_device_new(absent.as_ptr(), absent.len(), 0) }.is_null());
+        let mut words = [0u8; 512];
+        let n = unsafe { crate::emusen_platform_last_error(words.as_mut_ptr(), words.len()) };
+        assert!(n > 0, "the words why");
     }
 
     #[test]

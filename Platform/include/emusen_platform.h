@@ -42,7 +42,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 43u
+#define EMUSEN_PLATFORM_ABI_VERSION 44u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -1464,6 +1464,23 @@ typedef struct {
  * is the whole of the order between them (EmuSen_Qt.md section 1.8). DEVICE when no frame has been given yet or a
  * Vulkan call failed. Since interface 42. */
 int32_t emusen_serenity_chain_draw(const emusen_serenity_chain *chain, int32_t width, int32_t height, emusen_serenity_drawn *out);
+
+/* The display's clock as a frame loop keeps it: the swaps a window reported (their count and steady-clock time), the
+ * period read from them, smoothed over the swaps between two looks. The host owns the struct, sets `size`, zeroes the
+ * rest before the first swap, and leaves it to these calls (EmuSen_Qt.md section 1.8.3). Since interface 44. */
+typedef struct {
+    uint32_t size, seen;
+    uint64_t swaps;
+    int64_t at_ns;
+    double period_ns;
+} emusen_serenity_display_clock;
+
+/* A swap's count and time seen: 0, or a status. Since interface 44. */
+int32_t emusen_serenity_pace_saw(emusen_serenity_display_clock *clock, uint64_t swaps, int64_t at_ns);
+
+/* Whether a game whose frames come every `interval_ns` runs one frame a swap, its interval within a hundredth of the
+ * display's period: 1, 0, or a status. Since interface 44. */
+int32_t emusen_serenity_pace_locks(const emusen_serenity_display_clock *clock, uint64_t interval_ns);
 
 /* The newest picture taken through `lend` as the chain's new frame, read on the device by its next render or present:
  * 1 when there was one newer than the last, 0 when not, a status otherwise. Since interface 11. */

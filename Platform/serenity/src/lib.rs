@@ -12,6 +12,7 @@ pub mod compiler;
 pub mod filters;
 pub mod format;
 pub mod lend;
+pub mod pace;
 pub mod parameters;
 pub mod preset;
 pub mod reflection;

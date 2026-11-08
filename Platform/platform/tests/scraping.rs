@@ -1,10 +1,9 @@
-//! `scrape` in a shell this library makes, over a scraper the test lends as a host does, answered by a recorded-response server on 127.0.0.1 - see EmuSen_LibraryTools.md §8.
+//! `scrape` in a shell this library makes, over the scraper the test opens as a front end does, answered by a recorded-response server on 127.0.0.1 - see EmuSen_LibraryTools.md §8.
 
 use emusen_galaxia::tree::{self, Override};
 use emusen_library::Library;
 use emusen_platform::dianash::{dianash_free, dianash_new, dianash_output_take, dianash_session_new, dianash_submit};
-use emusen_platform::scraping::{Lend, emusen_scraping_lend, opened_its_own};
-use emusen_scrape::Scraper;
+use emusen_platform::scraping::{Config, TABLE, emusen_scraping_close, emusen_scraping_open, emusen_scraping_service, opened_its_own};
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, DnType, IsCa, KeyPair};
 use rustls::pki_types::{PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::io::{Read, Write};
@@ -112,11 +111,15 @@ fn write(path: &Path, bytes: &[u8]) {
 }
 
 #[test]
-fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
+fn scrape_runs_the_scraper_the_front_end_opened_and_no_other_is_opened() {
     let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+    let shipped = std::fs::read_to_string("/proc/self/maps").unwrap().lines().filter_map(|l| l.split_whitespace().nth(5)).find(|p| p.ends_with("libe_sqlite3.so")).map(PathBuf::from).unwrap();
     let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-scrape-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
-    let (library, home, etc) = (base.join("library"), base.join("home"), base.join("etc"));
+    let (program, library, home, etc) = (base.join("program"), base.join("library"), base.join("home"), base.join("etc"));
+    std::fs::create_dir_all(&program).unwrap();
+    std::os::unix::fs::symlink(&shipped, program.join(emusen_sqlite::SHIPPED_NAME)).unwrap();
+    assert!(tree::init(&program, None), "the program's directory is named before the tree is asked for");
     let mut nes = b"NES\x1a\x01\x01\x00\x00".to_vec();
     nes.resize(16 + 16384 + 8192, 0);
     write(&library.join("nes/Third.nes"), &nes);
@@ -127,9 +130,9 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
     tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let (game, other) = (library.join("snes/Game.sfc").to_string_lossy().into_owned(), library.join("snes/Other.sfc").to_string_lossy().into_owned());
 
-    let games_db = home.join("Library/games.db");
+    let games_db = base.join("named/games.db");
     std::fs::create_dir_all(games_db.parent().unwrap()).unwrap();
-    let lib: &'static Library = Box::leak(Box::new(Library::open(sqlite.clone(), &games_db.to_string_lossy()).unwrap()));
+    let lib = Library::open(sqlite, &games_db.to_string_lossy()).unwrap();
     lib.change_request(&format!("{{\"op\":\"set_favourite\",\"path\":{game:?},\"favourite\":true}}")).unwrap();
     lib.change_request(&format!("{{\"op\":\"save_edits\",\"path\":{other:?},\"changes\":{{\"nomultiscrape\":\"1\"}}}}")).unwrap();
     let (port, pem, asked) = serve();
@@ -137,10 +140,27 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
         "{{\"roms\":{:?},\"openemu\":false,\"developer_files\":false,\"cores\":[[\"snes\"],[\"nes\"]],\"test\":{{\"connect\":\"127.0.0.1:{port}\",\"roots\":{pem:?}}}}}",
         library.to_string_lossy()
     );
-    let media = home.join("Media");
-    let scraper = Box::into_raw(Box::new(Scraper::open(sqlite, &media.to_string_lossy(), Some(lib), &developer_blob(), &settings).unwrap()));
-    let lend = Lend { size: std::mem::size_of::<Lend>() as u32, scraper, library: lib as *const Library as *mut Library, systems: std::ptr::null(), systems_len: 0, theme_kinds: Some(theme), ctx: std::ptr::null_mut() };
-    assert_eq!(unsafe { emusen_scraping_lend(&lend) }, 0);
+    let (media, games_db, blob) = (home.join("Media").to_string_lossy().into_owned(), games_db.to_string_lossy().into_owned(), developer_blob());
+    let config = Config {
+        size: std::mem::size_of::<Config>() as u32,
+        root: media.as_ptr(),
+        root_len: media.len(),
+        games_db: games_db.as_ptr(),
+        games_db_len: games_db.len(),
+        sqlite: std::ptr::null_mut(),
+        embedded: blob.as_ptr(),
+        embedded_len: blob.len(),
+        settings: settings.as_ptr(),
+        settings_len: settings.len(),
+        systems: std::ptr::null(),
+        systems_len: 0,
+        theme_kinds: Some(theme),
+        ctx: std::ptr::null_mut(),
+    };
+    let opened = unsafe { emusen_scraping_open(&config) };
+    assert!(opened > 0, "the scraper opens: {opened}");
+    let serial = opened as u64;
+    assert!(std::ptr::eq(emusen_scraping_service(), &TABLE), "a front end is given the shells' own table");
 
     let sh = unsafe { dianash_new(std::ptr::null()) };
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);
@@ -166,13 +186,17 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
     let after = run(sh, "scrape ls --system snes --kinds cover");
     assert!(after.contains(&format!("{game}\tsnes\tcover=screenscraper")), "{after}");
     assert!(!run(sh, "scrape ls --system snes --missing cover").contains(&game), "a game with its cover is not missing it");
-    assert!(media.is_dir() && !library.join("snes").read_dir().unwrap().flatten().any(|e| e.file_name() != "Game.sfc" && e.file_name() != "Other.sfc"), "the library is only read");
+    assert!(Path::new(&media).is_dir() && !library.join("snes").read_dir().unwrap().flatten().any(|e| e.file_name() != "Game.sfc" && e.file_name() != "Other.sfc"), "the library is only read");
 
-    assert_eq!(unsafe { emusen_scraping_lend(std::ptr::null()) }, 0);
+    let third = library.join("nes/Third.nes").to_string_lossy().into_owned();
+    lib.change_request(&format!("{{\"op\":\"set_favourite\",\"path\":{third:?},\"favourite\":true}}")).unwrap();
+    assert!(run(sh, "scrape plan --favorites").contains("games\t2\n"), "the shell reads games.db as the front end's own connection wrote it");
+    assert_eq!(emusen_scraping_close(serial + 1), 0, "a close names the scraper it means");
+    assert_eq!(emusen_scraping_close(serial), 1);
+    assert_eq!(emusen_scraping_close(serial), 0, "a scraper closes once");
     let refused = run(sh, "scrape status");
     assert!(refused.contains("not open now"), "{refused}");
-    assert!(!opened_its_own(), "after a lend this library never opens a scraper of its own");
+    assert!(!opened_its_own(), "after a front end's open this library never opens a scraper of its own");
     unsafe { dianash_free(sh) };
-    drop(unsafe { Box::from_raw(scraper) });
     let _ = std::fs::remove_dir_all(&base);
 }

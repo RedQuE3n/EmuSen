@@ -18,11 +18,10 @@ namespace EmuSen.Galaxia.Native
         public const long Busy = -1164;
         public const long StoreInUse = -1167;
 
-        private static readonly Lazy<(nint Command, nint LastError)> Exports = new(() =>
-            (PlatformLibrary.Export("emusen_scraping_command"), PlatformLibrary.Export("emusen_scrape_last_error")));
+        private static readonly Lazy<nint> Command = new(() => PlatformLibrary.Export("emusen_scraping_command"));
 
-        // Whether the command can be asked here: the platform library is loaded and has the call.
-        public static bool Available => Exports.Value.Command != 0 && Exports.Value.LastError != 0;
+        // Whether the command can be asked here: the platform library is loaded and has the call and the service's table.
+        public static bool Available => Command.Value != 0 && ScrapeService.Table != null;
 
         // Why the platform library is or is not in use, for the words of a window that cannot ask.
         public static string Report => PlatformLibrary.Report;
@@ -32,7 +31,7 @@ namespace EmuSen.Galaxia.Native
         {
             GalaxiaScope.Refuse("A scrape run");
             if (!Available) throw new ScrapeCommandException(-256, $"{PlatformLibrary.FileName} is not in use ({PlatformLibrary.Report})");
-            var call = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)Exports.Value.Command;
+            var call = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, long>)Command.Value;
             byte[] text = Encoding.UTF8.GetBytes(request);
             byte[] buffer = new byte[16384];
             while (true)
@@ -70,18 +69,6 @@ namespace EmuSen.Galaxia.Native
             return Encoding.UTF8.GetString(stream.ToArray());
         }
 
-        private static string LastError()
-        {
-            var last = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)Exports.Value.LastError;
-            byte[] buffer = new byte[1024];
-            long n;
-            fixed (byte* b = buffer) n = last(b, (nuint)buffer.Length);
-            if (n > buffer.Length)
-            {
-                buffer = new byte[n];
-                fixed (byte* b = buffer) n = last(b, (nuint)buffer.Length);
-            }
-            return Encoding.UTF8.GetString(buffer, 0, (int)Math.Clamp(n, 0, buffer.Length));
-        }
+        private static string LastError() => ScrapeService.Words(ScrapeService.Table);
     }
 }

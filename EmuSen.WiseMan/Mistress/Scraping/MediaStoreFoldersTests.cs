@@ -14,6 +14,7 @@ using Microsoft.Data.Sqlite;
 namespace EmuSen.WiseMan.Mistress.Scraping
 {
     // media.db's second migration and the store's one layout step, taken by emusen-scrape when it opens the store: flat pictures of foldered games carried into their folders, nothing lost - see EmuSen_BigPicture.md §30 and EmuSen_Backend.md §40.5.
+    [Collection(TestCollections.ProcessGlobals)]
     public class MediaStoreFoldersTests : IDisposable
     {
         private readonly string _root = Path.Combine(Path.GetTempPath(), "EmuSenMediaStoreFolders", Guid.NewGuid().ToString("N"));

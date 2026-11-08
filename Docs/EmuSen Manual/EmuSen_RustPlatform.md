@@ -3888,7 +3888,7 @@ spellings.
 `emusen_library.h`'s requests are read as a `serde_json::Value` and its answers built with `json!` (`library/src/json.rs`,
 `library/src/lib.rs`): a record, the records by path, a game, edits, collections, orphans, the games list and an
 identity. A double JSON has no number for is still the name `NaN`, `Infinity` or `-Infinity`, as the C# reader takes
-it. `emusen_scrape.h`'s requests are read the same way, and the requests the scraper sends the library are built with
+it. `emusen_scrape.h`'s requests (the `emusen.scrape` service's since §47.25) are read the same way, and the requests the scraper sends the library are built with
 `json!`. The scraper's answers are still laid out by its readers' `format!` calls, but every value in them (a text, a
 number, a list of texts) is written by serde_json through `scrape/src/json.rs`; turning those layouts into `json!` is
 left for a later change, since it moves no byte. What changes in the bytes is as §47.12 says: UTF-8 text, and a whole
@@ -4313,3 +4313,83 @@ codec is `ABSENT`. The C# classes over the facades (the systems table's and code
 cheat formats', the save media's, the memory cards' offer, `CrystalHeaderTests`) pass 143 and the save media and cheat
 window classes 32 (2 skipped). Three faults were seeded and caught: a row missing `media` and a decoder answering from
 the wrong codec (`crystal_reads.rs`), and the C# table facade keeping a runtime key (`SystemTableParityTests`).
+
+### 47.25 Scraping has one surface, the `emusen.scrape` service 2.0, and the library's reads one of their own
+
+*Decided 2026-11-07 by the tester* (the cleanup's question 6): scraping keeps its versioned service table, and the
+library gets its own surface; the details, confirmed with evidence below, were decided 2026-11-08: (a) a front end
+gets the table through `emusen_scraping_service()`, and `emusen_scrape.h`'s handle API and `emusen_scraping_lend` go,
+the process's one scraper being the platform library's own, on the condition that two connections on one `games.db`
+in one process are shown safe; (b) `library_get` and `games` leave the scrape table for a service of their own, and
+`emusen.scrape` goes to 2.0; (c) `emusen_scraping_command` stays, since it fronts the module's command, not the
+scraper. Platform interface 39.
+
+**The callers, before the deletion**, found by name in C#, Rust, scripts, the workflow and the docs:
+
+| Deleted | Its callers | What they reach the service through now |
+|---|---|---|
+| `emusen_scrape.h` 1.2: `emusen_scrape_open`, `_close`, `_get`, `_change`, `_start`, `_progress`, `_wait`, `_pause`, `_cancel`, `_last_error`, `_abi_version` (`platform/src/scrape.rs`) | `Crystal.Client/Scrape/MediaService.cs`, and through it Mistress's `NativeScraping` and 20 WiseMan call sites; `scrape/tests/scrape_abi.rs` and its baseline; the workflow's "scraper's surface" step; Galaxia's `ScrapeCommand` for its words | `emusen_scraping_open`/`_close` and the table (`MediaService` keeps its methods); `scrape/tests/scrape_service.rs`; the table's `last_error` |
+| `emusen_scraping_lend` | `Crystal.Client/Scrape/ScrapingLend.cs` (Mistress's `OpenNative` and its start, `MediaService.Dispose`, `GameLibrary.Dispose`), `ScrapingLendTests`, `platform/tests/scraping.rs` and `scraping_default.rs` | `emusen_scraping_open`, which takes what the lend carried; `MediaService.CloseAny` at Mistress's start |
+| the table's `library_get` and `games` | `emusen-scrape-module` (`library_get` for records, collections, members and every edit; `games` for the choice) | `emusen.games` 1.0's `get` and `games` |
+
+**Why the open takes the front end's settings.** `open_own`, the scraper the platform library opens from the settings
+file, cannot stand in for Mistress's: Mistress's scraper carries the program's embedded developer blob, its build's
+name in its User-Agent header, the cores grouped by console, the packages by game, the test seams its tests set, and a
+scraper for the sources alone while no `media.db` exists; and 20 WiseMan call sites open stores on fixture folders.
+So the process's one scraper is still the platform library's, held in its slot and closed by it, but a front end opens
+it with `emusen_scraping_open`, which takes what the lend took (games.db, now by its file; the systems; the theme
+loader) and what `emusen_scrape_open` took (the store, SQLite, the blob, the settings). An open closes the scraper
+before it first, so that a store reopened in the same process is not refused by its own lock, and answers a serial;
+`emusen_scraping_close(serial)` closes that scraper only while it is still the one open, so Mistress's sources-alone
+scraper, replaced by its full one, cannot close the latter when it is disposed. After any open or close the platform
+library never opens its own, as after a lend. Two consequences: the shells now answer from a sources-alone scraper
+where before they refused, so such a scraper refuses `start` (`BAD_REQUEST`, "runs nothing"); and the WiseMan classes
+that open a scraper join the `ProcessGlobals` collection (`MediaStoreTests`, `MediaStoreFoldersTests`,
+`GameMetadataTests`, `ScrapeExtrasTests`; the rest were in it), since a process holds one. `MediaService` refuses
+every call once a later open replaced it. The table's `wait` is held to 250 ms; `MediaService.Wait` asks again.
+
+**The library's service is `emusen.games`, not `emusen.library`.** That name is the library tool's
+(`emusen_library_tool.h` 1.7, the `chd`, `pkg` and `rom` jobs); adding games.db's reads to that table would have given
+the job runner a second job and mixed two status bands. `emusen.games` 1.0 (`Platform/include/emusen_games_service.h`,
+`platform/src/games_service.rs`) is `get`, `games` and `last_error`, with `emusen_library.h`'s statuses. It speaks for
+the games.db named at the open, the same connection the scraper's cover lookups and edits use, else the tree's,
+opened on first use. `emusen_scrape_service.h` 2.0 drops the two calls, declares the scraper's statuses (they were
+`emusen_scrape.h`'s) and is included by `emusen_platform.h`. The scraper takes its library as `Arc<Library>` instead of
+a `&'static` the host promised to keep alive. The C# table layout has one owner, `Galaxia/Native/ScrapeService.cs`,
+used by `MediaService` and `ScrapeCommand`.
+
+**The open point: two connections on one games.db in one process.** The front end keeps its own `GameLibrary`
+(emusen_library.h) on games.db, and the platform library now opens a second connection for the scraper and the shells,
+where before the lend shared one. The argument from SQLite's documentation:
+
+1. Two connections are safe when they are made by one copy of SQLite. POSIX advisory locks are cancelled by any
+   `close()` of the file in the process, and "the unix drivers for SQLite know about the POSIX advisory locking quirks
+   and work around them", by "keeping a global list (mutex protected) of open SQLite database files"; the hazard is
+   "multiple copies of SQLite linked into the same application", whose connections "will be unaware of" each other's
+   ("How To Corrupt An SQLite Database File", §2.2 and §2.3, https://www.sqlite.org/howtocorrupt.html, read
+   2026-11-08). Both connections here are the platform library's, over the SQLite the C# lends (`SqliteLend`, the same
+   handle `GameLibrary` uses), or, with none lent, `Sqlite::of_process`, which takes the copy already loaded.
+2. Only one write transaction runs at a time, and a deferred transaction that cannot upgrade to a write fails with
+   `SQLITE_BUSY` ("Transaction", https://www.sqlite.org/lang_transaction.html, read 2026-11-08). The library begins
+   every transaction `IMMEDIATE` (`db::begin`), so no connection holds a read it must upgrade; a busy `BEGIN
+   IMMEDIATE`, statement or `COMMIT` ("the transaction remains active and the COMMIT can be retried", ibid.) is tried
+   again every 150 ms for the connection's 30-second wait (`emusen_sqlite::COMMAND_TIMEOUT`), so `SQLITE_BUSY` reaches a
+   caller only past 30 seconds of another connection's write.
+
+`library/tests/two_connections.rs`, measured on 2026-11-08: two `Library` handles on one file, four threads (two a
+handle) each writing 150 favourites and 150 edits while reading the records every tenth game: all 1,200 writes are
+seen through both handles and none failed; and a write made while another connection held `BEGIN IMMEDIATE` for 1.2
+s waited it out and both rows were kept. With the 30-second wait cut to the 1-second default (a seeded fault), both
+tests failed with a busy database: the wait is what keeps `SQLITE_BUSY` from the player.
+
+**Proof, measured on 2026-11-08.** The touched crates, the DianaSh goldens and the disk corpus (`emusen-scrape`,
+`emusen-scrape-module`, `emusen-library`, `emusen-platform`, `emusen-dianash`, `emusen-galaxia`) pass 228 tests (1
+ignored), and the workspace checks with every target. `platform/tests/scraping.rs` opens the scraper as a front end
+does, on a games.db apart from the tree's, and runs the shell's `scrape` over a recorded HTTPS server: a favourite
+written on the front end's own connection is read by the shell's choice, a close naming another serial is refused, a
+second close of the same is 0, and after it the service refuses. `scraping_default.rs`: a process with no open opens
+its own, a front end's open replaces it, and a sources-alone scraper refuses a run and makes no `media.db`. The C#
+classes over the binding (the Scraping namespace, `CoverChoiceTests`, `GameMetadataTests`, `GamePackageGateTests`,
+`OnlineCoverTests`, `LibraryRecordsParityTests`, `GalaxiaParityTests`, `GalaxiaScopeTests`) pass 322 (4 tools skipped),
+and the packaged library's fit audit 16. Seeded and caught: a close that ignores its serial and an open that does not
+name games.db to `emusen.games` (`scraping.rs`), and the shortened wait (`two_connections.rs`).

@@ -1,10 +1,8 @@
-//! `scrape` in a process whose host lent no scraper: one is opened from the settings file, and a later lend replaces it - see EmuSen_LibraryTools.md §8.
+//! `scrape` in a process whose front end opened no scraper: one is opened from the settings file, and a later open replaces it - see EmuSen_LibraryTools.md §8.
 
 use emusen_galaxia::tree::{self, Override};
-use emusen_library::Library;
 use emusen_platform::dianash::{dianash_free, dianash_new, dianash_output_take, dianash_session_new, dianash_submit};
-use emusen_platform::scraping::{Lend, emusen_scraping_lend, opened_its_own};
-use emusen_scrape::Scraper;
+use emusen_platform::scraping::{Config, emusen_scraping_close, emusen_scraping_open, opened_its_own};
 use std::path::PathBuf;
 
 
@@ -23,8 +21,8 @@ fn run(sh: *mut emusen_platform::dianash::DianashShell, line: &str) -> String {
 }
 
 #[test]
-fn a_process_with_no_lend_opens_its_own_scraper_and_a_lend_replaces_it() {
-    let Some(sqlite) = emusen_sqlite::for_tests() else { return };
+fn a_process_with_no_open_opens_its_own_scraper_and_a_front_end_s_open_replaces_it() {
+    let Some(_sqlite) = emusen_sqlite::for_tests() else { return };
     let shipped = loaded_from().expect("for_tests loaded an e_sqlite3 file");
     let base = std::env::var("TMPDIR").map(PathBuf::from).unwrap_or_else(|_| std::env::temp_dir()).join(format!("emusen-platform-scrape-own-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&base);
@@ -49,17 +47,34 @@ fn a_process_with_no_lend_opens_its_own_scraper_and_a_lend_replaces_it() {
     assert!(opened_its_own() && home.join("Media/media.db").is_file() && home.join("Library/games.db").is_file(), "the store and games.db are the tree's");
     let listed = run(sh, "scrape ls");
     assert!(listed.contains(&format!("{}\tnes\tcover=-", library.join("nes/Third.nes").display())), "{listed}");
-    assert!(run(sh, "scrape ls --kinds theme").contains("no theme loader is lent here"), "the theme is a host's to read");
+    assert!(run(sh, "scrape ls --kinds theme").contains("no theme loader was named here"), "the theme is a host's to read");
 
-    let lib: &'static Library = Box::leak(Box::new(Library::open(sqlite.clone(), ":memory:").unwrap()));
-    let store = base.join("lent");
-    let scraper = Box::into_raw(Box::new(Scraper::open(sqlite, &store.to_string_lossy(), Some(lib), &[], r#"{"developer_files":false,"openemu":false,"test":{"offline":true}}"#).unwrap()));
-    let lend = Lend { size: std::mem::size_of::<Lend>() as u32, scraper, library: lib as *const Library as *mut Library, systems: br#"["nes"]"#.as_ptr(), systems_len: 7, theme_kinds: None, ctx: std::ptr::null_mut() };
-    assert_eq!(unsafe { emusen_scraping_lend(&lend) }, 0);
-    assert!(!opened_its_own(), "a lend closes the scraper this library opened, so the process holds one");
-    assert!(run(sh, "scrape status").contains("developer\tnone"), "the lent scraper answers now");
-    assert_eq!(unsafe { emusen_scraping_lend(std::ptr::null()) }, 0);
+    let store = base.join("opened").to_string_lossy().into_owned();
+    let settings = r#"{"developer_files":false,"openemu":false,"sources_alone":true,"test":{"offline":true}}"#;
+    let systems = br#"["nes"]"#;
+    let config = Config {
+        size: std::mem::size_of::<Config>() as u32,
+        root: store.as_ptr(),
+        root_len: store.len(),
+        games_db: std::ptr::null(),
+        games_db_len: 0,
+        sqlite: std::ptr::null_mut(),
+        embedded: std::ptr::null(),
+        embedded_len: 0,
+        settings: settings.as_ptr(),
+        settings_len: settings.len(),
+        systems: systems.as_ptr(),
+        systems_len: systems.len(),
+        theme_kinds: None,
+        ctx: std::ptr::null_mut(),
+    };
+    let serial = unsafe { emusen_scraping_open(&config) };
+    assert!(serial > 0 && !opened_its_own(), "an open closes the scraper this library opened, so the process holds one");
+    assert!(run(sh, "scrape status").contains("developer\tnone"), "the front end's scraper answers now");
+    let ran = run(sh, "scrape run --system nes");
+    assert!(ran.contains("runs nothing"), "a scraper opened for its sources alone runs nothing: {ran}");
+    assert!(!std::path::Path::new(&store).join("media.db").exists(), "and makes no media.db");
+    assert_eq!(emusen_scraping_close(0), 1);
     unsafe { dianash_free(sh) };
-    drop(unsafe { Box::from_raw(scraper) });
     let _ = std::fs::remove_dir_all(&base);
 }

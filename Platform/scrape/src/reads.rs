@@ -1,4 +1,4 @@
-//! `emusen_scrape_get`: one read, `{"what": …}`, as `emusen_scrape.h` lists them. See EmuSen_Backend.md §30.3.
+//! The service's `get`: one read, `{"what": …}`, as `emusen_scrape_service.h` lists them. See EmuSen_LibraryTools.md §8.
 
 use crate::json::{self, float_or_null, number_or_null, quoted, strings_into, text_or_null};
 use crate::store::{Key, Record, Stored};

@@ -9,52 +9,29 @@ use std::ffi::c_void;
 use std::sync::Arc;
 
 thread_local! {
-    /// An answer that did not fit, by the export and the request that made it, taken by the same call asked again.
-    static WAITING: RefCell<Option<(u8, Vec<u8>, Vec<u8>)>> = const { RefCell::new(None) };
+    static WAITING: crate::reply::Waiting = const { RefCell::new(None) };
 }
 
-fn fail(status: i32, words: impl Into<String>) -> i32 {
+pub(crate) fn fail(status: i32, words: impl Into<String>) -> i32 {
     crate::last_error::fail(crate::last_error::Slot::Library, status, words.into())
 }
 
-fn failed(error: Error) -> i32 {
+pub(crate) fn failed(error: Error) -> i32 {
     fail(error.status(), error.words())
 }
 
 /// The text a caller passed; an empty one may come as a null pointer with no length.
-unsafe fn text<'a>(data: *const u8, len: usize) -> Result<&'a str, i32> {
-    if data.is_null() {
-        return if len == 0 { Ok("") } else { Err(fail(abi::NULL, "a text with a length is null")) };
-    }
-    let bytes = if len == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(data, len) } };
-    std::str::from_utf8(bytes).map_err(|_| fail(abi::BAD_STRING, "the text is not UTF-8"))
+pub(crate) unsafe fn text<'a>(data: *const u8, len: usize) -> Result<&'a str, i32> {
+    unsafe { crate::reply::text(data, len, |status, words| fail(status, words)) }
 }
 
 unsafe fn handle<'a>(lib: *mut Library) -> Result<&'a Library, i32> {
     if lib.is_null() { Err(fail(abi::NULL, "the library handle is null")) } else { Ok(unsafe { &*lib }) }
 }
 
-/// The length-query idiom over an answer made once: copied when it fits, else kept for the same call asked again.
-unsafe fn answer(export: u8, request: &str, out: *mut u8, len: usize, make: impl FnOnce() -> Result<String, Error>) -> i64 {
-    let waiting = WAITING.with_borrow_mut(|w| match w {
-        Some((e, r, _)) if *e == export && r.as_slice() == request.as_bytes() => w.take().map(|(_, _, a)| a),
-        _ => None,
-    });
-    let bytes = match waiting {
-        Some(bytes) => bytes,
-        None => match make() {
-            Ok(text) => text.into_bytes(),
-            Err(e) => return failed(e) as i64,
-        },
-    };
-    if !out.is_null() && bytes.len() <= len {
-        unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), out, bytes.len()) };
-    } else {
-        let length = bytes.len();
-        WAITING.with_borrow_mut(|w| *w = Some((export, request.as_bytes().to_vec(), bytes)));
-        return length as i64;
-    }
-    bytes.len() as i64
+/// The length-query idiom over an answer made once, in this layer's slot.
+pub(crate) unsafe fn answer(export: u8, request: &str, out: *mut u8, len: usize, make: impl FnOnce() -> Result<String, Error>) -> i64 {
+    unsafe { crate::reply::answer(&WAITING, export, request, out, len, make, failed) }
 }
 
 /// The header's version, `(MAJOR << 16) | MINOR`.

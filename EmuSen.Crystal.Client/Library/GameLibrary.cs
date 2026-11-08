@@ -93,11 +93,15 @@ namespace EmuSen.Crystal.Client.Library
         // The handle, for lending to the scraper while this library is open.
         internal nint Handle => _handle;
 
-        private GameLibrary(Exports t, nint handle)
+        private GameLibrary(Exports t, nint handle, string path)
         {
             _t = t;
             _handle = handle;
+            Path = path;
         }
+
+        // The file it was opened on, which the scraper opens games.db by.
+        public string Path { get; }
 
         // Opens games.db at path, migrating it; ":memory:" is a database that lives as long as the handle.
         public static GameLibrary Open(string path)
@@ -112,7 +116,7 @@ namespace EmuSen.Crystal.Client.Library
                 status = t.Open(&config, &handle);
             }
             if (status != 0) throw Fault(t, status);
-            return new GameLibrary(t, handle);
+            return new GameLibrary(t, handle, path);
         }
 
         private static GameLibraryException Fault(Exports t, long status)
@@ -216,7 +220,6 @@ namespace EmuSen.Crystal.Client.Library
         // Cancels what runs on the handle, waits for every call in progress, then closes it.
         public void Dispose()
         {
-            EmuSen.Crystal.Client.Scrape.ScrapingLend.Release(this);
             nint h;
             lock (_gate)
             {

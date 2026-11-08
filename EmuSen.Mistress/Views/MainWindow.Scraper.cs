@@ -13,7 +13,7 @@ namespace EmuSen.Mistress.Views
     {
         private ScraperWindow? _scraperWindow;
 
-        // The Scraper, over Mistress's own scraper lent to it, so the quota is counted once; one open window is brought forward.
+        // The Scraper, over the process's one scraper that Mistress opened, so the quota is counted once; one open window is brought forward.
         private void ShowScraper()
         {
             if (_scrapeClosed) return;

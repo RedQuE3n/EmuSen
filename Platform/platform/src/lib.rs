@@ -25,10 +25,12 @@ mod last_error;
 pub mod library;
 // The library tool: CHD conversion jobs, for Mistress's window and, as the emusen.library service, for every shell (EmuSen_GamePackages.md §12.3).
 pub mod library_tool;
+// The emusen.games service every shell is handed: the process's games.db (EmuSen_LibraryTools.md §8).
+pub mod games_service;
 pub mod patch;
-pub mod scrape;
-// The emusen.scrape service every shell is handed (EmuSen_LibraryTools.md §8).
+// The emusen.scrape service, scraping's one surface, for front ends and every shell (EmuSen_LibraryTools.md §8).
 pub mod scraping;
+mod reply;
 pub mod net;
 pub mod serenity;
 pub mod serenity_device;
@@ -37,7 +39,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 38;
+pub const ABI_VERSION: u32 = 39;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {

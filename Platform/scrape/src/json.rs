@@ -1,4 +1,4 @@
-//! Requests read and answers' values written for `emusen_scrape.h`'s calls, both by serde_json. See EmuSen_Backend.md
+//! Requests read and answers' values written for the `emusen.scrape` service's calls, both by serde_json. See EmuSen_Backend.md
 //! §30.3 and EmuSen_RustPlatform.md §47.13.
 
 use crate::Error;

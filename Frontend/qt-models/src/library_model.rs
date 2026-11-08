@@ -73,6 +73,14 @@ pub mod qobject {
         #[qproperty(QString, home_lines, cxx_name = "homeLines", READ, NOTIFY)]
         /// Whether a console starts with nothing in it, so the cards offer Start Console.
         #[qproperty(bool, starts_empty, cxx_name = "startsEmpty", READ, NOTIFY)]
+        /// Whether an ES-DE theme is the library's look: `LibraryStyle` is Theme and `BigPictureTheme` names one.
+        #[qproperty(bool, themed, READ, NOTIFY)]
+        /// The ES-DE view's settings, shelves, media index and media presence as text (esde_shelves.rs), each written at a
+        /// refresh; the three library texts are "[]" and "{}" while the own look is shown.
+        #[qproperty(QString, esde_settings, cxx_name = "esdeSettings", READ, NOTIFY)]
+        #[qproperty(QString, esde_shelves, cxx_name = "esdeShelves", READ, NOTIFY)]
+        #[qproperty(QString, esde_media, cxx_name = "esdeMedia", READ, NOTIFY)]
+        #[qproperty(QString, esde_presence, cxx_name = "esdePresence", READ, NOTIFY)]
         type LibraryModel = super::LibraryModelRust;
     }
 
@@ -165,6 +173,11 @@ pub struct LibraryModelRust {
     /// Home's places' second lines as a JSON array of `{"status", "attention"}`.
     home_lines: QString,
     starts_empty: bool,
+    themed: bool,
+    esde_settings: QString,
+    esde_shelves: QString,
+    esde_media: QString,
+    esde_presence: QString,
     view: LibraryView,
     source: Option<Arc<dyn LibrarySource>>,
 }
@@ -188,6 +201,11 @@ impl Default for LibraryModelRust {
             dark: true,
             home_lines: QString::from("[]"),
             starts_empty: false,
+            themed: false,
+            esde_settings: QString::default(),
+            esde_shelves: QString::from("[]"),
+            esde_media: QString::from("{}"),
+            esde_presence: QString::from("{}"),
             view: LibraryView::empty(),
             source: None,
         }
@@ -353,6 +371,14 @@ impl qobject::LibraryModel {
             self.as_mut().rust_mut().source = source;
         }
         let rows_change = refreshed.is_ok();
+        // Which of the ES-DE texts changed, compared as Rust text before any is made a QString.
+        let changed = match &refreshed {
+            Ok(read) => {
+                let (old, new) = ((&self.view.esde_settings, &self.view.esde), (&read.esde_settings, &read.esde));
+                [old.0.text != new.0.text, old.1.shelves != new.1.shelves, old.1.media != new.1.media, old.1.presence != new.1.presence]
+            }
+            Err(_) => [false; 4],
+        };
         if rows_change {
             self.as_mut().begin_reset_model();
         }
@@ -360,8 +386,36 @@ impl qobject::LibraryModel {
         if rows_change {
             self.as_mut().end_reset_model();
         }
+        self.as_mut().publish_esde(changed);
         self.as_mut().show_loading(false);
         self.publish();
+    }
+
+    /// The ES-DE view's texts that changed and whether it is shown, announced after a refresh and never on a step, since
+    /// the shelves' text grows with the library.
+    fn publish_esde(mut self: Pin<&mut Self>, changed: [bool; 4]) {
+        let [settings, shelves, media, presence] = changed;
+        if settings {
+            self.as_mut().rust_mut().esde_settings = QString::from(self.view.esde_settings.text.as_str());
+            self.as_mut().esde_settings_changed();
+        }
+        if shelves {
+            self.as_mut().rust_mut().esde_shelves = QString::from(self.view.esde.shelves.as_str());
+            self.as_mut().esde_shelves_changed();
+        }
+        if media {
+            self.as_mut().rust_mut().esde_media = QString::from(self.view.esde.media.as_str());
+            self.as_mut().esde_media_changed();
+        }
+        if presence {
+            self.as_mut().rust_mut().esde_presence = QString::from(self.view.esde.presence.as_str());
+            self.as_mut().esde_presence_changed();
+        }
+        let themed = self.view.esde_settings.themed;
+        if self.themed != themed {
+            self.as_mut().rust_mut().themed = themed;
+            self.themed_changed();
+        }
     }
 
     /// Moonrise's worlds, one line each, and its caption, from the systems.

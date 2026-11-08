@@ -25,6 +25,9 @@ pub enum Shown {
     Search,
     /// The grid's search, the keyboard docked and the focus on the covers (LunaP's `GalleryLayout` out of the keyboard).
     SearchGrid,
+    /// The ES-DE theme's view in place of Home, Choose a console and the grid, its system and gamelist views one screen
+    /// whose model says which (EmuSen_Qt.md §4.6).
+    Esde,
 }
 
 /// What asked for a change.
@@ -50,6 +53,8 @@ pub enum Ask {
     Close,
     /// The focus went to the search's keys (true) or its covers (false) by other means than the shoulders: the pointer.
     Keys(bool),
+    /// The library's look changed between the own look and an ES-DE theme: the library's screen shown is the other's.
+    Restyled,
 }
 
 /// Home's Power place, by its index in `words::HOME_PLACES`.
@@ -101,6 +106,38 @@ pub fn step(shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
     }
 }
 
+/// The library's screen of a look: Home for the own look, the theme's view for an ES-DE theme.
+pub fn library_of(themed: bool) -> Shown {
+    if themed {
+        Shown::Esde
+    } else {
+        Shown::Home
+    }
+}
+
+/// As `step`, under the library's look: with an ES-DE theme the theme's view stands where Home, Choose a console and
+/// the grid stood, and the cards, the game and the Pause Card come back to it (EmuSen_Qt.md §4.6).
+pub fn step_in(themed: bool, shown: Shown, ask: &Ask) -> Option<(Shown, Option<String>)> {
+    let own = matches!(shown, Shown::Home | Shown::Consoles | Shown::Grid | Shown::Search | Shown::SearchGrid);
+    match (themed, shown, ask) {
+        (true, _, Ask::Restyled) if own => Some((Shown::Esde, None)),
+        (false, Shown::Esde, Ask::Restyled) => Some((Shown::Home, None)),
+        (_, _, Ask::Restyled) => None,
+        (false, ..) => step(shown, ask),
+        // Start opens the Home card at its first page, as ES-DE's Start opens its menu; B at the theme's view is the
+        // view's own, going back from a gamelist, and does nothing more here (decided 2026-11-08).
+        (true, Shown::Esde, Ask::Act(key)) if key == HOME => Some((Shown::HomeCard, Some(crate::home_card::FIRST.to_owned()))),
+        (true, Shown::Esde, Ask::Act(key)) if key == LIST => Some((Shown::List, None)),
+        (true, Shown::Esde | Shown::List | Shown::Pause, Ask::Play) => Some((Shown::Game, None)),
+        // The cards close to the theme's view on B, Start or any of their actions, which the host carries out.
+        (true, Shown::HomeCard | Shown::List, Ask::Back | Ask::Close | Ask::Act(_)) => Some((Shown::Esde, None)),
+        (true, Shown::Game, Ask::Menu) => Some((Shown::Pause, None)),
+        (true, Shown::Pause, Ask::Library) => Some((Shown::Esde, None)),
+        (true, Shown::Game | Shown::Pause, Ask::Closed) => Some((Shown::Esde, None)),
+        _ => None,
+    }
+}
+
 #[cxx_qt::bridge]
 pub mod qobject {
     unsafe extern "C++" {
@@ -120,6 +157,7 @@ pub mod qobject {
         List,
         Search,
         SearchGrid,
+        Esde,
     }
 
     extern "RustQt" {
@@ -134,6 +172,8 @@ pub mod qobject {
         #[qproperty(QString, page, READ, NOTIFY)]
         /// Whether the grid shows a game, so the keyboard's shoulders have covers to move to.
         #[qproperty(bool, found)]
+        /// Whether an ES-DE theme is the library's look (LibraryModel.themed): its view stands for the library's screens.
+        #[qproperty(bool, themed)]
         type Screens = super::ScreensRust;
     }
 
@@ -185,21 +225,24 @@ pub struct ScreensRust {
     home_again: i32,
     page: QString,
     found: bool,
+    themed: bool,
 }
 
 impl Default for ScreensRust {
     fn default() -> Self {
-        ScreensRust { shown: Screen::Home, key: QString::default(), game_running: false, home_again: 0, page: QString::default(), found: false }
+        ScreensRust { shown: Screen::Home, key: QString::default(), game_running: false, home_again: 0, page: QString::default(), found: false, themed: false }
     }
 }
 
 impl cxx_qt::Initialize for qobject::Screens {
-    fn initialize(self: Pin<&mut Self>) {
-        self.on_game_running_changed(|screens| {
-            let ask = if screens.game_running { Ask::Play } else { Ask::Closed };
-            screens.ask(ask);
-        })
-        .release();
+    fn initialize(mut self: Pin<&mut Self>) {
+        self.as_mut()
+            .on_game_running_changed(|screens| {
+                let ask = if screens.game_running { Ask::Play } else { Ask::Closed };
+                screens.ask(ask);
+            })
+            .release();
+        self.on_themed_changed(|screens| screens.ask(Ask::Restyled)).release();
     }
 }
 
@@ -213,6 +256,7 @@ fn shown_of(screen: Screen) -> Shown {
         Screen::List => Shown::List,
         Screen::Search => Shown::Search,
         Screen::SearchGrid => Shown::SearchGrid,
+        Screen::Esde => Shown::Esde,
         _ => Shown::Home,
     }
 }
@@ -228,6 +272,7 @@ fn screen_of(shown: Shown) -> Screen {
         Shown::List => Screen::List,
         Shown::Search => Screen::Search,
         Shown::SearchGrid => Screen::SearchGrid,
+        Shown::Esde => Screen::Esde,
     }
 }
 
@@ -280,7 +325,7 @@ impl qobject::Screens {
     }
 
     fn apply(mut self: Pin<&mut Self>, ask: Ask) {
-        let Some((shown, key)) = step(shown_of(self.shown), &ask) else { return };
+        let Some((shown, key)) = step_in(self.themed, shown_of(self.shown), &ask) else { return };
         if let (Shown::HomeCard, Some(page)) = (shown, &key) {
             let page = QString::from(page.as_str());
             if self.page != page {

@@ -55,3 +55,33 @@ fn the_client_source_scans_the_player_s_folder_and_makes_the_rows() {
     let refused = ClientSource::open(world.root.join("libnot.so").to_str().unwrap(), &none).err().expect("no library there");
     assert!(refused.contains("libnot.so"), "{refused}");
 }
+
+#[test]
+fn with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names() {
+    let world = World::new("models-clients-esde");
+    let roms = world.dir("Roms");
+    let path = library().to_str().unwrap();
+    let platform = Platform::load(path).unwrap();
+    let mut settings = platform.model_new(MODEL_APP_SETTINGS).unwrap();
+    settings["RomDirectory"] = serde_json::json!(roms.to_str().unwrap());
+    settings["LibraryStyle"] = serde_json::json!("Theme");
+    settings["BigPictureTheme"] = serde_json::json!(world.dir("Themes/plain").to_str().unwrap());
+    platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
+    let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
+    image.resize(16 + 16384, 0);
+    std::fs::write(world.dir("Roms/NES").join("Synthetic.nes"), image).unwrap();
+
+    let none = Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) };
+    let source = ClientSource::open(path, &none).unwrap();
+    let read = refresh(&source).unwrap();
+    assert!(read.esde_settings.themed);
+    let shelves: serde_json::Value = serde_json::from_str(&read.esde.shelves).unwrap();
+    let nes = source.runtime.systems().unwrap().into_iter().find(|s| s.id == "nes").unwrap();
+    assert_eq!(shelves.as_array().unwrap().len(), 1, "{shelves}");
+    assert_eq!((shelves[0]["system"].as_str(), shelves[0]["esde_system"].as_str()), (Some("nes"), Some("nes")));
+    assert_eq!(shelves[0]["esde_full_name"].as_str(), Some(nes.esde_full_name.as_str()), "the systems table's name");
+    let game = &shelves[0]["games"][0];
+    assert!(game["file"].as_str().unwrap().ends_with("Synthetic.nes"), "{game}");
+    assert_eq!((game["name"].as_str(), game["play_count"].as_i64(), game["favourite"].as_bool()), (Some("Synthetic"), Some(0), Some(false)));
+    eprintln!("the row: {game}");
+}

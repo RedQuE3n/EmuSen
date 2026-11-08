@@ -4422,3 +4422,25 @@ The C# test of the table (`ThemedLibraryHostTests.SDL_s_pad_types_and_names_give
 tests, case for case. Measured on 2026-11-08: Endymion's `family` tests (3) and the platform client's 12 pass, its
 simulated-pads test reading the family by type, by name and after the pad closes; a library answering the type for the
 family failed it.
+
+## 49. Interface 42, 2026-11-08: Serenity's device adopted by a host's renderer
+
+For the Qt front end's game picture (`EmuSen_Qt.md` §1.8.1, where the protocol is argued and measured). Three additions,
+each an extension of an existing call family (rule B, so the number moves):
+- `emusen_serenity_device_new_for(name, validate, instance, device)`: the device as `_new` makes it, with the extensions a
+  host's renderer needs enabled on the instance and the device, Vulkan's names separated by spaces (Qt's scene graph asks
+  for `VK_KHR_surface`, the platform's surface, `VK_EXT_swapchain_colorspace` and `VK_KHR_swapchain`); null with words
+  naming the first one not offered.
+- `emusen_serenity_device_raw` answers three more kinds: the physical device (2), the graphics queue (3) and its family
+  (4); the queue is index 0. The header's rule for that queue changes from "nothing else submits to it" to "a host that
+  adopted the device submits to it only from the one thread that makes every chain call that submits".
+- `emusen_serenity_chain_draw(chain, width, height, emusen_serenity_drawn*)`: every pass run for the view with no readback,
+  no copy and no wait, the last pass's own image left for the host to sample, its `VkImage`, `VkImageView`, size, format
+  and layout (`SHADER_READ_ONLY_OPTIMAL`) answered. A change of size waits for the queue before the outputs are remade.
+
+One change reaches every chain: each pass's render pass carries a second dependency, from the vertex and fragment shaders
+of everything before it on the queue to its colour writes, so that no earlier read of an output (another pass's, or since
+now a host's) can meet the next frame's write. The chains of the C# front end wait for each submission on the processor,
+so nothing they do changes; the dependency is what makes the host's case correct by the specification. `lib.rs`,
+`emusen_platform.h` and `PlatformLibrary.InterfaceVersion` moved to 42 together, and `Frontend/platform-client`'s binding
+was regenerated, with a `serenity` module over the calls the picture needs.

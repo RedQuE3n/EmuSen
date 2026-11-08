@@ -687,6 +687,35 @@ Module {
         Method { name: "clearActions"; lineNumber: 285 }
     }
     Component {
+        file: "game_picture.h"
+        lineNumber: 27
+        name: "GamePicture"
+        accessSemantics: "reference"
+        prototype: "QQuickItem"
+        exports: ["EmuSen.Kit/GamePicture 1.0"]
+        exportMetaObjectRevisions: [256]
+        Property {
+            name: "feed"
+            type: "qulonglong"
+            read: "feed"
+            write: "setFeed"
+            notify: "feedChanged"
+            index: 0
+            lineNumber: 30
+        }
+        Property {
+            name: "live"
+            type: "bool"
+            read: "live"
+            write: "setLive"
+            notify: "liveChanged"
+            index: 1
+            lineNumber: 31
+        }
+        Signal { name: "feedChanged"; lineNumber: 42 }
+        Signal { name: "liveChanged"; lineNumber: 43 }
+    }
+    Component {
         file: "moonrise.cxxqt.h"
         lineNumber: 421
         name: "MoonriseModel"

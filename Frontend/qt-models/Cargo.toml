@@ -20,8 +20,10 @@ serde_json.workspace = true
 # The frontend API and the platform library, the only ways to the back end (EmuSen_Qt.md §1.1).
 emusen-crystal-client = { path = "../crystal-client" }
 emusen-platform-client = { path = "../platform-client" }
-# A console's world written as the kit reads it (EmuSen_Kit.md §7.16): kit-core is pure Rust and names no Qt.
+# A console's world written as the kit reads it (EmuSen_Kit.md §7.17): kit-core is pure Rust and names no Qt.
 emusen-kit-core.workspace = true
+# The game picture's feed as GamePicture declares it (EmuSen_Qt.md §1.8), the one type taken from the kit.
+emusen-kit-qt.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true

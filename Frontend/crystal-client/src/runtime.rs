@@ -29,6 +29,8 @@ pub struct Open {
     pub console: Option<String>,
     pub engine: Option<String>,
     pub audio_buffer_max_samples: u32,
+    /// The presenter's Serenity device (the platform library's `emusen_serenity_device`), lent to each machine.
+    pub device: Option<NonNull<std::ffi::c_void>>,
 }
 
 /// A settings scope.
@@ -190,7 +192,7 @@ impl Runtime {
             engine_len: el,
             audio_buffer_max_samples: open.audio_buffer_max_samples,
             reserved: 0,
-            device: std::ptr::null(),
+            device: open.device.map_or(std::ptr::null(), |d| d.as_ptr().cast_const()),
         };
         self.status(unsafe { self.lib().emusen_crystal_open(self.rt(), &params) }).map(|id| id as SessionId)
     }

@@ -1180,7 +1180,37 @@ queued nothing). The last was first seeded against the harness test alone and pa
 takes a name it was not given as a path and answers success: the play's proof is the queued bytes, read through the
 client's `InterfacePlayer::queued`, added for it.
 
-### 7.16 Worlds as lines: Moonrise's and the tiles' bodies from the host's data (2026-11-08)
+### 7.16 `GamePicture` and the adopted device (stage 1, the game picture; 2026-11-08)
+
+`EmuSen_Qt.md` §1.8 as built in the kit; the protocol, its proof and the session behind it are there (§1.8.1 to §1.8.4).
+The kit's part knows no runtime, no client and no Serenity: it shows a Vulkan image someone else drew, on the scene
+graph's own device, and says when each frame was swapped.
+
+- **`GamePicture`** (`cpp/game_picture.h`, `.cpp`), an item of `EmuSen.Kit` 1.0, registered from its `QML_ELEMENT` by the
+  module's own type registration. Two properties: `feed`, the address of a host's `EmuSenPictureFeed` (a number, since
+  QML carries no native pointer and a QML-made element cannot be handed a Rust value), and `live`, which keeps the item
+  redrawn at every swap. At the item's sync, on the render thread with the GUI thread held, it asks the feed to draw for
+  its size in pixels and wraps the image the feed names with `QNativeInterface::QSGVulkanTexture::fromNative` in a
+  `QSGSimpleTextureNode`, made again only when the image or its size changes: no copy and no upload. Each
+  `frameSwapped`, on the render thread, it hands the steady clock's nanoseconds to the feed and, while `live`, asks
+  for the next frame. What the render thread reads of the two properties is what the last sync read.
+  *[own, because cxx-qt has no scene-graph bindings (`EmuSen_Qt.md` §11, risk 4): an item's `updatePaintNode` and a
+  native texture are C++ only.]*
+- **The feed** is a plain C struct, `EmuSenPictureFeed { context, draw, swapped }`, and `EmuSenPicture { image, width,
+  height, format, layout }`, mirrored in Rust by `emusen_kit_qt::picture::{Feed, Picture}` with a layout test.
+  `draw` answers 1 with a picture, anything else for none, and is the host's only chance to submit to the queue it
+  shares with the scene graph.
+- **`kit_adopt_vulkan`** (the same files, called from Rust as `picture::adopt`): a window's scene graph put on a host's
+  device before its first show: a `QVulkanInstance` adopting the host's `VkInstance` (`setVkInstance`, with the
+  extensions it was made with and API 1.2), owned by a child object of the window so that it goes after the window's
+  scene graph, and `QQuickGraphicsDevice::fromDeviceObjects` with the physical device, the device, the queue's family
+  and index 0. *[own, because cxx-qt-lib binds neither `QVulkanInstance` nor `QQuickGraphicsDevice`.]*
+
+**Held to**: the layout test of the two structs (`picture::tests`), the registry (`GamePicture` and its two properties
+added to `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes`), and `EmuSen_Qt.md` §1.8.1's runs in a real window. 197 lines of
+C++ were added (`game_picture.h` 64, `game_picture.cpp` 133, blank lines and includes counted), the reasons above.
+
+### 7.17 Worlds as lines: Moonrise's and the tiles' bodies from the host's data (2026-11-08)
 
 Decided 2026-11-08 by the tester, from `EmuSen_Interface.md` §24.6: each console is drawn by its maker in Choose a console
 and in Moonrise, so the program's splash draws the bodies, the approved draft remaining the oracle for everything else
@@ -1232,7 +1262,7 @@ caption's box is loose enough to let a digit through, so the test also holds its
 reverted: the palette dropped by `world_of` failed it at 407 pixels; the moonlets dropped at 30; the caption counting one
 too many passed the pictures and failed the words, which is why the words are held.
 
-### 7.17 Rows of bodies and a screen's declared actions (stage 1; 2026-11-08)
+### 7.18 Rows of bodies and a screen's declared actions (stage 1; 2026-11-08)
 
 **Decided 2026-11-08: two additive extensions of the kit, for stage 1's screens.** Both were weighed as `EmuSen_Qt.md`
 §1.3 asks (an extension, a module, or a component of its own): each is an extension, a new type and a new property on
@@ -1316,7 +1346,9 @@ cxx-qt-lib does not bind (§7.9); the contrast sampling and the picture differen
 the Qt calls of §7.11 that cxx-qt-lib does not bind (`QAccessible::queryAccessibleInterface`, `QMetaProperty`'s
 declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address,
 `QQuickTest::qWaitForPolish`); and §7.14's message handler, since `qInstallMessageHandler` takes a C function pointer,
-which neither cxx nor cxx-qt-lib can supply.
+which neither cxx nor cxx-qt-lib can supply. §7.16's `GamePicture` and `kit_adopt_vulkan` (`cpp/game_picture.*`):
+an item's scene-graph node with a native Vulkan texture, and a window's adopted instance and device, none of which
+cxx-qt-lib binds.
 
 ### 7.7 Open
 

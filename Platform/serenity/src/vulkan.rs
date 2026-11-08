@@ -11,7 +11,7 @@ use crate::preset::Wrap;
 use ash::prelude::VkResult;
 use ash::vk::{self, Handle};
 use std::cell::Cell;
-use std::ffi::{CStr, c_void};
+use std::ffi::{CStr, CString, c_void};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::time::Instant;
@@ -239,6 +239,21 @@ pub(crate) fn lend_queues(queues: &[vk::QueueFamilyProperties], graphics: u32) -
     }
 }
 
+/// The extensions a host's renderer needs on the instance and on the device, by Vulkan's names.
+#[derive(Default)]
+pub struct Host {
+    pub instance: Vec<CString>,
+    pub device: Vec<CString>,
+}
+
+/// The first of `wanted` that `offered` lacks, as words.
+fn missing(offered: &[vk::ExtensionProperties], wanted: &[CString]) -> Result<(), String> {
+    match wanted.iter().find(|name| !offered.iter().any(|e| e.extension_name_as_c_str().is_ok_and(|n| n == name.as_c_str()))) {
+        Some(name) => Err(format!("the extension {} is not offered", name.to_string_lossy())),
+        None => Ok(()),
+    }
+}
+
 /// A device, shared by everything made on it.
 #[derive(Clone)]
 pub struct Device {
@@ -352,6 +367,12 @@ impl Device {
     /// With `validate`, the Khronos layer is loaded with synchronisation validation and its findings wait in
     /// `findings`.
     pub fn create(name_contains: Option<&str>, validate: bool) -> Result<Device, String> {
+        Self::create_for(name_contains, validate, &Host::default())
+    }
+
+    /// The same, with the extensions a host's own renderer needs enabled on the instance and the device, so that the
+    /// host can adopt them (EmuSen_Qt.md §1.8); refused, naming it, when one is not offered.
+    pub fn create_for(name_contains: Option<&str>, validate: bool, host: &Host) -> Result<Device, String> {
         let unavailable = |why: String| format!("Vulkan is not available: {why}");
         // SAFETY: the system's loader, whose one entry point has the type Vulkan declares for it; the device keeps
         // the loader for as long as any handle made through it lives.
@@ -360,7 +381,7 @@ impl Device {
             Ok(get_instance_proc_addr) => unsafe { ash::Entry::from_static_fn(ash::StaticFn { get_instance_proc_addr: *get_instance_proc_addr }) },
             Err(e) => return Err(unavailable(e.to_string())),
         };
-        let root = Self::root(entry, loader, validate).map_err(unavailable)?;
+        let root = Self::root(entry, loader, validate, &host.instance).map_err(unavailable)?;
         let instance = &root.instance;
 
         let mut candidates = Vec::new();
@@ -384,7 +405,7 @@ impl Device {
             return Err(if candidates.is_empty() { "no Vulkan device offers a graphics queue".to_string() } else { format!("no Vulkan device is named like \"{wanted}\"") });
         };
         let (physical, family, name, timestamp_period) = (chosen.physical, chosen.family, chosen.name.clone(), chosen.timestamp_period as f64);
-        Self::open(root, physical, family, name, timestamp_period).map_err(unavailable)
+        Self::open(root, physical, family, name, timestamp_period, &host.device).map_err(unavailable)
     }
 
     /// Whether the device offers both extensions an image and its semaphores are exported with.
@@ -417,7 +438,7 @@ impl Device {
         semaphore && image
     }
 
-    fn root(entry: ash::Entry, loader: libloading::Library, validate: bool) -> Result<Root, String> {
+    fn root(entry: ash::Entry, loader: libloading::Library, validate: bool, host: &[CString]) -> Result<Root, String> {
         let offered = unsafe { entry.try_enumerate_instance_version() }.ok().flatten().unwrap_or(vk::API_VERSION_1_0);
         let api = if offered >= vk::API_VERSION_1_2 { vk::API_VERSION_1_2 } else { vk::API_VERSION_1_1 };
         let application = vk::ApplicationInfo::default().api_version(api);
@@ -433,10 +454,14 @@ impl Device {
         let settings = [setting(c"validate_sync", &ON), setting(c"syncval_shader_accesses_heuristic", &ON), setting(c"enable_message_limit", &OFF)];
         let mut layer_settings = vk::LayerSettingsCreateInfoEXT::default().settings(&settings);
         let layers = [LAYER.as_ptr()];
-        let extensions = [ash::ext::debug_utils::NAME.as_ptr(), ash::ext::layer_settings::NAME.as_ptr()];
+        let offered = unsafe { entry.enumerate_instance_extension_properties(None) }.unwrap_or_default();
+        missing(&offered, host)?;
+        let mut extensions: Vec<*const std::ffi::c_char> = host.iter().map(|name| name.as_ptr()).collect();
         if validate {
-            create = create.push_next(&mut layer_settings).enabled_layer_names(&layers).enabled_extension_names(&extensions);
+            extensions.extend([ash::ext::debug_utils::NAME.as_ptr(), ash::ext::layer_settings::NAME.as_ptr()]);
+            create = create.push_next(&mut layer_settings).enabled_layer_names(&layers);
         }
+        create = create.enabled_extension_names(&extensions);
         let instance = unsafe { entry.create_instance(&create, None) }.check("vkCreateInstance")?;
         let findings = Arc::new(Findings::default());
         let mut root = Root { entry, instance, api, listener: None, findings, _loader: loader };
@@ -453,7 +478,7 @@ impl Device {
         Ok(root)
     }
 
-    fn open(root: Root, physical: vk::PhysicalDevice, family: u32, name: String, timestamp_period: f64) -> Result<Device, String> {
+    fn open(root: Root, physical: vk::PhysicalDevice, family: u32, name: String, timestamp_period: f64, host: &[CString]) -> Result<Device, String> {
         let instance = &root.instance;
         let api = unsafe { instance.get_physical_device_properties(physical) }.api_version.min(root.api);
         // Timeline semaphores and two more queues, where offered, so that a core can be lent the device (§2 of EmuSen_DevicePicture.md).
@@ -475,12 +500,13 @@ impl Device {
         let priorities = [1.0f32; 4];
         let queue_info: Vec<vk::DeviceQueueCreateInfo> = wanted_queues.iter().map(|&(f, n)| vk::DeviceQueueCreateInfo::default().queue_family_index(f).queue_priorities(&priorities[..n as usize])).collect();
         let exporting = Self::offers_exports(&root.instance, physical);
-        let wanted = [ash::khr::external_memory_fd::NAME.as_ptr(), ash::khr::external_semaphore_fd::NAME.as_ptr()];
-        let mut v12 = vk::PhysicalDeviceVulkan12Features::default().timeline_semaphore(true);
-        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info);
+        missing(&unsafe { instance.enumerate_device_extension_properties(physical) }.unwrap_or_default(), host)?;
+        let mut wanted: Vec<*const std::ffi::c_char> = host.iter().map(|name| name.as_ptr()).collect();
         if exporting {
-            device_info = device_info.enabled_extension_names(&wanted);
+            wanted.extend([ash::khr::external_memory_fd::NAME.as_ptr(), ash::khr::external_semaphore_fd::NAME.as_ptr()]);
         }
+        let mut v12 = vk::PhysicalDeviceVulkan12Features::default().timeline_semaphore(true);
+        let mut device_info = vk::DeviceCreateInfo::default().queue_create_infos(&queue_info).enabled_extension_names(&wanted);
         if timeline {
             device_info = device_info.push_next(&mut v12);
         }
@@ -560,7 +586,8 @@ impl Device {
     }
 
     /// The instance's and the device's own handles, for a caller that makes a Vulkan call of its own on them. The
-    /// queue is the device's: nothing else may submit to it.
+    /// queue is the device's: only a host that adopted the device submits to it too, on the one thread that makes
+    /// every chain call that submits (EmuSen_Qt.md §1.8).
     pub fn raw_instance(&self) -> u64 {
         self.inner.root.instance.handle().as_raw()
     }
@@ -602,7 +629,7 @@ impl Device {
         &self.inner.root.entry
     }
 
-    pub(crate) fn raw_physical(&self) -> u64 {
+    pub fn raw_physical(&self) -> u64 {
         self.inner.physical.as_raw()
     }
 
@@ -610,8 +637,13 @@ impl Device {
         self.inner.api
     }
 
-    pub(crate) fn family(&self) -> u32 {
+    pub fn family(&self) -> u32 {
         self.inner.family
+    }
+
+    /// The graphics queue, index 0 of `family`, for a host that adopted the device.
+    pub fn raw_queue(&self) -> u64 {
+        self.inner.queue.as_raw()
     }
 
     pub(crate) fn lending(&self) -> Option<&Lending> {
@@ -768,7 +800,7 @@ impl Device {
 
     /// Records and submits, waiting on the device for `wait` and signalling `signal`, and returns at once; the next
     /// call that submits or settles waits for it (EmuSen_DevicePicture.md §4.2).
-    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: vk::Semaphore, timeline: Option<(vk::Semaphore, u64)>, then: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
+    pub(crate) fn run_unwaited(&self, record: impl FnOnce(vk::CommandBuffer), wait: Option<vk::Semaphore>, signal: Option<vk::Semaphore>, timeline: Option<(vk::Semaphore, u64)>, then: Option<(vk::Semaphore, u64)>) -> Result<(), String> {
         let mut pending = locked(&self.inner.submit);
         self.settle_held(&mut pending)?;
         let (device, commands, fence) = (&self.inner.device, self.inner.commands, self.inner.fence);
@@ -788,8 +820,8 @@ impl Device {
                 values.push(value);
             }
             let stages = [vk::PipelineStageFlags::TRANSFER; 2];
-            let signals: Vec<vk::Semaphore> = std::iter::once(signal).chain(then.map(|t| t.0)).collect();
-            let signal_values: Vec<u64> = std::iter::once(0).chain(then.map(|t| t.1)).collect();
+            let signals: Vec<vk::Semaphore> = signal.into_iter().chain(then.map(|t| t.0)).collect();
+            let signal_values: Vec<u64> = signal.map(|_| 0).into_iter().chain(then.map(|t| t.1)).collect();
             let mut timeline_info = vk::TimelineSemaphoreSubmitInfo::default().wait_semaphore_values(&values).signal_semaphore_values(&signal_values);
             let mut submit = vk::SubmitInfo::default().command_buffers(&buffers).wait_semaphores(&waits).wait_dst_stage_mask(&stages[..waits.len()]).signal_semaphores(&signals);
             if timeline.is_some() || then.is_some() {

@@ -1603,6 +1603,75 @@ screen replaces its C# counterpart only when every gate is equal or better, "equ
 The handheld's GPU sits at its 800 MHz floor at the library (`project_handheld_gpu_clock`, 2026-09-28), so the scene graph's
 idle cost matters: an unchanged scene is not re-rendered, and the sky's glow animates only while the focus moves.
 
+#### 9.3.1 Stage 1 on the desktop against Mistress **[M 2026-11-08]**
+
+**Method.** Both programs measured by the same script on the same day, one run at a time, the machine otherwise quiet.
+Each ran from its own sandbox copy of the published desktop build (`out/linux-x64/Mistress`, published 2026-11-08 07:58)
+with a fresh home: Mistress as published, and `emusen-qt` in release (opt-level 2, at `cfc7591b6`) placed beside the
+copy's platform library, so both read the same tree, the same settings and the same cores (VenusRT for the Super
+Nintendo). The settings were the same for both: the big screen in the own look, Moonrise off (on for the real-path
+check), scraping off, the ROM folder the player's library (9,007 games on ten consoles), bound read-only into the
+process. Every run started from the same snapshot of the home (the library read once, nothing played). Each run had a
+compositor of its own, `kwin_wayland --virtual` at 1920 × 1200 with Xwayland (Mistress is an X11 client), on the RX 6800,
+with a window rule making every window fullscreen, and a uinput pad (vendor 1209, product 0001) that both programs read
+through SDL. A frame is a buffer commit on the program's window surface in the Wayland protocol log (`WAYLAND_DEBUG`:
+emusen-qt's own, Xwayland's for Mistress). "Home shown" is the first of KWin's `ScreenShot2` grabs, taken about every
+35 ms from the process's start, in which Games' focus ring stands. The script and every run's log and grabs are in
+`~/.cache/emusen/tmp/qt-s1-gates/`. Two rounds each; a third for the play run, where the programs came within each
+other's noise.
+
+| Gate | emusen-qt | Mistress | |
+|---|---|---|---|
+| Start to Home shown | 0.30–0.34 s, 0.30–0.34 s | 0.77–0.81 s, 0.77–0.81 s | Qt better |
+| Start to the first pad press answered | 2.17–2.62 s, 2.16–2.61 s | ≤ 0.95 s, ≤ 0.95 s | **Qt fails** |
+| RSS, the library idle 10 s | 990, 991 MiB (871 anonymous) | 305, 307 MiB | **Qt fails** |
+| RSS, the same with an empty library | 173 MiB | 255 MiB | |
+| RSS at the Pause Card over a game | 1,211, 1,212, 1,212 MiB | 370, 382, 379 MiB | **Qt fails** |
+| The grid, Down held 24.4 s (300 steps at the kit's 400 + 80 ms) | 1,340, 1,332 frames; median 16.9 ms, worst 69.1, 68.5 ms | 1,266, 1,262 frames; median 16.7 ms, worst 96.8, 96.9 ms | **Qt fails**: the view does not scroll |
+| Play to the game's screen (polled grabs, the library gone) | 0.16–0.23 s, 0.23–0.31 s | 0.03–0.09 s, 0–0.03 s | Mistress better |
+| Play to the first picture, the program's own count | 101, 104, 107 ms (`emusen-qt-play`, from the load naming the game) | no count on this build | owed |
+| 60 s of play, frames presented 2–60 s after Play | 3,174, 3,170, 3,164; over 25 ms 130, 126, 128 | 3,167, 3,166, 3,175; over 25 ms 117, 112, 121 | equal |
+| 60 s of play, the program's own counters | `emusen-qt-play`: 3,295, 3,277, 3,291 swaps, 322, 351, 373 dropped | `[fps]` lines, 57 s: 3,425 offered, 3,115, 3,107, 3,117 shown | equal |
+
+**Findings**, numbered for reference:
+
+1. *Choose a console stops the program for seconds at each step, in proportion to the row's games.* The frames stop
+   after a press and the focus moves at the end of the stop (Qt's `qt.quick.focus` log beside the protocol log, one run):
+   2.35 s for a step onto the NES (4,185 games), 0.6 s onto the Game Boy (1,913), under 0.3 s onto the Game Boy Color
+   (443). A press made during a stop is applied after it, so a player's quick presses land one screen late (seen in the
+   exploration runs: a Down pressed on the opening screen applied with the next A). The fan's `GameModel` is set from
+   `LibraryModel.gamesOf(key)`, every game of the focused row written as JSON and read back on the GUI thread
+   (`Consoles.qml`), for a fan that draws four. The start's stop of 2.0 s (frames stop 0.66 s after the start) is the same
+   kind and is why the first press is answered only at about 2.6 s; with an empty library the stop is absent. Play's
+   frames show the same stops (the presentation is steady only 3.4 to 6.1 s after Play, against 0.4 to 2.4 s for
+   Mistress), which fits the games being read again as a game starts (§7.1, step 6); not traced further.
+2. *The grid does not follow the focus.* Down held for 24.4 s on All Games moved the selection to "Cosmic Spacehead (E)
+   [h1]" (the caption follows), but the view still shows the first two rows with no focused cover
+   (`r1-scroll-qt/03-end.png`). `GameGrid.qml`'s `GridView` sets `highlightFollowsCurrentItem: false` and is never
+   positioned at the current index. So the gate's frame times are not of scrolling; Mistress's are (its worst 97 ms).
+3. *Memory grows with the library:* about 820 MiB of anonymous memory for 9,007 games (173 MiB empty, 990 MiB with
+   the library), against 50 MiB for Mistress (255 against 305).
+4. *The 60 s picture cannot be judged in this compositor.* Both programs lost 9 to 10% of their frames to the same cause:
+   the compositor's frame callbacks came about 54.7 times a second (`emusen-qt-play` without the protocol log: 3,281
+   swaps in 60 s, 372 dropped, the same as with it), where §1.8.4's compositor gave 60. The two programs are equal here;
+   the gate itself waits for the real desk.
+5. *Play to the first picture* has no own count in Mistress on this build: `EMUSEN_PRESENT_TRACE` wrote no file. The
+   polled grabs time the library's leaving, not the picture (the game's first frames are black), so the comparison of
+   first pictures is owed to the real desk with a count on both sides.
+6. *The game picture fills the window.* On the 16:10 screen emusen-qt stretches the Super Nintendo's picture to the full
+   width, where Mistress keeps the console's 4:3 with bars at the sides (`r1-play-*/04-playing.png`).
+
+**The real path** (`runs/realpath-qt/`, its grabs `00-` to `13-`): emusen-qt from Moonrise to Home, Choose a console, the
+Super Nintendo, ActRaiser (U) [!] and Play; the game ran with its sound into SDL's dummy driver and no problem
+reported; Start on the pad reached the title's menu and Down moved its cursor; the chord opened the Pause Card;
+Leave ▸, Back to Library went Home, where Continue showed "● Super Nintendo · Paused just now" over the paused frame,
+and "Paused 1 minute ago" a minute later. Passed. Seen on the way: Moonrise shows a bare sky for its first two seconds,
+until the systems arrive after the start's stop (finding 1); the Rewind row says "nothing to go back to yet" (§7.1,
+owed with Rewind's page); Mistress's status line counted "0 controllers" while it read the same pad.
+
+**Not measured:** the hosted core's Play to the first picture, which waits on the tester's approval of one core download
+(§1.8.4).
+
 ---
 
 ## 10. The toolchain spike (outside the tree, `~/.cache/emusen/qt-spike/`)

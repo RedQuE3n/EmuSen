@@ -90,3 +90,16 @@ fn each_press_has_its_control_and_the_swap_trades_south_and_east_and_north_and_w
         assert_eq!(c.index(), i);
     }
 }
+
+#[test]
+fn every_control_gives_back_the_press_whose_control_it_is_and_the_router_s_swap_restores_it() {
+    for swap in [false, true] {
+        for button in UiButton::ALL {
+            let given = button.control(swap).press().map(|press| press.swapped(swap));
+            assert_eq!(given, Some(button), "{button:?}'s control read back (swap {swap})");
+        }
+    }
+    assert_eq!(PadControl::RightStick.press(), Some(UiButton::Random), "either stick's click is Random");
+    let pressed: Vec<UiButton> = PadControl::ALL.iter().filter_map(|c| c.press()).collect();
+    assert_eq!(pressed.len(), PadControl::ALL.len(), "every control gives a press");
+}

@@ -53,6 +53,29 @@ impl PadControl {
     pub const fn is_face(self) -> bool {
         matches!(self, PadControl::South | PadControl::East | PadControl::West | PadControl::North)
     }
+
+    /// The press a control gives before the player's swap, which the router applies: `UiButton::control` read the other
+    /// way, with either stick's click giving Random, as the C# front end read them; the triggers past half their travel.
+    pub const fn press(self) -> Option<UiButton> {
+        Some(match self {
+            PadControl::South => UiButton::Accept,
+            PadControl::East => UiButton::Back,
+            PadControl::West => UiButton::Screensaver,
+            PadControl::North => UiButton::Search,
+            PadControl::Up => UiButton::Up,
+            PadControl::Down => UiButton::Down,
+            PadControl::Left => UiButton::Left,
+            PadControl::Right => UiButton::Right,
+            PadControl::LeftShoulder => UiButton::PageUp,
+            PadControl::RightShoulder => UiButton::PageDown,
+            PadControl::LeftTrigger => UiButton::First,
+            PadControl::RightTrigger => UiButton::Last,
+            PadControl::Start => UiButton::Menu,
+            PadControl::Select => UiButton::Options,
+            PadControl::LeftStick | PadControl::RightStick => UiButton::Random,
+            PadControl::Guide => UiButton::Guide,
+        })
+    }
 }
 
 impl UiButton {

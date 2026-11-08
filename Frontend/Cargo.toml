@@ -4,7 +4,7 @@
 [workspace]
 resolver = "2"
 members = ["kit-qt", "qt-test", "kit-gallery", "qt-models", "qt-endymion", "qt-app", "qt-play"]
-exclude = ["kit-core", "qml-rules", "crystal-client", "platform-client", "client-fixture", "c-calls"]
+exclude = ["kit-core", "qml-rules", "esde", "crystal-client", "platform-client", "client-fixture", "c-calls"]
 
 [workspace.package]
 version = "0.1.0"

@@ -1,0 +1,68 @@
+NAME
+    esde-check - load ES-DE themes for every variant and system and measure them as TSV
+
+SYNOPSIS
+    esde-check [--diagnostics | --properties] [--systems a,b,...] <folder>...
+
+DESCRIPTION
+    The development tool of the emusen.dev module for the Qt front end's
+    ES-DE engine (EmuSen_Qt.md §4.4): the corpus measure of ES-DE themes,
+    over the check module of the emusen-esde crate at Frontend/esde. Each
+    <folder> is a theme (it holds capabilities.xml, or its first subfolder
+    does) or a corpus, a folder whose subfolders are themes. Each theme is
+    loaded by the engine's loader once for every selectable variant (or
+    once when it offers none) and every system, at 1280 x 800 with the
+    other choices automatic, as pass 3's survey loaded them
+    (EmuSen_BigPicture.md §25.8). The systems are EmuSen's five, nes,
+    snes, gb, gbc and n64, unless --systems names others; a system is
+    loaded under its short name as its folder, name and full name.
+
+    The output is TSV with a header line. By default it is one row a
+    theme:
+
+        theme        the folder's name
+        loads        yes when every system is themed by some variant
+        systems      the systems themed, of those asked for
+        variants     the selectable variants (1 when none is offered)
+        runs         the loads made: variants times systems
+        errors       errors over all the runs (each unthemes a system)
+        warnings     warnings over all the runs
+        set          the type.property pairs the theme sets, in any run
+        unknown      those the loader does not know (an error)
+        unsupported  those the scene and its painter do not draw
+        whole        yes when it loads with nothing unknown or
+                     unsupported and no undrawn kind
+        kinds        the element kinds used
+        undrawn      kinds not drawn, and carousel:<type> for a wheel
+                     carousel, which is drawn only in part
+
+    and a last line '# N themes, N load, N drawn whole, N use no
+    undrawn kind': the three headline numbers of EmuSen_Qt.md §4.4.
+
+    --diagnostics prints each distinct diagnostic at warning or above
+    instead, a row each: theme, severity, code, file (relative to the
+    theme), line and message. Severities and codes are the loader's
+    (EmuSen_BigPicture.md §12.3).
+
+    --properties prints the property map instead, a row a pair: theme,
+    type.property and its state, one of set (drawn), unsupported or
+    unknown. What is drawn is the scene's table,
+    Frontend/esde/src/scene/mapping.tsv, which holds what the C# scene
+    drew on 2026-11-08; the painter's stages extend it.
+
+    Nothing is fetched: the corpus is fetched beforehand, outside the
+    repository (EmuSen_Qt.md §4.5.5), and the command only reads it.
+
+EXIT STATUS
+    0 when every theme loads, 1 when one or more does not, 2 when it
+    could not run (a folder missing, an option unknown).
+
+EXAMPLES
+    esde-check ~/.cache/emusen/bigpicture/corpus/xml
+    esde-check --diagnostics ~/.cache/emusen/bigpicture/corpus/xml/caralt-es-de
+    esde-check --properties --systems snes ~/themes/art-book-next-es-de
+
+SEE ALSO
+    qml-rules(1), dupes(1); EmuSen_Qt.md §4.4 and §4.5;
+    EmuSen_BigPicture.md §12, §25.8, §31 and §35; the corpus measures
+    committed under Testing/esde-corpus/.

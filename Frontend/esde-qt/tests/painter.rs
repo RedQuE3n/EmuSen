@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use emusen_esde::scene::{DateTime, Layout};
-use emusen_esde_qt::painter::{systems, Action, Button, Painter, ThemeCache};
+use emusen_esde_qt::painter::{systems, Action, Painter, ThemeCache};
+use emusen_kit_core::input::UiButton as Button;
 use emusen_esde_qt::shelves::{self, from_unix, Settings};
 
 const W: f64 = 1280.0;
@@ -180,4 +181,43 @@ fn every_pointer_path_makes_the_pad_s_call() {
     assert_eq!(pad.pressed(Button::Back, false), Some(Action::Cue("back")));
     assert_eq!(pad.view(), "system");
     assert_eq!(pad.pressed(Button::Back, false), None, "B at the system view does nothing (decided 2026-11-08)");
+}
+
+#[test]
+fn four_thousand_games_install_and_step_on_the_gui_thread_within_two_milliseconds() {
+    let theme = Theme::new("big");
+    let games: Vec<String> = (0..4000).map(|i| format!("Game {i:04}")).collect();
+    let names: Vec<&str> = games.iter().map(String::as_str).collect();
+    let text = format!("[{}]", shelf("snes", "Super Nintendo", &names));
+    let settings = Settings { theme: theme.0.to_string_lossy().into_owned(), startup_view: "gamelist".into(), ..Settings::default() };
+    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), W as i32, H as i32);
+    let mut p = Painter::new(settings);
+    let t = std::time::Instant::now();
+    p.install(found, W, H, DateTime::new(2026, 11, 8, 12, 0, 0));
+    let rows = p.rows(p.frame.primary.as_ref().expect("the list").rows);
+    let install = t.elapsed();
+    let t = std::time::Instant::now();
+    p.pressed(Button::Down, false);
+    p.tick(16.0);
+    let step = t.elapsed();
+    eprintln!("4,000 games: install and rows {install:?}, a step and a tick {step:?}");
+    assert_eq!(rows.len(), 4000);
+    assert!(step.as_secs_f64() < 0.002, "a step's GUI-thread work {step:?}");
+    assert!(install.as_secs_f64() < 0.002 || cfg!(debug_assertions), "the install's GUI-thread work {install:?}");
+}
+
+#[test]
+fn a_help_entry_s_place_is_the_kit_button_that_draws_there_under_the_swap() {
+    use emusen_esde::scene::PadButton;
+    use emusen_esde_qt::painter::help_buttons;
+    use emusen_kit_core::input::PadControl;
+    for swap in [false, true] {
+        for (place, control) in [(PadButton::South, PadControl::South), (PadButton::East, PadControl::East), (PadButton::West, PadControl::West), (PadButton::North, PadControl::North), (PadButton::Start, PadControl::Start)] {
+            let (button, pair) = help_buttons(place, false, swap);
+            assert_eq!(Button::ALL[button as usize].control(swap), control, "{place:?} with the swap {swap}");
+            assert_eq!(pair, -1);
+        }
+    }
+    let (up, down) = help_buttons(PadButton::DpadUpDown, true, false);
+    assert_eq!((Button::ALL[up as usize], Button::ALL[down as usize]), (Button::Up, Button::Down));
 }

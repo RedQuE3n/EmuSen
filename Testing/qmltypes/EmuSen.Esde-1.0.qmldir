@@ -4,8 +4,22 @@ classname EmuSen_Esde_plugin
 typeinfo plugin.qmltypes
 depends QtQuick
 depends QtQuick.Shapes
+depends QtQml.Models
 depends EmuSen.Kit
 prefer :/qt/qml/EmuSen/Esde/
 Picture 1.0 qml/Picture.qml
 Mark 1.0 qml/Mark.qml
 TextBlock 1.0 qml/TextBlock.qml
+Icon 1.0 qml/Icon.qml
+ElementBox 1.0 qml/ElementBox.qml
+PictureElement 1.0 qml/PictureElement.qml
+TextElement 1.0 qml/TextElement.qml
+RatingElement 1.0 qml/RatingElement.qml
+BadgesElement 1.0 qml/BadgesElement.qml
+InfoElement 1.0 qml/InfoElement.qml
+StatusElement 1.0 qml/StatusElement.qml
+HelpElement 1.0 qml/HelpElement.qml
+CarouselElement 1.0 qml/CarouselElement.qml
+TextListView 1.0 qml/TextListView.qml
+GridElement 1.0 qml/GridElement.qml
+View 1.0 qml/View.qml

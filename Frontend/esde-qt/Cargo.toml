@@ -20,10 +20,11 @@ emusen-esde = { path = "../esde" }
 serde_json.workspace = true
 # The kit's QML module (the body face, the help bar, the pad router) and its conversions to Qt's types.
 emusen-kit-qt.workspace = true
+# The kit's buttons and pad places (UiButton, PadControl), the one owner of the face-to-function table.
+emusen-kit-core.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
 
 [dev-dependencies]
 emusen-qt-test.workspace = true
-emusen-kit-core.workspace = true

@@ -5,7 +5,9 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::{Arc, Mutex};
 
 use emusen_esde::loader::{self, Choices, MediaPresence, Theme, ThemeSystem};
-use emusen_esde::scene::{Data, DateTime, Frame, Layout, Row, Rows, Stage, System, Time};
+use emusen_esde::scene::{Data, DateTime, Frame, Layout, PadButton, Row, Rows, Stage, System, Time};
+
+use emusen_kit_core::input::{PadControl, UiButton};
 
 use crate::shelves::{Settings, Shelf};
 
@@ -44,52 +46,6 @@ pub fn systems(cache: &ThemeCache, settings: &Settings, shelves: Vec<Shelf>, pre
         .collect()
 }
 
-/// The kit's pad buttons by their numbers in `Kit.PadButton` (kit-qt's `kinds.rs`), the one owner of the order.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Button {
-    Up,
-    Down,
-    Left,
-    Right,
-    Accept,
-    Back,
-    Menu,
-    Options,
-    PageUp,
-    PageDown,
-    First,
-    Last,
-    Guide,
-    Search,
-    Random,
-    Screensaver,
-}
-
-impl Button {
-    pub const ALL: [Button; 16] = [
-        Button::Up,
-        Button::Down,
-        Button::Left,
-        Button::Right,
-        Button::Accept,
-        Button::Back,
-        Button::Menu,
-        Button::Options,
-        Button::PageUp,
-        Button::PageDown,
-        Button::First,
-        Button::Last,
-        Button::Guide,
-        Button::Search,
-        Button::Random,
-        Button::Screensaver,
-    ];
-
-    pub fn of(number: i32) -> Option<Button> {
-        usize::try_from(number).ok().and_then(|i| Button::ALL.get(i)).copied()
-    }
-}
-
 /// What a press asks of the host.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Action {
@@ -106,8 +62,12 @@ pub struct Painter {
     /// The stage's clock, microseconds since the painter began.
     pub now: Time,
     pub frame: Frame,
-    held: Option<Button>,
+    held: Option<UiButton>,
     pub settings: Settings,
+    /// Counts installs, so a list model knows its rows may have changed under the same `Rows`.
+    pub generation: u64,
+    /// The player's face-button swap, which the help's buttons follow.
+    pub swap: bool,
 }
 
 impl Default for Painter {
@@ -118,11 +78,12 @@ impl Default for Painter {
 
 impl Painter {
     pub fn new(settings: Settings) -> Self {
-        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings }
+        Painter { stage: None, now: 0, frame: Frame::default(), held: None, settings, generation: 0, swap: false }
     }
 
     /// Installs a refresh's systems, keeping the view and the selection where they still exist.
     pub fn install(&mut self, systems: Vec<System>, w: f64, h: f64, now: DateTime) {
+        self.generation += 1;
         if systems.is_empty() {
             self.stage = None;
             self.frame = Frame::default();
@@ -139,10 +100,27 @@ impl Painter {
         data.show_clock = self.settings.show_clock;
         data.show_help = self.settings.show_help;
         data.scroll_overlay = self.settings.scroll_overlay;
+        data.swap = self.swap;
         let view = if view == "gamelist" { "gamelist" } else { "system" };
         self.stage = Some(Stage::new(data, view, self.now));
         self.held = None;
         self.refresh();
+    }
+
+    /// The player's swap: the help names the buttons the functions moved to.
+    pub fn set_swap(&mut self, swap: bool) {
+        self.swap = swap;
+        if let Some(stage) = &mut self.stage {
+            stage.current.data.swap = swap;
+        }
+        self.refresh();
+    }
+
+    /// The wall clock the clock element and the dates read.
+    pub fn set_now(&mut self, now: DateTime) {
+        if let Some(stage) = &mut self.stage {
+            stage.current.data.now = now;
+        }
     }
 
     /// The frame at the stage's time.
@@ -198,7 +176,7 @@ impl Painter {
     }
 
     /// A press from the router; the scene repeats a held direction itself, so the router's repeats are not passed on.
-    pub fn pressed(&mut self, button: Button, repeat: bool) -> Option<Action> {
+    pub fn pressed(&mut self, button: UiButton, repeat: bool) -> Option<Action> {
         if repeat || self.stage.is_none() {
             return None;
         }
@@ -208,50 +186,50 @@ impl Painter {
         let gamelist = self.view() == "gamelist";
         let quick = self.settings.quick_select.clone();
         let action = match button {
-            Button::Up | Button::Down | Button::Left | Button::Right => {
-                let along = matches!(button, Button::Up | Button::Down) == vertical || grid;
-                let dir = if matches!(button, Button::Up | Button::Left) { -1 } else { 1 };
+            UiButton::Up | UiButton::Down | UiButton::Left | UiButton::Right => {
+                let along = matches!(button, UiButton::Up | UiButton::Down) == vertical || grid;
+                let dir = if matches!(button, UiButton::Up | UiButton::Left) { -1 } else { 1 };
                 if along {
-                    let rows = grid && matches!(button, Button::Up | Button::Down);
+                    let rows = grid && matches!(button, UiButton::Up | UiButton::Down);
                     self.stage.as_mut()?.current.press(dir, now, rows);
                     self.held = Some(button);
                     Some(Action::Cue("navigate"))
-                } else if gamelist && quick.starts_with("leftright") && matches!(button, Button::Left | Button::Right) {
+                } else if gamelist && quick.starts_with("leftright") && matches!(button, UiButton::Left | UiButton::Right) {
                     self.change_system(dir as i64);
                     Some(Action::Cue("quicksysselect"))
                 } else {
                     None
                 }
             }
-            Button::Accept if gamelist => self.game_file().map(Action::Played),
-            Button::Accept => {
+            UiButton::Accept if gamelist => self.game_file().map(Action::Played),
+            UiButton::Accept => {
                 self.stage.as_mut()?.switch(now);
                 Some(Action::Cue("select"))
             }
-            Button::Back if gamelist => {
+            UiButton::Back if gamelist => {
                 self.stage.as_mut()?.switch(now);
                 Some(Action::Cue("back"))
             }
-            Button::PageUp | Button::PageDown if gamelist && quick == "leftrightshoulders" => {
-                self.change_system(if button == Button::PageUp { -1 } else { 1 });
+            UiButton::PageUp | UiButton::PageDown if gamelist && quick == "leftrightshoulders" => {
+                self.change_system(if button == UiButton::PageUp { -1 } else { 1 });
                 Some(Action::Cue("quicksysselect"))
             }
-            Button::First | Button::Last if gamelist && quick == "leftrighttriggers" => {
-                self.change_system(if button == Button::First { -1 } else { 1 });
+            UiButton::First | UiButton::Last if gamelist && quick == "leftrighttriggers" => {
+                self.change_system(if button == UiButton::First { -1 } else { 1 });
                 Some(Action::Cue("quicksysselect"))
             }
-            Button::PageUp | Button::PageDown => {
-                let moved = self.stage.as_mut()?.current.jump(if button == Button::PageUp { -10 } else { 10 }, now);
+            UiButton::PageUp | UiButton::PageDown => {
+                let moved = self.stage.as_mut()?.current.jump(if button == UiButton::PageUp { -10 } else { 10 }, now);
                 moved.then_some(Action::Cue("navigate"))
             }
-            Button::First | Button::Last => {
+            UiButton::First | UiButton::Last => {
                 let current = &mut self.stage.as_mut()?.current;
                 let n = current.count() as i32;
-                current.jump(if button == Button::First { -n } else { n }, now).then_some(Action::Cue("navigate"))
+                current.jump(if button == UiButton::First { -n } else { n }, now).then_some(Action::Cue("navigate"))
             }
-            Button::Search if gamelist => self.game_file().map(Action::Favourite),
-            Button::Menu => Some(Action::Menu),
-            Button::Options => Some(Action::Options),
+            UiButton::Search if gamelist => self.game_file().map(Action::Favourite),
+            UiButton::Menu => Some(Action::Menu),
+            UiButton::Options => Some(Action::Options),
             _ => None,
         };
         self.refresh();
@@ -259,7 +237,7 @@ impl Painter {
     }
 
     /// A release from the router: a held direction stops and the metadata fades back in.
-    pub fn released(&mut self, button: Button) {
+    pub fn released(&mut self, button: UiButton) {
         if self.held == Some(button) {
             self.held = None;
             let now = self.now;
@@ -286,7 +264,7 @@ impl Painter {
     /// A tap selects its row and takes A there, the same call as the pad's.
     pub fn tap(&mut self, row: i32) -> Option<Action> {
         self.hover(row);
-        self.pressed(Button::Accept, false)
+        self.pressed(UiButton::Accept, false)
     }
 
     /// One wheel notch steps one item: back for a notch up, on for a notch down.
@@ -310,4 +288,43 @@ impl Painter {
     pub fn rows(&self, rows: Rows) -> Vec<Row> {
         self.stage.as_ref().and_then(|s| s.rows(rows)).unwrap_or_default()
     }
+}
+
+/// A help entry's place as the kit's button that draws there under the swap, and its pair's (-1 for none): the kit's
+/// `PadGlyph` draws `UiButton::control(swap)`, so the press of the place, swapped, draws the place itself.
+pub fn help_buttons(place: PadButton, pair: bool, swap: bool) -> (i32, i32) {
+    let control = match place {
+        PadButton::DpadUpDown => PadControl::Up,
+        PadButton::DpadLeftRight => PadControl::Left,
+        PadButton::South => PadControl::South,
+        PadButton::East => PadControl::East,
+        PadButton::West => PadControl::West,
+        PadButton::North => PadControl::North,
+        PadButton::LeftShoulder => PadControl::LeftShoulder,
+        PadButton::RightShoulder => PadControl::RightShoulder,
+        PadButton::LeftTrigger => PadControl::LeftTrigger,
+        PadButton::RightTrigger => PadControl::RightTrigger,
+        PadButton::Select => PadControl::Select,
+        PadButton::Start => PadControl::Start,
+        PadButton::StickClick => PadControl::LeftStick,
+    };
+    let number = |c: PadControl| c.press().map_or(-1, |b| b.swapped(swap).index() as i32);
+    let second = match (place, pair) {
+        (PadButton::DpadUpDown, true) => number(PadControl::Down),
+        (PadButton::DpadLeftRight, true) => number(PadControl::Right),
+        _ => -1,
+    };
+    (number(control), second)
+}
+
+/// The first error the loader met in a system's theme, or a missing theme file, as the host's notice words it.
+pub fn problem(systems: &[System]) -> String {
+    use emusen_esde::loader::Severity;
+    systems
+        .iter()
+        .find_map(|s| match s.theme.entry_file {
+            None => Some(format!("no theme.xml for {}", s.theme.system.name)),
+            Some(_) => s.theme.diagnostics.iter().find(|d| d.severity == Severity::Error).map(|d| d.to_string()),
+        })
+        .unwrap_or_default()
 }

@@ -1,10 +1,10 @@
 # The Qt front end's cargo workspace (EmuSen_Qt.md §1.9): the kit's Qt half, its harness, the gallery and the checkers.
-# emusen-kit-core and emusen-qml-rules stay outside it on purpose, each with its own lock file, so their fence tests can read what their trees name:
+# emusen-kit-core, emusen-qml-rules and theme-check (with its manifest crate) stay outside it on purpose, each with its own lock file, so their fence tests can read what their trees name:
 # the back end's dev module depends on qml-rules, which must never pull in Qt. The two client crates, their shared idioms and their test fixture stay outside for the same reason (EmuSen_Qt.md §1.1.1).
 [workspace]
 resolver = "2"
 members = ["kit-qt", "qt-test", "kit-gallery", "qt-models", "qt-endymion", "qt-app", "qt-play", "esde-qt"]
-exclude = ["kit-core", "qml-rules", "esde", "crystal-client", "platform-client", "client-fixture", "c-calls"]
+exclude = ["kit-core", "qml-rules", "esde", "theme-check", "theme-check/manifest", "crystal-client", "platform-client", "client-fixture", "c-calls"]
 
 [workspace.package]
 version = "0.1.0"

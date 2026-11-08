@@ -97,7 +97,7 @@ versioned theme package, both defined in §5).
 ### 1.1 The back end, through the frontend API
 
 The front end is a client in the sense of `EmuSen_Surfaces.md` §6.2 rule E: it holds the runtime through
-`emusen_crystal.h` (version 2.0 today; rule A) and the platform library through `emusen_platform.h` (interface 38; rule
+`emusen_crystal.h` (version 2.0 today; rule A) and the platform library through `emusen_platform.h` (interface 39; rule
 B), and never a runtime type. 2.0 removed the session service's twins (`EmuSen_RustPlatform.md` §47.23): the debugger,
 states by path, the log switch and the cheat ops are called through the `emusen_session_v1` table that
 `emusen_crystal_session_service` hands out, the one the shell is handed too. That the implementation behind both
@@ -116,6 +116,99 @@ into a QObject.
 *What this costs and buys.* A C hop between two Rust halves is one indirect call and one JSON parse on the non-frame path;
 the frame path crosses structs and buffers. It buys an auditable boundary (two headers, both already baselined in CI),
 and both front ends interchangeable while both ship.
+
+#### 1.1.1 `emusen-crystal-client` as built **[M 2026-11-08]**
+
+`Frontend/crystal-client`, a crate outside the Qt workspace with its own lock file, as `emusen-kit-core` is, so that its
+fence test reads what its tree names (no Qt crate; no `emusen-*` crate but itself and its test fixture; no path
+dependency outside `[dev-dependencies]`). Its dependencies are `libloading` 0.8, `serde` 1, `serde_json` 1 and
+`thiserror` 2; `bindgen` 0.72 and `emusen-client-fixture` (§1.1.3) are dev-dependencies. It names no runtime crate: the
+platform library is reached at run time, by its path, as any front end reaches it.
+
+**The raw layer** is `src/raw.rs`, bindgen 0.72.1's output for `emusen_crystal.h` and the `emusen_session.h` it includes
+(allow-listed by file), committed. It is generated for dynamic loading (`dynamic_library_name`, with
+`dynamic_link_require_all`, so that every function of the header is resolved when the library is loaded and a missing
+one refuses the load with the loader's words naming it), with `derive_default`, `wrap_unsafe_ops` (edition 2024) and
+bindgen's layout tests, which hold each struct's size and offsets to the header at compile time. `tests/binding.rs` runs
+the same builder and fails on any difference from the committed file; `EMUSEN_BINDGEN_WRITE=1` writes it instead, so a
+header change reaches the client as a reviewed diff of `raw.rs`. rustfmt formats the output with the crate's
+`rustfmt.toml`, the kit's.
+
+**Loading** (`Api::load`). The library is opened, `emusen_crystal_abi_version` alone is resolved and called, and a major
+other than 2, or a minor below the header's, is refused with words that name the path and both versions, before any
+other symbol is read (`Error::Version`); a later minor is taken, since a minor only adds. Then every symbol is resolved.
+
+**One owner for each idiom** (`src/out.rs`) *[own, because the header's length-query idiom is its own and no crate
+speaks it]*: text in as a pointer and a length, none being the absent string; the copy-out, which asks the length,
+copies, and asks again when the answer grew between the two calls; a negative return made an `Error::Status` with the
+words read at once on the same thread; `EMUSEN_SVC_ABSENT` read as `None` (an answer, as the header says); and an answer
+read into its record, a refusal of serde's being `Error::Shape` with the call's name.
+
+**Typed readers** (`src/shapes.rs`, serde) for `systems` (`SystemRow`: the table's 24 keys, then `engines`,
+`starts_empty`, `core` and `controllers`; a system only an engine names reads with the table's keys at their defaults),
+`sessions`, `shelves`, `engines`, `cores` (with the libretro row), `route`, `session_info`, `settings_schema`,
+`firmware_needed`, `firmware_overview`, `firmware_status`, `cheat_codec_list`, `cheat_decode`, `state_slots`,
+`state_record`, `rewind_reel`, `save_media`, and the events a subscription drains (`Event`, tagged by `kind`, a kind a
+later minor adds being `Other`). Keys a later minor adds are skipped; a key the header gives as possibly null is an
+`Option`. A firmware request keeps the entry as the runtime wrote it, which `firmware_install` hands back whole.
+
+**The per-frame calls** (`src/frame.rs`) are thin wrappers: `frame` and `rewind_step` fill a caller's
+`FrameInfo` (`emusen_crystal_frame_info` itself, its `size` set by `frame_info()`), `picture_copy`, `raw_copy`,
+`audio_drain` and `phases` fill a caller's buffer, and the input, rumble and speed calls pass numbers. Nothing on that
+path allocates but a failure's words. `picture_lend` and `picture_ring` return the pointer for Serenity to borrow,
+dereferenced nowhere here.
+
+**The session service's table** (`src/service.rs`) is wrapped once, as `SessionService`, which keeps its runtime alive
+(the table lives as long as the runtime). Its major is checked; each entry is read only after the table's `size` is
+seen to reach it, as `EMUSEN_SESSION_HAS` asks *[own, because that is a C macro bindgen does not translate]*, and
+through raw pointers, so a provider's shorter table is never read past its end; an entry the table lacks is
+`EMUSEN_SVC_NOT_SUPPORTED` with words that name it; and every failure's words are the table's own `last_error`'s. Wrapped
+now: `sessions`, `info`, `summary`, `run_control`, `cheat_op`, `cheat_codecs`, `telemetry`, `audio_channels`,
+`set_channel_muted`, `state_save`, `state_load`, `state_default_path`, `log_switch`, `log_status`, `events_drain`,
+`games`, `open_game`, `open_console`. **Owed**, the debugger's entries, which the shell's commands reach today:
+`halt_state`, `spaces`, `space_read`, `space_write`, `resolve_physical`, `processors`, `registers`, `set_register`,
+`disassemble`, the `bp_*`, `watch_*`, `framelog_*`, `freeze_*` and `label_*` families, `coverage_op`, `profile_op`,
+`counters_op`, `call_stack`, `dma_channels`, `dma_log_op`, `register_flow_op`, `coprocessor_history`, `vectors`,
+`tilemap_entry`, `tile_pixels`, `sprites`, `palettes`, `evaluate`, `symbols`, `trace`, `trace_off`, `tile_sheet`,
+`palette_swatch` and `audio_peek`. Also owed: typed records for the card manager's answers and the table's cheat,
+telemetry and channel answers (read as `serde_json::Value` today), and the config's SQLite lend (none is lent, so the
+state records' calls answer `NOT_SUPPORTED` until the front end lends one).
+
+**Threads.** `Runtime` is a shared handle (`Arc`), freed with its last clone; it is `Send` and `Sync` because the header
+answers a read on any thread and makes a change from another thread wait for the frame boundary. A `Subscription` is
+`Send` and is drained or waited on by its owner, never called back.
+
+**A finding, measured 2026-11-08.** `firmware_status`'s `"need"` is written as a string naming the need (`"file:boot.rom"`
+for the test core's boot ROM; `Platform/crystal/src/firmware.rs`), where the header's comment says it is the index of
+the first file meeting the same need. The reader follows the library (`need: String`); the header's comment is in error
+and is left for its owner to correct.
+
+**Proof, measured 2026-11-08** against the platform library built from the same commit (§1.1.3): 9 tests pass, the
+binding's regeneration, the fence's two, the version check's unit test, and five against the library: the listings read
+into their records (the table's NES, the SNES Game Genie encoding and decoding `0xEA` at `0x8000`, an unknown codec
+`ABSENT`); a file that is no library, and a library without the API, refused with the loader's words; a player's core
+approved by its hash through `core_approve`, routed, opened, run ten frames with the picture and sound copied, its
+schema read (the core's `Rate` a choice of `32000` and `48000`, and the `Engine` row), a console setting set and read
+back, a state saved and loaded through the table, the session closed and its table then answering `NO_SESSION`, and
+the subscription's `opened`, `Rate` and `closed` events pulled; and failures carrying their own words (a file nothing
+opens is `NO_ENGINE` with the runtime's words; a cheat op asked of the table with no game is `NO_SESSION` with the
+table's "No ROM loaded"). Four faults were seeded and caught: the table's failures read through the runtime's
+`last_error` (`a_failure_carries_its_own_words`), a constant edited by hand in `raw.rs` (`binding.rs`), any major
+accepted (the unit test), and `need` read as the header's index (the session test).
+
+#### 1.1.3 The clients' test world: `emusen-client-fixture` **[M 2026-11-08]**
+
+`Frontend/client-fixture`, a dev-dependency of both client crates and nothing else, with one job: a test world built
+from the same commit. `library()` and `test_core()` run cargo once a process on this checkout's `Platform/`
+(`-p emusen-platform --lib -p emusen-crystal --example crystal_test_core`, profile `test-fast`, the land gate's for that
+workspace, so its build is shared) *[own, because the platform library is a cdylib of another workspace and cargo has no
+artifact dependency on stable]*; `EMUSEN_PLATFORM_LIBRARY` and `EMUSEN_TEST_CORE` name prebuilt ones instead. `World`
+makes a scratch tree under `TMPDIR` and moves Galaxia's config and data redirects into it with
+`emusen_galaxia_set_override`, the one call it makes, so no test touches the player's tree; since the redirects are
+the process's, one world is held at a time. A game is the test core's image (`V1TC`, a little-endian length, the
+payload), and a player's core is the test core copied unread into a player's cores folder, approved by the test through
+the API as a player approves one. Building both took 27 s from a clean target with sccache's cache warm, on 2026-11-08,
+and about a second when nothing changed.
 
 ### 1.2 View models: `emusen-qt-models`
 

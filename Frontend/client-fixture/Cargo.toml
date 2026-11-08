@@ -1,0 +1,15 @@
+[package]
+name = "emusen-client-fixture"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# The client crates' test world: the platform library and the test core built from the same commit, and a scratch tree
+# Galaxia is redirected to. A dev-dependency only. See EmuSen_Qt.md §1.1.3.
+[lib]
+name = "emusen_client_fixture"
+
+[dependencies]
+# The one Galaxia call the fixture makes, emusen_galaxia_set_override, before any client loads the library.
+libloading = "0.8"

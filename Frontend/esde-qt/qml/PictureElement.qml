@@ -36,5 +36,7 @@ ElementBox {
         radius: root.radius
         nearest: root.nearest
         onOwnHeightChanged: root.esde.measured(root.elementId, picture.ownWidth, picture.ownHeight)
+        // A new picture of the same size is reported too, since the scene keys a measurement by what it shows.
+        onStatusChanged: if (picture.status === Image.Ready) root.esde.measured(root.elementId, picture.ownWidth, picture.ownHeight)
     }
 }

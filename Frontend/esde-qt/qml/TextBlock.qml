@@ -16,6 +16,7 @@ Item {
     property color color
     property int hAlign: TextBlock.Align.Start
     property int vAlign: TextBlock.Align.Center
+    // A line's height over px; 0 is the face's own, a single row's.
     property real lineSpacing: 1.5
     property bool wrap: false
     property bool ellipsis: false
@@ -72,14 +73,14 @@ Item {
             x: -root.scrollX
             y: -root.scrollY
             width: root.width
-            height: root.scrollVertical ? implicitHeight : root.height
+            height: root.scrollVertical ? undefined : root.height
             text: root.text
             color: root.color
             font.family: face.status === FontLoader.Ready ? face.font.family : body.font.family
             font.styleName: face.status === FontLoader.Ready ? face.font.styleName : body.font.styleName
             font.pixelSize: Math.max(1, root.px)
-            lineHeightMode: Text.FixedHeight
-            lineHeight: root.px * root.lineSpacing
+            lineHeightMode: root.lineSpacing > 0 ? Text.FixedHeight : Text.ProportionalHeight
+            lineHeight: root.lineSpacing > 0 ? root.px * root.lineSpacing : 1
             wrapMode: root.wrap ? Text.WordWrap : Text.NoWrap
             elide: root.ellipsis && !root.scrolling ? Text.ElideRight : Text.ElideNone
             horizontalAlignment: root.scrolling && !root.scrollVertical ? Text.AlignLeft : root.hAlign === TextBlock.Align.End ? Text.AlignRight : root.hAlign === TextBlock.Align.Center ? Text.AlignHCenter : Text.AlignLeft

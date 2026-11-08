@@ -339,7 +339,8 @@ fn each_screen_matches_its_mockup_and_passes_the_gate() {
     });
     assert!(text_of(&mut scene, "homeStatus").is_some_and(|t| t.starts_with("1 controller · ")), "the status line counts the virtual pad");
     assert!(!shown(&mut scene, "continueHeading") && !shown(&mut scene, "continuePanel"), "no Continue with no game suspended");
-    assert_eq!(text_of(&mut scene, "continueTitle").as_deref(), Some("Aurora Drift (Synthetic)"));
+    // The top reads its own GameModel, filled off the GUI thread apart from the shelf's, so it may name the game a little after the focus.
+    until(&mut scene, "the top named the shelf's first game", |s| text_of(s, "continueTitle").as_deref() == Some("Aurora Drift (Synthetic)"));
     let hero = scene.property("continueArt", "source");
     assert!(hero.ends_with("screenshots/Aurora Drift (Synthetic).png"), "the top shows the hero art: {hero}");
     assert_eq!(text_of(&mut scene, "shelfTitle").as_deref(), Some("Aurora Drift (Synthetic)"), "the focused cover's name under the shelf");

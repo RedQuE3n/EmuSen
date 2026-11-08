@@ -63,6 +63,8 @@ ElementBox {
             required property string marker
             required property bool folder
             readonly property bool chosen: line.index === root.selected
+            // ES-DE prefixes the marker to the name, so a row without one starts at the margin (EmuSen_Qt.md §4.8.5).
+            readonly property real room: line.marker.length > 0 ? root.markerWidth : 0
             objectName: "row-" + line.index
             width: root.width
             height: root.rowHeight
@@ -74,9 +76,9 @@ ElementBox {
             }
             Rectangle {
                 visible: line.chosen && root.hasSelectedBackground
-                x: name.x - root.selectedBackgroundLeft
+                x: root.margin - root.selectedBackgroundLeft
                 y: (root.rowHeight - root.bandHeight) / 2
-                width: Math.min(name.contentWidth, name.width) + root.selectedBackgroundLeft + root.selectedBackgroundRight
+                width: line.room + Math.min(name.contentWidth, name.width) + root.selectedBackgroundLeft + root.selectedBackgroundRight
                 height: root.bandHeight
                 radius: root.selectedBackgroundRadius
                 color: root.selectedBackground
@@ -84,21 +86,21 @@ ElementBox {
             Mark {
                 x: root.margin
                 anchors.verticalCenter: parent.verticalCenter
-                width: root.markerWidth * 0.8
-                height: root.markerWidth * 0.8
+                width: root.px
+                height: root.px
                 mark: line.marker
                 color: line.chosen ? root.selectedColor : root.primaryColor
             }
             TextBlock {
                 id: name
-                x: root.margin + root.markerWidth
+                x: root.margin + line.room
                 y: (root.rowHeight - root.bandHeight) / 2
-                width: root.width - 2 * root.margin - root.markerWidth
+                width: root.width - 2 * root.margin - line.room
                 height: root.bandHeight
                 text: line.text
                 fontSource: root.fontSource
                 px: root.px
-                lineSpacing: root.lineSpacing
+                lineSpacing: 0
                 hAlign: root.hAlign
                 ellipsis: !line.chosen
                 color: line.chosen ? (line.folder ? root.selectedSecondaryColor : root.selectedColor) : (line.folder ? root.secondaryColor : root.primaryColor)

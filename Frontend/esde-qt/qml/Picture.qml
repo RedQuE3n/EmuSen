@@ -59,8 +59,9 @@ Item {
         cache: true
         smooth: !root.nearest
         fillMode: root.fit === Picture.Fit.Contain ? Image.PreserveAspectFit : root.fit === Picture.Fit.Cover ? Image.PreserveAspectCrop : Image.Stretch
-        sourceSize.width: root.nearest ? 0 : root.tiled ? root.tileWidth : Math.ceil(root.width * root.sourceScale)
-        sourceSize.height: root.nearest ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
+        // Contained or covered, only a width is asked for, so a vector picture keeps the aspect the scene measures (EmuSen_Qt.md §4.8.5).
+        sourceSize.width: root.nearest ? 0 : root.tiled ? root.tileWidth : Math.ceil((root.fit === Picture.Fit.Cover ? Math.max(root.width, 2 * root.height) : root.width) * root.sourceScale)
+        sourceSize.height: root.nearest || root.fit === Picture.Fit.Contain || root.fit === Picture.Fit.Cover ? 0 : root.tiled ? root.tileHeight : Math.ceil(root.height * root.sourceScale)
     }
     ShaderEffect {
         readonly property var source: image

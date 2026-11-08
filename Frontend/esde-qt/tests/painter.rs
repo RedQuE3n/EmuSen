@@ -44,13 +44,17 @@ fn shelf(name: &str, full: &str, games: &[&str]) -> String {
     format!("{{\"name\":\"{name}\",\"full_name\":\"{full}\",\"theme\":\"{name}\",\"kind\":\"regular\",\"games\":[{}]}}", rows.join(","))
 }
 
-fn painter(theme: &Theme) -> Painter {
-    let text = format!(
+fn library() -> String {
+    format!(
         "[{},{},{}]",
         shelf("nes", "Nintendo", &["Aurora Drift", "Brass Lantern"]),
         shelf("snes", "Super Nintendo", &["Cobalt Harbor", "Dune Relay", "Ember Circuit", "Fable of Tiles"]),
         shelf("n64", "Nintendo 64", &["Granite Choir"])
-    );
+    )
+}
+
+fn painter(theme: &Theme) -> Painter {
+    let text = library();
     let settings = Settings { theme: theme.0.to_string_lossy().into_owned(), ..Settings::default() };
     let cache = ThemeCache::default();
     let found = systems(&cache, &settings, shelves::shelves(&text, "{}"), &BTreeMap::new(), W as i32, H as i32);
@@ -181,6 +185,39 @@ fn every_pointer_path_makes_the_pad_s_call() {
     assert_eq!(pad.pressed(Button::Back, false), Some(Action::Cue("back")));
     assert_eq!(pad.view(), "system");
     assert_eq!(pad.pressed(Button::Back, false), None, "B at the system view does nothing (decided 2026-11-08)");
+}
+
+#[test]
+fn an_item_gliding_under_a_still_pointer_does_not_take_the_selection() {
+    let theme = Theme::new("glide");
+    let mut p = painter(&theme);
+    p.hover(1);
+    assert_eq!(selected(&p), 1, "hover at rest selects");
+    p.hover(2);
+    assert_eq!(selected(&p), 1, "the next item, come under the pointer while the carousel glides, is not chosen");
+    p.tick(1000.0);
+    p.hover(2);
+    assert_eq!(selected(&p), 2, "at rest again, the pointer's item is chosen");
+}
+
+#[test]
+fn a_measurement_survives_a_reload() {
+    let theme = Theme::new("measured");
+    std::fs::write(
+        theme.0.join("theme.xml"),
+        "<theme><view name=\"system\"><carousel name=\"systems\"><pos>0 0.3</pos><size>1 0.4</size></carousel>\
+         <text name=\"words\"><pos>0.5 0.1</pos><origin>0.5 0</origin><text>Hello</text></text></view></theme>",
+    )
+    .unwrap();
+    let mut p = painter(&theme);
+    let id = p.frame.elements.iter().find(|e| e.name == "words").expect("the text drawn").id;
+    assert!(p.measured(id, 120.0, 30.0), "the first measurement changes the frame");
+    let words = |p: &Painter| p.frame.elements.iter().find(|e| e.name == "words").map(|e| (e.x, e.w)).unwrap();
+    assert_eq!(words(&p), (W / 2.0 - 60.0, 120.0));
+    let settings = p.settings.clone();
+    let found = systems(&ThemeCache::default(), &settings, shelves::shelves(&library(), "{}"), &BTreeMap::new(), W as i32, H as i32);
+    p.install(found, W, H, DateTime::new(2026, 11, 8, 12, 0, 0));
+    assert_eq!(words(&p), (W / 2.0 - 60.0, 120.0), "a reload keeps what the painter measured, which no delegate reports again");
 }
 
 #[test]

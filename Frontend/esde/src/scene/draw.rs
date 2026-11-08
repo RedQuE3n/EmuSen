@@ -118,7 +118,11 @@ impl SceneView {
                 continue;
             }
             let Some(draft) = paint::draft(e, s.text.clone(), s.scroll, &ctx) else { continue };
-            let content = key(&[&format!("{:?}{:?}", draft.paint, draft.size)]);
+            // A picture's own size is its file's, so it holds across a resize; text and rows are measured at their size.
+            let content = match (&draft.paint, draft.sizing) {
+                (Paint::Picture(p), Sizing::Natural { .. } | Sizing::Aspect { .. }) => key(&["picture", &p.source]),
+                _ => key(&[&format!("{:?}{:?}", draft.paint, draft.size)]),
+            };
             let measured = measures.get(&id).filter(|m| m.0 == content).map(|m| (m.1, m.2));
             let (mut bw, mut bh) = draft.size;
             match (draft.sizing, measured) {

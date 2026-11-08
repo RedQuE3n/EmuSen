@@ -31,6 +31,7 @@ pub mod qobject {
         #[qproperty(f64, width)]
         #[qproperty(f64, height)]
         #[qproperty(bool, swap)]
+        #[qproperty(QString, device)]
         #[qproperty(bool, themed, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
         #[qproperty(QString, view, READ, NOTIFY)]
@@ -106,6 +107,7 @@ pub struct EsdeModelRust {
     width: f64,
     height: f64,
     swap: bool,
+    device: QString,
     themed: bool,
     problem: QString,
     view: QString,
@@ -138,6 +140,12 @@ impl cxx_qt::Initialize for qobject::EsdeModel {
         self.as_mut().on_presence_changed(|m| m.load()).release();
         self.as_mut().on_width_changed(|m| m.load()).release();
         self.as_mut().on_height_changed(|m| m.load()).release();
+        self.as_mut().on_device_changed(|mut m| {
+            let device = shelves::device(&m.device.to_string());
+            m.as_mut().rust_mut().shared.borrow_mut().set_device(device);
+            m.publish();
+        })
+        .release();
         self.as_mut().on_swap_changed(|mut m| {
             let swap = *m.swap();
             m.as_mut().rust_mut().shared.borrow_mut().set_swap(swap);

@@ -128,7 +128,8 @@ fn image(e: &Element, ctx: &Ctx) -> Option<Draft> {
     let source = if typed { media(e, "media", ctx.game) } else { existing(e.path("path")) }.or_else(|| existing(e.path("default")))?;
     let (mut fit, size, sizing) = sized(e.pair("size"), e.pair("maxSize"), e.pair("cropSize"), ctx.w, ctx.h);
     let mut p = picture(e, source, fit, "cropPos", "cornerRadius", ctx);
-    if e.bool("tile") == Some(true) {
+    // THEMES.md: tile "can only be used when path has been set", so a game's media is never tiled.
+    if e.bool("tile") == Some(true) && !typed {
         fit = Fit::Tile;
         p.fit = fit;
         p.tile_size = px(e.pair("tileSize"), ctx.w, ctx.h).unwrap_or((0.0, 0.0));
@@ -208,7 +209,8 @@ fn text(e: &Element, said: String, scroll: Option<TextScroll>, ctx: &Ctx) -> Dra
         v_align: v_align(e.string("verticalAlignment"), VAlign::Center),
         line_spacing: if clock { 1.0 } else { e.float("lineSpacing").unwrap_or(1.5) as f64 },
         wrap: size.0 > 0.0 && !clock,
-        ellipsis: !clock,
+        // An auto-sized text grows to its words, so it is never cut short (a 0 box would elide them all).
+        ellipsis: !clock && size.0 > 0.0,
         background: if clock {
             padded(e, ctx, tint(e, "backgroundColor", "backgroundColorEnd", "backgroundGradientType"))
         } else {
@@ -390,8 +392,7 @@ fn badges(e: &Element, ctx: &Ctx) -> Option<Draft> {
 }
 
 fn help_element(e: &Element, ctx: &Ctx) -> Option<Draft> {
-    let folder = ctx.game.is_some_and(|g| g.folder && (g.folder_link.is_none() || ctx.data.help.editing));
-    let entries = help::entries(ctx.view, e, ctx.data, folder);
+    let entries = help::entries(ctx.view, e, ctx.data);
     if entries.is_empty() {
         return None;
     }

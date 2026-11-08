@@ -407,6 +407,27 @@ impl Scene<'_> {
         self.wait(5);
     }
 
+    /// A pad button pressed and left held, on the harness's clock; `pad_up` lets it go. The router's repeats are its own.
+    pub fn pad_down(&mut self, button: UiButton) {
+        self.pad_edge(button, true);
+    }
+
+    /// The release of a button `pad_down` held.
+    pub fn pad_up(&mut self, button: UiButton) {
+        self.pad_edge(button, false);
+    }
+
+    fn pad_edge(&mut self, button: UiButton, down: bool) {
+        let at = self.harness.now_ms;
+        self.harness.now_ms += 16;
+        if let Some(mut router) = self.harness.router() {
+            router.as_mut().set_clock_running(false);
+            router.as_mut().push(kinds::pad_button(button), down);
+            router.as_mut().pump_at(at);
+        }
+        self.wait(5);
+    }
+
     /// Whether the router gives the menu chord alone, as it does while a game owns the pad.
     pub fn pad_chord_only(&mut self) -> bool {
         self.harness.router().is_some_and(|router| *router.chord_only())

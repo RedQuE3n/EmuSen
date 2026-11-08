@@ -103,7 +103,8 @@ impl ViewBuilder {
         }
         if self.name == "system" || self.name == "gamelist" {
             let mut order = self.elements.len();
-            for kind in ["helpsystem", "systemstatus"] {
+            // ES-DE draws these three where a theme has none, the clock "in the upper left corner" (UG "Display clock").
+            for kind in ["helpsystem", "clock", "systemstatus"] {
                 if self.elements.iter().any(|e| e.spec.kind == kind) {
                     continue;
                 }

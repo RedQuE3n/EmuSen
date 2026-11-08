@@ -58,6 +58,8 @@ pub fn row(e: &Element, view: &str, data: &Data, i: usize) -> Option<Row> {
                 Marker::Tick
             } else if e.string("indicators") == Some("none") || g.is_collection {
                 Marker::None
+            } else if g.folder && g.folder_link.is_some() {
+                Marker::FolderLink
             } else if g.folder {
                 Marker::Folder
             } else if g.favorite && system.stars {

@@ -1,0 +1,24 @@
+[package]
+name = "emusen-qt-test"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-qt-test"
+
+# The headless harness of EmuSen_Qt.md §8.1 tier 1 and §8.3: offscreen, the software backend, the item tree read into kit-core's audit, QTest's verbs through a small C++ block, PadEvents through the router's queue.
+[lib]
+name = "emusen_qt_test"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+emusen-kit-core.workspace = true
+emusen-kit-qt.workspace = true
+emusen-qml-rules.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true

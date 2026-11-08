@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
-import EmuSen.Kit
+import EmuSen.Kit as Kit
 
 // The night sky: kit-core's gradient, its stars as rounded rectangles on the scene graph, and the one soft glow (EmuSen_Kit.md §7.5).
 Item {
@@ -22,7 +22,7 @@ Item {
             GradientStop { position: field.stop2At; color: field.stop2Ink }
         }
     }
-    StarField {
+    Kit.StarField {
         id: field
         width: root.width
         height: root.height

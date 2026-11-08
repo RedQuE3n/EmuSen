@@ -1,17 +1,19 @@
-//! The kit's enumerations for QML, each a mirror of a kit-core type, so QML says `Kit.Accept` or `Kit.BigScreen` (EmuSen_Kit.md §7.1).
+//! The kit's enumerations for QML, each a mirror of a kit-core type in a namespace of its own, so QML says `Kit.Pad.Accept` or `Kit.Forms.BigScreen` (EmuSen_Kit.md §7.1).
 
 use emusen_kit_core::input::{RepeatTiers, Role as WalkRole, UiButton, WalkForm};
 use emusen_kit_core::sound::Cue as SoundCue;
 use emusen_kit_core::tokens::{Form as TokenForm, Variant as TokenVariant};
 use emusen_kit_core::world::{WorldRing, WorldShape};
 
-#[cxx_qt::bridge(namespace = "Kit")]
+#[cxx_qt::bridge]
 pub mod ffi {
+
     #[qml_element]
-    qnamespace!("Kit");
+    qnamespace!("Pad");
 
     /// What a pad asks of the interface: kit-core's `UiButton`, in its order.
     #[qenum]
+    #[namespace = "Pad"]
     enum PadButton {
         Up,
         Down,
@@ -31,16 +33,24 @@ pub mod ffi {
         Screensaver,
     }
 
+    #[qml_element]
+    qnamespace!("Forms");
+
     /// The frame's three forms; the tokens read Card as the big screen's column.
     #[qenum]
+    #[namespace = "Forms"]
     enum Form {
         Desktop,
         BigScreen,
         Card,
     }
 
+    #[qml_element]
+    qnamespace!("Roles");
+
     /// The frame's roles, and NoRole when nothing is focused.
     #[qenum]
+    #[namespace = "Roles"]
     enum Role {
         Navigation,
         Content,
@@ -50,14 +60,22 @@ pub mod ffi {
         NoRole,
     }
 
+    #[qml_element]
+    qnamespace!("Variants");
+
     #[qenum]
+    #[namespace = "Variants"]
     enum Variant {
         Dark,
         Light,
     }
 
+    #[qml_element]
+    qnamespace!("Repeat");
+
     /// The pad's repeat tiers: kit-core's four measured sets.
     #[qenum]
+    #[namespace = "Repeat"]
     enum Tiers {
         Own,
         EsdeList,
@@ -65,24 +83,36 @@ pub mod ffi {
         EsdeCarousel,
     }
 
+    #[qml_element]
+    qnamespace!("Bodies");
+
     /// The kind of body a world is drawn as: kit-core's `WorldShape`.
     #[qenum]
+    #[namespace = "Bodies"]
     enum BodyShape {
         Planet,
         Shards,
         Gem,
     }
 
+    #[qml_element]
+    qnamespace!("Rings");
+
     /// A planet's ring: kit-core's `WorldRing`.
     #[qenum]
+    #[namespace = "Rings"]
     enum Ring {
         NoRing,
         Subtle,
         Big,
     }
 
+    #[qml_element]
+    qnamespace!("Cues");
+
     /// The interface's nine cues: kit-core's `Cue`.
     #[qenum]
+    #[namespace = "Cues"]
     enum Cue {
         Move,
         Section,

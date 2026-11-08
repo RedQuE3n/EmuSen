@@ -1,7 +1,7 @@
-module QtQuick.Controls.EmuSen
-depends QtQuick.Controls
-depends EmuSen.Kit
-prefer :/qt/qml/QtQuick/Controls/EmuSen/
+module EmuSen
+depends QtQuick.Controls auto
+depends EmuSen.Kit auto
+prefer :/qt/qml/EmuSen/
 Button 1.0 Button.qml
 CheckBox 1.0 CheckBox.qml
 ComboBox 1.0 ComboBox.qml

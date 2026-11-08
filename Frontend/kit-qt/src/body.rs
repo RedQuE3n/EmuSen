@@ -25,9 +25,9 @@ pub mod qobject {
         include!("cxx-qt-lib/qmodelindex.h");
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
-        #[namespace = "Kit"]
+        #[namespace = "Bodies"]
         type BodyShape = crate::kinds::ffi::BodyShape;
-        #[namespace = "Kit"]
+        #[namespace = "Rings"]
         type Ring = crate::kinds::ffi::Ring;
     }
 

@@ -12,7 +12,7 @@ use crate::kinds::{self, Cue};
 pub mod qobject {
     unsafe extern "C++" {
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
-        #[namespace = "Kit"]
+        #[namespace = "Cues"]
         type Cue = crate::kinds::ffi::Cue;
     }
 

@@ -1,14 +1,14 @@
 import QtQuick
 import QtQuick.Templates as T
-import EmuSen.Kit
+import EmuSen.Kit as Kit
 
 // A pane in the tokens: the surface with the pane gutter.
 T.Pane {
     id: control
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset, contentWidth + leftPadding + rightPadding)
     implicitHeight: Math.max(implicitBackgroundHeight + topInset + bottomInset, contentHeight + topPadding + bottomPadding)
-    padding: Tokens.paneGutter
+    padding: Kit.Tokens.paneGutter
     background: Rectangle {
-        color: Tokens.surface
+        color: Kit.Tokens.surface
     }
 }

@@ -18,9 +18,9 @@ pub mod qobject {
         include!("cxx-qt-lib/qcolor.h");
         type QColor = cxx_qt_lib::QColor;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
-        #[namespace = "Kit"]
+        #[namespace = "Forms"]
         type Form = crate::kinds::ffi::Form;
-        #[namespace = "Kit"]
+        #[namespace = "Variants"]
         type Variant = crate::kinds::ffi::Variant;
     }
 

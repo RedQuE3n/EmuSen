@@ -19,8 +19,8 @@ fn control_files() -> BTreeSet<String> {
 #[test]
 fn qt_1_5_the_qmldir_lists_every_control_file_once() {
     let qmldir = std::fs::read_to_string(style_dir().join("qmldir")).expect("qmldir");
-    assert!(qmldir.starts_with("module QtQuick.Controls.EmuSen\n"), "the module Qt Quick Controls looks for");
-    assert!(qmldir.contains("depends EmuSen.Kit\n"), "the style reads Tokens");
+    assert!(qmldir.starts_with("module EmuSen\n"), "a custom style is a module named for the style, which Qt imports by that name");
+    assert!(qmldir.contains("depends EmuSen.Kit auto\n"), "the style reads Tokens");
     let listed: Vec<String> =
         qmldir.lines().filter(|l| l.ends_with(".qml")).map(|l| l.rsplit(' ').next().unwrap_or("").to_owned()).collect();
     let set: BTreeSet<String> = listed.iter().cloned().collect();
@@ -37,7 +37,7 @@ fn qt_1_5_the_qmldir_lists_every_control_file_once() {
 #[test]
 fn qt_1_5_the_qrc_carries_the_qmldir_and_every_control_file() {
     let qrc = std::fs::read_to_string(style_dir().join("EmuSen.qrc")).expect("EmuSen.qrc");
-    assert!(qrc.contains("<qresource prefix=\"/qt/qml/QtQuick/Controls/EmuSen\">"), "where a style module is found");
+    assert!(qrc.contains("<qresource prefix=\"/qt/qml/EmuSen\">"), "on the default import path, beside EmuSen/Kit");
     assert!(qrc.contains("<file>qmldir</file>"));
     let carried: BTreeSet<String> = qrc
         .lines()

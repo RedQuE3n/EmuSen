@@ -1,33 +1,33 @@
 import QtQuick
-import EmuSen.Kit
+import EmuSen.Kit as Kit
 
 // A row whose whole width is its content (a slider, a switch with its words): the row's height and focus marks, the content in its slot (EmuSen_Kit.md §7.8).
-Walkable {
+Kit.Walkable {
     id: root
     default property alias content: slot.data
     property bool current: false
-    implicitHeight: Tokens.rowHeight
+    implicitHeight: Kit.Tokens.rowHeight
     Accessible.role: Accessible.ListItem
     Rectangle {
         anchors.fill: parent
-        radius: Tokens.rowRadius
-        color: root.activeFocus || root.current ? Tokens.surfaceRaised : Tokens.surface
-        border.width: root.hovered ? Tokens.hoverBorder : 0
-        border.color: Tokens.border
+        radius: Kit.Tokens.rowRadius
+        color: root.activeFocus || root.current ? Kit.Tokens.surfaceRaised : Kit.Tokens.surface
+        border.width: root.hovered ? Kit.Tokens.hoverBorder : 0
+        border.color: Kit.Tokens.border
         Rectangle {
-            width: Tokens.barWidth
+            width: Kit.Tokens.barWidth
             height: parent.height
-            radius: Tokens.rowRadius
-            color: Tokens.accent
+            radius: Kit.Tokens.rowRadius
+            color: Kit.Tokens.accent
             visible: root.activeFocus
         }
     }
     Item {
         id: slot
         anchors.fill: parent
-        anchors.leftMargin: Tokens.base * 4
-        anchors.rightMargin: Tokens.base * 4
-        anchors.topMargin: Tokens.base
-        anchors.bottomMargin: Tokens.base
+        anchors.leftMargin: Kit.Tokens.base * 4
+        anchors.rightMargin: Kit.Tokens.base * 4
+        anchors.topMargin: Kit.Tokens.base
+        anchors.bottomMargin: Kit.Tokens.base
     }
 }

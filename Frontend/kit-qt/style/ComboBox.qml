@@ -2,18 +2,18 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Controls.impl
-import EmuSen.Kit
+import EmuSen.Kit as Kit
 
 // A combo box in the tokens: an input-surface field, a drawn chevron, its list in a raised popup.
 T.ComboBox {
     id: control
-    implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset, implicitContentWidth + leftPadding + rightPadding)
-    implicitHeight: Math.max(implicitBackgroundHeight + topInset + bottomInset, implicitContentHeight + topPadding + bottomPadding, implicitIndicatorHeight + topPadding + bottomPadding)
-    padding: Tokens.base * 2
-    leftPadding: padding + (!control.mirrored || !indicator || !indicator.visible ? Tokens.base : indicator.width + spacing)
-    rightPadding: padding + (control.mirrored || !indicator || !indicator.visible ? Tokens.base : indicator.width + spacing)
-    spacing: Tokens.base * 2
-    font.pixelSize: Tokens.fontBody
+    implicitWidth: Math.ceil(Math.max(implicitBackgroundWidth + leftInset + rightInset, implicitContentWidth + leftPadding + rightPadding))
+    implicitHeight: Math.ceil(Math.max(implicitBackgroundHeight + topInset + bottomInset, implicitContentHeight + topPadding + bottomPadding, implicitIndicatorHeight + topPadding + bottomPadding))
+    padding: Kit.Tokens.base * 2
+    leftPadding: padding + (!control.mirrored || !indicator || !indicator.visible ? Kit.Tokens.base : indicator.width + spacing)
+    rightPadding: padding + (control.mirrored || !indicator || !indicator.visible ? Kit.Tokens.base : indicator.width + spacing)
+    spacing: Kit.Tokens.base * 2
+    font.pixelSize: Kit.Tokens.fontBody
     delegate: ItemDelegate {
         required property var model
         required property int index
@@ -24,13 +24,13 @@ T.ComboBox {
     }
     indicator: Rectangle {
         x: control.mirrored ? control.padding : control.width - width - control.padding
-        y: control.topPadding + (control.availableHeight - height) / 2 - Tokens.base / 2
-        implicitWidth: Tokens.base * 2.5
-        implicitHeight: Tokens.base * 2.5
+        y: control.topPadding + (control.availableHeight - height) / 2 - Kit.Tokens.base / 2
+        implicitWidth: Kit.Tokens.base * 2.5
+        implicitHeight: Kit.Tokens.base * 2.5
         rotation: 45
-        color: Tokens.inputSurface
-        border.width: Tokens.hoverBorder * 2
-        border.color: control.enabled ? Tokens.text : Tokens.muted
+        color: Kit.Tokens.inputSurface
+        border.width: Kit.Tokens.hoverBorder * 2
+        border.color: control.enabled ? Kit.Tokens.text : Kit.Tokens.muted
     }
     contentItem: T.TextField {
         implicitHeight: contentHeight + topPadding + bottomPadding
@@ -44,39 +44,39 @@ T.ComboBox {
         validator: control.validator
         selectByMouse: control.selectTextByMouse
         font: control.font
-        color: control.enabled ? Tokens.text : Tokens.muted
-        selectionColor: Tokens.accent
-        selectedTextColor: Tokens.overAccent
+        color: control.enabled ? Kit.Tokens.text : Kit.Tokens.muted
+        selectionColor: Kit.Tokens.accent
+        selectedTextColor: Kit.Tokens.overAccent
         verticalAlignment: Text.AlignVCenter
     }
     background: Rectangle {
-        implicitWidth: Tokens.controlHeight * 4
-        implicitHeight: Tokens.controlHeight
-        radius: Tokens.rowRadius
-        color: Tokens.inputSurface
-        border.width: control.activeFocus ? Tokens.ringThickness : Tokens.hoverBorder
-        border.color: control.activeFocus ? Tokens.accent : Tokens.border
+        implicitWidth: Kit.Tokens.controlHeight * 4
+        implicitHeight: Kit.Tokens.controlHeight
+        radius: Kit.Tokens.rowRadius
+        color: Kit.Tokens.inputSurface
+        border.width: control.activeFocus ? Kit.Tokens.ringThickness : Kit.Tokens.hoverBorder
+        border.color: control.activeFocus ? Kit.Tokens.accent : Kit.Tokens.border
     }
     popup: T.Popup {
         y: control.height
         width: control.width
-        height: Math.min(contentItem.implicitHeight, Tokens.rowHeight * 8)
-        topMargin: Tokens.base * 2
-        bottomMargin: Tokens.base * 2
-        padding: Tokens.base
+        height: Math.min(contentItem.implicitHeight, Kit.Tokens.rowHeight * 8)
+        topMargin: Kit.Tokens.base * 2
+        bottomMargin: Kit.Tokens.base * 2
+        padding: Kit.Tokens.base
         contentItem: ListView {
             clip: true
             implicitHeight: contentHeight
             model: control.delegateModel
             currentIndex: control.highlightedIndex
-            highlightMoveDuration: Tokens.instant
+            highlightMoveDuration: Kit.Tokens.instant
             T.ScrollBar.vertical: ScrollBar {}
         }
         background: Rectangle {
-            radius: Tokens.rowRadius
-            color: Tokens.surfaceRaised
-            border.width: Tokens.hoverBorder
-            border.color: Tokens.border
+            radius: Kit.Tokens.rowRadius
+            color: Kit.Tokens.surfaceRaised
+            border.width: Kit.Tokens.hoverBorder
+            border.color: Kit.Tokens.border
         }
     }
 }

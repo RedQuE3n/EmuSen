@@ -2,7 +2,7 @@
 # emusen-kit-core stays outside it on purpose, with its own lock file, so its fence test can read what its tree names.
 [workspace]
 resolver = "2"
-members = ["kit-qt"]
+members = ["kit-qt", "qml-rules", "qt-test"]
 exclude = ["kit-core"]
 
 [workspace.package]
@@ -18,6 +18,10 @@ cxx-qt-lib = { version = "0.10", features = ["qt_full"] }
 cxx-qt-build = { version = "0.10", features = ["link_qt_object_files"] }
 emusen-kit-core = { path = "kit-core" }
 emusen-kit-qt = { path = "kit-qt" }
+emusen-qml-rules = { path = "qml-rules" }
+emusen-qt-test = { path = "qt-test" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [profile.release]
 opt-level = 2

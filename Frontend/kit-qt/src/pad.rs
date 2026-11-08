@@ -15,9 +15,9 @@ use crate::router::{PadEvent, Router};
 pub mod qobject {
     unsafe extern "C++" {
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
-        #[namespace = "Kit"]
+        #[namespace = "Pad"]
         type PadButton = crate::kinds::ffi::PadButton;
-        #[namespace = "Kit"]
+        #[namespace = "Repeat"]
         type Tiers = crate::kinds::ffi::Tiers;
     }
 

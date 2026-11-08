@@ -53,11 +53,11 @@ pub mod qobject {
         include!("cxx-qt-lib/qstringlist.h");
         type QStringList = cxx_qt_lib::QStringList;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
-        #[namespace = "Kit"]
+        #[namespace = "Forms"]
         type Form = crate::kinds::ffi::Form;
-        #[namespace = "Kit"]
+        #[namespace = "Roles"]
         type Role = crate::kinds::ffi::Role;
-        #[namespace = "Kit"]
+        #[namespace = "Pad"]
         type PadButton = crate::kinds::ffi::PadButton;
         include!("kit_glue.h");
         fn send_key(key: i32, modifiers: i32);

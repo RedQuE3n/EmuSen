@@ -37,22 +37,45 @@ Module {
             name: "prepare"
             type: "int"
             lineNumber: 37
-            Parameter { name: "cue"; type: "Kit::Cue" }
+            Parameter { name: "cue"; type: "Cues::Cue" }
         }
         Method { name: "prepareAll"; lineNumber: 38 }
         Method {
             name: "durationMs"
             type: "int"
             lineNumber: 39
-            Parameter { name: "cue"; type: "Kit::Cue" }
+            Parameter { name: "cue"; type: "Cues::Cue" }
         }
         Method {
             name: "peak"
             type: "double"
             lineNumber: 40
-            Parameter { name: "cue"; type: "Kit::Cue" }
+            Parameter { name: "cue"; type: "Cues::Cue" }
         }
         Method { name: "quickSelectFrames"; type: "int"; lineNumber: 41 }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 31
+        name: "Bodies"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Bodies 1.0", "EmuSen.Kit/Bodies 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "BodyShape"
+            isScoped: true
+            type: "int"
+            lineNumber: 114
+            values: ["Planet", "Shards", "Gem"]
+        }
+        Enum {
+            name: "BodyShape"
+            isScoped: true
+            type: "int"
+            lineNumber: 114
+            values: ["Planet", "Shards", "Gem"]
+        }
     }
     Component {
         file: "body.cxxqt.h"
@@ -89,7 +112,7 @@ Module {
         }
         Property {
             name: "shape"
-            type: "Kit::BodyShape"
+            type: "Bodies::BodyShape"
             read: "getShape"
             write: "setShape"
             notify: "shapeChanged"
@@ -143,7 +166,7 @@ Module {
         }
         Property {
             name: "ring"
-            type: "Kit::Ring"
+            type: "Rings::Ring"
             read: "getRing"
             write: "setRing"
             notify: "ringChanged"
@@ -190,7 +213,7 @@ Module {
         Method {
             name: "setShape"
             lineNumber: 146
-            Parameter { name: "value"; type: "Kit::BodyShape" }
+            Parameter { name: "value"; type: "Bodies::BodyShape" }
         }
         Method {
             name: "setHue"
@@ -220,7 +243,7 @@ Module {
         Method {
             name: "setRing"
             lineNumber: 158
-            Parameter { name: "value"; type: "Kit::Ring" }
+            Parameter { name: "value"; type: "Rings::Ring" }
         }
         Method {
             name: "setMoons"
@@ -250,6 +273,72 @@ Module {
         }
     }
     Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 41
+        name: "Cues"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Cues 1.0", "EmuSen.Kit/Cues 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Cue"
+            isScoped: true
+            type: "int"
+            lineNumber: 134
+            values: [
+                "Move",
+                "Section",
+                "Choose",
+                "Back",
+                "Favourite",
+                "Launch",
+                "Saved",
+                "Loaded",
+                "Refused"
+            ]
+        }
+        Enum {
+            name: "Cue"
+            isScoped: true
+            type: "int"
+            lineNumber: 134
+            values: [
+                "Move",
+                "Section",
+                "Choose",
+                "Back",
+                "Favourite",
+                "Launch",
+                "Saved",
+                "Loaded",
+                "Refused"
+            ]
+        }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 11
+        name: "Forms"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Forms 1.0", "EmuSen.Kit/Forms 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Form"
+            isScoped: true
+            type: "int"
+            lineNumber: 71
+            values: ["Desktop", "BigScreen", "Card"]
+        }
+        Enum {
+            name: "Form"
+            isScoped: true
+            type: "int"
+            lineNumber: 71
+            values: ["Desktop", "BigScreen", "Card"]
+        }
+    }
+    Component {
         file: "frame.cxxqt.h"
         lineNumber: 205
         name: "FrameController"
@@ -259,7 +348,7 @@ Module {
         exportMetaObjectRevisions: [256]
         Property {
             name: "form"
-            type: "Kit::Form"
+            type: "Forms::Form"
             read: "getForm"
             write: "setForm"
             notify: "formChanged"
@@ -340,7 +429,7 @@ Module {
         }
         Property {
             name: "focusedRole"
-            type: "Kit::Role"
+            type: "Roles::Role"
             read: "getFocusedRole"
             notify: "focusedRoleChanged"
             index: 9
@@ -385,7 +474,7 @@ Module {
         Signal {
             name: "focusMoved"
             lineNumber: 274
-            Parameter { name: "role"; type: "Kit::Role" }
+            Parameter { name: "role"; type: "Roles::Role" }
         }
         Signal { name: "detailOpened"; lineNumber: 275 }
         Signal { name: "detailClosed"; lineNumber: 276 }
@@ -398,14 +487,14 @@ Module {
         Signal {
             name: "sheetPressed"
             lineNumber: 279
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
         }
         Signal { name: "sheetDismissed"; lineNumber: 280 }
         Signal { name: "backDeclined"; lineNumber: 281 }
         Method {
             name: "setForm"
             lineNumber: 227
-            Parameter { name: "value"; type: "Kit::Form" }
+            Parameter { name: "value"; type: "Forms::Form" }
         }
         Method {
             name: "setHasDetail"
@@ -451,13 +540,13 @@ Module {
             name: "offer"
             type: "bool"
             lineNumber: 259
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
         }
         Method {
             name: "press"
             type: "bool"
             lineNumber: 260
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
         }
         Method {
             name: "key"
@@ -488,7 +577,7 @@ Module {
             name: "focusRole"
             type: "bool"
             lineNumber: 265
-            Parameter { name: "role"; type: "Kit::Role" }
+            Parameter { name: "role"; type: "Roles::Role" }
         }
         Method {
             name: "stepSection"
@@ -504,199 +593,10 @@ Module {
             name: "setAction"
             lineNumber: 271
             Parameter { name: "key"; type: "QString" }
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "enabled"; type: "bool" }
         }
         Method { name: "clearActions"; lineNumber: 272 }
-    }
-    Component {
-        file: "kinds.cxxqt.h"
-        lineNumber: 6
-        name: "Kit"
-        accessSemantics: "none"
-        exports: ["EmuSen.Kit/Kit 1.0", "EmuSen.Kit/Kit 1.0"]
-        isCreatable: false
-        exportMetaObjectRevisions: [256]
-        Enum {
-            name: "PadButton"
-            isScoped: true
-            type: "int"
-            lineNumber: 13
-            values: [
-                "Up",
-                "Down",
-                "Left",
-                "Right",
-                "Accept",
-                "Back",
-                "Menu",
-                "Options",
-                "PageUp",
-                "PageDown",
-                "First",
-                "Last",
-                "Guide",
-                "Search",
-                "Random",
-                "Screensaver"
-            ]
-        }
-        Enum {
-            name: "Form"
-            isScoped: true
-            type: "int"
-            lineNumber: 36
-            values: ["Desktop", "BigScreen", "Card"]
-        }
-        Enum {
-            name: "Role"
-            isScoped: true
-            type: "int"
-            lineNumber: 46
-            values: [
-                "Navigation",
-                "Content",
-                "Detail",
-                "Actions",
-                "Search",
-                "NoRole"
-            ]
-        }
-        Enum {
-            name: "Variant"
-            isScoped: true
-            type: "int"
-            lineNumber: 59
-            values: ["Dark", "Light"]
-        }
-        Enum {
-            name: "Tiers"
-            isScoped: true
-            type: "int"
-            lineNumber: 68
-            values: ["Own", "EsdeList", "EsdeCarouselFast", "EsdeCarousel"]
-        }
-        Enum {
-            name: "BodyShape"
-            isScoped: true
-            type: "int"
-            lineNumber: 79
-            values: ["Planet", "Shards", "Gem"]
-        }
-        Enum {
-            name: "Ring"
-            isScoped: true
-            type: "int"
-            lineNumber: 89
-            values: ["NoRing", "Subtle", "Big"]
-        }
-        Enum {
-            name: "Cue"
-            isScoped: true
-            type: "int"
-            lineNumber: 99
-            values: [
-                "Move",
-                "Section",
-                "Choose",
-                "Back",
-                "Favourite",
-                "Launch",
-                "Saved",
-                "Loaded",
-                "Refused"
-            ]
-        }
-        Enum {
-            name: "PadButton"
-            isScoped: true
-            type: "int"
-            lineNumber: 13
-            values: [
-                "Up",
-                "Down",
-                "Left",
-                "Right",
-                "Accept",
-                "Back",
-                "Menu",
-                "Options",
-                "PageUp",
-                "PageDown",
-                "First",
-                "Last",
-                "Guide",
-                "Search",
-                "Random",
-                "Screensaver"
-            ]
-        }
-        Enum {
-            name: "Form"
-            isScoped: true
-            type: "int"
-            lineNumber: 36
-            values: ["Desktop", "BigScreen", "Card"]
-        }
-        Enum {
-            name: "Role"
-            isScoped: true
-            type: "int"
-            lineNumber: 46
-            values: [
-                "Navigation",
-                "Content",
-                "Detail",
-                "Actions",
-                "Search",
-                "NoRole"
-            ]
-        }
-        Enum {
-            name: "Variant"
-            isScoped: true
-            type: "int"
-            lineNumber: 59
-            values: ["Dark", "Light"]
-        }
-        Enum {
-            name: "Tiers"
-            isScoped: true
-            type: "int"
-            lineNumber: 68
-            values: ["Own", "EsdeList", "EsdeCarouselFast", "EsdeCarousel"]
-        }
-        Enum {
-            name: "BodyShape"
-            isScoped: true
-            type: "int"
-            lineNumber: 79
-            values: ["Planet", "Shards", "Gem"]
-        }
-        Enum {
-            name: "Ring"
-            isScoped: true
-            type: "int"
-            lineNumber: 89
-            values: ["NoRing", "Subtle", "Big"]
-        }
-        Enum {
-            name: "Cue"
-            isScoped: true
-            type: "int"
-            lineNumber: 99
-            values: [
-                "Move",
-                "Section",
-                "Choose",
-                "Back",
-                "Favourite",
-                "Launch",
-                "Saved",
-                "Loaded",
-                "Refused"
-            ]
-        }
     }
     Component {
         file: "moonrise.cxxqt.h"
@@ -1227,11 +1127,11 @@ Module {
             lineNumber: 517
             Parameter { name: "name"; type: "QString" }
             Parameter { name: "hue"; type: "double" }
-            Parameter { name: "shape"; type: "Kit::BodyShape" }
+            Parameter { name: "shape"; type: "Bodies::BodyShape" }
             Parameter { name: "craters"; type: "double" }
             Parameter { name: "bands"; type: "double" }
             Parameter { name: "cap"; type: "double" }
-            Parameter { name: "ring"; type: "Kit::Ring" }
+            Parameter { name: "ring"; type: "Rings::Ring" }
             Parameter { name: "moons"; type: "int" }
         }
         Method { name: "clearBodies"; lineNumber: 518 }
@@ -1263,6 +1163,63 @@ Module {
         }
     }
     Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 6
+        name: "Pad"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Pad 1.0", "EmuSen.Kit/Pad 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "PadButton"
+            isScoped: true
+            type: "int"
+            lineNumber: 48
+            values: [
+                "Up",
+                "Down",
+                "Left",
+                "Right",
+                "Accept",
+                "Back",
+                "Menu",
+                "Options",
+                "PageUp",
+                "PageDown",
+                "First",
+                "Last",
+                "Guide",
+                "Search",
+                "Random",
+                "Screensaver"
+            ]
+        }
+        Enum {
+            name: "PadButton"
+            isScoped: true
+            type: "int"
+            lineNumber: 48
+            values: [
+                "Up",
+                "Down",
+                "Left",
+                "Right",
+                "Accept",
+                "Back",
+                "Menu",
+                "Options",
+                "PageUp",
+                "PageDown",
+                "First",
+                "Last",
+                "Guide",
+                "Search",
+                "Random",
+                "Screensaver"
+            ]
+        }
+    }
+    Component {
         file: "pad.cxxqt.h"
         lineNumber: 59
         name: "PadRouter"
@@ -1274,7 +1231,7 @@ Module {
         exportMetaObjectRevisions: [256]
         Property {
             name: "tiers"
-            type: "Kit::Tiers"
+            type: "Repeat::Tiers"
             read: "getTiers"
             write: "setTiers"
             notify: "tiersChanged"
@@ -1305,7 +1262,7 @@ Module {
         Signal {
             name: "pressed"
             lineNumber: 85
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "repeat"; type: "bool" }
             Parameter { name: "jump"; type: "int" }
         }
@@ -1313,7 +1270,7 @@ Module {
         Method {
             name: "setTiers"
             lineNumber: 73
-            Parameter { name: "value"; type: "Kit::Tiers" }
+            Parameter { name: "value"; type: "Repeat::Tiers" }
         }
         Method {
             name: "setSwapAcceptBack"
@@ -1328,7 +1285,7 @@ Module {
         Method {
             name: "push"
             lineNumber: 81
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
             Parameter { name: "down"; type: "bool" }
         }
         Method { name: "pump"; lineNumber: 82 }
@@ -1342,7 +1299,90 @@ Module {
             type: "bool"
             isMethodConstant: true
             lineNumber: 84
-            Parameter { name: "button"; type: "Kit::PadButton" }
+            Parameter { name: "button"; type: "Pad::PadButton" }
+        }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 26
+        name: "Repeat"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Repeat 1.0", "EmuSen.Kit/Repeat 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Tiers"
+            isScoped: true
+            type: "int"
+            lineNumber: 103
+            values: ["Own", "EsdeList", "EsdeCarouselFast", "EsdeCarousel"]
+        }
+        Enum {
+            name: "Tiers"
+            isScoped: true
+            type: "int"
+            lineNumber: 103
+            values: ["Own", "EsdeList", "EsdeCarouselFast", "EsdeCarousel"]
+        }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 36
+        name: "Rings"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Rings 1.0", "EmuSen.Kit/Rings 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Ring"
+            isScoped: true
+            type: "int"
+            lineNumber: 124
+            values: ["NoRing", "Subtle", "Big"]
+        }
+        Enum {
+            name: "Ring"
+            isScoped: true
+            type: "int"
+            lineNumber: 124
+            values: ["NoRing", "Subtle", "Big"]
+        }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 16
+        name: "Roles"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Roles 1.0", "EmuSen.Kit/Roles 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Role"
+            isScoped: true
+            type: "int"
+            lineNumber: 81
+            values: [
+                "Navigation",
+                "Content",
+                "Detail",
+                "Actions",
+                "Search",
+                "NoRole"
+            ]
+        }
+        Enum {
+            name: "Role"
+            isScoped: true
+            type: "int"
+            lineNumber: 81
+            values: [
+                "Navigation",
+                "Content",
+                "Detail",
+                "Actions",
+                "Search",
+                "NoRole"
+            ]
         }
     }
     Component {
@@ -1743,7 +1783,7 @@ Module {
         exportMetaObjectRevisions: [256]
         Property {
             name: "form"
-            type: "Kit::Form"
+            type: "Forms::Form"
             read: "getForm"
             write: "setForm"
             notify: "formChanged"
@@ -1752,7 +1792,7 @@ Module {
         }
         Property {
             name: "variant"
-            type: "Kit::Variant"
+            type: "Variants::Variant"
             read: "getVariant"
             write: "setVariant"
             notify: "variantChanged"
@@ -2504,12 +2544,12 @@ Module {
         Method {
             name: "setForm"
             lineNumber: 785
-            Parameter { name: "value"; type: "Kit::Form" }
+            Parameter { name: "value"; type: "Forms::Form" }
         }
         Method {
             name: "setVariant"
             lineNumber: 787
-            Parameter { name: "value"; type: "Kit::Variant" }
+            Parameter { name: "value"; type: "Variants::Variant" }
         }
         Method {
             name: "setTextScale"
@@ -2534,6 +2574,29 @@ Module {
             isMethodConstant: true
             lineNumber: 941
             Parameter { name: "height"; type: "double" }
+        }
+    }
+    Component {
+        file: "kinds.cxxqt.h"
+        lineNumber: 21
+        name: "Variants"
+        accessSemantics: "none"
+        exports: ["EmuSen.Kit/Variants 1.0", "EmuSen.Kit/Variants 1.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [256]
+        Enum {
+            name: "Variant"
+            isScoped: true
+            type: "int"
+            lineNumber: 94
+            values: ["Dark", "Light"]
+        }
+        Enum {
+            name: "Variant"
+            isScoped: true
+            type: "int"
+            lineNumber: 94
+            values: ["Dark", "Light"]
         }
     }
 }

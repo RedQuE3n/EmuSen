@@ -1,0 +1,10 @@
+[package]
+name = "emusen-qml-rules"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+# The qml-rules checker of EmuSen_Qt.md §1.3: QML is layout only. A library the emusen.dev command module exposes as `qml-rules`; no Qt.
+[lib]
+name = "emusen_qml_rules"

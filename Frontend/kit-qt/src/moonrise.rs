@@ -30,9 +30,9 @@ pub mod qobject {
         include!("cxx-qt-lib/qstring.h");
         type QString = cxx_qt_lib::QString;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
-        #[namespace = "Kit"]
+        #[namespace = "Bodies"]
         type BodyShape = crate::kinds::ffi::BodyShape;
-        #[namespace = "Kit"]
+        #[namespace = "Rings"]
         type Ring = crate::kinds::ffi::Ring;
     }
 

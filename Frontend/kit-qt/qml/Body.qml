@@ -1,7 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Shapes
-import EmuSen.Kit
+import EmuSen.Kit as Kit
 
 // A world's body drawn by the scene graph from kit-core's shapes: one Shape per row, scaled out of the unit box (EmuSen_Kit.md §7.5).
 Item {
@@ -16,7 +16,7 @@ Item {
     property alias moons: shapes.moons
     implicitWidth: shapes.unitWidth
     implicitHeight: shapes.unitHeight
-    BodyShapes {
+    Kit.BodyShapes {
         id: shapes
     }
     Repeater {

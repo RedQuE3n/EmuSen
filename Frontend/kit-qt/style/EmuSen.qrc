@@ -1,5 +1,5 @@
 <RCC>
-  <qresource prefix="/qt/qml/QtQuick/Controls/EmuSen">
+  <qresource prefix="/qt/qml/EmuSen">
     <file>qmldir</file>
     <file>Button.qml</file>
     <file>CheckBox.qml</file>

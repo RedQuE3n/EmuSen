@@ -1,0 +1,242 @@
+//! The window's item tree, as the C++ dumps it, read into kit-core's audit `Item`s, so the rules are kit-core's and nothing is re-implemented (EmuSen_Qt.md §8.1, EmuSen_Kit.md §7.9).
+
+use std::collections::HashMap;
+
+use emusen_kit_core::audit::{Axes, Edges, Item, Kind, Rect, Text};
+use emusen_kit_core::tokens::Colour;
+use serde::Deserialize;
+
+/// One item as `harness_tree` writes it.
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct Node {
+    pub id: String,
+    pub parent: String,
+    pub ty: String,
+    pub cls: String,
+    pub name: String,
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+    pub visible: bool,
+    pub opacity: f64,
+    pub clip: bool,
+    pub hit: bool,
+    pub operable: bool,
+    pub control: bool,
+    pub focus: bool,
+    pub popup: bool,
+    pub menubar: bool,
+    pub picture: bool,
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub elided: bool,
+    #[serde(default)]
+    pub tw: f64,
+    #[serde(default)]
+    pub th: f64,
+    #[serde(default)]
+    pub cap: f64,
+    #[serde(default)]
+    pub sv: bool,
+    #[serde(default)]
+    pub sh: bool,
+    #[serde(default)]
+    pub wheel: bool,
+    #[serde(default, rename = "fadeTop")]
+    pub fade_top: bool,
+    #[serde(default, rename = "fadeBottom")]
+    pub fade_bottom: bool,
+    #[serde(default, rename = "fadeLeft")]
+    pub fade_left: bool,
+    #[serde(default, rename = "fadeRight")]
+    pub fade_right: bool,
+    #[serde(default)]
+    pub heard: String,
+    #[serde(default)]
+    pub role: i32,
+    #[serde(default)]
+    pub colors: Vec<String>,
+}
+
+/// The kit's drawn world: its colours are hues by design, so palette reach treats it as a scene.
+pub const SCENES: [&str; 3] = ["Body", "Sky", "Moonrise"];
+
+/// The kit's rows and Qt's.
+const ROWS: [&str; 4] = ["MenuRow", "WholeRow", "QQuickItemDelegate", "QQuickMenuItem"];
+
+/// A colour as the dump writes it, `#AARRGGBB`.
+pub fn colour(text: &str) -> Option<Colour> {
+    let hex = text.strip_prefix('#')?;
+    if hex.len() != 8 {
+        return None;
+    }
+    let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).ok();
+    Some(Colour::rgba(byte(2)?, byte(4)?, byte(6)?, byte(0)?))
+}
+
+fn kind(node: &Node) -> Kind {
+    if node.popup {
+        Kind::Popup
+    } else if node.menubar {
+        Kind::MenuBar
+    } else if node.name == "statusBar" {
+        Kind::StatusBar
+    } else if node.sv || node.sh {
+        Kind::Scroller
+    } else if node.text.is_some() {
+        Kind::Words
+    } else if node.picture {
+        Kind::Picture
+    } else if ROWS.contains(&node.ty.as_str()) || ROWS.contains(&node.cls.as_str()) {
+        Kind::Row
+    } else if node.operable || node.control {
+        Kind::Control
+    } else if node.name.to_ascii_lowercase().contains("title") {
+        Kind::Title
+    } else if node.name.to_ascii_lowercase().contains("footer") {
+        Kind::Footer
+    } else {
+        Kind::Panel
+    }
+}
+
+fn item(index: u32, node: &Node) -> Item {
+    let rect = Rect::new(node.x, node.y, node.w, node.h);
+    let kind = kind(node);
+    let label = if node.name.is_empty() { node.ty.clone() } else { node.name.clone() };
+    let mut item = Item::new(index, kind, rect).named(&label);
+    if !node.visible {
+        item = item.hidden();
+    }
+    if node.hit {
+        item = item.hit_testable();
+    }
+    if node.operable {
+        item = item.operable().calls("activate", "activate");
+    }
+    if node.clip {
+        item = item.clipping();
+    }
+    if node.sv || node.sh {
+        item = item.scrolling(Axes { vertical: node.sv, horizontal: node.sh });
+    }
+    if node.wheel {
+        item = item.wheel_scrolls();
+    }
+    if node.fade_top || node.fade_bottom || node.fade_left || node.fade_right {
+        item = item.fading(Edges { top: node.fade_top, bottom: node.fade_bottom, left: node.fade_left, right: node.fade_right });
+    }
+    if node.text.is_some() {
+        item = item.words(Text { cap_height: node.cap, width: node.tw, height: node.th, ellipsis: node.elided });
+    }
+    let heard = if node.heard.is_empty() { node.text.clone().unwrap_or_default() } else { node.heard.clone() };
+    if !heard.is_empty() {
+        item = item.heard(&heard);
+    }
+    let paints: Vec<Colour> = node.colors.iter().filter_map(|c| colour(c)).collect();
+    if !paints.is_empty() {
+        item = item.paints(&paints);
+    }
+    if SCENES.contains(&node.ty.as_str()) {
+        item = item.scene();
+    }
+    item
+}
+
+/// The tree with its ids: the root `Item` and, by the items' numbers, the Qt pointers the harness focuses by.
+pub struct Tree {
+    pub root: Item,
+    pub ids: Vec<u64>,
+    pub nodes: Vec<Node>,
+}
+
+impl Tree {
+    pub fn from_json(json: &str) -> Result<Tree, String> {
+        let nodes: Vec<Node> = serde_json::from_str(json).map_err(|e| format!("the tree's JSON: {e}"))?;
+        let mut children: HashMap<&str, Vec<usize>> = HashMap::new();
+        for (i, node) in nodes.iter().enumerate() {
+            children.entry(node.parent.as_str()).or_default().push(i);
+        }
+        let ids: Vec<u64> = nodes.iter().map(|n| n.id.parse().unwrap_or(0)).collect();
+        let root_index = nodes.iter().position(|n| n.parent == "0").ok_or("no root")?;
+        let root = build(&nodes, &children, root_index, None);
+        Ok(Tree { root, ids, nodes })
+    }
+
+    /// The item number of a Qt pointer, as `harness_focus` reports one.
+    pub fn index_of(&self, id: u64) -> Option<u32> {
+        (id != 0).then(|| self.ids.iter().position(|i| *i == id)).flatten().map(|i| i as u32)
+    }
+
+    pub fn id_of(&self, index: u32) -> u64 {
+        self.ids.get(index as usize).copied().unwrap_or(0)
+    }
+
+    pub fn find_named(&self, name: &str) -> Option<u32> {
+        self.nodes.iter().position(|n| n.name == name).map(|i| i as u32)
+    }
+
+    pub fn find_type(&self, ty: &str) -> Vec<u32> {
+        self.nodes.iter().enumerate().filter(|(_, n)| n.ty == ty).map(|(i, _)| i as u32).collect()
+    }
+
+    /// One line per item an audit may name: its number, type, objectName, words and box.
+    pub fn legend(&self) -> String {
+        self.nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, n)| n.visible && (n.operable || n.text.is_some() || n.sv || n.sh || !n.name.is_empty()))
+            .map(|(i, n)| {
+                format!("{i}: {} {} {:?} at {:.0},{:.0} {:.0}x{:.0}", n.ty, n.name, n.text.clone().unwrap_or_default(), n.x, n.y, n.w, n.h)
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// The numbers of every operable, visible item.
+    pub fn operable(&self) -> Vec<u32> {
+        self.nodes.iter().enumerate().filter(|(_, n)| n.operable && n.visible).map(|(i, _)| i as u32).collect()
+    }
+}
+
+/// The first words under an item: a control named by what it holds, as Avalonia's automation peers resolved it (InterfaceSpec §4.3).
+fn words_under(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize) -> Option<String> {
+    for &child in children.get(nodes[index].id.as_str()).map(Vec::as_slice).unwrap_or(&[]) {
+        let node = &nodes[child];
+        if !node.heard.is_empty() {
+            return Some(node.heard.clone());
+        }
+        if let Some(text) = node.text.as_ref().filter(|t| !t.is_empty()) {
+            return Some(text.clone());
+        }
+        if let Some(found) = words_under(nodes, children, child) {
+            return Some(found);
+        }
+    }
+    None
+}
+
+/// Builds an item and its children; a child kept outside its nearest clipping ancestor is `unseen`, as a row built out of view.
+fn build(nodes: &[Node], children: &HashMap<&str, Vec<usize>>, index: usize, clip: Option<Rect>) -> Item {
+    let node = &nodes[index];
+    let mut it = item(index as u32, node);
+    if node.operable && it.heard.is_none() {
+        if let Some(words) = words_under(nodes, children, index) {
+            it = it.heard(&words);
+        }
+    }
+    if let Some(clip) = clip {
+        if node.operable && clip.overlap(&it.rect).is_empty() {
+            it = it.unseen();
+        }
+    }
+    let own_clip = if node.clip { Some(it.rect) } else { clip };
+    if let Some(kids) = children.get(node.id.as_str()) {
+        for &child in kids {
+            it = it.child(build(nodes, children, child, own_clip));
+        }
+    }
+    it
+}

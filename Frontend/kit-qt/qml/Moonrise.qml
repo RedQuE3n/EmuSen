@@ -1,6 +1,6 @@
 import QtQuick
 import QtQuick.Shapes
-import EmuSen.Kit
+import EmuSen.Kit as Kit
 
 // Moonrise: the splash laid out from kit-core's frame, the moon, the row of worlds, the sweep, the line and the words (EmuSen_Kit.md §7.5).
 Item {
@@ -10,12 +10,12 @@ Item {
     property alias model: splash
     property bool running: true
     readonly property alias finished: splash.finished
-    MoonriseModel {
+    Kit.MoonriseModel {
         id: splash
         width: root.width
         height: root.height
     }
-    Sky {
+    Kit.Sky {
         anchors.fill: parent
         seed: splash.seed
         count: splash.starCount
@@ -128,7 +128,7 @@ Item {
                 radius: world.glowRadius
                 color: world.glowInk
             }
-            Body {
+            Kit.Body {
                 x: world.boxX
                 y: world.boxY
                 width: world.boxWidth

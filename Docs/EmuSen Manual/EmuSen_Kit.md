@@ -295,8 +295,10 @@ The QML module is `EmuSen.Kit` 1.0, registered by `build.rs`, its `.qml` files i
 
 ### 7.1 The enumerations (`kinds`)
 
-A `Kit` namespace element carries five `Q_ENUM_NS` mirrors, so QML writes `Kit.Accept`, `Kit.BigScreen`, `Kit.Content`,
-`Kit.Dark` and `Kit.EsdeList`: `PadButton` is `UiButton` in its order (the conversion goes through `UiButton::index`
+Each mirror is a `Q_ENUM_NS` in a namespace element of its own, since a QML namespace resolves a key by name alone and
+`Back` is a pad button and a cue, `Search` a pad button and a role: QML writes `Kit.Pad.Accept`, `Kit.Forms.BigScreen`,
+`Kit.Roles.Content`, `Kit.Variants.Dark`, `Kit.Repeat.EsdeList`, `Kit.Bodies.Planet`, `Kit.Rings.Big` and `Kit.Cues.Back`
+under the module's alias (§7.8): `PadButton` is `UiButton` in its order (the conversion goes through `UiButton::index`
 and `UiButton::ALL`, and `tests/kinds.rs` names every pair so a reordering on either side fails); `Form` is the frame's
 `WalkForm` with its three values, and the tokens read Card as the big screen's column; `Role` is the walk's `Role` plus
 `NoRole` for no focus; `Variant` and `Tiers` are the tokens' variant and the grammar's four measured repeat sets.
@@ -436,11 +438,12 @@ read the outer model). No C++ was added: the count stays at 23 lines.
 
 **The style** is `EmuSen_Qt.md` §1.5's: a directory of control files, `Frontend/kit-qt/style`, each composing its
 `QtQuick.Templates` type and painting in `Tokens`, with Basic as the fallback for a control not written. It travels in
-the kit's binary as a resource module at `qrc:/qt/qml/QtQuick/Controls/EmuSen/` with a hand-written `qmldir`
-(`style/EmuSen.qrc`), which is the module Qt Quick Controls looks for when a program calls
-`QQuickStyle::setStyle("EmuSen")` before its engine loads; cxx-qt 0.10 registers one QML module per crate, so a second
-`QmlModule` for the style was not open, and a resource module is the plainer form anyway, since the style has no Rust
-type. Twenty-one controls are written: `Button`, `CheckBox`, `RadioButton`, `Switch`, `Slider`, `ComboBox`,
+the kit's binary as a resource module named `EmuSen` at `qrc:/qt/qml/EmuSen/`, beside `EmuSen/Kit`, with a hand-written
+`qmldir` (`style/EmuSen.qrc`): Qt 6 resolves a custom style by importing a module named for the style, so
+`QQuickStyle::setStyle("EmuSen")` before the engine loads is `import EmuSen` (measured 2026-11-07: a module
+`QtQuick.Controls.EmuSen` was not found, with "module EmuSen is not installed"; the `QtQuick.Controls.*` names are the
+built-in styles'). cxx-qt 0.10 registers one QML module per crate, so a second `QmlModule` was not open, and a resource
+module is the plainer form anyway, since the style has no Rust type. Twenty-one controls are written: `Button`, `CheckBox`, `RadioButton`, `Switch`, `Slider`, `ComboBox`,
 `TextField`, `Label`, `ItemDelegate`, `ScrollBar`, `TabBar`, `TabButton`, `ProgressBar`, `ToolTip`, `Menu`,
 `MenuItem`, `MenuSeparator`, `Popup`, `Dialog`, `DialogButtonBox` (because `Dialog` instantiates it, and a Basic one
 would paint Basic's colours into a sweep) and `Pane`. The rules every file keeps, held by `tests/style.rs`: it imports
@@ -467,8 +470,13 @@ layout is written here.
   `PadRouter`, enabled while the frame holds the active focus, whose one line is `controller.offer(button)`; a `Timer`
   pumps the router on the wall clock while `PadRouter.clockRunning` (a test turns it off and pumps at stated times);
   and `Keys.onPressed` hands the keys its controls declined to `controller.key`, which decides and reports acceptance.
-  The desktop chrome (menu bar, status bar) is the desktop form's and not here (§7.7). *A name to know:* Qt Quick
-  Controls has a `Frame` too; a file importing both modules qualifies one (`import QtQuick.Controls as Controls`).
+  The desktop chrome (menu bar, status bar) is the desktop form's and not here (§7.7).
+
+**The kit is always imported as `Kit`** (decided 2026-11-07): every `.qml` file writes `import EmuSen.Kit as Kit` and
+`Kit.Frame`, `Kit.Tokens`, `Kit.Pad.Accept`, as Kirigami's convention has it (`import org.kde.kirigami as Kirigami`),
+because Qt Quick Controls has a `Frame` too and theme authors will import it unqualified out of habit, and with two
+unqualified imports whichever comes last silently shadows the other. `qml-rules` reports an unqualified `import
+EmuSen.Kit` (§7.9); the kit's own files, the style and the gallery follow it, and the theme API's pages will repeat it.
 - `HelpBar`: a row of entries from a model with `button` and `label` roles, each a flat `Button` whose press is
   `controller.offer(button)`, so a pointer has every action the bar names (§1.7); a ring stands where the glyph will be.
 - `MenuRow` and `WholeRow`: `Walkable`s of `rowHeight`, so a click is A there and hovering focuses them; the row's
@@ -498,6 +506,76 @@ the project's import paths. Measured on 2026-11-07 with four seeded faults, each
 failed the sheet-rule test; `Slider` dropped from the style's qmldir failed the qmldir test; `Frame.qml` dropped from
 the kit module failed rule Q's qmldir comparison; a misspelt token in `Button.qml` (`surfaceRaise`) was caught by
 `qmllint` as a missing property. Tests in the crate: 34. No C++ was added (23 lines).
+
+### 7.9 The harness `emusen-qt-test` and the checker `qml-rules` (stage 0, step 9; 2026-11-07)
+
+**The harness** is `EmuSen_Qt.md` §8.1's first tier and §8.3's shape, at `Frontend/qt-test`: a library crate the kit's
+gallery and later the screens' tests link, with one `QGuiApplication` per process (so one test function per test
+binary, the suite serial, as §8.3 says). `Harness::new` sets `QT_QPA_PLATFORM=offscreen`, `QT_QUICK_BACKEND=software`
+and the EmuSen style before Qt starts, and `QT_FORCE_STDERR_LOGGING=1`, because Fedora's Qt sends its warnings to
+journald when stderr is not a terminal (measured 2026-11-07: a scene that failed to load printed nothing in a test run
+while the journal held "module EmuSen is not installed"; a harness that swallows Qt's words is useless). `load(url, w, h)`
+loads a scene whose root is a `Window`, taking the root from the engine's `objectCreated`, shows it exposed and active
+at the size, and gives a `Scene` with the verbs: `tree`, `click`, `right_click`, `key`, `wheel`, `focus`, `focus_item`,
+`grab`, `property` and `pad`, plus `record_edges` and `audit`.
+
+- **The item tree becomes kit-core's.** `harness_tree` (C++) walks the window's items once and writes one JSON object
+  per item: its type (Qt names a QML component's meta-object after it, `MenuRow_QMLTYPE_3`, so the type is the class
+  name before `_QMLTYPE_`), its scene rectangle, visibility with the effective opacity, clip, whether it is hit-testable
+  (it accepts a mouse button or holds a pointer handler), operable (a control with a focus policy, or a walkable with
+  `activeFocusOnTab`, and not a focus scope whose content holds the focus), the words of a `Text` with `truncated`, the
+  content size and the font's cap height, a flickable's scrolling axes and `interactive`, the edges it declares it fades
+  (`fadeTop` … `fadeRight` properties, the protocol a scroller follows), its spoken name (`Accessible.name`, then its
+  `text`, then its `placeholderText`) and the colours it paints (`color`, a drawn border's colour, a shape path's fill
+  and stroke). `tree.rs` reads that into kit-core's `Item`s: the kind by what the dump says (a popup item, a menu bar,
+  a scroller only when it scrolls, words, a picture, a row of the kit's or Qt's, a control), `unseen` for an operable
+  item outside its nearest clipping ancestor (a row built out of view), the spoken name of a nameless operable item from
+  the first words under it (as Avalonia's peers resolved it, InterfaceSpec §4.3), `Body`, `Sky` and `Moonrise` as
+  scenes, and clear colours dropped. So every rule is kit-core's; the harness re-implements none.
+- **Pad reach is measured, not declared.** `record_edges` focuses each operable item in turn and presses Up, Down, Left
+  and Right through `PadRouter`'s queue on the harness's own clock (`clockRunning` off), reading where the focus lands;
+  `audit` hands kit-core those edges with the panel, the form, the focus, the variant's eighteen colours and the slack.
+- **The pad goes in where a pad goes in.** `pad(button)` pushes a down and an up into the router's queue and pumps at
+  stated times; the router is reached as the engine's singleton, downcast to the kit's `PadRouter` by cxx-qt's `Upcast`.
+- **C++**: `cpp/harness.cpp` and `harness.h`, the tree dump and QTest's verbs (`mouseClick`, `keyClick`, a wheel event,
+  `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton), 241 lines. QTest's mouse, keyboard and
+  window helpers are declared only under `QT_GUI_LIB`, which CMake defines and cc-rs does not, so the file defines it.
+
+**What the harness found in the kit** on 2026-11-07, each fixed in the kit, not the test: a help-bar button took the
+focus on a click, so the row it was meant to act on lost it (`focusPolicy: Qt.NoFocus`); a sheet took the focus out of
+the frame's scope, so the frame's `Connections` went quiet while a sheet was open (enabled while `sheetOpen` too); a row
+given the focus by a hover or a forced focus did not become the list's current row, so Down then jumped back (the panel's
+row makes itself current on focus); a list cut rows at an edge that did not fade (the panel fades its scroll edges and
+declares them); a scroll bar lay over the rows' right ends (it stands in the panel's margin); Qt's buttons ignore Return,
+their key being Space, so A did nothing on a stock button (the style's buttons take Return and Enter as a click or a
+toggle); a `TabBar`'s focus stopped at the bar (its list takes the focus and the current tab holds it); and `Walkable` is
+now a `FocusScope`, so a row whose content asks for the focus hands it on. Two findings are owed to stage 1 (§7.7): a
+`TextField` and a `ComboBox` take Up and Down themselves, so a vertical walk cannot pass them, and the four audited sizes
+are the gallery's (step 10).
+
+**`qml-rules`** is `EmuSen_Qt.md` §1.3's checker, a pure-Rust library at `Frontend/qml-rules` exposed as the third
+command of the `emusen.dev` DianaSh module (`Platform/emusen-dev-module`, with its man page `qml-rules(1)`), per the
+2026-10-26 rule that every tool is a DianaSh command. It reads `.qml` text with comments stripped and reports, one a line
+as `file:line rule words` with a last line `ok` or `N findings`: a `function` other than a `Connections` handler of one
+call; `Qt.callLater`; an array or object literal; words the player would read outside the bindings that take a name
+(`objectName`, `font.family`, `source`, `property`, `properties`, `sequence`, `Accessible.role`, `placeholderText`) and
+colour literals; `Component.onCompleted` beyond taking the focus; a `ListModel` with rows; an import outside the allowed
+list, or `EmuSen.Kit` imported without `as Kit` (§7.8). `--fixture` reads test scenes and the gallery as fixtures,
+whose words, rows and literals stand in for models. `tests/rules.rs` holds every rule and the spike's three deliberate
+breaks (`EmuSen_Qt.md` §10.3); `qt-test/tests/lint.rs` runs the checker and `qmllint`, with the project's import paths,
+over every file of the kit, the style and the scenes on every test run.
+
+**Held to**: `tests/menu.rs` (a menu scene: the panel and its eight rows in the tree, Down moves the focus and A
+activates, a click at a row's centre focuses and activates it the same way, the help bar's Open acts on the focused row,
+then the gate at 1280 × 800 from recorded edges, and the wheel), `tests/sheet.rs` (F1 opens the question, B dismisses it
+choosing nothing, A chooses the current button), `tests/style.rs` (eleven styled controls present, the gate passes over
+them, a grab is written), `tests/lint.rs`; `qml-rules/tests/rules.rs` (4); the dev module's two tests. Measured on
+2026-11-07 with four seeded faults, each reverted: every item marked hit-testable in the dump put the panel's fade over
+its rows and failed the menu scene's pointer reach; a colour read with its channels reversed failed the style scene's
+palette reach; the unqualified import allowed failed the rules test; the frame deaf while a sheet is open failed the
+sheet test. Two faults seeded first were not observable and are recorded as such: nothing hit-testable in the dump
+changes nothing for rows, since kit-core's `operable()` makes an item hit-testable itself; and `unseen` never set
+changes nothing in the menu scene, whose out-of-view rows are visible items the walk explores anyway.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 
@@ -532,8 +610,8 @@ once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on
 each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
 CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
 
-**Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count): 23 lines in `cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of
-it `send_key`. Budget: under 600 for the whole front end.
+**Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count): 23 lines in the kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`,
+all of it `send_key`) and 241 in the harness (§7.9), 264 in all. Budget: under 600 for the whole front end.
 
 ### 7.7 Open
 
@@ -545,6 +623,7 @@ it `send_key`. Budget: under 600 for the whole front end.
   the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.
 - Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker`, `DatePicker` and `NormalizedCanvas`; the drawn
   glyphs (the pad's buttons for the help bar, a check, a radio dot, a chevron) in place of the rings, discs and
-  rectangles the style draws now; the desktop form's menu bar and status bar; the `Frame` name beside Qt Quick
-  Controls' `Frame`, which a file importing both qualifies. **[routine]** Recommended: keep the name `Frame`, as the
-  design has it, and let screens import `QtQuick.Controls as Controls`.
+  rectangles the style draws now; the desktop form's menu bar and status bar.
+- Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
+  by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
+  do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.

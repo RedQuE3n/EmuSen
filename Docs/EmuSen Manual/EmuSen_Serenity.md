@@ -2427,3 +2427,106 @@ in the bench, each against the new case:
 3. **Levers 6 to 8**: recorded and not proposed. Recommended: leave them. **[decision]**
 4. **The battery run**: the handheld unplugged, then `systemd-run --user bash ~/emusen-bench/shader-opt/run.sh 3
    battery` (about 25 minutes), and `results-battery.txt` with `machine-battery.txt` sent back. **[routine]**
+
+---
+
+## 14. The Vulkan loader's lists, guarded across device creation and destruction (2026-11-08)
+
+### 14.1 The crash
+
+Three test hosts of WiseMan's sharded run died with SIGSEGV on 2026-11-04, and at 00:42 and 06:27 on 2026-11-08,
+each a few seconds into a shard in which several Serenity and slang test classes made devices in parallel in one
+process. The crashing thread's stack was the same each time: `loader_get_icd_and_device` in `libvulkan.so.1`, under
+`vkGetDeviceProcAddr`, under ash's `DeviceFnV1_1::load_erased`, under `ash::Device::load`, under
+`Device::create_for`. A re-run of the shard passed. The system: vulkan-loader 1.4.341.0 (Fedora 44), Mesa 26.2.4,
+the RX 6800 and the integrated Radeon 610M.
+
+### 14.2 The mechanism, read from the loader's source
+
+The loader's source at tag `v1.4.341` (https://github.com/KhronosGroup/Vulkan-Loader, read 2026-11-08):
+
+1. `loader_get_icd_and_device` (`loader/loader.c`) walks every instance in the process's `loader.instances`, every
+   driver entry (`icd_terms`) of each, and every device of each driver, holding `loader_global_instance_list_lock`.
+   `vkGetDeviceProcAddr` reaches it for every name it hands down to the loader's device terminator, so ash's
+   loading of a new device's table walks the lists hundreds of times.
+2. `vkEnumeratePhysicalDevices` (`loader/trampoline.c`) holds a different lock, `loader_lock`, and on any call that
+   fills an array calls `unload_drivers_without_physical_devices`. For each driver that found no device, that
+   function frees the driver entry (`loader_icd_destroy`, which ends in `loader_instance_heap_free`), then
+   `dlclose`s the driver (`loader_unload_scanned_icd`), and only then unlinks the freed entry from the instance's
+   `icd_terms`. It never takes `loader_global_instance_list_lock`.
+3. So one thread's enumeration on its own new instance frees a driver entry that is still linked, for as long as a
+   `dlclose` takes, while another thread's `vkGetDeviceProcAddr` walks that instance's list under a lock the first
+   thread does not hold. Fedora 44 installs twelve 64-bit Mesa drivers (`/usr/share/vulkan/icd.d/`) and this
+   machine has devices for two of them (RADV, and lavapipe), so every new instance frees and closes ten entries.
+
+Each instance being its own does not avoid this: the walk crosses every instance in the process.
+
+The cores agree. In the dump of 06:27 (`coredumpctl info 553614`), the faulting instruction compares the
+loader's device-table magic, `0x10ADED040410ADED` (`DEVICE_DISP_TABLE_MAGIC_NUMBER`), against a pointer read from a
+freed node, `0x2b6364747362696c`, which is the ASCII bytes "libstdc+": the node's memory already held someone
+else's string. At the same moment another of the host's threads was in `dlclose` of `libvulkan_virtio.so`, under
+`loader_unload_scanned_icd`, under `vkEnumeratePhysicalDevices`, under `Device::create_for`. The dump of 00:42 holds
+the same pair: one thread in `vkGetDeviceProcAddr`, another in `dlclose` under `vkEnumeratePhysicalDevices`.
+
+The hypothesis first put, that a `vkDestroyInstance` or `vkCreateInstance` changes the instance list during the
+walk, is refuted: both change `loader.instances` under `loader_global_instance_list_lock`, the walker's own lock,
+and `vkDestroyInstance` frees its driver entries only after its instance is unlinked. The defect is in the
+per-instance driver list, which enumeration prunes unguarded.
+
+The loader's maintainers fixed it in pull request #1866, "Use recursive mutexes to fix deadlocks in loader"
+(commit 5ee27b30c, merged 2026-02-20), which removes `loader_global_instance_list_lock` and has the walk take
+`loader_lock`, the lock enumeration, device creation and device destruction already hold. The first release that
+carries it is `v1.4.345`; Fedora 44 ships 1.4.341. Issue #2018 (closed 2026-08-24) reported the same family of crash
+on 1.4.341 with `vkCreateDevice` beside `vkDestroyDevice`, and was closed as not reproducing on the loader's main
+branch, which has #1866.
+
+### 14.3 The fix
+
+One process-wide lock in `vulkan.rs`, `LOADER_LISTS`, stands in for the loader's own until the loader fixes it.
+Every call Serenity makes that changes or walks the loader's lists holds it: `vkCreateInstance`, the debug
+messenger's creation, `vkEnumeratePhysicalDevices`, `vkCreateDevice` with ash's loading of the device's table and
+of the two export extensions' tables, `vkDestroyDevice`, and the messenger's and the instance's destruction. Device
+creation and destruction are guarded too, though the test hosts' dumps show only enumeration, because on 1.4.341
+`terminator_CreateDevice` links a device and `terminator_DestroyDevice` frees one under `loader_lock` alone,
+against the same walk (the mechanism of issue #2018); §14.4 shows that pair to be the one the stress test meets
+most.
+
+It is a mutable static, and a new one: the loader's lists are the process's, so the lock that stands for the
+loader's own must be too. It is internal to `vulkan.rs` and wires nothing to anything else. It is held only around
+those calls, never across a drop of a `Root` or a device, so a failure on the way out of `create_for` takes it again
+without deadlock. The cost is that those calls are serialised across the process, which only tests do in
+parallel: §14.4's stress run took 6.8 s with the lock against 5.6 s without, for 320 devices on eight threads.
+
+The lock can go once the system's loader is 1.4.345 or later on every platform the program ships for.
+
+### 14.4 The evidence (measured on 2026-11-08)
+
+`vulkan::tests::devices_made_and_dropped_on_many_threads_at_once_do_not_crash_the_loader`, ignored by default,
+makes and drops 40 devices on each of eight threads at once on the RX 6800 (`EMUSEN_SERENITY_RACE_ROUNDS` sets
+the 40). Without the lock it passed 15 runs of 15 as it stands: a freed node is read, but its memory has seldom
+been reused yet. glibc's `glibc.malloc.perturb=165` tunable fills every freed block with `0xa5`, which turns each
+read of a freed node into a fault at once; under it, without the lock, 13 runs of 13 died with SIGSEGV, at the same
+instruction as the test hosts (`loader_get_icd_and_device` + `0x1309e`, under `vkGetDeviceProcAddr` and ash's
+`Device::load`), with the device-table magic in `rbx` and `0xa5a5a5a5a5a5a5a5` in `rdx`. With the lock, under the
+same tunable, 25 runs of 25 passed, 8,000 devices. The crate's other 41 tests pass.
+
+Seeded faults, each the fixed build with one guard removed, ten runs each under the tunable:
+
+| Fault | Runs that crashed |
+|---|---|
+| Every guard removed | 10 of 10 |
+| `vkDestroyDevice` unguarded | 10 of 10 |
+| `vkCreateDevice` and the table loads unguarded | 1 of 10 |
+| `vkEnumeratePhysicalDevices` unguarded | 0 of 10: **survived** |
+
+The enumeration's guard survives this test because here every driver the pruning closes is still held open by the
+other threads' instances, so `dlclose` returns at once and the freed entry stays linked for a moment only. In the
+test hosts the pruning thread was caught inside `munmap` (§14.2), a window this test does not reproduce; the
+guard is kept on the evidence of both dumps.
+
+### 14.5 What it does not cover
+
+The lock covers Serenity's own calls. Another component that makes its own instance in the same process, or a
+host or core that resolves functions on a device it was handed (the Qt front end adopting Serenity's device, a
+core lent one, the libretro host's own instance, the core kit's lender), calls the loader outside it and meets the
+same defect on 1.4.341 if it does so while Serenity creates a device.

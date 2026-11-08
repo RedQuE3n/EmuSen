@@ -81,6 +81,14 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// The loader's instance, driver and device lists are the process's, and loaders before 1.4.345 free from them
+/// unguarded: every call here that changes or walks them holds this (EmuSen_Serenity.md §14).
+static LOADER_LISTS: Mutex<()> = Mutex::new(());
+
+fn loader_lists() -> MutexGuard<'static, ()> {
+    locked(&LOADER_LISTS)
+}
+
 /// What the validation layer has said and nobody has taken yet.
 #[derive(Default)]
 pub struct Findings {
@@ -156,6 +164,7 @@ struct Root {
 
 impl Drop for Root {
     fn drop(&mut self) {
+        let _lists = loader_lists();
         unsafe {
             if let Some((loader, listener)) = &self.listener {
                 loader.destroy_debug_utils_messenger(*listener, None);
@@ -213,6 +222,7 @@ impl Drop for Inner {
             }
             self.device.destroy_fence(self.fence, None);
             self.device.destroy_command_pool(self.pool, None);
+            let _lists = loader_lists();
             self.device.destroy_device(None);
         }
     }
@@ -385,7 +395,11 @@ impl Device {
         let instance = &root.instance;
 
         let mut candidates = Vec::new();
-        for physical in unsafe { instance.enumerate_physical_devices() }.unwrap_or_default() {
+        let physicals = {
+            let _lists = loader_lists();
+            unsafe { instance.enumerate_physical_devices() }.unwrap_or_default()
+        };
+        for physical in physicals {
             let properties = unsafe { instance.get_physical_device_properties(physical) };
             let queues = unsafe { instance.get_physical_device_queue_family_properties(physical) };
             let Some(family) = queues.iter().position(|q| q.queue_flags.contains(vk::QueueFlags::GRAPHICS)) else { continue };
@@ -462,7 +476,11 @@ impl Device {
             create = create.push_next(&mut layer_settings).enabled_layer_names(&layers);
         }
         create = create.enabled_extension_names(&extensions);
-        let instance = unsafe { entry.create_instance(&create, None) }.check("vkCreateInstance")?;
+        let instance = {
+            let _lists = loader_lists();
+            unsafe { entry.create_instance(&create, None) }
+        }
+        .check("vkCreateInstance")?;
         let findings = Arc::new(Findings::default());
         let mut root = Root { entry, instance, api, listener: None, findings, _loader: loader };
         if validate {
@@ -472,7 +490,11 @@ impl Device {
                 .pfn_user_callback(Some(heard))
                 .user_data(Arc::as_ptr(&root.findings).cast_mut().cast());
             let loader = ash::ext::debug_utils::Instance::new(&root.entry, &root.instance);
-            let listener = unsafe { loader.create_debug_utils_messenger(&messenger, None) }.check("vkCreateDebugUtilsMessengerEXT")?;
+            let listener = {
+                let _lists = loader_lists();
+                unsafe { loader.create_debug_utils_messenger(&messenger, None) }
+            }
+            .check("vkCreateDebugUtilsMessengerEXT")?;
             root.listener = Some((loader, listener));
         }
         Ok(root)
@@ -510,13 +532,18 @@ impl Device {
         if timeline {
             device_info = device_info.push_next(&mut v12);
         }
-        let device = unsafe { root.instance.create_device(physical, &device_info, None) }.check("vkCreateDevice")?;
+        // ash loads the device's table through vkGetDeviceProcAddr, which walks the loader's lists, as each extension's loader does.
+        let (device, exports) = {
+            let _lists = loader_lists();
+            let device = unsafe { root.instance.create_device(physical, &device_info, None) }.check("vkCreateDevice")?;
+            let exports = exporting.then(|| (ash::khr::external_memory_fd::Device::new(&root.instance, &device), ash::khr::external_semaphore_fd::Device::new(&root.instance, &device)));
+            (device, exports)
+        };
         let mut id = vk::PhysicalDeviceIDProperties::default();
         let mut properties = vk::PhysicalDeviceProperties2::default().push_next(&mut id);
         unsafe { root.instance.get_physical_device_properties2(physical, &mut properties) };
         let uuid = id.device_uuid;
         let driver_uuid = id.driver_uuid;
-        let exports = exporting.then(|| (ash::khr::external_memory_fd::Device::new(&root.instance, &device), ash::khr::external_semaphore_fd::Device::new(&root.instance, &device)));
         let made = (|| unsafe {
             let queue = device.get_device_queue(family, 0);
             let pool_info = vk::CommandPoolCreateInfo::default().queue_family_index(family).flags(vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER);
@@ -541,6 +568,7 @@ impl Device {
         let (queue, pool, commands, fence) = match made {
             Ok(made) => made,
             Err(words) => {
+                let _lists = loader_lists();
                 unsafe { device.destroy_device(None) };
                 return Err(words);
             }
@@ -1298,5 +1326,26 @@ mod tests {
     fn a_mark_is_sixteen_bytes_for_the_header_s_struct() {
         assert_eq!(std::mem::size_of::<Mark>(), 16);
         assert_eq!(std::mem::align_of::<Mark>(), 8);
+    }
+
+    /// Devices made and dropped on eight threads at once, which crashed the loader before its lists were guarded (EmuSen_Serenity.md §14).
+    #[test]
+    #[ignore = "needs a Vulkan device; EMUSEN_SERENITY_RACE_ROUNDS sets the rounds per thread"]
+    fn devices_made_and_dropped_on_many_threads_at_once_do_not_crash_the_loader() {
+        let rounds: usize = std::env::var("EMUSEN_SERENITY_RACE_ROUNDS").ok().and_then(|r| r.parse().ok()).unwrap_or(40);
+        let name = std::env::var(DEVICE_VARIABLE).ok();
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                let name = name.clone();
+                std::thread::spawn(move || {
+                    for _ in 0..rounds {
+                        Device::create(name.as_deref(), false).expect("a device");
+                    }
+                })
+            })
+            .collect();
+        for thread in threads {
+            thread.join().expect("a thread that made devices");
+        }
     }
 }

@@ -1,0 +1,36 @@
+[package]
+name = "emusen-theme-qt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-theme-qt"
+
+# What a theme sees, the QML module EmuSen.Theme 1.0 (EmuSen_Qt.md §3.2): curated views over emusen-qt-models, the kit's
+# types by name, and nothing else. The host feeds the views; a theme reads them and acts through Actions.
+[lib]
+name = "emusen_theme_qt"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+# The pad's buttons as the help bar numbers them.
+emusen-kit-core.workspace = true
+# The kit's types, re-exported by name from this module's own files.
+emusen-kit-qt.workspace = true
+# The views this module curates: the library's rows, its words and the help bars' entries (EmuSen_Qt.md §1.2).
+emusen-qt-models = { path = "../qt-models" }
+# Home's lines as the library model publishes them, a JSON array.
+serde_json.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+[dev-dependencies]
+emusen-qt-test.workspace = true
+# The platform library built from this commit and a scratch tree, for the views over the real clients.
+emusen-client-fixture = { path = "../client-fixture" }
+# The runtime's configuration a test opens the clients with; tests only, the module names no client.
+emusen-crystal-client = { path = "../crystal-client" }
+emusen-platform-client = { path = "../platform-client" }

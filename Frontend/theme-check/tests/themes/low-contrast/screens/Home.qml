@@ -2,7 +2,7 @@ import QtQuick
 import EmuSen.Theme 1.0
 import "../parts"
 
-Screen {
+ThemeScreen {
     objectName: "Home"
     Shelf {
         anchors.fill: parent

@@ -1,0 +1,168 @@
+import QtQuick
+import EmuSen.Theme
+import EmuSen.Kit as Kit
+
+// A theme's view of the module: every list read through its roles by name, the words, the tokens, a screen and each re-exported type placed.
+Window {
+    id: scene
+    objectName: "scene"
+    width: 1280
+    height: 800
+    color: Tokens.voidFill
+    component ConsoleRow: Item {
+        required property string key
+        required property string name
+        required property string displayName
+        required property string maker
+        required property int year
+        required property int count
+        required property real hue
+        required property string body
+        required property string engineName
+        required property string engineKind
+        required property string engineMark
+    }
+    component PlaceRow: Item {
+        required property string key
+        required property string name
+        required property string kind
+        required property string line
+        required property bool attention
+        required property int count
+    }
+    component GameRow: Item {
+        required property string key
+        required property string title
+        required property string cover
+        required property real coverShape
+        required property bool favourite
+        required property real lastPlayed
+        required property bool played
+        required property string consoleId
+        required property real consoleHue
+        required property int players
+        required property int year
+        required property string genre
+        required property real rating
+        required property string description
+        required property string video
+        required property string hero
+        required property string lastPlayedWords
+    }
+    readonly property int consoles: Library.consoles.count
+    readonly property int places: Library.places.count
+    readonly property int shelves: Library.shelves.count
+    // The console whose games the scene lists, named by the test as a theme takes it from a row.
+    property string consoleKey
+    readonly property int consoleGames: Library.gamesOf(scene.consoleKey).count
+    readonly property string wordmark: Words.title
+    readonly property string counted: Words.games(2)
+    readonly property string status: Words.statusLine(Device.controllers, Device.clock)
+    readonly property string sessionTitle: Session.title
+    readonly property bool hasGame: Session.hasGame
+    readonly property int gameHelp: gameHelpList.count
+    readonly property string gameActions: Help.entries(Help.Section).actionLines
+    readonly property color accent: Tokens.accent
+    readonly property color kitAccent: Kit.Tokens.accent
+    readonly property int dark: Tokens.Dark
+    readonly property int screenRole: screen.role
+    readonly property int screenFocus: screen.focusRole
+    readonly property string firstConsole: (consoleList.count > 0 ? consoleList.itemAt(0) as ConsoleRow : null)?.key ?? ""
+    // Home's places stand before the feed, so their probe is read again when the test names a console after the feed.
+    readonly property string secondPlace: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.name ?? ""
+    readonly property bool secondAttention: (scene.consoleKey.length >= 0 && placeList.count > 1 ? placeList.itemAt(1) as PlaceRow : null)?.attention ?? false
+    readonly property string firstTitle: (gameList.count > 0 ? gameList.itemAt(0) as GameRow : null)?.title ?? ""
+    Repeater {
+        id: gameHelpList
+        model: Help.entries(Help.Game)
+        Item {
+            required property int button
+            required property string label
+            required property int pair
+        }
+    }
+    Repeater {
+        id: consoleList
+        model: Library.consoles
+        delegate: ConsoleRow {}
+    }
+    Repeater {
+        id: placeList
+        model: Library.places
+        delegate: PlaceRow {}
+    }
+    Repeater {
+        model: Library.shelves
+        Item {
+            required property string key
+            required property string name
+            required property string line
+            required property int count
+        }
+    }
+    Repeater {
+        id: gameList
+        model: Library.gamesOf(scene.consoleKey)
+        delegate: GameRow {}
+    }
+    Repeater {
+        model: Library.collections
+        Item {
+            required property string key
+            required property string name
+            required property int count
+        }
+    }
+    ThemeScreen {
+        id: screen
+        objectName: "screen"
+        anchors.fill: parent
+        role: ThemeScreen.Games
+        focusRole: ThemeScreen.Navigation
+        focusItems: [walkable]
+        Frame {
+            id: frame
+            anchors.fill: parent
+            help: Help.entries(Help.Section)
+            padFamily: Device.family
+            Walkable {
+                id: walkable
+                objectName: "walkable"
+                controller: frame.controller
+                width: 120
+                height: 160
+            }
+            Carousel {
+                objectName: "carousel"
+                controller: frame.controller
+                y: 200
+                width: 600
+                height: 200
+            }
+        }
+        Sky {
+            objectName: "sky"
+            anchors.fill: parent
+            z: -1
+        }
+        Scene {
+            objectName: "ownColours"
+            Body {
+                objectName: "body"
+                width: 72
+                height: 72
+                hue: 200
+            }
+        }
+        NormalizedCanvas {
+            objectName: "canvas"
+            width: 320
+            height: 200
+        }
+        HelpBar {
+            objectName: "helpBar"
+            model: Help.entries(Help.Place)
+            width: 600
+        }
+    }
+}

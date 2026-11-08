@@ -554,8 +554,15 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
 - *The real desk, and the C# figures from the same script.* The desk's session was locked through the work; both need
   the tester there. The C# front end counts no `frameSwapped`; which of its own counters stands for the same count is
   settled when its figures are taken, and they are written next to these.
-- *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
-  Cores window's job, in the player's tree.
+- *Play to the first picture for a hosted core.* Owed: it needs one live core download through `cores get`, awaiting the
+  tester's go (2026-11-08). The program's only Cores path is the platform library's tool job (`emusen_tool_job_start`,
+  op `get`, `core-tool`), whose source is fixed to the buildbot; a test's own server cannot stand in through the C
+  interface, by design. The job's installation is the calling program's own folder, and the Qt program has no published
+  layout yet (no libretro host, proxy or `cores.manifest` beside `emusen-qt-play`; `xtask publish`, §1.9); nor has
+  `platform-client` a tool-job wrapper. The method once allowed: a sandbox installation laid out as a publish lays one
+  (DianaSh's program, the libretro host, the proxy, the manifest) and a sandbox home; `cores get fceumm` (one download)
+  and `cores approve` at the prompt; then `emusen-qt-play` with `EMUSEN_CORES` naming that installation and `--game`
+  naming a game in the library, opened in place; two rounds, a third if within the noise.
 - *The pad driving the game.* Done 2026-11-08, §1.8.5.
 - *A device core's picture.* Done 2026-11-08, §1.8.7.
 - *The sound* (done 2026-11-08, §1.8.6); *the picture's content* (done 2026-11-08 by a window grab, §1.8.8); and the chain dropped on the render thread when a session closes (it is now

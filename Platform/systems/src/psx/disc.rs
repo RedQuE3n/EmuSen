@@ -3,8 +3,6 @@
 
 use crate::media::ascii;
 use crate::probe::{DiscSectors, Head, Need, ROOT_FILE_LIMIT, Recognition, SYNC, root_file_through};
-use emusen_dotnet::text::{trim, trim_start};
-
 
 const LICENCE: &[u8; 32] = b"          Licensed  by          ";
 
@@ -26,11 +24,11 @@ pub fn serial_of(config: Option<&[u8]>) -> Option<String> {
     let text = ascii(config?);
     for line in text.split('\n') {
         let Some(eq) = line.find('=') else { continue };
-        let start = trim_start(line);
+        let start = line.trim_start();
         if start.len() < 4 || !start[..4].eq_ignore_ascii_case("BOOT") {
             continue;
         }
-        return serial_of_file(trim(&line[eq + 1..]));
+        return serial_of_file(line[eq + 1..].trim());
     }
     None
 }
@@ -40,7 +38,7 @@ pub fn serial_of_file(file: &str) -> Option<String> {
     let cut = file.rfind('\\').max(file.rfind(':')).map_or(0, |i| i + 1);
     let file = &file[cut..];
     let file = file.split(';').next().unwrap_or("").replace('.', "").replace('_', "-");
-    let file = trim(&file).to_ascii_uppercase();
+    let file = file.trim().to_ascii_uppercase();
     ((6..=12).contains(&file.len()) && file.contains('-')).then_some(file)
 }
 

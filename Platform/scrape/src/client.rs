@@ -63,7 +63,7 @@ impl Wire {
 /// The start of a body, for the status line: never more than a line of 160 characters, and never a credential.
 pub fn snippet(body: &str) -> String {
     let line = body.split('\n').next().unwrap_or("").trim_matches(char::is_whitespace);
-    let cut: String = if emusen_dotnet::text::utf16_len(line) > 160 { take_utf16(line, 160) } else { line.to_string() };
+    let cut: String = if line.chars().count() > 160 { take_utf16(line, 160) } else { line.to_string() };
     redact(&cut)
 }
 
@@ -253,7 +253,7 @@ impl Client {
         let Some(q) = url.find('?') else { return url.to_string() };
         let kept: Vec<&str> = url[q + 1..]
             .split('&')
-            .filter(|p| !(emusen_dotnet::text::starts_with_ignore_case(p, "ssid=") || emusen_dotnet::text::starts_with_ignore_case(p, "sspassword=")))
+            .filter(|p| !(p.to_uppercase().starts_with("SSID=") || p.to_uppercase().starts_with("SSPASSWORD=")))
             .collect();
         format!("{}{}", &url[..q + 1], kept.join("&"))
     }
@@ -401,7 +401,7 @@ pub fn sign_in_result(status: Status, body: &str) -> (&'static str, Option<Membe
             Ok(None) => ("wrong_account", None, said),
             Err(_) => ("unreadable", None, said),
         },
-        Status::BadCredentials if emusen_dotnet::text::contains_ignore_case(body, "velop") => ("developer_refused", None, said),
+        Status::BadCredentials if body.to_uppercase().contains("VELOP") => ("developer_refused", None, said),
         Status::BadCredentials => ("wrong_account", None, said),
         Status::ServerBusy => ("busy", None, said),
         Status::ApiClosed => ("closed", None, said),

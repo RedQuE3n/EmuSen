@@ -4,17 +4,11 @@ use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report
 use emusen_galaxia::config::{self, Loaded};
 use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::models::{self, Model};
-use emusen_galaxia::{cheats, error_log, json, model, suggestion, tree};
+use emusen_galaxia::{cheats, error_log, model, tree};
 use std::time::{Duration, SystemTime};
 
 /// `EMUSEN_GALAXIA_MODEL_UPGRADE`: apply the model's own upgrade to what was read or made.
 pub const UPGRADE: u32 = 1;
-
-/// What `emusen_galaxia_number_format` formats.
-pub mod number {
-    pub const DOUBLE: u32 = 0;
-    pub const SINGLE: u32 = 1;
-}
 
 /// What `emusen_galaxia_suggest` answers with.
 pub mod suggest {
@@ -184,30 +178,6 @@ pub unsafe extern "C" fn emusen_galaxia_model_save_to(model: u32, file: *const u
     result().map_or_else(|status| status, |()| 0)
 }
 
-/// A file's bytes as .NET's `File.ReadAllText` decodes them, for a test to hold the decoding to .NET's.
-///
-/// # Safety
-/// Each pointer must be valid for its length, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_text_decode(bytes: *const u8, bytes_len: usize, out: *mut u8, len: usize) -> i64 {
-    let bytes = if bytes.is_null() || bytes_len == 0 { &[][..] } else { unsafe { std::slice::from_raw_parts(bytes, bytes_len) } };
-    answer(Ok(json::decode(bytes)), out, len)
-}
-
-/// A number as .NET writes it into JSON, from its bits: a double's 64, or a float's in the low 32. `ABSENT` for a value JSON has no number for.
-///
-/// # Safety
-/// `out` must be valid for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_number_format(kind: u32, bits: u64, out: *mut u8, len: usize) -> i64 {
-    let formatted = match kind {
-        number::DOUBLE => json::format_f64(f64::from_bits(bits)),
-        number::SINGLE => json::format_f32(f32::from_bits(bits as u32)),
-        _ => return fail(status::BAD_ARGUMENT, format!("no number kind {kind}")) as i64,
-    };
-    answer(formatted.ok_or(status::ABSENT), out, len)
-}
-
 /// The saved cheat lists by name, in .NET's caseless order, each followed by a NUL.
 ///
 /// # Safety
@@ -340,7 +310,7 @@ pub extern "C" fn emusen_galaxia_log_reset() -> i32 {
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_suggest_distance(a: *const u8, a_len: usize, b: *const u8, b_len: usize) -> i32 {
-    let result = || -> Result<i32, i32> { Ok(suggestion::distance(unsafe { required(a, a_len) }?, unsafe { required(b, b_len) }?) as i32) };
+    let result = || -> Result<i32, i32> { Ok(emusen_suggest::distance(unsafe { required(a, a_len) }?, unsafe { required(b, b_len) }?) as i32) };
     result().unwrap_or_else(|status| status)
 }
 
@@ -354,8 +324,8 @@ pub unsafe extern "C" fn emusen_galaxia_suggest(what: u32, typed: *const u8, typ
         let (typed, candidates) = (unsafe { required(typed, typed_len) }?, unsafe { text(candidates, candidates_len) }?.unwrap_or(""));
         let candidates: Vec<&str> = candidates.split_terminator('\0').collect();
         match what {
-            suggest::HINT => Ok(suggestion::hint(typed, &candidates, max)),
-            suggest::NEAREST => Ok(suggestion::nearest(typed, &candidates, max).iter().map(|name| format!("{name}\0")).collect()),
+            suggest::HINT => Ok(emusen_suggest::hint(typed, &candidates, max)),
+            suggest::NEAREST => Ok(emusen_suggest::nearest(typed, &candidates, max).iter().map(|name| format!("{name}\0")).collect()),
             _ => Err(fail(status::BAD_ARGUMENT, format!("no suggestion {what}"))),
         }
     };
@@ -393,12 +363,7 @@ mod tests {
     }
 
     #[test]
-    fn numbers_and_suggestions_cross_as_text() {
-        let double = |value: f64| ask(|out, len| unsafe { emusen_galaxia_number_format(number::DOUBLE, value.to_bits(), out, len) });
-        let single = |value: f32| ask(|out, len| unsafe { emusen_galaxia_number_format(number::SINGLE, value.to_bits() as u64, out, len) });
-        assert_eq!(double(1e-7), Ok("1E-07".to_string()));
-        assert_eq!(single(0.8), Ok("0.8".to_string()));
-        assert_eq!(double(f64::NAN), Err(status::ABSENT as i64));
+    fn suggestions_cross_as_text() {
         let candidates = "DPadUp\0DPadDown\0";
         let suggest = |what, typed: &str| ask(|out, len| unsafe { emusen_galaxia_suggest(what, typed.as_ptr(), typed.len(), candidates.as_ptr(), candidates.len(), 2, out, len) });
         assert_eq!(suggest(suggest::HINT, "DPadUpp"), Ok(" Did you mean 'DPadUp'?".to_string()));
@@ -432,8 +397,6 @@ mod tests {
         defines("EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG", models::GRAPHICS_CONFIG_ID);
         defines("EMUSEN_GALAXIA_MODEL_CHEAT_FILE", models::CHEAT_FILE_ID);
         defines("EMUSEN_GALAXIA_MODEL_UPGRADE", UPGRADE);
-        defines("EMUSEN_GALAXIA_NUMBER_DOUBLE", number::DOUBLE);
-        defines("EMUSEN_GALAXIA_NUMBER_SINGLE", number::SINGLE);
         defines("EMUSEN_GALAXIA_SUGGEST_HINT", suggest::HINT);
         defines("EMUSEN_GALAXIA_SUGGEST_NEAREST", suggest::NEAREST);
         assert_eq!(models::MODELS.len(), 4);

@@ -20,6 +20,7 @@ pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;
 pub mod galaxia_config;
+mod last_error;
 // The library's stable header, emusen_library.h, exported beside this interface (EmuSen_Backend.md §28).
 pub mod library;
 // The library tool: CHD conversion jobs, for Mistress's window and, as the emusen.library service, for every shell (EmuSen_GamePackages.md §12.3).
@@ -36,7 +37,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 35;
+pub const ABI_VERSION: u32 = 36;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -67,14 +68,12 @@ pub mod status {
 }
 
 thread_local! {
-    static LAST_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
     static DIAGNOSTICS: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Records why a call failed, for `emusen_platform_last_error` on the same thread, and returns its status.
 pub(crate) fn fail(status: i32, words: impl Into<String>) -> i32 {
-    LAST_ERROR.with_borrow_mut(|last| *last = words.into());
-    status
+    last_error::fail(last_error::Slot::Platform, status, words.into())
 }
 
 /// The status for an I/O error, with its words recorded.
@@ -180,7 +179,7 @@ pub unsafe extern "C" fn emusen_platform_set_crash_log(path: *const u8, len: usi
 /// `out` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_platform_last_error(out: *mut u8, len: usize) -> i64 {
-    LAST_ERROR.with_borrow(|last| unsafe { put(last.as_bytes(), out, len) })
+    unsafe { last_error::copy_out(last_error::Slot::Platform, out, len) }
 }
 
 /// The calling thread's waiting diagnostics, each ended by a NUL, removed once a buffer has taken them all.

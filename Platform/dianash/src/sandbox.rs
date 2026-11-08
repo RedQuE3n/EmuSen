@@ -1,7 +1,6 @@
 //! The shell's `/`: Galaxia's home, and paths resolved chroot-style inside it, as `DianaShSandbox.TryResolve`
 //! resolves them. A walled garden, not a security boundary: see `man hier` and EmuSen_DianaSh.md §12.1.
 
-use crate::dotnet;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree;
 
@@ -26,7 +25,7 @@ impl Sandbox {
                 return (true, as_is);
             }
         }
-        let base = if looks_rooted { root.clone() } else { dotnet::current_directory() };
+        let base = if looks_rooted { root.clone() } else { std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default() };
         let mut effective = if looks_rooted { requested.trim_start_matches(['/', '\\']) } else { requested };
         if effective.is_empty() {
             effective = ".";
@@ -60,7 +59,7 @@ impl Sandbox {
     pub fn display(&self, real: &str) -> String {
         let root = self.root();
         let Some(root) = self.within(real, &root) else { return real.to_string() };
-        if dotnet::same(real, &root) {
+        if real.eq_ignore_ascii_case(&root) {
             return "/".to_string();
         }
         let rest: String = real.chars().skip(root.chars().count() + 1).collect();
@@ -80,7 +79,7 @@ pub const IGNORES_CASE: bool = cfg!(any(windows, target_os = "macos"));
 pub fn inside(candidate: &str, root: &str) -> bool {
     let below = format!("{root}{}", Style::HOST.separator());
     if IGNORES_CASE {
-        dotnet::same(candidate, root) || dotnet::starts_with_ignore_case(candidate, &below)
+        candidate.eq_ignore_ascii_case(&root) || candidate.to_uppercase().starts_with(&below.to_uppercase())
     } else {
         candidate == root || candidate.starts_with(&below)
     }

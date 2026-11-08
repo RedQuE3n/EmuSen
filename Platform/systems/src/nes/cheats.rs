@@ -1,6 +1,5 @@
 //! The NES's two code formats: the plain address:value form and Galoob's Game Genie (Moon_Cheats.md §2).
 
-use emusen_dotnet::text::upper_invariant;
 use crate::cheats::{Decoded, format_error, hex, is_hex};
 
 /// The plain form: exactly six hex digits once anything else is stripped.
@@ -29,7 +28,7 @@ const COMPARE_BITS: [u32; 8] = [27, 30, 29, 28, 23, 26, 25, 24];
 
 /// The letters of the alphabet in the code, upper case, where there are six or eight.
 fn genie_letters(code: &str) -> Option<Vec<u32>> {
-    let letters: Vec<u32> = code.chars().filter_map(|c| ALPHABET.find(upper_invariant(c)).map(|i| i as u32)).collect();
+    let letters: Vec<u32> = code.chars().filter_map(|c| ALPHABET.find(c.to_ascii_uppercase()).map(|i| i as u32)).collect();
     matches!(letters.len(), 6 | 8).then_some(letters)
 }
 

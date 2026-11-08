@@ -211,8 +211,8 @@ pub fn path_for(request: &Request, store: &str) -> String {
 /// false without words when it is not, the words when the folder or the file could not be written.
 pub fn install(request: &Request, source: &str, store: &str) -> Result<bool, String> {
     let Some(bytes) = Bytes::exact(source, request.size) else { return Ok(false) };
-    std::fs::create_dir_all(store).map_err(|e| emusen_dotnet::file::io_message(&e, store))?;
-    emusen_dotnet::file::write_all_bytes(&path_for(request, store), &bytes)?;
+    std::fs::create_dir_all(store).map_err(|e| format!("{}: {}", store, e))?;
+    std::fs::write(&path_for(request, store), &bytes).map_err(|e| format!("{}: {e}", path_for(request, store)))?;
     Ok(true)
 }
 

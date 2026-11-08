@@ -7,7 +7,7 @@ use emusen_n64_pak as pak;
 /// A name field read in the pak's characters up to its first NUL, its trailing white space kept off.
 pub fn text_of(field: &[u8]) -> String {
     let text: String = field.iter().take_while(|&&b| b != 0).map(|&b| pak::char_of(b)).collect();
-    emusen_dotnet::text::trim_end(&text).to_string()
+    text.trim_end().to_string()
 }
 
 /// A code field as text where it is printable ASCII, as Nintendo's codes are, else in upper-case hex, as a cheat

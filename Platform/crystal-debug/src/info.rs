@@ -129,6 +129,6 @@ impl Info {
     }
 
     pub fn space_named(&self, name: &str) -> Option<&SpaceInfo> {
-        self.spaces.iter().find(|s| emusen_dotnet::text::equals_ignore_case(&s.name, name))
+        self.spaces.iter().find(|s| s.name.eq_ignore_ascii_case(&name))
     }
 }

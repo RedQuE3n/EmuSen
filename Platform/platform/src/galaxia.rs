@@ -1,7 +1,7 @@
 //! Galaxia's C layer: the tree, the save library's names, atomic files, the migration and the ROM hash.
 
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, fail_io, join_nul, put, report, required, status, text};
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::migration::{self, Copied};
 use emusen_galaxia::tree::{self, Directory, Override};
 use emusen_galaxia::mapped::Mapped;
@@ -27,26 +27,6 @@ pub mod migrate {
     pub const BETWEEN: u32 = 3;
     pub const TREE: u32 = 4;
     pub const SEED: u32 = 5;
-}
-
-/// The path rules `emusen_galaxia_dotnet_path` answers with text.
-pub mod path_op {
-    pub const COMBINE: u32 = 0;
-    pub const FILE_NAME: u32 = 1;
-    pub const FILE_NAME_WITHOUT_EXTENSION: u32 = 2;
-    pub const CHANGE_EXTENSION: u32 = 3;
-    pub const DIRECTORY_NAME: u32 = 4;
-    pub const TRIM_ENDING_SEPARATOR: u32 = 5;
-    pub const FULL_PATH: u32 = 6;
-}
-
-/// The rules `emusen_galaxia_dotnet_test` answers with 1 or 0.
-pub mod test_op {
-    pub const FILE_EXISTS: u32 = 0;
-    pub const DIRECTORY_EXISTS: u32 = 1;
-    pub const IS_BLANK: u32 = 2;
-    pub const EQUALS_IGNORE_CASE: u32 = 3;
-    pub const ENDS_WITH_IGNORE_CASE: u32 = 4;
 }
 
 /// A text answer, or the status that stands in for it.
@@ -394,7 +374,7 @@ pub unsafe extern "C" fn emusen_galaxia_rom_tracks(sheet: *const u8, sheet_len: 
             .iter()
             .map(|t| {
                 let h = hashes_json(&t.hashes);
-                format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, emusen_galaxia::json::quoted(&t.file), t.offset, &h[1..])
+                format!(r#"{{"track":{},"file":{},"offset":{},{}"#, t.number, serde_json::json!(&t.file).to_string(), t.offset, &h[1..])
             })
             .collect();
         Ok(format!("[{}]", items.join(",")))
@@ -457,7 +437,7 @@ pub unsafe extern "C" fn emusen_galaxia_package_format(manifest: *const u8, mani
 }
 
 fn roots_from<'a>(packages: &'a str, library: Option<&'a str>, compressed: &'a str) -> claims::Roots<'a> {
-    claims::Roots { packages, library: library.filter(|l| !path::is_blank(Some(l))), compressed }
+    claims::Roots { packages, library: library.filter(|l| !l.trim().is_empty()), compressed }
 }
 
 fn strings(out: &mut String, items: &[String]) {
@@ -466,7 +446,7 @@ fn strings(out: &mut String, items: &[String]) {
         if i > 0 {
             out.push(',');
         }
-        out.push_str(&emusen_galaxia::json::quoted(item));
+        out.push_str(&serde_json::json!(item).to_string());
     }
     out.push(']');
 }
@@ -497,7 +477,7 @@ pub unsafe extern "C" fn emusen_galaxia_package_index(
             if i > 0 {
                 j.push(',');
             }
-            j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", emusen_galaxia::json::quoted(&pkg.folder), emusen_galaxia::json::quoted(&pkg.system), emusen_galaxia::json::quoted(&pkg.game)));
+            j.push_str(&format!("{{\"folder\":{},\"system\":{},\"game\":{},\"claims\":", serde_json::json!(&pkg.folder).to_string(), serde_json::json!(&pkg.system).to_string(), serde_json::json!(&pkg.game).to_string()));
             strings(&mut j, &pkg.claims);
             j.push('}');
         }
@@ -530,8 +510,8 @@ pub unsafe extern "C" fn emusen_galaxia_package_resolve(
         let at = unsafe { required(at, at_len) }?;
         let (p, l, c) = (unsafe { required(packages, packages_len) }?, unsafe { text(library, library_len) }?, unsafe { required(compressed, compressed_len) }?);
         let r = claims::resolve(&roots_from(p, l, c), at).map_err(|words| fail(status::IO, words))?;
-        let package = r.package.as_deref().map_or_else(|| "null".to_string(), emusen_galaxia::json::quoted);
-        Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", emusen_galaxia::json::quoted(&r.game), r.moved))
+        let package = serde_json::json!(r.package).to_string();
+        Ok(format!("{{\"game\":{},\"package\":{package},\"moved\":{}}}", serde_json::json!(&r.game).to_string(), r.moved))
     };
     answer(result(), out, len)
 }
@@ -595,52 +575,6 @@ pub unsafe extern "C" fn emusen_galaxia_unmap(mapped: *mut Mapped) -> i32 {
     0
 }
 
-/// One of .NET's path rules as this library applies it, by its `EMUSEN_GALAXIA_PATH_*` number, so the parity tests can hold each rule to .NET's own answer.
-///
-/// # Safety
-/// Each pointer must be valid for its length, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_dotnet_path(op: u32, a: *const u8, a_len: usize, b: *const u8, b_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> {
-        let (a, b) = (unsafe { required(a, a_len) }?, unsafe { text(b, b_len) }?.unwrap_or(""));
-        let style = Style::HOST;
-        Ok(match op {
-            path_op::COMBINE => path::combine(style, a, b),
-            path_op::FILE_NAME => path::file_name(style, a).to_string(),
-            path_op::FILE_NAME_WITHOUT_EXTENSION => path::file_name_without_extension(style, a).to_string(),
-            path_op::CHANGE_EXTENSION => path::change_extension(style, a, b),
-            path_op::DIRECTORY_NAME => path::directory_name(style, a).ok_or_else(absent)?,
-            path_op::TRIM_ENDING_SEPARATOR => path::trim_ending_separator(style, a).to_string(),
-            path_op::FULL_PATH => path::full_path(a),
-            _ => return Err(fail(status::BAD_ARGUMENT, format!("no path rule {op}"))),
-        })
-    };
-    answer(result(), out, len)
-}
-
-/// One of .NET's yes-or-no rules as this library applies it, by its `EMUSEN_GALAXIA_TEST_*` number: 1, 0 or a status. A null `a` is a null string.
-///
-/// # Safety
-/// Each pointer must be valid for its length, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_galaxia_dotnet_test(op: u32, a: *const u8, a_len: usize, b: *const u8, b_len: usize) -> i32 {
-    let result = || -> Result<bool, i32> {
-        let (a, b) = (unsafe { text(a, a_len) }?, unsafe { text(b, b_len) }?.unwrap_or(""));
-        Ok(match op {
-            test_op::IS_BLANK => path::is_blank(a),
-            test_op::FILE_EXISTS => tree::file_exists(a.unwrap_or("")),
-            test_op::DIRECTORY_EXISTS => tree::directory_exists(a.unwrap_or("")),
-            test_op::EQUALS_IGNORE_CASE => path::equals_ignore_case(a.unwrap_or(""), b),
-            test_op::ENDS_WITH_IGNORE_CASE => path::ends_with_ignore_case(a.unwrap_or(""), b),
-            _ => return Err(fail(status::BAD_ARGUMENT, format!("no rule {op}"))),
-        })
-    };
-    match result() {
-        Ok(answer) => i32::from(answer),
-        Err(status) => status,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -653,17 +587,6 @@ mod tests {
         let mut out = vec![0u8; length as usize];
         assert_eq!(call(out.as_mut_ptr(), out.len()), length);
         Ok(String::from_utf8(out).unwrap())
-    }
-
-    #[test]
-    fn a_rule_asked_through_the_c_layer_is_the_crates_answer() {
-        let rule = |op, a: &str, b: &str| ask(|out, len| unsafe { emusen_galaxia_dotnet_path(op, a.as_ptr(), a.len(), b.as_ptr(), b.len(), out, len) });
-        let separator = Style::HOST.separator();
-        assert_eq!(rule(path_op::COMBINE, "a", "b"), Ok(format!("a{separator}b")));
-        assert_eq!(rule(path_op::FILE_NAME_WITHOUT_EXTENSION, "Game (U).sfc", ""), Ok("Game (U)".to_string()));
-        assert_eq!(rule(path_op::CHANGE_EXTENSION, "a.state", ".png"), Ok("a.png".to_string()));
-        assert_eq!(rule(path_op::DIRECTORY_NAME, "", ""), Err(status::ABSENT as i64));
-        assert_eq!(rule(99, "a", ""), Err(status::BAD_ARGUMENT as i64));
     }
 
     #[test]
@@ -752,16 +675,6 @@ mod tests {
     }
 
     #[test]
-    fn a_null_text_is_told_from_an_empty_one() {
-        let blank = |a: Option<&str>| unsafe { emusen_galaxia_dotnet_test(test_op::IS_BLANK, a.map_or(std::ptr::null(), str::as_ptr), a.map_or(0, str::len), std::ptr::null(), 0) };
-        assert_eq!(blank(None), 1);
-        assert_eq!(blank(Some("")), 1);
-        assert_eq!(blank(Some(" \t")), 1);
-        assert_eq!(blank(Some("x")), 0);
-        assert_eq!(unsafe { emusen_galaxia_dotnet_path(path_op::FILE_NAME, std::ptr::null(), 0, std::ptr::null(), 0, std::ptr::null_mut(), 0) }, status::NULL as i64);
-    }
-
-    #[test]
     fn a_file_goes_out_and_comes_back_through_the_callers_buffer() {
         let directory = std::env::temp_dir().join(format!("emusen-platform-file-{}", std::process::id()));
         let file = directory.join("Saves").join("a.srm").to_string_lossy().into_owned();
@@ -818,26 +731,6 @@ mod tests {
         }
         for (name, value) in [("OWN", migrate::OWN), ("OWN_CONFIG", migrate::OWN_CONFIG), ("OWN_SEED", migrate::OWN_SEED), ("BETWEEN", migrate::BETWEEN), ("TREE", migrate::TREE), ("SEED", migrate::SEED)] {
             defines(&format!("EMUSEN_GALAXIA_MIGRATE_{name}"), value);
-        }
-        for (name, value) in [
-            ("COMBINE", path_op::COMBINE),
-            ("FILE_NAME", path_op::FILE_NAME),
-            ("FILE_NAME_WITHOUT_EXTENSION", path_op::FILE_NAME_WITHOUT_EXTENSION),
-            ("CHANGE_EXTENSION", path_op::CHANGE_EXTENSION),
-            ("DIRECTORY_NAME", path_op::DIRECTORY_NAME),
-            ("TRIM_ENDING_SEPARATOR", path_op::TRIM_ENDING_SEPARATOR),
-            ("FULL_PATH", path_op::FULL_PATH),
-        ] {
-            defines(&format!("EMUSEN_GALAXIA_PATH_{name}"), value);
-        }
-        for (name, value) in [
-            ("FILE_EXISTS", test_op::FILE_EXISTS),
-            ("DIRECTORY_EXISTS", test_op::DIRECTORY_EXISTS),
-            ("IS_BLANK", test_op::IS_BLANK),
-            ("EQUALS_IGNORE_CASE", test_op::EQUALS_IGNORE_CASE),
-            ("ENDS_WITH_IGNORE_CASE", test_op::ENDS_WITH_IGNORE_CASE),
-        ] {
-            defines(&format!("EMUSEN_GALAXIA_TEST_{name}"), value);
         }
     }
 }

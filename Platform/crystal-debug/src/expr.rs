@@ -2,8 +2,6 @@
 //! rule and word for word (`man eval`). The language knows no console: what a name or a memory read means is the
 //! [`Context`]'s.
 
-use emusen_dotnet::text::{is_digit, is_letter, is_letter_or_digit, is_white_space};
-
 /// What an expression can reach, `IExpressionContext`.
 pub trait Context {
     /// A symbol's value, or none for a name the context does not know.
@@ -286,19 +284,19 @@ fn tokenize(source: &str, tokens: &mut Vec<Token>) -> Result<(), Error> {
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i].1;
-        if is_white_space(c) {
+        if c.is_whitespace() {
             i += 1;
             continue;
         }
         // '%' is a binary prefix only before a binary digit; elsewhere it is modulo.
         let binary = c == '%' && chars.get(i + 1).is_some_and(|&(_, n)| n == '0' || n == '1');
-        if c == '$' || binary || is_digit(c) {
+        if c == '$' || binary || c.is_ascii_digit() {
             tokens.push(number(&chars, &mut i, source)?);
             continue;
         }
-        if is_letter(c) || c == '_' || c == '.' {
+        if c.is_alphabetic() || c == '_' || c == '.' {
             let start = i;
-            while i < chars.len() && (is_letter_or_digit(chars[i].1) || chars[i].1 == '_' || chars[i].1 == '.') {
+            while i < chars.len() && (chars[i].1.is_alphanumeric() || chars[i].1 == '_' || chars[i].1 == '.') {
                 i += 1;
             }
             tokens.push(Token { kind: Kind::Identifier, start: at(start), end: at(i), value: 0, prefix: "" });
@@ -364,7 +362,7 @@ fn number(chars: &[(usize, char)], i: &mut usize, source: &str) -> Result<Token,
 fn digit_in(c: char, radix: u32) -> bool {
     match radix {
         2 => c == '0' || c == '1',
-        10 => is_digit(c),
+        10 => c.is_ascii_digit(),
         _ => c.is_ascii_hexdigit(),
     }
 }

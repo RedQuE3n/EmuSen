@@ -3,7 +3,6 @@
 //! extension (EmuSen_CoreAPI_Extensions.md §8.4). Reading the file is the host's: a recogniser that needs more bytes
 //! than it was given says how many, and the host reads them and asks again.
 
-use emusen_dotnet::text::equals_ignore_case;
 
 /// A recogniser's claim: the system, and the game's serial and market where the pack can read them.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -111,7 +110,7 @@ impl<'a> DiscSectors<'a> {
                     break;
                 }
                 let entry = crate::media::ascii(&dir[at + 33..at + 33 + length]);
-                if equals_ignore_case(entry.split(';').next().unwrap_or(""), name) {
+                if entry.split(';').next().unwrap_or("").eq_ignore_ascii_case(&name) {
                     let (start, length) = (le32(&dir[at + 2..]) as i64, le32(&dir[at + 10..]) as i64);
                     if length < 0 || start < 0 {
                         return Reach::Absent;
@@ -193,7 +192,7 @@ pub fn route(file_name: &str, folder: Option<&str>, candidates: &[Candidate], cl
     if let [(at, claim)] = claims {
         return chosen(&candidates[*at], Some(claim.clone()));
     }
-    let named: Vec<usize> = (0..candidates.len()).filter(|&i| folder.is_some_and(|f| equals_ignore_case(candidates[i].esde_system, f))).collect();
+    let named: Vec<usize> = (0..candidates.len()).filter(|&i| folder.is_some_and(|f| candidates[i].esde_system.eq_ignore_ascii_case(&f))).collect();
     if let [one] = named[..] {
         return chosen(&candidates[one], claims.iter().find(|(at, _)| *at == one).map(|(_, r)| r.clone()));
     }

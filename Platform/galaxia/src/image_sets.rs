@@ -4,15 +4,14 @@
 
 use crate::dotnet_files::{directory_exists, file_exists};
 use crate::dotnet_path::{self as path, Style};
-use emusen_dotnet::text::{ends_with_ignore_case, equals_ignore_case};
 use std::collections::HashSet;
 
 pub fn is_sheet(at: &str) -> bool {
-    ends_with_ignore_case(at, ".cue")
+    at.to_uppercase().ends_with(".CUE")
 }
 
 pub fn is_playlist(at: &str) -> bool {
-    ends_with_ignore_case(at, ".m3u")
+    at.to_uppercase().ends_with(".M3U")
 }
 
 /// A name as the folder holds it: each part matched exactly, else by the one entry matching it ignoring case, either
@@ -35,7 +34,7 @@ pub fn beside(dir: &str, name: &str) -> Result<String, String> {
         for entry in std::fs::read_dir(&at).map_err(|e| e.to_string())? {
             let entry = entry.map_err(|e| e.to_string())?;
             let entry = entry.file_name().to_string_lossy().into_owned();
-            if equals_ignore_case(&entry, part) {
+            if entry.to_uppercase() == part.to_uppercase() {
                 found.push(entry);
             }
         }
@@ -57,21 +56,21 @@ pub fn companion_names(sheet: &str) -> Result<Vec<String>, String> {
 /// The files a sheet's FILE lines name, as paths beside it.
 pub fn companions(sheet_path: &str) -> Result<Vec<String>, String> {
     let dir = folder_of(sheet_path);
-    let text = emusen_dotnet::file::read_all_text(sheet_path)?;
+    let text = crate::text_file::read(sheet_path)?;
     companion_names(&text)?.iter().map(|n| beside(&dir, n)).collect()
 }
 
 /// The discs an `.m3u` lists, as paths beside it.
 pub fn discs(list_path: &str) -> Result<Vec<String>, String> {
     let dir = folder_of(list_path);
-    let text = emusen_dotnet::file::read_all_text(list_path)?;
+    let text = crate::text_file::read(list_path)?;
     emusen_disc::set::playlist(&text).iter().map(|n| beside(&dir, n)).collect()
 }
 
 /// The files a core receives beside the image: a sheet's, then an `.sbi` found beside it.
 pub fn files_for(image: &str) -> Result<Vec<String>, String> {
     let mut paths = if is_sheet(image) { companions(image)? } else { Vec::new() };
-    if !paths.is_empty() || ends_with_ignore_case(image, ".bin") || ends_with_ignore_case(image, ".iso") {
+    if !paths.is_empty() || image.to_uppercase().ends_with(".BIN") || image.to_uppercase().ends_with(".ISO") {
         let sbi = emusen_disc::set::sbi_beside(image);
         if file_exists(&sbi) {
             paths.push(sbi);

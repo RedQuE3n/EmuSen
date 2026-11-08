@@ -9,14 +9,12 @@ use std::ffi::c_void;
 use std::sync::Arc;
 
 thread_local! {
-    static LAST_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
     /// An answer that did not fit, by the export and the request that made it, taken by the same call asked again.
     static WAITING: RefCell<Option<(u8, Vec<u8>, Vec<u8>)>> = const { RefCell::new(None) };
 }
 
 pub(crate) fn fail(status: i32, words: impl Into<String>) -> i32 {
-    LAST_ERROR.with_borrow_mut(|last| *last = emusen_scrape::redact::redact(&words.into()));
-    status
+    crate::last_error::fail(crate::last_error::Slot::Scrape, status, emusen_scrape::redact::redact(&words.into()))
 }
 
 pub(crate) fn failed(error: Error) -> i32 {
@@ -73,12 +71,7 @@ pub extern "C" fn emusen_scrape_abi_version() -> u32 {
 /// `out` valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_scrape_last_error(out: *mut u8, len: usize) -> i64 {
-    LAST_ERROR.with_borrow(|words| {
-        if !out.is_null() && words.len() <= len {
-            unsafe { std::ptr::copy_nonoverlapping(words.as_ptr(), out, words.len()) };
-        }
-        words.len() as i64
-    })
+    unsafe { crate::last_error::copy_out(crate::last_error::Slot::Scrape, out, len) }
 }
 
 /// Opens the media store with the host's SQLite and, when given, its library; the handle in `out`.

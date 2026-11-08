@@ -24,8 +24,14 @@ flate2 = { version = "1", default-features = false, features = ["zlib-rs"] }
 # Deflate64, the one method .NET's zip reader inflates besides stored and deflate (dotnet_zip.rs); a port of .NET's own
 # decoder, MIT, with no dependencies of its own (EmuSen_Backend.md §40.1).
 deflate64 = "=0.1.12"
+# The system's folder for a program's settings, on every system the project builds for (tree.rs).
+dirs.workspace = true
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"
+
+[dev-dependencies]
+# The disk corpus's models compared as JSON (tests/disk.rs).
+serde_json.workspace = true
 
 # The page cache asked directly, for the test that advised bytes reach memory (tests/advise.rs).
 [target.'cfg(target_os = "linux")'.dev-dependencies]

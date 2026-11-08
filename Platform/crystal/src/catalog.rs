@@ -32,7 +32,7 @@ pub fn hand_row_for_console(console: &str) -> Option<&'static HandRow> {
 }
 
 fn eq_ic(a: &str, b: &str) -> bool {
-    emusen_dotnet::text::equals_ignore_case(a, b)
+    a.eq_ignore_ascii_case(&b)
 }
 
 impl Row {
@@ -143,7 +143,7 @@ impl<'d> Catalog<'d> {
             let engine = discovered_for(discovery, row.console()).filter(|c| first_offered_console(c) == Some(row.console())).map(|c| c.engine_name().to_string());
             for name in [Some(row.console().to_string()), engine].into_iter().flatten() {
                 if !name.is_empty() && !name.chars().any(char::is_whitespace) {
-                    let key = emusen_dotnet::text::to_lower(&name);
+                    let key = name.to_lowercase();
                     if !registry.iter().any(|(k, _)| eq_ic(k, &key)) {
                         registry.push((key, at));
                     }
@@ -173,9 +173,9 @@ impl<'d> Catalog<'d> {
         let mut order: Vec<usize> = (0..self.rows.len()).collect();
         order.sort_by(|&a, &b| {
             let (x, y) = (self.rows[a].systems[0], self.rows[b].systems[0]);
-            emusen_dotnet::text::compare_ignore_case(&x.manufacturer, &y.manufacturer)
+            x.manufacturer.to_uppercase().cmp(&y.manufacturer.to_uppercase())
                 .then(x.release_year.cmp(&y.release_year))
-                .then(emusen_dotnet::text::compare_ignore_case(&x.console, &y.console))
+                .then(x.console.to_uppercase().cmp(&y.console.to_uppercase()))
         });
         order
     }
@@ -331,7 +331,7 @@ pub fn discovered_for<'d>(discovery: &'d Discovery, console: &str) -> Option<&'d
 /// `DiscoveredConsoles`.
 pub fn discovered_consoles(discovery: &Discovery) -> Vec<String> {
     let mut packs: Vec<&'static System> = table().iter().filter(|s| hand_console_of(&s.id).is_none() && discovery.for_system(&s.id).any(|c| runs(c, &s.id))).collect();
-    packs.sort_by(|x, y| emusen_dotnet::text::compare_ignore_case(&x.manufacturer, &y.manufacturer).then(x.release_year.cmp(&y.release_year)));
+    packs.sort_by(|x, y| x.manufacturer.to_uppercase().cmp(&y.manufacturer.to_uppercase()).then(x.release_year.cmp(&y.release_year)));
     let mut out: Vec<String> = Vec::new();
     for p in packs {
         if !out.iter().any(|c| eq_ic(c, &p.console)) {

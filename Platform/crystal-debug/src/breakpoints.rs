@@ -2,7 +2,6 @@
 //! `man step`, `man runto`). The registry decides; a condition or a logpoint is rendered by the caller's [`Evaluate`],
 //! which [`crate::conditions`] makes over the registry's scope.
 
-use emusen_dotnet::text::{equals_ignore_case, fold, to_lower};
 use std::collections::{HashMap, VecDeque};
 
 /// How a call stack frame was entered, `CallFrameKind`, numbered as the session service writes it.
@@ -303,7 +302,7 @@ impl BreakpointRegistry {
             if !bp.enabled || bp.on_read != read || address < bp.address || address > bp.end {
                 continue;
             }
-            if !equals_ignore_case(&bp.space, space) || (bp.value >= 0 && bp.value != value as i32) {
+            if !bp.space.eq_ignore_ascii_case(&space) || (bp.value >= 0 && bp.value != value as i32) {
                 continue;
             }
             if !read && bp.changed_only {
@@ -356,7 +355,7 @@ impl BreakpointRegistry {
 
     fn note_uninitialized_write(&mut self, space: &str, address: i32) {
         let Some(written) = self.uninit_written.as_mut() else { return };
-        if address < 0 || address as usize >= written.len() || !equals_ignore_case(space, &self.uninit_space) {
+        if address < 0 || address as usize >= written.len() || !space.eq_ignore_ascii_case(&self.uninit_space) {
             return;
         }
         written[address as usize] = true;
@@ -364,7 +363,7 @@ impl BreakpointRegistry {
 
     fn note_uninitialized_read(&mut self, space: &str, address: i32) {
         let Some(written) = self.uninit_written.as_mut() else { return };
-        if address < 0 || address as usize >= written.len() || !equals_ignore_case(space, &self.uninit_space) || written[address as usize] {
+        if address < 0 || address as usize >= written.len() || !space.eq_ignore_ascii_case(&self.uninit_space) || written[address as usize] {
             return;
         }
         // Reported once an address, or a boot loop halts on the same byte forever.
@@ -378,7 +377,7 @@ impl BreakpointRegistry {
     }
 
     fn condition_index(&self, name: &str) -> Option<usize> {
-        let key = fold(name);
+        let key = name.to_uppercase();
         self.conditions.iter().position(|(k, _)| *k == key)
     }
 
@@ -390,7 +389,7 @@ impl BreakpointRegistry {
         let entry = ConditionBreak { name: name.to_string(), log_only, enabled: true, hits: 0 };
         match self.condition_index(name) {
             Some(i) => self.conditions[i].1 = entry,
-            None => self.conditions.push((fold(name), entry)),
+            None => self.conditions.push((name.to_uppercase(), entry)),
         }
         self.any_condition_armed = true;
     }
@@ -429,7 +428,7 @@ impl BreakpointRegistry {
     /// `NoteInterrupt`: from an interrupt the call log names.
     pub fn note_interrupt(&mut self, kind: CallKind) {
         if self.any_condition_armed && matches!(kind, CallKind::Brk | CallKind::Cop) {
-            let name = to_lower(kind.name());
+            let name = kind.name().to_lowercase();
             self.note_condition(&name, 0, &format!("{} taken", name.to_uppercase()));
         }
         if self.run_to_interrupt != Some(kind) {

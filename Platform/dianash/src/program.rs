@@ -4,11 +4,10 @@
 //! directory, and the environment with every exported variable and `DIANASH_ROOT`, `DIANASH_USER` and
 //! `DIANASH_SHELL`; it is given no service (§7.2). See EmuSen_DianaSh.md §7 and §13.11.
 
-use crate::dotnet;
 use crate::interp::{Interp, Outcome};
 use crate::shell::World;
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::tree;
 use std::io::{Read, Write};
 use std::process::{Command, Stdio};
@@ -74,7 +73,7 @@ pub(crate) fn run(interp: &mut Interp, world: &mut World, program: &Program, arg
     command.args(&args[1..]);
     #[cfg(unix)]
     std::os::unix::process::CommandExt::arg0(&mut command, &args[0]);
-    command.current_dir(dotnet::current_directory());
+    command.current_dir(std::env::current_dir().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default());
     command.envs(interp.exported_variables());
     command.env("DIANASH_ROOT", world.sandbox.root());
     command.env("DIANASH_USER", world.session(interp.session).map(|s| s.user.clone()).unwrap_or_default());

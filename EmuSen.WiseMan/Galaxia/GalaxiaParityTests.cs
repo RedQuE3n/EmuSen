@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using EmuSen.Galaxia;
@@ -102,95 +101,6 @@ namespace EmuSen.WiseMan.Galaxia
             var random = new Random(seed);
             for (int i = 0; i < count; i++)
                 yield return string.Concat(Enumerable.Range(0, random.Next(0, 8)).Select(_ => parts[random.Next(parts.Count)]));
-        }
-
-        [Fact]
-        public void Every_path_rule_gives_the_string_dotnet_gives()
-        {
-            string[] paths = Paths(3000, seed: 20261007).ToArray();
-            var different = new List<string>();
-            void Same(string? dotnet, string? library, string what) { if (dotnet != library) different.Add($"{what}: .NET [{dotnet}], the library [{library}]"); }
-            for (int i = 0; i < paths.Length; i++)
-            {
-                string a = paths[i], b = paths[(i * 7 + 3) % paths.Length];
-                Same(Path.Combine(a, b), GalaxiaNative.PathRule(GalaxiaPathRule.Combine, a, b), $"Combine([{a}], [{b}])");
-                Same(Path.GetFileName(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileName, a), $"GetFileName([{a}])");
-                Same(Path.GetFileNameWithoutExtension(a), GalaxiaNative.PathRule(GalaxiaPathRule.FileNameWithoutExtension, a), $"GetFileNameWithoutExtension([{a}])");
-                foreach (string extension in new[] { ".png", "png", "" })
-                    Same(Path.ChangeExtension(a, extension), GalaxiaNative.PathRule(GalaxiaPathRule.ChangeExtension, a, extension), $"ChangeExtension([{a}], [{extension}])");
-                Same(Path.GetDirectoryName(a), GalaxiaNative.PathRule(GalaxiaPathRule.DirectoryName, a), $"GetDirectoryName([{a}])");
-                Same(Path.TrimEndingDirectorySeparator(a), GalaxiaNative.PathRule(GalaxiaPathRule.TrimEndingSeparator, a), $"TrimEndingDirectorySeparator([{a}])");
-                // .NET refuses what is no path, and on Windows a UNC root with no share; no caller asks the library either.
-                string? full = null;
-                try { if (!EffectivelyEmpty(a)) full = Path.GetFullPath(a); } catch (ArgumentException) { }
-                if (full is not null) Same(full, GalaxiaNative.PathRule(GalaxiaPathRule.FullPath, a), $"GetFullPath([{a}])");
-            }
-            Assert.True(different.Count == 0, $"{different.Count} differ:\n{string.Join("\n", different.Take(40))}");
-        }
-
-        [Fact]
-        public void Blank_text_and_caseless_equality_follow_dotnet_for_every_character()
-        {
-            Assert.True(GalaxiaNative.TestRule(GalaxiaTestRule.IsBlank, null));
-            Assert.True(GalaxiaNative.TestRule(GalaxiaTestRule.IsBlank, ""));
-            var different = new List<string>();
-            for (int c = 1; c < 0x10000; c++)
-            {
-                if (char.IsSurrogate((char)c)) continue;
-                string text = ((char)c).ToString();
-                if (string.IsNullOrWhiteSpace(text) != GalaxiaNative.TestRule(GalaxiaTestRule.IsBlank, text)) different.Add($"blank U+{c:X4}");
-                foreach (string other in new[] { char.ToUpperInvariant((char)c).ToString(), char.ToLowerInvariant((char)c).ToString(), "A" })
-                {
-                    if (string.Equals("x" + text, "X" + other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EqualsIgnoreCase, "x" + text, "X" + other))
-                        different.Add($"equals U+{c:X4} U+{(int)other[0]:X4}");
-                    if (("x" + text).EndsWith(other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EndsWithIgnoreCase, "x" + text, other))
-                        different.Add($"ends U+{c:X4} U+{(int)other[0]:X4}");
-                }
-            }
-            for (int c = 0x10000; c < 0x20000; c++)
-            {
-                // Outside the BMP .NET asks the system's ICU, which on macOS knows letters newer than the runtime's own tables; only what those tables know is compared.
-                if (CharUnicodeInfo.GetUnicodeCategory(c) == UnicodeCategory.OtherNotAssigned) continue;
-                string text = char.ConvertFromUtf32(c), upper = text.ToUpperInvariant(), lower = text.ToLowerInvariant();
-                foreach (string other in new[] { upper, lower })
-                    if (string.Equals(text, other, StringComparison.OrdinalIgnoreCase) != GalaxiaNative.TestRule(GalaxiaTestRule.EqualsIgnoreCase, text, other))
-                        different.Add($"equals U+{c:X5} U+{char.ConvertToUtf32(other, 0):X5}");
-            }
-            Assert.True(different.Count == 0, $"{different.Count} differ: {string.Join(", ", different.Take(40))}");
-        }
-
-        [Fact]
-        public void A_file_and_a_directory_exist_for_both_or_for_neither()
-        {
-            string file = Put(At("exists", "file.bin"));
-            var cases = new List<string?> { null, "", file, file + Path.DirectorySeparatorChar, At("exists"), At("exists") + Path.DirectorySeparatorChar, At("absent"), At("exists", "file.bin", "under") };
-            if (Links.Allowed)
-            {
-                File.CreateSymbolicLink(At("exists", "to-file"), file);
-                Directory.CreateSymbolicLink(At("exists", "to-directory"), At("exists"));
-                File.CreateSymbolicLink(At("exists", "dangling"), At("nowhere"));
-                Directory.CreateSymbolicLink(At("exists", "dangling-directory"), At("nowhere"));
-                File.CreateSymbolicLink(At("exists", "file-link-to-directory"), At("exists"));
-                Directory.CreateSymbolicLink(At("exists", "directory-link-to-file"), file);
-                cases.AddRange(new[] { At("exists", "to-file"), At("exists", "to-directory"), At("exists", "dangling"), At("exists", "to-directory") + "/",
-                    At("exists", "dangling-directory"), At("exists", "file-link-to-directory"), At("exists", "directory-link-to-file") });
-            }
-            if (OperatingSystem.IsWindows())
-            {
-                Directory.CreateDirectory(At("gone"));
-                Links.Junction(At("exists", "junction"), At("exists"));
-                Links.Junction(At("exists", "dangling-junction"), At("gone"));
-                Directory.Delete(At("gone"));
-                cases.AddRange(new[] { At("exists", "junction"), At("exists", "dangling-junction"), At("exists", "junction") + "\\" });
-            }
-            var different = new List<string>();
-            foreach (string? path in cases)
-            {
-                (bool file, bool directory) csharp = (File.Exists(path), Directory.Exists(path));
-                (bool file, bool directory) library = (GalaxiaNative.TestRule(GalaxiaTestRule.FileExists, path), GalaxiaNative.TestRule(GalaxiaTestRule.DirectoryExists, path));
-                if (csharp != library) different.Add($"{path}: C# (file, directory) {csharp}, the library {library}");
-            }
-            Assert.True(different.Count == 0, string.Join("\n", different));
         }
 
         [Fact]

@@ -4,7 +4,7 @@
 
 use emusen_core_tool::{job, Context, Placement, Source};
 use emusen_galaxia::archive::ZipWriter;
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use rcgen::{BasicConstraints, CertificateParams, CertifiedIssuer, DnType, IsCa, KeyPair};
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use std::collections::HashMap;

@@ -4,7 +4,6 @@
 //! title ignoring case. See EmuSen_Settings_Reference.md §4.11, §4.46 and EmuSen_Backend.md §28.4.
 
 use crate::{Error, Progress};
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
 use emusen_galaxia::{archive, claims, dotnet_files, image_sets, package_zip};
@@ -71,7 +70,7 @@ impl Systems {
     pub fn extensions(&self) -> Vec<String> {
         let mut all: Vec<String> = Vec::new();
         for e in self.entries.iter().flat_map(|s| s.extensions.iter()).map(String::as_str).chain(archive::EXTENSIONS.iter().copied()) {
-            if !all.iter().any(|a| equals_ignore_case(a, e)) {
+            if !all.iter().any(|a| a.eq_ignore_ascii_case(&e)) {
                 all.push(e.to_string());
             }
         }
@@ -79,11 +78,11 @@ impl Systems {
     }
 
     fn takes(&self, extension: &str) -> bool {
-        self.entries.iter().any(|s| s.extensions.iter().any(|e| equals_ignore_case(e, extension)))
+        self.entries.iter().any(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension)))
     }
 
     fn candidates(&self, extension: &str) -> Vec<&'static emusen_systems::System> {
-        self.entries.iter().copied().filter(|s| s.extensions.iter().any(|e| equals_ignore_case(e, extension))).collect()
+        self.entries.iter().copied().filter(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension))).collect()
     }
 }
 
@@ -133,7 +132,7 @@ pub fn route(at: &str, systems: &Systems) -> Option<String> {
 /// The system a package's manifest names, among the named systems: the one of its ES-DE name, else of its id.
 fn system_named(manifest: &str, systems: &Systems) -> Option<String> {
     let by = |f: &dyn Fn(&emusen_systems::System) -> bool| systems.entries.iter().find(|s| f(s)).map(|s| s.id.clone());
-    by(&|s| equals_ignore_case(&s.esde_system, manifest)).or_else(|| by(&|s| equals_ignore_case(&s.id, manifest)))
+    by(&|s| s.esde_system.eq_ignore_ascii_case(&manifest)).or_else(|| by(&|s| s.id.eq_ignore_ascii_case(&manifest)))
 }
 
 /// Walks the roots, keeping what was found in a `Scan`; `progress` is updated as it goes and asked whether to stop.
@@ -148,7 +147,7 @@ pub fn scan(roots: &[String], ids: &[String], progress: &Progress) -> Result<Sca
 pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &Progress) -> Result<Scan, Error> {
     let systems = Systems::named(ids);
     let extensions = systems.extensions();
-    let given: Vec<String> = roots.iter().filter(|r| !emusen_dotnet::text::is_blank(Some(r))).cloned().collect();
+    let given: Vec<String> = roots.iter().filter(|r| !r.trim().is_empty()).cloned().collect();
     let mut scan = Scan { outcome: Outcome::NoDirectory, roots: given.clone(), systems: ids.to_vec(), games: Vec::new() };
     if given.is_empty() {
         return Ok(scan);
@@ -170,7 +169,7 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
                 return;
             }
             progress.files.fetch_add(1, Ordering::Relaxed);
-            if extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, at))) {
+            if extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, at))) {
                 files.push(at.to_string());
             }
         });
@@ -187,7 +186,7 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
         for folder in [packages, compressed.as_str()].into_iter().filter(|f| dotnet_files::directory_exists(f)) {
             let mut files = Vec::new();
             let _ = dotnet_files::visit_files_with(folder, options, |at, _| {
-                if extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, at))) {
+                if extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, at))) {
                     files.push(at.to_string());
                 }
             });
@@ -221,7 +220,7 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: p.game.clone(), system, package: Some(p.folder.clone()) });
     }
-    scan.games.sort_by(|a, b| compare_ignore_case(path::file_name_without_extension(Style::HOST, &a.path), path::file_name_without_extension(Style::HOST, &b.path)));
+    scan.games.sort_by(|a, b| path::file_name_without_extension(Style::HOST, &a.path).to_uppercase().cmp(&path::file_name_without_extension(Style::HOST, &b.path).to_uppercase()));
     scan.outcome = if missing { Outcome::NotFound } else if scan.games.is_empty() { Outcome::Empty } else { Outcome::Ok };
     if missing && given.len() == 1 {
         scan.games.clear();

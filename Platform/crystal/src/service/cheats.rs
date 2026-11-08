@@ -4,7 +4,7 @@
 
 use emusen_cheats::registry::CheatRegistry;
 use emusen_cheats::{cht, database::Database, prune};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 use emusen_galaxia::models::{CHEAT_FILE_ID, CHEATS_CATEGORY, MODELS};
 use emusen_galaxia::tree::{self as galaxia_tree, Directory, Tree};
 use emusen_session_service::abi::{cheat as op, status};
@@ -121,7 +121,7 @@ fn space_of(spaces: &[String], name: Option<&str>) -> Answer<String> {
     let Some(name) = name else { return Err(refused(status::BAD_ARGUMENT, "a memory space must be named")) };
     spaces
         .iter()
-        .find(|s| emusen_dotnet::text::equals_ignore_case(s, name))
+        .find(|s| s.eq_ignore_ascii_case(&name))
         .cloned()
         .ok_or_else(|| refused(status::NO_SUCH_SPACE, format!("No memory space named '{name}'. Available: {}", spaces.join(", "))))
 }
@@ -152,7 +152,7 @@ fn database_folder(tree: &Tree) -> String {
     let model = &MODELS[emusen_galaxia::models::APP_SETTINGS_ID as usize];
     let (settings, _) = emusen_galaxia::config::load_or_new(tree, model, None, emusen_galaxia::models::APP_SETTINGS_FILE);
     match settings.get("CheatDatabaseDirectory").and_then(|v| v.as_str()) {
-        Some(named) if !emusen_dotnet::text::is_blank(Some(named)) => named.to_string(),
+        Some(named) if !named.trim().is_empty() => named.to_string(),
         _ => tree.directory(Directory::Cheats).unwrap_or_default(),
     }
 }
@@ -496,8 +496,8 @@ fn run(cc: &mut Cheats, o: u32, bytes: &[u8]) -> Answer<(Option<Vec<u8>>, i64)> 
             let game = args::string(&a, "game")?;
             let Some(&best) = db.find(&game, 1).first() else { return record(parsed_json(&cht::Parsed::default(), None)) };
             let entry = &db.entries[best];
-            let text = std::fs::read(&entry.path).map_err(|e| refused(status::FAULT, emusen_dotnet::file::io_message(&e, &entry.path)))?;
-            let parsed = read_cht(cc, &emusen_dotnet::file::decode(&text))?;
+            let text = std::fs::read(&entry.path).map_err(|e| refused(status::FAULT, format!("{}: {}", entry.path, e)))?;
+            let parsed = read_cht(cc, &emusen_galaxia::text_file::decode(&text))?;
             record(parsed_json(&parsed, Some(&entry.game)))
         }
         op::DB_PRUNE => {

@@ -1,13 +1,14 @@
 //! The requests `emusen_library_get` and `emusen_library_change` take, read, and their answers written, as
-//! `emusen_library.h` describes them: one `what` or `op` a call, each a `GameRecords` method's. See EmuSen_Backend.md
-//! §28.4.
+//! `emusen_library.h` describes them: one `what` or `op` a call, each a `GameRecords` method's. A request is a
+//! `serde_json::Value` and an answer is built with `json!`; serde_json reads and writes the text. See
+//! EmuSen_Backend.md §28.4 and EmuSen_RustPlatform.md §47.13.
 
 use crate::{Error, Library, clock, records};
-use emusen_dotnet::json::{self as dj, Value};
+use serde_json::{Map, Value, json};
 
 pub(crate) fn parse(text: &str) -> Result<Value, Error> {
-    let value = dj::parse(text).map_err(|e| Error::BadRequest(format!("The request is not JSON: {e}")))?;
-    if !matches!(value, Value::Object(_)) {
+    let value: Value = serde_json::from_str(text).map_err(|e| Error::BadRequest(format!("The request is not JSON: {e}")))?;
+    if !value.is_object() {
         return Err(Error::BadRequest("The request is not a JSON object.".into()));
     }
     Ok(value)
@@ -23,7 +24,7 @@ fn wrong(name: &str, what: &str) -> Error {
 
 pub(crate) fn text(r: &Value, name: &str) -> Result<String, Error> {
     match r.get(name) {
-        Some(Value::String(t)) if !t.broken => Ok(t.text.clone()),
+        Some(Value::String(t)) => Ok(t.clone()),
         Some(_) => Err(wrong(name, "text")),
         None => Err(missing(name)),
     }
@@ -46,17 +47,16 @@ pub(crate) fn flag(r: &Value, name: &str) -> Result<bool, Error> {
 
 fn integer(r: &Value, name: &str) -> Result<i64, Error> {
     match r.get(name) {
-        Some(Value::Number(token)) => token.parse::<i64>().map_err(|_| wrong(name, "a whole number")),
-        Some(_) => Err(wrong(name, "a whole number")),
+        Some(v) => v.as_i64().ok_or_else(|| wrong(name, "a whole number")),
         None => Err(missing(name)),
     }
 }
 
-/// A double from its token, or from the names .NET writes for one JSON has no number for.
+/// A double, or the name of one JSON has no number for (`NaN`, `Infinity`, `-Infinity`).
 fn real(r: &Value, name: &str) -> Result<f64, Error> {
     match r.get(name) {
-        Some(Value::Number(token)) => token.parse::<f64>().map_err(|_| wrong(name, "a number")),
-        Some(Value::String(t)) => match t.text.as_str() {
+        Some(Value::Number(n)) => n.as_f64().ok_or_else(|| wrong(name, "a number")),
+        Some(Value::String(t)) => match t.as_str() {
             "NaN" => Ok(f64::NAN),
             "Infinity" => Ok(f64::INFINITY),
             "-Infinity" => Ok(f64::NEG_INFINITY),
@@ -69,10 +69,7 @@ fn real(r: &Value, name: &str) -> Result<f64, Error> {
 
 pub(crate) fn strings(r: &Value, name: &str) -> Result<Vec<String>, Error> {
     match r.get(name) {
-        Some(Value::Array(items)) => items.iter().map(|v| match v {
-            Value::String(t) if !t.broken => Ok(t.text.clone()),
-            _ => Err(wrong(name, "a list of texts")),
-        }).collect(),
+        Some(Value::Array(items)) => items.iter().map(|v| v.as_str().map(str::to_string).ok_or_else(|| wrong(name, "a list of texts"))).collect(),
         Some(_) => Err(wrong(name, "a list of texts")),
         None => Err(missing(name)),
     }
@@ -83,91 +80,34 @@ fn at(r: &Value) -> Result<String, Error> {
     Ok(text_or_none(r, "at")?.unwrap_or_else(clock::now))
 }
 
-pub(crate) fn write_text_or_null(out: &mut String, text: Option<&str>) {
-    match text {
-        Some(t) => out.push_str(&dj::quoted(t)),
-        None => out.push_str("null"),
+/// A double as a number, or the name of one JSON has no number for.
+fn real_value(x: f64) -> Value {
+    if x.is_finite() {
+        json!(x)
+    } else {
+        json!(if x.is_nan() { "NaN" } else if x > 0.0 { "Infinity" } else { "-Infinity" })
     }
 }
 
-pub(crate) fn write_strings<'a>(out: &mut String, items: impl Iterator<Item = &'a str>) {
-    out.push('[');
-    for (i, item) in items.enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        out.push_str(&dj::quoted(item));
-    }
-    out.push(']');
+fn record_value(r: &records::Record) -> Map<String, Value> {
+    let Value::Object(m) = json!({ "favourite": r.favourite, "last_played": r.last_played, "play_count": r.play_count, "play_seconds": real_value(r.play_seconds) }) else { unreachable!() };
+    m
 }
 
-/// A double as .NET writes it, or the name it writes for one JSON has no number for.
-fn write_real(out: &mut String, x: f64) {
-    match dj::format_f64(x) {
-        Some(token) => out.push_str(&token),
-        None => out.push_str(if x.is_nan() { "\"NaN\"" } else if x > 0.0 { "\"Infinity\"" } else { "\"-Infinity\"" }),
-    }
+fn crop_value(crop: Option<records::Crop>) -> Value {
+    crop.map_or(Value::Null, |c| json!({ "left": real_value(c.left), "right": real_value(c.right), "top": real_value(c.top), "bottom": real_value(c.bottom) }))
 }
 
-fn write_record(out: &mut String, r: &records::Record) {
-    out.push_str(&format!("{{\"favourite\":{},\"last_played\":", r.favourite));
-    write_text_or_null(out, r.last_played.as_deref());
-    out.push_str(&format!(",\"play_count\":{},\"play_seconds\":", r.play_count));
-    write_real(out, r.play_seconds);
-    out.push('}');
-}
-
-fn write_crop(out: &mut String, crop: Option<records::Crop>) {
-    let Some(c) = crop else { return out.push_str("null") };
-    for (i, (name, x)) in [("left", c.left), ("right", c.right), ("top", c.top), ("bottom", c.bottom)].into_iter().enumerate() {
-        out.push_str(if i == 0 { "{\"" } else { ",\"" });
-        out.push_str(name);
-        out.push_str("\":");
-        write_real(out, x);
-    }
-    out.push('}');
-}
-
-fn write_edits(out: &mut String, edits: &[(String, String)]) {
-    out.push('{');
-    for (i, (field, value)) in edits.iter().enumerate() {
-        if i > 0 {
-            out.push(',');
-        }
-        out.push_str(&dj::quoted(field));
-        out.push(':');
-        out.push_str(&dj::quoted(value));
-    }
-    out.push('}');
-}
-
-fn write_ids(out: &mut String, ids: &[i64]) {
-    out.push('[');
-    out.push_str(&ids.iter().map(i64::to_string).collect::<Vec<_>>().join(","));
-    out.push(']');
+fn edits_value(edits: &[(String, String)]) -> Value {
+    Value::Object(edits.iter().map(|(field, value)| (field.clone(), json!(value))).collect())
 }
 
 /// One read.
 pub(crate) fn get(lib: &Library, r: &Value) -> Result<String, Error> {
     let what = text(r, "what")?;
-    let mut out = String::new();
-    match what.as_str() {
-        "record" => match records::find(&*lib.db()?, &text(r, "path")?)? {
-            Some(record) => write_record(&mut out, &record),
-            None => out.push_str("null"),
-        },
-        "records" => {
-            out.push('{');
-            for (i, (path, record)) in records::all(&*lib.db()?)?.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push_str(&dj::quoted(path));
-                out.push(':');
-                write_record(&mut out, record);
-            }
-            out.push('}');
-        }
+    let answer = match what.as_str() {
+        "record" => records::find(&*lib.db()?, &text(r, "path")?)?.map_or(Value::Null, |record| Value::Object(record_value(&record))),
+        "records" => Value::Object(records::all(&*lib.db()?)?.iter().map(|(path, record)| (path.clone(), Value::Object(record_value(record)))).collect()),
         "game" => {
             let path = text(r, "path")?;
             let db = lib.db()?;
@@ -179,70 +119,37 @@ pub(crate) fn get(lib: &Library, r: &Value) -> Result<String, Error> {
             })?;
             match (records::find(&db, &path)?, found) {
                 (Some(record), Some((md5, bytes))) => {
-                    write_record(&mut out, &record);
-                    out.pop();
-                    out.push_str(",\"md5\":");
-                    write_text_or_null(&mut out, md5.as_deref());
-                    out.push_str(",\"bytes\":");
-                    out.push_str(&bytes.map_or("null".to_string(), |b| b.to_string()));
-                    out.push_str(",\"crop\":");
-                    write_crop(&mut out, records::crop(&db, &path)?);
-                    out.push_str(",\"edits\":");
-                    write_edits(&mut out, &records::edits(&db, &path)?);
-                    out.push_str(",\"collections\":");
-                    write_ids(&mut out, &records::collections_of(&db, &path)?);
-                    out.push('}');
+                    let mut game = record_value(&record);
+                    game.insert("md5".into(), json!(md5));
+                    game.insert("bytes".into(), json!(bytes));
+                    game.insert("crop".into(), crop_value(records::crop(&db, &path)?));
+                    game.insert("edits".into(), edits_value(&records::edits(&db, &path)?));
+                    game.insert("collections".into(), json!(records::collections_of(&db, &path)?));
+                    Value::Object(game)
                 }
-                _ => out.push_str("null"),
+                _ => Value::Null,
             }
         }
-        "edits" => write_edits(&mut out, &records::edits(&*lib.db()?, &text(r, "path")?)?),
-        "all_edits" => {
-            out.push('{');
-            for (i, (path, edits)) in records::all_edits(&*lib.db()?)?.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push_str(&dj::quoted(path));
-                out.push(':');
-                write_edits(&mut out, edits);
-            }
-            out.push('}');
-        }
-        "collections" => {
-            out.push('[');
-            for (i, c) in records::collections(&*lib.db()?)?.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push_str(&format!("{{\"id\":{},\"name\":{},\"count\":{}}}", c.id, dj::quoted(&c.name), c.count));
-            }
-            out.push(']');
-        }
-        "members" => write_strings(&mut out, records::members(&*lib.db()?, integer(r, "id")?)?.iter().map(String::as_str)),
-        "collections_of" => write_ids(&mut out, &records::collections_of(&*lib.db()?, &text(r, "path")?)?),
-        "crop" => write_crop(&mut out, records::crop(&*lib.db()?, &text(r, "path")?)?),
-        "cover_lookup" => write_text_or_null(&mut out, records::cover_lookup(&*lib.db()?, &text(r, "path")?)?.as_deref()),
-        "known_hash" => write_text_or_null(&mut out, records::known_hash(&*lib.db()?, &text(r, "path")?, integer(r, "bytes")?, integer(r, "modified")?)?.as_deref()),
-        "path_by_hash" => write_text_or_null(&mut out, records::path_by_hash(&*lib.db()?, &text(r, "md5")?)?.as_deref()),
+        "edits" => edits_value(&records::edits(&*lib.db()?, &text(r, "path")?)?),
+        "all_edits" => Value::Object(records::all_edits(&*lib.db()?)?.iter().map(|(path, edits)| (path.clone(), edits_value(edits))).collect()),
+        "collections" => Value::Array(records::collections(&*lib.db()?)?.iter().map(|c| json!({ "id": c.id, "name": c.name, "count": c.count })).collect()),
+        "members" => json!(records::members(&*lib.db()?, integer(r, "id")?)?),
+        "collections_of" => json!(records::collections_of(&*lib.db()?, &text(r, "path")?)?),
+        "crop" => crop_value(records::crop(&*lib.db()?, &text(r, "path")?)?),
+        "cover_lookup" => json!(records::cover_lookup(&*lib.db()?, &text(r, "path")?)?),
+        "known_hash" => json!(records::known_hash(&*lib.db()?, &text(r, "path")?, integer(r, "bytes")?, integer(r, "modified")?)?),
+        "path_by_hash" => json!(records::path_by_hash(&*lib.db()?, &text(r, "md5")?)?),
         "orphans" => {
             let present = strings(r, "present")?.into_iter().collect();
-            out.push('[');
-            for (i, (path, md5, bytes)) in records::orphans(&*lib.db()?, &present)?.iter().enumerate() {
-                if i > 0 {
-                    out.push(',');
-                }
-                out.push_str(&format!("{{\"path\":{},\"md5\":{},\"bytes\":{bytes}}}", dj::quoted(path), dj::quoted(md5)));
-            }
-            out.push(']');
+            Value::Array(records::orphans(&*lib.db()?, &present)?.iter().map(|(path, md5, bytes)| json!({ "path": path, "md5": md5, "bytes": bytes })).collect())
         }
         "recent" => {
             let limit = integer(r, "limit")?.max(0) as usize;
-            write_strings(&mut out, lib.recent(limit, games(r)?)?.iter().map(String::as_str));
+            json!(lib.recent(limit, games(r)?)?)
         }
         other => return Err(Error::BadRequest(format!("No read is called {other}."))),
-    }
-    Ok(out)
+    };
+    Ok(answer.to_string())
 }
 
 /// The games a reclaim or `recent` is given in place of the last scan's.
@@ -258,8 +165,8 @@ fn changes(r: &Value) -> Result<Vec<(String, Option<String>)>, Error> {
         Some(Value::Object(members)) => members
             .iter()
             .map(|(key, value)| match value {
-                Value::Null => Ok((key.text.clone(), None)),
-                Value::String(t) if !t.broken => Ok((key.text.clone(), Some(t.text.clone()))),
+                Value::Null => Ok((key.clone(), None)),
+                Value::String(t) => Ok((key.clone(), Some(t.clone()))),
                 _ => Err(wrong("changes", "an object of texts and nulls")),
             })
             .collect(),
@@ -277,7 +184,7 @@ fn storable(values: &[f64]) -> Result<(), Error> {
 pub(crate) fn change(lib: &Library, r: &Value) -> Result<String, Error> {
     let op = text(r, "op")?;
     if op == "reclaim" {
-        return Ok(format!("{{\"moved\":{}}}", lib.reclaim_guarded(games(r)?)?));
+        return Ok(json!({ "moved": lib.reclaim_guarded(games(r)?)? }).to_string());
     }
     let db = lib.db()?;
     let db = &*db;
@@ -296,9 +203,7 @@ pub(crate) fn change(lib: &Library, r: &Value) -> Result<String, Error> {
                 Some(kept) => {
                     storable(&[kept])?;
                     records::played(db, &path()?, kept)?;
-                    let mut out = String::new();
-                    write_real(&mut out, kept);
-                    out
+                    real_value(kept).to_string()
                 }
                 None => "null".to_string(),
             });

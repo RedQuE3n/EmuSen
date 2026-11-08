@@ -3707,3 +3707,187 @@ system default, answering `ABSENT` with words where no device has the name. An o
 on the device. The C# side is `UiSoundPlayer.SetOutputDevice`. A new number, as §45's was (rule B). Design and tests:
 `EmuSen_Audio_Sync.md` §7.5.
 
+
+## 47. The platform stops imitating .NET, 2026-11-07
+
+*Decided 2026-11-07 by the tester*, with every answer of the cleanup's plan: once the C# front end reads only through
+the Rust library, the platform's code no longer reproduces .NET's rules byte for byte (§5.2–§5.5, §10.3, §11.3).
+serde and serde_json, the zip crate, the `time` crate and the standard library's paths take the place of the
+hand-written readers and writers, and each service keeps one surface. Four facts stay fixed, since they are stored:
+the path keys of `states.db` and `games.db`, the unpacked folder's name, the 100 ns tick, and the round-trip text of a
+time as it is written. Two changes on disk were approved: config files are written in serde's spelling, and new zips
+are written by the zip crate. A file a person edited by hand keeps reading: comments, trailing commas, names in any
+case, a member written twice (the last wins), and UTF-16 and UTF-32 text with a byte-order mark. The C# classes that
+held the Rust to .NET's bytes are deleted by the step that ends each imitation; the disk corpus below is the proof in
+their place. The crates the platform shares are named once, in `[workspace.dependencies]` of `Platform/Cargo.toml`.
+
+### 47.1 The disk corpus
+
+Files as the platform wrote them at `1d3cd893c`, variants edited by hand, and zips made by other programs, each beside
+what it reads to, recorded once and never re-recorded to make a change pass. Each owner keeps its own, in
+`tests/disk/` beside a `tests/disk.rs`:
+
+| Owner | Files | What each is held to |
+|---|---|---|
+| Galaxia | the four config models and `consoles.json` (written, comments and trailing commas, lower-case names, members twice, a stray byte, unknown members, every byte-order mark, `null`, five refusals); `package.json` (written, edited with a mark and comments, newer, a member twice, not JSON); zips: stored, deflated, Deflate64 (7-Zip), Zip64 and with members twice (Python's `zipfile`), a package's with NTFS times, the recorder's | the model as JSON, compared member by member in order with numbers equal as a double or a float; a read, written and read again gives the same model; each zip's entries, lengths and CRC-32 through the game reader and the cheat database's reader, and a package's files unpacked with their times to the 100 ns |
+| Galaxia | `keys.tsv`, `unpacked.tsv` | the key `games.db` and `states.db` store for a path; the unpacked folder's name for a path, length and tick |
+| Crystal | a game's own settings (written, comments, a mark, UTF-16, keys twice, values not strings, `null`, a list, not JSON); a package's state records; `times.tsv` | the values in order; the record's members with its time as the instant it names, so that the zone the test runs in does not matter |
+| The library | `last-played.tsv` | the instant in ticks since 1970; a time without a zone is local and stays with the owner's tests |
+| The scraper | the member file, made-up accounts only | user, password and the instant it was verified |
+| `emusen-core-host` | two sidecars as built, one marked in development, one naming a file outside its folder, one of version 2 | the listing: library, hash, version, capabilities, the info |
+
+The Deflate64 zip is refused by the game reader at this point; the cheat database's reader takes it. The test names
+that one refusal, so that a reader that starts taking it says so.
+
+### 47.2 One store of a call's last words
+
+Five thread-local strings held the words of a thread's last failing call, one per header that has a last-error export:
+the platform's (which the shell's `dianash_last_error` shares), the frontend API's, the session table's, the
+library's and the scraper's. They are now one module, `platform/src/last_error.rs`, with a slot for each, so a
+failure in one header still leaves another's words alone, as before. The scraper redacts its words before they are
+stored, as it did.
+
+### 47.3 The settings folder from `dirs`
+
+`tree::application_data`, the folder the tree's legacy settings and default log folder sit under when the host names
+none, is `dirs::config_dir` (dirs 7.0.0): `$XDG_CONFIG_HOME` where it is absolute, else `~/.config`; `~/Library/Application
+Support` on macOS; the roaming application data on Windows, which `dirs` asks the system for as the removed code did.
+These are the folders §5.5's second point reproduced by hand, about 50 lines and a Windows call written out. The
+firmware search reads the home folder through `tree::user_home` rather than `$HOME` itself. `tests/application_data.rs`
+holds the three Linux cases (absolute, relative, unset) in a process of its own.
+
+### 47.4 Interface 36: the parity-test exports go
+
+`emusen_galaxia_dotnet_path`, `emusen_galaxia_dotnet_test`, `emusen_galaxia_number_format` and
+`emusen_galaxia_text_decode`, with their `EMUSEN_GALAXIA_PATH_*`, `EMUSEN_GALAXIA_TEST_*` and `EMUSEN_GALAXIA_NUMBER_*`
+numbers, existed only so that WiseMan could hold the library's path rules, its yes-or-no text rules, its number
+layout and its file decoding to .NET's own answers (§10.5, §11.5). No program called them. They are deleted, with the
+five WiseMan tests that called them (in `GalaxiaParityTests`: every path rule, blank text and caseless equality, a
+file and a directory existing, every double and float written, a file's bytes decoded), and the interface is 36.
+What those rules do to stored keys and to files a person edits is now held by the disk corpus (§47.1).
+
+### 47.5 White space, letters and digits are the standard library's
+
+`trim`, `trim_start`, `trim_end`, white space, blank text, letters and letters-or-digits are `str` and `char`'s own
+(`trim`, `is_whitespace`, `is_alphabetic`, `is_alphanumeric`); blank text is `trim().is_empty()`. White space was
+already Unicode's White_Space and the same set (§10.3), so trimming and word splitting do not change, and the DianaSh
+goldens hold them. Letters change at the edges: a character outside the Basic Multilingual Plane, two surrogates to
+.NET and so no letter, is a letter when Unicode says so, and the 398 ranges of `letter_or_digit.rs` (.NET 10's own,
+generated 2026-10-17) are gone with them. A digit in the debugger's expressions is an ASCII digit; .NET's took any
+script's decimal digits, which no number in an expression could then be read from.
+
+### 47.6 Numbers are read by `str::parse`
+
+Every integer and floating-point reading of typed text, `.cht` fields, settings rows and scraper answers is the text
+trimmed and given to `str::parse`; the debugger's hexadecimal addresses are `u32::from_str_radix` after an optional
+`0x` or `$`, read as 32 bits so that `ffffffff` is −1 as before. What changes: trailing NULs and a thousands comma
+(`1,000`, which .NET's en-US reading took) are no longer read as part of a number, `inf` and `infinity` are read
+beside `NaN`, and a refusal is worded by the standard library (`'zz' is not a hexadecimal number: invalid digit found
+in string.`) rather than by .NET. `number.rs` (230 lines) is deleted. The goldens and the `.cht` tests did not change.
+
+### 47.7 "Did you mean …?" is a crate of its own, on strsim
+
+The suggestion a refusal ends with (`emusen-suggest`, `Platform/suggest`) measures names by `strsim::osa_distance`
+(strsim 0.11.1), optimal string alignment as before, on the names lower-cased by the standard library, and counts
+characters rather than UTF-16 units: an emoji is one slip, not two, and a word's tolerance (one slip up to three
+characters, two up to six, three beyond) counts its characters. A tie still goes first to a name the typed text
+begins, then to names in order of their upper case. It is a crate of its own because the shell, its command modules
+and the platform library all use it and a module may not link Galaxia (EmuSen_DianaSh.md §16 Q11); emusen-dotnet's
+`suggestion.rs` is deleted, and the C# sweep that held it to the C#'s sentences
+(`GalaxiaParityTests.A_suggestion_is_the_sentence_the_csharp_gave` and its golden) with it. `SuggestionTests` keep
+holding the behaviour, and the DianaSh goldens did not change.
+
+### 47.8 Case and order are the standard library's
+
+emusen-dotnet's `text.rs` (350 lines) is deleted; its callers use `str`'s own:
+
+| What | Now | What changes |
+|---|---|---|
+| Names that are identifiers ignoring case: extensions, keywords, commands, memory spaces, processors, config members, console and system ids | `eq_ignore_ascii_case` | letters outside ASCII are compared exactly; none of these names has one, and the comparison allocates nothing, which the debugger's frame needs (`crystal-debug/tests/alloc.rs`) |
+| Text a person wrote, ignoring case: a game's name searched for, a file's name on a system whose files ignore case; contains, starts and ends with | both sides `to_uppercase()` | Unicode's full mapping: `ß` equals `SS`, and the long s (U+017F) and the dotless i (U+0131), which .NET kept apart, equal `S` and `I` |
+| Ordered ignoring case | by `to_uppercase()` | as before for what a player names: `_` still sorts after the letters |
+| Ordered ordinally | `str`'s `cmp`, UTF-8's order | a character outside the Basic Multilingual Plane sorts after U+E000–U+FFFF, where UTF-16's order put it before |
+| Lower and upper case, the keys names are found under | `to_lowercase()`, `to_uppercase()` | the full mapping, as above |
+| Widths of shell columns | `format!`'s `{:<w$}` and `chars().count()` | widths count characters, not UTF-16 units (an emoji is one, not two); the goldens did not change, so the routine question of §47's plan (Q10) is answered by them |
+| The error log's line breaks | CR LF, LF and CR | form feed, U+0085, U+2028 and U+2029 no longer break an entry's line |
+| The error log's room for a day | the entry's bytes against the 8 MB in bytes | it was the entry's UTF-16 length against bytes |
+
+The cheat codes' alphabets (Game Genie, Action Replay, Pro Action Replay) are ASCII and upper-case their input with
+`to_ascii_uppercase`, which gives the same codes. One Galaxia test was changed with the rules: a day's log is judged
+by bytes (`error_log.rs`).
+
+### 47.9 Files are read and written by `std::fs`, and a mark still chooses the encoding
+
+emusen-dotnet's `file.rs` (116 lines) is deleted. A file a person may have written (a config, a cheat list, a game's
+own settings, a manifest, a cue sheet or an `.m3u` list) is read by `emusen_galaxia::text_file`: its byte-order mark
+chooses UTF-8, UTF-16 or UTF-32 and is dropped, UTF-8 is read without one, and what is not valid becomes U+FFFD, as
+the tester's answer to the plan's Q7 keeps it. That module is ours, about 25 lines, because no crate the platform uses
+reads UTF-32's marks. Everything else is the standard library's: the shell reads a redirect, a man page or a script
+with `read_to_string`, writes with `fs::write` or an appending `OpenOptions`, and lines are `str::lines`.
+
+A refusal is the path and the system's words, `<path>: No such file or directory (os error 2)`, where it was .NET's
+sentence (`Could not find file '<path>'.`, `Access to the path '<path>' is denied.`). Six lines of the DianaSh goldens
+(`awk`, `wc`, `touch` and two cases of `shell` twice) were changed with their lengths to the new words; nothing else
+in them moved.
+
+### 47.10 ScreenScraper's and GitHub's answers and the session's arguments are read by serde
+
+emusen-dotnet's `json_document` (531 lines with its tests), which reproduced `JsonDocument.Parse` and its exceptions'
+words, is deleted. Its three readers:
+
+- **ScreenScraper's answers** (`scrape/src/answer.rs`) are read into typed structures, one per reader, so that a reader
+  decodes only the members it uses, as the C# did: a member of the wrong kind is absent (`Object<T>`), a list that is not
+  one is empty and its non-objects are passed over (`Many<T>`; a genre that is not an object is an empty genre, as
+  before), and a leaf is a string's text or a number's digits (`Text`; a fraction is always shown, so that `77.0` is
+  no whole number). A sign-in's name is read before anything else its member holds. The 155 answers of
+  `scrape/tests/fixtures/answers.jsonl` read to the C#'s models; a refusal is held to being one, since its words are
+  now serde's (`missing field `response` at line 1 column 2`), and `media.db` keeps those words on the rows it writes
+  from now on. The reader's own refusal, "a game without an id", is held word for word.
+- **OpenVGDB's release** (`scrape/src/openemu.rs`) is a `Release` of a tag and its assets.
+- **A session call's arguments** (`crystal/src/service/args.rs`) are a `serde_json::Value` read by the accessors as
+  before. A string holding half a surrogate pair, which .NET read and refused only when the call asked for it, makes the
+  whole argument "not JSON"; an element of the wrong kind is refused as "an element is Number, not a string".
+
+The cores' workspaces that link Galaxia (`emusen-libretro-games`, `-host`, `emusen-core-broker`, `-conform` and
+Diamond's) carry the platform's new dependencies in their locks from this step on.
+
+### 47.11 The systems data is read by serde
+
+`System`, `Medium` and `Look` derive `Deserialize` with unknown fields refused, and every field must be written, `null`
+where a fact is unknown (`stated`). serde refuses a field missing, unknown, written twice or of the wrong kind, in its
+words (`missing field `console` at line 25 column 1`); what serde cannot know is checked after it, in the words it had:
+blank words, a word twice in a list, the year, the cover's shape, the byte order, dotted lower-case extensions, a
+medium named twice and a look's ranges. A medium's three fields may now come in any order. `table.json`'s cover shape
+is a `TableFacts`. `System`'s fields are declared in the order the table writes them.
+
+### 47.12 The API's answers are written by serde_json
+
+The frontend API's JSON answers (`emusen_crystal.h`: the catalog, core info, a game's opening, a console's look, the
+session table's views and lists) are built by `crystal/src/json.rs` as a `serde_json::Value` and written by
+serde_json. The builder keeps its calls (`begin_object`, `str`, `int` and the rest), since 72 answers build in loops
+and helpers, but it writes no text itself: no escaping, no number layout, no commas. Members keep the order they are
+given in (serde_json's `preserve_order`). What changes in the bytes: text is written as UTF-8 rather than escaped
+(`<é>` where .NET wrote `<é>`), a whole double keeps its point (`2.0` where .NET wrote `2`), and a
+double JSON has no number for is `null`. The C# front end reads every answer with a JSON reader, which takes both
+spellings.
+
+### 47.13 The library's and the scraper's requests and answers
+
+`emusen_library.h`'s requests are read as a `serde_json::Value` and its answers built with `json!` (`library/src/json.rs`,
+`library/src/lib.rs`): a record, the records by path, a game, edits, collections, orphans, the games list and an
+identity. A double JSON has no number for is still the name `NaN`, `Infinity` or `-Infinity`, as the C# reader takes
+it. `emusen_scrape.h`'s requests are read the same way, and the requests the scraper sends the library are built with
+`json!`. The scraper's answers are still laid out by its readers' `format!` calls, but every value in them (a text, a
+number, a list of texts) is written by serde_json through `scrape/src/json.rs`; turning those layouts into `json!` is
+left for a later change, since it moves no byte. What changes in the bytes is as §47.12 says: UTF-8 text, and a whole
+double with its point.
+
+### 47.14 The systems table, the session's arguments and the modules' texts are written by serde_json
+
+`System`, `Medium` and `Look` derive `Serialize` beside `Deserialize`, so the systems table (`emusen_systems_table`,
+the frontend API's `systems`) is the data files' own types written by serde_json, its members in `KEYS`' order since
+the fields are declared in it; a cover's shape of 1 is now `1.0`. The save media, cheat codec and libretro core lists
+of `emusen-systems` build `serde_json::Value`s. The session service's `quoted`, which the command modules build their
+arguments with, the shell's JSON strings, the platform's package answer and the library tool's crop text are serde_json's
+or the standard library's. What still reads or writes emusen-dotnet's `json::Value` is Galaxia's models and manifests
+and the files and session answers read through them, which §47's config step replaces.

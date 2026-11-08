@@ -4,7 +4,6 @@
 //! the pokes into those a core gates itself and those the host writes (EmuSen_Backend.md §29.4, §29.33).
 
 use emusen_dotnet::json::{Text, Value};
-use emusen_dotnet::text::{equals_ignore_case, is_blank, trim};
 use emusen_systems::cheats::{Kind, Write, WriteType};
 
 /// One cheat as the registry holds it, `CheatInfo`.
@@ -380,21 +379,21 @@ fn type_name(kind: WriteType) -> &'static str {
 /// `TryParseWriteType`: absent or blank is `Set`; otherwise a member's name or number, ignoring case, as
 /// `Enum.TryParse` takes it.
 pub fn parse_write_type(text: Option<&str>) -> Option<WriteType> {
-    let Some(t) = text.filter(|t| !is_blank(Some(t))) else { return Some(WriteType::Set) };
-    let t = trim(t);
+    let Some(t) = text.filter(|t| !t.trim().is_empty()) else { return Some(WriteType::Set) };
+    let t = t.trim();
     const ALL: [WriteType; 7] = [WriteType::Set, WriteType::Increase, WriteType::Decrease, WriteType::IfEqual, WriteType::IfNotEqual, WriteType::IfLess, WriteType::IfGreater];
-    if let Some(k) = ALL.iter().find(|k| equals_ignore_case(type_name(**k), t)) {
+    if let Some(k) = ALL.iter().find(|k| type_name(**k).eq_ignore_ascii_case(&t)) {
         return Some(*k);
     }
     // Enum.TryParse takes a number too, any int; one outside the members is kept by .NET as its value, which no
     // write type has, and the write then acts as a plain set of its value.
-    emusen_dotnet::number::parse_i32(t).map(|n| ALL.get(n as usize).copied().unwrap_or(WriteType::Set))
+    t.trim().parse::<i32>().ok().map(|n| ALL.get(n as usize).copied().unwrap_or(WriteType::Set))
 }
 
 /// `CheatFileWrite.TryHex`: hex text with an optional 0x or $, as an unsigned 32-bit number.
 fn try_hex(text: Option<&str>) -> Option<u32> {
-    let t = text.filter(|t| !is_blank(Some(t)))?;
-    let t = trim(t);
+    let t = text.filter(|t| !t.trim().is_empty())?;
+    let t = t.trim();
     let stripped = if t.len() >= 2 && t[..2].eq_ignore_ascii_case("0x") {
         &t[2..]
     } else if let Some(rest) = t.strip_prefix('$') {
@@ -407,7 +406,7 @@ fn try_hex(text: Option<&str>) -> Option<u32> {
 
 /// `uint.TryParse(text, NumberStyles.HexNumber)` and its byte form: white space around, leading zeros allowed.
 fn hex_number(text: &str, digits: usize) -> Option<u32> {
-    let d = trim(text);
+    let d = text.trim();
     if d.is_empty() || !d.chars().all(|c| c.is_ascii_hexdigit()) {
         return None;
     }
@@ -422,14 +421,14 @@ fn hex_number(text: &str, digits: usize) -> Option<u32> {
 fn read_entry(e: &Value) -> Option<(Kind, Vec<Write>, Option<u8>)> {
     let compare = match e.get("Compare").and_then(Value::as_str) {
         None => None,
-        Some(c) if is_blank(Some(c)) || trim(c) == "-" => None,
+        Some(c) if c.trim().is_empty() || c.trim() == "-" => None,
         Some(c) => {
-            let t = trim(c);
+            let t = c.trim();
             let stripped = if t.len() >= 2 && t[..2].eq_ignore_ascii_case("0x") { &t[2..] } else { t.strip_prefix('$').unwrap_or(t) };
             Some(hex_number(stripped, 2)? as u8)
         }
     };
-    let kind = if e.get("Kind").and_then(Value::as_str).is_some_and(|k| equals_ignore_case(k, "RomPatch")) { Kind::RomPatch } else { Kind::RamPoke };
+    let kind = if e.get("Kind").and_then(Value::as_str).is_some_and(|k| k.eq_ignore_ascii_case("RomPatch")) { Kind::RomPatch } else { Kind::RamPoke };
     let listed: Vec<Value> = match e.get("Writes") {
         Some(Value::Array(w)) if !w.is_empty() => w.clone(),
         _ => match e.get("Address").and_then(Value::as_str) {
@@ -458,8 +457,8 @@ fn read_entry(e: &Value) -> Option<(Kind, Vec<Write>, Option<u8>)> {
         let value = try_hex(s("Value", "00").as_deref())?;
         let repeat_address = s("RepeatAddAddress", "0");
         let repeat_value = s("RepeatAddValue", "0");
-        let repeat_address = if is_blank(repeat_address.as_deref()) { 0 } else { try_hex(repeat_address.as_deref())? };
-        let repeat_value = if is_blank(repeat_value.as_deref()) { 0 } else { try_hex(repeat_value.as_deref())? };
+        let repeat_address = if repeat_address.as_deref().is_none_or(|t| t.trim().is_empty()) { 0 } else { try_hex(repeat_address.as_deref())? };
+        let repeat_value = if repeat_value.as_deref().is_none_or(|t| t.trim().is_empty()) { 0 } else { try_hex(repeat_value.as_deref())? };
         let kind = parse_write_type(s("Type", "Set").as_deref())?;
         writes.push(Write {
             space: s("Space", "").unwrap_or_default(),

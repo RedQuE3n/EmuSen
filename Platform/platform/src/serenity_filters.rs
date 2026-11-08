@@ -5,7 +5,7 @@
 
 use crate::serenity::{bits, document, list, number, object, out_json, parameter_of};
 use crate::{fail, status, text};
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_serenity::filters::write::{self, Refusal, Written};
 use emusen_serenity::filters::{self, Axis, Filter, Pass, Scale, Setting, Size, Values, glsl, screens};
 use std::borrow::Cow;
@@ -117,7 +117,7 @@ fn filter_json(f: &Filter) -> Value {
         .iter()
         .map(|s| {
             let Value::Object(mut members) = crate::serenity::parameter_json(&s.parameter) else { unreachable!() };
-            members.push((emusen_galaxia::json::Text::new("choices"), s.choices.as_deref().map_or(Value::Null, strings)));
+            members.push((emusen_dotnet::json::Text::new("choices"), s.choices.as_deref().map_or(Value::Null, strings)));
             Value::Object(members)
         })
         .collect();
@@ -307,7 +307,7 @@ mod tests {
         let mut out = vec![0u8; 1 << 20];
         let n = unsafe { emusen_serenity_filters(out.as_mut_ptr(), out.len()) };
         assert!(n > 0 && (n as usize) < out.len());
-        let catalog = emusen_galaxia::json::parse(std::str::from_utf8(&out[..n as usize]).unwrap()).unwrap();
+        let catalog = emusen_dotnet::json::parse(std::str::from_utf8(&out[..n as usize]).unwrap()).unwrap();
         let listed = list(catalog.get("filters")).unwrap();
         assert_eq!(listed.len(), filters::catalog().len());
         for (doc, filter) in listed.iter().zip(filters::catalog()) {

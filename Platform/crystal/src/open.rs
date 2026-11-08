@@ -51,7 +51,7 @@ fn library_for<'d>(catalog: &Catalog, discovery: &'d Discovery, trust: &Trust, a
     let extension = crate::route::image_extension(catalog, discovery, at);
     // A hand row's console taking the extension names its missing sole engine (the systems data's catalog rows).
     let row = emusen_systems::catalog_rows::hand_rows().iter().find(|r| {
-        r.systems.iter().filter_map(|(id, _)| emusen_systems::find(id)).any(|s| s.extensions.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, &extension)))
+        r.systems.iter().filter_map(|(id, _)| emusen_systems::find(id)).any(|s| s.extensions.iter().any(|e| e.eq_ignore_ascii_case(&extension)))
     });
     Err(match row {
         Some(r) => missing(discovery, &r.refusal, &r.sole_engine),
@@ -120,7 +120,7 @@ impl Sessions {
 /// The empty consoles in release order, `ConsolesThatStartEmpty`.
 fn empty_starts(catalog: &Catalog) -> Vec<(String, String)> {
     let mut packs: Vec<&emusen_systems::System> = emusen_systems::table().unwrap_or(&[]).iter().filter(|e| catalog.starts_empty(&e.id)).collect();
-    packs.sort_by(|x, y| emusen_dotnet::text::compare_ignore_case(&x.manufacturer, &y.manufacturer).then(x.release_year.cmp(&y.release_year)));
+    packs.sort_by(|x, y| x.manufacturer.to_uppercase().cmp(&y.manufacturer.to_uppercase()).then(x.release_year.cmp(&y.release_year)));
     packs.into_iter().map(|e| (e.console.clone(), e.id.clone())).collect()
 }
 
@@ -267,7 +267,7 @@ fn open_game(
 /// creation: the table's console of its system, else the system id in capitals, else the row's, else the core's id.
 fn session_console(system: Option<&crate::info::SystemDetail>, row_console: Option<String>, core: &Discovered) -> String {
     system
-        .and_then(|s| Catalog::discovered_console_for_system(&s.id).map(str::to_string).or_else(|| Some(emusen_dotnet::text::to_upper(&s.id))))
+        .and_then(|s| Catalog::discovered_console_for_system(&s.id).map(str::to_string).or_else(|| Some(s.id.to_uppercase())))
         .or(row_console)
         .unwrap_or_else(|| core.sidecar.info.id.clone())
 }
@@ -287,12 +287,12 @@ fn start_console(
     let starts = empty_starts(catalog);
     let console = starts
         .iter()
-        .find(|(c, id)| emusen_dotnet::text::equals_ignore_case(c, asked) || emusen_dotnet::text::equals_ignore_case(id, asked))
+        .find(|(c, id)| c.eq_ignore_ascii_case(&asked) || id.eq_ignore_ascii_case(&asked))
         .map(|(c, _)| c.clone())
         .ok_or_else(|| (crate::abi::status::NO_ENGINE, format!("no console named \"{asked}\" starts with nothing in it in this build")))?;
     let chosen = engine.map(str::to_string).or_else(|| crate::settings::current(stored.value(&console, catalog::ENGINE_KEY).map(str::to_string)));
     let not_here = || (crate::abi::status::NO_ENGINE, format!("No core in this build starts the {console} with nothing in it."));
-    let (_, system_id) = starts.iter().find(|(c, _)| emusen_dotnet::text::equals_ignore_case(c, &console)).cloned().ok_or_else(not_here)?;
+    let (_, system_id) = starts.iter().find(|(c, _)| c.eq_ignore_ascii_case(&console)).cloned().ok_or_else(not_here)?;
     let mut candidates: Vec<&Discovered> =
         discovery.for_system(&system_id).filter(|c| c.sidecar.info.systems.iter().any(|s| s.id == system_id && s.starts_empty)).collect();
     candidates.sort_by_key(|c| if Some(c.engine_name()) == chosen.as_deref() { 0 } else { 1 });

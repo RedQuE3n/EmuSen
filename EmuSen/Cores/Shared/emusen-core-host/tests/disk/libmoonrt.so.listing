@@ -1,0 +1,37 @@
+library=libmoonrt.so
+sha256=7ab200008cab3f87ff47c13cd00a0b33c8292615c7b568e764cbddd61f485053
+abi=1.19
+capabilities=4405281
+development=false
+settings=1
+CoreInfo {
+    abi: "1.19",
+    id: "moonrt",
+    name: "MoonRT",
+    display_name: "MoonRT (Rust)",
+    version: "0.1.0",
+    license: "GPL-3.0-or-later",
+    systems: [
+        CoreSystem {
+            id: "nes",
+            name: "Nintendo Entertainment System",
+            extensions: [
+                ".nes",
+            ],
+            development: false,
+            starts_empty: false,
+        },
+    ],
+    capabilities: [
+        "RESET",
+        "MUTES",
+        "ROM_PATCHES",
+        "DEBUG",
+        "DEBUG_STACK",
+        "DEBUG_REGISTERS",
+        "DEBUG_DISASSEMBLE",
+        "RAW_PICTURE",
+    ],
+    host_requires: [],
+    libretro: None,
+}

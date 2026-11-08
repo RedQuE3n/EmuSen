@@ -4,7 +4,6 @@
 
 use crate::media::ascii;
 use crate::probe::{Head, Need, ROOT_FILE_LIMIT, Recognition, root_file_through};
-use emusen_dotnet::text::{equals_ignore_case, trim};
 
 /// The bytes read first: sector 16, the primary volume descriptor, in an .iso's 2,048-byte sectors or a raw track's 2,352-byte ones.
 pub const FIRST: usize = 40 * 1024;
@@ -14,7 +13,7 @@ pub fn value(config: Option<&[u8]>, key: &str) -> Option<String> {
     let text = ascii(config?);
     text.split('\n').find_map(|line| {
         let eq = line.find('=')?;
-        equals_ignore_case(trim(&line[..eq]), key).then(|| trim(&line[eq + 1..]).to_string())
+        line[..eq].trim().eq_ignore_ascii_case(&key).then(|| line[eq + 1..].trim().to_string())
     })
 }
 
@@ -31,7 +30,7 @@ pub fn region(serial: Option<&str>, config: Option<&[u8]>) -> Option<String> {
         Some(b'U') => "Americas",
         Some(b'E') => "Europe",
         Some(b'P' | b'A' | b'K' | b'C') => "Japan",
-        _ if value(config, "VMODE").is_some_and(|v| equals_ignore_case(&v, "PAL")) => "Europe",
+        _ if value(config, "VMODE").is_some_and(|v| v.eq_ignore_ascii_case("PAL")) => "Europe",
         _ => return None,
     };
     Some(market.to_string())

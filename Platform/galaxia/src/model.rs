@@ -5,8 +5,7 @@
 //! serializes. A bound document is a `Value` holding every field of its schema in the schema's order, so that the
 //! writer, the C# facade and a later reader all see the same shape. See EmuSen_RustPlatform.md §11.2.
 
-use crate::dotnet_path::equals_ignore_case;
-use crate::json::{self, Text, Value};
+use emusen_dotnet::json::{self, Text, Value};
 use std::fmt;
 
 /// What a field holds, by the C# type it mirrors. Everything C# can leave null is nullable here too.
@@ -127,7 +126,7 @@ impl Schema {
     /// The field a JSON name means: .NET matches names without regard to case.
     fn field(&self, name: &str) -> Option<&Field> {
         // A name in its own case is the usual one and is found without casing anything; no two fields differ by case alone.
-        self.fields.iter().find(|field| field.name == name).or_else(|| self.fields.iter().find(|field| equals_ignore_case(field.name, name)))
+        self.fields.iter().find(|field| field.name == name).or_else(|| self.fields.iter().find(|field| field.name.eq_ignore_ascii_case(&name)))
     }
 
     /// Binds an object read from a file: each member replaces its field whole, an unknown member is ignored, and a field with no member keeps its initial value.

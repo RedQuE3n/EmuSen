@@ -4,7 +4,6 @@
 use crate::memory::{find, read, side_effects, Space};
 use crate::{session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::text::to_lower;
 use emusen_session_service::words::parse_hex;
 use emusen_session_service::Session;
 use std::collections::HashMap;
@@ -89,7 +88,7 @@ pub fn search(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: search <space> <value> [<width>] | search refine <value> | search changed|unchanged|increased|decreased | search list [<count>] | search reset"));
     }
-    let first = to_lower(&parts[1]);
+    let first = parts[1].to_lowercase();
     let st = &mut state(call).search;
     match first.as_str() {
         "reset" => {
@@ -188,7 +187,7 @@ pub fn snapshot(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: snapshot <space> <name> | snapshot list | snapshot remove <name>"));
     }
-    let first = to_lower(&parts[1]);
+    let first = parts[1].to_lowercase();
     let snapshots = &mut state(call).snapshots;
     if first == "list" {
         if snapshots.len() == 0 {

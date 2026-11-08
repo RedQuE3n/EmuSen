@@ -3,7 +3,7 @@
 pub(crate) use emusen_dotnet::date::local_offset;
 use crate::json::{self, quoted, strings_into};
 use crate::{Error, Scraper, credentials, layout};
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 
 /// The instant a request names in `at` (a round-trip text with its offset) with that offset, else now on the handle's
 /// clock with the machine's: the UTC ticks and the offset in seconds.
@@ -57,7 +57,7 @@ pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
             out.push_str(&format!("{{\"moved\":{moved},\"bytes\":{bytes},\"folder\":{}}}", quoted(&folder)));
         }
         "sign_out" => {
-            let had = credentials::Member::delete().map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &credentials::Member::path())))?;
+            let had = credentials::Member::delete().map_err(|e| Error::Io(format!("{}: {}", credentials::Member::path(), e)))?;
             s.set_run_member(None);
             out.push_str(&format!("{{\"had\":{had}}}"));
         }

@@ -224,8 +224,8 @@ out 1
 status 0
 action none
 $ cat < nosuch.txt
-out 47
-Error: Could not find file '<ROOT>/nosuch.txt'.
+out 64
+Error: <ROOT>/nosuch.txt: No such file or directory (os error 2)
 status 0
 action none
 $ echo x > /../escape.txt
@@ -234,8 +234,8 @@ Error: '/../escape.txt' is outside the project sandbox (<ROOT>)
 status 0
 action none
 $ echo x > Logs
-out 50
-Error: Access to the path '<ROOT>/Logs' is denied.
+out 48
+Error: <ROOT>/Logs: Is a directory (os error 21)
 status 0
 action none
 $ cat out.txt | grep two
@@ -452,8 +452,8 @@ case status of failed redirections
 target none
 covers 1-2
 $ cat < nosuch.txt
-out 47
-Error: Could not find file '<ROOT>/nosuch.txt'.
+out 64
+Error: <ROOT>/nosuch.txt: No such file or directory (os error 2)
 status 0
 action none
 $ echo $?
@@ -472,8 +472,8 @@ out 1
 status 0
 action none
 $ echo x > Logs
-out 50
-Error: Access to the path '<ROOT>/Logs' is denied.
+out 48
+Error: <ROOT>/Logs: Is a directory (os error 21)
 status 0
 action none
 $ echo $?

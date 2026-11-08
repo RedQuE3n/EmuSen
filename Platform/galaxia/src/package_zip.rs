@@ -7,7 +7,7 @@
 use crate::archive::{self, ZipEntry, ZipWriter};
 use crate::dotnet_files;
 use crate::dotnet_path::{self as path, Style};
-use crate::json::Value;
+use emusen_dotnet::json::Value;
 use crate::package;
 
 const STYLE: Style = Style::HOST;
@@ -19,7 +19,7 @@ pub fn zip_beside(folder: &str) -> String {
 
 fn stored(name: &str) -> bool {
     let extension = path::extension(Style::Unix, name);
-    archive::STORED_EXTENSIONS.iter().any(|e| emusen_dotnet::text::equals_ignore_case(e, extension))
+    archive::STORED_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&extension))
 }
 
 /// Every file of a package's folder, as zip names relative to it with `/` between their parts, in ordinal order with
@@ -112,7 +112,7 @@ pub fn manifest_in(zip: &str) -> Result<Option<(String, Value)>, String> {
     let manifest = entries.iter().find(|e| e.full_name == format!("{top}/{}", package::FILE_NAME)).ok_or("no manifest")?;
     let mut bytes = Vec::new();
     archive::copy_entry(zip, manifest, &mut bytes).map_err(|e| format!("{zip}: {e}"))?;
-    let doc = package::parse(&emusen_dotnet::file::decode(&bytes)).map_err(|r| format!("{zip}: {}", r.words()))?;
+    let doc = package::parse(&crate::text_file::decode(&bytes)).map_err(|r| format!("{zip}: {}", r.words()))?;
     Ok(Some((top, doc)))
 }
 
@@ -195,7 +195,7 @@ pub fn same_game(a: &Value, b: &Value) -> bool {
             let text = |v: Option<&Value>| {
                 let mut s = String::new();
                 if let Some(v) = v {
-                    crate::json::write_compact(&mut s, v);
+                    emusen_dotnet::json::write_compact(&mut s, v);
                 }
                 s
             };

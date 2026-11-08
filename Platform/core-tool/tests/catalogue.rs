@@ -8,7 +8,7 @@ use emusen_core_entry::{library_suffix, sha256_file, Entry, Notice};
 use emusen_core_tool::catalogue::{self, State};
 use emusen_core_tool::info::CoreInfo;
 use emusen_core_tool::{index, job, Context, Source};
-use emusen_galaxia::json::{Text, Value};
+use emusen_dotnet::json::{Text, Value};
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -237,7 +237,7 @@ fn a_requests_test_server_stands_in_for_the_buildbot_on_loopback_only() {
     let ctx = Context { cores: dir.join("Cores"), source: Source::buildbot(), placement: Some(placement()), installation: None, notes: Vec::new(), hosted: None };
     let request = |connect: &str| {
         let mut out = String::new();
-        emusen_galaxia::json::write_compact(&mut out, &Value::Object(vec![(Text::new("op"), Value::string("core-fetch")), (Text::new("test"), Value::Object(vec![(Text::new("connect"), Value::string(connect)), (Text::new("roots"), Value::string(pem.as_str()))]))]));
+        emusen_dotnet::json::write_compact(&mut out, &Value::Object(vec![(Text::new("op"), Value::string("core-fetch")), (Text::new("test"), Value::Object(vec![(Text::new("connect"), Value::string(connect)), (Text::new("roots"), Value::string(pem.as_str()))]))]));
         out
     };
     let fetched = events(&ctx, &request(&format!("127.0.0.1:{}", server.port)));

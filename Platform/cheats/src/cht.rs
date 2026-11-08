@@ -2,7 +2,6 @@
 //! write or a code a console's codec decodes, and cheats written back the same way (`man cheat`, EmuSen_Cheats.md §8).
 //! The codecs are emusen-systems', named by id; a code no codec takes, type 0 or a malformed number is skipped.
 
-use emusen_dotnet::text::{equals_ignore_case, fold, is_blank, trim};
 use emusen_systems::cheats::{self, Answer, Error, Kind, Write, WriteType};
 use std::collections::BTreeSet;
 use std::collections::HashMap;
@@ -46,32 +45,32 @@ impl Fields {
     fn read(text: &str) -> Fields {
         let mut fields = HashMap::new();
         for raw in text.split('\n') {
-            let line = trim(raw);
+            let line = raw.trim();
             if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
                 continue;
             }
             let Some(equals) = line.find('=').filter(|&at| at > 0) else { continue };
-            let key = trim(&line[..equals]);
-            let mut value = trim(&line[equals + 1..]);
+            let key = line[..equals].trim();
+            let mut value = line[equals + 1..].trim();
             if value.encode_utf16().count() >= 2 && value.starts_with('"') && value.ends_with('"') {
                 value = &value[1..value.len() - 1];
             }
-            fields.insert(fold(key), value.to_string());
+            fields.insert(key.to_uppercase(), value.to_string());
         }
         Fields(fields)
     }
 
     fn get(&self, key: &str) -> Option<&str> {
-        self.0.get(&fold(key)).map(String::as_str)
+        self.0.get(&key.to_uppercase()).map(String::as_str)
     }
 
     fn has(&self, key: &str) -> bool {
-        self.0.contains_key(&fold(key))
+        self.0.contains_key(&key.to_uppercase())
     }
 
     /// `Long`: `long.TryParse` with the invariant culture, or the fallback.
     fn long(&self, key: &str, fallback: i64) -> i64 {
-        self.get(key).and_then(emusen_dotnet::number::parse_i64).unwrap_or(fallback)
+        self.get(key).and_then(|t: &str| t.trim().parse::<i64>().ok()).unwrap_or(fallback)
     }
 
     fn int(&self, key: &str, fallback: i32) -> i32 {
@@ -79,7 +78,7 @@ impl Fields {
     }
 
     fn is_true(&self, key: &str) -> bool {
-        self.get(key).is_some_and(|v| equals_ignore_case(v, "true"))
+        self.get(key).is_some_and(|v| v.eq_ignore_ascii_case("true"))
     }
 
     /// The entries whose fields are there, by number: every other entry below the count reads nothing and is skipped.
@@ -105,7 +104,7 @@ fn answer(codec: &str, code: &str) -> Answer {
 
 /// `code.Split('+', RemoveEmptyEntries | TrimEntries)`.
 fn tokens(code: &str) -> Vec<&str> {
-    code.split('+').map(trim).filter(|t| !t.is_empty()).collect()
+    code.split('+').map(str::trim).filter(|t| !t.is_empty()).collect()
 }
 
 /// A codec's answer as the C# caller saw it: a value, a `FormatException` it catches, or a range fault it lets escape.
@@ -120,7 +119,7 @@ fn checked<T>(result: Result<T, Error>) -> Result<Option<T>, OutOfRange> {
 /// `ChtFile.Parse`, with each codec named by its emusen-systems id.
 pub fn parse(text: &str, codec: Option<&str>, space: &str, patch: Option<&str>) -> Result<Parsed, OutOfRange> {
     let fields = Fields::read(text);
-    let Some(count) = fields.get("cheats").and_then(emusen_dotnet::number::parse_i32) else { return Ok(Parsed::default()) };
+    let Some(count) = fields.get("cheats").and_then(|t: &str| t.trim().parse::<i32>().ok()) else { return Ok(Parsed::default()) };
     let mut parsed = Parsed::default();
     if count <= 0 {
         return Ok(parsed);
@@ -195,7 +194,7 @@ fn read_explicit(fields: &Fields, prefix: &str, space: &str) -> Option<Vec<Write
 /// A code is a patch when only the patch codec claims it, the rule `cheat add` follows (EmuSen_Cheats.md §8).
 fn claims_patch(code: Option<&str>, codec: Option<&str>, patch: Option<&str>) -> bool {
     let (Some(code), Some(patch)) = (code, patch) else { return false };
-    if is_blank(Some(code)) || cheats::codec(patch).is_none_or(|c| c.kind != Kind::RomPatch) {
+    if code.trim().is_empty() || cheats::codec(patch).is_none_or(|c| c.kind != Kind::RomPatch) {
         return false;
     }
     if codec.is_some_and(|c| answer(c, code).can_decode) {
@@ -227,7 +226,7 @@ fn read_patch(code: &str, patch: &str) -> Result<Option<Vec<Write>>, OutOfRange>
 /// The console's own form: one or more codes joined with `+`, the whole first, since one of a codec's codes can span a `+`.
 fn read_code(code: Option<&str>, codec: Option<&str>, space: &str) -> Result<Option<Vec<Write>>, OutOfRange> {
     let (Some(code), Some(codec)) = (code, codec) else { return Ok(None) };
-    if is_blank(Some(code)) {
+    if code.trim().is_empty() {
         return Ok(None);
     }
     match checked(answer(codec, code).writes)? {

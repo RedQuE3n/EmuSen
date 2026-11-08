@@ -3,7 +3,7 @@
 //! (`emusen-psx-card`, `emusen-n64-pak`, `emusen-mcd-bram`, EmuSen_Backend.md D14); a family's module here gives its
 //! saves their names and titles and its refusals their words, as the C# modules did (EmuSen_SaveMedia.md §6.2).
 
-use emusen_dotnet::json::{self, Value};
+use serde_json::Value;
 
 /// A save as the console's own manager shows it; `id` is the medium's own name for it, which a copy carries.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -109,11 +109,11 @@ pub fn format(id: &str) -> Option<Vec<u8>> {
 }
 
 fn text_or_null(text: Option<&str>) -> Value {
-    text.map_or(Value::Null, Value::string)
+    text.map_or(Value::Null, Value::from)
 }
 
 fn object(members: Vec<(&str, Value)>) -> Value {
-    Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect())
+    Value::Object(members.into_iter().map(|(k, v)| (String::from(k), v)).collect())
 }
 
 /// A listing as JSON: `formatted`, `saves` (each `id`, `title`, `units`, `game`, `damaged`), `free`, `problem`.
@@ -123,9 +123,9 @@ pub fn listing_json(listing: &Listing) -> String {
         .iter()
         .map(|s| {
             object(vec![
-                ("id", Value::string(s.id.as_str())),
-                ("title", Value::string(s.title.as_str())),
-                ("units", Value::number(s.units as i64)),
+                ("id", Value::from(s.id.as_str())),
+                ("title", Value::from(s.title.as_str())),
+                ("units", Value::from(s.units as i64)),
                 ("game", text_or_null(s.game.as_deref())),
                 ("damaged", Value::Bool(s.damaged)),
             ])
@@ -134,11 +134,11 @@ pub fn listing_json(listing: &Listing) -> String {
     let value = object(vec![
         ("formatted", Value::Bool(listing.formatted)),
         ("saves", Value::Array(saves)),
-        ("free", Value::number(listing.free as i64)),
+        ("free", Value::from(listing.free as i64)),
         ("problem", text_or_null(listing.problem.as_deref())),
     ]);
     let mut out = String::new();
-    json::write_compact(&mut out, &value);
+    out.push_str(&value.to_string());
     out
 }
 
@@ -148,15 +148,15 @@ pub fn modules_json() -> String {
         .iter()
         .map(|m| {
             object(vec![
-                ("id", Value::string(m.id)),
-                ("length", Value::number(m.length as i64)),
-                ("capacity", Value::number(m.capacity as i64)),
-                ("unit", Value::string(m.unit)),
+                ("id", Value::from(m.id)),
+                ("length", Value::from(m.length as i64)),
+                ("capacity", Value::from(m.capacity as i64)),
+                ("unit", Value::from(m.unit)),
             ])
         })
         .collect();
     let mut out = String::new();
-    json::write_compact(&mut out, &Value::Array(rows));
+    out.push_str(&Value::Array(rows).to_string());
     out
 }
 

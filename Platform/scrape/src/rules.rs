@@ -4,7 +4,6 @@
 
 use crate::answer::{Genre, Localised, Media};
 use crate::kinds::{Kind, Payload};
-use emusen_dotnet::text::{equals_ignore_case, is_blank};
 
 pub const AUTOMATIC_REGION: &str = "auto";
 
@@ -19,7 +18,7 @@ const COUNTRIES: [(&str, &str); 18] = [
 ];
 
 fn country(name: &str) -> Option<&'static str> {
-    COUNTRIES.iter().find(|(n, _)| equals_ignore_case(n, name)).map(|(_, code)| *code)
+    COUNTRIES.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)).map(|(_, code)| *code)
 }
 
 /// The text inside each `(...)` holding no parenthesis, left to right, as the regex `\(([^()]*)\)` finds them.
@@ -53,7 +52,7 @@ pub fn region_of_file_name(file_name: &str) -> Option<&'static str> {
 
 /// The regions tried, in order: the player's choice or the file's tag, then with the fallback on ES-DE's list.
 pub fn region_order(file_name: &str, choice: &str, fallback: bool) -> Vec<String> {
-    let preferred = if choice != AUTOMATIC_REGION && !is_blank(Some(choice)) { choice.to_string() } else { region_of_file_name(file_name).unwrap_or("wor").to_string() };
+    let preferred = if choice != AUTOMATIC_REGION && !choice.trim().is_empty() { choice.to_string() } else { region_of_file_name(file_name).unwrap_or("wor").to_string() };
     let mut order = vec![preferred.clone()];
     if fallback {
         order.extend(FALLBACK_REGIONS.iter().filter(|r| **r != preferred).map(|r| r.to_string()));
@@ -62,7 +61,7 @@ pub fn region_order(file_name: &str, choice: &str, fallback: bool) -> Vec<String
 }
 
 pub fn language_order(preferred: &str) -> Vec<String> {
-    if is_blank(Some(preferred)) || preferred == "en" { vec!["en".into()] } else { vec![preferred.to_string(), "en".into()] }
+    if preferred.trim().is_empty() || preferred == "en" { vec!["en".into()] } else { vec![preferred.to_string(), "en".into()] }
 }
 
 /// The file of one kind to fetch: each ScreenScraper type in turn, by region order; then one with no region; then any
@@ -126,7 +125,7 @@ pub fn rating(note: Option<f64>) -> Option<f32> {
 
 /// A date as `yyyy-MM-dd`, `yyyy-MM` or `yyyy` exactly, ASCII digits, a real day; the text trimmed first.
 pub fn date(text: Option<&str>) -> Option<(i32, u32, u32)> {
-    let text = text.filter(|t| !is_blank(Some(t)))?.trim_matches(char::is_whitespace);
+    let text = text.filter(|t| !t.trim().is_empty())?.trim_matches(char::is_whitespace);
     let digits = |s: &str| -> Option<u32> { (s.bytes().all(|b| b.is_ascii_digit())).then(|| s.parse().ok()).flatten() };
     let parts: Vec<&str> = text.split('-').collect();
     let (year, month, day) = match parts.as_slice() {
@@ -156,7 +155,7 @@ pub fn extension(format: Option<&str>, payload: Payload) -> &'static str {
     match payload {
         Payload::Pdf => ".pdf",
         Payload::Video => ".mp4",
-        Payload::Image => match format.map(emusen_dotnet::text::to_lower).as_deref() {
+        Payload::Image => match format.map(str::to_lowercase).as_deref() {
             Some("jpg" | "jpeg") => ".jpg",
             _ => ".png",
         },

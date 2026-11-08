@@ -11,7 +11,7 @@ use emusen_core_tool::install::{self, Note};
 use emusen_core_tool::notes::{self, Tested};
 use emusen_core_tool::Context;
 use emusen_galaxia::archive::ZipWriter;
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_galaxia::rom_hash::Crc32;
 use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};

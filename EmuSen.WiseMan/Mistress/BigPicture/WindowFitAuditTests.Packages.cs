@@ -32,7 +32,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.WriteAllBytes(Path.Combine(_romDir, "nes", PackagedTitle + ".nes"), SyntheticNesRom.Build());
             new AppSettings { RomDirectory = _romDir, LibraryView = AppSettings.LibraryList, ResumeOnLaunch = AppSettings.ResumeNever, StateDirectory = Path.Combine(_root, "States") }.Save();
             string packaged = Path.Combine(DataStore.Packages, "NES", PackagedTitle + ".nes");
-            CrystalParityTests.PackageFor(packaged, _romDir, $"nes/{PackagedTitle}.nes", "nes");
+            PackageFixtures.PackageFor(packaged, _romDir, $"nes/{PackagedTitle}.nes", "nes");
             // Its cover in its package's media folder, which the window's sources read for it (§18.3).
             string cover = Path.Combine(packaged, "media", "covers", PackagedTitle + ".png");
             Directory.CreateDirectory(Path.GetDirectoryName(cover)!);

@@ -28,9 +28,13 @@ fn unpacked(tree: &Tree) -> String {
 pub fn folder_for(tree: &Tree, archive_path: &str) -> Result<String, String> {
     let full = path::full_path(archive_path);
     let (length, ticks) = crate::dotnet_files::file_info(&full).ok_or_else(|| format!("Could not find file '{full}'."))?;
+    Ok(path::combine(Style::HOST, &unpacked(tree), &folder_name(&full, length, ticks)))
+}
+
+/// The unpacked folder's name: the first eight bytes of the SHA-256 of `full path|length|ticks`, in hex. A stored name, so its rule never changes.
+pub fn folder_name(full: &str, length: i64, ticks: i64) -> String {
     let key = Sha256::digest(format!("{full}|{length}|{ticks}").as_bytes());
-    let hex: String = key[..8].iter().map(|b| format!("{b:02x}")).collect();
-    Ok(path::combine(Style::HOST, &unpacked(tree), &hex))
+    key[..8].iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// `Path.ChangeExtension(path, null)`: the path without its last part's extension.
@@ -54,7 +58,7 @@ fn renamed(entry: &str, chosen: &str, archive_path: &str) -> String {
     if entry == chosen {
         return path::combine(Style::HOST, &dir, &format!("{stem}{}", path::extension(Style::HOST, chosen)));
     }
-    let sbi = emusen_dotnet::text::equals_ignore_case(path::extension(Style::HOST, entry), ".sbi");
+    let sbi = path::extension(Style::HOST, entry).eq_ignore_ascii_case(".sbi");
     if sbi && without_extension(entry) == without_extension(chosen) {
         path::combine(Style::HOST, &dir, &format!("{stem}.sbi"))
     } else {

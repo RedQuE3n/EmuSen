@@ -4,7 +4,6 @@
 
 use emusen_disc::cue::{FileKind, Mode, Sheet};
 use emusen_disc::Kind;
-use emusen_dotnet::text::{compare_ignore_case, ends_with_ignore_case};
 use emusen_galaxia::dotnet_files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
@@ -72,13 +71,13 @@ pub fn items(library: &str, given: &[String]) -> (Vec<Item>, Vec<String>) {
     files.dedup();
     let systems = crate::packages::every_system();
     let mut found: Vec<Item> = image_sets::shelved(files).into_iter().filter_map(|at| item_of(library, at, &systems)).collect();
-    found.sort_by(|a, b| compare_ignore_case(&a.rel, &b.rel).then_with(|| a.rel.cmp(&b.rel)));
+    found.sort_by(|a, b| a.rel.to_uppercase().cmp(&b.rel.to_uppercase()).then_with(|| a.rel.cmp(&b.rel)));
     (found, refused)
 }
 
 /// A library file as the disc the tool converts, or none: a sheet, track, ISO, zip or playlist of a system it converts.
 fn item_of(library: &str, at: String, systems: &emusen_library::scan::Systems) -> Option<Item> {
-    if !DISC_EXTENSIONS.iter().any(|e| ends_with_ignore_case(&at, e)) {
+    if !DISC_EXTENSIONS.iter().any(|e| at.to_uppercase().ends_with(&e.to_uppercase())) {
         return None;
     }
     let rel = rel_of(library, &at);
@@ -93,7 +92,7 @@ fn item_of(library: &str, at: String, systems: &emusen_library::scan::Systems) -
 /// Whether `chd convert` takes a library file, as `items` would find it (EmuSen_Packages.md §3a); a playlist is not
 /// converted as one, so it is not offered.
 pub fn convertible(library: &str, at: &str, systems: &emusen_library::scan::Systems) -> bool {
-    !ends_with_ignore_case(at, ".m3u") && item_of(library, at.to_string(), systems).is_some()
+    !at.to_uppercase().ends_with(".M3U") && item_of(library, at.to_string(), systems).is_some()
 }
 
 /// Where the scan's routing names no system (no recogniser claimed the disc, and the folder holding it is no ES-DE
@@ -185,7 +184,7 @@ fn image_of(tree: &Tree, at: &str) -> Result<String, String> {
         return Ok(at.to_string());
     }
     let names: Vec<String> = archive::entries_of(at)?.into_iter().map(|e| e.full_name).filter(|n| !n.ends_with('/')).collect();
-    let tracks = names.iter().filter(|n| ends_with_ignore_case(n, ".bin")).count();
+    let tracks = names.iter().filter(|n| n.to_uppercase().ends_with(".BIN")).count();
     if !names.iter().any(|n| image_sets::is_sheet(n)) && tracks > 1 {
         return Err(format!("{} holds {tracks} track files and no sheet, so its tracks' order and gaps are unknown", path::file_name(Style::HOST, at)));
     }
@@ -200,7 +199,7 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
     let image = image_of(tree, &item.path)?;
     let (form, sheet, original, names, files, medium) = if image_sets::is_sheet(&image) {
         let bytes = std::fs::read(&image).map_err(|e| format!("{image}: {e}"))?;
-        let text = emusen_dotnet::file::decode(&bytes);
+        let text = emusen_galaxia::text_file::decode(&bytes);
         let parsed = Sheet::parse(&text).map_err(|e| e.to_string())?;
         if parsed.kinds.contains(&FileKind::Wave) {
             return Err("the sheet names a WAVE file, whose header a CHD does not keep: not converted by this step".into());

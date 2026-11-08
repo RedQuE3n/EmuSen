@@ -81,7 +81,7 @@ impl Session {
 
     /// Why the record says the state is not this machine's to load, or none.
     fn refusal(&self, e: &Engine, r: &StateRecord) -> Option<String> {
-        if !emusen_dotnet::text::equals_ignore_case(&r.console, &self.console) {
+        if !r.console.eq_ignore_ascii_case(&self.console) {
             return Some(format!("That state was saved by the {} core, and {} runs on the {} core.", r.console, path::file_name(Style::HOST, &self.game_key()), self.console));
         }
         let loads = &e.mi.loads_from;
@@ -96,10 +96,10 @@ impl Session {
     pub(crate) fn save_in(&self, e: &mut Engine, at: &str, records: Option<&StateRecords>, picture: bool) -> Result<(), Refused> {
         let full = path::full_path(at);
         if let Some(folder) = path::directory_name(Style::HOST, &full).filter(|f| !f.is_empty()) {
-            std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, &folder)))?;
+            std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, format!("{}: {}", folder, err)))?;
         }
         let bytes = e.state_bytes().map_err(|r| (r.status, r.words))?;
-        std::fs::write(at, &bytes).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, at)))?;
+        std::fs::write(at, &bytes).map_err(|err| (abi::status::IO, format!("{}: {}", at, err)))?;
         crate::states::write(records, at, &self.record(e))?;
         self.events.raise(self.id, abi::EVENT_STATE, "state", |j| {
             j.str("op", "saved").str("path", at);
@@ -108,7 +108,7 @@ impl Session {
             let (rgba, width, height) = self.shown_picture(e);
             if width > 0 && height > 0 {
                 let png = emusen_galaxia::saves::picture_path(at);
-                crate::png::write(&png, &rgba, width as u32, height as u32).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, &png)))?;
+                crate::png::write(&png, &rgba, width as u32, height as u32).map_err(|err| (abi::status::IO, format!("{}: {}", png, err)))?;
             }
         }
         Ok(())
@@ -124,7 +124,7 @@ impl Session {
         {
             return Err((abi::status::STATE_REFUSED, why));
         }
-        let bytes = std::fs::read(at).map_err(|err| (abi::status::IO, emusen_dotnet::file::io_message(&err, at)))?;
+        let bytes = std::fs::read(at).map_err(|err| (abi::status::IO, format!("{}: {}", at, err)))?;
         // With rewind on, the present is kept as the newest moment and the chain stays, so Rewind undoes the load (EmuSen_Backend.md §36).
         let was = run.rewind.withheld().is_some();
         if run.rewind.enabled && run.rewind.capture_unless_held(&mut crate::engine::Snap { engine: e, ctx: Some(ctx) })? && run.rewind.thumbnail_width > 0 && !e.skip_rendering {

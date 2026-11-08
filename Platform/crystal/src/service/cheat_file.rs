@@ -5,7 +5,6 @@
 
 use emusen_cheats::registry::CheatRegistry;
 use emusen_dotnet::json::Value;
-use emusen_dotnet::text::equals_ignore_case;
 
 /// What a property of the model holds.
 #[derive(Clone, Copy)]
@@ -56,7 +55,7 @@ impl Shape {
             ],
             _ => &[],
         };
-        fields.iter().find(|(n, _)| equals_ignore_case(n, name)).map(|(_, s)| *s)
+        fields.iter().find(|(n, _)| n.eq_ignore_ascii_case(&name)).map(|(_, s)| *s)
     }
 }
 

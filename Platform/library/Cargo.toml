@@ -10,6 +10,8 @@ publish.workspace = true
 name = "emusen_library"
 
 [dependencies]
+# The requests read and the answers written as JSON.
+serde_json.workspace = true
 # Where a file lives and how it is read: the walk, the sets, the archives and a dump's hashes.
 emusen-galaxia = { path = "../galaxia" }
 # What each system is and how a file is routed among them.

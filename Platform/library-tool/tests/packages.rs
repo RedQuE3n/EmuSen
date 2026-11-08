@@ -4,7 +4,7 @@
 //! a missing one; and the library is left byte for byte as it was. The C# twin and the runtimes are WiseMan's.
 
 use emusen_galaxia::claims;
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::package;
 use emusen_galaxia::rom_hash;
 use emusen_galaxia::tree::Tree;

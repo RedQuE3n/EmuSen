@@ -168,7 +168,7 @@ pub struct TrackHashes {
 /// beside the sheet as a disc's are; SHA-1 always. `stop` is as [`hashes_with`]'s.
 pub fn tracks(sheet_path: &str, stop: &dyn Fn() -> bool) -> std::io::Result<Vec<TrackHashes>> {
     let refuse = |words: String| std::io::Error::new(std::io::ErrorKind::InvalidData, words);
-    let text = emusen_dotnet::file::decode(&std::fs::read(sheet_path)?);
+    let text = crate::text_file::decode(&std::fs::read(sheet_path)?);
     let names = emusen_disc::set::companions(&text).map_err(|e| refuse(e.to_string()))?;
     let spans = emusen_disc::set::track_spans(&text).map_err(refuse)?;
     let paths = crate::image_sets::companions(sheet_path).map_err(refuse)?;

@@ -7,8 +7,7 @@
 
 use crate::cheats::{begins_as, ends_as, files_in};
 use crate::config;
-use crate::dotnet_path::{self as path, Style, is_blank};
-use crate::dotnet_text::{replace_line_endings, utf16_len};
+use crate::dotnet_path::{self as path, Style};
 use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
 use crate::tree::{Directory, Tree, file_exists};
 use std::io::Write;
@@ -42,7 +41,7 @@ pub const WRITE_CHECK: &str = ".emusen-write-check";
 /// `ErrorLog.Usable`: a folder that is named, can be made, and takes a file; made by the asking.
 pub fn usable(directory: Option<&str>) -> bool {
     match directory {
-        Some(directory) if !is_blank(Some(directory)) => {
+        Some(directory) if !directory.trim().is_empty() => {
             if std::fs::create_dir_all(directory).is_err() {
                 return false;
             }
@@ -59,7 +58,7 @@ pub fn usable(directory: Option<&str>) -> bool {
 /// the home's own `Logs` when it names one this machine cannot make or write (a settings file copied from another).
 pub fn fallback_root(tree: &Tree, configured: Option<&str>) -> String {
     match configured {
-        Some(named) if !is_blank(Some(named)) => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
+        Some(named) if !named.trim().is_empty() => tree.directory(Directory::Logs).unwrap_or_else(|| default_root(tree)),
         _ => default_root(tree),
     }
 }
@@ -76,7 +75,7 @@ pub fn root(tree: &Tree, directory_override: Option<&str>) -> (String, Option<St
         return (configured.unwrap_or_default().to_string(), said);
     }
     let root = fallback_root(tree, configured);
-    if let Some(named) = configured.filter(|named| !is_blank(Some(named))) {
+    if let Some(named) = configured.filter(|named| !named.trim().is_empty()) {
         if !FELL_BACK_SAID.swap(true, Ordering::SeqCst) {
             *FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(fallback_words(named, &root));
         }
@@ -89,18 +88,23 @@ pub fn path_for(root: &str, day: &str) -> String {
     path::combine(Style::HOST, root, &format!("{PREFIX}{day}.log"))
 }
 
+/// A text's lines, a carriage return and line feed together ending one.
+fn lines(text: &str) -> Vec<String> {
+    text.replace("\r\n", "\n").split(['\n', '\r']).map(str::to_string).collect()
+}
+
 fn one_line(text: &str) -> String {
-    replace_line_endings(text, " \u{23CE} ")
+    lines(text).join(" \u{23CE} ")
 }
 
 /// One entry: its line, its context on a second, and a fault's text indented under them.
 pub fn format_entry(stamp: &str, level: &str, area: &str, message: &str, context: Option<&str>, fault: Option<&str>) -> String {
     let mut entry = format!("{stamp} {level} [{area}] {}\n", one_line(message));
-    if let Some(context) = context.filter(|context| !is_blank(Some(context))) {
+    if let Some(context) = context.filter(|context| !context.trim().is_empty()) {
         entry.push_str(&format!("    context: {}\n", one_line(context)));
     }
     if let Some(fault) = fault {
-        for line in replace_line_endings(fault, "\n").split('\n') {
+        for line in lines(fault) {
             entry.push_str(&format!("    {line}\n"));
         }
     }
@@ -159,8 +163,7 @@ fn append_entry(file: &str, stamp: &str, now: SystemTime, text: Option<&str>) ->
     if let Some(notice) = FELL_BACK.lock().unwrap_or_else(|poisoned| poisoned.into_inner()).take() {
         text.insert_str(0, &format!("{stamp} WARN [log] {notice}\n"));
     }
-    // The length is counted as C# counts a string's, in UTF-16 code units, against a size in bytes.
-    if size + utf16_len(&text) as u64 >= MAX_BYTES {
+    if size + text.len() as u64 >= MAX_BYTES {
         text.push_str(&format!("{stamp} WARN [log] this file reached {} MB; nothing more is written to it today\n", MAX_BYTES >> 20));
     }
     log.write_all(text.as_bytes()).ok()
@@ -239,12 +242,11 @@ mod tests {
         assert_eq!(append(&root, "20261008", "T", now, "refused\n"), None);
         assert_eq!(std::fs::metadata(&file).unwrap().len(), text.len() as u64);
 
-        // The room left is judged by the entry's length as C# counts it, in UTF-16 code units, not by the bytes it takes.
+        // The room left is judged by the bytes an entry takes.
         let wide = "é😀\n";
-        assert_eq!((utf16_len(wide), wide.len()), (4, 7));
-        std::fs::write(&file, vec![b'x'; MAX_BYTES as usize - 5]).unwrap();
+        std::fs::write(&file, vec![b'x'; MAX_BYTES as usize - 8]).unwrap();
         assert!(append(&root, "20261008", "STAMP", now, wide).is_some());
-        assert_eq!(std::fs::metadata(&file).unwrap().len(), MAX_BYTES - 5 + 7);
+        assert_eq!(std::fs::metadata(&file).unwrap().len(), MAX_BYTES - 8 + 7);
 
         std::fs::write(temp.join("blocker"), "a file where the folder should be").unwrap();
         assert_eq!(append(&temp.join("blocker"), "20261008", "T", now, "nowhere\n"), None);
@@ -259,7 +261,7 @@ mod tests {
         assert_eq!(root(&tree, None), (temp.join("appdata/EmuSen/Logs"), None));
         std::fs::create_dir_all(temp.join("etc")).unwrap();
         let settings = |log: &str| std::fs::write(temp.join("etc/appsettings.json"), format!("{{\"LogDirectory\":{log}}}")).unwrap();
-        settings(&crate::json::quoted(&temp.join("made/Logs")).replace("\\u002B", "+"));
+        settings(&emusen_dotnet::json::quoted(&temp.join("made/Logs")).replace("\\u002B", "+"));
         assert_eq!(root(&tree, None), (temp.join("made/Logs"), None));
         assert!(crate::tree::directory_exists(&temp.join("made/Logs")));
         // A folder this machine cannot make, as a settings file copied from another names, falls back to the home's own Logs, said once in it.
@@ -268,7 +270,7 @@ mod tests {
         let home_logs = tree.directory(Directory::Logs).unwrap();
         std::fs::write(temp.join("blocker"), "x").unwrap();
         let blocked = temp.join("blocker/Logs");
-        settings(&crate::json::quoted(&blocked));
+        settings(&emusen_dotnet::json::quoted(&blocked));
         assert_eq!(root(&tree, None).0, home_logs);
         let now = SystemTime::now();
         let file = append(&root(&tree, None).0, "20261101", "T", now, "first\n").unwrap();
@@ -283,7 +285,7 @@ mod tests {
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o555)).unwrap();
             if std::fs::write(path::combine(Style::HOST, &shut, "probe"), b"").is_err() {
                 assert!(!usable(Some(&shut)));
-                settings(&crate::json::quoted(&shut));
+                settings(&emusen_dotnet::json::quoted(&shut));
                 assert_eq!(root(&tree, None).0, home_logs);
             }
             std::fs::set_permissions(&shut, std::fs::Permissions::from_mode(0o755)).unwrap();

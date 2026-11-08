@@ -66,7 +66,7 @@ pub fn game_values(tree: &Tree, system: Option<&str>, game: &str, package: Optio
 /// The values of one settings file, `GameSettings.Read`'s parse.
 pub fn values_at(at: &str) -> Vec<(String, String)> {
     let Ok(Some(bytes)) = emusen_galaxia::atomic::try_read(at) else { return Vec::new() };
-    let text = emusen_dotnet::file::decode(&bytes);
+    let text = emusen_galaxia::text_file::decode(&bytes);
     let none = |why: String| {
         crate::error_log::warning("settings", &format!("{at} is not a game's settings, and is read as none: {why}"));
         Vec::new()

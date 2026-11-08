@@ -9,7 +9,7 @@
 
 use crate::endymion::{hand_over, take};
 use crate::{fail, required, status, text};
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_serenity::cache::{self, Cache};
 use emusen_serenity::compiler::{Shaderc, Stage};
 use emusen_serenity::preset::{self, Preset, ScaleType, Wrap};

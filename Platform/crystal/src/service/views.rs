@@ -192,7 +192,7 @@ pub fn symbols(c: &Call, processor: u32, filter: Raw) -> Answer<Vec<u8>> {
         let names = d.symbol_names(m, p);
         let mut j = Json::new();
         j.begin_array();
-        for n in names.iter().filter(|n| filter.is_none_or(|f| emusen_dotnet::text::contains_ignore_case(n, f))) {
+        for n in names.iter().filter(|n| filter.is_none_or(|f| n.to_uppercase().contains(&f.to_uppercase()))) {
             j.str_value(n);
         }
         j.end_array();

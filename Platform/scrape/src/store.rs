@@ -470,7 +470,7 @@ fn scalar_text(db: &Connection, sql: &str, parameters: &[(&str, Bound)]) -> Resu
 impl Store {
     /// Opens `<root>/media.db`, the folder made first, migrating it; a newer file is refused unwritten.
     pub fn open(sqlite: Arc<Sqlite>, root: &str) -> Result<Store, Error> {
-        std::fs::create_dir_all(root).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, root)))?;
+        std::fs::create_dir_all(root).map_err(|e| Error::Io(format!("{}: {}", root, e)))?;
         let path = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, FILE_NAME);
         Store::open_at(sqlite, root, &path)
     }

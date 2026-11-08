@@ -67,10 +67,10 @@ impl ImageProbe {
 /// The extension that decides a file's system: an archive's image entry's, else its own, in lower case.
 pub fn image_extension(at: &str, takes: &dyn Fn(&str) -> bool) -> String {
     if !archive::is_archive(at) {
-        return emusen_dotnet::text::to_lower(path::extension(Style::HOST, at));
+        return path::extension(Style::HOST, at).to_lowercase();
     }
     match archive::image_entry(at, takes) {
-        Ok(Some(entry)) => emusen_dotnet::text::to_lower(path::extension(Style::Unix, &entry)),
+        Ok(Some(entry)) => path::extension(Style::Unix, &entry).to_lowercase(),
         _ => String::new(),
     }
 }

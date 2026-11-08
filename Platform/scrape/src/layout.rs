@@ -13,7 +13,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 const STYLE: Style = Style::HOST;
 
 fn io(e: std::io::Error, at: &str) -> Error {
-    Error::Io(emusen_dotnet::file::io_message(&e, at))
+    Error::Io(format!("{}: {}", at, e))
 }
 
 /// `MediaStore.Relative`: the system, the kind's folder, the game's folder and the file's name.
@@ -192,7 +192,7 @@ pub fn orphans(store: &Store, names_by_system: &BTreeMap<String, HashSet<String>
             });
         }
     }
-    found.sort_by(|a, b| emusen_dotnet::text::compare_ordinal(a, b));
+    found.sort_by(|a, b| a.cmp(b));
     found
 }
 

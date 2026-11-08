@@ -1,11 +1,11 @@
-//! Every reading of ScreenScraper's JSON, `ScreenScraperJson` ported, because API v2 is a beta that may change. The
-//! text is read as `JsonDocument.Parse` reads it (`emusen_dotnet::json_document`), and each refusal the C# catches as
-//! a malformed answer is given in the words of the exception the C# saw first, since a fifth malformed answer is kept
-//! in `media.db` with them. Members are read in the C#'s order for that reason. See EmuSen_BigPicture.md §5.1, §17.
+//! Every reading of ScreenScraper's JSON, because API v2 is a beta that may change: the answer read into typed
+//! structures by serde, leniently, as the C# `ScreenScraperJson` read it. A member of the wrong kind is absent, a list
+//! that is not one is empty, and a leaf is a string's text or a number's digits. What does not read is refused with
+//! serde's words, which a fifth malformed answer keeps in `media.db`. See EmuSen_BigPicture.md §5.1, §17 and
+//! EmuSen_RustPlatform.md §47.10.
 
-use emusen_dotnet::json::Value;
-use emusen_dotnet::json_document;
-use emusen_dotnet::number::parse_i64;
+use serde::Deserialize;
+use serde::de::{Deserializer, IgnoredAny, MapAccess, SeqAccess, Visitor, value::MapAccessDeserializer};
 
 /// A text keyed by a region or a language, as ScreenScraper lists names, synopses, dates and genre names.
 #[derive(Clone, Debug, PartialEq)]
@@ -69,214 +69,410 @@ pub struct Member {
 
 type Read<T> = Result<T, String>;
 
-/// `JsonValueKind`'s name, as an `InvalidOperationException` names the kind it found.
-fn kind(v: &Value) -> &'static str {
-    match v {
-        Value::Object(_) => "Object",
-        Value::Array(_) => "Array",
-        Value::String(_) => "String",
-        Value::Number(_) => "Number",
-        Value::Bool(true) => "True",
-        Value::Bool(false) => "False",
-        Value::Null => "Null",
+/// Drains whatever a lenient reader passes over, so that what it holds is never decoded.
+fn drain_seq<'de, A: SeqAccess<'de>>(mut seq: A) -> Result<(), A::Error> {
+    while seq.next_element::<IgnoredAny>()?.is_some() {}
+    Ok(())
+}
+
+fn drain_map<'de, A: MapAccess<'de>>(mut map: A) -> Result<(), A::Error> {
+    while map.next_entry::<IgnoredAny, IgnoredAny>()?.is_some() {}
+    Ok(())
+}
+
+/// A leaf: a string's text or a number's digits (a fraction always shown, so `77.0` is no whole number); none for any other kind.
+#[derive(Default)]
+struct Text(Option<String>);
+
+impl<'de> Deserialize<'de> for Text {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Text, D::Error> {
+        struct Leaf;
+        impl<'de> Visitor<'de> for Leaf {
+            type Value = Text;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("any value")
+            }
+            fn visit_str<E>(self, v: &str) -> Result<Text, E> {
+                Ok(Text(Some(v.to_string())))
+            }
+            fn visit_i64<E>(self, v: i64) -> Result<Text, E> {
+                Ok(Text(Some(v.to_string())))
+            }
+            fn visit_u64<E>(self, v: u64) -> Result<Text, E> {
+                Ok(Text(Some(v.to_string())))
+            }
+            fn visit_f64<E>(self, v: f64) -> Result<Text, E> {
+                Ok(Text(Some(format!("{v:?}"))))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Text, E> {
+                Ok(Text(None))
+            }
+            fn visit_unit<E>(self) -> Result<Text, E> {
+                Ok(Text(None))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Text, A::Error> {
+                drain_seq(seq).map(|()| Text(None))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Text, A::Error> {
+                drain_map(map).map(|()| Text(None))
+            }
+        }
+        d.deserialize_any(Leaf)
     }
 }
 
-fn not_object(v: &Value) -> String {
-    format!("The requested operation requires an element of type 'Object', but the target element has type '{}'.", kind(v))
-}
-
-/// `GetProperty`: the member, or `KeyNotFoundException`'s words; an element not an object refused.
-fn get_property<'a>(v: &'a Value, name: &str) -> Read<&'a Value> {
-    match v {
-        Value::Object(_) => v.get(name).ok_or_else(|| "The given key was not present in the dictionary.".to_string()),
-        _ => Err(not_object(v)),
+impl Text {
+    fn long(&self) -> Option<i64> {
+        self.0.as_deref().and_then(|t| t.trim().parse().ok())
+    }
+    fn int(&self) -> Option<i32> {
+        self.0.as_deref().and_then(|t| t.trim().parse().ok())
+    }
+    fn double(&self) -> Option<f64> {
+        self.0.as_deref().and_then(|t| t.trim().parse().ok())
     }
 }
 
-/// `TryGetProperty`: the member or none; an element not an object refused.
-fn try_get_property<'a>(v: &'a Value, name: &str) -> Read<Option<&'a Value>> {
-    match v {
-        Value::Object(_) => Ok(v.get(name)),
-        _ => Err(not_object(v)),
+/// An object read as `T`, and none for a member of any other kind.
+struct Object<T>(Option<T>);
+
+impl<T> Default for Object<T> {
+    fn default() -> Self {
+        Object(None)
     }
 }
 
-/// The C#'s `Prop`: a member of an object, else nothing.
-fn prop<'a>(v: Option<&'a Value>, name: &str) -> Option<&'a Value> {
-    match v {
-        Some(o @ Value::Object(_)) => o.get(name),
-        _ => None,
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Object<T> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Object<T>, D::Error> {
+        struct Only<T>(std::marker::PhantomData<T>);
+        impl<'de, T: Deserialize<'de>> Visitor<'de> for Only<T> {
+            type Value = Object<T>;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("any value")
+            }
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Object<T>, A::Error> {
+                T::deserialize(MapAccessDeserializer::new(map)).map(|t| Object(Some(t)))
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Object<T>, A::Error> {
+                drain_seq(seq).map(|()| Object(None))
+            }
+            fn visit_str<E>(self, _: &str) -> Result<Object<T>, E> {
+                Ok(Object(None))
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<Object<T>, E> {
+                Ok(Object(None))
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<Object<T>, E> {
+                Ok(Object(None))
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<Object<T>, E> {
+                Ok(Object(None))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Object<T>, E> {
+                Ok(Object(None))
+            }
+            fn visit_unit<E>(self) -> Result<Object<T>, E> {
+                Ok(Object(None))
+            }
+        }
+        d.deserialize_any(Only(std::marker::PhantomData))
     }
 }
 
-fn array(v: Option<&Value>) -> &[Value] {
-    match v {
-        Some(Value::Array(items)) => items,
-        _ => &[],
+/// A list's objects read as `T`, its other elements passed over (or, where `EVERY`, each read as an empty `T`); empty for a member that is no list.
+struct Many<T, const EVERY: bool = false>(Vec<T>);
+
+impl<T, const EVERY: bool> Default for Many<T, EVERY> {
+    fn default() -> Self {
+        Many(Vec::new())
     }
 }
 
-/// The C#'s `Text`: a string's text, a number's token, else none. A string holding an escaped lone surrogate is refused
-/// as `JsonElement.GetString` refuses it.
-fn text(v: Option<&Value>) -> Read<Option<String>> {
-    match v {
-        Some(Value::String(t)) if t.broken => Err(broken_words(t)),
-        Some(Value::String(t)) => Ok(Some(t.text.clone())),
-        Some(Value::Number(token)) => Ok(Some(token.clone())),
-        _ => Ok(None),
+impl<'de, T: Deserialize<'de> + Default, const EVERY: bool> Deserialize<'de> for Many<T, EVERY> {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Many<T, EVERY>, D::Error> {
+        struct List<T, const EVERY: bool>(std::marker::PhantomData<T>);
+        impl<'de, T: Deserialize<'de> + Default, const EVERY: bool> Visitor<'de> for List<T, EVERY> {
+            type Value = Many<T, EVERY>;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("any value")
+            }
+            fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Many<T, EVERY>, A::Error> {
+                let mut out = Vec::new();
+                while let Some(Object(item)) = seq.next_element::<Object<T>>()? {
+                    out.extend(if EVERY { Some(item.unwrap_or_default()) } else { item });
+                }
+                Ok(Many(out))
+            }
+            fn visit_map<A: MapAccess<'de>>(self, map: A) -> Result<Many<T, EVERY>, A::Error> {
+                drain_map(map).map(|()| Many(Vec::new()))
+            }
+            fn visit_str<E>(self, _: &str) -> Result<Many<T, EVERY>, E> {
+                Ok(Many(Vec::new()))
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<Many<T, EVERY>, E> {
+                Ok(Many(Vec::new()))
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<Many<T, EVERY>, E> {
+                Ok(Many(Vec::new()))
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<Many<T, EVERY>, E> {
+                Ok(Many(Vec::new()))
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Many<T, EVERY>, E> {
+                Ok(Many(Vec::new()))
+            }
+            fn visit_unit<E>(self) -> Result<Many<T, EVERY>, E> {
+                Ok(Many(Vec::new()))
+            }
+        }
+        d.deserialize_any(List(std::marker::PhantomData))
     }
 }
 
-fn broken_words(t: &emusen_dotnet::json::Text) -> String {
-    t.refusal.clone().unwrap_or_else(|| "Cannot read incomplete UTF-16 JSON text as string with missing low surrogate.".to_string())
+/// A member that is there, whatever it holds: `null` included, which `Option` alone would read as absent.
+fn present<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Option<T>, D::Error> {
+    T::deserialize(d).map(Some)
 }
 
-fn long(v: Option<&Value>) -> Read<Option<i64>> {
-    Ok(text(v)?.as_deref().and_then(parse_i64))
+/// An answer: its `response`, which each reader reads as its own structure, so that a reader reads only what it uses.
+#[derive(Deserialize)]
+#[serde(bound = "R: Deserialize<'de>")]
+struct Envelope<R> {
+    response: Object<R>,
 }
 
-fn int(v: Option<&Value>) -> Read<Option<i32>> {
-    Ok(text(v)?.as_deref().and_then(emusen_dotnet::number::parse_i32))
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Infos {
+    #[serde(deserialize_with = "present")]
+    ssuser: Option<Object<User>>,
+    jeu: Object<Jeu>,
 }
 
-fn double(v: Option<&Value>) -> Read<Option<f64>> {
-    Ok(text(v)?.as_deref().and_then(emusen_dotnet::number::parse_f64_invariant_float))
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Search {
+    #[serde(deserialize_with = "present")]
+    ssuser: Option<Object<User>>,
+    jeux: Many<Jeu>,
 }
 
-fn quota(user: &Value) -> Read<Quota> {
-    let u = Some(user);
-    Ok(Quota {
-        max_threads: int(prop(u, "maxthreads"))?,
-        max_download_kbps: int(prop(u, "maxdownloadspeed"))?,
-        requests_today: int(prop(u, "requeststoday"))?,
-        requests_ko_today: int(prop(u, "requestskotoday"))?,
-        max_requests_per_minute: int(prop(u, "maxrequestspermin"))?,
-        max_requests_per_day: int(prop(u, "maxrequestsperday"))?,
-        max_requests_ko_per_day: int(prop(u, "maxrequestskoperday"))?,
-    })
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Users {
+    #[serde(deserialize_with = "present")]
+    ssuser: Option<Object<User>>,
 }
 
-fn list(items: Option<&Value>, key: &str) -> Read<Vec<Localised>> {
-    let mut out = Vec::new();
-    for item in array(items) {
-        let key = text(prop(Some(item), key))?.unwrap_or_default();
-        let text = text(prop(Some(item), "text"))?;
-        if let Some(text) = text.filter(|t| !emusen_dotnet::text::is_blank(Some(t))) {
-            out.push(Localised { key, text });
+/// A sign-in's name alone, read before anything else the member holds.
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Named {
+    ssuser: Object<Id>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Systems {
+    systemes: Many<Systeme>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct User {
+    id: Text,
+    niveau: Text,
+    maxthreads: Text,
+    maxdownloadspeed: Text,
+    requeststoday: Text,
+    requestskotoday: Text,
+    maxrequestspermin: Text,
+    maxrequestsperday: Text,
+    maxrequestskoperday: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Jeu {
+    id: Text,
+    romid: Text,
+    rom: Object<Id>,
+    systeme: Object<Id>,
+    noms: Many<ByRegion>,
+    synopsis: Many<ByLanguage>,
+    dates: Many<ByRegion>,
+    genres: Many<GenreEntry, true>,
+    developpeur: Object<Texted>,
+    editeur: Object<Texted>,
+    joueurs: Object<Texted>,
+    note: Object<Texted>,
+    medias: Many<MediaEntry>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Id {
+    id: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Texted {
+    text: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ByRegion {
+    region: Text,
+    text: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct ByLanguage {
+    langue: Text,
+    text: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct GenreEntry {
+    noms: Many<ByLanguage>,
+    principale: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct MediaEntry {
+    #[serde(rename = "type")]
+    ty: Text,
+    region: Text,
+    url: Text,
+    format: Text,
+    sha1: Text,
+    size: Text,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct Systeme {
+    id: Text,
+    noms: Object<SystemNames>,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct SystemNames {
+    nom_eu: Text,
+    nom_us: Text,
+    nom_recalbox: Text,
+}
+
+fn localised(key: Text, text: Text) -> Option<Localised> {
+    text.0.filter(|t| !t.trim().is_empty()).map(|text| Localised { key: key.0.unwrap_or_default(), text })
+}
+
+impl User {
+    fn quota(&self) -> Quota {
+        Quota {
+            max_threads: self.maxthreads.int(),
+            max_download_kbps: self.maxdownloadspeed.int(),
+            requests_today: self.requeststoday.int(),
+            requests_ko_today: self.requestskotoday.int(),
+            max_requests_per_minute: self.maxrequestspermin.int(),
+            max_requests_per_day: self.maxrequestsperday.int(),
+            max_requests_ko_per_day: self.maxrequestskoperday.int(),
         }
     }
-    Ok(out)
 }
 
-fn game(jeu: &Value) -> Read<Option<Game>> {
-    let j = Some(jeu);
-    let Some(id) = long(prop(j, "id"))? else { return Ok(None) };
-    let rom_id = match long(prop(j, "romid"))? {
-        Some(r) => Some(r),
-        None => long(prop(prop(j, "rom"), "id"))?,
-    };
-    let system_id = int(prop(prop(j, "systeme"), "id"))?;
-    let names = list(prop(j, "noms"), "region")?;
-    let synopses = list(prop(j, "synopsis"), "langue")?;
-    let dates = list(prop(j, "dates"), "region")?;
-    let mut genres = Vec::new();
-    for g in array(prop(j, "genres")) {
-        let names = list(prop(Some(g), "noms"), "langue")?;
-        let main = text(prop(Some(g), "principale"))?.as_deref() == Some("1");
-        genres.push(Genre { names, main });
-    }
-    let developer = text(prop(prop(j, "developpeur"), "text"))?;
-    let publisher = text(prop(prop(j, "editeur"), "text"))?;
-    let players = text(prop(prop(j, "joueurs"), "text"))?;
-    let note = double(prop(prop(j, "note"), "text"))?;
-    let mut media = Vec::new();
-    for m in array(prop(j, "medias")) {
-        let m = Some(m);
-        if text(prop(m, "type"))?.is_none() || text(prop(m, "url"))?.is_none() {
-            continue;
-        }
-        let ty = text(prop(m, "type"))?.unwrap_or_default();
-        let region = text(prop(m, "region"))?;
-        let url = text(prop(m, "url"))?.unwrap_or_default();
-        let format = text(prop(m, "format"))?;
-        let sha1 = text(prop(m, "sha1"))?.map(|s| emusen_dotnet::text::to_lower(&s));
-        let size = long(prop(m, "size"))?;
-        media.push(Media { ty, region, url, format, sha1, size });
-    }
-    Ok(Some(Game { id, rom_id, system_id, names, synopses, dates, genres, developer, publisher, players, note, media }))
+fn text_of(field: Object<Texted>) -> Option<String> {
+    field.0.and_then(|t| t.text.0)
 }
 
-fn response(json: &str) -> Read<Value> {
-    let root = json_document::parse(json)?;
-    Ok(get_property(&root, "response")?.clone())
-}
-
-fn ssuser(response: &Value) -> Read<Option<Quota>> {
-    match try_get_property(response, "ssuser")? {
-        Some(user) => Ok(Some(quota(user)?)),
-        None => Ok(None),
+impl Jeu {
+    fn game(self) -> Option<Game> {
+        let id = self.id.long()?;
+        let rom_id = self.romid.long().or_else(|| self.rom.0.and_then(|r| r.id.long()));
+        let system_id = self.systeme.0.and_then(|s| s.id.int());
+        let genres = self.genres.0.into_iter().map(|g| Genre { names: g.noms.0.into_iter().filter_map(|n| localised(n.langue, n.text)).collect(), main: g.principale.0.as_deref() == Some("1") }).collect();
+        let media = self
+            .medias
+            .0
+            .into_iter()
+            .filter_map(|m| {
+                let (ty, url) = (m.ty.0?, m.url.0?);
+                Some(Media { ty, region: m.region.0, url, format: m.format.0, sha1: m.sha1.0.map(|s| s.to_lowercase()), size: m.size.long() })
+            })
+            .collect();
+        Some(Game {
+            id,
+            rom_id,
+            system_id,
+            names: self.noms.0.into_iter().filter_map(|n| localised(n.region, n.text)).collect(),
+            synopses: self.synopsis.0.into_iter().filter_map(|n| localised(n.langue, n.text)).collect(),
+            dates: self.dates.0.into_iter().filter_map(|n| localised(n.region, n.text)).collect(),
+            genres,
+            developer: text_of(self.developpeur),
+            publisher: text_of(self.editeur),
+            players: text_of(self.joueurs),
+            note: self.note.0.and_then(|t| t.text.double()),
+            media,
+        })
     }
 }
 
-/// The game and the quota of a `jeuInfos` answer; an error is the words of what the C# threw.
+/// The answer's `response` as `R`, none where it is no object; serde's words where the answer does not read.
+fn response<R: for<'de> Deserialize<'de>>(json: &str) -> Read<Option<R>> {
+    serde_json::from_str::<Envelope<R>>(json).map(|e| e.response.0).map_err(|e| e.to_string())
+}
+
+/// A response that must be an object, as every reader but the systems list needs.
+fn object<R: for<'de> Deserialize<'de>>(json: &str) -> Read<R> {
+    response(json)?.ok_or_else(|| "the response is not an object".to_string())
+}
+
+fn quota_of(user: &Option<Object<User>>) -> Option<Quota> {
+    user.as_ref().map(|u| u.0.as_ref().map(User::quota).unwrap_or_default())
+}
+
+/// The game and the quota of a `jeuInfos` answer.
 pub fn jeu_infos(json: &str) -> Read<(Option<Game>, Option<Quota>)> {
-    let response = response(json)?;
-    let quota = ssuser(&response)?;
-    match try_get_property(&response, "jeu")? {
-        Some(jeu @ Value::Object(_)) => match game(jeu)? {
-            Some(g) => Ok((Some(g), quota)),
-            None => Err("a game without an id".to_string()),
-        },
-        _ => Ok((None, quota)),
+    let r: Infos = object(json)?;
+    let quota = quota_of(&r.ssuser);
+    match r.jeu.0 {
+        Some(jeu) => jeu.game().map(|g| (Some(g), quota)).ok_or_else(|| "a game without an id".to_string()),
+        None => Ok((None, quota)),
     }
 }
 
 /// `jeuRecherche`: up to 30 games ranked by likelihood; an entry with no id is left out.
 pub fn jeu_recherche(json: &str) -> Read<(Vec<Game>, Option<Quota>)> {
-    let response = response(json)?;
-    let quota = ssuser(&response)?;
-    let mut games = Vec::new();
-    for j in array(prop(Some(&response), "jeux")) {
-        if matches!(j, Value::Object(_)) {
-            if let Some(g) = game(j)? {
-                games.push(g);
-            }
-        }
-    }
-    Ok((games, quota))
+    let r: Search = object(json)?;
+    let quota = quota_of(&r.ssuser);
+    Ok((r.jeux.0.into_iter().filter_map(Jeu::game).collect(), quota))
 }
 
 /// `ssuserInfos`: only the quota.
 pub fn user(json: &str) -> Read<Option<Quota>> {
-    let response = response(json)?;
-    ssuser(&response)
+    Ok(quota_of(&object::<Users>(json)?.ssuser))
 }
 
 /// `ssuserInfos` as a sign-in: the member, or none when the answer names none.
 pub fn member(json: &str) -> Read<Option<Member>> {
-    let response = response(json)?;
-    let Some(user @ Value::Object(_)) = try_get_property(&response, "ssuser")? else { return Ok(None) };
-    let name = text(prop(Some(user), "id"))?;
-    let Some(name) = name.filter(|n| !emusen_dotnet::text::is_blank(Some(n))) else { return Ok(None) };
-    let level = text(prop(Some(user), "niveau"))?;
-    Ok(Some(Member { name, level, quota: quota(user)? }))
+    let Some(name) = object::<Named>(json)?.ssuser.0.and_then(|u| u.id.0).filter(|n| !n.trim().is_empty()) else { return Ok(None) };
+    let Some(Some(user)) = object::<Users>(json)?.ssuser.map(|u| u.0) else { return Ok(None) };
+    Ok(Some(Member { name, level: user.niveau.0.clone(), quota: user.quota() }))
 }
 
 /// `systemesListe`: each system's id and its name, a later entry of an id replacing an earlier one.
 pub fn systems(json: &str) -> Read<Vec<(i32, String)>> {
-    let response = response(json)?;
     let mut out: Vec<(i32, String)> = Vec::new();
-    for s in array(prop(Some(&response), "systemes")) {
-        let Some(id) = int(prop(Some(s), "id"))? else { continue };
-        let names = prop(Some(s), "noms");
-        let name = match text(prop(names, "nom_eu"))? {
-            Some(n) => n,
-            None => match text(prop(names, "nom_us"))? {
-                Some(n) => n,
-                None => text(prop(names, "nom_recalbox"))?.unwrap_or_else(|| id.to_string()),
-            },
-        };
+    for s in response::<Systems>(json)?.map(|r| r.systemes.0).unwrap_or_default() {
+        let Some(id) = s.id.int() else { continue };
+        let names = s.noms.0.unwrap_or_default();
+        let name = names.nom_eu.0.or(names.nom_us.0).or(names.nom_recalbox.0).unwrap_or_else(|| id.to_string());
         match out.iter_mut().find(|(i, _)| *i == id) {
             Some(entry) => entry.1 = name,
             None => out.push((id, name)),

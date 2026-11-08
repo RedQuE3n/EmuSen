@@ -142,9 +142,9 @@ pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str
     let stem = path::file_name_without_extension(style, rom).to_string();
     let mut found = db.by_name(&stem, &core.openvgdb_systems);
     if found.is_none() {
-        let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(emusen_dotnet::file::io_message(&e, rom)))?;
+        let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(format!("{}: {}", rom, e)))?;
         if size <= HASH_LIMIT {
-            let bytes = std::fs::read(rom).map_err(|e| Some(emusen_dotnet::file::io_message(&e, rom)))?;
+            let bytes = std::fs::read(rom).map_err(|e| Some(format!("{}: {}", rom, e)))?;
             let hashed = core.systems.first().and_then(|s| emusen_systems::openvgdb::bytes(s, &bytes)).unwrap_or(bytes);
             found = db.by_md5(&emusen_galaxia::rom_hash::hashes_of(&hashed).md5, &core.openvgdb_systems);
         }
@@ -205,15 +205,20 @@ fn fetch(wire: &Wire, url: &str, target: &str, stop: &crate::clock::Stop) -> std
 pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_net::Progress) -> std::result::Result<String, String> {
     let release = emusen_net::fetch(&wire.request(LATEST_RELEASE, TIMEOUT), cancel).map_err(|f| f.message)?;
     let text = String::from_utf8_lossy(&release).into_owned();
-    let doc = emusen_dotnet::json_document::parse(&text)?;
-    let tag = doc.get("tag_name").and_then(|v| v.as_str()).unwrap_or("?").to_string();
-    let zip = match doc.get("assets") {
-        Some(emusen_dotnet::json::Value::Array(assets)) => assets
-            .iter()
-            .filter(|a| a.get("name").and_then(|n| n.as_str()).is_some_and(|n| emusen_dotnet::text::ends_with_ignore_case(n, ".zip")))
-            .find_map(|a| a.get("browser_download_url").and_then(|u| u.as_str()).map(str::to_string)),
-        _ => None,
-    };
+    #[derive(serde::Deserialize)]
+    struct Asset {
+        name: Option<String>,
+        browser_download_url: Option<String>,
+    }
+    #[derive(serde::Deserialize)]
+    struct Release {
+        tag_name: Option<String>,
+        #[serde(default)]
+        assets: Vec<Asset>,
+    }
+    let release: Release = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let tag = release.tag_name.unwrap_or_else(|| "?".to_string());
+    let zip = release.assets.into_iter().filter(|a| a.name.as_deref().is_some_and(|n| n.to_uppercase().ends_with(".ZIP"))).find_map(|a| a.browser_download_url);
     let Some(zip) = zip else { return Err(format!("OpenVGDB {tag} has no zip to download.")) };
     let archive = emusen_net::fetch(&wire.request(&zip, TIMEOUT), cancel).map_err(|f| f.message)?;
     let part = format!("{target}.part");
@@ -223,7 +228,7 @@ pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_
     let zip_part = format!("{target}.zip.part");
     std::fs::write(&zip_part, &archive).map_err(|e| e.to_string())?;
     let named = emusen_galaxia::archive::entries_of(&zip_part).ok().and_then(|entries| {
-        entries.into_iter().map(|e| e.full_name).find(|n| emusen_dotnet::text::equals_ignore_case(n.rsplit('/').next().unwrap_or(n), FILE_NAME))
+        entries.into_iter().map(|e| e.full_name).find(|n| n.rsplit('/').next().unwrap_or(n).eq_ignore_ascii_case(&FILE_NAME))
     });
     let entry = named.and_then(|n| emusen_galaxia::archive::read_entry(&zip_part, &n, usize::MAX).ok());
     let _ = std::fs::remove_file(&zip_part);

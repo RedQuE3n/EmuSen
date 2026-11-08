@@ -3,7 +3,6 @@
 //! inside the tree it was planned against (EmuSen_Settings_Reference.md §4.16).
 
 use crate::database::{Database, visit_files};
-use emusen_dotnet::text::equals_ignore_case;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 
 /// One system folder the plan removes, with its files' count and their bytes.
@@ -25,7 +24,7 @@ pub struct Plan {
 
 /// `CheatDatabasePruner.Plan`.
 pub fn plan(db: &Database, keep: &[String]) -> Plan {
-    let kept = |system: &str| keep.iter().any(|k| equals_ignore_case(k, system));
+    let kept = |system: &str| keep.iter().any(|k| k.eq_ignore_ascii_case(&system));
     let present = db.systems();
     let keeping: Vec<String> = present.iter().filter(|(s, _)| kept(s)).map(|(s, _)| s.clone()).collect();
     let removing: Vec<&(String, usize)> = present.iter().filter(|(s, _)| !kept(s)).collect();
@@ -67,7 +66,7 @@ pub fn apply(db: &Database, removing: &[Pruned]) -> (usize, Vec<String>) {
         }
         match remove_tree(&system.path) {
             Ok(()) => removed += 1,
-            Err(e) => failed.push(format!("{} ({})", system.system, emusen_dotnet::file::io_message(&e, &system.path))),
+            Err(e) => failed.push(format!("{} ({})", system.system, format!("{}: {}", system.path, e))),
         }
     }
     (removed, failed)

@@ -356,7 +356,7 @@ pub fn run(script: &mut Script, verb: &str, rest: &str, words: &[&str]) -> Optio
             r.stack.note_instructions(number(w(0)) as i32, number(w(1)));
             "ok".into()
         }
-        "cs.hot" => join(r.stack.hottest(number(w(0)) as i32), |(a, n, c, p)| format!("{a}:{n}:{c}:{}", emusen_dotnet::json::format_f64(p).unwrap_or_default())),
+        "cs.hot" => join(r.stack.hottest(number(w(0)) as i32), |(a, n, c, p)| format!("{a}:{n}:{c}:{p}")),
         "cs.status" => format!("{} {} {} {}", r.stack.is_profiling(), r.stack.profiled_instructions(), r.stack.unmatched_returns(), r.stack.depth()),
         "cs.reset" => {
             r.stack.reset();

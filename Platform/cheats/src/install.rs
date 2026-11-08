@@ -4,7 +4,6 @@
 //! read by Galaxia's `dotnet_zip`, every form .NET's reader reads, and one it refuses is refused in its words. The
 //! download is not here (EmuSen_Backend.md SR9). See EmuSen_Backend.md §15.3 and §40.1.
 
-use emusen_dotnet::text::ends_with_ignore_case;
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::io::Write;
 
@@ -121,7 +120,7 @@ pub fn install(bytes: &[u8], target: &str) -> Result<(Installed, Option<Thrown>)
         if e.full_name.ends_with('/') || (e.length == 0 && name.is_empty()) {
             continue;
         }
-        if !ends_with_ignore_case(name, ".cht") {
+        if !name.to_uppercase().ends_with(".CHT") {
             done.skipped += 1;
             continue;
         }

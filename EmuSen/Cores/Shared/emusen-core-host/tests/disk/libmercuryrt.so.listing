@@ -1,0 +1,45 @@
+library=libmercuryrt.so
+sha256=80fb26c72a15a9e801dbbeff24ac1161f8f8db257b28c73ec9f164e077a1a9ac
+abi=1.19
+capabilities=210992
+development=false
+settings=1
+CoreInfo {
+    abi: "1.19",
+    id: "mercuryrt",
+    name: "MercuryRT",
+    display_name: "MercuryRT (Rust)",
+    version: "0.1.0",
+    license: "GPL-3.0-or-later",
+    systems: [
+        CoreSystem {
+            id: "gb",
+            name: "Game Boy",
+            extensions: [
+                ".gb",
+            ],
+            development: false,
+            starts_empty: false,
+        },
+        CoreSystem {
+            id: "gbc",
+            name: "Game Boy Color",
+            extensions: [
+                ".gbc",
+            ],
+            development: false,
+            starts_empty: false,
+        },
+    ],
+    capabilities: [
+        "AUDIO_PEEK",
+        "MUTES",
+        "ROM_PATCHES",
+        "DEBUG",
+        "DEBUG_STACK",
+        "DEBUG_REGISTERS",
+        "DEBUG_DISASSEMBLE",
+    ],
+    host_requires: [],
+    libretro: None,
+}

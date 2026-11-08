@@ -5,7 +5,7 @@
 
 use emusen_disc::ecma130::{self, RAW};
 use emusen_galaxia::claims::{Index, Package};
-use emusen_galaxia::json::{self, Value};
+use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_galaxia::tree::Tree;
 use emusen_library_tool::job::{self, Job};

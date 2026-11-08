@@ -151,7 +151,7 @@ pub fn summary(system: &str, registers: &[(String, u64)], m: &mut dyn Memory, un
         s if is_gb(s) => gb::views::summary(registers, m, units),
         s if is_sms(s) => sms::views::summary(registers, m, units),
         "n64" => {
-            let vi = units.iter().find(|u| u.kind == "video" && emusen_dotnet::text::equals_ignore_case(&u.name, "VI")).map(|u| u.registers.as_slice());
+            let vi = units.iter().find(|u| u.kind == "video" && u.name.eq_ignore_ascii_case("VI")).map(|u| u.registers.as_slice());
             n64::views::summary(registers, vi)
         }
         _ => None,

@@ -15,12 +15,10 @@ pub mod disc_set;
 pub mod dotnet_files;
 pub mod dotnet_path;
 pub mod dotnet_zip;
-pub mod dotnet_text;
 pub mod game_folders;
 pub mod error_log;
 pub mod image_probe;
 pub mod image_sets;
-pub mod json;
 pub mod mapped;
 pub mod medium_lock;
 pub mod migration;
@@ -32,7 +30,7 @@ pub mod rom_hash;
 pub mod saves;
 pub mod setting_folders;
 pub mod stores;
-pub mod suggestion;
+pub mod text_file;
 pub mod tree;
 
 #[cfg(test)]

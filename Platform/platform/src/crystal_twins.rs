@@ -2,7 +2,6 @@
 //! `emusen_session_v1` table built from them, over `emusen-crystal`'s `service`: a twin names its session through the
 //! runtime, a table entry through the table it was handed, and both make one call (EmuSen_Backend.md §29.3, §29.21).
 
-use std::cell::RefCell;
 use std::ffi::c_void;
 use std::sync::Mutex;
 
@@ -13,14 +12,8 @@ use emusen_session_service::abi::{emusen_session_v1, status as svc};
 
 use crate::crystal::{fail, put, runtime};
 
-thread_local! {
-    /// The table's own last words, `SessionExports`' `t_lastError`.
-    static SERVICE_ERROR: RefCell<String> = const { RefCell::new(String::new()) };
-}
-
 fn service_fail(status: i32, words: &str) -> i32 {
-    SERVICE_ERROR.with_borrow_mut(|last| *last = words.to_string());
-    status
+    crate::last_error::fail(crate::last_error::Slot::Session, status, words.to_string())
 }
 
 /// What a table's ctx points at: the runtime, the session it serves (0 for the runtime's table with no game), and
@@ -133,7 +126,7 @@ fn code(result: Result<i64, i32>) -> i32 {
 // ---- The table's own: last_error, sessions, games ------------------------------------------------------------------
 
 unsafe extern "C" fn last_error(_ctx: *mut c_void, o: *mut u8, len: usize) -> i64 {
-    SERVICE_ERROR.with_borrow(|words| unsafe { put(words.as_bytes(), o, len) })
+    unsafe { crate::last_error::copy_out(crate::last_error::Slot::Session, o, len) }
 }
 
 unsafe extern "C" fn sessions(ctx: *mut c_void, o: *mut u8, len: usize) -> i64 {

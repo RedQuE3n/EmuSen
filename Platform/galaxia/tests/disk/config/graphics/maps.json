@@ -1,0 +1,6 @@
+{
+  // per console
+  "Consoles": {"SNES": {"Shader": "crt", "Shader": "lcd", "shader": "none"}, "snes": {}},
+  "RecentShaders": {"SNES": [], "N64": null},
+  "ShaderParameters": null,
+}

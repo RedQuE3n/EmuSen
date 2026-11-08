@@ -10,10 +10,9 @@ use crate::job::{Op, Request};
 use crate::{packages, Context};
 use emusen_disc::cue::{FileKind, Sheet};
 use emusen_disc::{Kind, Lone, Medium};
-use emusen_dotnet::text::{compare_ignore_case, ends_with_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_files::{self, Options};
 use emusen_galaxia::dotnet_path::{self as path, Style};
-use emusen_galaxia::json::Value;
+use emusen_dotnet::json::Value;
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{self, Hasher, Hashes};
 use emusen_galaxia::{archive, claims, image_sets};
@@ -45,7 +44,7 @@ pub struct Failed {
 const STOPPED: &str = "stopped";
 
 fn takes(system: Option<&System>, extension: &str) -> bool {
-    system.is_some_and(|s| s.extensions.iter().any(|x| equals_ignore_case(x, extension)))
+    system.is_some_and(|s| s.extensions.iter().any(|x| x.eq_ignore_ascii_case(&extension)))
 }
 
 /// The files under each named path, shelved as the library's scan shelves them: a folder only with `recursive`, and
@@ -81,7 +80,7 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
     all.dedup();
     let mut found: Vec<File> = Vec::new();
     for at in image_sets::shelved(all) {
-        if !direct.contains(&at) && !extensions.iter().any(|e| equals_ignore_case(e, path::extension(Style::HOST, &at))) {
+        if !direct.contains(&at) && !extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, &at))) {
             continue;
         }
         let rel = rel_of(library, &at);
@@ -91,7 +90,7 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
         }
         found.push(File { rel, path: at, system });
     }
-    found.sort_by(|a, b| compare_ignore_case(&a.rel, &b.rel).then_with(|| a.rel.cmp(&b.rel)));
+    found.sort_by(|a, b| a.rel.to_uppercase().cmp(&b.rel.to_uppercase()).then_with(|| a.rel.cmp(&b.rel)));
     let mut out: Vec<File> = Vec::with_capacity(found.len());
     for f in found {
         let discs = if image_sets::is_playlist(&f.path) { image_sets::discs(&f.path).unwrap_or_default() } else { Vec::new() };
@@ -114,10 +113,10 @@ fn io_words(at: &str, e: std::io::Error) -> String {
 /// system that takes sheets.
 fn is_disc(f: &File) -> bool {
     let ext = path::extension(Style::HOST, &f.path);
-    if image_sets::is_sheet(&f.path) || equals_ignore_case(ext, ".chd") || equals_ignore_case(ext, ".iso") {
+    if image_sets::is_sheet(&f.path) || ext.eq_ignore_ascii_case(".chd") || ext.eq_ignore_ascii_case(".iso") {
         return true;
     }
-    equals_ignore_case(ext, ".bin") && takes(f.system, ".cue") && emusen_galaxia::image_probe::head_of(&f.path, 16).is_ok_and(|h| h.starts_with(&emusen_disc::ecma130::SYNC))
+    ext.eq_ignore_ascii_case(".bin") && takes(f.system, ".cue") && emusen_galaxia::image_probe::head_of(&f.path, 16).is_ok_and(|h| h.starts_with(&emusen_disc::ecma130::SYNC))
 }
 
 /// The disc a sheet, CHD or lone image makes, its files mapped; 2,048-byte sectors a compact disc where the system
@@ -182,7 +181,7 @@ fn transformed(system: Option<&System>, bytes: &[u8]) -> Hashes {
 
 /// A zip's comparable form: the entry play opens, checked against its CRC-32, in its system's comparable form.
 fn entry(f: &File) -> Result<Hashes, String> {
-    let name = archive::image_entry(&f.path, |e| f.system.is_none_or(|s| s.extensions.iter().any(|x| equals_ignore_case(x, e))))?.ok_or("the archive holds no image of its system")?;
+    let name = archive::image_entry(&f.path, |e| f.system.is_none_or(|s| s.extensions.iter().any(|x| x.eq_ignore_ascii_case(&e))))?.ok_or("the archive holds no image of its system")?;
     let entries = archive::entries_of(&f.path)?;
     let e = entries.iter().find(|e| e.full_name == name).ok_or_else(|| format!("the archive holds no {name}"))?;
     if f.system.is_some_and(|s| openvgdb::transforms(&s.id)) {
@@ -271,7 +270,7 @@ fn grouped(n: u64) -> String {
 /// disc opens through `emusen-disc`.
 fn check_sheet(f: &File, stop: &dyn Fn() -> bool, out: &mut Vec<Failed>) {
     let text = match std::fs::read(&f.path) {
-        Ok(b) => emusen_dotnet::file::decode(&b),
+        Ok(b) => emusen_galaxia::text_file::decode(&b),
         Err(e) => return out.push(failed("size", format!("{} is unreadable: {e}", path::file_name(Style::HOST, &f.path)))),
     };
     let sheet = match Sheet::parse(&text) {
@@ -377,13 +376,13 @@ pub fn check(f: &File, chdman: Option<&Chdman>, stop: &dyn Fn() -> bool) -> Vec<
         out.push(failed("size", format!("{} is empty", path::file_name(Style::HOST, &f.path))));
     } else if archive::is_archive(&f.path) {
         check_archive(&f.path, stop, &mut out);
-    } else if equals_ignore_case(ext, ".chd") {
+    } else if ext.eq_ignore_ascii_case(".chd") {
         check_chd(f, chdman, stop, &mut out);
     } else {
         match read_through(&f.path, stop) {
             Err(x) => out.push(x),
             Ok(size) if is_disc(f) => {
-                let sector: u64 = if equals_ignore_case(ext, ".iso") { 2048 } else { 2352 };
+                let sector: u64 = if ext.eq_ignore_ascii_case(".iso") { 2048 } else { 2352 };
                 if size % sector != 0 {
                     out.push(failed("size", format!("its {} bytes are not a whole number of {}-byte sectors", grouped(size), grouped(sector))));
                 }
@@ -407,7 +406,7 @@ pub struct Member {
 /// relative path ignoring case, the groups by their first file.
 pub fn groups(mut members: Vec<Member>, index: &claims::Index) -> Vec<Vec<Member>> {
     let key = |m: &Member| (m.hashes.sha1.clone(), m.hashes.md5.clone(), m.hashes.crc32.clone(), m.hashes.size);
-    members.sort_by(|a, b| key(a).cmp(&key(b)).then_with(|| compare_ignore_case(&a.rel, &b.rel)));
+    members.sort_by(|a, b| key(a).cmp(&key(b)).then_with(|| a.rel.to_uppercase().cmp(&b.rel.to_uppercase())));
     let mut out: Vec<Vec<Member>> = Vec::new();
     let mut run: Vec<Member> = Vec::new();
     let mut close = |run: &mut Vec<Member>| {
@@ -426,7 +425,7 @@ pub fn groups(mut members: Vec<Member>, index: &claims::Index) -> Vec<Vec<Member
         run.push(m);
     }
     close(&mut run);
-    out.sort_by(|a, b| compare_ignore_case(&a[0].rel, &b[0].rel));
+    out.sort_by(|a, b| a[0].rel.to_uppercase().cmp(&b[0].rel.to_uppercase()));
     out
 }
 
@@ -467,7 +466,7 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
     };
     let mut start = vec![("event", Value::string("start")), ("op", Value::string(word)), ("files", Value::number(files.len()))];
     let mut chdman = None;
-    if req.op == Op::RomCheck && files.iter().any(|f| ends_with_ignore_case(&f.path, ".chd")) {
+    if req.op == Op::RomCheck && files.iter().any(|f| f.path.to_uppercase().ends_with(".CHD")) {
         match Chdman::open(&ctx.chdman, ctx.pin.as_deref(), &ctx.release) {
             Ok(c) => {
                 start.push(("chdman", Value::string(&c.version)));

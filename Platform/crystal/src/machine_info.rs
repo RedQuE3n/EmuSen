@@ -168,7 +168,7 @@ impl SettingDesc {
     pub fn accepts(&self, value: &str) -> bool {
         match self.kind.as_str() {
             "switch" => value == "true" || value == "false",
-            "count" => emusen_dotnet::number::parse_i32(value).is_some_and(|n| n as i64 >= self.min && n as i64 <= self.max),
+            "count" => value.trim().parse::<i32>().is_ok_and(|n| n as i64 >= self.min && n as i64 <= self.max),
             "choice" => self.choices.iter().any(|c| c == value),
             _ => !value.contains('\n') && !value.contains('\r'),
         }

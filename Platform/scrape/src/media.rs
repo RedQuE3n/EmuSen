@@ -115,8 +115,8 @@ impl Scraper {
     /// The game whose cover a ROM shows, the player's choice in the library's edits; none with no library lent.
     fn cover_from(&self, rom: &str) -> Option<String> {
         let library = self.library().ok()?;
-        let edits = library.get_request(&format!("{{\"what\":\"edits\",\"path\":{}}}", emusen_dotnet::json::quoted(rom))).ok()?;
-        emusen_dotnet::json::parse(&edits).ok()?.get("coverfrom").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
+        let edits = library.get_request(&serde_json::json!({ "what": "edits", "path": rom }).to_string()).ok()?;
+        serde_json::from_str::<serde_json::Value>(&edits).ok()?.get("coverfrom").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).map(str::to_string)
     }
 
     /// The picture of a type for a game on the shelf ES-DE calls `esde_system`, and where it came from.
@@ -164,7 +164,7 @@ impl Scraper {
         if let Some(scraped) = find_in(&self.root(), esde_system, game, media_type) {
             return Some((Source::ScreenScraper, scraped));
         }
-        if let Some(esde) = settings.esde_media.as_deref().filter(|e| !emusen_dotnet::text::is_blank(Some(e))).and_then(|root| find_in(root, esde_system, game, media_type)) {
+        if let Some(esde) = settings.esde_media.as_deref().filter(|e| !e.trim().is_empty()).and_then(|root| find_in(root, esde_system, game, media_type)) {
             return Some((Source::EsdeFolder, esde));
         }
         if cover && settings.openemu {
@@ -255,7 +255,7 @@ impl Scraper {
         let settings = self.settings();
         let stored: Vec<(String, String, bool)> = games.iter().map(|(f, p, d)| (f.clone(), settings.store_folder(f, p, *d), *d)).collect();
         let mut found: Vec<String> = present_in(&self.root(), system, &stored).into_iter().map(str::to_string).collect();
-        if let Some(esde) = settings.esde_media.as_deref().filter(|e| !emusen_dotnet::text::is_blank(Some(e))) {
+        if let Some(esde) = settings.esde_media.as_deref().filter(|e| !e.trim().is_empty()) {
             for t in present_in(esde, system, &stored) {
                 if !found.iter().any(|f| f == t) {
                     found.push(t.to_string());
@@ -298,7 +298,7 @@ impl Scraper {
         } else {
             String::new()
         };
-        let esde = settings.esde_media.as_deref().filter(|e| !emusen_dotnet::text::is_blank(Some(e))).map(|e| stamp_in(e, system)).unwrap_or_default();
+        let esde = settings.esde_media.as_deref().filter(|e| !e.trim().is_empty()).map(|e| stamp_in(e, system)).unwrap_or_default();
         let mut roots: Vec<&str> = settings.packages.iter().map(|(_, f)| f.as_str()).collect();
         roots.sort();
         format!("{}|{esde}|{openemu_stamp}|{choice}|{}", stamp_in(&self.root(), system), package_stamp(&roots))

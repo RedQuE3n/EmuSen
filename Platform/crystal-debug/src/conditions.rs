@@ -3,11 +3,10 @@
 //! that scope, its registers refreshed once an evaluation first names a symbol.
 
 use crate::expr::{Context, Error, Evaluator};
-use emusen_dotnet::text::trim;
 
 /// A logpoint's comma-separated parts, each trimmed, the empty ones dropped.
 pub fn parts(log: &str) -> impl Iterator<Item = &str> {
-    log.split(',').map(trim).filter(|p| !p.is_empty())
+    log.split(',').map(str::trim).filter(|p| !p.is_empty())
 }
 
 fn check(context: &mut dyn Context, expression: &str, what: &str, whole: &str) -> Result<(), String> {

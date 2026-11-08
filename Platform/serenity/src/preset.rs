@@ -3,8 +3,7 @@
 
 use crate::text::{self, is_space, parse_float, parse_int, skip_spaces};
 use crate::{Error, full, read_lines, resolve};
-use emusen_galaxia::dotnet_path::{Style, directory_name, equals_ignore_case};
-use emusen_galaxia::dotnet_text::lower_invariant;
+use emusen_galaxia::dotnet_path::{Style, directory_name};
 use emusen_galaxia::tree::file_exists;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -132,7 +131,7 @@ fn value(text: &str) -> String {
 }
 
 fn boolean(value: Option<&str>) -> bool {
-    value.is_some_and(|value| equals_ignore_case(value, "true") || value == "1")
+    value.is_some_and(|value| value.eq_ignore_ascii_case("true") || value == "1")
 }
 
 fn float(value: Option<&str>, fallback: f32) -> f32 {
@@ -140,7 +139,7 @@ fn float(value: Option<&str>, fallback: f32) -> f32 {
 }
 
 fn lower(text: &str) -> String {
-    text.chars().map(lower_invariant).collect()
+    text.chars().map(|c: char| c.to_ascii_lowercase()).collect()
 }
 
 fn wrap(name: Option<&str>) -> Wrap {

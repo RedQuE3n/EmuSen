@@ -45,8 +45,8 @@ touch: 'Logs' is a directory
 status 1
 action none
 $ touch sub/dir/file.txt
-out 67
-touch: Could not find a part of the path '<ROOT>/sub/dir/file.txt'.
+out 70
+touch: <ROOT>/sub/dir/file.txt: No such file or directory (os error 2)
 status 1
 action none
 end

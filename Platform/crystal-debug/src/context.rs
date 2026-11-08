@@ -3,7 +3,6 @@
 //! what it names through a [`Source`], which the debugger implements over its machine and a test over plain data.
 
 use crate::expr::Context;
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case, fold, is_letter, is_letter_or_digit, to_lower};
 use std::collections::{HashMap, HashSet};
 
 /// One register as a snapshot shows it, `DebugRegisterValue`.
@@ -54,15 +53,15 @@ pub trait Source {
 /// `IsIdentifier` of `UnitSymbols`, the evaluator's identifier: a letter, '_' or '.', then letters, digits, '_' and '.'.
 fn is_identifier(s: &str) -> bool {
     let mut chars = s.chars();
-    matches!(chars.next(), Some(c) if is_letter(c) || c == '_' || c == '.') && s.chars().all(|c| is_letter_or_digit(c) || c == '_' || c == '.')
+    matches!(chars.next(), Some(c) if c.is_alphabetic() || c == '_' || c == '.') && s.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.')
 }
 
 /// Names distinct ignoring case, the first kept, then ordered ignoring case (a stable sort), as LINQ's `Distinct` and
 /// `OrderBy` with `OrdinalIgnoreCase` make them.
 pub fn distinct_sorted(names: impl IntoIterator<Item = String>) -> Vec<String> {
     let mut seen = HashSet::new();
-    let mut out: Vec<String> = names.into_iter().filter(|n| seen.insert(fold(n))).collect();
-    out.sort_by(|a, b| compare_ignore_case(a, b));
+    let mut out: Vec<String> = names.into_iter().filter(|n| seen.insert(n.to_uppercase())).collect();
+    out.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
     out
 }
 
@@ -86,7 +85,7 @@ pub struct UnitSymbols {
 
 impl UnitSymbols {
     pub fn new(units: &[UnitInfo], taken: &[String]) -> UnitSymbols {
-        let scope: HashSet<String> = taken.iter().map(|t| fold(t)).collect();
+        let scope: HashSet<String> = taken.iter().map(|t| t.to_uppercase()).collect();
         // Insertion order kept, as a .NET dictionary enumerates entries never removed.
         let mut qualified: Vec<(String, Option<(u32, usize, usize)>)> = Vec::new();
         let mut bare: Vec<(String, Option<(u32, usize, usize)>)> = Vec::new();
@@ -94,13 +93,13 @@ impl UnitSymbols {
             if !is_identifier(&spelling) {
                 return;
             }
-            match into.iter_mut().find(|(n, _)| equals_ignore_case(n, &spelling)) {
+            match into.iter_mut().find(|(n, _)| n.eq_ignore_ascii_case(&spelling)) {
                 Some(entry) => entry.1 = None,
                 None => into.push((spelling, Some(at))),
             }
         }
         for unit in units {
-            let prefix = to_lower(&unit.name.chars().filter(|&c| is_letter_or_digit(c) || c == '_').collect::<String>());
+            let prefix = (&unit.name.chars().filter(|&c| c.is_alphanumeric() || c == '_').collect::<String>()).to_lowercase();
             for (i, (register, _)) in unit.registers.iter().enumerate() {
                 let at = (unit.id, i, unit.registers.len());
                 if !prefix.is_empty() {
@@ -112,16 +111,16 @@ impl UnitSymbols {
         let mut table = UnitSymbols::default();
         for (name, at) in qualified {
             let Some(found) = at else { continue };
-            if scope.contains(&fold(&name)) {
+            if scope.contains(&name.to_uppercase()) {
                 continue;
             }
-            table.by_name.insert(fold(&name), found);
+            table.by_name.insert(name.to_uppercase(), found);
             table.names.push(name);
         }
         for (name, at) in bare {
             if let Some(found) = at {
-                if !scope.contains(&fold(&name)) {
-                    table.by_name.entry(fold(&name)).or_insert(found);
+                if !scope.contains(&name.to_uppercase()) {
+                    table.by_name.entry(name.to_uppercase()).or_insert(found);
                 }
             }
         }
@@ -133,7 +132,7 @@ impl UnitSymbols {
         if self.by_name.is_empty() {
             return None;
         }
-        self.by_name.get(&fold(name)).copied()
+        self.by_name.get(&name.to_uppercase()).copied()
     }
 }
 
@@ -146,7 +145,7 @@ fn read_memory(source: &mut dyn Source, space: Option<&str>, fallback: Option<&s
     }
     let index = match space.or(fallback) {
         None => 0,
-        Some(wanted) => (0..count).find(|&i| equals_ignore_case(source.space_name(i), wanted))?,
+        Some(wanted) => (0..count).find(|&i| source.space_name(i).eq_ignore_ascii_case(&wanted))?,
     };
     let mut value = 0i64;
     for i in 0..width {
@@ -177,7 +176,7 @@ pub struct CpuContext<'s, 'a> {
 
 impl Context for CpuContext<'_, '_> {
     fn symbol(&mut self, name: &str) -> Option<i64> {
-        if equals_ignore_case(name, "frame") {
+        if name.eq_ignore_ascii_case("frame") {
             return Some(self.source.frame());
         }
         if let Some(v) = self.source.register(self.set, name) {
@@ -185,7 +184,7 @@ impl Context for CpuContext<'_, '_> {
         }
         if self.extra.main {
             // stackdepth where the core keeps a call stack, else the pack's symbol over the registers.
-            let depth = if equals_ignore_case(name, "stackdepth") { self.source.stack_depth() } else { None };
+            let depth = if name.eq_ignore_ascii_case("stackdepth") { self.source.stack_depth() } else { None };
             if let Some(v) = depth.or_else(|| self.source.pack_symbol(name)) {
                 return Some(v);
             }
@@ -216,7 +215,7 @@ const TARGET_SETS: [Set; 4] = [Set::Processor(0), Set::Video, Set::Apu, Set::Cop
 
 impl Context for TargetContext<'_> {
     fn symbol(&mut self, name: &str) -> Option<i64> {
-        if equals_ignore_case(name, "frame") {
+        if name.eq_ignore_ascii_case("frame") {
             return Some(self.source.frame());
         }
         for set in TARGET_SETS {
@@ -343,5 +342,5 @@ pub fn own_names(registers: &[(String, i32)], pack: &[String], stack: bool) -> V
 
 /// The lower-case name a scope word matches, `DebugCpu.Name`.
 pub fn cpu_name(name: &str) -> String {
-    to_lower(name)
+    name.to_lowercase()
 }

@@ -4,7 +4,6 @@
 //! and EmuSen_Backend.md §40.11.3.
 
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_dotnet::text::{compare_ignore_case, equals_ignore_case};
 use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_savemedia::{Card, Done, Manager, Media, Medium, Outcome, Thrown};
 
@@ -52,7 +51,7 @@ impl Known {
 impl Media for Known {
     fn medium_of(&self, file: &str) -> Option<Medium> {
         let extension = path::extension(Style::HOST, file);
-        self.0.iter().find(|(e, _)| equals_ignore_case(e, extension)).map(|(_, m)| m.clone())
+        self.0.iter().find(|(e, _)| e.eq_ignore_ascii_case(&extension)).map(|(_, m)| m.clone())
     }
 }
 
@@ -121,7 +120,7 @@ impl Run<'_> {
     fn list_all(&self) -> Answer {
         let saves = emusen_galaxia::tree::tree().saves();
         let mut consoles = folders(&saves);
-        consoles.sort_by(|a, b| compare_ignore_case(a, b));
+        consoles.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
         let mut lines: Vec<String> = Vec::new();
         for console in consoles {
             let mut cards: Vec<String> = [emusen_crystal::media::CARDS_FOLDER, emusen_crystal::media::CONSOLE_FOLDER]
@@ -133,7 +132,7 @@ impl Run<'_> {
             if cards.is_empty() {
                 continue;
             }
-            cards.sort_by(|a, b| compare_ignore_case(a, b));
+            cards.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
             lines.push(path::file_name(Style::HOST, &console).to_string());
             for card in cards {
                 match self.open(&card) {

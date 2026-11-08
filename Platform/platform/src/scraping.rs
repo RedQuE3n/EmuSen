@@ -80,12 +80,12 @@ fn every_system() -> Vec<String> {
     emusen_systems::table().map(|t| t.iter().map(|s| s.id.clone()).collect()).unwrap_or_default()
 }
 
-fn setting(settings: &emusen_galaxia::json::Value, name: &str) -> Option<String> {
+fn setting(settings: &emusen_dotnet::json::Value, name: &str) -> Option<String> {
     settings.get(name).and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string)
 }
 
 /// The tree, the settings file and its ROM folder, as the library tool reads them.
-fn settings_file() -> (tree::Tree, emusen_galaxia::json::Value, Option<String>) {
+fn settings_file() -> (tree::Tree, emusen_dotnet::json::Value, Option<String>) {
     let tree = tree::tree().clone();
     let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
     let roms = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;

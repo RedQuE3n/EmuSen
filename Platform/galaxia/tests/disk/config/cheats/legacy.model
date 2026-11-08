@@ -1,0 +1,1 @@
+{"Cheats":[{"Kind":"RamPoke","Writes":[],"Compare":null,"Description":"Old","Enabled":true,"Space":null,"Address":"7E0010","Value":"FF"},{"Kind":"RamPoke","Writes":[],"Compare":null,"Description":"No address","Enabled":true,"Space":null,"Address":null,"Value":null}]}

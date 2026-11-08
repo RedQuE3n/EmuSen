@@ -12,7 +12,7 @@ use crate::run::{Choices, Phase};
 use crate::store::Priority;
 use crate::{Error, Scraper, credentials, openemu};
 use emusen_dotnet::date::TICKS_PER_SECOND;
-use emusen_dotnet::json::Value;
+use serde_json::Value;
 
 /// `ScrapeCost.Kinds`: the share of §17.9's 39 found answers offering each kind, and the mean size the region rule took.
 const COST: [(&str, f64, f64); 11] = [
@@ -47,7 +47,7 @@ fn kinds_of(r: &Value) -> Result<Vec<kinds::Kind>, Error> {
 }
 
 pub(crate) fn choices(r: Option<&Value>, refresh: bool) -> Result<Choices, Error> {
-    let empty = Value::Object(Vec::new());
+    let empty = Value::Object(Default::default());
     let c = r.filter(|v| !v.is_null()).unwrap_or(&empty);
     let kinds = if c.get("kinds").is_some() { kinds_of(c)? } else { vec![kinds::COVER, kinds::SCREENSHOT, kinds::MARQUEE, kinds::MIXIMAGE] };
     Ok(Choices {
@@ -224,7 +224,7 @@ impl Scraper {
         if result == "signed_in" {
             let mut kept = member.clone();
             kept.verified = Some(self.clock.now());
-            kept.save().map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &credentials::Member::path())))?;
+            kept.save().map_err(|e| Error::Io(format!("{}: {}", credentials::Member::path(), e)))?;
             self.set_run_member(Some(kept));
         }
         let mut out = format!("{{\"result\":\"{result}\",\"name\":");
@@ -324,7 +324,7 @@ impl Scraper {
         let at = openemu::default_path();
         let bytes = std::fs::metadata(&at).map(|m| m.len()).ok();
         if bytes.is_some() {
-            std::fs::remove_file(&at).map_err(|e| Error::Io(emusen_dotnet::file::io_message(&e, &at)))?;
+            std::fs::remove_file(&at).map_err(|e| Error::Io(format!("{}: {}", at, e)))?;
         }
         let _ = std::fs::remove_file(format!("{at}.part"));
         let mut out = String::from("{\"bytes\":");
@@ -334,9 +334,9 @@ impl Scraper {
     }
 }
 
-/// A double as .NET's shortest round-trip text writes it.
+/// A double as JSON writes it.
 fn fmt(d: f64) -> String {
-    emusen_dotnet::json::format_f64(d).unwrap_or_else(|| "0".into())
+    Value::from(d).to_string()
 }
 
 pub(crate) const _TICKS: i64 = TICKS_PER_SECOND;

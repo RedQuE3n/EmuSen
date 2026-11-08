@@ -72,7 +72,7 @@ fn read_text(value: &Value, name: &str) -> Option<String> {
 fn parse_developer(json: &str, origin: Origin) -> Option<Developer> {
     let root = dj::parse(json).ok()?;
     let (id, password, soft) = (read_text(&root, "devid")?, read_text(&root, "devpassword")?, read_text(&root, "softname")?);
-    if [&id, &password, &soft].iter().any(|v| emusen_dotnet::text::is_blank(Some(v))) {
+    if [&id, &password, &soft].iter().any(|v| v.trim().is_empty()) {
         return None;
     }
     redact::register(&id);
@@ -143,20 +143,19 @@ impl Member {
 
     /// The account file, or an empty account where it is missing or does not read.
     pub fn load() -> Member {
-        let Ok(text) = std::fs::read_to_string(Member::path()) else { return Member::default() };
-        let Ok(root) = dj::parse(&text) else { return Member::default() };
+        std::fs::read_to_string(Member::path()).map_or_else(|_| Member::default(), |text| Member::from_text(&text))
+    }
+
+    /// The account a file's text holds, or an empty one where it does not read.
+    pub fn from_text(text: &str) -> Member {
+        let Ok(root) = dj::parse(text) else { return Member::default() };
         let mut member = Member::new(&read_text(&root, "ssid").unwrap_or_default(), &read_text(&root, "sspassword").unwrap_or_default());
         member.verified = read_text(&root, "verified").and_then(|t| emusen_dotnet::date::instant(&t));
         member
     }
 
-    /// Written whole beside its final name with mode 0600 from the moment it exists, then moved over the old file.
-    pub fn save(&self) -> std::io::Result<()> {
-        let path = Member::path();
-        if let Some(dir) = std::path::Path::new(&path).parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let temp = format!("{path}.part");
+    /// The file's text.
+    pub fn to_text(&self) -> String {
         let mut body = String::from("{\"ssid\":");
         body.push_str(&dj::quoted(&self.user));
         body.push_str(",\"sspassword\":");
@@ -166,6 +165,17 @@ impl Member {
             body.push_str(&dj::quoted(&round_trip_utc(at)));
         }
         body.push('}');
+        body
+    }
+
+    /// Written whole beside its final name with mode 0600 from the moment it exists, then moved over the old file.
+    pub fn save(&self) -> std::io::Result<()> {
+        let path = Member::path();
+        if let Some(dir) = std::path::Path::new(&path).parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        let temp = format!("{path}.part");
+        let body = self.to_text();
         {
             use std::io::Write;
             let mut options = std::fs::OpenOptions::new();

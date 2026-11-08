@@ -34,8 +34,8 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
         {
             foreach (string name in new[] { Linked, Inside }) File.WriteAllBytes(Path.Combine(roms, name + ".sfc"), SyntheticRom.BuildBlank());
             string linked = Path.Combine(DataStore.Packages, "SNES", Linked + ".sfc"), inside = Path.Combine(DataStore.Packages, "SNES", Inside + ".sfc");
-            CrystalParityTests.PackageFor(linked, roms, Linked + ".sfc", "snes");
-            CrystalParityTests.SelfContainedFor(inside, roms, Inside + ".sfc", "snes");
+            PackageFixtures.PackageFor(linked, roms, Linked + ".sfc", "snes");
+            PackageFixtures.SelfContainedFor(inside, roms, Inside + ".sfc", "snes");
             WritePicture(Path.Combine(linked, "media", "covers", Linked + ".png"));
             WritePicture(Path.Combine(inside, "media", "covers", Inside + ".png"));
         }
@@ -73,7 +73,7 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
             File.WriteAllBytes(Path.Combine(folder, Disc + " (Track 1).bin"), new byte[2352]);
             File.WriteAllBytes(Path.Combine(folder, Disc + " (Track 2).bin"), new byte[2352]);
             string package = Path.Combine(DataStore.Packages, "Sega CD", Disc, Disc + ".cue");
-            CrystalParityTests.PackageFor(package, roms, $"segacd/{Disc}/{Disc}.cue", "segacd");
+            PackageFixtures.PackageFor(package, roms, $"segacd/{Disc}/{Disc}.cue", "segacd");
             WritePicture(Path.Combine(package, "media", "covers", Disc + ".png"));
         }
 

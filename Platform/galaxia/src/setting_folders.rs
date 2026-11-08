@@ -2,7 +2,7 @@
 //! `SettingFolders.Checked` and `FolderValue`, which the platform's file services read (EmuSen_Backend.md §15). Blank is
 //! unset, `~` and `~/` are the home, a relative path or a file is refused, and a folder that does not exist is said.
 
-use crate::dotnet_path::{self as path, Style, is_blank};
+use crate::dotnet_path::{self as path, Style};
 use crate::tree::{directory_exists, file_exists};
 
 /// How a checked folder setting stands, `FolderState`'s members in order.
@@ -91,10 +91,10 @@ fn expanded(value: &str, home: &str) -> String {
 
 /// `SettingFolders.Checked`, with the home `Environment.GetFolderPath(UserProfile)` gives passed in by the host.
 pub fn checked(value: Option<&str>, home: &str) -> FolderValue {
-    let Some(named) = value.filter(|v| !is_blank(Some(v))) else {
+    let Some(named) = value.filter(|v| !v.trim().is_empty()) else {
         return FolderValue { state: FolderState::Unset, path: None, written: value.unwrap_or("").to_string() };
     };
-    let written = emusen_dotnet::text::trim(named).to_string();
+    let written = named.trim().to_string();
     let expanded = expanded(&written, home);
     if !is_fully_qualified(Style::HOST, &expanded) {
         return FolderValue { state: FolderState::Relative, path: None, written };
@@ -111,7 +111,7 @@ pub fn checked(value: Option<&str>, home: &str) -> FolderValue {
 pub fn same_folder(a: &str, b: &str) -> bool {
     let (a, b) = (path::full_path(a), path::full_path(b));
     let (a, b) = (path::trim_ending_separator(Style::HOST, &a), path::trim_ending_separator(Style::HOST, &b));
-    if cfg!(target_os = "linux") { a == b } else { path::equals_ignore_case(a, b) }
+    if cfg!(target_os = "linux") { a == b } else { a.to_uppercase() == b.to_uppercase() }
 }
 
 #[cfg(test)]

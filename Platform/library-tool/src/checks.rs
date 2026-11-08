@@ -6,7 +6,7 @@
 
 use emusen_disc::cue::Sheet;
 use emusen_disc::{Disc, Dvd, IsoForm, Kind, Lone, Medium};
-use emusen_galaxia::json::{Text, Value};
+use emusen_dotnet::json::{Text, Value};
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{Hasher, Hashes};
 

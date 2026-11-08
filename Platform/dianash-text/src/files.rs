@@ -3,9 +3,6 @@
 
 use crate::{clock, Answer, Run};
 use dianash_module::Call;
-use emusen_dotnet::file::{io_message, read_all_text};
-use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::text::{compare_ordinal, equals_ignore_case, is_white_space, simple_upper};
 use std::path::Path;
 
 /// A path through the sandbox, or the refusal the command words as `<name>: <refusal>`.
@@ -57,7 +54,7 @@ pub fn cat(call: &Call, args: &[String], stdin: Option<String>) -> Run {
         if !file_exists(&resolved) {
             return Ok(Answer::fail(format!("cat: no such file: {path}")));
         }
-        text.push_str(&read_all_text(&resolved)?);
+        text.push_str(&std::fs::read_to_string(&resolved).map_err(|e| format!("{}: {e}", resolved))?);
     }
     Ok(Answer::ok(text.trim_end_matches('\n')))
 }
@@ -71,7 +68,7 @@ pub fn head(call: &Call, args: &[String], stdin: Option<String>, tail: bool) -> 
     while i < args.len() {
         if args[i] == "-n" && i + 1 < args.len() {
             i += 1;
-            match parse_i32(&args[i]) {
+            match args[i].trim().parse::<i32>().ok() {
                 Some(n) if n >= 0 => count = n,
                 _ => return Ok(Answer::fail(format!("{name}: -n expects a non-negative integer"))),
             }
@@ -90,7 +87,7 @@ pub fn head(call: &Call, args: &[String], stdin: Option<String>, tail: bool) -> 
             if !file_exists(&resolved) {
                 return Ok(Answer::fail(format!("{name}: no such file: {path}")));
             }
-            read_all_text(&resolved)?
+            std::fs::read_to_string(&resolved).map_err(|e| format!("{}: {e}", resolved))?
         }
         (None, None) => return Ok(Answer::fail(format!("{name}: usage: {name} [-n N] [path]"))),
     };
@@ -125,12 +122,12 @@ pub fn wc(call: &Call, args: &[String], stdin: Option<String>) -> Run {
     }
     let text = match (stdin, resolved) {
         (Some(text), _) => text,
-        (None, Some(file)) => read_all_text(&file)?,
+        (None, Some(file)) => std::fs::read_to_string(&file).map_err(|e| format!("{}: {e}", file))?,
         (None, None) => String::new(),
     };
     // The file's count is one more than the same text piped (§13.4 finding 14): the C# split counts the newline a file ends in.
     let line_count = if text.is_empty() { 0 } else { text.split('\n').count() };
-    let word_count = text.split(is_white_space).filter(|w| !w.is_empty()).count();
+    let word_count = text.split(char::is_whitespace).filter(|w| !w.is_empty()).count();
     let all = !lines && !words && !bytes;
     let mut fields = Vec::new();
     if all || lines {
@@ -163,7 +160,7 @@ fn entry(dir: &str, name: &str, long: bool) -> String {
 /// The names in a directory, in .NET's ordinal order.
 fn names(dir: &str) -> Vec<String> {
     let mut names: Vec<String> = std::fs::read_dir(dir).map(|r| r.flatten().map(|e| e.file_name().to_string_lossy().into_owned()).collect()).unwrap_or_default();
-    names.sort_by(|a, b| compare_ordinal(a, b));
+    names.sort_by(|a, b| a.cmp(b));
     names
 }
 
@@ -202,8 +199,8 @@ fn matches(pattern: &[char], name: &[char]) -> bool {
         None => name.is_empty(),
         Some(('*', rest)) => (0..=name.len()).any(|skip| matches(rest, &name[skip..])),
         Some(('?', rest)) => !name.is_empty() && matches(rest, &name[1..]),
-        Some(('\\', rest)) if !rest.is_empty() => !name.is_empty() && simple_upper(rest[0]) == simple_upper(name[0]) && matches(&rest[1..], &name[1..]),
-        Some((c, rest)) => !name.is_empty() && simple_upper(*c) == simple_upper(name[0]) && matches(rest, &name[1..]),
+        Some(('\\', rest)) if !rest.is_empty() => !name.is_empty() && rest[0].to_uppercase().eq(name[0].to_uppercase()) && matches(&rest[1..], &name[1..]),
+        Some((c, rest)) => !name.is_empty() && c.to_uppercase().eq(name[0].to_uppercase()) && matches(rest, &name[1..]),
     }
 }
 
@@ -247,7 +244,7 @@ fn walk(call: &Call, resolved: &str, shown: &str, pattern: Option<&[char]>, resu
 }
 
 pub fn cp(call: &Call, args: &[String]) -> Run {
-    let recursive = args.len() >= 2 && (equals_ignore_case(&args[1], "-r") || equals_ignore_case(&args[1], "-rf"));
+    let recursive = args.len() >= 2 && (args[1].eq_ignore_ascii_case("-r") || args[1].eq_ignore_ascii_case("-rf"));
     let start = if recursive { 2 } else { 1 };
     if args.len() < start + 2 {
         return Ok(Answer::fail("cp: usage: cp [-r] <src> <dst>"));
@@ -285,11 +282,11 @@ fn copy_file(src: &str, dst: &str) -> Result<(), String> {
     if same {
         return Err(format!("The process cannot access the file '{dst}' because it is being used by another process."));
     }
-    std::fs::copy(src, dst).map(|_| ()).map_err(|e| io_message(&e, dst))
+    std::fs::copy(src, dst).map(|_| ()).map_err(|e| format!("{}: {}", dst, e))
 }
 
 fn copy_directory(src: &str, dst: &str) -> Result<(), String> {
-    std::fs::create_dir_all(dst).map_err(|e| io_message(&e, dst))?;
+    std::fs::create_dir_all(dst).map_err(|e| format!("{}: {}", dst, e))?;
     for name in names(src) {
         let (from, to) = (combine(src, &name), combine(dst, &name));
         if directory_exists(&from) {
@@ -326,7 +323,7 @@ pub fn touch(call: &Call, args: &[String]) -> Run {
     };
     Ok(match touched {
         Ok(()) => Answer::ok(""),
-        Err(e) => Answer::fail(format!("touch: {}", io_message(&e, &resolved))),
+        Err(e) => Answer::fail(format!("touch: {}: {}", resolved, e)),
     })
 }
 
@@ -344,7 +341,7 @@ pub fn xxd(call: &Call, args: &[String], stdin: Option<String>) -> Run {
             if !file_exists(&resolved) {
                 return Ok(Answer::fail(format!("xxd: no such file: {}", args[1])));
             }
-            std::fs::read(&resolved).map_err(|e| io_message(&e, &resolved))?
+            std::fs::read(&resolved).map_err(|e| format!("{}: {}", resolved, e))?
         }
     };
     if data.is_empty() {
@@ -367,5 +364,5 @@ pub fn xxd(call: &Call, args: &[String], stdin: Option<String>) -> Run {
         out.push_str(&ascii);
         out.push('\n');
     }
-    Ok(Answer::ok(out.trim_end_matches(is_white_space)))
+    Ok(Answer::ok(out.trim_end_matches(char::is_whitespace)))
 }

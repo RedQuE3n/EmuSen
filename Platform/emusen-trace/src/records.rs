@@ -4,11 +4,7 @@
 use crate::control::{has_call_stack, upper};
 use crate::{required, scoped, session, Run};
 use dianash_module::{Answer, Call};
-use emusen_dotnet::file::{read_all_bytes, write_all_bytes};
 use emusen_dotnet::json::{self, Value};
-use emusen_dotnet::number::parse_i32;
-use emusen_dotnet::suggestion;
-use emusen_dotnet::text::{equals_ignore_case, pad_left, pad_right, to_lower, trim_end};
 use emusen_session_service::abi::{self, status};
 use emusen_session_service::scope;
 use emusen_session_service::space::{find, read};
@@ -22,7 +18,7 @@ fn record(bytes: Result<Vec<u8>, Refusal>) -> Result<Value, String> {
 }
 
 fn hint_and_try(word: &str, subcommands: &[&str]) -> String {
-    format!("{} Try {}", suggestion::hint(word, subcommands, 2), subcommands.join("/"))
+    format!("{} Try {}", emusen_suggest::hint(word, subcommands, 2), subcommands.join("/"))
 }
 
 pub fn counters(call: &Call, parts: &[String]) -> Run {
@@ -38,7 +34,7 @@ pub fn counters(call: &Call, parts: &[String]) -> Run {
     }
     let op = |op: u32, args: &str| record(session.counters_op(op, args));
     let header = |status: &Value| format!("{}{}:", status.text("space"), if status.flag("armed") { "" } else { " (counting stopped)" });
-    match to_lower(&parts[1]).as_str() {
+    match parts[1].to_lowercase().as_str() {
         "on" => {
             if parts.len() < 3 {
                 return Ok(Answer::ok("Usage: counters on <space>"));
@@ -60,7 +56,7 @@ pub fn counters(call: &Call, parts: &[String]) -> Run {
             if !status.flag("armed") && status.int("size") == 0 {
                 return Ok(Answer::ok("Not counting - run `counters on <space>` first."));
             }
-            let sort = match parts.get(2).map(|s| to_lower(s)).as_deref() {
+            let sort = match parts.get(2).map(|s| s.to_lowercase()).as_deref() {
                 None | Some("r" | "read" | "reads") => "reads",
                 Some("w" | "write" | "writes") => "writes",
                 Some("x" | "exec" | "executes") => "executes",
@@ -79,9 +75,9 @@ pub fn counters(call: &Call, parts: &[String]) -> Run {
                     format!(
                         "  {}  r={} w={} x={} uninit={}",
                         describe(&session, r.address("address")),
-                        pad_right(&r.int("reads").to_string(), 10),
-                        pad_right(&r.int("writes").to_string(), 10),
-                        pad_right(&r.int("executes").to_string(), 10),
+                        format!("{:<10}", r.int("reads").to_string()),
+                        format!("{:<10}", r.int("writes").to_string()),
+                        format!("{:<10}", r.int("executes").to_string()),
                         r.int("uninitialized_reads")
                     )
                 })
@@ -136,7 +132,7 @@ pub fn freeze(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: freeze add|list|remove|clear ..."));
     }
-    match to_lower(&parts[1]).as_str() {
+    match parts[1].to_lowercase().as_str() {
         "add" => {
             if parts.len() < 4 {
                 return Ok(Answer::ok("Usage: freeze add <space> <addr> [<value>]"));
@@ -210,7 +206,7 @@ pub fn profile(call: &Call, parts: &[String]) -> Run {
         return Ok(Answer::ok("Usage: profile on|off|clear|top ..."));
     }
     let processor = scope::index(&session, cpu);
-    match to_lower(&parts[at]).as_str() {
+    match parts[at].to_lowercase().as_str() {
         "on" => {
             session.profile_op(processor, abi::profile::ARM, "{}")?;
             Ok(Answer::ok("Profiling instructions per routine."))
@@ -237,7 +233,7 @@ pub fn profile(call: &Call, parts: &[String]) -> Run {
                 .map(|r| {
                     let address = r.address("address");
                     let place = if address == 0 { "(outside any recorded call)".to_string() } else { describe(&session, address) };
-                    format!("  {:6.2}%  {} {} {place}", r.float("percent"), pad_right(&r.int("instructions").to_string(), 12), pad_right(&r.int("calls").to_string(), 8))
+                    format!("  {:6.2}%  {} {} {place}", r.float("percent"), format!("{:<12}", r.int("instructions").to_string()), format!("{:<8}", r.int("calls").to_string()))
                 })
                 .collect();
             Ok(Answer::ok(format!(
@@ -291,7 +287,7 @@ pub fn cov(call: &Call, parts: &[String]) -> Run {
     let scope_name = if coprocessor { format!("{} coverage", upper(&cpu.unwrap().name)) } else { "Coverage".to_string() };
     let op = |op: u32, args: &str| session.coverage_op(processor, op, args.as_bytes());
     let status = || record(op(abi::coverage::STATUS, "{}"));
-    let sub = to_lower(&parts[at]);
+    let sub = parts[at].to_lowercase();
     match sub.as_str() {
         "on" => {
             op(abi::coverage::ARM, "{}")?;
@@ -326,7 +322,7 @@ pub fn cov(call: &Call, parts: &[String]) -> Run {
             let rows: Vec<String> = funcs
                 .items()
                 .iter()
-                .map(|f| format!("  {}  {}  entered {}x", describe(&session, f.address("address")), pad_right(frame_kind(f.int("kind")), 4), f.int("entries")))
+                .map(|f| format!("  {}  {}  entered {}x", describe(&session, f.address("address")), format!("{:<4}", frame_kind(f.int("kind"))), f.int("entries")))
                 .collect();
             return Ok(Answer::ok(format!("{} routine(s) discovered:\n{}", status.int("entry_points"), rows.join("\n"))));
         }
@@ -343,13 +339,13 @@ pub fn cov(call: &Call, parts: &[String]) -> Run {
             }
             if sub == "save" {
                 let map = op(abi::coverage::EXPORT, "{}")?;
-                write_all_bytes(&path, &map)?;
+                std::fs::write(&path, &map).map_err(|e| format!("{}: {e}", path))?;
                 return Ok(Answer::ok(format!("{scope_name} map saved to {path} ({} routine(s)).", status()?.int("entry_points"))));
             }
             if !std::path::Path::new(&path).is_file() {
                 return Ok(Answer::fail(format!("No coverage map at {path}.")));
             }
-            let map = read_all_bytes(&path)?;
+            let map = std::fs::read(&path).map_err(|e| format!("{}: {e}", path))?;
             return Ok(match session.coverage_op(processor, abi::coverage::IMPORT, &map) {
                 Ok(_) => Answer::ok(format!("{scope_name} map merged from {path} ({} routine(s) known now).", status()?.int("entry_points"))),
                 Err(refusal) if refusal.is(status::BAD_ARGUMENT) => Answer::fail(format!("{path} is not a coverage map this build can read.")),
@@ -403,7 +399,7 @@ pub fn framelog(call: &Call, parts: &[String]) -> Run {
     if parts.len() < 2 {
         return Ok(Answer::ok("Usage: framelog add|list|show|clear|remove ..."));
     }
-    let sub = to_lower(&parts[1]);
+    let sub = parts[1].to_lowercase();
     match sub.as_str() {
         "add" => {
             if parts.len() < 4 {
@@ -488,7 +484,7 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
         return Ok(Answer::ok(format!("{} exposes no coprocessor register window to watch.", session.core_name()?)));
     }
     let op = |op: u32, args: &str| record(session.register_flow_op(op, args));
-    match to_lower(&parts[1]).as_str() {
+    match parts[1].to_lowercase().as_str() {
         "on" => {
             let size = if parts.len() > 2 { parse_hex(&parts[2])? } else { 0x1000 };
             let window = op(abi::flow::STATUS, "{}")?.text("window");
@@ -515,15 +511,15 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
             for e in entries.items() {
                 out += &format!(
                     "  {}  {}  {}  ${:04X}     0x{:02X}   {}\n",
-                    pad_left(&e.int("sequence").to_string(), 8),
-                    pad_left(&e.int("frame").to_string(), 5),
-                    pad_left(if e.flag("write") { "W " } else { " R" }, 3),
+                    format!("{:>8}", e.int("sequence").to_string()),
+                    format!("{:>5}", e.int("frame").to_string()),
+                    format!("{:>3}", if e.flag("write") { "W " } else { " R" }),
                     e.int("register") as i32,
                     e.int("value"),
                     e.text("actor")
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         "stats" => {
             let stats = op(abi::flow::STATS, "{}")?;
@@ -536,13 +532,13 @@ pub fn copflow(call: &Call, parts: &[String]) -> Run {
                 out += &format!(
                     "  ${:04X}  {}  {}  {}  0x{:02X}\n",
                     s.int("register") as i32,
-                    pad_left(&s.int("reads").to_string(), 9),
-                    pad_left(&s.int("writes").to_string(), 7),
-                    pad_left(&s.int("distinct_values").to_string(), 8),
+                    format!("{:>9}", s.int("reads").to_string()),
+                    format!("{:>7}", s.int("writes").to_string()),
+                    format!("{:>8}", s.int("distinct_values").to_string()),
                     s.int("last_value")
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         "poll" => {
             let status = op(abi::flow::STATUS, "{}")?;
@@ -583,8 +579,8 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
     if frames.last().is_none_or(|f| f.items().is_empty()) {
         return Ok(Answer::ok("No coprocessor present on this cartridge."));
     }
-    let wanted = parts.get(1).filter(|p| parse_i32(p).is_none());
-    let count = parts.iter().skip(1).find_map(|p| parse_i32(p)).map_or(16, |c| c.max(1));
+    let wanted = parts.get(1).filter(|p| p.trim().parse::<i32>().is_err());
+    let count = parts.iter().skip(1).find_map(|p| p.trim().parse::<i32>().ok()).map_or(16, |c| c.max(1));
     let shown = &frames[frames.len().saturating_sub(count as usize)..];
     let first_index = history.int("refreshes") - shown.len() as i64 + 1;
     let mut out = format!(
@@ -595,11 +591,11 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
         history.int("unchanged_for")
     );
     let last = shown[shown.len() - 1].items();
-    let names: Vec<String> = last.iter().map(|r| r.text("name")).filter(|n| wanted.is_none_or(|w| equals_ignore_case(n, w))).collect();
+    let names: Vec<String> = last.iter().map(|r| r.text("name")).filter(|n| wanted.is_none_or(|w| n.eq_ignore_ascii_case(&w))).collect();
     if names.is_empty() {
         return Ok(Answer::ok(format!("No coprocessor register named '{}'.", wanted.map(String::as_str).unwrap_or(""))));
     }
-    out += &format!("  refresh  {}\n", names.iter().map(|n| pad_left(n, 6)).collect::<Vec<_>>().join("  "));
+    out += &format!("  refresh  {}\n", names.iter().map(|n| format!("{:>6}", n)).collect::<Vec<_>>().join("  "));
     for (i, frame) in shown.iter().enumerate() {
         let cells: Vec<String> = names
             .iter()
@@ -607,14 +603,14 @@ pub fn cophist(call: &Call, parts: &[String]) -> Run {
                 Some(r) => {
                     let digits = (r.int("bits") / 4).max(1) as usize;
                     let value = r.field("value").and_then(|v| if let Value::Number(t) = v { t.parse::<u64>().ok() } else { None }).unwrap_or(0);
-                    pad_left(&format!("{value:0digits$X}"), 6)
+                    format!("{:>6}", format!("{value:0digits$X}"))
                 }
-                None => pad_left("", 6),
+                None => format!("{:>6}", ""),
             })
             .collect();
-        out += &format!("  {}  {}\n", pad_left(&(first_index + i as i64).to_string(), 7), cells.join("  "));
+        out += &format!("  {}  {}\n", format!("{:>7}", (first_index + i as i64).to_string()), cells.join("  "));
     }
-    Ok(Answer::ok(trim_end(&out)))
+    Ok(Answer::ok(out.trim_end()))
 }
 
 /// The core's own name for a B-bus register, or its number.
@@ -652,22 +648,22 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                 "  {}   {hdma}   {}  {}  {}  ${}  {}  {table}\n",
                 c.int("index"),
                 if control & 0x80 != 0 { "B->A" } else { "A->B" },
-                pad_left(&(control & 0x07).to_string(), 4),
-                pad_right(&destination(c.optional_text("destination_name"), c.int("destination")), 16),
+                format!("{:>4}", (control & 0x07).to_string()),
+                format!("{:<16}", destination(c.optional_text("destination_name"), c.int("destination"))),
                 hex(c.address("source"), 6),
-                pad_left(&c.int("size").to_string(), 7)
+                format!("{:>7}", c.int("size").to_string())
             );
         }
         out += "  (mode is the B-bus write pattern; dir B->A reads the register instead)";
         return Ok(Answer::ok(out));
     }
-    match to_lower(&parts[1]).as_str() {
+    match parts[1].to_lowercase().as_str() {
         "log" => {
             if !session.can("dma_log")? {
                 return Ok(Answer::fail(format!("{} records no DMA history.", session.core_name()?)));
             }
             let op = |op: u32, args: &str| record(session.dma_log_op(op, args));
-            let arg = parts.get(2).map(|a| to_lower(a)).unwrap_or_default();
+            let arg = parts.get(2).map(|a| a.to_lowercase()).unwrap_or_default();
             match arg.as_str() {
                 "on" => {
                     let capacity = if parts.len() > 3 { parse_hex(&parts[3])? } else { 4096 };
@@ -694,17 +690,17 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
             for e in entries.items() {
                 out += &format!(
                     "  {}  {}  {}  {}   {}  {}  ${}  {}\n",
-                    pad_left(&e.int("sequence").to_string(), 8),
-                    pad_left(&e.int("frame").to_string(), 5),
-                    pad_left(&e.int("scanline").to_string(), 4),
+                    format!("{:>8}", e.int("sequence").to_string()),
+                    format!("{:>5}", e.int("frame").to_string()),
+                    format!("{:>4}", e.int("scanline").to_string()),
                     e.int("channel"),
                     if e.text("kind") == "hdma" { "hdma" } else { "gen " },
-                    pad_right(&destination(e.optional_text("destination_name"), e.int("destination")), 16),
+                    format!("{:<16}", destination(e.optional_text("destination_name"), e.int("destination"))),
                     hex(e.address("source"), 6),
-                    pad_left(&e.int("length").to_string(), 6)
+                    format!("{:>6}", e.int("length").to_string())
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         "stats" => {
             if !session.can("dma_log")? {
@@ -728,10 +724,10 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                 out += &format!(
                     "  {}  {}  {}  {}  {}\n",
                     c.int("channel"),
-                    pad_left(&c.int("general_transfers").to_string(), 8),
-                    pad_left(&c.int("general_bytes").to_string(), 7),
-                    pad_left(&c.int("hdma_transfers").to_string(), 9),
-                    pad_left(&c.int("hdma_bytes").to_string(), 7)
+                    format!("{:>8}", c.int("general_transfers").to_string()),
+                    format!("{:>7}", c.int("general_bytes").to_string()),
+                    format!("{:>9}", c.int("hdma_transfers").to_string()),
+                    format!("{:>7}", c.int("hdma_bytes").to_string())
                 );
             }
             out += "  destination       transfers    bytes  channels\n";
@@ -740,13 +736,13 @@ pub fn dma(call: &Call, parts: &[String]) -> Run {
                 let list: Vec<String> = (0..16).filter(|i| mask & (1 << i) != 0).map(|i| i.to_string()).collect();
                 out += &format!(
                     "  {}  {}  {}  {}\n",
-                    pad_right(&destination(d.optional_text("destination_name"), d.int("destination")), 16),
-                    pad_left(&d.int("transfers").to_string(), 9),
-                    pad_left(&d.int("bytes").to_string(), 7),
+                    format!("{:<16}", destination(d.optional_text("destination_name"), d.int("destination"))),
+                    format!("{:>9}", d.int("transfers").to_string()),
+                    format!("{:>7}", d.int("bytes").to_string()),
                     if list.is_empty() { "-".to_string() } else { list.join(",") }
                 );
             }
-            Ok(Answer::ok(trim_end(&out)))
+            Ok(Answer::ok(out.trim_end()))
         }
         _ => Ok(Answer::ok(format!("Unknown dma subcommand '{}'. Try log|stats, or `dma` alone for the channel table.", parts[1]))),
     }

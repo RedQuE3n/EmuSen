@@ -10,7 +10,7 @@ use crate::kinds::Payload;
 use crate::quota::Status;
 use crate::redact::redact;
 use crate::{Settings, Test};
-use emusen_dotnet::date::TICKS_PER_SECOND;
+use emusen_galaxia::clock::TICKS_PER_SECOND;
 use emusen_net::{Progress, Request};
 use std::io::Write;
 use std::time::{Duration, Instant};

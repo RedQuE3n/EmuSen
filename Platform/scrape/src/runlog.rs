@@ -79,9 +79,9 @@ impl Log {
 fn local_now() -> (String, String) {
     let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default();
     let seconds = since.as_secs() as i64;
-    let local = (seconds + emusen_dotnet::date::local_offset(seconds)) * emusen_dotnet::date::TICKS_PER_SECOND;
-    let day = emusen_dotnet::date::local_text(local, "yyyyMMdd");
-    let stamp = format!("{}.{:03}", emusen_dotnet::date::local_text(local, "yyyy-MM-dd HH:mm:ss"), since.subsec_millis());
+    let local = (seconds + emusen_galaxia::clock::local_offset(seconds)) * emusen_galaxia::clock::TICKS_PER_SECOND;
+    let day = emusen_galaxia::clock::text(local, emusen_galaxia::clock::DAY_NAME);
+    let stamp = format!("{}.{:03}", emusen_galaxia::clock::text(local, emusen_galaxia::clock::STAMP), since.subsec_millis());
     (day, stamp)
 }
 

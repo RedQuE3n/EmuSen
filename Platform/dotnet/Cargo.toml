@@ -11,6 +11,3 @@ publish.workspace = true
 [lib]
 name = "emusen_dotnet"
 
-# localtime_r, for the system zone's offset as .NET's DateTime.Now takes it.
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"

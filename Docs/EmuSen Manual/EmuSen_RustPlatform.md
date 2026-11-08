@@ -4103,3 +4103,20 @@ not write. A text holding only comments is refused like an empty one (jsonc-pars
 
 The proof is the disk corpus: every config file (five models), manifest, game settings file, state record and member
 file reads to its recorded model, and each config read, written and read again is the same model.
+
+### 47.20 Dates are the `time` crate's
+
+`emusen-dotnet`'s `date.rs` (civil-from-days arithmetic, a .NET format-string imitation, an ISO 8601 reader and
+`localtime_r`) is gone. Galaxia's `clock` owns the platform's times on `time` 0.3.55 (decided 2026-11-07 by the tester,
+plan question 3): the stored unit stays 100 ns ticks from 1970 in UTC; the round-trip text is written with seven
+fraction digits as before (`2026-10-18T14:03:11.2510000+02:00`) through a format description; a stored text is read
+by RFC 3339, or as an unmarked local time, with a `T` required between date and time as the round-trip form has it
+(RFC 3339 alone would also take a space). Formats the callers used as .NET strings are named constants (`DAY`,
+`DAY_NAME`, `STAMP`, `STAMP_NAME`, `MTIME`, `CLOCK`). The system zone's offset is `UtcOffset::local_offset_at`, which in
+0.3.55 calls `localtime_r` itself and answers in a multithreaded process (measured: -14400 at 2026-10-14 in the threaded
+test runner, the machine's daylight offset). The recorder and DianaSh's `ls -l`, which do not link Galaxia, use `time`
+directly; the shell's own Windows offset code went with it.
+
+Proof: the corpus's `crystal/tests/disk/times.tsv`, `library/tests/disk/last-played.tsv` and the scraper's member files
+read to the same instants and texts, and `clock`'s tests hold the old module's cases (the year 9999's last tick, a tick
+before 1970, leap days, milliseconds cut and not rounded).

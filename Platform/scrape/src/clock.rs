@@ -4,7 +4,7 @@
 use std::sync::{Condvar, Mutex};
 use std::time::Duration;
 
-use emusen_dotnet::date::TICKS_PER_SECOND;
+use emusen_galaxia::clock::TICKS_PER_SECOND;
 
 /// A wait that a cancel ends at once.
 #[derive(Default)]

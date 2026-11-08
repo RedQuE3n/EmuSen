@@ -147,7 +147,7 @@ impl Member {
     pub fn from_text(text: &str) -> Member {
         let Ok(root) = emusen_galaxia::config_json::parse::<Value>(text) else { return Member::default() };
         let mut member = Member::new(&read_text(&root, "ssid").unwrap_or_default(), &read_text(&root, "sspassword").unwrap_or_default());
-        member.verified = read_text(&root, "verified").and_then(|t| emusen_dotnet::date::instant(&t));
+        member.verified = read_text(&root, "verified").and_then(|t| emusen_galaxia::clock::instant(&t));
         member
     }
 
@@ -194,7 +194,7 @@ impl Member {
 
 /// `DateTime.ToString("O")` of a UTC time: `2026-10-18T12:00:00.0000000Z`.
 pub fn round_trip_utc(ticks: i64) -> String {
-    let millis = emusen_dotnet::date::utc_millis(ticks);
-    let fraction = ticks.rem_euclid(emusen_dotnet::date::TICKS_PER_SECOND);
+    let millis = emusen_galaxia::clock::utc_millis(ticks);
+    let fraction = ticks.rem_euclid(emusen_galaxia::clock::TICKS_PER_SECOND);
     format!("{}.{fraction:07}Z", &millis[..19])
 }

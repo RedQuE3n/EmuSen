@@ -198,9 +198,7 @@ pub fn seen_of(at: &str) -> Option<(u64, String)> {
 /// A time as the manifest's `mtime`: UTC to the second, `yyyy-MM-ddTHH:mm:ssZ`.
 pub fn mtime_text(t: std::time::SystemTime) -> String {
     let secs = t.duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-    let (y, m, d) = emusen_dotnet::date::civil(secs.div_euclid(86_400));
-    let s = secs.rem_euclid(86_400);
-    format!("{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z", s / 3600, s / 60 % 60, s % 60)
+    crate::clock::text(secs * crate::clock::TICKS_PER_SECOND, crate::clock::MTIME)
 }
 
 fn number(v: Option<&Value>) -> Option<u64> {

@@ -12,6 +12,7 @@ strsim = "0.11.1"
 walkdir = "2.5.0"
 jsonc-parser = { version = "0.34.0", features = ["serde"] }
 indexmap = { version = "2.14.2", features = ["serde"] }
+time = { version = "0.3.55", features = ["formatting", "parsing", "macros", "local-offset"] }
 zip = { version = "9.4.1", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64"] }
 
 [workspace.package]

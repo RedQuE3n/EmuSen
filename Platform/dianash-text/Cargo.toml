@@ -13,7 +13,8 @@ name = "dianash_text"
 
 [dependencies]
 dianash-module = { path = "../dianash-module" }
-emusen-dotnet = { path = "../dotnet" }
+# ls -l's times in the local zone (clock.rs).
+time.workspace = true
 # grep, sed and awk's patterns, translated from .NET's syntax where the two differ (§13.8).
 regex = "1"
 # The parser's own errors, to word a refusal as .NET words it.

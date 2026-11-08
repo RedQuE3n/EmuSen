@@ -1,6 +1,6 @@
 //! `emusen_scrape_change`: one change, `{"op": …}`, as `emusen_scrape.h` lists them. See EmuSen_Backend.md §30.3.
 
-pub(crate) use emusen_dotnet::date::local_offset;
+pub(crate) use emusen_galaxia::clock::local_offset;
 use crate::json::{self, quoted, strings_into};
 use crate::{Error, Scraper, credentials, layout};
 use serde_json::Value;
@@ -9,11 +9,11 @@ use serde_json::Value;
 /// clock with the machine's: the UTC ticks and the offset in seconds.
 fn given_now(s: &Scraper, r: &Value) -> Result<(i64, i64), Error> {
     if let Some(at) = json::text_or_none(r, "at")? {
-        let utc = emusen_dotnet::date::instant(&at).ok_or_else(|| Error::BadRequest("The request's at is not a time.".into()))?;
+        let utc = emusen_galaxia::clock::instant(&at).ok_or_else(|| Error::BadRequest("The request's at is not a time.".into()))?;
         return Ok((utc, offset_written(&at)));
     }
     let utc = s.clock.now();
-    Ok((utc, local_offset(utc / emusen_dotnet::date::TICKS_PER_SECOND)))
+    Ok((utc, local_offset(utc / emusen_galaxia::clock::TICKS_PER_SECOND)))
 }
 
 fn offset_written(text: &str) -> i64 {
@@ -51,7 +51,7 @@ pub(crate) fn change(s: &Scraper, r: &Value) -> Result<String, Error> {
         "clean_up" => {
             let relatives = json::strings(r, "relatives")?;
             let (utc, offset) = given_now(s, r)?;
-            let tick = emusen_dotnet::date::TICKS_PER_SECOND;
+            let tick = emusen_galaxia::clock::TICKS_PER_SECOND;
             let machine = utc + local_offset(utc.div_euclid(tick)) * tick;
             let (moved, bytes, folder) = layout::clean_up(&s.store(), &relatives, machine, utc + offset * tick, offset)?;
             out.push_str(&format!("{{\"moved\":{moved},\"bytes\":{bytes},\"folder\":{}}}", quoted(&folder)));

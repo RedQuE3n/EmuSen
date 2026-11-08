@@ -21,8 +21,9 @@ pub fn local_now() -> (i64, u32, u32, u32, u32, u32, u32) {
 }
 
 fn local(seconds: i64, millis: u32) -> (i64, u32, u32, u32, u32, u32, u32) {
-    let (y, mo, d, h, mi, s) = emusen_dotnet::date::local_fields(seconds);
-    (y, mo, d, h, mi, s, millis)
+    let utc = time::OffsetDateTime::from_unix_timestamp(seconds).unwrap_or(time::OffsetDateTime::UNIX_EPOCH);
+    let at = time::UtcOffset::local_offset_at(utc).map_or(utc, |offset| utc.to_offset(offset));
+    (at.year() as i64, at.month() as u32, at.day() as u32, at.hour() as u32, at.minute() as u32, at.second() as u32, millis)
 }
 
 /// The fields of a file's time in the local zone.

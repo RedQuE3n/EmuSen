@@ -216,7 +216,7 @@ pub fn names_by_system(games: &[(String, String)], folder_of_rom: &dyn Fn(&str) 
 /// emptied folders removed, and the moves listed in `cleanup.txt`. How many, their bytes, and the folder.
 /// The folder is named by the machine's local time of the instant, the note by the time as it was given, with its offset.
 pub fn clean_up(store: &Store, relatives: &[String], machine_local: i64, given_local: i64, offset_seconds: i64) -> Result<(usize, u64, String), Error> {
-    let stamp = emusen_dotnet::date::local_text(machine_local, "yyyy-MM-dd_HHmmss");
+    let stamp = emusen_galaxia::clock::text(machine_local, emusen_galaxia::clock::STAMP_NAME);
     let backup = Path::new(&store.root).join(CLEANUP_FOLDER).join(&stamp).to_string_lossy().into_owned();
     let root = root_prefix(&store.root);
     let (mut moved, mut bytes) = (0usize, 0u64);
@@ -244,7 +244,7 @@ pub fn clean_up(store: &Store, relatives: &[String], machine_local: i64, given_l
     if moved > 0 {
         let sign = if offset_seconds < 0 { '-' } else { '+' };
         let off = offset_seconds.abs() / 60;
-        let when = format!("{} {sign}{:02}:{:02}", emusen_dotnet::date::local_text(given_local, "yyyy-MM-dd HH:mm:ss"), off / 60, off % 60);
+        let when = format!("{} {sign}{:02}:{:02}", emusen_galaxia::clock::text(given_local, emusen_galaxia::clock::STAMP), off / 60, off % 60);
         let mut text = format!("Moved here from {} on {when}\n", store.root);
         for line in &log {
             text.push_str(line);

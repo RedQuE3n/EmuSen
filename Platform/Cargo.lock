@@ -313,9 +313,9 @@ name = "dianash-text"
 version = "0.1.0"
 dependencies = [
  "dianash-module",
- "emusen-dotnet",
  "regex",
  "regex-syntax",
+ "time",
 ]
 
 [[package]]
@@ -500,9 +500,6 @@ dependencies = [
 [[package]]
 name = "emusen-dotnet"
 version = "0.1.0"
-dependencies = [
- "libc",
-]
 
 [[package]]
 name = "emusen-endymion"
@@ -536,6 +533,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "sha2",
+ "time",
  "walkdir",
  "zip",
 ]
@@ -679,7 +677,7 @@ version = "0.1.0"
 name = "emusen-recorder"
 version = "0.1.0"
 dependencies = [
- "emusen-dotnet",
+ "time",
  "zip",
 ]
 
@@ -1115,6 +1113,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "num_threads"
+version = "0.1.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cabcc654086861f9e1bc5115258de62ef92c79b20f4615a1b0cc57c4e82027d4"
+dependencies = [
+ "libc",
 ]
 
 [[package]]
@@ -1581,7 +1588,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cdb87b95ec50ddfa440816d227a17b2ccbdda963a316a727fda0fc4334f7d134"
 dependencies = [
  "deranged",
+ "libc",
  "num-conv",
+ "num_threads",
  "powerfmt",
  "serde_core",
  "time-core",

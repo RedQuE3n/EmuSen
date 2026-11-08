@@ -16,7 +16,7 @@ use crate::rules;
 use crate::runlog::{self, Lane, Log, Tally};
 use crate::store::{Key, Priority, Queued, Record, State, Stored};
 use crate::{Error, Scraper, layout};
-use emusen_dotnet::date::TICKS_PER_SECOND;
+use emusen_galaxia::clock::TICKS_PER_SECOND;
 use emusen_galaxia::files::{file_exists, file_info};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -962,7 +962,7 @@ impl Scraper {
         if got.outcome != MediaOutcome::Saved {
             return Duration::ZERO;
         }
-        let owed = emusen_dotnet::date::ticks_from_seconds(got.bytes as f64 / (speed as f64 * 1024.0)) - client::ticks(got.took);
+        let owed = emusen_galaxia::clock::ticks_from_seconds(got.bytes as f64 / (speed as f64 * 1024.0)) - client::ticks(got.took);
         let began = Instant::now();
         if owed > 0 {
             self.clock.delay(owed, stop);
@@ -1254,9 +1254,9 @@ fn set_paused(p: &mut Progress, paused: bool, now: i64) {
 fn local_day_time(utc: i64) -> String {
     let seconds = utc.div_euclid(TICKS_PER_SECOND);
     let local = utc + crate::changes::local_offset(seconds) * TICKS_PER_SECOND;
-    let days = local.div_euclid(emusen_dotnet::date::TICKS_PER_DAY);
+    let days = local.div_euclid(emusen_galaxia::clock::TICKS_PER_DAY);
     let names = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-    format!("{} {}", names[emusen_dotnet::date::weekday(days) as usize], emusen_dotnet::date::local_text(local, "HH:mm"))
+    format!("{} {}", names[emusen_galaxia::clock::weekday(days) as usize], emusen_galaxia::clock::text(local, emusen_galaxia::clock::CLOCK))
 }
 
 /// The package `rom` opens as, as the runtime resolves it, `Scraper.PackageOf`.

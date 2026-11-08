@@ -31,6 +31,8 @@ serde_json.workspace = true
 jsonc-parser.workspace = true
 # A model's maps keep the file's order (models.rs).
 indexmap.workspace = true
+# Times: the ticks stored, the round-trip text written and read, and the system zone's offset (clock.rs, EmuSen_RustPlatform.md §47.20).
+time.workspace = true
 # A file mapped read-only, on every system the project builds for (mapped.rs).
 memmap2 = "0.9"
 

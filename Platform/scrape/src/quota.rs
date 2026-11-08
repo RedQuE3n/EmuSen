@@ -8,7 +8,7 @@ use crate::answer::Quota;
 use crate::clock::{Clock, Stop};
 use crate::store::{Day, Store};
 use crate::zone::Zone;
-use emusen_dotnet::date::{TICKS_PER_DAY, TICKS_PER_SECOND, local_text, ticks_from_seconds};
+use emusen_galaxia::clock::{TICKS_PER_DAY, TICKS_PER_SECOND, ticks_from_seconds};
 use std::sync::{Mutex, OnceLock};
 
 /// Assumed until an answer says otherwise: 30 requests a minute.
@@ -100,7 +100,7 @@ fn paris() -> &'static Zone {
 
 /// ScreenScraper's day, taken as Paris's.
 pub fn day_of(t: i64) -> String {
-    local_text(paris().local(t), "yyyy-MM-dd")
+    emusen_galaxia::clock::text(paris().local(t), emusen_galaxia::clock::DAY)
 }
 
 pub fn start_of_next_day(t: i64) -> i64 {

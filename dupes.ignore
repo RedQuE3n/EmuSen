@@ -17,3 +17,6 @@ SourceLogs
 *.g.cs
 *.Designer.cs
 *.generated.cs
+# bindgen's output for a header, regenerated and compared by its crate's tests, never edited (EmuSen_Qt.md §1.1.1).
+crystal-client/src/raw.rs
+platform-client/src/raw.rs

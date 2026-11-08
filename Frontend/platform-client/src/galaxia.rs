@@ -1,0 +1,65 @@
+//! Galaxia through the platform library: where the tree's directories are, a config file's path, and the config models
+//! (the player's settings) as the documents Galaxia binds. A model crosses as JSON and stays Galaxia's: its fields are
+//! not restated here, so a model has one owner.
+
+use crate::error::Result;
+use crate::out::{json, string, text, to_json};
+use crate::platform::Platform;
+use serde_json::Value;
+use std::path::PathBuf;
+
+/// The directories of the tree, EMUSEN_GALAXIA_DIR_*, and the models, EMUSEN_GALAXIA_MODEL_*.
+pub mod consts {
+    pub use crate::raw::{
+        EMUSEN_GALAXIA_DIR_ARTWORK as DIR_ARTWORK, EMUSEN_GALAXIA_DIR_CHEATS as DIR_CHEATS,
+        EMUSEN_GALAXIA_DIR_COMPRESSED as DIR_COMPRESSED, EMUSEN_GALAXIA_DIR_CONFIG as DIR_CONFIG, EMUSEN_GALAXIA_DIR_CORES as DIR_CORES,
+        EMUSEN_GALAXIA_DIR_FIRMWARE as DIR_FIRMWARE, EMUSEN_GALAXIA_DIR_HOME as DIR_HOME, EMUSEN_GALAXIA_DIR_LIBRARY as DIR_LIBRARY,
+        EMUSEN_GALAXIA_DIR_LOGS as DIR_LOGS, EMUSEN_GALAXIA_DIR_MEDIA as DIR_MEDIA, EMUSEN_GALAXIA_DIR_PACKAGES as DIR_PACKAGES,
+        EMUSEN_GALAXIA_DIR_ROOT as DIR_ROOT, EMUSEN_GALAXIA_DIR_SAVE_STATES as DIR_SAVE_STATES, EMUSEN_GALAXIA_DIR_SAVES as DIR_SAVES,
+        EMUSEN_GALAXIA_DIR_SCREENSHOTS as DIR_SCREENSHOTS, EMUSEN_GALAXIA_DIR_SHADERS as DIR_SHADERS,
+        EMUSEN_GALAXIA_DIR_THEMES as DIR_THEMES, EMUSEN_GALAXIA_MODEL_APP_SETTINGS as MODEL_APP_SETTINGS,
+        EMUSEN_GALAXIA_MODEL_AUDIO_CONFIG as MODEL_AUDIO_CONFIG, EMUSEN_GALAXIA_MODEL_CHEAT_FILE as MODEL_CHEAT_FILE,
+        EMUSEN_GALAXIA_MODEL_GRAPHICS_CONFIG as MODEL_GRAPHICS_CONFIG,
+    };
+}
+
+impl Platform {
+    /// A directory of the process's tree, by its EMUSEN_GALAXIA_DIR_* number; none where the tree has none.
+    pub fn directory(&self, which: u32) -> Result<Option<PathBuf>> {
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_directory(which, o, l) })?;
+        bytes.map(|b| string("directory", b).map(PathBuf::from)).transpose()
+    }
+
+    /// A config file's path: a category is a subdirectory of the config directory, none the directory itself.
+    pub fn config_path(&self, category: Option<&str>, file: &str) -> Result<PathBuf> {
+        let (c, cl) = text(category);
+        let bytes =
+            self.read(|o, l| unsafe { self.lib.emusen_galaxia_config_path(c, cl, file.as_ptr(), file.len(), o, l) })?.unwrap_or_default();
+        string("config_path", bytes).map(PathBuf::from)
+    }
+
+    /// A model's file as its bound document, upgraded as settings for use are; none for no file, `Value::Null` for a
+    /// file whose document is null.
+    pub fn model_load(&self, model: u32, category: Option<&str>, file: &str) -> Result<Option<Value>> {
+        let (c, cl) = text(category);
+        let flags = crate::raw::EMUSEN_GALAXIA_MODEL_UPGRADE;
+        let bytes =
+            self.read(|o, l| unsafe { self.lib.emusen_galaxia_model_load(model, c, cl, file.as_ptr(), file.len(), flags, o, l) })?;
+        bytes.map(|b| json("model_load", &b)).transpose()
+    }
+
+    /// A document saved as a model's file.
+    pub fn model_save(&self, model: u32, category: Option<&str>, file: &str, document: &Value) -> Result<()> {
+        let (c, cl) = text(category);
+        let document = to_json(document);
+        let n = unsafe { self.lib.emusen_galaxia_model_save(model, c, cl, file.as_ptr(), file.len(), document.as_ptr(), document.len()) };
+        self.status(n.into()).map(drop)
+    }
+
+    /// A new instance of a model, every field at its initial value.
+    pub fn model_new(&self, model: u32) -> Result<Value> {
+        let flags = crate::raw::EMUSEN_GALAXIA_MODEL_UPGRADE;
+        let bytes = self.read(|o, l| unsafe { self.lib.emusen_galaxia_model_new(model, flags, o, l) })?.unwrap_or_default();
+        json("model_new", &bytes)
+    }
+}

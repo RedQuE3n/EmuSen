@@ -1,0 +1,21 @@
+[package]
+name = "emusen-c-calls"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+# How a client calls an EmuSen C header, written once for both client crates: the library opened by its path with its
+# version read first, text in, the length-query copy-out, a status with its words, a JSON answer read. See EmuSen_Qt.md
+# §1.1.1.
+[lib]
+name = "emusen_c_calls"
+
+[dependencies]
+# The library opened by its path.
+libloading = "0.8"
+# An answer read into its record, and a request written.
+serde = "1"
+serde_json = "1"
+# The error type's words.
+thiserror = "2"

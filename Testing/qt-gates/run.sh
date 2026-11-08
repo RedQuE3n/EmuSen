@@ -1,12 +1,13 @@
 #!/bin/bash
-# One gate run in a compositor of its own: KWin's virtual one at 1920 x 1200 with Xwayland, on a D-Bus of its own,
-# every window made fullscreen by a rule; the program started with polled grabs (grab.py) and, when PAD names steps, a
-# uinput pad (pad.py). Everything started is stopped when the run ends; the whole run is bounded by a watchdog.
+# One gate run in a compositor of its own: KWin's virtual one at 1920 x 1200 (WIDTH, HEIGHT) with Xwayland, on a D-Bus
+# of its own, every window made fullscreen by a rule; the program started with polled grabs (grab.py) and, when PAD
+# names steps, a uinput pad (pad.py). Everything started is stopped when the run ends; the whole run is bounded by a watchdog.
 # With DESK, the session's own compositor instead (desk.py): the program fullscreen on that output, no grabs, and the
 # pad started only once the program holds the focus.
 # Usage: run.sh <run-dir> <seconds> <program> [<arg>...]
 #   PAD="wait:4 tap:start ..."  the pad's steps; none, no pad
 #   BOX="r0-r1,g0-g1,b0-b1"     the game's colour box grab.py measures; INTERVAL grab interval in ms (35)
+#   WIDTH, HEIGHT               the virtual compositor's size (1920, 1200); FULL=1 keeps each grab at full size
 #   DESK=<output>               the session's compositor, fullscreen on that output; MATCH the program's window class
 #                               (a regex, "emusen"); the session's WAYLAND_DISPLAY, DISPLAY and XDG_RUNTIME_DIR as
 #                               DESK_WAYLAND (wayland-0), DESK_DISPLAY (:0), DESK_RUNTIME (/run/user/<uid>)
@@ -74,7 +75,7 @@ else
   GATE_RUN="$run" XDG_CONFIG_HOME="$run/kwin-config" KWIN_SCREENSHOT_NO_PERMISSION_CHECKS=1 KWIN_COMPOSE=O2 \
     timeout -k 5 $((seconds + 40)) env -u DISPLAY -u WAYLAND_DISPLAY dbus-run-session -- \
     kwin_wayland --virtual --xwayland --no-lockscreen --no-global-shortcuts --no-kactivities --socket "$socket" \
-    --width 1920 --height 1200 --exit-with-session "/bin/bash $run/launch.sh" > "$run/kwin.log" 2>&1
+    --width ${WIDTH:-1920} --height ${HEIGHT:-1200} --exit-with-session "/bin/bash $run/launch.sh" > "$run/kwin.log" 2>&1
   echo "run ended: $?" >> "$run/kwin.log"
 fi
 # Services the session activated (the desktop portal, ksecretd) are started by systemd and outlive it; each carries

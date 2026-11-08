@@ -6,7 +6,8 @@ Nothing here is built or shipped; each script is plain text in and out, and none
 - `run.sh <run-dir> <seconds> <program> [<arg>...]` — one run: KWin's virtual compositor at 1,920 × 1,200 with
   Xwayland, on a D-Bus of its own, every window fullscreen by a rule; the program started with polled grabs and, when
   `PAD` names steps, a uinput pad; everything it started stopped at the end, and the whole run under a watchdog.
-  `BOX` is the game's colour box for the grabs, `INTERVAL` their interval in ms (35).
+  `BOX` is the game's colour box for the grabs, `INTERVAL` their interval in ms (35). `WIDTH` and `HEIGHT` set the
+  virtual compositor's size (1,920 and 1,200), and `FULL=1` keeps every grab at that full size.
   With `DESK=<output>` the run uses the session's own compositor instead (`WAYLAND_DISPLAY` wayland-0, `DISPLAY` :0
   and the session's `XDG_RUNTIME_DIR`, each overridable as `DESK_WAYLAND`, `DESK_DISPLAY`, `DESK_RUNTIME`): no grabs,
   since the session's KWin refuses `ScreenShot2` to a client it has not authorised, and the pad started only once the
@@ -17,7 +18,7 @@ Nothing here is built or shipped; each script is plain text in and out, and none
   `active` marks the program's first focus. The script is unloaded at the end; the session's rules and settings are
   not touched.
 - `grab.py` — the grabs, through KWin's `ScreenShot2`: one line each (time, share of the screen lit, share in the
-  colour box, the PNG), the PNGs at 480 × 300.
+  colour box, the PNG), the PNGs at 480 × 300, or at the compositor's full size with `FULL=1`.
 - `pad.py` — the pad, "gate pad" (vendor 1209, product 0001), pressed by steps: `wait:<s>`, `tap:<button>`,
   `hold:<button>:<s>`. Every program on the desk reads it, so no `guide`, and nothing else reading pads while it runs.
 - `first.py <run-dir>` — the program's exec to its window and to the game's first picture, from the grabs.

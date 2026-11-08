@@ -1826,8 +1826,9 @@ closed and opened again asks the Resume question over the game held with no pict
 focused, held at the gate's five sizes (`ResumeQuestion`); B closes it to Home; opened again it asks again, and
 Continue loads where it was left off and the game draws more than 10 frames in 0.5 s, with no "Could not" notice. The
 last run passed every step and failed one gate fault: the screenshot's notice, still fading over the Pause Card while
-`PauseCardLeave` was held, read 3.96:1 at 1920 × 1080. The test now lets that notice go before the next page is held;
-that change has not yet run on Vulkan.
+`PauseCardLeave` was held, read 3.96:1 at 1920 × 1080. The test now lets that notice go before the next page is held,
+and the run after it passed whole (1 test, 121 s, nothing logged). qt-play's `device`, `pads` and `ring` pass on Vulkan
+with `Play.Game.game` the session's own.
 
 **Held to** (measured on 2026-11-08): kit-core 95 tests, qt-test 12, qt-models 37 (`cards`' routes for the search's two
 states, the pointer and B; `library`'s help bars and both shoulders declared; `question`'s resume rules), emusen-qt's

@@ -61,6 +61,51 @@ fn inside_carousel(tree: &emusen_qt_test::tree::Tree) -> Vec<String> {
     faults
 }
 
+/// A list that scrolls took the height it was given: in the first ancestor with room below the list, something stands
+/// below it and across it, or the list was cut short with empty space under its fade.
+fn list_cut_short(tree: &emusen_qt_test::tree::Tree, room: f64) -> Vec<String> {
+    let nodes = &tree.nodes;
+    let index: std::collections::HashMap<&str, usize> = nodes.iter().enumerate().map(|(i, n)| (n.id.as_str(), i)).collect();
+    let ancestors = |i: usize| {
+        let mut chain = Vec::new();
+        let mut at = nodes[i].parent.as_str();
+        while let Some(&p) = index.get(at) {
+            chain.push(p);
+            at = nodes[p].parent.as_str();
+        }
+        chain
+    };
+    let mut faults = Vec::new();
+    for (i, list) in nodes.iter().enumerate() {
+        if !(list.visible && list.clip && list.sv) {
+            continue;
+        }
+        let bottom = list.y + list.h;
+        let chain = ancestors(i);
+        let Some(&holder) = chain.iter().find(|&&p| nodes[p].y + nodes[p].h > bottom + room) else { continue };
+        let holder_bottom = nodes[holder].y + nodes[holder].h;
+        let below = nodes.iter().enumerate().any(|(j, n)| {
+            n.visible
+                && n.w > 0.0
+                && n.h > 0.0
+                && n.y >= bottom - SLACK
+                && n.y < holder_bottom
+                && n.x < list.x + list.w
+                && n.x + n.w > list.x
+                && !chain.contains(&j)
+                && j != i
+                && {
+                    let up = ancestors(j);
+                    up.contains(&holder) && !up.contains(&i)
+                }
+        });
+        if !below {
+            faults.push(format!("a list cut short with {:.0} px of room below it: {i}", holder_bottom - bottom));
+        }
+    }
+    faults
+}
+
 /// The style sweep: the colour inside each styled control's background, near its right end, is a token of the variant.
 fn sweep(scene: &mut Scene<'_>, tree: &emusen_qt_test::tree::Tree, variant: Variant) -> Vec<String> {
     let tokens = palette(variant);
@@ -120,8 +165,9 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                     let mut tree = scene.tree();
                     let focus = scene.focus(&tree);
                     let name = format!("{form_name}-{variant:?}-{}-{w}x{h}", section.to_lowercase());
+                    let room = if form == WalkForm::Desktop { 48.0 } else { 48.0 * f64::from(h) / 800.0 };
                     let mut faults: Vec<String> = match page {
-                        0 => inside_carousel(&tree),
+                        0 => inside_carousel(&tree).into_iter().chain(list_cut_short(&tree, room)).collect(),
                         1 => sweep(&mut scene, &tree, variant),
                         _ => Vec::new(),
                     };

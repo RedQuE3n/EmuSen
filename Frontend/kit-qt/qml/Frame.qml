@@ -17,8 +17,8 @@ FocusScope {
     readonly property bool card: frameController.form === Kit.Forms.Card
     readonly property bool bigScreen: !desktop && !card
     readonly property bool detailBeside: frameController.hasDetail && frameController.detailBeside
-    readonly property real safeX: desktop ? 0 : Kit.Tokens.safeAreaX
-    readonly property real safeY: desktop ? 0 : Kit.Tokens.safeAreaY
+    readonly property real safeX: desktop ? Kit.Tokens.paneGutter : Kit.Tokens.safeAreaX
+    readonly property real safeY: desktop ? Kit.Tokens.paneGutter : Kit.Tokens.safeAreaY
     objectName: "frame"
     Kit.FrameController {
         id: frameController
@@ -49,7 +49,7 @@ FocusScope {
     Item {
         id: contentArea
         objectName: "content"
-        x: root.card ? (root.width - Kit.Tokens.cardWidth) / 2 : (root.desktop && navigationPane.visible ? navigationPane.width + Kit.Tokens.paneGap : root.safeX)
+        x: root.card ? (root.width - Kit.Tokens.cardWidth) / 2 : (root.desktop && navigationPane.visible ? navigationPane.x + navigationPane.width + Kit.Tokens.paneGap : root.safeX)
         y: root.card ? root.safeY + Kit.Tokens.titleRow : (root.bigScreen && navigationPane.visible ? navigationPane.y + navigationPane.height + Kit.Tokens.paneGap : root.safeY)
         width: root.card ? Kit.Tokens.cardWidth : (root.detailBeside ? detailPane.x - x - Kit.Tokens.paneGap : root.width - x - root.safeX)
         height: actionsRow.y - y - (root.bigScreen || root.card ? Kit.Tokens.paneGap : 0)

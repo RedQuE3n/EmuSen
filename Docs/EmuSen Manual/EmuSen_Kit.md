@@ -612,7 +612,9 @@ control's right end, inside its background, and requires a token of the variant 
 `TestCase` is JavaScript, which §1.3 keeps out of QML, and the harness already holds the grab]*. A state with faults
 writes `<state>.faults.txt` beside its grab: the faults, the tree's legend and the recorded edges. Two checks of the
 kit's own promises run beside the rules: in the Menu section nothing under the carousel rests outside its box (within
-the audit's slack of a pixel and a half), and the finished splash shows all 220 of its stars. **Measured on 2026-11-08:
+the audit's slack of a pixel and a half); a list that scrolls has taken the height it was given (in the first ancestor
+with 48 design pixels of room below the list, something stands below it and across it, or the list was cut short with
+empty space under its fade); and the finished splash shows all 220 of its stars. **Measured on 2026-11-08:
 73 states, no fault, 41.0 s and 41.7 s.** The grabs are written to `~/.cache/emusen/tmp/kit-gallery/` for a human look.
 
 **Contrast, measured.** For every visible, enabled text the dump gives its colour with its opacity folded into the
@@ -645,13 +647,19 @@ as WCAG exempts an inactive component's.
    one clipped item that declares `backdrop`.
 7. `NormalizedCanvas`: at the first layout, before the window had a height, a unit of 0 made the section bar's
    `contentX` NaN for good. The unit is 1 until the parent has a height.
-8. kit-qt: the card form had no surface: its content stood on the Scrim over whatever was behind, and "A label in the
+8. Three layout faults seen in the grabs on 2026-11-08, each fixed where it lived. The gallery fixed its menu panel at
+   five rows, so the list scrolled and faded with a third of the page empty under it; the Menu page is a `RowLayout`
+   whose panel fills the height (`Layout.fillHeight`), and the fade shows only when rows overflow. The desktop form
+   had no margin, its content flush against the window's top edge; the frame's edge is now the pane gutter there,
+   the content starting after the navigation's right edge. The slider's handle was `textStrong`, black in the light
+   variant; it is `overAccent`, as the switch's knob.
+9. kit-qt: the card form had no surface: its content stood on the Scrim over whatever was behind, and "A label in the
    tokens" in the light variant was dark grey on black. The frame now draws the card's raised surface (`surfaceRaised`,
    the tile radius) a pane gutter outside the content area, which is `EmuSen_Qt.md`'s card over the theme.
-9. kit-qt: Moonrise showed no stars. Kit-core draws no stars at no opacity, so the star model's rows went from 0 to 220
+10. kit-qt: Moonrise showed no stars. Kit-core draws no stars at no opacity, so the star model's rows went from 0 to 220
    with only `dataChanged`, and the view never made them; the splash begins at no opacity, the screens' sky at 1, which
    is why only the splash lost them. The model now resets when the stars appear or vanish.
-10. kit-qt and kit-core: the Moonrise shadow was a whole disc drawn over the halo, and the halo a flat translucent disc.
+11. kit-qt and kit-core: the Moonrise shadow was a whole disc drawn over the halo, and the halo a flat translucent disc.
     Compared with the approved draft (`~/.cache/emusen/tmp/moonrise/reference-8s.html`, its finished frame) and the C#
     `LunaSplash` side by side, both clip the shadow to the moon and draw the halo as a radial gradient, flat out to 0.6
     radii and clear at 3.2. Kit-core's `Moon` now gives the shadow as it is drawn (`shadow_outline`, the outline of the
@@ -726,7 +734,8 @@ contrast in the light card form at all four sizes; the carousel's old `pathItemC
 two) failed the gate with cards resting outside it; the star model not reset failed the gate's count of the splash's
 stars; the shadow drawn as its whole disc failed kit-core's test that the shadow stays inside the moon. Kit-core's
 `tests/audit.rs` holds the contrast rule itself: 4.5:1 and the large type's 3:1 at 24 px and 18.66 px bold, the ink
-composited over what is behind it, the spare tenth, and no ink nothing to judge.
+composited over what is behind it, the spare tenth, and no ink nothing to judge. The gallery's menu panel fixed at five rows again
+failed the gate with a list cut short in every form, variant and size.
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

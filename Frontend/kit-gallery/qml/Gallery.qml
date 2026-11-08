@@ -53,14 +53,15 @@ Window {
                 anchors.fill: parent
                 currentIndex: scene.page
                 Item {
-                    Row {
+                    RowLayout {
+                        anchors.fill: parent
                         spacing: Kit.Tokens.paneGap
                         Kit.MenuPanel {
                             id: panel
                             objectName: "panel"
                             controller: frame.controller
-                            width: Kit.Tokens.cardWidth
-                            height: Kit.Tokens.rowHeight * 5 + Kit.Tokens.base * 4
+                            Layout.preferredWidth: Kit.Tokens.cardWidth
+                            Layout.fillHeight: true
                             KeyNavigation.right: carousel
                             onActivated: (index) => scene.activated = index
                             model: ListModel {
@@ -75,6 +76,7 @@ Window {
                             }
                         }
                         Column {
+                            Layout.alignment: Qt.AlignTop
                             visible: scene.form !== Kit.Forms.Card
                             spacing: Kit.Tokens.paneGap
                             Kit.Sky {

@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Templates as T
 import EmuSen.Kit as Kit
 
-// A slider in the tokens: an input-surface track filled with the accent to the value, a round handle, the ring on focus.
+// A slider in the tokens: an input-surface track filled with the accent to the value, a round handle in overAccent as the switch's knob, the ring on focus.
 T.Slider {
     id: control
     implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset, implicitHandleWidth + leftPadding + rightPadding)
@@ -14,7 +14,7 @@ T.Slider {
         implicitWidth: Kit.Tokens.controlHeight * 0.6
         implicitHeight: Kit.Tokens.controlHeight * 0.6
         radius: width / 2
-        color: control.pressed ? Kit.Tokens.overAccent : Kit.Tokens.textStrong
+        color: control.pressed ? Kit.Tokens.accent : Kit.Tokens.overAccent
         border.width: control.activeFocus ? Kit.Tokens.ringThickness : Kit.Tokens.hoverBorder
         border.color: control.activeFocus ? Kit.Tokens.accent : Kit.Tokens.border
     }

@@ -1,0 +1,6 @@
+module EmuSen.ThemeHost
+optional plugin EmuSen_ThemeHost
+classname EmuSen_ThemeHost_plugin
+typeinfo plugin.qmltypes
+depends QtQuick
+prefer :/qt/qml/EmuSen/ThemeHost/

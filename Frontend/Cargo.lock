@@ -378,6 +378,7 @@ dependencies = [
  "emusen-qt-models",
  "emusen-qt-play",
  "emusen-qt-test",
+ "emusen-theme-host",
  "serde_json",
 ]
 
@@ -445,6 +446,45 @@ dependencies = [
  "emusen-qml-rules",
  "libloading",
  "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "emusen-theme-host"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-qml-rules",
+ "emusen-qt-models",
+ "emusen-qt-test",
+ "emusen-theme-manifest",
+]
+
+[[package]]
+name = "emusen-theme-manifest"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "emusen-theme-qt"
+version = "0.1.0"
+dependencies = [
+ "cxx",
+ "cxx-qt",
+ "cxx-qt-build",
+ "cxx-qt-lib",
+ "emusen-client-fixture",
+ "emusen-crystal-client",
+ "emusen-kit-core",
+ "emusen-kit-qt",
+ "emusen-platform-client",
+ "emusen-qt-models",
+ "emusen-qt-test",
  "serde_json",
 ]
 

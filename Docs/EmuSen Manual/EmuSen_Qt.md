@@ -758,26 +758,86 @@ console's games or the ES-DE system and gamelist views) and their sounds. EmuSen
 Pause Card, the List card, the game's page, tools, Settings, questions and the launch screen; **a theme never styles a
 card** (§0.7 there) and no theme colour is read into one. A card opens over the theme under the Scrim, in the tokens.
 
-### 3.2 What a theme sees: the `EmuSen.Theme` API
+### 3.2 What a theme sees: the `EmuSen.Theme` API **[M 2026-11-08]**
 
-`import EmuSen.Theme 1.0` gives a theme exactly these, each a QML singleton or type backed by Rust, each a view over
-`emusen-qt-models` with the fields a theme may read and nothing more.
+`import EmuSen.Theme 1.0` gives a theme exactly these, each a QML singleton or type, each a view over `emusen-qt-models`
+with the fields a theme may read and nothing more. The table is the module as built (`Frontend/theme-qt`, the crate
+`emusen-theme-qt`); its registry is committed as `Testing/qmltypes/EmuSen.Theme-1.0.*` and held to this table by hand in
+`tests/surface.rs`. The amendments of 2026-11-08 are listed in `Frontend/theme-qt/CHANGELOG-theme-api.md`.
 
 | Name | Kind | What it holds |
 |---|---|---|
-| `Library` | singleton | `consoles` (a model: `id`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body`, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`), `places` (All, Favourites, Recent with counts and sublines), `recent`, `favourites`, `collections`, `gamesOf(console)` (a model: `title`, `cover` URL, `coverShape`, `favourite`, `lastPlayed`, `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video` URL), `search(text)` |
-| `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played`, `frame` (the paused picture as a texture item) |
-| `Device` | singleton | `controllers` (count, family for glyphs), `clock`, `battery`, `charging`, `network`, `bigScreen`, `form` |
-| `Actions` | singleton | `play(game)`, `openPage(game)`, `favourite(game)`, `random(console)`, `openConsole(id)`, `openPlace(id)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`; each returns whether it was taken |
-| `Cues` | singleton | `scroll`, `systembrowse`, `select`, `back`, `favorite`, `launch`, `quicksysselect`: the seven names of `EmuSen_Interface.md` §23, played through Endymion at the player's volume; a theme may supply its own files for them in `theme.json` |
-| `Tokens` | singleton (the kit's) | every token of `EmuSen_Interface.md` §5 in the current form and variant; read-only to a theme, overridden only through `theme.json` (§3.4) |
-| `Frame`, `HelpBar`, `Body`, `Sky`, `Carousel`, `CoverTile`, `NormalizedCanvas` | types (the kit's) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free |
-| `Screen` | type | the root of one of the three screens a theme provides; its `role` names which, and its `focusRole` the role the walk enters first |
+| `Library` | singleton | `consoles` (`key`, `name`, `displayName`, `maker`, `year`, `count`, `hue`, `body` = the world the kit's `Body` draws, `engineName`, `engineKind` = `emusen`/`libretro`, `engineMark`); `places`, Home's seven destinations in Home's order (`key` = `games`, `scraper`, `packages`, `library`, `cores`, `settings`, `power`; `name`; `kind` = `library`/`tool`/`settings`/`power`; `line`; `attention`; `count`, Games' consoles); `shelves`, All, Favourites, Recent (`key`, `name`, `line`, `count`); `recent`, `favourites` (game rows); `collections` (`key`, `name`, `count`); `gamesOf(key)` for a console's or a shelf's key and `search(words)`, game rows: `key` (the game's file), `title`, `cover`, `coverShape` (the console's width over height), `favourite`, `lastPlayed` (s since 1970, 0 never), `played`, `consoleId`, `consoleHue`, `players`, `year`, `genre`, `rating`, `description`, `video`, `hero`, `lastPlayedWords` |
+| `Session` | singleton | `hasGame`, `title`, `consoleId`, `pausedSince`, `played` (seconds), `frame` (the item the game's picture is drawn in, for a `ShaderEffectSource`) |
+| `Device` | singleton | `controllers`, `family` (the glyphs' family, as `Frame.padFamily` takes it), `clock`, `battery` (-1 none), `charging`, `network`, `bigScreen`, `form` |
+| `Actions` | singleton | `play(key)`, `openPage(key)`, `favourite(key)`, `random(console)`, `openConsole(key)`, `openPlace(key)`, `home()`, `back()`, `stepSection(±1)`, `openHomeCard()`, `openListCard()`, `search()`; each returns whether it was taken |
+| `Cues` | singleton | `scroll()`, `systembrowse()`, `select()`, `back()`, `favorite()`, `launch()`, `quicksysselect()`: the seven names of `EmuSen_Interface.md` §23, rung by the host through Endymion at the player's volume |
+| `Words` | singleton | `title`, `gamesHeading`, `chooseAConsole`, `gamesPath`, `continuePlaying`, `recent`, `between`, `search`, `emusenTag`, `libretroTag`; `games(n)`, `ago(t)`, `pausedFacts(console, pausedSince)`, `facts(maker, year, count, runsOn)`, `runsOn(engineName, engineKind)`, `statusLine(controllers, clock)`, `splashCaption(n)`: the curated face of `words.rs` |
+| `Help` | singleton | `entries(kind)` for `Help.Continue`, `Game`, `Console`, `Place`, `Section`, `Search`: a list of `button`, `label`, `pair` with `actionLines`, which `Frame.help` takes; the curated face of `help.rs` |
+| `Tokens` | singleton | every token of the kit (`EmuSen_Interface.md` §5) in the current form and variant, read-only; `Tokens.Dark`/`Light`, `Tokens.Desktop`/`BigScreen`/`Card` to compare `variant` and `form` with; overridden only through `theme.json` (§3.4) |
+| `Frame`, `HelpBar`, `Walkable`, `Body`, `Sky`, `Scene`, `Carousel`, `NormalizedCanvas`, `Moonrise` | types (the kit's, by name) | the pieces a theme places; `Frame` carries the walk, so a theme that places roles gets the pad for free; every item the pad and the pointer reach is a `Walkable` |
+| `ThemeScreen` | type | the root of a theme's screen: `role` (`ThemeScreen.Home`, `Consoles`, `Games`, `Splash`), `focusRole` (`ThemeScreen.Navigation`, `Content`, `Detail`, `Actions`, `Search`), `focusItems`, and for the splash `length` (ms), `still` and `finished()` |
 
-A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `Screen`; a theme that omits
-one gets the reference theme's. Everything on them is bound to the singletons above; the pad reaches them through the
-`Frame` they place or, where a theme arranges freely on a `NormalizedCanvas`, through `Screen.focusItems`, an ordered
-list the walk uses. The models are read-only; every change goes through `Actions`.
+A theme provides `screens/Home.qml`, `screens/Consoles.qml` and `screens/Games.qml`, each a `ThemeScreen`, and may provide
+`screens/Splash.qml`; a theme that omits one gets the reference theme's (Moonrise for the splash). Everything on them is
+bound to the singletons above; the pad reaches them through the `Frame` they place or, where a theme arranges freely on
+a `NormalizedCanvas`, through `ThemeScreen.focusItems` and `KeyNavigation`. The views are read-only; every change goes through
+`Actions`, every sound through `Cues`.
+
+**As built.** One job per part, each in its own file of `Frontend/theme-qt/src`:
+- `view.rs`, plain Rust and no Qt: each list's roles, written once, and its rows curated from the library's view
+  (`LibraryView`, §1.2.1) a cell for each role, in the role's order. The games' rows come from `library::games_of_at`
+  and a search from `listing::shown`, the grid's own rules; nothing about a game or a console is decided here.
+- `rows.rs`, **`Rows`**: every list as one read-only `QAbstractListModel`, its roles fixed when its singleton makes it,
+  its rows replaced whole under the model's reset, `count` notified. A theme cannot make one (uncreatable) or write one.
+- `library.rs`, `session.rs`, `device.rs`, `words.rs`, `help.rs`: the singletons. Each has a Rust-only feed (`show`),
+  no invokable that changes it, and no property a theme may write: a writable path to the platform library, as
+  `LibraryModel` has, would let a theme load any library, so the host hands the views their data instead.
+- `actions.rs`, `cues.rs`: each invokable becomes a value (`Action`, `Cue`) handed to the host's sink or player, a
+  Rust trait object; with none set, nothing is taken and nothing rings.
+- `qml/`: `ThemeScreen.qml`, `Tokens.qml` and one file a kit type, `Kit.Frame {}` and its kind. The qmldir names these and
+  imports nothing, so `import EmuSen.Theme` brings no other kit type: the kit's `Card`, `Question`, `PadRouter` and its
+  writable `Tokens` stay out of a theme's reach. `Tokens.qml` reads each kit token into a read-only property, and
+  `ThemeScreen`'s walk roles and the tokens' `Variant` and `Form` repeat the kit's enumerations; the surface test reads the
+  kit's registry and fails when either side changes, so the kit stays their one owner.
+- `glue.rs` and `cpp/theme_glue.cpp` *[own, because cxx-qt makes no QObject from Rust and cxx-qt-lib has no
+  `singletonInstance`]*: a list made as its singleton's child and held in C++ ownership, so no engine's collector takes a
+  list a call handed to QML; and a singleton found in the engine an object lives in. The host reaches the singletons
+  through `emusen_theme_qt::host`, given the theme's engine or any object of it.
+
+The C++ class names carry `Theme` (`ThemeLibrary`, `ThemeWords`, ...), registered under the API's names, because
+`EmuSen.Models` and the kit already define `Words` and `Cues` in the same program.
+
+**What the views do not hold yet.** The own look's library view reads no scraper facts and no collections (the ES-DE
+view does), so `players`, `year`, `genre`, `rating`, `description` and `video` are empty or 0 and `collections` is
+empty; the roles stand so a theme written now reads them when the view does. `hero` falls back to the cover. Not yet in
+the module: `CoverTile` (moved into the kit with the reference theme's package), `VideoTile` (stage 4) and `Bells` with
+`ladder(count)` and `strike(i)`, which the kit's `Bells` does not offer; each is added by name when the kit has it.
+
+**What the host does.** The host (§3.5) makes the theme's engine, then feeds `Library.show(view, homeLines)` after each
+refresh of the library model, `Session.show` and `show_frame` while a game is suspended, `Device.show` on each status
+change and clock tick, and sets the `Actions` sink and the `Cues` player once. The module holds no static; a singleton
+lives and dies with its engine, so switching themes drops them with it.
+
+**Proof, measured 2026-11-08.** `tests/view.rs`: each list's roles against a hand-written list, and every list over the
+real clients built from this commit (`emusen-client-fixture`, one synthetic NES game): the NES's row with the table's
+key and name and its engine's kind; Home's seven in order with their kinds and the scraper's line asking for the player;
+the shelves' counts; `gamesOf` for a console and a shelf, the cover's shape the console's; an unknown key and a search
+with no match empty. `tests/qml.rs`, one harness test: a scene importing `EmuSen.Theme` reads every list through
+`required property` delegates of every role (a missing role is a warning, and the scene must stay quiet), `gamesOf`,
+`Words`, `Device` and `Session` as fed, `Tokens.accent` equal to the kit's, `ThemeScreen`'s enums, and places each kit type
+by its name; `Help.entries` is non-empty for every kind; `Actions` take nothing with no sink and then say which the host
+took; `Cues` are silent with no player. `tests/surface.rs`: the committed registry is the built one; each type's
+properties and methods equal a hand-written list and nothing else is exported; the qmldir lists the kit's types by name
+and imports nothing; `Tokens` mirrors every kit token; `qml-rules` and `qmllint` pass the module and its scene; the
+crate's dependencies name no client and no runtime crate, and no source file reaches one (the tree reaches the clients
+only through `emusen-qt-models`, which it curates). Three faults were seeded and caught: a game's title and cover cells
+swapped (`view.rs`'s test and the harness test), a declined action reported as taken (the harness test), and a token
+left out of `Tokens.qml` (the surface test).
+
+**The name `ThemeScreen`.** §3.2 named the type `Screen`, but QtQuick has an attached type of that name (`Screen.width`,
+`Screen.pixelDensity`), and which one a theme got depended on the order of its imports. Decided 2026-11-08: the type is
+`ThemeScreen`, and its enumerations are read as `ThemeScreen.Home` and the others.
 
 ### 3.3 Versioning
 
@@ -820,6 +880,92 @@ fails to load is reported in the Themes tab with the engine's warnings and the r
 Switching themes at run time destroys the engine and creates another; the spike shows the smaller case, one engine and
 a `Loader` whose `source` moves between theme files (§10.3).
 
+#### 3.5.1 The host as built **[M 2026-11-08]**
+
+**The crate.** `emusen-theme-host` (`Frontend/theme-host`), the QML module `EmuSen.ThemeHost 1.0` (the program's; a theme's engine
+never resolves it). Four parts, one job each: `policy.rs`, the sandbox's rules as plain data with no Qt; `package.rs`, `theme.json`
+read through `emusen-theme-manifest` (the schema's one owner, §3.7) into what the host loads, the name and the screens provided;
+`sandbox.rs`, the bridge to the C++ shells; `host.rs`, the `ThemeHost` type. Its dependencies are cxx, cxx-qt, cxx-qt-lib,
+`emusen-qml-rules` (for `THEME_IMPORTS` and its theme profile, the allow-list's one owner) and the manifest crate; no client, runtime
+or model crate (`tests/lint.rs` holds the list).
+
+**`ThemeHost`.** `folder` (a path, a `file:` URL or a `qrc:` folder; empty for none) and `coverStores` are written; `name`, `ready`,
+`failed`, `warnings` (one line per finding), `generation` and `liveEngines` are read. Writing `folder` destroys the engine before,
+drops `ready` (so every slot lets its screen go), reads `theme.json`, and makes the new engine; a manifest that breaks the schema or
+names a newer API is refused with the manifest's words (`theme.json:4 api written for EmuSen.Theme 2.0; this build has 1.0`) and
+no engine is made. `provides(role)` says whether the package lists the role (`ThemeHost.Home`, `Consoles`, `Games`, `Splash`, an
+enum, so no QML writes a role's name); `place(role, slot)` creates the role's screen in the theme's engine as a child of the slot,
+filling it, and returns false, setting `failed`, when it cannot.
+
+**The engine.** One `QQmlEngine` per theme, created and owned by the sandbox: its import paths are Qt's QML folder, `qrc:/qt/qml`
+and `qrc:/qt-project.org/imports` only (no application folder, no `QML_IMPORT_PATH`), no plugin path, the URL interceptor and the
+network factory installed, `offlineStoragePath` set empty, and its `warnings` signal gathered into the host's log. The sandbox
+deletes the screens it made, then the engine, then the shells the engine was handed, in that order; `liveEngines` counts the
+engines still alive through a `QPointer` each, so a leak is a number a test reads.
+
+**What a theme's engine may reach**, judged by `Policy::judge` for every URL the engine resolves (QML, script, qmldir, and every
+`url` property after resolution):
+
+1. A theme's own QML or script file has its imports held to `THEME_IMPORTS` (`QtQuick`, `QtQuick.Layouts`, `QtQuick.Effects`,
+   `QtQuick.Shapes`, `QtQuick.Controls`, `EmuSen.Theme`) and to relative folders, through qml-rules' theme profile; a script's
+   `.import` likewise. A file that names another module is refused before it compiles, with the file, the line and the list:
+   `screens/Home.qml:2 imports EmuSen.Models, which a theme may not import (allowed: …)`.
+2. Some modules never resolve, by any route: the program's own (`EmuSen.Models`, `.App`, `.Play`, `.Endymion`, `.Esde`,
+   `.ThemeHost`) and those that reach files, processes, media or the network (`QtMultimedia`, `QtNetwork`, `QtCore`,
+   `QtQml.XmlListModel`, `QtQuick.LocalStorage`, `QtQuick.Dialogs`, `QtWebEngine`, `Qt.labs`), refused at their `qmldir` under
+   every import root. This is what stops an inline component, `Qt.createQmlObject("import EmuSen.Models; …")`, which no file
+   check sees: measured on 2026-11-08 with the program's models registered in the process, the module's qmldir is looked for
+   under each of the three roots, each lookup is refused, and the object is not made. The allow-list of rule 1 is the narrower
+   rule; rule 2 exists because a module allowed by rule 1 (QtQuick, the kit through `EmuSen.Theme`) imports modules of its own,
+   which a theme must still be able to resolve transitively.
+3. `file:` URLs inside the theme's folder (symbolic links resolved, `..` taken out), pictures inside a cover store, and Qt's own
+   module files in its QML folder; nothing else on disk (`file:///etc/hostname is outside the theme's folder and the cover store`).
+4. `qrc:` URLs of Qt's own modules, `EmuSen.Theme`, the kit it re-exports, the EmuSen style's controls and the kit's fonts, and the
+   theme's folder when it is a resource (the reference package, R); never another resource of the program (`EmuSen.App`'s screens,
+   the ES-DE painter's shader).
+5. `data:` and `image:` (only the providers registered on the theme's engine, none yet); no other scheme, so no network:
+   `http://example.invalid/cover.png: a theme reaches no network …`.
+
+A refused URL is rewritten into `/emusen-refused/<scheme>/<host><path>`, a folder that never exists, so the engine reports the
+file missing synchronously (`QML Image: Cannot open: file:///emusen-refused/http/example.invalid/cover.png`) and the host's log has
+the reason. A first version rewrote to an unknown scheme left for the refusing network to decline; that sent qmldir lookups through
+the network asynchronously, and a synchronous `Qt.createQmlObject` waiting on them never returned (measured on 2026-11-08: the test
+hung past 180 s). The network factory stays as the second wall: every manager it makes refuses every request, logged, so a URL
+that reached it by a route the interceptor does not see still fails with a diagnostic.
+
+**The two C++ shells, and why.** `SandboxInterceptor` subclasses `QQmlAbstractUrlInterceptor` and `SandboxNetwork` subclasses
+`QQmlNetworkAccessManagerFactory` (its managers subclass `QNetworkAccessManager::createRequest`): cxx-qt declares no subclass of a Qt
+C++ interface with virtual functions, so these are the glue §1.4 allows. Each asks Rust: the interceptor calls `policy_reads` and
+`policy_judge` through the bridge and holds no rule of its own. Their log is guarded by a mutex, since the type loader and the
+picture readers call from their own threads; the policy is plain immutable data and is shared by reference, owned by the host and
+dropped after the sandbox. The sandbox (engine ownership and the screens' creation through `QQmlComponent`, which cxx-qt-lib does
+not bind) is the third piece of glue; `cpp/sandbox.h` and `cpp/sandbox.cpp` hold all three in 264 lines.
+
+**In the program.** `ThemeHost.qml` (`EmuSen.App`) holds the host and one `Loader` slot per role, each made while the theme provides
+the role and placing the screen when loaded; a slot's `themed` is true when its screen is in place and the theme has not failed.
+`Main.qml` draws it over the reference's screens, below every card, and hides the reference's Home, Choose a console or grid only
+where the theme's slot is `themed`; a role the theme omits, and every role once it fails, is the reference's, drawn as before. A
+theme's splash slot is made only while the splash is shown and is drawn in a layer over Moonrise, faded with it: Moonrise keeps the
+splash's clock, the skip and the fade (`EmuSen_Interface.md` §22), so a theme's splash cannot hold the start or take a press. Until
+`EmuSen.Theme`'s `Screen` gives a splash its `length`, Moonrise's length is the splash's, and Moonrise draws unseen under a theme's
+splash. The theme is chosen by `--theme DIR` or `EMUSEN_THEME`, empty for the reference; the cover stores are the media store and the
+settings' `ArtworkDirectory` and `EsdeMediaDirectory`. With no theme chosen the program is unchanged.
+
+**Proof.** `theme-host/tests/policy.rs` (5 tests, no Qt): the folder, the cover store and nothing else on disk; no network and no
+unknown scheme; Qt's modules resolve and the named ones never; a theme file held to the allow-list; a folder in the resources.
+`tests/sandbox.rs` (offscreen, the software backend, `EmuSen.Models` imported by the test scene so its types are registered as in
+the program): a stub theme's screen fills its slot and reads a picture from its folder, quietly; an `EmuSen.Models` import, a remote
+picture, a file outside, an inline component and a newer API each fail with the words above; switching stub → remote → stub leaves
+one engine, and no theme none. `tests/lint.rs`: the committed registry `Testing/qmltypes/EmuSen.ThemeHost-1.0.*` is the built one,
+the scene keeps the QML rules, the dependency list. `qt-app/tests/theme.rs`: a theme's splash over Moonrise and gone after it, its
+Home in place of the reference's and the omitted Choose a console the reference's, a failing theme reported and the reference
+shown, switching twice leaving one engine. The stub themes are plain QtQuick under `theme-host/tests/themes/` until `EmuSen.Theme`
+lands.
+
+**Not yet.** The `Screen` type and the splash's `length`, `still` and `finished` (T); the Themes tab and the setting that chooses a
+theme (S); a themed Games screen opens no List card until `Actions.openListCard` exists (T, R). What the sandbox does not do is
+§3.5's paragraph above, unchanged: a theme can still spin or allocate.
+
 ### 3.6 Console-style designs as themes: the test that the API is sufficient
 
 Four designs, each **inspired** by a console's shell (its arrangement and motion, never its logos, glyph sets, fonts or
@@ -829,7 +975,7 @@ would be too narrow; none does. **[A]**
 | Design | Arrangement (general patterns only) | What it reads | What it places |
 |---|---|---|---|
 | **Deck-like** | a left column of places and consoles with the focused one expanded; the content a horizontal band of large art tiles with the focused tile's details beneath; a dark surface with a cool accent | `Library.places`, `Library.consoles`, `gamesOf`, `recent`; `Device.controllers`, `battery`, `clock`; `Session` for a Continue tile | `Frame` (navigation + content + detail), `CoverTile`, `HelpBar`; tokens: `accent`, `surfaceRaised` overridden |
-| **Xbox-like** | rows of blocks: a large Continue block, a row of recent covers, square tiles for places; blocks slide as the focus moves | `Session`, `recent`, `places`, `collections`; `Device` | `NormalizedCanvas` with `Screen.focusItems`; `CoverTile`; the walk through `Frame` roles `content` and `actions` |
+| **Xbox-like** | rows of blocks: a large Continue block, a row of recent covers, square tiles for places; blocks slide as the focus moves | `Session`, `recent`, `places`, `collections`; `Device` | `NormalizedCanvas` with `ThemeScreen.focusItems`; `CoverTile`; the walk through `Frame` roles `content` and `actions` |
 | **PlayStation-like** | one horizontal strip of console or game icons along the top third, the focused one larger with its name under it; the lower two thirds show the focused item's art and facts; a soft moving background | `consoles` or `gamesOf`, `hue` for the background's tint, `description`, `video` | `Carousel` (over `PathView`), `Sky` with the glow following `hue`, a `VideoTile` where a clip exists |
 | **Switch-like** | a horizontal strip of game tiles at mid-height, round places beneath (favourites, recent, search, settings), a light or dark variant; a cue on every move | `gamesOf(All)`, `places`, `Cues`, `Tokens.variant` | `Carousel` horizontal with equal tiles, `WholeRow` for the round places, `HelpBar`; `Cues.scroll` on move, `select` on A |
 

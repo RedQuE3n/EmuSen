@@ -1,6 +1,6 @@
 //! What the program reads before its window opens (EmuSen_Qt.md §7): where the platform library is, and Moonrise on or off.
 
-use emusen_qt::start::{game_mode_from, guide_chords_from, platform_library, reduced_motion_from, splash_from, LIBRARY_FILE};
+use emusen_qt::start::{cover_stores_from, game_mode_from, guide_chords_from, platform_library, reduced_motion_from, splash_from, theme, LIBRARY_FILE};
 use serde_json::json;
 use std::path::Path;
 
@@ -46,4 +46,19 @@ fn the_guide_chords_are_on_off_or_auto_away_from_game_mode() {
     assert!(guide_chords_from(&json!({ "GuideChords": "On" }), true));
     assert!(!guide_chords_from(&json!({ "GuideChords": "Off" }), false));
     assert!(!guide_chords_from(&json!({ "GuideChords": "Auto" }), true));
+}
+
+#[test]
+fn the_theme_is_the_named_one_then_the_environment_s_and_else_the_reference() {
+    let named = vec!["emusen-qt".to_owned(), "--theme".to_owned(), "/t/Dawn".to_owned()];
+    assert_eq!(theme(&named, Some("/t/Day".into())), "/t/Dawn");
+    assert_eq!(theme(&[], Some("/t/Day".into())), "/t/Day");
+    assert_eq!(theme(&[], None), "", "no theme: the reference");
+}
+
+#[test]
+fn a_theme_s_pictures_come_from_the_media_store_and_the_artwork_folders_set() {
+    let settings = json!({ "ArtworkDirectory": "/art", "EsdeMediaDirectory": "" });
+    assert_eq!(cover_stores_from(Some(Path::new("/media")), &settings), ["/media", "/art"]);
+    assert!(cover_stores_from(None, &serde_json::Value::Null).is_empty());
 }

@@ -110,7 +110,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Accept);
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "HomeCard");
-    assert_eq!(titled(&mut scene, "homeCard"), ("Home".into(), "Power".into()));
+    assert_eq!(titled(&mut scene, "homeCardCanvas"), ("Home".into(), "Power".into()));
     assert_eq!(rows(&mut scene), ["Exit Big Picture", "Quit EmuSen..."]);
     assert_eq!(scene.property("homeCardModel", "current"), "0");
     scene.assert_still("the Home card in place");
@@ -120,7 +120,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);
     scene.wait(50);
-    assert_eq!(titled(&mut scene, "homeCard"), ("EmuSen closes.".into(), "Quit EmuSen?".into()));
+    assert_eq!(titled(&mut scene, "homeCardCanvas"), ("EmuSen closes.".into(), "Quit EmuSen?".into()));
     assert_eq!(rows(&mut scene), ["No", "Yes"]);
     hold(&mut scene, "HomeCardQuit", &mockup::Mockup::default(), named, &mut report);
     scene.pad(UiButton::Back);
@@ -156,7 +156,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Options);
     settle(&mut scene);
     assert_eq!(scene.property("screens", "shown"), "List");
-    assert_eq!(titled(&mut scene, "listCard"), ("List".into(), "All · 8 games".into()));
+    assert_eq!(titled(&mut scene, "grid"), ("List".into(), "All · 8 games".into()));
     assert_eq!(rows(&mut scene), ["Search", "Sort | Name", "Filter", "Jump to | A", "Random game", "Collections"]);
     assert!(scene.tree().nodes.iter().any(|n| n.visible && n.text.as_deref() == Some("Type part of a name; the covers narrow as you type.")), "the pane says what Search does");
     hold(&mut scene, "GamesListCard", &mockup::Mockup::default(), named, &mut report);
@@ -181,7 +181,7 @@ fn the_home_card_and_the_list_card_are_mistresss() {
     scene.pad(UiButton::Up);
     scene.pad(UiButton::Accept);
     scene.wait(50);
-    assert_eq!(titled(&mut scene, "listCard").1, "Filter");
+    assert_eq!(titled(&mut scene, "grid").1, "Filter");
     assert_eq!(rows(&mut scene), ["Every game", "Favourites"]);
     scene.pad(UiButton::Down);
     scene.pad(UiButton::Accept);

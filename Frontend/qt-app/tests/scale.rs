@@ -93,6 +93,34 @@ fn a_step_builds_nothing_per_game_and_the_grid_follows_the_focus() {
     }
     assert_eq!(scene.property("gridFocusTitle", "text"), "Game 00075");
 
+    // The List card over 9,000 games: each step of Sort and Jump to and each search's words answer within 400 ms, the
+    // listing read off the GUI thread (EmuSen_Qt.md §7.1, stage 2).
+    scene.pad(UiButton::Options);
+    wait_for(&mut scene, "screens", "shown", "List", 1000);
+    scene.pad(UiButton::Down);
+    for (by, sort) in [(UiButton::Right, "Last played"), (UiButton::Left, "Name")] {
+        let next = (scene.property("gridGames", "revision").parse::<i32>().unwrap() + 1).to_string();
+        let at = std::time::Instant::now();
+        scene.pad(by);
+        wait_for(&mut scene, "gridGames", "revision", &next, 2000);
+        let took = at.elapsed().as_millis();
+        assert!(took < 400, "Sort to {sort} took {took} ms over 9,000 games");
+    }
+    scene.pad(UiButton::Down);
+    scene.pad(UiButton::Down);
+    let at = std::time::Instant::now();
+    scene.pad(UiButton::Right);
+    assert!(at.elapsed().as_millis() < 400, "Jump to took {} ms", at.elapsed().as_millis());
+    scene.pad(UiButton::Back);
+    wait_for(&mut scene, "screens", "shown", "Grid", 1000);
+    let at = std::time::Instant::now();
+    // Game 00075 stands on both shelves.
+    assert!(scene.set_property("gridGames", "search", "00075"));
+    wait_for(&mut scene, "gridGames", "countLine", "2 of 9,000 games", 2000);
+    assert!(at.elapsed().as_millis() < 400, "the search took {} ms over 9,000 games", at.elapsed().as_millis());
+    assert!(scene.set_property("gridGames", "search", ""));
+    wait_for(&mut scene, "gridGames", "countLine", "9,000 games", 2000);
+
     // Another row's grid opens at its first row.
     scene.pad(UiButton::Back);
     scene.pad(UiButton::Down);

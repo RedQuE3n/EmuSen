@@ -141,6 +141,7 @@ Window {
     Kit.NormalizedCanvas {
         id: homeCardCanvas
         objectName: "homeCardCanvas"
+        readonly property alias slide: homeCard.slide
         visible: homeCard.open || homeCard.leaving
         CardModel {
             id: homeCardModel
@@ -154,7 +155,6 @@ Window {
         }
         MenuCard {
             id: homeCard
-            objectName: "homeCard"
             anchors.fill: parent
             open: screens.shown === Screens.HomeCard
             focus: open
@@ -181,6 +181,7 @@ Window {
     Kit.NormalizedCanvas {
         id: cardCanvas
         objectName: "cardCanvas"
+        readonly property alias slide: card.slide
         visible: card.open || card.leaving
         PauseCard {
             id: card

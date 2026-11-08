@@ -82,7 +82,7 @@ FocusScope {
         visible: root.paneShown
         opacity: 1 - root.slide
         Column {
-            objectName: "PaneLines"
+            objectName: "AdaptiveDetail"
             x: 24
             y: 24
             width: parent.width - 48
@@ -176,6 +176,7 @@ FocusScope {
             height: root.height
             Rectangle {
                 id: caster
+                objectName: "cardShadowCaster"
                 width: root.panelWidth
                 height: root.height
                 color: Kit.Tokens.surface
@@ -296,5 +297,27 @@ FocusScope {
         labelFont: Qt.font({ family: faces.regular, pixelSize: 20 })
         entrySpacing: 40
         glyphGap: 10
+    }
+    // The panel's shadow falls over the help band too, as Mistress's does: the band and its bar are painted after the panel, so the shadow's part beside the panel is drawn again over them.
+    Item {
+        objectName: "bandShadow"
+        x: frame.x + root.panelWidth
+        y: band.y
+        width: 64
+        height: root.bandHeight
+        clip: true
+        MultiEffect {
+            x: -root.panelWidth
+            y: -band.y
+            width: root.panelWidth
+            height: root.height
+            source: caster
+            shadowEnabled: true
+            shadowColor: "#000000"
+            shadowOpacity: 0.5
+            shadowVerticalOffset: 8
+            blurMax: 24
+            shadowBlur: 1
+        }
     }
 }

@@ -1002,10 +1002,14 @@ On the distribution's Qt: Fedora 44's 6.11.2 (`qt6-qtbase-devel`, `qt6-qtdeclara
   | `linuxdeploy-x86_64.AppImage` | 1-alpha-20251107-1 | https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage | `c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d` |
   | `linuxdeploy-plugin-qt-x86_64.AppImage` | 1-alpha-20250213-1 | https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/1-alpha-20250213-1/linuxdeploy-plugin-qt-x86_64.AppImage | `15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724` |
   | `appimagetool-x86_64.AppImage` | 1.9.1 | https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage | `ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0` |
+  | `runtime-x86_64` | 20251108 | https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64 | `2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d` |
 
   The sizes matched the releases' (19,421,688, 12,317,424 and 15,092,216 bytes), and two of the hashes the digests
   GitHub publishes for the assets; the Qt plugin's release of 2025-02-13 publishes none, so its hash is the one computed
-  on download (fetched 2026-11-08). The fourth pin is patchelf, below.
+  on download (fetched 2026-11-08). The runtime is the type2 runtime appimagetool would otherwise download at every build, unpinned, from the
+  moving `continuous` release (it failed with HTTP 504 on 2026-11-08); the xtask passes it with `--runtime-file`, so
+  packing needs no network, and its 944,632 bytes and sha256 match the digest GitHub publishes for the asset (fetched
+  2026-11-08 through the release-asset API, the download URL answering 504). The fifth pin is patchelf, below.
 
   **linuxdeploy's own patchelf breaks Fedora 44's libraries** [M 2026-11-08]. linuxdeploy sets each bundled library's
   RUNPATH to `$ORIGIN` with the patchelf it carries, 0.15.0, and that rewrite corrupts libraries whose relocations are

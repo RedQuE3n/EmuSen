@@ -1732,6 +1732,10 @@ game's file name, then the local time to the millisecond, `2026-11-08 21.42.07.1
 wraps no `QImage::save`, and Qt already holds a PNG writer]. **Held to:** `acceptance.rs` on Vulkan (X on the card saves
 the screenshot and the card stays in place).
 
+**One owner for a card's rows on Qt.** `row_roles.rs` holds the roles `MenuCard.qml`'s rows read (label, value, steps,
+opens, sectionEnd, key, dimmed) and each row's value for them; `CardModel` and `PauseModel` both answer `data` and
+`roleNames` through it, where each had held its own copy.
+
 ### 7.4 Stage 2, the forms: the question, notices and the docked keyboard (2026-11-08)
 
 Kit pieces the stage's screens use, each an extension of `EmuSen.Kit` reviewed under rule Q (`EmuSen_Kit.md` §7.22 to

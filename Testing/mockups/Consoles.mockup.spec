@@ -71,7 +71,8 @@ element consoleDetailName x=64 y=633.6 h=44 token=TextStrong words=data
 element consoleDetailFacts x=64 y=683.6 h=26.4 token=Muted words=data
 element coverFan x=796 y=612 w=420 h=104
 note the help bar stands flush on the foot, 742 to 800, decided 2026-11-05 (EmuSen_Interface.md §24.7)
-element helpBar x=0 y=742 w=1280 h=58 token=Surface alpha=0.92
+note the band is the accepted render's night glass, the input surface at 0.72 (LunaP's HelpBand), where the canvas had Surface at 0.92; the render stands (EmuSen_Qt.md §7.1, step 5)
+element helpBar x=0 y=742 w=1280 h=58 token=InputSurface alpha=0.72
 element glyph-Back y=756 w=30 h=30
 element glyph-Favourites y=756 w=30 h=30
 element "glyph-Random game" y=756 w=30 h=30

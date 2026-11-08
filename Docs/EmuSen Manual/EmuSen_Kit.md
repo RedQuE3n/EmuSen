@@ -1546,7 +1546,7 @@ list); qt-models' `question.rs` (3). Measured on 2026-11-08.
 `Connections` stop offering the pad's presses until the list closes; the pointer and the keyboard work. A popup in the
 frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings pages are the first with combo boxes.
 
-### 7.25 The pad router sleeps (stage 2; 2026-11-08)
+### 7.25 The pad router sleeps; the night help band (stage 2; 2026-11-08)
 
 - **The router's clock runs only while it has work** (owed by `EmuSen_Qt.md` §9.3.2, "Seen, not changed"). Each
   `Frame`, `Game.qml` and the splash ran an 8 ms `Timer` pumping `PadRouter` while shown, waking the GUI thread 125
@@ -1555,6 +1555,15 @@ frame's sheet rule (as `Sheet` does) is the fix; owed to stage 5, whose settings
   only while it is true. A push starts the clock and the pump that applies the last release stops it. Repeats are
   unchanged: a held button keeps the clock running. Held to by `kit-qt/tests/router.rs` (idle, a waiting event, a held
   button, let go) and by `idle.rs`, `pause.rs` and the gallery's `pads.rs`, which drive the router through it.
+- **The help band is glass at night** (the tester, 2026-11-08: on Home the band read opaque where Mistress's shows the
+  sky through it). Mistress draws a full screen's band from LunaP's `HelpBand`, which at night is the input surface at
+  0.72 with its Border rule at 0.72, flush on the foot. `HelpBar.glass` draws that, and `Frame` sets it on the big screen
+  whenever the frame draws no surface of its own (`surfaceDrawn` off, the night screens with their sky). The fill is a
+  translucent colour, `Qt.alpha(inputSurface, 0.72)`, never `transparent` with an overlay: measured on Vulkan on
+  2026-11-08, a root `Rectangle` in `transparent` left the strip at alpha 184 with no sky under it (the trap the Pause
+  Card met, `EmuSen_Qt.md` §7.1 step 7), and the translucent colour blends, the band reading (15, 17, 28) against
+  Mistress's (15, 17, 27) at 1920 × 1200. kit-core's palette reach now takes a declared opaque token at any alpha, since
+  a token through a colour's alpha is the token as it is through an item's opacity (`tests/audit.rs`).
 
 ### 7.6 Building, linking, the registry, and what it is held to
 

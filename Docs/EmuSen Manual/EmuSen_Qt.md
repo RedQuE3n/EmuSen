@@ -1740,7 +1740,7 @@ Kit pieces the stage's screens use, each an extension of `EmuSen.Kit` reviewed u
 Mistress's question card from `CoresPlan-1280x800.spec`, `MenuRow.overRaised`, and the words in `emusen-qt-models`'
 `question.rs`, the Resume question's among them); **notices** (`NoticeModel` and `NoticeLayer`, kit-core's `notice.rs`);
 the **vertical walk** passing a field and a combo box (`KeyPass`); B offered to the focused control before the host's
-`backDeclined`; and the router's clock asleep while it has nothing to do. The
+`backDeclined`; the router's clock asleep while it has nothing to do; and the night **help band** as glass. The
 side-by-sides, Mistress left and the kit right, are in `~/.cache/emusen/tmp/qt-s2/compare/`.
 
 **Named, for the tester:** the question's cover stops at the 58-unit help bar on the foot (742), where Mistress's Cores

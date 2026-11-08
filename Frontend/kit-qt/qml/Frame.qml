@@ -87,6 +87,7 @@ FocusScope {
         objectName: "helpBar"
         controller: root.controller
         visible: !root.desktop && root.helpShown
+        glass: root.bigScreen && !root.surfaceDrawn
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom

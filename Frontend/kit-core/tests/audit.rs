@@ -277,6 +277,11 @@ fn interface_spec_4_4_every_painted_colour_is_declared_and_a_scene_is_exempt() {
     let mut painted = clean();
     painted.children[2].paints.push(stray);
     assert_eq!(palette_reach(&painted, &declared), vec![Fault::OutsidePalette { item: id(20), colour: stray }]);
+    // A declared opaque colour at an alpha is the token through its alpha, as through an item's opacity (EmuSen_Kit.md §7.25).
+    let opaque = *declared.iter().find(|c| c.a == 255).expect("an opaque colour");
+    let mut glass = clean();
+    glass.children[2].paints.push(Colour { a: 184, ..opaque });
+    assert_eq!(palette_reach(&glass, &declared), vec![]);
     let themed = clean().child(
         Item::new(90, Kind::Panel, Rect::new(0.0, 0.0, 1280.0, 800.0))
             .scene()

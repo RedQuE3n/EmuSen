@@ -16,10 +16,21 @@ Rectangle {
     property real glyphGap: Kit.Tokens.base * 2
     // The rule along its top; a host that draws the band itself turns it off.
     property bool ruled: true
+    // At night the band is glass: the input surface and its Border rule at 0.72 over the sky, as LunaP's HelpBand draws it (EmuSen_Kit.md §7.25).
+    property bool glass: false
+    readonly property real glassOpacity: 0.72
     implicitHeight: Kit.Tokens.helpBar
-    color: Kit.Tokens.surface
+    // A translucent colour, never "transparent": on Vulkan a clear Rectangle cleared its strip to alpha 0 (EmuSen_Qt.md §7.1, step 7).
+    color: root.glass ? Qt.alpha(Kit.Tokens.inputSurface, root.glassOpacity) : Kit.Tokens.surface
     Rectangle {
-        visible: root.ruled
+        objectName: "helpGlassRule"
+        visible: root.glass
+        width: parent.width
+        height: Kit.Tokens.hoverBorder
+        color: Qt.alpha(Kit.Tokens.border, root.glassOpacity)
+    }
+    Rectangle {
+        visible: root.ruled && !root.glass
         anchors.top: parent.top
         width: parent.width
         height: Kit.Tokens.hoverBorder

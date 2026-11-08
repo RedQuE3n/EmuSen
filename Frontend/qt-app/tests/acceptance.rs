@@ -28,7 +28,7 @@ use std::path::{Path, PathBuf};
 /// these are held by kit-core's layout test against the canvas's own numbers (EmuSen_Qt.md §7.1 step 4).
 const COUNTED: [&str; 6] = ["consoleTile.", "consoleBody.", "consoleName.", "consoleCount.", "consoleRing.", "orbit.1"];
 
-/// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4: the help bar's opaque Surface, the orbit line in the
+/// A fault explained by a difference named in EmuSen_Qt.md §7.1 step 4: the orbit line in the
 /// canvas's own ink, the canvas's 17- and 18-unit words under the floor at 1280 x 720 alone, the focused console's name in
 /// the canvas's line box of 1, an engine's name too long for its tile or a place's line for its tile (cut as the accepted
 /// render cuts it), the fan's covers laid over each other, and the focused shelf cover's name, whose glyph box the focus
@@ -36,8 +36,7 @@ const COUNTED: [&str; 6] = ["consoleTile.", "consoleBody.", "consoleName.", "con
 fn named_difference(fault: &str, tree: &emusen_qt_test::tree::Tree, size: (i32, i32)) -> bool {
     let item = |n: &str| n.trim().trim_end_matches(':').parse::<usize>().ok().and_then(|i| tree.nodes.get(i)).map_or("", |n| n.name.as_str());
     let after = |key: &str| fault.split(key).nth(1).map(|r| r.split_whitespace().next().unwrap_or(""));
-    fault.contains("helpBar: alpha 1.000, the mockup's 0.92")
-        || after("palette on ").is_some_and(|i| item(i).starts_with("orbit."))
+    after("palette on ").is_some_and(|i| item(i).starts_with("orbit."))
         || (size == (1280, 720) && fault.contains("too small to read"))
         || after("cut at the foot: ").is_some_and(|i| item(i) == "consoleDetailName")
         || after("ellipsis: ").is_some_and(|i| item(i).starts_with("consoleEngineName.") || item(i).starts_with("placeStatus."))

@@ -1,9 +1,12 @@
 /*
  * emusen_platform.h - the C interface of EmuSen's platform library.
  *
- * The library holds the platform components that have moved to Rust (Galaxia first) and is loaded by the C#
- * programs, which keep their own types and forward to it. This header is the interface's specification; the rules
- * are argued in EmuSen_RustPlatform.md, section 3, and are the core ABI's (emusen_core.h) one layer up:
+ * The library holds EmuSen's platform components in Rust: Galaxia's paths and files, Endymion's input and sound,
+ * Serenity's shaders and device, the file services, the shell, and the frontend API (emusen_crystal.h), which a front
+ * end calls for what both offer. This header is the components' own interface; since 38 the systems table, the cheat
+ * codecs, a firmware install, the card manager and a cheat database's install are the frontend API's alone
+ * (EmuSen_RustPlatform.md, section 47.24). The rules are argued in EmuSen_RustPlatform.md, section 3, and are the core
+ * ABI's (emusen_core.h) one layer up:
  *
  *  - The host calls and the library returns. The library never calls the host: what the C# reports through a
  *    delegate is returned to it, as a status, as words or as queued diagnostics.
@@ -36,7 +39,7 @@
 extern "C" {
 #endif
 
-#define EMUSEN_PLATFORM_ABI_VERSION 37u
+#define EMUSEN_PLATFORM_ABI_VERSION 38u
 
 /* Statuses. Zero and above is success: a count or a length. */
 #define EMUSEN_PLATFORM_NULL (-1)            /* a null pointer where one was required */
@@ -507,17 +510,7 @@ int64_t emusen_disc_sbi_beside(const uint8_t *image, size_t image_len, uint8_t *
  */
 int64_t emusen_disc_track_spans(const uint8_t *sheet, size_t sheet_len, uint8_t *out, size_t len);
 
-/* ---- The systems table and the packs' code: emusen-systems (EmuSen_Backend.md, sections 5, 12 and 13) ---- */
-
-/*
- * Every system's facts as one compact JSON array, one object a system in the table's order, each with the keys id,
- * name, console, manufacturer, release_year, extensions, cheat_systems, openvgdb_systems, cover_aspect, esde_system,
- * esde_full_name, self_delimiting_images, attached_to (a console or null), screenscraper_system (a number or null),
- * display_name (the name a list shows, "Super Nintendo" where console is "SNES"), firmware_name (the console's firmware
- * in the player's words, "PlayStation 2 BIOS", or null), cheat_space (a memory space or null) and media (a list of objects with the keys id, title and noun), and the rest of emusen-systems' KEYS, look last (an object or null), in that order. By the length-query idiom.
- * EMUSEN_PLATFORM_PARSE with words only for a library built from a broken data file.
- */
-int64_t emusen_systems_table(uint8_t *out, size_t len);
+/* ---- The packs' code: emusen-systems (EmuSen_Backend.md, sections 5, 12 and 13; the table is emusen_crystal_systems') ---- */
 
 /*
  * The libretro cores EmuSen hosts, libretro-cores.tsv, as one compact JSON array, one object a core in the list's order,
@@ -551,23 +544,6 @@ int64_t emusen_systems_media_delete(const uint8_t *id, size_t id_len, const uint
 
 /* A formatted blank of the medium. */
 int64_t emusen_systems_media_format(const uint8_t *id, size_t id_len, uint8_t *out, size_t len);
-
-/*
- * The cheat codecs, by codec id. Every codec and each system's pair as a JSON object: codecs (each id, name, kind
- * RamPoke or RomPatch, space or null) and systems (each id, auto and explicit, a codec's id or null).
- */
-int64_t emusen_systems_cheat_codecs(uint8_t *out, size_t len);
-
-/*
- * A code's answers from one codec as a JSON object: can (whether the code is the codec's), then decode (address and
- * value), compare (a byte or null) and writes (a list of objects with the keys space, address, value, width, type as
- * CheatWriteType's number, bit or null, big_endian, repeat, repeat_address and repeat_value, or null), each of those
- * three an object with the key format (the codec's words) or range where it refused. ABSENT for a codec there is not.
- */
-int64_t emusen_systems_cheat_decode(const uint8_t *codec, size_t codec_len, const uint8_t *code, size_t code_len, uint8_t *out, size_t len);
-
-/* The Game Genie code that patches `value` at `address`, for snes.gg and md.gg; ABSENT for a codec with no encoder. */
-int64_t emusen_systems_cheat_encode(const uint8_t *codec, size_t codec_len, int32_t address, uint32_t value, uint8_t *out, size_t len);
 
 /* Each system's code as a JSON array in the table's order: id, and whether it has a recogniser (recognises), an OpenVGDB rule (openvgdb) and a header reader (header). */
 int64_t emusen_systems_code(uint8_t *out, size_t len);
@@ -649,26 +625,12 @@ int64_t emusen_firmware_find(const uint8_t *request, size_t request_len, uint8_t
 /* In: {"request", "folders"}. Out: found (folder, names, whole, content; or null), each file opened and measured but not read,
  * and wrong (the first folder with a file of the canonical name and another size, looked for only when nothing is found). */
 int64_t emusen_firmware_locate(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
-/* In: {"request", "source", "store"}. 1 when the source, of the request's size, was copied to the store under the
- * canonical name; 0 when its size is not the request's; IO with the words when the store could not be written. */
-int32_t emusen_firmware_install(const uint8_t *request, size_t request_len);
-
-/*
- * The card manager (EmuSen_SaveMedia.md, section 6). The request is a JSON object: op (open, copy, move, delete,
- * import, new, duplicate, rename), its files (file; from and to; card; to and from, a list, for import), save, and
- * media, an object naming each file the request names with the medium id its extension makes it, or null. Out: open's
- * {"card": {exists, length, listing} or null}, or {done, words}. A change takes the lock below as "the card manager".
- * BAD_ARGUMENT for a damaged directory that reaches outside its image; NOT_FOUND, ACCESS or IO for a rename the system
- * refused. A read or a write that failed is queued for emusen_platform_diagnostics.
- */
-int64_t emusen_savemedia_op(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
-
 /*
  * The cheat files and the player's cheat database (EmuSen_Cheats.md; `man cheat`). A cheat crosses as {desc, enabled,
  * kind (RamPoke or RomPatch), writes}, each write {space, address, value, width, type, bit (or null), big_endian,
- * repeat, repeat_address, repeat_value}, as emusen_systems_cheat_decode writes one.
+ * repeat, repeat_address, repeat_value}, as emusen_crystal_cheat_decode writes one.
  */
-/* A .cht text read: {"text", "codec", "space", "patch"}, each codec an emusen_systems_cheat_codecs id or null. Out:
+/* A .cht text read: {"text", "codec", "space", "patch"}, each codec an emusen_crystal_cheat_codec_list id or null. Out:
  * {"cheats", "skipped"}. BAD_ARGUMENT where a codec's index fell outside its code, which the C# let escape. */
 int64_t emusen_cheats_parse(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 /* Cheats written as a .cht text: {"cheats": [...]}. */
@@ -687,10 +649,6 @@ int64_t emusen_cheats_database_query(const emusen_cheats_database *db, const uin
 int64_t emusen_cheats_prune_plan(const emusen_cheats_database *db, const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
 /* A plan applied inside its folder: {"directory", "removing": [{system, path}]}. Out: {"removed", "failed": [...]}. */
 int64_t emusen_cheats_prune_apply(const uint8_t *request, size_t request_len, uint8_t *out, size_t len);
-/* A downloaded zip installed under `target`: out {"installed", "skipped"}. REFUSED, nothing written, for an archive the
- * zip reader does not read, its words the last error; IO, NOT_FOUND or ACCESS where the target could not be made. */
-int64_t emusen_cheats_install(const uint8_t *zip, size_t zip_len, const uint8_t *target, size_t target_len, uint8_t *out, size_t len);
-
 /* ---- The HTTP client: emusen-net (EmuSen_Backend.md, section 16). Since interface 17. ---- */
 
 /*

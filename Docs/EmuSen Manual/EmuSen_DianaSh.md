@@ -2635,7 +2635,7 @@ drives frames takes it with the binding's `SessionOf(id)` or closes it; until on
 This keeps the decision of whether a second game replaces the first, or plays beside it, the frontend's, which is the
 only component that knows whether it has one game window or several.
 
-**Its twins.** SR4 asks every function of this service for a frontend-API twin of the same arguments. `open_game`'s and
+**Its twins** (deleted 2026-11-07 with the rest, frontend API 2.0; `EmuSen_RustPlatform.md` §47.23). SR4 asks every function of this service for a frontend-API twin of the same arguments. `open_game`'s and
 `open_console`'s are new exports, `emusen_crystal_open_game` and `emusen_crystal_open_console`, additive in the API's
 1.1. `games` has one already: `emusen_crystal_systems` takes the same arguments after the runtime and answers the same
 JSON, so a second export answering it would be two owners of one fact. The twin check

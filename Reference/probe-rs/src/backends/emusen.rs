@@ -130,17 +130,26 @@ impl EmuSenBackend {
     fn read_back(&mut self) {
         let (rt, session, api) = (self.runtime, self.session, self.api());
         let mut spaces = Vec::new();
-        if self.system == "nes" {
-            let sizes = self.json(|out, len| unsafe { api.emusen_crystal_spaces(rt, session, out, len) }).unwrap_or(Value::Null);
+        // The debugger's reads go through the session's read-only table, the session service's one surface.
+        let table = unsafe { api.emusen_crystal_session_service(rt, session, sys::EMUSEN_CRYSTAL_SERVICE_READ_ONLY) };
+        if self.system == "nes" && table.is_null() {
+            println!("[WARN] the session's table could not be had: {}", self.last_error());
+        } else if self.system == "nes" {
+            let t = unsafe { &*table };
+            let (spaces_of, read, words) = (t.spaces.expect("spaces"), t.space_read.expect("space_read"), t.last_error.expect("last_error"));
+            let sizes = self.json(|out, len| unsafe { spaces_of(t.ctx, session, out, len) }).unwrap_or(Value::Null);
             for (name, space) in NES_SPACES {
                 let size = sizes.as_array().and_then(|a| a.iter().find(|s| s["name"] == space)).and_then(|s| s["size"].as_u64()).unwrap_or(0) as usize;
                 if size == 0 {
                     continue;
                 }
                 let mut data = vec![0u8; size];
-                let status = unsafe { api.emusen_crystal_space_read(rt, session, space.as_ptr(), space.len(), 0, data.as_mut_ptr(), data.len()) };
+                let status = unsafe { read(t.ctx, session, space.as_ptr(), space.len(), 0, data.as_mut_ptr(), data.len()) };
                 if status < 0 {
-                    println!("[WARN] {space} could not be read: {}", self.last_error());
+                    let mut said = vec![0u8; 1024];
+                    let n = unsafe { words(t.ctx, said.as_mut_ptr(), said.len()) };
+                    said.truncate(n.clamp(0, 1024) as usize);
+                    println!("[WARN] {space} could not be read: {}", String::from_utf8_lossy(&said));
                 }
                 spaces.push((name.to_string(), data));
             }

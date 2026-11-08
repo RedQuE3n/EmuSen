@@ -221,28 +221,14 @@ impl Runtime {
         let mut listed: Vec<&str> = Vec::new();
         for e in emusen_systems::table().unwrap_or(&[]) {
             listed.push(&e.id);
-            j.begin_object()
-                .str("id", &e.id)
-                .str("name", &e.name)
-                .str("console", &e.console)
-                .str("display_name", &e.display_name)
-                .str_or_null("firmware_name", e.firmware_name.as_deref())
-                .str("manufacturer", &e.manufacturer)
-                .int("release_year", e.release_year as i64)
-                .strs("extensions", &e.extensions)
-                .strs("cheat_systems", &e.cheat_systems)
-                .strs("openvgdb_systems", &e.openvgdb_systems)
-                .f64("cover_aspect", e.cover_aspect)
-                .str("esde_system", &e.esde_system)
-                .str("esde_full_name", &e.esde_full_name)
-                .bool("self_delimiting_images", e.self_delimiting_images)
-                .bool("rumble", e.rumble)
-                .str_or_null("attached_to", e.attached_to.as_deref());
+            j.begin_object();
+            // The table's own row as emusen-systems writes it, then the look the row stands for, in its place.
+            if let Ok(serde_json::Value::Object(row)) = serde_json::to_value(e) {
+                for (key, value) in &row {
+                    j.key_value(key, value);
+                }
+            }
             look(&mut j, &e.look());
-            match e.screenscraper_system {
-                Some(id) => j.int("screenscraper_system", id as i64),
-                None => j.null("screenscraper_system"),
-            };
             j.strs("engines", catalog.engines_of(&e.console, &e.id)).bool("starts_empty", catalog.starts_empty(&e.id));
             self.core_of(&mut j, &catalog, &e.console, &e.extensions);
             self.controllers(&mut j, &catalog, &e.console, &stored);

@@ -119,9 +119,8 @@ namespace EmuSen.WiseMan.Crystal
         public void The_header_declares_the_exports_the_facades_call_and_no_other()
         {
             string header = File.ReadAllText(Path.Combine(ConfigRoot.Directory, "Platform", "include", "emusen_platform.h"));
-            Assert.Contains("int64_t emusen_systems_table(uint8_t *out, size_t len);", header);
             var declared = Regex.Matches(header, @"^\w+ \*?(emusen_systems_\w+)\(", RegexOptions.Multiline).Select(m => m.Groups[1].Value).Order(StringComparer.Ordinal);
-            Assert.Equal(SystemCode.Exports.Append("emusen_systems_table").Append("emusen_systems_libretro_cores").Order(StringComparer.Ordinal), declared);
+            Assert.Equal(SystemCode.Exports.Append("emusen_systems_libretro_cores").Order(StringComparer.Ordinal), declared);
         }
     }
 }

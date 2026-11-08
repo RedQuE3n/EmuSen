@@ -3,8 +3,8 @@ namespace EmuSen.Crystal.Client.Contract
     // emusen_crystal.h's numbers, named as there without the prefix; CrystalHeaderTests holds the two equal.
     public static class CrystalAbi
     {
-        public const uint Major = 1u;
-        public const uint Minor = 13u;
+        public const uint Major = 2u;
+        public const uint Minor = 0u;
         public const uint Version = (Major << 16) | Minor;
         public const int NoEngine = -1109;
         public const int Firmware = -1110;
@@ -43,7 +43,7 @@ namespace EmuSen.Crystal.Client.Contract
         public const uint CardsRename = 8u;
     }
 
-    // emusen_session.h's numbers, which the frontend API's twins take and return, as that header names them; CrystalHeaderTests holds them equal.
+    // emusen_session.h's numbers, which the session table's functions take and return, as that header names them; CrystalHeaderTests holds them equal.
     public static class CrystalSessionAbi
     {
         public const uint Major = 1u;

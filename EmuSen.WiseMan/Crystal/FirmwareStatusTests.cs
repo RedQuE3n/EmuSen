@@ -82,7 +82,7 @@ namespace EmuSen.WiseMan.Crystal
         public void Files_an_engine_declares_alternatives_share_its_need_and_a_cartridges_chips_do_not()
         {
             using CrystalRuntime runtime = Runtime();
-            Assert.True(CrystalAbi.Minor >= 11);
+            Assert.True(CrystalAbi.Version >= ((1u << 16) | 11));
             // Diamond declares its three market BIOSes one need, each in a slot of its own.
             var psx = Needs(runtime.FirmwareStatus("psx"));
             Assert.Equal(3, psx.Count);

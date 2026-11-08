@@ -224,6 +224,16 @@ pub fn write_json(w: &Write) -> Value {
     ])
 }
 
+/// The Game Genie code that patches `value` at `address`, for the codecs with an encoder (the SNES's and the Genesis's);
+/// none for any other.
+pub fn encode(id: &str, address: i32, value: u32) -> Option<String> {
+    match id {
+        "snes.gg" => Some(crate::snes::cheats::encode_game_genie(address, value as u8)),
+        "md.gg" => Some(crate::genesis::cheats::encode_game_genie(address, value as u16)),
+        _ => None,
+    }
+}
+
 /// An answer as JSON: `can`, then `decode` (`address` and `value`), `compare` (a byte or null) and `writes` (a list or
 /// null), each of the three an object with `format` (the words) or `range` where it refused.
 pub fn answer_json(a: &Answer) -> String {

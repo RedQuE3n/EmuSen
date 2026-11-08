@@ -371,6 +371,11 @@ to two kinds of client" [R]. Concretely:
 - the service keeps its own header, version and baseline, because modules depend on it at 1.2, and gains functions only
   as the frontend API gains their twins.
 
+*Decided 2026-11-07 by the tester, frontend API 2.0:* the twins are deleted, and the table is the session service's one
+surface, for a frontend's own calls as for a shell's. `emusen_crystal_sessions` stays as the runtime's listing of every
+open session, which a session's table (its own session only) does not answer; `systems` stays as the runtime's. See
+`EmuSen_RustPlatform.md` §47.23.
+
 What changes for the hosts: a frontend no longer **provides** the service, it **passes on** Crystal's. The C# provider
 (`EmuSen.Crystal/Session/`, 3,117 lines [M]) retires at B7. Two of DianaSh's open items fall out of this: `HostAction`
 is retired by events and `open` (`EmuSen_DianaSh.md` Q5, decided [R]), and Q25's `games` and `open_game`, proposed for
@@ -6292,6 +6297,9 @@ the byte), `lend` (the device lender's trait), and in (c) `service`.
 
 ### 29.3 The C layer, the exports and the binding's switch
 
+*Since 2026-11-07 (frontend API 2.0) the twins are gone and `crystal_twins.rs` is `session_table.rs`, the table alone
+(`EmuSen_RustPlatform.md` §47.23); what follows records the layer as built.*
+
 `crystal.rs` exports the API's own functions and `crystal_twins.rs` the twins, each as `emusen_crystal.h` declares it,
 held by `tests/crystal_abi.rs`'s existing check (a subset while parts (a) and (b) are built; equality from (c), when
 the check is made exact). Every export follows §3.3 as the C# does: statuses for failures with the words in
@@ -7041,7 +7049,7 @@ the machine do. Text and bytes reach a function as `Raw`, read where the C# read
 before a malformed name in a change and after it in a read, as in the C#. The provider's own state, run control's
 requests for `events_drain` and the last one `halt_state` names, is a `Provider` on each session.
 
-**The C layer.** `crystal_twins.rs` exports each twin and defines its table entry beside it; both call the one
+**The C layer** (the twins deleted 2026-11-07, frontend API 2.0; `EmuSen_RustPlatform.md` §47.23). `crystal_twins.rs` exports each twin and defines its table entry beside it; both call the one
 function, a twin through the runtime's session (0 the current one), an entry through the table it was handed, so a
 module and a frontend reach one implementation, as SR4 asks. A twin's failure sets its words in the frontend API's
 `last_error` and the table's, as the C#'s twin copies the table's words into its own; an entry's sets the table's

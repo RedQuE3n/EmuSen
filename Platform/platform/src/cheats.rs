@@ -1,11 +1,10 @@
-//! The C layer over emusen-cheats, for the C# `ChtFile`, `CheatDatabase`, `CheatDatabasePruner` and
-//! `CheatDatabaseInstaller.Install`, their only implementation (EmuSen_Backend.md §15.3, §40.1). A database is a handle,
-//! scanned once and never changed, so any thread may ask it.
+//! The C layer over emusen-cheats, for the C# `ChtFile`, `CheatDatabase` and `CheatDatabasePruner` (EmuSen_Backend.md
+//! §15.3, §40.1); a database's install is the session table's cheat op `DB_UPDATE` since the frontend API's 2.0. A
+//! database is a handle, scanned once and never changed, so any thread may ask it.
 
-use crate::{bytes, fail, fail_io, given, put, required, status};
+use crate::{fail, given, put, required, status};
 use emusen_cheats::cht::{self, Cheat};
 use emusen_cheats::database::Database;
-use emusen_cheats::install::{self, Refusal};
 use emusen_cheats::prune::{self, Pruned};
 use serde_json::Value;
 use emusen_systems::cheats::{Kind, Write, WriteType};
@@ -225,24 +224,6 @@ pub unsafe extern "C" fn emusen_cheats_prune_apply(request_data: *const u8, requ
         let db = Database { directory: text(&r, "directory")?.unwrap_or("").to_string(), entries: Vec::new() };
         let (removed, failed) = prune::apply(&db, &removing);
         Ok(compact(&object(vec![("removed", Value::from(removed)), ("failed", Value::Array(failed.into_iter().map(|s| Value::String(String::from(s))).collect()))])))
-    };
-    answer(run(), out, len)
-}
-
-/// A downloaded archive installed under `target`: out `{"installed", "skipped"}`; REFUSED with the zip reader's words as
-/// the last error for an archive it does not read; IO, NOT_FOUND or ACCESS where the target could not be made.
-///
-/// # Safety
-/// `zip` must be valid for `zip_len` bytes, `target` for `target_len`; `out` for `len` bytes, or null.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_cheats_install(zip: *const u8, zip_len: usize, target: *const u8, target_len: usize, out: *mut u8, len: usize) -> i64 {
-    let run = || -> Result<String, i32> {
-        let (zip, target) = unsafe { (bytes(zip, zip_len)?, required(target, target_len)?) };
-        match install::install(zip, target) {
-            Ok(done) => Ok(compact(&object(vec![("installed", Value::from(done.installed)), ("skipped", Value::from(done.skipped))]))),
-            Err(Refusal::Unreadable(words)) => Err(fail(status::REFUSED, words)),
-            Err(Refusal::Io(e)) => Err(fail_io(&e)),
-        }
     };
     answer(run(), out, len)
 }

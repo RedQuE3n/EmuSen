@@ -4212,3 +4212,104 @@ ran on their inline cases, which do.
   16 MiB, the bus is carved from the heap and cleared by hand, where an mmap'd one arrives zeroed. With
   `MALLOC_MMAP_THRESHOLD_=4194304` the same run took 8.4 s. The check now keeps one bus for every case, cleared by
   each run as `run_file`'s already was: 5.4 s.
+
+### 47.23 The session service has one surface: the frontend API's 2.0
+
+Every function of the session service, `emusen_session.h`'s `emusen_session_v1`, had a twin in `emusen_crystal.h`
+(`emusen_crystal_<name>(rt, session, …)`), so that a frontend and a shell reached one implementation by two surfaces
+(`EmuSen_Backend.md` §3.8, SR4). *Decided 2026-11-07 by the tester* (the cleanup's question 5): the table is the one
+surface, the twins go, and the frontend API goes to major 2. That is done this way:
+
+- **The 79 twins are deleted**, from the header and from the platform library: `platform/src/crystal_twins.rs` is
+  `session_table.rs`, the table's entries, the slots that hold them and `emusen_crystal_session_service` alone
+  (1,322 lines to 698). The table is unchanged: same entries, same statuses, same JSON.
+- **`emusen_crystal_sessions` stays, as the runtime's listing.** It sat among the twins as the table's `sessions`,
+  but it is `crystal.rs`'s `listing!`, beside `systems`, `shelves`, `engines` and `cores`, and answers every session
+  the runtime has open, where a session's table answers its own session alone and the table with no game `[]`. No
+  other surface lists a runtime's sessions, so it is not a second surface of one fact; the header now declares it
+  beside `systems` as a runtime listing. `systems` stays for the same reason (it was `games`' twin by another name).
+- **The table with no game sets the log switch.** The process's switch needs no game, and the twin set it with none
+  open, as Mistress's Settings does; the table with no game refused it. Since 2.0 that table's `log_switch` sets the
+  switch, refused with `EMUSEN_SVC_READ_ONLY` where the table is read-only, and `log_status` reads it, as it did.
+- **Words that named the version** ("service flags 0x4 are not known to 1.13") name the major too: "… to 2.0".
+- **The baseline starts again.** `Platform/crystal/abi/v2/baseline.txt` records every fact of 2.0 at `@2.0`, struct
+  sizes as 2.0 lays them out; `abi/v1/baseline.txt` is kept unchanged as the record of 1.0 to 1.13. The ABI test reads
+  the major's file, and the workflow's base comparison reads `abi/v2/`. A structure shorter than its 1.0 size is still
+  the only one refused, as the header says. The twin check is replaced by its converse: the header declares no
+  function of a table entry's name but the runtime's own `last_error` and `sessions`.
+
+**Hosts on the table.** The C# front end, while it still runs, calls the debugger, states by path, the log switch and
+the cheat ops through the table: `CrystalSession` asks its session's table once, while the runtime lives, and reads a
+failure's words with the table's `last_error` (`SessionTable`); `CrystalRuntime`'s cheat ops with no session and its
+log switch use the table with no game. The table's C# mirror, `EmuSenSessionV1`, lives in `EmuSen.DianaSh`, so
+`EmuSen.Crystal.Client` references `EmuSen.DianaSh`: a new C# reference, in the front end being retired, that adds
+nothing to any program (Mistress, Hotaru and WiseMan referenced both already). The probe's EmuSen backend reads the
+NES's spaces through the session's read-only table.
+
+**What changed for a caller.** A caller of a twin calls the table's entry of the same name, with `ctx` in place of the
+runtime. A failure's words are the table's `last_error`'s, not the frontend API's; the statuses are the same. A cheat
+op of a game asked of the table with no game is `EMUSEN_SVC_NO_SESSION`, as it was with session 0, with the table's
+words ("No ROM loaded - this command needs an active debug target.") in place of "cheat op N is a game's: name its
+session". The table lives as long as the runtime, as it always did; the header now says so, and a closed session's
+table answers `EMUSEN_SVC_NO_SESSION`.
+
+**Proof, measured on 2026-11-08.** The Platform workspace passes 594 tests (1 ignored), among them the ABI test's six
+and `platform/tests/session_table.rs`, which holds the table with no game's log switch, a read-only table's refusal and
+the runtime's listing. The C# classes that read the API (`EmuSen.WiseMan.Crystal`, `NoGameServiceTests`,
+`ShellOverSessionTests`, the Mistress classes whose cheat list, states and readouts call the session) pass 169, 2
+skipped. The probe's EmuSen backend builds against the 2.0 header. Three faults were seeded and caught: a twin declared
+again (the converse check, the export check and the baseline), the table with no game setting the switch where
+read-only (`session_table.rs`), and the C# session calling through its read-only table (eight tests of
+`MainWindowCheatListTests` and `MainWindowSaveStateThreadTests`).
+
+### 47.24 Firmware, cards, the systems table and the cheat codecs: one surface each, the frontend API's
+
+*Decided 2026-11-07 by the tester* (the cleanup's question 6): firmware, the cards, the systems table and the cheat
+codecs stay in `emusen_crystal.h`, which front ends call, and `emusen_platform.h`'s copies go; the details were
+confirmed with evidence and decided 2026-11-08. The frontend API's 2.0 had not been published (§47.23 had not
+landed, and no Qt client exists), so what follows is folded into 2.0 and its baseline rather than made a 2.1.
+
+**The callers, before the deletion.** Every caller of the seven exports was found by name in C#, Rust, scripts and
+the workflow. No program, crate or script called them; their only callers were the test facades kept in
+`EmuSen.WiseMan/Bindings/` since the C# implementations were deleted (2026-11-04), and one unit test of the C layer:
+
+| Deleted from `emusen_platform.h` | Its callers | The surface that stays, and how they reach it now |
+|---|---|---|
+| `emusen_systems_table` | `Bindings/Systems/SystemTable.cs`; `systems.rs`'s own test | `emusen_crystal_systems`, read from a runtime with no cores directories, the runtime's four keys taken out; `platform/tests/crystal_reads.rs` holds the rows whole |
+| `emusen_systems_cheat_codecs`, `_decode`, `_encode` | `Bindings/Systems/SystemCode.cs` (and through it `NativeCheatCodec` and the SNES's and Genesis's Game Genie) | `emusen_crystal_cheat_codec_list`, `emusen_crystal_cheat_decode`, `emusen_crystal_cheat_encode`, new in 2.0 |
+| `emusen_firmware_install` | `Bindings/Services/ServiceLibrary.cs`'s list of exports, never called | `emusen_crystal_firmware_install`, over the same install of emusen-firmware |
+| `emusen_savemedia_op` | `Bindings/SaveMedia/SaveMediaNative.cs` | `emusen_crystal_cards_op`, over the same `emusen_savemedia::Manager`, read from a runtime with the build's cores |
+| `emusen_cheats_install` | `ServiceLibrary.cs`'s list, never called | the session table's cheat op `DB_UPDATE`, over the same install of emusen-cheats |
+
+`emusen_firmware_folders`, `_find` and `_locate`, and the save media's format modules (`emusen_systems_media*`) have
+no counterpart in the frontend API and stay. The platform interface is 38.
+
+**The systems table.** `emusen_crystal_systems` was not a copy of the table: its rows were written by hand, a second
+writer of the table's spelling, and lacked six of its 24 keys (`cheat_space`, `media`, `byte_order`,
+`libretro_databases`, `libretro_systemids`, `firmware_note`), though the header promised the table's keys. Each row is
+now emusen-systems' own, serialised by serde in `KEYS`' order, its `look` replaced in place by the one the row stands
+for (the table's or the one computed from the id), and then the runtime's `engines`, `starts_empty`, `core` and
+`controllers`. A front end reads one array for both.
+
+**The cheat codecs.** With the twins gone (§47.23) the frontend API had none: a session table's `cheat_codecs`
+answers that session's pair, not the catalogue, and the decoder and encoder had no counterpart. The three reads take
+the runtime and answer what emusen-systems answers, word for word. The catalogue is named `cheat_codec_list`, not
+`cheat_codecs`, so that no export bears a table entry's name for another answer (the converse check of §47.23). The
+encoder's choice of a codec, the SNES's and the Genesis's Game Genie, moved from the C layer into
+`emusen_systems::cheats::encode`, its one owner.
+
+**What changed for a caller of the card manager.** `cards_op` reports a refused rename as `EMUSEN_CRYSTAL_IO` with the
+system's words, where `emusen_savemedia_op` told `NOT_FOUND` and `ACCESS` apart, and an unreadable card's line is not
+queued for `emusen_platform_diagnostics`. Two methods of `SaveMediaManagerParityTests` pinned those to the C# card
+manager's goldens (a `DirectoryNotFoundException`, and the diagnostic line `ConfigDiagnostics` received); measured on
+2026-11-08 through `cards_op`, the generated scripts matched the golden in every step but that rename, and the
+unreadable card's outcome in everything but the diagnostic line. Under the tester's answer 0 the two methods and their
+goldens (`CardManagerScripts`, `CardManagerUnreadable`) are deleted; the class's import and lock methods pass.
+
+**Proof, measured on 2026-11-08.** The Platform workspace passes 595 tests (1 ignored), with
+`platform/tests/crystal_reads.rs`: every row holds the table's 24 keys in their order with emusen-systems' values,
+then the runtime's four; the catalogue, a decoded code and an encoded one are emusen-systems' answers; an unknown
+codec is `ABSENT`. The C# classes over the facades (the systems table's and code's parity classes, the packs', the
+cheat formats', the save media's, the memory cards' offer, `CrystalHeaderTests`) pass 143 and the save media and cheat
+window classes 32 (2 skipped). Three faults were seeded and caught: a row missing `media` and a decoder answering from
+the wrong codec (`crystal_reads.rs`), and the C# table facade keeping a runtime key (`SystemTableParityTests`).

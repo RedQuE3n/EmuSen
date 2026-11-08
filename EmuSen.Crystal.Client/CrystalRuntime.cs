@@ -79,15 +79,18 @@ namespace EmuSen.Crystal.Client
         public static long Check(long result) => result < 0 ? throw Failure(result) : result;
 
         // A copy-out call's bytes: asked their length, then copied, again if they grew between the two.
-        public static byte[] Bytes(CrystalCopyOut call)
+        public static byte[] Bytes(CrystalCopyOut call) => Bytes(call, Check);
+
+        // The same, a failure checked by the surface that answered it.
+        internal static byte[] Bytes(CrystalCopyOut call, Func<long, long> check)
         {
             while (true)
             {
-                long n = Check(call(null, 0));
+                long n = check(call(null, 0));
                 var bytes = new byte[n];
                 fixed (byte* b = bytes)
                 {
-                    long written = Check(call(b, (nuint)bytes.Length));
+                    long written = check(call(b, (nuint)bytes.Length));
                     if (written <= n) return written == n ? bytes : bytes[..(int)written];
                 }
             }
@@ -137,8 +140,10 @@ namespace EmuSen.Crystal.Client
         public nint NoGameService(bool readOnly = false)
         {
             nint table = Contract.Crystal.SessionService(Handle, 0, CrystalAbi.ServiceNoGame | (readOnly ? CrystalAbi.ServiceReadOnly : 0));
-            return table == 0 ? throw Failure(CrystalSessionAbi.NoSession) : table;
+            return table == 0 ? throw Failure(Handle == 0 ? CrystalSessionAbi.Null : CrystalSessionAbi.NoSession) : table;
         }
+
+        private SessionTable NoGame => new(NoGameService());
 
         public string Sessions() => Text((o, n) => Contract.Crystal.Sessions(Handle, o, n));
 
@@ -186,9 +191,12 @@ namespace EmuSen.Crystal.Client
         public void SetGameSetting(string path, string key, string? value) =>
             WithText(path, (p, pl) => WithText(key, (k, kl) => WithText(value, (v, vl) => Check(Contract.Crystal.GameSettingSet(Handle, (byte*)p, pl, (byte*)k, kl, (byte*)v, vl)))));
 
-        // Since 1.1: a cheat op that needs no game, answered with no session.
-        public string CheatOp(uint op, string argsJson) =>
-            WithText(argsJson, (a, al) => Text((o, n) => Contract.Crystal.CheatOp(Handle, 0, op, (byte*)a, al, o, n)));
+        // A cheat op that needs no game, answered by the table with no game.
+        public string CheatOp(uint op, string argsJson)
+        {
+            SessionTable t = NoGame;
+            return WithText(argsJson, (a, al) => t.Text((o, n) => t.T->cheat_op(t.T->ctx, 0, op, (byte*)a, al, o, n)));
+        }
 
         public string FirmwareNeeded(string path, string? engine = null) =>
             WithText(path, (p, pl) => WithText(engine, (e, el) => Text((o, n) => Contract.Crystal.FirmwareNeeded(Handle, (byte*)p, pl, (byte*)e, el, o, n))));
@@ -206,6 +214,15 @@ namespace EmuSen.Crystal.Client
                 ? Once((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n))
                 : Text((o, n) => Contract.Crystal.CardsOp(Handle, op, (byte*)a, al, o, n)));
 
+        // The cheat codecs' catalogue, a code as one codec reads it, and a Game Genie code made, since frontend API 2.0.
+        public string CheatCodecList() => Text((o, n) => Contract.Crystal.CheatCodecList(Handle, o, n));
+
+        public string CheatDecode(string codec, string code) =>
+            WithText(codec, (c, cl) => WithText(code, (t, tl) => Text((o, n) => Contract.Crystal.CheatDecode(Handle, (byte*)c, cl, (byte*)t, tl, o, n))));
+
+        public string CheatEncode(string codec, int address, uint value) =>
+            WithText(codec, (c, cl) => Text((o, n) => Contract.Crystal.CheatEncode(Handle, (byte*)c, cl, address, value, o, n)));
+
         public string SettingsSchema(string console, string? engine = null) =>
             WithText(console, (c, cl) => WithText(engine, (e, el) => Text((o, n) => Contract.Crystal.SettingsSchema(Handle, 0, (byte*)c, cl, (byte*)e, el, o, n))));
 
@@ -221,10 +238,11 @@ namespace EmuSen.Crystal.Client
             return sub == 0 ? throw Failure(CrystalSessionAbi.Null) : new CrystalSubscription(sub);
         }
 
+        // The process's log switch, through the table with no game.
         public bool LogSwitch
         {
-            get => Check(Contract.Crystal.LogStatus(Handle)) != 0;
-            set => Check(Contract.Crystal.LogSwitch(Handle, value ? 1u : 0u));
+            get { SessionTable t = NoGame; return t.Check(t.T->log_status(t.T->ctx)) != 0; }
+            set { SessionTable t = NoGame; t.Check(t.T->log_switch(t.T->ctx, value ? 1u : 0u)); }
         }
 
         // An answer that may be ABSENT, as null.

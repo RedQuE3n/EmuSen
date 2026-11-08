@@ -15,6 +15,8 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static long Systems(nint rt, byte* out_, nuint len) => Table->systems(rt, out_, len);
 
+        public static long Sessions(nint rt, byte* out_, nuint len) => Table->sessions(rt, out_, len);
+
         public static long Shelves(nint rt, byte* out_, nuint len) => Table->shelves(rt, out_, len);
 
         public static long Engines(nint rt, byte* out_, nuint len) => Table->engines(rt, out_, len);
@@ -125,6 +127,12 @@ namespace EmuSen.Crystal.Client.Contract
 
         public static long CardsOp(nint rt, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->cards_op(rt, op, args, args_len, out_, len);
 
+        public static long CheatCodecList(nint rt, byte* out_, nuint len) => Table->cheat_codec_list(rt, out_, len);
+
+        public static long CheatDecode(nint rt, byte* codec, nuint codec_len, byte* code, nuint code_len, byte* out_, nuint len) => Table->cheat_decode(rt, codec, codec_len, code, code_len, out_, len);
+
+        public static long CheatEncode(nint rt, byte* codec, nuint codec_len, int address, uint value, byte* out_, nuint len) => Table->cheat_encode(rt, codec, codec_len, address, value, out_, len);
+
         public static nint Subscribe(nint rt, uint session, uint kinds) => Table->subscribe(rt, session, kinds);
 
         public static long SubscriptionDrain(nint sub, byte* out_, nuint len) => Table->subscription_drain(sub, out_, len);
@@ -138,165 +146,5 @@ namespace EmuSen.Crystal.Client.Contract
         public static long RecordStop(nint rt, uint session, byte* out_, nuint len) => Table->record_stop(rt, session, out_, len);
 
         public static nint SessionService(nint rt, uint session, uint flags) => Table->session_service(rt, session, flags);
-
-        public static long Sessions(nint rt, byte* out_, nuint len) => Table->sessions(rt, out_, len);
-
-        public static long Info(nint rt, uint session, byte* out_, nuint len) => Table->info(rt, session, out_, len);
-
-        public static long Summary(nint rt, uint session, byte* out_, nuint len) => Table->summary(rt, session, out_, len);
-
-        public static long RunControl(nint rt, uint session, uint op, uint processor, long argument) => Table->run_control(rt, session, op, processor, argument);
-
-        public static long HaltState(nint rt, uint session, uint processor, byte* out_, nuint len) => Table->halt_state(rt, session, processor, out_, len);
-
-        public static long Spaces(nint rt, uint session, byte* out_, nuint len) => Table->spaces(rt, session, out_, len);
-
-        public static long SpaceRead(nint rt, uint session, byte* space, nuint space_len, uint address, byte* out_, nuint len) => Table->space_read(rt, session, space, space_len, address, out_, len);
-
-        public static int SpaceWrite(nint rt, uint session, byte* space, nuint space_len, uint address, byte* data, nuint len) => Table->space_write(rt, session, space, space_len, address, data, len);
-
-        public static long ResolvePhysical(nint rt, uint session, uint address, byte* out_, nuint len) => Table->resolve_physical(rt, session, address, out_, len);
-
-        public static long Processors(nint rt, uint session, byte* out_, nuint len) => Table->processors(rt, session, out_, len);
-
-        public static long Registers(nint rt, uint session, uint processor, byte* out_, nuint len) => Table->registers(rt, session, processor, out_, len);
-
-        public static int SetRegister(nint rt, uint session, uint processor, byte* name, nuint name_len, ulong value) => Table->set_register(rt, session, processor, name, name_len, value);
-
-        public static long Disassemble(nint rt, uint session, uint processor, byte* space, nuint space_len, uint address, uint count, byte* hints, nuint hints_len, byte* out_, nuint len) => Table->disassemble(rt, session, processor, space, space_len, address, count, hints, hints_len, out_, len);
-
-        public static long BpAdd(nint rt, uint session, uint processor, byte* spec, nuint spec_len) => Table->bp_add(rt, session, processor, spec, spec_len);
-
-        public static long BpAddData(nint rt, uint session, uint processor, byte* spec, nuint spec_len) => Table->bp_add_data(rt, session, processor, spec, spec_len);
-
-        public static int BpSetEnabled(nint rt, uint session, uint processor, uint id, uint enabled) => Table->bp_set_enabled(rt, session, processor, id, enabled);
-
-        public static int BpRemove(nint rt, uint session, uint processor, uint id) => Table->bp_remove(rt, session, processor, id);
-
-        public static long BpList(nint rt, uint session, uint processor, byte* out_, nuint len) => Table->bp_list(rt, session, processor, out_, len);
-
-        public static long BpLog(nint rt, uint session, uint processor, uint count, byte* out_, nuint len) => Table->bp_log(rt, session, processor, count, out_, len);
-
-        public static int BpLogClear(nint rt, uint session, uint processor) => Table->bp_log_clear(rt, session, processor);
-
-        public static int BpArmCondition(nint rt, uint session, uint processor, byte* name, nuint name_len, uint flags) => Table->bp_arm_condition(rt, session, processor, name, name_len, flags);
-
-        public static long BpConditions(nint rt, uint session, uint processor, byte* out_, nuint len) => Table->bp_conditions(rt, session, processor, out_, len);
-
-        public static int BpDepthGuard(nint rt, uint session, uint processor, int depth) => Table->bp_depth_guard(rt, session, processor, depth);
-
-        public static long BpForbidRange(nint rt, uint session, uint processor, uint address, uint end) => Table->bp_forbid_range(rt, session, processor, address, end);
-
-        public static int BpUninitialized(nint rt, uint session, uint processor, byte* space, nuint space_len, uint size) => Table->bp_uninitialized(rt, session, processor, space, space_len, size);
-
-        public static long WatchAdd(nint rt, uint session, byte* space, nuint space_len, uint address, uint length, uint kind) => Table->watch_add(rt, session, space, space_len, address, length, kind);
-
-        public static int WatchRemove(nint rt, uint session, uint id) => Table->watch_remove(rt, session, id);
-
-        public static long WatchList(nint rt, uint session, byte* out_, nuint len) => Table->watch_list(rt, session, out_, len);
-
-        public static long WatchEvents(nint rt, uint session, uint id, uint count, byte* out_, nuint len) => Table->watch_events(rt, session, id, count, out_, len);
-
-        public static long WatchSummary(nint rt, uint session, uint id, byte* out_, nuint len) => Table->watch_summary(rt, session, id, out_, len);
-
-        public static int WatchClear(nint rt, uint session, uint id) => Table->watch_clear(rt, session, id);
-
-        public static long FramelogAdd(nint rt, uint session, byte* space, nuint space_len, uint address, uint width) => Table->framelog_add(rt, session, space, space_len, address, width);
-
-        public static int FramelogRemove(nint rt, uint session, uint id) => Table->framelog_remove(rt, session, id);
-
-        public static long FramelogList(nint rt, uint session, byte* out_, nuint len) => Table->framelog_list(rt, session, out_, len);
-
-        public static long FramelogSamples(nint rt, uint session, uint id, uint count, byte* out_, nuint len) => Table->framelog_samples(rt, session, id, count, out_, len);
-
-        public static int FramelogClear(nint rt, uint session, uint id) => Table->framelog_clear(rt, session, id);
-
-        public static long CoverageOp(nint rt, uint session, uint processor, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->coverage_op(rt, session, processor, op, args, args_len, out_, len);
-
-        public static long ProfileOp(nint rt, uint session, uint processor, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->profile_op(rt, session, processor, op, args, args_len, out_, len);
-
-        public static long CountersOp(nint rt, uint session, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->counters_op(rt, session, op, args, args_len, out_, len);
-
-        public static long CallStack(nint rt, uint session, uint processor, uint count, byte* out_, nuint len) => Table->call_stack(rt, session, processor, count, out_, len);
-
-        public static long FreezeAdd(nint rt, uint session, byte* space, nuint space_len, uint address, uint value) => Table->freeze_add(rt, session, space, space_len, address, value);
-
-        public static int FreezeRemove(nint rt, uint session, uint id) => Table->freeze_remove(rt, session, id);
-
-        public static long FreezeList(nint rt, uint session, byte* out_, nuint len) => Table->freeze_list(rt, session, out_, len);
-
-        public static int FreezeClear(nint rt, uint session) => Table->freeze_clear(rt, session);
-
-        public static int LabelAdd(nint rt, uint session, uint address, byte* name, nuint name_len, byte* comment, nuint comment_len) => Table->label_add(rt, session, address, name, name_len, comment, comment_len);
-
-        public static int LabelRemove(nint rt, uint session, byte* name, nuint name_len, uint address) => Table->label_remove(rt, session, name, name_len, address);
-
-        public static long LabelList(nint rt, uint session, byte* out_, nuint len) => Table->label_list(rt, session, out_, len);
-
-        public static long LabelAt(nint rt, uint session, uint address, byte* out_, nuint len) => Table->label_at(rt, session, address, out_, len);
-
-        public static long LabelLoad(nint rt, uint session, byte* text, nuint text_len, byte* out_, nuint len) => Table->label_load(rt, session, text, text_len, out_, len);
-
-        public static long LabelSave(nint rt, uint session, byte* out_, nuint len) => Table->label_save(rt, session, out_, len);
-
-        public static int LabelClear(nint rt, uint session) => Table->label_clear(rt, session);
-
-        public static long DmaChannels(nint rt, uint session, byte* out_, nuint len) => Table->dma_channels(rt, session, out_, len);
-
-        public static long DmaLogOp(nint rt, uint session, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->dma_log_op(rt, session, op, args, args_len, out_, len);
-
-        public static long RegisterFlowOp(nint rt, uint session, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->register_flow_op(rt, session, op, args, args_len, out_, len);
-
-        public static long CoprocessorHistory(nint rt, uint session, uint count, byte* out_, nuint len) => Table->coprocessor_history(rt, session, count, out_, len);
-
-        public static long Vectors(nint rt, uint session, byte* out_, nuint len) => Table->vectors(rt, session, out_, len);
-
-        public static long TilemapEntry(nint rt, uint session, byte* space, nuint space_len, uint address, byte* out_, nuint len) => Table->tilemap_entry(rt, session, space, space_len, address, out_, len);
-
-        public static long TilePixels(nint rt, uint session, byte* space, nuint space_len, uint address, uint bpp, byte* out_, nuint len) => Table->tile_pixels(rt, session, space, space_len, address, bpp, out_, len);
-
-        public static long Sprites(nint rt, uint session, byte* out_, nuint len) => Table->sprites(rt, session, out_, len);
-
-        public static long Palettes(nint rt, uint session, byte* out_, nuint len) => Table->palettes(rt, session, out_, len);
-
-        public static long AudioChannels(nint rt, uint session, byte* out_, nuint len) => Table->audio_channels(rt, session, out_, len);
-
-        public static int SetChannelMuted(nint rt, uint session, uint channel, uint muted) => Table->set_channel_muted(rt, session, channel, muted);
-
-        public static long Evaluate(nint rt, uint session, uint processor, byte* text, nuint text_len, byte* out_, nuint len) => Table->evaluate(rt, session, processor, text, text_len, out_, len);
-
-        public static long Symbols(nint rt, uint session, uint processor, byte* filter, nuint filter_len, byte* out_, nuint len) => Table->symbols(rt, session, processor, filter, filter_len, out_, len);
-
-        public static long CheatOp(nint rt, uint session, uint op, byte* args, nuint args_len, byte* out_, nuint len) => Table->cheat_op(rt, session, op, args, args_len, out_, len);
-
-        public static long CheatCodecs(nint rt, uint session, byte* out_, nuint len) => Table->cheat_codecs(rt, session, out_, len);
-
-        public static int Trace(nint rt, uint session, uint processor, uint count) => Table->trace(rt, session, processor, count);
-
-        public static int TraceOff(nint rt, uint session, uint processor) => Table->trace_off(rt, session, processor);
-
-        public static long Telemetry(nint rt, uint session, uint kind, byte* out_, nuint len) => Table->telemetry(rt, session, kind, out_, len);
-
-        public static long TileSheet(nint rt, uint session, byte* out_, nuint len) => Table->tile_sheet(rt, session, out_, len);
-
-        public static long PaletteSwatch(nint rt, uint session, byte* out_, nuint len) => Table->palette_swatch(rt, session, out_, len);
-
-        public static long AudioPeek(nint rt, uint session, byte* out_, nuint len) => Table->audio_peek(rt, session, out_, len);
-
-        public static int StateSave(nint rt, uint session, byte* path, nuint path_len) => Table->state_save(rt, session, path, path_len);
-
-        public static int StateLoad(nint rt, uint session, byte* path, nuint path_len) => Table->state_load(rt, session, path, path_len);
-
-        public static long StateDefaultPath(nint rt, uint session, byte* out_, nuint len) => Table->state_default_path(rt, session, out_, len);
-
-        public static int LogSwitch(nint rt, uint on) => Table->log_switch(rt, on);
-
-        public static int LogStatus(nint rt) => Table->log_status(rt);
-
-        public static long EventsDrain(nint rt, uint session, uint kinds, byte* out_, nuint len) => Table->events_drain(rt, session, kinds, out_, len);
-
-        public static long OpenGame(nint rt, uint session, byte* path, nuint path_len, byte* engine, nuint engine_len) => Table->open_game(rt, session, path, path_len, engine, engine_len);
-
-        public static long OpenConsole(nint rt, uint session, byte* console, nuint console_len, byte* engine, nuint engine_len) => Table->open_console(rt, session, console, console_len, engine, engine_len);
     }
 }

@@ -1,11 +1,11 @@
 //! The frontend API held to its header and to its baseline (EmuSen_Backend.md §3.2, §14): every constant's value,
 //! every function's signature, every struct's size and every field's offset, the C side read from `emusen_crystal.h`
-//! by a C compiler and the Rust side from `emusen_crystal::abi`; the header compiled as C99 and as C++17; each of the
-//! session service's functions held to its twin, both ways and in order (§3.8); and any `emusen_crystal_` export of
-//! the platform library held to the header both ways. The facts are then held to `Platform/crystal/abi/v1/baseline.txt`: a fact
-//! missing from it fails until the baseline is recorded with it (`CRYSTAL_ABI_EMIT=1`), a line of it no longer a fact
-//! fails always, and `CRYSTAL_ABI_AGAINST=<file>`, the base branch's baseline, fails on any line of that file this one
-//! removed or changed.
+//! by a C compiler and the Rust side from `emusen_crystal::abi`; the header compiled as C99 and as C++17; no twin of a
+//! session-service function declared beside the table (2.0, EmuSen_RustPlatform.md §47.23); and any `emusen_crystal_`
+//! export of the platform library held to the header both ways. The facts are then held to the major's baseline,
+//! `Platform/crystal/abi/v<MAJOR>/baseline.txt`: a fact missing from it fails until the baseline is recorded with it
+//! (`CRYSTAL_ABI_EMIT=1`), a line of it no longer a fact fails always, and `CRYSTAL_ABI_AGAINST=<file>`, the base
+//! branch's baseline, fails on any line of that file this one removed or changed.
 
 use emusen_crystal::abi::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -284,35 +284,15 @@ fn the_statuses_follow_the_session_service_s_in_the_band() {
     }
 }
 
-/// The service's functions whose twin the API already had under another name: 1.3's `games` is `systems` (§3.11).
-const NAMED_TWINS: [(&str, &str); 1] = [("games", "systems")];
-
-/// Every session-service function has its twin, the runtime in place of ctx and every other parameter the same, in the
-/// table's order; and the header's twins are exactly the table's functions (EmuSen_Backend.md §3.8, SR4).
+/// The session service has one surface, its table: the header declares no function of a table entry's name but the
+/// runtime's own `last_error` and `sessions`, whose answers are the runtime's, not a session's (2.0, §47.23).
 #[test]
-fn every_session_service_function_has_its_twin_both_ways() {
-    let h = header();
-    let marker = "The twins of emusen_session.h";
-    let at = h.find(marker).expect("the header marks where its twins begin");
-    let all: BTreeMap<String, (String, Vec<String>)> = declared(&code(&h), "emusen_crystal_", true).into_iter().map(|(n, r, p)| (n, (r, p))).collect();
-    let twins: Vec<String> = prototypes(&code(&h[at..]), "emusen_crystal_").into_iter().map(|(n, _, _)| n).collect();
+fn no_session_service_function_has_a_twin() {
+    let declared: BTreeSet<String> = prototypes(&code(&header()), "emusen_crystal_").into_iter().map(|(n, _, _)| n).collect();
     let table = table_functions(true);
     assert_eq!(table.len(), 82, "the session service's 1.3 table has 82 functions");
-
-    for (name, returns, params) in &table {
-        let named = NAMED_TWINS.iter().find(|(n, _)| n == name).map(|(_, t)| *t);
-        let twin = format!("emusen_crystal_{}", named.unwrap_or(name));
-        let (twin_returns, twin_params) = all.get(&twin).unwrap_or_else(|| panic!("{name} has no twin {twin}"));
-        assert_eq!(twin_returns, returns, "{twin}'s return");
-        assert_eq!(twin_params[0], "emusen_crystal_runtime *rt", "{twin} takes the runtime first");
-        assert_eq!(&twin_params[1..], &params[..], "{twin}'s parameters after the runtime, by type and by name");
-    }
-    let expected: Vec<String> = table
-        .iter()
-        .filter(|(n, _, _)| n != "last_error" && !NAMED_TWINS.iter().any(|(t, _)| t == n))
-        .map(|(n, _, _)| format!("emusen_crystal_{n}"))
-        .collect();
-    assert_eq!(twins, expected, "the header's twins, in order, are the table's functions but last_error, declared with the library's calls, and those named elsewhere");
+    let twins: Vec<&str> = table.iter().map(|(n, _, _)| n.as_str()).filter(|n| declared.contains(&format!("emusen_crystal_{n}"))).collect();
+    assert_eq!(twins, ["last_error", "sessions"], "a table function declared again as an export of the frontend API");
 }
 
 /// The exports a source's macros make: each `macro_rules!` whose body defines `extern "C" fn $name(…)`, at each of its
@@ -475,7 +455,7 @@ fn the_rust_layouts_are_the_c_compiler_s() {
 }
 
 fn baseline_path() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("abi/v1/baseline.txt")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("abi/v{MAJOR}/baseline.txt"))
 }
 
 /// A baseline's lines by key, each `(value, tag)`.
@@ -509,7 +489,9 @@ fn grown(key: &str, was: &str, now: &str, facts: &BTreeMap<String, String>) -> b
         && facts.iter().filter_map(|(k, v)| k.strip_prefix(&format!("field {name}.")).map(|_| v)).all(|v| v.strip_prefix("offset ").and_then(|o| o.parse::<usize>().ok()).is_some())
 }
 
-const BASELINE_HEADER: &str = "# The frontend API, emusen_crystal.h, version 1: one fact per line, sorted; struct layouts are a 64-bit target's.\n# Written by `CRYSTAL_ABI_EMIT=1 cargo test -p emusen-crystal --test crystal_abi`; a line is never edited once its minor is released.\n# See EmuSen_Backend.md section 14.\n";
+fn baseline_header() -> String {
+    format!("# The frontend API, emusen_crystal.h, version {MAJOR}: one fact per line, sorted; struct layouts are a 64-bit target's.\n# Written by `CRYSTAL_ABI_EMIT=1 cargo test -p emusen-crystal --test crystal_abi`; a line is never edited once its minor is released.\n# See EmuSen_Backend.md section 14 and EmuSen_RustPlatform.md section 47.23.\n")
+}
 
 #[test]
 fn the_baseline_holds_every_fact_and_loses_none() {
@@ -519,9 +501,9 @@ fn the_baseline_holds_every_fact_and_loses_none() {
     let facts = facts();
     let path = baseline_path();
     let recorded = std::fs::read_to_string(&path).map(|t| parse_baseline(&t)).unwrap_or_default();
-    let minor = format!("@1.{MINOR}");
+    let minor = format!("@{MAJOR}.{MINOR}");
     if std::env::var("CRYSTAL_ABI_EMIT").as_deref() == Ok("1") {
-        let mut text = BASELINE_HEADER.to_string();
+        let mut text = baseline_header();
         for (key, value) in &facts {
             match recorded.get(key) {
                 Some((was, tag)) if was == value || grown(key, was, value, &facts) => text += &format!("{key} {was} @{tag}\n"),

@@ -14,8 +14,8 @@ pub mod endymion_devices;
 pub mod cheats;
 // The frontend API's stable header, emusen_crystal.h, exported beside this interface as step B7 builds it (EmuSen_Backend.md §29).
 pub mod crystal;
-// The session service's twins and its table over Crystal in Rust (EmuSen_Backend.md §29.3, §29.21).
-pub mod crystal_twins;
+// The session service's table over Crystal in Rust (EmuSen_Backend.md §29.3, §29.21).
+pub mod session_table;
 pub mod firmware;
 pub mod savemedia;
 pub mod galaxia;
@@ -37,7 +37,7 @@ pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 37;
+pub const ABI_VERSION: u32 = 38;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {

@@ -32,7 +32,9 @@ namespace EmuSen.WiseMan.DianaSh
         private static unsafe CrystalFrameInfo Halted(CrystalSession s)
         {
             Frame(s);
-            CrystalRuntime.WithText("{\"address\":5}", (p, l) => CrystalRuntime.Check(EmuSen.Crystal.Client.Contract.Crystal.BpAdd(s.Runtime.Handle, s.Id, 0, (byte*)p, l)));
+            var t = (EmuSenSessionV1*)s.ServiceTable();
+            long added = CrystalRuntime.WithText("{\"address\":5}", (p, l) => t->bp_add(t->ctx, s.Id, 0, (byte*)p, l));
+            Assert.True(added >= 0, $"bp_add answered {added}");
             CrystalFrameInfo f = Frame(s);
             for (int i = 0; i < 10 && f.halted == 0; i++) f = Frame(s);
             Assert.Equal(1u, f.halted);

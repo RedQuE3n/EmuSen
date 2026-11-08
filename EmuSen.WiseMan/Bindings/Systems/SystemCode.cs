@@ -21,7 +21,6 @@ namespace EmuSen.WiseMan.Bindings.Systems
         public static readonly IReadOnlyList<string> Exports = new[]
         {
             "emusen_systems_media", "emusen_systems_media_read", "emusen_systems_media_copy", "emusen_systems_media_delete", "emusen_systems_media_format",
-            "emusen_systems_cheat_codecs", "emusen_systems_cheat_decode", "emusen_systems_cheat_encode",
             "emusen_systems_code", "emusen_systems_recognise", "emusen_systems_route", "emusen_systems_openvgdb", "emusen_systems_header",
             "emusen_systems_disassemble", "emusen_systems_board_name", "emusen_systems_view",
         };
@@ -85,8 +84,7 @@ namespace EmuSen.WiseMan.Bindings.Systems
 
         private static readonly Lazy<(IReadOnlyList<CodecFacts> Codecs, IReadOnlyList<CodecPair> Pairs)> CodecTable = new(() =>
         {
-            var codecs = (delegate* unmanaged[Cdecl]<byte*, nuint, long>)Export("emusen_systems_cheat_codecs");
-            using var document = JsonDocument.Parse(Bytes((o, l) => codecs(o, l), 2048));
+            using var document = JsonDocument.Parse(FrontendRuntime.Table.CheatCodecList());
             JsonElement r = document.RootElement;
             return (r.GetProperty("codecs").EnumerateArray().Select(c => new CodecFacts(c.GetProperty("id").GetString()!, c.GetProperty("name").GetString()!,
                     Enum.Parse<CheatCodeKind>(c.GetProperty("kind").GetString()!), c.GetProperty("space").GetString())).ToArray(),
@@ -100,31 +98,18 @@ namespace EmuSen.WiseMan.Bindings.Systems
         // A pack's codec, the library's under the codec's id.
         public static ICheatCodeCodec Codec(string id) => new NativeCheatCodec(id);
 
-        // A code's answers from the library's codec, as JSON.
-        internal static JsonDocument CheatDecode(string codec, string code)
-        {
-            byte[] id = Encoding.UTF8.GetBytes(codec), text = Encoding.UTF8.GetBytes(code);
-            var decode = (delegate* unmanaged[Cdecl]<byte*, nuint, byte*, nuint, byte*, nuint, long>)Export("emusen_systems_cheat_decode");
-            fixed (byte* i = id)
-            fixed (byte* t = text)
-            {
-                byte* ip = i, tp = t;
-                nuint il = (nuint)id.Length, tl = (nuint)text.Length;
-                return JsonDocument.Parse(Guard(() => Bytes((o, l) => decode(ip, il, tp, tl, o, l), 1024)));
-            }
-        }
+        // A code's answers from the library's codec, as JSON, through the frontend API since 2.0.
+        internal static JsonDocument CheatDecode(string codec, string code) => JsonDocument.Parse(Frontend(() => FrontendRuntime.Table.CheatDecode(codec, code)));
 
         // A Game Genie code for a patch, from the library's encoder of the codec named; the SNES's and the Genesis's.
-        public static string CheatEncode(string codec, int address, uint value)
+        public static string CheatEncode(string codec, int address, uint value) => Frontend(() => FrontendRuntime.Table.CheatEncode(codec, address, value));
+
+        // A frontend API's refusal as Guard gives the library's.
+        private static T Frontend<T>(Func<T> call)
         {
-            byte[] id = Encoding.UTF8.GetBytes(codec);
-            var encode = (delegate* unmanaged[Cdecl]<byte*, nuint, int, uint, byte*, nuint, long>)Export("emusen_systems_cheat_encode");
-            fixed (byte* i = id)
-            {
-                byte* ip = i;
-                nuint il = (nuint)id.Length;
-                return Encoding.UTF8.GetString(Guard(() => Bytes((o, l) => encode(ip, il, address, value, o, l), 16)));
-            }
+            try { return call(); }
+            catch (EmuSen.Crystal.Client.CrystalException e) when (e.Status == EmuSen.Crystal.Client.Contract.CrystalSessionAbi.BadArgument) { throw new ArgumentOutOfRangeException(); }
+            catch (EmuSen.Crystal.Client.CrystalException e) { throw new InvalidOperationException($"{PlatformLibrary.FileName}: {e.Message} ({e.Status})"); }
         }
 
         // Which systems have code of each kind, as the library states it.

@@ -1,5 +1,6 @@
 //! The C layer over emusen-firmware, for the C# `FirmwareLibrary` and `FirmwareOverview`, their only
-//! implementation since 2026-11-04 (EmuSen_Backend.md §15, §40.1). Each call takes one JSON request; nothing is decided here.
+//! implementation since 2026-11-04 (EmuSen_Backend.md §15, §40.1); an install is the frontend API's `firmware_install`
+//! since 2.0. Each call takes one JSON request; nothing is decided here.
 
 use crate::{fail, given, put, report, status};
 use serde_json::Value;
@@ -74,23 +75,5 @@ pub unsafe extern "C" fn emusen_firmware_locate(request_data: *const u8, request
     match answer() {
         Ok(text) => unsafe { put(text.as_bytes(), out, len) },
         Err(s) => s as i64,
-    }
-}
-
-/// An install into the store: `{"request", "source", "store"}` in; 1 installed, 0 refused for its size, IO with the
-/// words when the store or the file could not be written.
-///
-/// # Safety
-/// `request` must be valid for `request_len` bytes.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn emusen_firmware_install(request_data: *const u8, request_len: usize) -> i32 {
-    let answer = || -> Result<bool, i32> {
-        let r = request(request_data, request_len)?;
-        let wanted = parsed(firmware::request_from(r.get("request").unwrap_or(&Value::Null)))?;
-        firmware::install(&wanted, field(&r, "source")?, field(&r, "store")?).map_err(|words| fail(status::IO, words))
-    };
-    match answer() {
-        Ok(done) => i32::from(done),
-        Err(s) => s,
     }
 }

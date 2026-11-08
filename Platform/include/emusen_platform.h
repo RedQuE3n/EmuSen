@@ -922,6 +922,18 @@ int64_t emusen_endymion_bindings_defaults(uint32_t which, uint8_t *out, size_t l
 int64_t emusen_endymion_bindings_bound(const uint8_t *console, size_t console_len, int32_t player, const uint8_t *game, size_t game_len, int32_t *out,
                                        size_t cap);
 
+/*
+ * Since 43. Which map a player (1 to 8) of a console plays with, by the rules bound uses, as
+ * {"profile":"<name>","mapPlayer":<n>} by the length query: the profile, in its own spelling, and the player whose map
+ * it is in that profile (the player's own, else 1). profile names the profile to look in (any case; one the console
+ * lacks is Default), or null for the one that applies to game, the game's path or null. gamepad and profiles are the
+ * GAMEPAD and PROFILES models as load gives them; a null one is read from its file as load reads it. PARSE for a model
+ * that will not read, BAD_ARGUMENT for a player.
+ */
+int64_t emusen_endymion_bindings_choose(const uint8_t *gamepad, size_t gamepad_len, const uint8_t *profiles, size_t profiles_len, const uint8_t *console,
+                                        size_t console_len, int32_t player, const uint8_t *game, size_t game_len, const uint8_t *profile,
+                                        size_t profile_len, uint8_t *out, size_t len);
+
 /* ---- Endymion: the device half (EmuSen_Audio_Sync.md, section 7; EmuSen_Input.md, sections 4 and 8) ---- */
 
 /*

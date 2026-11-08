@@ -1085,7 +1085,7 @@ namespace EmuSen.Mistress.Views
         // The game's own profile where its page or the Pause Card chose one, else the console's (EmuSen_Input.md §10.5).
         private void ApplyBindings(string console, string? game)
         {
-            string profile = _gamepadBindings.Resolve(console, game is not null ? _gamepadBindings.GameProfile(console, GameProfileKey(game)) : null);
+            string profile = _gamepadBindings.Resolve(console, game);
             _gamepad.Bindings = _gamepadBindings.For(console, 1, profile);
             _gamepad.PlayerBindings = player => _gamepadBindings.For(console, player, profile);
         }

@@ -4463,8 +4463,20 @@ player 1's, the console's chosen profile, a game's own, a player's own in a prof
 with defaults only, and a console never named). A game is known in the profiles by its file's name without the
 extension, as Mistress's `GameProfileKey` has it.
 
-The C# front end keeps its own resolution, which this call now duplicates until it retires; the C# half never calls the
-export, so `EndymionParityTests` counts it as the Qt host's. `lib.rs`, `emusen_platform.h` and
+**The rule's one owner: `emusen_endymion_bindings_choose`** (decided 2026-11-08). The C# front end's
+`GamepadBindings.For(console, player, profile)` hands back the editable in-memory map, which the settings pages rebind
+before it is saved, and its `Resolve` reads that in-memory model, so a call that reads the files could not replace them.
+The second export of interface 43 therefore answers from the models a caller passes (GAMEPAD's and PROFILES' JSON as
+`_load` gives them; a null one is read from its file): `{"profile":"<name>","mapPlayer":<n>}`, the profile in its own
+spelling and the player whose map it is there, either in a profile the caller names (any case; one the console lacks is
+Default) or in the profile that applies to the game's path. In Rust the rule is `bindings::choose` (the map by profile and
+player) beside `resolve` (the profile a game starts with), with `map_of` the plain lookup by the answer; `bound` and
+`bound_in` are built on them, and `models_in` reads the two files for both calls. The C# `Resolve`, `ConsoleDefault`,
+`For`, `HasOwn`, `Own` and `Forget` ask it through `BindingFiles.Choose` and take their own object by the answer, and the
+C# rule is deleted (`EmuSen_Input.md` §5.2). `_bound` stays for the Qt reader, which holds no model; the C# half never
+calls it, so `EndymionParityTests` counts it as the Qt host's. The unit test above also holds `choose`'s answers: the
+console's chosen profile, a player's own and player 1's in the game's profile, player 2's own in Default, a profile named
+in another case, a profile not there, and the answer's JSON. `lib.rs`, `emusen_platform.h` and
 `PlatformLibrary.InterfaceVersion` moved to 43 together; `Frontend/platform-client`'s binding was regenerated, with
 `Platform::bindings_bound`, and a `router` module wrapping the router's calls (`emusen_endymion_router_*`), which were
 in the header since §12.2 and had no Rust client.

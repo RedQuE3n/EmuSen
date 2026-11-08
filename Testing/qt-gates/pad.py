@@ -49,11 +49,35 @@ def send(kind, code, value):
         os.write(fd, struct.pack("llHHi", int(now), int(now % 1 * 1e6), t, c, v))
 
 
+def settle(tsv, still):
+    """Waits until the window is lit (over 1% of the screen) and its lit share has not changed for `still` seconds in the
+    polled grabs of run.sh (grabs.tsv), or 15 s; prints the epoch time it stopped waiting."""
+    give_up = time.time() + 15
+    while time.time() < give_up:
+        try:
+            rows = [line.split() for line in open(tsv) if line.split() and line.split()[1] != "-"]
+        except OSError:
+            rows = []
+        lit = [(float(r[0]), float(r[1])) for r in rows if float(r[1]) > 0.01]
+        if lit:
+            changed = lit[0][0]
+            for (_, a), (t, b) in zip(lit, lit[1:]):
+                if abs(a - b) > 0.0005:
+                    changed = t
+            if lit[-1][0] - changed >= still:
+                break
+        time.sleep(0.02)
+    print(f"{time.time():.3f} {step} (stopped waiting)", flush=True)
+
+
 time.sleep(1.0)  # the readers see the pad arrive before its first press
+print("ready", flush=True)
 for step in sys.argv[1:]:
     word, *rest = step.split(":")
     if word == "wait":
         time.sleep(float(rest[0]))
+    elif word == "settle":
+        settle(rest[0], float(rest[1]))
     elif word in ("tap", "hold"):
         send(EV_KEY, BUTTONS[rest[0]], 1)
         time.sleep(float(rest[1]) if word == "hold" else 0.1)

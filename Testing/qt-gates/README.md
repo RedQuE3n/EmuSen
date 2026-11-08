@@ -22,6 +22,16 @@ Nothing here is built or shipped; each script is plain text in and out, and none
 - `pad.py` — the pad, "gate pad" (vendor 1209, product 0001), pressed by steps: `wait:<s>`, `tap:<button>`,
   `hold:<button>:<s>`. Every program on the desk reads it, so no `guide`, and nothing else reading pads while it runs.
 - `first.py <run-dir>` — the program's exec to its window and to the game's first picture, from the grabs.
+- `sandbox.sh <root> <qt-bin-dir>` — the sandbox the start-up and memory gates run in: the published tree's program
+  folder copied with `emusen-qt` and `emusen-qt-play` beside the platform library, the tree's marker, and a home of its
+  own whose settings are the big screen in the reference look, Moonrise off, scraping off, the player's ROM folder as
+  the library (read-only through `bwrap` when run) and saves inside the sandbox.
+- `rss.py` — `RSS=<comm>` in `run.sh`: the program's `VmRSS` and `RssAnon` every 0.5 s to `rss.tsv`.
+- `press.py <run-dir>` — the first press: the pad's `settle:<grabs.tsv>:<s>` step waits until the window is lit and its
+  lit share has stood unchanged for `<s>` seconds in the polled grabs, then `tap:right` presses; `press.py` prints the
+  press and the first grab whose picture differs from the last before it (the focus ring moved), from the run's start. `PAD_FIRST=1` makes the pad
+  before the program starts, so the press is not held back by the pad's arrival.
+- `gates.sh <root> <out> warm|start|idle|pause...` — the rebuilt method of §9.3.5, a round of the gates for one sandbox; `figures.py <runs> <round>` reads its figures.
 - `shell.py <tree>/lib/EmuSen` — a terminal over a published tree's platform library: its shell with every EmuSen
   module and the runtime's settings service, as Mistress's shell has them, so `cores fetch`, `get`, `approve` and
   `default` run as typed. Lines come from stdin. Its executable is the Python interpreter, so an approved entry is read

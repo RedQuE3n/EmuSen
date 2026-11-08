@@ -89,7 +89,7 @@ pub fn rows(systems: &[SystemRow], games: &[GameFile], favourites: usize, recent
             maker: s.manufacturer.clone(),
             year: s.release_year,
             engine: s.engines.first().cloned().unwrap_or_default(),
-            world: world_line(s.look.hue, &world_of(s)),
+            world: world_line_of(s),
         });
     }
     out
@@ -110,10 +110,15 @@ pub fn world_of(s: &SystemRow) -> WorldBody {
     }
 }
 
+/// A console's world as the kit's one line: its hue and its body.
+pub fn world_line_of(s: &SystemRow) -> String {
+    world_line(s.look.hue, &world_of(s))
+}
+
 /// Moonrise's planets: one world for each system the table lists with an engine, in the table's order, each the body its
 /// tile shows (EmuSen_Interface.md §22, §24.6).
 pub fn splash_worlds(systems: &[SystemRow]) -> Vec<String> {
-    systems.iter().filter(|s| !s.engines.is_empty()).map(|s| world_line(s.look.hue, &world_of(s))).collect()
+    systems.iter().filter(|s| !s.engines.is_empty()).map(world_line_of).collect()
 }
 
 /// What one refresh read: the rows, or the words for why it could not.

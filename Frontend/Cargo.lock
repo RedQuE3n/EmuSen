@@ -349,6 +349,7 @@ dependencies = [
  "cxx-qt-build",
  "cxx-qt-lib",
  "emusen-client-fixture",
+ "emusen-crystal-client",
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-platform-client",

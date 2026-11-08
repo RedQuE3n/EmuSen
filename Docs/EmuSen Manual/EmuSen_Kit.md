@@ -1209,6 +1209,29 @@ line left out; a palette of two colours and an unknown shape refused); kit-qt's 
 two or none not; the palette, not the hue, paints the disc); the registry test. Seeded on 2026-11-08 and reverted: the
 palette dropped in `parse_world` failed kit-core's test.
 
+**The bodies against Mistress's splash** (measured 2026-11-08). The draft's picture has plain planets only, so a second
+C# reference holds the bodies: `Testing/moonrise/LunaSplash-bodies-1280x720.png`, Mistress's own splash at 1280 × 720
+on its finished frame, with the courts canvas's eleven consoles (NES, Super Nintendo, Nintendo 64, Game Boy, Game Boy
+Color, Master System, Genesis, Sega CD, PlayStation, PlayStation 2, Dreamcast) in the systems table's order, each the
+body `StartupSplash.Bodies` gives it, and the caption "11 CONSOLES". WiseMan's `MoonrisePictureTool` writes it (with
+`EMUSEN_BIGPICTURE_PNG=1`, to `~/.cache/emusen/tmp/moonrise/raw/`, then copied beside the draft's): a themed session
+whose start-up work never ends holds the splash, as `StartupSplashTests` does, and the tool sets the eleven on it. The
+list is stated rather than read from the build's engines because the engines a runtime offers follow the cores found
+beside its platform library, which differ between WiseMan's output (eight cores) and the Qt tests' platform library
+(none built beside it); a pixel comparison needs one list on both sides. Which systems have an engine is held by the
+library view's test instead (§7.1 of `EmuSen_Qt.md`).
+
+`emusen-qt`'s `tests/splash.rs` holds the program to it: the program's window at 1280 × 720, its Moonrise given the
+eleven consoles' lines (`library::world_line_of` over the runtime's systems) and the caption from `words.rs`, skipped to
+its finished frame by a pad press and held up, is compared pixel by pixel. The comparison is `emusen-qt-test`'s
+`moonrise::against`, moved there from the gallery's gate so the gate and the program share one tolerance (§7.10's: 2
+pixels and 24 levels, 128 inside the words' and the moon's boxes). Against the draft 4 pixels may differ; against the
+bodies 16, since Skia and Qt's curve renderer antialias the shards' and gems' straight edges differently (10 pixels, each
+within 30 levels of the tolerance, on the Dreamcast's and the Genesis's shards); a wrong body differs at hundreds. The
+caption's box is loose enough to let a digit through, so the test also holds its words. Seeded on 2026-11-08, each
+reverted: the palette dropped by `world_of` failed it at 407 pixels; the moonlets dropped at 30; the caption counting one
+too many passed the pictures and failed the words, which is why the words are held.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

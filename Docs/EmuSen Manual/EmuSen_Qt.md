@@ -552,10 +552,8 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
 - *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
   Cores window's job, in the player's tree.
 - *The pad driving the game.* Done 2026-11-08, §1.8.5.
-- *A device core's picture.* The device is lent, but the chain still advances from `picture_copy`; the lend's and the
-  ring's pictures (`emusen_serenity_chain_advance_lent`, `_advance_ring`) go through the feed's draw on the render thread.
-- *The sound*, drained and dropped until Endymion's game player is wrapped; *the picture's content* read back under
-  `QQuickRenderControl` (§8.1, tier 2); and the chain dropped on the render thread when a session closes (it is now
+- *A device core's picture.* Done 2026-11-08, §1.8.7.
+- *The sound* (done 2026-11-08, §1.8.6); *the picture's content* (done 2026-11-08 by a window grab, §1.8.8); and the chain dropped on the render thread when a session closes (it is now
   dropped with the feed, after the window).
 
 #### 1.8.5 The pad drives the game **[M 2026-11-08]**
@@ -618,7 +616,7 @@ took exactly those); `qt-models`' `session` on the RX 6800 (every handed frame's
 Seeded and caught: the submit skipped (no frames taken, `session`), the device opened at a fixed rate (`sound`), and the
 window's player made and dropped (`pads`).
 
-#### 1.8.7 Pictures on the device: a machine's lend and its ring **[M 2026-11-08, proof owed]**
+#### 1.8.7 Pictures on the device: a machine's lend and its ring **[M 2026-11-08]**
 
 Every kind of picture the runtime offers now crosses the feed (`picture.rs`), as Mistress's `OfferPicture` offers them
 (`EmuSen_Backend.md` §14.12, §33): a frame's `Source` is its pixels (read back by `picture_copy`), the newest picture the
@@ -637,12 +635,53 @@ tried again. The session opens with `OPEN_RING` wherever the window has a device
 2. Before the machine is freed the frame thread withdraws the frame still waiting (`Handoff::withdraw`) and waits out a
    draw under way, which holds the feed's `drawing` lock from taking a frame to its end.
 
-**Proof owed.** Measured 2026-11-08 only on the copy path (the crystal test core refuses rings and paints nothing on the
-device): `qt-models`' `session` and `qt-play`'s `pads` pass unchanged. The lend's proof needs `device_test_core`
-(`EmuSen/Cores/Libretro/emusen-libretro-host/examples`, DEVICE_PICTURE with a painter), installed as a player's core;
-the ring's needs a libretro entry laid out as `LibretroEntryFixture` lays one (the proxy, the libretro host, the
-libretro test core and its `.info`, `EMUSEN_CORE_RUNNER`, the setting `tc_hw` = `vulkan`), which is also the hosted
-core's path to the first picture. Both are EmuSen-workspace builds.
+**A named difference from Mistress, accepted for stage 1 (decided 2026-11-08).** While the window does not draw (hidden
+or minimised), a game drawing on the device is held still: rule 1 keeps it from running past a picture nobody has drawn.
+Mistress keeps such a game running through `SlangRingRelease`; the tester sees this difference listed here until the
+Pause Card and the window's own life settle what a hidden window should do.
+
+**The player's cores beside a named installation.** The runtime scans no player's folder when a host names its `cores`
+and leaves `player_cores` unset (`emusen_crystal.h`'s config; `Runtime::new`), which suits a test of the installation
+alone but would hide every core the player installed from a program that names its installation. `SessionModel` therefore
+passes Galaxia's cores folder (`EMUSEN_GALAXIA_DIR_CORES`, the runtime's own default) whenever it names `cores`.
+
+**Proof, measured 2026-11-08** in a real window (`qt-play`'s `device` and `ring`): the program's Play.qml in a
+`kwin_wayland --virtual` of the test's own, Qt adopting a validated Serenity device on the RX 6800, the game opened
+through `SessionModel` as the player opens one.
+- *The lend:* emusen-native's `device_test_core` (built from `emusen-libretro-host`'s examples by `client-fixture`'s
+  `cores::device_core`), installed as a player's core and approved, paints its picture on the lent device. Every frame
+  drawn (60 and more) came from the lend (`Counts::shown_lent`), none from a ring.
+- *The ring:* the libretro test core, laid out as an installed libretro entry (`cores::libretro_entry`: the proxy, the
+  libretro host, the core and its `.info` under the player's `Cores/libretro/testcore`, with an installation whose
+  `cores.manifest` vouches for the proxy and the host, and `EMUSEN_CORE_RUNNER`), set to draw with Vulkan (`tc_hw`).
+  Every frame drawn came from a slot of the ring (`Counts::shown_ring`).
+- *Rule 1:* with the window hidden, nothing more is handed over, and the game closes in about 1.3 s (the runner
+  stopping); with the frame thread's wait for the draw removed, the close took 9.8 s, its frame waiting on a ring slot
+  nobody gave back. The test bounds the close at 5 s.
+- The layer found nothing in either run, apart from the window grab's own (§1.8.8).
+
+Seeded and caught: the ring's slot never advanced into the chain (`ring`: no picture within ten seconds); the wait for
+a device picture's draw removed (`ring`: the hidden window's close, 9.8 s); `SessionModel` naming its installation
+without the player's folder (`ring`: no core for `.tcg`).
+
+#### 1.8.8 The picture's content, read back **[M 2026-11-08]**
+
+"It swapped" does not show the right picture, so both tests read back what the window shows and compare it with what the
+core made. The device test core and the libretro test core paint the same picture, a function of the frame's serial
+(`client-fixture`'s `cores::painted_pixel`: red the column plus the serial, green twice the row plus forty a life, blue
+the column over eight). The feed records the core's serial of the frame it drew last (`Counts::shown_serial`). The test
+pauses the game by the chord, so the frame drawn stays the frame shown, grabs the window (`QQuickWindow::grabWindow`,
+the harness's `colours_at`) and compares 48 pixels, spread over the picture and mapped to the window at the size the
+compositor gave it, with the core's picture of that serial: none may differ by more than one level. Measured
+2026-11-08: none differs, for the lend (frame 67 on the first run) and for the ring.
+
+The first run found a mismatch in green only, from row 46 down, growing with the row: the compositor had given the
+window less height than asked for (its decoration), so the mapping now reads the window's own size.
+
+**The grab's findings, a named exception.** `grabWindow` under the threaded render loop gives two findings on Qt's own
+swapchain: a render pass after the present (`WRITE_AFTER_PRESENT`) and a barrier after the acquire (`WRITE_AFTER_READ`).
+The same test without the grab gives none. The tests therefore require no finding up to the grab and after it, and around
+the grab allow only those two (`assert_qt_grab_only`), which name `vkQueuePresentKHR` and `vkAcquireNextImageKHR`.
 
 ### 1.9 Homes for the front-end logic still in C#
 

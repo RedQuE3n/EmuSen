@@ -2,6 +2,8 @@
 //! from this commit's `Platform/`, a scratch tree with Galaxia's config and data redirected into it, and the test core's
 //! images. Nothing here names a runtime crate: the library is reached as the front end reaches it, by its path.
 
+pub mod cores;
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::{Mutex, MutexGuard, OnceLock};
@@ -102,8 +104,13 @@ impl World {
 
     /// The test core copied into `dir` as a player's core, unread and unapproved until the runtime approves its hash.
     pub fn player_core(&self, dir: &Path) -> PathBuf {
-        let at = dir.join("libcrystal_test_core.so");
-        std::fs::copy(test_core(), &at).unwrap();
+        self.player_library(dir, test_core())
+    }
+
+    /// A core's library copied into `dir` under its own name as a player's core, unapproved.
+    pub fn player_library(&self, dir: &Path, library: &Path) -> PathBuf {
+        let at = dir.join(library.file_name().unwrap());
+        std::fs::copy(library, &at).unwrap();
         at
     }
 }

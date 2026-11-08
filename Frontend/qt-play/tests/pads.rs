@@ -4,32 +4,18 @@
 //! game heard is read from the save the session leaves. Qt adopts Serenity's device in a compositor of the test's own, on
 //! the RX 6800 (EMUSEN_GPU_DEVICE names another); the game's sound plays on SDL's dummy driver, which `Sdl::open` sets.
 
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+mod common;
 
+use std::path::{Path, PathBuf};
+
+use common::{approve, device_and_feed, play_window, until, vulkan_qt};
 use emusen_client_fixture::{library, World};
-use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_core::input::PadControl;
-use emusen_kit_qt::picture::{adopt, Adopted};
-use emusen_platform_client::serenity::{builtin_preset, Device};
-use emusen_platform_client::Platform;
 use emusen_qt_endymion::reading::sdl_button;
-use emusen_qt_models::picture::PictureFeed;
 use emusen_qt_play::window::ffi::QGuiApplication as App;
-use emusen_qt_play::{surface_extensions, PLAY_URL};
 use emusen_qt_test::compositor::Compositor;
 use emusen_qt_test::virtual_pad::Sdl;
-use emusen_qt_test::{Harness, Scene};
-
-/// Waits up to ten seconds for a condition the scene answers, letting Qt run between looks.
-fn until(scene: &mut Scene<'_>, what: &str, mut done: impl FnMut(&mut Scene<'_>) -> bool) {
-    let start = Instant::now();
-    while !done(scene) {
-        assert!(start.elapsed() < Duration::from_secs(10), "{what}: not within ten seconds");
-        scene.wait(8);
-    }
-}
+use emusen_qt_test::Harness;
 
 /// The battery files under `dir`, by name.
 fn saves(dir: &Path) -> Vec<PathBuf> {
@@ -45,46 +31,20 @@ fn saves(dir: &Path) -> Vec<PathBuf> {
     found
 }
 
-/// The test core in the player's cores folder and approved, as a player installs one; the window's runtime finds it there.
-fn approved_test_core(world: &World) {
-    world.player_core(&world.dir("Home/Cores"));
-    let rt = Runtime::new(&Api::load(library()).unwrap(), &Config::default()).unwrap();
-    let sha = rt.cores().unwrap().into_iter().find(|c| c.directory.as_deref() == Some("player")).and_then(|c| c.sha256).expect("the player's core");
-    rt.core_approve(&sha).unwrap();
-}
-
 #[test]
 fn a_virtual_pad_plays_the_game_in_the_window_and_its_chord_pauses_and_resumes_it() {
     let _kwin = Compositor::start(1280, 800);
-    std::env::set_var("QT_QUICK_BACKEND", "rhi");
-    std::env::set_var("QSG_RHI_BACKEND", "vulkan");
-    std::env::set_var("QSG_RENDER_LOOP", "threaded");
+    vulkan_qt();
     let world = World::new("play-pads");
-    approved_test_core(&world);
+    approve(&world.player_core(&world.dir("Home/Cores")), None, &world);
     let game = world.game("game.tst", &[1, 2, 3, 4]);
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
 
-    // The device and its feed are made first so that they outlive the window that adopts them, on a failure too.
-    let platform = Platform::load(library()).unwrap();
-    let surface = surface_extensions("wayland");
-    let gpu = std::env::var("EMUSEN_GPU_DEVICE").ok();
-    let device = Arc::new(Device::new_for(&platform, gpu.as_deref(), false, &surface, &["VK_KHR_swapchain"]).expect("a Vulkan device"));
-    let preset = builtin_preset(&platform, "effect.None.nearest", None, world.dir("presets").to_str().unwrap()).unwrap();
-    let feed = PictureFeed::new(device.clone(), preset);
-    let raw = device.raw();
+    let (device, feed) = device_and_feed(&world.dir("presets"));
     let mut harness = Harness::new();
     assert_eq!(App::platform_name().to_string(), "wayland", "Qt on the test's compositor");
-    let adopted = Adopted {
-        instance: raw.instance,
-        physical: raw.physical,
-        device: raw.device,
-        queue_family: raw.queue_family,
-        queue_index: 0,
-        extensions: &surface,
-    };
-    let mut scene = harness.load_prepared(PLAY_URL, 1280, 800, |window| unsafe { adopt(window.cast(), &adopted) }.expect("Qt adopts the device"));
-
+    let mut scene = play_window(&mut harness, &device);
     assert!(scene.set_property("play", "onlyPads", &pad.id.to_string()));
     assert!(scene.set_property("play", "platformLibrary", library().to_str().unwrap()));
     until(&mut scene, "the virtual pad read", |s| s.property("pads", "connected") == "1");

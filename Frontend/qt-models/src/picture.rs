@@ -45,6 +45,11 @@ pub struct Counts {
     pub handed: AtomicU64,
     /// Frames handed over and drawn.
     pub shown: AtomicU64,
+    /// Of those, the frames drawn from a machine's lend and from its ring.
+    pub shown_lent: AtomicU64,
+    pub shown_ring: AtomicU64,
+    /// The core's serial of the frame drawn last, which a read-back of the picture is compared with.
+    pub shown_serial: AtomicU64,
     /// Frames handed over that a newer one replaced before any draw.
     pub dropped: AtomicU64,
     /// Swaps while running at which no new frame had come since the last.
@@ -262,7 +267,14 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
         }
         render.advanced = true;
         render.fresh_since_swap = true;
-        context.shared.counts.shown.fetch_add(1, Ordering::Relaxed);
+        let counts = &context.shared.counts;
+        counts.shown.fetch_add(1, Ordering::Relaxed);
+        counts.shown_serial.store(render.current.serial, Ordering::Relaxed);
+        match render.current.source {
+            Source::Lent(_) => counts.shown_lent.fetch_add(1, Ordering::Relaxed),
+            Source::Ring { .. } => counts.shown_ring.fetch_add(1, Ordering::Relaxed),
+            Source::Pixels => 0,
+        };
     }
     match chain.draw(width, height) {
         Ok(drawn) => {

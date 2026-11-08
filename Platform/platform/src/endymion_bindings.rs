@@ -1,6 +1,6 @@
 //! Endymion's C layer for the binding files: each read as a program starts with it, saved, and a map's defaults.
 
-use crate::{bytes, diagnostics_rewind, diagnostics_waiting, fail, put, report, required, status};
+use crate::{bytes, diagnostics_rewind, diagnostics_waiting, fail, put, report, required, status, text};
 use emusen_endymion::bindings::{self, File, Unsaved};
 use emusen_galaxia::tree;
 
@@ -65,4 +65,39 @@ pub unsafe extern "C" fn emusen_endymion_bindings_defaults(which: u32, out: *mut
         Ok(map) => unsafe { put(map.as_bytes(), out, len) },
         Err(status) => status as i64,
     }
+}
+
+/// The SDL button each PadButton is bound to for a player of a console, -1 for none, by the profiles' rules, from the
+/// files as a program starts with them; `game` is the game's path, for a profile it names. The count of PadButtons.
+///
+/// # Safety
+/// `console` must be valid for `console_len` bytes; `game` for `game_len` bytes, or null; `out` for `cap` values, or null.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn emusen_endymion_bindings_bound(
+    console: *const u8,
+    console_len: usize,
+    player: i32,
+    game: *const u8,
+    game_len: usize,
+    out: *mut i32,
+    cap: usize,
+) -> i64 {
+    if !(1..=emusen_endymion::slots::MAX_PLAYERS as i32).contains(&player) {
+        return fail(status::BAD_ARGUMENT, format!("no player {player}")) as i64;
+    }
+    let console = match unsafe { required(console, console_len) } {
+        Ok(console) => console,
+        Err(status) => return status as i64,
+    };
+    let game = match unsafe { text(game, game_len) } {
+        Ok(game) => game.filter(|g| !g.is_empty()),
+        Err(status) => return status as i64,
+    };
+    let (bound, said) = bindings::bound_in(&tree::tree(), console, player, game);
+    said.into_iter().for_each(report);
+    if !out.is_null() {
+        // SAFETY: the caller gave room for `cap` values.
+        unsafe { std::ptr::copy_nonoverlapping(bound.as_ptr(), out, cap.min(bound.len())) };
+    }
+    bound.len() as i64
 }

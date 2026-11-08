@@ -24,6 +24,8 @@ cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
 emusen-kit-qt.workspace = true
 emusen-qt-models = { path = "../qt-models" }
+# The pads' one reader, for the interface and the game (EmuSen_Kit.md §7.17).
+emusen-qt-endymion = { path = "../qt-endymion" }
 emusen-platform-client = { path = "../platform-client" }
 
 [build-dependencies]

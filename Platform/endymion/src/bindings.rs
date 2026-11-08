@@ -434,9 +434,103 @@ pub fn save(tree: &Tree, file: File, document: &str) -> Result<(), Unsaved> {
     }
 }
 
+/// The name a game is known by in a console's profiles: its file's name without the extension, as its own settings are kept.
+pub fn game_key(path: &str) -> &str {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    match name.rfind('.') {
+        Some(dot) if dot > 0 => &name[..dot],
+        _ => name,
+    }
+}
+
+/// The profile a game starts with: its own where it names one that exists, else the console's chosen one, else Default.
+pub fn resolve<'a>(profiles: &'a GamepadProfiles, console: &str, game: Option<&str>) -> &'a str {
+    let Some(all) = profiles.iter().find(|(k, _)| same_name(k, console)).map(|(_, all)| all) else { return DEFAULT_PROFILE };
+    let own = game.and_then(|path| all.games.get(game_key(path)));
+    if own.is_some_and(|name| is_default(name)) {
+        return DEFAULT_PROFILE;
+    }
+    let chosen = || all.default.as_deref().and_then(|chosen| named(all, chosen));
+    own.and_then(|name| named(all, name)).or_else(chosen).unwrap_or(DEFAULT_PROFILE)
+}
+
+/// A player's map for a console in a profile; a player with none of their own plays with player 1's (EmuSen_Input.md §8.4).
+pub fn map_for<'a>(gamepad: &'a GamepadBindings, profiles: &'a GamepadProfiles, console: &str, player: i32, profile: &str) -> Option<&'a PadMap> {
+    let own = |maps: &'a IndexMap<Player, PadMap>| if player > 1 { maps.get(&Player(player)) } else { None };
+    if !is_default(profile) {
+        let all = profiles.iter().find(|(k, _)| same_name(k, console)).map(|(_, all)| all);
+        if let Some(maps) = all.and_then(|all| all.profiles.iter().find(|(k, _)| same_name(k, profile))).map(|(_, maps)| maps) {
+            return own(maps).or_else(|| maps.get(&Player(1)));
+        }
+    }
+    let players = gamepad.players.iter().find(|(k, _)| same_name(k, console)).map(|(_, maps)| maps);
+    players.and_then(own).or_else(|| gamepad.consoles.iter().find(|(k, _)| same_name(k, console)).map(|(_, map)| map))
+}
+
+/// The gamepad button each PadButton is bound to for a player of a console, SDL's number or -1 for none, by the profiles'
+/// rules (EmuSen_Input.md §5.2, §10.5); `game` is the game's path, for a profile it names.
+pub fn bound(gamepad: &GamepadBindings, profiles: &GamepadProfiles, console: &str, player: i32, game: Option<&str>) -> [i32; crate::pad::BUTTONS] {
+    let mut out = [-1; crate::pad::BUTTONS];
+    if let Some(map) = map_for(gamepad, profiles, console, player, resolve(profiles, console, game)) {
+        for (button, pad) in map {
+            if let Some(slot) = usize::try_from(button.number()).ok().and_then(|b| out.get_mut(b)) {
+                *slot = pad.number();
+            }
+        }
+    }
+    out
+}
+
+/// `bound` from the two files in the config directory of `tree`, as a program starts with them, with what would not read.
+pub fn bound_in(tree: &Tree, console: &str, player: i32, game: Option<&str>) -> ([i32; crate::pad::BUTTONS], Vec<String>) {
+    let mut said = Vec::new();
+    let mut text = |file: File| match emusen_galaxia::config::read_text(tree, None, file.name()) {
+        Ok(text) => text,
+        Err(words) => {
+            said.push(emusen_galaxia::config::load_diagnostic(tree, None, file.name(), &words));
+            None
+        }
+    };
+    let (gamepad_text, profiles_text) = (text(File::Gamepad), text(File::Profiles));
+    let (gamepad, words) = read_gamepad(gamepad_text.as_deref(), &[console]);
+    said.extend(words.map(|w| emusen_galaxia::config::load_diagnostic(tree, None, File::Gamepad.name(), &w)));
+    let (profiles, words) = read_profiles(profiles_text.as_deref());
+    said.extend(words.map(|w| emusen_galaxia::config::load_diagnostic(tree, None, File::Profiles.name(), &w)));
+    (bound(&gamepad, &profiles, console, player, game), said)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sdl(name: &str) -> i32 {
+        GamepadButton::named(name).unwrap().number()
+    }
+
+    fn button(name: &str) -> usize {
+        Button::named(name).unwrap().number() as usize
+    }
+
+    #[test]
+    fn a_players_buttons_follow_the_game_then_the_console_then_player_one() {
+        let (gamepad, _) = read_gamepad(Some(r#"{"SNES":{"A":"East","B":"South"},"SNES Player 2":{"A":"North"}}"#), &["SNES", "NES"]);
+        let (profiles, _) = read_profiles(Some(
+            r#"{"snes":{"Default":"Swapped","Profiles":{"Swapped":{"1":{"A":"South","B":"East"}},"Mine":{"1":{"A":"West"},"3":{"A":"Back"}}},"Games":{"Zelda":"Mine","Mario":"default"}}}"#,
+        ));
+        let none = GamepadProfiles::new();
+        assert_eq!(bound(&gamepad, &none, "SNES", 1, None)[button("A")], sdl("East"), "the console's own map");
+        assert_eq!(bound(&gamepad, &none, "snes", 2, None)[button("A")], sdl("North"), "player 2's own, the console in any case");
+        assert_eq!(bound(&gamepad, &none, "SNES", 3, None)[button("A")], sdl("East"), "player 3 plays with player 1's");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 1, None)[button("A")], sdl("South"), "the console's chosen profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 1, Some("/roms/Zelda.sfc"))[button("A")], sdl("West"), "the game's own profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 3, Some("Zelda.sfc"))[button("A")], sdl("Back"), "a player's own in a profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 2, Some("Zelda.sfc"))[button("A")], sdl("West"), "else player 1's of the profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 2, Some("C:\\roms\\Mario.sfc"))[button("A")], sdl("North"), "a game that chose Default");
+        assert_eq!(bound(&gamepad, &profiles, "NES", 1, None)[button("Start")], sdl("Start"), "a console with no file entry has its defaults");
+        assert_eq!(bound(&gamepad, &none, "Unknown", 1, None), [-1; crate::pad::BUTTONS], "a console never named binds nothing");
+        assert_eq!(game_key("/a.b/Game.v1.sfc"), "Game.v1");
+        assert_eq!(game_key(".hidden"), ".hidden");
+    }
 
     #[test]
     fn every_default_is_a_word_of_its_vocabulary() {

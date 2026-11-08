@@ -4444,3 +4444,27 @@ now a host's) can meet the next frame's write. The chains of the C# front end wa
 so nothing they do changes; the dependency is what makes the host's case correct by the specification. `lib.rs`,
 `emusen_platform.h` and `PlatformLibrary.InterfaceVersion` moved to 42 together, and `Frontend/platform-client`'s binding
 was regenerated, with a `serenity` module over the calls the picture needs.
+
+## 50. Interface 43, 2026-11-08: a player's bound buttons, for the Qt front end's game pads
+
+For the Qt front end's game input (`EmuSen_Qt.md` §1.8.5, `EmuSen_Kit.md` §7.17). One addition, an extension of the
+binding files' family (rule B, so the number moves): `emusen_endymion_bindings_bound(console, player, game, out, cap)`,
+the gamepad button each PadButton is bound to for a player of a console, SDL's number or -1, read from
+`gamepadbindings.json` and `gamepadprofiles.json` as `_load` reads them.
+
+**Why a call and not the model.** `_load` hands a host the model as JSON, written in SDL's button names ("South",
+"DPadUp"). A host that read those names would hold a second copy of the name table Endymion's vocabulary already owns,
+and the rule that picks a player's map (the game's own profile where it names one that exists, else the console's
+chosen profile, else the console's maps; a player with no map of their own plays with player 1's) lived only in the C#
+front end's `GamepadBindings.Resolve` and `For`. Both are Endymion's facts, so Endymion answers them:
+`emusen_endymion::bindings::{game_key, resolve, map_for, bound, bound_in}`, held by the unit test
+`a_players_buttons_follow_the_game_then_the_console_then_player_one` (the console's map, player 2's own, player 3 with
+player 1's, the console's chosen profile, a game's own, a player's own in a profile, a game that chose Default, a console
+with defaults only, and a console never named). A game is known in the profiles by its file's name without the
+extension, as Mistress's `GameProfileKey` has it.
+
+The C# front end keeps its own resolution, which this call now duplicates until it retires; the C# half never calls the
+export, so `EndymionParityTests` counts it as the Qt host's. `lib.rs`, `emusen_platform.h` and
+`PlatformLibrary.InterfaceVersion` moved to 43 together; `Frontend/platform-client`'s binding was regenerated, with
+`Platform::bindings_bound`, and a `router` module wrapping the router's calls (`emusen_endymion_router_*`), which were
+in the header since §12.2 and had no Rust client.

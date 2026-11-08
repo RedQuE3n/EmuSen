@@ -20,6 +20,8 @@ serde_json.workspace = true
 # The frontend API and the platform library, the only ways to the back end (EmuSen_Qt.md §1.1).
 emusen-crystal-client = { path = "../crystal-client" }
 emusen-platform-client = { path = "../platform-client" }
+# The game's side of the pads from the interface's one reader (EmuSen_Qt.md §1.8.5): pads have one owner and one reader.
+emusen-qt-endymion = { path = "../qt-endymion" }
 # The game picture's feed as GamePicture declares it (EmuSen_Qt.md §1.8), the one type taken from the kit.
 emusen-kit-qt.workspace = true
 

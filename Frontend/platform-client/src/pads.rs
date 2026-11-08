@@ -65,6 +65,11 @@ impl Pads {
         Pads::made(platform, pads)
     }
 
+    /// The platform library the pads were made on.
+    pub fn platform(&self) -> &Arc<Platform> {
+        &self.platform
+    }
+
     fn made(platform: &Arc<Platform>, pads: *mut raw::emusen_endymion_pads) -> Result<Pads> {
         let pads = NonNull::new(pads).ok_or_else(|| crate::error::status(raw::EMUSEN_PLATFORM_NOT_SUPPORTED, platform.last_error()))?;
         Ok(Pads { platform: platform.clone(), pads })

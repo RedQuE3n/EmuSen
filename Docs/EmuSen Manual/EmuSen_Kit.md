@@ -1210,6 +1210,45 @@ graph's own device, and says when each frame was swapped.
 added to `Testing/qmltypes/EmuSen.Kit-1.0.qmltypes`), and `EmuSen_Qt.md` §1.8.1's runs in a real window. 197 lines of
 C++ were added (`game_picture.h` 64, `game_picture.cpp` 133, blank lines and includes counted), the reasons above.
 
+### 7.17 The pad drives the game: one reader, two sides (stage 1, the play; 2026-11-08)
+
+`EmuSen_Qt.md` §1.8.5 as built in `emusen-qt-endymion` and the kit. Pads have one owner (Endymion) and one reader (§7.15's
+thread): each tick reads the pads for the interface, as before, and for a running game, through each player's bindings.
+
+- **`game.rs`**, plain Rust, two parts. `GamePads` is the hand-over between the reader's thread and a game's frame thread:
+  what the game wants (its console and game, for the bindings; its ports; the axes it reads, by PadAxis), whether it owns
+  the pad, and the newest read (a mask by PadButton and the read axes for each player, and the players seated), taken by
+  the frame thread with `clone_from` into a read it keeps, so no tick or frame allocates. `GameReading` is the reader's
+  half: when the wants change it asks Endymion for every player's bound buttons (`bindings_bound`, platform interface 43,
+  `EmuSen_RustPlatform.md` §50) and sets the left stick to be a stick where the game reads LeftX; each tick it seats the
+  open pads in the order they were opened (player 1 alone where the first controller only is read) and lights their
+  numbers, then reads each seated player's buttons with Endymion's `pads_pressed` (the stick for the d-pad, a trigger
+  past half, else the bound button) and the wanted axes. *[own, because Endymion has no seat table outside the C#
+  `PlayerSlots`; the seats the player arranges and keeps (`emusen_endymion_slots_*`) come with the Pause Card's players
+  page.]*
+- **Who hears the pad.** Nothing is handed over while the game does not own the pad (paused, or a menu over it). Given
+  back, the game hears nothing until every button is let go, so the press that closed a menu is not the game's (Mistress's
+  `PadBelongsToTheInterface`).
+- **`PadReader.gamePads`**, a constant number naming the reader's `GamePads`, which a `SessionModel` is named by
+  (`pads`), as `GamePicture` is named its feed: a QML element is handed no Rust value. The model takes a reference of its
+  own (`GamePads::at`), so the hand-over outlives a reader dropped first.
+- **`PadRouter.chordOnly`** (kit-qt): while on, a pump gives the menu chord alone, and a button held then is the grammar's
+  only once let go and pressed again, so neither the walk nor a repeat sees game input and nothing held over the game
+  presses when the interface has the pad back. The kit knows no game: a host binds it (`Play.qml`: the game running and
+  not paused), and answers the chord (`SessionModel.togglePause` until the Pause Card exists).
+
+**Held to** (measured on 2026-11-08, the platform library from the same commit): kit-qt's `router` test
+`kit_7_17_…` (Down held over the game gives no press or repeat; the chord reaches the program; Down still held when the
+interface has the pad presses nothing until let go and pressed again); `emusen-qt-models`' `input` test (Endymion's
+simulated pad, the reader's game half and `GameInput` on the test core, whose RAM byte 3 counts up each frame port 0's
+first button is held: nothing heard while the game does not own the pad; a press held as it takes the pad not heard; A,
+bound by the console's map, heard on port 0 for 10 frames; another button not heard as A); Endymion's unit test of the
+binding rule (§50 of the platform page); the platform client's binding test (player 2's own, player 3 with player 1's,
+a player out of range refused). Four seeded faults, each reverted: the quiet rule dropped (caught by `input`: the held
+press was heard), a player's own map ignored (Endymion's test: player 2 read player 1's A), the router letting a press
+held over the game through (`router`: the walk saw it), a button told to port 1 (`input`: A never counted). No C++ was
+added.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

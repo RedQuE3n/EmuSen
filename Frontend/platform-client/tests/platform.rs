@@ -58,6 +58,12 @@ fn galaxia_names_its_files_and_endymion_reads_and_writes_the_binding_files() {
     let written = std::fs::read_to_string(p.config_path(None, "gamepadbindings.json").unwrap()).unwrap();
     assert!(written.contains("\"SNES Player 2\": {\n    \"A\": \"West\""), "{written}");
     assert_eq!(p.bindings_load(bind::GAMEPAD, &["SNES"]).unwrap()["Players"]["SNES"]["2"]["A"], "West");
+    // Interface 43: a player's buttons as SDL's numbers, player 2's own and player 3 with player 1's (South 0, West 2).
+    let (a, b) = (8, 0);
+    assert_eq!(p.bindings_bound("SNES", 2, None).unwrap()[a], 2);
+    assert_eq!(p.bindings_bound("snes", 3, Some("/games/Some Game.sfc")).unwrap()[a], p.bindings_bound("SNES", 1, None).unwrap()[a]);
+    assert_eq!(p.bindings_bound("SNES", 1, None).unwrap()[b], 0);
+    assert!(matches!(p.bindings_bound("SNES", 9, None), Err(Error::Status { .. })));
 
     std::fs::write(p.config_path(None, "hotkeybindings.json").unwrap(), r#"{"FastFoward": "Tab"}"#).unwrap();
     assert_eq!(p.bindings_load(bind::HOTKEYS, &[]).unwrap(), p.bindings_defaults(bind::HOTKEYS).unwrap());

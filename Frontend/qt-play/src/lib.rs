@@ -1,6 +1,9 @@
 //! emusen-qt-play: a game through the ring (EmuSen_Qt.md §1.8). The window's scene graph adopts Serenity's device,
 //! GamePicture samples the chain's picture where it lies, and the frame thread paces by the window's swaps.
 
+// The modules the window imports register through their crates' initializers.
+extern crate emusen_qt_endymion;
+
 pub mod window;
 
 /// The program's window, in the resource system.

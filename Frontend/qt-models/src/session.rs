@@ -2,6 +2,7 @@
 //! of its own, its pictures handed to the picture's feed, paced by the window's swaps. No Qt here; `SessionModel`
 //! puts it on Qt.
 
+use crate::input::GameInput;
 use crate::picture::{Frame, Handoff};
 use emusen_crystal_client::{frame_info, Open, Runtime};
 use std::ptr::NonNull;
@@ -68,13 +69,14 @@ pub struct Session {
 
 impl Session {
     /// Opens `path` with `engine` (none for the settings' choice) and runs it until closed; `device` is the presenter's
-    /// Serenity device, lent to the machine.
+    /// Serenity device, lent to the machine; `input` the game's side of the pads, when the window reads pads.
     pub fn start(
         runtime: Runtime,
         path: String,
         engine: Option<String>,
         device: Option<NonNull<std::ffi::c_void>>,
         handoff: Handoff,
+        input: Option<GameInput>,
         report: impl Fn(Report) + Send + 'static,
     ) -> Session {
         let control = Arc::new(Control::default());
@@ -82,7 +84,10 @@ impl Session {
         let device = device.map_or(0, |d| d.as_ptr() as usize);
         let thread = std::thread::spawn({
             let control = control.clone();
-            move || run(&runtime, path, engine, NonNull::new(device as *mut std::ffi::c_void), &handoff, &control, &report)
+            move || {
+                let open = Open { path: Some(path), engine, device: NonNull::new(device as *mut std::ffi::c_void), ..Open::default() };
+                run(&runtime, open, &handoff, input, &control, &report)
+            }
         });
         Session { control, thread: Some(thread) }
     }
@@ -107,20 +112,22 @@ impl Drop for Session {
 
 fn run(
     runtime: &Runtime,
-    path: String,
-    engine: Option<String>,
-    device: Option<NonNull<std::ffi::c_void>>,
+    open: Open,
     handoff: &Handoff,
+    mut input: Option<GameInput>,
     control: &Control,
     report: &impl Fn(Report),
 ) {
     let (stop, paused) = (&control.stop, &control.paused);
     let started = Instant::now();
-    let open = Open { path: Some(path), engine, device, ..Open::default() };
     let session = match runtime.open(&open) {
         Ok(session) => session,
         Err(e) => return report(Report::Failed(e.to_string())),
     };
+    if let Some(Err(words)) = input.as_mut().map(|input| input.start(runtime, session, open.path.as_deref().unwrap_or_default())) {
+        let _ = runtime.close(session);
+        return report(Report::Failed(words));
+    }
     report(Report::Opened { session });
     let mut info = frame_info();
     let mut frame = Frame::default();
@@ -133,13 +140,21 @@ fn run(
     handoff.set_running(true);
     let failed = Mutex::new(None);
     while !stop.load(Ordering::Relaxed) {
-        if paused.load(Ordering::Relaxed) {
+        let held = paused.load(Ordering::Relaxed);
+        if let Some(input) = input.as_mut() {
+            input.set_owned(!held);
+        }
+        if held {
             handoff.set_running(false);
             seen = handoff.wait_swap(seen, SWAP_BOUND);
             next = Instant::now();
             continue;
         }
         handoff.set_running(true);
+        if let Some(Err(words)) = input.as_mut().map(|input| input.frame(runtime, session)) {
+            *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
+            break;
+        }
         if let Err(e) = runtime.frame(session, &mut info) {
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
             break;
@@ -181,6 +196,7 @@ fn run(
         }
     }
     handoff.set_running(false);
+    drop(input);
     let _ = runtime.close(session);
     match failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
         Some(words) => report(Report::Failed(words)),

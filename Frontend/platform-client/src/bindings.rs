@@ -31,6 +31,17 @@ impl Platform {
         self.status(unsafe { self.lib.emusen_endymion_bindings_save(which, document.as_ptr(), document.len()) }.into()).map(drop)
     }
 
+    /// The gamepad button each PadButton is bound to for a player of a console, SDL's number or -1, by the profiles' rules;
+    /// `game` is the game's path, for a profile it names (since interface 43).
+    pub fn bindings_bound(&self, console: &str, player: i32, game: Option<&str>) -> Result<[i32; 16]> {
+        let mut out = [-1i32; 16];
+        let (g, gl) = crate::out::text(game);
+        self.status(unsafe {
+            self.lib.emusen_endymion_bindings_bound(console.as_ptr(), console.len(), player, g, gl, out.as_mut_ptr(), out.len())
+        })?;
+        Ok(out)
+    }
+
     /// One map at its defaults: a console's keys, a console's gamepad buttons, or the hotkeys.
     pub fn bindings_defaults(&self, which: u32) -> Result<Value> {
         let bytes = self.read(|o, l| unsafe { self.lib.emusen_endymion_bindings_defaults(which, o, l) })?.unwrap_or_default();

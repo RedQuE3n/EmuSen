@@ -551,14 +551,32 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
   settled when its figures are taken, and they are written next to these.
 - *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
   Cores window's job, in the player's tree.
-- *The pad driving the game.* `PadReader` puts presses on the interface; the game's buttons (`emusen_crystal_input_button`
-  from Endymion's PadButton) are a frame-thread poll of the same pads, which must not open them twice. Recommended: the
-  reader hands the game's buttons to the session as well as the interface's presses, one owner of the pads.
+- *The pad driving the game.* Done 2026-11-08, §1.8.5.
 - *A device core's picture.* The device is lent, but the chain still advances from `picture_copy`; the lend's and the
   ring's pictures (`emusen_serenity_chain_advance_lent`, `_advance_ring`) go through the feed's draw on the render thread.
 - *The sound*, drained and dropped until Endymion's game player is wrapped; *the picture's content* read back under
   `QQuickRenderControl` (§8.1, tier 2); and the chain dropped on the render thread when a session closes (it is now
   dropped with the feed, after the window).
+
+#### 1.8.5 The pad drives the game **[M 2026-11-08]**
+
+One owner of the pads (Endymion) and one reader (`PadReader`'s thread, `EmuSen_Kit.md` §7.15): each tick reads the pads
+for the interface and for the running game, the second through each player's bindings (`EmuSen_Kit.md` §7.17). The
+game's read crosses to the frame thread by a hand-over (`GamePads`) and is routed there:
+- `input.rs`, **`GameInput`** (`emusen-qt-models`): owned by the session's frame thread. At open it reads the session's
+  console, ports (one where a core declares none, as Mistress reads them) and axes, asks them of the pads and resets
+  Endymion's router (`emusen_endymion_router_*`, now wrapped by the platform client); before each frame it takes a newer
+  read, polls the router and tells the core each change in the router's order (`input_connected`, `input_button`,
+  `input_axis`), applied at once since the frame thread calls them between frames. The router is the C# front end's
+  (`PortRouter`), so both front ends route by one rule.
+- `SessionModel.pads` names the reader's hand-over (`PadReader.gamePads`); a session with none named hears no pad.
+- While the game runs and is not paused, `PadRouter.chordOnly` keeps the walk from game input and the menu chord reaches
+  the program; `Play.qml` pauses on it until the Pause Card opens there.
+
+The new dependency, `emusen-qt-models` on `emusen-qt-endymion`, is stated: the session must reach the one reader's
+hand-over, and a third crate for one struct would add a boundary with nothing behind it. Owed: the seats the player
+arranges and keeps, rumble to the players' pads, the keyboard as a player, a core's ports changing while it runs
+(Mistress's `Resize`), and the C# front end calling interface 43 in place of its own copy of the binding rule.
 
 ### 1.9 Homes for the front-end logic still in C#
 

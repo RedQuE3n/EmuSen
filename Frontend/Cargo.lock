@@ -367,6 +367,7 @@ dependencies = [
  "emusen-crystal-client",
  "emusen-kit-qt",
  "emusen-platform-client",
+ "emusen-qt-endymion",
  "emusen-qt-test",
  "serde_json",
 ]
@@ -381,6 +382,7 @@ dependencies = [
  "cxx-qt-lib",
  "emusen-kit-qt",
  "emusen-platform-client",
+ "emusen-qt-endymion",
  "emusen-qt-models",
  "emusen-qt-test",
 ]

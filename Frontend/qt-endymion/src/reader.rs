@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use emusen_platform_client::pads::Pads;
 
+use crate::game::{GamePads, GameReading};
 use crate::reading::{Reading, Tick};
 
 /// How often the pads are read: Mistress's pad timer's 16 ms (EmuSen_Input.md §8.12).
@@ -30,8 +31,8 @@ pub struct Reader {
 
 impl Reader {
     /// Opens the pads on the new thread, shows `only` of SDL's pads (all for none), then reads them every tick until
-    /// stopped; `deliver` returns false to stop it.
-    pub fn spawn<O, D>(open: O, only: Option<Vec<u32>>, mut deliver: D) -> Reader
+    /// stopped, for the interface and, when given, for a game; `deliver` returns false to stop it.
+    pub fn spawn<O, D>(open: O, only: Option<Vec<u32>>, game: Option<Arc<GamePads>>, mut deliver: D) -> Reader
     where
         O: FnOnce() -> std::result::Result<Pads, String> + Send + 'static,
         D: FnMut(Delivery) -> bool + Send + 'static,
@@ -47,6 +48,7 @@ impl Reader {
                 }
             };
             let mut reading = Reading::default();
+            let mut game_reading = GameReading::default();
             let mut started = false;
             let mut failed: Option<String> = None;
             while !thread_shared.stop.load(Ordering::Acquire) {
@@ -58,6 +60,7 @@ impl Reader {
                         reading.start(&pads)
                     }
                 });
+                let tick = tick.and_then(|tick| game.as_ref().map_or(Ok(()), |game| game_reading.read(&pads, game)).map(|()| tick));
                 let delivery = match tick {
                     Ok(tick) => {
                         started = true;

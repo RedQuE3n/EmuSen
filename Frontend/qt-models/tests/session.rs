@@ -73,6 +73,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         None,
         std::ptr::NonNull::new(device.as_ptr().cast_mut()),
         handoff.clone(),
+        None,
         move |r| {
             let _ = tell.send(r);
         },

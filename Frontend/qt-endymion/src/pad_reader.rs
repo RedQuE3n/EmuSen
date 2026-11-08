@@ -1,5 +1,6 @@
 //! `PadReader`: Endymion's pads read on a thread of their own and put on the GUI thread through `qt_thread().queue`, one
-//! tick at a time, as presses for `PadRouter.push` and the help bar's family (EmuSen_Kit.md §7.15).
+//! tick at a time, as presses for `PadRouter.push` and the help bar's family (EmuSen_Kit.md §7.15); the same reader
+//! reads them for a running game, which finds the hand-over by `gamePads` (§7.17).
 
 use core::pin::Pin;
 use std::sync::Arc;
@@ -10,6 +11,7 @@ use emusen_kit_qt::kinds::{self, Family};
 use emusen_platform_client::pads::Pads;
 use emusen_platform_client::{Lent, Platform};
 
+use crate::game::GamePads;
 use crate::reader::{Delivery, Reader};
 
 #[cxx_qt::bridge]
@@ -33,6 +35,7 @@ pub mod qobject {
         #[qproperty(Family, family, READ, NOTIFY)]
         #[qproperty(i32, connected, READ, NOTIFY)]
         #[qproperty(QString, problem, READ, NOTIFY)]
+        #[qproperty(u64, game_pads, READ, CONSTANT)]
         type PadReader = super::PadReaderRust;
     }
 
@@ -48,19 +51,25 @@ pub mod qobject {
 }
 
 /// The reader's properties: the platform library's path and, for a test, SDL's pads to read alone (their ids, separated
-/// by spaces; empty reads every pad); the family of the pad last used, how many pads are read, and the last failure.
+/// by spaces; empty reads every pad); the family of the pad last used, how many pads are read, and the last failure; the
+/// game's hand-over, as a number a `SessionModel` is named.
 pub struct PadReaderRust {
     platform_library: QString,
     only_pads: QString,
     family: Family,
     connected: i32,
     problem: QString,
+    game_pads: u64,
+    game: Arc<GamePads>,
     reader: Option<Reader>,
 }
 
 impl Default for PadReaderRust {
     fn default() -> Self {
+        let game = Arc::new(GamePads::default());
         PadReaderRust {
+            game_pads: GamePads::address(&game),
+            game,
             platform_library: QString::default(),
             only_pads: QString::default(),
             family: kinds::family_of(emusen_kit_core::glyph::PadFamily::Generic),
@@ -111,6 +120,7 @@ impl qobject::PadReader {
         let reader = Reader::spawn(
             move || open_pads(&path),
             only(&self.only_pads),
+            Some(self.game.clone()),
             move |delivery| qt.queue(move |reader: Pin<&mut qobject::PadReader>| reader.apply(delivery)).is_ok(),
         );
         self.as_mut().rust_mut().reader = Some(reader);

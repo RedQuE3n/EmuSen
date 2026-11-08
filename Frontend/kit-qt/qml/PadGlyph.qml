@@ -24,10 +24,6 @@ Item {
         font.pixelSize: Kit.Tokens.fontGlyph * marks.letterScale
         text: marks.letter
     }
-    FontMetrics {
-        id: face
-        font.pixelSize: Kit.Tokens.fontGlyph * marks.letterScale
-    }
     Repeater {
         model: marks
         Shape {
@@ -55,12 +51,19 @@ Item {
             }
         }
     }
-    Text {
-        x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
-        y: root.height / 2 - face.ascent - inked.tightBoundingRect.y - inked.tightBoundingRect.height / 2
+    Shape {
+        anchors.fill: parent
         visible: marks.letter.length > 0 && !marks.cut
-        text: marks.letter
-        color: root.ink
-        font.pixelSize: inked.font.pixelSize
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            fillColor: root.ink
+            strokeColor: Qt.alpha(root.ink, 0)
+            PathText {
+                x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
+                y: (root.height - inked.tightBoundingRect.height) / 2
+                font.pixelSize: inked.font.pixelSize
+                text: marks.letter
+            }
+        }
     }
 }

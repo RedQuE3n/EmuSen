@@ -1,0 +1,38 @@
+[package]
+name = "emusen-qt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+links = "emusen-qt"
+
+# The Qt front end as a program beside Mistress (EmuSen_Qt.md §7): Moonrise, then Home, Choose a console and the grid in
+# the reference theme, over the view models; it reads the player's settings through the platform library, as Mistress does.
+[lib]
+name = "emusen_qt"
+
+[[bin]]
+name = "emusen-qt"
+path = "src/main.rs"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+serde_json.workspace = true
+emusen-kit-qt.workspace = true
+emusen-qt-models = { path = "../qt-models" }
+emusen-qt-endymion = { path = "../qt-endymion" }
+# The game on its screen and under Home (Game.qml), and the adopted device its picture needs (EmuSen_Qt.md §1.8, §7.1).
+emusen-qt-play = { path = "../qt-play" }
+# The settings read before the window opens (Moonrise on or off), through the platform library.
+emusen-platform-client = { path = "../platform-client" }
+
+[dev-dependencies]
+emusen-crystal-client = { path = "../crystal-client" }
+emusen-client-fixture = { path = "../client-fixture" }
+emusen-kit-core.workspace = true
+emusen-qt-test.workspace = true
+
+[build-dependencies]
+cxx-qt-build.workspace = true

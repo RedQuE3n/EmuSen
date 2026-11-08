@@ -2,10 +2,22 @@
 //! Rust over a source the client crates or a test's fake answer; its bridge only puts that on Qt.
 
 pub mod clients;
+pub mod clock;
+pub mod game_model;
+pub mod games;
+pub mod help;
+pub mod help_model;
 pub mod input;
 pub mod keyed;
 pub mod library;
 pub mod library_model;
+pub mod marks;
+pub mod marks_object;
+pub mod pause;
+pub mod pause_model;
 pub mod picture;
+pub mod screens;
 pub mod session;
 pub mod session_model;
+pub mod words;
+pub mod words_object;

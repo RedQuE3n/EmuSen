@@ -364,3 +364,23 @@ fn lunap_219_the_shadow_is_drawn_inside_the_moon_and_the_halo_and_face_are_the_d
     far.shadow_outline(48, &mut outline);
     assert!(outline.is_empty(), "discs apart: no shadow");
 }
+
+#[test]
+fn a_world_reads_back_from_its_line_with_or_without_its_palette() {
+    use emusen_kit_core::tokens::Colour;
+    use emusen_kit_core::world::{WorldBody, WorldRing, WorldShape, parse_world, parse_worlds, world_line};
+    let nes = WorldBody {
+        palette: Some([Colour::rgb(0xFF, 0xF8, 0xFB), Colour::rgb(0xF3, 0xCF, 0xE3), Colour::rgb(0xA9, 0x78, 0x9F)]),
+        craters: 0.28,
+        ..WorldBody::PLAIN
+    };
+    let line = world_line(330.0, &nes);
+    assert_eq!(line, "330 planet 0.28 0 0 none 0 #FFF8FB #F3CFE3 #A9789F");
+    assert_eq!(parse_world(&line), Some((330.0, nes)));
+    let n64 = WorldBody { cap: 0.9, ring: WorldRing::Subtle, moons: 2, ..WorldBody::new(WorldShape::Planet) };
+    let shards = WorldBody::new(WorldShape::Shards);
+    let text = format!("{}\nnot a world\n{}\n", world_line(352.0, &n64), world_line(0.0, &shards));
+    assert_eq!(parse_worlds(&text), vec![(352.0, n64), (0.0, shards)], "an unreadable line is left out");
+    assert_eq!(parse_world("10 planet 0 0 0 none 0 #FFF"), None, "a palette is three colours or none");
+    assert_eq!(parse_world("10 cube 0 0 0 none 0"), None);
+}

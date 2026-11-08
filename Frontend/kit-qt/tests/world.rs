@@ -64,3 +64,17 @@ fn kit_7_5_shards_and_a_gem_fill_their_tall_box() {
         }
     }
 }
+
+#[test]
+fn a_palette_is_three_colours_or_none_and_paints_the_disc() {
+    use emusen_kit_qt::world::{palette, palette_words};
+    let nes = palette("#FFF8FB #F3CFE3 #A9789F").expect("three colours");
+    assert_eq!(nes[0], Colour::rgb(0xFF, 0xF8, 0xFB));
+    assert_eq!(palette_words(Some(nes)), "#FFF8FB #F3CFE3 #A9789F");
+    assert_eq!((palette(""), palette("#FFF8FB #F3CFE3"), palette_words(None)), (None, None, String::new()));
+    let mut planet = body(WorldShape::Planet, 0.0, 0.0, 0.0, WorldRing::None, 0);
+    let from_hue = rows(&planet, 330.0, false);
+    planet.palette = Some(nes);
+    let painted = rows(&planet, 330.0, false);
+    assert_ne!(from_hue, painted, "the palette, not the hue, paints the disc");
+}

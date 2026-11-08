@@ -8,6 +8,8 @@ pub mod compositor;
 pub mod ffi;
 pub mod harness;
 pub mod lint;
+pub mod mockup;
+pub mod moonrise;
 pub mod spec;
 pub mod tree;
 pub mod virtual_pad;

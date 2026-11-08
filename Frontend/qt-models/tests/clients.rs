@@ -31,7 +31,7 @@ fn the_client_source_scans_the_player_s_folder_and_makes_the_rows() {
     let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
     image.resize(16 + 16384, 0);
     std::fs::write(world.dir("Roms/NES").join("Synthetic.nes"), image).unwrap();
-    let rows = refresh(&source).unwrap();
+    let rows = refresh(&source).unwrap().rows;
     let seen: Vec<(Option<Kind>, &str, usize)> = rows.iter().map(|r| (r.kind, r.key.as_str(), r.count)).collect();
     assert_eq!(
         seen,
@@ -44,6 +44,11 @@ fn the_client_source_scans_the_player_s_folder_and_makes_the_rows() {
     );
     let nes = source.runtime.systems().unwrap().into_iter().find(|s| s.id == "nes").unwrap();
     assert_eq!((rows[3].name.as_str(), rows[3].hue), (nes.display_name.as_str(), nes.look.hue), "the table's name and hue");
+    // The NES's engine through the runtime's Setting(console, "Engine") with nothing stored: the console's default, named
+    // from the cores listing, so a stored choice would be read the same way.
+    let engine = source.runtime.settings_get(0, emusen_crystal_client::Scope::Console, Some("nes"), "Engine").unwrap().unwrap_or_default();
+    assert_eq!(rows[3].engine, if engine.is_empty() { nes.engines.first().cloned().unwrap_or_default() } else { engine });
+    assert!(!rows[3].engine_name.is_empty() && rows[3].facts.ends_with("an EmuSen core"), "{}", rows[3].facts);
     let games = platform.file(FILE_GAMES).unwrap();
     assert!(games.starts_with(&world.root) && games.is_file(), "games.db where Galaxia names it: {games:?}");
 

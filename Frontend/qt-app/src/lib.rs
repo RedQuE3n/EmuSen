@@ -1,0 +1,13 @@
+//! emusen-qt, the Qt front end's program (EmuSen_Qt.md §7): the module EmuSen.App and what the program reads before its
+//! window opens.
+
+// The modules the scene imports register through their crates' initializers; a crate that only names them must link them.
+extern crate emusen_kit_qt;
+extern crate emusen_qt_endymion;
+extern crate emusen_qt_models;
+extern crate emusen_qt_play;
+
+pub mod start;
+
+/// Where the program's window lives in the resource system.
+pub const MAIN_URL: &str = "qrc:/qt/qml/EmuSen/App/qml/Main.qml";

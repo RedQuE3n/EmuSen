@@ -12,12 +12,11 @@ use std::time::{Duration, Instant};
 use cxx_qt::casting::Upcast;
 use cxx_qt::QObject;
 use cxx_qt_lib::{QGuiApplication, QMap, QMapPair_QString_QVariant, QQmlApplicationEngine, QString, QUrl, QVariant};
-use emusen_kit_qt::picture::{adopt, Adopted};
-use emusen_platform_client::serenity::{builtin_preset, Device};
 use emusen_platform_client::Platform;
-use emusen_qt_models::picture::{Frame, Handoff, PictureFeed};
+use emusen_qt_models::picture::{Frame, Handoff};
+use emusen_qt_play::host::Host;
 use emusen_qt_play::window::ffi::{QCoreApplication, QGuiApplication as App, QQuickWindow};
-use emusen_qt_play::{surface_extensions, PLAY_URL};
+use emusen_qt_play::PLAY_URL;
 
 /// Seconds left out of the gate's counts at the start.
 const WARM: u64 = 2;
@@ -39,17 +38,10 @@ fn main() {
     let library = std::env::var("EMUSEN_PLATFORM_LIBRARY").expect("EMUSEN_PLATFORM_LIBRARY names the platform library");
     let mut application = QGuiApplication::new();
     let platform = Platform::load(&library).unwrap_or_else(|e| panic!("{e}"));
-    let surface = surface_extensions(&App::platform_name().to_string());
-    let device = Arc::new(Device::new_for(&platform, None, validate, &surface, &["VK_KHR_swapchain"]).unwrap_or_else(|e| panic!("{e}")));
-    let root = std::env::temp_dir().join("emusen-qt-play");
-    let preset =
-        builtin_preset(&platform, "effect.None.nearest", None, root.to_str().unwrap_or_default()).unwrap_or_else(|e| panic!("{e}"));
-    let feed = PictureFeed::new(device.clone(), preset);
-    let raw = device.raw();
-    let mut extensions = surface.clone();
-    if validate {
-        extensions.push("VK_EXT_debug_utils");
-    }
+    let presets = std::env::temp_dir().join("emusen-qt-play");
+    let host = Host::new(&platform, &App::platform_name().to_string(), None, validate, &presets).unwrap_or_else(|e| panic!("{e}"));
+    let (device, feed) = (&host.device, &host.feed);
+    let adoption = host.adoption();
 
     let mut engine = QQmlApplicationEngine::new();
     if let Some(mut engine) = engine.as_mut() {
@@ -73,15 +65,7 @@ fn main() {
                 if window.is_null() {
                     return;
                 }
-                let adopted = Adopted {
-                    instance: raw.instance,
-                    physical: raw.physical,
-                    device: raw.device,
-                    queue_family: raw.queue_family,
-                    queue_index: 0,
-                    extensions: &extensions,
-                };
-                if let Err(words) = unsafe { adopt(window.cast(), &adopted) } {
+                if let Err(words) = unsafe { adoption.adopt(window.cast()) } {
                     eprintln!("{words}");
                     QCoreApplication::quit();
                     return;

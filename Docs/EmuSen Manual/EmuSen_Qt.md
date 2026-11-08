@@ -581,7 +581,8 @@ game's read crosses to the frame thread by a hand-over (`GamePads`) and is route
   (`PortRouter`), so both front ends route by one rule.
 - `SessionModel.pads` names the reader's hand-over (`PadReader.gamePads`); a session with none named hears no pad.
 - While the game runs and is not paused, `PadRouter.chordOnly` keeps the walk from game input and the menu chord reaches
-  the program; `Play.qml` pauses on it until the Pause Card opens there.
+  the program. emusen-qt opens the Pause Card on it (§7.1, step 7); `Play.qml`, emusen-qt-play's window of one game,
+  has no card and pauses and resumes on it.
 
 The new dependency, `emusen-qt-models` on `emusen-qt-endymion`, is stated: the session must reach the one reader's
 hand-over, and a third crate for one struct would add a boundary with nothing behind it. Owed: the seats the player
@@ -1054,6 +1055,414 @@ calendar weeks. The order puts the tester's first requirement first (the referen
 the third next (the theme API proven by console-style themes, stage 3), the second after it (ES-DE, stage 4), and the
 fourth is a property of the models from stage 0 on (§6), held by tests rather than a stage.
 
+### 7.1 Stage 1 as built: the program and its screens (2026-11-08)
+
+**The program, step 1.** `Frontend/qt-app`, the crate `emusen-qt`, its binary `emusen-qt` and the QML module
+`EmuSen.App` 1.0 (`Main.qml`, the window; one file a screen). Before the window opens, `start.rs` reads two facts and
+hands them to the window's root as its initial properties (`QQmlApplicationEngine::setInitialProperties`), so no static
+carries them: the platform library's path (`--platform-library PATH`, else `EMUSEN_PLATFORM_LIBRARY`, else
+`libemusen_platform.so` beside the program), and `AppSettings.StartupSplash`, read through Galaxia's model by
+`emusen_qt_models::clients::app_settings`, the one function the library view's scan also reads the settings through. So
+the program reads the player's own settings file, as Mistress does, and switching costs nothing. Its dependencies are
+the kit, the models, `emusen-qt-endymion` and the platform client, all by path in the Qt workspace.
+
+The window holds `LibraryModel` and `PadReader` once, the screens on the big screen's `NormalizedCanvas`, and Moonrise
+over them. It has no menu bar and no status bar: the big-screen and card forms have none (§1.7). The Frame gained
+`surfaceDrawn` (on by default), off on the night screens, whose sky is behind the frame.
+
+**Moonrise at the start** (`EmuSen_Interface.md` §22, as the C# front end does it): its planets are one per system the
+systems table lists with an engine, in the table's order (`library::splash_hues`), read by `LibraryModel` from the
+systems before the scan of the games and published as `splashHues` and `splashCaption` ("N CONSOLES", `words.rs`); the
+splash runs once they arrive, so the scan runs beneath it. It ends at the later of its own end and the library read
+(`!loading`), then fades over the Fade token. A pad press, a key or a click skips it to its finished frame, and the
+press is the splash's alone: while it shows it holds the focus, so the frame's `Connections` on the router are off.
+With the setting off it is never shown. **Words**: `Words`, a QML singleton over `words.rs`, holds the screens' fixed
+words, so a QML file names a word and never writes one (§1.3); `words::counted` writes "1,566 games" as the mockups do.
+
+**The bodies** (decided 2026-11-08 by the tester, `EmuSen_Interface.md` §24.6): the splash draws each console's body,
+as its tile does. `library::world_of` reads a console's body from the systems table's look, the one owner (its shape,
+its three colours where the table gives three, its craters, bands, cap and moons), and writes it as the kit's world line
+(`EmuSen_Kit.md` §7.18); `LibraryModel` publishes the lines of the systems with an engine as `splashWorlds`, the window
+hands them to `Moonrise.worlds`, and every console's row carries its line as the role `world`. The draft stays the
+splash's oracle for everything else.
+
+**Reduced motion and the skip's keys** (measured 2026-11-08). `start.rs` reads `AppSettings.ReducedMotion` beside
+`StartupSplash` and hands it to the window as `reducedMotion`, which sets `Kit.Tokens.reducedMotion`; the kit's
+`Moonrise` then draws its last frame from the start and holds it for the splash's length, as Mistress's
+`Reduced_motion_shows_the_still_frame_for_the_splashs_length` does (`EmuSen_Kit.md` §7.19). A key skips the splash only
+when the kit's map makes it a press (§1.7: the arrows, Return and Enter, Escape, and the map's other keys), through
+`MoonriseModel.takeKey`; any other key (Tab, Shift, a letter) is kept from the screens behind and skips nothing. A pad
+press and a click still skip it. One difference from Mistress is named: the player's "system" choice reads the desktop's
+own preference in Mistress (KDE's `AnimationDurationFactor` of 0, or GNOME's `enable-animations` off, read by
+`MainWindow.SystemReducesMotion`), which has no Rust owner yet, so here "system" leaves motion on. **Held to**:
+`tests/still.rs` (the program under reduced motion, compared with Mistress's finished splash while not yet finished,
+then Tab, Shift and A leaving it and Return skipping it) and `tests/start.rs` (the setting's three values). Seeded
+faults, each reverted: the frame drawn at the clock's time failed the picture at 126,229 pixels; the hold dropped failed
+"held"; every key made a press failed at Tab; "system" read as on failed the settings test.
+
+**Held to** (measured 2026-11-08): `tests/start.rs` (2: the library's path in its order; the splash on unless turned off),
+`tests/program.rs` (the window over the real clients on a scratch tree with a synthetic NES image: Moonrise covers the
+window, runs once the systems arrive with a caption counting them, a pad press finishes it, it goes once the library is
+read, Home holds the focus and the library's selection is unmoved; nothing logged; the scenes keep `qml-rules` and
+`qmllint`), and the library view's test of the planets (a system with no engine has none, in the table's order) and the
+counted words; since the bodies, the worlds' lines in the table's order from each look, with the NES's palette and
+a gem. Seeded faults, each reverted: every system given a planet failed the library test; the palette dropped by
+`world_of` failed it; the splash
+deaf to the pad failed the program test (the splash never finished); the setting read inverted failed `start.rs`.
+
+**The mockups as numbers, step 2.** `Testing/mockups/Consoles.mockup.spec`, `Home.mockup.spec` and `Grid.mockup.spec`,
+written by hand from the three approved canvases (`Courts.dc.html`, `Home.dc.html`, `Grid.dc.html`, 1280 × 800 design
+units, approved 2026-11-05), and `emusen-qt-test`'s `mockup` module that reads them and holds a shown state to them
+(§8.2) *[own, because the format is EmuSen's own]*. The format, `mockup 1`, is plain text: a `canvas NAME WIDTH HEIGHT`
+line, `source` and `note` lines a reader reads and the comparison skips, and one `element` line per named element:
+its objectName (quoted where it holds a space), the edges the canvas states (`x`, `y`, `w`, `h`, `right`, `bottom`; one
+left out is free), a colour token by kit-core's name (`token=Muted`) or a colour that is no token (`ink=#RRGGBB`), the
+paint's `alpha` with the item's opacity, and the words, exact (`text="GAMES"`) or the canvas's example data
+(`words=data`, where only words being shown is held). The comparison finds each element by its objectName among the
+visible items, divides the scene's rectangle by the design unit, and holds every stated edge within two units, a token's
+colour exactly (an ink within a level a channel), an alpha within three levels, and the words.
+
+How the boxes were worked out from the CSS, so a reader can check a line: a text's box is its line box, Barlow's and
+Barlow Condensed's normal line height being 1.2 of the size (no half-leading); in a row aligned by baselines the tallest
+item's top is the row's top and the others share its baseline (Choose a console's GAMES at 40 with its baseline at 72,
+so "Choose a console" at 52); a grid's column is (width − gaps) / columns (the places 372, Home's places 152.57, the
+grid's cells 211.2); a centred flex row starts at (1280 − its width) / 2 (six tiles of 176 with gaps of 18 at 67, five
+at 164); a focused tile is lifted 6 (PlayStation 2's at 380) and its ring drawn 3 outside it; a body is centred in its
+104-unit art box (a planet 58, a shard cluster or gem 42 × 68, the focused gem 60 × 96). The canvases' data is
+example data (eleven consoles with their real library counts), so the words that are data are marked and the boxes
+that follow from the count of consoles are stated for eleven: the acceptance test of step 4 shows the canvas's
+eleven consoles. **One decision overrides the canvases**: the help bar stands flush on the foot, 742 to 800
+(`EmuSen_Interface.md` §24.7, decided 2026-11-05), where the Grid canvas drew it at 702 to 760; every file says so in
+a `note` line. The canvases' focus is stated too (PlayStation 2 on Choose a console, Continue on Home, the first cover
+on the grid), so a state is compared in the canvas's own focus.
+
+**Held to** (`qt-test/tests/mockup.rs`, 2, measured 2026-11-08): the three files read, each element once, the help bar
+at 742 in each; and the comparison at 1920 × 1200 (a unit of 1.5 pixels) passing a title, a glass tile at 55% and a
+data count where the canvas has them, and failing a title three units low, a tile painting Surface for SurfaceRaised, a
+count with no words, an opaque tile for one at 55%, and elements not shown. Three seeded faults, each reverted: a
+tolerance of five units failed the comparison test (the title three units low passed); the alpha not checked failed it;
+the Grid's help bar written at the canvas's 702 failed the files' test. The canvases cannot be rendered here (their
+`support.js` is not kept beside them), so the side-by-side pictures of step 4 draw each `.mockup.spec`'s boxes over the
+built screen's grab, beside the C# grab of the same state.
+
+**The screens' models, step 3's first part** (measured 2026-11-08). Everything Home, Choose a console and the grid show
+comes from a model's roles; nothing is written per console:
+
+- **The library view** (`library.rs`) reads, besides the systems and the games, which games are favourites and which
+  were played (paths, the most recent first; the source's `recent` answered a count before) and **the engine each
+  console runs now**, `LibrarySource::engines`: through the runtime's `Setting(console, "Engine")` with session 0 (the
+  player's stored choice, else the engine row's default), else the first engine the table lists, named from the cores
+  listing by `clients::engine_shown` (a libretro core by its corename, an EmuSen core by its info name less the port's
+  "RT", `without_port_mark`, the named exception of `EmuSen_Interface.md` §24.6). This replaces the table's first
+  engine, a difference from Mistress named at step 1. A row gained `fullName`, `status` (the count, "Your hearts, every
+  console", "Last: " and the game played last or "Nothing played yet"), `facts` ("Nintendo · 1983 · 2 games · runs on
+  Moon, an EmuSen core"), `engineName`, `libretro` and `countWords`; `LibraryModel` gained `summary` ("11 consoles ·
+  1,566 games"). The words are `words.rs`'s, as Mistress's `ConsolesScreen` words them.
+- **`GameModel`**: a list of games (roles `path`, `system`, `title`, `hue`, `favourite`) for the grid's cells, Home's
+  shelf and Choose a console's fan. It is set from `LibraryModel.gamesOf(key)`, the games a row leads to (all and a
+  console's by title, the favourites by title, the recently played the most recent first) as plain data, a JSON array
+  (`games.rs`), so the library is read once and neither model reaches into the other. A title is the file name without
+  its extension until scraped names are read.
+- **`HelpModel`**: a screen's help bar (`screen`: Home, Consoles, Grid) with the roles the kit's `HelpBar` reads, from
+  `help.rs`: Choose a console's Open (A), Back (B), Favourites (Y, `Search`), Random game (X, `Screensaver`); the grid's
+  Play, Game page, Favourite, Consoles; Home's Resume, Game page, Home card, as the mockups label them.
+- **`Words`** gained the screens' fixed words (GAMES, Choose a console, GAMES ▸, CONTINUE PLAYING, RECENT, Home's seven
+  places, the EMUSEN and LIBRETRO tags). The three list models declare `QAbstractListModel` once, in `library_model.rs`,
+  as kit-qt's `base.rs` does, since cxx-qt emits an upcast shim per declaration and a second one clashes at link time.
+- **The faces**: the mockups set names in Barlow Condensed Medium and words in Barlow; both are now in the kit's
+  `fonts/Fonts.qrc` beside Moonrise's two, the C#'s own files (SIL Open Font License 1.1, the licence already in
+  `licenses/`; SHA-256 of BarlowCondensed-Medium.ttf beginning `1da0b65f`, of Barlow-Regular.ttf `54786f6c`).
+
+**Held to** (`qt-models/tests/library.rs`, 8, and `clients.rs`, measured 2026-11-08): the rows' words, facts and engine
+from a fake source with an EmuSen and a libretro engine; the games of each row in order, read back whole through the
+plain data, and the summary; an engine named by its own info with the port's mark dropped only after a lower-case
+letter; each screen's help entries; and, over the real platform library, the NES's engine as the runtime's setting
+gives it with facts ending "an EmuSen core". Seeded faults, each reverted: the engine taken from the table's first in
+place of the source's answer failed the rows' test; the port's mark dropped from any name ending in "RT" failed the
+engine test; the recently played reversed failed the games' test.
+
+**The screens, step 3's second part** (measured 2026-11-08). `Home.qml`, `Consoles.qml` (Choose a console) and
+`GameGrid.qml` (the grid; not `Grid`, which is Qt Quick's positioner and was taken in its place) are in `qt-app/qml`, with
+`GameCard.qml` (a game without its cover: a card in its console's hue with its title), `CoverFan.qml` (up to four of a
+row's games, fanned) and `Faces.qml` (the two Barlow faces). Each lays its content out in canvas units from the window's
+corner inside a `Kit.Frame` with the navigation hidden, under its own `Kit.Sky`, and keeps the qml-rules and `qmllint`:
+
+- **What a screen shows is a model's.** Choose a console is one `Repeater` over `LibraryModel`: the places first
+  (`LibraryModel.places` counts them), then each console with games as its body; the tiles' boxes and the walk between
+  rows are `Kit.PlanetLayout`'s (`EmuSen_Kit.md` §7.19), the body's size `Body.tileWidth`/`tileHeight`, the focused
+  console's words its row's `fullName` and `facts`, the fan `GameModel` over `gamesOf` of the selected row. The grid's
+  cells are a `GridView` over `GameModel`, its heading the row it opened. Home's Continue and shelf are
+  `LibraryModel.recent` (the recently played as plain data, kept current by the model), its places `Words.homePlaces`,
+  its status line `Clock.time` (`clock.rs`, `QTime`'s, ticked by a `Timer` every 15 s). An empty `games` text is no
+  games, so a screen never writes a fallback list.
+- **The walk** is the frame's: a tile is a `Kit.Walkable`, and `KeyNavigation` names its neighbours (on Choose a console
+  from the layout's lists; on Home Continue, the shelf and the places). Each binding reads its `Repeater`'s count, so it
+  is read again once the items exist. A walkable is named apart from the painted rectangle the mockup names
+  (`tile.N` and `place.N` over `consoleTile.N` and `placeTile.N`, `continue` over `continuePanel`), so the comparison
+  finds the paint, and Home's and Choose a console's names do not meet.
+- **Switching screens** is `Screens` (`screens.rs`), one rule in Rust: Home's first place opens Choose a console, a row
+  chosen there opens its grid, the favourites' action (Y) opens theirs, B goes back one screen and stays on Home. The
+  other actions (X's random game, the game page, Home's card, Home's other six places) change nothing until their stage.
+  `Main.qml` shows the screen `Screens.shown` names and hands each screen's signal to it in one call. A change is
+  applied after the event that asked (`qt_thread().queue`): applied at once, the screen it opened took the same B press
+  and went back a second screen, which the seeded fault below shows. The actions are declared as data (§7.19 of
+  `EmuSen_Kit.md`): `HelpModel.actionLines` from `help.rs`, whose entries now carry their action keys.
+
+**Held to** (`qt-app/tests/screens.rs`, measured 2026-11-08, beside `program.rs` whose `sandbox` and `wait_for` moved to
+`tests/common`): over a sandbox of three synthetic games on two consoles, Home holds the focus on Continue; Down goes to
+the places when nothing was played; A on Games opens Choose a console on the selected row; Down goes to the first
+planet, Right along the row; A opens that console's grid with its own two games and its name; B goes back to Choose a
+console on the same console; Y opens the favourites; B twice goes Home, and nothing is logged. The tree, not the
+window's children, finds a `Repeater`'s items. `qt-models/tests/library.rs` holds `screens::step` and each screen's
+declared actions read back by the walk's parser. Seeded faults, each reverted: the switch applied at once failed the
+screens test at B from the grid; the favourites' action key misspelt failed it at Y. The kit's two are in `EmuSen_Kit.md`
+§7.19.
+
+**Step 4, acceptance** (measured 2026-11-08; `qt-app/tests/acceptance.rs`). The program over a sandbox of the canvas's
+eleven consoles, one synthetic image each under its own folder with its first extension and ten on the Super Nintendo,
+three played and one a favourite through the library's own changes. The fixture's engines shelve five of them (the NES,
+the Super Nintendo, the Game Boy, the Game Boy Color and the Nintendo 64); the others have no engine beside the test's
+platform library, or no image a scan routes without a real disc. Each screen is shown in the canvas's own focus
+(Continue; the last console, standing for PlayStation 2; the Super Nintendo's first cover) and held at the gate's five
+sizes: its `.mockup.spec` at 1280 × 800 and 1920 × 1200 (two units, token colours exact), the kit's gate audit (fit, pad
+and pointer reach, no chrome, contrast, the palette, the floor) at every size, and nothing logged. Each state is recorded
+as a spec and grabbed; `EMUSEN_QT_COMPARE` names the folder. Choose a console's boxes that follow from eleven consoles
+(the console tiles, bodies, names, counts, ring and the second orbit) are held by kit-core's layout test against the
+canvas's own numbers (`EmuSen_Kit.md` §7.19), not by this state of five.
+
+Fixed on the way, each found by the comparison or the gate: Home's Continue read its game through an invokable, so the
+binding never saw the games arrive (it now reads the count first); the grid opened with no current cover; the help bar's
+entries carried the style's padding, so the first glyph stood at 80 where the canvases put it at 64 (`HelpBar` now sets
+none); a generated card's border and an engine's name and tag were coloured from the console's hue, outside the palette
+and under 4.5:1 at 1920 wide (they are now `rule`, `muted` and `text`); the grid's neighbours (the shoulders and the rows
+beside it) were not built.
+
+**Named differences from the mockups**, each with its reason, which the test lists in `named_difference` and nowhere else:
+the help bar paints Surface opaque where the courts canvas had it at 92% (`HelpBar` is the kit's, one surface for every
+screen); the orbit line keeps the canvas's own ink `#8C96DC`, outside the palette; at 1280 × 720 alone the canvas's 17-
+and 18-unit words (a place's status, a console's count and engine) fall under the floor, as the canvas scales them by
+the height; the focused console's name keeps the canvas's line box of 1 (44 units) where Barlow's is 53, which the gate
+reads as cut at the foot though the capitals are whole; an engine's name longer than its tile is elided (the fixture's
+cores call themselves "MoonRT (Rust)"); the fan's covers overlap, as a fan does.
+
+**Compared with Mistress's recordings** (`EmuSen.WiseMan/Mistress/Specification/{Home,Consoles,Games}-*.spec`, and their
+grabs beside the Qt grabs with the mockup's boxes drawn over them, in `~/.cache/emusen/tmp/qt-s1/compare/*-side.png`).
+Where the C# and the mockup part, the program follows the mockup, so these differences are the approved design's: Home's
+Continue panel at 80 and 304 high (C# 72 and 296) and its places at 632, 152.57 wide (C# 622, 150); the grid's covers as
+208 × 146 cards in five columns from 64 (C# 180 × 240 cover cards in a 996-wide grid from 142); each help bar's entries as
+its canvas labels them (the C#'s Home adds Favourite, Search and Home; its grid adds Console, List and Home). What the
+program does not draw yet, named: the status line's controller count (the time alone); the crescent beside the wordmark
+(a plain body); Continue's console and facts line; the places' status lines on Home and their icons on Choose a console
+(plain discs); the engines' mark glyphs and hued tags; covers and favourite hearts (generated cards, until covers are
+read); scraped titles (file names, sorted as text, so "Game 10" before "Game 2"); and the grid's heading names its row,
+not the C#'s section. **Held to**: the test passes; seeded faults, each reverted: Continue's heading 4 units low failed
+the mockup at both sizes; a card's border in its hue failed the gate's palette; the help bar's padding restored failed
+the mockup at the first glyph.
+
+**Step 5, the screens brought to the accepted render** (measured on 2026-11-08). The canvases cannot be drawn here (their
+`support.js` is not kept and their faces are fetched online), so the oracle is Mistress's own look as the tester approved
+it, recorded at 1280 × 800 and 1920 × 1200 with the help bar on the foot (the `courts-built` grabs, and
+`EmuSen.WiseMan/Mistress/Specification/{Home,Consoles,Games}-*.spec` for their numbers). Decided 2026-11-08: where that
+render and a canvas disagree, the render stands, and each `.mockup.spec` entry it supersedes is rewritten with the reason
+in a `note` beside it (the grid's covers whole at their own shapes in 180 × 240 boxes, the tester's decision of
+2026-11-04, Interface §21; Home's Continue at 72 and 296 high, RECENT at 376, the places at 622, 150 wide every 167 and
+named in title case; the grid's focused words on two lines at 628 and 670).
+
+- **The library is the render's own.** `acceptance.rs` builds Mistress's own-look fixture: the eight Synthetic games on
+  the NES, the Super Nintendo and the Game Boy in one folder, their covers at their boxes' shapes in an ES-DE media
+  folder named by `EsdeMediaDirectory` (each drawn by Qt Quick as `SyntheticLibrary.Label` draws it: the game's colour,
+  a white rim, its console, title and size), each played three hours apart, two hearted, the installed engines as the
+  sidecars an installation carries (nothing is loaded from them), and the tools' summaries as Mistress's fixture
+  answers them. Home is held after Cobalt Harbor is started and the library read again, as the render's paused game.
+- **Covers through the models.** `ClientSource` opens the scraper as a handle for finding pictures alone
+  (`sources_alone`, the media store and the player's folders as Mistress gives them) and asks `emusen.scrape`'s `media`
+  for each game's cover; `GameRow` carries it, and `GameModel` gives `cover` (a file URL) and `facts` ("Super Nintendo ·
+  3 h ago", from games.db's `last_played`). `Cover.qml` draws a picture whole at its own shape on its box's foot with
+  the heart, and the gallery's lift (1.06 and 6 units up) and ring; a game with no art keeps the
+  generated card. The fan takes the canvas's last slots, so two covers stand at the right, turned 2 and 6 degrees.
+- **The rest of the picture.** The faces' weights are named (Barlow Condensed Medium, the wordmark Light), since both
+  files share a family and Qt chose the Light; the places' icons, the heart, the engine symbols, the sparkles, the
+  crescent and the warning mark are the canvases' own paths, kept as data in `marks.rs` and read through the `Marks`
+  singleton, since a QML file writes no words (`Glyph.qml`, `EngineMark.qml` with the project's pixel alien); an engine's name and tag are in its console's hue inside a `Kit.Scene` (`EmuSen_Kit.md` §7.20), its mark
+  `engine_mark` (a sky-named core's symbol, else its maker's glyph, libretro's badge); the consoles follow the
+  runtime's shelves; the grid's heading is a place's short name ("ALL") and its shoulders wrap; Home's places carry
+  their lines (`words::home_lines`: the games, each tool's brief or what it does, the look and the sound from the
+  settings, Exit; a tool's attention in amber with its mark; the tools' summaries come in through
+  `LibraryModel.toolSummaries`, which nothing fills until each tool's stage), and the status line counts Endymion's pads
+  (`Clock.controllers`, "1 controller · 21:42", the time alone with none). A generic pad's
+  glyphs are drawn as the Xbox pad's lettered ones, Mistress's rule for these screens; the help bars name the render's
+  entries, the shoulders as one.
+- **Fixed on the way:** Continue read its game through invokables, so a second read of the same count of games left the
+  old one shown; `GameModel.revision` now announces each read. Home's walk named the shelf's first cover by `itemAt`,
+  stale after a second read; the cover now names itself as it is made.
+
+**Differences that remain, each for the tester:** Continue shows the game's cover where the render shows the paused
+frame and "Paused just now": no session runs in the test, and the frame belongs to `SessionModel` and `GamePicture`,
+which Home does not read yet; the status line has no controller in the test, which reads no pad, and its time is the
+clock's; the covers' corners are square where the render rounds them a little (a mask through `MultiEffect` hid the
+pictures, so it was left out); the help bar's glyph stands 8 units from its word where the render has 10; the planets
+and the focused body are the kit's drawing at its sizes.
+
+**Held to** (measured on 2026-11-08): `acceptance.rs` passes, the mockups at 1280 × 800 and 1920 × 1200 and the gate at
+its five sizes with nothing logged, and now also holds every grid cover drawn from its picture, each engine named by its
+info less the port's mark with its own symbol, and Continue on the game played last after a second read; `program.rs`'s
+QML rules and `qmllint`; `qt-models` 15, `kit-qt` 38, `qt-test` 9, `kit-gallery` 4 (the gate), `kit-core` 88; clippy
+clean. The side-by-sides (the render left, the program right, nothing drawn over either) and their pixel differences
+are `~/.cache/emusen/tmp/qt-s1/compare/*-side.png` and `*-diff.png`. Seeded faults, each reverted and each caught by
+the acceptance test: the covers' lookup answering none (every cover read and drawn); Continue bound to the games' count
+in place of `revision` (Continue follows the games read again); a sky-named core given its maker's glyph (the engine's
+symbol).
+
+**Step 6, the last differences closed** (2026-11-08).
+
+- **Rounded covers** (measured 2026-11-08). The mask through `MultiEffect` drew nothing because the harness's first tier
+  renders with Qt Quick's software backend (§8.1), which has no shader effects: on the software backend a `MultiEffect`
+  is an empty box, and so is a `ShapePath.fillItem` (both tried in `qml` under `offscreen`; the second filled white). On
+  Vulkan both round. The two ways were compared at 1.5 times in a compositor of the test's own: a layer with a mask
+  renders the picture into a texture at the item's size in canvas units and is then scaled, so its covers came out
+  soft; a `Shape` whose path is a `PathRectangle` with the radius, filled by `fillItem` with the `Image`'s own texture
+  (`fillTransform` scaling the texture into the drawn box), draws its edges as curves at the window's resolution and
+  samples the picture where it lies, with no texture of its own. `RoundPicture.qml` is the second: a picture whole in
+  its box (the covers, on their box's foot) or filling it cut at the centre (Home's top, as Mistress's poster slot
+  fills its box), radius `tileRadius` (8, Mistress's `CoverCard` for a big cover). On the software backend it draws the
+  plain `Image`, square-cornered: that tier holds layout, focus and words, and the pictures are judged on Vulkan, where
+  the acceptance test runs.
+- **The help bar's glyph 10 units from its word**, the `IconTextSpacing` Mistress's help bands set (`HelpBar.glyphGap`,
+  `EmuSen_Kit.md` §7.20).
+- **A game in the program.** `emusen-qt` now plays: a game chosen on Home's shelf or the grid is recorded as started
+  (`LibraryModel.started`, games.db's `started`, then the games read again), opened and shown; the menu chord pauses it
+  and shows Home over it, Continue resumes it, and its screen gives way to Home when it stops (`Screens`: `Game`, `play`,
+  `menu`, `gameRunning`; the rule is `screens::step`). Nothing of the play is copied: the game is `Game.qml` of
+  `EmuSen.Play`, the session, the picture, the router's clock and the pad given to the game while it is in front, which
+  emusen-qt-play's window now holds too, answering the chord with a pause there; and the device is
+  `emusen_qt_play::host` (the device for Qt's platform, the plain preset's feed, the window's adoption as plain
+  handles), which both programs start through and the tests use. A new dependency, stated here: `emusen-qt` on
+  `emusen-qt-play`, the program on its game. `Main.qml` is shown by the program once its scene graph has adopted the
+  device, as emusen-qt-play's window is; without a device the window still opens and plays nothing. The splash keeps the
+  focus until it has faded: on the frame the skipping press finished it, Home took the focus while that press was still
+  being delivered, which Continue had ignored and the first place did not (`program.rs`, "the press was the splash's
+  alone").
+- **Continue as Mistress's Home has it** (`HomeScreen.Continue`, `HubLayout.AddTop`, `MainWindow.GamePage`'s `Art`).
+  Continue stands only while a game is suspended: its caption, its glass and ring, the planet, the title, and the facts
+  "Super Nintendo · Paused 3 minutes ago" (`words::paused_ago`, Mistress's `PausedAgo`; `Clock.paused`, said again on each
+  tick, counting from when `gamePaused` turned on), and the paused frame. The frame is the game's own `GamePicture`
+  drawn into a `ShaderEffectSource` at the window's resolution, cut at its centre to the box's shape as Mistress's
+  poster slot cuts the still, and filled into the same rounded `Shape`; one picture item names the feed, so the frame
+  thread sees one item's swaps. The shelf leaves the suspended game out (`GameModel.leaveOut`). With no game suspended
+  there is no Continue: the top shows the shelf's focused game (else its first) with no caption, glass or planet, its
+  picture the game's hero art, its fan art, else its screenshot, else its title screen, else its cover
+  (`library::HERO`, read from the media store for the played games alone), and the focus starts on the shelf, its name
+  under it; with no game played, on the first place. The help bar follows the row focused, as `HomeScreen.HintsFor`
+  gives it: Resume on Continue, Play on the shelf, Open on a place (`help::Screen::HomeShelf`, `HomePlaces`). A game
+  the library does not hold (opened by its file) is named from its file (`LibraryModel.titleOf`), with no console in its
+  facts and no planet. A game that starts is shown (`Screens.gameRunning`), so a start from outside the screens shows it
+  too; the screens' rule stays in `screens::step`, QML holding no logic (§1.3: no function, no `Qt.callLater`).
+- **One controller.** The acceptance test attaches an SDL virtual pad and names it to the reader alone
+  (`program.onlyPads`), so the status line reads "1 controller · 21:42" as the render's.
+
+**Acceptance on Vulkan** (measured on 2026-11-08; `qt-app/tests/acceptance.rs`, §8.1's second tier). The program runs as
+a player's: in a compositor of the test's own (`kwin_wayland --virtual`, 3840 × 2160), its window adopting Serenity's
+device on the RX 6800 through `host`, Qt on Vulkan with the threaded loop, the pads an SDL virtual pad alone. Four
+states, each at the five sizes with the mockup at 1280 × 800 and 1920 × 1200: Home with no game suspended (held to the
+gate; the render's `HomeNothingLeft`), Choose a console, the grid, and Home over a paused game. That game is a real
+session on the test core, Cobalt Harbor's file replaced by the test core's image (the sandbox has no Super Nintendo
+core), paused by the guide button on the virtual pad; Continue resumes it, and closed, Home has no Continue again. The
+covers' window adopts the same device: a second Vulkan instance in the process faulted in Qt's swapchain release when
+the engine was dropped, and each window is hidden before the harness goes, which releases its swapchain while its
+adopted instance still lives. *Open:* on a failed assertion the unwinding drops the windows unhidden and the process
+faults the same way, leaving its compositor running (its socket names the test's process); a watchdog such as
+qt-play's `within` would stop it. **Differences that remain, each for the tester:** the paused game's console and planet
+("Super Nintendo ·" and the gold planet in the render), its frame (the test core's dark picture, the render's orange)
+and Home's game count (7, Cobalt Harbor's file being the test core's now), all from the test core standing in for a
+Super Nintendo core; the clock's own time; the focused shelf cover's name meets the focus ring's foot, as the render
+places both, and the gate's contrast sampling at 1280 × 720 reads the ring there (named in `named_difference`).
+
+**Held to** (measured on 2026-11-08): `acceptance.rs` (as above, and the top's picture rounded at its corner, sampled
+from the window); `program.rs`, `screens.rs`, `splash.rs`, `still.rs`, `start.rs`; qt-play's `device`, `pads`, `ring`
+and `qml`; qt-models' `library` 12 (the hero art's order, the shelf less the suspended game, the paused words, the
+screens' rule for the game); clippy clean. Seeded faults, each reverted: the shelf keeping the suspended game (the
+models' test), the hero art's order with the screenshot first (the models' test), `RoundPicture` drawing square corners
+(the acceptance test's corner sample, at 66,205,110 where the box's corner must show what is behind).
+
+**Step 7, the Pause Card's first page** (2026-11-08; `EmuSen_Interface.md` §2.8, §5 item 4, §18.5, §20.6). Stage 1's
+last screen. The oracle is Mistress's own card over a paused game: the recordings
+`EmuSen.WiseMan/Mistress/Specification/PauseCard-{1280x800,1920x1200}.spec` and its accepted renders at 1280 × 800 and
+1920 × 1080, plus the Leave page's (`PauseCardLeave`).
+
+- **The chord opens it, as Mistress's `OpenPadMenu` does over a game.** Decided 2026-11-08: the chord over the game no
+  longer shows Home. `Screens` gained `Pause` and the ask `Library` (`screens::step`: the chord over the game is the
+  card; the card resuming is the game; Back to Library is Home with the game suspended; a game that stops under the card
+  is Home). Home over a paused game is reached as in Mistress, by Leave ▸ Back to Library, so the player keeps a way
+  home while a game runs.
+- **Every word from a model, the actions as data.** `pause.rs` (plain Rust) holds the pages: the first page's seven rows
+  in Mistress's words (`GameMenuRows`: Resume, Rewind, Save State ◂ slot ▸, Load State ◂ slot ▸, Speed ◂ 100% ▸, Game
+  Options ▸, Leave ▸, the lighter rule ending the first section), Leave's page, each row's key, what a choice does
+  (`choose`) and what B does (`back`: to the first page on the row that opened the page, else resume). The words come
+  from the session's facts, read as the game pauses: `SessionModel.cardFacts` (the runtime's `session_info`,
+  `rewind_reel` and `state_slots`, all reads, which the runtime answers on any thread, emusen_crystal.h), worded as
+  Mistress words them (`RewindUnavailable`, `RewindHeld`, `SlotValue`). `PauseModel` puts the page on Qt as rows, title
+  and breadcrumb; the help bar is `HelpModel`'s `Pause` and `PausePage` (A Select or Choose, B Resume or Back, X
+  Screenshot, Start Resume), whose `resume` line is the frame's declared action (`EmuSen_Kit.md` §7.19).
+- **The drawing** (`PauseCard.qml`, canvas units): the scrim over the paused frame, which never moves; the panel at the
+  left edge at 40% of the width on Surface, its shadow by `MultiEffect` (offset 0,8, blur 24, black at 50%, §5.4) from a
+  caster behind it, so the panel's words are never drawn through a layer; the title row (the game's cover at 60 × 80
+  where the library has one, the breadcrumb in Muted above the title on a page past the first, the title in Barlow
+  Condensed Regular at 32 down to 22, LunaP's card's face); the rows from 64,156 as `Kit.MenuRow`s 54 high with their
+  marks and rules (`EmuSen_Kit.md` §7.21); the band, 98 units of Surface with a Border rule under the panel and its
+  shadow, and its help bar over both. The help bar paints Surface: painted `transparent` on Vulkan it cleared its strip
+  to alpha 0 across the window (the panel and band beneath read 0,0,0,0 in the grab, measured 2026-11-08; on the
+  software backend it drew as expected), so it is opaque, and the panel's shadow does not darken the band within it.
+- **The slide** (§20.6, LunaP §218): `slide` from 1 to 0 over Enter (200 ms, quadratic out) as the card opens and back
+  over Exit (160 ms, quadratic in) as it closes; the panel moves left by its right edge and 40 units times `slide`, the
+  band down by its height, the pane fades. A page turn moves nothing. The tokens' durations are nothing under reduced
+  motion, so the card comes and goes at once. B or Start closes it at once (the card stops taking the pad), and the
+  game resumes only when it says it is `gone`.
+
+**Owed to stage 2, named:** the context pane (the reel's three pictures on Rewind, the slots' pictures and sentence on
+Save and Load: the pane is laid out, empty); what Rewind, Save State, Load State, Speed, their Left and Right, Game
+Options ▸ and X's screenshot do (declared, answering nothing yet); the console rows (Change Disc, Swap Players); Leave's
+Restart Game…, Quit Game… and Quit EmuSen… with their questions; the Guide chords (Up saves, Down loads, R1 a
+screenshot); and a card opened again while it slides out taking over that pause. `Play.qml`, emusen-qt-play's window of
+one game, keeps pausing and resuming on the chord.
+
+**Compared with Mistress** (measured on 2026-11-08). The Qt recordings `PauseCard-1280x800.spec` and `-1920x1200.spec`
+were read by WiseMan's own `SpecDocument.Parse` and written back byte for byte, `InterfaceRules.All` found 0 faults, and
+`InterfaceSpec.Compare` against Mistress's recordings found the card's root (`PadCard`, a pane over the window), the scrim
+(`AdaptiveCardScrim`), the rows' box (`AdaptiveCardRows`, 64,156 424 × 378) and the list (`PadMenuList`, a list) in place
+at both sizes. Its 53 differences at each size are these, each a fact of the toolkit rather than of the card: Avalonia's
+wrappers, which Qt has no counterpart for (`AdaptiveLayers`, `AdaptiveContent`, the list's `PART_ScrollViewer`: the card
+holds at most eight rows and never scrolls); `AdaptiveCard` at 0,0,512,800, where Avalonia's `MenuPanel` control spans the
+window and paints its panel inside; the Qt items the C# tree has no names for; and the walk's 28 edges through the
+seven rows, where Mistress records `walk none` because its menu moves its own selection. The grabs beside Mistress's
+renders at 1280 × 800 and 1920 × 1080, with nothing drawn over either, are `~/.cache/emusen/tmp/qt-s1/compare/
+PauseCard-*-side.png` and `PauseCardLeave-*-side.png`, with their differences as `*-diff.png`: the title within one unit
+of width (254 against 255), the marks within a pixel, the rows one pixel lower, the help bar's last entry three units
+right.
+
+**Differences that remain, each for the tester:** the Rewind row reads "nothing to go back to yet", where Mistress's
+render shows no value, because emusen-qt's session does not yet turn the runtime's rewind on from the player's settings
+as Mistress does at a game's start (owed with Rewind's page); the paused frame is the test core's dark picture where the
+render's is black; the panel's shadow does not darken the band within the help bar's strip (above); Mistress draws the
+section's rule in `#707076`, the card in `Border` (`#707070`); the title's shrink floor is the design's 22 units
+(`EmuSen_Interface.md` §5 item 4), where LunaP's card shrinks to 0.55 of 32; and Leave's page holds Back to Library
+alone.
+
+**Held to** (measured on 2026-11-08): `acceptance.rs` on Vulkan in its own compositor with the RX 6800, the game a real
+session on the test core opened from the program's own path: the chord pausing it under the card, the card in place
+with Mistress's seven rows and her words, held at the gate's five sizes with nothing logged and recorded; B resuming the
+game only once the card has gone; the chord again, Leave ▸ (a page turn, nothing moved), Back to Library to Home over the
+paused game, held as before. A watchdog stops its compositor: `Compositor::watch` (`emusen-qt-test`) makes a panic, or a
+run past ten minutes, write its words to the process's own stderr, stop KWin and end the process, since unwinding
+faulted in Qt's swapchain release and left the compositor running (step 6's open point); a first failed run showed the
+panic's words and left no KWin. `pause.rs` on the software backend: the first page's words and help bar, the slide part
+of the way in at 60 ms and in place by 400, a page turn moving nothing, B back to Leave's row, Back to Library, B and
+Start resuming once gone, and none of the motion under reduced motion. qt-models' `pause` 4 (the rows and words from the
+facts, the facts read as Mistress reads them, the choices and B, the help bar and declared actions) and `library` 12
+(the screens' rule with the card); `program.rs`'s QML rules and `qmllint`; the kit's 39 and the gallery's gate 4; clippy
+clean. Seeded faults, each reverted: the section's rule on Game Options rather than Speed (the models' `pause` test);
+the slide's duration written as 200 ms in place of the token (`pause.rs`, under reduced motion); B on Leave returning
+to the first row (`pause.rs`, the row that opened the page).
+
 ---
 
 ## 8. Testing
@@ -1069,7 +1478,8 @@ fourth is a property of the models from stage 0 on (§6), held by tests rather t
    element (nothing covers it) and make the same view-model call as the pad's A there, and the wheel must move every
    list that scrolls; and **no chrome**, in the big-screen and card forms no menu bar or status bar item is visible.
 2. **The picture**: `QQuickRenderControl` on Vulkan on the RX 6800, the ring's cases drawn through `GamePicture` and read
-   back; one GPU test at a time, the validation layer on.
+   back; one GPU test at a time, the validation layer on. Since 2026-11-08 the program's acceptance runs here too, in a compositor of the
+   test's own, so the screens' pictures (rounded corners, the paused frame) are judged as a player sees them (§7.1, step 6).
 
 ### 8.2 The mockups and the recordings as oracles
 

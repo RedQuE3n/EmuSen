@@ -25,14 +25,14 @@ namespace EmuSen.WiseMan.Mistress.BigPicture
 
         private static readonly BindingFlags Hidden = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        private static LunaSplash? Splash(ThemedSession s) => (LunaSplash?)typeof(MainWindow).GetProperty("SplashShown", Hidden)!.GetValue(s.Window);
+        internal static LunaSplash? Splash(ThemedSession s) => (LunaSplash?)typeof(MainWindow).GetProperty("SplashShown", Hidden)!.GetValue(s.Window);
 
         // Whether the splash still takes the pad and the keys: false while it fades.
         private static bool Taking(ThemedSession s) => (bool)typeof(MainWindow).GetProperty("SplashOpen", Hidden)!.GetValue(s.Window)!;
 
         private static string Bells => System.IO.Path.GetFileNameWithoutExtension(StartupSplash.BellsKey);
 
-        private static int LengthMs => (int)Math.Round(SplashTimeline.Moonrise.Length * 1000);
+        internal static int LengthMs => (int)Math.Round(SplashTimeline.Moonrise.Length * 1000);
 
         private static ThemedSession Open(Task? work = null, Action<AppSettings>? more = null, double width = 1280, double height = 800) =>
             new(width, height, settings: a => { a.StartupSplash = true; more?.Invoke(a); }, startupWork: work ?? Task.CompletedTask);

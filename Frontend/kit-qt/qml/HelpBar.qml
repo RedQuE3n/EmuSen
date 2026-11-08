@@ -10,9 +10,16 @@ Rectangle {
     property alias model: entries.model
     property real leftInset: 0
     property int family: Kit.Families.Generic
+    // The labels' face, the gap between entries and the gap from a glyph to its label; a theme may set its own.
+    property font labelFont: Qt.font({ pixelSize: Kit.Tokens.fontBody })
+    property real entrySpacing: Kit.Tokens.paneGap
+    property real glyphGap: Kit.Tokens.base * 2
+    // The rule along its top; a host that draws the band itself turns it off.
+    property bool ruled: true
     implicitHeight: Kit.Tokens.helpBar
     color: Kit.Tokens.surface
     Rectangle {
+        visible: root.ruled
         anchors.top: parent.top
         width: parent.width
         height: Kit.Tokens.hoverBorder
@@ -21,20 +28,25 @@ Rectangle {
     Row {
         x: root.leftInset
         anchors.verticalCenter: parent.verticalCenter
-        spacing: Kit.Tokens.paneGap
+        spacing: root.entrySpacing
         Repeater {
             id: entries
             Button {
                 id: entry
                 required property int button
                 required property string label
+                required property var model
+                readonly property int pair: entry.model.pair ?? -1
                 objectName: "help-" + entry.label
                 flat: true
+                leftPadding: 0
+                rightPadding: 0
+                implicitWidth: entry.implicitContentWidth
                 focusPolicy: Qt.NoFocus
                 text: entry.label
                 onClicked: root.controller.offer(entry.button)
                 contentItem: Row {
-                    spacing: Kit.Tokens.base * 2
+                    spacing: root.glyphGap
                     Kit.PadGlyph {
                         objectName: "glyph-" + entry.label
                         anchors.verticalCenter: parent.verticalCenter
@@ -42,11 +54,20 @@ Rectangle {
                         button: entry.button
                         swap: Kit.PadRouter.swapAcceptBack
                     }
+                    Kit.PadGlyph {
+                        objectName: "glyph2-" + entry.label
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: entry.pair >= 0
+                        width: entry.pair >= 0 ? implicitWidth : 0
+                        family: root.family
+                        button: Math.max(0, entry.pair)
+                        swap: Kit.PadRouter.swapAcceptBack
+                    }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: entry.label
                         color: Kit.Tokens.text
-                        font.pixelSize: Kit.Tokens.fontBody
+                        font: root.labelFont
                     }
                 }
             }

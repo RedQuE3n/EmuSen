@@ -23,6 +23,8 @@ pub mod qobject {
         include!("cxx-qt-lib/qvariant.h");
         type QVariant = cxx_qt_lib::QVariant;
         include!("cxx-qt-lib/qmodelindex.h");
+        include!("cxx-qt-lib/qstring.h");
+        type QString = cxx_qt_lib::QString;
         type QModelIndex = cxx_qt_lib::QModelIndex;
         include!("emusen-kit-qt/src/kinds.cxxqt.h");
         #[namespace = "Bodies"]
@@ -65,8 +67,12 @@ pub mod qobject {
         #[qproperty(f64, cap)]
         #[qproperty(Ring, ring)]
         #[qproperty(i32, moons)]
+        #[qproperty(QString, inks)]
+        #[qproperty(QString, world)]
         #[qproperty(f64, unit_width, READ, NOTIFY)]
         #[qproperty(f64, unit_height, READ, NOTIFY)]
+        #[qproperty(f64, tile_width, READ, NOTIFY)]
+        #[qproperty(f64, tile_height, READ, NOTIFY)]
         type BodyShapes = super::BodyShapesRust;
     }
 
@@ -127,14 +133,22 @@ pub struct BodyShapesRust {
     cap: f64,
     ring: Ring,
     moons: i32,
+    /// The palette: the light, middle and rim colours as `#RRGGBB` words, or empty for the hue's own; `inks`, since a QQuickItem has a `palette` (EmuSen_Kit.md §7.18).
+    inks: cxx_qt_lib::QString,
+    /// A whole world as one line (EmuSen_Kit.md §7.18); when it reads, it stands for the hue, the shape and the features.
+    world: cxx_qt_lib::QString,
     unit_width: f64,
     unit_height: f64,
+    /// The size the shape is drawn at on a picker's tile, at rest or focused (kit-core's `size_of`).
+    tile_width: f64,
+    tile_height: f64,
     rows: Vec<ShapeRow>,
 }
 
 impl Default for BodyShapesRust {
     fn default() -> Self {
         let (unit_width, unit_height) = world::unit_box(world::WorldShape::Planet);
+        let (tile_width, tile_height) = world::size_of(world::WorldShape::Planet, false);
         let mut rust = BodyShapesRust {
             shape: BodyShape::Planet,
             hue: 0.0,
@@ -144,8 +158,12 @@ impl Default for BodyShapesRust {
             cap: 0.0,
             ring: Ring::NoRing,
             moons: 0,
+            inks: cxx_qt_lib::QString::default(),
+            world: cxx_qt_lib::QString::default(),
             unit_width,
             unit_height,
+            tile_width,
+            tile_height,
             rows: Vec::new(),
         };
         rust.rebuild();
@@ -156,13 +174,17 @@ impl Default for BodyShapesRust {
 impl BodyShapesRust {
     fn body(&self) -> world::WorldBody {
         let moons = u8::try_from(self.moons.clamp(0, 2)).unwrap_or(0);
-        crate::world::body(kinds::world_shape(self.shape), self.craters, self.bands, self.cap, kinds::world_ring(self.ring), moons)
+        let mut body =
+            crate::world::body(kinds::world_shape(self.shape), self.craters, self.bands, self.cap, kinds::world_ring(self.ring), moons);
+        body.palette = crate::world::palette(&self.inks.to_string());
+        body
     }
 
     fn rebuild(&mut self) {
-        let body = self.body();
+        let (hue, body) = world::parse_world(&self.world.to_string()).unwrap_or((self.hue, self.body()));
         (self.unit_width, self.unit_height) = world::unit_box(body.shape);
-        self.rows = rows(&body, self.hue, self.focused);
+        (self.tile_width, self.tile_height) = world::size_of(body.shape, self.focused);
+        self.rows = rows(&body, hue, self.focused);
     }
 }
 
@@ -176,6 +198,8 @@ impl cxx_qt::Initialize for qobject::BodyShapes {
         self.as_mut().on_cap_changed(|this| this.refresh()).release();
         self.as_mut().on_ring_changed(|this| this.refresh()).release();
         self.as_mut().on_moons_changed(|this| this.refresh()).release();
+        self.as_mut().on_inks_changed(|this| this.refresh()).release();
+        self.as_mut().on_world_changed(|this| this.refresh()).release();
     }
 }
 
@@ -186,6 +210,8 @@ impl qobject::BodyShapes {
         self.as_mut().end_reset_model();
         self.as_mut().unit_width_changed();
         self.as_mut().unit_height_changed();
+        self.as_mut().tile_width_changed();
+        self.as_mut().tile_height_changed();
     }
 
     pub fn data(&self, index: &QModelIndex, role: i32) -> QVariant {

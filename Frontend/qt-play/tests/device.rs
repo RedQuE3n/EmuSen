@@ -27,9 +27,9 @@ fn a_lent_device_s_pictures_are_drawn_in_the_window_as_the_core_made_them() {
     let sdl = Sdl::open();
     let pad = sdl.attach("EmuSen Test Xbox Pad", 0x045e, 0x028e);
 
-    let (device, feed) = device_and_feed(&world.dir("presets"));
+    let (device, feed, adoption) = device_and_feed(&world.dir("presets"));
     let mut harness = Harness::new();
-    let mut scene = play_window(&mut harness, &device);
+    let mut scene = play_window(&mut harness, &adoption);
     assert!(scene.set_property("play", "onlyPads", &pad.id.to_string()));
     play(&mut scene, &feed, &game);
     until(&mut scene, "a second of pictures", |_| feed.counts().shown.load(Ordering::Relaxed) >= 60);

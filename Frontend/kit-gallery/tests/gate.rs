@@ -64,35 +64,6 @@ fn finish_moonrise(scene: &mut Scene<'_>) {
     panic!("the splash did not finish in 12 s");
 }
 
-/// The C# LunaSplash's finished frame at 1280 x 720, the approved draft's picture star for star, with the draft's 13 consoles.
-const MOONRISE_REFERENCE: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../Testing/moonrise/LunaSplash-1280x720.png");
-/// Levels and reach under which a pixel matches the reference: antialiasing moves an edge by under a pixel (EmuSen_Kit.md §7.10).
-const MOONRISE_LEVELS: i32 = 24;
-const MOONRISE_REACH: i32 = 2;
-/// The words' and the moon's boxes, where Skia's subpixel text and stroke coverage differ from Qt's: a glyph or the moon
-/// out of place still differs by more.
-const MOONRISE_LOOSE_LEVELS: i32 = 128;
-/// Pixels that may differ outside them.
-const MOONRISE_SPARE: usize = 4;
-
-/// Qt's finished Moonrise against the C# reference, pixel by pixel, the differing pixels marked beside the grabs.
-fn moonrise_against_reference(scene: &mut Scene<'_>, tree: &emusen_qt_test::tree::Tree, marks: &str) -> Vec<String> {
-    let loose: Vec<([i32; 4], i32)> = ["moonriseTitle", "moonriseCaption", "moonOutline"]
-        .iter()
-        .filter_map(|name| tree.find_named(name))
-        .map(|i| {
-            let n = &tree.nodes[i as usize];
-            ([n.x as i32 - 4, n.y as i32 - 4, n.w as i32 + 8, n.h as i32 + 8], MOONRISE_LOOSE_LEVELS)
-        })
-        .collect();
-    assert_eq!(loose.len(), 3, "the title, the caption and the moon in the tree");
-    match scene.difference(MOONRISE_REFERENCE, MOONRISE_LEVELS, MOONRISE_REACH, &loose, marks) {
-        Some(n) if n <= MOONRISE_SPARE => Vec::new(),
-        Some(n) => vec![format!("Moonrise differs from the C# reference at {n} pixels, marked in {marks}")],
-        None => vec!["Moonrise's reference could not be read, or its size differs".to_owned()],
-    }
-}
-
 /// The finished splash shows every star of the draft's sky.
 fn moonrise_stars(scene: &mut Scene<'_>) {
     assert_eq!(scene.property("moonrise", "starsShown"), "220", "the splash's stars, which begin at no opacity");
@@ -250,7 +221,13 @@ fn qt_7_stage_0_gate_on_the_gallery() {
                         0 => inside_carousel(&tree).into_iter().chain(list_cut_short(&tree, room)).collect(),
                         1 => sweep(&mut scene, &tree, variant),
                         2 if (w, h) == (1280, 720) && form == WalkForm::BigScreen && variant == Variant::Dark => {
-                            moonrise_against_reference(&mut scene, &tree, &grabs.join("moonrise-difference.png").display().to_string())
+                            emusen_qt_test::moonrise::against(
+                                &mut scene,
+                                &tree,
+                                emusen_qt_test::moonrise::DRAFT_REFERENCE,
+                                emusen_qt_test::moonrise::SPARE,
+                                &grabs.join("moonrise-difference.png").display().to_string(),
+                            )
                         }
                         _ => Vec::new(),
                     };

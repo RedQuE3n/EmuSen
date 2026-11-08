@@ -65,6 +65,11 @@ impl UiButton {
         UiButton::Screensaver,
     ];
 
+    /// The button a name means, as `{:?}` writes it.
+    pub fn named(name: &str) -> Option<UiButton> {
+        UiButton::ALL.into_iter().find(|b| format!("{b:?}") == name)
+    }
+
     pub const fn index(self) -> usize {
         self as usize
     }

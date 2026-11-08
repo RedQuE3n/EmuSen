@@ -69,6 +69,7 @@ pub mod qobject {
         FocusX,
         FocusY,
         FocusRadius,
+        Palette,
     }
 
     #[auto_cxx_name]
@@ -80,6 +81,7 @@ pub mod qobject {
         #[qproperty(f64, height)]
         #[qproperty(QString, title)]
         #[qproperty(QString, caption)]
+        #[qproperty(QString, worlds)]
         #[qproperty(QList_f64, hues)]
         #[qproperty(i32, seed, READ, CONSTANT)]
         #[qproperty(i32, star_count, READ, CONSTANT)]
@@ -132,6 +134,7 @@ pub mod qobject {
         #[qproperty(QColor, line_ink, READ, CONSTANT)]
         #[qproperty(QColor, title_ink, READ, CONSTANT)]
         #[qproperty(QColor, caption_ink, READ, CONSTANT)]
+        #[qproperty(bool, still)]
         type MoonriseModel = super::MoonriseModelRust;
     }
 
@@ -155,6 +158,10 @@ pub mod qobject {
         /// The frame for the host's clock, in seconds from the splash's start.
         #[qinvokable]
         fn tick(self: Pin<&mut MoonriseModel>, seconds: f64);
+        /// A key while the splash shows: one the kit's map makes a press skips to the end, and every key is kept from the
+        /// screens behind, Tab's walk included, so it answers true.
+        #[qinvokable]
+        fn take_key(self: Pin<&mut MoonriseModel>, key: i32, modifiers: i32) -> bool;
     }
 
     extern "RustQt" {
@@ -191,7 +198,7 @@ pub mod qobject {
 
 use qobject::PlanetRole;
 
-pub const ROLE_NAMES: [(PlanetRole, &str); 26] = [
+pub const ROLE_NAMES: [(PlanetRole, &str); 27] = [
     (PlanetRole::PlanetX, "planetX"),
     (PlanetRole::PlanetY, "planetY"),
     (PlanetRole::PlanetRadius, "planetRadius"),
@@ -218,6 +225,7 @@ pub const ROLE_NAMES: [(PlanetRole, &str); 26] = [
     (PlanetRole::FocusX, "focusX"),
     (PlanetRole::FocusY, "focusY"),
     (PlanetRole::FocusRadius, "focusRadius"),
+    (PlanetRole::Palette, "inks"),
 ];
 
 pub struct MoonriseModelRust {
@@ -225,7 +233,10 @@ pub struct MoonriseModelRust {
     height: f64,
     title: QString,
     caption: QString,
+    worlds: QString,
     hues: QList<f64>,
+    /// Reduced motion: the last frame is drawn from the start and held for the splash's length (EmuSen_Interface.md §22).
+    still: bool,
     seed: i32,
     star_count: i32,
     length: f64,
@@ -292,7 +303,9 @@ impl Default for MoonriseModelRust {
             height: 0.0,
             title: QString::default(),
             caption: QString::default(),
+            worlds: QString::default(),
             hues: QList::default(),
+            still: false,
             seed: timeline.seed as i32,
             star_count: timeline.star_count as i32,
             length: timeline.length,
@@ -412,6 +425,18 @@ impl cxx_qt::Initialize for qobject::MoonriseModel {
                 rust.splash = None;
             })
             .release();
+        // `worlds` is the declarative way to a row of drawn worlds, one line each (EmuSen_Kit.md §7.18).
+        self.as_mut()
+            .on_worlds_changed(|mut this| {
+                let bodies: Vec<SplashBody> = emusen_kit_core::world::parse_worlds(&this.worlds.to_string())
+                    .into_iter()
+                    .map(|(hue, body)| SplashBody { name: String::new(), hue, body: (body != WorldBody::PLAIN).then_some(body) })
+                    .collect();
+                let mut rust = this.as_mut().rust_mut();
+                rust.bodies = bodies;
+                rust.splash = None;
+            })
+            .release();
         // A resize lays the frame out again at the time shown, so a finished splash follows its window.
         self.as_mut().on_width_changed(|this| this.relayout()).release();
         self.as_mut().on_height_changed(|this| this.relayout()).release();
@@ -462,10 +487,14 @@ impl qobject::MoonriseModel {
                 rust.splash = Some(Splash::new(Timeline::MOONRISE, rust.bodies.clone()));
             }
             let (width, height) = (rust.width, rust.height);
-            let frame = rust.splash.as_ref().map(|s| s.frame(seconds, width, height));
+            let drawn = if rust.still { rust.length } else { seconds };
+            let frame = rust.splash.as_ref().map(|s| s.frame(drawn, width, height));
             rust.time = seconds;
             if let Some(frame) = &frame {
                 rust.read(frame);
+            }
+            if rust.still {
+                rust.finished = seconds >= rust.length;
             }
             rust.frame = frame;
         }
@@ -478,6 +507,14 @@ impl qobject::MoonriseModel {
             self.as_mut().data_changed(&first, &last, &QVector::<i32>::default());
         }
         self.announce();
+    }
+
+    pub fn take_key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        if crate::qt_keys::press_of(key, modifiers).is_some() {
+            let length = self.length;
+            self.tick(length);
+        }
+        true
     }
 
     fn announce(mut self: Pin<&mut Self>) {
@@ -553,6 +590,7 @@ impl qobject::MoonriseModel {
             PlanetRole::FocusX => QVariant::from(&(planet.focus[0] - planet.centre[0] + planet.radius)),
             PlanetRole::FocusY => QVariant::from(&(planet.focus[1] - planet.centre[1] + planet.radius)),
             PlanetRole::FocusRadius => QVariant::from(&planet.focus_radius),
+            PlanetRole::Palette => QVariant::from(&QString::from(crate::world::palette_words(body.palette))),
             _ => QVariant::default(),
         }
     }

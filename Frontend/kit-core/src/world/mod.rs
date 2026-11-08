@@ -1,12 +1,14 @@
 //! The drawn world as data: bodies, the sky and Moonrise as vertices, colours and times, never pixels (EmuSen_Qt.md §1.4 and §10.4, EmuSen_Kit.md §4).
 
 mod body;
+mod line;
 mod moonrise;
 mod random;
 mod shape;
 mod sky;
 
 pub use body::{WorldBody, WorldRing, WorldShape, colours, facet_inks, geometry, glow, size_of, tallness, unit_box};
+pub use line::{hex, parse_world, parse_worlds, shape_of, world_line};
 pub use moonrise::{
     CAPTION, CAPTION_SIZE, CAPTION_Y, Frame, HALO, HALO_EDGE, LINE, LIT_INNER, LIT_OUTER, Line, MOON_RADIUS, MOON_Y, Moon, OUTLINE,
     PlanetFrame, ROW_MOST, ROW_SHARE, ROW_Y, SHADOW, SPLASH_STAR_SIZE, SWEEP, Span, Splash, SplashBody, Sweep, TITLE, TITLE_SIZE, TITLE_Y,

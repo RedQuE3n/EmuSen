@@ -1255,6 +1255,158 @@ press was heard), a player's own map ignored (Endymion's test: player 2 read pla
 held over the game through (`router`: the walk saw it), a button told to port 1 (`input`: A never counted). No C++ was
 added.
 
+### 7.18 Worlds as lines: Moonrise's and the tiles' bodies from the host's data (2026-11-08)
+
+Decided 2026-11-08 by the tester, from `EmuSen_Interface.md` §24.6: each console is drawn by its maker in Choose a console
+and in Moonrise, so the program's splash draws the bodies, the approved draft remaining the oracle for everything else
+in it (sky, stars, moon, halo, title, layout). The kit's splash took a host's bodies only through the `addBody`
+invokable, which a view cannot call in a loop under `EmuSen_Qt.md` §1.3, and a `Body` had no palette, though kit-core's
+`WorldBody` has carried one since LunaP §222.1. A minor addition of the kit's surface closes both: a world as one line
+of plain text, the form of a declarative input.
+
+- **kit-core** `world::line`: `world_line(hue, body)` writes and `parse_world` reads `HUE SHAPE CRATERS BANDS CAP RING
+  MOONS [#LIGHT #MIDDLE #RIM]` (shapes `planet`, `shards`, `gem`; rings `none`, `subtle`, `big`; moons at most 2; the
+  palette three colours or none, a world without one drawn from its hue); `parse_worlds` reads one a line and leaves out a
+  line it cannot read. The grammar has one owner, here; a host writes lines with `world_line`, never by hand.
+- **kit-qt** `MoonriseModel.worlds` (and `Moonrise.worlds`): the lines, each a planet of the row, a plain one (no palette,
+  no feature, a planet) drawn as the draft's lit disc as before, any other as a `Body`; each planet's row gained the role
+  `inks`, the palette as three words. `BodyShapes` and `Body` gained `inks` (the palette as three `#RRGGBB` words; empty
+  is the hue's own) and `world` (a whole line, which, when it reads, stands for the hue, the shape and the features). The
+  name is `inks`, not `palette`, because every `QQuickItem` has a `palette` and QML warns that the member overrides it.
+- **The registry** (rule Q, §7.6) gained `BodyShapes.inks`, `BodyShapes.world`, `MoonriseModel.worlds` and the role
+  enumeration's `Palette`, additions only; reviewed and copied.
+
+The host's side is `EmuSen_Qt.md` §7.1: `LibraryModel` writes each console's line from the systems table's look (the one
+owner of which console is which body), as the role `world` of a console's row and as `splashWorlds`, the systems with an
+engine in the table's order. **Held to** (measured 2026-11-08): kit-core's `world` test (the NES's line with its palette
+written and read back; a capped, ringed planet with two moons and a shard cluster read from a text with an unreadable
+line left out; a palette of two colours and an unknown shape refused); kit-qt's `world` test (three words a palette,
+two or none not; the palette, not the hue, paints the disc); the registry test. Seeded on 2026-11-08 and reverted: the
+palette dropped in `parse_world` failed kit-core's test.
+
+**The bodies against Mistress's splash** (measured 2026-11-08). The draft's picture has plain planets only, so a second
+C# reference holds the bodies: `Testing/moonrise/LunaSplash-bodies-1280x720.png`, Mistress's own splash at 1280 × 720
+on its finished frame, with the courts canvas's eleven consoles (NES, Super Nintendo, Nintendo 64, Game Boy, Game Boy
+Color, Master System, Genesis, Sega CD, PlayStation, PlayStation 2, Dreamcast) in the systems table's order, each the
+body `StartupSplash.Bodies` gives it, and the caption "11 CONSOLES". WiseMan's `MoonrisePictureTool` writes it (with
+`EMUSEN_BIGPICTURE_PNG=1`, to `~/.cache/emusen/tmp/moonrise/raw/`, then copied beside the draft's): a themed session
+whose start-up work never ends holds the splash, as `StartupSplashTests` does, and the tool sets the eleven on it. The
+list is stated rather than read from the build's engines because the engines a runtime offers follow the cores found
+beside its platform library, which differ between WiseMan's output (eight cores) and the Qt tests' platform library
+(none built beside it); a pixel comparison needs one list on both sides. Which systems have an engine is held by the
+library view's test instead (§7.1 of `EmuSen_Qt.md`).
+
+`emusen-qt`'s `tests/splash.rs` holds the program to it: the program's window at 1280 × 720, its Moonrise given the
+eleven consoles' lines (`library::world_line_of` over the runtime's systems) and the caption from `words.rs`, skipped to
+its finished frame by a pad press and held up, is compared pixel by pixel. The comparison is `emusen-qt-test`'s
+`moonrise::against`, moved there from the gallery's gate so the gate and the program share one tolerance (§7.10's: 2
+pixels and 24 levels, 128 inside the words' and the moon's boxes). Against the draft 4 pixels may differ; against the
+bodies 16, since Skia and Qt's curve renderer antialias the shards' and gems' straight edges differently (10 pixels, each
+within 30 levels of the tolerance, on the Dreamcast's and the Genesis's shards); a wrong body differs at hundreds. The
+caption's box is loose enough to let a digit through, so the test also holds its words. Seeded on 2026-11-08, each
+reverted: the palette dropped by `world_of` failed it at 407 pixels; the moonlets dropped at 30; the caption counting one
+too many passed the pictures and failed the words, which is why the words are held.
+
+### 7.19 Rows of bodies and a screen's declared actions (stage 1; 2026-11-08)
+
+**Decided 2026-11-08: two additive extensions of the kit, for stage 1's screens.** Both were weighed as `EmuSen_Qt.md`
+§1.3 asks (an extension, a module, or a component of its own): each is an extension, a new type and a new property on
+existing surfaces, since the job is the kit's and neither gives a component a second job.
+
+**The planet rows' layout and walk** are the kit's: the C# drawing of Choose a console was LunaP's (`LunaP.md` §222, as
+`EmuSen_Interface.md` §24.6 records). `kit-core`'s `layout::planet_layout(width, leading, bodies, geometry)` lays out a
+leading row of wide tiles across the margins and then the bodies in centred rows of fixed tiles: as few rows as fit
+(`capacity`, (width − 2 × margin + gap) / (tile + gap)), as even as they divide; every tile gets its box, its row and its
+four neighbours, Left and Right within its row and stopping at the ends, Up and Down the tile of the next row whose centre
+is nearest, the first of two at the same distance. `PlanetGeometry::COURTS` is the courts canvas's measures (margin 64,
+gap 18, leading tiles 72 high at 100, tiles 176 × 190 from 186 every 200, the orbit 52 into a tile, the focused tile
+lifted 6). It names no console: the host hands it counts. `kit-qt`'s `PlanetLayout` puts it on Qt as lists a screen's
+tiles bind to by index (`xs`, `ys`, `widths`, `heights`, `left`, `right`, `up`, `down`, `orbits`, `lift`), each a
+QList inside a `QVariant`, since `qmllint` cannot name cxx-qt's list aliases (`QList_f64`) and failed every binding on
+them. The screen's tiles bind `KeyNavigation` to the neighbours, so the walk between rows is data and Qt's own. A
+body's size on a tile is kit-core's `size_of` (LunaP §222.2), now `Body.tileWidth` and `Body.tileHeight`, so a screen
+writes no shape's size.
+
+**A screen's actions as data.** A frame's X and Y (and any other button the walk does not answer itself) are declared
+as text, one action a line, `key Button` with the button as `UiButton` names it (`kit-core`'s `WalkAction::from_lines`;
+`UiButton::named`). `FrameController.actionLines` takes the text and replaces the walk's actions with it; `Frame.qml`
+binds it to its help model's `actionLines` where the model has one, so one declaration feeds both the help bar's
+entries and the walk, and a screen writes no handler and no `setAction` call. `emusen-qt-models`' `HelpModel` gives
+each screen's lines from the same table as its entries (`help.rs`, `EmuSen_Qt.md` §7.1). The pressed action comes back
+as `actionInvoked(key)`; a screen passes the key on in one call.
+
+**A press passed on as a key is not walked twice** (found 2026-11-08 with the program's screens). A press the walk
+declines goes to the focused control as its key (§7.3); when the control declines that key too, it reaches the frame's
+`Keys.onPressed`, which walked it again. For B that raised `backDeclined` twice, and the program went back two screens
+for one press. `offer` now marks the key it sends, and `key` declines a key while it is being passed on. The C# frame
+had no second path, since its keys and the pad met in one handler.
+
+**Moonrise under reduced motion, and the keys that skip it.** `MoonriseModel.still`, which the kit's `Moonrise` binds
+to `Tokens.reducedMotion`, draws the splash's last frame from the start while its clock runs on, and `finished` waits
+for the clock to reach the length, as `EmuSen_Interface.md` §22 and Mistress hold it. `qt_keys::press_of` is the
+press a Qt key means in the kit's map (kit-core's `intent` over `kit_key`), none for Tab or any other key;
+`MoonriseModel.takeKey` skips on such a key and keeps every key from the screens behind, since a Tab left unaccepted
+walked Qt's focus chain to the screen under the splash.
+
+**The registry** (rule Q, §7.6) gained `PlanetLayout`, `BodyShapes.tileWidth` and `tileHeight`,
+`FrameController.actionLines`, and `MoonriseModel.still` and `takeKey` (each placed last, so the other properties keep
+their indexes); nothing was removed.
+
+**Held to** (`kit-core/tests/layout.rs`, 3, and `input.rs`'s action lines, measured 2026-11-08): the courts canvas's
+eleven bodies under three places (the places at 64, 454 and 844, 372 wide; six tiles from 67, five from 164; the orbits
+at 238 and 438); the walk's neighbours, a tie going to the first, the ends stopping; capacity at three widths and seven
+bodies dividing four and three; the lines read with their buttons by name, a line naming no button skipped. The program's
+`tests/screens.rs` holds the rest through the harness (`EmuSen_Qt.md` §7.1). Seeded faults, each reverted: a tie going to
+the last failed the walk test; the passed key's mark dropped failed the program's screens test at B from the grid.
+
+### 7.20 A theme's own colours, the help bar's face, and paired glyphs (stage 1; 2026-11-08)
+
+Three extensions, each optional, found while the program's screens were brought to the accepted render (EmuSen_Qt.md
+§7.1, step 5). None changes what an existing screen draws.
+
+- **`Kit.Scene`**, a plain `Item` whose content is a theme's own drawing in its own colours: a console's hue on its
+  engine's name and tag, the crescent's ink beside the wordmark. The gate's palette reach treats it as it treats `Body`,
+  `Sky` and `Moonrise` (`emusen_qt_test::tree::SCENES`): its colours are the author's. Contrast still holds its words to
+  4.5:1. A theme that paints a hue outside `Scene` fails the palette, as before.
+- **`HelpBar.labelFont` and `entrySpacing`**, aliased by `Frame` as `helpFont` and `helpSpacing`, so a theme sets its
+  labels' face and the gap between entries (the reference theme: Barlow at 20, entries 40 apart, as the accepted render
+  has them). **`HelpBar.glyphGap`**, aliased as `helpGlyphGap`, is the gap from an entry's glyph to its label: the kit's
+  default stays 8 (`base` × 2), and the reference theme sets 10, the `IconTextSpacing` Mistress's help bands use. An entry's width is its content's: the style's button no longer pads a short entry ("Play") to its own
+  minimum, which pushed every later entry right.
+- **A paired entry.** An entry whose model gives a `pair` role draws a second glyph after its first: the shoulders, LB
+  and RB, as one entry ("Console"), as the accepted render draws them. A model without the role draws one glyph.
+  `HelpModel`'s `pair` comes from `help::pair_of`, which names the right shoulder beside the left and nothing else.
+- **The glyph's letter is drawn as a path** (`PathText`), as the cut letter already was, so the gate reads a pad glyph as
+  one picture. Drawn as a `Text`, the Xbox family's lettered rings, which the own look's screens show for a generic pad,
+  failed contrast at 1.00:1, the letter sampled over its own ring's ink.
+
+### 7.21 A menu row's marks and rules, and a help bar a screen draws itself (stage 1, the Pause Card; 2026-11-08)
+
+Three extensions, each optional and off by default, found while the Pause Card was brought to Mistress's render
+(`EmuSen_Qt.md` §7.1, step 7). Each is an extension of an existing control rather than a type of the program's own, since
+LunaP's `MenuPanel` drew all three for every card, and the Home card and the List card of stage 2 draw the same rows.
+None changes what an existing screen draws: the gallery's gate passes unchanged.
+
+- **`MenuRow.steps`, `opens`, `ruled`, `sectionEnd`, `inset` and `labelFont`.** A stepped value stands between ◂ and ▸
+  (Save State's slot, the speed), a row that turns to a page of its own ends in ▸ (Game Options, Leave), each mark a
+  `Shape` triangle in Muted 12 units from the value, a step's 8 × 11 units and an opening row's 9 × 13, as Mistress's
+  render measures them (measured 2026-11-08 within a pixel at 1280 × 800). `ruled` draws a
+  one-unit rule in `Rule` along the row's foot, and `sectionEnd` draws it in `Border`, the lighter rule before a new
+  section (Mistress's `SectionRule` is `#707076`, six levels from `Border` in blue: the token is the one owner, and the
+  difference is named in `EmuSen_Qt.md` §7.1). `inset` is the words' distance from the row's edges (the kit's default
+  stays 16; the card sets 24) and `labelFont` the face of the label and the value.
+- **`HelpBar.ruled`**: the rule along the bar's top, on by default; off where the host draws the band itself.
+- **`Frame.helpShown`**: the frame's own help bar on the foot, on by default. The Pause Card's band is 98 units high, lies
+  under the panel and its shadow, and slides down on its own, so the card draws a `HelpBar` of its own over the frame's
+  controller and help model while the frame keeps the model for its declared actions (§7.19).
+
+- **A fourth face**, `fonts/BarlowCondensed-Regular.ttf` (LunaP's own file, SHA-256 beginning `b4bb48af`; the Barlow
+  licence and notice already cover it): the face of LunaP's card titles (`AdaptiveLayout`'s `TitleSize` 32 in
+  `CondensedFile`). The card's title in Medium came out 265 units wide where Mistress's is 255; in Regular, 254.
+
+**Held to**: the gallery's gate (4) and the kit's 39 tests pass unchanged; `qt-app/tests/pause.rs` reads the marks' rows
+through the card. No C++ was added.
+
 ### 7.6 Building, linking, the registry, and what it is held to
 
 **The linker is lld** (Fedora's `lld`, 22.1.8, installed 2026-11-07 at the tester's desk, as `EmuSen_Qt.md` §10.4

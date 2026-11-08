@@ -54,6 +54,20 @@ pub fn rows(body: &WorldBody, hue: f64, focused: bool) -> Vec<ShapeRow> {
     world::geometry(body, hue, focused).iter().map(row).collect()
 }
 
+/// Three `#RRGGBB` words as a palette; anything else is none, so the hue's own colours are drawn.
+pub fn palette(words: &str) -> Option<[emusen_kit_core::tokens::Colour; 3]> {
+    let c: Vec<_> = words.split_whitespace().map(emusen_kit_core::world::hex).collect();
+    match c.as_slice() {
+        [Some(a), Some(b), Some(d)] => Some([*a, *b, *d]),
+        _ => None,
+    }
+}
+
+/// A palette as the three `#RRGGBB` words `palette` reads, or empty for none.
+pub fn palette_words(palette: Option<[emusen_kit_core::tokens::Colour; 3]>) -> String {
+    palette.map(|p| p.iter().map(|c| format!("#{:02X}{:02X}{:02X}", c.r, c.g, c.b)).collect::<Vec<_>>().join(" ")).unwrap_or_default()
+}
+
 pub fn body(shape: WorldShape, craters: f64, bands: f64, cap: f64, ring: WorldRing, moons: u8) -> WorldBody {
     WorldBody { shape, palette: None, craters, bands, cap, ring, moons }
 }

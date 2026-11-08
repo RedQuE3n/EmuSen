@@ -554,15 +554,8 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
 - *The real desk, and the C# figures from the same script.* The desk's session was locked through the work; both need
   the tester there. The C# front end counts no `frameSwapped`; which of its own counters stands for the same count is
   settled when its figures are taken, and they are written next to these.
-- *Play to the first picture for a hosted core.* Owed: it needs one live core download through `cores get`, awaiting the
-  tester's go (2026-11-08). The program's only Cores path is the platform library's tool job (`emusen_tool_job_start`,
-  op `get`, `core-tool`), whose source is fixed to the buildbot; a test's own server cannot stand in through the C
-  interface, by design. The job's installation is the calling program's own folder, and the Qt program has no published
-  layout yet (no libretro host, proxy or `cores.manifest` beside `emusen-qt-play`; `xtask publish`, §1.9); nor has
-  `platform-client` a tool-job wrapper. The method once allowed: a sandbox installation laid out as a publish lays one
-  (DianaSh's program, the libretro host, the proxy, the manifest) and a sandbox home; `cores get fceumm` (one download)
-  and `cores approve` at the prompt; then `emusen-qt-play` with `EMUSEN_CORES` naming that installation and `--game`
-  naming a game in the library, opened in place; two rounds, a third if within the noise.
+- *Play to the first picture for a hosted core.* Done 2026-11-08, §9.3.3: Nestopia (the NES's hosted core) through
+  `cores get` in a sandbox laid out as a publish, equal to Mistress within the noise.
 - *The pad driving the game.* Done 2026-11-08, §1.8.5.
 - *A device core's picture.* Done 2026-11-08, §1.8.7.
 - *The sound* (done 2026-11-08, §1.8.6); *the picture's content* (done 2026-11-08 by a window grab, §1.8.8); and the chain dropped on the render thread when a session closes (it is now
@@ -1679,8 +1672,7 @@ and "Paused 1 minute ago" a minute later. Passed. Seen on the way: Moonrise show
 until the systems arrive after the start's stop (finding 1); the Rewind row says "nothing to go back to yet" (§7.1,
 owed with Rewind's page); Mistress's status line counted "0 controllers" while it read the same pad.
 
-**Not measured:** the hosted core's Play to the first picture, which waits on the tester's approval of one core download
-(§1.8.4).
+**Not measured here:** the hosted core's Play to the first picture, measured 2026-11-08 in §9.3.3.
 
 **The defects' mechanisms and fixes** **[M 2026-11-08]**, by the findings they answer:
 
@@ -1806,6 +1798,78 @@ at the Pause Card).
 router while it has the focus, waking the GUI thread 125 times a second at an idle screen. It draws nothing (the counts
 above), and it is the router's repeat clock, so it is left as it is; whether it should sleep until a pad event is a
 question for the router (`EmuSen_Kit.md` §7.4).
+
+#### 9.3.3 Play to the first picture on a hosted core **[M 2026-11-08]**
+
+The gate §1.8.4 left owed: Play to the first picture on a libretro core, emusen-qt against Mistress by the same script.
+The tester approved one core download on 2026-11-08. The NES's hosted core is Nestopia (`libretro-cores.tsv`; FCEUmm,
+first named for the run, is not a core EmuSen hosts), so the run made three requests to buildbot.libretro.com and
+downloaded one core.
+
+**The sandbox.** The published desktop build of 2026-11-08 07:58 (`out/linux-x64/Mistress`: Mistress, the platform
+library, the libretro host and proxy, `emusen-core-runner`, `cores.manifest`) was copied without its home into a
+folder of its own, with `HOME` and the `XDG_*` folders pointed into the sandbox, and `emusen-qt-play` (release, built at
+`d6a6d10d8`) placed beside the copy's platform library. Mistress's ROM folder was an empty folder of the sandbox, so
+neither program read the library. Super Mario Bros. was opened in place, read-only, from the player's library
+(`NES/World/Super Mario Bros (JU) (PRG 0).nes`); no ROM was copied.
+
+**The core, as the player gets it.** The `cores` command runs only in a shell with the platform library's services and
+the runtime's settings service, which today only Mistress's shell provides; `Testing/qt-gates/shell.py` gives the same
+shell to the terminal over the copy's own platform library (`dianash.h`, `emusen_crystal.h`), each line of its input
+submitted as typed at the prompt. Its lines and answers:
+
+- `cores fetch`: "Fetched libretro's catalogue on 2026-11-08: 260 cores for this platform" (`info.zip` and the Linux
+  x86_64 index, 0.88 s).
+- `cores get nestopia`: installed build 2026-11-07, SHA-256 `72e2784b…5b0be105`, the same build §4.12 of
+  `EmuSen_Cores.md` smoke-tested on 2026-11-01; every check of §5.2 passed (0.15 s); "Not tested by EmuSen".
+- `cores approve nestopia`: approved; `cores verify`: `ok nestopia`.
+- `cores default NES "Nintendo - NES / Famicom (Nestopia)"`: "NES now opens on Nintendo - NES / Famicom (Nestopia)".
+  Both programs open the NES on it from then on; Mistress's log names the engine and its `retro_run`.
+
+The approval is recorded at once, but the entry is read (its proxy loaded and its sidecar written) only by a process
+whose executable lies beside `emusen-core-runner`, which the proxy looks for; the terminal's is the Python interpreter,
+so the runtime refused the read ("no emusen-core-runner beside /usr/bin/python3.14") and the first program started from
+the copy read it at its start. That is the test terminal's limit, not the installation's.
+
+**Method.** `Testing/qt-gates/run.sh`, one run at a time, each in a compositor of its own (`kwin_wayland --virtual` at
+1,920 × 1,200 with Xwayland, a D-Bus of its own, every window fullscreen by a rule), on the RX 6800, under a watchdog,
+with SDL's dummy sound driver. Each program is given the game at its start: `emusen-qt-play --game`, and Mistress
+`--play`, which loads the game when its window opens. KWin's `ScreenShot2` grabs are polled from the program's exec
+(`grab.py`, a median 37 to 56 ms apart), and `first.py` reads three times from them: the program's window (the first grab
+with more than 1% of the screen lit), the first picture (the first grab with more than 20% of the screen in Super Mario
+Bros.'s sky, a colour box both cores' palettes fall in), and the span between them, which is Play to the first picture
+on both sides, since each opens the game as its window appears. Each time is late by up to one grab interval.
+`emusen-qt-play` also prints its own count, from the window's load, which names the game, to the first frame drawn
+(§1.8.4), which may be one of the game's black frames. Three stage 2 builds were compiling beside the runs; the load is
+the one-minute average from `uptime` at each run's start, on 16 threads.
+
+| Round | Load | emusen-qt-play: window, picture, between | own count | Mistress: window, picture, between |
+|---|---|---|---|---|
+| 1 | 7.7, 8.0 | 0.292, 0.902, 0.610 s | 270 ms | 1.013, 1.599, 0.586 s |
+| 2 | 8.5, 8.7 | 0.329, 0.885, 0.556 s | 274 ms | 0.810, 1.487, 0.677 s |
+| 3 | 8.4, 9.8 | 0.284, 0.846, 0.562 s | 250 ms | 1.127, 1.898, 0.771 s |
+
+The third round was taken because Mistress's two rounds differed by more than a grab interval and the two programs'
+spans overlapped. **Play to the first picture is equal within the noise**: 0.56 to 0.61 s for emusen-qt, 0.59 to 0.77 s
+for Mistress, the hosted core's start and the game's first black frames on both sides. From the program's exec to the
+picture emusen-qt is 0.6 to 1.1 s sooner, which is the start (its window at 0.28 to 0.33 s against 0.81 to 1.13 s for
+Mistress, whose library window shows first and gives way to the game screen). The first run of all, before the rounds
+(`trial1-qt`), read the newly approved entry at its start: window at 0.93 s, picture at 1.23 s, with a slower grabber
+(54 ms).
+
+**It plays.** With the pad of §9.3.1 (`pad.py`: Start, then Right held 3 s), on both programs Start left the title for
+World 1-1 and Right walked Mario on and scrolled the level; the two programs' grabs at 11.5 s show the same frame
+(`pad-qt/grabs/0295.png`, `pad-mistress/grabs/0115.png`). No pad was left behind after any run. Over the
+rounds' 8 s `emusen-qt-play` counted 349 to 358 swaps after its first 2 s, 0 to 12 dropped, at the compositor's own
+rate (§9.3.1, finding 4); Mistress's `[fps]` lines read 60.1 offered, 58 to 59 shown.
+
+**Seen.** `emusen-qt-play`'s window shows white for its first 0.2 s and white bars beside the picture; it is the
+measuring window of §1.8, not the front end's game screen, whose bars are black (§9.3.1, finding 6).
+
+The grabs and logs of every run are in `~/.cache/emusen/tmp/qt-hosted-grabs/`; the sandbox, its core and its settings
+were removed after the runs. The scripts are committed in `Testing/qt-gates/` (`README.md`) so the gates run again
+without rebuilding the method; §9.3.1's own scripts, under `~/.cache/emusen/tmp/qt-s1-gates/`, were removed with its
+sandbox.
 
 ---
 

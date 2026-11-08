@@ -4480,3 +4480,25 @@ in another case, a profile not there, and the answer's JSON. `lib.rs`, `emusen_p
 `PlatformLibrary.InterfaceVersion` moved to 43 together; `Frontend/platform-client`'s binding was regenerated, with
 `Platform::bindings_bound`, and a `router` module wrapping the router's calls (`emusen_endymion_router_*`), which were
 in the header since §12.2 and had no Rust client.
+
+## 51. Interface 44, 2026-11-08: Serenity's display clock, for a host's frame loop
+
+Frame pacing's home is Serenity (`EmuSen_Qt.md` §1.9; `EmuSen_Surfaces.md` §6.2 makes Serenity the owner of the display
+clock and the pacer). Its first part moves there from the Qt view models: `emusen-serenity::pace::DisplayClock`, the
+display's period read from the times a window's frames were swapped, and whether a game's frames run one a swap (within a
+hundredth of the period, `LOCK_SHARE`). It neither waits nor sleeps; the frame loop that feeds it keeps it.
+
+Two calls carry it, `emusen_serenity_pace_saw(clock, swaps, at_ns)` and `emusen_serenity_pace_locks(clock, interval_ns)`,
+over `emusen_serenity_display_clock`, a plain struct the host owns (its `size` set, the rest zero before the first swap)
+and leaves to the calls (`Platform/platform/src/serenity_pace.rs`). A struct rather than a handle, since the clock is a
+few numbers kept by one thread: there is nothing to free and no allocation. `Frontend/platform-client` wraps them as
+`pace::DisplayClock`, with its test (`tests/pace.rs`). The C# half keeps `FrameScheduler` until it retires and never
+calls them, so `SerenityParityTests` counts them as the adopting host's with interface 42's two. `lib.rs`,
+`emusen_platform.h` and `PlatformLibrary.InterfaceVersion` moved to 44 together.
+
+**A defect found in the move, measured 2026-11-08.** A frame thread's first look comes before any swap: count 0 at time
+0. The clock took it as a sample, so the first real swap (at the steady clock's time, hours of nanoseconds on a desktop)
+gave a period of that size, which the 0.9 smoothing took about two seconds of swaps to bring within 1 %. The headless
+session test, given swaps 4 ms apart from 1 s, locked for none of them: 7 frames over 30 swaps (`qt-models`' `session`,
+now asserting at least 24). A count of zero is no swap and now no sample; the same test locks on every swap. This is
+also why §1.8.4's gate counted only after the first 2 s.

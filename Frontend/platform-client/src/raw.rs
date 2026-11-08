@@ -17,7 +17,7 @@ pub const EMUSEN_SCRAPE_BUSY: i32 = -1164;
 pub const EMUSEN_SCRAPE_IO: i32 = -1165;
 pub const EMUSEN_SCRAPE_NO_LIBRARY: i32 = -1166;
 pub const EMUSEN_SCRAPE_STORE_IN_USE: i32 = -1167;
-pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 43;
+pub const EMUSEN_PLATFORM_ABI_VERSION: u32 = 44;
 pub const EMUSEN_PLATFORM_NULL: i32 = -1;
 pub const EMUSEN_PLATFORM_BAD_STRING: i32 = -5;
 pub const EMUSEN_PLATFORM_NOT_SUPPORTED: i32 = -256;
@@ -605,6 +605,26 @@ const _: () = {
     ["Offset of field: emusen_serenity_drawn::reserved"][::std::mem::offset_of!(emusen_serenity_drawn, reserved) - 20usize];
     ["Offset of field: emusen_serenity_drawn::image"][::std::mem::offset_of!(emusen_serenity_drawn, image) - 24usize];
     ["Offset of field: emusen_serenity_drawn::view"][::std::mem::offset_of!(emusen_serenity_drawn, view) - 32usize];
+};
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct emusen_serenity_display_clock {
+    pub size: u32,
+    pub seen: u32,
+    pub swaps: u64,
+    pub at_ns: i64,
+    pub period_ns: f64,
+}
+#[allow(clippy::unnecessary_operation, clippy::identity_op)]
+const _: () = {
+    ["Size of emusen_serenity_display_clock"][::std::mem::size_of::<emusen_serenity_display_clock>() - 32usize];
+    ["Alignment of emusen_serenity_display_clock"][::std::mem::align_of::<emusen_serenity_display_clock>() - 8usize];
+    ["Offset of field: emusen_serenity_display_clock::size"][::std::mem::offset_of!(emusen_serenity_display_clock, size) - 0usize];
+    ["Offset of field: emusen_serenity_display_clock::seen"][::std::mem::offset_of!(emusen_serenity_display_clock, seen) - 4usize];
+    ["Offset of field: emusen_serenity_display_clock::swaps"][::std::mem::offset_of!(emusen_serenity_display_clock, swaps) - 8usize];
+    ["Offset of field: emusen_serenity_display_clock::at_ns"][::std::mem::offset_of!(emusen_serenity_display_clock, at_ns) - 16usize];
+    ["Offset of field: emusen_serenity_display_clock::period_ns"]
+        [::std::mem::offset_of!(emusen_serenity_display_clock, period_ns) - 24usize];
 };
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -1321,6 +1341,8 @@ pub struct PlatformLibrary {
     ) -> i32,
     pub emusen_serenity_chain_draw:
         unsafe extern "C" fn(chain: *const emusen_serenity_chain, width: i32, height: i32, out: *mut emusen_serenity_drawn) -> i32,
+    pub emusen_serenity_pace_saw: unsafe extern "C" fn(clock: *mut emusen_serenity_display_clock, swaps: u64, at_ns: i64) -> i32,
+    pub emusen_serenity_pace_locks: unsafe extern "C" fn(clock: *const emusen_serenity_display_clock, interval_ns: u64) -> i32,
     pub emusen_serenity_chain_advance_lent:
         unsafe extern "C" fn(chain: *const emusen_serenity_chain, lend: *const emusen_serenity_lend) -> i32,
     pub emusen_serenity_lent_release: unsafe extern "C" fn(slot: u64) -> i32,
@@ -1668,6 +1690,8 @@ impl PlatformLibrary {
         let emusen_serenity_chain_render_lent = unsafe { __library.get(b"emusen_serenity_chain_render_lent\0") }.map(|sym| *sym)?;
         let emusen_serenity_chain_present = unsafe { __library.get(b"emusen_serenity_chain_present\0") }.map(|sym| *sym)?;
         let emusen_serenity_chain_draw = unsafe { __library.get(b"emusen_serenity_chain_draw\0") }.map(|sym| *sym)?;
+        let emusen_serenity_pace_saw = unsafe { __library.get(b"emusen_serenity_pace_saw\0") }.map(|sym| *sym)?;
+        let emusen_serenity_pace_locks = unsafe { __library.get(b"emusen_serenity_pace_locks\0") }.map(|sym| *sym)?;
         let emusen_serenity_chain_advance_lent = unsafe { __library.get(b"emusen_serenity_chain_advance_lent\0") }.map(|sym| *sym)?;
         let emusen_serenity_lent_release = unsafe { __library.get(b"emusen_serenity_lent_release\0") }.map(|sym| *sym)?;
         let emusen_serenity_ring_new = unsafe { __library.get(b"emusen_serenity_ring_new\0") }.map(|sym| *sym)?;
@@ -1942,6 +1966,8 @@ impl PlatformLibrary {
             emusen_serenity_chain_render_lent,
             emusen_serenity_chain_present,
             emusen_serenity_chain_draw,
+            emusen_serenity_pace_saw,
+            emusen_serenity_pace_locks,
             emusen_serenity_chain_advance_lent,
             emusen_serenity_lent_release,
             emusen_serenity_ring_new,
@@ -3373,6 +3399,12 @@ impl PlatformLibrary {
         out: *mut emusen_serenity_drawn,
     ) -> i32 {
         unsafe { (self.emusen_serenity_chain_draw)(chain, width, height, out) }
+    }
+    pub unsafe fn emusen_serenity_pace_saw(&self, clock: *mut emusen_serenity_display_clock, swaps: u64, at_ns: i64) -> i32 {
+        unsafe { (self.emusen_serenity_pace_saw)(clock, swaps, at_ns) }
+    }
+    pub unsafe fn emusen_serenity_pace_locks(&self, clock: *const emusen_serenity_display_clock, interval_ns: u64) -> i32 {
+        unsafe { (self.emusen_serenity_pace_locks)(clock, interval_ns) }
     }
     pub unsafe fn emusen_serenity_chain_advance_lent(&self, chain: *const emusen_serenity_chain, lend: *const emusen_serenity_lend) -> i32 {
         unsafe { (self.emusen_serenity_chain_advance_lent)(chain, lend) }

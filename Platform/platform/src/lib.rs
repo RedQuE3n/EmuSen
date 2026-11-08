@@ -36,11 +36,12 @@ pub mod net;
 pub mod serenity;
 pub mod serenity_device;
 pub mod serenity_filters;
+pub mod serenity_pace;
 pub mod systems;
 pub mod systems_debug;
 
 /// The interface's one number, matched exactly by the host that was built against it.
-pub const ABI_VERSION: u32 = 43;
+pub const ABI_VERSION: u32 = 44;
 
 /// Every status the interface returns. Zero and up is success: a count or a length.
 pub mod status {
@@ -285,6 +286,7 @@ mod tests {
         exported.extend(exports_in(include_str!("serenity.rs")));
         exported.extend(exports_in(include_str!("serenity_device.rs")));
         exported.extend(exports_in(include_str!("serenity_filters.rs")));
+        exported.extend(exports_in(include_str!("serenity_pace.rs")));
         exported.extend(exports_in(include_str!("systems.rs")));
         exported.extend(exports_in(include_str!("systems_debug.rs")));
         exported.extend(exports_in(include_str!("firmware.rs")));

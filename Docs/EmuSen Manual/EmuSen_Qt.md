@@ -514,13 +514,18 @@ cores folder and the game as the window's initial properties, and with `--second
 
 #### 1.8.3 Pacing by the display **[M 2026-11-08]**
 
-`DisplayClock` (in `session.rs`) smooths the display's period from the swaps' times. A game whose interval sits within
-1 % of it is locked to the display: after each hand-over the frame thread waits until a draw has taken the frame, so
-the next one is run a whole frame before the sync that shows it. The first version woke at each swap instead and raced
-the sync that follows a swap at once in the threaded loop: on a 10 s run of an NES game, after the first 2 s, 3 frames
-were dropped and 1 swap repeated; waiting for the take gave 0 and 0. A game off the display's rate runs on its own clock.
-*[own, because Serenity's pacer (`emusen-serenity::pace`, §1.9) is not built; the clock moves there with
-`FrameScheduler`'s port, and `GamePicture` already delivers the swaps' times it reads.]*
+Serenity's display clock (`emusen-serenity::pace`, platform interface 44, `EmuSen_RustPlatform.md` §51) smooths the
+display's period from the swaps' times, which `GamePicture` delivers through the feed's `swapped`; the frame thread keeps
+one (`platform-client`'s `pace::DisplayClock`, given to `Session::start`). A game whose interval sits within 1 % of the
+period is locked to the display: after each hand-over the frame thread waits until a draw has taken the frame, so the
+next one is run a whole frame before the sync that shows it. The first version woke at each swap instead and raced the
+sync that follows a swap at once in the threaded loop: on a 10 s run of an NES game, after the first 2 s, 3 frames were
+dropped and 1 swap repeated; waiting for the take gave 0 and 0. A game off the display's rate runs on its own clock.
+
+Until 2026-11-08 the clock lived in `qt-models`' `session.rs` and took the frame thread's first look, before any swap, as
+a sample, so it locked only after about two seconds (`EmuSen_RustPlatform.md` §51); it moved to Serenity with that fixed, and the copy in
+`qt-models` is deleted. The rest of the pacer (`FrameScheduler`'s port: speed, frame skip, the presentation trace) follows
+it there.
 
 #### 1.8.4 The gate, the tests, and what is owed **[M 2026-11-08]**
 
@@ -693,7 +698,7 @@ by the one-owner rule, and none goes into the view models unless it is a view mo
 | The ES-DE theme engine: loader, scene, gamelists, collections, folders (about 4,000, plus 3,900 of tests) | `emusen-esde` (§4.2), a crate of its own, with `EmuSen.Esde` as its painter | one job, no Qt in the loader or scene, testable alone |
 | The theme store: `themes.db`, GitHub and GitLab downloads, the browser's records, attribution (about 1,150) | `emusen-themes`, a platform crate over `emusen-net`, the zip reader and SQLite, exposed as the DianaSh command `theme` (`list`, `install`, `update`, `remove`, `check`), which the Themes tab fronts; it serves both theme kinds | the 2026-10-26 rule: every tool a command; one store for both kinds |
 | The four binding files: keybindings, hotkeybindings, gamepadbindings, gamepadprofiles (about 800) | Endymion, through the platform library (`emusen_endymion_*`) and Galaxia's models; the front end's `DeviceModel` and `SettingsModel` read and write them through `emusen-platform-client` | Endymion is the one owner of pads; both front ends share the files, so this is stage 0. Done 2026-11-08 at interface 40 (`EmuSen_Input.md` §5.2) |
-| Frame pacing: `FrameScheduler`, `DisplayClock`, `PictureSlots`, `PresentationTrace`, `VblankCounter`, `FrameHandOff`, `FramePacer` (about 650) | Serenity (`emusen-serenity::pace`), fed the window's `frameSwapped` stamps by `GamePicture` and read by the emulation thread's frame loop | `EmuSen_Surfaces.md` §6.2 already makes Serenity the owner of the display clock and the pacer; the view models only relay stamps |
+| Frame pacing: `FrameScheduler`, `DisplayClock`, `PictureSlots`, `PresentationTrace`, `VblankCounter`, `FrameHandOff`, `FramePacer` (about 650) | Serenity (`emusen-serenity::pace`), fed the window's `frameSwapped` stamps by `GamePicture` and read by the emulation thread's frame loop | `EmuSen_Surfaces.md` §6.2 already makes Serenity the owner of the display clock and the pacer; the view models only relay stamps. `DisplayClock` moved 2026-11-08 (interface 44, §1.8.3) |
 | The build host: `EmuSen.csproj`, `RustCores.props`, `RustCoresPublish.targets`, `CheckCoreSidecars.proj`, `Platform.targets`, the publish layouts (about 760 lines of MSBuild) | a cargo workspace with an `xtask` crate: `cargo xtask check-sidecars`, `publish`, `appdir`, `qml-rules`, `qmltypes-diff`, each a plain Rust subcommand calling Qt's libexec tools (`qmlimportscanner`, `qmlcachegen`, `qmltyperegistrar`) where needed; MSBuild stays only for the C# until it retires | cxx-qt builds under cargo already, so one toolchain builds everything; CMake would add a second build system for no C++ host, since the front end has none **[A]**; a CMake host becomes worth it only if a C++ consumer of the kit appears (§11 Q8 says none is planned) |
 
 The rest of that survey (the headers' folder, the memcard command, records.db, Pharaoh's probe as a Rust CLI, the shell

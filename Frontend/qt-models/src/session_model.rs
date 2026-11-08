@@ -9,6 +9,7 @@ use cxx_qt_lib::QString;
 use crate::input::GameInput;
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_platform_client::audio::{GameSound, SoundSettings};
+use emusen_platform_client::pace::DisplayClock;
 use emusen_platform_client::{galaxia, Lent, Platform};
 use emusen_qt_endymion::game::GamePads;
 use std::sync::Arc;
@@ -154,9 +155,13 @@ impl qobject::SessionModel {
         let report = move |report: Report| {
             let _ = queue.queue(move |model| model.reported(report));
         };
+        let clock = match self.as_mut().platform() {
+            Ok(platform) => DisplayClock::new(&platform),
+            Err(words) => return self.as_mut().set_problem(QString::from(&words)),
+        };
         let engine = (!self.engine.is_empty()).then(|| self.engine.to_string());
-        let session =
-            Session::start(runtime, path.to_string(), engine, std::ptr::NonNull::new(device.as_ptr().cast_mut()), handoff, GameIo { pads, sound }, report);
+        let device = std::ptr::NonNull::new(device.as_ptr().cast_mut());
+        let session = Session::start(runtime, path.to_string(), engine, device, handoff, GameIo { pads, sound }, clock, report);
         self.as_mut().set_sounding(sounding);
         self.as_mut().rust_mut().session = Some(session);
         self.as_mut().set_problem(QString::from(unsounded.as_deref().unwrap_or_default()));

@@ -24,7 +24,7 @@ fn main() {
             p => paths.push(format!("\"{}\"", p.replace('\\', "\\\\").replace('"', "\\\""))),
         }
     }
-    tree::init(base, None);
+    tree::init(std::path::Path::new(base), None);
     let tree = tree::tree().clone();
     let (settings, said) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
     if let Some(words) = said {

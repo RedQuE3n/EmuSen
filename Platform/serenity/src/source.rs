@@ -3,8 +3,8 @@
 
 use crate::text::{parse_float, pragma, quoted, skip_spaces, spaces, word, word_ends};
 use crate::{Error, full, read_lines, resolve};
-use emusen_galaxia::dotnet_path::{Style, directory_name};
-use emusen_galaxia::tree::file_exists;
+use std::path::Path;
+use emusen_galaxia::files::file_exists;
 
 /// One `#pragma parameter`: its id, what it is called, its default and its range.
 #[derive(Clone, Debug, PartialEq)]
@@ -66,7 +66,7 @@ fn expand(path: &str, lines: &mut Vec<String>, depth: usize) -> Result<(), Error
     if !file_exists(path) {
         return Err(Error::NotFound { message: format!("The shader file {path} does not exist."), file: path.to_string() });
     }
-    let directory = directory_name(Style::HOST, path).unwrap_or_default();
+    let directory = Path::new(path).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
     for line in read_lines(path)? {
         if let Some(name) = include(&line) {
             expand(&resolve(&directory, name)?, lines, depth + 1)?;

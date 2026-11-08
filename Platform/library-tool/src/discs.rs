@@ -2,10 +2,11 @@
 //! by the library's own scan, and each prepared for chdman in a scratch folder of links, since chdman 0.289 refused a
 //! sheet naming a library file by its absolute path (EmuSen_GamePackages.md §4.2). The library is only read.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_disc::cue::{FileKind, Mode, Sheet};
 use emusen_disc::Kind;
 use emusen_galaxia::files::{self, Options};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_galaxia::{archive, disc_set, image_sets};
 
@@ -35,13 +36,13 @@ pub fn relative(given: &str) -> Result<String, String> {
 }
 
 fn full(library: &str, rel: &str) -> String {
-    rel.split('/').filter(|p| !p.is_empty()).fold(library.to_string(), |at, part| path::combine(Style::HOST, &at, part))
+    rel.split('/').filter(|p| !p.is_empty()).fold(library.to_string(), |at, part| Path::new(&at).join(part).to_string_lossy().into_owned())
 }
 
 /// A full path under the library back to its relative form.
 pub fn rel_of(library: &str, at: &str) -> String {
-    let root = path::trim_ending_separator(Style::HOST, library);
-    at.strip_prefix(root).unwrap_or(at).trim_start_matches(['/', '\\']).replace('\\', "/")
+    let rest = Path::new(at).strip_prefix(library).map_or_else(|_| at.to_string(), |r| r.to_string_lossy().into_owned());
+    rest.trim_start_matches(['/', '\\']).replace('\\', "/")
 }
 
 /// The disc games under each named path, in order of their relative path ignoring case, each once; the words for a
@@ -60,7 +61,7 @@ pub fn items(library: &str, given: &[String]) -> (Vec<Item>, Vec<String>) {
         };
         let at = full(library, &rel);
         if files::directory_exists(&at) {
-            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string()));
+            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string_lossy().into_owned()));
         } else if files::file_exists(&at) {
             files.push(at);
         } else {
@@ -153,17 +154,17 @@ fn lone_mode(at: &str, size: u64) -> Result<(&'static str, Form), String> {
     const SYNC: [u8; 12] = [0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0];
     if head.len() >= 16 && head[..12] == SYNC {
         if !size.is_multiple_of(2352) {
-            return Err(format!("{} is not a whole number of 2,352-byte sectors", path::file_name(Style::HOST, at)));
+            return Err(format!("{} is not a whole number of 2,352-byte sectors", Path::new(at).file_name().unwrap_or_default().to_string_lossy()));
         }
         return Ok((if head[15] == 1 { "MODE1/2352" } else { "MODE2/2352" }, Form::LoneTrack));
     }
     if head.get(16 * 2048 + 1..16 * 2048 + 6) == Some(b"CD001") {
         if !size.is_multiple_of(2048) {
-            return Err(format!("{} is not a whole number of 2,048-byte sectors", path::file_name(Style::HOST, at)));
+            return Err(format!("{} is not a whole number of 2,048-byte sectors", Path::new(at).file_name().unwrap_or_default().to_string_lossy()));
         }
         return Ok(("MODE1/2048", Form::Iso));
     }
-    Err(format!("{} is neither a raw data track nor an ISO 9660 image", path::file_name(Style::HOST, at)))
+    Err(format!("{} is neither a raw data track nor an ISO 9660 image", Path::new(at).file_name().unwrap_or_default().to_string_lossy()))
 }
 
 fn link(target: &str, at: &std::path::Path) -> Result<(), String> {
@@ -186,9 +187,9 @@ fn image_of(tree: &Tree, at: &str) -> Result<String, String> {
     let names: Vec<String> = archive::entries_of(at)?.into_iter().map(|e| e.full_name).filter(|n| !n.ends_with('/')).collect();
     let tracks = names.iter().filter(|n| n.to_uppercase().ends_with(".BIN")).count();
     if !names.iter().any(|n| image_sets::is_sheet(n)) && tracks > 1 {
-        return Err(format!("{} holds {tracks} track files and no sheet, so its tracks' order and gaps are unknown", path::file_name(Style::HOST, at)));
+        return Err(format!("{} holds {tracks} track files and no sheet, so its tracks' order and gaps are unknown", Path::new(at).file_name().unwrap_or_default().to_string_lossy()));
     }
-    disc_set::unpack(tree, at, &|e| [".bin", ".iso"].iter().any(|x| x.eq_ignore_ascii_case(e)))
+    disc_set::unpack(tree, at, &|e| [".bin", ".iso"].iter().any(|x| x.eq_ignore_ascii_case(e))).map(|p| p.to_string_lossy().into_owned())
 }
 
 /// A library disc made ready in `scratch`, which this makes and the caller removes.
@@ -204,29 +205,29 @@ pub fn prepare(tree: &Tree, item: &Item, scratch: &str) -> Result<Prepared, Stri
         if parsed.kinds.contains(&FileKind::Wave) {
             return Err("the sheet names a WAVE file, whose header a CHD does not keep: not converted by this step".into());
         }
-        let files = image_sets::companions(&image)?;
+        let files: Vec<String> = image_sets::companions(&image)?.iter().map(|p| p.to_string_lossy().into_owned()).collect();
         if let Some(gone) = files.iter().find(|f| !files::file_exists(f)) {
             return Err(format!("the sheet names {gone}, which is not there"));
         }
         // A sheet is a compact disc's, as every core opens one (§4.2a).
-        (Form::CueBin, text, Some((path::file_name(Style::HOST, &image).to_string(), bytes)), parsed.files, files, Kind::Cd)
+        (Form::CueBin, text, Some((Path::new(&image).file_name().unwrap_or_default().to_string_lossy().to_string(), bytes)), parsed.files, files, Kind::Cd)
     } else {
         let size = std::fs::metadata(&image).map_err(|e| format!("{image}: {e}"))?.len();
         let (mode, form) = lone_mode(&image, size)?;
         let medium = if form == Form::Iso { lone_medium(&item.system.id) } else { Kind::Cd };
-        let name = path::file_name(Style::HOST, &image).to_string();
+        let name = Path::new(&image).file_name().unwrap_or_default().to_string_lossy().to_string();
         (form, format!("FILE \"{name}\" BINARY\n  TRACK 01 {mode}\n    INDEX 01 00:00:00\n"), None, vec![name], vec![image.clone()], medium)
     };
     std::fs::create_dir_all(scratch).map_err(|e| format!("the scratch folder {scratch} could not be made: {e}"))?;
     for (name, file) in names.iter().zip(&files) {
         let parts: Vec<&str> = name.split(['/', '\\']).filter(|p| !p.is_empty()).collect();
-        if parts.is_empty() || parts.contains(&"..") || path::is_rooted(Style::HOST, name) {
+        if parts.is_empty() || parts.contains(&"..") || Path::new(name).has_root() {
             return Err(format!("the sheet names {name}, which is not a file beside it"));
         }
         let at = parts.iter().fold(std::path::PathBuf::from(scratch), |p, part| p.join(part));
-        link(&path::full_path(file), &at)?;
+        link(&path_key::key_text(file), &at)?;
     }
-    let scratch_sheet = path::combine(Style::HOST, scratch, "disc.cue");
+    let scratch_sheet = Path::new(scratch).join("disc.cue").to_string_lossy().into_owned();
     std::fs::write(&scratch_sheet, &sheet).map_err(|e| e.to_string())?;
     let sources = match (archive::is_archive(&item.path), &original) {
         (true, _) => vec![item.path.clone()],

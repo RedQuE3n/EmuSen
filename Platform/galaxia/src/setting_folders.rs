@@ -2,8 +2,9 @@
 //! `SettingFolders.Checked` and `FolderValue`, which the platform's file services read (EmuSen_Backend.md §15). Blank is
 //! unset, `~` and `~/` are the home, a relative path or a file is refused, and a folder that does not exist is said.
 
-use crate::dotnet_path::{self as path, Style};
-use crate::tree::{directory_exists, file_exists};
+use crate::files::{directory_exists, file_exists};
+use crate::path_key;
+use std::path::{Path, PathBuf};
 
 /// How a checked folder setting stands, `FolderState`'s members in order.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,53 +54,29 @@ impl FolderValue {
     }
 }
 
-/// `Path.IsPathFullyQualified`: rooted with no part left to a current drive or directory.
-pub fn is_fully_qualified(style: Style, value: &str) -> bool {
-    let b = value.as_bytes();
-    match style {
-        Style::Unix => b.first() == Some(&b'/'),
-        Style::Windows => {
-            let separator = |c: u8| c == b'\\' || c == b'/';
-            (b.len() >= 2 && separator(b[0]) && separator(b[1])) || (b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && separator(b[2]))
-        }
-    }
-}
-
-/// `Path.Join` of two parts: an empty part is the other, and one separator between them.
-pub fn join(style: Style, first: &str, second: &str) -> String {
-    if first.is_empty() {
-        return second.to_string();
-    }
-    if second.is_empty() {
-        return first.to_string();
-    }
-    if path::ends_in_separator(style, first) || second.starts_with(style.separator()) || (style == Style::Windows && second.starts_with('/')) {
-        format!("{first}{second}")
-    } else {
-        format!("{first}{}{second}", style.separator())
-    }
-}
-
 /// `~` alone, or followed by a separator, is the player's home; `~name` is not expanded and so stays relative.
-fn expanded(value: &str, home: &str) -> String {
+fn expanded(value: &str, home: &Path) -> PathBuf {
     let windows_tilde = cfg!(windows) && value.starts_with("~\\");
     if value != "~" && !value.starts_with("~/") && !windows_tilde {
-        return value.to_string();
+        return PathBuf::from(value);
     }
-    if value.len() == 1 { home.to_string() } else { join(Style::HOST, home, &value[2..]) }
+    match value.get(2..).unwrap_or("") {
+        "" => home.to_path_buf(),
+        rest => home.join(rest),
+    }
 }
 
-/// `SettingFolders.Checked`, with the home `Environment.GetFolderPath(UserProfile)` gives passed in by the host.
-pub fn checked(value: Option<&str>, home: &str) -> FolderValue {
+/// `SettingFolders.Checked`, with the player's home passed in by the host.
+pub fn checked(value: Option<&str>, home: impl AsRef<Path>) -> FolderValue {
     let Some(named) = value.filter(|v| !v.trim().is_empty()) else {
         return FolderValue { state: FolderState::Unset, path: None, written: value.unwrap_or("").to_string() };
     };
     let written = named.trim().to_string();
-    let expanded = expanded(&written, home);
-    if !is_fully_qualified(Style::HOST, &expanded) {
+    let expanded = expanded(&written, home.as_ref());
+    if !expanded.is_absolute() {
         return FolderValue { state: FolderState::Relative, path: None, written };
     }
-    let full = path::full_path(&expanded);
+    let full = path_key::key_text(&expanded);
     if file_exists(&full) {
         return FolderValue { state: FolderState::File, path: None, written };
     }
@@ -107,11 +84,14 @@ pub fn checked(value: Option<&str>, home: &str) -> FolderValue {
     FolderValue { state, path: Some(full), written }
 }
 
-/// `SettingFolders.SameFolder`: equal once full and without a trailing separator; by case on Linux alone.
+/// `SettingFolders.SameFolder`: equal once full, part by part; by case on Linux alone.
 pub fn same_folder(a: &str, b: &str) -> bool {
-    let (a, b) = (path::full_path(a), path::full_path(b));
-    let (a, b) = (path::trim_ending_separator(Style::HOST, &a), path::trim_ending_separator(Style::HOST, &b));
-    if cfg!(target_os = "linux") { a == b } else { a.to_uppercase() == b.to_uppercase() }
+    let (a, b) = (path_key::key(a), path_key::key(b));
+    if cfg!(target_os = "linux") {
+        return a == b;
+    }
+    let parts = |p: &Path| p.components().map(|c| c.as_os_str().to_string_lossy().to_uppercase()).collect::<Vec<_>>();
+    parts(&a) == parts(&b)
 }
 
 #[cfg(test)]
@@ -133,28 +113,20 @@ mod tests {
         assert_eq!(checked(Some("~name/x"), "/home/p").state, FolderState::Relative);
         let dir = TempDir::new("setting-folders");
         let v = checked(Some(" ~ "), dir.path());
-        assert_eq!((v.state, v.path.as_deref(), v.written.as_str()), (FolderState::Usable, Some(dir.path()), "~"));
+        assert_eq!((v.state, v.path.as_deref().map(Path::new), v.written.as_str()), (FolderState::Usable, Some(dir.path()), "~"));
         let v = checked(Some("~/absent"), dir.path());
         assert_eq!(v.state, FolderState::Missing);
-        assert_eq!(v.problem().unwrap(), format!("The folder {} does not exist.", dir.join("absent")));
+        assert_eq!(v.problem().unwrap(), format!("The folder {} does not exist.", dir.join("absent").display()));
     }
 
     #[test]
     fn a_file_is_refused_and_paths_are_made_full() {
         let dir = TempDir::new("setting-folders-file");
         std::fs::write(dir.join("f"), b"x").unwrap();
-        let v = checked(Some(&dir.join("f")), "/");
-        assert_eq!((v.state, v.problem().unwrap()), (FolderState::File, format!("\"{}\" is a file, not a folder, so it is not used.", dir.join("f"))));
-        let v = checked(Some(&format!("{}/./sub/..", dir.path())), "/");
-        assert_eq!((v.state, v.path.as_deref()), (FolderState::Usable, Some(dir.path())));
-        assert!(same_folder(&format!("{}/", dir.path()), dir.path()));
-    }
-
-    #[test]
-    fn join_puts_one_separator_between_parts() {
-        assert_eq!(join(Style::Unix, "/h", "x"), "/h/x");
-        assert_eq!(join(Style::Unix, "/h/", "x"), "/h/x");
-        assert_eq!(join(Style::Unix, "/h", ""), "/h");
-        assert_eq!(join(Style::Unix, "", "x"), "x");
+        let v = checked(Some(&dir.join("f").to_string_lossy()), "/");
+        assert_eq!((v.state, v.problem().unwrap()), (FolderState::File, format!("\"{}\" is a file, not a folder, so it is not used.", dir.join("f").display())));
+        let v = checked(Some(&format!("{}/./sub/..", dir.path().display())), "/");
+        assert_eq!((v.state, v.path.as_deref().map(Path::new)), (FolderState::Usable, Some(dir.path())));
+        assert!(same_folder(&format!("{}/", dir.path().display()), &dir.path().to_string_lossy()));
     }
 }

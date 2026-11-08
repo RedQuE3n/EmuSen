@@ -2,10 +2,10 @@
 //! the settings' layers choose, its firmware asked first, or a console started empty; the engine made with the
 //! console's stored settings and media, the layered settings applied (EmuSen_Backend.md §29.2).
 
+use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use emusen_core_host::{Discovered, Discovery, Library, Trust};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_session_service::abi::status as svc;
 
@@ -186,7 +186,7 @@ pub fn open(rt: &crate::runtime::Runtime, sessions: &Sessions, asked: &Asked) ->
 
 /// The patched image's MD5 and size where the package at `folder` lists patches.
 fn patched_identity(folder: &str) -> Option<(String, u64)> {
-    let manifest = emusen_galaxia::files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let manifest = std::path::Path::new(folder).join(emusen_galaxia::package::FILE_NAME);
     let doc = emusen_galaxia::package::read(&manifest).ok()?.ok()?;
     emusen_patch::package::patched_identity(&doc)
 }
@@ -237,7 +237,7 @@ fn open_game(
     let (core_name, missing) = crate::firmware::needed(rt, tree, at, chosen.as_deref());
     if !missing.is_empty() {
         let list: Vec<String> = missing.iter().map(|m| format!("{core_name} {} firmware - {}, {} bytes", m.label, m.name, crate::firmware::n0(m.size))).collect();
-        return Err((crate::abi::status::FIRMWARE, format!("{} needs firmware the library does not hold: {}", path::file_name(Style::HOST, at), list.join("; "))));
+        return Err((crate::abi::status::FIRMWARE, format!("{} needs firmware the library does not hold: {}", Path::new(at).file_name().unwrap_or_default().to_string_lossy(), list.join("; "))));
     }
     let (core, lib) = library_for(catalog, discovery, &rt.trust(), at, chosen.as_deref())?;
     crate::firmware::link_player_firmware(core, discovery, tree);

@@ -133,7 +133,7 @@ fn file_name(name: &str) -> String {
 
 /// `ValidName`.
 fn valid_name(name: String) -> Answer<String> {
-    if emusen_galaxia::cheats::is_valid_name(emusen_galaxia::dotnet_path::Style::HOST, Some(&name)) { Ok(name) } else { Err(refused(status::BAD_ARGUMENT, format!("'{name}' is not a usable file name."))) }
+    if emusen_galaxia::cheats::is_valid_name(Some(&name)) { Ok(name) } else { Err(refused(status::BAD_ARGUMENT, format!("'{name}' is not a usable file name."))) }
 }
 
 /// A registry's list as the bytes `JsonSerializer.SerializeToUtf8Bytes(file, ConfigJson.Options)` writes.
@@ -153,7 +153,7 @@ fn database_folder(tree: &Tree) -> String {
     let (settings, _) = emusen_galaxia::config::load_or_new(tree, model, None, emusen_galaxia::models::APP_SETTINGS_FILE);
     match settings.get("CheatDatabaseDirectory").and_then(|v| v.as_str()) {
         Some(named) if !named.trim().is_empty() => named.to_string(),
-        _ => tree.directory(Directory::Cheats).unwrap_or_default(),
+        _ => tree.directory(Directory::Cheats).unwrap_or_default().to_string_lossy().into_owned(),
     }
 }
 
@@ -450,7 +450,7 @@ fn run(cc: &mut Cheats, o: u32, bytes: &[u8]) -> Answer<(Option<Vec<u8>>, i64)> 
         op::FILES => {
             let tree = galaxia_tree::tree();
             let mut j = Json::new();
-            j.begin_object().str("directory", &emusen_galaxia::cheats::directory(&tree)).strs("names", emusen_galaxia::cheats::names(&tree)).end_object();
+            j.begin_object().str("directory", &emusen_galaxia::cheats::directory(&tree).to_string_lossy()).strs("names", emusen_galaxia::cheats::names(&tree)).end_object();
             record(j.finish().into_bytes())
         }
         op::FILE_READ => {
@@ -463,7 +463,7 @@ fn run(cc: &mut Cheats, o: u32, bytes: &[u8]) -> Answer<(Option<Vec<u8>>, i64)> 
                 _ => None,
             };
             let mut j = Json::new();
-            j.begin_object().str("path", &tree.config_path(Some(CHEATS_CATEGORY), &file));
+            j.begin_object().str("path", &tree.config_path(Some(CHEATS_CATEGORY), &file).to_string_lossy());
             match &loaded {
                 Some(v) => j.key_value("file", v),
                 None => j.null("file"),
@@ -478,14 +478,14 @@ fn run(cc: &mut Cheats, o: u32, bytes: &[u8]) -> Answer<(Option<Vec<u8>>, i64)> 
             let mut canonical = String::new();
             emusen_dotnet::json::write_compact(&mut canonical, &cc.registry.to_file());
             if emusen_galaxia::config::save(&tree, &MODELS[CHEAT_FILE_ID as usize], Some(CHEATS_CATEGORY), &file, Some(&canonical)).is_err() {
-                return Err(refused(status::FAULT, format!("couldn't write {}", tree.config_path(Some(CHEATS_CATEGORY), &file))));
+                return Err(refused(status::FAULT, format!("couldn't write {}", tree.config_path(Some(CHEATS_CATEGORY), &file).display())));
             }
             Ok((None, cc.registry.cheats().len() as i64))
         }
         op::DB_STATUS => {
             let directory = database_folder(&galaxia_tree::tree());
             let mut j = Json::new();
-            j.begin_object().str("directory", &directory).bool("exists", galaxia_tree::directory_exists(&directory)).str("attribution", ATTRIBUTION).end_object();
+            j.begin_object().str("directory", &directory).bool("exists", emusen_galaxia::files::directory_exists(&directory)).str("attribution", ATTRIBUTION).end_object();
             record(j.finish().into_bytes())
         }
         op::DB_PARSE => {

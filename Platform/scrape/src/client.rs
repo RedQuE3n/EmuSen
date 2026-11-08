@@ -3,6 +3,7 @@
 //! answer read as it read it. Every request goes through `emusen-net` (SR9), with the program's `User-Agent` and the
 //! client's 30 s. See EmuSen_BigPicture.md §5.1, §17.3, §38 and EmuSen_Backend.md §30.5.
 
+use std::path::Path;
 use crate::answer::{self, Game, Member, Quota};
 use crate::credentials::{self, Developer};
 use crate::kinds::Payload;
@@ -187,7 +188,7 @@ impl Client {
     pub fn jeu_infos_url(&self, system_id: i32, hashes: &Hashes, file_name: &str, game_id: Option<i64>) -> String {
         let system = system_id.to_string();
         let size = hashes.size.to_string();
-        let name = emusen_galaxia::dotnet_path::file_name(emusen_galaxia::dotnet_path::Style::HOST, file_name).to_string();
+        let name = Path::new(file_name).file_name().unwrap_or_default().to_string_lossy().to_string();
         let id = game_id.map(|g| g.to_string());
         let mut query: Vec<(&str, &str)> = vec![("romtype", "rom"), ("systemeid", &system)];
         if !hashes.by_name_and_size() {

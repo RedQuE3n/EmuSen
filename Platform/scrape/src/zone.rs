@@ -37,7 +37,7 @@ impl Zone {
     /// The named zone from the system's files, or UTC where it cannot be read.
     pub fn system(name: &str) -> Zone {
         let dir = std::env::var("TZDIR").unwrap_or_else(|_| "/usr/share/zoneinfo".to_string());
-        std::fs::read(std::path::Path::new(&dir).join(name)).ok().and_then(|bytes| Zone::parse(&bytes)).unwrap_or_default()
+        std::fs::read(std::path::Path::new(&dir).join(name).to_string_lossy().into_owned()).ok().and_then(|bytes| Zone::parse(&bytes)).unwrap_or_default()
     }
 
     fn parse(b: &[u8]) -> Option<Zone> {

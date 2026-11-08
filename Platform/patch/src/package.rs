@@ -117,11 +117,11 @@ pub fn image(folder: &str, doc: &Value, source: &[u8]) -> Result<Option<Vec<u8>>
 
 /// The image a package at `folder` gives its core: its manifest read, and `image`'s answer.
 pub fn image_at(folder: &str, source: &[u8]) -> Result<Option<Vec<u8>>, String> {
-    let manifest = emusen_galaxia::files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let manifest = std::path::Path::new(folder).join(emusen_galaxia::package::FILE_NAME);
     let doc = match emusen_galaxia::package::read(&manifest) {
         Ok(Ok(doc)) => doc,
         Ok(Err(refusal)) => return Err(refusal.words().to_string()),
-        Err(e) => return Err(format!("{manifest}: {e}")),
+        Err(e) => return Err(format!("{}: {e}", manifest.display())),
     };
     image(folder, &doc, source)
 }

@@ -70,8 +70,8 @@ fn a_frame_through_the_runtime_allocates_nothing() {
     install(&cores);
     {
         let mut t = tree_mut();
-        t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
-        t.set_override(Override::Config, Some(root.join("Config").to_string_lossy().into_owned()));
+        t.set_override(Override::Data, Some(root.join("Home")));
+        t.set_override(Override::Config, Some(root.join("Config")));
     }
     let game = root.join("game.tst");
     std::fs::write(&game, [b'V', b'1', b'T', b'C', 4, 0, 1, 2, 3, 4]).unwrap();

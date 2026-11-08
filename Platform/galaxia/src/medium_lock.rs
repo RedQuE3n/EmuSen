@@ -4,8 +4,10 @@
 //! Unix, so a lock taken by either half, or by another program of either half, refuses the other. Within the process a
 //! table answers who holds a file in the holder's own words; shared handles are the program's machines, one run at a time.
 
-use crate::dotnet_path::{self as path, Style};
-use crate::tree::file_exists;
+use crate::atomic::beside;
+use crate::files::file_exists;
+use crate::path_key;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
@@ -20,35 +22,35 @@ struct Taken {
     handles: Vec<(u64, String)>,
 }
 
-static HELD: Mutex<Option<HashMap<String, Taken>>> = Mutex::new(None);
+static HELD: Mutex<Option<HashMap<PathBuf, Taken>>> = Mutex::new(None);
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 /// A held lock; letting it go releases this handle, and the file's lock with the last one.
 #[derive(Debug)]
 pub struct MediumLock {
     pub id: u64,
-    pub path: String,
+    pub path: PathBuf,
     pub holder: String,
 }
 
-fn table<R>(f: impl FnOnce(&mut HashMap<String, Taken>) -> R) -> R {
+fn table<R>(f: impl FnOnce(&mut HashMap<PathBuf, Taken>) -> R) -> R {
     let mut held = HELD.lock().unwrap_or_else(|p| p.into_inner());
     f(held.get_or_insert_with(HashMap::new))
 }
 
 /// The lock file opened and locked, or none when another holds it; the folder is made where it is missing.
-fn open(key: &str) -> Option<File> {
-    if let Some(folder) = path::directory_name(Style::HOST, key).filter(|f| !f.is_empty()) {
+fn open(key: &Path) -> Option<File> {
+    if let Some(folder) = key.parent().filter(|f| !f.as_os_str().is_empty()) {
         std::fs::create_dir_all(folder).ok()?;
     }
-    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(format!("{key}{SUFFIX}")).ok()?;
+    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(beside(key, SUFFIX)).ok()?;
     file.try_lock().ok()?;
     Some(file)
 }
 
 /// `MediumLock.TryTake`: the lock on `file` for `holder`, or none where another program holds it or this one holds it unshared.
-pub fn try_take(file: &str, holder: &str, shared: bool) -> Option<MediumLock> {
-    let key = path::full_path(file);
+pub fn try_take(file: impl AsRef<Path>, holder: &str, shared: bool) -> Option<MediumLock> {
+    let key = path_key::key(file);
     table(|held| {
         if let Some(taken) = held.get_mut(&key) {
             if !shared || !taken.shared {
@@ -69,26 +71,26 @@ pub fn try_take(file: &str, holder: &str, shared: bool) -> Option<MediumLock> {
     })
 }
 
-fn add(taken: &mut Taken, key: &str, holder: &str) -> MediumLock {
+fn add(taken: &mut Taken, key: &Path, holder: &str) -> MediumLock {
     let id = NEXT.fetch_add(1, Ordering::Relaxed);
     taken.handles.push((id, holder.to_string()));
-    MediumLock { id, path: key.to_string(), holder: holder.to_string() }
+    MediumLock { id, path: key.to_path_buf(), holder: holder.to_string() }
 }
 
 /// The file removed, then its lock let go as it closes, as .NET's `DeleteOnClose` does.
-fn release_file(key: &str, file: File) {
-    let _ = std::fs::remove_file(format!("{key}{SUFFIX}"));
+fn release_file(key: &Path, file: File) {
+    let _ = std::fs::remove_file(beside(key, SUFFIX));
     drop(file);
 }
 
 /// `MediumLock.HolderOf`: the latest holder's words in this process, "another program" elsewhere, none when no one holds it.
-pub fn holder_of(file: &str) -> Option<String> {
-    let key = path::full_path(file);
+pub fn holder_of(file: impl AsRef<Path>) -> Option<String> {
+    let key = path_key::key(file);
     table(|held| {
         if let Some(taken) = held.get(&key) {
             return taken.handles.last().map(|(_, holder)| holder.clone());
         }
-        let lock = format!("{key}{SUFFIX}");
+        let lock = beside(&key, SUFFIX);
         if !file_exists(&lock) {
             return None;
         }
@@ -132,12 +134,12 @@ mod tests {
         let dir = TempDir::new("medium-lock");
         let card = dir.join("Cards/a.mcr");
         let game = try_take(&card, "Game A", false).unwrap();
-        assert!(file_exists(&format!("{card}{SUFFIX}")));
-        assert_eq!(std::fs::read_to_string(format!("{card}{SUFFIX}")).unwrap(), format!("Game A\n{}\n", std::process::id()));
+        assert!(file_exists(&beside(&card, SUFFIX)));
+        assert_eq!(std::fs::read_to_string(beside(&card, SUFFIX)).unwrap(), format!("Game A\n{}\n", std::process::id()));
         assert!(try_take(&card, "the card manager", false).is_none());
         assert_eq!(holder_of(&card).as_deref(), Some("Game A"));
         drop(game);
-        assert!(!file_exists(&format!("{card}{SUFFIX}")));
+        assert!(!file_exists(&beside(&card, SUFFIX)));
         assert_eq!(holder_of(&card), None);
         let one = try_take(&card, "Game B", true).unwrap();
         let two = try_take(&card, "Game C", true).unwrap();
@@ -153,13 +155,13 @@ mod tests {
     fn a_file_another_open_file_has_locked_is_held_by_another_program_and_a_stale_one_is_taken() {
         let dir = TempDir::new("medium-lock-other");
         let card = dir.join("b.mcr");
-        let other = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(format!("{card}{SUFFIX}")).unwrap();
+        let other = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(beside(&card, SUFFIX)).unwrap();
         other.try_lock().unwrap();
         assert_eq!(holder_of(&card).as_deref(), Some("another program"));
         assert!(try_take(&card, "Game", false).is_none());
         drop(other);
         assert_eq!(holder_of(&card), None);
-        assert!(file_exists(&format!("{card}{SUFFIX}")));
+        assert!(file_exists(&beside(&card, SUFFIX)));
         let taken = try_take(&card, "Game", false).unwrap();
         assert!(release(taken.id));
         assert!(!release(taken.id));

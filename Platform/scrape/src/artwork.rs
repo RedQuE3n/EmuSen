@@ -2,9 +2,9 @@
 //! console or a libretro system scopes what is under it to that console. The first of a cover's sources. See
 //! EmuSen_Settings_Reference.md §4.33 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::consoles::Core;
 use emusen_galaxia::files::{self, Options};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::HashMap;
 
 pub const IMAGE_EXTENSIONS: [&str; 4] = [".png", ".jpg", ".jpeg", ".webp"];
@@ -59,20 +59,14 @@ impl Index {
                 set(system, &core.console);
             }
         }
-        let style = Style::HOST;
         let _ = files::visit_files_with(dir, Options { skip_hidden: true, ignore_inaccessible: true }, |file, _| {
-            let ext = path::extension(style, file);
-            if !IMAGE_EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&ext)) {
+            let ext = file.extension().unwrap_or_default().to_string_lossy();
+            if ext.is_empty() || !IMAGE_EXTENSIONS.iter().any(|e| e.trim_start_matches('.').eq_ignore_ascii_case(&ext)) {
                 return;
             }
-            let relative = file[dir.trim_end_matches(style.separator()).len()..].trim_start_matches(style.separator());
-            let folder = path::directory_name(style, relative).unwrap_or_default();
-            let console = if folder.is_empty() {
-                None
-            } else {
-                folder.split(style.separator()).find_map(|part| console_by_folder.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part)).map(|(_, c)| c.clone()))
-            };
-            index.add(console, path::file_name_without_extension(style, file), file);
+            let folder = file.strip_prefix(dir).ok().and_then(Path::parent).unwrap_or(Path::new(""));
+            let console = folder.components().find_map(|part| console_by_folder.iter().find(|(n, _)| n.eq_ignore_ascii_case(&part.as_os_str().to_string_lossy())).map(|(_, c)| c.clone()));
+            index.add(console, &file.file_stem().unwrap_or_default().to_string_lossy(), &file.to_string_lossy());
         });
         index
     }

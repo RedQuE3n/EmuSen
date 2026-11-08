@@ -3,10 +3,10 @@
 //! server has its box under that name, and OpenVGDB's own address is tried last. Asked only inside a run the player
 //! started. See EmuSen_Settings_Reference.md §4.39, EmuSen_BigPicture.md §26 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::client::{TIMEOUT, Wire};
 use crate::consoles::Core;
 use emusen_galaxia::files::file_exists;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_sqlite::{Bound, Connection, Sqlite};
 use std::sync::Arc;
 use std::time::Duration;
@@ -138,8 +138,7 @@ pub struct Result {
 
 /// One lookup: the waits between requests are the real clock's, as `CoverFetcher`'s are.
 pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str, stop: &crate::clock::Stop) -> std::result::Result<Result, Option<String>> {
-    let style = Style::HOST;
-    let stem = path::file_name_without_extension(style, rom).to_string();
+    let stem = Path::new(rom).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let mut found = db.by_name(&stem, &core.openvgdb_systems);
     if found.is_none() {
         let size = std::fs::metadata(rom).map(|m| m.len()).map_err(|e| Some(format!("{}: {}", rom, e)))?;
@@ -150,7 +149,7 @@ pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str
         }
     }
     let Some(m) = found else { return Ok(Result { rom: rom.into(), outcome: Outcome::Unknown, rom_name: None, saved: None, detail: None }) };
-    let target = path::combine_all(style, &[artwork, &core.console, &format!("{}.png", safe(&stem))]);
+    let target = Path::new(artwork).join(&core.console).join(&format!("{}.png", safe(&stem))).to_string_lossy().into_owned();
     if file_exists(&target) {
         return Ok(Result { rom: rom.into(), outcome: Outcome::Found, rom_name: Some(m.rom_name), saved: Some(target), detail: Some("already there".into()) });
     }
@@ -163,8 +162,8 @@ pub fn look_up(db: &Database, wire: &Wire, rom: &str, core: &Core, artwork: &str
         }
     }
     if let Some(cover) = m.cover_url.as_deref().filter(|c| c.starts_with("https://") || c.starts_with("http://")) {
-        let ext = path::extension(style, cover.split(['?', '#']).next().unwrap_or(cover));
-        let fallback = path::change_extension(style, &target, if ext == ".jpg" || ext == ".jpeg" { ".jpg" } else { ".png" });
+        let ext = Path::new(cover.split(['?', '#']).next().unwrap_or(cover)).extension().unwrap_or_default().to_string_lossy();
+        let fallback = Path::new(&target).with_extension(if ext == "jpg" || ext == "jpeg" { "jpg" } else { "png" }).to_string_lossy().into_owned();
         if let Some(saved) = fetch(wire, cover, &fallback, stop)? {
             return Ok(Result { rom: rom.into(), outcome: Outcome::Found, rom_name: Some(m.rom_name), saved: Some(saved), detail: Some(cover.to_string()) });
         }
@@ -245,5 +244,5 @@ pub fn download(sqlite: Arc<Sqlite>, wire: &Wire, target: &str, cancel: &emusen_
 /// Where OpenVGDB is kept: Galaxia's `home/Library`.
 pub fn default_path() -> String {
     let library = emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-    path::combine(Style::HOST, &library, FILE_NAME)
+    Path::new(&library).join(FILE_NAME).to_string_lossy().into_owned()
 }

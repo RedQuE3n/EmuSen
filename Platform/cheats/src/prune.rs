@@ -2,8 +2,9 @@
 //! the rest, refusing the cases where an empty or unmatched keep-set would wipe everything, and applies a plan only
 //! inside the tree it was planned against (EmuSen_Settings_Reference.md §4.16).
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::database::{Database, visit_files};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 
 /// One system folder the plan removes, with its files' count and their bytes.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -45,7 +46,7 @@ pub fn plan(db: &Database, keep: &[String]) -> Plan {
 
 /// A system folder's bytes, every file under it counted as .NET measures one; what cannot be read counts nothing.
 fn measure(root: &str, system: &str, files: usize) -> Pruned {
-    let folder = path::combine(Style::HOST, root, system);
+    let folder = Path::new(root).join(system).to_string_lossy().into_owned();
     let mut bytes = 0u64;
     let _ = visit_files(&folder, |file, _| {
         if let Ok(m) = std::fs::symlink_metadata(file) {
@@ -74,13 +75,11 @@ pub fn apply(db: &Database, removing: &[Pruned]) -> (usize, Vec<String>) {
 
 /// Resolved on both sides, so neither `..` nor a link reaches out of the tree.
 fn is_inside(root: &str, candidate: &str) -> bool {
-    let full_root = path::full_path(root);
-    let full_candidate = path::full_path(candidate);
-    let (r, c) = (path::trim_ending_separator(Style::HOST, &full_root), path::trim_ending_separator(Style::HOST, &full_candidate));
-    if std::fs::symlink_metadata(c).is_ok_and(|m| m.file_type().is_symlink()) {
+    let (r, c) = (path_key::key(root), path_key::key(candidate));
+    if std::fs::symlink_metadata(&c).is_ok_and(|m| m.file_type().is_symlink()) {
         return false;
     }
-    c.len() > r.len() && c.starts_with(r) && c[r.len()..].starts_with(Style::HOST.separator())
+    c != r && c.starts_with(&r)
 }
 
 /// `Directory.Delete(path, recursive: true)` on Unix: every entry tried, links removed and not followed, the first

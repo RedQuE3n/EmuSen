@@ -4,11 +4,12 @@
 //! self-contained copies its game in and never moves or removes the library's, and migrating copies and never
 //! overwrites or removes anything.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::convert::{obj, Outcome};
 use crate::Context;
 use emusen_galaxia::claims::{self, Index, Roots};
 use emusen_galaxia::files::{self, Options};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
 use emusen_galaxia::rom_hash::{self, Hashes};
 use emusen_galaxia::{archive, cheats, image_sets, package};
@@ -55,7 +56,7 @@ pub fn games(library: &str, given: &[String]) -> (Vec<Game>, Vec<String>) {
         };
         let at = claims::under(library, &rel);
         if files::directory_exists(&at) {
-            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string()));
+            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| files.push(f.to_string_lossy().into_owned()));
         } else if files::file_exists(&at) {
             direct.push(at.clone());
             files.push(at);
@@ -70,7 +71,7 @@ pub fn games(library: &str, given: &[String]) -> (Vec<Game>, Vec<String>) {
     let mut found = Vec::new();
     for at in image_sets::shelved(files) {
         let rel = crate::discs::rel_of(library, &at);
-        if !extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, &at))) {
+        if !extensions.iter().any(|e| e.eq_ignore_ascii_case(&Path::new(&at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default())) {
             if direct.contains(&at) {
                 refused.push(format!("{rel}: no system of this build takes its kind of file"));
             }
@@ -138,7 +139,7 @@ pub struct Making {
 pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &dyn Fn() -> bool) -> Outcome {
     let places = ctx.places();
     let roots = places.roots();
-    let full = path::full_path(&game.path);
+    let full = path_key::key_text(&game.path);
     if let Some(p) = index.claimant(&full) {
         let folder = p.folder.clone();
         if how == Making::default() {
@@ -147,7 +148,7 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
         return further(ctx, index, &folder, how, "already", stop);
     }
     let (folder, folder_rel) = place(ctx, game);
-    let manifest = files::join(&folder, package::FILE_NAME);
+    let manifest = Path::new(&folder).join(package::FILE_NAME).to_string_lossy().into_owned();
     if files::file_exists(&manifest) {
         return Outcome::said("failed", format!("Packages/{folder_rel} already holds a package for another file, so none was made")).with("package", text(&folder_rel));
     }
@@ -171,10 +172,10 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
             ("file", Value::Null),
             ("transformed", Value::Null),
             ("tracks", Value::Array(tracks.iter().map(|t| hashes_json(&t.hashes, vec![("file", text(&t.file))])).collect())),
-            ("sheet", hashes_json(&sheet, vec![("file", text(path::file_name(Style::HOST, &game.path)))])),
+            ("sheet", hashes_json(&sheet, vec![("file", text(&Path::new(&game.path).file_name().unwrap_or_default().to_string_lossy()))])),
             ("form", text("cue-bin")),
         ];
-        companions = image_sets::files_for(&game.path).unwrap_or_default();
+        companions = image_sets::files_for(&game.path).unwrap_or_default().iter().map(|p| p.to_string_lossy().into_owned()).collect();
     } else if archive::is_archive(&game.path) {
         let takes = |e: &str| game.system.extensions.iter().any(|x| x.eq_ignore_ascii_case(&e));
         let Ok(Some(name)) = archive::image_entry(&game.path, takes) else { return Outcome::said("failed", "the archive holds no image of its system") };
@@ -196,20 +197,20 @@ pub fn make(ctx: &Context, index: &mut Index, game: &Game, how: Making, stop: &d
         };
         let t = if emusen_systems::openvgdb::transforms(id) { std::fs::read(&game.path).map(|b| transformed(id, &b)).unwrap_or(Value::Null) } else { Value::Null };
         dump = vec![("file", hashes_json(&h, vec![])), ("transformed", t)];
-        companions = image_sets::all_files(&game.path).map(|a| a.into_iter().skip(1).collect()).unwrap_or_default();
+        companions = image_sets::all_files(&game.path).map(|a| a.iter().skip(1).map(|p| p.to_string_lossy().into_owned()).collect()).unwrap_or_default();
     }
     let playlist = image_sets::is_playlist(&game.path);
     let companion_entries: Vec<Value> = companions
         .iter()
         .map(|c| {
-            let role = if playlist { "disc" } else if path::extension(Style::HOST, c).eq_ignore_ascii_case(".sbi") { "sbi" } else { "track" };
-            match claims::entry_place(&roots, &path::full_path(c)) {
+            let role = if playlist { "disc" } else if Path::new(c).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default().eq_ignore_ascii_case(".sbi") { "sbi" } else { "track" };
+            match claims::entry_place(&roots, &path_key::key_text(c)) {
                 ("library", rel) => entry(role, "library", &rel, c),
                 (_, full) => entry(role, "absolute", &full, c),
             }
         })
         .collect();
-    let title = path::file_name_without_extension(Style::HOST, &game.path).to_string();
+    let title = Path::new(&game.path).file_stem().unwrap_or_default().to_string_lossy().to_string();
     let mut doc = package::new(Some(&title), &game.system.esde_system, "linked", entry("image", "library", &rel_of(&full), &game.path));
     claims::set(&mut doc, "dump", obj(dump));
     claims::set(&mut doc, "companions", Value::Array(companion_entries));
@@ -266,7 +267,7 @@ fn further(ctx: &Context, index: &mut Index, folder: &str, how: Making, found: &
         if mode != "self-contained" {
             return Outcome::said("failed", "a linked package's zip would hold no game, so none was written").with("package", text(&rel)).with("mode", text(&mode));
         }
-        let zip = emusen_galaxia::package_zip::zip_beside(folder);
+        let zip = emusen_galaxia::package_zip::zip_beside(folder).to_string_lossy().into_owned();
         match emusen_galaxia::package_zip::write(folder, &zip, stop) {
             Ok((_, bytes)) => {
                 outcome_zip = obj(vec![("path", text(&package_rel(ctx, &zip))), ("bytes", Value::number(bytes))]);
@@ -307,9 +308,9 @@ fn copy_in(folder: &str, from: &str, rel: &str, stop: &dyn Fn() -> bool) -> Resu
         return if there == want { Ok((want, size)) } else { Err(format!("{rel} is already in the package and is another file, so it was left as it is")) };
     }
     let modified = std::fs::metadata(from).and_then(|m| m.modified()).map_err(|e| format!("{from}: {e}"))?;
-    let dir = path::directory_name(Style::HOST, &target).unwrap_or_default();
+    let dir = Path::new(&target).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
     std::fs::create_dir_all(&dir).map_err(|e| format!("{dir}: {e}"))?;
-    let partial = path::combine(Style::HOST, &dir, &format!(".{}.partial-{}", path::file_name(Style::HOST, &target), std::process::id()));
+    let partial = Path::new(&dir).join(&format!(".{}.partial-{}", Path::new(&target).file_name().unwrap_or_default().to_string_lossy(), std::process::id())).to_string_lossy().into_owned();
     let copied = (|| {
         let mut input = std::fs::File::open(from).map_err(|e| format!("{from}: {e}"))?;
         let mut out = std::fs::File::create(&partial).map_err(|e| format!("{partial}: {e}"))?;
@@ -373,7 +374,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     }
     let doc_now = read(folder)?;
     *doc = doc_now;
-    let base = path::directory_name(Style::HOST, &game).unwrap_or_default();
+    let base = Path::new(&game).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
     let within = |at: &str| -> Result<String, String> {
         if claims::within(at, &base) && at.len() > base.len() {
             Ok(at[base.len()..].trim_start_matches(['/', '\\']).replace('\\', "/"))
@@ -387,9 +388,9 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     };
     // The copy is named as the package's folder where their kinds agree, so that ES-DE, given the folder, finds the
     // file of its name, and RetroArch the patches named by the package's own name beside it (§6, §19).
-    let folder_name = path::file_name(Style::HOST, folder).to_string();
-    let same_kind = path::extension(Style::HOST, &folder_name).eq_ignore_ascii_case(&path::extension(Style::HOST, &game));
-    let copy_name = if same_kind && companions.is_empty() { folder_name } else { path::file_name(Style::HOST, &game).to_string() };
+    let folder_name = Path::new(folder).file_name().unwrap_or_default().to_string_lossy().to_string();
+    let same_kind = Path::new(&folder_name).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default().eq_ignore_ascii_case(&Path::new(&game).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default());
+    let copy_name = if same_kind && companions.is_empty() { folder_name } else { Path::new(&game).file_name().unwrap_or_default().to_string_lossy().to_string() };
     let mut plan: Vec<(Value, String, String)> = vec![(doc.get("game").cloned().unwrap_or(Value::Null), game.clone(), copy_name)];
     for c in &companions {
         let at = claims::place(&roots, folder, c).ok_or("a companion's library is not set")?;
@@ -423,7 +424,7 @@ fn contain(ctx: &Context, folder: &str, doc: &mut Value, stop: &dyn Fn() -> bool
     claims::set(doc, "game", game_entry);
     claims::set(doc, "companions", Value::Array(moved_in));
     claims::set(doc, "sources", Value::Array(sources));
-    let manifest = files::join(folder, package::FILE_NAME);
+    let manifest = Path::new(folder).join(package::FILE_NAME).to_string_lossy().into_owned();
     match package::write(&manifest, doc) {
         Ok(Ok(())) => Ok(names),
         Ok(Err(words)) => Err(words),
@@ -441,9 +442,8 @@ pub fn named(ctx: &Context, given: &[String]) -> (Vec<String>, Vec<String>) {
     }
     let (mut found, mut refused) = (Vec::new(), Vec::new());
     for g in given {
-        let rooted = path::is_rooted(Style::HOST, g) && g.trim_matches(['/', '\\']) != "";
-        let at = if rooted { path::full_path(g) } else { claims::under(&packages, &crate::discs::relative(g).unwrap_or_default()) };
-        let at = path::trim_ending_separator(Style::HOST, &at).to_string();
+        let rooted = Path::new(g).has_root() && g.trim_matches(['/', '\\']) != "";
+        let at = if rooted { path_key::key_text(g) } else { claims::under(&packages, &crate::discs::relative(g).unwrap_or_default()) };
         let mine: Vec<&String> = all.iter().filter(|f| claims::within(f, &at)).collect();
         if mine.is_empty() {
             refused.push(format!("{g}: no package there"));
@@ -467,8 +467,8 @@ pub fn named_or_zipped(ctx: &Context, given: &[String], zips: bool) -> (Vec<Stri
     let packages = ctx.packages();
     let (mut zipped, mut rest) = (Vec::new(), Vec::new());
     for g in given {
-        let rooted = path::is_rooted(Style::HOST, g);
-        let at = if rooted { path::full_path(g) } else { claims::under(&packages, &crate::discs::relative(g).unwrap_or_default()) };
+        let rooted = Path::new(g).has_root();
+        let at = if rooted { path_key::key_text(g) } else { claims::under(&packages, &crate::discs::relative(g).unwrap_or_default()) };
         if is_zip(&at) { zipped.push((g.clone(), at)) } else { rest.push(g.clone()) }
     }
     let (mut found, mut refused) = if rest.is_empty() && !zipped.is_empty() { (Vec::new(), Vec::new()) } else { named(ctx, &rest) };
@@ -491,8 +491,8 @@ pub fn check_zip(ctx: &Context, zip: &str, stop: &dyn Fn() -> bool) -> Outcome {
         Ok(None) => return Outcome::said("refused", "the zip holds no package"),
         Err(words) => return Outcome::said("refused", words),
     };
-    let scratch = path::combine(Style::HOST, &ctx.packages(), &format!(".check-{}-{}", std::process::id(), SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)));
-    let folder = path::combine(Style::HOST, &scratch, &top);
+    let scratch = Path::new(&ctx.packages()).join(&format!(".check-{}-{}", std::process::id(), SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed))).to_string_lossy().into_owned();
+    let folder = Path::new(&scratch).join(&top).to_string_lossy().into_owned();
     let outcome = match emusen_galaxia::package_zip::unpack(zip, &top, &folder, stop) {
         Ok(()) => check(ctx, &folder, stop),
         Err(words) if words == "stopped" => Outcome::new("stopped"),
@@ -508,7 +508,7 @@ static SCRATCH: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize:
 /// saves a patched game keeps are named by its patch list, not by this (§16), so nothing else changes. `set`,
 /// `already`, or `failed` for `patched` on a package with no soft patches.
 pub fn identity(folder: &str, want: &str) -> Outcome {
-    let manifest = files::join(folder, package::FILE_NAME);
+    let manifest = Path::new(folder).join(package::FILE_NAME).to_string_lossy().into_owned();
     let mut doc = match read(folder) {
         Ok(d) => d,
         Err(words) => return Outcome::said("refused", words),
@@ -542,7 +542,7 @@ pub fn of_console(ctx: &Context, console: &str) -> Vec<String> {
 }
 
 pub(crate) fn read(folder: &str) -> Result<Value, String> {
-    let manifest = files::join(folder, package::FILE_NAME);
+    let manifest = Path::new(folder).join(package::FILE_NAME).to_string_lossy().into_owned();
     match package::read(&manifest) {
         Ok(Ok(doc)) => Ok(doc),
         Ok(Err(refusal)) => Err(refusal.words().to_string()),
@@ -690,7 +690,7 @@ fn companions_gone(roots: &Roots, folder: &str, doc: &Value) -> Vec<String> {
 pub fn check(ctx: &Context, folder: &str, stop: &dyn Fn() -> bool) -> Outcome {
     let places = ctx.places();
     let roots = places.roots();
-    let manifest = files::join(folder, package::FILE_NAME);
+    let manifest = Path::new(folder).join(package::FILE_NAME).to_string_lossy().into_owned();
     let mut doc = match read(folder) {
         Ok(d) => d,
         Err(words) => return Outcome::said("refused", words),
@@ -801,7 +801,7 @@ fn files_in(folder: &str, keep: impl Fn(&str) -> bool) -> Vec<String> {
         .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
         .map(|e| e.file_name().to_string_lossy().into_owned())
         .filter(|n| keep(n))
-        .map(|n| files::join(folder, &n))
+        .map(|n| Path::new(folder).join(&n).to_string_lossy().into_owned())
         .collect();
     found.sort();
     found
@@ -823,35 +823,35 @@ pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
     let Some(system) = system_named(system_name) else { return head(&doc, Outcome::said("failed", format!("no system of this build is named {system_name}"))) };
     let game = doc.get("game").and_then(|g| claims::place(&roots, folder, g));
     let rel = doc.get("game").and_then(|g| g.get("path")).and_then(Value::as_str).unwrap_or("");
-    let stem = path::file_name_without_extension(Style::Unix, &rel.replace('\\', "/")).to_string();
-    let saves_root = ctx.tree.saves();
+    let stem = Path::new(&rel.replace('\\', "/")).file_stem().unwrap_or_default().to_string_lossy().to_string();
+    let saves_root = ctx.tree.saves().to_string_lossy().into_owned();
     let console = system.console.as_str();
     let mut from: Vec<(String, String)> = Vec::new();
     // Each file takes the package's own name in place of the game's, as the runtime names a packaged game's saves.
     let own = emusen_galaxia::saves::package_stem(folder).to_string();
-    let renamed = |f: &str| format!("{own}{}", &path::file_name(Style::HOST, f)[stem.len()..]);
-    let into_saves = |f: &str| path::combine_all(Style::HOST, &[folder, package::SAVES_FOLDER, &renamed(f)]);
-    let mut save_folders = vec![path::combine(Style::HOST, &saves_root, console)];
+    let renamed = |f: &str| format!("{own}{}", &Path::new(f).file_name().unwrap_or_default().to_string_lossy()[stem.len()..]);
+    let into_saves = |f: &str| Path::new(folder).join(package::SAVES_FOLDER).join(&renamed(f)).to_string_lossy().into_owned();
+    let mut save_folders = vec![Path::new(&saves_root).join(console).to_string_lossy().into_owned()];
     match system.id.as_str() {
         "snes" | "n64" => save_folders.push(saves_root.clone()),
-        "md" => save_folders.push(path::combine(Style::HOST, &saves_root, "MD")),
-        "mcd" => save_folders.push(path::combine(Style::HOST, &saves_root, "MCD")),
+        "md" => save_folders.push(Path::new(&saves_root).join("MD").to_string_lossy().into_owned()),
+        "mcd" => save_folders.push(Path::new(&saves_root).join("MCD").to_string_lossy().into_owned()),
         _ => {}
     }
     for f in save_folders.iter().flat_map(|d| files_in(d, |n| save_of(n, &stem))) {
         from.push((into_saves(&f), f));
     }
     if matches!(system.id.as_str(), "nes" | "gb" | "gbc")
-        && let Some(beside) = game.as_deref().and_then(|g| path::directory_name(Style::HOST, g))
+        && let Some(beside) = game.as_deref().and_then(|g| Path::new(g).parent().map(|d| d.to_string_lossy().into_owned()))
     {
         for f in files_in(&beside, |n| n == format!("{stem}.srm")) {
             from.push((into_saves(&f), f));
         }
     }
-    let state_folder = ctx.state_folder.clone().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| ctx.tree.save_states());
+    let state_folder = ctx.state_folder.clone().filter(|s| !s.trim().is_empty()).unwrap_or_else(|| ctx.tree.save_states().to_string_lossy().into_owned());
     let mut states: Vec<(String, String)> = Vec::new();
     for f in files_in(&state_folder, |n| state_of(n, &stem)) {
-        let to = path::combine_all(Style::HOST, &[folder, package::STATES_FOLDER, &renamed(&f)]);
+        let to = Path::new(folder).join(package::STATES_FOLDER).join(&renamed(&f)).to_string_lossy().into_owned();
         if f.ends_with(emusen_galaxia::saves::STATE_EXTENSION) {
             states.push((to.clone(), f.clone()));
         }
@@ -860,9 +860,9 @@ pub fn migrate(ctx: &Context, folder: &str) -> Outcome {
     for (to, art) in art_of(ctx, &doc, folder, game.as_deref()) {
         from.push((to, art));
     }
-    let lists = [cheats::game_list(Style::HOST, Some(console), game.as_deref().or(Some(rel))), cheats::game_list(Style::HOST, None, game.as_deref().or(Some(rel)))];
-    if let Some(list) = lists.iter().flatten().map(|l| path::combine_all(Style::HOST, &[&ctx.tree.config(), &l.category, &l.file_name()])).find(|p| files::file_exists(p)) {
-        from.push((files::join(folder, package::CHEATS_FILE), list));
+    let lists = [cheats::game_list(Some(console), game.as_deref().or(Some(rel))), cheats::game_list(None, game.as_deref().or(Some(rel)))];
+    if let Some(list) = lists.iter().flatten().map(|l| Path::new(&ctx.tree.config()).join(&l.category).join(&l.file_name()).to_string_lossy().into_owned()).find(|p| files::file_exists(p)) {
+        from.push((Path::new(folder).join(package::CHEATS_FILE).to_string_lossy().into_owned(), list));
     }
     let (mut copied, mut kept, mut failed) = (Vec::new(), 0u64, Vec::new());
     for (to, source) in from {
@@ -911,7 +911,7 @@ fn records_into(ctx: &Context, states: &[(String, String)], failed: &mut Vec<Str
         return Records { copied: 0, unread: None };
     }
     let Some(sqlite) = ctx.sqlite.clone() else { return Records { copied: 0, unread: Some("this program has no SQLite loaded to read states.db with".into()) } };
-    let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
+    let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default().to_string_lossy().into_owned();
     let mut copied = 0;
     for (to, source) in states {
         let Some(at) = emusen_galaxia::saves::package_record_path(to) else { continue };
@@ -961,20 +961,20 @@ const CROP_KEY: &str = "Crop";
 /// The crop games.db holds for a game, read only; none where there is none, or no SQLite to read it with.
 fn crop_of(ctx: &Context, game: &str) -> Option<emusen_library::records::Crop> {
     let sqlite = ctx.sqlite.clone()?;
-    let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-    let at = path::combine(Style::HOST, &library, emusen_galaxia::stores::GAMES_DB);
+    let library = ctx.tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default().to_string_lossy().into_owned();
+    let at = Path::new(&library).join(emusen_galaxia::stores::GAMES_DB).to_string_lossy().into_owned();
     if !files::file_exists(&at) {
         return None;
     }
     let db = emusen_sqlite::Connection::open_read_only(sqlite, &at).ok()?;
-    emusen_library::records::crop(&db, &path::full_path(game)).ok().flatten()
+    emusen_library::records::crop(&db, &path_key::key_text(game)).ok().flatten()
 }
 
 /// The game's art in the media store, each type's file to copy and where in the package it goes, named by the
 /// package's name (§18.3); a type the package already has a file of is left.
 fn art_of(ctx: &Context, doc: &Value, folder: &str, game: Option<&str>) -> Vec<(String, String)> {
     let (Some(game), Some(system)) = (game, doc.get("system").and_then(Value::as_str)) else { return Vec::new() };
-    let store = ctx.tree.directory(emusen_galaxia::tree::Directory::Media).unwrap_or_default();
+    let store = ctx.tree.directory(emusen_galaxia::tree::Directory::Media).unwrap_or_default().to_string_lossy().into_owned();
     let named = emusen_scrape::media::Game { file: game, folder_path: emusen_galaxia::game_folders::of(ctx.library.as_deref(), game), folder: false };
     let mut found = Vec::new();
     for kind in emusen_scrape::kinds::ALL_FOLDER_ORDER {
@@ -982,7 +982,7 @@ fn art_of(ctx: &Context, doc: &Value, folder: &str, game: Option<&str>) -> Vec<(
             continue;
         }
         if let Some(art) = emusen_scrape::media::find_in(&store, system, &named, kind.esde_type) {
-            found.push((package::media_path(folder, kind.folder, path::extension(Style::HOST, &art)), art));
+            found.push((package::media_path(folder, kind.folder, &Path::new(&art).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default()).to_string_lossy().into_owned(), art));
         }
     }
     found

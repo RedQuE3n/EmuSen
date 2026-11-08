@@ -3,7 +3,13 @@
 //! (EmuSen_Settings_Reference.md §4.85.6, §4.85.11, EmuSen_Backend.md §17.10).
 
 use emusen_galaxia::atomic;
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use emusen_galaxia::path_key;
+use std::path::Path;
+
+/// `at` with its extension made `extension`, written with or without its period, as text.
+fn with_extension(at: impl AsRef<Path>, extension: &str) -> String {
+    at.as_ref().with_extension(extension.trim_start_matches('.')).to_string_lossy().into_owned()
+}
 use emusen_galaxia::saves;
 use emusen_galaxia::tree::Tree;
 
@@ -34,12 +40,12 @@ impl BatterySave {
             return BatterySave::NONE;
         }
         let exists = emusen_galaxia::files::file_exists;
-        let plain = path::change_extension(Style::HOST, &saves::sram_path(tree, rom, console), extension);
+        let plain = with_extension(saves::sram_path(tree, rom, console), extension);
         let Some(root) = package.filter(|p| !p.is_empty()) else {
             let previous = if exists(&plain) { None } else { previous_home(tree, rom, console, extension) };
             return BatterySave { path: Some(plain), previous, adopts: false };
         };
-        let at = path::change_extension(Style::HOST, &saves::package_sram_path(root, key), extension);
+        let at = with_extension(saves::package_sram_path(root, key), extension);
         let previous = if exists(&at) || key.is_some_and(|k| !k.is_empty()) {
             None
         } else if exists(&plain) {
@@ -58,7 +64,7 @@ impl BatterySave {
         }
         let folder = crate::media::medium_folder(tree, console, console_kind);
         let adopts = adopt.is_some();
-        BatterySave { path: Some(path::combine(Style::HOST, &folder, &format!("{name}{extension}"))), previous: adopt, adopts }
+        BatterySave { path: Some(Path::new(&folder).join(format!("{name}{extension}")).to_string_lossy().into_owned()), previous: adopt, adopts }
     }
 
     /// The save kept before copied into its own place, once a load knows the machine keeps the file.
@@ -66,7 +72,7 @@ impl BatterySave {
         if let (Some(at), Some(previous)) = (&self.path, &self.previous)
             && !emusen_galaxia::files::file_exists(at)
         {
-            if path::full_path(previous) == path::full_path(at) {
+            if path_key::key(previous) == path_key::key(at) {
                 return;
             }
             let Ok(Some(saved)) = atomic::try_read(previous) else { return };
@@ -99,10 +105,10 @@ impl BatterySave {
 
 /// The one place each console's saves were kept before, `PreviousHome`.
 pub fn previous_home(tree: &Tree, rom: &str, console: &str, extension: &str) -> Option<String> {
-    let change = |p: &str| path::change_extension(Style::HOST, p, extension);
+    let change = |p: &Path| with_extension(p, extension);
     match console {
         "SNES" | "N64" => Some(change(&saves::flat_sram_path(tree, rom))),
-        "NES" | "GB" | "GBC" => Some(change(rom)),
+        "NES" | "GB" | "GBC" => Some(change(Path::new(rom))),
         "Genesis" => Some(change(&saves::sram_path(tree, rom, "MD"))),
         "Sega CD" => Some(change(&saves::sram_path(tree, rom, "MCD"))),
         _ => None,

@@ -6,7 +6,6 @@ use crate::interp::{Interp, Outcome};
 use crate::man;
 use crate::shell::{Request, World};
 use crate::table::{Kind, Table};
-use emusen_galaxia::tree;
 
 /// A command the shell answers itself; a host's command of the same name takes its place, as a frontend's always has.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -300,7 +299,7 @@ fn cd(world: &mut World, args: &[String]) -> Outcome {
     if !inside {
         return Outcome::fail(format!("cd: {}", world.sandbox.outside(&dir)));
     }
-    if !tree::directory_exists(&resolved) {
+    if !emusen_galaxia::files::directory_exists(&resolved) {
         return Outcome::fail(format!("cd: no such directory: {dir}"));
     }
     world.shown_cwd = None;
@@ -322,11 +321,11 @@ fn evaluate(world: &World, expr: &[String]) -> Result<bool, String> {
             "-z" => Ok(value.is_empty()),
             "-n" => Ok(!value.is_empty()),
             "-f" => Ok(match world.sandbox.resolve(value) {
-                (true, file) => tree::file_exists(&file),
+                (true, file) => emusen_galaxia::files::file_exists(&file),
                 _ => false,
             }),
             "-d" => Ok(match world.sandbox.resolve(value) {
-                (true, dir) => tree::directory_exists(&dir),
+                (true, dir) => emusen_galaxia::files::directory_exists(&dir),
                 _ => false,
             }),
             _ => Err(format!("Unknown unary test operator '{op}'.")),

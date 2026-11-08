@@ -47,7 +47,7 @@ pub(crate) fn shaderc() -> Result<Arc<Shaderc>, i32> {
     if let Some(shaderc) = SHADERC.get() {
         return Ok(shaderc.clone());
     }
-    let found = Shaderc::find(&emusen_galaxia::tree::base_directory()).map_err(|words| fail(status::NOT_SUPPORTED, words))?;
+    let found = Shaderc::find(&emusen_galaxia::tree::base_directory().to_string_lossy()).map_err(|words| fail(status::NOT_SUPPORTED, words))?;
     Ok(SHADERC.get_or_init(|| Arc::new(found)).clone())
 }
 

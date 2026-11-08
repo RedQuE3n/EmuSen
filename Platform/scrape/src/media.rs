@@ -2,11 +2,11 @@
 //! what the player placed, a packaged game's package, ScreenScraper's store, an ES-DE folder, OpenEmu's failover folder. Both frontends ask this,
 //! so a game shows the same cover in each. See EmuSen_Settings_Reference.md §4.60, §4.65 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::Scraper;
 use crate::consoles::{self, Core};
 use crate::kinds;
 use emusen_galaxia::files::file_exists;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use std::collections::HashSet;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -39,14 +39,12 @@ pub struct Game<'a> {
     pub folder: bool,
 }
 
-const STYLE: Style = Style::HOST;
-
 /// Where below a type folder a game's files are named: its folder then its stem, and for a foldered game its stem alone.
 fn names(game: &Game) -> Vec<String> {
     if game.folder {
         return if game.folder_path.is_empty() { Vec::new() } else { vec![game.folder_path.clone()] };
     }
-    let stem = path::file_name_without_extension(STYLE, game.file).to_string();
+    let stem = Path::new(game.file).file_stem().unwrap_or_default().to_string_lossy().to_string();
     if game.folder_path.is_empty() { vec![stem] } else { vec![format!("{}/{stem}", game.folder_path), stem] }
 }
 
@@ -55,7 +53,7 @@ pub fn find_in(root: &str, system: &str, game: &Game, media_type: &str) -> Optio
     let folder = kinds::by_type(media_type)?.folder;
     for name in names(game) {
         for ext in kinds::extensions(media_type) {
-            let file = path::combine_all(STYLE, &[root, system, folder, &format!("{name}{ext}")]);
+            let file = Path::new(root).join(system).join(folder).join(&format!("{name}{ext}")).to_string_lossy().into_owned();
             if file_exists(&file) {
                 return Some(file);
             }
@@ -67,7 +65,7 @@ pub fn find_in(root: &str, system: &str, game: &Game, media_type: &str) -> Optio
 /// A packaged game's file of a type in its package, `EsdeMediaFolder.FindInPackage` (EmuSen_GamePackages.md §18.3).
 pub fn find_in_package(root: &str, media_type: &str) -> Option<String> {
     let folder = kinds::by_type(media_type)?.folder;
-    kinds::extensions(media_type).iter().map(|ext| emusen_galaxia::package::media_path(root, folder, ext)).find(|p| file_exists(p))
+    kinds::extensions(media_type).iter().map(|ext| emusen_galaxia::package::media_path(root, folder, ext).to_string_lossy().into_owned()).find(|p| file_exists(p))
 }
 
 /// Each packaged game's media folder and its type folders' write times, `EsdeMediaFolder.PackageStamp`.
@@ -75,12 +73,12 @@ fn package_stamp(roots: &[&str]) -> String {
     roots
         .iter()
         .map(|r| {
-            let dir = path::combine(STYLE, r, emusen_galaxia::package::MEDIA_FOLDER);
+            let dir = Path::new(r).join(emusen_galaxia::package::MEDIA_FOLDER).to_string_lossy().into_owned();
             if !emusen_galaxia::files::directory_exists(&dir) {
                 return "0".to_string();
             }
             let mut subs: Vec<String> = std::fs::read_dir(&dir)
-                .map(|entries| entries.flatten().filter(|e| emusen_galaxia::files::listed_as_directory(e)).map(|e| emusen_galaxia::files::join(&dir, &e.file_name().to_string_lossy())).collect())
+                .map(|entries| entries.flatten().filter(|e| emusen_galaxia::files::listed_as_directory(e)).map(|e| Path::new(&dir).join(e.file_name()).to_string_lossy().into_owned()).collect())
                 .unwrap_or_default();
             subs.sort();
             std::iter::once(dir).chain(subs).filter_map(|d| std::fs::metadata(&d).ok().map(|m| emusen_galaxia::files::write_ticks(&m).to_string())).collect::<Vec<_>>().join(";")
@@ -92,7 +90,7 @@ fn package_stamp(roots: &[&str]) -> String {
 /// Where `CoverFetcher` writes: `<root>/<console>/<libretro-safe stem>.<ext>`.
 pub fn openemu_cover(root: &str, console: &str, title: &str) -> Option<String> {
     let stem = crate::openemu::safe(title);
-    [".png", ".jpg", ".jpeg"].iter().map(|ext| path::combine_all(STYLE, &[root, console, &format!("{stem}{ext}")])).find(|p| file_exists(p))
+    [".png", ".jpg", ".jpeg"].iter().map(|ext| Path::new(root).join(console).join(&format!("{stem}{ext}")).to_string_lossy().into_owned()).find(|p| file_exists(p))
 }
 
 impl Scraper {
@@ -144,7 +142,7 @@ impl Scraper {
                 }
             }
         }
-        let title = path::file_name_without_extension(STYLE, game.file).to_string();
+        let title = Path::new(game.file).file_stem().unwrap_or_default().to_string_lossy().to_string();
         let console = if file { self.console_for(game.file, cores) } else { None };
         if cover {
             if let Some(console) = &console {
@@ -184,18 +182,18 @@ fn present_in(root: &str, system: &str, games: &[(String, String, bool)]) -> Vec
     let nested = games.iter().any(|g| !g.1.is_empty());
     let mut names: Option<HashSet<String>> = None;
     for kind in kinds::ALL_FOLDER_ORDER {
-        let dir = path::combine_all(STYLE, &[root, system, kind.folder]);
+        let dir = Path::new(root).join(system).join(kind.folder).to_string_lossy().into_owned();
         if !emusen_galaxia::files::directory_exists(&dir) {
             continue;
         }
         let names = names.get_or_insert_with(|| games.iter().flat_map(|(file, folder_path, folder)| names_of(file, folder_path, *folder)).collect());
         let extensions = kinds::extensions(kind.esde_type);
         let mut hit = false;
-        let mut look = |file: &str| {
-            let rel = file[dir.len()..].trim_start_matches(STYLE.separator());
-            let parent = path::directory_name(STYLE, rel).unwrap_or_default();
-            let name = path::combine(STYLE, &parent, path::file_name_without_extension(STYLE, rel)).replace(STYLE.separator(), "/");
-            if extensions.contains(&path::extension(STYLE, file)) && names.contains(&name) {
+        let mut look = |file: &Path| {
+            let Some(rel) = file.strip_prefix(&dir).ok() else { return };
+            let name = rel.with_extension("").to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/");
+            let dotted = file.extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
+            if extensions.contains(&dotted.as_str()) && names.contains(&name) {
                 hit = true;
             }
         };
@@ -204,7 +202,7 @@ fn present_in(root: &str, system: &str, games: &[(String, String, bool)]) -> Vec
         } else if let Ok(entries) = std::fs::read_dir(&dir) {
             for e in entries.flatten() {
                 if !emusen_galaxia::files::listed_as_directory(&e) {
-                    look(&emusen_galaxia::files::join(&dir, &e.file_name().to_string_lossy()));
+                    look(&Path::new(&dir).join(e.file_name()));
                 }
             }
         }
@@ -224,7 +222,7 @@ fn stamp_in(root: &str, system: &str) -> String {
     kinds::ALL_FOLDER_ORDER
         .iter()
         .map(|kind| {
-            let dir = path::combine_all(STYLE, &[root, system, kind.folder]);
+            let dir = Path::new(root).join(system).join(kind.folder).to_string_lossy().into_owned();
             if !emusen_galaxia::files::directory_exists(&dir) {
                 return "0".to_string();
             }
@@ -237,7 +235,7 @@ fn stamp_in(root: &str, system: &str) -> String {
                 if let Ok(entries) = std::fs::read_dir(&d) {
                     for e in entries.flatten() {
                         if emusen_galaxia::files::listed_as_directory(&e) {
-                            queue.push_back(emusen_galaxia::files::join(&d, &e.file_name().to_string_lossy()));
+                            queue.push_back(Path::new(&d).join(e.file_name()).to_string_lossy().into_owned());
                         }
                     }
                 }

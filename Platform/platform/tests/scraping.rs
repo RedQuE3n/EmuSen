@@ -123,8 +123,8 @@ fn scrape_runs_the_lent_scraper_and_no_other_is_opened() {
     write(&library.join("snes/Game.sfc"), &vec![0u8; 0x8000]);
     write(&library.join("snes/Other.sfc"), &vec![1u8; 0x8000]);
     write(&etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\", \"OpenEmuFallback\": false}}", library.display()).as_bytes());
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
     let (game, other) = (library.join("snes/Game.sfc").to_string_lossy().into_owned(), library.join("snes/Other.sfc").to_string_lossy().into_owned());
 
     let games_db = home.join("Library/games.db");

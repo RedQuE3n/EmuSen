@@ -1,6 +1,7 @@
 //! One open session: its engine, what it was opened with, and its answers about itself, the C# `ManagedSession`'s
 //! life and `Info` (EmuSen_Backend.md §29.2). The frame, input, speed, rewind and states join it in their pieces.
 
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 
@@ -652,7 +653,7 @@ impl Session {
         j.begin_object().int("id", self.id as i64).str("engine", &e.display_name).str_or_null("system", loaded.then_some(e.mi.system.as_str())).str("console", &self.console);
         match &self.game_path {
             Some(p) => {
-                j.key_object("game").str("path", p).str("name", emusen_galaxia::dotnet_path::file_name_without_extension(emusen_galaxia::dotnet_path::Style::HOST, p)).end_object();
+                j.key_object("game").str("path", p).str("name", &Path::new(p).file_stem().unwrap_or_default().to_string_lossy()).end_object();
             }
             None => {
                 j.null("game");

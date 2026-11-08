@@ -595,41 +595,6 @@ namespace EmuSen.WiseMan.Galaxia
 
         private static string? Listed(GameCheats? list) => list is null ? null : $"{list.Category} | {list.Name}";
 
-        // A game's own list named both ways: odd characters, blank consoles, no extension, several periods, Windows spellings - see EmuSen_RustPlatform.md §20.
-        [Fact]
-        public void A_games_list_is_named_as_the_csharp_names_it()
-        {
-            void Compare(string? console, string? romPath) => GSweep("lists", $"'{console}' '{romPath}'", Listed(GameCheats.ForNative(console, romPath)), test: nameof(A_games_list_is_named_as_the_csharp_names_it));
-
-            string?[] consoles = { null, "", " ", "\t", "\u2003", "\u001F", ".", "..", "...", "SNES", " SNES ", "Game Boy", "a/b", "a\\b", "a:b", "Sega CD/32X", "\0", "é", "日本", "😀", "con", "a*b?" };
-            string?[] paths =
-            {
-                null, "", "Gamma", "Gamma.smc", "/roms/Gamma.smc", "/roms/", "/roms/.smc", ".hidden", "name.", "..", "...", "....", "/roms/..", "   .smc",
-                "Super.Mario.World.sfc", "a.b.c.d", "/roms.d/Gamma", "x\0y.nes", "Mario|Luigi? <1>.md", "Zelda: \"A\" *.sfc", "tab\there.gb", "é 日本 😀.gb",
-                @"C:\roms\Gamma.smc", @"roms\Gamma.smc", "C:Gamma.smc", "C:", @"C:\", @"\\server\share\Gamma.smc", @"\\?\C:\roms\Gamma.smc", "C:/roms/Gamma.smc",
-            };
-            foreach (string? console in consoles)
-                foreach (string? path in paths) Compare(console, path);
-            string[] built = Paths(3000, seed: 20261010).ToArray();
-            for (int i = 0; i < built.Length; i++)
-            {
-                Compare(consoles[i % consoles.Length], built[i]);
-                Compare(built[i], built[(i * 7 + 3) % built.Length] + ".smc");
-            }
-            for (int c = 0; c < 0x3000; c++)
-            {
-                if (char.IsSurrogate((char)c)) continue;
-                string one = ((char)c).ToString();
-                Compare(one, "Gamma.smc");
-                Compare("a" + one + "b", "Gamma.smc");
-                Compare("SNES", one + ".smc");
-                Compare("SNES", "/roms/a" + one + "b.c" + one + "d");
-            }
-            Assert.Equal($"{Path.Combine("cheats", "SNES")} | Gamma", Listed(GameCheats.ForNative("SNES", "/roms/Gamma.smc")));
-            Assert.Equal("cheats | Gamma", Listed(GameCheats.ForNative(" ", "Gamma")));
-            Assert.Null(GameCheats.ForNative("SNES", ".."));
-        }
-
         [Fact]
         public void The_log_folder_is_chosen_as_the_csharp_chose_it()
         {

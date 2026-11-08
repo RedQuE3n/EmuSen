@@ -531,7 +531,7 @@ impl Interp {
         if !inside {
             return Outcome::fail(format!("trust: {}", world.sandbox.outside(&args[1])));
         }
-        if !emusen_galaxia::tree::file_exists(&resolved) {
+        if !emusen_galaxia::files::file_exists(&resolved) {
             return Outcome::fail(format!("trust: no such file: {}", args[1]));
         }
         let bytes = match std::fs::read(&resolved) {
@@ -540,10 +540,10 @@ impl Interp {
         };
         use sha2::{Digest, Sha256};
         let hash: String = Sha256::digest(&bytes).iter().map(|b| format!("{b:02x}")).collect();
-        let store = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &emusen_galaxia::tree::tree().config(), "dianash");
+        let store = emusen_galaxia::tree::tree().config().join("dianash");
         let _ = std::fs::create_dir_all(&store);
-        let file = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &store, "trusted");
-        if let Err(words) = write_text(&file, &format!("{hash}  {resolved}\n"), true) {
+        let file = store.join("trusted");
+        if let Err(words) = write_text(&file.to_string_lossy(), &format!("{hash}  {resolved}\n"), true) {
             return Outcome::fail(format!("Error: {words}"));
         }
         Outcome::ok(format!("trust: approved {} (sha256 {hash})", args[1]))
@@ -563,7 +563,7 @@ impl Interp {
         if !inside {
             return Outcome::fail(format!("{name}: {}", world.sandbox.outside(requested)));
         }
-        if !emusen_galaxia::tree::file_exists(&resolved) {
+        if !emusen_galaxia::files::file_exists(&resolved) {
             return Outcome::fail(format!("{name}: no such file: {requested}"));
         }
         let lines = match std::fs::read_to_string(&resolved).map(|t| t.lines().map(str::to_string).collect::<Vec<_>>()).map_err(|e| format!("{}: {e}", resolved)) {

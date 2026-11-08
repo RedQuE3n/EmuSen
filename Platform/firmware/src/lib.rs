@@ -4,11 +4,11 @@
 //! split form whole from that folder, then the folder's files of the declared size by their MD5 when the request lists
 //! checksums (EmuSen_Firmware.md §7); size is the only test of a named file. An install writes into home/Firmware alone.
 
+use std::path::Path;
 use emusen_dotnet::json::{self, Value};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::setting_folders::{self, FolderValue};
 use emusen_galaxia::rom_hash;
-use emusen_galaxia::tree::file_exists;
+use emusen_galaxia::files::file_exists;
 use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::SystemTime;
@@ -154,7 +154,7 @@ fn by_content(request: &Request, folder: &str) -> Option<(String, String)> {
     let candidates: Vec<(String, String, String)> = names
         .into_iter()
         .filter_map(|name| {
-            let file = path::combine(Style::HOST, folder, &name);
+            let file = Path::new(folder).join(&name).to_string_lossy().into_owned();
             let n = length(&file).filter(|&n| n == request.size as u64)?;
             let digest = md5_of(&file, n)?;
             Some((name, file, digest))
@@ -166,12 +166,12 @@ fn by_content(request: &Request, folder: &str) -> Option<(String, String)> {
 fn search<T: Take>(request: &Request, folders: &[String]) -> Option<(String, Vec<String>, Vec<T::Part>, bool)> {
     for folder in folders {
         for name in std::iter::once(&request.file).chain(&request.alternates) {
-            if let Some(part) = T::exact(&path::combine(Style::HOST, folder, name), request.size) {
+            if let Some(part) = T::exact(&Path::new(folder).join(name).to_string_lossy().into_owned(), request.size) {
                 return Some((folder.clone(), vec![name.clone()], vec![part], false));
             }
         }
         for form in request.parts.iter().filter(|f| f.len() >= 2) {
-            let parts: Option<Vec<T::Part>> = form.iter().map(|name| T::any(&path::combine(Style::HOST, folder, name))).collect();
+            let parts: Option<Vec<T::Part>> = form.iter().map(|name| T::any(&Path::new(folder).join(name).to_string_lossy().into_owned())).collect();
             let Some(parts) = parts else { continue };
             if request.size > 0 && parts.iter().map(T::len).sum::<u64>() != request.size as u64 {
                 continue;
@@ -199,12 +199,12 @@ pub fn locate(request: &Request, folders: &[String]) -> Option<Located> {
 
 /// The first folder holding a file of the canonical name and the wrong size, for the overview's note.
 pub fn wrong_size_in(request: &Request, folders: &[String]) -> Option<String> {
-    folders.iter().find(|f| length(&path::combine(Style::HOST, f, &request.file)).is_some_and(|n| n != request.size as u64)).cloned()
+    folders.iter().find(|f| length(&Path::new(f).join(&request.file).to_string_lossy().into_owned()).is_some_and(|n| n != request.size as u64)).cloned()
 }
 
 /// `FirmwareLibrary.PathFor`: where an install writes.
 pub fn path_for(request: &Request, store: &str) -> String {
-    path::combine(Style::HOST, store, &request.file)
+    Path::new(store).join(&request.file).to_string_lossy().into_owned()
 }
 
 /// `FirmwareLibrary.Install`: the picked file copied into the store under the canonical name when its size is right;

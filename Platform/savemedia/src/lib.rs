@@ -3,10 +3,11 @@
 //! host's to say (EmuSen_Backend.md F28); everything after that is here, words included. A change to a card is one
 //! atomic write under the manager's own lock, refused where a game or another program holds the card.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_galaxia::atomic;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::medium_lock;
-use emusen_galaxia::tree::file_exists;
+use emusen_galaxia::files::file_exists;
 use emusen_systems::media::{self, Fault, Listing, Module, Save};
 use std::cell::RefCell;
 
@@ -90,7 +91,7 @@ pub fn find<'a>(listing: &'a Listing, save: &str) -> Option<&'a Save> {
 }
 
 fn show(file: &str) -> &str {
-    path::file_name(Style::HOST, file)
+    Path::new(file).file_name().and_then(|n| n.to_str()).unwrap_or("")
 }
 
 fn module_read(module: &Module, image: &[u8]) -> Result<Listing, Thrown> {
@@ -274,9 +275,9 @@ impl<'a, M: Media> Manager<'a, M> {
             }
             let mut taken: Vec<(&str, Vec<u8>, Save)> = Vec::new();
             let mut present = 0usize;
-            let whole_to = path::full_path(to);
+            let whole_to = path_key::key_text(to);
             for card in from {
-                if path::full_path(card) == whole_to {
+                if path_key::key_text(card) == whole_to {
                     continue;
                 }
                 if self.media.medium_of(card).map(|m| m.id) != Some(module.id.to_string()) {

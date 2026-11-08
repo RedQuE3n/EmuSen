@@ -27,8 +27,8 @@ impl Home {
     pub fn point_tree(&self) {
         use emusen_galaxia::tree::{Override, tree_mut};
         let mut t = tree_mut();
-        t.set_override(Override::Data, Some(self.data.to_string_lossy().into_owned()));
-        t.set_override(Override::Config, Some(self.config.to_string_lossy().into_owned()));
+        t.set_override(Override::Data, Some(self.data.clone()));
+        t.set_override(Override::Config, Some(self.config.clone()));
     }
 }
 

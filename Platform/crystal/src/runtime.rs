@@ -2,7 +2,7 @@
 //! hold, found by `emusen-core-host` and opened under its trust rules, and the answers about systems, engines and a
 //! file's route, which run no core (EmuSen_Backend.md §29.2, §29.6).
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use emusen_core_host::{Discovery, Trust, listing, trust};
@@ -513,7 +513,7 @@ impl Runtime {
         let at = {
             let tree = emusen_galaxia::tree::tree();
             let library = tree.directory(emusen_galaxia::tree::Directory::Library).unwrap_or_default();
-            emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &library, crate::states::FILE_NAME)
+            library.join(crate::states::FILE_NAME).to_string_lossy().into_owned()
         };
         let mut held = self.records.lock().unwrap_or_else(|p| p.into_inner());
         if held.as_ref().is_none_or(|(p, _)| *p != at) {
@@ -572,7 +572,7 @@ fn player_directories(configured: Option<&[PathBuf]>) -> Vec<PathBuf> {
 /// The cores directories a runtime given none scans: the program's own and its cores folder.
 pub fn installation_directories() -> Vec<PathBuf> {
     let base = emusen_galaxia::tree::base_directory();
-    vec![PathBuf::from(&base), PathBuf::from(emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &base, "cores"))]
+    vec![base.clone(), base.join("cores")]
 }
 
 fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> Discovery {
@@ -584,20 +584,20 @@ fn discover(directories: &[PathBuf], player: &[PathBuf], development: bool) -> D
 }
 
 /// The approvals' file in the config directory, so a test's follows its config override (EmuSen_Backend.md §29.40.3).
-fn approvals_path() -> String {
+fn approvals_path() -> PathBuf {
     emusen_galaxia::tree::tree().config_path(None, trust::APPROVALS)
 }
 
 /// The installation's manifests and the player's approvals; an approvals' file refused is said, and approves nothing.
 fn trust_of(directories: &[PathBuf], player: &[PathBuf], events: &crate::events::Events) -> Trust {
-    let approvals = trust::read_approvals(std::path::Path::new(&approvals_path())).unwrap_or_else(|why| {
+    let approvals = trust::read_approvals(&approvals_path()).unwrap_or_else(|why| {
         events.raise_runtime_lines(0, &[why]);
         Vec::new()
     });
     Trust::new(directories, &approvals).with_player(player)
 }
 
-fn read_text(file: &str) -> Result<String, crate::open::Refused> {
+fn read_text(file: &Path) -> Result<String, crate::open::Refused> {
     let bytes = emusen_galaxia::atomic::try_read(file).map_err(|why| (crate::abi::status::IO, why))?;
     Ok(bytes.map(|b| String::from_utf8_lossy(&b).into_owned()).unwrap_or_default())
 }

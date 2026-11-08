@@ -189,6 +189,6 @@ fn a_stored_path_key_is_still_the_key_of_its_path() {
     let table = std::fs::read_to_string(Path::new(DISK).join("keys.tsv")).unwrap();
     for line in table.lines().filter(|l| !l.starts_with('#')) {
         let [given, key] = line.split('\t').collect::<Vec<_>>()[..] else { panic!("{line}") };
-        assert_eq!(emusen_galaxia::dotnet_path::full_path(given), key, "{line}");
+        assert_eq!(emusen_galaxia::path_key::key_text(given), key, "{line}");
     }
 }

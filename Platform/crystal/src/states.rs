@@ -2,10 +2,11 @@
 //! and stamped with its size and time, the rows of Mistress's `records.db` copied in once (D8), and the sidecar JSON
 //! builds before 2026-09-26 wrote beside a state read where no row is (EmuSen_Backend.md §14.12, §29.5).
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use std::sync::Arc;
 
 use emusen_dotnet::json::Value;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_sqlite::{Bound, Connection, Sqlite};
 
 pub const FILE_NAME: &str = emusen_galaxia::stores::STATES_DB;
@@ -106,8 +107,8 @@ pub struct StateRecords {
 impl StateRecords {
     /// The file opened, made and migrated, and records.db's rows copied once.
     pub fn open(sqlite: Arc<Sqlite>, at: &str) -> Result<StateRecords, Refused> {
-        let full = path::full_path(at);
-        let folder = path::directory_name(Style::HOST, &full).unwrap_or_default();
+        let full = path_key::key_text(at);
+        let folder = Path::new(&full).parent().map(|d| d.to_string_lossy().into_owned()).unwrap_or_default();
         std::fs::create_dir_all(&folder).map_err(|e| (crate::abi::status::IO, format!("{}: {}", folder, e)))?;
         let mut db = Connection::open(sqlite, at).map_err(sqlite_failure)?;
         db.set_timeout(emusen_sqlite::COMMAND_TIMEOUT);
@@ -124,13 +125,13 @@ impl StateRecords {
             version += 1;
         }
         db.execute("PRAGMA journal_mode = WAL").map_err(sqlite_failure)?;
-        copy_from_records(&db, &path::combine(Style::HOST, &folder, RECORDS_FILE_NAME))?;
+        copy_from_records(&db, &Path::new(&folder).join(RECORDS_FILE_NAME))?;
         Ok(StateRecords { db })
     }
 
     /// The record while the state is the file it was written for; with no row, the sidecar an earlier build wrote.
     pub fn read(&self, state_path: &str) -> Result<Option<StateRecord>, Refused> {
-        let key = path::full_path(state_path);
+        let key = path_key::key_text(state_path);
         let Some((bytes, modified)) = stat(&key) else { return Ok(None) };
         let mut row: Option<(i64, i64, StateRecord)> = None;
         self.db
@@ -151,7 +152,7 @@ impl StateRecords {
     }
 
     pub fn write(&self, state_path: &str, r: &StateRecord) -> Result<(), Refused> {
-        let key = path::full_path(state_path);
+        let key = path_key::key_text(state_path);
         let Some((bytes, modified)) = stat(&key) else { return Ok(()) };
         run(
             &self.db,
@@ -177,19 +178,19 @@ rom_md5 = excluded.rom_md5, rom_bytes = excluded.rom_bytes",
     }
 
     pub fn forget(&self, state_path: &str) -> Result<(), Refused> {
-        run(&self.db, "DELETE FROM state_record WHERE path = $path", &[("$path", Bound::Text(&path::full_path(state_path)))])
+        run(&self.db, "DELETE FROM state_record WHERE path = $path", &[("$path", Bound::Text(&path_key::key_text(state_path)))])
     }
 }
 
 /// D8's one migration: every row of records.db's state_record copied, none over a row already here, once.
-fn copy_from_records(db: &Connection, records: &str) -> Result<(), Refused> {
+fn copy_from_records(db: &Connection, records: &Path) -> Result<(), Refused> {
     let source = Bound::Text(RECORDS_FILE_NAME);
     if scalar(db, "SELECT COUNT(*) FROM copied WHERE source = $source", &[("$source", Bound::Text(RECORDS_FILE_NAME))])?.unwrap_or(0) > 0 {
         return Ok(());
     }
     let at = emusen_galaxia::clock::utc_now();
     if emusen_galaxia::files::file_exists(records) {
-        run(db, "ATTACH DATABASE $file AS records", &[("$file", Bound::Text(records))])?;
+        run(db, "ATTACH DATABASE $file AS records", &[("$file", Bound::Text(&records.to_string_lossy()))])?;
         let copied = transaction(db, |db| {
             if scalar(db, "SELECT COUNT(*) FROM records.sqlite_master WHERE type = 'table' AND name = 'state_record'", &[])?.unwrap_or(0) > 0 {
                 db.execute(
@@ -223,14 +224,14 @@ pub fn package_record_text(r: &StateRecord, state_bytes: i64, state_modified: i6
     )
 }
 
-fn write_packaged(record_at: &str, state_path: &str, r: &StateRecord) -> Result<(), Refused> {
-    let Some((bytes, modified)) = stat(&path::full_path(state_path)) else { return Ok(()) };
+fn write_packaged(record_at: &Path, state_path: &str, r: &StateRecord) -> Result<(), Refused> {
+    let Some((bytes, modified)) = stat(&path_key::key_text(state_path)) else { return Ok(()) };
     emusen_galaxia::atomic::write(record_at, package_record_text(r, bytes, modified).as_bytes()).map_err(|words| (crate::abi::status::IO, words))
 }
 
 /// A package's record while its state is the file it was written for; none where it is not, or does not bind.
-pub fn read_packaged(record_at: &str, state_path: &str) -> Option<StateRecord> {
-    let (bytes, modified) = stat(&path::full_path(state_path))?;
+pub fn read_packaged(record_at: &Path, state_path: &str) -> Option<StateRecord> {
+    let (bytes, modified) = stat(&path_key::key_text(state_path))?;
     let doc = parse_file(record_at)?;
     let number = |name: &str| match member(&doc, name) {
         Some(Value::Number(t)) => t.as_str().parse::<i64>().ok(),
@@ -263,7 +264,7 @@ pub fn forget(records: Option<&StateRecords>, state_path: &str) -> Result<(), Re
         match std::fs::remove_file(&at) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err((crate::abi::status::IO, format!("{}: {}", at, e))),
+            Err(e) => return Err((crate::abi::status::IO, format!("{}: {}", at.display(), e))),
         }
     }
     records.map_or(Ok(()), |r| r.forget(state_path))
@@ -272,14 +273,14 @@ pub fn forget(records: Option<&StateRecords>, state_path: &str) -> Result<(), Re
 /// The record states.db, else the records.db it was copied from, holds for a state while it is the file it was
 /// written for, both read only and neither written: `pkg migrate`'s source (EmuSen_GamePackages.md §18.4).
 pub fn kept_record(sqlite: Arc<Sqlite>, library_folder: &str, state_path: &str) -> Option<StateRecord> {
-    let key = path::full_path(state_path);
+    let key = path_key::key_text(state_path);
     let (bytes, modified) = stat(&key)?;
     for file in [FILE_NAME, RECORDS_FILE_NAME] {
-        let at = path::combine(Style::HOST, library_folder, file);
+        let at = Path::new(library_folder).join(file);
         if !emusen_galaxia::files::file_exists(&at) {
             continue;
         }
-        let Ok(db) = Connection::open_read_only(sqlite.clone(), &at) else { continue };
+        let Ok(db) = Connection::open_read_only(sqlite.clone(), &at.to_string_lossy()) else { continue };
         let mut found: Option<StateRecord> = None;
         let _ = db.query(
             "SELECT state_bytes, state_modified, console, core, state_version, build, saved_at, rom_file, rom_md5, rom_bytes FROM state_record WHERE path = $path",
@@ -313,10 +314,10 @@ fn member<'a>(v: &'a Value, name: &str) -> Option<&'a Value> {
 
 /// The sidecar an earlier build wrote, `StateRecord.ReadSidecar`: none for no sidecar or one that does not bind.
 pub fn read_sidecar(state_path: &str) -> Option<StateRecord> {
-    bind(&parse_file(&path::change_extension(Style::HOST, state_path, ".json"))?)
+    bind(&parse_file(&Path::new(state_path).with_extension("json"))?)
 }
 
-fn parse_file(at: &str) -> Option<Value> {
+fn parse_file(at: &Path) -> Option<Value> {
     let text = std::fs::read_to_string(at).ok()?;
     emusen_dotnet::json::parse(text.trim_start_matches('\u{feff}')).ok()
 }

@@ -5,12 +5,13 @@
 //! used. Writing is the temp file and the rename of `atomic`, and its failure is a `false` and nothing more.
 
 use crate::atomic::{self, words};
-use crate::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::{self, Value};
 use crate::migration::copy_file;
 use crate::model;
 use crate::models::Model;
-use crate::tree::{Tree, file_exists};
+use crate::files::file_exists;
+use crate::tree::Tree;
+use std::path::{Path, PathBuf};
 
 /// `ConfigFile.Exists`.
 pub fn exists(tree: &Tree, category: Option<&str>, file: &str) -> bool {
@@ -23,13 +24,13 @@ pub fn delete(tree: &Tree, category: Option<&str>, file: &str) -> bool {
     match std::fs::remove_file(&target) {
         Ok(()) => true,
         // .NET's delete says nothing of a file that is not there, and throws for a folder that is not.
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => path::directory_name(Style::HOST, &target).is_some_and(|directory| crate::tree::directory_exists(&directory)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => target.parent().is_some_and(crate::files::directory_exists),
         Err(_) => false,
     }
 }
 
 /// The file to read: the config file itself, or failing that the copy made from where it sat before Galaxia, or that old file where no copy could be made.
-fn source(tree: &Tree, category: Option<&str>, file: &str) -> Option<String> {
+fn source(tree: &Tree, category: Option<&str>, file: &str) -> Option<PathBuf> {
     let destination = tree.config_path(category, file);
     if file_exists(&destination) {
         return Some(destination);
@@ -52,8 +53,8 @@ pub fn read_text(tree: &Tree, category: Option<&str>, file: &str) -> Result<Opti
 }
 
 /// The folder a file goes in, made as C#'s save makes it before anything else can fail.
-fn make_folder(target: &str) -> Result<(), String> {
-    match path::directory_name(Style::HOST, target).filter(|directory| !directory.is_empty()) {
+fn make_folder(target: &Path) -> Result<(), String> {
+    match target.parent().filter(|directory| !directory.as_os_str().is_empty()) {
         Some(directory) => std::fs::create_dir_all(directory).map_err(|error| words(&error)),
         None => Ok(()),
     }
@@ -104,7 +105,7 @@ pub fn load(tree: &Tree, model: &Model, category: Option<&str>, file: &str, upgr
 
 /// The diagnostic for a config file that would not load.
 pub fn load_diagnostic(tree: &Tree, category: Option<&str>, file: &str, words: &str) -> String {
-    format!("{}: {words} Falling back to defaults.", tree.config_path(category, file))
+    format!("{}: {words} Falling back to defaults.", tree.config_path(category, file).display())
 }
 
 /// A model's settings as a program wants them: the file's, upgraded, or a new instance's when there is no file or it will not load, with the diagnostic for the second case.
@@ -134,15 +135,17 @@ pub fn save(tree: &Tree, model: &Model, category: Option<&str>, file: &str, cano
 }
 
 /// `CheatFile.LoadFrom`: a model read from any path; none for a file that is missing, unreadable or will not bind.
-pub fn load_from(model: &Model, file: &str) -> Option<Value> {
+pub fn load_from(model: &Model, file: impl AsRef<Path>) -> Option<Value> {
     let text = crate::text_file::decode(&std::fs::read(file).ok()?);
     bind_text(model, &text, false).ok().flatten()
 }
 
 /// `CheatFile.SaveTo`: a model written straight to any path the player picked, with no temp file, as C# writes it.
-pub fn save_to(model: &Model, file: &str, canonical: Option<&str>) -> bool {
+pub fn save_to(model: &Model, file: impl AsRef<Path>, canonical: Option<&str>) -> bool {
+    let file = file.as_ref();
     let write = || -> Result<(), String> {
-        let directory = path::directory_name(Style::HOST, &path::full_path(file)).ok_or("The path has no folder.")?;
+        let full = crate::path_key::key(file);
+        let directory = full.parent().ok_or("The path has no folder.")?;
         std::fs::create_dir_all(directory).map_err(|error| words(&error))?;
         std::fs::write(file, bytes_for(model, canonical)?).map_err(|error| words(&error))
     };
@@ -163,8 +166,9 @@ mod tests {
         tree
     }
 
-    fn put(file: &str, contents: &[u8]) {
-        std::fs::create_dir_all(path::directory_name(Style::HOST, file).unwrap()).unwrap();
+    fn put(file: impl AsRef<Path>, contents: &[u8]) {
+        let file = file.as_ref();
+        std::fs::create_dir_all(file.parent().unwrap()).unwrap();
         std::fs::write(file, contents).unwrap();
     }
 
@@ -185,7 +189,7 @@ mod tests {
         assert_eq!(load(&tree, AUDIO, None, "audio.json", false), Err("$.SampleRate is not a whole number.".to_string()));
         put(&temp.join("etc/audio.json"), b"{ not json at all");
         let words = load(&tree, AUDIO, None, "audio.json", false).unwrap_err();
-        assert_eq!(load_diagnostic(&tree, None, "audio.json", &words), format!("{}: Neither a name nor '}}' in an object at line 1, byte 3. Falling back to defaults.", temp.join("etc/audio.json")));
+        assert_eq!(load_diagnostic(&tree, None, "audio.json", &words), format!("{}: Neither a name nor '}}' in an object at line 1, byte 3. Falling back to defaults.", temp.text("etc/audio.json")));
     }
 
     #[test]
@@ -200,11 +204,11 @@ mod tests {
         assert!(save(&tree, AUDIO, None, "audio.json", None).is_err());
         // What cannot be written still has its folder made, and settings that are null are written as that word.
         assert!(save(&tree, AUDIO, Some("group"), "x.json", None).is_err());
-        assert!(crate::tree::directory_exists(&temp.join("etc/group")) && !file_exists(&temp.join("etc/group/x.json")));
+        assert!(crate::files::directory_exists(&temp.join("etc/group")) && !file_exists(&temp.join("etc/group/x.json")));
         save(&tree, AUDIO, Some("group"), "null.json", Some(" null ")).unwrap();
         assert_eq!(std::fs::read_to_string(temp.join("etc/group/null.json")).unwrap(), "null");
         assert!(!write_text(&tree, Some("made"), "x.json", None));
-        assert!(crate::tree::directory_exists(&temp.join("etc/made")));
+        assert!(crate::files::directory_exists(&temp.join("etc/made")));
         assert!(write_text(&tree, Some("made"), "x.json", Some("{\"a\":1}")));
         assert_eq!(read_text(&tree, Some("made"), "x.json"), Ok(Some("{\"a\":1}".to_string())));
         assert!(save(&tree, AUDIO, None, "audio.json", Some(r#"{"RateControlMaxDeviation":1e999}"#)).is_err());
@@ -259,7 +263,7 @@ mod tests {
         put(&temp.join("etc/appsettings.json"), b"[]");
         let (fallback, said) = load_or_new(&tree, APP, None, "appsettings.json");
         assert_eq!(fallback.get("SelectedCore").and_then(Value::as_str), Some("All consoles"));
-        assert_eq!(said, Some(format!("{}: $ is not an object. Falling back to defaults.", temp.join("etc/appsettings.json"))));
+        assert_eq!(said, Some(format!("{}: $ is not an object. Falling back to defaults.", temp.text("etc/appsettings.json"))));
     }
 
     #[test]
@@ -271,7 +275,7 @@ mod tests {
         let back = load_from(cheats, &file).unwrap();
         assert_eq!(model::transport(&back), r#"{"Cheats":[{"Kind":"RamPoke","Writes":[{"Space":"","Address":"7E0019","Value":"00","Width":1,"Type":"Set","BitPosition":null,"BigEndian":false,"RepeatCount":1,"RepeatAddAddress":"0","RepeatAddValue":"0"}],"Compare":null,"Description":"é","Enabled":true,"Space":null,"Address":null,"Value":null}]}"#);
         assert!(!save_to(cheats, &temp.join("made/anyway/broken.json"), None));
-        assert!(crate::tree::directory_exists(&temp.join("made/anyway")));
+        assert!(crate::files::directory_exists(&temp.join("made/anyway")));
         assert_eq!(load_from(cheats, &temp.join("absent.json")), None);
         // Written straight to its path: a path that is a folder strands no temp file beside it.
         std::fs::create_dir_all(temp.join("taken/list.json")).unwrap();

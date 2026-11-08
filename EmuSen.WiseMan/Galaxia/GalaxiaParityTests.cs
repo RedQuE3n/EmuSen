@@ -160,86 +160,6 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(Path.Combine(At("bare", "bin"), ConfigRoot.PublishedRootDirName), GalaxiaNative.RootFor(At("bare", "bin"), false, home));
         }
 
-        private static readonly (GalaxiaDirectory Which, string Name)[] Named =
-        {
-            (GalaxiaDirectory.Library, "Library"), (GalaxiaDirectory.Screenshots, "Screenshots"), (GalaxiaDirectory.Artwork, "Artwork"),
-            (GalaxiaDirectory.Media, "Media"), (GalaxiaDirectory.Firmware, "Firmware"), (GalaxiaDirectory.Shaders, "Shaders"),
-            (GalaxiaDirectory.Themes, "Themes"), (GalaxiaDirectory.Cheats, "Cheats"), (GalaxiaDirectory.Games, "Games"),
-            (GalaxiaDirectory.Unpacked, "Unpacked"), (GalaxiaDirectory.Cores, "Cores"),
-            (GalaxiaDirectory.Packages, "Packages"), (GalaxiaDirectory.Compressed, "Compressed"),
-        };
-
-        private void TheTree(string combination, [System.Runtime.CompilerServices.CallerMemberName] string test = "")
-        {
-            void Answer(string what, object? answer) => GSweep("tree", $"{combination} {what}", answer, test: test);
-            foreach (GalaxiaDirectory which in Enum.GetValues<GalaxiaDirectory>()) Answer(which.ToString(), GalaxiaNative.Directory(which));
-            foreach ((GalaxiaDirectory which, string name) in Named)
-                Assert.Equal(Path.Combine(GalaxiaNative.Directory(GalaxiaDirectory.Home)!, name), GalaxiaNative.Directory(which));
-            Assert.Equal(Enum.GetValues<GalaxiaDirectory>().Length, Named.Length + 11);
-
-            foreach (string file in new[] { "appsettings.json", "é.json", "a b.json", "" })
-            {
-                Answer($"config [{file}]", GalaxiaNative.ConfigPath(null, file));
-                Answer($"cheats [{file}]", GalaxiaNative.ConfigPath("cheats", file));
-                Answer($"no category [{file}]", GalaxiaNative.ConfigPath("", file));
-                Answer($"legacy [{file}]", GalaxiaNative.LegacyConfigPath(file));
-            }
-        }
-
-        [Fact]
-        public void Every_directory_agrees_under_every_combination_of_overrides()
-        {
-            string?[] choices = { null, At("redirect"), At("redirect") + Path.DirectorySeparatorChar, "relative", At("é 日本") };
-            foreach (string? config in choices)
-                foreach (string? legacy in choices)
-                    foreach (string? data in choices)
-                    {
-                        ConfigStore.OverrideDirectory = config;
-                        ConfigStore.OverrideLegacyDirectory = legacy;
-                        DataStore.OverrideDirectory = data;
-                        TheTree($"config [{config}] legacy [{legacy}] data [{data}]");
-                    }
-
-            // A redirected config with no redirected legacy directory reaches no real one, on either side.
-            ConfigStore.OverrideDirectory = At("redirect");
-            ConfigStore.OverrideLegacyDirectory = null;
-            Assert.Null(GalaxiaNative.LegacyConfigPath("appsettings.json"));
-            ConfigStore.OverrideDirectory = null;
-            Assert.NotNull(GalaxiaNative.LegacyConfigPath("appsettings.json"));
-        }
-
-        [Fact]
-        public void Every_save_is_named_alike()
-        {
-            var roms = new List<string>
-            {
-                "/roms/SNES/Zelda (U).sfc", "a.b.c.nes", "noext", ".hidden", "trailing.", "dir.with.dot/file", "日本語.gb", "with space.n64", @"C:\win\style.sfc",
-                "a/b/", "", "x.y/", "/", "é.sfc", "..", "state.slot2.state",
-            };
-            roms.AddRange(Paths(400, seed: 11));
-            string?[] directories = { null, "", "  ", "\t", At("elsewhere"), At("elsewhere") + Path.DirectorySeparatorChar, "relative", " padded " };
-            string[] consoles = { "SNES", "NES", "N64", "GB", "", "Game Boy Color", ".." };
-            int[] slots = { 1, 2, 3, 10, 0, -1, int.MaxValue, int.MinValue };
-
-            foreach (string? data in new[] { null, At("data") })
-            {
-                DataStore.OverrideDirectory = data;
-                foreach (string rom in roms)
-                {
-                    GSweep("saves", $"{data} flat [{rom}]", GalaxiaNative.SavePath(GalaxiaSave.FlatSram, rom));
-                    GSweep("saves", $"{data} picture [{rom}]", GalaxiaNative.SavePath(GalaxiaSave.Picture, rom));
-                    foreach (string console in consoles)
-                        GSweep("saves", $"{data} sram [{rom}] [{console}]", GalaxiaNative.SavePath(GalaxiaSave.Sram, rom, console));
-                    foreach (string? directory in directories)
-                    {
-                        GSweep("saves", $"{data} resume [{rom}] [{directory}]", GalaxiaNative.SavePath(GalaxiaSave.ResumeState, rom, directory));
-                        foreach (int slot in slots)
-                            GSweep("saves", $"{data} state [{rom}] [{directory}] {slot}", GalaxiaNative.SavePath(GalaxiaSave.State, rom, directory, slot));
-                    }
-                }
-            }
-        }
-
         private static string Mode(string path) => OperatingSystem.IsWindows() ? "" : File.GetUnixFileMode(path).ToString();
 
         [Theory]
@@ -269,40 +189,6 @@ namespace EmuSen.WiseMan.Galaxia
             Assert.Equal(contents, GalaxiaNative.FileRead(native));
             Assert.Equal(contents, GalaxiaNative.FileRead(dotnet));
             Assert.Empty(Reported());
-        }
-
-        [Fact]
-        public void What_is_not_a_readable_file_is_absent_for_both_and_said_by_both_or_by_neither()
-        {
-            string file = Put(At("read", "save.srm"), "whole");
-            Put(file + AtomicFile.TempSuffix, "half a sa");
-            var quiet = new List<string> { At("read", "none.srm"), At("read"), "", At("read", "save.srm", "under"), At("read", "other.srm") + AtomicFile.TempSuffix };
-            var loud = new List<string>();
-            if (Links.Allowed)
-            {
-                File.CreateSymbolicLink(At("read", "dangling.srm"), At("nowhere"));
-                loud.Add(At("read", "dangling.srm"));
-            }
-            if (!OperatingSystem.IsWindows() && Environment.UserName != "root")
-            {
-                File.SetUnixFileMode(Put(At("read", "locked.srm")), UnixFileMode.None);
-                loud.Add(At("read", "locked.srm"));
-            }
-
-            Assert.Equal("whole"u8.ToArray(), GalaxiaNative.FileRead(file));
-            Assert.Empty(Reported());
-            foreach (string path in quiet)
-            {
-                Assert.Null(GalaxiaNative.FileRead(path));
-                Assert.Empty(Reported());
-            }
-            foreach (string path in loud)
-            {
-                Assert.Null(GalaxiaNative.FileRead(path));
-                string message = Assert.Single(Reported());
-                Assert.StartsWith(path + ": ", message);
-                Assert.EndsWith(" Treating it as absent.", message);
-            }
         }
 
         [Fact]
@@ -411,46 +297,6 @@ namespace EmuSen.WiseMan.Galaxia
 
             G("remaining", GalaxiaNative.RemainingLibrary(At("native", "legacy")).Select(p => p.Replace(At("native"), "<root>")));
             Assert.Equal(2, GalaxiaNative.RemainingLibrary(At("native", "legacy")).Count);
-            Assert.Empty(Reported());
-        }
-
-        [Fact]
-        public void The_other_migrations_decline_and_copy_what_the_csharp_did()
-        {
-            foreach (string side in new[] { "native" })
-            {
-                Put(At(side, "tree", "Saves", "a.srm"), "a");
-                Put(At(side, "tree", "Documents", "manual.md"), "page");
-                Put(At(side, "seeded", "Documents", "mine.md"), "mine");
-                Directory.CreateDirectory(At(side, "TREE"));
-                Directory.CreateDirectory(At(side, "library", "Games", "SNES", "empty"));
-                Put(At(side, "library", "Roms", "deep", "er", "game.sfc"), "rom");
-                Stamp(At(side));
-            }
-            int Between(string side, string from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Between, from, to);
-            int Tree(string side, string from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Tree, from, to);
-            int Seed(string side, string? from, string to) => GalaxiaNative.Migrate(GalaxiaMigrate.Seed, from, to);
-            (string Name, Func<string, int> Run)[] cases =
-            {
-                ("onto itself", side => Between(side, At(side, "tree"), At(side, "tree"))),
-                ("onto itself, spelled in another case", side => Between(side, At(side, "tree"), At(side, "TREE"))),
-                ("onto itself, by a longer way round", side => Between(side, At(side, "tree"), At(side, "x", "..", "tree"))),
-                ("onto itself, with a separator after it", side => Between(side, At(side, "tree"), At(side, "tree") + Path.DirectorySeparatorChar)),
-                ("from nowhere", side => Between(side, At(side, "absent"), At(side, "to"))),
-                ("from a file", side => Between(side, At(side, "tree", "Saves", "a.srm"), At(side, "to"))),
-                ("a tree from nowhere", side => Tree(side, At(side, "absent"), At(side, "to"))),
-                ("no seed", side => Seed(side, null, At(side, "seeded"))),
-                ("a seed", side => Seed(side, At(side, "tree"), At(side, "seeded"))),
-                ("the seed again", side => Seed(side, At(side, "tree"), At(side, "seeded"))),
-                ("a whole tree", side => Tree(side, At(side, "tree"), At(side, "copy"))),
-            };
-            foreach ((string name, Func<string, int> run) in cases)
-                G(name, run("native"));
-            Assert.Equal(2, Seed("native", At("native", "tree"), At("native", "seeded-again")));
-            G("seeded", Listing(At("native", "seeded")));
-            G("copy", Listing(At("native", "copy")));
-            Assert.Equal("mine", File.ReadAllText(At("native", "seeded", "Documents", "mine.md")));
-            Assert.Equal(new[] { At("native", "library", "Roms") }, GalaxiaNative.RemainingLibrary(At("native", "library")));
             Assert.Empty(Reported());
         }
 

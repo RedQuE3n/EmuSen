@@ -2,12 +2,12 @@
 //! module through the `emusen.library` service and Mistress's window through the platform library, which never calls
 //! its host (EmuSen_RustPlatform.md §3). The request and every event are listed in EmuSen_GamePackages.md §12.3.
 
+use std::path::Path;
 use crate::chdman::Chdman;
 use crate::convert::{self, obj, Options, Outcome};
 use crate::discs::{self, Item};
 use crate::{packages, Context};
 use emusen_galaxia::claims;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::{self, Value};
 use emusen_tool_job::Events as Queue;
 pub use emusen_tool_job::Job;
@@ -322,7 +322,7 @@ fn run_packages(ctx: &Context, library: &str, req: &Request, queue: &Queue, stop
     let systems = if req.op == Op::PkgList { packages::every_system() } else { emusen_library::scan::Systems::named(&[]) };
     let unclaimed = if req.unpackaged { packages::unpackaged(ctx, library, req.console.as_deref(), &systems) } else { Vec::new() };
     let total = games.len() + folders.len();
-    let log_at = path::combine(Style::HOST, &ctx.logs(), &format!("pkg_{}.log", &convert::utc(std::time::SystemTime::now())[..10]));
+    let log_at = Path::new(&ctx.logs()).join(&format!("pkg_{}.log", &convert::utc(std::time::SystemTime::now())[..10])).to_string_lossy().into_owned();
     let mut start = vec![("event", Value::string("start")), ("op", Value::string(op_word(&req.op))), ("packages", Value::number(total))];
     if req.op != Op::PkgList {
         start.push(("log", Value::string(&log_at)));
@@ -409,7 +409,7 @@ fn append(at: &str, text: &str) {
 /// The batch's log, `Logs/chd_<day>.log` by the day it started, so that one batch keeps to one file (§4.6).
 fn log_path(ctx: &Context, started: std::time::SystemTime) -> String {
     let stamp = convert::utc(started);
-    path::combine(Style::HOST, &ctx.logs(), &format!("chd_{}.log", &stamp[..10]))
+    Path::new(&ctx.logs()).join(&format!("chd_{}.log", &stamp[..10])).to_string_lossy().into_owned()
 }
 
 /// One line per disc in the batch's log: when, what, the disc and its event.

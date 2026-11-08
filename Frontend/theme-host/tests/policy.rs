@@ -33,6 +33,21 @@ fn qt_3_5_no_network_and_no_unknown_scheme() {
     }
     assert!(passes(&p, "data:image/png;base64,AAAA", Kind::Url));
     assert!(passes(&p, "image://provider/x", Kind::Url));
+    assert!(passes(&p, "", Kind::Url), "an unset source is passed, not refused");
+}
+
+#[test]
+fn qt_3_5_qt_s_versioned_probes_follow_the_module_they_probe_for() {
+    let p = policy();
+    for probe in ["qrc:/qt/qml/EmuSen/Theme.1.0/qmldir", "qrc:/qt/qml/EmuSen.1.0/Theme/qmldir", "qrc:/qt/qml/EmuSen/Theme.1/qmldir", "qrc:/qt/qml/EmuSen.1/Theme/qmldir"] {
+        assert!(passes(&p, probe, Kind::Qmldir), "a probe for EmuSen.Theme 1.0: {probe}");
+    }
+    assert!(passes(&p, "qrc:/qt/qml/EmuSen/Kit.1.0/qmldir", Kind::Qmldir));
+    let models = p.judge("qrc:/qt/qml/EmuSen.1.0/Models/qmldir", "", Kind::Qmldir, "");
+    assert_eq!(models, "EmuSen.Models is a module no theme may use", "a probe for a module never resolved is still refused");
+    let app = p.judge("qrc:/qt/qml/EmuSen/Scenes.1/qmldir", "", Kind::Qmldir, "");
+    assert!(app.ends_with("is a resource of the program, not of the theme's modules"), "a module of the program not on the list stays refused and logged: {app}");
+    assert!(!passes(&p, "qrc:/qt/qml/EmuSen/App.1/qml/Main.qml", Kind::Qml), "only a qmldir probe is read without its version");
 }
 
 #[test]

@@ -44,7 +44,7 @@ fn the_slide_holds_the_overlays_still_and_a_held_list_fades_its_metadata() {
     let cover = dir.path("cover.bmp");
     common::halves(&cover, 60, 80, [255, 140, 0], [0, 128, 128]);
     let media: Vec<String> = (0..60).map(|i| format!("\"g{i:03}\":\"{}\"", cover.display())).collect();
-    let media = format!("{{\"snes\":{{\"covers\":{{{}}}}}}}", media.join(","));
+    let media = format!("{{\"snes\":{{\"cover\":{{{}}}}}}}", media.join(","));
 
     let mut harness = Harness::new();
     let mut scene = harness.load(common::VIEW, W, H);
@@ -72,7 +72,8 @@ fn the_slide_holds_the_overlays_still_and_a_held_list_fades_its_metadata() {
     assert_eq!(box_of(&mut scene, "element-help"), Some(help));
 
     // scrollFadeIn: a new game's cover comes in from half over 326 ms; the view's opening did not fade it.
-    assert!((opacity_of(&mut scene, "element-art") - 1.0).abs() < 1e-6, "the cover at full when the view opens");
+    let opened = opacity_of(&mut scene, "element-art");
+    assert!((opened - 1.0).abs() < 1e-6, "the cover at full when the view opens: {opened}; {:?}", box_of(&mut scene, "element-art"));
     scene.pad(UiButton::Down);
     scene.wait(60);
     let fading = opacity_of(&mut scene, "element-art");

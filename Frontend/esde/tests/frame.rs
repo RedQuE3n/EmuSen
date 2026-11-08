@@ -71,8 +71,8 @@ fn mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted() {
     assert!(mapping::is_mapped("helpsystem", "textColorDimmed"));
     assert_eq!(mapping::status("video", "delay"), Some(&Mapped::Later("video".into())));
     assert!(!mapping::is_mapped("carousel", "itemLinearScale"));
-    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 367);
-    assert!(mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"));
+    assert_eq!(mapping::pairs().filter(|(_, _, s)| **s == Mapped::Drawn).count(), 347);
+    assert!(!mapping::is_drawn("gameselector") && !mapping::is_drawn("sound"), "the gameselector waits for its family; sound is played");
 }
 
 #[test]

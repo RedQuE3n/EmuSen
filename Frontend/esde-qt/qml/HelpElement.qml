@@ -33,10 +33,14 @@ ElementBox {
         id: body
         source: "qrc:/emusen/fonts/Barlow-Regular.ttf"
     }
+    // The bar's own extent is the element's size: the scene places it by its origin once measured (EmuSen_Qt.md §4.8.5).
     Kit.HelpBar {
+        id: bar
         objectName: "esdeHelp"
         width: implicitWidth
-        height: root.height
+        height: implicitHeight
+        onImplicitWidthChanged: root.esde.measured(root.elementId, bar.implicitWidth, bar.implicitHeight)
+        onImplicitHeightChanged: root.esde.measured(root.elementId, bar.implicitWidth, bar.implicitHeight)
         model: parts
         fitted: true
         ruled: false

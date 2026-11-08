@@ -317,7 +317,7 @@ fn layout(pr: &Primary, role: &str) -> Option<V> {
             "selectorSource" => url(&g.selector_image),
             "selectorScale" => V::N(g.selector_scale),
             "selectorRadius" => V::N(g.selector_radius),
-            "selectorOnTop" => V::B(g.selector_layer == "boxY"),
+            "selectorOnTop" => V::B(g.selector_layer == "top"),
             "selectorInMiddle" => V::B(g.selector_layer == "middle"),
             "fontSource" => url(&g.text.font),
             "px" => V::N(g.text.px),

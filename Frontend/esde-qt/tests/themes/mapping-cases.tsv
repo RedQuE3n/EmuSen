@@ -1,6 +1,6 @@
 # One case per (element, property) pair mapping.tsv marks drawn, beyond the shared properties tests/mapping.rs makes itself (EmuSen_Qt.md §4.8.5).
 # Translated from the C# SceneMappingTests (EmuSen_BigPicture.md §13.5). Columns: kind, property, value a, value b, view, system, game, removed, context, at (ms), moves, hidden metadata, beside; - is none.
-# {A} {B} pictures, {X} a missing file, {G} {G2} GIFs, {S1}-{S3} SVG icons, {FT} {FB} two faces; context is key=value;... set on the element after its base.
+# {A} a picture of four quadrants and {B} one of two halves, {X} a missing file, {G} {G2} GIFs, {S1}-{S3} SVG icons, {FT} {FB} two faces; context is key=value;... set on the element after its base.
 image	path	{A}	{B}	-	-	-	-	-	-	-	-	-
 image	default	{A}	{B}	-	-	-	path	path={X}	-	-	-	-
 image	imageType	cover	screenshot	-	-	-	path	-	-	-	-	-

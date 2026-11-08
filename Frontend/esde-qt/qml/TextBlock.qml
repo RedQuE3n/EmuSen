@@ -72,7 +72,7 @@ Item {
             x: -root.scrollX
             y: -root.scrollY
             width: root.width
-            height: root.scrollVertical ? implicitHeight : root.height
+            height: root.scrollVertical ? undefined : root.height
             text: root.text
             color: root.color
             font.family: face.status === FontLoader.Ready ? face.font.family : body.font.family

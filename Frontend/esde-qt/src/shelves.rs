@@ -156,6 +156,7 @@ fn game_of(v: &Value, media: &Value) -> Game {
         alt_emulator: flag(v, "alt_emulator"),
         folder_link: text(v, "folder_link"),
         is_collection: flag(v, "is_collection"),
+        in_collection: flag(v, "in_collection"),
         ..Game::new(&name, &file)
     }
 }

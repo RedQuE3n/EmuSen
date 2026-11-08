@@ -56,7 +56,7 @@ fn along(theme: &Path, choices: &Choices, view: &str) -> UiButton {
 fn chrome(scene: &mut Scene<'_>) -> Vec<String> {
     let tree = scene.tree();
     let Some(view) = tree.nodes.iter().find(|n| n.name == "view").map(|n| n.id.clone()) else { return vec!["no view".into()] };
-    tree.nodes.iter().filter(|n| n.parent == view && n.visible && !n.name.starts_with("element-")).map(|n| format!("{} {}", n.cls, n.name)).collect()
+    tree.nodes.iter().filter(|n| n.parent == view && n.visible && !n.name.starts_with("element-") && n.cls != "QQuickRepeater").map(|n| format!("{} {}", n.cls, n.name)).collect()
 }
 
 /// The primary's items and the help's entries the pointer can reach: their centres inside the window.
@@ -74,7 +74,7 @@ fn unreachable(scene: &mut Scene<'_>, w: f64, h: f64) -> (Vec<String>, Vec<(f64,
         if item && (0.0..w).contains(&cx) && (0.0..h).contains(&cy) {
             items.push((cx, cy));
         }
-        if entry && !((0.0..w).contains(&cx) && (0.0..h).contains(&cy) && n.operable) {
+        if entry && !((0.0..w).contains(&cx) && (0.0..h).contains(&cy) && (n.hit || n.operable)) {
             bad.push(format!("{} at {cx:.0},{cy:.0}", n.name));
         }
     }

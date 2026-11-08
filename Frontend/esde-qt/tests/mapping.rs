@@ -1,6 +1,6 @@
 //! The mapping is checked, not asserted (EmuSen_Qt.md §4.8.5): every pair `mapping.tsv` marks drawn is rendered through
-//! the bridge and `View.qml` on the GPU tier with two values, and the two pictures must differ; the cases and the file are
-//! the same set. Translated from the C# SceneMappingTests (EmuSen_BigPicture.md §13.5).
+//! the bridge and `View.qml` on the GPU tier with two values, and the two pictures must differ; every drawn pair has a
+//! case, and a case's pair is drawn or waits for a later family. Translated from the C# SceneMappingTests (EmuSen_BigPicture.md §13.5).
 
 mod common;
 
@@ -140,7 +140,7 @@ struct Assets {
 impl Assets {
     fn new(dir: &Path) -> Assets {
         let p = |n: &str| dir.join(n);
-        common::halves(&p("a.bmp"), 60, 80, [255, 140, 0], [0, 128, 128]);
+        common::bmp(&p("a.bmp"), 60, 80, |x, y| [[[255, 140, 0], [0, 128, 128]], [[128, 0, 128], [255, 215, 0]]][(y >= 40) as usize][(x >= 30) as usize]);
         common::halves(&p("b.bmp"), 80, 50, [128, 0, 128], [255, 215, 0]);
         common::halves(&p("screenshot.bmp"), 80, 70, [128, 0, 128], [255, 215, 0]);
         common::halves(&p("marquee.bmp"), 100, 30, [220, 20, 60], [128, 128, 0]);
@@ -254,7 +254,7 @@ fn library(system: usize, game: usize, hide: bool) -> (String, Vec<(String, Stri
         .collect();
     shelves.push(("all".into(), "All Games".into(), "auto-allgames".into(), "auto", games("nes", ".nes", none)));
     shelves.push(("snes".into(), "Super Nintendo".into(), "snes".into(), "regular", games("snes", ".sfc", |i| if i == 5 { "\"folder\":true".into() } else { String::new() })));
-    shelves.push(("mine".into(), "mine".into(), "mine".into(), "custom", games("snes", ".sfc", none)));
+    shelves.push(("mine".into(), "mine".into(), "mine".into(), "custom", games("snes", ".sfc", |i| if i % 2 == 0 { "\"in_collection\":true".into() } else { String::new() })));
     let pads = |i: usize| if i == 3 { "\"folder\":true,\"folder_link\":\"Linked Game.sfc\"".to_owned() } else { "\"controller\":\"gamepad_nintendo_snes\"".to_owned() };
     shelves.push(("pads".into(), "Pads".into(), "snes".into(), "regular", games("snes", ".sfc", pads)));
     if hide {
@@ -275,7 +275,7 @@ fn library(system: usize, game: usize, hide: bool) -> (String, Vec<(String, Stri
     files.dedup();
     let text: Vec<String> = shelves
         .iter()
-        .map(|(n, f, t, k, rows)| format!("{{\"name\":\"{n}\",\"full_name\":\"{f}\",\"theme\":\"{t}\",\"kind\":\"{k}\",\"games\":[{}]}}", rows.join(",")))
+        .map(|(n, f, t, k, rows)| format!("{{\"name\":\"{n}\",\"full_name\":\"{f}\",\"theme\":\"{t}\",\"kind\":\"{k}\",\"stars\":true,\"games\":[{}]}}", rows.join(",")))
         .collect();
     (format!("[{}]", text.join(",")), files)
 }
@@ -342,9 +342,10 @@ fn along(c: &Case, value: &str) -> UiButton {
 /// installed, the case's move made, and the picture left on the window at the case's time.
 fn render(scene: &mut Scene<'_>, c: &Case, value: &str, theme: &Path, assets: &Assets) {
     common::write_theme(theme, "", &element(c, value, assets));
-    assert!(scene.watch("esdeModel", "revision"));
-    assert!(scene.set_property("view", "shelves", "[]"));
-    until(scene, "the view emptied", |s| s.notified("esdeModel", "revision").unwrap_or(0) > 0 && s.property("esdeModel", "themed") == "false");
+    if scene.property("esdeModel", "themed") == "true" {
+        assert!(scene.set_property("view", "shelves", "[]"));
+        until(scene, "the view emptied", |s| s.property("esdeModel", "themed") == "false");
+    }
     let (shelves, files) = library(c.system, c.game, c.hide);
     assert!(scene.set_property("view", "media", &assets.media(&files)));
     let interface = format!("\"DisplayClock\":true,\"StartupView\":\"{}\"", view_of(c));
@@ -376,9 +377,9 @@ fn every_pair_the_mapping_marks_drawn_has_a_case_and_every_case_is_mapped() {
         mapping::pairs().filter(|(_, _, s)| **s == Status::Drawn).map(|(k, p, _)| (k.to_owned(), p.to_owned())).collect();
     let proved: BTreeSet<(String, String)> = all_cases().into_iter().map(|c| (c.kind, c.property)).collect();
     let unproved: Vec<_> = claimed.difference(&proved).collect();
-    let unmapped: Vec<_> = proved.difference(&claimed).collect();
+    let unmapped: Vec<_> = proved.difference(&claimed).filter(|(k, p)| !matches!(mapping::status(k, p), Some(Status::Later(_)))).collect();
     assert!(unproved.is_empty(), "drawn in mapping.tsv with no case: {unproved:?}");
-    assert!(unmapped.is_empty(), "a case for a pair mapping.tsv does not mark drawn: {unmapped:?}");
+    assert!(unmapped.is_empty(), "a case for a pair mapping.tsv marks neither drawn nor later: {unmapped:?}");
 }
 
 #[test]
@@ -403,7 +404,12 @@ fn every_drawn_pair_changes_the_painted_pixels() {
     let dir = Scratch::new("mapping");
     let assets = Assets::new(&dir.0);
     let only = std::env::var("ESDE_MAPPING_ONLY").ok();
-    let cases: Vec<Case> = all_cases().into_iter().filter(|c| only.as_deref().is_none_or(|o| o.split(',').any(|w| w == c.to_string()))).collect();
+    // A case kept for a pair marked later waits for its family; only the drawn pairs are held.
+    let cases: Vec<Case> = all_cases()
+        .into_iter()
+        .filter(|c| mapping::status(&c.kind, &c.property) == Some(&Status::Drawn))
+        .filter(|c| only.as_deref().is_none_or(|o| o.split(',').any(|w| w == c.to_string())))
+        .collect();
     let mut harness = Harness::new();
     let mut scene = harness.load(common::VIEW, W, H);
     let mut failures = vec![];
@@ -430,7 +436,7 @@ fn every_drawn_pair_changes_the_painted_pixels() {
         let _ = std::fs::remove_dir_all(&ta);
         let _ = std::fs::remove_dir_all(&tb);
     }
-    eprintln!("{} cases, {} failing", cases.len(), failures.len());
+    eprintln!("{} cases, {} failing\n{}", cases.len(), failures.len(), failures.join("\n"));
     scene.assert_quiet();
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

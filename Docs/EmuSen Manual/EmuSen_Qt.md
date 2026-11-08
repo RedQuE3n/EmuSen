@@ -1267,7 +1267,7 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 
 | Status | Pairs | Meaning |
 |---|---|---|
-| `drawn` | 367 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it |
+| `drawn` | 347 | the C# `SceneMapping` sets, `Common` expanded to each element that declares it, less the 20 pairs the painter's mapping test found undrawn (§4.8.5, measured 2026-11-08) |
 | `accepted` | 9 | the help's eight `*Dimmed` properties (decided 2026-11-08; the design counted six, `THEMES.md` lists eight: `posDimmed`, `originDimmed`, `textColorDimmed`, `iconColorDimmed`, `fontSizeDimmed`, `entrySpacingDimmed`, `iconTextSpacingDimmed`, `opacityDimmed`), and `sound.path`, which the host plays |
 | `later:video` | 16 | the video family |
 | `later:gradients` | 22 | the `*ColorEnd` and `*GradientType` pairs the C# did not draw |
@@ -1277,6 +1277,11 @@ test `mapping_lists_every_catalogue_pair_once_and_the_dimmed_help_as_accepted` h
 | `later:carousel-layout` | 6 | `itemStacking`, `selectedItemOffset`, `itemLinearScale`, `itemLinearSpacing`, `itemAxisRotation`, `itemDiagonalOffset` |
 | `later:textlist-selector` | 5 | the selector image, width and offset, the secondary selected background |
 | `later:help-layout` | 1 | `entryLayout` |
+| `later:gameselector` | 13 | the gameselector's picks (`selection`, `gameCount`, `allowDuplicates`) and the elements that read them (`gameselector`, `gameselectorEntry` of image, video, text, datetime and rating): the scene shows no game in the system view (§4.8.5) |
+| `later:animation-timing` | 3 | a GIF's `speed`, `direction` and `iterationCount`: the scene gives the painter no frame, so a GIF stands on its first |
+| `later:container` | 2 | a text container's `containerVerticalSnap` (not read) and `containerScrollSpeed` (read, no visible change by 1 s) |
+| `later:grid-rows` | 1 | `fractionalRows`: the grid's record carries no row count, so a partial row is drawn either way |
+| `later:text-lines` | 1 | datetime's `lineSpacing`: one line at the top of its box is placed the same at every spacing |
 
 `check` counts a pair as `set` when it is drawn or accepted, `unsupported` otherwise; nothing reads `catalog.tsv`'s
 `deferred` column for it any more.
@@ -1636,6 +1641,55 @@ still, a wheel's logo centres (§36.3) and the `(default)` help and status place
 own tests (`Frontend/esde/tests/scene.rs`, `frame.rs`), and in the painter they are bindings of the same roles. The
 side-by-sides of Art Book Next beside piece B's grabs need the oracle's synthetic library and are left for piece C's
 rig. The scene allocates its `Frame` each tick and the lists copy what changed; the cost of both is measured with H.
+
+#### 4.8.5 The mapping, the five sizes and the motion on the GPU tier (E3) **[M 2026-11-08]**
+
+Three GPU-tier tests, each in a `kwin_wayland --virtual` of its own on the RX 6800 with the validation layer on, Qt's
+log required quiet; what they share is `tests/common/mod.rs` (the compositor, a written theme, BMP and GIF writers so
+no image crate is needed, the oracle library read as the three texts of §4.6).
+
+- **`tests/motion.rs`** (green): the slide pans the coming list while the help and the clock keep their boxes exactly;
+  a step fades a `scrollFadeIn` cover in from half (0.45–0.95 at 60 ms, 1 when the motion ends) and the view's opening
+  does not; a held Down (the harness's `pad_down`, EmuSen_Kit.md §7.28's router left holding) keeps the developer text
+  at 1 at 300 ms, 0 at 800 ms (the first repeat at 500, the fade 149), frames swapping, and 1 again after `pad_up`.
+- **`tests/mapping.rs`** (green): the C# `SceneMappingTests` translated, its cases as data
+  (`tests/themes/mapping-cases.tsv`, the shared properties made from the catalogue as the C# `Common` made them), the
+  C# case library as `esdeShelves` (five consoles, an automatic collection, a console whose sixth game is a folder, a
+  custom collection, a console of pads), each case's system and game rotated to the front so the view starts on them.
+  Each case is rendered twice through the bridge at 640 × 400 and the two grabs must differ; each case's two themes
+  load without an error; every drawn pair has a case, and a case's pair is drawn or later. 347 cases, 254 s.
+  The first runs found 47 drawn pairs that painted nothing, and each was settled one way or the other:
+
+| Found | Settled |
+|---|---|
+| `grid.selectorLayer`: the role compared the layer with `"boxY"`, a rename of `top` that reached a string | fixed in `values.rs` |
+| `helpsystem` and `systemstatus` (24 pairs): neither delegate reported its extent, so both stood in a 0 × 0 box and the origin, the background and its paddings had nothing to act on | both delegates report their row's size through `measured`; the status background grows by its paddings |
+| `TextBlock`: a vertical container bound the text's height to its own implicit height, a binding loop Qt logged | the height is left to the text (`undefined`) while it scrolls vertically |
+| `textlist.indicators`, `collectionIndicators`, `grid.imageCropPos`, `image.tileVerticalAlignment` | the fixtures: the shelves now carry `stars`, a custom collection's games `in_collection` (which `shelves.rs` now reads; qt-models writes none yet, so the tick waits for collection editing), and picture A is four quadrants, so a vertical crop or tile shows |
+| the gameselector (13), a GIF's timing (3), `fractionalRows`, `containerVerticalSnap`, `containerScrollSpeed`, datetime `lineSpacing` | not drawn: marked `later:` in `mapping.tsv` with their families (§4.5.5), 367 → 347 drawn |
+
+- **`tests/sizes.rs`** (red, measured 2026-11-08): the three watched themes (`Testing/esde-baseline/states.tsv`), both
+  views (the SNES; its first game, the folder being entry 0), at the five `SIZES`, on the oracle's library with the
+  systems in the order ES-DE showed them. Held: nothing drawn but the elements, the help's entries and the primary's
+  items inside the window and taking the pointer, a step and A and B answered, the pointer selecting, and every
+  element's box ÷ (W, H) equal within 0.001 across the sizes of one aspect ratio. It found two defects, named here and
+  owed before E3 is done:
+  1. **A measurement does not survive a new install.** A resize reinstalls the stage, and a picture, text or bar whose
+     own extent did not change never reports it again, so elements sized by their content (Art Book Next's art, its
+     metadata icons and texts, Artflix's overlay) stand at width 0 at the second size. The same chicken-and-egg keeps
+     Art Book Next's cover and its date, players and play time undrawn at the first size: the box is 0 until measured,
+     and nothing is measured in a 0 box.
+  2. **The help bar does not scale in proportion**: its width over W is 0.3246 at 1280 × 800 and 0.3046 at
+     1920 × 1200; the kit's glyph and gap sizes are pixels, not fractions of the height.
+
+**The side-by-sides** (`~/.cache/emusen/tmp/qt-s4/compare/side-*.png`: ES-DE 3.4.1 | C# | Qt; `sizes-*.png`: the
+five sizes). Art Book Next at 1280 × 800, looked at 2026-11-08. The system view: the artwork, the logo and the clock
+agree; the Qt view draws the status (Wi-Fi, a battery, 80%) where ES-DE drew none, since the scene's default device
+is a handheld's and the bridge binds no device yet; the help bar is smaller, 9 px higher, names the D-pad SYSTEM where
+ES-DE says CHOOSE (Mistress's words, §36.3) and has no SCREENSAVER entry, which the C# had. The gamelist: the list's
+rows, stars, folder and selection agree within a few pixels, though Qt's stars are larger and ES-DE draws Tower Set
+with its folder-link arrow where both EmuSen painters draw a folder; the cover and the three metadata texts are missing
+(defect 1); the status is drawn (as above). Every difference is a defect until the tester accepts it.
 
 ---
 

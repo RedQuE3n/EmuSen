@@ -1657,7 +1657,7 @@ other's noise.
 4. *The 60 s picture cannot be judged in this compositor.* Both programs lost 9 to 10% of their frames to the same cause:
    the compositor's frame callbacks came about 54.7 times a second (`emusen-qt-play` without the protocol log: 3,281
    swaps in 60 s, 372 dropped, the same as with it), where §1.8.4's compositor gave 60. The two programs are equal here;
-   the gate itself waits for the real desk.
+   the gate itself waits for the real desk (measured there in §9.3.4: both pass).
 5. *Play to the first picture* has no own count in Mistress on this build: `EMUSEN_PRESENT_TRACE` wrote no file. The
    polled grabs time the library's leaving, not the picture (the game's first frames are black), so the comparison of
    first pictures is owed to the real desk with a count on both sides.
@@ -1870,6 +1870,53 @@ The grabs and logs of every run are in `~/.cache/emusen/tmp/qt-hosted-grabs/`; t
 were removed after the runs. The scripts are committed in `Testing/qt-gates/` (`README.md`) so the gates run again
 without rebuilding the method; §9.3.1's own scripts, under `~/.cache/emusen/tmp/qt-s1-gates/`, were removed with its
 sandbox.
+
+#### 9.3.4 60 seconds of play on the real desk **[M 2026-11-08]**
+
+§9.3.1's finding 4 left the 60-second gate to the real desk, because the virtual compositor called back only about 55
+times a second. Measured on the tester's own desktop, with the tester's consent, on the main monitor.
+
+**The display.** DP-3, 2,560 × 1,440 at 165.00 Hz, scale 1.25 (2,048 × 1,152 logical), adaptive sync "Automatic"; a
+second monitor (HDMI-A-1, 1,920 × 1,080 at 74.97 Hz) stayed in use beside it. KWin 6.7.5 on the RX 6800.
+
+**Method.** `Testing/qt-gates/run.sh` with its `DESK` option (`README.md`): the session's own compositor, where
+`desk.py` loads a KWin script for the run only that sends the program's window to DP-3, makes it fullscreen and
+activates it, and reports every window and activation back over D-Bus; the pad is started only once the program holds
+the focus; no grabs, since the session's KWin refuses `ScreenShot2` to a client it has not authorised. The sandbox was
+a copy of the published desktop build of 2026-11-08 07:58 (`out/linux-x64/Mistress`) without its home, with
+`emusen-qt-play` (release, built at `d6a6d10d8`) beside its platform library, `HOME` and the `XDG_*` folders in the
+sandbox, the big screen on, the splash and scraping off, and the ROM folder the player's library, bound read-only into
+each program by `bwrap`. Both programs played Super Mario Bros. (`NES/World/Super Mario Bros (JU) (PRG 0).nes`, opened
+in place) on MoonRT, the NES's default engine (`cores default NES`: "MoonRT (Rust)"), sound into SDL's dummy driver.
+Mistress ran once for 30 s first, so the library was read once, and every round started from a snapshot of the home
+taken after it. Each run: `emusen-qt-play --seconds 62 --game`, counted by its own counters after its first 2 s; and
+Mistress `--play` for 62 s, counted by its `[fps]` lines (one a second from the game's start) less the first two. The
+uinput pad pressed Start once, about 3 s after the program took the focus, and was removed at once. Each run in a capped
+scope (`CPUWeight=20`); three stage 2 builds were compiling beside the runs; the load is the one-minute average at each
+run's start, on 16 threads.
+
+| Round | Load | emusen-qt-play, 2–62 s: swaps, frames shown, dropped, repeated | Mistress, `[fps]` seconds 3 to the end: offered, shown, copied |
+|---|---|---|---|
+| 1 | 8.4, 5.9 | 9,886 (164.8 a second), 3,605 (60.08), 1, 6,281 | 57 s: 3,427, 3,425, 3,425 (60.09 shown a second; lowest second 58.9) |
+| 2 | 6.4, 6.9 | 9,869 (164.5), 3,603 (60.05), 2, 6,266 | 58 s: 3,486, 3,485, 3,485 (60.09; lowest second 59.1) |
+
+**Both programs show every game frame at the desk.** `emusen-qt-play` swapped at the monitor's 165 Hz and drew each of
+the core's 60.1 frames a second, 1 and 2 dropped in 60 s; a repeated frame is a swap with no new frame, about 1.7 to
+each frame shown at this refresh, so "repeated" counts the refresh's surplus, not a fault. Mistress drew each frame it
+was offered once (shown equal to copied), 2 and 1 short of offered; its scheduler named itself "content-paced 60.10 Hz",
+"refresh follows the content" for the first seconds and "refresh not measured" after (in the warm-up run, "display-locked
+120.78 Hz / 2"), so whether adaptive sync lowered the monitor's rate under Mistress is not known from its side. The 9 to
+10% lost in §9.3.1 was the virtual compositor's, as finding 4 read it; on the real desk neither program loses frames, and
+the gate is equal, both passing.
+
+**Seen.** Both windows stayed fullscreen on DP-3 for the whole of every run (`desk.log`). The focus moved to the
+tester's own windows on the other monitor during three runs (about 23 s into round 1's `emusen-qt-play`, 2.3 s into
+round 2's, before its Start, and about 53 and 47 s into Mistress's); neither program's counts changed at those moments,
+and Mistress, with "pause in background" on, did not pause, the window being still in front on its own monitor. Whether
+round 2's Start reached `emusen-qt-play` with the focus elsewhere is not recorded (no grabs); the counts are of the
+picture either way. Steam opened a window each time the pad appeared.
+
+The logs of every run are in `~/.cache/emusen/tmp/qt-desk/runs/`; the sandbox was removed after the runs.
 
 ---
 

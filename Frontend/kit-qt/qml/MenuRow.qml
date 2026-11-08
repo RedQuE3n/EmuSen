@@ -73,7 +73,10 @@ Kit.Walkable {
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted
-            PathPolyline { path: [Qt.point(root.stepMark.width, 0), Qt.point(0, root.stepMark.height / 2), Qt.point(root.stepMark.width, root.stepMark.height)] }
+            startX: root.stepMark.width
+            startY: 0
+            PathLine { x: 0; y: root.stepMark.height / 2 }
+            PathLine { x: root.stepMark.width; y: root.stepMark.height }
         }
     }
     Text {
@@ -99,7 +102,10 @@ Kit.Walkable {
         ShapePath {
             strokeWidth: -1
             fillColor: Kit.Tokens.muted
-            PathPolyline { path: [Qt.point(0, 0), Qt.point(root.afterMark.width, root.afterMark.height / 2), Qt.point(0, root.afterMark.height)] }
+            startX: 0
+            startY: 0
+            PathLine { x: root.afterMark.width; y: root.afterMark.height / 2 }
+            PathLine { x: 0; y: root.afterMark.height }
         }
     }
 }

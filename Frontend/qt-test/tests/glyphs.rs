@@ -1,4 +1,4 @@
-// EmuSen_Kit.md §7.12: every press's glyph in every family draws something inside its ring, and the grab is saved for a human look.
+// EmuSen_Kit.md §7.12, §7.28: every press's glyph in every family and both sets draws something inside its ring, and the grab is saved for a human look.
 
 use emusen_qt_test::Harness;
 
@@ -23,6 +23,19 @@ fn kit_7_12_every_glyph_of_every_family_draws_something() {
         .map(|(i, inked)| format!("{} ({inked} inked)", tree.nodes[i as usize].heard))
         .collect();
     assert!(empty.is_empty(), "glyphs that draw nothing inside their ring: {}", empty.join(", "));
+
+    // EmuSen_Kit.md §7.28: the filled set beside it, an unknown pad lettered as an Xbox pad, and every disc with its cut showing.
+    let filled: Vec<u32> = (0..tree.nodes.len() as u32).filter(|i| tree.nodes[*i as usize].name == "glyphFilled").collect();
+    assert_eq!(filled.len(), 4 * 16, "the filled set, sixteen presses in four families");
+    let heard: Vec<&str> = filled.iter().map(|i| tree.nodes[*i as usize].heard.as_str()).collect();
+    assert_eq!((heard[4], heard[16 + 4], heard[32 + 4], heard[48 + 4]), ("A", "A", "Cross", "B"), "Accept on each family's South, filled");
+    let uncut: Vec<String> = scene
+        .ink_inside(&tree, &filled)
+        .into_iter()
+        .filter(|(_, inked)| *inked < 2)
+        .map(|(i, inked)| format!("{} ({inked} inked)", tree.nodes[i as usize].heard))
+        .collect();
+    assert!(uncut.is_empty(), "filled glyphs with nothing cut out: {}", uncut.join(", "));
     let path = std::path::PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".cache/emusen/tmp/qt-test/glyphs.png");
     assert!(scene.grab(&path.display().to_string()), "the grab saved");
     scene.assert_quiet();

@@ -3,12 +3,13 @@ import QtQuick
 import QtQuick.Shapes
 import EmuSen.Kit as Kit
 
-// A pad button's glyph: kit-core's marks for the control that gives the press in the pad's family, in one colour, the letter in the glyph type centred on its ink or cut out of the mark that holds it (EmuSen_Kit.md §7.12).
+// A pad button's glyph: kit-core's marks for the control that gives the press in the pad's family and the style's set, in one colour, the letter in the glyph type centred on its ink or cut out of the mark that holds it, a mark's holes cut out with it (EmuSen_Kit.md §7.12, §7.28).
 Item {
     id: root
     property alias family: marks.family
     property alias button: marks.button
     property alias swap: marks.swap
+    property alias style: marks.style
     property color ink: Kit.Tokens.text
     readonly property alias name: marks.name
     implicitWidth: Kit.Tokens.fontGlyph * 1.4
@@ -22,6 +23,7 @@ Item {
     TextMetrics {
         id: inked
         font.pixelSize: Kit.Tokens.fontGlyph * marks.letterScale
+        font.bold: marks.letterBold
         text: marks.letter
     }
     Repeater {
@@ -32,6 +34,7 @@ Item {
             required property bool filled
             required property real stroke
             required property string cutLetter
+            required property var holes
             anchors.fill: parent
             preferredRendererType: Shape.CurveRenderer
             ShapePath {
@@ -42,10 +45,12 @@ Item {
                 capStyle: ShapePath.RoundCap
                 joinStyle: ShapePath.RoundJoin
                 PathPolyline { path: drawn.outline }
+                PathMultiline { paths: drawn.holes }
                 PathText {
                     x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
                     y: (root.height - inked.tightBoundingRect.height) / 2
                     font.pixelSize: inked.font.pixelSize
+                    font.bold: inked.font.bold
                     text: drawn.cutLetter
                 }
             }
@@ -62,6 +67,7 @@ Item {
                 x: (root.width - inked.tightBoundingRect.width) / 2 - inked.tightBoundingRect.x
                 y: (root.height - inked.tightBoundingRect.height) / 2
                 font.pixelSize: inked.font.pixelSize
+                font.bold: inked.font.bold
                 text: marks.letter
             }
         }

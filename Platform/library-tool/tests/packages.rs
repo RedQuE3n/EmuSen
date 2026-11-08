@@ -50,7 +50,7 @@ fn listing(root: &str) -> Vec<(String, u64, std::time::SystemTime, String)> {
             if meta.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p).unwrap()));
             }
         }
     }
@@ -97,7 +97,7 @@ fn nes(fill: u8) -> Vec<u8> {
 const SHEET: &str = "FILE \"Disc (Track 1).bin\" BINARY\n  TRACK 01 MODE2/2352\n    INDEX 01 00:00:00\nFILE \"Disc (Track 2).bin\" BINARY\n  TRACK 02 AUDIO\n    INDEX 01 00:00:00\n";
 
 fn context(t: &Temp) -> Context {
-    let tree = Tree { root: t.at("root"), data_override: Some(t.at("home")), config_override: Some(t.at("home/etc/EmuSen")), ..Tree::default() };
+    let tree = Tree { root: t.at("root").into(), data_override: Some(t.at("home").into()), config_override: Some(t.at("home/etc/EmuSen").into()), ..Tree::default() };
     let mut ctx = Context::pinned(tree, Some(t.at("library")), String::new());
     ctx.state_folder = Some(t.at("library/states-in-the-library"));
     ctx

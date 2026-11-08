@@ -26,6 +26,7 @@ pub mod runlog;
 pub mod store;
 pub mod zone;
 
+use std::path::Path;
 use clock::Clock;
 use serde_json::Value;
 use emusen_sqlite::{Failure, Sqlite};
@@ -242,7 +243,7 @@ impl Scraper {
 
     /// The store's lock, or why another holds it.
     fn hold(root: &str) -> Result<emusen_galaxia::medium_lock::MediumLock, Error> {
-        let db = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, store::FILE_NAME);
+        let db = Path::new(root).join(store::FILE_NAME).to_string_lossy().into_owned();
         emusen_galaxia::medium_lock::try_take(&db, "EmuSen's scraper in this program", false).ok_or_else(|| {
             let who = emusen_galaxia::medium_lock::holder_of(&db).unwrap_or_else(|| "another program".into());
             Error::InUse(format!("The media store {root} is in use by {who}: one scraper holds it at a time, so that the account's quota is counted once. Close the other (EmuSen, or a shell running scrape) and try again."))
@@ -264,7 +265,7 @@ impl Scraper {
 
     /// The failover's own folder, apart from the player's art: `<store>/openemu/<console>/`.
     pub fn openemu_root(&self) -> String {
-        emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, &self.root, "openemu")
+        Path::new(&self.root).join("openemu").to_string_lossy().into_owned()
     }
 
     pub fn art(&self) -> std::sync::RwLockReadGuard<'_, artwork::Index> {

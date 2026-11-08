@@ -3,12 +3,12 @@
 //! machine's events drained (EmuSen_Backend.md §29.2). The frame and its order are `frame`'s; this holds what they
 //! work on.
 
+use std::path::Path;
 use std::ffi::CString;
 use std::sync::{Arc, Mutex};
 
 use emusen_core_host::{Create, InputLatch, Library, Machine};
 use emusen_galaxia::disc_set::{DiscFiles, DiscSet};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_native::core::sys::{FrameInfo, caps, event, flags};
 use emusen_native::json::Value;
@@ -475,10 +475,10 @@ impl Engine {
         let asked = self.lib.firmware_for(disc.image.bytes()).ok().and_then(|t| emusen_native::json::parse(t.as_bytes()).ok()).map(|v| crate::firmware::entries(&v)).unwrap_or_default();
         let firmware = self.firmware_files(&asked, folders);
         if let Some(why) = self.own_missing(&asked, &console) {
-            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", path::file_name(Style::HOST, at)) });
+            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", Path::new(at).file_name().unwrap_or_default().to_string_lossy()) });
         }
         self.release_media();
-        let stem = path::file_name_without_extension(Style::HOST, at).to_string();
+        let stem = Path::new(at).file_stem().unwrap_or_default().to_string_lossy().to_string();
         let disabled = self.options.battery_disabled;
         let package = self.package.clone();
         let key = self.save_key.clone();
@@ -515,7 +515,7 @@ impl Engine {
         if routed.as_deref().is_some_and(|id| info_starts_empty(&self.info, id))
             && let Some(why) = self.runs_nothing(&asked)
         {
-            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", path::file_name(Style::HOST, at)) });
+            return Err(Refused { status: crate::abi::status::FIRMWARE, words: format!("{} cannot start: {why}", Path::new(at).file_name().unwrap_or_default().to_string_lossy()) });
         }
         Ok(())
     }
@@ -523,7 +523,7 @@ impl Engine {
     /// The path a core claiming `IMAGE_PATH` is given beside the bytes: the image's file where it is unaltered, neither
     /// unpacked from an archive nor patched by a package, which may hold soft patches (EmuSen_LibretroHost.md §10d).
     fn image_path(&self, disc: &DiscFiles) -> Option<CString> {
-        disc.unaltered_path().filter(|_| self.package.is_none()).and_then(|p| CString::new(p).ok())
+        disc.unaltered_path().filter(|_| self.package.is_none()).and_then(|p| CString::new(p.to_str()?).ok())
     }
 
     /// The disc's image with its package's soft patches applied, where the game is a package that lists any; the core is
@@ -533,7 +533,7 @@ impl Engine {
         match emusen_patch::package::image_at(package, disc.image.bytes()) {
             Ok(Some(image)) => disc.image = emusen_galaxia::mapped::Mapped::held(image),
             Ok(None) => {}
-            Err(words) => return Err(Refused::io(format!("{} was not opened, since its soft patches did not apply: {words}", path::file_name(Style::HOST, at)))),
+            Err(words) => return Err(Refused::io(format!("{} was not opened, since its soft patches did not apply: {words}", Path::new(at).file_name().unwrap_or_default().to_string_lossy()))),
         }
         Ok(disc)
     }
@@ -610,7 +610,7 @@ impl Engine {
         self.media_notice = if placement.notices.is_empty() { None } else { Some(placement.notices.join(" ")) };
         let notices = placement.notices.clone();
         self.placement = Some(placement);
-        self.discs = set.as_ref().map(|s| s.images()).unwrap_or_default();
+        self.discs = set.as_ref().map(|s| s.images().iter().map(|p| p.to_string_lossy().into_owned()).collect()).unwrap_or_default();
         self.disc_index = if set.is_some() { 0 } else { -1 };
         self.set = set;
         self.close_lid_at = -1;

@@ -25,8 +25,9 @@ pub fn decode(bytes: &[u8]) -> String {
 }
 
 /// The text of the file at `path`, decoded as [`decode`] decodes it; the system's words, after the path, when it will not read.
-pub fn read(path: &str) -> Result<String, String> {
-    std::fs::read(path).map(|bytes| decode(&bytes)).map_err(|e| format!("{path}: {e}"))
+pub fn read(path: impl AsRef<std::path::Path>) -> Result<String, String> {
+    let path = path.as_ref();
+    std::fs::read(path).map(|bytes| decode(&bytes)).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 #[cfg(test)]

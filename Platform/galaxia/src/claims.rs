@@ -6,12 +6,16 @@
 //! §14, and EmuSen_Galaxia.md §3.11.
 
 use crate::files::{self, Options};
-use crate::dotnet_path::{self as path, Style};
+use crate::path_key;
+use std::path::{Path, PathBuf};
 use emusen_dotnet::json::{Text, Value};
 use crate::package;
 use crate::rom_hash::{self, Hashes};
 
-const STYLE: Style = Style::HOST;
+/// A package folder's manifest.
+fn manifest_of(folder: impl AsRef<Path>) -> PathBuf {
+    folder.as_ref().join(package::FILE_NAME)
+}
 
 /// How deep the walk of `Packages` looks for a package's folder.
 pub const MAX_DEPTH: usize = 32;
@@ -38,7 +42,7 @@ impl Places {
         use crate::models::{APP_SETTINGS_FILE, APP_SETTINGS_ID, MODELS};
         let (settings, _) = crate::config::load_or_new(tree, &MODELS[APP_SETTINGS_ID as usize], None, APP_SETTINGS_FILE);
         let library = crate::setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &crate::tree::user_home()).path;
-        let folder = |which| tree.directory(which).unwrap_or_default();
+        let folder = |which| tree.directory(which).unwrap_or_default().to_string_lossy().into_owned();
         Places { packages: folder(crate::tree::Directory::Packages), library, compressed: folder(crate::tree::Directory::Compressed) }
     }
 
@@ -77,13 +81,12 @@ impl Index {
 
 /// Whether `full` is `folder` or lies under it.
 pub fn within(full: &str, folder: &str) -> bool {
-    let folder = path::trim_ending_separator(STYLE, folder);
-    full == folder || full.strip_prefix(folder).is_some_and(|rest| rest.as_bytes().first().is_some_and(|&b| STYLE.is_separator(b)))
+    Path::new(full).starts_with(folder)
 }
 
 /// A path relative to a root, `/` or `\` between its parts, under that root as `Path.Combine` joins each part.
 pub fn under(root: &str, rel: &str) -> String {
-    rel.split(['/', '\\']).filter(|p| !p.is_empty()).fold(root.to_string(), |at, part| path::combine(STYLE, &at, part))
+    rel.split(['/', '\\']).filter(|p| !p.is_empty()).fold(PathBuf::from(root), |at, part| at.join(part)).to_string_lossy().into_owned()
 }
 
 /// The full path an entry's `where` and `path` name, none for `library` with no library set.
@@ -96,7 +99,7 @@ pub fn place(roots: &Roots, folder: &str, entry: &Value) -> Option<String> {
         "absolute" => rel.to_string(),
         _ => return None,
     };
-    Some(path::full_path(&at))
+    Some(path_key::key_text(at))
 }
 
 /// Every package folder under `packages`: a folder holding `package.json` is one, and is not looked inside; hidden
@@ -117,8 +120,8 @@ fn walk(dir: &str, depth: usize, found: &mut Vec<String>) {
         .collect();
     names.sort();
     for name in names {
-        let sub = files::join(dir, &name);
-        if files::file_exists(&files::join(&sub, package::FILE_NAME)) {
+        let sub = Path::new(dir).join(&name).to_string_lossy().into_owned();
+        if files::file_exists(manifest_of(&sub)) {
             found.push(sub);
         } else if depth + 1 < MAX_DEPTH {
             walk(&sub, depth + 1, found);
@@ -179,7 +182,7 @@ pub fn index(roots: &Roots) -> Index {
     let folders = folders(roots.packages);
     let packages = folders
         .iter()
-        .filter_map(|f| match package::read(&files::join(f, package::FILE_NAME)) {
+        .filter_map(|f| match package::read(manifest_of(f)) {
             Ok(Ok(doc)) => package_of(roots, f, &doc),
             _ => None,
         })
@@ -279,10 +282,11 @@ fn seen_value(size: u64, mtime: &str) -> Value {
 /// Where a file is as an entry names it: `library` and its path below the library where it lies there, else `absolute`.
 pub fn entry_place(roots: &Roots, full: &str) -> (&'static str, String) {
     if let Some(library) = roots.library {
-        let root = path::full_path(library);
-        if within(full, &root) && full.len() > path::trim_ending_separator(STYLE, &root).len() {
-            let rest = &full[path::trim_ending_separator(STYLE, &root).len()..];
-            return ("library", rest.trim_start_matches(['/', '\\']).replace('\\', "/"));
+        let root = path_key::key(library);
+        if let Ok(rest) = Path::new(full).strip_prefix(&root)
+            && !rest.as_os_str().is_empty()
+        {
+            return ("library", rest.to_string_lossy().replace('\\', "/"));
         }
     }
     ("absolute", full.to_string())
@@ -313,7 +317,7 @@ pub fn moved(roots: &Roots, doc: &mut Value, found: &str) {
                     None => tail.to_string(),
                 };
                 set(c, "where", Value::string(place));
-                set(c, "path", Value::string(if place == "absolute" { under(path::directory_name(STYLE, found).as_deref().unwrap_or(""), tail) } else { rebased }));
+                set(c, "path", Value::string(if place == "absolute" { under(&Path::new(found).parent().unwrap_or(Path::new("")).to_string_lossy(), tail) } else { rebased }));
             }
         }
     }
@@ -326,7 +330,7 @@ pub fn find_in_library(roots: &Roots, size: u64, recorded: &Value) -> Option<Str
     let mut same: Vec<String> = Vec::new();
     let _ = files::visit_files_with(library, Options { skip_hidden: true, ignore_inaccessible: true }, |at, _| {
         if std::fs::metadata(at).is_ok_and(|m| m.len() == size) {
-            same.push(path::full_path(at));
+            same.push(path_key::key_text(at));
         }
     });
     same.sort();
@@ -363,13 +367,14 @@ impl From<String> for NotOpened {
 }
 
 fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resolution, NotOpened> {
-    let manifest = files::join(folder, package::FILE_NAME);
+    let manifest = manifest_of(folder);
+    let shown = manifest.display();
     let mut doc = match package::read(&manifest) {
         Ok(Ok(doc)) => doc,
-        Ok(Err(refusal)) => return Err(format!("{manifest}: {}", refusal.words()).into()),
-        Err(e) => return Err(format!("{manifest}: {e}").into()),
+        Ok(Err(refusal)) => return Err(format!("{shown}: {}", refusal.words()).into()),
+        Err(e) => return Err(format!("{shown}: {e}").into()),
     };
-    let game = doc.get("game").and_then(|g| place(roots, folder, g)).ok_or_else(|| format!("{manifest}: its game's library is not set (AppSettings.RomDirectory)"))?;
+    let game = doc.get("game").and_then(|g| place(roots, folder, g)).ok_or_else(|| format!("{shown}: its game's library is not set (AppSettings.RomDirectory)"))?;
     let resolution = |game: String, moved: bool| Resolution { game, package: Some(folder.to_string()), moved };
     if let Some((size, mtime)) = seen_of(&game) {
         let seen = doc.get("game").and_then(|g| g.get("seen"));
@@ -411,7 +416,7 @@ fn opening(roots: &Roots, folder: &str, opened: Option<&str>) -> Result<Resoluti
 /// copied from (`sources`) and is no longer that file: its size and time are not those recorded and its SHA-1 is not
 /// the one recorded. Such a file opens as a plain game, as a changed dump does (EmuSen_GamePackages.md §19).
 pub fn source_holds(roots: &Roots, folder: &str, full: &str) -> bool {
-    let Ok(Ok(doc)) = package::read(&files::join(folder, package::FILE_NAME)) else { return true };
+    let Ok(Ok(doc)) = package::read(manifest_of(folder)) else { return true };
     let Some(entry) = entries(&doc, "sources").into_iter().find(|e| place(roots, folder, e).as_deref() == Some(full)) else { return true };
     let seen = entry.get("seen");
     let now = seen_of(full);
@@ -450,8 +455,8 @@ pub fn opened_as(tree: &crate::tree::Tree, at: &str) -> (String, Option<String>)
 /// opened itself; a file no package claims, whose size and hashes are those of a package's game that is gone, is that
 /// game moved, and the manifest is rewritten; anything else opens as it is.
 pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
-    let full = path::full_path(at);
-    if files::directory_exists(&full) && files::file_exists(&files::join(&full, package::FILE_NAME)) {
+    let full = path_key::key_text(at);
+    if files::directory_exists(&full) && files::file_exists(manifest_of(&full)) {
         return open_package(roots, &full, None);
     }
     if crate::archive::is_archive(&full) && files::file_exists(&full)
@@ -459,8 +464,8 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     {
         return open_package(roots, &folder, None);
     }
-    if path::file_name(STYLE, &full) == package::FILE_NAME && files::file_exists(&full) {
-        return open_package(roots, &path::directory_name(STYLE, &full).unwrap_or_default(), None);
+    if Path::new(&full).file_name().is_some_and(|n| n == package::FILE_NAME) && files::file_exists(&full) {
+        return open_package(roots, &Path::new(&full).parent().unwrap_or(Path::new("")).to_string_lossy(), None);
     }
     let plain = || Ok(Resolution { game: at.to_string(), package: None, moved: false });
     if !files::file_exists(&full) {
@@ -479,7 +484,7 @@ pub fn resolve(roots: &Roots, at: &str) -> Result<Resolution, String> {
     let Some(size) = std::fs::metadata(&full).ok().map(|m| m.len()) else { return plain() };
     let mut taken: Option<Hashes> = None;
     for p in index.packages.iter().filter(|p| !files::file_exists(&p.game)) {
-        let manifest = files::join(&p.folder, package::FILE_NAME);
+        let manifest = manifest_of(&p.folder);
         let Ok(Ok(mut doc)) = package::read(&manifest) else { continue };
         let where_ = doc.get("game").and_then(|g| g.get("where")).and_then(Value::as_str).unwrap_or("");
         if !(where_ == "library" || where_ == "absolute") || recorded_size(&doc) != Some(size) {
@@ -503,8 +508,9 @@ mod tests {
     use super::*;
     use crate::test_support::TempDir;
 
-    fn put(at: &str, bytes: &[u8]) {
-        std::fs::create_dir_all(path::directory_name(STYLE, at).unwrap()).unwrap();
+    fn put(at: impl AsRef<Path>, bytes: &[u8]) {
+        let at = at.as_ref();
+        std::fs::create_dir_all(at.parent().unwrap()).unwrap();
         std::fs::write(at, bytes).unwrap();
     }
 
@@ -517,7 +523,7 @@ mod tests {
             h.md5,
             h.sha1.unwrap()
         );
-        let at = t.join(&format!("Packages/{folder}"));
+        let at = t.text(&format!("Packages/{folder}"));
         put(&format!("{at}/package.json"), text.as_bytes());
         at
     }
@@ -525,27 +531,27 @@ mod tests {
     #[test]
     fn a_claimed_file_resolves_to_its_package_and_a_moved_one_is_found_again_by_hash() {
         let t = TempDir::new("claims");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
         let bytes = b"a cartridge of sixteen bytes!!!!";
-        let game = t.join("Roms/SNES/Game.sfc");
+        let game = t.text("Roms/SNES/Game.sfc");
         put(&game, bytes);
-        put(&t.join("Roms/SNES/Other.sfc"), b"another cartridge, same length..");
+        put(&t.text("Roms/SNES/Other.sfc"), b"another cartridge, same length..");
         let folder = linked(&t, "SNES/Game.sfc", "SNES/Game.sfc", bytes, &game);
-        put(&t.join("Packages/SNES/Game.sfc/saves/Game.srm"), b"save");
-        put(&t.join("Packages/.hidden/x/package.json"), b"{}");
+        put(&t.text("Packages/SNES/Game.sfc/saves/Game.srm"), b"save");
+        put(&t.text("Packages/.hidden/x/package.json"), b"{}");
         let idx = index(&roots);
         assert_eq!(idx.folders, vec![folder.clone()]);
         assert_eq!(idx.packages[0].claims, vec![game.clone()]);
-        assert!(idx.inside_package(&t.join("Packages/SNES/Game.sfc/saves/Game.srm")));
-        assert!(!idx.inside_package(&t.join("Packages/SNES/Game.sfcx")));
+        assert!(idx.inside_package(&t.text("Packages/SNES/Game.sfc/saves/Game.srm")));
+        assert!(!idx.inside_package(&t.text("Packages/SNES/Game.sfcx")));
         let r = resolve(&roots, &game).unwrap();
         assert_eq!((r.game.as_str(), r.package.as_deref(), r.moved), (game.as_str(), Some(folder.as_str()), false));
         assert_eq!(resolve(&roots, &folder).unwrap().package.as_deref(), Some(folder.as_str()));
-        assert_eq!(resolve(&roots, &t.join("Roms/SNES/Other.sfc")).unwrap().package, None);
+        assert_eq!(resolve(&roots, &t.text("Roms/SNES/Other.sfc")).unwrap().package, None);
         // Moved: the plain path at its new place finds the package by size, then hash, and the manifest follows it.
-        let elsewhere = t.join("Roms/SNES/USA/Game (U).sfc");
-        std::fs::create_dir_all(t.join("Roms/SNES/USA")).unwrap();
+        let elsewhere = t.text("Roms/SNES/USA/Game (U).sfc");
+        std::fs::create_dir_all(t.text("Roms/SNES/USA")).unwrap();
         std::fs::rename(&game, &elsewhere).unwrap();
         let r = resolve(&roots, &elsewhere).unwrap();
         assert_eq!((r.game.as_str(), r.package.as_deref(), r.moved), (elsewhere.as_str(), Some(folder.as_str()), true));
@@ -560,10 +566,10 @@ mod tests {
     #[test]
     fn a_changed_game_is_refused_with_both_hashes_and_a_touched_one_is_recorded() {
         let t = TempDir::new("claims-changed");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
         let bytes = b"sixteen bytes!!!";
-        let game = t.join("Roms/NES/G.nes");
+        let game = t.text("Roms/NES/G.nes");
         put(&game, bytes);
         let folder = linked(&t, "NES/G.nes", "NES/G.nes", bytes, &game);
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(7200);
@@ -584,12 +590,12 @@ mod tests {
     #[test]
     fn a_self_contained_package_claims_the_file_it_was_copied_from_only_while_it_is_that_file() {
         let t = TempDir::new("claims-sources");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
         let bytes = b"sixteen bytes!!!";
-        let game = t.join("Roms/NES/G.nes");
+        let game = t.text("Roms/NES/G.nes");
         put(&game, bytes);
-        let folder = t.join("Packages/NES/G.nes");
+        let folder = t.text("Packages/NES/G.nes");
         put(&format!("{folder}/G.nes"), bytes);
         let h = rom_hash::hashes_of(bytes);
         let (size, mtime) = seen_of(&game).unwrap();
@@ -621,12 +627,12 @@ mod tests {
     #[test]
     fn a_chd_beside_its_original_claims_the_original_only_while_its_record_verifies_it() {
         let t = TempDir::new("claims-beside");
-        let (lib, packages, compressed) = (t.join("Roms"), t.join("Packages"), t.join("Compressed"));
+        let (lib, packages, compressed) = (t.text("Roms"), t.text("Packages"), t.text("Compressed"));
         let roots = Roots { packages: &packages, library: Some(&lib), compressed: &compressed };
-        let (original, chd) = (t.join("Roms/psx/D.bin"), t.join("Roms/psx/D.chd"));
+        let (original, chd) = (t.text("Roms/psx/D.bin"), t.text("Roms/psx/D.chd"));
         put(&original, b"a raw track");
         put(&chd, b"a CHD of it");
-        let folder = t.join("Packages/PlayStation/D.chd");
+        let folder = t.text("Packages/PlayStation/D.chd");
         let manifest = |checks: &str| {
             let ((size, mtime), (csize, cmtime)) = (seen_of(&original).unwrap(), seen_of(&chd).unwrap());
             format!(

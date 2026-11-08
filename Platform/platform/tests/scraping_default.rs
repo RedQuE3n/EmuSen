@@ -33,13 +33,13 @@ fn a_process_with_no_lend_opens_its_own_scraper_and_a_lend_replaces_it() {
         std::fs::create_dir_all(d).unwrap();
     }
     std::os::unix::fs::symlink(&shipped, program.join(emusen_sqlite::SHIPPED_NAME)).unwrap();
-    assert!(tree::init(&program.to_string_lossy(), None), "the program's directory is named before the tree is asked for");
+    assert!(tree::init(&program, None), "the program's directory is named before the tree is asked for");
     let mut nes = b"NES\x1a\x01\x01\x00\x00".to_vec();
     nes.resize(16 + 16384 + 8192, 0);
     std::fs::write(library.join("nes/Third.nes"), &nes).unwrap();
     std::fs::write(etc.join("appsettings.json"), format!("{{\"RomDirectory\": \"{}\", \"OpenEmuFallback\": false}}", library.display())).unwrap();
-    tree::tree_mut().set_override(Override::Data, Some(home.to_string_lossy().into_owned()));
-    tree::tree_mut().set_override(Override::Config, Some(etc.to_string_lossy().into_owned()));
+    tree::tree_mut().set_override(Override::Data, Some(home.to_path_buf()));
+    tree::tree_mut().set_override(Override::Config, Some(etc.to_path_buf()));
 
     let sh = unsafe { dianash_new(std::ptr::null()) };
     assert_eq!(unsafe { dianash_session_new(sh) }, 1);

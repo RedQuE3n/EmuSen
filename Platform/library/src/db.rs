@@ -2,6 +2,7 @@
 //! the same append-only list of migrations, each in its own transaction; a file newer than the list is refused
 //! unwritten. See EmuSen_Settings_Reference.md §4.32 and EmuSen_Backend.md §28.3.
 
+use std::path::Path;
 use crate::Error;
 use emusen_sqlite::{Bound, Connection, Sqlite};
 use std::sync::Arc;
@@ -107,7 +108,7 @@ pub fn scalar_text(db: &Connection, sql: &str, parameters: &[(&str, Bound)]) -> 
 
 /// Opens `games.db`, its folder made first, with foreign keys on, and migrates it.
 pub fn open(sqlite: Arc<Sqlite>, path: &str) -> Result<Connection, Error> {
-    if let Some(folder) = emusen_galaxia::dotnet_path::directory_name(emusen_galaxia::dotnet_path::Style::HOST, path).filter(|f| !f.is_empty()) {
+    if let Some(folder) = Path::new(path).parent().map(|d| d.to_string_lossy().into_owned()).filter(|f| !f.is_empty()) {
         std::fs::create_dir_all(&folder).map_err(|e| Error::Io(format!("{}: {}", folder, e)))?;
     }
     let mut db = Connection::open(sqlite, path)?;

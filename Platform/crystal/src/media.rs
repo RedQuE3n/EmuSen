@@ -3,8 +3,8 @@
 //! cards and the games' own, and the card manager over them through `emusen-savemedia` (EmuSen_SaveMedia.md §3, §6).
 //! Which medium a file is, by its extension, is core info's slots' (EmuSen_Backend.md F28).
 
+use std::path::Path;
 use emusen_core_host::Discovery;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::Tree;
 use emusen_savemedia::{Medium, Media};
 use emusen_systems::media::Module;
@@ -39,8 +39,10 @@ pub fn entry(id: Option<&str>) -> Option<Entry> {
 
 /// The extension of a suffix, its last part: ".mcr" of ".2.mcr", `ExtensionOf`.
 pub fn extension_of(suffix: &str) -> String {
-    let e = path::extension(Style::HOST, suffix);
-    if e.len() > 1 { e.to_string() } else { suffix.to_string() }
+    match Path::new(suffix).extension() {
+        Some(e) if !e.is_empty() => format!(".{}", e.to_string_lossy()),
+        _ => suffix.to_string(),
+    }
 }
 
 /// One medium of a console, `SaveMedium`.
@@ -107,12 +109,12 @@ impl SaveMedium {
         self.slots[slot].label.clone().unwrap_or_else(|| if self.slots.len() == 1 { self.title.clone() } else { format!("Slot {}", slot + 1) })
     }
 
-    pub fn folder(&self, tree: &Tree) -> String {
+    pub fn folder(&self, tree: &Tree) -> std::path::PathBuf {
         medium_folder(tree, &self.console, self.is_console())
     }
 
     pub fn path_of(&self, tree: &Tree, name: &str) -> String {
-        path::combine(Style::HOST, &self.folder(tree), &format!("{name}{}", self.extension))
+        self.folder(tree).join(format!("{name}{}", self.extension)).to_string_lossy().into_owned()
     }
 
     /// The mode a medium has when nothing is stored: a console's own memory shared, as the console does; a removable one
@@ -140,18 +142,18 @@ impl SaveMedium {
 }
 
 /// `SaveLibrary.MediumFolder`.
-pub fn medium_folder(tree: &Tree, console: &str, console_kind: bool) -> String {
-    path::combine_all(Style::HOST, &[&tree.saves(), console, if console_kind { CONSOLE_FOLDER } else { CARDS_FOLDER }])
+pub fn medium_folder(tree: &Tree, console: &str, console_kind: bool) -> std::path::PathBuf {
+    Path::new(&tree.saves()).join(console).join(if console_kind { CONSOLE_FOLDER } else { CARDS_FOLDER })
 }
 
 /// A folder's own files, links to files among them, `Directory.EnumerateFiles` without its subfolders: each path and name.
-fn files_in(folder: &str) -> Vec<(String, String)> {
+fn files_in(folder: &Path) -> Vec<(String, String)> {
     let Ok(read) = std::fs::read_dir(folder) else { return Vec::new() };
     read.flatten()
         .filter(|e| !emusen_galaxia::files::listed_as_directory(e))
         .map(|e| {
             let name = e.file_name().to_string_lossy().into_owned();
-            (emusen_galaxia::files::join(folder, &name), name)
+            (folder.join(&name).to_string_lossy().into_owned(), name)
         })
         .collect()
 }
@@ -161,8 +163,8 @@ pub fn medium_names(tree: &Tree, console: &str, console_kind: bool, extension: &
     let folder = medium_folder(tree, console, console_kind);
     let mut names: Vec<String> = files_in(&folder)
         .into_iter()
-        .filter(|(_, name)| name.ends_with(extension) && (path::extension(Style::HOST, name).eq_ignore_ascii_case(&extension)))
-        .map(|(at, _)| path::file_name_without_extension(Style::HOST, &at).to_string())
+        .filter(|(_, name)| name.ends_with(extension) && Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case(extension.trim_start_matches('.'))))
+        .map(|(at, _)| Path::new(&at).file_stem().unwrap_or_default().to_string_lossy().into_owned())
         .collect();
     names.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
     names
@@ -229,25 +231,25 @@ pub fn cards_of(tree: &Tree, m: &SaveMedium) -> Vec<MediumFile> {
 
 /// Each game's own file of a medium in its console's folder: its game, its slot, and whether a slot's suffix named it.
 fn games_own(tree: &Tree, m: &SaveMedium) -> Vec<(String, String, usize, bool)> {
-    let own = path::combine(Style::HOST, &tree.saves(), &m.console);
+    let own = Path::new(&tree.saves()).join(&m.console);
     if !emusen_galaxia::files::directory_exists(&own) {
         return Vec::new();
     }
     let mut suffixes: Vec<(String, usize)> = m.slots.iter().enumerate().map(|(n, s)| (s.suffix.clone(), n)).collect();
     suffixes.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-    let mut files: Vec<String> = files_in(&own).into_iter().filter(|(_, name)| path::extension(Style::HOST, name).eq_ignore_ascii_case(&m.extension)).map(|(at, _)| at).collect();
+    let mut files: Vec<String> = files_in(&own).into_iter().filter(|(_, name)| Path::new(name).extension().is_some_and(|e| e.eq_ignore_ascii_case(m.extension.trim_start_matches('.')))).map(|(at, _)| at).collect();
     files.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
     files
         .into_iter()
         .map(|file| {
-            let name = path::file_name(Style::HOST, &file).to_string();
+            let name = Path::new(&file).file_name().unwrap_or_default().to_string_lossy().into_owned();
             match suffixes.iter().find(|(s, _)| name.to_uppercase().ends_with(&s.to_uppercase()) && name.len() > s.len()) {
                 Some((s, slot)) => {
                     let game = name[..name.len() - s.len()].to_string();
                     (file, game, *slot, true)
                 }
                 None => {
-                    let game = path::file_name_without_extension(Style::HOST, &file).to_string();
+                    let game = Path::new(&file).file_stem().unwrap_or_default().to_string_lossy().into_owned();
                     (file, game, 0, false)
                 }
             }
@@ -291,8 +293,8 @@ pub struct ByExtension<'d> {
 
 impl Media for ByExtension<'_> {
     fn medium_of(&self, file: &str) -> Option<Medium> {
-        let extension = path::extension(Style::HOST, file);
-        declared(self.discovery).into_iter().filter(|(_, e)| e.eq_ignore_ascii_case(&extension)).find_map(|(id, _)| Medium::by_id(&id))
+        let extension = Path::new(file).extension()?.to_string_lossy();
+        declared(self.discovery).into_iter().filter(|(_, e)| e.trim_start_matches('.').eq_ignore_ascii_case(&extension)).find_map(|(id, _)| Medium::by_id(&id))
     }
 }
 
@@ -400,7 +402,7 @@ pub fn cards_op(catalog: &crate::catalog::Catalog, tree: &Tree, op: u32, args: &
         }
         a::CARDS_OPEN => {
             let at = text("path")?;
-            let card = manager.open(&at).map_err(thrown)?.ok_or_else(|| (emusen_session_service::abi::status::ABSENT, format!("{} is of no medium a system pack names", path::file_name(Style::HOST, &at))))?;
+            let card = manager.open(&at).map_err(thrown)?.ok_or_else(|| (emusen_session_service::abi::status::ABSENT, format!("{} is of no medium a system pack names", Path::new(&at).file_name().unwrap_or_default().to_string_lossy())))?;
             let mut j = Json::new();
             j.begin_object()
                 .str("medium", &card.medium.id)
@@ -559,7 +561,7 @@ mod tests {
         let home = std::env::temp_dir().join(format!("emusen-crystal-media-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&home);
         std::fs::create_dir_all(home.join("Saves").join("TEST")).unwrap();
-        Tree { data_override: Some(home.to_string_lossy().into_owned()), ..Tree::default() }
+        Tree { data_override: Some(home.clone()), ..Tree::default() }
     }
 
     #[test]
@@ -568,8 +570,8 @@ mod tests {
         let system = system();
         assert_eq!(media_of("TEST", Some(&system))[0].default_mode(), SHARED);
         let placed = place(&tree, "TEST", Some(&system), &[], "Game", &|_| BatterySave::NONE, false);
-        let expected = path::combine_all(Style::HOST, &[&tree.saves(), "TEST", CONSOLE_FOLDER, "Memory 1.mem"]);
-        assert_eq!(placed.file(2).and_then(|s| s.path.clone()), Some(expected));
+        let expected = Path::new(&tree.saves()).join("TEST").join(CONSOLE_FOLDER).join("Memory 1.mem");
+        assert_eq!(placed.file(2).and_then(|s| s.path.clone()), Some(expected.to_string_lossy().into_owned()));
         assert!(placed.console_apart);
         let _ = std::fs::remove_dir_all(tree.home());
     }
@@ -577,8 +579,8 @@ mod tests {
     #[test]
     fn a_consoles_memory_adopts_the_newest_games_own_without_moving_any() {
         let tree = tree("adopt");
-        let folder = path::combine(Style::HOST, &tree.saves(), "TEST");
-        let (first, second) = (path::combine(Style::HOST, &folder, "First.mem"), path::combine(Style::HOST, &folder, "Second.mem"));
+        let folder = Path::new(&tree.saves()).join("TEST");
+        let (first, second) = (Path::new(&folder).join("First.mem"), Path::new(&folder).join("Second.mem"));
         std::fs::write(&first, [0x11u8; 16]).unwrap();
         std::fs::write(&second, [0x22u8; 16]).unwrap();
         let now = SystemTime::now();
@@ -591,7 +593,7 @@ mod tests {
         save.settle(&|line| said.borrow_mut().push(line));
         assert_eq!(std::fs::read(save.path.as_ref().unwrap()).unwrap(), [0x22; 16]);
         assert_eq!((std::fs::read(&first).unwrap(), std::fs::read(&second).unwrap()), (vec![0x11; 16], vec![0x22; 16]));
-        assert!(said.borrow().iter().any(|l| l.contains(&second) && l.contains("untouched")));
+        assert!(said.borrow().iter().any(|l| l.contains(&*second.to_string_lossy()) && l.contains("untouched")));
         drop(placed);
         let _ = std::fs::remove_dir_all(tree.home());
     }

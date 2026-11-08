@@ -139,7 +139,7 @@ fn library(root: &str) {
 }
 
 fn context(t: &Temp) -> Context {
-    let tree = Tree { root: t.at("root"), data_override: Some(t.at("home")), config_override: Some(t.at("home/etc/EmuSen")), ..Tree::default() };
+    let tree = Tree { root: t.at("root").into(), data_override: Some(t.at("home").into()), config_override: Some(t.at("home/etc/EmuSen").into()), ..Tree::default() };
     let chdman = std::env::var("EMUSEN_CHDMAN").unwrap_or_default();
     let mut ctx = Context::pinned(tree, Some(t.at("library")), chdman.clone());
     ctx.pin = emusen_library_tool::pin::sha256(&chdman).ok();
@@ -210,7 +210,7 @@ fn listing(root: &str) -> Vec<(String, u64, String)> {
             if p.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), p.metadata().unwrap().len(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), p.metadata().unwrap().len(), rom_hash::md5(&p).unwrap()));
             }
         }
     }

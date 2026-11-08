@@ -174,7 +174,7 @@ namespace EmuSen.WiseMan.Galaxia
                 .OrderBy(line => line, StringComparer.Ordinal)
                 .ToList();
 
-        // A tree migrated onto itself, however the system lets it be spelled, copies nothing and changes nothing: the roots compare equal, or every file finds itself there - see EmuSen_Galaxia.md §3.2.
+        // A tree migrated onto itself, however the system lets it be spelled, copies nothing: case variants only where the file system ignores case - see EmuSen_RustPlatform.md §47.18.2.
         [Fact]
         public void A_tree_spelled_any_way_the_system_reads_as_itself_is_left_alone()
         {
@@ -185,7 +185,8 @@ namespace EmuSen.WiseMan.Galaxia
                 Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 File.WriteAllText(path, file);
             }
-            var spellings = new List<string> { home, home + Path.DirectorySeparatorChar, Path.Combine(_root, "x", "..", "Caf\u00e9"), Path.Combine(_root, "CAF\u00c9"), Path.Combine(_root, "caf\u00e9") };
+            var spellings = new List<string> { home, home + Path.DirectorySeparatorChar, Path.Combine(_root, "x", "..", "Caf\u00e9") };
+            if (OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()) spellings.AddRange(new[] { Path.Combine(_root, "CAF\u00c9"), Path.Combine(_root, "caf\u00e9") });
             if (Links.Allowed)
             {
                 Directory.CreateSymbolicLink(Path.Combine(links, "linked"), home);

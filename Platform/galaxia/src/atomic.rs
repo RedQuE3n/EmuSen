@@ -4,8 +4,8 @@
 //! or a killed process sees the whole old file or the whole new one. Nothing is flushed to the device, so it is not a
 //! promise against power loss; EmuSen_RustPlatform.md §10.4 records why that was left as it is.
 
-use crate::dotnet_path::{self as path, Style};
-use crate::tree::file_exists;
+use crate::files::file_exists;
+use std::path::Path;
 use std::io::Read;
 
 pub const TEMP_SUFFIX: &str = ".tmp";
@@ -16,25 +16,23 @@ pub fn words(error: &std::io::Error) -> String {
     if text.ends_with('.') { text } else { format!("{text}.") }
 }
 
-/// The file's length, or none where `File.Exists` is false: missing, a directory, or not to be examined.
-pub fn length(file: &str) -> Option<u64> {
-    if !file_exists(file) {
-        return None;
-    }
-    // A file that exists and will not be examined (a dangling link) is given a length, so that reading it is tried and says why it failed.
-    Some(std::fs::metadata(file).map_or(0, |m| m.len()))
+/// The file's length, or none where there is no file: missing, a directory, or a link to neither.
+pub fn length(file: impl AsRef<Path>) -> Option<u64> {
+    std::fs::metadata(file).ok().filter(|m| !m.is_dir()).map(|m| m.len())
 }
 
 /// The file's bytes; none for a missing file, and the diagnostic for one that is there and will not read.
-pub fn try_read(file: &str) -> Result<Option<Vec<u8>>, String> {
+pub fn try_read(file: impl AsRef<Path>) -> Result<Option<Vec<u8>>, String> {
+    let file = file.as_ref();
     if !file_exists(file) {
         return Ok(None);
     }
-    std::fs::read(file).map(Some).map_err(|error| format!("{file}: {} Treating it as absent.", words(&error)))
+    std::fs::read(file).map(Some).map_err(|error| format!("{}: {} Treating it as absent.", file.display(), words(&error)))
 }
 
 /// The file read into the caller's buffer: its whole length, with the buffer filled only when it holds all of it.
-pub fn read_into(file: &str, out: &mut [u8]) -> Result<Option<usize>, String> {
+pub fn read_into(file: impl AsRef<Path>, out: &mut [u8]) -> Result<Option<usize>, String> {
+    let file = file.as_ref();
     if !file_exists(file) {
         return Ok(None);
     }
@@ -56,20 +54,28 @@ pub fn read_into(file: &str, out: &mut [u8]) -> Result<Option<usize>, String> {
             }
         }
     };
-    read().map(Some).map_err(|error| format!("{file}: {} Treating it as absent.", words(&error)))
+    read().map(Some).map_err(|error| format!("{}: {} Treating it as absent.", file.display(), words(&error)))
 }
 
 /// The bytes written beside the file and renamed over it; the diagnostic when any step failed, the live file then being as it was.
-pub fn write(file: &str, contents: &[u8]) -> Result<(), String> {
+pub fn write(file: impl AsRef<Path>, contents: &[u8]) -> Result<(), String> {
+    let file = file.as_ref();
     let write = || -> std::io::Result<()> {
-        if let Some(directory) = path::directory_name(Style::HOST, file).filter(|d| !d.is_empty()) {
+        if let Some(directory) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
             std::fs::create_dir_all(directory)?;
         }
-        let temp = format!("{file}{TEMP_SUFFIX}");
+        let temp = beside(file, TEMP_SUFFIX);
         std::fs::write(&temp, contents)?;
         std::fs::rename(&temp, file)
     };
-    write().map_err(|error| format!("{file}: {} The previous file is unchanged.", words(&error)))
+    write().map_err(|error| format!("{}: {} The previous file is unchanged.", file.display(), words(&error)))
+}
+
+/// The path with a suffix added to its last part, for a file kept beside it.
+pub fn beside(file: &Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = file.as_os_str().to_os_string();
+    name.push(suffix);
+    name.into()
 }
 
 #[cfg(test)]
@@ -84,7 +90,7 @@ mod tests {
         write(&file, b"first").unwrap();
         write(&file, b"second, longer").unwrap();
         assert_eq!(try_read(&file).unwrap().as_deref(), Some(&b"second, longer"[..]));
-        assert!(!file_exists(&format!("{file}{TEMP_SUFFIX}")));
+        assert!(!file_exists(beside(&file, TEMP_SUFFIX)));
         assert_eq!(length(&file), Some(14));
     }
 
@@ -92,7 +98,7 @@ mod tests {
     fn an_abandoned_temp_file_never_becomes_the_live_file() {
         let temp = TempDir::new("atomic");
         let file = temp.join("game.srm");
-        std::fs::write(format!("{file}{TEMP_SUFFIX}"), b"half a sa").unwrap();
+        std::fs::write(beside(&file, TEMP_SUFFIX), b"half a sa").unwrap();
         assert_eq!(try_read(&file), Ok(None));
         write(&file, b"whole").unwrap();
         assert_eq!(try_read(&file).unwrap().as_deref(), Some(&b"whole"[..]));
@@ -109,14 +115,13 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn a_dangling_link_is_there_to_be_read_and_says_why_it_cannot_be() {
+    fn a_dangling_link_is_no_file() {
         let temp = TempDir::new("atomic");
         let link = temp.join("dangling.srm");
         std::os::unix::fs::symlink(temp.join("nowhere"), &link).unwrap();
-        assert_eq!(length(&link), Some(0));
-        let message = try_read(&link).unwrap_err();
-        assert!(message.starts_with(&link) && message.ends_with(". Treating it as absent."), "{message}");
-        assert!(read_into(&link, &mut [0u8; 8]).is_err());
+        assert_eq!(length(&link), None);
+        assert_eq!(try_read(&link), Ok(None));
+        assert_eq!(read_into(&link, &mut [0u8; 8]), Ok(None));
     }
 
     #[test]
@@ -125,7 +130,7 @@ mod tests {
         let blocker = temp.join("blocker");
         std::fs::write(&blocker, b"a file where a directory is wanted").unwrap();
         let message = write(&temp.join("blocker/game.srm"), b"x").unwrap_err();
-        assert!(message.starts_with(&temp.join("blocker/game.srm")), "{message}");
+        assert!(message.starts_with(&temp.text("blocker/game.srm")), "{message}");
         assert!(message.ends_with(". The previous file is unchanged."), "{message}");
     }
 
@@ -135,8 +140,8 @@ mod tests {
         let taken = temp.join("taken.srm");
         std::fs::create_dir_all(&taken).unwrap();
         assert!(write(&taken, b"bytes").is_err());
-        assert_eq!(std::fs::read(format!("{taken}{TEMP_SUFFIX}")).unwrap(), b"bytes");
-        assert!(crate::tree::directory_exists(&taken));
+        assert_eq!(std::fs::read(beside(&taken, TEMP_SUFFIX)).unwrap(), b"bytes");
+        assert!(crate::files::directory_exists(&taken));
     }
 
     #[test]

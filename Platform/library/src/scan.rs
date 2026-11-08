@@ -3,8 +3,9 @@
 //! each file routed among the named systems by `emusen-systems` over the bytes Galaxia reads, and the games ordered by
 //! title ignoring case. See EmuSen_Settings_Reference.md §4.11, §4.46 and EmuSen_Backend.md §28.4.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::{Error, Progress};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::image_probe::{self, ImageProbe, head_of};
 use emusen_galaxia::{archive, claims, files, image_sets, package_zip};
 use emusen_systems::probe::{self, Candidate, Recognition};
@@ -102,7 +103,7 @@ fn image_extension(at: &str, systems: &Systems) -> String {
 /// `CoreCatalog.IsGameBoyColor`'s reading: the file's own extension, and its byte at 0x143 where it is longer.
 fn shelved_as_color(at: &str) -> bool {
     let byte = head_of(at, 0x144).ok().filter(|h| h.len() > 0x143).map(|h| h[0x143]);
-    emusen_systems::gb::shelved_as_color(path::extension(Style::HOST, at), byte)
+    emusen_systems::gb::shelved_as_color(&Path::new(at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default(), byte)
 }
 
 /// The system a file is shelved as, among the named systems: the only one taking its image's extension, else the one
@@ -116,9 +117,9 @@ pub fn route(at: &str, systems: &Systems) -> Option<String> {
         _ => {
             let claims = claims(at, &candidates, systems);
             let asked = claims.len() != 1;
-            let folder = if asked { path::directory_name(Style::HOST, &path::full_path(at)).map(|d| path::file_name(Style::HOST, &d).to_string()) } else { None };
+            let folder = if asked { path_key::key(at).parent().map(|d| d.file_name().unwrap_or_default().to_string_lossy().into_owned()) } else { None };
             let named: Vec<Candidate> = candidates.iter().map(|s| Candidate { id: &s.id, name: &s.name, esde_system: &s.esde_system }).collect();
-            probe::route(path::file_name(Style::HOST, at), folder.as_deref(), &named, &claims).system
+            probe::route(&Path::new(at).file_name().unwrap_or_default().to_string_lossy(), folder.as_deref(), &named, &claims).system
         }
     };
     match chosen.as_deref() {
@@ -169,8 +170,8 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
                 return;
             }
             progress.files.fetch_add(1, Ordering::Relaxed);
-            if extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, at))) {
-                files.push(at.to_string());
+            if extensions.iter().any(|e| e.eq_ignore_ascii_case(&Path::new(at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default())) {
+                files.push(at.to_string_lossy().into_owned());
             }
         });
         if stopped {
@@ -186,8 +187,8 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
         for folder in [packages, compressed.as_str()].into_iter().filter(|f| files::directory_exists(f)) {
             let mut files = Vec::new();
             let _ = files::visit_files_with(folder, options, |at, _| {
-                if extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, at))) {
-                    files.push(at.to_string());
+                if extensions.iter().any(|e| e.eq_ignore_ascii_case(&Path::new(at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default())) {
+                    files.push(at.to_string_lossy().into_owned());
                 }
             });
             found.extend(image_sets::shelved(files));
@@ -196,18 +197,18 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
     });
     if let Some(index) = &index {
         found.retain(|at| {
-            let full = path::full_path(at);
+            let full = path_key::key_text(at);
             let zip_of_folder = archive::is_archive(&full) && index.folders.iter().any(|f| package_zip::zip_beside(f) == full);
             !index.inside_package(&full) && index.claimant(&full).is_none() && !zip_of_folder
         });
     }
-    let packages_root = beside.packages.as_deref().map(path::full_path);
+    let packages_root = beside.packages.as_deref().map(path_key::key_text);
     progress.phase.store(2, Ordering::Relaxed);
     for at in found {
         if progress.cancelled() {
             return Err(Error::Cancelled);
         }
-        let zipped = packages_root.as_deref().filter(|p| archive::is_archive(&at) && claims::within(&path::full_path(&at), p)).and_then(|_| package_zip::manifest_in(&at).ok().flatten());
+        let zipped = packages_root.as_deref().filter(|p| archive::is_archive(&at) && claims::within(&path_key::key_text(&at), p)).and_then(|_| package_zip::manifest_in(&at).ok().flatten());
         let system = match zipped {
             Some((_, doc)) => doc.get("system").and_then(|v| v.as_str()).and_then(|s| system_named(s, &systems)),
             None => route(&at, &systems),
@@ -220,7 +221,7 @@ pub fn scan_with(roots: &[String], beside: &Beside, ids: &[String], progress: &P
         progress.games.fetch_add(1, Ordering::Relaxed);
         scan.games.push(Game { path: p.game.clone(), system, package: Some(p.folder.clone()) });
     }
-    scan.games.sort_by(|a, b| path::file_name_without_extension(Style::HOST, &a.path).to_uppercase().cmp(&path::file_name_without_extension(Style::HOST, &b.path).to_uppercase()));
+    scan.games.sort_by(|a, b| Path::new(&a.path).file_stem().unwrap_or_default().to_string_lossy().to_uppercase().cmp(&Path::new(&b.path).file_stem().unwrap_or_default().to_string_lossy().to_uppercase()));
     scan.outcome = if missing { Outcome::NotFound } else if scan.games.is_empty() { Outcome::Empty } else { Outcome::Ok };
     if missing && given.len() == 1 {
         scan.games.clear();

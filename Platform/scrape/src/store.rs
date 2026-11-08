@@ -3,6 +3,7 @@
 //! brought to this build's schema by the C#'s three migrations to the byte. See EmuSen_BigPicture.md §5.6, §17.5, §30,
 //! §38 and EmuSen_Backend.md §30.6.
 
+use std::path::Path;
 use crate::Error;
 use crate::kinds;
 use emusen_dotnet::date::{instant, utc_millis};
@@ -471,7 +472,7 @@ impl Store {
     /// Opens `<root>/media.db`, the folder made first, migrating it; a newer file is refused unwritten.
     pub fn open(sqlite: Arc<Sqlite>, root: &str) -> Result<Store, Error> {
         std::fs::create_dir_all(root).map_err(|e| Error::Io(format!("{}: {}", root, e)))?;
-        let path = emusen_galaxia::dotnet_path::combine(emusen_galaxia::dotnet_path::Style::HOST, root, FILE_NAME);
+        let path = Path::new(root).join(FILE_NAME).to_string_lossy().into_owned();
         Store::open_at(sqlite, root, &path)
     }
 

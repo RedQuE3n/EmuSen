@@ -153,7 +153,7 @@ fn listing(root: &Path) -> Vec<(String, u64, std::time::SystemTime, String)> {
             if meta.is_dir() {
                 stack.push(p);
             } else {
-                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p.to_string_lossy()).unwrap()));
+                out.push((p.to_string_lossy().into_owned(), meta.len(), meta.modified().unwrap(), rom_hash::md5(&p).unwrap()));
             }
         }
     }
@@ -162,7 +162,7 @@ fn listing(root: &Path) -> Vec<(String, u64, std::time::SystemTime, String)> {
 }
 
 fn context(temp: &Temp, chdman: &str, pinned: Option<String>) -> Context {
-    let tree = Tree { root: temp.at("root").to_string_lossy().into_owned(), data_override: Some(temp.at("home").to_string_lossy().into_owned()), ..Tree::default() };
+    let tree = Tree { root: temp.at("root").to_path_buf(), data_override: Some(temp.at("home").to_path_buf()), ..Tree::default() };
     let pin = pinned.or_else(|| rom_hash_sha256(chdman));
     Context { tree, library: Some(temp.at("library").to_string_lossy().into_owned()), chdman: chdman.to_string(), pin, release: "0.289".into(), state_folder: None, sqlite: None, output: None }
 }
@@ -434,7 +434,7 @@ fn a_converted_disc_made_self_contained_holds_its_chd_and_its_zip_stores_it() {
     let index = emusen_galaxia::claims::index(&ctx.places().roots());
     let claimant = index.claimant(&compressed.to_string_lossy()).map(|p| p.folder.clone());
     assert_eq!(claimant.as_deref(), Some(package.to_string_lossy().as_ref()), "the CHD in Compressed is the package's source");
-    let entries = emusen_galaxia::archive::entries_of(&temp.at("home/Packages/PlayStation/Two/Two.chd.zip").to_string_lossy()).unwrap();
+    let entries = emusen_galaxia::archive::entries_of(temp.at("home/Packages/PlayStation/Two/Two.chd.zip")).unwrap();
     assert_eq!(entries.iter().find(|e| e.full_name == "Two.chd/Two.chd").map(|e| e.stored), Some(true), "a CHD is stored, never compressed again");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "ls", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "converted");
     assert_eq!(state_of(&run(&ctx, r#"{"op": "check", "paths": ["psx/Two"]}"#), "psx/Two/Two.cue"), "verified");

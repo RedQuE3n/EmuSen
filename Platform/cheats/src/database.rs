@@ -1,7 +1,7 @@
 //! The player's cheat database, the C# `CheatDatabase`: an index over a tree of `.cht` files, each in a folder named
 //! for its system as libretro lays them out, scanned once and searched by game (`man cheat`). Nothing EmuSen ships.
 
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
 use std::cmp::Ordering;
 
 /// One `.cht` file in the tree: its folder's name, its name without `.cht`, and its path.
@@ -35,18 +35,18 @@ impl Database {
     /// `CheatDatabase.All` on first use: nothing where the folder is absent or the tree cannot be listed whole.
     pub fn scan(directory: &str) -> Database {
         let mut db = Database { directory: directory.to_string(), entries: Vec::new() };
-        if !emusen_galaxia::tree::directory_exists(directory) {
+        if !emusen_galaxia::files::directory_exists(directory) {
             return db;
         }
         let mut files = Vec::new();
-        if visit_files(directory, |at, name| if is_cht(name) { files.push(at.to_string()) }).is_err() {
+        if visit_files(directory, |at, name| if is_cht(name) { files.push(at.to_string_lossy().into_owned()) }).is_err() {
             return db;
         }
         db.entries = files
             .into_iter()
             .map(|p| Entry {
-                system: path::directory_name(Style::HOST, &p).map(|d| path::file_name(Style::HOST, &d).to_string()).unwrap_or_default(),
-                game: path::file_name_without_extension(Style::HOST, &p).to_string(),
+                system: Path::new(&p).parent().map(|d| d.to_string_lossy().into_owned()).map(|d| Path::new(&d).file_name().unwrap_or_default().to_string_lossy().to_string()).unwrap_or_default(),
+                game: Path::new(&p).file_stem().unwrap_or_default().to_string_lossy().to_string(),
                 path: p,
             })
             .collect();

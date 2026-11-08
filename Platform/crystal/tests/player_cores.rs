@@ -7,8 +7,8 @@ use emusen_crystal::runtime::{Config, Runtime};
 use emusen_galaxia::tree::{Override, tree_mut};
 
 fn data(root: &std::path::Path) {
-    tree_mut().set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
-    tree_mut().set_override(Override::Config, Some(root.join("Config").to_string_lossy().into_owned()));
+    tree_mut().set_override(Override::Data, Some(root.join("Home")));
+    tree_mut().set_override(Override::Config, Some(root.join("Config")));
 }
 
 #[test]
@@ -19,7 +19,7 @@ fn a_moved_data_folders_cores_are_the_ones_the_next_rescan_lists() {
     data(&first);
     let rt = Runtime::new(&Config { cores: None, player_cores: None, development: Some(false), sqlite: None, lender: None, fetch: None });
     let cores = emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).unwrap();
-    assert!(cores.starts_with(&*second.parent().unwrap().to_string_lossy()), "{cores}");
+    assert!(cores.starts_with(second.parent().unwrap()), "{}", cores.display());
     data(&second);
     let moved = PathBuf::from(emusen_galaxia::tree::tree().directory(emusen_galaxia::tree::Directory::Cores).unwrap());
     std::fs::create_dir_all(&moved).unwrap();

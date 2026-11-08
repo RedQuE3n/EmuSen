@@ -3,8 +3,8 @@
 //! this library makes is handed, so that the shell's module and Mistress's window run one tool. Since 1.5 a request whose
 //! op starts `core-` is the core tool's, on the same job runner (EmuSen_Cores.md §6).
 
+use std::path::Path;
 use crate::{bytes, fail, put, status};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::models::{APP_SETTINGS_ID, MODELS};
 use emusen_galaxia::{config, setting_folders, tree};
 use emusen_library_tool::{job, Context};
@@ -41,7 +41,7 @@ pub static TABLE: LibraryToolV1 = LibraryToolV1 {
 /// The chdman a job runs: `EMUSEN_CHDMAN` where set, for a build's tests, else the one beside this library; either is
 /// refused unless its SHA-256 is the pin's.
 fn chdman() -> String {
-    std::env::var("EMUSEN_CHDMAN").ok().filter(|c| !c.is_empty()).unwrap_or_else(|| path::combine(Style::HOST, &tree::base_directory(), if cfg!(windows) { "chdman.exe" } else { "chdman" }))
+    std::env::var("EMUSEN_CHDMAN").ok().filter(|c| !c.is_empty()).unwrap_or_else(|| Path::new(&tree::base_directory()).join(if cfg!(windows) { "chdman.exe" } else { "chdman" }).to_string_lossy().into_owned())
 }
 
 /// The process's tree, `AppSettings.RomDirectory`, `StateDirectory` and `ChdOutputDirectory` as the settings file holds
@@ -51,7 +51,7 @@ fn context() -> Context {
     let (settings, _) = config::load_or_new(&tree, &MODELS[APP_SETTINGS_ID as usize], None, emusen_galaxia::models::APP_SETTINGS_FILE);
     let library = setting_folders::checked(settings.get("RomDirectory").and_then(|v| v.as_str()), &tree::user_home()).path;
     let states = settings.get("StateDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
-    let beside = path::combine(Style::HOST, &tree::base_directory(), emusen_sqlite::SHIPPED_NAME);
+    let beside = Path::new(&tree::base_directory()).join(emusen_sqlite::SHIPPED_NAME).to_string_lossy().into_owned();
     let sqlite = emusen_sqlite::Sqlite::of_process(&[beside]).ok().map(std::sync::Arc::new);
     let output = settings.get("ChdOutputDirectory").and_then(|v| v.as_str()).filter(|s| !s.trim().is_empty()).map(str::to_string);
     Context { state_folder: states, sqlite, output, ..Context::pinned(tree, library, chdman()) }
@@ -61,7 +61,7 @@ fn context() -> Context {
 /// libretro host and proxy, the shipped tested builds, the systems table's `for_libretro` placing each core under
 /// EmuSen's systems, and its list of the libretro cores EmuSen hosts (EmuSen_Cores.md §4.2, §4.7, §5.3).
 fn core_context() -> emusen_core_tool::Context {
-    let cores = tree::tree().directory(tree::Directory::Cores).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from(path::combine(Style::HOST, &tree::user_home(), "Cores")));
+    let cores = tree::tree().directory(tree::Directory::Cores).map(std::path::PathBuf::from).unwrap_or_else(|| std::path::PathBuf::from(Path::new(&tree::user_home()).join("Cores").to_string_lossy().into_owned()));
     let installation = Some(std::path::PathBuf::from(tree::base_directory()));
     let placement: emusen_core_tool::Placement = std::sync::Arc::new(|systemid, databases| emusen_systems::for_libretro(systemid, databases).into_iter().map(|s| s.id.clone()).collect());
     let hosted = emusen_systems::libretro_cores::hosted().iter().map(|c| emusen_core_tool::Hosted { stem: c.stem.clone(), systems: c.systems.clone() }).collect();

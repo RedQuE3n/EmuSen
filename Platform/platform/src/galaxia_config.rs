@@ -2,7 +2,6 @@
 
 use crate::{diagnostics_rewind, diagnostics_waiting, fail, join_nul, put, report, required, status, text};
 use emusen_galaxia::config::{self, Loaded};
-use emusen_galaxia::dotnet_path::Style;
 use emusen_galaxia::models::{self, Model};
 use emusen_galaxia::{cheats, error_log, model, tree};
 use std::time::{Duration, SystemTime};
@@ -193,7 +192,7 @@ pub unsafe extern "C" fn emusen_galaxia_cheat_names(out: *mut u8, len: usize) ->
 /// `name` must be valid for `len` bytes, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_cheat_name_valid(name: *const u8, len: usize) -> i32 {
-    flag(unsafe { text(name, len) }.map(|name| cheats::is_valid_name(Style::HOST, name)))
+    flag(unsafe { text(name, len) }.map(|name| cheats::is_valid_name(name)))
 }
 
 /// A game's own cheat list as a frontend keeps it: its name, then its category, each followed by a NUL. `ABSENT` for a ROM path that gives no name a list may have.
@@ -204,7 +203,7 @@ pub unsafe extern "C" fn emusen_galaxia_cheat_name_valid(name: *const u8, len: u
 pub unsafe extern "C" fn emusen_galaxia_cheat_game_list(console: *const u8, console_len: usize, rom_path: *const u8, rom_path_len: usize, out: *mut u8, len: usize) -> i64 {
     let result = || -> Result<Vec<u8>, i32> {
         let (console, rom_path) = (unsafe { text(console, console_len) }?, unsafe { text(rom_path, rom_path_len) }?);
-        let list = cheats::game_list(Style::HOST, console, rom_path).ok_or(status::ABSENT)?;
+        let list = cheats::game_list(console, rom_path).ok_or(status::ABSENT)?;
         Ok(join_nul(&[list.name, list.category]))
     };
     match result() {
@@ -225,6 +224,7 @@ pub unsafe extern "C" fn emusen_galaxia_log_root(directory: *const u8, directory
     };
     let waiting = diagnostics_waiting();
     let (root, said) = error_log::root(&tree::tree(), directory);
+    let root = root.to_string_lossy().into_owned();
     said.into_iter().for_each(report);
     if out.is_null() || root.len() > len {
         // The caller comes back with room, and the settings are read and reported then.
@@ -248,7 +248,7 @@ pub unsafe extern "C" fn emusen_galaxia_log_usable(directory: *const u8, len: us
 /// Each pointer must be valid for its length, or null.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn emusen_galaxia_log_path(root: *const u8, root_len: usize, day: *const u8, day_len: usize, out: *mut u8, len: usize) -> i64 {
-    let result = || -> Result<String, i32> { Ok(error_log::path_for(unsafe { required(root, root_len) }?, unsafe { required(day, day_len) }?)) };
+    let result = || -> Result<String, i32> { Ok(error_log::path_for(unsafe { required(root, root_len) }?, unsafe { required(day, day_len) }?).to_string_lossy().into_owned()) };
     answer(result(), out, len)
 }
 
@@ -379,7 +379,7 @@ mod tests {
             let (rom_path, rom_path_len) = rom_path.map_or((std::ptr::null(), 0), |r| (r.as_ptr(), r.len()));
             ask(|out, len| unsafe { emusen_galaxia_cheat_game_list(console, console_len, rom_path, rom_path_len, out, len) })
         };
-        let separator = Style::HOST.separator();
+        let separator = std::path::MAIN_SEPARATOR;
         assert_eq!(list(Some("SNES"), Some("/roms/Gamma.smc")), Ok(format!("Gamma\0cheats{separator}SNES\0")));
         assert_eq!(list(None, Some("Gamma.smc")), Ok("Gamma\0cheats\0".to_string()));
         assert_eq!(list(Some(" "), Some("Gamma")), Ok("Gamma\0cheats\0".to_string()));

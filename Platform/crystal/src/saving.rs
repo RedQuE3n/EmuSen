@@ -2,7 +2,8 @@
 //! folder, a state written whole with its record and its picture, a state loaded unless its record says it is another
 //! machine's, and the history cleared after the jump (EmuSen_Backend.md §14.12, §29.5).
 
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_galaxia::tree::Tree;
 use emusen_session_service::abi::status as svc;
 
@@ -34,15 +35,15 @@ fn check_slot(slot: u32) -> Result<i32, Refused> {
 impl Session {
     pub fn state_path(&self, tree: &Tree, slot: i32) -> String {
         match &self.package {
-            Some(root) => emusen_galaxia::saves::package_state_path(root, slot, self.save_key.as_deref()),
-            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()),
+            Some(root) => emusen_galaxia::saves::package_state_path(root, slot, self.save_key.as_deref()).to_string_lossy().into_owned(),
+            None => emusen_galaxia::saves::state_path(tree, &self.game_key(), slot, state_folder(tree).as_deref()).to_string_lossy().into_owned(),
         }
     }
 
     pub fn resume_path(&self, tree: &Tree) -> String {
         match &self.package {
-            Some(root) => emusen_galaxia::saves::package_resume_state_path(root, self.save_key.as_deref()),
-            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()),
+            Some(root) => emusen_galaxia::saves::package_resume_state_path(root, self.save_key.as_deref()).to_string_lossy().into_owned(),
+            None => emusen_galaxia::saves::resume_state_path(tree, &self.game_key(), state_folder(tree).as_deref()).to_string_lossy().into_owned(),
         }
     }
 
@@ -73,7 +74,7 @@ impl Session {
             state_version: e.state_version(),
             build: build_name(),
             saved_at: emusen_galaxia::clock::now(),
-            rom_file: path::file_name(Style::HOST, &self.game_key()).to_string(),
+            rom_file: Path::new(&self.game_key()).file_name().unwrap_or_default().to_string_lossy().to_string(),
             rom_md5: if game { md5 } else { None },
             rom_bytes: if game { bytes } else { 0 },
         }
@@ -82,7 +83,7 @@ impl Session {
     /// Why the record says the state is not this machine's to load, or none.
     fn refusal(&self, e: &Engine, r: &StateRecord) -> Option<String> {
         if !r.console.eq_ignore_ascii_case(&self.console) {
-            return Some(format!("That state was saved by the {} core, and {} runs on the {} core.", r.console, path::file_name(Style::HOST, &self.game_key()), self.console));
+            return Some(format!("That state was saved by the {} core, and {} runs on the {} core.", r.console, Path::new(&self.game_key()).file_name().unwrap_or_default().to_string_lossy(), self.console));
         }
         let loads = &e.mi.loads_from;
         if r.core == e.display_name && e.machine.is_some() && !loads.is_empty() && !loads.contains(&(r.state_version as i64)) {
@@ -94,8 +95,8 @@ impl Session {
 
     /// The state written whole and its record kept, `ManagedSession.SaveState`; with a picture beside it when asked.
     pub(crate) fn save_in(&self, e: &mut Engine, at: &str, records: Option<&StateRecords>, picture: bool) -> Result<(), Refused> {
-        let full = path::full_path(at);
-        if let Some(folder) = path::directory_name(Style::HOST, &full).filter(|f| !f.is_empty()) {
+        let full = path_key::key_text(at);
+        if let Some(folder) = Path::new(&full).parent().map(|d| d.to_string_lossy().into_owned()).filter(|f| !f.is_empty()) {
             std::fs::create_dir_all(&folder).map_err(|err| (abi::status::IO, format!("{}: {}", folder, err)))?;
         }
         let bytes = e.state_bytes().map_err(|r| (r.status, r.words))?;
@@ -108,7 +109,7 @@ impl Session {
             let (rgba, width, height) = self.shown_picture(e);
             if width > 0 && height > 0 {
                 let png = emusen_galaxia::saves::picture_path(at);
-                crate::png::write(&png, &rgba, width as u32, height as u32).map_err(|err| (abi::status::IO, format!("{}: {}", png, err)))?;
+                crate::png::write(&png.to_string_lossy(), &rgba, width as u32, height as u32).map_err(|err| (abi::status::IO, format!("{}: {}", png.display(), err)))?;
             }
         }
         Ok(())

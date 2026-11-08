@@ -4,9 +4,9 @@
 //! directory, and the environment with every exported variable and `DIANASH_ROOT`, `DIANASH_USER` and
 //! `DIANASH_SHELL`; it is given no service (§7.2). See EmuSen_DianaSh.md §7 and §13.11.
 
+use std::path::Path;
 use crate::interp::{Interp, Outcome};
 use crate::shell::World;
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::{self, Value};
 use emusen_galaxia::tree;
 use std::io::{Read, Write};
@@ -26,7 +26,7 @@ pub struct Program {
 /// The programs beside the shell, in the order of their manifests' names, read once per process.
 pub fn shipped() -> &'static [Program] {
     static SHIPPED: OnceLock<Vec<Program>> = OnceLock::new();
-    SHIPPED.get_or_init(|| read(&tree::shell_modules_directory()))
+    SHIPPED.get_or_init(|| read(&tree::shell_modules_directory().to_string_lossy()))
 }
 
 /// The manifests of kind `program` in a folder whose executable is there too.
@@ -42,7 +42,7 @@ pub fn read(folder: &str) -> Vec<Program> {
             continue;
         }
         let Some(file) = value.get("file").and_then(Value::as_str) else { continue };
-        let file = path::combine(Style::HOST, folder, &format!("{file}{}", std::env::consts::EXE_SUFFIX));
+        let file = Path::new(folder).join(&format!("{file}{}", std::env::consts::EXE_SUFFIX)).to_string_lossy().into_owned();
         if !std::path::Path::new(&file).is_file() {
             continue;
         }

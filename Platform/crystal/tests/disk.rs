@@ -60,7 +60,7 @@ fn record_outcome(line: &Path) -> String {
     std::fs::write(&state, vec![0u8; 4096]).unwrap();
     let nanos = (639_000_000_001_234_567 - UNIX_EPOCH_TICKS) as u64 * 100;
     std::fs::File::options().write(true).open(&state).unwrap().set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos)).unwrap();
-    let record = states::read_packaged(line.to_str().unwrap(), state.to_str().unwrap());
+    let record = states::read_packaged(&line, state.to_str().unwrap());
     std::fs::remove_file(&state).unwrap();
     match record {
         None => "none\n".to_string(),
@@ -90,15 +90,15 @@ fn a_state_record_written_reads_back_to_the_same_members() {
     let line = Path::new(DISK).join("states/written.line");
     let state = std::env::temp_dir().join(format!("crystal-disk-again-{}.state", std::process::id()));
     std::fs::write(&state, vec![0u8; 4096]).unwrap();
-    let r = states::read_packaged(line.to_str().unwrap(), state.to_str().unwrap()).or_else(|| {
+    let r = states::read_packaged(&line, state.to_str().unwrap()).or_else(|| {
         let nanos = (639_000_000_001_234_567 - UNIX_EPOCH_TICKS) as u64 * 100;
         std::fs::File::options().write(true).open(&state).unwrap().set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_nanos(nanos)).unwrap();
-        states::read_packaged(line.to_str().unwrap(), state.to_str().unwrap())
+        states::read_packaged(&line, state.to_str().unwrap())
     });
     let r = r.expect("the corpus record binds");
     let again = std::env::temp_dir().join(format!("crystal-disk-again-{}.line", std::process::id()));
     std::fs::write(&again, states::package_record_text(&r, 4096, 639_000_000_001_234_567)).unwrap();
-    assert_eq!(states::read_packaged(again.to_str().unwrap(), state.to_str().unwrap()), Some(r));
+    assert_eq!(states::read_packaged(&again, state.to_str().unwrap()), Some(r));
     let _ = (std::fs::remove_file(&state), std::fs::remove_file(&again));
 }
 

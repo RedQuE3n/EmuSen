@@ -2,6 +2,7 @@
 //! installed, and every system's overview, over `emusen-firmware`'s store and the cores' own declarations, as the C#
 //! `EmulatorSession.MissingFirmwareFor`, `FirmwareLibrary` and `FirmwareOverview` give them (EmuSen_Backend.md §29.2).
 
+use std::path::Path;
 use emusen_core_host::Discovered;
 use emusen_core_host::entry::{FirmwareRole, firmware_role, system_folder};
 use emusen_firmware::Request;
@@ -122,7 +123,7 @@ pub fn replacement_offered(infos: &[&Value], systems: &[String]) -> bool {
 
 /// The firmware store, `FirmwareLibrary.Directory`.
 pub fn store(tree: &Tree) -> String {
-    tree.directory(Directory::Firmware).unwrap_or_default()
+    tree.directory(Directory::Firmware).unwrap_or_default().to_string_lossy().into_owned()
 }
 
 /// The folders searched, first to last, `FirmwareLibrary.Folders`.
@@ -131,7 +132,7 @@ pub fn folders(tree: &Tree) -> Vec<String> {
     let (settings, _) = emusen_galaxia::config::load_or_new(tree, models, None, emusen_galaxia::models::APP_SETTINGS_FILE);
     let chosen = settings.get("FirmwareDirectory").and_then(|v| v.as_str()).map(str::to_string);
     let home = emusen_galaxia::tree::user_home();
-    emusen_firmware::folders(chosen.as_deref(), &home, &store(tree)).0
+    emusen_firmware::folders(chosen.as_deref(), &home.to_string_lossy(), &store(tree)).0
 }
 
 /// One request as `firmware_needed` lists it.
@@ -449,7 +450,7 @@ pub fn install(tree: &Tree, request: &str, source: &str, say: &dyn Fn(String)) -
     }
     let length = std::fs::metadata(source).map(|m| m.len() as i64).unwrap_or(0);
     if length != size as i64 {
-        let name = emusen_galaxia::dotnet_path::file_name(emusen_galaxia::dotnet_path::Style::HOST, source);
+        let name = Path::new(source).file_name().unwrap_or_default().to_string_lossy();
         return Err(bad(format!("{name} is {} bytes, and {file} is {}", n0(length), n0(size as i64))));
     }
     let store = store(tree);

@@ -1,8 +1,8 @@
 //! The `emusen.scrape` service: the process's one scraper, lent by its host or opened here - see EmuSen_LibraryTools.md §8.
 
+use std::path::Path;
 use crate::scrape::{answer, fail, failed, text};
 use emusen_dotnet::json::{self, Value};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::models::{APP_SETTINGS_ID, MODELS};
 use emusen_galaxia::tree::{self, Directory};
 use emusen_galaxia::{config, setting_folders};
@@ -95,7 +95,7 @@ fn settings_file() -> (tree::Tree, emusen_dotnet::json::Value, Option<String>) {
 /// The settings file's folders, as `MainWindow.NativeSettings` gives them; each system its own engine, since no runtime catalog is here.
 fn own_settings() -> (String, String, String) {
     let (tree, settings, roms) = settings_file();
-    let art = setting(&settings, "ArtworkDirectory").or_else(|| tree.directory(Directory::Artwork));
+    let art = setting(&settings, "ArtworkDirectory").or_else(|| tree.directory(Directory::Artwork).map(|d| d.to_string_lossy().into_owned()));
     let mut members = vec![
         ("roms", roms.map_or(Value::Null, Value::string)),
         ("art", art.map_or(Value::Null, Value::string)),
@@ -107,13 +107,13 @@ fn own_settings() -> (String, String, String) {
     members.push(("cores", Value::Array(every_system().into_iter().map(|id| Value::Array(vec![Value::string(id)])).collect())));
     let mut out = String::new();
     json::write_compact(&mut out, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));
-    let media = tree.directory(Directory::Media).unwrap_or_default();
-    let games = path::combine(Style::HOST, &tree.directory(Directory::Library).unwrap_or_default(), emusen_galaxia::stores::GAMES_DB);
+    let media = tree.directory(Directory::Media).unwrap_or_default().to_string_lossy().into_owned();
+    let games = tree.directory(Directory::Library).unwrap_or_default().join(emusen_galaxia::stores::GAMES_DB).to_string_lossy().into_owned();
     (media, games, out)
 }
 
 fn open_own() -> Result<Slot, Error> {
-    let beside = path::combine(Style::HOST, &tree::base_directory(), emusen_sqlite::SHIPPED_NAME);
+    let beside = Path::new(&tree::base_directory()).join(emusen_sqlite::SHIPPED_NAME).to_string_lossy().into_owned();
     let sqlite = Arc::new(Sqlite::of_process(&[beside]).map_err(Error::Io)?);
     let (media, games, settings) = own_settings();
     let library: &'static Library = Box::leak(Box::new(Library::open(sqlite.clone(), &games).map_err(library_error)?));
@@ -259,8 +259,8 @@ fn games(h: &Held<'_>, filter: &str) -> Result<String, Error> {
     let members = vec![
         ("roots", Value::Array(vec![Value::string(roms)])),
         ("systems", Value::Array(h.systems.iter().map(Value::string).collect())),
-        ("packages", tree.directory(Directory::Packages).map_or(Value::Null, Value::string)),
-        ("compressed", tree.directory(Directory::Compressed).map_or(Value::Null, Value::string)),
+        ("packages", tree.directory(Directory::Packages).map_or(Value::Null, |d| Value::string(d.to_string_lossy()))),
+        ("compressed", tree.directory(Directory::Compressed).map_or(Value::Null, |d| Value::string(d.to_string_lossy()))),
     ];
     let mut request = String::new();
     json::write_compact(&mut request, &Value::Object(members.into_iter().map(|(k, v)| (json::Text::new(k), v)).collect()));

@@ -3,8 +3,8 @@
 //! program's engines declare, in the systems table's order. It needs no game. See `man memcard`, EmuSen_SaveMedia.md §6
 //! and EmuSen_Backend.md §40.11.3.
 
+use std::path::Path;
 use dianash_module::{Answer, Call, Manifest, Module};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_savemedia::{Card, Done, Manager, Media, Medium, Outcome, Thrown};
 
 const USAGE: &str = "  memcard ls [<card>]           every card under Saves, or the saves on one card\n  memcard cp <card>:<save> <card>\n                                copy a save onto another card of its medium\n  memcard mv <card>:<save> <card>\n                                copy a save, read it back, then delete the first\n  memcard rm <card>:<save>      delete a save as the console's own manager does\n  memcard import <card> <from>...\n                                every save of <from> onto <card>, all or none\n  memcard new <card>            a new card, formatted where its medium allows\n  memcard dup <card> <new>      a whole card copied to a new name\n  memcard rename <card> <new>   a card renamed";
@@ -50,7 +50,7 @@ impl Known {
 
 impl Media for Known {
     fn medium_of(&self, file: &str) -> Option<Medium> {
-        let extension = path::extension(Style::HOST, file);
+        let extension = Path::new(file).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
         self.0.iter().find(|(e, _)| e.eq_ignore_ascii_case(&extension)).map(|(_, m)| m.clone())
     }
 }
@@ -79,7 +79,7 @@ impl Run<'_> {
     fn card(&self, given: &str) -> Result<String, Answer> {
         let real = self.call.resolve(given).map_err(|words| Answer::fail(format!("memcard: {words}")))?;
         if self.known.medium_of(&real).is_none() {
-            return Err(Answer::fail(format!("memcard: {} is no card: the media known are {}", path::file_name(Style::HOST, given), self.known.named())));
+            return Err(Answer::fail(format!("memcard: {} is no card: the media known are {}", Path::new(given).file_name().unwrap_or_default().to_string_lossy(), self.known.named())));
         }
         Ok(real)
     }
@@ -110,7 +110,7 @@ impl Run<'_> {
     fn open(&self, real: &str) -> Result<Card, Answer> {
         match self.manager.open(real) {
             Ok(Some(card)) => Ok(card),
-            Ok(None) => Err(Answer::fail(format!("memcard: {} is no card", path::file_name(Style::HOST, real)))),
+            Ok(None) => Err(Answer::fail(format!("memcard: {} is no card", Path::new(real).file_name().unwrap_or_default().to_string_lossy()))),
             Err(Thrown::Io(e)) => Err(Answer::fail(format!("memcard: {e}"))),
             Err(Thrown::Range) => Err(Answer::fault("Specified argument was out of the range of valid values.")),
         }
@@ -119,13 +119,13 @@ impl Run<'_> {
     /// Every card under Saves, by console: each console's Cards and Console folders and its own files.
     fn list_all(&self) -> Answer {
         let saves = emusen_galaxia::tree::tree().saves();
-        let mut consoles = folders(&saves);
+        let mut consoles = folders(&saves.to_string_lossy());
         consoles.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
         let mut lines: Vec<String> = Vec::new();
         for console in consoles {
             let mut cards: Vec<String> = [emusen_crystal::media::CARDS_FOLDER, emusen_crystal::media::CONSOLE_FOLDER]
                 .iter()
-                .flat_map(|f| files(&path::combine(Style::HOST, &console, f)))
+                .flat_map(|f| files(&Path::new(&console).join(f).to_string_lossy().into_owned()))
                 .chain(files(&console))
                 .filter(|f| self.known.medium_of(f).is_some())
                 .collect();
@@ -133,7 +133,7 @@ impl Run<'_> {
                 continue;
             }
             cards.sort_by(|a, b| a.to_uppercase().cmp(&b.to_uppercase()));
-            lines.push(path::file_name(Style::HOST, &console).to_string());
+            lines.push(Path::new(&console).file_name().unwrap_or_default().to_string_lossy().to_string());
             for card in cards {
                 match self.open(&card) {
                     Ok(c) => lines.push(format!("  {}", self.summary(&card, &c))),
@@ -202,7 +202,7 @@ fn files(dir: &str) -> Vec<String> {
 
 fn entries(dir: &str, folders: bool) -> Vec<String> {
     let Ok(read) = std::fs::read_dir(dir) else { return Vec::new() };
-    read.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir() == folders)).map(|e| path::combine(Style::HOST, dir, &e.file_name().to_string_lossy())).collect()
+    read.flatten().filter(|e| e.file_type().is_ok_and(|t| t.is_dir() == folders)).map(|e| Path::new(dir).join(e.file_name()).to_string_lossy().into_owned()).collect()
 }
 
 impl Module for MemcardCommands {

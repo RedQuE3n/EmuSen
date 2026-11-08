@@ -53,8 +53,8 @@ fn layout(name: &str) -> Layout {
     std::fs::write(entry.info_path(), "display_name = \"EmuSen - Test Core\"\ncorename = \"TestCore\"\nlicense = \"GPLv3\"\nsystemid = \"\"\n").unwrap();
     {
         let mut t = tree_mut();
-        t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
-        t.set_override(Override::Config, Some(root.join("Config").to_string_lossy().into_owned()));
+        t.set_override(Override::Data, Some(root.join("Home")));
+        t.set_override(Override::Config, Some(root.join("Config")));
     }
     unsafe { std::env::set_var("EMUSEN_CORE_RUNNER", env!("CARGO_BIN_EXE_emusen-core-runner")) };
     Layout { root, installation, cores, entry }

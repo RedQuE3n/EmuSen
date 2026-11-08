@@ -3969,3 +3969,54 @@ The tick (100 ns since the year 1, in UTC) that `file_info` and `write_ticks` gi
 `media.db` and the unpacked folder's name store it; the corpus's `unpacked.tsv` holds it. `files.rs`'s new test walks a
 tree holding a link to a folder, a dangling link, a hidden dangling link, a link back to the root and a folder that
 cannot be read.
+
+### 47.18 Paths are std's
+
+Galaxia's `dotnet_path` (`System.IO.Path` as text, with Windows' rules tested on Linux) is gone, and every crate builds
+and takes paths apart with `std::path`: `Path::join` for `Combine`, `file_name`, `file_stem`, `extension`, `parent` and
+`with_extension`. Windows' rules are std's on Windows and are no longer emulated elsewhere. Galaxia's tree (`Tree`,
+`user_home`, `application_data`, `base_directory`, `root_for` and the rest of `tree.rs`) takes and returns `PathBuf`, and
+so do the save paths of `saves.rs`, the unpacked folders of `disc_set.rs`, the companions of `image_sets.rs`, the
+error log's root and the package zip's paths. Text stays text where it is a stored key, a C answer or a manifest's
+`path`: the platform library converts at its C interface, and `claims` keeps its keys as text.
+
+**The one rule std does not give** is the stored key: `path_key::key` makes a path absolute against the working
+directory and normalises it lexically, `.` parts and repeated separators gone, `..` unwinding one part and stopping at
+the root, a trailing separator kept, links not followed. `std::path::absolute` keeps `..` and a leading `//`, so it would
+change keys. The corpus's `keys.tsv` (eight keys) and `unpacked.tsv` (three folder names) read as before, and the rule
+has its own test against the cases `dotnet_path` was held to. States.db, games.db and the unpacked folder's name are
+unchanged.
+
+Where std's answer differs from .NET's, std's was taken, since the cases are ones no player's library holds:
+
+1. **Existence is std's.** `tree::file_exists` and `tree::directory_exists` were second copies of `files`'; they are
+   gone, as is `tree::listed_as_directory`. A dangling link is no longer a file that exists: a battery save that is one
+   reads as absent, where it read as a file that would not read and was then treated as absent.
+2. **A name that begins with its only period is all stem** (`.smc`), and a path ending in a separator names its last
+   folder (`/roms/` names `roms`). A cheat list follows that: a ROM named `.smc` has the list `.smc`. The saved lists'
+   names are still the file names less `.json`. ES-DE's search text keeps ES-DE's own rule, the stem ending at the last
+   period, so its table in `scrape/tests/rules.rs` holds unchanged.
+3. **The cheat list's file-name rule** is the host's (`cfg!(windows)`), and the Windows characters stay tested through
+   the private rule; `is_valid_name`, `sanitized` and `game_list` take no style.
+4. **Two migration roots are one folder** when their keys are equal. The upper-case comparison this replaces took
+   `CAFÉ` and `Café` to be one folder on Linux as well, where they are two. Any other spelling of one folder (a link, a
+   case variant where the file system ignores case) copies nothing either, since every file finds itself already
+   there; the test spells the case variants only on Windows and macOS, where they name the tree.
+5. **Paths compare by part.** `claims::within`, the library tool's `inside`, the cheat pruner's `is_inside` and
+   `game_folders::of` compare with `Path::starts_with`, so `/r` no longer prefixes `/rx` by text and a trailing
+   separator does not matter.
+
+An extension compared with the systems table's, which writes its period, is compared without the period
+(`Path::extension`), and one that is handed on keeps it (`archive::image_entry`'s `is_image`, `image_probe`). `files::join`
+is gone for `Path::join`. Steps 17-19 are one commit: `Tree`'s `PathBuf` reaches every crate that reads the tree, so no
+part of the change builds without the rest. An empty last part is std's too: `Path::join("")` ends the path with a
+separator where .NET's `Combine` returned it as it was, which only an empty file name reaches.
+
+The C# parity methods that held these answers to .NET's text were deleted with their goldens, the disk corpus being the
+proof in their place: five of `GalaxiaParityTests` (the tree under every override, the save names, the unreadable file,
+the declining migrations, the cheat lists' names) and `SerenityParityTests`' preset sweep, whose inputs include an
+empty reference and a folder, now resolved with std's parts (its golden holds digests, so the lines themselves were not
+compared). Measured on 2026-11-07: Platform `cargo test --workspace` 606 passed, the corpus
+and the DianaSh goldens among them; the C# classes that read these paths (the blast radius's filter with the package,
+disc, core-install, store, Serenity and migration classes) 1,251 passed before the deletions, and the Galaxia and
+Serenity parity classes 229 passed after them.

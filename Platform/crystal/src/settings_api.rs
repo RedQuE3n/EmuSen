@@ -3,8 +3,9 @@
 //! change written to `consoles.json` or the game's own file and applied to the open sessions it reaches; and SR10's
 //! one copy of games.db's engine choices (EmuSen_Backend.md §3.6, §14.12, §29.19).
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use emusen_core_host::{Discovered, Discovery, Trust};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_galaxia::tree::{Directory, Tree};
 use emusen_session_service::abi::status as svc;
 
@@ -315,7 +316,7 @@ pub fn setting_of(tree: &Tree, s: &Session) -> impl Fn(&str) -> Option<String> {
 /// The game's values written whole, indented as `JsonSerializer` writes a dictionary.
 fn write_game_values(tree: &Tree, system: Option<&str>, game: &str, package: Option<&str>, values: &[(String, String)]) -> Result<(), Refused> {
     let Some(at) = crate::settings::write_place(tree, system, game, package) else {
-        return Err((svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", path::file_name(Style::HOST, game))));
+        return Err((svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", Path::new(game).file_name().unwrap_or_default().to_string_lossy())));
     };
     crate::settings::write_values(&at, values).map_err(|words| (abi::status::IO, words))
 }
@@ -465,7 +466,7 @@ impl Runtime {
         let at = game.as_str();
         let (row_console, system) = self.console_and_system(at);
         let console = row_console.or_else(|| system.as_deref().map(str::to_uppercase)).ok_or_else(|| {
-            (svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", path::file_name(Style::HOST, at)))
+            (svc::NOT_SUPPORTED, format!("{} runs as no system of the table, so it has no file of its own settings", Path::new(at).file_name().unwrap_or_default().to_string_lossy()))
         })?;
         let tree = emusen_galaxia::tree::tree();
         let discovery = self.discovery();
@@ -489,9 +490,9 @@ impl Runtime {
         }
         write_game_values(&tree, system.as_deref(), at, package.as_deref(), &values)?;
         drop(tree);
-        let full = path::full_path(at);
+        let full = path_key::key_text(at);
         for open in self.sessions.all() {
-            if open.game_path.as_deref().is_some_and(|p| path::full_path(p) == full) {
+            if open.game_path.as_deref().is_some_and(|p| path_key::key_text(p) == full) {
                 self.apply_to(&open, key);
             }
         }
@@ -508,13 +509,13 @@ impl Runtime {
         let tree = emusen_galaxia::tree::tree();
         let library = tree.directory(Directory::Library).unwrap_or_default();
         let config = tree.directory(Directory::Config).unwrap_or_default();
-        let games_db = path::combine(Style::HOST, &library, emusen_galaxia::stores::GAMES_DB);
-        let marker = path::combine_all(Style::HOST, &[&config, "games", ".engine-choices-copied"]);
+        let games_db = Path::new(&library).join(emusen_galaxia::stores::GAMES_DB);
+        let marker = Path::new(&config).join("games").join(".engine-choices-copied");
         if !emusen_galaxia::files::file_exists(&games_db) || emusen_galaxia::files::file_exists(&marker) {
             return 0;
         }
         let mut choices: Vec<(String, String)> = Vec::new();
-        let read = emusen_sqlite::Connection::open_read_only(sqlite, &games_db)
+        let read = emusen_sqlite::Connection::open_read_only(sqlite, &games_db.to_string_lossy())
             .and_then(|db| db.query("SELECT path, value FROM game_edit WHERE field = 'altemulator'", &[], |row| choices.push((row.text(0), row.text(1)))).map(|_| ()));
         if let Err(e) = read {
             crate::error_log::warning("settings", &format!("games.db's engine choices could not be read, and none was copied: {}", e.message));
@@ -543,9 +544,9 @@ impl Runtime {
             }
         }
         let tree = emusen_galaxia::tree::tree();
-        let _ = std::fs::create_dir_all(path::directory_name(Style::HOST, &marker).unwrap_or_default());
+        let _ = std::fs::create_dir_all(marker.parent().unwrap_or(Path::new("")));
         let day = emusen_dotnet::date::local_text(emusen_galaxia::clock::local_ticks_now(), "yyyy-MM-dd");
-        let _ = std::fs::write(&marker, format!("{copied} engine choice(s) copied from {games_db} on {day}\n"));
+        let _ = std::fs::write(&marker, format!("{copied} engine choice(s) copied from {} on {day}\n", games_db.display()));
         drop(tree);
         copied
     }

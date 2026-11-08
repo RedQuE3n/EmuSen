@@ -7,14 +7,14 @@
 
 use crate::image_sets;
 use std::io::{Read, Seek, Write};
+use std::path::Path;
 
 /// `ArchiveImages.Extensions`.
 pub const EXTENSIONS: &[&str] = &[".zip"];
 
 /// `ArchiveImages.IsArchive`: by the extension, ignoring case.
-pub fn is_archive(at: &str) -> bool {
-    let extension = crate::dotnet_path::extension(crate::dotnet_path::Style::HOST, at);
-    EXTENSIONS.iter().any(|e| e.eq_ignore_ascii_case(&extension))
+pub fn is_archive(at: impl AsRef<Path>) -> bool {
+    at.as_ref().extension().is_some_and(|extension| EXTENSIONS.iter().any(|e| e.strip_prefix('.').is_some_and(|e| extension.eq_ignore_ascii_case(e))))
 }
 
 /// One entry of a zip's central directory.
@@ -40,7 +40,7 @@ pub struct Zip<R> {
 }
 
 impl Zip<std::io::BufReader<std::fs::File>> {
-    pub fn open(at: &str) -> Result<Self, String> {
+    pub fn open(at: impl AsRef<Path>) -> Result<Self, String> {
         Zip::over(std::io::BufReader::new(std::fs::File::open(at).map_err(|e| e.to_string())?))
     }
 }
@@ -123,24 +123,25 @@ pub fn entries_in(zip: &[u8]) -> Result<Vec<ZipEntry>, String> {
 }
 
 /// The entries of an archive on disk, reading only its end and its directory.
-pub fn entries_of(at: &str) -> Result<Vec<ZipEntry>, String> {
+pub fn entries_of(at: impl AsRef<Path>) -> Result<Vec<ZipEntry>, String> {
     Zip::open(at)?.entries()
 }
 
 /// `ArchiveImages.ImageEntry`: a cue sheet first, then a lone image of an extension `is_image` takes, by depth then by
 /// name ignoring case; none where there is none.
-pub fn image_entry(at: &str, is_image: impl Fn(&str) -> bool) -> Result<Option<String>, String> {
+pub fn image_entry(at: impl AsRef<Path>, is_image: impl Fn(&str) -> bool) -> Result<Option<String>, String> {
     let mut names: Vec<String> = entries_of(at)?.into_iter().map(|e| e.full_name).filter(|n| !n.ends_with('/')).collect();
     names.sort_by(|a, b| a.matches('/').count().cmp(&b.matches('/').count()).then_with(|| a.to_uppercase().cmp(&b.to_uppercase())));
     if let Some(sheet) = names.iter().find(|n| image_sets::is_sheet(n)) {
         return Ok(Some(sheet.clone()));
     }
-    Ok(names.into_iter().find(|n| !image_sets::is_playlist(n) && is_image(crate::dotnet_path::extension(crate::dotnet_path::Style::Unix, n))))
+    let dotted = |n: &str| Path::new(n).extension().map_or(String::new(), |e| format!(".{}", e.to_string_lossy()));
+    Ok(names.into_iter().find(|n| !image_sets::is_playlist(n) && is_image(&dotted(n))))
 }
 
 /// `ArchiveImages.ReadEntry`: an entry's first bytes, at most `length` of them, found by its exact name and then
 /// ignoring case.
-pub fn read_entry(at: &str, entry: &str, length: usize) -> Result<Vec<u8>, String> {
+pub fn read_entry(at: impl AsRef<Path>, entry: &str, length: usize) -> Result<Vec<u8>, String> {
     let mut zip = Zip::open(at)?;
     let entries = zip.entries()?;
     let e = entries.iter().find(|e| e.full_name == entry).or_else(|| entries.iter().find(|e| e.full_name.to_uppercase() == entry.to_uppercase())).ok_or_else(|| format!("the archive holds no {entry}"))?;
@@ -148,7 +149,7 @@ pub fn read_entry(at: &str, entry: &str, length: usize) -> Result<Vec<u8>, Strin
 }
 
 /// An entry of the zip at `at` copied out whole, as [`Zip::copy`] copies it.
-pub fn copy_entry(at: &str, e: &ZipEntry, out: &mut dyn Write) -> Result<(), String> {
+pub fn copy_entry(at: impl AsRef<Path>, e: &ZipEntry, out: &mut dyn Write) -> Result<(), String> {
     Zip::open(at)?.copy(e, out)
 }
 
@@ -195,16 +196,18 @@ fn ntfs_times(t: std::time::SystemTime) -> [u8; 32] {
 }
 
 impl ZipWriter {
-    pub fn create(at: &str) -> Result<ZipWriter, String> {
-        let file = std::fs::OpenOptions::new().write(true).create_new(true).open(at).map_err(|e| format!("{at}: {e}"))?;
+    pub fn create(at: impl AsRef<Path>) -> Result<ZipWriter, String> {
+        let at = at.as_ref();
+        let file = std::fs::OpenOptions::new().write(true).create_new(true).open(at).map_err(|e| format!("{}: {e}", at.display()))?;
         Ok(ZipWriter { zip: zip::ZipWriter::new(file) })
     }
 
     /// The file at `source` added as `name`, stored where `store` says and deflated otherwise, with `modified` as its
     /// time; `stop` is asked between each MiB.
-    pub fn add(&mut self, name: &str, source: &str, modified: std::time::SystemTime, store: bool, stop: &dyn Fn() -> bool) -> Result<(), String> {
-        let mut input = std::fs::File::open(source).map_err(|e| format!("{source}: {e}"))?;
-        let length = input.metadata().map_err(|e| format!("{source}: {e}"))?.len();
+    pub fn add(&mut self, name: &str, source: impl AsRef<Path>, modified: std::time::SystemTime, store: bool, stop: &dyn Fn() -> bool) -> Result<(), String> {
+        let source = source.as_ref();
+        let mut input = std::fs::File::open(source).map_err(|e| format!("{}: {e}", source.display()))?;
+        let length = input.metadata().map_err(|e| format!("{}: {e}", source.display()))?.len();
         let (method, level) = if store { (zip::CompressionMethod::Stored, None) } else { (zip::CompressionMethod::Deflated, Some(6)) };
         let mut options = zip::write::FullFileOptions::default()
             .compression_method(method)
@@ -223,7 +226,7 @@ impl ZipWriter {
             if stop() {
                 return Err("stopped".into());
             }
-            let n = input.read(&mut buffer).map_err(|e| format!("{source}: {e}"))?;
+            let n = input.read(&mut buffer).map_err(|e| format!("{}: {e}", source.display()))?;
             if n == 0 {
                 break;
             }
@@ -231,7 +234,7 @@ impl ZipWriter {
             copied += n as u64;
         }
         if copied != length {
-            return Err(format!("{source} changed while it was written"));
+            return Err(format!("{} changed while it was written", source.display()));
         }
         Ok(())
     }

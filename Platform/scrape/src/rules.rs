@@ -4,6 +4,7 @@
 
 use crate::answer::{Genre, Localised, Media};
 use crate::kinds::{Kind, Payload};
+use std::path::Path;
 
 pub const AUTOMATIC_REGION: &str = "auto";
 
@@ -164,7 +165,9 @@ pub fn extension(format: Option<&str>, payload: Payload) -> &'static str {
 
 /// ES-DE's search text from a file's name: the extension and every `(...)` and `[...]` taken out, underscores as spaces.
 pub fn search_name(file_name: &str) -> String {
-    let stem = emusen_galaxia::dotnet_path::file_name_without_extension(emusen_galaxia::dotnet_path::Style::HOST, file_name);
+    // ES-DE's stem ends at the last period, a leading one included, so ".x (USA)" searches as nothing.
+    let name = Path::new(file_name).file_name().unwrap_or_default().to_string_lossy();
+    let stem = name.rfind('.').map_or(&*name, |at| &name[..at]);
     let mut bare = String::with_capacity(stem.len());
     let chars: Vec<char> = stem.chars().collect();
     let mut i = 0;

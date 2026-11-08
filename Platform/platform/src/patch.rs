@@ -3,6 +3,7 @@
 //! itself. The result is a Galaxia mapping that holds the bytes, so the host reads, lends and frees it as it does a
 //! mapped file.
 
+use std::path::Path;
 use crate::{bytes, fail, required, status};
 use emusen_galaxia::mapped::Mapped;
 
@@ -26,7 +27,7 @@ pub unsafe extern "C" fn emusen_patch_package_image(folder: *const u8, folder_le
         Ok(b) => b,
         Err(code) => return code,
     };
-    let manifest = emusen_galaxia::files::join(folder, emusen_galaxia::package::FILE_NAME);
+    let manifest = Path::new(folder).join(emusen_galaxia::package::FILE_NAME).to_string_lossy().into_owned();
     let doc = match emusen_galaxia::package::read(&manifest) {
         Ok(Ok(doc)) => doc,
         Ok(Err(refusal)) => return fail(status::IO, refusal.words()),

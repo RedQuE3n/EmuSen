@@ -2,6 +2,8 @@
 //! under the paths named, each hashed as dumped or in its system's comparable form, held to the structural checks a
 //! dump can be held to without a database, and grouped where two are the same dump. The library is only read.
 
+use std::path::Path;
+use emusen_galaxia::path_key;
 use crate::chdman::Chdman;
 use crate::checks::{Bytes, ISO_FORM};
 use crate::convert::obj;
@@ -11,7 +13,6 @@ use crate::{packages, Context};
 use emusen_disc::cue::{FileKind, Sheet};
 use emusen_disc::{Kind, Lone, Medium};
 use emusen_galaxia::files::{self, Options};
-use emusen_galaxia::dotnet_path::{self as path, Style};
 use emusen_dotnet::json::Value;
 use emusen_galaxia::mapped::Mapped;
 use emusen_galaxia::rom_hash::{self, Hasher, Hashes};
@@ -66,7 +67,7 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
                 refused.push(format!("{}: a folder; -r takes what is under it", if g.is_empty() { "/" } else { g }));
                 continue;
             }
-            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| walked.push(f.to_string()));
+            let _ = files::visit_files_with(&at, Options { skip_hidden: true, ignore_inaccessible: true }, |f, _| walked.push(f.to_string_lossy().into_owned()));
         } else if files::file_exists(&at) {
             direct.push(at);
         } else {
@@ -80,7 +81,7 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
     all.dedup();
     let mut found: Vec<File> = Vec::new();
     for at in image_sets::shelved(all) {
-        if !direct.contains(&at) && !extensions.iter().any(|e| e.eq_ignore_ascii_case(&path::extension(Style::HOST, &at))) {
+        if !direct.contains(&at) && !extensions.iter().any(|e| e.eq_ignore_ascii_case(&Path::new(&at).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default())) {
             continue;
         }
         let rel = rel_of(library, &at);
@@ -98,7 +99,8 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
         out.push(f);
         for d in discs.into_iter().filter(|d| files::file_exists(d)) {
             if !out.iter().any(|o| o.path == d) {
-                out.push(File { rel: rel_of(library, &d), path: d, system });
+                let d = d.to_string_lossy().into_owned();
+            out.push(File { rel: rel_of(library, &d), path: d, system });
             }
         }
     }
@@ -106,13 +108,13 @@ pub fn files(library: &str, given: &[String], recursive: bool, console: Option<&
 }
 
 fn io_words(at: &str, e: std::io::Error) -> String {
-    if e.kind() == std::io::ErrorKind::Interrupted { STOPPED.into() } else { format!("{}: {e}", path::file_name(Style::HOST, at)) }
+    if e.kind() == std::io::ErrorKind::Interrupted { STOPPED.into() } else { format!("{}: {e}", Path::new(at).file_name().unwrap_or_default().to_string_lossy()) }
 }
 
 /// Whether a file is read as a disc for its comparable form: a sheet, a CHD, an `.iso`, or a raw data track of a
 /// system that takes sheets.
 fn is_disc(f: &File) -> bool {
-    let ext = path::extension(Style::HOST, &f.path);
+    let ext = Path::new(&f.path).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     if image_sets::is_sheet(&f.path) || ext.eq_ignore_ascii_case(".chd") || ext.eq_ignore_ascii_case(".iso") {
         return true;
     }
@@ -124,7 +126,7 @@ fn is_disc(f: &File) -> bool {
 fn medium(f: &File) -> Result<Medium<Bytes>, String> {
     let image = Mapped::open(&f.path).map_err(|e| io_words(&f.path, e))?;
     let companions = if image_sets::is_sheet(&f.path) {
-        image_sets::companions(&f.path)?.iter().map(|c| Mapped::open(c).map(Bytes).map_err(|e| io_words(c, e))).collect::<Result<Vec<_>, _>>()?
+        image_sets::companions(&f.path)?.iter().map(|c| Mapped::open(c).map(Bytes).map_err(|e| io_words(&c.to_string_lossy(), e))).collect::<Result<Vec<_>, _>>()?
     } else {
         Vec::new()
     };
@@ -235,7 +237,7 @@ fn failed(check: &'static str, words: impl Into<String>) -> Failed {
 
 /// The size check: a file that will not open or read through, or holds no byte; its size.
 fn read_through(at: &str, stop: &dyn Fn() -> bool) -> Result<u64, Failed> {
-    let name = path::file_name(Style::HOST, at).to_string();
+    let name = Path::new(at).file_name().unwrap_or_default().to_string_lossy().to_string();
     let mut file = std::fs::File::open(at).map_err(|e| failed("size", format!("{name} is unreadable: {e}")))?;
     let (mut total, mut buffer) = (0u64, vec![0u8; 1 << 20]);
     loop {
@@ -271,14 +273,14 @@ fn grouped(n: u64) -> String {
 fn check_sheet(f: &File, stop: &dyn Fn() -> bool, out: &mut Vec<Failed>) {
     let text = match std::fs::read(&f.path) {
         Ok(b) => emusen_galaxia::text_file::decode(&b),
-        Err(e) => return out.push(failed("size", format!("{} is unreadable: {e}", path::file_name(Style::HOST, &f.path)))),
+        Err(e) => return out.push(failed("size", format!("{} is unreadable: {e}", Path::new(&f.path).file_name().unwrap_or_default().to_string_lossy()))),
     };
     let sheet = match Sheet::parse(&text) {
         Ok(s) => s,
         Err(e) => return out.push(failed("sheet", format!("it does not parse: {e}"))),
     };
     let files = match image_sets::companions(&f.path) {
-        Ok(c) => c,
+        Ok(c) => c.iter().map(|p| p.to_string_lossy().into_owned()).collect::<Vec<_>>(),
         Err(words) => return out.push(failed("sheet", words)),
     };
     let mut sizes = Vec::with_capacity(files.len());
@@ -363,17 +365,17 @@ fn check_chd(f: &File, chdman: Option<&Chdman>, stop: &dyn Fn() -> bool, out: &m
 /// is a failure whose words are `stopped`.
 pub fn check(f: &File, chdman: Option<&Chdman>, stop: &dyn Fn() -> bool) -> Vec<Failed> {
     let mut out = Vec::new();
-    let ext = path::extension(Style::HOST, &f.path);
+    let ext = Path::new(&f.path).extension().map(|e| format!(".{}", e.to_string_lossy())).unwrap_or_default();
     if image_sets::is_sheet(&f.path) {
         check_sheet(f, stop, &mut out);
     } else if image_sets::is_playlist(&f.path) {
         match image_sets::discs(&f.path) {
             Ok(discs) if discs.is_empty() => out.push(failed("sheet", "it lists no disc")),
-            Ok(discs) => out.extend(discs.iter().filter(|d| !files::file_exists(d)).map(|d| failed("sheet", format!("it lists {}, which is not there", path::file_name(Style::HOST, d))))),
+            Ok(discs) => out.extend(discs.iter().filter(|d| !files::file_exists(d)).map(|d| failed("sheet", format!("it lists {}, which is not there", Path::new(d).file_name().unwrap_or_default().to_string_lossy())))),
             Err(words) => out.push(failed("sheet", words)),
         }
     } else if std::fs::metadata(&f.path).map(|m| m.len() == 0).unwrap_or(false) {
-        out.push(failed("size", format!("{} is empty", path::file_name(Style::HOST, &f.path))));
+        out.push(failed("size", format!("{} is empty", Path::new(&f.path).file_name().unwrap_or_default().to_string_lossy())));
     } else if archive::is_archive(&f.path) {
         check_archive(&f.path, stop, &mut out);
     } else if ext.eq_ignore_ascii_case(".chd") {
@@ -410,7 +412,7 @@ pub fn groups(mut members: Vec<Member>, index: &claims::Index) -> Vec<Vec<Member
     let mut out: Vec<Vec<Member>> = Vec::new();
     let mut run: Vec<Member> = Vec::new();
     let mut close = |run: &mut Vec<Member>| {
-        let mut units: Vec<String> = run.iter().map(|m| index.claimant(&path::full_path(&m.path)).map_or_else(|| m.path.clone(), |p| p.folder.clone())).collect();
+        let mut units: Vec<String> = run.iter().map(|m| index.claimant(&path_key::key_text(&m.path)).map_or_else(|| m.path.clone(), |p| p.folder.clone())).collect();
         units.sort();
         units.dedup();
         if units.len() > 1 {
@@ -541,7 +543,7 @@ pub fn run(ctx: &Context, library: &str, req: &Request, emit: &dyn Fn(Value), co
                 .iter()
                 .map(|m| {
                     let mut e = hashes_json(&m.hashes, &m.rel);
-                    if let Some(p) = index.claimant(&path::full_path(&m.path)) {
+                    if let Some(p) = index.claimant(&path_key::key_text(&m.path)) {
                         claims::set(&mut e, "package", Value::string(&crate::packages::package_rel(ctx, &p.folder)));
                     }
                     e

@@ -1,7 +1,7 @@
 //! Settings in layers, game over console over the schema's default: a console's in `consoles.json`, a game's in a file
 //! of its own, `/etc/EmuSen/games/<system>/<file stem>.json` (EmuSen_Backend.md §3.6, §14.7, SR10, SR12).
 
-use emusen_galaxia::dotnet_path::{self as path, Style};
+use std::path::Path;
 use emusen_galaxia::tree::{Directory, Tree};
 
 /// A retired engine's name a player's settings may still hold, and the engine that runs instead (`RetiredEngines`).
@@ -32,13 +32,13 @@ pub fn current(stored: Option<String>) -> Option<String> {
 /// Where a game's own settings are kept.
 pub fn game_settings_path(tree: &Tree, system: &str, game: &str) -> String {
     let config = tree.directory(Directory::Config).unwrap_or_default();
-    let stem = path::file_name_without_extension(Style::HOST, game);
-    path::combine_all(Style::HOST, &[&config, "games", system, &format!("{stem}.json")])
+    let stem = Path::new(game).file_stem().unwrap_or_default().to_string_lossy();
+    config.join("games").join(system).join(format!("{stem}.json")).to_string_lossy().into_owned()
 }
 
 /// A packaged game's own settings, `GameSettings.PackagePath` (EmuSen_GamePackages.md §18.2).
 pub fn package_settings_path(package: &str) -> String {
-    path::combine(Style::HOST, package, emusen_galaxia::package::SETTINGS_FILE)
+    Path::new(package).join(emusen_galaxia::package::SETTINGS_FILE).to_string_lossy().into_owned()
 }
 
 /// The file a game's values are read from, `GameSettings.ReadPath`: its package's where it has one, else the plain file.
@@ -91,7 +91,7 @@ pub fn values_at(at: &str) -> Vec<(String, String)> {
 
 /// A game's values written whole to `at`, indented as `JsonSerializer` writes a dictionary, `GameSettings.Write`.
 pub fn write_values(at: &str, values: &[(String, String)]) -> Result<(), String> {
-    if let Some(folder) = path::directory_name(Style::HOST, at) {
+    if let Some(folder) = Path::new(at).parent().map(|d| d.to_string_lossy().into_owned()) {
         let _ = std::fs::create_dir_all(folder);
     }
     let mut text = String::new();
@@ -135,8 +135,8 @@ mod tests {
         std::fs::write(config.join("games").join("nes").join("Good.json"), "{\"Engine\":\"MoonRT (Rust)\"}").unwrap();
         {
             let mut t = tree_mut();
-            t.set_override(Override::Config, Some(config.to_string_lossy().into_owned()));
-            t.set_override(Override::Data, Some(root.join("Home").to_string_lossy().into_owned()));
+            t.set_override(Override::Config, Some(config.clone()));
+            t.set_override(Override::Data, Some(root.join("Home")));
         }
         let t = tree().clone();
         assert!(super::game_values(&t, Some("nes"), "/roms/Bad.nes", None).is_empty());

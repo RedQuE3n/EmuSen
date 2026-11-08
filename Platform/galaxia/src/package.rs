@@ -25,9 +25,9 @@ pub const MEDIA_FOLDER: &str = "media";
 
 /// A packaged game's art of one ES-DE type folder, `GamePackage.MediaPathFor`: `<package>/media/<type folder>/<package's
 /// name><extension>` (EmuSen_GamePackages.md §18.3).
-pub fn media_path(root: &str, type_folder: &str, extension: &str) -> String {
-    let style = crate::dotnet_path::Style::HOST;
-    crate::dotnet_path::combine_all(style, &[root, MEDIA_FOLDER, type_folder, &format!("{}{extension}", crate::saves::package_stem(root))])
+pub fn media_path(root: impl AsRef<std::path::Path>, type_folder: &str, extension: &str) -> std::path::PathBuf {
+    let root = root.as_ref();
+    root.join(MEDIA_FOLDER).join(type_folder).join(format!("{}{extension}", crate::saves::package_stem(root)))
 }
 
 /// Why a text is not a manifest this build takes.
@@ -57,14 +57,14 @@ pub fn parse(text: &str) -> Result<Value, Refusal> {
 }
 
 /// Reads the manifest at `path`, decoded as `File.ReadAllText` decodes a file.
-pub fn read(path: &str) -> Result<Result<Value, Refusal>, std::io::Error> {
+pub fn read(path: impl AsRef<std::path::Path>) -> Result<Result<Value, Refusal>, std::io::Error> {
     let bytes = std::fs::read(path)?;
     Ok(parse(&crate::text_file::decode(&bytes)))
 }
 
 /// Writes the manifest at `path` atomically, as `AtomicFile` writes; a document the schema refuses is never written.
 /// The outer error is the refusal, the inner the diagnostic of a write that failed.
-pub fn write(path: &str, doc: &Value) -> Result<Result<(), String>, Refusal> {
+pub fn write(path: impl AsRef<std::path::Path>, doc: &Value) -> Result<Result<(), String>, Refusal> {
     check(doc)?;
     Ok(crate::atomic::write(path, format(doc).as_bytes()))
 }
@@ -197,8 +197,8 @@ pub fn save_key(doc: &Value) -> Option<String> {
 }
 
 /// `save_key` of the manifest in the package at `folder`; none where it lists no patches or does not read.
-pub fn save_key_at(folder: &str) -> Option<String> {
-    let doc = read(&crate::files::join(folder, FILE_NAME)).ok()?.ok()?;
+pub fn save_key_at(folder: impl AsRef<std::path::Path>) -> Option<String> {
+    let doc = read(folder.as_ref().join(FILE_NAME)).ok()?.ok()?;
     save_key(&doc)
 }
 

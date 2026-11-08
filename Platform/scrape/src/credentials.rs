@@ -138,7 +138,7 @@ impl Member {
     }
 
     pub fn path() -> String {
-        emusen_galaxia::tree::tree().config_path(None, MEMBER_FILE)
+        emusen_galaxia::tree::tree().config_path(None, MEMBER_FILE).to_string_lossy().into_owned()
     }
 
     /// The account file, or an empty account where it is missing or does not read.

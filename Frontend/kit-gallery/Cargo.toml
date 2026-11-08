@@ -25,8 +25,6 @@ emusen-qt-endymion = { path = "../qt-endymion" }
 [dev-dependencies]
 # The platform library built from this commit, for the walk by SDL's virtual pads.
 emusen-client-fixture = { path = "../client-fixture" }
-# SDL's virtual joysticks, attached and pressed by the test as SdlVirtualPadsTests does.
-libloading = "0.8"
 emusen-kit-core.workspace = true
 emusen-qt-test.workspace = true
 

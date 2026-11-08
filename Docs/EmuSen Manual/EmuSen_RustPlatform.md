@@ -4444,3 +4444,39 @@ now a host's) can meet the next frame's write. The chains of the C# front end wa
 so nothing they do changes; the dependency is what makes the host's case correct by the specification. `lib.rs`,
 `emusen_platform.h` and `PlatformLibrary.InterfaceVersion` moved to 42 together, and `Frontend/platform-client`'s binding
 was regenerated, with a `serenity` module over the calls the picture needs.
+
+## 50. Interface 43, 2026-11-08: a player's bound buttons, for the Qt front end's game pads
+
+For the Qt front end's game input (`EmuSen_Qt.md` §1.8.5, `EmuSen_Kit.md` §7.17). One addition, an extension of the
+binding files' family (rule B, so the number moves): `emusen_endymion_bindings_bound(console, player, game, out, cap)`,
+the gamepad button each PadButton is bound to for a player of a console, SDL's number or -1, read from
+`gamepadbindings.json` and `gamepadprofiles.json` as `_load` reads them.
+
+**Why a call and not the model.** `_load` hands a host the model as JSON, written in SDL's button names ("South",
+"DPadUp"). A host that read those names would hold a second copy of the name table Endymion's vocabulary already owns,
+and the rule that picks a player's map (the game's own profile where it names one that exists, else the console's
+chosen profile, else the console's maps; a player with no map of their own plays with player 1's) lived only in the C#
+front end's `GamepadBindings.Resolve` and `For`. Both are Endymion's facts, so Endymion answers them:
+`emusen_endymion::bindings::{game_key, resolve, map_for, bound, bound_in}`, held by the unit test
+`a_players_buttons_follow_the_game_then_the_console_then_player_one` (the console's map, player 2's own, player 3 with
+player 1's, the console's chosen profile, a game's own, a player's own in a profile, a game that chose Default, a console
+with defaults only, and a console never named). A game is known in the profiles by its file's name without the
+extension, as Mistress's `GameProfileKey` has it.
+
+**The rule's one owner: `emusen_endymion_bindings_choose`** (decided 2026-11-08). The C# front end's
+`GamepadBindings.For(console, player, profile)` hands back the editable in-memory map, which the settings pages rebind
+before it is saved, and its `Resolve` reads that in-memory model, so a call that reads the files could not replace them.
+The second export of interface 43 therefore answers from the models a caller passes (GAMEPAD's and PROFILES' JSON as
+`_load` gives them; a null one is read from its file): `{"profile":"<name>","mapPlayer":<n>}`, the profile in its own
+spelling and the player whose map it is there, either in a profile the caller names (any case; one the console lacks is
+Default) or in the profile that applies to the game's path. In Rust the rule is `bindings::choose` (the map by profile and
+player) beside `resolve` (the profile a game starts with), with `map_of` the plain lookup by the answer; `bound` and
+`bound_in` are built on them, and `models_in` reads the two files for both calls. The C# `Resolve`, `ConsoleDefault`,
+`For`, `HasOwn`, `Own` and `Forget` ask it through `BindingFiles.Choose` and take their own object by the answer, and the
+C# rule is deleted (`EmuSen_Input.md` §5.2). `_bound` stays for the Qt reader, which holds no model; the C# half never
+calls it, so `EndymionParityTests` counts it as the Qt host's. The unit test above also holds `choose`'s answers: the
+console's chosen profile, a player's own and player 1's in the game's profile, player 2's own in Default, a profile named
+in another case, a profile not there, and the answer's JSON. `lib.rs`, `emusen_platform.h` and
+`PlatformLibrary.InterfaceVersion` moved to 43 together; `Frontend/platform-client`'s binding was regenerated, with
+`Platform::bindings_bound`, and a `router` module wrapping the router's calls (`emusen_endymion_router_*`), which were
+in the header since §12.2 and had no Rust client.

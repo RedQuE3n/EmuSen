@@ -17,6 +17,9 @@ namespace EmuSen.Endymion.Input
         Hotkeys,
     }
 
+    // A profile, in its own spelling, and the player whose map in it a player plays with - see EmuSen_Input.md §5.2.
+    public sealed record BindingChoice(string Profile, int MapPlayer);
+
     // The platform library reads and writes the binding files, its one reader and writer; this binds what crosses - see EmuSen_Input.md §5.2.
     public static unsafe class BindingFiles
     {
@@ -48,6 +51,21 @@ namespace EmuSen.Endymion.Input
         {
             EndymionNative.Up();
             return JsonSerializer.Deserialize<T>(DeviceNative.Text((o, c) => EndymionNative.BindingsDefaults((uint)file, o, c))!, ConfigJson.Options)!;
+        }
+
+        // Which map a player plays with, by Endymion's rule over the two models passed: in the profile named, else the one that applies to the game's path.
+        public static BindingChoice Choose(object gamepad, object profiles, string console, int player, string? game, string? profile)
+        {
+            EndymionNative.Up();
+            byte[] pads = JsonSerializer.SerializeToUtf8Bytes(gamepad, ConfigJson.Options), sets = JsonSerializer.SerializeToUtf8Bytes(profiles, ConfigJson.Options);
+            byte[] name = Encoding.UTF8.GetBytes(console);
+            byte[]? path = game is null ? null : Encoding.UTF8.GetBytes(game), chosen = profile is null ? null : Encoding.UTF8.GetBytes(profile);
+            string text = DeviceNative.Text((o, c) =>
+            {
+                fixed (byte* g = pads, s = sets, n = name, p = path, f = chosen)
+                    return EndymionNative.BindingsChoose(g, (nuint)pads.Length, s, (nuint)sets.Length, n, (nuint)name.Length, player, p, (nuint)(path?.Length ?? 0), f, (nuint)(chosen?.Length ?? 0), o, c);
+            })!;
+            return JsonSerializer.Deserialize<BindingChoice>(text, ConfigJson.Options)!;
         }
     }
 }

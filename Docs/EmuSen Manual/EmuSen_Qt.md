@@ -551,14 +551,72 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
   settled when its figures are taken, and they are written next to these.
 - *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
   Cores window's job, in the player's tree.
-- *The pad driving the game.* `PadReader` puts presses on the interface; the game's buttons (`emusen_crystal_input_button`
-  from Endymion's PadButton) are a frame-thread poll of the same pads, which must not open them twice. Recommended: the
-  reader hands the game's buttons to the session as well as the interface's presses, one owner of the pads.
+- *The pad driving the game.* Done 2026-11-08, §1.8.5.
 - *A device core's picture.* The device is lent, but the chain still advances from `picture_copy`; the lend's and the
   ring's pictures (`emusen_serenity_chain_advance_lent`, `_advance_ring`) go through the feed's draw on the render thread.
 - *The sound*, drained and dropped until Endymion's game player is wrapped; *the picture's content* read back under
   `QQuickRenderControl` (§8.1, tier 2); and the chain dropped on the render thread when a session closes (it is now
   dropped with the feed, after the window).
+
+#### 1.8.5 The pad drives the game **[M 2026-11-08]**
+
+One owner of the pads (Endymion) and one reader (`PadReader`'s thread, `EmuSen_Kit.md` §7.15): each tick reads the pads
+for the interface and for the running game, the second through each player's bindings (`EmuSen_Kit.md` §7.17). The
+game's read crosses to the frame thread by a hand-over (`GamePads`) and is routed there:
+- `input.rs`, **`GameInput`** (`emusen-qt-models`): owned by the session's frame thread. At open it reads the session's
+  console, ports (one where a core declares none, as Mistress reads them) and axes, asks them of the pads and resets
+  Endymion's router (`emusen_endymion_router_*`, now wrapped by the platform client); before each frame it takes a newer
+  read, polls the router and tells the core each change in the router's order (`input_connected`, `input_button`,
+  `input_axis`), applied at once since the frame thread calls them between frames. The router is the C# front end's
+  (`PortRouter`), so both front ends route by one rule.
+- `SessionModel.pads` names the reader's hand-over (`PadReader.gamePads`); a session with none named hears no pad.
+- While the game runs and is not paused, `PadRouter.chordOnly` keeps the walk from game input and the menu chord reaches
+  the program; `Play.qml` pauses on it until the Pause Card opens there.
+
+The new dependency, `emusen-qt-models` on `emusen-qt-endymion`, is stated: the session must reach the one reader's
+hand-over, and a third crate for one struct would add a boundary with nothing behind it. Owed: the seats the player
+arranges and keeps, rumble to the players' pads, the keyboard as a player, a core's ports changing while it runs
+(Mistress's `Resize`). The C# front end now asks interface 43's `_choose` (decided 2026-11-08,
+`EmuSen_RustPlatform.md` §50), so the binding rule has one owner.
+
+**Proof in the window, measured 2026-11-08** (`qt-play/tests/pads.rs`): `Play.qml` loaded by the harness in a compositor
+of the test's own (`emusen_qt_test::compositor`, `kwin_wayland --virtual`), Qt adopting Serenity's device on the RX 6800
+before the window is shown (`Harness::load_prepared`), the test core installed in the player's cores folder and approved
+as a player would, and an SDL virtual pad named to the reader alone. Before a game the router gives everything; while the
+game runs it gives the chord alone; A (East, Endymion's default) held half a second is heard on port 0, read afterwards
+from the battery file the test core counts it in; the guide button pauses the game and gives the walk the pad, and again
+resumes it; the reader and session say no failure and the validation layer's findings are none. 1.5 s. Seeded and
+caught: the window not naming the reader's hand-over (no battery file: the game heard nothing), `chordOnly` never set
+(the router gave everything during the game), and the chord not reaching the session (no pause in 10 s).
+
+#### 1.8.6 The game's sound **[M 2026-11-08]**
+
+The sound takes the C# front end's path through the platform library, so it has one owner: Endymion's game player
+(`emusen_endymion_audio_*`, `AudioPlayer`'s, `EmuSen_Audio_Sync.md` §7) on SDL's playback device, steered by a rate
+control of its own (`emusen_endymion_rate_*`) that absorbs the drift between the game's clock and the device's by
+resampling. The parts, each with one job:
+- `audio.rs`, **`GameSound`** (`emusen-platform-client`): the player and its rate control, made together and freed
+  together; `submit` (interleaved stereo at the game's rate, a new rate reopening the device), `reset`, the queued and
+  taken frames, the device's rate and the volume. `SoundSettings` carries audio.json's three values and the buffer.
+- The session's frame thread (`session.rs`) drains each frame's sound and submits it, where it was drained and dropped
+  (§1.8.3); a game that pauses starts its rate control over, as Mistress's `DrainSound` does. `Session::sounded` reports
+  the frames the player took in, by the rate control's own count. `GameIo` carries the pads and the player into the
+  session together.
+- `SessionModel` lends SDL to the library and makes the player at open; where it cannot be made the game plays without
+  sound and `problem` says so. `sounding` says whether the open game's sound reaches a player.
+
+**Owed, stated:** audio.json is not yet read, so the player uses `AudioPlayer`'s own defaults, which are audio.json's
+(32 kHz, 256 ms, a deviation of 0.005, 4,096 frames); the output device, the volume and mute of `appsettings.json` and
+audio.json's `MasterVolume`, `Muted` and `AudioEnabled` wait for the settings screens. The C# clamps audio.json's values
+in `AudioConfig.Bounded`, which has no Rust owner yet; reading the file in Qt needs that rule moved into Galaxia's model
+first, so that the bounds are not copied.
+
+**Proof, measured 2026-11-08** (SDL's dummy driver, nothing reaches the speakers): `platform-client`'s `sound` (the
+player opens at 32 kHz, reopens at a game's 48 kHz and again at 32 kHz, holds a tone's 800 frames, and its rate control
+took exactly those); `qt-models`' `session` on the RX 6800 (every handed frame's sound, a sixtieth of the test core's
+32 kHz, reached the player, and a paused game played none); `qt-play`'s `pads` (the window's game is `sounding`).
+Seeded and caught: the submit skipped (no frames taken, `session`), the device opened at a fixed rate (`sound`), and the
+window's player made and dropped (`pads`).
 
 ### 1.9 Homes for the front-end logic still in C#
 

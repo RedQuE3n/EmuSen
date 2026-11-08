@@ -357,7 +357,10 @@ namespace EmuSen.WiseMan.Endymion
         {
             string header = System.IO.File.ReadAllText(System.IO.Path.Combine(EmuSen.Galaxia.ConfigRoot.Directory, "Platform", "include", "emusen_platform.h"));
             foreach (string export in EndymionNative.Exports) Assert.Contains(export + "(", header);
-            Assert.Equal(EndymionNative.Exports.Count(e => e.StartsWith("emusen_endymion_")), System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_endymion_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count);
+            // Interface 43's bound serves the Qt front end's game pads; the C# half asks choose, over its own models (EmuSen_RustPlatform.md §50).
+            string[] qtOnly = { "emusen_endymion_bindings_bound" };
+            foreach (string export in qtOnly) Assert.Contains(export + "(", header);
+            Assert.Equal(EndymionNative.Exports.Count(e => e.StartsWith("emusen_endymion_")) + qtOnly.Length, System.Text.RegularExpressions.Regex.Matches(header, @"^\w+ \*?emusen_endymion_\w+\(", System.Text.RegularExpressions.RegexOptions.Multiline).Count);
         }
     }
 }

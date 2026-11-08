@@ -434,9 +434,144 @@ pub fn save(tree: &Tree, file: File, document: &str) -> Result<(), Unsaved> {
     }
 }
 
+/// The name a game is known by in a console's profiles: its file's name without the extension, as its own settings are kept.
+pub fn game_key(path: &str) -> &str {
+    let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+    match name.rfind('.') {
+        Some(dot) if dot > 0 => &name[..dot],
+        _ => name,
+    }
+}
+
+/// The entry of a name in a map keyed by names without regard to case.
+fn by_name<'a, T>(map: &'a IndexMap<String, T>, name: &str) -> Option<&'a T> {
+    map.iter().find(|(k, _)| same_name(k, name)).map(|(_, value)| value)
+}
+
+/// The profile a game starts with: its own where it names one that exists, else the console's chosen one, else Default.
+pub fn resolve<'a>(profiles: &'a GamepadProfiles, console: &str, game: Option<&str>) -> &'a str {
+    let Some(all) = by_name(profiles, console) else { return DEFAULT_PROFILE };
+    let own = game.and_then(|path| all.games.get(game_key(path)));
+    if own.is_some_and(|name| is_default(name)) {
+        return DEFAULT_PROFILE;
+    }
+    let chosen = || all.default.as_deref().and_then(|chosen| named(all, chosen));
+    own.and_then(|name| named(all, name)).or_else(chosen).unwrap_or(DEFAULT_PROFILE)
+}
+
+/// Which map a player of a console plays with: the profile, in its own spelling, and the player whose map it is there.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Choice {
+    pub profile: String,
+    pub map_player: i32,
+}
+
+/// The map a player plays with in a profile, a name in any case where one that is not there is Default; a player with
+/// none of their own plays with player 1's (EmuSen_Input.md §8.4).
+pub fn choose(gamepad: &GamepadBindings, profiles: &GamepadProfiles, console: &str, player: i32, profile: &str) -> Choice {
+    let map_player = |maps: Option<&IndexMap<Player, PadMap>>| if player > 1 && maps.is_some_and(|m| m.contains_key(&Player(player))) { player } else { 1 };
+    let found = by_name(profiles, console).filter(|_| !is_default(profile)).and_then(|all| all.profiles.iter().find(|(k, _)| same_name(k, profile)));
+    match found {
+        Some((name, maps)) => Choice { profile: name.clone(), map_player: map_player(Some(maps)) },
+        None => Choice { profile: DEFAULT_PROFILE.to_string(), map_player: map_player(by_name(&gamepad.players, console)) },
+    }
+}
+
+/// The map a choice names, if the models hold it.
+pub fn map_of<'a>(gamepad: &'a GamepadBindings, profiles: &'a GamepadProfiles, console: &str, choice: &Choice) -> Option<&'a PadMap> {
+    let player = Player(choice.map_player);
+    if !is_default(&choice.profile) {
+        by_name(profiles, console)?.profiles.get(&choice.profile)?.get(&player)
+    } else if choice.map_player > 1 {
+        by_name(&gamepad.players, console)?.get(&player)
+    } else {
+        by_name(&gamepad.consoles, console)
+    }
+}
+
+/// The gamepad button each PadButton is bound to for a player of a console, SDL's number or -1 for none, by the profiles'
+/// rules (EmuSen_Input.md §5.2, §10.5); `game` is the game's path, for a profile it names.
+pub fn bound(gamepad: &GamepadBindings, profiles: &GamepadProfiles, console: &str, player: i32, game: Option<&str>) -> [i32; crate::pad::BUTTONS] {
+    let mut out = [-1; crate::pad::BUTTONS];
+    let choice = choose(gamepad, profiles, console, player, resolve(profiles, console, game));
+    if let Some(map) = map_of(gamepad, profiles, console, &choice) {
+        for (button, pad) in map {
+            if let Some(slot) = usize::try_from(button.number()).ok().and_then(|b| out.get_mut(b)) {
+                *slot = pad.number();
+            }
+        }
+    }
+    out
+}
+
+/// gamepadbindings.json and gamepadprofiles.json from the config directory of `tree` as a program starts with them, for
+/// a console, with what would not read.
+pub fn models_in(tree: &Tree, console: &str) -> (GamepadBindings, GamepadProfiles, Vec<String>) {
+    let mut said = Vec::new();
+    let mut text = |file: File| match emusen_galaxia::config::read_text(tree, None, file.name()) {
+        Ok(text) => text,
+        Err(words) => {
+            said.push(emusen_galaxia::config::load_diagnostic(tree, None, file.name(), &words));
+            None
+        }
+    };
+    let (gamepad_text, profiles_text) = (text(File::Gamepad), text(File::Profiles));
+    let (gamepad, words) = read_gamepad(gamepad_text.as_deref(), &[console]);
+    said.extend(words.map(|w| emusen_galaxia::config::load_diagnostic(tree, None, File::Gamepad.name(), &w)));
+    let (profiles, words) = read_profiles(profiles_text.as_deref());
+    said.extend(words.map(|w| emusen_galaxia::config::load_diagnostic(tree, None, File::Profiles.name(), &w)));
+    (gamepad, profiles, said)
+}
+
+/// `bound` from the two files in the config directory of `tree`, as a program starts with them, with what would not read.
+pub fn bound_in(tree: &Tree, console: &str, player: i32, game: Option<&str>) -> ([i32; crate::pad::BUTTONS], Vec<String>) {
+    let (gamepad, profiles, said) = models_in(tree, console);
+    (bound(&gamepad, &profiles, console, player, game), said)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn sdl(name: &str) -> i32 {
+        GamepadButton::named(name).unwrap().number()
+    }
+
+    fn button(name: &str) -> usize {
+        Button::named(name).unwrap().number() as usize
+    }
+
+    #[test]
+    fn a_players_buttons_follow_the_game_then_the_console_then_player_one() {
+        let (gamepad, _) = read_gamepad(Some(r#"{"SNES":{"A":"East","B":"South"},"SNES Player 2":{"A":"North"}}"#), &["SNES", "NES"]);
+        let (profiles, _) = read_profiles(Some(
+            r#"{"snes":{"Default":"Swapped","Profiles":{"Swapped":{"1":{"A":"South","B":"East"}},"Mine":{"1":{"A":"West"},"3":{"A":"Back"}}},"Games":{"Zelda":"Mine","Mario":"default"}}}"#,
+        ));
+        let none = GamepadProfiles::new();
+        assert_eq!(bound(&gamepad, &none, "SNES", 1, None)[button("A")], sdl("East"), "the console's own map");
+        assert_eq!(bound(&gamepad, &none, "snes", 2, None)[button("A")], sdl("North"), "player 2's own, the console in any case");
+        assert_eq!(bound(&gamepad, &none, "SNES", 3, None)[button("A")], sdl("East"), "player 3 plays with player 1's");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 1, None)[button("A")], sdl("South"), "the console's chosen profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 1, Some("/roms/Zelda.sfc"))[button("A")], sdl("West"), "the game's own profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 3, Some("Zelda.sfc"))[button("A")], sdl("Back"), "a player's own in a profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 2, Some("Zelda.sfc"))[button("A")], sdl("West"), "else player 1's of the profile");
+        assert_eq!(bound(&gamepad, &profiles, "SNES", 2, Some("C:\\roms\\Mario.sfc"))[button("A")], sdl("North"), "a game that chose Default");
+        assert_eq!(bound(&gamepad, &profiles, "NES", 1, None)[button("Start")], sdl("Start"), "a console with no file entry has its defaults");
+        assert_eq!(bound(&gamepad, &none, "Unknown", 1, None), [-1; crate::pad::BUTTONS], "a console never named binds nothing");
+        let chosen = |player, game| choose(&gamepad, &profiles, "SNES", player, resolve(&profiles, "SNES", game));
+        let choice = |profile: &str, map_player| Choice { profile: profile.to_string(), map_player };
+        assert_eq!(chosen(1, None), choice("Swapped", 1), "the console's chosen profile");
+        assert_eq!(chosen(3, Some("Zelda.sfc")), choice("Mine", 3), "a player's own in the game's profile");
+        assert_eq!(chosen(2, Some("Zelda.sfc")), choice("Mine", 1), "else player 1's of the profile");
+        assert_eq!(chosen(2, Some("Mario.sfc")), choice("Default", 2), "player 2's own in Default");
+        assert_eq!(choose(&gamepad, &profiles, "snes", 3, "MINE"), choice("Mine", 3), "a profile named in any case, in its own spelling");
+        assert_eq!(choose(&gamepad, &profiles, "SNES", 2, "Gone"), choice("Default", 2), "a profile not there is Default");
+        assert_eq!(choose(&gamepad, &none, "SNES", 3, "Default"), choice("Default", 1), "player 3 with player 1's");
+        assert_eq!(serde_json::to_string(&choice("Mine", 3)).unwrap(), r#"{"profile":"Mine","mapPlayer":3}"#);
+        assert_eq!(game_key("/a.b/Game.v1.sfc"), "Game.v1");
+        assert_eq!(game_key(".hidden"), ".hidden");
+    }
 
     #[test]
     fn every_default_is_a_word_of_its_vocabulary() {

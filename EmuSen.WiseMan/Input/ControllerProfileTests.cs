@@ -123,9 +123,10 @@ namespace EmuSen.WiseMan.Input
 
             Assert.Equal("Couch", bindings.ConsoleDefault("SNES"));
             Assert.Equal("Couch", bindings.Resolve("SNES"));
-            Assert.Equal("Couch", bindings.Resolve("SNES", "Gone"));
-            Assert.Equal("Default", bindings.Resolve("SNES", "default"));
-            Assert.Equal("Default", bindings.Resolve("NES", "Couch"));
+            Assert.Equal("Couch", bindings.Resolve("SNES", "/roms/Gone.sfc"));
+            Assert.True(bindings.SetGameProfile("SNES", "Dune Relay", "default"));
+            Assert.Equal("Default", bindings.Resolve("SNES", "/roms/Dune Relay.sfc"));
+            Assert.Equal("Default", bindings.Resolve("NES", "/roms/Gone.nes"));
             bindings.Save();
 
             GamepadBindings loaded = GamepadBindings.Load(Consoles);
@@ -149,7 +150,8 @@ namespace EmuSen.WiseMan.Input
             Assert.True(bindings.SetGameProfile("SNES", "Granite Choir", "couch"));
             Assert.True(bindings.SetGameProfile("SNES", "Dune Relay", "default"));
             Assert.Equal("Couch", bindings.GameProfile("SNES", "Granite Choir"));
-            Assert.Equal("Couch", bindings.Resolve("SNES", bindings.GameProfile("SNES", "Granite Choir")));
+            Assert.Equal("Couch", bindings.Resolve("SNES", "/roms/Granite Choir.sfc"));
+            Assert.Equal("Default", bindings.Resolve("SNES", "C:\\roms\\Dune Relay.smc"));
             Assert.True(bindings.Save());
 
             using (JsonDocument file = JsonDocument.Parse(Read("gamepadprofiles.json")))
@@ -166,7 +168,7 @@ namespace EmuSen.WiseMan.Input
             Assert.Equal("Sofa", loaded.GameProfile("SNES", "Granite Choir"));
             Assert.True(loaded.DeleteProfile("SNES", "Sofa"));
             Assert.Null(loaded.GameProfile("SNES", "Granite Choir"));
-            Assert.Equal("Default", loaded.Resolve("SNES", loaded.GameProfile("SNES", "Granite Choir")));
+            Assert.Equal("Default", loaded.Resolve("SNES", "Granite Choir.sfc"));
             Assert.True(loaded.SetGameProfile("SNES", "Dune Relay", null));
             Assert.Null(loaded.GameProfile("SNES", "Dune Relay"));
 

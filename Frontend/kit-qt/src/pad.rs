@@ -29,6 +29,7 @@ pub mod qobject {
         #[qproperty(Tiers, tiers)]
         #[qproperty(bool, swap_accept_back)]
         #[qproperty(bool, clock_running)]
+        #[qproperty(bool, chord_only)]
         type PadRouter = super::PadRouterRust;
     }
 
@@ -65,6 +66,7 @@ pub struct PadRouterRust {
     tiers: Tiers,
     swap_accept_back: bool,
     clock_running: bool,
+    chord_only: bool,
     router: Router,
     started: Instant,
 }
@@ -75,6 +77,7 @@ impl Default for PadRouterRust {
             tiers: Tiers::Own,
             swap_accept_back: false,
             clock_running: true,
+            chord_only: false,
             router: Router::new(RepeatTiers::OWN),
             started: Instant::now(),
         }
@@ -93,6 +96,12 @@ impl cxx_qt::Initialize for qobject::PadRouter {
             .on_swap_accept_back_changed(|mut this| {
                 let swap = this.swap_accept_back;
                 this.as_mut().rust_mut().router.set_swap_accept_back(swap);
+            })
+            .release();
+        self.as_mut()
+            .on_chord_only_changed(|mut this| {
+                let on = this.chord_only;
+                this.as_mut().rust_mut().router.set_chord_only(on);
             })
             .release();
     }

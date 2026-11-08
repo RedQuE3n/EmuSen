@@ -2,10 +2,13 @@
 //! of its own, its pictures handed to the picture's feed, paced by the window's swaps. No Qt here; `SessionModel`
 //! puts it on Qt.
 
+use crate::input::GameInput;
 use crate::picture::{Frame, Handoff};
+use emusen_crystal_client::shapes::SessionId;
 use emusen_crystal_client::{frame_info, Open, Runtime};
+use emusen_platform_client::audio::GameSound;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -58,6 +61,15 @@ pub enum Report {
 struct Control {
     stop: AtomicBool,
     paused: AtomicBool,
+    /// Stereo frames of sound the player has taken in, by its own count.
+    sounded: AtomicU64,
+}
+
+/// What the game hears and plays through, each when the window has it: the game's side of the pads and the sound player.
+#[derive(Default)]
+pub struct GameIo {
+    pub pads: Option<GameInput>,
+    pub sound: Option<GameSound>,
 }
 
 /// A game running on its frame thread.
@@ -68,13 +80,14 @@ pub struct Session {
 
 impl Session {
     /// Opens `path` with `engine` (none for the settings' choice) and runs it until closed; `device` is the presenter's
-    /// Serenity device, lent to the machine.
+    /// Serenity device, lent to the machine; `io` the pads and the sound player the window has.
     pub fn start(
         runtime: Runtime,
         path: String,
         engine: Option<String>,
         device: Option<NonNull<std::ffi::c_void>>,
         handoff: Handoff,
+        io: GameIo,
         report: impl Fn(Report) + Send + 'static,
     ) -> Session {
         let control = Arc::new(Control::default());
@@ -82,7 +95,10 @@ impl Session {
         let device = device.map_or(0, |d| d.as_ptr() as usize);
         let thread = std::thread::spawn({
             let control = control.clone();
-            move || run(&runtime, path, engine, NonNull::new(device as *mut std::ffi::c_void), &handoff, &control, &report)
+            move || {
+                let open = Open { path: Some(path), engine, device: NonNull::new(device as *mut std::ffi::c_void), ..Open::default() };
+                run(&runtime, open, &handoff, io, &control, &report)
+            }
         });
         Session { control, thread: Some(thread) }
     }
@@ -93,6 +109,11 @@ impl Session {
 
     pub fn paused(&self) -> bool {
         self.control.paused.load(Ordering::Relaxed)
+    }
+
+    /// Stereo frames of the game's sound the player has taken in so far.
+    pub fn sounded(&self) -> u64 {
+        self.control.sounded.load(Ordering::Relaxed)
     }
 }
 
@@ -107,20 +128,23 @@ impl Drop for Session {
 
 fn run(
     runtime: &Runtime,
-    path: String,
-    engine: Option<String>,
-    device: Option<NonNull<std::ffi::c_void>>,
+    open: Open,
     handoff: &Handoff,
+    io: GameIo,
     control: &Control,
     report: &impl Fn(Report),
 ) {
     let (stop, paused) = (&control.stop, &control.paused);
+    let (mut input, mut sound) = (io.pads, io.sound);
     let started = Instant::now();
-    let open = Open { path: Some(path), engine, device, ..Open::default() };
     let session = match runtime.open(&open) {
         Ok(session) => session,
         Err(e) => return report(Report::Failed(e.to_string())),
     };
+    if let Some(Err(words)) = input.as_mut().map(|input| input.start(runtime, session, open.path.as_deref().unwrap_or_default())) {
+        let _ = runtime.close(session);
+        return report(Report::Failed(words));
+    }
     report(Report::Opened { session });
     let mut info = frame_info();
     let mut frame = Frame::default();
@@ -132,14 +156,31 @@ fn run(
     let mut next = Instant::now();
     handoff.set_running(true);
     let failed = Mutex::new(None);
+    let mut was_held = false;
     while !stop.load(Ordering::Relaxed) {
-        if paused.load(Ordering::Relaxed) {
+        let held = paused.load(Ordering::Relaxed);
+        if let Some(input) = input.as_mut() {
+            input.set_owned(!held);
+        }
+        if held && !was_held {
+            // A game that stops playing for a while starts its rate control over, as Mistress's does.
+            if let Some(Err(e)) = sound.as_mut().map(GameSound::reset) {
+                *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
+                break;
+            }
+        }
+        was_held = held;
+        if held {
             handoff.set_running(false);
             seen = handoff.wait_swap(seen, SWAP_BOUND);
             next = Instant::now();
             continue;
         }
         handoff.set_running(true);
+        if let Some(Err(words)) = input.as_mut().map(|input| input.frame(runtime, session)) {
+            *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
+            break;
+        }
         if let Err(e) = runtime.frame(session, &mut info) {
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
             break;
@@ -158,8 +199,10 @@ fn run(
                 }
             }
         }
-        // The sound is drained and dropped until the game's player is wrapped (EmuSen_Qt.md §1.8.3).
-        while matches!(runtime.audio_drain(session, &mut audio), Ok((n, _)) if n > 0) {}
+        if let Err(words) = play_sound(runtime, session, &mut audio, sound.as_mut(), &control.sounded) {
+            *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
+            break;
+        }
         clock.saw(handoff.swaps(), handoff.last_swap());
         if clock.locks(info.frame_interval_ns) {
             // Locked to the display: the next frame runs once a draw has taken this one, a whole frame before the
@@ -181,10 +224,25 @@ fn run(
         }
     }
     handoff.set_running(false);
+    drop(input);
     let _ = runtime.close(session);
     match failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
         Some(words) => report(Report::Failed(words)),
         None => report(Report::Closed),
+    }
+}
+
+/// The frame's sound drained and handed to the player (EmuSen_Qt.md §1.8.6); with none, drained and dropped.
+fn play_sound(runtime: &Runtime, session: SessionId, audio: &mut [i16], mut sound: Option<&mut GameSound>, sounded: &AtomicU64) -> Result<(), String> {
+    loop {
+        let (n, rate) = runtime.audio_drain(session, audio).map_err(|e| e.to_string())?;
+        if n == 0 {
+            return Ok(());
+        }
+        if let Some(sound) = sound.as_deref_mut() {
+            sound.submit(&audio[..n * 2], rate).map_err(|e| e.to_string())?;
+            sounded.store(sound.taken_frames().map_err(|e| e.to_string())? as u64, Ordering::Relaxed);
+        }
     }
 }
 

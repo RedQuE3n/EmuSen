@@ -1,13 +1,15 @@
 //! A game through the picture's feed with no window (EmuSen_Qt.md §1.8.4): the test core opened on its frame thread,
-//! its pictures handed over, and the feed's two calls made as GamePicture's render thread makes them. On the RX 6800.
+//! its pictures handed over, and the feed's two calls made as GamePicture's render thread makes them, its sound played
+//! through Endymion's game player on SDL's dummy driver. On the RX 6800.
 
 use emusen_client_fixture::{library, World};
 use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_qt::picture::{Feed, Picture};
 use emusen_platform_client::serenity::{builtin_preset, Device};
-use emusen_platform_client::Platform;
+use emusen_platform_client::audio::{GameSound, SoundSettings};
+use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::picture::PictureFeed;
-use emusen_qt_models::session::{Report, Session};
+use emusen_qt_models::session::{GameIo, Report, Session};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::sync::Arc;
@@ -50,6 +52,8 @@ fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
 
 #[test]
 fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
+    // Set before SDL is first loaded, while this binary's one test is its only thread that reads the environment.
+    unsafe { std::env::set_var("SDL_AUDIODRIVER", "dummy") };
     let world = World::new("session");
     let runtime = with_test_core(&world);
     let platform = Platform::load(library()).unwrap();
@@ -65,6 +69,8 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
     let mut out = Picture::default();
     assert_eq!((feed.draw)(feed.context, 64, 48, &mut out), 0, "nothing to show before a frame");
 
+    platform.lend_sdl(&Lent::open("libSDL3.so.0").unwrap()).unwrap();
+    let sound = GameSound::new(&platform, SoundSettings::default()).unwrap();
     let (tell, told) = mpsc::channel();
     let game = world.game("game.tst", &[1, 2, 3, 4]);
     let session = Session::start(
@@ -73,6 +79,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         None,
         std::ptr::NonNull::new(device.as_ptr().cast_mut()),
         handoff.clone(),
+        GameIo { pads: None, sound: Some(sound) },
         move |r| {
             let _ = tell.send(r);
         },
@@ -93,15 +100,21 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         std::thread::sleep(Duration::from_millis(2));
     }
     assert_eq!(picture.counts().swaps.load(Ordering::Relaxed), 30);
+    // The test core makes a sixtieth of a second of its rate (32 kHz) each frame; every frame's reaches the player.
+    let frames = picture.counts().handed.load(Ordering::Relaxed);
+    let sounded = session.sounded();
+    assert!(frames > 0 && sounded >= frames * (32000 / 60), "{sounded} stereo frames of sound played over {frames} frames");
 
     session.set_paused(true);
     std::thread::sleep(Duration::from_millis(100));
     let handed = picture.counts().handed.load(Ordering::Relaxed);
+    let sounded = session.sounded();
     for n in 30..40 {
         (feed.swapped)(feed.context, start + n * 16_666_667);
     }
     std::thread::sleep(Duration::from_millis(100));
     assert_eq!(picture.counts().handed.load(Ordering::Relaxed), handed, "a paused game hands nothing over");
+    assert_eq!(session.sounded(), sounded, "a paused game plays no sound");
     session.set_paused(false);
     wait_until("a resumed game hands frames over again", || picture.counts().handed.load(Ordering::Relaxed) > handed);
 

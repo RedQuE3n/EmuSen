@@ -311,7 +311,6 @@ dependencies = [
  "emusen-kit-qt",
  "emusen-qt-endymion",
  "emusen-qt-test",
- "libloading",
 ]
 
 [[package]]
@@ -367,6 +366,7 @@ dependencies = [
  "emusen-crystal-client",
  "emusen-kit-qt",
  "emusen-platform-client",
+ "emusen-qt-endymion",
  "emusen-qt-test",
  "serde_json",
 ]
@@ -379,8 +379,12 @@ dependencies = [
  "cxx-qt",
  "cxx-qt-build",
  "cxx-qt-lib",
+ "emusen-client-fixture",
+ "emusen-crystal-client",
+ "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-platform-client",
+ "emusen-qt-endymion",
  "emusen-qt-models",
  "emusen-qt-test",
 ]
@@ -396,6 +400,7 @@ dependencies = [
  "emusen-kit-core",
  "emusen-kit-qt",
  "emusen-qml-rules",
+ "libloading",
  "serde",
  "serde_json",
 ]

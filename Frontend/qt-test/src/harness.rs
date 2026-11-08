@@ -71,6 +71,12 @@ impl Harness {
 
     /// Loads a scene whose root is a Window and shows it at a size; the window must come up exposed and active.
     pub fn load(&mut self, url: &str, width: i32, height: i32) -> Scene<'_> {
+        self.load_prepared(url, width, height, |_| {})
+    }
+
+    /// `load`, with `prepare` given the window after it is made and before it is shown, as a host that adopts a device
+    /// prepares its window (EmuSen_Kit.md §7.16).
+    pub fn load_prepared(&mut self, url: &str, width: i32, height: i32, prepare: impl FnOnce(*mut QObject)) -> Scene<'_> {
         self.created.store(0, Ordering::SeqCst);
         let engine = self.engine.as_mut().expect("the QML engine");
         engine.load(&QUrl::from(url));
@@ -81,6 +87,7 @@ impl Harness {
         }
         let window = self.created.load(Ordering::SeqCst) as *mut QObject;
         assert!(!window.is_null(), "{url} did not create a root object in {waited} ms; Qt's words are above");
+        prepare(window);
         let shown = unsafe { ffi::harness_show(Pin::new_unchecked(&mut *window), width, height) };
         assert!(shown, "{url}: the window did not come up exposed and active");
         ffi::harness_wait(50);
@@ -357,6 +364,11 @@ impl Scene<'_> {
             router.as_mut().pump_at(up);
         }
         self.wait(5);
+    }
+
+    /// Whether the router gives the menu chord alone, as it does while a game owns the pad.
+    pub fn pad_chord_only(&mut self) -> bool {
+        self.harness.router().is_some_and(|router| *router.chord_only())
     }
 
     /// Whether the router holds a button, as its last pump left it.

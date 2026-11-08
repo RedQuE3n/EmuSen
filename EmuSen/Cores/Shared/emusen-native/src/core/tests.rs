@@ -8,7 +8,7 @@ use std::ptr::{null, null_mut};
 use std::sync::Mutex;
 
 use super::sys::*;
-use super::{Core, schema};
+use super::Core;
 use test_core::*;
 
 /// The library log is one per process; tests that read it take turns.
@@ -78,146 +78,23 @@ fn digest(m: *mut Machine) -> Vec<u8> {
     state
 }
 
+// The test core's descriptors say what it claims; the host's tests validate each against its schema (emusen-core-host tests/host.rs).
 #[test]
-fn every_descriptor_validates_against_its_committed_schema() {
+fn every_descriptor_says_what_the_core_claims() {
     let m = make("Wide=true");
     let info = text(|o, l| unsafe { emusen_core_info(o, l) });
-    let cases = [
-        (schema::INFO, info.clone()),
-        (schema::SETTINGS, text(|o, l| unsafe { emusen_core_settings_schema(o, l) })),
-        (schema::FIRMWARE, text(|o, l| unsafe { emusen_core_firmware_for(image(&[0xB0]).as_ptr(), 7, o, l) })),
-        (schema::MACHINE_INFO, text(|o, l| unsafe { emusen_core_machine_info(m, o, l) })),
-        (schema::SETTING_NOTES, text(|o, l| unsafe { emusen_core_setting_notes(m, o, l) })),
-        (schema::DISASSEMBLY, text(|o, l| unsafe { emusen_core_debug_disassemble(m, 0, 0, 0, 4, o, l) })),
-    ];
-    for (s, doc) in &cases {
-        assert_eq!(schema::validate(s, doc), Vec::<String>::new(), "{doc}");
-    }
-    let v = crate::json::parse(info.as_bytes()).unwrap();
-    assert_eq!(v.get("abi").and_then(|a| a.as_str()), Some("1.19"));
-    let names: Vec<&str> = v.get("capabilities").unwrap().as_array().unwrap().iter().filter_map(|c| c.as_str()).collect();
+    assert!(info.contains(r#""abi":"1.19""#), "{info}");
+    let names = super::desc::capability_names(unsafe { emusen_core_capabilities() });
     assert_eq!(names.len(), 27);
+    let listed: Vec<String> = names.iter().map(|n| format!("\"{n}\"")).collect();
+    assert!(info.contains(&format!(r#""capabilities":[{}]"#, listed.join(","))), "{info}");
     assert!(
         info.contains(r#""battery":[{"which":0,"suffix":".srm"},{"which":1,"suffix":".card","kind":"removable","medium":"test.card","label":"Card slot"},{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]"#),
         "core info lists the system's battery files since 1.3, a removable one's kind since 1.7, a console one's and each slot's medium and label since 1.8, and nothing unset: {info}"
     );
-    assert_eq!(super::desc::capability_names(unsafe { emusen_core_capabilities() }), names);
-    let mi = crate::json::parse(cases[3].1.as_bytes()).unwrap();
-    let spaces = mi.get("spaces").unwrap().as_array().unwrap();
-    assert_eq!(spaces[0].get("size").and_then(|s| s.as_i64()), Some(unsafe { emusen_core_space_size(m, 0) }));
-    assert_eq!(mi.get("battery").unwrap().as_array().unwrap()[0].get("length").and_then(|s| s.as_i64()), Some(16));
-    assert_eq!(cases[4].1, r#"{"Wide":"The picture is drawn twice as wide."}"#);
-    assert!(cases[2].1.contains("boot.rom"));
+    assert_eq!(text(|o, l| unsafe { emusen_core_setting_notes(m, o, l) }), r#"{"Wide":"The picture is drawn twice as wide."}"#);
+    assert!(text(|o, l| unsafe { emusen_core_firmware_for(image(&[0xB0]).as_ptr(), 7, o, l) }).contains("boot.rom"));
     unsafe { emusen_core_free(m) };
-}
-
-// §6.2's replacement object and §6.4's firmware sources, written and validated.
-#[test]
-fn a_replacement_and_a_firmware_source_are_written_as_the_schemas_say() {
-    use super::desc::{Firmware, FirmwareSource, MachineInfo, Replacement};
-    let f = Firmware { which: 2, name: "a.rom".into(), label: "A".into(), size: 8, replacement: Some(Replacement::Accuracy { cost: "slower".into() }), ..Firmware::default() };
-    let none = Firmware { replacement: Some(Replacement::None { cost: "runs without the chip".into() }), ..f.clone() };
-    let doc = super::desc::firmware_json(&[f, none, Firmware { which: 3, name: "b.rom".into(), ..Firmware::default() }]);
-    assert_eq!(schema::validate(schema::FIRMWARE, &doc), Vec::<String>::new());
-    assert!(doc.contains(r#""replacement":{"effect":"accuracy","cost":"slower"}"#), "{doc}");
-    assert!(doc.contains(r#""effect":"none""#) && doc.matches("replacement").count() == 2, "{doc}");
-    let m = MachineInfo { firmware: vec![(2, FirmwareSource::Replacement), (3, FirmwareSource::File)], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true, outputs: &[] };
-    let mi = super::desc::machine_info_json(&m, &measured, &[]);
-    assert!(mi.contains(r#""firmware":[{"which":2,"source":"replacement"},{"which":3,"source":"file"}]"#), "{mi}");
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
-}
-
-// Since 1.19 an entry's need is written only when the core gives one, so no earlier answer changes by a byte (§6.44).
-#[test]
-fn a_firmware_entrys_need_is_written_only_when_given_and_alternatives_of_any_size_share_it() {
-    use super::desc::Firmware;
-    let small = Firmware { which: 2, name: "a.rom".into(), label: "A".into(), size: 8, need: "bios".into(), ..Firmware::default() };
-    let large = Firmware { which: 3, name: "b.rom".into(), size: 16, ..small.clone() };
-    let own = Firmware { which: 4, name: "c.rom".into(), label: "C".into(), size: 8, ..Firmware::default() };
-    let doc = super::desc::firmware_json(&[small, large, own]);
-    assert_eq!(schema::validate(schema::FIRMWARE, &doc), Vec::<String>::new());
-    assert_eq!(doc.matches(r#""need":"bios""#).count(), 2, "{doc}");
-    assert_eq!(doc.matches(r#""need""#).count(), 2, "{doc}");
-}
-
-// Since 1.12 an entry's md5 list is written only when it has a checksum, so no earlier answer changes by a byte (§6.32).
-#[test]
-fn a_firmware_entrys_md5_list_is_written_only_when_not_empty() {
-    use super::desc::Firmware;
-    let plain = Firmware { which: 1, name: "a.rom".into(), label: "A".into(), size: 8, ..Firmware::default() };
-    let listed = Firmware { md5: vec!["0123456789abcdef0123456789abcdef".into(), "fedcba9876543210fedcba9876543210".into()], ..plain.clone() };
-    let doc = super::desc::firmware_json(&[plain, listed]);
-    assert_eq!(schema::validate(schema::FIRMWARE, &doc), Vec::<String>::new());
-    assert_eq!(doc.matches("\"md5\"").count(), 1, "{doc}");
-    assert!(doc.contains(r#""md5":["0123456789abcdef0123456789abcdef","fedcba9876543210fedcba9876543210"]"#), "{doc}");
-    assert!(!schema::validate(schema::FIRMWARE, &doc.replace("0123456789abcdef0123", "0123456789ABCDEF0123")).is_empty());
-}
-
-// Since 1.5 a bound of settling pictures is written under the state when it is not 0, within the schema's range, which is the crate's maximum.
-#[test]
-fn a_picture_settling_bound_is_written_under_the_state_only_when_declared() {
-    use super::desc::{MachineInfo, PICTURE_SETTLES_MAX};
-    let m = MachineInfo::default();
-    let of = |n: u32| super::desc::machine_info_json(&m, &super::desc::Measured { space_size: &|_| None, battery_len: &|_| None, capabilities: 0, picture_settles: n, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true, outputs: &[] }, &[]);
-    assert!(!of(0).contains("picture_settles"), "{}", of(0));
-    assert!(of(240).contains(r#""loads_from":[],"picture_settles":240}"#), "{}", of(240));
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX)), Vec::<String>::new());
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &of(PICTURE_SETTLES_MAX + 1)), vec![format!("$.state.picture_settles: {} is above {PICTURE_SETTLES_MAX}", PICTURE_SETTLES_MAX + 1)]);
-}
-
-// A view is written as one more of a space's flags, which the schema leaves open, and a space without it is as before.
-#[test]
-fn a_view_is_a_flag_of_its_space() {
-    use super::desc::{MachineInfo, Space};
-    let m = MachineInfo { spaces: vec![Space { read_only: true, view: true, ..Space::new(0, "CPUBUS") }, Space::new(1, "WRAM")], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|id| Some(if id == 0 { 1 << 24 } else { 1 << 16 }), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true, outputs: &[] };
-    let mi = super::desc::machine_info_json(&m, &measured, &[]);
-    assert!(mi.contains(r#"{"id":0,"name":"CPUBUS","size":16777216,"flags":["read_only","view"]}"#), "{mi}");
-    assert!(mi.contains(r#"{"id":1,"name":"WRAM","size":65536,"flags":[]}"#), "{mi}");
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
-}
-
-// Since 1.16: named files after the numbered ones, the exact rate, a withdrawn snapshot and an unrated setting, each valid.
-#[test]
-fn the_additions_of_1_16_are_written_and_valid() {
-    use super::desc::{Battery, BatteryKind, Effect, MachineInfo, NamedFile, Scope, Setting, SettingKind, Choice};
-    let m = MachineInfo { battery: vec![Battery::game(0, ".srm")], ..MachineInfo::default() };
-    let named = [NamedFile { which: flags::FILE_NAMED, name: "save/notes.txt".into(), kind: BatteryKind::Console, removed: false }, NamedFile { which: flags::FILE_NAMED + 1, name: "save/old.txt".into(), kind: BatteryKind::Console, removed: true }];
-    let measured = super::desc::Measured { space_size: &|_| None, battery_len: &|w| Some(w as i64 & 0xF), capabilities: caps::SNAPSHOT, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &named, audio_rate_exact: Some((64_081, 2)), snapshot_offered: false, outputs: &[] };
-    let mi = super::desc::machine_info_json(&m, &measured, &[]);
-    assert!(mi.contains(r#""rate_exact":{"num":64081,"den":2}"#), "{mi}");
-    assert!(mi.contains(r#"{"which":32768,"suffix":"","name":"save/notes.txt","length":0,"kind":"console"}"#), "{mi}");
-    assert!(mi.contains(r#""name":"save/old.txt","length":1,"kind":"console","removed":true}"#), "{mi}");
-    assert!(mi.contains(r#""kinds":[0]"#), "{mi}");
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
-    let unrated = Setting { key: "core_option".into(), label: "An option".into(), help: String::new(), kind: SettingKind::Choice(vec![Choice::new("a", "A")]), default: "a".into(), scope: Scope::Run, category: None, effect: Effect::Unrated, advanced: false, hidden: false, restart: false };
-    assert_eq!(unrated.check(), Ok(()));
-    let text = super::desc::settings_json(&[unrated]);
-    assert!(text.contains(r#""effect":"unrated""#), "{text}");
-    assert_eq!(schema::validate(schema::SETTINGS, &text), Vec::<String>::new());
-}
-
-// Since 1.14 a space's byte order is written only where the core states one, so no earlier machine info changes by a byte (§6.39).
-#[test]
-fn a_spaces_byte_order_is_written_only_when_stated() {
-    use super::desc::{BYTE_ORDER_BIG, BYTE_ORDER_LITTLE, MachineInfo, Space};
-    let m = MachineInfo { spaces: vec![Space::new(0, "WRAM"), Space { byte_order: Some(BYTE_ORDER_LITTLE), ..Space::new(1, "Z80RAM") }, Space { byte_order: Some(BYTE_ORDER_BIG), ..Space::new(2, "VRAM") }], ..MachineInfo::default() };
-    let measured = super::desc::Measured { space_size: &|_| Some(8), battery_len: &|_| None, capabilities: 0, picture_settles: 0, raw: &[], units: &[], telemetry: &[], named: &[], audio_rate_exact: None, snapshot_offered: true, outputs: &[] };
-    let mi = super::desc::machine_info_json(&m, &measured, &[]);
-    assert!(mi.contains(r#"{"id":0,"name":"WRAM","size":8,"flags":[]}"#), "{mi}");
-    assert!(mi.contains(r#"{"id":1,"name":"Z80RAM","size":8,"flags":[],"byte_order":"little"}"#), "{mi}");
-    assert!(mi.contains(r#"{"id":2,"name":"VRAM","size":8,"flags":[],"byte_order":"big"}"#), "{mi}");
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi), Vec::<String>::new());
-    assert_eq!(schema::validate(schema::MACHINE_INFO, &mi.replace(r#""byte_order":"big""#, r#""byte_order":"Big""#)), vec![r#"$.spaces[2].byte_order: "Big" is not one of the enumeration"#]);
-}
-
-#[test]
-fn a_schema_violation_is_reported_by_path() {
-    assert_eq!(schema::validate(schema::FIRMWARE, r#"[{"which":0,"name":"a","label":"b","size":1}]"#), vec!["$[0]: required is required", "$[0].which: 0 is below 1"]);
-    assert_eq!(schema::validate(schema::INFO, r#"{"abi":"1.0","id":"Bad Id","name":"","version":"","license":"","systems":[],"capabilities":[]}"#), vec![r#"$.id: "Bad Id" does not match ^[a-z0-9-]+$"#]);
-    assert_eq!(schema::matches("^[0-9]+[.][0-9]+$", "1.10"), Some(true));
-    assert_eq!(schema::matches("^a.b$", "a.b"), None);
 }
 
 #[test]
@@ -773,18 +650,6 @@ fn a_lent_disc_is_let_go_when_its_drive_takes_another() {
     assert_eq!(unsafe { emusen_core_free(m) }, 0);
 }
 
-// Since 1.8 (EmuSen_CoreAPI.md §6.28): a slot's port is written as a number, with its medium and label, and a file that sets none writes 1.7's form.
-#[test]
-fn a_slots_medium_label_and_port_are_written_only_where_set() {
-    use super::desc::{Battery, Info, System, info_json};
-    let info = Info { id: "x".into(), systems: vec![System { id: "n64".into(), ..Default::default() }], ..Default::default() };
-    let text = info_json(&info, 0, &|_| Some(vec![Battery::game(0, ".eep"), Battery::removable(1, ".2.mpk").medium("n64.pak").label("Controller 2").port(1)]), &|_| Vec::new(), &|_| false);
-    assert!(text.contains(r#""battery":[{"which":0,"suffix":".eep"},{"which":1,"suffix":".2.mpk","kind":"removable","medium":"n64.pak","label":"Controller 2","port":1}]"#), "{text}");
-    assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &text), Vec::<String>::new());
-    let bad = info_json(&info, 0, &|_| Some(vec![Battery::console(0, ".brm").medium("Sega CD")]), &|_| Vec::new(), &|_| false);
-    assert!(!schema::validate(include_str!("../../abi/v1/info.schema.json"), &bad).is_empty(), "a medium outside [a-z0-9.]+ is refused by the schema");
-}
-
 fn raw_info(m: *mut Machine, raw: u32) -> (i32, RawFrame) {
     let mut f = RawFrame { size: std::mem::size_of::<RawFrame>() as u32, element: 99, ..RawFrame::default() };
     let r = unsafe { emusen_core_raw_info(m, raw, &mut f) };
@@ -796,10 +661,10 @@ fn raw_info(m: *mut Machine, raw: u32) -> (i32, RawFrame) {
 #[test]
 fn a_raw_picture_is_kept_only_when_selected_and_draws_the_frame_through_its_palette() {
     let m = make("");
-    let mi = crate::json::parse(text(|o, l| unsafe { emusen_core_machine_info(m, o, l) }).as_bytes()).unwrap();
-    let listed = mi.get("video").unwrap().get("raw").unwrap().as_array().unwrap();
-    assert_eq!((listed.len(), listed[0].get("encoding").and_then(|e| e.as_str()), listed[0].get("element").and_then(|e| e.as_i64())), (1, Some(RAW_ENCODING), Some(1)));
-    let palette: Vec<i64> = listed[0].get("palette").unwrap().as_array().unwrap().iter().filter_map(|v| v.as_i64()).collect();
+    let mi = text(|o, l| unsafe { emusen_core_machine_info(m, o, l) });
+    let palette: Vec<i64> = (0..256).map(|v| v << 16).collect();
+    let listed: Vec<String> = palette.iter().map(i64::to_string).collect();
+    assert!(mi.contains(&format!(r#""raw":[{{"encoding":"{RAW_ENCODING}","element":1,"max_width":16,"max_height":4,"palette":[{}]}}]"#, listed.join(","))), "{mi}");
     advance(m);
     assert_eq!(raw_info(m, 0), (0, RawFrame { size: 32, ..RawFrame::default() }), "nothing kept before a select, every field but size zero");
     assert_eq!(unsafe { emusen_core_raw_copy(m, 0, null_mut(), 0) }, 0);
@@ -832,7 +697,6 @@ fn a_raw_picture_is_kept_only_when_selected_and_draws_the_frame_through_its_pale
 fn an_empty_image_starts_a_system_that_starts_empty_and_nothing_else() {
     let info = text(|o, l| unsafe { emusen_core_info(o, l) });
     assert!(info.contains(r#""starts_empty":true"#), "{info}");
-    assert_eq!(schema::validate(include_str!("../../abi/v1/info.schema.json"), &info), Vec::<String>::new());
     let mut code = 1;
     let p = CreateParams { system: c"test".as_ptr(), ..params(&[], "", &[]) };
     let m = unsafe { emusen_core_create(&p, &mut code) };

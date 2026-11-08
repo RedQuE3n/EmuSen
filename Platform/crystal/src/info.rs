@@ -3,7 +3,7 @@
 //! its default (EmuSen_CoreAPI.md §6.3, EmuSen_Backend.md §29.2).
 
 use emusen_native::core::{Axis, Control};
-use emusen_native::json::Value;
+use serde_json::Value;
 
 /// The canonical controls' names in their order, their numbers, as emusen-native owns them (EmuSen_CoreAPI.md §6.4).
 pub const BUTTONS: [&str; 16] = Control::NAMES;
@@ -78,7 +78,7 @@ pub struct SystemDetail {
 }
 
 fn arr<'a>(v: &'a Value, key: &str) -> &'a [Value] {
-    v.get(key).and_then(Value::as_array).unwrap_or(&[])
+    v.get(key).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn opt_str<'a>(v: &'a Value, key: &str) -> Option<&'a str> {
@@ -158,8 +158,8 @@ pub struct Setting {
 pub fn settings(schema: &Value) -> Vec<Setting> {
     schema
         .as_array()
-        .unwrap_or(&[])
-        .iter()
+        .into_iter()
+        .flatten()
         .filter(|s| !matches!(s.get("hidden"), Some(Value::Bool(true))) && matches!(opt_str(s, "kind"), Some("switch" | "count" | "choice")))
         .map(|s| Setting { key: opt_str(s, "key").unwrap_or("").to_string(), default: opt_str(s, "default").unwrap_or("").to_string() })
         .collect()
@@ -168,11 +168,10 @@ pub fn settings(schema: &Value) -> Vec<Setting> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emusen_native::json::parse;
 
     #[test]
     fn controls_are_read_by_name_or_number_and_ports_counted() {
-        let v = parse(br#"{"systems":[{"id":"s","controllers":[{"id":"p","ports":[0,1],"buttons":[{"control":"A"},{"control":"9"},{"control":"a"},{"control":null}],"axes":[{"control":"LeftY"}]}]}]}"#).unwrap();
+        let v: Value = serde_json::from_slice(br#"{"systems":[{"id":"s","controllers":[{"id":"p","ports":[0,1],"buttons":[{"control":"A"},{"control":"9"},{"control":"a"},{"control":null}],"axes":[{"control":"LeftY"}]}]}]}"#).unwrap();
         let s = &systems(&v)[0];
         assert_eq!(s.buttons(), [8, 9]);
         assert_eq!(s.axes(), [1]);

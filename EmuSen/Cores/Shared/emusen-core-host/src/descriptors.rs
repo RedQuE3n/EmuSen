@@ -1,7 +1,7 @@
 //! The fields of core info a host reads to list and route a core, with the C# host's defaults: a field it does not know
 //! is ignored, one it needs and is absent takes its default (EmuSen_CoreAPI.md §6.3, `CoreDescriptors.cs`).
 
-use emusen_native::json::Value;
+use serde_json::Value;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CoreSystem {
@@ -41,7 +41,7 @@ fn str_or(v: &Value, key: &str, fallback: &str) -> String {
 }
 
 fn arr<'a>(v: &'a Value, key: &str) -> &'a [Value] {
-    v.get(key).and_then(Value::as_array).unwrap_or(&[])
+    v.get(key).and_then(Value::as_array).map_or(&[], Vec::as_slice)
 }
 
 fn strs(v: &Value, key: &str) -> Vec<String> {
@@ -56,7 +56,7 @@ fn flag(v: &Value, key: &str) -> bool {
 fn integers_where_read(system: &Value) -> bool {
     let ports = arr(system, "controllers").iter().all(|c| arr(c, "ports").iter().all(|p| p.as_i64().is_some()));
     let parts = arr(system, "firmware").iter().all(|f| arr(f, "parts").iter().all(|p| p.as_array().is_some()));
-    let battery_ports = arr(system, "battery").iter().all(|b| !matches!(b.get("port"), Some(Value::Float(_))));
+    let battery_ports = arr(system, "battery").iter().all(|b| !b.get("port").is_some_and(Value::is_f64));
     ports && parts && battery_ports
 }
 
@@ -105,20 +105,13 @@ impl CoreInfo {
     }
 }
 
-/// Two JSON values equal as .NET's `JsonNode.DeepEquals` compares them: an object's members without regard to order.
-pub fn deep_equal(a: &Value, b: &Value) -> bool {
-    match (a, b) {
-        (Value::Object(x), Value::Object(y)) => x.len() == y.len() && x.iter().all(|(k, v)| y.iter().any(|(l, w)| k == l && deep_equal(v, w))),
-        (Value::Array(x), Value::Array(y)) => x.len() == y.len() && x.iter().zip(y).all(|(v, w)| deep_equal(v, w)),
-        (Value::Int(x), Value::Float(y)) | (Value::Float(y), Value::Int(x)) => *x as f64 == *y,
-        _ => a == b,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use emusen_native::json::parse;
+
+    fn parse(text: &[u8]) -> serde_json::Result<Value> {
+        serde_json::from_slice(text)
+    }
 
     #[test]
     fn the_display_name_falls_back_to_the_name_and_extensions_are_lowercased() {
@@ -137,12 +130,13 @@ mod tests {
         assert!(CoreInfo::read(&parse(b"[1]").unwrap()).is_none());
     }
 
+    // Discovery compares a library's info with its sidecar's by value: members in any order, items in theirs.
     #[test]
     fn objects_compare_without_regard_to_member_order() {
         let a = parse(br#"{"a":1,"b":[1,{"c":2,"d":3}]}"#).unwrap();
         let b = parse(br#"{"b":[1,{"d":3,"c":2}],"a":1}"#).unwrap();
         let c = parse(br#"{"b":[{"d":3,"c":2},1],"a":1}"#).unwrap();
-        assert!(deep_equal(&a, &b));
-        assert!(!deep_equal(&a, &c));
+        assert_eq!(a, b);
+        assert_ne!(a, c);
     }
 }

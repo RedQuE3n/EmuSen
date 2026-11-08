@@ -1,12 +1,12 @@
 //! Machine info and the settings schema as the runtime reads them, the C# `CoreDescriptorReader.MachineInfo` and
 //! `Settings`: a field it does not know ignored, one absent taken at its default (EmuSen_CoreAPI.md §6.3, §6.5).
 
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 use crate::info::BatteryKind;
 
 fn arr<'a>(v: Option<&'a Value>, key: &str) -> &'a [Value] {
-    v.and_then(|v| v.get(key)).and_then(Value::as_array).unwrap_or(&[])
+    v.and_then(|v| v.get(key)).and_then(Value::as_array).map_or(&[][..], Vec::as_slice)
 }
 
 fn int(v: Option<&Value>, key: &str, fallback: i64) -> i64 {
@@ -97,7 +97,7 @@ pub struct MachineInfo {
 
 impl MachineInfo {
     pub fn read(text_json: &str) -> MachineInfo {
-        let doc = json::parse(text_json.as_bytes()).unwrap_or(Value::Null);
+        let doc = serde_json::from_str::<Value>(&text_json).unwrap_or(Value::Null);
         let r = Some(&doc);
         let rate = obj(r, "frame_rate");
         let video = obj(r, "video");
@@ -182,10 +182,10 @@ impl SettingDesc {
 
 /// A schema's settings, every one, in its order.
 pub fn settings(text_json: &str) -> Vec<SettingDesc> {
-    let doc = json::parse(text_json.as_bytes()).unwrap_or(Value::Null);
+    let doc = serde_json::from_str::<Value>(&text_json).unwrap_or(Value::Null);
     doc.as_array()
-        .unwrap_or(&[])
-        .iter()
+        .into_iter()
+        .flatten()
         .map(|s| {
             let s = Some(s);
             let choices = arr(s, "choices");
@@ -211,7 +211,7 @@ pub fn settings(text_json: &str) -> Vec<SettingDesc> {
 
 /// `key -> sentence`, from `setting_notes`.
 pub fn notes(text_json: &str) -> Vec<(String, String)> {
-    match json::parse(text_json.as_bytes()) {
+    match serde_json::from_str::<Value>(&text_json) {
         Ok(Value::Object(members)) => members.into_iter().filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string()))).collect(),
         _ => Vec::new(),
     }

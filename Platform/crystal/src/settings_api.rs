@@ -182,7 +182,7 @@ pub fn schema(rt: &Runtime, catalog: &Catalog, discovery: &Discovery, tree: &Tre
             locked: false,
         });
     }
-    let infos: Vec<&emusen_native::json::Value> = engines.iter().map(|e| &e.sidecar.info_json).collect();
+    let infos: Vec<&serde_json::Value> = engines.iter().map(|e| &e.sidecar.info_json).collect();
     if crate::firmware::replacement_offered(&infos, &console_system_ids(console)) {
         rows.push(Row {
             key: crate::firmware::PREFERENCE_KEY.to_string(),

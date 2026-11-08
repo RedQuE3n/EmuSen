@@ -16,6 +16,9 @@ path = "src/main.rs"
 
 [dependencies]
 emusen-native = { path = "../emusen-native" }
+# A core's descriptors read as JSON and checked against the ABI's committed schemas (EmuSen_RustPlatform.md §47.22).
+serde_json = "1.0.154"
+emusen-core-schema = { path = "../emusen-core-schema" }
 # The core host: the loader, the export table, the sidecar's format and the hash it records (EmuSen_Backend.md §27).
 emusen-core-host = { path = "../emusen-core-host" }
 # The set module, which names a sheet's companions as the runtime's reading does (EmuSen_CoreAPI_Extensions.md §2.3).

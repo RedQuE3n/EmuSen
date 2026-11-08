@@ -22,7 +22,7 @@ use emusen_galaxia::mapped::Mapped;
 use emusen_native::core::flags::{self, FILE_MEDIA};
 use emusen_native::core::sys::{CAPABILITY_NAMES, CreateParams, EXPORTS, Event, FileEntry, FrameInfo, caps, event, status};
 use emusen_native::core::{jsonw::Json, schema};
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 /// What the author supplies: the image, how many frames, settings text, files and the input.
 #[derive(Clone)]
@@ -445,22 +445,22 @@ fn frame_checks(f: u64, fi: &FrameInfo, copied: usize, problems: &mut Vec<String
 /// Since 1.17: each output machine info declares, as (port, output), which every `OUTPUT` must name (EmuSen_CoreAPI.md §6.42).
 fn declared_outputs(m: &Machine<'_>) -> Vec<(u32, u32)> {
     let info = m.machine_info().ok().and_then(|t| parse(&t));
-    let ports = info.as_ref().and_then(|i| i.get("ports")).and_then(Value::as_array).unwrap_or(&[]);
+    let ports = info.as_ref().and_then(|i| i.get("ports")).and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     ports
         .iter()
         .flat_map(|p| {
             let port = p.get("port").and_then(Value::as_i64).unwrap_or(-1) as u32;
-            p.get("outputs").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(move |o| Some((port, o.get("output")?.as_i64()? as u32)))
+            p.get("outputs").and_then(Value::as_array).into_iter().flatten().filter_map(move |o| Some((port, o.get("output")?.as_i64()? as u32)))
         })
         .collect()
 }
 
 fn parse(text: &str) -> Option<Value> {
-    json::parse(text.as_bytes()).ok()
+    serde_json::from_str::<Value>(&text).ok()
 }
 
 fn strs(v: Option<&Value>) -> Vec<String> {
-    v.and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(|x| x.as_str().map(str::to_owned)).collect()
+    v.and_then(Value::as_array).into_iter().flatten().filter_map(|x| x.as_str().map(str::to_owned)).collect()
 }
 
 /// A report's heading for the library at `path`, its cases still to come.
@@ -654,7 +654,7 @@ pub fn systems_in_development(info: &str) -> (Vec<String>, Vec<String>) {
 
 fn c2(lib: &Lib, info: &str) -> Case {
     let mut c = Check::new();
-    for e in schema::validate(schema::INFO, info) {
+    for e in emusen_core_schema::validate(schema::INFO, info) {
         c.that(false, || format!("info: {e}"));
     }
     let v = unsafe { (lib.f.abi_version)() };
@@ -688,7 +688,7 @@ fn c3(lib: &Lib) -> Case {
             return c.done("C3", "the schema");
         }
     };
-    for e in schema::validate(schema::SETTINGS, &text) {
+    for e in emusen_core_schema::validate(schema::SETTINGS, &text) {
         c.that(false, || format!("schema: {e}"));
     }
     let list = parse(&text).and_then(|v| v.as_array().map(|a| a.to_vec())).unwrap_or_default();
@@ -700,7 +700,7 @@ fn c3(lib: &Lib) -> Case {
         let in_domain = match kind.as_str() {
             "switch" => default == "true" || default == "false",
             "count" => default.parse::<i64>().is_ok_and(|d| d >= s.get("min").and_then(Value::as_i64).unwrap_or(i64::MIN) && d <= s.get("max").and_then(Value::as_i64).unwrap_or(i64::MAX)),
-            "choice" => s.get("choices").and_then(Value::as_array).unwrap_or(&[]).iter().any(|ch| ch.get("value").and_then(Value::as_str) == Some(default.as_str())),
+            "choice" => s.get("choices").and_then(Value::as_array).into_iter().flatten().any(|ch| ch.get("value").and_then(Value::as_str) == Some(default.as_str())),
             _ => !default.contains(['\r', '\n']),
         };
         c.that(in_domain, || format!("{key}: the default {default:?} is outside its own domain"));
@@ -1276,7 +1276,7 @@ fn sampled_values(setting: &Value) -> Vec<String> {
     let get = |k: &str| setting.get(k).and_then(Value::as_str).unwrap_or("").to_owned();
     match get("kind").as_str() {
         "switch" => vec!["true".into(), "false".into()],
-        "choice" => setting.get("choices").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(|c| c.get("value").and_then(Value::as_str).map(str::to_owned)).collect(),
+        "choice" => setting.get("choices").and_then(Value::as_array).into_iter().flatten().filter_map(|c| c.get("value").and_then(Value::as_str).map(str::to_owned)).collect(),
         "count" => {
             let (lo, hi) = (setting.get("min").and_then(Value::as_i64).unwrap_or(0), setting.get("max").and_then(Value::as_i64).unwrap_or(0));
             let mut v = vec![lo, (lo + hi) / 2, hi];
@@ -1736,7 +1736,7 @@ fn c16(s: &mut Session<'_>) -> Case {
     let lent = s.media_lent();
     let body = |s: &mut Session<'_>, c: &mut Check| -> Result<(), String> {
         let m = s.machine(&settings)?;
-        let drives = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
+        let drives = |m: &Machine<'_>| m.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().cloned()).unwrap_or_default();
         let listed = drives(&m);
         if listed.is_empty() {
             return c16_no_drive(s, c, &m, &image, &media, lent);
@@ -2357,7 +2357,7 @@ fn c22(s: &mut Session<'_>) -> Case {
         .info()
         .ok()
         .and_then(|t| parse(&t))
-        .and_then(|v| v.get("systems")?.as_array().map(<[Value]>::to_vec))
+        .and_then(|v| v.get("systems")?.as_array().cloned())
         .unwrap_or_default()
         .iter()
         .map(|v| (v.get("id").and_then(Value::as_str).unwrap_or("").to_owned(), v.get("starts_empty") == Some(&Value::Bool(true))))
@@ -2393,7 +2393,7 @@ fn c22(s: &mut Session<'_>) -> Case {
             let lib = s.lib;
             let make = || lib.create_empty(&name, &settings, &files).map_err(|(code, text)| format!("an empty start of {id} was refused: status {code} ({text})"));
             let (one, two) = (make()?, make()?);
-            let drives = one.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default();
+            let drives = one.machine_info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("drives")?.as_array().cloned()).unwrap_or_default();
             for d in &drives {
                 c.that(d.get("loaded") == Some(&Value::Bool(false)), || format!("{id} started empty lists drive {:?} loaded", d.get("drive")));
             }
@@ -2429,7 +2429,7 @@ fn c22(s: &mut Session<'_>) -> Case {
 fn c23(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
     let minor = unsafe { (s.lib.f.abi_version)() } & 0xFFFF;
-    let entries = |v: Option<Value>| -> Vec<Value> { v.and_then(|v| v.as_array().map(<[Value]>::to_vec)).unwrap_or_default() };
+    let entries = |v: Option<Value>| -> Vec<Value> { v.and_then(|v| v.as_array().cloned()).unwrap_or_default() };
     let info = s.lib.info().ok().and_then(|t| parse(&t));
     let listed: Vec<Value> = entries(info.and_then(|v| v.get("systems").cloned())).iter().flat_map(|sys| entries(sys.get("firmware").cloned())).collect();
     let image = s.opts.image.clone();
@@ -2469,7 +2469,7 @@ const ROUTED_FRAMES: u64 = 60;
 fn c24(s: &mut Session<'_>) -> Case {
     let mut c = Check::new();
     let minor = unsafe { (s.lib.f.abi_version)() } & 0xFFFF;
-    let systems: Vec<String> = s.lib.info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("systems")?.as_array().map(<[Value]>::to_vec)).unwrap_or_default().iter().filter_map(|v| v.get("id")?.as_str().map(str::to_owned)).collect();
+    let systems: Vec<String> = s.lib.info().ok().and_then(|t| parse(&t)).and_then(|v| v.get("systems")?.as_array().cloned()).unwrap_or_default().iter().filter_map(|v| v.get("id")?.as_str().map(str::to_owned)).collect();
     if minor < 15 {
         c.note(format!("the library is of core ABI 1.{minor}, before a host named the system it routed an image to"));
         return c.done("C24", "the routed system");

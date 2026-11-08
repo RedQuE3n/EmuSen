@@ -81,7 +81,7 @@ pub fn info(c: &Call) -> Answer<Vec<u8>> {
 pub fn summary(c: &Call) -> Answer<Vec<u8>> {
     c.target()?;
     c.read(|e, _| {
-        let version = e.info.get("version").and_then(emusen_native::json::Value::as_str).unwrap_or("").to_string();
+        let version = e.info.get("version").and_then(serde_json::Value::as_str).unwrap_or("").to_string();
         let display = e.display_name.clone();
         let (d, m) = dm(e);
         Ok(match m {

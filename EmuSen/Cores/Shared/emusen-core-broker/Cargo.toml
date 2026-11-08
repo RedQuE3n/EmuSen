@@ -24,6 +24,8 @@ landlock = "0.4"
 
 # The libretro proxy, host and test core, built as shared libraries beside the tests that run them brokered.
 [dev-dependencies]
+# The runtime's listing read back as JSON.
+serde_json = "1.0.154"
 emusen-libretro-proxy = { path = "../../Libretro/emusen-libretro-proxy" }
 emusen-libretro-host = { path = "../../Libretro/emusen-libretro-host" }
 emusen-libretro-testcore = { path = "../../Libretro/emusen-libretro-testcore" }

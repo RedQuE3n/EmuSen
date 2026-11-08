@@ -7,7 +7,7 @@ use emusen_core_host::Discovered;
 use emusen_core_host::entry::{FirmwareRole, firmware_role, system_folder};
 use emusen_firmware::Request;
 use emusen_galaxia::tree::{Directory, Tree};
-use emusen_native::json::Value;
+use serde_json::Value;
 
 use crate::catalog::{self, Catalog};
 use crate::json::Json;
@@ -56,7 +56,7 @@ pub struct Entry {
 }
 
 fn strs(v: &Value) -> Vec<String> {
-    v.as_array().unwrap_or(&[]).iter().filter_map(Value::as_str).map(str::to_string).collect()
+    v.as_array().into_iter().flatten().filter_map(Value::as_str).map(str::to_string).collect()
 }
 
 impl Entry {
@@ -68,7 +68,7 @@ impl Entry {
             label: s("label"),
             size: f.get("size").and_then(Value::as_i64).unwrap_or(0),
             required: matches!(f.get("required"), Some(Value::Bool(true))),
-            parts: f.get("parts").and_then(Value::as_array).unwrap_or(&[]).iter().map(strs).collect(),
+            parts: f.get("parts").and_then(Value::as_array).into_iter().flatten().map(strs).collect(),
             replacement: f.get("replacement").filter(|r| matches!(r, Value::Object(_))).map(|r| {
                 (r.get("effect").and_then(Value::as_str).unwrap_or("none").to_string(), r.get("cost").and_then(Value::as_str).map(str::to_string))
             }),
@@ -90,15 +90,15 @@ impl Entry {
 
 /// A list of entries, the core's `firmware_for` answer or a system's `firmware`.
 pub fn entries(list: &Value) -> Vec<Entry> {
-    list.as_array().unwrap_or(&[]).iter().map(Entry::read).collect()
+    list.as_array().into_iter().flatten().map(Entry::read).collect()
 }
 
 /// Each system of an info with its firmware entries.
 pub fn systems_of(info: &Value) -> Vec<(String, String, bool, Vec<Entry>)> {
     info.get("systems")
         .and_then(Value::as_array)
-        .unwrap_or(&[])
-        .iter()
+        .into_iter()
+        .flatten()
         .map(|s| {
             (
                 s.get("id").and_then(Value::as_str).unwrap_or("").to_string(),
@@ -182,7 +182,7 @@ pub fn needed(rt: &Runtime, tree: &Tree, at: &str, engine: Option<&str>) -> (Str
     let Ok(set) = emusen_galaxia::disc_set::DiscSet::of(tree, at, &is_image) else { return (String::new(), Vec::new()) };
     let Ok(disc) = set.open(tree, 0, &is_image) else { return (String::new(), Vec::new()) };
     let Ok(text) = lib.firmware_for(disc.image.bytes()) else { return (String::new(), Vec::new()) };
-    let list = emusen_native::json::parse(text.as_bytes()).map(|v| entries(&v)).unwrap_or_default();
+    let list = serde_json::from_str::<Value>(&text).map(|v| entries(&v)).unwrap_or_default();
     let searched = folders(tree);
     let missing = list
         .into_iter()
@@ -278,11 +278,11 @@ pub fn status_json(rt: &Runtime, system: &str) -> Option<String> {
     let declared = |native: bool| -> Vec<(Entry, bool)> {
         let mut found: Vec<(Entry, bool)> = Vec::new();
         for core in discovery.found().iter().filter(|c| c.entry.is_none() == native) {
-            for s in core.sidecar.info_json.get("systems").and_then(Value::as_array).unwrap_or(&[]) {
+            for s in core.sidecar.info_json.get("systems").and_then(Value::as_array).into_iter().flatten() {
                 if s.get("id").and_then(Value::as_str) != Some(system) {
                     continue;
                 }
-                for f in s.get("firmware").and_then(Value::as_array).unwrap_or(&[]) {
+                for f in s.get("firmware").and_then(Value::as_array).into_iter().flatten() {
                     let (e, needed) = (Entry::read(f), emusen_core_host::listing::firmware_needed(f));
                     match found.iter_mut().find(|(have, _)| have.name == e.name) {
                         Some(have) => have.1 |= needed,
@@ -469,7 +469,7 @@ mod need_tests {
     use super::*;
 
     fn entry(json: &str) -> Entry {
-        Entry::read(&emusen_native::json::parse(json.as_bytes()).unwrap())
+        Entry::read(&serde_json::from_str::<Value>(&json).unwrap())
     }
 
     #[test]

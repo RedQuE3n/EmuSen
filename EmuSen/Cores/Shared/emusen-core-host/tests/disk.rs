@@ -17,7 +17,7 @@ fn outcome(file: &Path) -> String {
         None => "none\n".to_string(),
         Some(s) => {
             let settings = match &s.settings {
-                emusen_native::json::Value::Array(items) => items.len(),
+                serde_json::Value::Array(items) => items.len(),
                 _ => usize::MAX,
             };
             format!(

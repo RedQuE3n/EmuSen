@@ -4143,3 +4143,70 @@ people edit were already read through `config_json` (§47.19). What `quoted` wro
 so an answer holds text outside ASCII as itself rather than as a `\u` escape. Numbers are read by value
 (`as_i64`, `as_u64`, `as_f64`) where a token was parsed before, so `1.0` is still no whole number. The shell's test of
 its dependencies names Galaxia and the suggestion crate alone. Sections 5.2-5.5, 10.3 and 11.3 are kept as history.
+
+### 47.22 Descriptors and single-step files are read by serde_json; emusen-native keeps no reader
+
+`emusen-native` held a JSON reader of its own (`src/json.rs`, 288 lines) so that a core's tests needed no dependency,
+and a validator for the subset of JSON Schema the ABI's schemas use, which read through it. *Decided 2026-11-07 by the
+tester* (the cleanup's question 4): `emusen-native` keeps no dependency, and serde_json may be a development
+dependency of the four CPU crates with single-step suites. Both are now done this way:
+
+- **The reader is deleted.** `emusen-native` keeps the descriptor writer (`core::jsonw`, every core's) and, in
+  `core::schema`, the six committed schemas as text. It has no dependency and no development dependency.
+- **The validator is a crate of its own, `emusen-core-schema`** (`EmuSen/Cores/Shared/`), on serde_json with
+  `preserve_order`, so that violations are named in the document's order in every workspace that links it. Its users
+  are the core host (rule 4 of §7.2 and the sidecar writer), the conformance kit and the ABI check. No core links it.
+  A JSON Schema crate was not taken: the schemas use a dozen keywords, and the validator's words are pinned by tests.
+- **The core host reads a core's info, settings schema and sidecar with serde_json**, `preserve_order` set in its own
+  manifest for the same reason. Crystal and its debugger hold the host's `serde_json::Value`. The kit, the goldens'
+  driver and the ABI check read with serde_json; the broker's tests take it as a development dependency.
+- **The single-step files** are read by `emusen-singlestep` with serde_json; `beryl-m68k`, `beryl-z80`,
+  `blackmoon-r3000` and VenusRT name it as a development dependency for their harnesses' cases.
+
+**What changed for a reader of the host.** Four behaviours differ, none on a file the build writes:
+1. A refusal names serde_json's words: "its info is not JSON: expected value at line 1 column 1" where it named a
+   byte offset.
+2. Opening compares the library's info with the sidecar's by serde_json's equality: members in any order, as before,
+   but `1` and `1.0` are no longer the same number, so an info rewritten that way is refused as altered.
+3. A sidecar's `capabilities` is read as any whole number up to 2^64 - 1; one past 2^63 was refused before as a float.
+4. A member written twice keeps its last value, where the old reader kept the first; to the validator `-0` is now a
+   number rather than an integer, and a whole number past 2^63 - 1 an integer rather than a number. No schema or
+   writer of the project writes any of them.
+
+**Tests moved, none dropped.** The nine tests that validated the writer's output against the schemas moved whole from
+`emusen-native/src/core/tests.rs` to `emusen-core-schema/tests/written.rs`, with jsonw's "the text parses" check;
+the test core's six descriptors are validated through the host in `emusen-core-host/tests/host.rs`
+(`every_descriptor_of_the_test_core_validates_against_its_committed_schema`), and the raw picture's listing and the
+info's capabilities are compared as text in `emusen-native`. The reader's own two tests went with it. A new host test
+holds point 2: an info edited in its sidecar is refused, one with its members reversed opens.
+
+**A real sample of the corpora**, fetched 2026-11-07 into `~/.cache/emusen/singlestep-sample/` (about 100 MB, never
+committed) and laid out as each `*_CORPUS` variable expects. Each file is
+`https://raw.githubusercontent.com/SingleStepTests/<repository>/<commit>/<path>`, fetched with curl:
+- `680x0` at `e0d5ece9670205cc84a0101081837deb446f86a3`: `68000/v1/ABCD.json.gz` and `ADD.w.json.gz`, unpacked by
+  gunzip to `beryl/680x0/68000/v1/` (`EMUSEN_BERYL_CORPUS=…/beryl`);
+- `z80` at `ebe1875d48f374bcfd4b505d8eb8ee751568b5f7`: `v1/00.json`, `3e.json` and `cb 46.json` to `beryl/z80/v1/`;
+- `65816` at `307c63f5673c8c6b861c52f71ddb89212a227480`: the fourteen files the disputes log names, `v1/01.e.json`,
+  `21.e`, `41.e`, `61.e`, `81.e`, `a1.e`, `c1.e`, `e1.e`, `7c.n`, `7c.e`, `fc.n`, `fc.e`, `42.n` and `42.e`, to
+  `venusrt/src/SingleStepTests-65816/v1/` (`EMUSEN_VENUSRT_CORPUS=…/venusrt`).
+
+The `m68000` and `r3000` suites ship their cases as `.json.bin`, which only their own Python decoders turn into JSON;
+those were not run, so the 68000's primary suite and the R3000A's ran on their inline cases only.
+
+**Proof, measured on 2026-11-07.**
+- The core host's tool lists the eight sidecars of the published `out/linux-x64/Mistress/lib/EmuSen` to the same bytes
+  built at `5146e4240` and after the step, and `cargo xtask check-sidecars` passes on that folder. The disk corpus's five
+  sidecars read to their recorded listings, and the ABI check finds its 565 facts, the schemas' descriptor fields among
+  them, in agreement with the baseline.
+- On the sample: the Z80 passes 3,000 of 3,000 cases, by the processor and by the replay. The 68000 passes 13,133 of
+  TomHarte's 16,130 (measured, not gated; §3.3 of `Beryl_M68k.md`), with the per-file report, first failures included,
+  identical to the old reader's. VenusRT's 167 tests pass with the 65816 files present; the two that assert the
+  whole suite's 512 files and 5,120,000 cases were left out. Run alone, the whole-suite test writes the same per-file
+  rows as the old reader's and stops at the same case with both: `e1 e 8669` is expected to fail under D-1 and passes
+  in the suite at `307c63f`. The suite's later commit and the disputes log disagree there; the reader is not the cause.
+- **A fresh 16 MiB bus per case.** The disputes check made a new `FlatBus` (16 MiB, zeroed) for every case. With the
+  new reader the run took 694 s, against 20 s before, on an idle machine. Stack samples showed the time in `memset`
+  under `vec![0; 1 << 24]` and in heap trimming: once a freed chunk raises glibc's dynamic mmap threshold past
+  16 MiB, the bus is carved from the heap and cleared by hand, where an mmap'd one arrives zeroed. With
+  `MALLOC_MMAP_THRESHOLD_=4194304` the same run took 8.4 s. The check now keeps one bus for every case, cleared by
+  each run as `run_file`'s already was: 5.4 s.

@@ -8,7 +8,7 @@ use std::path::Path;
 
 use clang_sys::*;
 use emusen_native::core::{schema, sys};
-use emusen_native::json::Value;
+use serde_json::Value;
 
 /// The triples the project builds; the facts must be the same for each.
 pub const TRIPLES: [&str; 4] = ["x86_64-unknown-linux-gnu", "x86_64-pc-windows-msvc", "aarch64-apple-darwin", "x86_64-apple-darwin"];
@@ -163,9 +163,9 @@ pub const DOCUMENTS: [(&str, &str); 6] = [
 ];
 
 fn type_of(root: &Value, s: &Value) -> String {
-    let s = schema::resolve(root, s);
+    let s = emusen_core_schema::resolve(root, s);
     let base = match s.get("type") {
-        Some(Value::Str(t)) => t.clone(),
+        Some(Value::String(t)) => t.clone(),
         Some(Value::Array(ts)) => ts.iter().filter_map(Value::as_str).collect::<Vec<_>>().join("|"),
         _ => "any".to_owned(),
     };
@@ -176,9 +176,9 @@ fn type_of(root: &Value, s: &Value) -> String {
 }
 
 fn walk(root: &Value, s: &Value, path: &str, out: &mut Facts) {
-    let s = schema::resolve(root, s);
+    let s = emusen_core_schema::resolve(root, s);
     if let Some(Value::Object(props)) = s.get("properties") {
-        let required: Vec<&str> = s.get("required").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(Value::as_str).collect();
+        let required: Vec<&str> = s.get("required").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
         for (name, child) in props {
             let p = format!("{path}.{name}");
             let need = if required.contains(&name.as_str()) { "required" } else { "optional" };
@@ -200,7 +200,7 @@ fn walk(root: &Value, s: &Value, path: &str, out: &mut Facts) {
 pub fn descriptors() -> Result<Facts, String> {
     let mut out = Facts::new();
     for (name, text) in DOCUMENTS {
-        let root = emusen_native::json::parse(text.as_bytes()).map_err(|e| format!("{name}'s schema is not JSON at byte {}", e.at))?;
+        let root: Value = serde_json::from_str(text).map_err(|e| format!("{name}'s schema is not JSON: {e}"))?;
         out.insert(format!("json {name}"), type_of(&root, &root));
         walk(&root, &root, name, &mut out);
     }

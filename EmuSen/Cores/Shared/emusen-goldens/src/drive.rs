@@ -6,7 +6,7 @@ use std::path::Path;
 
 use emusen_core_host::{Create, InputLatch, Library, Machine};
 use emusen_native::core::sys::caps;
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 /// The pad's controls in their canonical order, emusen-native's: bit n of a script's mask is control n.
 pub const PAD_BUTTONS: [&str; 16] = emusen_native::core::Control::NAMES;
@@ -33,12 +33,12 @@ impl Driven {
     /// The library's machine for the image, as the system its info gives the extension.
     pub fn open(library: &Path, image: &[u8], extension: &str, skip_rendering: bool) -> Result<Driven, String> {
         let lib = Library::load(library).map_err(|e| format!("{}: {e:?}", library.display()))?;
-        let info = json::parse(lib.info_text().map_err(|c| lib.words(c))?.as_bytes()).map_err(|e| format!("info: {e:?}"))?;
-        let settings = json::parse(lib.settings_text().map_err(|c| lib.words(c))?.as_bytes()).map_err(|e| format!("settings: {e:?}"))?;
+        let info = serde_json::from_str::<Value>(&lib.info_text().map_err(|c| lib.words(c))?).map_err(|e| format!("info: {e:?}"))?;
+        let settings = serde_json::from_str::<Value>(&lib.settings_text().map_err(|c| lib.words(c))?).map_err(|e| format!("settings: {e:?}"))?;
         let rows: Vec<(String, String, bool)> = settings
             .as_array()
-            .unwrap_or(&[])
-            .iter()
+            .into_iter()
+            .flatten()
             .map(|s| (text(s, "key").unwrap_or("").to_string(), text(s, "default").unwrap_or("").to_string(), text(s, "scope") == Some("create")))
             .collect();
         let all: Vec<String> = rows.iter().map(|(k, v, _)| format!("{k}={v}")).collect();
@@ -46,9 +46,9 @@ impl Driven {
         let system = info
             .get("systems")
             .and_then(Value::as_array)
-            .unwrap_or(&[])
-            .iter()
-            .find(|s| s.get("extensions").and_then(Value::as_array).unwrap_or(&[]).iter().any(|e| e.as_str().is_some_and(|e| e.trim_start_matches('.').eq_ignore_ascii_case(extension.trim_start_matches('.')))))
+            .into_iter()
+            .flatten()
+            .find(|s| s.get("extensions").and_then(Value::as_array).into_iter().flatten().any(|e| e.as_str().is_some_and(|e| e.trim_start_matches('.').eq_ignore_ascii_case(extension.trim_start_matches('.')))))
             .cloned();
         let id = system.as_ref().and_then(|s| text(s, "id")).map(|s| std::ffi::CString::new(s).unwrap());
         let all = all.join("\n");
@@ -62,14 +62,14 @@ impl Driven {
             machine.set_settings(&run).map_err(|c| lib.words(c as i64))?;
         }
         let pads: Vec<&Value> = system.as_ref().and_then(|s| s.get("controllers")).and_then(Value::as_array).map(|c| c.iter().collect()).unwrap_or_default();
-        let ports = pads.iter().flat_map(|c| c.get("ports").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(Value::as_i64)).max().map_or(0, |p| p as usize + 1).max(2);
+        let ports = pads.iter().flat_map(|c| c.get("ports").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_i64)).max().map_or(0, |p| p as usize + 1).max(2);
         // Each port's pad as the machine's info names it, as `CoreEngine.ControllerFor` chose it; the system's first where the info names no port.
-        let machine_info = json::parse(machine.machine_info().unwrap_or_default().as_bytes()).unwrap_or(Value::Null);
+        let machine_info = serde_json::from_str::<Value>(&machine.machine_info().unwrap_or_default()).unwrap_or(Value::Null);
         let named: Vec<(i64, Option<String>)> = machine_info
             .get("ports")
             .and_then(Value::as_array)
-            .unwrap_or(&[])
-            .iter()
+            .into_iter()
+            .flatten()
             .map(|p| (p.get("port").and_then(Value::as_i64).unwrap_or(-1), text(p, "controller").map(str::to_string)))
             .collect();
         let ports = ports.max(named.len());
@@ -81,7 +81,7 @@ impl Driven {
                 let id = named.iter().find(|(p, _)| *p == port as i64).and_then(|(_, c)| c.clone());
                 pads.iter().find(|c| id.is_some() && text(c, "id") == id.as_deref())
             };
-            for b in pad.and_then(|c| c.get("buttons")).and_then(Value::as_array).unwrap_or(&[]) {
+            for b in pad.and_then(|c| c.get("buttons")).and_then(Value::as_array).into_iter().flatten() {
                 if let (Some(control), Some(bit)) = (text(b, "control"), b.get("bit").and_then(Value::as_i64)) {
                     if let Some(i) = PAD_BUTTONS.iter().position(|n| *n == control) {
                         if bit < 32 {

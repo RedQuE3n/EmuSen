@@ -3,9 +3,10 @@
 
 use std::path::{Path, PathBuf};
 
+use emusen_core_schema::validate;
 use emusen_native::core::jsonw::Json;
 use emusen_native::core::schema;
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 use crate::descriptors::CoreInfo;
 use crate::library::Library;
@@ -36,7 +37,7 @@ pub fn path_for(library: &Path) -> PathBuf {
 fn opt_string(doc: &Value, key: &str) -> Option<String> {
     match doc.get(key) {
         None | Some(Value::Null) => Some(String::new()),
-        Some(Value::Str(s)) => Some(s.clone()),
+        Some(Value::String(s)) => Some(s.clone()),
         Some(_) => None,
     }
 }
@@ -46,8 +47,8 @@ impl Sidecar {
     /// a bare file name; the C# host's rules, field for field.
     pub fn read(path: &Path) -> Option<Sidecar> {
         let bytes = std::fs::read(path).ok()?;
-        let doc = json::parse(&bytes).ok()?;
-        if !matches!(doc, Value::Object(_)) || doc.get("sidecar") != Some(&Value::Int(1)) {
+        let doc: Value = serde_json::from_slice(&bytes).ok()?;
+        if !doc.is_object() || doc.get("sidecar").and_then(Value::as_i64) != Some(1) {
             return None;
         }
         let name = doc.get("library")?.as_str()?;
@@ -55,15 +56,14 @@ impl Sidecar {
             return None;
         }
         let info_json = doc.get("info")?;
-        if !matches!(info_json, Value::Object(_)) {
+        if !info_json.is_object() {
             return None;
         }
         let sha256 = opt_string(&doc, "sha256")?;
         let abi = opt_string(&doc, "abi")?;
         let capabilities = match doc.get("capabilities") {
             None | Some(Value::Null) => 0,
-            Some(Value::Int(n)) if *n >= 0 => *n as u64,
-            Some(_) => return None,
+            Some(v) => v.as_u64()?,
         };
         let development = match doc.get("development") {
             None | Some(Value::Null) => false,
@@ -90,7 +90,7 @@ pub fn write(library: &Path, development: bool) -> Result<PathBuf, String> {
     }
     let info = lib.info_text().map_err(|e| format!("info failed with {e}"))?;
     let settings = lib.settings_text().map_err(|e| format!("settings_schema failed with {e}"))?;
-    let problems: Vec<String> = schema::validate(schema::INFO, &info).into_iter().chain(schema::validate(schema::SETTINGS, &settings)).collect();
+    let problems: Vec<String> = validate(schema::INFO, &info).into_iter().chain(validate(schema::SETTINGS, &settings)).collect();
     if !problems.is_empty() {
         return Err(format!("its descriptors do not validate: {}", problems.join("; ")));
     }

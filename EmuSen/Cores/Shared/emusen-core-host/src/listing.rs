@@ -3,7 +3,7 @@
 //! and §29.40.5 for 1.3's keys; each row's `libretro` and the entries waiting for approval, EmuSen_LibretroHost.md §10m).
 
 use emusen_native::core::jsonw::Json;
-use emusen_native::json::Value;
+use serde_json::Value;
 
 use crate::descriptors::LibretroFile;
 use crate::discovery::Discovery;
@@ -21,7 +21,7 @@ pub fn cores(j: &mut Json, d: &Discovery, trust: &Trust) {
     j.begin_array();
     for c in d.found() {
         let s = &c.sidecar;
-        let authors: Vec<&str> = s.info_json.get("authors").and_then(Value::as_array).unwrap_or(&[]).iter().filter_map(Value::as_str).collect();
+        let authors: Vec<&str> = s.info_json.get("authors").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
         let systems: Vec<&str> = s.info.systems.iter().map(|x| x.id.as_str()).collect();
         j.begin_object()
             .field_str("library", &s.library_path.to_string_lossy())
@@ -86,8 +86,8 @@ pub fn cores(j: &mut Json, d: &Discovery, trust: &Trust) {
 /// The firmware a core's info declares for its systems: `required` where one has no open replacement, `optional` where
 /// every one has, none where it declares none (EmuSen_Cores.md §3.9).
 pub fn firmware_need(info: &Value) -> Option<&'static str> {
-    let systems = info.get("systems").and_then(Value::as_array).unwrap_or(&[]);
-    let entries: Vec<&Value> = systems.iter().flat_map(|s| s.get("firmware").and_then(Value::as_array).unwrap_or(&[])).collect();
+    let systems = info.get("systems").and_then(Value::as_array).into_iter().flatten();
+    let entries: Vec<&Value> = systems.flat_map(|s| s.get("firmware").and_then(Value::as_array).into_iter().flatten()).collect();
     if entries.is_empty() {
         return None;
     }
@@ -164,10 +164,10 @@ pub fn both(d: &Discovery, trust: &Trust) -> String {
 #[cfg(test)]
 mod tests {
     use super::firmware_need;
-    use emusen_native::json::parse;
+    use serde_json::{Value, from_str};
 
     fn need(firmware: &str) -> Option<&'static str> {
-        firmware_need(&parse(format!(r#"{{"systems":[{{"id":"ps2","firmware":{firmware}}}]}}"#).as_bytes()).unwrap())
+        firmware_need(&from_str::<Value>(&format!(r#"{{"systems":[{{"id":"ps2","firmware":{firmware}}}]}}"#)).unwrap())
     }
 
     #[test]
@@ -177,6 +177,6 @@ mod tests {
         assert_eq!(need(r#"[{"label":"BIOS","required":true,"replacement":{"effect":"accuracy","cost":"c"}}]"#), Some("required"));
         assert_eq!(need(r#"[{"label":"BIOS","required":false}]"#), Some("required"));
         assert_eq!(need(r#"[{"label":"BIOS","required":false,"replacement":{"effect":"accuracy","cost":"c"}}]"#), Some("optional"));
-        assert_eq!(firmware_need(&parse(b"{}").unwrap()), None);
+        assert_eq!(firmware_need(&from_str::<Value>("{}").unwrap()), None);
     }
 }

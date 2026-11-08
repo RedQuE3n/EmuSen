@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 use crate::{Access, Bus, M68000, Step};
 
@@ -148,7 +148,7 @@ mod tests {
     fn map() -> Option<BTreeMap<u16, Option<String>>> {
         let root = std::env::var_os(crate::singlestep::CORPUS_VARIABLE)?;
         let path = Path::new(&root).join("680x0/map/68000.official.json");
-        let Ok(Value::Object(members)) = json::parse(&std::fs::read(path).ok()?) else { return None };
+        let Ok(Value::Object(members)) = serde_json::from_slice::<Value>(&std::fs::read(path).ok()?) else { return None };
         Some(members.into_iter().map(|(k, v)| (u16::from_str_radix(&k, 16).unwrap(), v.as_str().filter(|s| *s != "None").map(str::to_owned))).collect())
     }
 

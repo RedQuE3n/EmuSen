@@ -20,6 +20,7 @@ use emusen_core_host::Machine;
 use emusen_native::core::caps;
 use emusen_native::debug::{flag, range, run, stop};
 use emusen_systems::debug::{Reference, Unit};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -1156,21 +1157,21 @@ impl Debugger {
             Ok(t) if !t.is_empty() => t,
             _ => "[]".to_string(),
         };
-        let doc = emusen_native::json::parse(text.as_bytes()).unwrap_or(emusen_native::json::Value::Null);
+        let doc = serde_json::from_str::<Value>(&text).unwrap_or(Value::Null);
         let mut out = Vec::new();
-        for r in doc.as_array().unwrap_or(&[]) {
-            let at = r.get("address").and_then(emusen_native::json::Value::as_i64).unwrap_or(0) as i32;
-            let bytes = r.get("bytes").and_then(emusen_native::json::Value::as_array).unwrap_or(&[]).iter().map(|b| b.as_i64().unwrap_or(0) as u8).collect();
-            let text_of = |k: &str| r.get(k).and_then(emusen_native::json::Value::as_str).unwrap_or("").to_string();
+        for r in doc.as_array().into_iter().flatten() {
+            let at = r.get("address").and_then(Value::as_i64).unwrap_or(0) as i32;
+            let bytes = r.get("bytes").and_then(Value::as_array).into_iter().flatten().map(|b| b.as_i64().unwrap_or(0) as u8).collect();
+            let text_of = |k: &str| r.get(k).and_then(Value::as_str).unwrap_or("").to_string();
             out.push(Instruction { address: at, bytes, mnemonic: text_of("mnemonic"), operands: text_of("operands") });
-            match r.get("reference").filter(|v| matches!(v, emusen_native::json::Value::Object(_))) {
+            match r.get("reference").filter(|v| matches!(v, Value::Object(_))) {
                 Some(reference) => {
-                    let kind = match reference.get("kind").and_then(emusen_native::json::Value::as_str) {
+                    let kind = match reference.get("kind").and_then(Value::as_str) {
                         Some("call") => Reference::Call,
                         Some("write") => Reference::Write,
                         _ => Reference::Read,
                     };
-                    let target = reference.get("target").and_then(emusen_native::json::Value::as_i64).unwrap_or(0) as i32;
+                    let target = reference.get("target").and_then(Value::as_i64).unwrap_or(0) as i32;
                     self.references.insert(at, (kind, target));
                 }
                 None => {

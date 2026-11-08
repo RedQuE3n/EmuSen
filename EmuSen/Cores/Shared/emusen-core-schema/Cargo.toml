@@ -1,0 +1,23 @@
+[package]
+name = "emusen-core-schema"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# A descriptor checked against the core ABI's committed schemas (emusen-native's abi/v1), for the host, the conformance
+# kit and the ABI check; no core links it. See EmuSen_RustPlatform.md §47.22.
+[lib]
+name = "emusen_core_schema"
+
+[dependencies]
+# Members kept in their written order, so that violations are reported in the document's order in every workspace.
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
+
+# The schemas, and the descriptor writer whose output tests/written.rs checks against them.
+[dev-dependencies]
+emusen-native = { path = "../emusen-native" }
+
+# What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
+[profile.test-checked]
+inherits = "release"
+overflow-checks = true

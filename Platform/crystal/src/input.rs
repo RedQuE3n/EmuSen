@@ -5,7 +5,7 @@
 use std::sync::Mutex;
 
 use emusen_core_host::InputLatch;
-use emusen_native::json::Value;
+use serde_json::Value;
 
 use crate::info::{AXES, BUTTONS};
 
@@ -33,7 +33,7 @@ fn named(names: &[&str], text: Option<&str>) -> Option<usize> {
 
 fn pad_of(c: &Value) -> Pad {
     let mut pad = Pad::default();
-    for b in c.get("buttons").and_then(Value::as_array).unwrap_or(&[]) {
+    for b in c.get("buttons").and_then(Value::as_array).into_iter().flatten() {
         let bit = b.get("bit").and_then(Value::as_i64).unwrap_or(0);
         if let Some(control) = named(&BUTTONS, b.get("control").and_then(Value::as_str))
             && (0..=31).contains(&bit)
@@ -41,7 +41,7 @@ fn pad_of(c: &Value) -> Pad {
             pad.buttons[control] |= 1u32 << bit;
         }
     }
-    for a in c.get("axes").and_then(Value::as_array).unwrap_or(&[]) {
+    for a in c.get("axes").and_then(Value::as_array).into_iter().flatten() {
         if let Some(control) = named(&AXES, a.get("control").and_then(Value::as_str)) {
             let axis = a.get("axis").and_then(Value::as_i64).unwrap_or(0) as u32;
             pad.axes.push((control, axis, matches!(a.get("trigger"), Some(Value::Bool(true)))));
@@ -55,9 +55,9 @@ impl Routes {
     pub fn of(info: &Value, machine: Option<&crate::machine_info::MachineInfo>) -> Routes {
         let system = machine.map(|m| m.system.as_str());
         let ports: &[crate::machine_info::Port] = machine.map_or(&[], |m| &m.ports);
-        let systems = info.get("systems").and_then(Value::as_array).unwrap_or(&[]);
+        let systems = info.get("systems").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
         let chosen = systems.iter().find(|s| system.is_some() && s.get("id").and_then(Value::as_str) == system).or(systems.first());
-        let controllers = chosen.and_then(|s| s.get("controllers")).and_then(Value::as_array).unwrap_or(&[]);
+        let controllers = chosen.and_then(|s| s.get("controllers")).and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
         let by_id = |id: Option<&str>| controllers.iter().find(|c| id.is_some() && c.get("id").and_then(Value::as_str) == id).map(pad_of);
         Routes {
             machine: machine.is_some(),

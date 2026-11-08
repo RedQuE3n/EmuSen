@@ -9,7 +9,8 @@ use emusen_core_host::machine::Status;
 use emusen_core_host::sidecar::{self, Sidecar};
 use emusen_core_host::trust::{self, MANIFEST, Standing};
 use emusen_core_host::{Create, Discovery, InputLatch, Library, Machine, StateLayout, Trust, listing, sha256};
-use emusen_native::json::{self, Value};
+use emusen_native::core::schema;
+use serde_json::Value;
 
 fn example(name: &str) -> PathBuf {
     let profile = std::env::current_exe().unwrap().parent().unwrap().parent().unwrap().to_path_buf();
@@ -61,6 +62,29 @@ fn the_test_core_loads_and_passes_rule_4_and_its_report_names_it() {
     assert!(plain.check().is_ok() && plain.capabilities() == 0);
 }
 
+// Each descriptor of emusen-native's test core, as a host is given it, against the schema committed beside the header.
+#[test]
+fn every_descriptor_of_the_test_core_validates_against_its_committed_schema() {
+    let lib = Library::load(&example("host_test_core")).unwrap();
+    let img = image(&[1, 2, 3]);
+    let mut m = Machine::create(lib, &Create { settings: "Wide=true", ..Create::new(&img) }).unwrap();
+    let machine_info = m.machine_info().unwrap();
+    let cases = [
+        (schema::INFO, lib.info_text().unwrap()),
+        (schema::SETTINGS, lib.settings_text().unwrap()),
+        (schema::FIRMWARE, lib.firmware_for(&image(&[0xB0])).unwrap()),
+        (schema::MACHINE_INFO, machine_info.clone()),
+        (schema::SETTING_NOTES, m.setting_notes().unwrap()),
+        (schema::DISASSEMBLY, m.disassemble(0, 0, 0, 4).unwrap()),
+    ];
+    for (s, doc) in &cases {
+        assert_eq!(emusen_core_schema::validate(s, doc), Vec::<String>::new(), "{doc}");
+    }
+    let mi: Value = serde_json::from_str(&machine_info).unwrap();
+    assert_eq!(mi["spaces"][0]["size"].as_u64(), Some(m.space_size(0).unwrap()));
+    assert_eq!(mi["battery"][0]["length"].as_i64(), Some(16));
+}
+
 #[test]
 fn a_library_without_the_required_exports_is_refused_in_both_words() {
     let e = Library::load(&example("host_partial_core")).err().unwrap();
@@ -83,10 +107,10 @@ fn each_lie_is_refused_by_rule_4_in_its_own_words() {
         (4, "it requires the host obligation teleport, which this host does not know"),
         (5, "its info is not UTF-8 text under 1 MiB"),
         (6, "its info is not UTF-8 text under 1 MiB"),
-        (7, "its info is not JSON: at byte"),
+        (7, "its info is not JSON: "),
         (8, "its info lacks id, name, version or license"),
         (9, "its info does not validate: "),
-        (10, "its settings schema is not JSON: at byte"),
+        (10, "its settings schema is not JSON: "),
         (11, "its settings schema does not validate: "),
         (12, "its id Liar is not [a-z0-9-]+"),
     ];
@@ -243,7 +267,7 @@ fn the_layout_reads_and_writes_fields_and_names_differences() {
 }
 
 fn listed(d: &Discovery) -> Value {
-    json::parse(listing::both(d, &Trust::default()).as_bytes()).unwrap()
+    serde_json::from_str(&listing::both(d, &Trust::default())).unwrap()
 }
 
 fn reports(v: &Value) -> Vec<String> {
@@ -268,7 +292,7 @@ fn discovery_lists_from_sidecars_alone_and_opens_under_the_trust_rules() {
     let v = listed(&d);
     assert_eq!(reports(&v)[1], format!("{}, V1TestCore (test) 1.0.0, core ABI 1.19", dir.join("libtest.so").display()));
     let engine = &v.get("engines").and_then(Value::as_array).unwrap()[1];
-    assert_eq!(engine.get("systems"), Some(&Value::Array(vec![Value::Str("test".into())])));
+    assert_eq!(engine.get("systems"), Some(&Value::Array(vec![Value::String("test".into())])));
     assert_eq!(engine.get("available"), Some(&Value::Bool(true)));
     assert_eq!(d.for_extension(".TST").count(), 2);
     assert_eq!(d.for_system("test").count(), 2);
@@ -305,6 +329,28 @@ fn a_missing_an_altered_and_an_unapproved_library_are_listed_and_refused_at_open
     let approved = Trust::new(std::slice::from_ref(&dir), &[sha256::file_hex(&unapproved).unwrap().to_uppercase()]);
     let again = Discovery::scan(std::slice::from_ref(&dir), false);
     assert!(again.found()[3].open(&approved).is_ok(), "an approval by hash lets it load");
+}
+
+// Opening compares the info a library gives with its sidecar's by value: members in another order are the same info,
+// an edited member is not.
+#[test]
+fn an_info_edited_in_its_sidecar_is_refused_and_one_reordered_is_not() {
+    let dir = scratch("info");
+    let edited = installed(&dir, "host_plain_core", "libedited.so", false);
+    let reordered = installed(&dir, "host_test_core", "libreordered.so", false);
+    manifest(&dir, &[&edited, &reordered]);
+    let rewrite = |library: &Path, change: &dyn Fn(&mut Value)| {
+        let path = sidecar::path_for(library);
+        let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        change(&mut doc["info"]);
+        std::fs::write(&path, doc.to_string()).unwrap();
+    };
+    rewrite(&edited, &|info| info["license"] = Value::String("edited".into()));
+    rewrite(&reordered, &|info| *info = Value::Object(info.as_object().unwrap().iter().rev().map(|(k, v)| (k.clone(), v.clone())).collect()));
+    let d = Discovery::scan(std::slice::from_ref(&dir), false);
+    let trust = Trust::new(std::slice::from_ref(&dir), &[]);
+    assert_eq!(d.found()[0].open(&trust).err(), Some("libedited.so's info differs from its sidecar's; it is refused as altered"));
+    assert!(d.found()[1].open(&trust).is_ok());
 }
 
 #[test]
@@ -469,23 +515,23 @@ fn the_players_directory_comes_after_the_installation_its_manifest_unread_and_it
     assert_eq!(d.found()[1].standing(&trust), Standing::NeedsApproval, "a manifest in the player's directory is not read");
     assert_eq!(d.found()[1].open(&trust).err(), Some("libplain.so is in no cores manifest and has not been approved; it was not loaded"));
     assert!(d.found()[1].awaits_approval() && !d.found()[0].awaits_approval());
-    let v = json::parse(listing::both(&d, &trust).as_bytes()).unwrap();
+    let v: Value = serde_json::from_str(&listing::both(&d, &trust)).unwrap();
     let cores = field(&v, "cores").as_array().unwrap();
     assert_eq!(cores.len(), 4);
-    assert_eq!(field(&cores[0], "directory"), &Value::Str("installation".into()));
-    assert_eq!(field(&cores[0], "trust"), &Value::Str("manifest".into()));
-    assert_eq!(field(&cores[0], "systems"), &Value::Array(vec![Value::Str("test".into())]));
-    assert_eq!(field(&cores[1], "directory"), &Value::Str("player".into()));
-    assert_eq!(field(&cores[1], "trust"), &Value::Str("needs_approval".into()));
+    assert_eq!(field(&cores[0], "directory"), &Value::String("installation".into()));
+    assert_eq!(field(&cores[0], "trust"), &Value::String("manifest".into()));
+    assert_eq!(field(&cores[0], "systems"), &Value::Array(vec![Value::String("test".into())]));
+    assert_eq!(field(&cores[1], "directory"), &Value::String("player".into()));
+    assert_eq!(field(&cores[1], "trust"), &Value::String("needs_approval".into()));
     let bare = &cores[2];
-    assert_eq!(field(bare, "trust"), &Value::Str("not_read".into()));
-    assert_eq!(field(bare, "report"), &Value::Str("not yet read".into()));
+    assert_eq!(field(bare, "trust"), &Value::String("not_read".into()));
+    assert_eq!(field(bare, "report"), &Value::String("not yet read".into()));
     for k in ["sidecar", "abi", "engine", "name", "license"] {
         assert_eq!(field(bare, k), &Value::Null, "{k}");
     }
     let engines = field(&v, "engines").as_array().unwrap();
     assert_eq!(engines.len(), 2, "a library not yet read is no engine");
-    assert_eq!(field(&engines[1], "trust"), &Value::Str("needs_approval".into()));
+    assert_eq!(field(&engines[1], "trust"), &Value::String("needs_approval".into()));
     let approved = Trust::new(&inst, &[sha256::file_hex(&plain).unwrap()]).with_player(&mine);
     let again = Discovery::scan_with_player(&inst, &mine, false);
     assert_eq!(again.found()[1].standing(&approved), Standing::Approved);

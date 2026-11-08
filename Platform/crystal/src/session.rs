@@ -9,7 +9,7 @@ use emusen_core_host::InputLatch;
 
 use emusen_galaxia::tree::Tree;
 use emusen_native::core::sys::caps;
-use emusen_native::json::Value;
+use serde_json::Value;
 
 use crate::catalog::Catalog;
 use crate::abi::{self, emusen_crystal_frame_info};
@@ -121,9 +121,9 @@ pub struct Session {
 }
 
 fn controllers_of_system(info: &Value, system: &str) -> Vec<Value> {
-    let systems = info.get("systems").and_then(Value::as_array).unwrap_or(&[]);
+    let systems = info.get("systems").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
     let chosen = systems.iter().find(|s| s.get("id").and_then(Value::as_str) == Some(system)).or(systems.first());
-    chosen.and_then(|s| s.get("controllers")).and_then(Value::as_array).map(<[Value]>::to_vec).unwrap_or_default()
+    chosen.and_then(|s| s.get("controllers")).and_then(Value::as_array).cloned().unwrap_or_default()
 }
 
 impl Session {
@@ -677,10 +677,10 @@ impl Session {
                 .info
                 .get("systems")
                 .and_then(Value::as_array)
-                .unwrap_or(&[])
-                .iter()
-                .flat_map(|s| s.get("controllers").and_then(Value::as_array).unwrap_or(&[]).iter())
-                .flat_map(|c| c.get("ports").and_then(Value::as_array).unwrap_or(&[]).iter())
+                .into_iter()
+                .flatten()
+                .flat_map(|s| s.get("controllers").and_then(Value::as_array).into_iter().flatten())
+                .flat_map(|c| c.get("ports").and_then(Value::as_array).into_iter().flatten())
                 .filter_map(Value::as_i64)
                 .map(|p| p as usize + 1)
                 .max()
@@ -700,7 +700,7 @@ impl Session {
         };
         let controls = |list: &str, names: &[&str]| -> Vec<i64> {
             let mut out: Vec<i64> = Vec::new();
-            for b in pad.as_ref().and_then(|c| c.get(list)).and_then(Value::as_array).unwrap_or(&[]) {
+            for b in pad.as_ref().and_then(|c| c.get(list)).and_then(Value::as_array).into_iter().flatten() {
                 let text = b.get("control").and_then(Value::as_str);
                 let found = text.and_then(|t| names.iter().position(|n| *n == t).or_else(|| t.trim().parse::<usize>().ok().filter(|n| *n < names.len())));
                 if let Some(i) = found

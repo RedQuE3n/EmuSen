@@ -151,6 +151,8 @@ mod tests {
                     && got.address == want.address && want.value.is_none() && got.value.is_some() && Signals { vpa: false, ..g } == w)
         };
         let mut out = Vec::new();
+        // One bus for every case, cleared by each run as run_file's is (EmuSen_RustPlatform.md §47.22).
+        let mut bus = FlatBus::default();
         let indexed_indirect = ["01", "21", "41", "61", "81", "a1", "c1", "e1"].map(|o| (format!("{o}.e.json"), "D-1"));
         let rest = [("7c.n.json", "D-2"), ("7c.e.json", "D-2"), ("fc.n.json", "D-2"), ("fc.e.json", "D-3"), ("42.n.json", "D-41"), ("42.e.json", "D-41")]
             .map(|(f, r)| (f.to_owned(), r));
@@ -160,7 +162,7 @@ mod tests {
             let mut failing = Vec::new();
             for case in super::super::read_cases(&dir.join(file)) {
                 let want = Expected::from_json(&case);
-                let name = case.get("name").and_then(emusen_native::json::Value::as_str).unwrap().to_owned();
+                let name = case.get("name").and_then(serde_json::Value::as_str).unwrap().to_owned();
                 let s_low = want.initial.s & 0xFF;
                 let expected_to_fail = match rule {
                     "D-1" => {
@@ -172,14 +174,14 @@ mod tests {
                     }
                     _ => file == "fc.e.json" && s_low == 0x00,
                 };
-                let strict = run_case(&mut Cpu::default(), &mut FlatBus::default(), &want).passed();
+                let strict = run_case(&mut Cpu::default(), &mut bus, &want).passed();
                 strict_failures += !strict as usize;
                 let o = if rule == "D-2" || file == "fc.e.json" {
-                    run_case_with(&mut Cpu::default(), &mut FlatBus::default(), &want, swapped)
+                    run_case_with(&mut Cpu::default(), &mut bus, &want, swapped)
                 } else if rule == "D-41" {
-                    run_case_with(&mut Cpu::default(), &mut FlatBus::default(), &want, fetched)
+                    run_case_with(&mut Cpu::default(), &mut bus, &want, fetched)
                 } else {
-                    run_case(&mut Cpu::default(), &mut FlatBus::default(), &want)
+                    run_case(&mut Cpu::default(), &mut bus, &want)
                 };
                 assert_eq!(!o.passed(), expected_to_fail, "{file} {name} under {rule}: {:?}", o.first_difference);
                 if expected_to_fail {
@@ -202,7 +204,7 @@ mod tests {
     // One case written out by hand, so the CPU's harness wiring is checked without the corpus.
     #[test]
     fn sta_direct_x_in_native_mode_takes_its_documented_cycles() {
-        let case = emusen_native::json::parse(br#"{"name": "95 n", "initial": {"pc": 100, "s": 511, "p": 0, "a": 4660, "x": 2, "y": 0, "dbr": 0, "d": 16, "pbr": 1, "e": 0, "ram": [[65636, 149], [65637, 32]]},
+        let case = serde_json::from_slice::<serde_json::Value>(br#"{"name": "95 n", "initial": {"pc": 100, "s": 511, "p": 0, "a": 4660, "x": 2, "y": 0, "dbr": 0, "d": 16, "pbr": 1, "e": 0, "ram": [[65636, 149], [65637, 32]]},
             "final": {"pc": 102, "s": 511, "p": 0, "a": 4660, "x": 2, "y": 0, "dbr": 0, "d": 16, "pbr": 1, "e": 0, "ram": [[50, 52], [51, 18]]},
             "cycles": [[65636, 149, "dp-r----"], [65637, 32, "-p-r----"], [65637, null, "---r----"], [65637, null, "---r----"], [50, 52, "d--w----"], [51, 18, "d--w----"]]}"#).unwrap();
         let want = Expected::from_json(&case);

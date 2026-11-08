@@ -75,8 +75,9 @@ truncated load changes nothing, which a test pins.
 files are read by `emusen_native::json`, a reader of about 300 lines with no dependency. None of the Rust cores takes
 a dependency beyond `emusen-native`, and the offline cargo cache had no JSON crate; a reader written for the purpose
 kept both true (measured: the whole of both suites, 2.8 GB of JSON, is read and graded in 16 s of wall time on four
-threads). The corpus is found through `EMUSEN_VENUSRT_CORPUS`; without it the corpus tests pass unrun, as
-`NecDspRealFirmwareTests` does without firmware.
+threads). Since 2026-11-07 the files are read by serde_json, a dev-dependency of VenusRT and of `emusen-singlestep`;
+`emusen-native` keeps no dependency (`EmuSen_RustPlatform.md` §47.22). The corpus is found through
+`EMUSEN_VENUSRT_CORPUS`; without it the corpus tests pass unrun, as `NecDspRealFirmwareTests` does without firmware.
 
 **The 65816 protocol.** A flat 16 MiB bus that records every cycle as (address, data, pins). The pins are the suite's
 eight, in its order: VDA, VPA, VPB, RWB, E, M, X, MLB. RAM answers only a cycle with VDA, VPA or VPB, as the suite's

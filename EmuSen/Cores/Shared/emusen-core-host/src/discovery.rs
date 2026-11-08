@@ -9,9 +9,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-use emusen_native::json;
 
-use crate::descriptors::{CoreSystem, deep_equal};
+use crate::descriptors::CoreSystem;
 use crate::entry::{Entry, Waiting};
 use crate::library::{Library, full_path};
 use crate::sidecar::{SUFFIX, Sidecar};
@@ -94,7 +93,7 @@ impl Discovered {
         let lib = loaded.map_err(|e| Refusal::of(format!("{name}: {}", e.host_words())))?;
         record_loaded(path, hash);
         let checked = lib.check().map_err(|_| Refusal::of(lib.report()))?;
-        let same = json::parse(checked.info.as_bytes()).is_ok_and(|v| deep_equal(&v, &self.sidecar.info_json));
+        let same = serde_json::from_str::<serde_json::Value>(&checked.info).is_ok_and(|v| v == self.sidecar.info_json);
         if !same {
             return Err(Refusal::of(format!("{name}'s info differs from its sidecar's; it is refused as altered")));
         }

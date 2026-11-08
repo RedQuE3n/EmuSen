@@ -191,8 +191,8 @@ fn a_console_setting_stored_through_a_session_reaches_the_next_machines_creation
 
 /// The listing's rows that are libretro entries, each as (engine or none, row trust, its `libretro` member's hash and trust).
 fn entry_rows(rt: &Runtime) -> Vec<(Option<String>, String, String, String)> {
-    let listing = emusen_native::json::parse(rt.cores_json().as_bytes()).unwrap();
-    let text = |v: &emusen_native::json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_owned);
+    let listing = serde_json::from_str::<serde_json::Value>(&rt.cores_json()).unwrap();
+    let text = |v: &serde_json::Value, k: &str| v.get(k).and_then(|x| x.as_str()).map(str::to_owned);
     listing
         .as_array()
         .unwrap()

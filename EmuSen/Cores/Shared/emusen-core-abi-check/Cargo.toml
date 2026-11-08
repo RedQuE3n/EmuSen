@@ -8,6 +8,9 @@ publish = false
 # and against abi/v1/baseline.txt. No core's build depends on it. See EmuSen_CoreAPI.md §5.2 and §5.4.
 [dependencies]
 emusen-native = { path = "../emusen-native" }
+# The committed schemas read as JSON and walked for their fields (EmuSen_RustPlatform.md §47.22).
+serde_json = "1.0.154"
+emusen-core-schema = { path = "../emusen-core-schema" }
 clang-sys = { version = "1.9", features = ["clang_11_0", "runtime"] }
 
 [build-dependencies]

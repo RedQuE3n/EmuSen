@@ -10,7 +10,7 @@ use emusen_crystal_debug::watches::WatchKind;
 use emusen_crystal_debug::{Debugger, Ran};
 use emusen_native::core::caps;
 use emusen_native::core::sys::event;
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 pub struct MachineScript {
     machine: Option<Machine>,
@@ -48,10 +48,10 @@ fn or_dash(text: &Option<String>) -> &str {
 
 /// The settings a library's schema gives, each `key=default`: all of them, or those set while running.
 fn settings_text(lib: &Library, create: bool) -> String {
-    let doc = json::parse(lib.settings_text().unwrap_or_default().as_bytes()).unwrap_or(Value::Null);
+    let doc = serde_json::from_str::<Value>(&lib.settings_text().unwrap_or_default()).unwrap_or(Value::Null);
     doc.as_array()
-        .unwrap_or(&[])
-        .iter()
+        .into_iter()
+        .flatten()
         .filter(|s| create || s.get("scope").and_then(Value::as_str) != Some("create"))
         .map(|s| format!("{}={}", s.get("key").and_then(Value::as_str).unwrap_or(""), s.get("default").and_then(Value::as_str).unwrap_or("")))
         .collect::<Vec<_>>()
@@ -150,7 +150,7 @@ impl MachineScript {
             let _ = m.set_settings(&run);
         }
         let _ = m.setting_notes();
-        let info = json::parse(lib.info_text().unwrap_or_default().as_bytes()).unwrap_or(Value::Null);
+        let info = serde_json::from_str::<Value>(&lib.info_text().unwrap_or_default()).unwrap_or(Value::Null);
         let name = info.get("name").and_then(Value::as_str).unwrap_or("").to_string();
         let display = info.get("display_name").and_then(Value::as_str).map_or(name, str::to_string);
         self.display = (display, info.get("version").and_then(Value::as_str).unwrap_or("").to_string());

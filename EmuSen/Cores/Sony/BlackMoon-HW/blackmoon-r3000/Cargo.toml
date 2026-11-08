@@ -14,6 +14,8 @@ emusen-mips = { path = "../../../Shared/emusen-mips" }
 
 [dev-dependencies]
 emusen-singlestep = { path = "../../../Shared/emusen-singlestep" }
+# The single-step suites' JSON (EmuSen_SingleStep.md).
+serde_json = "1.0.154"
 
 # What CI tests with: release with overflow checks on, so an arithmetic wrap nobody wrote fails a test - see EmuSen_RustPlatform.md §37.
 [profile.test-checked]

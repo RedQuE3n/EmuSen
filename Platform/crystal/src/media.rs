@@ -553,7 +553,7 @@ mod tests {
     use std::time::{Duration, SystemTime};
 
     fn system() -> SystemDetail {
-        let v = emusen_native::json::parse(br#"{"systems":[{"id":"test","battery":[{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]}]}"#).unwrap();
+        let v = serde_json::from_slice::<serde_json::Value>(br#"{"systems":[{"id":"test","battery":[{"which":2,"suffix":".mem","kind":"console","medium":"test.memory","label":"Inside the console"}]}]}"#).unwrap();
         info::systems(&v).remove(0)
     }
 

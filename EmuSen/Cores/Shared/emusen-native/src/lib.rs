@@ -13,7 +13,6 @@
 //!   `Settings` and the crash log, which [`core`] re-exports.
 //! - [`core`] is the stable core ABI, version 1: the `Core` trait and `core_exports!`, which generate every
 //!   `emusen_core_*` export of `include/emusen_core.h`, the descriptors, the events and the log (EmuSen_CoreAPI.md).
-//! - [`json`] reads the single-step suites' files for a core's tests, with no dependency.
 //!
 //! Nothing here knows a console: magics, versions and a core's own refusals stay in the core. See EmuSen_RustState.md.
 
@@ -24,7 +23,6 @@ pub mod abi;
 pub mod core;
 pub mod debug;
 pub mod ffi;
-pub mod json;
 pub mod naming;
 mod reader;
 pub mod shell;

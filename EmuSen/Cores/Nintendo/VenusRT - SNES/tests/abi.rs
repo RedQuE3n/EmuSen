@@ -7,12 +7,12 @@ use common::golden::library;
 use common::{differential, programs};
 use emusen_core_host::Library;
 use emusen_native::core::sys::caps;
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 #[test]
 fn venusrt_claims_the_snes_images_and_its_capabilities() {
     let lib = Library::load(&library()).unwrap();
-    let info = json::parse(lib.info_text().unwrap().as_bytes()).unwrap();
+    let info = serde_json::from_str::<Value>(&lib.info_text().unwrap()).unwrap();
     let systems = info.get("systems").and_then(Value::as_array).unwrap();
     assert_eq!(1, systems.len());
     let extensions: Vec<&str> = systems[0].get("extensions").and_then(Value::as_array).unwrap().iter().filter_map(Value::as_str).collect();

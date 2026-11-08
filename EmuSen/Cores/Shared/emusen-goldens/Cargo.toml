@@ -13,3 +13,5 @@ name = "emusen_goldens"
 [dependencies]
 emusen-core-host = { path = "../emusen-core-host" }
 emusen-native = { path = "../emusen-native" }
+# The core's descriptors read as JSON, as the runtime reads them.
+serde_json = "1.0.154"

@@ -161,6 +161,5 @@ mod tests {
         j.begin_object().field_str("a", "x\"\\\n\u{1}é").key("b").begin_array().int(-1).uint(2).bool(true).null().begin_object().end_object().end_array().field_strs("c", &["p", "q"]).end_object();
         let text = j.finish();
         assert_eq!(text, r#"{"a":"x\"\\\n\u0001é","b":[-1,2,true,null,{}],"c":["p","q"]}"#);
-        assert!(crate::json::parse(text.as_bytes()).is_ok());
     }
 }

@@ -256,7 +256,7 @@ impl<'d> Catalog<'d> {
         let Some(core) = core else { return Vec::new() };
         let Ok(lib) = core.open(trust) else { return Vec::new() };
         let Ok(text) = lib.settings_text() else { return Vec::new() };
-        emusen_native::json::parse(text.as_bytes()).map(|v| info::settings(&v)).unwrap_or_default()
+        serde_json::from_str::<serde_json::Value>(&text).map(|v| info::settings(&v)).unwrap_or_default()
     }
 
     /// Each player's controller where the console's pack counts them, `PlayerControllersFor`.

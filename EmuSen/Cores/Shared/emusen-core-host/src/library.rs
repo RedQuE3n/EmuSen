@@ -6,9 +6,10 @@ use std::ffi::CString;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
+use emusen_core_schema::validate;
 use emusen_native::core::schema;
 use emusen_native::core::sys::{CAPABILITY_NAMES, EXPORTS, status};
-use emusen_native::json::{self, Value};
+use serde_json::Value;
 
 use crate::exports::Exports;
 
@@ -286,8 +287,8 @@ impl Library {
             }
         }
         let info = bounded(|o, l| unsafe { (self.exports.info)(o, l) }).ok_or("its info is not UTF-8 text under 1 MiB")?;
-        let doc = json::parse(info.as_bytes()).map_err(|e| format!("its info is not JSON: at byte {}", e.at))?;
-        if !matches!(doc, Value::Object(_)) {
+        let doc: Value = serde_json::from_str(&info).map_err(|e| format!("its info is not JSON: {e}"))?;
+        if !doc.is_object() {
             return Err("its info is not JSON: core info is not an object".to_owned());
         }
         let abi = format!("{}.{}", version >> 16, version & 0xFFFF);
@@ -314,15 +315,15 @@ impl Library {
             return Err(format!("it requires the host obligation {unknown}, which this host does not know"));
         }
         // §7.2 asks the info to validate against its schema; the C# host checks only the fields above (EmuSen_Backend.md §27.5).
-        let problems = schema::validate(schema::INFO, &info);
+        let problems = validate(schema::INFO, &info);
         if !problems.is_empty() {
             return Err(format!("its info does not validate: {}", problems.join("; ")));
         }
         let settings = bounded(|o, l| unsafe { (self.exports.settings_schema)(o, l) }).ok_or("its settings schema is not UTF-8 text under 1 MiB")?;
-        if let Err(e) = json::parse(settings.as_bytes()) {
-            return Err(format!("its settings schema is not JSON: at byte {}", e.at));
+        if let Err(e) = serde_json::from_str::<Value>(&settings) {
+            return Err(format!("its settings schema is not JSON: {e}"));
         }
-        let problems = schema::validate(schema::SETTINGS, &settings);
+        let problems = validate(schema::SETTINGS, &settings);
         if !problems.is_empty() {
             return Err(format!("its settings schema does not validate: {}", problems.join("; ")));
         }

@@ -845,6 +845,41 @@ read, Home holds the focus and the library's selection is unmoved; nothing logge
 counted words. Three seeded faults, each reverted: every system given a planet failed the library test; the splash
 deaf to the pad failed the program test (the splash never finished); the setting read inverted failed `start.rs`.
 
+**The mockups as numbers, step 2.** `Testing/mockups/Consoles.mockup.spec`, `Home.mockup.spec` and `Grid.mockup.spec`,
+written by hand from the three approved canvases (`Courts.dc.html`, `Home.dc.html`, `Grid.dc.html`, 1280 × 800 design
+units, approved 2026-11-05), and `emusen-qt-test`'s `mockup` module that reads them and holds a shown state to them
+(§8.2) *[own, because the format is EmuSen's own]*. The format, `mockup 1`, is plain text: a `canvas NAME WIDTH HEIGHT`
+line, `source` and `note` lines a reader reads and the comparison skips, and one `element` line per named element:
+its objectName (quoted where it holds a space), the edges the canvas states (`x`, `y`, `w`, `h`, `right`, `bottom`; one
+left out is free), a colour token by kit-core's name (`token=Muted`) or a colour that is no token (`ink=#RRGGBB`), the
+paint's `alpha` with the item's opacity, and the words, exact (`text="GAMES"`) or the canvas's example data
+(`words=data`, where only words being shown is held). The comparison finds each element by its objectName among the
+visible items, divides the scene's rectangle by the design unit, and holds every stated edge within two units, a token's
+colour exactly (an ink within a level a channel), an alpha within three levels, and the words.
+
+How the boxes were worked out from the CSS, so a reader can check a line: a text's box is its line box, Barlow's and
+Barlow Condensed's normal line height being 1.2 of the size (no half-leading); in a row aligned by baselines the tallest
+item's top is the row's top and the others share its baseline (Choose a console's GAMES at 40 with its baseline at 72,
+so "Choose a console" at 52); a grid's column is (width − gaps) / columns (the places 372, Home's places 152.57, the
+grid's cells 211.2); a centred flex row starts at (1280 − its width) / 2 (six tiles of 176 with gaps of 18 at 67, five
+at 164); a focused tile is lifted 6 (PlayStation 2's at 380) and its ring drawn 3 outside it; a body is centred in its
+104-unit art box (a planet 58, a shard cluster or gem 42 × 68, the focused gem 60 × 96). The canvases' data is
+example data (eleven consoles with their real library counts), so the words that are data are marked and the boxes
+that follow from the count of consoles are stated for eleven: the acceptance test of step 4 shows the canvas's
+eleven consoles. **One decision overrides the canvases**: the help bar stands flush on the foot, 742 to 800
+(`EmuSen_Interface.md` §24.7, decided 2026-11-05), where the Grid canvas drew it at 702 to 760; every file says so in
+a `note` line. The canvases' focus is stated too (PlayStation 2 on Choose a console, Continue on Home, the first cover
+on the grid), so a state is compared in the canvas's own focus.
+
+**Held to** (`qt-test/tests/mockup.rs`, 2, measured 2026-11-08): the three files read, each element once, the help bar
+at 742 in each; and the comparison at 1920 × 1200 (a unit of 1.5 pixels) passing a title, a glass tile at 55% and a
+data count where the canvas has them, and failing a title three units low, a tile painting Surface for SurfaceRaised, a
+count with no words, an opaque tile for one at 55%, and elements not shown. Three seeded faults, each reverted: a
+tolerance of five units failed the comparison test (the title three units low passed); the alpha not checked failed it;
+the Grid's help bar written at the canvas's 702 failed the files' test. The canvases cannot be rendered here (their
+`support.js` is not kept beside them), so the side-by-side pictures of step 4 draw each `.mockup.spec`'s boxes over the
+built screen's grab, beside the C# grab of the same state.
+
 ---
 
 ## 8. Testing

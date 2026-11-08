@@ -3,49 +3,20 @@
 //! puts it on Qt.
 
 use crate::input::GameInput;
-use crate::picture::{Frame, Handoff};
+use crate::picture::{Frame, Handoff, Source};
 use emusen_crystal_client::shapes::SessionId;
+use emusen_crystal_client::FrameInfo;
 use emusen_crystal_client::{frame_info, Open, Runtime};
 use emusen_platform_client::audio::GameSound;
+use emusen_platform_client::pace::DisplayClock;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-/// How far the game's interval may sit from the display's for one frame to run at each swap (EmuSen_Qt.md §1.8.3).
-const LOCK_SHARE: f64 = 0.01;
 /// The longest a frame thread waits for a swap before it runs on its own clock.
 const SWAP_BOUND: Duration = Duration::from_millis(100);
-
-/// The display's period, read from the swaps' times.
-#[derive(Default)]
-pub struct DisplayClock {
-    last: Option<(u64, i64)>,
-    period_ns: f64,
-}
-
-impl DisplayClock {
-    /// A swap's count and time seen; the period is smoothed over the swaps between two looks.
-    pub fn saw(&mut self, swaps: u64, at_ns: i64) {
-        if let Some((n, t)) = self.last {
-            if swaps > n && at_ns > t {
-                let one = (at_ns - t) as f64 / (swaps - n) as f64;
-                self.period_ns = if self.period_ns == 0.0 { one } else { self.period_ns * 0.9 + one * 0.1 };
-            }
-        }
-        self.last = Some((swaps, at_ns));
-    }
-
-    pub fn period_ns(&self) -> f64 {
-        self.period_ns
-    }
-
-    /// Whether a game whose frames come every `interval_ns` runs one frame a swap.
-    pub fn locks(&self, interval_ns: u64) -> bool {
-        self.period_ns > 0.0 && interval_ns > 0 && ((interval_ns as f64 - self.period_ns).abs() / self.period_ns) <= LOCK_SHARE
-    }
-}
 
 /// What the frame thread reports, on its own thread; the model queues each onto the GUI thread.
 #[derive(Clone, Debug, PartialEq)]
@@ -80,7 +51,9 @@ pub struct Session {
 
 impl Session {
     /// Opens `path` with `engine` (none for the settings' choice) and runs it until closed; `device` is the presenter's
-    /// Serenity device, lent to the machine; `io` the pads and the sound player the window has.
+    /// Serenity device, lent to the machine; `io` the pads and the sound player the window has; `clock` Serenity's
+    /// display clock, fed the window's swaps (EmuSen_Qt.md §1.8.3).
+    #[allow(clippy::too_many_arguments)]
     pub fn start(
         runtime: Runtime,
         path: String,
@@ -88,6 +61,7 @@ impl Session {
         device: Option<NonNull<std::ffi::c_void>>,
         handoff: Handoff,
         io: GameIo,
+        clock: DisplayClock,
         report: impl Fn(Report) + Send + 'static,
     ) -> Session {
         let control = Arc::new(Control::default());
@@ -96,8 +70,11 @@ impl Session {
         let thread = std::thread::spawn({
             let control = control.clone();
             move || {
-                let open = Open { path: Some(path), engine, device: NonNull::new(device as *mut std::ffi::c_void), ..Open::default() };
-                run(&runtime, open, &handoff, io, &control, &report)
+                let device = NonNull::new(device as *mut std::ffi::c_void);
+                // A machine whose core draws on a ring of its own is lent one wherever the window has a device (§1.8.7).
+                let flags = if device.is_some() { emusen_crystal_client::consts::OPEN_RING } else { 0 };
+                let open = Open { flags, path: Some(path), engine, device, ..Open::default() };
+                run(&runtime, open, &handoff, io, clock, &control, &report)
             }
         });
         Session { control, thread: Some(thread) }
@@ -131,6 +108,7 @@ fn run(
     open: Open,
     handoff: &Handoff,
     io: GameIo,
+    mut clock: DisplayClock,
     control: &Control,
     report: &impl Fn(Report),
 ) {
@@ -149,7 +127,6 @@ fn run(
     let mut info = frame_info();
     let mut frame = Frame::default();
     let mut audio = vec![0i16; 8192];
-    let mut clock = DisplayClock::default();
     let mut seen = handoff.swaps();
     let mut taken = handoff.taken();
     let mut first = true;
@@ -186,25 +163,33 @@ fn run(
             break;
         }
         let mut handed = false;
-        if info.rendered != 0 && info.width > 0 && info.height > 0 {
-            frame.rgba.resize(info.width as usize * info.height as usize * 4, 0);
-            if runtime.picture_copy(session, &mut frame.rgba).is_ok() {
-                (frame.width, frame.height, frame.row_repeat, frame.serial) =
-                    (info.width, info.height, info.row_repeat.max(1), info.picture_serial);
-                taken = handoff.taken();
-                handoff.hand_over(&mut frame);
-                handed = true;
-                if std::mem::take(&mut first) {
-                    report(Report::FirstPicture { after: started.elapsed() });
-                }
+        if info.rendered != 0 && info.width > 0 && info.height > 0 && take_picture(runtime, session, &info, &mut frame) {
+            taken = handoff.taken();
+            let on_device = frame.source != Source::Pixels;
+            handoff.hand_over(&mut frame);
+            handed = true;
+            if std::mem::take(&mut first) {
+                report(Report::FirstPicture { after: started.elapsed() });
+            }
+            // A picture on the device is drawn before the machine runs again, so a frame never waits on a ring slot
+            // nobody takes and no lend or ring is remade under a picture still to be drawn (§1.8.7).
+            while on_device && handoff.taken() <= taken && !stop.load(Ordering::Relaxed) {
+                handoff.wait_taken(taken, SWAP_BOUND);
             }
         }
         if let Err(words) = play_sound(runtime, session, &mut audio, sound.as_mut(), &control.sounded) {
             *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(words);
             break;
         }
-        clock.saw(handoff.swaps(), handoff.last_swap());
-        if clock.locks(info.frame_interval_ns) {
+        let locks = clock.saw(handoff.swaps(), handoff.last_swap()).and_then(|()| clock.locks(info.frame_interval_ns));
+        let locks = match locks {
+            Ok(locks) => locks,
+            Err(e) => {
+                *failed.lock().unwrap_or_else(PoisonError::into_inner) = Some(e.to_string());
+                break;
+            }
+        };
+        if locks {
             // Locked to the display: the next frame runs once a draw has taken this one, a whole frame before the
             // sync that shows it, so the two never race (EmuSen_Qt.md §1.8.3).
             if handed {
@@ -224,12 +209,34 @@ fn run(
         }
     }
     handoff.set_running(false);
+    handoff.withdraw();
     drop(input);
     let _ = runtime.close(session);
     match failed.into_inner().unwrap_or_else(PoisonError::into_inner) {
         Some(words) => report(Report::Failed(words)),
         None => report(Report::Closed),
     }
+}
+
+/// The frame's picture into `frame`: where the machine left it on the device (its ring's slot, or its lend), else its
+/// pixels read back; false where none could be had.
+fn take_picture(runtime: &Runtime, session: SessionId, info: &FrameInfo, frame: &mut Frame) -> bool {
+    let ring = (info.picture_in_ring != 0).then(|| runtime.picture_ring(session)).flatten();
+    let lend = (info.picture_on_device != 0).then(|| runtime.picture_lend(session)).flatten();
+    frame.source = match (ring, lend) {
+        (Some(ring), _) => Source::Ring { ring: ring.as_ptr() as usize, slot: info.ring_slot, value: info.ring_value },
+        (None, Some(lend)) => Source::Lent(lend.as_ptr() as usize),
+        (None, None) => {
+            frame.rgba.resize(info.width as usize * info.height as usize * 4, 0);
+            if runtime.picture_copy(session, &mut frame.rgba).is_err() {
+                return false;
+            }
+            Source::Pixels
+        }
+    };
+    (frame.width, frame.height, frame.serial) = (info.width, info.height, info.picture_serial);
+    frame.row_repeat = if frame.source == Source::Pixels { info.row_repeat.max(1) } else { 1 };
+    true
 }
 
 /// The frame's sound drained and handed to the player (EmuSen_Qt.md §1.8.6); with none, drained and dropped.
@@ -243,24 +250,5 @@ fn play_sound(runtime: &Runtime, session: SessionId, audio: &mut [i16], mut soun
             sound.submit(&audio[..n * 2], rate).map_err(|e| e.to_string())?;
             sounded.store(sound.taken_frames().map_err(|e| e.to_string())? as u64, Ordering::Relaxed);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_game_locks_to_the_display_only_within_a_hundredth_of_its_period() {
-        let mut clock = DisplayClock::default();
-        assert!(!clock.locks(16_666_667), "no swap seen yet");
-        for n in 0..=10u64 {
-            clock.saw(n, n as i64 * 16_666_667);
-        }
-        assert!((clock.period_ns() - 16_666_667.0).abs() < 1.0);
-        assert!(clock.locks(16_639_276), "the NES's 60.0988 Hz on a 60 Hz display");
-        assert!(!clock.locks(20_000_000), "a 50 Hz game runs on its own clock");
-        clock.saw(12, 12 * 16_666_667);
-        assert!((clock.period_ns() - 16_666_667.0).abs() < 1.0, "two swaps between looks are one period each");
     }
 }

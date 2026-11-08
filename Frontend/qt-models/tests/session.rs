@@ -7,6 +7,7 @@ use emusen_crystal_client::{Api, Config, Runtime};
 use emusen_kit_qt::picture::{Feed, Picture};
 use emusen_platform_client::serenity::{builtin_preset, Device};
 use emusen_platform_client::audio::{GameSound, SoundSettings};
+use emusen_platform_client::pace::DisplayClock;
 use emusen_platform_client::{Lent, Platform};
 use emusen_qt_models::picture::PictureFeed;
 use emusen_qt_models::session::{GameIo, Report, Session};
@@ -80,6 +81,7 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
         std::ptr::NonNull::new(device.as_ptr().cast_mut()),
         handoff.clone(),
         GameIo { pads: None, sound: Some(sound) },
+        DisplayClock::new(&platform),
         move |r| {
             let _ = tell.send(r);
         },
@@ -94,12 +96,16 @@ fn a_game_s_pictures_are_drawn_in_place_paced_and_paused() {
 
     // Swaps at 60 Hz: the frame thread locks to them, one frame a swap.
     let start = 1_000_000_000i64;
+    let before = picture.counts().handed.load(Ordering::Relaxed);
     for n in 0..30 {
         (feed.swapped)(feed.context, start + n * 16_666_667);
         (feed.draw)(feed.context, 80, 60, &mut out);
-        std::thread::sleep(Duration::from_millis(2));
+        std::thread::sleep(Duration::from_millis(4));
     }
     assert_eq!(picture.counts().swaps.load(Ordering::Relaxed), 30);
+    // Locked by Serenity's display clock, a frame follows each draw at once rather than a sixtieth of a second later.
+    let locked = picture.counts().handed.load(Ordering::Relaxed) - before;
+    assert!(locked >= 24, "{locked} frames over 30 swaps 4 ms apart: the frame thread did not lock to the swaps");
     // The test core makes a sixtieth of a second of its rate (32 kHz) each frame; every frame's reaches the player.
     let frames = picture.counts().handed.load(Ordering::Relaxed);
     let sounded = session.sounded();

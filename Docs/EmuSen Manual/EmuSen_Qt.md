@@ -514,13 +514,18 @@ cores folder and the game as the window's initial properties, and with `--second
 
 #### 1.8.3 Pacing by the display **[M 2026-11-08]**
 
-`DisplayClock` (in `session.rs`) smooths the display's period from the swaps' times. A game whose interval sits within
-1 % of it is locked to the display: after each hand-over the frame thread waits until a draw has taken the frame, so
-the next one is run a whole frame before the sync that shows it. The first version woke at each swap instead and raced
-the sync that follows a swap at once in the threaded loop: on a 10 s run of an NES game, after the first 2 s, 3 frames
-were dropped and 1 swap repeated; waiting for the take gave 0 and 0. A game off the display's rate runs on its own clock.
-*[own, because Serenity's pacer (`emusen-serenity::pace`, §1.9) is not built; the clock moves there with
-`FrameScheduler`'s port, and `GamePicture` already delivers the swaps' times it reads.]*
+Serenity's display clock (`emusen-serenity::pace`, platform interface 44, `EmuSen_RustPlatform.md` §51) smooths the
+display's period from the swaps' times, which `GamePicture` delivers through the feed's `swapped`; the frame thread keeps
+one (`platform-client`'s `pace::DisplayClock`, given to `Session::start`). A game whose interval sits within 1 % of the
+period is locked to the display: after each hand-over the frame thread waits until a draw has taken the frame, so the
+next one is run a whole frame before the sync that shows it. The first version woke at each swap instead and raced the
+sync that follows a swap at once in the threaded loop: on a 10 s run of an NES game, after the first 2 s, 3 frames were
+dropped and 1 swap repeated; waiting for the take gave 0 and 0. A game off the display's rate runs on its own clock.
+
+Until 2026-11-08 the clock lived in `qt-models`' `session.rs` and took the frame thread's first look, before any swap, as
+a sample, so it locked only after about two seconds (`EmuSen_RustPlatform.md` §51); it moved to Serenity with that fixed, and the copy in
+`qt-models` is deleted. The rest of the pacer (`FrameScheduler`'s port: speed, frame skip, the presentation trace) follows
+it there.
 
 #### 1.8.4 The gate, the tests, and what is owed **[M 2026-11-08]**
 
@@ -549,13 +554,18 @@ ignored (`session`), and the dependency from writes to reads removed (the layer,
 - *The real desk, and the C# figures from the same script.* The desk's session was locked through the work; both need
   the tester there. The C# front end counts no `frameSwapped`; which of its own counters stands for the same count is
   settled when its figures are taken, and they are written next to these.
-- *Play to the first picture for a hosted core.* No libretro core is installed on the desktop; installing one is the
-  Cores window's job, in the player's tree.
+- *Play to the first picture for a hosted core.* Owed: it needs one live core download through `cores get`, awaiting the
+  tester's go (2026-11-08). The program's only Cores path is the platform library's tool job (`emusen_tool_job_start`,
+  op `get`, `core-tool`), whose source is fixed to the buildbot; a test's own server cannot stand in through the C
+  interface, by design. The job's installation is the calling program's own folder, and the Qt program has no published
+  layout yet (no libretro host, proxy or `cores.manifest` beside `emusen-qt-play`; `xtask publish`, §1.9); nor has
+  `platform-client` a tool-job wrapper. The method once allowed: a sandbox installation laid out as a publish lays one
+  (DianaSh's program, the libretro host, the proxy, the manifest) and a sandbox home; `cores get fceumm` (one download)
+  and `cores approve` at the prompt; then `emusen-qt-play` with `EMUSEN_CORES` naming that installation and `--game`
+  naming a game in the library, opened in place; two rounds, a third if within the noise.
 - *The pad driving the game.* Done 2026-11-08, §1.8.5.
-- *A device core's picture.* The device is lent, but the chain still advances from `picture_copy`; the lend's and the
-  ring's pictures (`emusen_serenity_chain_advance_lent`, `_advance_ring`) go through the feed's draw on the render thread.
-- *The sound*, drained and dropped until Endymion's game player is wrapped; *the picture's content* read back under
-  `QQuickRenderControl` (§8.1, tier 2); and the chain dropped on the render thread when a session closes (it is now
+- *A device core's picture.* Done 2026-11-08, §1.8.7.
+- *The sound* (done 2026-11-08, §1.8.6); *the picture's content* (done 2026-11-08 by a window grab, §1.8.8); and the chain dropped on the render thread when a session closes (it is now
   dropped with the feed, after the window).
 
 #### 1.8.5 The pad drives the game **[M 2026-11-08]**
@@ -618,6 +628,73 @@ took exactly those); `qt-models`' `session` on the RX 6800 (every handed frame's
 Seeded and caught: the submit skipped (no frames taken, `session`), the device opened at a fixed rate (`sound`), and the
 window's player made and dropped (`pads`).
 
+#### 1.8.7 Pictures on the device: a machine's lend and its ring **[M 2026-11-08]**
+
+Every kind of picture the runtime offers now crosses the feed (`picture.rs`), as Mistress's `OfferPicture` offers them
+(`EmuSen_Backend.md` §14.12, §33): a frame's `Source` is its pixels (read back by `picture_copy`), the newest picture the
+machine took through its lend (`picture_on_device`, `picture_lend`), or a slot of its ring (`picture_in_ring`,
+`picture_ring`, the slot and value of the frame). The render thread advances the chain from where the picture lies
+(`Chain::advance_lent`, `Chain::advance_ring`, new in `platform-client`), and a picture that will not advance is never
+tried again. The session opens with `OPEN_RING` wherever the window has a device.
+
+**The rules that keep a lend and a ring alive while the render thread may read them:**
+1. A picture on the device is drawn before the machine runs again: the frame thread waits (stopping when asked) until a
+   draw has taken it. A core whose ring slots are all held therefore never waits inside `frame`, and no lend or ring is
+   remade (a reset, a state of another size, a ring's maxima growing) under a picture still to be drawn. The cost is
+   that a window that does not draw (hidden, minimised) holds such a game still; Mistress instead gives each slot back
+   through a one-pixel chain (`SlangRingRelease`) and shows the picture read back, which in Qt would submit from the
+   frame thread to the queue Qt's render thread uses, so it is not taken.
+2. Before the machine is freed the frame thread withdraws the frame still waiting (`Handoff::withdraw`) and waits out a
+   draw under way, which holds the feed's `drawing` lock from taking a frame to its end.
+
+**A named difference from Mistress, accepted for stage 1 (decided 2026-11-08).** While the window does not draw (hidden
+or minimised), a game drawing on the device is held still: rule 1 keeps it from running past a picture nobody has drawn.
+Mistress keeps such a game running through `SlangRingRelease`; the tester sees this difference listed here until the
+Pause Card and the window's own life settle what a hidden window should do.
+
+**The player's cores beside a named installation.** The runtime scans no player's folder when a host names its `cores`
+and leaves `player_cores` unset (`emusen_crystal.h`'s config; `Runtime::new`), which suits a test of the installation
+alone but would hide every core the player installed from a program that names its installation. `SessionModel` therefore
+passes Galaxia's cores folder (`EMUSEN_GALAXIA_DIR_CORES`, the runtime's own default) whenever it names `cores`.
+
+**Proof, measured 2026-11-08** in a real window (`qt-play`'s `device` and `ring`): the program's Play.qml in a
+`kwin_wayland --virtual` of the test's own, Qt adopting a validated Serenity device on the RX 6800, the game opened
+through `SessionModel` as the player opens one.
+- *The lend:* emusen-native's `device_test_core` (built from `emusen-libretro-host`'s examples by `client-fixture`'s
+  `cores::device_core`), installed as a player's core and approved, paints its picture on the lent device. Every frame
+  drawn (60 and more) came from the lend (`Counts::shown_lent`), none from a ring.
+- *The ring:* the libretro test core, laid out as an installed libretro entry (`cores::libretro_entry`: the proxy, the
+  libretro host, the core and its `.info` under the player's `Cores/libretro/testcore`, with an installation whose
+  `cores.manifest` vouches for the proxy and the host, and `EMUSEN_CORE_RUNNER`), set to draw with Vulkan (`tc_hw`).
+  Every frame drawn came from a slot of the ring (`Counts::shown_ring`).
+- *Rule 1:* with the window hidden, nothing more is handed over, and the game closes in about 1.3 s (the runner
+  stopping); with the frame thread's wait for the draw removed, the close took 9.8 s, its frame waiting on a ring slot
+  nobody gave back. The test bounds the close at 5 s.
+- The layer found nothing in either run, apart from the window grab's own (§1.8.8).
+
+Seeded and caught: the ring's slot never advanced into the chain (`ring`: no picture within ten seconds); the wait for
+a device picture's draw removed (`ring`: the hidden window's close, 9.8 s); `SessionModel` naming its installation
+without the player's folder (`ring`: no core for `.tcg`).
+
+#### 1.8.8 The picture's content, read back **[M 2026-11-08]**
+
+"It swapped" does not show the right picture, so both tests read back what the window shows and compare it with what the
+core made. The device test core and the libretro test core paint the same picture, a function of the frame's serial
+(`client-fixture`'s `cores::painted_pixel`: red the column plus the serial, green twice the row plus forty a life, blue
+the column over eight). The feed records the core's serial of the frame it drew last (`Counts::shown_serial`). The test
+pauses the game by the chord, so the frame drawn stays the frame shown, grabs the window (`QQuickWindow::grabWindow`,
+the harness's `colours_at`) and compares 48 pixels, spread over the picture and mapped to the window at the size the
+compositor gave it, with the core's picture of that serial: none may differ by more than one level. Measured
+2026-11-08: none differs, for the lend (frame 67 on the first run) and for the ring.
+
+The first run found a mismatch in green only, from row 46 down, growing with the row: the compositor had given the
+window less height than asked for (its decoration), so the mapping now reads the window's own size.
+
+**The grab's findings, a named exception.** `grabWindow` under the threaded render loop gives two findings on Qt's own
+swapchain: a render pass after the present (`WRITE_AFTER_PRESENT`) and a barrier after the acquire (`WRITE_AFTER_READ`).
+The same test without the grab gives none. The tests therefore require no finding up to the grab and after it, and around
+the grab allow only those two (`assert_qt_grab_only`), which name `vkQueuePresentKHR` and `vkAcquireNextImageKHR`.
+
 ### 1.9 Homes for the front-end logic still in C#
 
 The survey of the remaining C# (2026-11-07) lists front-end logic that needs a Rust owner. Each is given one layer here,
@@ -628,7 +705,7 @@ by the one-owner rule, and none goes into the view models unless it is a view mo
 | The ES-DE theme engine: loader, scene, gamelists, collections, folders (about 4,000, plus 3,900 of tests) | `emusen-esde` (§4.2), a crate of its own, with `EmuSen.Esde` as its painter | one job, no Qt in the loader or scene, testable alone |
 | The theme store: `themes.db`, GitHub and GitLab downloads, the browser's records, attribution (about 1,150) | `emusen-themes`, a platform crate over `emusen-net`, the zip reader and SQLite, exposed as the DianaSh command `theme` (`list`, `install`, `update`, `remove`, `check`), which the Themes tab fronts; it serves both theme kinds | the 2026-10-26 rule: every tool a command; one store for both kinds |
 | The four binding files: keybindings, hotkeybindings, gamepadbindings, gamepadprofiles (about 800) | Endymion, through the platform library (`emusen_endymion_*`) and Galaxia's models; the front end's `DeviceModel` and `SettingsModel` read and write them through `emusen-platform-client` | Endymion is the one owner of pads; both front ends share the files, so this is stage 0. Done 2026-11-08 at interface 40 (`EmuSen_Input.md` §5.2) |
-| Frame pacing: `FrameScheduler`, `DisplayClock`, `PictureSlots`, `PresentationTrace`, `VblankCounter`, `FrameHandOff`, `FramePacer` (about 650) | Serenity (`emusen-serenity::pace`), fed the window's `frameSwapped` stamps by `GamePicture` and read by the emulation thread's frame loop | `EmuSen_Surfaces.md` §6.2 already makes Serenity the owner of the display clock and the pacer; the view models only relay stamps |
+| Frame pacing: `FrameScheduler`, `DisplayClock`, `PictureSlots`, `PresentationTrace`, `VblankCounter`, `FrameHandOff`, `FramePacer` (about 650) | Serenity (`emusen-serenity::pace`), fed the window's `frameSwapped` stamps by `GamePicture` and read by the emulation thread's frame loop | `EmuSen_Surfaces.md` §6.2 already makes Serenity the owner of the display clock and the pacer; the view models only relay stamps. `DisplayClock` moved 2026-11-08 (interface 44, §1.8.3) |
 | The build host: `EmuSen.csproj`, `RustCores.props`, `RustCoresPublish.targets`, `CheckCoreSidecars.proj`, `Platform.targets`, the publish layouts (about 760 lines of MSBuild) | a cargo workspace with an `xtask` crate: `cargo xtask check-sidecars`, `publish`, `appdir`, `qml-rules`, `qmltypes-diff`, each a plain Rust subcommand calling Qt's libexec tools (`qmlimportscanner`, `qmlcachegen`, `qmltyperegistrar`) where needed; MSBuild stays only for the C# until it retires | cxx-qt builds under cargo already, so one toolchain builds everything; CMake would add a second build system for no C++ host, since the front end has none **[A]**; a CMake host becomes worth it only if a C++ consumer of the kit appears (§11 Q8 says none is planned) |
 
 The rest of that survey (the headers' folder, the memcard command, records.db, Pharaoh's probe as a Rust CLI, the shell

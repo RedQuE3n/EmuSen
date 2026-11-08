@@ -6,6 +6,7 @@
 use emusen_kit_qt::picture::{Feed, Picture};
 use emusen_platform_client::serenity::{Chain, Device};
 use std::ffi::c_void;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::time::Duration;
@@ -14,7 +15,17 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// One frame's pixels, RGBA8, a row after a row; its buffer is kept and refilled, never made per frame.
+/// Where a frame's picture lies: its pixels in `Frame::rgba`, the newest picture a machine took through its lend on the
+/// device, or a slot of the machine's ring; a lend or a ring is the platform library's, by its address.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Source {
+    #[default]
+    Pixels,
+    Lent(usize),
+    Ring { ring: usize, slot: u32, value: u64 },
+}
+
+/// One frame: its picture's shape and where it lies; its pixel buffer is kept and refilled, never made per frame.
 #[derive(Default)]
 pub struct Frame {
     pub rgba: Vec<u8>,
@@ -22,6 +33,7 @@ pub struct Frame {
     pub height: i32,
     pub row_repeat: i32,
     pub serial: u64,
+    pub source: Source,
 }
 
 /// What the render thread counted, read by anyone.
@@ -33,6 +45,11 @@ pub struct Counts {
     pub handed: AtomicU64,
     /// Frames handed over and drawn.
     pub shown: AtomicU64,
+    /// Of those, the frames drawn from a machine's lend and from its ring.
+    pub shown_lent: AtomicU64,
+    pub shown_ring: AtomicU64,
+    /// The core's serial of the frame drawn last, which a read-back of the picture is compared with.
+    pub shown_serial: AtomicU64,
     /// Frames handed over that a newer one replaced before any draw.
     pub dropped: AtomicU64,
     /// Swaps while running at which no new frame had come since the last.
@@ -52,6 +69,8 @@ struct Shared {
     counts: Counts,
     /// Whether a frame thread is running, for `repeated`.
     running: AtomicBool,
+    /// Held by a draw from taking the newest frame to its end, so a withdrawal can wait it out.
+    drawing: Mutex<()>,
 }
 
 /// The render thread's own: the chain and the frame it last advanced from.
@@ -92,6 +111,7 @@ impl PictureFeed {
             swapped: Condvar::new(),
             counts: Counts::default(),
             running: AtomicBool::new(false),
+            drawing: Mutex::new(()),
         });
         let render =
             Render { device, preset, chain: None, current: Frame::default(), advanced: false, fresh_since_swap: false, problem: None };
@@ -148,6 +168,18 @@ impl Handoff {
         newest.1 = true;
     }
 
+    /// The frame waiting for a draw taken back, and any draw under way waited out: after it the render thread holds no
+    /// picture of a machine's lend or ring that it has not drawn, so the machine may be freed (EmuSen_Qt.md §1.8.7).
+    pub fn withdraw(&self) {
+        {
+            let mut newest = locked(&self.shared.newest);
+            newest.1 = false;
+            newest.0.source = Source::Pixels;
+            newest.0.width = 0;
+        }
+        drop(locked(&self.shared.drawing));
+    }
+
     /// Waits for the next swap after `seen`, at most `bound`; the swaps' count.
     pub fn wait_swap(&self, seen: u64, bound: Duration) -> u64 {
         let swaps = locked(&self.shared.swaps);
@@ -200,6 +232,7 @@ impl Handoff {
 extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Picture) -> i32 {
     // SAFETY: the context is the feed's own, alive while an item names the feed.
     let context = unsafe { &*context.cast::<Context>() };
+    let _drawing = locked(&context.shared.drawing);
     let mut render = locked(&context.render);
     let render = &mut *render;
     {
@@ -226,14 +259,22 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
     }
     let Some(chain) = render.chain.as_mut() else { return -1 };
     if !render.advanced {
-        let frame = &render.current;
-        if let Err(e) = chain.advance(&frame.rgba, frame.width, frame.height, frame.row_repeat) {
+        if let Err(e) = advance(chain, &render.current) {
+            // A picture that would not advance is not tried again, so no later draw reads a lend or ring it named.
+            render.current.width = 0;
             render.problem = Some(e.to_string());
             return -1;
         }
         render.advanced = true;
         render.fresh_since_swap = true;
-        context.shared.counts.shown.fetch_add(1, Ordering::Relaxed);
+        let counts = &context.shared.counts;
+        counts.shown.fetch_add(1, Ordering::Relaxed);
+        counts.shown_serial.store(render.current.serial, Ordering::Relaxed);
+        match render.current.source {
+            Source::Lent(_) => counts.shown_lent.fetch_add(1, Ordering::Relaxed),
+            Source::Ring { .. } => counts.shown_ring.fetch_add(1, Ordering::Relaxed),
+            Source::Pixels => 0,
+        };
     }
     match chain.draw(width, height) {
         Ok(drawn) => {
@@ -247,6 +288,17 @@ extern "C" fn draw(context: *mut c_void, width: i32, height: i32, out: *mut Pict
             render.problem = Some(e.to_string());
             -1
         }
+    }
+}
+
+/// A frame into the chain from where its picture lies.
+fn advance(chain: &mut Chain, frame: &Frame) -> emusen_platform_client::Result<()> {
+    match frame.source {
+        Source::Pixels => chain.advance(&frame.rgba, frame.width, frame.height, frame.row_repeat),
+        // SAFETY: the frame thread names a lend or ring of its machine and frees the machine only after `withdraw`.
+        Source::Lent(lend) => NonNull::new(lend as *mut c_void).map_or(Ok(()), |lend| unsafe { chain.advance_lent(lend) }.map(drop)),
+        Source::Ring { ring, slot, value } => NonNull::new(ring as *mut c_void)
+            .map_or(Ok(()), |ring| unsafe { chain.advance_ring(ring, slot, value, frame.width, frame.height) }),
     }
 }
 

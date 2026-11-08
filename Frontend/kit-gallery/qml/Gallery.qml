@@ -12,6 +12,7 @@ Window {
     height: 800
     color: Kit.Tokens.voidFill
     property int form: Kit.Forms.BigScreen
+    property int padFamily: Kit.Families.Generic
     property int activated: -1
     property int chosen: -1
     readonly property int page: frame.controller.sections.indexOf(frame.controller.selectedSection)
@@ -23,6 +24,7 @@ Window {
             id: frame
             anchors.fill: parent
             form: scene.form
+            padFamily: scene.padFamily
             focus: true
             opacity: scene.page === 2 ? 0 : 1
             controller.sections: ["Menu", "Controls", "Moonrise"]

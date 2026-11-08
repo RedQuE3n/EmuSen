@@ -13,6 +13,7 @@ pub mod body;
 pub mod column;
 pub mod convert;
 pub mod frame;
+pub mod glyph;
 pub mod kinds;
 pub mod moonrise;
 pub mod pad;

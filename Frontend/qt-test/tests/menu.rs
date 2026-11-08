@@ -44,6 +44,14 @@ fn qt_8_1_a_menu_scene_passes_the_gate_and_every_way_in_reaches_its_rows() {
     scene.focus_item(&tree, rows[0]);
     scene.click(hx, hy);
     assert_eq!(scene.property("scene", "activated"), "0", "the help bar's Open activated the focused row");
+    let glyph = tree.find_named("glyph-Open").expect("the Open entry's glyph");
+    let (gx, gy) = {
+        let n = &tree.nodes[glyph as usize];
+        (n.x + n.w / 2.0, n.y + n.h / 2.0)
+    };
+    scene.focus_item(&tree, rows[1]);
+    scene.click(gx, gy);
+    assert_eq!(scene.property("scene", "activated"), "1", "a click on the glyph is the entry's press (EmuSen_Kit.md §7.12)");
 
     // The gate at this size: fit, pad reach from the recorded edges, pointer reach, no chrome, names, palette.
     scene.focus_item(&tree, rows[0]);

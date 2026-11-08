@@ -341,7 +341,7 @@ ways in:
 - **The pad.** `offer(button)` is §1.7's order, as the pure function `frame::route` states it and `tests/route.rs`
   holds it: an open sheet or question first (`sheetOpen`, and the press comes back as `sheetPressed` for the sheet's
   own handler), then the walk, then, declined, the focused control as the key `UiButton::key` names (`send_key`, the one
-  C++ function of this step, 16 lines: a `QKeyEvent` press and release sent to `QGuiApplication::focusWindow()`, which
+  C++ function of this step: a `QKeyEvent` press and release sent to `QGuiApplication::focusWindow()`, which
   Qt Quick delivers to the active focus item). B declined at the top also raises `backDeclined`, the host's signal to
   close. The player's A/B swap is applied once, in `PadRouter` (§7.4); the walk's own `set_swap_accept_back` stays off,
   so the fact has one owner.
@@ -374,7 +374,7 @@ A `Frame` consumes presses through a `Connections` on the singleton, enabled whi
 should be the scene graph's, a `QSGGeometryNode` or a `ShaderEffect`. Both were weighed against §8.1's harness, which
 runs on the software backend: that backend draws no custom geometry node and no shader effect, so a gallery grabbed
 under it would show no bodies at all, and a geometry node also means hand-written C++ for the node, its material and its
-vertex layout against §1.4's budget. Qt Quick Shapes is the scene graph's own vector item: on a GPU its geometry
+vertex layout. Qt Quick Shapes is the scene graph's own vector item: on a GPU its geometry
 renderer builds exactly those geometry nodes, and under the software backend its own renderer paints the same paths, so
 one `.qml` draws the same picture on both. kit-core's `Shape` (an outline, closed or open, a solid or radial fill, a
 stroke, an opacity) maps onto `ShapePath` with a `PathPolyline` one to one, which is the design's intent: the world as
@@ -541,7 +541,7 @@ at the size, and gives a `Scene` with the verbs: `tree`, `click`, `right_click`,
 - **The pad goes in where a pad goes in.** `pad(button)` pushes a down and an up into the router's queue and pumps at
   stated times; the router is reached as the engine's singleton, downcast to the kit's `PadRouter` by cxx-qt's `Upcast`.
 - **C++**: `cpp/harness.cpp` and `harness.h`, the tree dump and QTest's verbs (`mouseClick`, `keyClick`, a wheel event,
-  `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton), 241 lines. QTest's mouse, keyboard and
+  `qWait`, `qWaitForWindowExposed`, `grabWindow`, a property read, the singleton). QTest's mouse, keyboard and
   window helpers are declared only under `QT_GUI_LIB`, which CMake defines and cc-rs does not, so the file defines it.
 
 **What the harness found in the kit** on 2026-11-07, each fixed in the kit, not the test: a help-bar button took the
@@ -862,7 +862,7 @@ the Qt slack is kit-core's 1.5 above a unit of 1, where the C# recordings at 192
 are scene pixels, where the C# writes the control's own. None changes a comparison (`InterfaceSpec.Compare` reads names,
 roles, words, rectangles and the focus graph), and each is the toolkit's fact rather than one bent to match.
 
-**The C++** grows by 59 lines (`harness.cpp` 420, `harness.h` 28): four facts in the dump (enabled, the item's scale in
+**The C++** of this step: four facts in the dump (enabled, the item's scale in
 the scene, the face, a flickable's content height); the role read from Qt's accessibility instead of the attached
 `Accessible.role`, which only items that declare one carry (every `Text` read `none` through it); and the put-back's
 reads and writes (what a press may move, a focus scope's remembered item, an item found by its id, a number read and
@@ -907,6 +907,63 @@ the first difference at line 14). The put-back is held by `spec.rs` (a second wa
 before). Three more seeded faults, each reverted: no put-back failed `spec.rs`'s second walk; selections never written
 failed `style.rs` (the tab and the choice at 1, not 0; the menu scene's list puts itself back when a row takes the focus,
 so `spec.rs` could not see it); the remembered focus not given back failed `style.rs` (the combo box's focus false).
+
+### 7.12 The pad's glyphs (stage 0, the rest, step 2; 2026-11-08)
+
+The help bar's circles were empty until this step. Each entry now draws the glyph of the control that gives its press,
+in the pad's family, following the design's word: **drawn shapes and a letter from the interface's type**, not a font
+of symbols (LunaP.md §103.1, whose outlined set this is; `EmuSen_Interface.md` §5.2 sets the letters' size, Pad glyph,
+22 design units on the big screen and 13 pixels on the desktop, the token `fontGlyph`). Every shape is plain geometry
+and none is a vendor's artwork or colour.
+
+**kit-core** owns the decisions, in two places.
+
+- `input::PadControl` names a pad's controls by place, as SDL does (South is the bottom face button), and
+  `UiButton::control(swap)` says which control gives each press: Accept on South and Back on East, traded by the
+  player's swap through `swapped`, the router's one rule; Menu on Start, Options on Select, the pages on the shoulders,
+  First and Last on the triggers, Search on North, Screensaver on West, Random on a stick's click, the table of the C#
+  front end (`MainWindow.Controllers.cs`). The pad bridge (step 4) reads the same table the other way.
+- `glyph` draws a control of a family as marks in a unit box (a polyline, filled or stroked at a share of the box) and
+  the letter the family prints, with the name a reader hears. `PadFamily` is `Generic`, `Xbox`, `PlayStation` or
+  `Nintendo`; `Generic`, the pad whose printing is not known, is the RetroPad's face by position: four dots in a
+  diamond with the meant one filled, the shoulder's own half filled, a pill with a play mark for Start and a square for
+  Select. The lettered families differ at a glance: a ring round the letter (Xbox), the letter cut out of a disc
+  (Nintendo).
+
+**kit-qt** draws them: `PadGlyphMarks`, a list model of the marks in pixels at the glyph's size, and `PadGlyph.qml`,
+one `Shape` a mark, the letter a `Text` centred on its ink (`TextMetrics`' tight box and `FontMetrics`' ascent), or,
+where a mark is `cut`, a `PathText` in that mark's own path with the odd-even fill, so the letter is a hole showing
+what lies behind, as Qt Quick Shapes draws it, with no paint of ours. `Families` mirrors `PadFamily` (§7.1).
+`HelpBar` takes `family` (the frame passes `padFamily`), the glyph takes the router's `swapAcceptBack`, and each
+glyph sits inside its entry's button, so a click on it is the entry's press (§1.7).
+
+**The help bar on a pad of each family**, at 1280 × 800, big screen, dark: the generic face (dots, the pill with a play
+mark), Xbox (A and B in rings, the three-line ring), PlayStation (a cross and a circle in rings, the three-line pill) and
+Nintendo (B and A cut out of discs, the plus ring), Choose on South and Back on East in each, as the table gives them.
+The gate writes the four as `helpbar-<family>.png` beside its grabs, and `emusen-qt-test`'s `glyphs` test writes every
+press in every family, sixteen by four, to `~/.cache/emusen/tmp/qt-test/glyphs.png`; both were looked at on
+2026-11-08.
+
+**No glyph is empty.** `Scene::ink_inside` samples one grab on a grid within 0.35 of a glyph's size from its centre and
+counts the points that differ by more than 24 levels from the colour most of them show: an empty ring, filled or not,
+shows one colour there, and every glyph of the set covers at least two points *[own, because the check is the
+harness's own pixel reading, as §7.10's sweep is]*. The gate holds every help-bar glyph shown in every state to two
+points or more, three glyphs where the bar is shown and none where it is not, and the four families' bars the same way.
+
+**Held to**: kit-core's `tests/glyph.rs` (3: every control of every family draws a mark inside its box, closed where
+filled, one cut mark at most and never without a letter, and a name; the face letters and names by position, the
+generic dot at its own place; every press its own control, the swap trading Accept and Back only); kit-qt's `kinds`
+(the families pair by pair); `emusen-qt-test`'s `glyphs` (64 glyphs, each named, Accept's name on each family's South,
+none empty, nothing logged) and `menu` (a click on the Open entry's glyph is that entry's press); the gate. Rule Q's
+registry gained `Families` and `PadGlyphMarks` and the qmldir `PadGlyph`; reviewed and copied, additions only.
+Measured on 2026-11-08 with three seeded faults, each reverted: the model giving no marks failed the gate
+(`help-bar glyph glyph-Choose draws nothing inside its ring (0 points)`); the cut letter never given failed `glyphs`
+(Nintendo's B, A, X and Y, 0 points each: a disc with nothing cut shows one colour); the swap not applied failed
+kit-core's `each_press_has_its_control_and_the_swap_trades_accept_and_back` (Accept on South with the swap on).
+
+**A difference from the C# front end, kept for the tester.** The C# table trades North and West with the swap as well
+as South and East, as ES-DE's does; kit-core's `UiButton::swapped` trades Accept and Back only, "nothing else moves"
+(§2.2), so with the swap on, Search stays on North here. The glyph follows kit-core, the one owner.
 
 ### 7.14 A test fails on any warning Qt logs; the sheet's key loop (2026-11-08)
 
@@ -970,15 +1027,14 @@ once, the chord once with forget, a change of tiers) and `qmltypes`. Measured on
 each reverted: `pad_button` off by one failed the kinds pairs; a declined press losing its key failed the route test; the
 CubicOut curve numbered as InCubic failed the easing test; the swap applied inverted failed two router tests.
 
-**Hand-written C++** (`EmuSen_Qt.md` §1.4's tracked count, the lines of the files as `wc -l` counts them): 23 in the
-kit (`cpp/kit_glue.h` and `cpp/kit_glue.cpp`, all of it `send_key`) and 389 in the harness (`cpp/harness.cpp` 365,
-`cpp/harness.h` 24; §7.9, §7.10), **412 in all** on 2026-11-08 with the contrast sampling and the picture difference. Counted the same way, step 9's figure was 277 (the
-harness 254), not the 264 first written here. Budget: under 600 for the whole front end. With §7.11's 59 lines,
-`cpp/harness.cpp` is 420, `cpp/harness.h` 28, and the front end **471**; with the polish wait's include, 421 and **472**.
-The C++ of §7.11 is there because each piece is a Qt call cxx-qt-lib does not bind: `QAccessible::queryAccessibleInterface`,
-`QMetaProperty`'s declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address, and
-`QQuickTest::qWaitForPolish`. §7.14's message handler adds 29 (`qInstallMessageHandler` takes a C function pointer,
-which neither cxx nor cxx-qt-lib can supply): `cpp/harness.cpp` 448, `cpp/harness.h` 30, the front end **501**.
+**Hand-written C++**, each part with its reason (decided 2026-11-08: cxx-qt is the binding; C++ glue is written where
+cxx-qt-lib does not reach, each part with its reason, `EmuSen_Qt.md` §1.4). The kit's `cpp/kit_glue.cpp` is `send_key`,
+a key event sent to the focus window (§7.3). The harness's `cpp/harness.cpp` holds the tree dump and QTest's verbs, which
+cxx-qt-lib does not bind (§7.9); the contrast sampling and the picture difference, pixel loops over one grab (§7.10);
+the Qt calls of §7.11 that cxx-qt-lib does not bind (`QAccessible::queryAccessibleInterface`, `QMetaProperty`'s
+declaring class, `QQuickItem::scopedFocusItem` and `setFocus`, a property by an item's address,
+`QQuickTest::qWaitForPolish`); and §7.14's message handler, since `qInstallMessageHandler` takes a C function pointer,
+which neither cxx nor cxx-qt-lib can supply.
 
 ### 7.7 Open
 
@@ -989,8 +1045,8 @@ which neither cxx nor cxx-qt-lib can supply): `cpp/harness.cpp` 448, `cpp/harnes
 - Owed by §7.5 to a later step: the cues played through Endymion's interface player and Moonrise's strikes paired with
   the chime, both with the platform client; the stars' per-tick cost measured on the handheld before stage 1 lands.
 - Owed by §7.8: `Keyboard` (the docked pad keyboard), `RatingPicker` and `DatePicker`; the drawn
-  glyphs (the pad's buttons for the help bar, a check, a radio dot, a chevron) in place of the rings, discs and
-  rectangles the style draws now; the desktop form's menu bar and status bar.
+  glyphs of the style (a check, a radio dot, a chevron) in place of the rings, discs and rectangles it draws now (the
+  pad's buttons are drawn since §7.12); the desktop form's menu bar and status bar.
 - Owed by §7.9 to stage 1: a row whose control takes Up and Down itself (a `TextField`, a `ComboBox`) cannot be passed
   by a vertical walk; the rule (the row walks first, the control takes the keys once chosen, as a console's settings
   do) is decided with the docked `Keyboard`. Until then a fixture declares its path with `KeyNavigation` on the control.
@@ -998,6 +1054,5 @@ which neither cxx nor cxx-qt-lib can supply): `cpp/harness.cpp` 448, `cpp/harnes
   units as the audit's named exception to the floor (§7.10).
 - Owed by §7.10 to stage 1: the frame raises `focusMoved` when the walk's focused role changes (B on the desktop's
   content gives the navigation the focus) but no item takes Qt's focus, so the walk's role and Qt's focus part there;
-  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The help
-  bar's glyphs are empty circles until the pad's button glyphs are drawn (above). The other screens' faces (§5.2) are
+  the gallery's sections are pointer targets and shoulders until the desktop form's navigation is built. The other screens' faces (§5.2) are
   bundled when the first screen needs them; Moonrise's two are.

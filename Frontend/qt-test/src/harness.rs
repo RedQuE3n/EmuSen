@@ -273,6 +273,38 @@ impl Scene<'_> {
         text.split(';').map(crate::tree::colour).collect()
     }
 
+    /// How many points of a grid within 0.35 of each item's size from its centre differ by more than 24 levels from the
+    /// colour most of them show, from one grab: an empty ring, filled or not, shows one colour there (EmuSen_Kit.md §7.12).
+    pub fn ink_inside(&mut self, tree: &Tree, items: &[u32]) -> Vec<(u32, usize)> {
+        let mut spans = Vec::new();
+        let mut points = Vec::new();
+        for &i in items {
+            let n = &tree.nodes[i as usize];
+            let (cx, cy, r) = (n.x + n.w / 2.0, n.y + n.h / 2.0, 0.35 * n.w.min(n.h));
+            let start = points.len();
+            for row in -4..=4 {
+                for column in -4..=4 {
+                    let (dx, dy) = (r * f64::from(column) / 4.0, r * f64::from(row) / 4.0);
+                    if dx * dx + dy * dy <= r * r {
+                        points.push((cx + dx, cy + dy));
+                    }
+                }
+            }
+            spans.push((i, start..points.len()));
+        }
+        let colours = self.colours_at(&points);
+        let near =
+            |a: &Colour, b: &Colour| [(a.r, b.r), (a.g, b.g), (a.b, b.b)].iter().all(|(x, y)| (i32::from(*x) - i32::from(*y)).abs() <= 24);
+        spans
+            .into_iter()
+            .map(|(i, span)| {
+                let seen: Vec<Colour> = colours[span].iter().flatten().copied().collect();
+                let most = seen.iter().max_by_key(|c| seen.iter().filter(|o| near(c, o)).count()).copied();
+                (i, most.map_or(0, |m| seen.iter().filter(|c| !near(c, &m)).count()))
+            })
+            .collect()
+    }
+
     /// What is behind every visible text, from one grab with no words drawn, given to the tree for the contrast rule (EmuSen_Kit.md §7.10).
     pub fn sample_behind(&mut self, tree: &mut Tree, width: f64, height: f64) {
         let wanted = tree.behind_points(width, height);

@@ -164,10 +164,10 @@ The module's surface is `import EmuSen.Kit 1.0` and its `.qmltypes` (rule Q). It
 runtime: the bodies draw any host's worlds, the frame walks any host's roles. `cargo deny`-style test: the kit's
 dependency tree names no runtime or client crate.
 
-Attached properties (`EmuSen.Pad.button`, `EmuSen.Focus.group`, `EmuSen.Fit.exempt`) need a `QML_ATTACHED` C++ shell of
-about thirty lines each, since cxx-qt does not declare attached types and QML cannot; this is the trivial glue the
-decisions allow, and §10.4 records the same kind of glue the spike needed for a brush. The count of hand-written C++ is a
-tracked number: under 600 lines for the whole front end, or the design is wrong.
+Attached properties (`EmuSen.Pad.button`, `EmuSen.Focus.group`, `EmuSen.Fit.exempt`) need a `QML_ATTACHED` C++ shell
+each, since cxx-qt does not declare attached types and QML cannot; this is the trivial glue the decisions allow, and
+§10.4 records the same kind of glue the spike needed for a brush. Decided 2026-11-08: cxx-qt is the binding; C++ glue is
+written where cxx-qt-lib does not reach, each part with its reason.
 
 ### 1.5 The style: tokens as a Qt Quick Controls style named `EmuSen`
 
@@ -815,8 +815,7 @@ name, stored in Settings), never the order of a folder listing.
 **Risks**, largest first: (1) the one-queue protocol between Serenity's submissions and Qt's RHI (stage 1's first day); (2)
 the ES-DE engine's video and Lottie families, where the licence and the decoder are undecided (Q5, Q6); (3) the theme
 sandbox is an engine-level boundary, not a process one (§3.5); (4) cxx-qt's gaps (no scene-graph or painted-item bindings
-in its library, no attached properties) are each filled with glue, and the glue count is the measure of whether the
-binding was the right call: over 600 lines of C++ says reconsider; (5) a QML-layout-only rule erodes without the checker
+in its library, no attached properties) are each filled with glue, each part with its reason; (5) a QML-layout-only rule erodes without the checker
 from day one; (6) Qt's open-source LTS access is short, so a security fix may mean the next minor mid-way; (7) the
 estimate carries two unknowns (the picture protocol, the ES-DE painter's effects stack).
 

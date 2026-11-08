@@ -61,3 +61,21 @@ fn kit_7_1_forms_roles_variants_and_tiers_round_trip() {
     assert_eq!(kinds::repeat_tiers(Tiers::EsdeCarouselFast), RepeatTiers::ESDE_CAROUSEL_FAST);
     assert_eq!(kinds::repeat_tiers(Tiers::EsdeCarousel), RepeatTiers::ESDE_CAROUSEL);
 }
+
+#[test]
+fn kit_7_12_every_family_names_its_pad_family() {
+    use emusen_kit_core::glyph::PadFamily;
+    use emusen_kit_qt::kinds::Family;
+    let pairs = [
+        (Family::Generic, PadFamily::Generic),
+        (Family::Xbox, PadFamily::Xbox),
+        (Family::PlayStation, PadFamily::PlayStation),
+        (Family::Nintendo, PadFamily::Nintendo),
+    ];
+    assert_eq!(pairs.len(), PadFamily::ALL.len());
+    for (qml, core) in pairs {
+        assert_eq!(kinds::pad_family(qml), core, "{core:?}");
+        assert_eq!(kinds::family_of(core).repr, qml.repr, "{core:?}");
+    }
+    assert_eq!(kinds::pad_family(Family { repr: 9 }), PadFamily::Generic, "an unknown number is the generic face");
+}

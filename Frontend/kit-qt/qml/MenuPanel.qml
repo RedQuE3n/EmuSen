@@ -27,6 +27,7 @@ Rectangle {
         keyNavigationEnabled: true
         keyNavigationWraps: false
         highlightMoveDuration: Kit.Tokens.instant
+        highlightResizeDuration: Kit.Tokens.instant
         spacing: Kit.Tokens.base / 2
         property bool fadeTop: !list.atYBeginning
         property bool fadeBottom: !list.atYEnd

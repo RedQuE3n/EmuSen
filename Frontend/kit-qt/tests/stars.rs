@@ -45,3 +45,24 @@ fn kit_7_5_the_glow_comes_in_over_pan_and_goes_with_no_hue() {
     sky.set_glow_hue(None, Duration::from_millis(400));
     assert!(sky.glow_at(Duration::from_millis(800), size).is_none(), "gone after Pan");
 }
+
+#[test]
+fn kit_7_5_a_screens_stars_hold_still_and_the_glow_settles_after_pan() {
+    let size = [1280.0, 800.0];
+    let mut screens = SkyState::new(7, 40, false);
+    screens.tick(0.0, size, 1.0);
+    let first = screens.points.clone();
+    screens.tick(5.3, size, 1.0);
+    assert_eq!(screens.points, first, "a screen's stars at their twinkle for time 0, whatever the clock");
+    let mut splash = SkyState::new(7, 40, true);
+    splash.tick(0.0, size, 1.0);
+    let first = splash.points.clone();
+    splash.tick(5.3, size, 1.0);
+    assert_ne!(splash.points, first, "the splash's stars twinkle");
+    assert!(screens.glow_settled(Duration::ZERO), "no glow, nothing to ease");
+    screens.set_glow_hue(Some(200.0), Duration::from_secs(1));
+    assert!(!screens.glow_settled(Duration::from_millis(1100)), "easing in");
+    assert!(screens.glow_settled(Duration::from_millis(1400)), "at rest after Pan");
+    screens.set_glow_centre([0.3, 0.6], Duration::from_millis(1400));
+    assert!(!screens.glow_settled(Duration::from_millis(1500)), "a move eases too");
+}

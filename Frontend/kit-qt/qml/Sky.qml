@@ -15,6 +15,7 @@ Item {
     property alias glowY: field.glowY
     property bool animating: true
     readonly property alias starsShown: stars.count
+    readonly property alias glowSettled: field.glowSettled
     property alias time: field.time
     Kit.StarField {
         id: field
@@ -98,8 +99,9 @@ Item {
             }
         }
     }
+    // The clock runs only while the glow eases, so a still screen is not drawn again (EmuSen_Kit.md §7.5, EmuSen_Qt.md §9.3.2).
     FrameAnimation {
-        running: root.animating && root.visible
-        onTriggered: field.tick(elapsedTime)
+        running: root.animating && root.visible && !field.glowSettled
+        onTriggered: field.tick(field.time + frameTime)
     }
 }

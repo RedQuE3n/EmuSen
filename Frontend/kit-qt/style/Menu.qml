@@ -19,6 +19,7 @@ T.Menu {
         clip: true
         currentIndex: control.currentIndex
         highlightMoveDuration: Kit.Tokens.instant
+        highlightResizeDuration: Kit.Tokens.instant
         T.ScrollBar.vertical: ScrollBar {}
     }
     background: Rectangle {

@@ -58,6 +58,7 @@ Item {
         width: Math.min(root.width, root.height * picture.shape)
         height: Math.min(root.height, root.width / picture.shape)
         feed: root.feed
-        live: root.feed !== 0
+        // Redrawn at each swap only while the game runs; paused or with no game its last picture stands still (EmuSen_Qt.md §9.3.2).
+        live: root.feed !== 0 && session.running && !session.paused
     }
 }

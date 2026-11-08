@@ -20,6 +20,11 @@ impl DisplayClock {
         DisplayClock { platform: platform.clone(), clock }
     }
 
+    /// The clock as new, having seen no swap: for a loop whose window stopped swapping, as under a paused game.
+    pub fn restart(&mut self) {
+        self.clock = raw::emusen_serenity_display_clock { size: self.clock.size, ..Default::default() };
+    }
+
     /// A swap's count and its time, steady-clock nanoseconds, seen.
     pub fn saw(&mut self, swaps: u64, at_ns: i64) -> Result<()> {
         let n = unsafe { self.platform.lib.emusen_serenity_pace_saw(&mut self.clock, swaps, at_ns) };

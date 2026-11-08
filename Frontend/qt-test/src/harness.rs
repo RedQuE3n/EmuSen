@@ -247,6 +247,31 @@ impl Scene<'_> {
         done
     }
 
+    /// The frames the window has swapped since the first call, at Qt's `frameSwapped`.
+    pub fn frames(&mut self) -> u64 {
+        ffi::harness_frames(self.window())
+    }
+
+    /// The animations running under the window's items, one "Class in name" a line, the name its nearest named item's.
+    pub fn running(&mut self) -> Vec<String> {
+        ffi::harness_running(self.window()).to_string().lines().map(str::to_owned).collect()
+    }
+
+    /// Once every animation has stopped (within `SETTLE_MS`), the window swaps no frame for two seconds (EmuSen_Qt.md §9.3.2).
+    pub fn assert_still(&mut self, what: &str) {
+        let mut waited = 0;
+        while !self.running().is_empty() && waited < SETTLE_MS {
+            self.wait(50);
+            waited += 50;
+        }
+        self.wait(100);
+        let before = self.frames();
+        self.wait(2000);
+        let swapped = self.frames() - before;
+        let running = self.running();
+        assert!(swapped == 0 && running.is_empty(), "{what}: {swapped} frames swapped in 2 s with nothing changing; running: {running:?}");
+    }
+
     pub fn grab(&mut self, path: &str) -> bool {
         ffi::harness_grab(self.window(), &QString::from(path))
     }

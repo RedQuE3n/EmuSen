@@ -1,4 +1,4 @@
-/* emusen_library.h - the player's library, version 1.2. Owned by the library component, emusen-library.
+/* emusen_library.h - the player's library, version 1.3. Owned by the library component, emusen-library.
  *
  * The library of games below every frontend: the scan of the player's ROM folders, a dump's identity, and games.db
  * with the player's records (favourites, play time, collections, metadata edits, a crop stored for the frontend, cover
@@ -43,7 +43,7 @@ extern "C" {
 #endif
 
 #define EMUSEN_LIBRARY_MAJOR 1u
-#define EMUSEN_LIBRARY_MINOR 2u
+#define EMUSEN_LIBRARY_MINOR 3u
 #define EMUSEN_LIBRARY_VERSION ((EMUSEN_LIBRARY_MAJOR << 16) | EMUSEN_LIBRARY_MINOR)
 
 /* ---- Statuses: the band -1140 to -1159 (EmuSen_Backend.md D12), beside the platform's shared codes ------------- */
@@ -103,7 +103,10 @@ int32_t emusen_library_cancel(emusen_library *lib);
 /* The last scan, narrowed by an optional filter, {"system": "gbc"}; an empty filter is none. Answer:
  *   {"status": "ok" | "empty" | "not_found" | "no_directory", "roots": [...], "games": [{"path": "...", "system": "gbc" | null,
  *   "package": "..." | null}]}
- * @since 1.2: "package", the folder of the package a game is the game of. */
+ * @since 1.2: "package", the folder of the package a game is the game of.
+ * @since 1.3: "folder", the folders between the console folder (a root's first level) and the file, '/'-separated, as
+ * ES-DE's ROMs/<system>/<folder>/<file> and Galaxia's game_folders::of read them against the first root holding it; ""
+ * at the console folder's top and for a package's game, which is one entry at its console's top. */
 int64_t emusen_library_games(emusen_library *lib, const uint8_t *filter, size_t len, uint8_t *out, size_t out_len);
 
 /* What a dump is. Request {"path": "...", "systems": [...] (else the last scan's), "crc32": false, "sha1": false,

@@ -69,7 +69,8 @@ fn with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names() {
     platform.model_save(MODEL_APP_SETTINGS, None, "appsettings.json", &settings).unwrap();
     let mut image = b"NES\x1a\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00".to_vec();
     image.resize(16 + 16384, 0);
-    std::fs::write(world.dir("Roms/NES").join("Synthetic.nes"), image).unwrap();
+    std::fs::write(world.dir("Roms/NES").join("Synthetic.nes"), &image).unwrap();
+    std::fs::write(world.dir("Roms/NES/Puzzle").join("Foldered.nes"), &image).unwrap();
 
     let none = Config { development: false, cores: Some(Vec::new()), player_cores: Some(Vec::new()) };
     let source = ClientSource::open(path, &none).unwrap();
@@ -77,10 +78,11 @@ fn with_a_theme_chosen_the_real_library_s_rows_carry_their_es_de_names() {
     assert!(read.esde_settings.themed);
     let shelves: serde_json::Value = serde_json::from_str(&read.esde.shelves).unwrap();
     let nes = source.runtime.systems().unwrap().into_iter().find(|s| s.id == "nes").unwrap();
-    assert_eq!(shelves.as_array().unwrap().len(), 1, "{shelves}");
-    assert_eq!((shelves[0]["system"].as_str(), shelves[0]["esde_system"].as_str()), (Some("nes"), Some("nes")));
-    assert_eq!(shelves[0]["esde_full_name"].as_str(), Some(nes.esde_full_name.as_str()), "the systems table's name");
-    let game = &shelves[0]["games"][0];
+    assert_eq!(shelves[0]["system"].as_str(), Some("nes"), "{shelves}");
+    assert_eq!((shelves[0]["name"].as_str(), shelves[0]["full_name"].as_str()), (Some(nes.esde_system.as_str()), Some(nes.esde_full_name.as_str())), "the systems table's names");
+    let folder = &shelves[0]["games"][0];
+    assert_eq!((folder["name"].as_str(), folder["folder"].as_bool(), folder["folder_path"].as_str()), (Some("Puzzle"), Some(true), Some("Puzzle")), "the scan's folder (emusen_library.h 1.3) makes a folder entry");
+    let game = &shelves[0]["games"][1];
     assert!(game["file"].as_str().unwrap().ends_with("Synthetic.nes"), "{game}");
     assert_eq!((game["name"].as_str(), game["play_count"].as_i64(), game["favourite"].as_bool()), (Some("Synthetic"), Some(0), Some(false)));
     eprintln!("the row: {game}");

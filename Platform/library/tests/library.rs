@@ -127,9 +127,9 @@ fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
     assert_eq!(lib.scan_request(&request).unwrap(), 4);
     let games = lib.games_request("").unwrap();
     let q = |s: &str| serde_json::json!(s).to_string();
-    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":{}}}", q(&t.at("roms/nes/Claimed.nes")), q(&t.at("packages/NES/Claimed.nes")))), "{games}");
-    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"psx\",\"package\":{}}}", q(&t.at("compressed/psx/Disc.chd")), q(&t.at("packages/PlayStation/Disc.chd")))), "{games}");
-    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":null}}", q(&t.at("roms/nes/Free.nes")))), "{games}");
+    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":{},\"folder\":\"\"}}", q(&t.at("roms/nes/Claimed.nes")), q(&t.at("packages/NES/Claimed.nes")))), "{games}");
+    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"psx\",\"package\":{},\"folder\":\"\"}}", q(&t.at("compressed/psx/Disc.chd")), q(&t.at("packages/PlayStation/Disc.chd")))), "{games}");
+    assert!(games.contains(&format!("{{\"path\":{},\"system\":\"nes\",\"package\":null,\"folder\":\"\"}}", q(&t.at("roms/nes/Free.nes")))), "{games}");
     assert!(games.contains("Stray.chd") && !games.contains("Disc.cue") && !games.contains("Inside.nes") && !games.contains("Gone.nes"), "{games}");
     let parsed = serde_json::from_str::<serde_json::Value>(&games).unwrap();
     let Some(serde_json::Value::Array(entries)) = parsed.get("games") else { panic!("{games}") };
@@ -138,4 +138,42 @@ fn a_package_is_one_entry_and_what_it_claims_is_not_listed_again() {
     assert_eq!(claimed[0].get("package").and_then(|p| p.as_str()), Some(t.at("packages/NES/Claimed.nes").as_str()), "{games}");
     // Without the two folders the scan is the one before packages.
     assert_eq!(lib.scan(&[t.at("roms")], &systems).unwrap(), 3);
+}
+
+#[test]
+fn each_game_names_its_folder_below_the_console_folder_and_a_1_2_reader_reads_the_answer_as_before() {
+    let Some(sqlite) = sqlite() else { return };
+    let t = Temp::new("folders");
+    t.put("roms/nes/Top.nes", b"NES\x1atop");
+    t.put("roms/nes/RPG/Square/Deep.nes", b"NES\x1adeep");
+    t.put("roms/nes/Tower Set/Spire.nes", b"NES\x1aspire");
+    let lib = Library::open(sqlite, &t.at("lib/games.db")).unwrap();
+    assert_eq!(lib.scan(&[t.at("roms")], &["nes".to_string()]).unwrap(), 3);
+    let answer = lib.games_request("").unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&answer).unwrap();
+    let folders: Vec<(String, String)> = parsed["games"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|g| (g["path"].as_str().unwrap().rsplit('/').next().unwrap().to_owned(), g["folder"].as_str().unwrap().to_owned()))
+        .collect();
+    let expected = [("Deep.nes", "RPG/Square"), ("Spire.nes", "Tower Set"), ("Top.nes", "")];
+    assert_eq!(folders, expected.map(|(f, d)| (f.to_owned(), d.to_owned())), "{answer}");
+
+    // A client of 1.2 reads the answer into its own shapes, skipping the key it does not know, as the header's rule has it.
+    #[derive(serde::Deserialize, Debug, PartialEq)]
+    struct Games12 {
+        status: String,
+        roots: Vec<String>,
+        games: Vec<Game12>,
+    }
+    #[derive(serde::Deserialize, Debug, PartialEq)]
+    struct Game12 {
+        path: String,
+        system: Option<String>,
+        package: Option<String>,
+    }
+    let old: Games12 = serde_json::from_str(&answer).expect("a 1.2 reader reads 1.3's answer");
+    assert_eq!((old.status.as_str(), old.roots.clone(), old.games.len()), ("ok", vec![t.at("roms")], 3));
+    assert_eq!(old.games[0], Game12 { path: t.at("roms/nes/RPG/Square/Deep.nes"), system: Some("nes".into()), package: None });
 }

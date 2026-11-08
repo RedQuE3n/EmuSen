@@ -43,13 +43,15 @@ pub struct Games {
     pub games: Vec<GameFile>,
 }
 
-/// One game the scan found: its file, its system where routed, and its package's folder where it is one's.
+/// One game the scan found: its file, its system where routed, its package's folder where it is one's, and since 1.3
+/// the folders between its console folder and the file, '/'-separated ("" at the top and for a package's game).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(default)]
 pub struct GameFile {
     pub path: String,
     pub system: Option<String>,
     pub package: Option<String>,
+    pub folder: String,
 }
 
 /// A game's record of play.

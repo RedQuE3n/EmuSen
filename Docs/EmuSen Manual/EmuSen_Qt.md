@@ -219,7 +219,7 @@ built from the same commit (`Error::Refused`); only then is every symbol resolve
   a config file's path, and the config models (`AppSettings`, `AudioConfig`,
   `GraphicsConfig`) loaded, saved and made new as the documents Galaxia binds. A model crosses as `serde_json::Value`
   and its fields are not restated, so Galaxia stays the one owner of each model.
-- *The library* (`emusen_library.h` 1.2): a handle on games.db over the SQLite lent; scan, progress, cancel, the last
+- *The library* (`emusen_library.h` 1.3): a handle on games.db over the SQLite lent; scan, progress, cancel, the last
   scan's games (typed), `get` and `change` as the header's JSON, with typed reads for a game's record, the collections
   and the recently played. The `emusen.games` service speaks for the same file to a shell and has no front-end entry:
   a front end keeps its own handle, as that header says.
@@ -1177,15 +1177,17 @@ properties after the refresh that changed them and never on a step:
 |---|---|---|
 | `themed` | `LibraryStyle` is `Theme` and `BigPictureTheme` names a folder | the player's settings (`clients::app_settings`) |
 | `esdeSettings` | `{"style", "theme", "choices", "interface", "collections", "show_hidden"}`; the choices stored under the theme folder's absolute path less a trailing separator, as Mistress's `ThemeSettingsWindow.Key` keys them | the same |
-| `esdeShelves` | `[{"system", "esde_system", "esde_full_name", "kind", "games"}]`, a shelf for each of the runtime's shelves with games, in their order; `kind` is `regular` (the collections are the gamelist rules'); the games in the library's order | the systems table's `esde_*` fields (the `shelves` call reads the same table) |
+| `esdeShelves` | each shelf as the gamelist rules list it now (§4.7): the consoles with games, in the systems sorting's order, under the systems table's `esde_*` names, then the collections | the systems table's `esde_*` fields (the `shelves` call reads the same table) |
 | `esdeMedia` | `{system: {type: {name: path}}}` | `MediaIndex`, below |
-| `esdePresence` | `{system: [type]}`: the types some game of the shelf has, the theme's variant triggers | derived from the index |
+| `esdePresence` | `{shelf: [type]}`: the types some game of the shelf has, each game looked up under its own console, the theme's variant triggers | derived from the index |
 
 Each game carries every field Mistress's `SceneGame` carried: `file`, `name`, `sort_name`, `custom_sort_name`,
 `description`, `developer`, `publisher`, `genre`, `players`, `release_date` (the metadata's `yyyy-MM-dd`), `rating`
 (0–1 or null), `last_played` (seconds since 1970, 0 for never), `play_count`, `play_time` (seconds), `favourite`,
 `completed`, `kid_game`, `broken`, `hidden`, `not_counted`, `hide_metadata`, `controller`, `alt_emulator`, `emulator`
-(the alternative emulator's name), `manual` (the index has a manual), `folder`, `folder_path`, `folder_link`. The
+(the alternative emulator's name), `manual` (the index has a manual), `folder`, `folder_path`, `folder_link`, and
+`esde_system`, `esde_full_name`, `is_collection` and `face` for the collections (§4.7). The description is left out of
+the text and given by `LibraryModel.esdeDescription(file)`, the one field that grows long. The
 metadata is the scraper's `metadata` read (EmuSen_Backend.md §30.3), its edit else ScreenScraper's else the default,
 chosen there and not again here; the plays are games.db's `records`. While the own look is shown the three library
 texts are `[]`, `{}` and `{}` and no game's metadata is read, so the own look's refresh costs what it did.
@@ -1220,10 +1222,47 @@ files of one name differ in extension, the index keeps the first by name (`.jpg`
 with descriptions, a shelves text over 2 MB (comparing the texts, moving the read in, making the changed texts
 QStrings) took 0.65 and 0.67 ms, best of three each, under the 2 ms gate.
 
-**Owed.** `folder_path` is empty: the folder below the console folder is Galaxia's rule (`game_folders::of`), which no
-client surface answers; the library's scan answer gaining each game's folder is the proposed form. Until then a
-game's media is found by its stem alone. The metadata is one scraper read a game; its cost at a library's scale is
-measured with the real library.
+**The folder.** A game's `folder_path` is the library's scan answer's `folder` (`emusen_library.h` 1.3, decided
+2026-11-08; EmuSen_Backend.md §28.4), Galaxia's `game_folders::of`, so its one owner is unchanged; a game's media is
+found by its folder and stem, then its stem. **Owed:** the metadata is one scraper read a game; its cost at a library's
+scale is measured with the real library in the hosting piece.
+
+### 4.7 The gamelist rules, `gamelists.rs` **[M 2026-11-08]**
+
+Mistress's `GamelistOptions`, `CollectionShelves` and `ThemedLibrary.Gamelists`/`.Folders` (EmuSen_BigPicture.md §22,
+§30) as plain Rust with no view behind them. `esde_shelves::build` applies them to what a refresh read (`Base`) and
+writes the shelves' text; a choice of the List card writes it again from the same `Base`, off the GUI thread, with no
+read of the library.
+
+| Rule | As built |
+|---|---|
+| Sort | ES-DE's eleven keys, ascending and descending (System for collections alone, 22 orders); favourites first where the list asks, games with no value of the key after those with one whichever way, then the sort name ascending, then the order given (a stable sort); text compared as .NET's OrdinalIgnoreCase; "1-4" players is four. The default is `BigPictureCollections.DefaultSortOrder` |
+| Filters | rating in half stars, developer, publisher, genre, players, favourite, completed, kid game, broken; a value from the list's own games, "Unknown" for none, nothing offered where there is nothing to tell apart; every chosen field holds, any chosen value within one; a folder always passes. The search's words match a name anywhere, over every list |
+| Quick selector | "Folders" and "★" where each is sorted on top among other entries, then each first character of the sort name in list order |
+| Random | another entry than the selected where there is another, from a number the caller draws |
+| Folders | a console shows folders unless flattened (`FlattenedSystems`), once a game of it sits in one; a folder entry holds a kept game, on top unless `FoldersOnTop` is off; entering and leaving keep a path per console; a search or filter that empties the folder walks it up; a folder's link (an edit `folderlink` on the folder's path, the library's `all_edits`) rides on its entry |
+| Collections | after the consoles: the grouped custom collections (a folder each, its description naming its games in a seeded random order and showing the first), the discrete ones beside them (grouping `unthemed`, `always`, `never`; `unthemed` by `LibraryModel.esdeThemeFolders`, which the painter sets from the theme), then all games, favorites and last played as `AutoCollections` turns them on; a game excluded from the counter joins none; last played is the library's recent list in its order until a sort is chosen; a custom collection's sortname wins inside it |
+| Counts | a gamelistinfo's: the whole list's games and favourites over every folder, how many the search and filters keep, whether a filter is on and a folder open; folders and uncounted games are not counted |
+| Each list's own | sort and filter by the list's key (a console, or `collections/<name>` inside a grouped collection); the folder by console |
+
+A shelf of the text is `{"name", "full_name", "theme", "system", "kind" (regular, auto, custom), "collection_id",
+"stars", "key", "folder", "sort", "favourites_on_top", "counts", "letters": [[label, index]], "games"}`. A console's
+games are whole rows; a collection's are `{"file", "esde_system", "sort_name"}`, the row its console's shelf's, so
+each game is in the text once; a folder entry is whole. The List card under a theme reads `esdeListFacts(shelf,
+focused)` and acts through `esdeListAct(shelf, action, focused)` with the grid's action keys (Sort steps through the
+list's orders, Filter's Favourites is the favourite filter, Jump to and Random answer the entry to select); the
+painter calls `esdeEnter(shelf, entry)` and `esdeLeave(shelf)`, and `esdeSearch(words)`.
+
+**Measured on 2026-11-08** (`tests/esde.rs`, debug build): with the collections the GUI thread's part of a refresh at
+9,000 games first took 10.6 ms, every game's row written again in all games and favourites and each description
+carried; with the collections listing files and the description given on demand, 0.77 ms, under the 2 ms gate.
+
+**Proof.** `tests/gamelists.rs` re-expresses the rule cases of Mistress's `GamelistOptionsTests` (sorts, sort names,
+filters, letters, random, names, collection order and grouping, last played, a grouped collection's folder) and adds
+folders entered, left and walked up, a link, flatten, folders not on top, a grouped collection entered with its own
+sort, and the List card's Sort and Favourites changing the text's order and its facts. Seeded faults, each caught:
+missing values sorted first, folders on top inverted, an uncounted game joining the collections, a grouped
+collection's sort kept by its shelf, the scan answer's folder emptied.
 
 ### 4.8 The painter: `emusen-esde-qt` and the QML module `EmuSen.Esde` **[M 2026-11-08]**
 

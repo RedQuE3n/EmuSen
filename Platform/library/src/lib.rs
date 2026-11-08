@@ -201,7 +201,12 @@ impl Library {
     pub fn games_request(&self, filter: &str) -> Result<String, Error> {
         let system = if filter.trim().is_empty() { None } else { json::text_or_none(&json::parse(filter)?, "system")? };
         let (outcome, roots, games) = self.games(system.as_deref());
-        let games: Vec<serde_json::Value> = games.iter().map(|g| serde_json::json!({ "path": g.path, "system": g.system, "package": g.package })).collect();
+        let folder = |g: &scan::Game| match g.package {
+            Some(_) => String::new(),
+            None => roots.iter().map(|r| emusen_galaxia::game_folders::of(Some(r), &g.path)).find(|f| !f.is_empty()).unwrap_or_default(),
+        };
+        let games: Vec<serde_json::Value> =
+            games.iter().map(|g| serde_json::json!({ "path": g.path, "system": g.system, "package": g.package, "folder": folder(g) })).collect();
         Ok(serde_json::json!({ "status": outcome.word(), "roots": roots, "games": games }).to_string())
     }
 

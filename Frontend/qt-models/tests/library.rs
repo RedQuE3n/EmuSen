@@ -62,7 +62,7 @@ fn system(id: &str, display: &str, hue: f64, engine: &str) -> SystemRow {
 
 fn games(of: &[(&str, usize)]) -> Vec<GameFile> {
     of.iter()
-        .flat_map(|(s, n)| (0..*n).map(move |i| GameFile { path: format!("/roms/{s}/{i}"), system: Some(s.to_string()), package: None }))
+        .flat_map(|(s, n)| (0..*n).map(move |i| GameFile { path: format!("/roms/{s}/{i}"), system: Some(s.to_string()), ..GameFile::default() }))
         .collect()
 }
 
